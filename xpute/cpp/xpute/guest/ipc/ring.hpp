@@ -39,11 +39,11 @@ class Ring {
     bool empty() const noexcept { return len() == 0; }
 
     // The word, from the ring's start, where the frame at `position` begins.
-    std::uint32_t entry_at(std::uint32_t position) const noexcept { return ring::HEADER_WORDS + (position & (cap_ - 1)) * frame::WORDS; }
+    std::uint32_t entry_at(std::uint32_t pos) const noexcept { return ring::HEADER_WORDS + (pos & (cap_ - 1)) * frame::WORDS; }
 
     // EAGAIN when full, EMSGSIZE when larger than a slot.
     Errno push(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result,
-               std::optional<std::span<const std::uint8_t>> packet = std::nullopt) const noexcept;
+               std::optional<std::span<const std::uint8_t>> pkt = std::nullopt) const noexcept;
 
     // `write` gets the whole slot payload and answers the length, or none if it
     // did not fit (EMSGSIZE).
@@ -61,16 +61,16 @@ class Ring {
     std::optional<Frame> peek() const noexcept;
 
     // Valid until `advance`. EBADMSG when the frame names bytes outside a slot.
-    Result<std::span<const std::uint8_t>> packet(const Frame &f) const noexcept;
+    Result<std::span<const std::uint8_t>> pkt(const Frame &f) const noexcept;
 
     void advance() const noexcept;
 
   private:
     std::uint32_t header(std::uint32_t word) const noexcept { return mem_.word(at_ + 4 * word); }
     void set_header(std::uint32_t word, std::uint32_t w) const noexcept { mem_.set_word(at_ + 4 * word, w); }
-    std::uint32_t slot_at(std::uint32_t position) const noexcept;
+    std::uint32_t slot_at(std::uint32_t pos) const noexcept;
     void pad(std::uint32_t slot, std::uint32_t n) const noexcept;
-    void publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t packet_at) const noexcept;
+    void publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept;
 
     Memory mem_;
     std::uint32_t at_;

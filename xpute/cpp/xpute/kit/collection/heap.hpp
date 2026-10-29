@@ -28,13 +28,13 @@ template <class Vec, bool MIN> class Heap {
     const E *top() const noexcept { return a_.empty() ? nullptr : &a_[0]; }
 
     // Both of the root's subtrees must already hold the heap property.
-    static void heapify(std::span<E> a, std::size_t root, std::size_t size) noexcept {
+    static void heapify(std::span<E> a, std::size_t root, std::size_t sz) noexcept {
         std::size_t i = root;
         E e = a[i];
         std::size_t child = (i << 1) + 1;
-        while (child < size) {
+        while (child < sz) {
             std::size_t r = child + 1;
-            if (r < size && ahead(a[r].key, a[child].key)) child = r;
+            if (r < sz && ahead(a[r].key, a[child].key)) child = r;
             if (!ahead(a[child].key, e.key)) break;
             a[i] = a[child];
             i = child;

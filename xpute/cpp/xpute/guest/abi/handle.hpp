@@ -31,7 +31,7 @@ template <class T, std::size_t N> class Table {
 
   public:
     // None when every slot is taken.
-    std::optional<std::uint32_t> insert(T value) noexcept {
+    std::optional<std::uint32_t> insert(T val) noexcept {
         std::uint32_t slot;
         if (free_ != 0) {
             slot = free_;
@@ -46,8 +46,8 @@ template <class T, std::size_t N> class Table {
         auto generation = static_cast<std::uint16_t>(s.generation + 1);
         s.generation = generation == 0 ? 1 : generation;
         s.made = epoch_ + 1;
-        s.value = std::move(value);
-        count_++;
+        s.val = std::move(val);
+        cnt_++;
         return handle_of(slot, s.generation);
     }
 
@@ -56,7 +56,7 @@ template <class T, std::size_t N> class Table {
         return slot != 0 && slot < N && slots_[slot].made != 0 && slots_[slot].generation == handle >> SLOT_BITS;
     }
 
-    T *get(std::uint32_t handle) noexcept { return live(handle) ? &slots_[handle_slot(handle)].value : nullptr; }
+    T *get(std::uint32_t handle) noexcept { return live(handle) ? &slots_[handle_slot(handle)].val : nullptr; }
     const T *get(std::uint32_t handle) const noexcept { return const_cast<Table *>(this)->get(handle); }
 
     std::optional<T> remove(std::uint32_t handle) noexcept {
@@ -66,8 +66,8 @@ template <class T, std::size_t N> class Table {
         s.made = 0;
         s.next = free_;
         free_ = slot;
-        count_--;
-        return std::exchange(s.value, T{});
+        cnt_--;
+        return std::exchange(s.val, T{});
     }
 
     // From here, what is taken is what `rollback` gives back.
@@ -80,16 +80,16 @@ template <class T, std::size_t N> class Table {
         for (std::uint32_t slot = 1; slot <= top_; slot++) {
             std::uint32_t handle = handle_of(slot, slots_[slot].generation);
             if (slots_[slot].made != epoch_ + 1) continue;
-            if (std::optional<T> value = remove(handle)) gone(handle, std::move(*value));
+            if (std::optional<T> val = remove(handle)) gone(handle, std::move(*val));
         }
     }
 
-    std::uint32_t count() const noexcept { return count_; }
+    std::uint32_t count() const noexcept { return cnt_; }
 
     template <class F> void each(F &&f) {
         for (std::uint32_t slot = 1; slot <= top_; slot++) {
             std::uint32_t handle = handle_of(slot, slots_[slot].generation);
-            if (live(handle)) f(handle, slots_[slot].value);
+            if (live(handle)) f(handle, slots_[slot].val);
         }
     }
 
@@ -101,7 +101,7 @@ template <class T, std::size_t N> class Table {
         std::uint64_t made = 0;
         // A free slot's next free slot; 0, never handed out, ends the list.
         std::uint32_t next = 0;
-        T value{};
+        T val{};
     };
 
     static constexpr std::uint32_t handle_of(std::uint32_t slot, std::uint16_t generation) noexcept {
@@ -114,7 +114,7 @@ template <class T, std::size_t N> class Table {
     std::uint32_t free_ = 0;
     // The highest slot handed out; those past it never have been.
     std::uint32_t top_ = 0;
-    std::uint32_t count_ = 0;
+    std::uint32_t cnt_ = 0;
 };
 
 } // namespace xpute::abi

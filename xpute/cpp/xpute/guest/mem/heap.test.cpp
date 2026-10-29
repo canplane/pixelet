@@ -28,7 +28,7 @@ SlabMalloc<HeapRange> slab;
 
 } // namespace
 
-XPUTE_TEST(heap_block_offset_and_guard) {
+XPUTE_TEST(heap_block_off_and_guard) {
     XPUTE_CHECK_EQ(alloc(8), std::nullopt, "no allocator installed, no block");
     set_heap(Allocator{[](std::size_t bytes, std::size_t align) noexcept { return slab.alloc(bytes, align); },
                   [](void *at, std::size_t bytes, std::size_t align) noexcept { slab.dealloc(at, bytes, align); }});

@@ -93,7 +93,7 @@ SlotArena arena(std::uint32_t init_cap, std::uint32_t max_cap) {
 
 } // namespace
 
-XPUTE_TEST(arena_rewind_keeps_buffers) {
+XPUTE_TEST(arena_rewind_keeps_bufs) {
     SlotArena a = arena(4, 1 << 10);
     for (std::uint32_t i = 0; i < 4; i++) {
         Slot *slot = *a.alloc();
@@ -165,7 +165,7 @@ struct Counted {
     }
 };
 
-template <std::size_t N> std::vector<int> values(const List<Counted, N> &l) {
+template <std::size_t N> std::vector<int> vals(const List<Counted, N> &l) {
     std::vector<int> out;
     for (const Counted &c : l) out.push_back(c.n);
     return out;
@@ -184,19 +184,19 @@ XPUTE_TEST(list_order_and_drop) {
 
         Counted gone = l.remove(1);
         XPUTE_CHECK_EQ(gone.n, 2, "remove answered another value");
-        XPUTE_CHECK_EQ(values(l), (std::vector<int>{1, 3, 4, 5, 6}), "remove did not keep the order");
+        XPUTE_CHECK_EQ(vals(l), (std::vector<int>{1, 3, 4, 5, 6}), "remove did not keep the order");
         XPUTE_CHECK_EQ(l[4].n, 6, "the last moved down one");
         l.remove(4);
         XPUTE_CHECK_EQ(ended, 1, "the last removed, unkept, ends once");
 
         l.retain([](const Counted &c) { return c.n != 3 && c.n != 5; });
-        XPUTE_CHECK_EQ(values(l), (std::vector<int>{1, 4}), "retain did not keep the order of the rest");
+        XPUTE_CHECK_EQ(vals(l), (std::vector<int>{1, 4}), "retain did not keep the order of the rest");
         XPUTE_CHECK_EQ(ended, 3, "retain ends what it refuses, once each");
 
         l.as_mut_slice()[0].n = 7;
         List<Counted, 8> moved(std::move(l));
         XPUTE_CHECK(l.is_empty());
-        XPUTE_CHECK_EQ(values(moved), (std::vector<int>{7, 4}), "a move lost a value");
+        XPUTE_CHECK_EQ(vals(moved), (std::vector<int>{7, 4}), "a move lost a value");
         XPUTE_CHECK_EQ(ended, 3, "a move ended a value");
 
         moved.clear();

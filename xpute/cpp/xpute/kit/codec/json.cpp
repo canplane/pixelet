@@ -107,7 +107,7 @@ static std::optional<std::size_t> skip_number(std::string_view s, std::size_t at
     return at;
 }
 
-static std::optional<std::size_t> skip_value(std::string_view s, std::size_t at, std::uint32_t depth) noexcept {
+static std::optional<std::size_t> skip_val(std::string_view s, std::size_t at, std::uint32_t depth) noexcept {
     if (depth > MAX_DEPTH || at >= s.size()) return std::nullopt;
     auto literal = [&](std::string_view word) -> std::optional<std::size_t> {
         if (s.substr(at, word.size()) == word) return at + word.size();
@@ -122,7 +122,7 @@ static std::optional<std::size_t> skip_value(std::string_view s, std::size_t at,
         std::size_t i = skip_ws(s, at + 1);
         if (i < s.size() && s[i] == ']') return i + 1;
         for (;;) {
-            std::optional<std::size_t> end = skip_value(s, i, depth + 1);
+            std::optional<std::size_t> end = skip_val(s, i, depth + 1);
             if (!end) return std::nullopt;
             i = skip_ws(s, *end);
             if (i >= s.size()) return std::nullopt;
@@ -140,7 +140,7 @@ static std::optional<std::size_t> skip_value(std::string_view s, std::size_t at,
             if (!key) return std::nullopt;
             i = skip_ws(s, *key);
             if (i >= s.size() || s[i] != ':') return std::nullopt;
-            std::optional<std::size_t> end = skip_value(s, skip_ws(s, i + 1), depth + 1);
+            std::optional<std::size_t> end = skip_val(s, skip_ws(s, i + 1), depth + 1);
             if (!end) return std::nullopt;
             i = skip_ws(s, *end);
             if (i >= s.size()) return std::nullopt;
@@ -155,7 +155,7 @@ static std::optional<std::size_t> skip_value(std::string_view s, std::size_t at,
 
 std::optional<JsonValue> read_json(std::string_view text) noexcept {
     std::size_t start = skip_ws(text, 0);
-    std::optional<std::size_t> end = skip_value(text, start, 0);
+    std::optional<std::size_t> end = skip_val(text, start, 0);
     if (!end || skip_ws(text, *end) != text.size()) return std::nullopt;
     return JsonValue(text.substr(start, *end - start));
 }
@@ -233,11 +233,11 @@ std::optional<JsonValue> JsonValue::get(std::string_view key) const noexcept {
     return last;
 }
 
-std::optional<JsonValue> JsonValue::at(std::size_t index) const noexcept {
+std::optional<JsonValue> JsonValue::at(std::size_t idx) const noexcept {
     JsonItems it = items();
     for (std::size_t i = 0;; i++) {
         std::optional<JsonValue> v = it.next();
-        if (!v || i == index) return v;
+        if (!v || i == idx) return v;
     }
 }
 
@@ -248,7 +248,7 @@ std::optional<JsonValue> JsonItems::next() noexcept {
         return std::nullopt;
     }
     // The text was checked whole.
-    std::size_t end = *skip_value(s_, start, 0);
+    std::size_t end = *skip_val(s_, start, 0);
     at_ = skip_ws(s_, end) + 1;
     return JsonValue(s_.substr(start, end - start));
 }
@@ -260,10 +260,10 @@ std::optional<std::pair<JsonStr, JsonValue>> JsonFields::next() noexcept {
         return std::nullopt;
     }
     std::size_t key_end = *skip_string(s_, key_at);
-    std::size_t value_at = skip_ws(s_, skip_ws(s_, key_end) + 1);
-    std::size_t value_end = *skip_value(s_, value_at, 0);
-    at_ = skip_ws(s_, value_end) + 1;
-    return std::pair{JsonStr(s_.substr(key_at + 1, key_end - key_at - 2)), JsonValue(s_.substr(value_at, value_end - value_at))};
+    std::size_t val_at = skip_ws(s_, skip_ws(s_, key_end) + 1);
+    std::size_t val_end = *skip_val(s_, val_at, 0);
+    at_ = skip_ws(s_, val_end) + 1;
+    return std::pair{JsonStr(s_.substr(key_at + 1, key_end - key_at - 2)), JsonValue(s_.substr(val_at, val_end - val_at))};
 }
 
 std::optional<std::string_view> JsonStr::as_plain() const noexcept {

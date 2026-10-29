@@ -36,7 +36,7 @@ namespace xpute {
 // The bits a range's size and the exponents the buddy keeps fit in: a guest's
 // memory is 32-bit whatever the machine, though on a native build a range's
 // base is a full pointer (xpute-kit alloc.rs `ADDRESS_BITS`).
-inline constexpr std::size_t ADDRESS_BITS = 32;
+inline constexpr std::size_t ADDR_BITS = 32;
 
 // `MAX_LOG2` is the largest block the tree can describe, a bound on the
 // address space and not on any memory.
@@ -49,11 +49,11 @@ concept Range = requires {
 };
 
 template <Range R> class BuddyMalloc {
-    static constexpr std::size_t BUCKET_COUNT = R::MAX_LOG2 - R::MIN_LOG2 + 1;
+    static constexpr std::size_t BUCKET_CNT = R::MAX_LOG2 - R::MIN_LOG2 + 1;
     // A tree of fewer than four buckets has no split bit to keep, and one of
     // more than an exponent each, 0 through ADDRESS_BITS, a bitmap past what a
     // range can address.
-    static_assert(BUCKET_COUNT >= 4 && BUCKET_COUNT <= ADDRESS_BITS + 1, "a buddy tree's bucket count");
+    static_assert(BUCKET_CNT >= 4 && BUCKET_CNT <= ADDR_BITS + 1, "a buddy tree's bucket count");
 
     struct List {
         List *prev;
@@ -81,7 +81,7 @@ template <Range R> class BuddyMalloc {
 
     std::size_t largest_free() const noexcept {
         if (base_ptr_ == 0) return 0;
-        for (std::size_t b = bucket_limit_; b < BUCKET_COUNT; b++) {
+        for (std::size_t b = bucket_limit_; b < BUCKET_CNT; b++) {
             if (buckets_[b].next != &buckets_[b]) return std::size_t{1} << (R::MAX_LOG2 - b);
         }
         return 0;
@@ -95,10 +95,10 @@ template <Range R> class BuddyMalloc {
             base_ptr_ = R::base();
             max_ptr_ = base_ptr_;
             end_ptr_ = R::end();
-            bucket_limit_ = BUCKET_COUNT - 1;
+            bucket_limit_ = BUCKET_CNT - 1;
             update_max_ptr(base_ptr_ + sizeof(List));
-            list_init(BUCKET_COUNT - 1);
-            list_push(BUCKET_COUNT - 1, reinterpret_cast<List *>(base_ptr_));
+            list_init(BUCKET_CNT - 1);
+            list_push(BUCKET_CNT - 1, reinterpret_cast<List *>(base_ptr_));
         }
 
         if (request > std::size_t{1} << R::MAX_LOG2) return nullptr;
@@ -129,8 +129,8 @@ template <Range R> class BuddyMalloc {
 
             // Take the address range before going further; where there is no
             // room, put the block back and fail.
-            std::size_t size = std::size_t{1} << (R::MAX_LOG2 - bucket);
-            std::size_t bytes_needed = bucket < original_bucket ? size / 2 + sizeof(List) : size;
+            std::size_t sz = std::size_t{1} << (R::MAX_LOG2 - bucket);
+            std::size_t bytes_needed = bucket < original_bucket ? sz / 2 + sizeof(List) : sz;
             if (!update_max_ptr(reinterpret_cast<std::uintptr_t>(ptr) + bytes_needed)) {
                 list_push(bucket, ptr);
                 return nullptr;
@@ -186,40 +186,40 @@ template <Range R> class BuddyMalloc {
 
   private:
     // The C asks `brk`; here the range says.
-    bool update_max_ptr(std::uintptr_t new_value) noexcept {
-        if (new_value > max_ptr_) {
-            if (new_value > end_ptr_) return false;
-            max_ptr_ = new_value;
+    bool update_max_ptr(std::uintptr_t new_val) noexcept {
+        if (new_val > max_ptr_) {
+            if (new_val > end_ptr_) return false;
+            max_ptr_ = new_val;
         }
         return true;
     }
 
     // The address a node stands for. A bucket's first node is
     // `(1 << bucket) - 1`, so the `+ 1` comes before the subtraction.
-    List *ptr_for_node(std::size_t index, std::size_t bucket) const noexcept {
-        return reinterpret_cast<List *>(base_ptr_ + ((index + 1 - (std::size_t{1} << bucket)) << (R::MAX_LOG2 - bucket)));
+    List *ptr_for_node(std::size_t idx, std::size_t bucket) const noexcept {
+        return reinterpret_cast<List *>(base_ptr_ + ((idx + 1 - (std::size_t{1} << bucket)) << (R::MAX_LOG2 - bucket)));
     }
 
     std::size_t node_for_ptr(List *ptr, std::size_t bucket) const noexcept {
         return ((reinterpret_cast<std::uintptr_t>(ptr) - base_ptr_) >> (R::MAX_LOG2 - bucket)) + (std::size_t{1} << bucket) - 1;
     }
 
-    bool parent_is_split(std::size_t index) const noexcept {
-        index = (index - 1) / 2;
-        return (node_is_split_[index / 8] >> (index % 8) & 1) == 1;
+    bool parent_is_split(std::size_t idx) const noexcept {
+        const std::size_t parent = (idx - 1) / 2;
+        return (node_is_split_[parent / 8] >> (parent % 8) & 1) == 1;
     }
 
-    void flip_parent_is_split(std::size_t index) noexcept {
-        index = (index - 1) / 2;
-        node_is_split_[index / 8] ^= static_cast<std::uint8_t>(1 << (index % 8));
+    void flip_parent_is_split(std::size_t idx) noexcept {
+        const std::size_t parent = (idx - 1) / 2;
+        node_is_split_[parent / 8] ^= static_cast<std::uint8_t>(1 << (parent % 8));
     }
 
     std::size_t bucket_for_request(std::size_t request) const noexcept {
-        std::size_t bucket = BUCKET_COUNT - 1;
-        std::size_t size = std::size_t{1} << R::MIN_LOG2;
-        while (size < request) {
+        std::size_t bucket = BUCKET_CNT - 1;
+        std::size_t sz = std::size_t{1} << R::MIN_LOG2;
+        while (sz < request) {
             bucket--;
-            size *= 2;
+            sz *= 2;
         }
         return bucket;
     }
@@ -282,11 +282,11 @@ template <Range R> class BuddyMalloc {
         return true;
     }
 
-    std::array<List, BUCKET_COUNT> buckets_{};
+    std::array<List, BUCKET_CNT> buckets_{};
     std::size_t bucket_limit_ = 0;
     // The linearized tree of bits: parent `(i - 1) / 2`, children `i * 2 + 1`
     // and `i * 2 + 2`, sibling `((i - 1) ^ 1) + 1`. Only SPLIT is stored.
-    std::array<std::uint8_t, (std::size_t{1} << (BUCKET_COUNT - 1)) / 8> node_is_split_{};
+    std::array<std::uint8_t, (std::size_t{1} << (BUCKET_CNT - 1)) / 8> node_is_split_{};
     std::uintptr_t base_ptr_ = 0;
     std::uintptr_t max_ptr_ = 0;
     std::uintptr_t end_ptr_ = 0;

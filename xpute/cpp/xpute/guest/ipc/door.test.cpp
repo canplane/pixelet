@@ -38,18 +38,18 @@ XPUTE_TEST(door_command_needs_reply_room) {
     XPUTE_CHECK(d.sq().push(0, 1, frame::ACKREQ, 0) == Errno::ok);
     d.drain([&](std::uint32_t, std::span<const std::uint8_t>) {
         for (std::uint32_t k = 0; k < MOST_SIGNALS; k++) d.post(0, 2, 0, 0);
-        return Applied{.value = 7};
+        return Applied{.val = 7};
     });
     XPUTE_CHECK_EQ(d.pending(), true, "it waits for the next turn rather than overrunning this one");
 }
 
-XPUTE_TEST(door_signal_packet_errno) {
+XPUTE_TEST(door_signal_pkt_errno) {
     Fixture f = door();
     const Door &d = f.door;
     d.raise(9, 1, [](xtp::PacketWriter &w) { w.u32(41); });
     std::optional<Frame> got = d.cq().peek();
     XPUTE_CHECK(got && got->cmd == 9 && (got->flags & frame::RES) == 0);
-    XPUTE_CHECK(*xtp::TreeReader::make(*d.cq().packet(*got))->read_branch()->at(0)->get_number() == 41.0);
+    XPUTE_CHECK(*xtp::TreeReader::make(*d.cq().pkt(*got))->read_branch()->at(0)->get_number() == 41.0);
     d.cq().advance();
 
     XPUTE_CHECK(d.sq().push(5, 1, 0, 0) == Errno::ok);

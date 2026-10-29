@@ -36,7 +36,7 @@ std::optional<std::uint32_t> pair(std::span<std::uint8_t> out, std::uint32_t n) 
     return len ? std::optional(*len) : std::nullopt;
 }
 
-std::vector<std::uint8_t> packet_of(std::uint32_t n) {
+std::vector<std::uint8_t> pkt_of(std::uint32_t n) {
     std::vector<std::uint8_t> out(256);
     out.resize(*pair(out, n));
     return out;
@@ -53,7 +53,7 @@ XPUTE_TEST(ring_order_and_full) {
         for (std::uint32_t k = 0; k < 4; k++) {
             std::optional<Frame> got = r.peek();
             XPUTE_CHECK(got && got->tag == round * 4 + k && got->cmd == 7 && got->flags == frame::ACKREQ && got->result == -static_cast<std::int32_t>(round * 4 + k));
-            XPUTE_CHECK(r.packet(*got)->empty());
+            XPUTE_CHECK(r.pkt(*got)->empty());
             r.advance();
         }
         XPUTE_CHECK(!r.peek());
@@ -61,12 +61,12 @@ XPUTE_TEST(ring_order_and_full) {
     XPUTE_CHECK_EQ(r.head() == 12 && r.tail() == 12, true, "positions only grow");
 }
 
-XPUTE_TEST(ring_in_place_packet) {
+XPUTE_TEST(ring_in_place_pkt) {
     Fixture f = fixture(8, 64);
     const Ring &r = f.ring;
     XPUTE_CHECK(r.push_in_place(1, 2, 0, 0, [](std::span<std::uint8_t> out) { return pair(out, 5); }) == Errno::ok);
-    std::span<const std::uint8_t> got = *r.packet(*r.peek());
-    std::vector<std::uint8_t> want = packet_of(5);
+    std::span<const std::uint8_t> got = *r.pkt(*r.peek());
+    std::vector<std::uint8_t> want = pkt_of(5);
     XPUTE_CHECK((std::vector<std::uint8_t>(got.begin(), got.end()) == want));
 
     // The same packet is refused the same way with a frame in the ring and
@@ -87,25 +87,25 @@ XPUTE_TEST(ring_in_place_packet) {
     XPUTE_CHECK(r.push_in_place(3, 4, 0, -1, [](std::span<std::uint8_t> out) { return pair(out, 6); }) == Errno::ok);
     std::optional<Frame> next = r.peek();
     XPUTE_CHECK(next->tag == 3 && next->cmd == 4 && next->result == -1);
-    xtp::BranchCursor root = *xtp::TreeReader::make(*r.packet(*next))->read_branch();
+    xtp::BranchCursor root = *xtp::TreeReader::make(*r.pkt(*next))->read_branch();
     XPUTE_CHECK(*root.at(0)->get_number() == 6.0);
 }
 
 XPUTE_TEST(ring_payload_per_slot) {
     Fixture f = fixture(8, 64);
     const Ring &r = f.ring;
-    for (std::uint32_t n = 1; n <= 8; n++) XPUTE_CHECK(r.push(n, 0x0101, 0, 0, packet_of(n)) == Errno::ok);
-    XPUTE_CHECK_EQ(r.push(9, 0x0101, 0, 0, packet_of(9)), Errno::eagain, "the ring fills before the payloads do");
+    for (std::uint32_t n = 1; n <= 8; n++) XPUTE_CHECK(r.push(n, 0x0101, 0, 0, pkt_of(n)) == Errno::ok);
+    XPUTE_CHECK_EQ(r.push(9, 0x0101, 0, 0, pkt_of(9)), Errno::eagain, "the ring fills before the payloads do");
     XPUTE_CHECK(r.len() == 8);
     for (std::uint32_t n = 1; n <= 8; n++) {
         std::optional<Frame> got = r.peek();
-        xtp::BranchCursor root = *xtp::TreeReader::make(*r.packet(*got))->read_branch();
+        xtp::BranchCursor root = *xtp::TreeReader::make(*r.pkt(*got))->read_branch();
         XPUTE_CHECK(got->tag == n && *root.at(0)->get_number() == n && *root.at(1)->get_u64() == std::uint64_t{n} << 40);
         r.advance();
     }
-    XPUTE_CHECK_EQ(r.push(9, 0x0101, 0, 0, packet_of(9)), Errno::ok, "a slot freed is a payload freed");
+    XPUTE_CHECK_EQ(r.push(9, 0x0101, 0, 0, pkt_of(9)), Errno::ok, "a slot freed is a payload freed");
     std::vector<std::uint8_t> big(72);
     XPUTE_CHECK(r.push(10, 0x0101, 0, 0, big) == Errno::emsgsize);
-    Frame outside{.tag = 0, .cmd = 0, .flags = 0, .result = 0, .packet_at = 4};
-    XPUTE_CHECK_EQ(r.packet(outside).ok(), false, "outside a slot");
+    Frame outside{.tag = 0, .cmd = 0, .flags = 0, .result = 0, .pkt_at = 4};
+    XPUTE_CHECK_EQ(r.pkt(outside).ok(), false, "outside a slot");
 }

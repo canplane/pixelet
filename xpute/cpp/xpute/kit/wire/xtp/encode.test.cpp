@@ -83,7 +83,7 @@ XPUTE_TEST(xtp_writer_matches_other_languages) {
     check("graft", [&](PacketWriter &w) { w.graft(inner); });
 }
 
-XPUTE_TEST(xtp_overflow_spoils_packet) {
+XPUTE_TEST(xtp_overflow_spoils_pkt) {
     std::string long_str = encode([](PacketWriter &w) { w.branch(1, [](PacketWriter &b) { b.str("longer than what is left"); }); }, 40);
     XPUTE_CHECK_EQ(long_str, std::string("errno:-75"), "a child that does not fit");
     std::string long_branch = encode(

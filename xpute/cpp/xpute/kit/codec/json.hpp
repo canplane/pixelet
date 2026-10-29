@@ -69,7 +69,7 @@ class JsonValue {
     JsonFields fields() const noexcept;
     // The last field of that name, as the host's parse keeps.
     std::optional<JsonValue> get(std::string_view key) const noexcept;
-    std::optional<JsonValue> at(std::size_t index) const noexcept;
+    std::optional<JsonValue> at(std::size_t idx) const noexcept;
     std::string_view text() const noexcept { return s_; }
 
   private:

@@ -33,36 +33,36 @@ Ring Ring::init(Memory mem, std::uint32_t at, std::uint32_t cap, std::uint32_t s
     return Ring(mem, at);
 }
 
-std::uint32_t Ring::slot_at(std::uint32_t position) const noexcept {
-    return slot_base_ + (position & (cap_ - 1)) * slot_bytes_;
+std::uint32_t Ring::slot_at(std::uint32_t pos) const noexcept {
+    return slot_base_ + (pos & (cap_ - 1)) * slot_bytes_;
 }
 
 void Ring::pad(std::uint32_t slot, std::uint32_t n) const noexcept {
     std::memset(mem_.at(slot + n), 0, padded(n) - n);
 }
 
-void Ring::publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t packet_at) const noexcept {
+void Ring::publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept {
     std::uint32_t t = tail();
     std::uint32_t f = at_ + 4 * entry_at(t);
     mem_.set_word(f + 4 * frame::TAG, tag);
     mem_.set_word(f + 4 * frame::CMD, frame::cmd_word(cmd, flags));
     mem_.set_word(f + 4 * frame::RESULT, static_cast<std::uint32_t>(result));
-    mem_.set_word(f + 4 * frame::PKT, packet_at);
+    mem_.set_word(f + 4 * frame::PKT, pkt_at);
     // The frame is whole before the tail says so.
     set_header(ring::TAIL, t + 1);
 }
 
-Errno Ring::push(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::optional<std::span<const std::uint8_t>> packet) const noexcept {
+Errno Ring::push(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::optional<std::span<const std::uint8_t>> pkt) const noexcept {
     if (len() >= cap()) return Errno::eagain;
-    std::uint32_t packet_at = 0;
-    if (packet) {
-        if (padded(packet->size()) > slot_bytes()) return Errno::emsgsize;
-        packet_at = slot_at(tail());
-        auto n = static_cast<std::uint32_t>(packet->size());
-        std::memcpy(mem_.at(packet_at), packet->data(), n);
-        pad(packet_at, n);
+    std::uint32_t pkt_at = 0;
+    if (pkt) {
+        if (padded(pkt->size()) > slot_bytes()) return Errno::emsgsize;
+        pkt_at = slot_at(tail());
+        auto n = static_cast<std::uint32_t>(pkt->size());
+        std::memcpy(mem_.at(pkt_at), pkt->data(), n);
+        pad(pkt_at, n);
     }
-    publish(tag, cmd, flags, result, packet_at);
+    publish(tag, cmd, flags, result, pkt_at);
     return Errno::ok;
 }
 
@@ -75,20 +75,20 @@ std::optional<Frame> Ring::peek() const noexcept {
         .cmd = frame::cmd_of(word),
         .flags = frame::flags_of(word),
         .result = static_cast<std::int32_t>(mem_.word(f + 4 * frame::RESULT)),
-        .packet_at = mem_.word(f + 4 * frame::PKT),
+        .pkt_at = mem_.word(f + 4 * frame::PKT),
     };
 }
 
-Result<std::span<const std::uint8_t>> Ring::packet(const Frame &f) const noexcept {
-    if (f.packet_at == 0) return std::span<const std::uint8_t>();
+Result<std::span<const std::uint8_t>> Ring::pkt(const Frame &f) const noexcept {
+    if (f.pkt_at == 0) return std::span<const std::uint8_t>();
     std::uint32_t base = slot_base_, slot = slot_bytes_;
-    if (f.packet_at < base) return marshal_error(Errno::ebadmsg);
-    std::uint64_t off = f.packet_at - base;
+    if (f.pkt_at < base) return marshal_error(Errno::ebadmsg);
+    std::uint64_t off = f.pkt_at - base;
     if (off % slot != 0 || off + xtp::HDR_SZ > slots_bytes(cap(), slot)) return marshal_error(Errno::ebadmsg);
     // The header, then the payload its second word names, to the word.
-    std::uint64_t n = padded(xtp::HDR_SZ + std::uint64_t{mem_.word(f.packet_at + xtp::WORD_SZ)});
+    std::uint64_t n = padded(xtp::HDR_SZ + std::uint64_t{mem_.word(f.pkt_at + xtp::WORD_SZ)});
     if (n > slot) return marshal_error(Errno::ebadmsg);
-    return std::span<const std::uint8_t>(mem_.at(f.packet_at), static_cast<std::size_t>(n));
+    return std::span<const std::uint8_t>(mem_.at(f.pkt_at), static_cast<std::size_t>(n));
 }
 
 void Ring::advance() const noexcept {

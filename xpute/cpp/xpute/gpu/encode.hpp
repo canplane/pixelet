@@ -317,7 +317,7 @@ template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept
     put(count);
     std::optional<std::uint32_t> at = stream.reserve(op, count.n);
     if (!at) return false;
-    Fill fill{stream.memory(), *at};
+    Fill fill{stream.mem(), *at};
     put(fill);
     ensure(fill.n == count.n, Errno::enotrecoverable, op);
     return true;

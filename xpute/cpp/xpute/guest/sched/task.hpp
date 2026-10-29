@@ -73,10 +73,10 @@ struct PromiseBase {
 };
 
 template <class T> struct Promise : PromiseBase {
-    std::optional<T> value;
+    std::optional<T> val;
     Task<T> get_return_object() noexcept;
     static Task<T> get_return_object_on_allocation_failure() noexcept;
-    template <class U> void return_value(U &&v) noexcept { value.emplace(std::forward<U>(v)); }
+    template <class U> void return_value(U &&v) noexcept { val.emplace(std::forward<U>(v)); }
 };
 
 template <> struct Promise<void> : PromiseBase {
@@ -121,7 +121,7 @@ template <class T> class [[nodiscard]] Task {
             return h;
         }
         T await_resume() const noexcept {
-            if constexpr (!std::is_void_v<T>) return std::move(*h.promise().value);
+            if constexpr (!std::is_void_v<T>) return std::move(*h.promise().val);
         }
     };
 

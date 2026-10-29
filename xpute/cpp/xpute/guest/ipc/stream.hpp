@@ -35,7 +35,7 @@ class Stream {
 
     std::uint32_t head_at() const noexcept { return at_; }
 
-    Memory memory() const noexcept { return mem_; }
+    Memory mem() const noexcept { return mem_; }
 
     std::uint32_t left() const noexcept { return (words_ - head_ - len_) * WORD; }
 

@@ -177,7 +177,7 @@ XPUTE_TEST(xtp_cursor_matches_other_languages) {
     for (std::size_t j = 0; j < 3; j++) XPUTE_CHECK_EQ(at_cap("€€€", caps[j]), v.s("caps_utf8." + std::to_string(j)), "caps_utf8");
 }
 
-XPUTE_TEST(xtp_packet_round_trip) {
+XPUTE_TEST(xtp_pkt_round_trip) {
     std::array<std::uint8_t, 256> buf{};
     PacketWriter w(buf);
     const std::array<std::int32_t, 2> ints{7, 8};
@@ -207,7 +207,7 @@ XPUTE_TEST(xtp_packet_round_trip) {
     XPUTE_CHECK_EQ(absent.as_branch().error().errnum, Errno::efault, "an absent node is no branch");
 }
 
-XPUTE_TEST(xtp_packet_reads_anywhere) {
+XPUTE_TEST(xtp_pkt_reads_anywhere) {
     std::array<std::uint8_t, 64> buf{};
     PacketWriter w{std::span(buf).subspan(1)};
     const std::array<double, 2> xs{0.5, -4.0};

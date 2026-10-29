@@ -37,9 +37,9 @@ template <class T, std::size_t N> class List {
     std::size_t len() const noexcept { return len_; }
     bool is_empty() const noexcept { return len_ == 0; }
 
-    void push(T value) noexcept {
+    void push(T val) noexcept {
         ensure(len_ < N, Errno::enospc, N);
-        std::construct_at(slot(len_), std::move(value));
+        std::construct_at(slot(len_), std::move(val));
         len_++;
     }
 
@@ -57,11 +57,11 @@ template <class T, std::size_t N> class List {
     // The value at `at`, those after it moved down one: the order kept.
     T remove(std::size_t at) noexcept {
         ensure(at < len_, Errno::einval, at);
-        T value = std::move(*slot(at));
+        T val = std::move(*slot(at));
         std::destroy_at(slot(at));
         for (std::size_t i = at; i + 1 < len_; i++) move_down(i + 1, i);
         len_--;
-        return value;
+        return val;
     }
 
     // Those `keep` refuses dropped, the order of the rest kept, in one pass.

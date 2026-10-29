@@ -63,7 +63,7 @@ struct StepStat {
     Phase phase = Phase::interaction;
     std::uint32_t name = 0;
     double ms = 0;
-    std::uint32_t count = 0;
+    std::uint32_t cnt = 0;
     double max_ms = 0;
 
     bool operator==(const StepStat &) const = default;
@@ -139,7 +139,7 @@ template <std::size_t N> class Tick {
         }
         StepStat &s = stats_[at];
         s.ms += ms;
-        s.count++;
+        s.cnt++;
         s.max_ms = std::max(s.max_ms, ms);
     }
 

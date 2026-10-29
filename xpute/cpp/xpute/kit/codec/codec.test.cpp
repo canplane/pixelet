@@ -55,7 +55,7 @@ XPUTE_TEST(codec_hex) {
 
 // FNV-1a's published values, which the other languages compute too.
 XPUTE_TEST(codec_fnv1a64) {
-    XPUTE_CHECK_EQ(fnv1a64(""), FNV64_OFFSET, "the empty string");
+    XPUTE_CHECK_EQ(fnv1a64(""), FNV64_OFF, "the empty string");
     XPUTE_CHECK_EQ(fnv1a64("a"), std::uint64_t{0xaf63dc4c8601ec8cu}, "\"a\"");
     XPUTE_CHECK_EQ(fnv1a64("foobar"), std::uint64_t{0x85944171f73967e8u}, "\"foobar\"");
     XPUTE_CHECK_EQ(fnv1a64(bytes_of("foobar")), fnv1a64("foobar"), "bytes and a string are one hash");

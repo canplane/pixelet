@@ -49,10 +49,10 @@ class PacketWriter {
     PacketWriter &f32_array(std::optional<std::span<const float>> a) noexcept { return array(a); }
     PacketWriter &f64_array(std::optional<std::span<const double>> a) noexcept { return array(a); }
 
-    template <class T, class F> PacketWriter &array_with(std::uint32_t len, F &&value) noexcept {
+    template <class T, class F> PacketWriter &array_with(std::uint32_t len, F &&val) noexcept {
         std::optional<std::uint32_t> at = seq(len, std::uint64_t{len} * sizeof(T));
         if (at) {
-            for (std::uint32_t i = 0; i < len; i++) store<T>(buf_.data() + *at + WORD_SZ + i * sizeof(T), value(i));
+            for (std::uint32_t i = 0; i < len; i++) store<T>(buf_.data() + *at + WORD_SZ + i * sizeof(T), val(i));
         }
         return entry(at, type_of(ARRAY_OF<T>));
     }
@@ -79,12 +79,12 @@ class PacketWriter {
     }
 
     // Writing a different number of children than `count` is a bug.
-    template <class F> PacketWriter &branch(std::uint32_t count, F &&fill) noexcept {
-        std::optional<std::uint32_t> at = branch_open(count);
+    template <class F> PacketWriter &branch(std::uint32_t cnt, F &&fill) noexcept {
+        std::optional<std::uint32_t> at = branch_open(cnt);
         Frame outer = frame_;
-        frame_ = Frame{.base = at.value_or(0), .count = count, .written = 0, .root = false};
+        frame_ = Frame{.base = at.value_or(0), .cnt = cnt, .written = 0, .root = false};
         fill(*this);
-        ensure(frame_.written == frame_.count, Errno::enotrecoverable, frame_.count, frame_.written);
+        ensure(frame_.written == frame_.cnt, Errno::enotrecoverable, frame_.cnt, frame_.written);
         frame_ = outer;
         return entry(branch_close(at), type_of(SpecialType::branch));
     }
@@ -92,7 +92,7 @@ class PacketWriter {
     PacketWriter &no_branch() noexcept { return entry(std::nullopt, type_of(SpecialType::branch)); }
 
     // Its root's payload copied, placed as its root's type places it.
-    PacketWriter &graft(std::span<const std::uint8_t> packet) noexcept;
+    PacketWriter &graft(std::span<const std::uint8_t> pkt) noexcept;
 
     // The length, header included and to the word, or why it was refused.
     Result<std::uint32_t> finish() noexcept;
@@ -101,7 +101,7 @@ class PacketWriter {
     // The root is a branch of one whose entry is the header.
     struct Frame {
         std::uint32_t base;
-        std::uint32_t count;
+        std::uint32_t cnt;
         std::uint32_t written;
         bool root;
     };
@@ -130,15 +130,15 @@ class PacketWriter {
     std::optional<std::uint32_t> str_room() noexcept;
     std::optional<std::uint32_t> str_commit(std::uint32_t len) noexcept;
 
-    std::optional<std::uint32_t> branch_open(std::uint32_t count) noexcept;
+    std::optional<std::uint32_t> branch_open(std::uint32_t cnt) noexcept;
     std::optional<std::uint32_t> branch_close(std::optional<std::uint32_t> at) noexcept;
 
     std::span<std::uint8_t> buf_;
-    Frame frame_{.base = 0, .count = 1, .written = 0, .root = true};
+    Frame frame_{.base = 0, .cnt = 1, .written = 0, .root = true};
     NodeType root_type_ = type_of(SpecialType::nil);
     std::uint32_t lim_ = HDR_SZ;
     // The first reason only.
-    std::optional<Error> error_;
+    std::optional<Error> err_;
 };
 
 } // namespace xpute::xtp

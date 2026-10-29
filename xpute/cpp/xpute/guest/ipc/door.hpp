@@ -22,8 +22,8 @@ namespace xpute {
 
 // Errno::enosys for a command the guest does not number.
 struct Applied {
-    Errno error = Errno::ok;
-    std::int32_t value = 0;
+    Errno err = Errno::ok;
+    std::int32_t val = 0;
 };
 
 // How full the rings ran since the stat was last taken (`Door::take_stat`):
@@ -57,10 +57,10 @@ class Door {
         posted(cmd, cq_.push_in_place(tag, cmd, flags, result, write));
     }
 
-    template <class Fill> void raise(std::uint32_t cmd, std::uint32_t count, Fill &&fill) const noexcept {
+    template <class Fill> void raise(std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
         post_in_place(0, cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
             xtp::PacketWriter w(out);
-            w.branch(count, fill);
+            w.branch(cnt, fill);
             Result<std::uint32_t> n = w.finish();
             return n ? std::optional(*n) : std::nullopt;
         });
@@ -74,13 +74,13 @@ class Door {
         while (has_room()) {
             std::optional<Frame> f = sq_.peek();
             if (!f) break;
-            Result<std::span<const std::uint8_t>> pkt = sq_.packet(*f);
-            Applied a = pkt ? apply(f->cmd, *pkt) : Applied{.error = pkt.error().errnum};
+            Result<std::span<const std::uint8_t>> pkt = sq_.pkt(*f);
+            Applied a = pkt ? apply(f->cmd, *pkt) : Applied{.err = pkt.error().errnum};
             sq_.advance();
-            if (a.error != Errno::ok) {
-                post(f->tag, f->cmd, frame::RES, static_cast<std::int32_t>(a.error));
+            if (a.err != Errno::ok) {
+                post(f->tag, f->cmd, frame::RES, static_cast<std::int32_t>(a.err));
             } else if (f->flags & frame::ACKREQ) {
-                post(f->tag, f->cmd, frame::RES, a.value);
+                post(f->tag, f->cmd, frame::RES, a.val);
             }
         }
         stat_.left_peak = std::max(stat_.left_peak, sq_.len());

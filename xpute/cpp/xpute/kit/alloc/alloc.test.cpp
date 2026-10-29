@@ -46,13 +46,13 @@ XPUTE_TEST(buddy_block_contents_survive) {
     const std::size_t sizes[] = {1, 4096, 4097, 8192, 100, 16384, 40, 65536};
     std::vector<std::tuple<void *, std::size_t, std::uint8_t>> live;
     for (std::size_t i = 0; i < 24; i++) {
-        std::size_t size = sizes[i % 8];
-        void *p = heap.malloc(size);
+        std::size_t sz = sizes[i % 8];
+        void *p = heap.malloc(sz);
         if (p == nullptr) continue;
         auto at = reinterpret_cast<std::uintptr_t>(p);
-        XPUTE_CHECK(at >= R::base() && at + size <= R::end());
-        std::memset(p, static_cast<int>(i), size);
-        live.emplace_back(p, size, static_cast<std::uint8_t>(i));
+        XPUTE_CHECK(at >= R::base() && at + sz <= R::end());
+        std::memset(p, static_cast<int>(i), sz);
+        live.emplace_back(p, sz, static_cast<std::uint8_t>(i));
     }
     XPUTE_CHECK(live.size() > 8);
     std::vector<std::tuple<void *, std::size_t, std::uint8_t>> kept;
@@ -60,10 +60,10 @@ XPUTE_TEST(buddy_block_contents_survive) {
         if (j % 2 == 0) heap.free(std::get<0>(live[j]), std::get<1>(live[j]));
         else kept.push_back(live[j]);
     }
-    for (std::size_t size : sizes) {
-        if (void *p = heap.malloc(size)) std::memset(p, 0xff, size);
+    for (std::size_t sz : sizes) {
+        if (void *p = heap.malloc(sz)) std::memset(p, 0xff, sz);
     }
-    for (auto &[p, size, byte] : kept) XPUTE_CHECK_EQ(all(p, size, byte), true, "a block was written over");
+    for (auto &[p, sz, byte] : kept) XPUTE_CHECK_EQ(all(p, sz, byte), true, "a block was written over");
 }
 
 XPUTE_TEST(buddy_buddies_merge) {
@@ -93,13 +93,13 @@ XPUTE_TEST(buddy_oversize_refused) {
 
 XPUTE_TEST(buddy_freed_reused) {
     static BuddyMalloc<TestRange<3>> heap;
-    std::size_t size = std::size_t{1} << (MIN + 2);
-    void *p = heap.malloc(size);
+    std::size_t sz = std::size_t{1} << (MIN + 2);
+    void *p = heap.malloc(sz);
     XPUTE_CHECK(p != nullptr);
     std::size_t reached = heap.used();
     for (int i = 0; i < 8; i++) {
-        heap.free(p, size);
-        XPUTE_CHECK_EQ(heap.malloc(size), p, "the same request after the same free moved");
+        heap.free(p, sz);
+        XPUTE_CHECK_EQ(heap.malloc(sz), p, "the same request after the same free moved");
         XPUTE_CHECK_EQ(heap.used(), reached, "a reuse reached further into the range");
     }
     XPUTE_CHECK(heap.releases() >= 8);
@@ -110,11 +110,11 @@ XPUTE_TEST(slab_slot_contents_survive) {
     const std::size_t sizes[] = {1, 16, 17, 24, 64, 200, 1000, 4096, 9000};
     std::vector<std::tuple<void *, std::size_t, std::uint8_t>> live;
     for (std::size_t i = 0; i < 90; i++) {
-        std::size_t size = sizes[i % 9];
-        void *p = heap.alloc(size, 8);
+        std::size_t sz = sizes[i % 9];
+        void *p = heap.alloc(sz, 8);
         if (p == nullptr) continue;
-        std::memset(p, static_cast<int>(i), size);
-        live.emplace_back(p, size, static_cast<std::uint8_t>(i));
+        std::memset(p, static_cast<int>(i), sz);
+        live.emplace_back(p, sz, static_cast<std::uint8_t>(i));
     }
     XPUTE_CHECK(live.size() > 40);
     std::vector<std::tuple<void *, std::size_t, std::uint8_t>> kept;
@@ -122,10 +122,10 @@ XPUTE_TEST(slab_slot_contents_survive) {
         if (j % 2 == 0) heap.dealloc(std::get<0>(live[j]), std::get<1>(live[j]), 8);
         else kept.push_back(live[j]);
     }
-    for (std::size_t size : sizes) {
-        if (void *p = heap.alloc(size, 8)) std::memset(p, 0xff, size);
+    for (std::size_t sz : sizes) {
+        if (void *p = heap.alloc(sz, 8)) std::memset(p, 0xff, sz);
     }
-    for (auto &[p, size, byte] : kept) XPUTE_CHECK_EQ(all(p, size, byte), true, "a slot was written over");
+    for (auto &[p, sz, byte] : kept) XPUTE_CHECK_EQ(all(p, sz, byte), true, "a slot was written over");
 }
 
 XPUTE_TEST(slab_empty_run_returned) {
@@ -150,14 +150,14 @@ XPUTE_TEST(slab_empty_run_returned) {
 
 XPUTE_TEST(slab_page_requests_delegated) {
     static SlabMalloc<TestRange<6>> heap;
-    for (std::size_t size : {PAGE, PAGE + 1, PAGE * 4}) {
+    for (std::size_t sz : {PAGE, PAGE + 1, PAGE * 4}) {
         std::size_t before = heap.pages().live(), run = heap.run_live(), slot = heap.slot_live();
-        void *p = heap.alloc(size, 8);
+        void *p = heap.alloc(sz, 8);
         XPUTE_CHECK(p != nullptr);
         XPUTE_CHECK_EQ(heap.run_live() == run && heap.slot_live() == slot, true, "a whole-page request took a run or a slot");
-        XPUTE_CHECK(heap.pages().live() - before >= size);
+        XPUTE_CHECK(heap.pages().live() - before >= sz);
         XPUTE_CHECK_EQ(reinterpret_cast<std::uintptr_t>(p) % PAGE, std::uintptr_t{0}, "a whole-page request was not page-aligned");
-        heap.dealloc(p, size, 8);
+        heap.dealloc(p, sz, 8);
         XPUTE_CHECK_EQ(heap.pages().live(), before, "it did not go back whole");
     }
 }
@@ -184,8 +184,8 @@ XPUTE_TEST(slab_slots_inside_runs) {
             }
         }
     }
-    for (auto &[p, size] : live) {
-        heap.dealloc(p, size, 8);
+    for (auto &[p, sz] : live) {
+        heap.dealloc(p, sz, 8);
         check();
     }
     XPUTE_CHECK(heap.slot_live() == 0 && heap.run_live() == 0 && heap.pages().live() == 0);

@@ -10,7 +10,7 @@ using namespace xpute;
 
 static constexpr std::uint32_t PAGE = 1 << 12;
 
-XPUTE_TEST(memory_ranges_aligned_disjoint) {
+XPUTE_TEST(mem_ranges_aligned_disjoint) {
     const std::array<std::uint32_t, 4> sizes{PAGE, 1, 3 * PAGE + 1, 0};
     const std::uint32_t base = 8 * PAGE;
     const std::array<std::uint32_t, 4> want{8 * PAGE, 9 * PAGE, 10 * PAGE, 14 * PAGE};
@@ -24,7 +24,7 @@ XPUTE_TEST(memory_ranges_aligned_disjoint) {
     XPUTE_CHECK_EQ(nth_at(base, sizes, PAGE, sizes.size()), base + span_of(sizes, PAGE), "and one past the last is where the span ends");
 }
 
-XPUTE_TEST(memory_span_within_section) {
+XPUTE_TEST(mem_span_within_section) {
     const Section s{4 * PAGE, 2 * PAGE};
     XPUTE_CHECK(s.end() == 6 * PAGE);
     XPUTE_CHECK_EQ(s.at(0, 2 * PAGE), std::optional(4 * PAGE), "the whole of it");
@@ -34,7 +34,7 @@ XPUTE_TEST(memory_span_within_section) {
     XPUTE_CHECK_EQ(s.at(UINT32_MAX, 2), std::nullopt, "past the address space");
 }
 
-XPUTE_TEST(memory_range_ends_by_size) {
+XPUTE_TEST(mem_range_ends_by_sz) {
     const Section s{8 * PAGE, 4 * PAGE};
     const std::array<std::uint32_t, 2> sizes{PAGE + 1, PAGE};
     Section second = s.nth(sizes, PAGE, 1);

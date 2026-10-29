@@ -11,14 +11,14 @@ namespace {
 constexpr char HEX[] = "0123456789abcdef";
 constexpr char B64URL[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-int hex_value(char c) noexcept {
+int hex_val(char c) noexcept {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
     return -1;
 }
 
-int b64url_value(char c) noexcept {
+int b64url_val(char c) noexcept {
     if (c >= 'A' && c <= 'Z') return c - 'A';
     if (c >= 'a' && c <= 'z') return c - 'a' + 26;
     if (c >= '0' && c <= '9') return c - '0' + 52;
@@ -43,8 +43,8 @@ Result<std::size_t> hex_decode(std::string_view in, std::span<std::uint8_t> out)
     if (in.size() % 2 != 0) return marshal_error(Errno::ebadmsg);
     ensure(out.size() >= in.size() / 2, Errno::enospc, out.size(), in.size());
     for (std::size_t i = 0; i < in.size(); i += 2) {
-        int hi = hex_value(in[i]);
-        int lo = hex_value(in[i + 1]);
+        int hi = hex_val(in[i]);
+        int lo = hex_val(in[i + 1]);
         if (hi < 0 || lo < 0) return marshal_error(Errno::ebadmsg);
         out[i / 2] = static_cast<std::uint8_t>(hi << 4 | lo);
     }
@@ -83,7 +83,7 @@ Result<std::size_t> base64url_decode(std::string_view in, std::span<std::uint8_t
         std::size_t n = in.size() - i < 4 ? in.size() - i : 4;
         std::uint32_t w = 0;
         for (std::size_t k = 0; k < 4; k++) {
-            int v = k < n ? b64url_value(in[i + k]) : 0;
+            int v = k < n ? b64url_val(in[i + k]) : 0;
             if (v < 0) return marshal_error(Errno::ebadmsg);
             w = w << 6 | static_cast<std::uint32_t>(v);
         }

@@ -29,12 +29,12 @@ XPUTE_TEST(handle_removed_stale) {
     std::uint32_t b = *t.insert(2);
     XPUTE_CHECK(handle_slot(b) == handle_slot(a));
     XPUTE_CHECK(t.get(a) == nullptr && t.get(b) != nullptr && *t.get(b) == 2);
-    std::uint32_t seen = 0, count = 0;
+    std::uint32_t seen = 0, cnt = 0;
     t.each([&](std::uint32_t h, int &) {
         seen = h;
-        count++;
+        cnt++;
     });
-    XPUTE_CHECK(count == 1 && seen == b);
+    XPUTE_CHECK(cnt == 1 && seen == b);
     XPUTE_CHECK(t.get(0) == nullptr);
 }
 
@@ -43,11 +43,11 @@ XPUTE_TEST(handle_rollback_epoch) {
     std::uint32_t kept = *t.insert(1);
     t.begin();
     std::uint32_t made = *t.insert(2);
-    std::uint32_t gone = 0, value = 0;
+    std::uint32_t gone = 0, val = 0;
     t.rollback([&](std::uint32_t h, std::uint8_t v) {
         gone = h;
-        value = v;
+        val = v;
     });
-    XPUTE_CHECK(gone == made && value == 2);
+    XPUTE_CHECK(gone == made && val == 2);
     XPUTE_CHECK(t.live(kept) && !t.live(made));
 }
