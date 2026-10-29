@@ -16,13 +16,13 @@ use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::sys::mem::spec::STACK_BYTES;
 use xpute_gpu::admit;
 use xpute_guest::entry::BootInfo;
-use xpute_guest::wasm::Plan;
+use xpute_guest::wasm::Config;
 
 // The heap from the page past the last fixed range to the end of the memory:
 // everything before it is settled before it — the stack, the rings, the
 // linker's data, and `.fixed` (door/layout.rs `heap_at`).
 xpute_guest::wasm_abi!(
-    Plan {
+    Config {
         heap_at,
         stack_bytes: STACK_BYTES
     },

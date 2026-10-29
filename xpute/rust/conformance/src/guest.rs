@@ -176,11 +176,11 @@ fn given(mem: *mut u8) -> Memory {
 mod wasm {
     use super::*;
     use xpute_guest::entry::BootInfo;
-    use xpute_guest::wasm::Plan;
+    use xpute_guest::wasm::Config;
 
     // The heap is the range's last part, from `HEAP_AT` to the memory's end.
     xpute_guest::wasm_abi!(
-        Plan {
+        Config {
             heap_at: |data_end| range_at(data_end) + HEAP_AT,
             stack_bytes: spec::STACK_BYTES,
         },

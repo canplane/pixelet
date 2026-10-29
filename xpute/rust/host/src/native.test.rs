@@ -7,13 +7,13 @@ use std::sync::OnceLock;
 
 use xpute_guest::global::{off_marked_thread, on_marked_thread};
 use xpute_guest::mem::section::PAGE_BYTES;
-use xpute_host::native::{self, Guest, Plan};
+use xpute_host::native::{self, Config, Guest};
 
 const MEM_BYTES: u32 = 4 << 20;
 const HEAP_AT: u32 = 16 * PAGE_BYTES;
 
-fn plan(heap_at: u32) -> Plan {
-    Plan {
+fn cfg(heap_at: u32) -> Config {
+    Config {
         mem_bytes: MEM_BYTES,
         data_end: 0,
         heap_at,
@@ -25,7 +25,7 @@ fn plan(heap_at: u32) -> Plan {
 
 fn guest() -> Guest {
     static GUEST: OnceLock<Guest> = OnceLock::new();
-    *GUEST.get_or_init(|| native::boot(&plan(HEAP_AT)))
+    *GUEST.get_or_init(|| native::boot(&cfg(HEAP_AT)))
 }
 
 #[test]
@@ -75,15 +75,15 @@ fn while_idle_runs_here() {
 #[test]
 fn second_boot_refused() {
     guest();
-    let again = std::panic::catch_unwind(|| native::boot(&plan(HEAP_AT)));
+    let again = std::panic::catch_unwind(|| native::boot(&cfg(HEAP_AT)));
     assert!(again.is_err());
 }
 
 #[test]
 fn bad_heap_refused() {
     // The slab aligns a block by its offset from the heap's first byte.
-    assert!(std::panic::catch_unwind(|| native::boot(&plan(100))).is_err());
-    assert!(std::panic::catch_unwind(|| native::boot(&plan(MEM_BYTES))).is_err());
+    assert!(std::panic::catch_unwind(|| native::boot(&cfg(100))).is_err());
+    assert!(std::panic::catch_unwind(|| native::boot(&cfg(MEM_BYTES))).is_err());
     // Neither took the process's one boot.
     let (_, bytes) = guest().mem();
     assert_eq!(bytes, MEM_BYTES as usize);
@@ -91,7 +91,7 @@ fn bad_heap_refused() {
 
 #[test]
 fn first_intr_installs_clock() {
-    let boot = || guest().boot_info(&plan(HEAP_AT));
+    let boot = || guest().boot_info(&cfg(HEAP_AT));
     assert_eq!(
         guest().run(move || native::intr(0.0, boot, |_, _| xpute_guest::clock::now())),
         42.0

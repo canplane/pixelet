@@ -26,7 +26,7 @@ const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
 
 const NO_SLOTS: u32 = slot_word(NO_SLOT, NO_SLOT, NO_SLOT);
 
-fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
+fn layout() -> (Vec<TileOrigin>, Vec<u32>) {
     fn slot_of(slots: &mut Vec<TileOrigin>, tile: Option<TileOrigin>) -> u32 {
         let Some(tile) = tile else { return NO_SLOT };
         match slots.iter().position(|s| *s == tile) {
@@ -80,7 +80,7 @@ impl Pack {
     /// Nothing is drawn until the pack arrives: a flat color is the box's own,
     /// which the shader already has. Until then every face reads NO_SLOT.
     pub fn new(g: &Gpu) -> Pack {
-        let (tiles, _) = plan();
+        let (tiles, _) = layout();
         let slots = tiles.len() as u32;
         let levels = mip_levels(LAYER_TEX_SIZE, LAYER_TEX_SIZE);
         let usage = texture_usage::TEXTURE_BINDING
@@ -135,7 +135,7 @@ impl Pack {
         let Some(texture) = pack().and_then(|(image, file)| g.image(image, file)) else {
             return false;
         };
-        let (tiles, table) = plan();
+        let (tiles, table) = layout();
         let encoder = g.encoder();
         for (slot, tile) in tiles.iter().enumerate() {
             g.copy_texture(

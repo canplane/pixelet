@@ -12,6 +12,8 @@ cameras, WAI-ARIA, the language's own idiom) and what
 where it comes from. A thing with no precedent is named with the user, never
 coined alone.
 
+Why each rule is what it is: [the naming minutes](../../../doc/minutes/20261029-a-name-is-the-field-s-and-abbreviates-by-default.md).
+
 ## Abbreviate by default
 
 A word on this list is abbreviated; a word not on it stays whole until the
@@ -25,12 +27,14 @@ index `idx`, indices `idxs`, value `val`, values `vals`, buffer `buf`, buffers
 `mem`, component `comp`, channel `ch`, elevation `ele`, feature `feat`,
 latitude `lat`, longitude `lon`, radian `rad`, degree `deg`, orientation
 `orient`, rotation `rot`, altitude `alt`, error `err`, packet `pkt`, initial
-`init`, matrix `mat`, configuration `cfg`.
+`init`, matrix `mat`, configuration `cfg`, descriptor `desc`.
 
 - Longitude is `lon`, as PROJ, OpenStreetMap, PostGIS and the spec name it;
   0405's `lng` was a web map library's.
 - `pkt` only for a real wire packet (an XTP packet: a command's arguments, a
   baked tile's bytes).
+- `desc` is a descriptor (D3D12's `_DESC`, wgpu's `desc`, XTP's descriptor word);
+  SQL's `DESC` (descending) is SQL's.
 - `encode`, `decode` and `control` (`domain/control`) stay whole.
 
 ## Domain words stay whole

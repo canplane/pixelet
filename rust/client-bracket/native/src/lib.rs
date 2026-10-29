@@ -23,7 +23,7 @@ use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES, THREAD_STACK_BYTES};
 use pxl_kernel::sys::stop::Stop;
 use xpute_host::mem::Memory;
-use xpute_host::native::{self, Alloc, BootInfo, Plan};
+use xpute_host::native::{self, Alloc, BootInfo, Config};
 
 /// The library's one allocator: the kernel's blocks in its memory, so a
 /// `Vec` the kernel hands the shell lies in the memory the shell reads.
@@ -38,7 +38,7 @@ static ALLOC: Alloc = Alloc;
 // through, exported under xpute's names as `xpute_intr` and `xpute_mem`
 // (include/pxl_native.h), and `guest()` here.
 xpute_host::native_abi!(
-    Plan {
+    Config {
         mem_bytes: PHONE_BYTES,
         data_end: GLOBAL_BASE,
         heap_at: heap_at(GLOBAL_BASE),

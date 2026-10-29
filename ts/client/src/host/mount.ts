@@ -6,21 +6,21 @@
  * guest's alone; others hold only addresses it handed out.
  */
 
-import { type Host, mount, type Plan as Mount } from "@xpute/host/host.ts";
-import { bracket, type Plan } from "@/bracket.tsx";
+import { type Config as Mount, type Host, mount } from "@xpute/host/host.ts";
+import { bracket, type Config } from "@/bracket.tsx";
 
 /** Set once by `open_host`, which the boot awaits: Metro's bundle cannot wait on a module import. */
 export let HOST: Host;
 
-/** Opens the guest as `plan` says and mounts the host on it, its system calls answered by `sys` and each granted frame filled by `submit`. */
+/** Opens the guest as `cfg` says and mounts the host on it, its system calls answered by `sys` and each granted frame filled by `submit`. */
 export async function open_host(
-  plan: Plan,
+  cfg: Config,
   sys: Mount["sys"],
   submit: Mount["submit"],
 ): Promise<void> {
-  const guest = await bracket.guest.open(plan);
+  const guest = await bracket.guest.open(cfg);
   HOST = mount(guest, {
-    directory_at: plan.directory_at,
+    directory_at: cfg.directory_at,
     sys,
     submit,
     next_frame: (run) => requestAnimationFrame(run),

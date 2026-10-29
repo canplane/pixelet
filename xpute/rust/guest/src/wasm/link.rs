@@ -1,11 +1,11 @@
 // xpute-guest/wasm/link.rs
 
 //! How a guest built as one WebAssembly module is linked, for its build
-//! script, which runs on the build machine and so takes this with no cfg:
+//! script, which runs on the build machine and so takes this with no config:
 //!
 //! ```
 //! // a guest's build.rs, in its `main`
-//! xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan { stack_bytes: 1 << 20, global_base: None, init_bytes: None });
+//! xpute_guest::wasm::link(&xpute_guest::wasm::LinkConfig { stack_bytes: 1 << 20, global_base: None, init_bytes: None });
 //! ```
 //!
 //! Cargo applies a `rustc-link-arg` only to the package whose script prints
@@ -20,7 +20,7 @@
 pub const WASM_PAGE_BYTES: u32 = 1 << 16;
 
 /// A module guest's link numbers.
-pub struct LinkPlan {
+pub struct LinkConfig {
     /// The stack's size (`-z stack-size`), placed first (`--stack-first`).
     pub stack_bytes: u32,
     /// Where the linker's own data begins (`--global-base`), for a guest that
@@ -31,28 +31,28 @@ pub struct LinkPlan {
     pub init_bytes: Option<u32>,
 }
 
-/// Prints `plan`'s link arguments, and nothing when the target is not
+/// Prints `cfg`'s link arguments, and nothing when the target is not
 /// wasm32, where a guest is linked as the platform links any library.
-pub fn link(plan: &LinkPlan) {
+pub fn link(cfg: &LinkConfig) {
     if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("wasm32") {
         return;
     }
-    for arg in args(plan) {
+    for arg in args(cfg) {
         println!("cargo:rustc-link-arg={arg}");
     }
 }
 
 /// The arguments, in the order the linker is given them.
-fn args(plan: &LinkPlan) -> Vec<String> {
+fn args(cfg: &LinkConfig) -> Vec<String> {
     let mut args = vec![
         "--import-memory".to_string(),
         "--stack-first".to_string(),
-        format!("-zstack-size={}", plan.stack_bytes),
+        format!("-zstack-size={}", cfg.stack_bytes),
     ];
-    if let Some(at) = plan.global_base {
+    if let Some(at) = cfg.global_base {
         args.push(format!("--global-base={at}"));
     }
-    if let Some(bytes) = plan.init_bytes {
+    if let Some(bytes) = cfg.init_bytes {
         assert!(
             bytes.is_multiple_of(WASM_PAGE_BYTES),
             "a memory is declared in WebAssembly pages, not {bytes} bytes"

@@ -15,7 +15,7 @@
 
 use pxl_render::api_spec::{device as numbers, stream};
 use xpute_gpu::host::native;
-use xpute_gpu::host::{Ask, Plan};
+use xpute_gpu::host::{Ask, Config};
 use xpute_host::mem::Memory;
 
 #[cfg(target_os = "android")]
@@ -30,7 +30,7 @@ const PREFERRED: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// What the host runs by: the renderer's numbers (spec/client/render/gpu/api.json
 /// `device`) and the platform's surface.
-const PLAN: Plan = Plan {
+const CFG: Config = Config {
     preferred: PREFERRED,
     configure_at: native::CONFIGURE_AT,
     frame_latency: numbers::FRAME_LATENCY,
@@ -62,7 +62,7 @@ fn target(layer: core::ptr::NonNull<core::ffi::c_void>) -> wgpu::SurfaceTargetUn
 // `xpute_gpu_surface_bind` and `xpute_gpu_surface_unbind`
 // (include/pxl_native.h): the app's loop then sends the app an event, and
 // JavaScript asks the strobe for a frame (ts/app/native/src/gpu.ts).
-xpute_gpu::native_abi!(crate::guest, ASK, PLAN, target);
+xpute_gpu::native_abi!(crate::guest, ASK, CFG, target);
 
 /// The turn's edge, on the kernel's thread: what the device has answered
 /// since, written into `memory` before the turn reads it.

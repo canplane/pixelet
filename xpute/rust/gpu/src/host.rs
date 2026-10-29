@@ -49,7 +49,7 @@ use admit::Unfinished;
 /// The program's numbers and choices, which the host runs by: none of them
 /// is the host's to pick.
 #[derive(Clone, Copy)]
-pub struct Plan {
+pub struct Config {
     /// The format SURFACE_PREFERRED names and DEVICE tells the guest, as the
     /// web's `getPreferredCanvasFormat`.
     pub preferred: wgpu::TextureFormat,
@@ -106,13 +106,13 @@ impl GpuHost {
         adapter: wgpu::Adapter,
         device: wgpu::Device,
         queue: wgpu::Queue,
-        plan: Plan,
+        cfg: Config,
         wake: fn(),
     ) -> GpuHost {
         assert!(
-            plan.frame_latency >= 1,
+            cfg.frame_latency >= 1,
             "[gpu] a frame latency of {}",
-            plan.frame_latency
+            cfg.frame_latency
         );
         let gone = Arc::new(AtomicBool::new(false));
         let lost = gone.clone();
@@ -124,14 +124,14 @@ impl GpuHost {
         });
         GpuHost {
             adapter,
-            belt: wgpu::util::StagingBelt::new(device.clone(), plan.upload_chunk_bytes),
+            belt: wgpu::util::StagingBelt::new(device.clone(), cfg.upload_chunk_bytes),
             device,
             queue,
             names: Names::new(),
             objects: Vec::new(),
             surfaces: Vec::new(),
-            preferred: plan.preferred,
-            configure_at: plan.configure_at,
+            preferred: cfg.preferred,
+            configure_at: cfg.configure_at,
             block: None,
             gone,
             pending: Vec::new(),
@@ -141,8 +141,8 @@ impl GpuHost {
             finished: Vec::new(),
             admitted: false,
             unfinished: Arc::new(AtomicU32::new(0)),
-            frame_latency: plan.frame_latency,
-            present_mode: plan.present_mode,
+            frame_latency: cfg.frame_latency,
+            present_mode: cfg.present_mode,
             uploads: None,
         }
     }

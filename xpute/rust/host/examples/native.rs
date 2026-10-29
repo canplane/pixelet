@@ -6,7 +6,7 @@
 
 #[cfg(unix)]
 mod program {
-    use xpute_host::native::{self, Alloc, BootInfo, Plan};
+    use xpute_host::native::{self, Alloc, BootInfo, Config};
 
     /// What the guest's thread asks for lies in its memory; any other
     /// thread's is the system's.
@@ -16,7 +16,7 @@ mod program {
     const MEM_BYTES: u32 = 16 << 20;
 
     xpute_host::native_abi!(
-        Plan {
+        Config {
             mem_bytes: MEM_BYTES,
             data_end: 0,
             heap_at: 16 * xpute_guest::mem::section::PAGE_BYTES,

@@ -45,7 +45,7 @@ pub mod stream {
 }
 
 /// What a device's GPU host runs the renderer's stream by (xpute-gpu host
-/// `Plan`), which pxl-native hands it; a page's browser paces its frames and
+/// `Config`), which pxl-native hands it; a page's browser paces its frames and
 /// stages its writes itself.
 pub mod device {
     /// The frames drawn and not yet finished on the GPU at once: a turn draws only

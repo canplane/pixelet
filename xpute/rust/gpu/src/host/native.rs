@@ -15,7 +15,7 @@ use std::sync::OnceLock;
 use xpute_guest::global::Global;
 use xpute_host::native::Guest;
 
-use super::{Ask, ConfigureAt, GpuHost, Opened, Plan};
+use super::{Ask, Config, ConfigureAt, GpuHost, Opened};
 
 struct Device {
     /// What each window's surface is made with.
@@ -32,7 +32,7 @@ static GUEST: OnceLock<Guest> = OnceLock::new();
 /// What `wake_on` was given, as an address; 0 for none.
 static WAKE: AtomicUsize = AtomicUsize::new(0);
 
-/// Where a native guest's surfaces are configured, for its `Plan`: on an
+/// Where a native guest's surfaces are configured, for its `Config`: on an
 /// Apple platform's main thread while the guest is idle, since Core
 /// Animation sets a layer's properties there alone; elsewhere on the guest's
 /// thread, which runs the stream.
@@ -91,7 +91,7 @@ pub const SLOT_TAKEN: i32 = -4;
 
 /// Opens the device as `ask` says (`open`), once, on `guest`'s thread:
 /// whether it is open.
-pub fn open(guest: Guest, ask: &Ask, plan: Plan) -> bool {
+pub fn open(guest: Guest, ask: &Ask, cfg: Config) -> bool {
     let _ = GUEST.set(guest);
     guest.run(move || {
         if device().is_some() {
@@ -106,7 +106,7 @@ pub fn open(guest: Guest, ask: &Ask, plan: Plan) -> bool {
         else {
             return false;
         };
-        let host = GpuHost::new(adapter, device, queue, plan, wake);
+        let host = GpuHost::new(adapter, device, queue, cfg, wake);
         DEVICE.set(Some(Device { instance, host }));
         true
     })
@@ -168,20 +168,20 @@ pub fn unbind(guest: Guest, handle: u32) {
 ///   for a null one.
 /// - `xpute_gpu_surface_unbind(uint32_t handle)`: lets it go (`unbind`).
 ///
-/// `guest` is the guest's (`native_abi!`'s `guest`), `ask` and `plan` the
-/// program's for the device (`Ask`, `Plan`), and `target` makes a surface's
+/// `guest` is the guest's (`native_abi!`'s `guest`), `ask` and `cfg` the
+/// program's for the device (`Ask`, `Config`), and `target` makes a surface's
 /// target of a window as the platform hands it over
 /// (`fn(NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe`). `host()` is the
 /// program's for its own calls around a turn.
 #[macro_export]
 macro_rules! native_abi {
-    ($guest:expr, $ask:expr, $plan:expr, $target:expr $(,)?) => {
+    ($guest:expr, $ask:expr, $cfg:expr, $target:expr $(,)?) => {
         mod xpute_gpu_native {
             #[allow(unused_imports)]
             use super::*;
 
             pub fn open() -> i32 {
-                if $crate::host::native::open(($guest)(), &$ask, $plan) {
+                if $crate::host::native::open(($guest)(), &$ask, $cfg) {
                     0
                 } else {
                     $crate::host::native::NO_DEVICE

@@ -6,7 +6,7 @@
 use std::sync::OnceLock;
 
 use xpute_guest::mem::section::PAGE_BYTES;
-use xpute_host::native::{self, Alloc, Guest, Plan};
+use xpute_host::native::{self, Alloc, Config, Guest};
 
 #[global_allocator]
 static ALLOC: Alloc = Alloc;
@@ -17,7 +17,7 @@ const HEAP_AT: u32 = 16 * PAGE_BYTES;
 fn guest() -> Guest {
     static GUEST: OnceLock<Guest> = OnceLock::new();
     *GUEST.get_or_init(|| {
-        native::boot(&Plan {
+        native::boot(&Config {
             mem_bytes: MEM_BYTES,
             data_end: 0,
             heap_at: HEAP_AT,

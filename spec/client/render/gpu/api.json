@@ -47,7 +47,7 @@
     "$type": "u32",
     "$doc": [
       "What a device's GPU host runs the renderer's stream by (xpute-gpu host",
-      "`Plan`), which pxl-native hands it; a page's browser paces its frames and",
+      "`Config`), which pxl-native hands it; a page's browser paces its frames and",
       "stages its writes itself."
     ],
     "FRAME_LATENCY": {

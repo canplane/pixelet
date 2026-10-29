@@ -18,10 +18,10 @@ fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     (adapter, device, queue)
 }
 
-/// A test's plan: `frame_latency` frames, and a chunk as large as the
+/// A test's config: `frame_latency` frames, and a chunk as large as the
 /// largest write a record makes.
-fn plan(frame_latency: u32) -> Plan {
-    Plan {
+fn cfg(frame_latency: u32) -> Config {
+    Config {
         preferred: wgpu::TextureFormat::Bgra8Unorm,
         configure_at: ConfigureAt::Here,
         frame_latency,
@@ -40,7 +40,7 @@ fn host(
         adapter.clone(),
         device.clone(),
         queue.clone(),
-        plan(frame_latency),
+        cfg(frame_latency),
         || {},
     )
 }
@@ -166,7 +166,7 @@ fn records_read_back() {
             adapter.clone(),
             device.clone(),
             queue.clone(),
-            plan(2),
+            cfg(2),
             || {},
         );
         g.each(&format!("{p}.turn"), |turn| {

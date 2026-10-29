@@ -26,7 +26,7 @@ export interface Guest {
 }
 
 /** What the program mounts its guest with. */
-export interface Plan {
+export interface Config {
   directory_at: u32;
   sys: SysHost;
   /** Fills the rings before each frame the strobe grants is rung. */
@@ -47,8 +47,8 @@ export interface Host {
   now(cmd: u32, pkt?: PacketWriter): void;
 }
 
-export function mount(guest: Guest, plan: Plan): Host {
-  const directory = new Directory(guest.mem, plan.directory_at);
+export function mount(guest: Guest, cfg: Config): Host {
+  const directory = new Directory(guest.mem, cfg.directory_at);
   const stream = directory.get(key.SYS);
   const doorbell = new Doorbell(
     guest.mem,
@@ -67,15 +67,15 @@ export function mount(guest: Guest, plan: Plan): Host {
   const strobe = new Strobe(
     doorbell,
     directory.quantum(),
-    plan.submit,
-    plan.next_frame,
+    cfg.submit,
+    cfg.next_frame,
   );
   const send = (cmd: u32, pkt?: PacketWriter) => {
     doorbell.send(0, cmd, pkt);
     strobe.request();
   };
   const sys = new Sys(
-    plan.sys,
+    cfg.sys,
     (fd, res, detail) =>
       send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)),
   );

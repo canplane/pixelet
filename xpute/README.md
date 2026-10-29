@@ -83,12 +83,12 @@ installs its allocator and exports `intr` (`rust/conformance` is one):
 ```rust
 // build.rs, with xpute-guest as a build dependency
 fn main() {
-    xpute_guest::wasm::link(&xpute_guest::wasm::LinkPlan { stack_bytes: 1 << 20, global_base: None, init_bytes: None });
+    xpute_guest::wasm::link(&xpute_guest::wasm::LinkConfig { stack_bytes: 1 << 20, global_base: None, init_bytes: None });
 }
 
 // lib.rs
 xpute_guest::wasm_abi!(
-    xpute_guest::wasm::Plan { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
+    xpute_guest::wasm::Config { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
     my_guest::intr // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
 );
 ```
