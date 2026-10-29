@@ -40,7 +40,7 @@ impl<'a, 'w> Asked<'a, 'w> {
         Asked {
             world,
             unplaced: world.unplaced(),
-            lanes: world.objects.lanes(),
+            lanes: world.object.lanes(),
         }
     }
 }
@@ -75,14 +75,14 @@ impl Grounds for Asked<'_, '_> {
     }
 
     /// An edit where the world holds one there, as far as it is held.
-    fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool {
+    fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool {
         self.world
             .asset((zoom, c))
-            .value()
-            .is_some_and(pxl_spec_core::answer::placed)
+            .val()
+            .is_some_and(answer::is_placed)
     }
 
-    fn placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {
+    fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {
         p.next(&self.lanes)
     }
 }

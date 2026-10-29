@@ -111,7 +111,7 @@ fn zoom_by_dist() {
 /// no farther: just short of `draw_reach` a ray asks the zoom's own cells,
 /// and at it the coarser's.
 #[test]
-fn the_view_draws_a_zoom_to_where_the_grid_asks_a_coarser_cell() {
+fn view_zoom_extent() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
         let r = draw_reach(GROUND, zoom);
         assert_eq!(

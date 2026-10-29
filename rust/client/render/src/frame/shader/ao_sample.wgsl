@@ -5,7 +5,7 @@
 @group(0) @binding(2) var blue_noise: texture_2d<f32>;
 
 // N8AO's generateHemisphereSamples(4).
-const HEMISPHERE = array<vec3f, 4>(
+const HEMISPHERE = array<vec3f, AO_SAMPLES>(
   vec3f(0.353553, 0.000000, 0.935414),
   vec3f(-0.451544, 0.413652, 0.790569),
   vec3f(0.069116, -0.787542, 0.612372),

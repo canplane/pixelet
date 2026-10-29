@@ -36,8 +36,7 @@ impl Finish {
 
     /// `color`, `s`'s world color as it is shown, onto `canvas` and `s`'s
     /// depth into its screen's, a pass of its own, by the frame words in
-    /// `frame`, its time counted in `stamp`'s span.
-    #[allow(clippy::too_many_arguments)]
+    /// `frame`, its time counted in `span`.
     pub fn draw(
         &mut self,
         ctx: &mut RenderContext,
@@ -47,13 +46,15 @@ impl Finish {
         color: u32,
         canvas: u32,
     ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(span);
         let bound = [frame, color, s.depth_view];
         if bound != self.bound {
             release(self.group);
             self.group = g.bind_group(
                 self.built.layouts[0],
                 &[
-                    buffer_entry(0, frame),
+                    buf_entry(0, frame),
                     view_entry(1, color),
                     view_entry(2, s.depth_view),
                 ],

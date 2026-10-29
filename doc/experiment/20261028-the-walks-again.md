@@ -22,16 +22,16 @@ Chrome window at dpr 2 (1200×1113 for E6, 1200×1169 for E7), shadows off,
 and counted with ray_counts. E2's motion was used, with the walker at the
 device's location (terraces by water).
 
-- **E6, the reasons.** cast_cs counted each walked pixel with no pick by
-  what the four samples about it offer its own ray:
+- **E6, the reasons.** cast_cs counted each walked pixel with no visible sample
+  by what the four samples about it offer its own ray:
   - (a) a hole: no box of theirs is entered;
   - (b) off-axis: a box is entered, but only across another axis than its
     sample entered by. The raster draws a box's face across its sample's
     axis alone, so `fs` discards it (raster.wgsl, pxl-shader raster.rs
-    `picked`).
+    `taken`).
 
-  A lack's pick and a refused pick were counted apart; both were nil.
-  The exports were HEAD `7f9195c9c` and the tree before the removal
+  A lack's visible sample and a refused visible sample were counted apart; both
+  were nil. The exports were HEAD `7f9195c9c` and the tree before the removal
   (`52f0e9dba`).
 - **E7, a face for every open side.** The axis refusal was replaced by the
   face's own openness:
@@ -79,7 +79,7 @@ device's location (terraces by water).
 **Reviewed before the build** (pixelet-d3, pixelet-1d [faaf39]):
 
 - A LINE bit is a sound openness test at the stop's zoom, if a lenient one.
-  A side face can still show past an undrawn finer or partial neighbour, as
+  A side face can still show past an undrawn finer or partial neighbor, as
   a wrong surface rather than a hole.
 - A side face taken needs its own word, or it is painted with the sample
   face's edges. The other way, `face::BOX` on open sides, keeps today's asks
@@ -93,7 +93,7 @@ The walks again are not worth removing this way.
 - Half of them are holes, rows thinner than the samples' spacing, which no
   face drawn can answer. The walk is the answer there.
 - Of the off-axis half, the open sides removed about 40%. The rest are
-  sides against a whole neighbour, where walking is right.
+  sides against a whole neighbor, where walking is right.
 - So walks fell by about a fifth: a share of the millisecond the removal
   cost. It was bought with half again as many face asks, and with more
   fragments in every view, including looking down, where nothing walks.

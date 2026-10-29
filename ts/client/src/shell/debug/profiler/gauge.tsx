@@ -48,10 +48,8 @@ export const Head = ({
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 const or = (x: number) => (Number.isNaN(x) ? "-" : n1(x));
-const geo = (
-  lat: number,
-  lon: number,
-) => (Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`);
+const geo = (lat: number, lon: number) =>
+  Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`;
 const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
 /** What the pick met, by the kernel's code (profiler.json `NOW.view`). */
@@ -59,11 +57,8 @@ const STRUCK = ["ground", "cube", "cubes, folded", "decor"];
 
 /** A unit to an eighth, the finest cell (z27), with no trailing zeros. */
 const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
-const coord = (
-  x: number,
-  y: number,
-  z: number,
-) => (Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`);
+const coord = (x: number, y: number, z: number) =>
+  Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`;
 
 /**
  * Live: where the camera's eye, its pivot and the pointer are now, not over
@@ -102,17 +97,21 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
       />
       <Row
         k="struck/drawn at"
-        v={picked
-          ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`
-          : "-"}
+        v={
+          picked
+            ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`
+            : "-"
+        }
         warn={folded}
       />
       <Row k="places at" v={coord(v.place_x, v.place_y, v.place_z)} />
       <Row
         k="places at zoom"
-        v={Number.isNaN(v.place_zoom)
-          ? "-"
-          : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`}
+        v={
+          Number.isNaN(v.place_zoom)
+            ? "-"
+            : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`
+        }
         warn={v.blocked === 1}
       />
     </>
@@ -146,9 +145,10 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
 
   const f = g.frames;
   const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) =>
-    [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) =>
-      by(r) > 0
-    );
+    [...rows]
+      .sort((a, b) => by(b) - by(a))
+      .slice(0, n)
+      .filter((r) => by(r) > 0);
   const failing = g.tasks.filter((t) => t.err > 0);
 
   // A glance: how smooth, where the frame's time goes, what it is drawn at,
@@ -207,6 +207,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       </>
     ),
     cap: null,
+    rays: null,
+    eye: null,
     sun: null,
     requests: failing.length > 0 && (
       <>

@@ -41,7 +41,7 @@ fn timed_steps() {
 /// them: reads on one frame in three judge it as soon as every frame would,
 /// by the frames that took them, and a window none landed in is not judged.
 #[test]
-fn timed_windows_count_every_frame_and_judge_by_the_reads() {
+fn timed_windows() {
     let frame = param::SCALE_BUDGET_FLOOR_MS;
     let frames = (param::SCALE_WINDOW_MS / frame).ceil() as u32;
     let mut k = Scale::NEW;

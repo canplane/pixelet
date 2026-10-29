@@ -30,10 +30,10 @@ fn patch_contest() {
                         mark(&mut asked, i);
                     }
                     let beaten = beaten(decor, zoom, &cs, n, &asked);
-                    for i in 0..n as usize {
+                    for (i, c) in cs.iter().enumerate().take(n as usize) {
                         assert_eq!(
                             !is_marked(&beaten, i),
-                            stands(decor, zoom, &cs[i]),
+                            stands(decor, zoom, c),
                             "decor {} at {zoom}, patch {p}, candidate {i}",
                             decor.val
                         );
@@ -55,11 +55,11 @@ fn patch_contest() {
 /// Decor is drawn where the rays ask the leaf cell's zoom or finer at its
 /// distance, and nowhere they ask coarser.
 #[test]
-fn decor_is_drawn_at_the_leaves_or_finer_and_never_coarser() {
+fn decor_at_leaves_or_finer() {
     let detail = Detail {
         range: [0, crate::FINEST_ZOOM],
         eye: [0.0; 3],
-        spacing: crate::cast::Spacing::NONE,
+        spacing: Spacing::NONE,
     };
     let mut d = 0.25f32;
     let mut seen = [false; 2];

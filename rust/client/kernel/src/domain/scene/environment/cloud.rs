@@ -38,6 +38,8 @@ use crate::domain::scene::frame::Frame;
 use crate::domain::scene::lane::{self, GroupLanes};
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::km_per_u;
+use crate::domain::view::lens;
+use crate::domain::view::observation;
 use crate::domain::view::observation::eye;
 use crate::domain::view::param;
 use crate::domain::view::setting::store::settings_store;
@@ -153,7 +155,7 @@ fn layer_u() -> f64 {
 /// by up to that, an angle, the same on every screen. Infinite while none
 /// is drawn.
 pub fn drift_step_s() -> f64 {
-    crate::domain::view::lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
+    lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
 }
 
 /// How much of the clouds shows, the cumulus and the sheets alike (the stage's
@@ -190,9 +192,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let largest = CLOUD_WIDTH[1];
     // As far as the eye draws, a flat layer hiding under no horizon, and no
     // farther than its largest cloud is a sprite's worth.
-    let reach = crate::domain::view::observation::eye_draw_reach()
-        .unwrap_or(0.0)
-        .min(REACH_MAX);
+    let reach = observation::eye_draw_reach().unwrap_or(0.0).min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| {
         libm::floor((on_map[k] - reach) / PATCH) as i64
@@ -521,7 +521,7 @@ fn present_patch(
         sprites.clear();
         let gone = tier(extent * most / nearest) == drawn::GONE;
         let modeled = tier(extent * least / farthest) == drawn::MODEL;
-        for i in 0..if gone { 0 } else { count as usize } {
+        for i in 0..if gone { 0 } else { cnt as usize } {
             if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
             }

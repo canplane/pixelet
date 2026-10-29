@@ -26,8 +26,8 @@ import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command } from "@/abi/cmd.spec.ts";
 import { kernel_command, kernel_setting } from "@/abi/shell.ts";
 import {
+  SETTING,
   type SettingName,
-  SETTINGS,
   settingsIn,
 } from "@/shell/setting/schema.ts";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -139,7 +139,8 @@ const SAID_MS = 2500;
 
 /** A setting the panel holds (section `profiler`). */
 type Own = {
-  [K in SettingName]: (typeof SETTINGS)[K]["section"] extends "profiler" ? K
+  [K in SettingName]: (typeof SETTING)[K]["section"] extends "profiler"
+    ? K
     : never;
 }[SettingName];
 
@@ -152,7 +153,7 @@ const OWN: Record<Own, { label: string; note: string }> = {
 };
 
 function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
-  const { key } = SETTINGS[name];
+  const { key } = SETTING[name];
   const on = useKernel((s) => s.settings[key] === 1);
   const own = OWN[name];
   const Box = on ? CheckSquareIcon : SquareIcon;
@@ -211,16 +212,12 @@ export function ProfilerPanel() {
 
   if (!show) return null;
   const recording = g?.rec.recording === true;
-  const f = g?.frames ?? null;
   // The rate frames are drawn at over the last second, idle where recording
   // saw none move in it.
   const r = g?.recent ?? null;
   const rate = r === null ? null : movingFps(r);
-  const title = rate !== null
-    ? `Profiler · ${n1(rate)} fps`
-    : recording
-    ? "Profiler · idle"
-    : "Profiler";
+  const note =
+    rate !== null ? `${n1(rate)} fps` : recording ? "idle" : undefined;
 
   return (
     <Accordion

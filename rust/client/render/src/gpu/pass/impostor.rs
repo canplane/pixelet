@@ -87,7 +87,7 @@ impl ImpostorPass {
             texture_usage::RENDER_ATTACHMENT,
         );
         let depth_view = g.view(depth, false, 0, 1, 0, 1);
-        let fits = g.buffer(
+        let fits = g.buf(
             DECOR_GROUPS as u32 * FIT_BYTES,
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
@@ -96,7 +96,7 @@ impl ImpostorPass {
             &[
                 view_entry(0, atlas_view),
                 sampler_entry(1, sampler),
-                buffer_range_entry(2, fits, 0, DECOR_GROUPS as u32 * FIT_BYTES),
+                buf_range_entry(2, fits, 0, DECOR_GROUPS as u32 * FIT_BYTES),
             ],
         );
         ImpostorPass {
@@ -239,13 +239,10 @@ impl ImpostorPass {
         frame: u32,
     ) {
         let Some(d) = grown else { return };
-        g.set_pipeline(pass, self.draw.pipeline);
-        if *bound != frame {
-            g.set_bind_group(pass, 0, frame, &[]);
-            *bound = frame;
-        }
-        g.set_bind_group(pass, 2, self.group, &[]);
-        g.set_bind_group(pass, 3, d.instances_group, &[]);
+        pass.set_pipeline(self.draw.pipeline);
+        pass.set_bind_group(0, frame, &[]);
+        pass.set_bind_group(2, self.group, &[]);
+        pass.set_bind_group(3, d.instances_group, &[]);
         for group in 0..groups.min(DECOR_GROUPS as u32) {
             if self.baked[group as usize].is_none() {
                 continue;

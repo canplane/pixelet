@@ -7,7 +7,7 @@ import { FRAME_GROUP } from "@/abi/profiler.spec.ts";
 import { is_list, LANES } from "@/abi/profiler.ts";
 import { GROUPS, LIST_NAMES } from "./lane.ts";
 
-Deno.test("FRAME_GROUP - every lane is printed, in one group", () => {
+test("FRAME_GROUP - every lane is printed, in one group", () => {
   const grouped = GROUPS.flatMap((g) => FRAME_GROUP[g] as readonly string[]);
   assertEquals([...grouped].sort(), LANES.map((l) => l.name as string).sort());
 });

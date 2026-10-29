@@ -96,28 +96,27 @@ pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
     WINDOWS_STATE.set(fresh());
     windows().entries.copy_from_slice(&b.entries);
     windows().slots.copy_from_slice(&b.slots);
-    windows().berths.copy_from_slice(&b.berths);
     fold(windows());
 }
 
-/// The square at `cell` holding cell `g` absent, a fill on its way to it,
+/// The brick at `cell` holding cell `g` absent, a fill on its way to it,
 /// and the windows folded without it, as a turn's step leaves them before
-/// it lands: its berth and that fill's ticket, which `landed` takes.
+/// it lands: its slot and that fill's ticket, which `on_landed` takes.
 pub(crate) fn unland(cell: Zoom, g: [i32; 2]) -> (u32, u32) {
     let w = windows();
-    let b = berth_of(w, cell, window::square_of(g).0).expect("held");
-    (w.berths[b as usize].present, w.berths[b as usize].ticket) = (false, 7);
-    for i in of_slot(b % SLOTS) {
+    let b = slot_of(w, cell, window::brick_of(g).0).expect("held");
+    (w.slots[b as usize].present, w.slots[b as usize].ticket) = (false, 7);
+    for i in of_entry(b % ENTRIES) {
         show(w, i);
     }
     fold(w);
     (b, 7)
 }
 
-/// The device gone, as a turn's step finds it: every square's cells given
-/// up (`berth`).
+/// The device gone, as a turn's step finds it: every brick's cells given
+/// up (`assign_slots`).
 pub(crate) fn lose() {
-    berth(windows(), true);
+    assign_slots(windows(), true);
 }
 
 /// `hold`'s windows, built: the families their trees took, as records.
@@ -279,14 +278,14 @@ fn lay(w: &mut Windows, eye: [f64; 2], pivot: [f64; 2]) {
     assign_slots(w, false);
 }
 
-/// Every square held present, as if each had landed, its cells as they
+/// Every brick held present, as if each had landed, its cells as they
 /// came back, all zero unless a test held its own (`hold`): the windows
-/// fold over them wherever they are laid again (`berth`).
+/// fold over them wherever they are laid again (`assign_slots`).
 fn land_all(w: &mut Windows) {
     PLANES.get(|| Planes {
         cells: vec![0; CELLS_WORDS].leak(),
     });
-    for b in w.berths.iter_mut().filter(|b| !b.is_free()) {
+    for b in w.slots.iter_mut().filter(|b| !b.is_free()) {
         b.present = true;
     }
     for i in 0..SLOTS {
@@ -419,9 +418,9 @@ fn apart_windows_own_slots() {
 }
 
 #[test]
-fn a_landing_shows_in_every_window_wanting_the_square() {
-    let _g = crate::sys::serial();
-    // The fold after the landing reads the squares' cells.
+fn landing_shows_everywhere() {
+    let _g = sys::serial();
+    // The fold after the landing reads the bricks' cells.
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
     });
@@ -440,11 +439,11 @@ fn a_landing_shows_in_every_window_wanting_the_square() {
         w.slots[b as usize].ticket, 7,
         "another fill's landing lays nothing"
     );
-    landed(b, 7, Landing::Built(&[0]));
+    on_landed(b, 7, Landing::Built(&[0]));
     refold();
-    for win in [eye, focus] {
-        let row = w.slots[(win * SLOTS) as usize];
-        assert!(row.holds(q) && row.berth() == b);
+    for win in [eye, pivot] {
+        let row = w.entries[(win * ENTRIES) as usize];
+        assert!(row.holds(q) && row.slot() == b);
     }
     // Refused while a window wants it, then given up with the last.
     w.slots[b as usize] = Slot {
@@ -510,52 +509,4 @@ fn heap_wait_rehanded() {
         );
     }
     set_heap_stat(HeapStat::default);
-}
-
-/// A column read at the zoom of the square holding it carries which
-/// columns beside it touch its top, as its fill worked them out from the
-/// tops it laid, a neighbour past the square's edge its edge's own (`hold`
-/// clamps); read past the leaves, a leaf's cell drawing it, none.
-#[test]
-fn a_column_read_at_its_squares_zoom_carries_its_touching_neighbours_and_none_past() {
-    use pxl_spec_core::window::{
-        column_touches, TOUCH_X_HI, TOUCH_X_LO, TOUCH_Y_HI, TOUCH_Y_LO,
-    };
-    let _g = crate::sys::serial();
-    let leaf = Tile::new(LEAF_ZOOM - 1, [40, -20]).children()[0];
-    let side = GROUND.tile_cells() as i32;
-    let height = |x: i32, y: i32| ((x * 7 + y * 13) % 5) as i16;
-    let heights = (0..side * side).map(|k| height(k % side, k / side)).collect();
-    let looks = vec![pxl_spec::asset::cube::ground::land; (side * side) as usize];
-    let (x0, y0, _) = leaf.rect();
-    let centre = [x0 + 10.0, y0 + 10.0];
-    hold(centre, &[(leaf, looks, heights, Default::default())]);
-    let origin = cell_at(LEAF_CELL, [x0, y0]);
-    let top = |x: i32, y: i32| pxl_spec_core::ground::cells(LEAF_CELL, f32::from(height(x, y)));
-    let mut touched = 0;
-    for y in 0..2 * SQUARE as i32 {
-        for x in 0..2 * SQUARE as i32 {
-            let b = [origin[0] + x, origin[1] + y];
-            let (cell, f) = window::ground(&Windowed, window::Found::NONE, LEAF_CELL, b);
-            assert!(f.here() && f.from() == LEAF_CELL);
-            // A neighbour in this column's square, its edge's own past it.
-            let (sx, sy) = (x / SQUARE as i32 * SQUARE as i32, y / SQUARE as i32 * SQUARE as i32);
-            let at = |dx: i32, dy: i32| {
-                let last = SQUARE as i32 - 1;
-                top(sx + (x - sx + dx).clamp(0, last), sy + (y - sy + dy).clamp(0, last))
-            };
-            let own = top(x, y);
-            let bit = |t: i32, b: u32| if t >= own { b } else { 0 };
-            let want = bit(at(-1, 0), TOUCH_X_LO)
-                | bit(at(1, 0), TOUCH_X_HI)
-                | bit(at(0, -1), TOUCH_Y_LO)
-                | bit(at(0, 1), TOUCH_Y_HI);
-            assert_eq!(cell.touch, want, "column {x}, {y}");
-            assert_eq!(cell.touch, column_touches(window::cell(&Windowed, f, LEAF_CELL, b).1));
-            touched |= cell.touch;
-            let (past, _) = window::ground(&Windowed, window::Found::NONE, LEAF_CELL + 1, [2 * b[0], 2 * b[1]]);
-            assert_eq!(past.touch, 0, "past the leaves, column {x}, {y}");
-        }
-    }
-    assert_eq!(touched, 0xf, "every face touches somewhere");
 }

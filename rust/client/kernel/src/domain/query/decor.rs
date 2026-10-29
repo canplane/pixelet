@@ -425,12 +425,7 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
 }
 
 fn meet(s: &mut Strike, ray: &Ray, i: Instance) {
-    if let Some((t, axis)) = strike(
-        &i,
-        ray.origin,
-        ray.direction,
-        s.best.map_or(s.held, |b| b.0),
-    ) {
+    if let Some((t, axis)) = strike(&i, ray.origin, ray.dir, s.best.map_or(s.held, |b| b.0)) {
         s.best = Some((t, i, axis));
     }
 }

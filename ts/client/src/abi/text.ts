@@ -85,7 +85,7 @@ export function text_call(code: u32, w: U32Array, a: u32): void {
         at,
         4 * (LAYOUT_ANSWER.WORDS + LINE.WORDS * lines),
       );
-      out.setUint32(4 * LAYOUT_ANSWER.count, ends.length, true);
+      out.setUint32(4 * LAYOUT_ANSWER.cnt, ends.length, true);
       let start = 0;
       let start_byte = 0;
       ends.forEach((end, i) => {

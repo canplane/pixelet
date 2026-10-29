@@ -103,9 +103,9 @@ fn companion_props() -> Option<CompanionProps> {
 /// The edit the pointer would make, of what it is over where the camera now
 /// stands (`camera_tick`), so the scene draws it this turn, not the next.
 fn edit_tick(_: &mut TickContext) {
-    let edits = crate::domain::control::interaction::edit::pending_step();
+    let edits = edit::pending_step();
     // A new preview moves the world as drawn where it was and where it is.
-    if crate::domain::layer::object::preview::set(edits).is_some() {
+    if preview::set(edits).is_some() {
         request_world_tick();
     }
 }
@@ -169,12 +169,10 @@ fn camera_input_tick(_: &mut TickContext) {
 /// controllers), before the phases that observe it. The pointer is picked
 /// again from there, so what it is over follows a view moved under it.
 fn camera_tick(ctx: &mut TickContext) {
-    crate::domain::control::camera::controller::camera_step(ctx);
-    let moved = crate::domain::view::frame::pose::view_compose(
-        crate::domain::control::camera::controller::pose(),
-    );
+    controller::camera_step(ctx);
+    let moved = pose::view_compose(controller::pose());
     if let Some([x, y]) = rehover_at(moved) {
-        crate::pointer::hover(x, y);
+        pointer::hover(x, y);
     }
 }
 
@@ -252,38 +250,24 @@ pub fn world_turn() -> f64 {
     let mut times = [0.0; spec::EFFECT_NAMES];
     // First, so the turn they are read in is the first to see them.
     effect!(times, settings, {
-        if crate::domain::view::setting::store::settings_load_step() {
-            crate::profiler::window::profiler_follow(
-                crate::domain::view::setting::store::settings_store().profiler,
-            );
+        if store::settings_load_step() {
+            profiler_follow(store::settings_store().profiler);
         }
     });
     effect!(times, navigation, off_center_step());
     effect!(times, bootstrap, map_bootstrap_step());
-    effect!(
-        times,
-        orientation,
-        orientation_watchdog_step(platform.orientation)
-    );
+    effect!(times, orient, orient_watchdog_step(platform.orient));
     effect!(times, follow, follow_mode_step());
-    effect!(times, destination, {
+    effect!(times, dst, {
         // What the walker found under an unknown Z, let go where it moved.
         support::support_step();
         destination::dst_step();
     });
     effect!(times, decor, decor_models_step());
-    effect!(
-        times,
-        objects,
-        crate::domain::layer::object::repository::step()
-    );
-    // device_coord is not gated like focus: the puck keeps its last coordinate across a transient none.
+    effect!(times, objects, repository::step());
+    // device_coord is not gated like pivot: the puck keeps its last coordinate across a transient none.
     effect!(times, puck, location_puck_step(off_center().device_coord));
-    effect!(
-        times,
-        settings,
-        crate::domain::view::setting::store::settings_keep_step()
-    );
+    effect!(times, settings, store::settings_keep_step());
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times;
     now() - at
 }
@@ -330,7 +314,7 @@ fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
 }
 
-pub fn world_frame_asked(host: HostFrame) {
+pub fn on_world_frame_asked(host: HostFrame) {
     *FRAME.get(|| None) = Some(host);
     frames().notify();
 }
@@ -375,7 +359,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     text_rise();
     let effects_ms = world_turn();
     // Before the tick, so every step and the draw see the screen it is drawn on.
-    crate::domain::view::frame::pose::view_resize(width, height);
+    pose::view_resize(width, height);
     // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
     // a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);

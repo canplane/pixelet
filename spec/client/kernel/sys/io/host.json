@@ -55,7 +55,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": ["TEXT_LAYOUT's answer at its `at`: how many lines, then `LINE` apiece."],
-    "count": 1
+    "cnt": 1
   },
   "LINE": {
     "$type": "u32",

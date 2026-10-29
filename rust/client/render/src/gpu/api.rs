@@ -1205,8 +1205,8 @@ impl Gpu {
         call::set_scissor(&mut self.s().stream, pass, rect);
     }
 
-    pub fn set_bind_group(&self, pass: Id, index: u32, group: Id, offsets: &[u32]) {
-        call::set_bind_group(&mut self.s().stream, pass, index, group, offsets);
+    pub fn set_bind_group(&self, pass: Id, idx: u32, group: Id, offsets: &[u32]) {
+        call::set_bind_group(&mut self.s().stream, pass, idx, group, offsets);
     }
 
     /// A size of 0 is the rest of the buffer.

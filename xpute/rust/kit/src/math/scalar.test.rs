@@ -35,12 +35,12 @@ fn matches_record() {
 }
 
 #[test]
-fn the_tolerance_is_the_records() {
+fn record_tolerance() {
     assert_eq!(EPS.to_bits(), Golden::load(GOLDEN).f64("eps").to_bits());
 }
 
 #[test]
-fn a_half_way_case_rounds_toward_positive_infinity() {
+fn half_rounds_up() {
     assert_eq!(round_half_up(2.5), 3.0);
     assert_eq!(round_half_up(-2.5), -2.0);
     assert_eq!(round_half_up(-2.4), -2.0);

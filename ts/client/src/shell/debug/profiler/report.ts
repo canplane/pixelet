@@ -24,13 +24,21 @@ const pastText = (f: Frame) =>
     : `off-turn ${n1(f.interval_ms - f.busy_ms)}`;
 const spread = (s: Spread) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
-/** The `ray_counts` setting's sums since boot as the last frame holds them
- * (profiler.json FRAME's rays, eye and sun lanes), where any frame's counts
- * were read back: an observer's line each where it cast — the nodes its
+/** The `ray_counts` setting's counts over the window: its sums since boot
+ * (profiler.json FRAME's rays, eye and sun lanes) at its last frame less
+ * those at its first, where any frame's counts were read back: an observer's line each where it cast — the nodes its
  * beam rays, its samples and its walk again asked a cast, its pixels or
- * slots that took the raster's pick and that walked, the nodes a walking
- * one asked, and the boxes it drew a cast. */
-const raysText = (f: Frame) => {
+ * slots that took the visible sample and that walked, the nodes its walk
+ * again asked a walking one, and the boxes it drew a cast. */
+const raysText = (first: Frame, last: Frame) => {
+  const f = Object.fromEntries(
+    Object.keys(last)
+      .filter((k) => /^(rays_frames|eye_|sun_)/.test(k))
+      .map((k) => [
+        k,
+        (last[k as keyof Frame] as f64) - (first[k as keyof Frame] as f64),
+      ]),
+  ) as Record<string, f64>;
   if (f.rays_frames === 0) return [];
   const observer = (
     name: string,
@@ -40,9 +48,8 @@ const raysText = (f: Frame) => {
       beam: number;
       sample: number;
       miss: number;
-      picked: number;
+      took: number;
       walked: number;
-      pixel: number;
       boxes: number;
     },
   ) => {
@@ -50,15 +57,15 @@ const raysText = (f: Frame) => {
     const perCast = (n: number) => n1(n / casts);
     const share = (n: number) => `${fixed((100 * n) / Math.max(1, rays), 2)}%`;
     return [
-      `  ${
-        name.padEnd(7)
-      } cast in ${casts} of ${f.rays_frames} frames   nodes a cast: beam ${
-        perCast(o.beam)
-      }  sample ${perCast(o.sample)}  pixel ${perCast(o.pixel)}  miss ${
-        perCast(o.miss)
-      }   picked ${share(o.picked)}  walked ${share(o.walked)} (${
-        n1(o.pixel / Math.max(1, o.walked))
-      } nodes each)   boxes ${perCast(o.boxes)} a cast`,
+      `  ${name.padEnd(
+        7,
+      )} cast in ${casts} of ${f.rays_frames} frames   nodes a cast: beam ${perCast(
+        o.beam,
+      )}  sample ${perCast(o.sample)}  miss ${perCast(o.miss)}   took ${share(
+        o.took,
+      )}  walked ${share(o.walked)} (${n1(
+        o.miss / Math.max(1, o.walked),
+      )} nodes each)   boxes ${perCast(o.boxes)} a cast`,
     ];
   };
   return [
@@ -66,18 +73,16 @@ const raysText = (f: Frame) => {
       beam: f.eye_beam,
       sample: f.eye_sample,
       miss: f.eye_miss,
-      picked: f.eye_picked,
+      took: f.eye_took,
       walked: f.eye_walked,
-      pixel: f.eye_pixel,
       boxes: f.eye_boxes,
     }),
     ...observer("sun", f.sun_casts, f.sun_rays, {
       beam: f.sun_beam,
       sample: f.sun_sample,
       miss: f.sun_miss,
-      picked: f.sun_picked,
+      took: f.sun_took,
       walked: f.sun_walked,
-      pixel: f.sun_pixel,
       boxes: f.sun_boxes,
     }),
   ];
@@ -125,24 +130,26 @@ const worstEffectText = (f: Frame) => {
 /** Geometry, textures and heap only mean anything as deltas from `prev`. */
 export function frameLine(s: Frame, prev: Frame | null): string {
   const [draws, triangles] = drawn(s);
-  const d = prev === null
-    ? ""
-    : `  Δuploads ${signed(s.uploads - prev.uploads)} Δuploads bytes ${
-      signedBytes(s.uploads_bytes - prev.uploads_bytes)
-    } Δheap used ${signedBytes(s.heap_used_bytes - prev.heap_used_bytes)}`;
-  return `[${n1(s.t).padStart(9)}] ${
-    valueText("kind_name", s.kind_name)
-  }  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${
-    pastText(s)
-  }  effects ${n1(s.effects_ms)}${worstEffectText(s)}  tick ${n1(s.tick_ms)}/${
-    n1(s.budget_ms)
-  }${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  tasks ${
-    n1(s.tasks_ms)
-  }  profiler ${n1(s.profiler_ms)}  gpu ${
+  const d =
+    prev === null
+      ? ""
+      : `  Δuploads ${signed(s.uploads - prev.uploads)} Δuploads bytes ${signedBytes(
+          s.uploads_bytes - prev.uploads_bytes,
+        )} Δheap used ${signedBytes(s.heap_used_bytes - prev.heap_used_bytes)}`;
+  return `[${n1(s.t).padStart(9)}] ${valueText(
+    "kind_name",
+    s.kind_name,
+  )}  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${pastText(
+    s,
+  )}  effects ${n1(s.effects_ms)}${worstEffectText(s)}  tick ${n1(s.tick_ms)}/${n1(
+    s.budget_ms,
+  )}${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  tasks ${n1(
+    s.tasks_ms,
+  )}  profiler ${n1(s.profiler_ms)}  gpu ${
     s.gpu_read ? n1(gpuMs(s)) : "-"
-  }  draws ${draws} tris ${tris(triangles)}  uploads ${s.uploads}  heap used ${
-    bytes(s.heap_used_bytes)
-  }${d}`;
+  }  draws ${draws} tris ${tris(triangles)}  uploads ${s.uploads}  heap used ${bytes(
+    s.heap_used_bytes,
+  )}${d}`;
 }
 
 /** What the place hears its long frames by, where that is less than both sources. */
@@ -165,14 +172,19 @@ function windowSection(r: ProfilerReport): string[] {
   const f = r.frames;
   if (f === null) return ["frames n=0"];
   const last = f.last;
-  const spans = f.gpu_spans.filter((s) => s.p95 > 0).map((s) =>
-    `${s.name} ${n1(s.p95)}`
-  ).join("  ");
-  const steps = r.steps.length === 0
-    ? "none"
-    : [...r.steps].sort((a, b) => b.ms / b.cnt - a.ms / a.cnt).map((s) =>
-      `${s.phase}/${s.name} ${n1(s.ms / s.cnt)}/${n1(s.max_ms)}`
-    ).join("  ");
+  const spans = f.gpu_spans
+    .filter((s) => s.p95 > 0)
+    .map((s) => `${s.name} ${n1(s.p95)}`)
+    .join("  ");
+  const steps =
+    r.steps.length === 0
+      ? "none"
+      : [...r.steps]
+          .sort((a, b) => b.ms / b.cnt - a.ms / a.cnt)
+          .map(
+            (s) => `${s.phase}/${s.name} ${n1(s.ms / s.cnt)}/${n1(s.max_ms)}`,
+          )
+          .join("  ");
 
   const counted = (rows: { name: string; n: f64 }[]) =>
     rows
@@ -207,33 +219,28 @@ function windowSection(r: ProfilerReport): string[] {
         .map((e) => `${e.name} ${n1(e.p95)}`)
         .join("  ") || "-"
     }`,
-    `  effects ${spread(f.effects)} ms   p95 ${
-      f.effects_p95.filter((e) => e.p95 > 0).map((e) =>
-        `${e.name} ${n1(e.p95)}`
-      ).join("  ") || "-"
-    }`,
-    `  stage   ${
-      spread(f.stage)
-    } ms   (the pump, the stage's write and the render)`,
+    `  stage   ${spread(
+      f.stage,
+    )} ms   (the pump, the stage's write and the render)`,
     `  tasks   ${spread(f.tasks)} ms`,
-    `  profiler ${
-      spread(f.profiler)
-    } ms   (its own record and the shell's reads)`,
-    `  rest    ${
-      spread(f.rest)
-    } ms   (busy unmeasured: the door's commands, rise and fall)`,
+    `  profiler ${spread(
+      f.profiler,
+    )} ms   (its own record and the shell's reads)`,
+    `  rest    ${spread(
+      f.rest,
+    )} ms   (busy unmeasured: the door's commands, rise and fall)`,
     f.gpu_read > 0
-      ? `  gpu     ${
-        spread(f.gpu)
-      } ms   (over the ${f.gpu_read} frames a read timed)`
+      ? `  gpu     ${spread(
+          f.gpu,
+        )} ms   (over the ${f.gpu_read} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
-    ...raysText(last),
+    ...raysText(f.first, last),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms a run and max, since the recording started)`,
-    `  heap used Δ ${
-      signedBytes(f.heap_used_delta_bytes)
-    }   (the high-water mark)`,
+    `  heap used Δ ${signedBytes(
+      f.heap_used_delta_bytes,
+    )}   (the high-water mark)`,
   ];
 }
 
@@ -250,11 +257,11 @@ function tasksSection(tasks: TaskSummary[]): string[] {
             .map((x) => `${failText(x.fail, x.detail)} x${x.n}`)
             .join(", ")})`;
     lines.push(
-      `  ${t.stream.padEnd(9)}${bound.padEnd(9)}n=${t.n}   p50 ${
-        n1(t.lat.p50)
-      }  p95 ${
-        n1(t.lat.p95)
-      } ms   ok ${t.ok}  ab ${t.aborted}  err ${t.err}${reasons}`,
+      `  ${t.stream.padEnd(9)}${bound.padEnd(9)}n=${t.n}   p50 ${n1(
+        t.lat.p50,
+      )}  p95 ${n1(
+        t.lat.p95,
+      )} ms   ok ${t.ok}  ab ${t.aborted}  err ${t.err}${reasons}`,
     );
     if (t.phase_mean !== null) {
       const means = t.phase_mean.map(phaseText).join("  ");

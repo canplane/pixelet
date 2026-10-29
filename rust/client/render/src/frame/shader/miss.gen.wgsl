@@ -4,7 +4,6 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: dfd3d4d3ad8a2403c3c9a51936983118243ec5b144ba9b9a572d58b1bc31283d
 struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
@@ -27,38 +26,48 @@ struct type_17 {
     member: array<u32>,
 }
 
-struct type_31 {
-    member: bool,
-    member_1: bool,
+struct type_30 {
+    member: array<vec4<i32>>,
 }
 
-struct type_33 {
+struct type_34 {
     member: array<u32, 3>,
     member_1: u32,
     member_2: array<i32, 3>,
 }
 
-struct type_34 {
+struct type_40 {
+    member: bool,
+    member_1: bool,
+}
+
+struct type_41 {
     member: u32,
     member_1: u32,
     member_2: u32,
     member_3: u32,
-    member_4: type_31,
+    member_4: type_40,
 }
 
-struct type_35 {
+struct type_42 {
     member: u32,
-    member_1: type_34,
+    member_1: type_41,
 }
 
-struct type_47 {
+struct type_48 {
     member: f32,
     member_1: f32,
 }
 
-struct type_56 {
+struct type_51 {
     member: array<f32, 3>,
     member_1: array<f32, 3>,
+}
+
+struct type_52 {
+    member: type_42,
+    member_1: type_34,
+    member_2: f32,
 }
 
 struct type_57 {
@@ -77,7 +86,6 @@ struct type_60 {
     member_1: u32,
     member_2: i32,
     member_3: u32,
-    member_4: u32,
 }
 
 struct type_61 {
@@ -125,8 +133,8 @@ struct type_69 {
     member: array<u32, 2>,
     member_1: f32,
     member_2: u32,
-    member_3: type_33,
-    member_4: type_35,
+    member_3: type_34,
+    member_4: type_42,
 }
 
 struct type_70 {
@@ -135,32 +143,13 @@ struct type_70 {
     member_2: u32,
 }
 
-struct type_72 {
-    member: type_35,
-    member_1: type_33,
-    member_2: f32,
-}
-
-struct type_78 {
+struct type_76 {
     member: array<atomic<u32>>,
 }
 
 var<private> global: vec3<u32>;
 @group(0) @binding(0)
 var<uniform> global_1: type_13;
-@group(0) @binding(1)
-var<storage, read_write> global_2: type_16;
-@group(0) @binding(2)
-var<storage> global_3: type_19;
-@group(0) @binding(5)
-var<storage> global_4: type_16;
-@group(0) @binding(6)
-var<storage> global_5: type_19;
-@group(0) @binding(7)
-var<storage> global_6: type_19;
-@group(0) @binding(9)
-var<storage, read_write> global_7: type_78;
-var<private> global_8: type_33 = type_33(array<u32, 3>(0u, 0u, 0u), 0u, array<i32, 3>(0i, 0i, 0i));
 @group(0) @binding(3)
 var global_2: texture_storage_2d_array<r32uint,read_write>;
 @group(0) @binding(1)
@@ -182,9 +171,9 @@ var<private> global_10: type_34 = type_34(array<u32, 3>(0u, 0u, 0u), 0u, array<i
 var<storage, read_write> global_11: type_17;
 
 fn function_() {
-    var local: array<type_34, 33>;
-    var local_1: array<u32, 4>;
-    var local_2: array<u32, 3>;
+    var local: array<type_41, 33>;
+    var local_1: array<type_41, 33>;
+    var local_2: array<u32, 4>;
     var local_3: array<u32, 3>;
     var local_4: array<u32, 3>;
     var local_5: array<u32, 6>;
@@ -211,35 +200,35 @@ fn function_() {
     var local_26: array<u32, 3>;
     var local_27: array<u32, 6>;
     var local_28: array<u32, 3>;
-    var local_29: array<u32, 6>;
-    var local_30: array<u32, 4>;
-    var local_31: array<type_34, 33>;
-    var local_32: array<f32, 3>;
-    var local_33: array<f32, 3>;
-    var local_34: array<f32, 3>;
-    var local_35: array<f32, 3>;
+    var local_29: array<u32, 3>;
+    var local_30: array<u32, 6>;
+    var local_31: array<u32, 4>;
+    var local_32: array<u32, 3>;
+    var local_33: array<u32, 3>;
+    var local_34: array<u32, 6>;
+    var local_35: array<u32, 3>;
     var local_36: array<u32, 3>;
     var local_37: array<u32, 3>;
-    var local_38: array<u32, 6>;
+    var local_38: array<u32, 3>;
     var local_39: array<u32, 3>;
     var local_40: array<u32, 3>;
-    var local_41: array<u32, 6>;
+    var local_41: array<u32, 3>;
     var local_42: array<u32, 3>;
-    var local_43: array<u32, 3>;
+    var local_43: array<u32, 6>;
     var local_44: array<u32, 3>;
     var local_45: array<u32, 3>;
     var local_46: array<u32, 3>;
-    var local_47: array<u32, 6>;
+    var local_47: array<u32, 3>;
     var local_48: array<u32, 3>;
     var local_49: array<u32, 3>;
     var local_50: array<u32, 3>;
     var local_51: array<u32, 3>;
-    var local_52: array<u32, 3>;
-    var local_53: array<u32, 3>;
+    var local_52: array<u32, 6>;
+    var local_53: array<u32, 4>;
     var local_54: array<u32, 3>;
     var local_55: array<u32, 3>;
     var local_56: array<u32, 6>;
-    var local_57: array<u32, 4>;
+    var local_57: array<u32, 3>;
     var local_58: array<u32, 3>;
     var local_59: array<u32, 6>;
     var local_60: array<u32, 4>;
@@ -418,23 +407,13 @@ fn function_() {
     var local_86: u32;
     var local_87: u32;
     var local_88: u32;
-    var phi_18960_: u32;
     var local_89: u32;
     var local_90: u32;
     var phi_20595_: u32;
     var local_91: u32;
     var local_92: u32;
     var local_93: u32;
-    var phi_5160_: type_33;
-    var phi_5161_: type_55;
-    var phi_5163_: type_33;
-    var phi_5164_: type_55;
-    var phi_5165_: bool;
-    var phi_5171_: type_33;
-    var phi_5172_: type_55;
-    var phi_5173_: bool;
     var local_94: u32;
-    var phi_21260_: u32;
     var local_95: u32;
     var phi_5804_: type_42;
     var phi_5805_: type_57;
@@ -626,261 +605,12 @@ fn function_() {
     var phi_6594_: u32;
     var phi_6596_: u32;
     var local_99: u32;
-    var phi_5260_: type_35;
-    var phi_5261_: type_57;
-    var phi_5263_: type_35;
-    var phi_5264_: type_57;
-    var phi_5265_: bool;
-    var phi_5271_: type_35;
-    var phi_5272_: type_57;
-    var phi_5273_: bool;
     var local_100: u32;
-    var phi_22021_: bool;
-    var phi_22024_: bool;
-    var phi_22025_: bool;
-    var phi_22032_: bool;
-    var phi_10615_: bool;
-    var phi_10620_: u32;
-    var phi_10603_: u32;
-    var phi_10621_: u32;
-    var phi_10622_: u32;
-    var phi_22093_: bool;
-    var phi_22102_: bool;
-    var phi_22104_: bool;
-    var phi_22113_: bool;
-    var phi_22073_: bool;
-    var phi_22076_: bool;
-    var phi_22077_: bool;
-    var phi_10633_: u32;
-    var phi_10634_: u32;
-    var phi_10635_: bool;
     var local_101: u32;
-    var phi_5286_: bool;
     var local_102: u32;
-    var phi_5303_: u32;
-    var phi_5304_: u32;
-    var phi_5305_: u32;
-    var phi_5306_: u32;
-    var phi_5307_: u32;
-    var phi_5308_: u32;
-    var phi_5309_: u32;
-    var phi_5310_: u32;
-    var phi_5311_: u32;
-    var phi_5312_: u32;
-    var phi_5313_: type_35;
-    var phi_5314_: type_57;
-    var phi_5315_: bool;
-    var phi_21347_: u32;
-    var phi_21348_: u32;
-    var phi_21369_: u32;
-    var phi_21370_: u32;
-    var phi_21375_: u32;
-    var phi_21378_: u32;
-    var phi_21379_: bool;
-    var phi_5370_: vec4<i32>;
-    var phi_5381_: i32;
-    var phi_5383_: u32;
-    var phi_5388_: u32;
-    var phi_5390_: u32;
-    var phi_5391_: bool;
-    var phi_21422_: bool;
-    var phi_21425_: bool;
-    var phi_21426_: bool;
-    var phi_21432_: bool;
-    var phi_21435_: bool;
-    var phi_21436_: bool;
-    var phi_21477_: bool;
-    var phi_21446_: bool;
-    var phi_5416_: bool;
-    var phi_5417_: bool;
-    var phi_21518_: bool;
-    var phi_21521_: bool;
-    var phi_21522_: bool;
-    var phi_21529_: bool;
-    var phi_5507_: u32;
-    var phi_5508_: u32;
-    var phi_21571_: bool;
-    var phi_21615_: bool;
-    var phi_21618_: bool;
-    var phi_21619_: bool;
-    var phi_21626_: bool;
-    var phi_5535_: bool;
-    var phi_5540_: u32;
-    var phi_5523_: u32;
-    var phi_5541_: u32;
-    var phi_5542_: u32;
-    var phi_21687_: bool;
-    var phi_21696_: bool;
-    var phi_21698_: bool;
-    var phi_21707_: bool;
-    var phi_21667_: bool;
-    var phi_21670_: bool;
-    var phi_21671_: bool;
-    var phi_5553_: u32;
-    var phi_5554_: u32;
-    var phi_5555_: bool;
-    var phi_21716_: bool;
-    var phi_5588_: u32;
-    var phi_5590_: u32;
-    var phi_5591_: u32;
-    var phi_5451_: u32;
-    var phi_21742_: bool;
-    var phi_21779_: bool;
-    var phi_21788_: bool;
-    var phi_21790_: bool;
-    var phi_21799_: bool;
-    var phi_21759_: bool;
-    var phi_21762_: bool;
-    var phi_21763_: bool;
-    var phi_5466_: u32;
-    var phi_5472_: bool;
-    var phi_5473_: bool;
-    var phi_5593_: type_59;
-    var phi_21811_: bool;
-    var phi_21823_: bool;
-    var phi_5631_: u32;
-    var phi_5638_: u32;
-    var phi_5680_: u32;
-    var phi_5704_: u32;
-    var phi_5711_: u32;
-    var phi_5715_: u32;
-    var phi_5741_: u32;
-    var phi_5742_: u32;
-    var phi_21850_: bool;
-    var phi_21894_: bool;
-    var phi_21897_: bool;
-    var phi_21898_: bool;
-    var phi_21905_: bool;
-    var phi_5769_: bool;
-    var phi_5774_: u32;
-    var phi_5757_: u32;
-    var phi_5775_: u32;
-    var phi_5776_: u32;
-    var phi_21966_: bool;
-    var phi_21975_: bool;
-    var phi_21977_: bool;
-    var phi_21986_: bool;
-    var phi_21946_: bool;
-    var phi_21949_: bool;
-    var phi_21950_: bool;
-    var phi_5787_: bool;
-    var phi_5820_: u32;
-    var phi_5844_: u32;
-    var phi_5851_: u32;
-    var phi_5855_: u32;
-    var phi_5881_: u32;
-    var phi_5882_: u32;
-    var phi_22006_: bool;
-    var phi_22050_: bool;
-    var phi_22053_: bool;
-    var phi_22054_: bool;
-    var phi_22061_: bool;
-    var phi_5909_: bool;
-    var phi_5914_: u32;
-    var phi_5897_: u32;
-    var phi_5915_: u32;
-    var phi_5916_: u32;
-    var phi_22122_: bool;
-    var phi_22131_: bool;
-    var phi_22133_: bool;
-    var phi_22142_: bool;
-    var phi_22102_: bool;
-    var phi_22105_: bool;
-    var phi_22106_: bool;
-    var phi_5927_: bool;
-    var phi_5935_: u32;
-    var phi_5639_: u32;
-    var phi_32634_: bool;
-    var phi_32985_: bool;
-    var phi_32984_: bool;
-    var phi_5953_: array<u32, 4>;
-    var phi_5977_: u32;
-    var phi_5979_: u32;
-    var phi_5980_: u32;
-    var phi_5983_: bool;
-    var phi_5984_: u32;
-    var phi_5985_: u32;
-    var phi_5987_: bool;
-    var phi_5988_: bool;
-    var phi_5989_: u32;
-    var phi_5990_: u32;
-    var phi_5992_: bool;
-    var phi_5993_: bool;
-    var phi_5999_: u32;
-    var phi_32980_: bool;
-    var phi_6008_: type_57;
-    var phi_32979_: bool;
-    var phi_6010_: type_57;
-    var phi_6011_: bool;
-    var phi_22167_: bool;
-    var phi_6045_: u32;
-    var phi_6048_: u32;
-    var phi_6051_: u32;
-    var phi_6053_: u32;
-    var phi_6079_: u32;
-    var phi_6103_: u32;
-    var phi_6110_: u32;
-    var phi_6114_: u32;
-    var phi_6120_: u32;
-    var phi_6123_: u32;
-    var phi_6125_: i32;
-    var phi_6146_: u32;
-    var phi_6147_: u32;
-    var phi_6121_: u32;
-    var phi_6124_: u32;
-    var phi_6126_: i32;
-    var phi_6149_: u32;
-    var phi_6150_: u32;
-    var phi_6049_: u32;
-    var phi_6052_: u32;
-    var phi_6054_: u32;
     var local_103: u32;
-    var phi_10668_: u32;
-    var phi_10670_: u32;
-    var phi_10671_: u32;
     var local_104: u32;
-    var phi_6116_: u32;
-    var phi_6143_: u32;
-    var phi_6174_: u32;
-    var phi_6175_: u32;
-    var phi_6117_: u32;
-    var phi_30123_: bool;
-    var phi_30213_: bool;
-    var phi_6214_: array<u32, 2>;
-    var phi_30212_: bool;
-    var phi_6215_: array<u32, 2>;
-    var phi_30211_: bool;
-    var phi_6216_: array<u32, 2>;
-    var phi_30210_: bool;
-    var phi_6218_: array<u32, 2>;
-    var phi_19888_: bool;
-    var phi_6261_: array<u32, 2>;
-    var phi_19916_: u32;
-    var phi_19928_: u32;
-    var phi_6268_: type_33;
-    var phi_6271_: u32;
-    var phi_6273_: array<array<i32, 2>, 2>;
-    var phi_6275_: u32;
-    var phi_19941_: i32;
-    var phi_19954_: i32;
-    var phi_6549_: u32;
-    var phi_6550_: u32;
-    var phi_6552_: u32;
-    var phi_6553_: u32;
-    var phi_6554_: bool;
-    var phi_6559_: u32;
-    var phi_6562_: u32;
-    var phi_6591_: i32;
-    var phi_6617_: vec4<i32>;
-    var phi_20052_: bool;
-    var phi_20056_: bool;
-    var phi_20057_: bool;
-    var phi_6637_: u32;
-    var phi_6639_: u32;
-    var phi_6563_: u32;
-    var phi_6640_: bool;
-    var phi_6641_: bool;
-    var local_105: bool;
+    var local_105: u32;
     var local_106: u32;
     var phi_6758_: u32;
     var phi_6785_: u32;
@@ -997,9 +727,8 @@ fn function_() {
     var phi_7450_: bool;
     var phi_7451_: bool;
     var local_111: bool;
-    var local_112: u32;
+    var local_112: bool;
     var local_113: u32;
-    var phi_6746_: u32;
     var local_114: bool;
     var phi_7469_: bool;
     var local_115: bool;
@@ -1548,29 +1277,9 @@ fn function_() {
     var phi_25062_: type_48;
     var phi_25068_: type_48;
     var local_154: i32;
-    var phi_10845_: f32;
-    var phi_10860_: f32;
-    var local_155: bool;
-    var phi_25627_: type_47;
-    var phi_25630_: type_47;
-    var phi_25631_: bool;
-    var phi_25636_: type_47;
-    var phi_25642_: type_47;
-    var phi_25648_: type_47;
-    var local_156: bool;
-    var phi_25666_: type_47;
-    var phi_25669_: type_47;
-    var phi_25670_: bool;
-    var phi_25675_: type_47;
-    var phi_25681_: type_47;
-    var phi_25687_: type_47;
-    var local_157: bool;
-    var phi_25705_: type_47;
-    var phi_25708_: type_47;
-    var phi_25709_: bool;
-    var phi_25714_: type_47;
-    var phi_25720_: type_47;
-    var phi_25726_: type_47;
+    var local_155: i32;
+    var local_156: i32;
+    var local_157: i32;
     var local_158: i32;
     var local_159: i32;
     var local_160: bool;
@@ -1812,14 +1521,6 @@ fn function_() {
     var phi_13784_: u32;
     var local_168: u32;
     var local_169: u32;
-    var phi_25397_: bool;
-    var phi_25366_: bool;
-    var phi_12501_: bool;
-    var phi_12502_: bool;
-    var phi_25438_: bool;
-    var phi_25441_: bool;
-    var phi_25442_: bool;
-    var phi_25449_: bool;
     var local_170: u32;
     var local_171: u32;
     var phi_13583_: type_41;
@@ -2017,215 +1718,10 @@ fn function_() {
     var phi_14887_: u32;
     var local_174: u32;
     var local_175: u32;
-    var phi_14186_: type_34;
-    var phi_14505_: type_34;
-    var phi_14507_: type_34;
-    var phi_14510_: u32;
-    var phi_14560_: i32;
-    var phi_14576_: bool;
-    var phi_14583_: type_31;
-    var phi_14584_: type_31;
-    var phi_14585_: bool;
-    var phi_14590_: type_31;
-    var phi_14591_: type_31;
-    var phi_28003_: bool;
-    var phi_14616_: u32;
-    var phi_14636_: u32;
-    var phi_14660_: u32;
-    var phi_14667_: u32;
-    var phi_14671_: u32;
-    var phi_14672_: u32;
-    var phi_28032_: bool;
-    var phi_14697_: u32;
-    var phi_14717_: u32;
-    var phi_14741_: u32;
-    var phi_14748_: u32;
-    var phi_14752_: u32;
-    var phi_14753_: u32;
-    var phi_14508_: type_34;
-    var phi_14511_: u32;
-    var local_176: type_34;
-    var phi_28082_: u32;
-    var phi_28083_: u32;
-    var phi_28104_: u32;
-    var phi_28105_: u32;
-    var phi_28110_: u32;
-    var phi_28113_: u32;
-    var phi_28114_: bool;
-    var phi_14810_: vec4<i32>;
-    var phi_14821_: i32;
-    var phi_14823_: u32;
-    var phi_14828_: u32;
-    var phi_14830_: u32;
-    var phi_14831_: bool;
-    var local_177: type_34;
-    var phi_28157_: bool;
-    var phi_28160_: bool;
-    var phi_28161_: bool;
-    var phi_28167_: bool;
-    var phi_28170_: bool;
-    var phi_28171_: bool;
-    var phi_28212_: bool;
-    var phi_28181_: bool;
-    var phi_14855_: bool;
-    var phi_14856_: bool;
-    var phi_28253_: bool;
-    var phi_28256_: bool;
-    var phi_28257_: bool;
-    var phi_28264_: bool;
-    var phi_14945_: u32;
-    var phi_14946_: u32;
-    var phi_28306_: bool;
-    var phi_28350_: bool;
-    var phi_28353_: bool;
-    var phi_28354_: bool;
-    var phi_28361_: bool;
-    var phi_14973_: bool;
-    var phi_14978_: u32;
-    var phi_14961_: u32;
-    var phi_14979_: u32;
-    var phi_14980_: u32;
-    var phi_28422_: bool;
-    var phi_28431_: bool;
-    var phi_28433_: bool;
-    var phi_28442_: bool;
-    var phi_28402_: bool;
-    var phi_28405_: bool;
-    var phi_28406_: bool;
-    var phi_14991_: u32;
-    var phi_14992_: u32;
-    var phi_14993_: bool;
-    var phi_28451_: bool;
-    var phi_15026_: u32;
-    var phi_15028_: u32;
-    var phi_15029_: u32;
-    var phi_14889_: u32;
-    var phi_28477_: bool;
-    var phi_28514_: bool;
-    var phi_28523_: bool;
-    var phi_28525_: bool;
-    var phi_28534_: bool;
-    var phi_28494_: bool;
-    var phi_28497_: bool;
-    var phi_28498_: bool;
-    var phi_14904_: u32;
-    var phi_14910_: bool;
-    var phi_14911_: bool;
-    var phi_15031_: type_59;
-    var phi_28546_: bool;
-    var phi_28558_: bool;
-    var phi_15069_: u32;
-    var phi_15076_: u32;
-    var phi_15118_: u32;
-    var phi_15142_: u32;
-    var phi_15149_: u32;
-    var phi_15153_: u32;
-    var phi_15179_: u32;
-    var phi_15180_: u32;
-    var phi_28585_: bool;
-    var phi_28629_: bool;
-    var phi_28632_: bool;
-    var phi_28633_: bool;
-    var phi_28640_: bool;
-    var phi_15207_: bool;
-    var phi_15212_: u32;
-    var phi_15195_: u32;
-    var phi_15213_: u32;
-    var phi_15214_: u32;
-    var phi_28701_: bool;
-    var phi_28710_: bool;
-    var phi_28712_: bool;
-    var phi_28721_: bool;
-    var phi_28681_: bool;
-    var phi_28684_: bool;
-    var phi_28685_: bool;
-    var phi_15225_: bool;
-    var phi_15258_: u32;
-    var phi_15282_: u32;
-    var phi_15289_: u32;
-    var phi_15293_: u32;
-    var phi_15319_: u32;
-    var phi_15320_: u32;
-    var phi_28741_: bool;
-    var phi_28785_: bool;
-    var phi_28788_: bool;
-    var phi_28789_: bool;
-    var phi_28796_: bool;
-    var phi_15347_: bool;
-    var phi_15352_: u32;
-    var phi_15335_: u32;
-    var phi_15353_: u32;
-    var phi_15354_: u32;
-    var phi_28857_: bool;
-    var phi_28866_: bool;
-    var phi_28868_: bool;
-    var phi_28877_: bool;
-    var phi_28837_: bool;
-    var phi_28840_: bool;
-    var phi_28841_: bool;
-    var phi_15365_: bool;
-    var phi_15373_: u32;
-    var phi_15077_: u32;
-    var phi_34865_: bool;
-    var phi_35104_: bool;
-    var phi_35103_: bool;
-    var phi_15391_: array<u32, 4>;
-    var phi_15415_: u32;
-    var phi_15417_: u32;
-    var phi_15418_: u32;
-    var phi_15421_: bool;
-    var phi_15422_: u32;
-    var phi_15423_: u32;
-    var phi_15425_: bool;
-    var phi_15426_: bool;
-    var phi_15427_: u32;
-    var phi_15428_: u32;
-    var phi_15430_: bool;
-    var phi_15431_: bool;
-    var phi_15437_: u32;
-    var phi_35099_: bool;
-    var phi_15446_: type_57;
-    var phi_35098_: bool;
-    var phi_15448_: type_57;
-    var phi_15449_: bool;
-    var phi_28902_: bool;
-    var phi_15483_: u32;
-    var phi_15486_: u32;
-    var phi_15489_: u32;
-    var phi_15491_: u32;
-    var phi_15517_: u32;
-    var phi_15541_: u32;
-    var phi_15548_: u32;
-    var phi_15552_: u32;
-    var phi_15558_: u32;
-    var phi_15561_: u32;
-    var phi_15563_: i32;
-    var phi_15584_: u32;
-    var phi_15585_: u32;
-    var phi_15559_: u32;
-    var phi_15562_: u32;
-    var phi_15564_: i32;
-    var phi_15587_: u32;
-    var phi_15588_: u32;
-    var phi_15487_: u32;
-    var phi_15490_: u32;
-    var phi_15492_: u32;
+    var local_176: u32;
+    var local_177: u32;
     var local_178: u32;
-    var phi_12535_: u32;
     var local_179: u32;
-    var phi_25662_: bool;
-    var phi_25699_: bool;
-    var phi_25708_: bool;
-    var phi_25710_: bool;
-    var phi_25719_: bool;
-    var phi_25679_: bool;
-    var phi_25682_: bool;
-    var phi_25683_: bool;
-    var phi_12550_: u32;
-    var phi_12556_: bool;
-    var phi_12557_: bool;
-    var phi_12677_: type_57;
-    var phi_25731_: bool;
     var local_180: u32;
     var local_181: u32;
     var phi_15049_: u32;
@@ -2272,7 +1768,6 @@ fn function_() {
     var phi_15574_: bool;
     var local_183: bool;
     var local_184: u32;
-    var phi_26087_: bool;
     var local_185: u32;
     var phi_15579_: u32;
     var local_186: bool;
@@ -2345,9 +1840,8 @@ fn function_() {
     var phi_15741_: bool;
     var phi_15742_: bool;
     var local_187: bool;
-    var local_188: u32;
+    var local_188: bool;
     var local_189: u32;
-    var phi_16184_: u32;
     var local_190: bool;
     var phi_15760_: bool;
     var local_191: bool;
@@ -2825,45 +2319,39 @@ fn function_() {
     var local_217: u32;
     var local_218: u32;
     var local_219: u32;
-    var local_220: u32;
-    var local_221: u32;
-    var local_222: u32;
+    var local_220: array<array<i32, 2>, 2>;
+    var local_221: type_42;
+    var local_222: type_42;
     var local_223: u32;
-    var local_224: array<array<i32, 2>, 2>;
-    var local_225: type_35;
-    var local_226: type_35;
+    var local_224: u32;
+    var local_225: u32;
+    var local_226: u32;
     var local_227: u32;
-    var local_228: type_34;
-    var local_229: u32;
-    var local_230: u32;
-    var local_231: u32;
-    var local_232: u32;
-    var local_233: type_34;
-    var local_234: array<array<i32, 2>, 2>;
-    var local_235: type_34;
-    var local_236: type_34;
-    var local_237: type_34;
-    var local_238: u32;
-    var local_239: u32;
-    var local_240: u32;
+    var local_228: type_41;
+    var local_229: array<array<i32, 2>, 2>;
+    var local_230: type_41;
+    var local_231: type_41;
+    var local_232: type_41;
+    var local_233: u32;
+    var local_234: u32;
 
     switch bitcast<i32>(0u) {
         default: {
-            let _e279 = global;
-            let _e283 = arrayLength((&global_2.member));
-            let _e286 = arrayLength((&global_3.member));
-            let _e289 = arrayLength((&global_10.member));
-            let _e292 = arrayLength((&global_4.member));
-            let _e295 = arrayLength((&global_5.member));
-            let _e298 = arrayLength((&global_6.member));
-            let _e299 = textureDimensions(global_9);
-            if (_e279.x >= _e299.x) {
+            let _e271 = global;
+            let _e275 = arrayLength((&global_3.member));
+            let _e278 = arrayLength((&global_4.member));
+            let _e281 = arrayLength((&global_5.member));
+            let _e284 = arrayLength((&global_6.member));
+            let _e287 = arrayLength((&global_7.member));
+            let _e290 = arrayLength((&global_8.member));
+            let _e291 = textureDimensions(global_2);
+            if (_e271.x >= _e291.x) {
             } else {
-                if (_e279.y >= _e299.y) {
+                if (_e271.y >= _e291.y) {
                 } else {
-                    let _e306 = vec3<u32>(_e279.x, _e279.y, 0u);
-                    let _e312 = textureLoad(global_9, vec2<u32>(_e306.x, _e306.y), i32(_e306.z));
-                    if (_e312.x != 4294967295u) {
+                    let _e298 = vec3<u32>(_e271.x, _e271.y, 0u);
+                    let _e304 = textureLoad(global_2, vec2<u32>(_e298.x, _e298.y), i32(_e298.z));
+                    if (_e304.x != 4294967295u) {
                     } else {
                         local = array<type_41, 33>(type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)), type_41(0u, 0u, 0u, 0u, type_40(false, false)));
                         let _e312 = global_1.member.member_10[0u];
@@ -5209,21 +4697,6 @@ fn function_() {
                                                                 phi_32062_ = _e2597;
                                                                 break if !(_e2743);
                                                             }
-                                                            let _e2599 = local_43;
-                                                            if _e2599 {
-                                                                phi_5951_ = _e2532;
-                                                            } else {
-                                                                phi_5951_ = (_e2532 + (_e2531 / 2i));
-                                                            }
-                                                            let _e2603 = phi_5951_;
-                                                            let _e2605 = local_44;
-                                                            if _e2605 {
-                                                                phi_5964_ = (_e2532 + _e2531);
-                                                            } else {
-                                                                phi_5964_ = (_e2532 + (_e2531 / 2i));
-                                                            }
-                                                            let _e2610 = phi_5964_;
-                                                            phi_5966_ = array<i32, 2>(_e2603, _e2610);
                                                         }
                                                         let _e2773 = phi_32062_;
                                                         phi_46896_ = _e1100;

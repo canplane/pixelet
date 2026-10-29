@@ -86,7 +86,7 @@ lies in it: at Carto zoom c a cell four icons wide — an icon 16 pixels, Carto'
 web map's 256-pixel tile — keeps one place, the first in order, and every other
 in it is not drawn at c. Four icons, sixteen camera grid cells, is a product
 choice: at an icon's own cell, twice the places Carto shows were kept, which
-drawn showed as icons and names piled on each other, and places a few metres
+drawn showed as icons and names piled on each other, and places a few meters
 apart stood side by side as near as the view came. The cell is an angle, and its
 pixels are the screen's, so a name, which wraps at 193 CSS pixels
 (`SPACING_PX`), may be wider or narrower than its cell. A name shows wherever

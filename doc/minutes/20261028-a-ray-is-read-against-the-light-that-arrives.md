@@ -37,7 +37,7 @@ pixel.
   pixel's sample point, and the depth test keeps the nearest that does. What
   is thinner than a pixel and misses the point is lost: far wires and fences
   break up and crawl.
-- **No rows of holes.** Every triangle is projected, and neighbouring
+- **No rows of holes.** Every triangle is projected, and neighboring
   triangles share their edges (a watertight fill rule), so a pixel's point
   always lands on some surface. What a raster loses is under a pixel, never a
   whole row.
@@ -72,6 +72,10 @@ blend it. That needs transparency the opaque cells here do not have.
   the result is not relevant for very small voxels". It does not pass it. The
   prune passes, and so it errs toward holes.
 
+  > **Note (10-28):** the prune is gone
+  > ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md),
+  > its note of 10-28).
+
 ## The direction: stop where the cone touches
 
 > **Note (10-28):** not taken. Built, it held the visits and cost five to
@@ -95,7 +99,7 @@ is touched.
   pixel takes it only where its own ray enters it. The widening only decides
   which boxes are candidates; nothing on the screen is drawn larger than it
   is. A sample that stopped short of what lies behind leaves that pixel's
-  ray to refuse the pick and walk again.
+  ray to refuse the visible sample and walk again.
 - **The zoom is untouched.** It stays the distance's, so there is no patchy
   coarsening of the kind a stand would bring.
 - **It is deterministic.** It is decided in one frame. TAA's counterpart would
@@ -103,7 +107,7 @@ is touched.
   view moves and no frame's image is its own. The user asked for a
   deterministic answer, which rules it out.
 - **Symmetry holds.** Boxes and a cone, so every source alike. Each observer
-  keeps its own cone. Control and physics keep `Cone::EXACT` and are
+  keeps its own cone. Control and physics keep `Spacing::NONE` and are
   unchanged.
 
 ## Open

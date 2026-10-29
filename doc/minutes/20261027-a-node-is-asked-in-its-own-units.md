@@ -32,21 +32,22 @@ rule each change is held to.
   LOD always has. The two are independent.
 - **Nothing the ray meets is passed.** A ray enters every split whose box it
   meets and stops at the first block that is not transparent, the eye's and
-  the sun's map's alike. Its cone is read only by a beam, as how far apart its
+  the shadow map's alike. Its cone is read only by a beam, as how far apart its
   rays lie (`cast::Spacing`): the eye's an angle, its grid's cell; the sun's a
   width, `sun::BEAM` of its map's texels; control and physics none
   (`Spacing::NONE`). Passing what the cone cannot tell apart, a split's box
   shrunk by half the cone at the node's nearest point
   ([a cell's inside is don't-care](./archive/20260928-what-is-drawn-is-what-the-screen-covers.md)),
-  left a row missing whole at grazing angles, which no pick could bring back.
-  With the eye's prune off the rows went, at about a millisecond of GPU p95 at
-  the horizon ([the rows, seen](../experiment/20261028-the-rows-seen.md)),
-  which the user took over the rows on 10-28. The sun's prune, the same
-  machinery, bought nothing that could be measured or seen
-  ([the sun without its prune](../experiment/20261028-the-sun-without-its-prune.md)),
-  and the mitigations tried with the prune kept held neither the frame nor the
-  rows ([the cone touches](../experiment/20261028-the-cone-touches.md),
-  [the ring](../experiment/20261028-the-ring.md)).
+  left a row missing whole at grazing angles, which no visible sample could
+  bring back. With the eye's prune off the rows went, at about a millisecond of
+  GPU p95 at the horizon ([the rows,
+  seen](../experiment/20261028-the-rows-seen.md)), which the user took over the
+  rows on 10-28. The sun's prune, the same machinery, bought nothing that could
+  be measured or seen ([the sun without its
+  prune](../experiment/20261028-the-sun-without-its-prune.md)), and the
+  mitigations tried with the prune kept held neither the frame nor the rows
+  ([the cone touches](../experiment/20261028-the-cone-touches.md), [the
+  ring](../experiment/20261028-the-ring.md)).
 - **A walk resumed meets what the root's meets.** With nothing passed, a walk
   resumed inside a node and the walk from the root meet the same cells.
 

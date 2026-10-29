@@ -76,7 +76,7 @@ and does real work is the hazard.
   effect to no real work, since it has no budget. Its cost is one call of
   `domain/scene/indicator/location_puck.rs` `ground`, as main has it. Each of
   about 37 cells asks `surface_support` for itself and again for each of its
-  four neighbours, about 185 asks. Grounding is asked again only when the fix
+  four neighbors, about 185 asks. Grounding is asked again only when the fix
   moves or a change touches the columns it read (`domain/query/changed.rs`
   `Asked`, `within`). The beacon's bob and slide re-ground nothing, since `Seen`
   holds the target and not what is shown.
@@ -109,7 +109,7 @@ and does real work is the hazard.
     has no aging.
   - Cesium's tile priority is a key of factors packed one above another,
     the shape of the rank here. Its foveated deferral holds back the tiles
-    off the view's centre until the camera stops.
+    off the view's center until the camera stops.
   - Mapbox GL 1.3.0 cancels requests aggressively on a fast pan or zoom.
     MapTiler offers to cancel pending tiles while zooming.
   - None of them ages a request.

@@ -49,8 +49,10 @@ pub const GRID_WORDS: usize = beam::GRID_WORDS;
 pub const SUN: usize = GRID + GRID_WORDS;
 pub const SUN_WORDS: usize = 20;
 /// Where each pixel's ray goes through it this frame, its offset from the
-/// pixel's middle in drawn pixels, X right and Y down, f32 bits, then two
-/// words no reader reads. The renderer's to write; the kernel leaves it zero.
+/// pixel's middle in drawn pixels, X right and Y down, f32 bits; then the
+/// first pixel the frame casts across and down, f32 bits, where it casts
+/// only a region of them (pxl-render gpu/surface.rs `Region`). The
+/// renderer's to write; the kernel leaves it zero.
 /// What the beams, cells and samples cast is the camera grid's and reads none
 /// of it.
 pub const JITTER: usize = SUN + SUN_WORDS;
@@ -70,30 +72,12 @@ const _: () = assert!(
         && JITTER.is_multiple_of(4)
 );
 
-/// The slope a caster's depth in the sun's map is pushed back by, as a
-/// rasterizer's polygon offset: its greatest slope, in depth a texel
-/// (`sun::slope`), times this. The raster casters' depth pipelines take it
-/// (pxl-render record.rs `depth_only`), and the world's cast adds it
-/// (pxl-shader `sun_cs`), so the two kinds of caster shadow alike. A
-/// receiver compares each tap at its own plane's depth there (pxl-render
-/// shadow.wgsl), so the push covers only the texels a tap filters, a texel
-/// each way, along the steeper axis; the receiver's texel of normal offset
-/// covers the other. At 2, with each tap compared at the receiver's own
-/// depth, a step a unit high shadowed the ground below it in stripes a
-/// texel apart: the taps up the slope saw past the step.
-pub const SLOPE_BIAS: f32 = 1.0;
-
 /// Whether a ball `radius` units wide about `v`, units from the eye, lies
 /// at all in the view of the eye looking along `forward`, `right` across
 /// and `up`, the screen's half-angles' tangents `tan`: before it, and past
 /// none of its sides by more than its radius, each side's distance to a
 /// point its offset over the side's slope (`√(1 + tan²)`).
-pub fn sees(
-    [forward, right, up]: [[f32; 3]; 3],
-    tan: [f32; 2],
-    v: [f32; 3],
-    radius: f32,
-) -> bool {
+pub fn sees([forward, right, up]: [[f32; 3]; 3], tan: [f32; 2], v: [f32; 3], radius: f32) -> bool {
     let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let f = dot(v, forward);
     let side = |o: f32, t: f32| libm::fabsf(o) - t * f <= radius * libm::sqrtf(1.0 + t * t);
@@ -107,7 +91,7 @@ mod tests {
     /// A ball before the eye within its view is seen, one past a side or
     /// behind it by more than its radius not.
     #[test]
-    fn the_eye_sees_what_lies_within_its_view() {
+    fn eye_sees_view() {
         let axes = [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
         let tan = [1.0, 0.5];
         assert!(sees(axes, tan, [0.0, 10.0, 0.0], 0.0));

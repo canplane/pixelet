@@ -18,40 +18,21 @@ use spirv_std::spirv;
 use crate::add;
 use crate::world::brick_at;
 
-/// The ways of the squares `fresh` names, one a `z`, a thread a column
-/// (`x`, cells row by row): each column's spans and those beside it off the
-/// square's lines (pxl-spec-core `ways::around`) read along z as runs
-/// (`ways::runs`), into the square's scratch from its column's first
-/// (`window::FIRSTS_AT`). Four dispatches: `pass.x` 3 first, each column
-/// of the square and its ring its spans once into the scratch
-/// (`fill::spans`), which the rest read; then 0 to 2: each column
-/// counts its runs into its first; a workgroup a square sums them into each
-/// column's first, each
-/// thread a stretch (`fill::stretch_runs`), the stretches' sums scanned in
-/// the workgroup's memory (Hillis and Steele 1986; GPU Gems 3, ch. 39) and
-/// each stretch's firsts written off it (`fill::scanned`); each column
-/// writes its runs from its first. Over `heights_cs`'s tops: a way is told
-/// from their faces. Each square's entry as handed whole: where it lies
-/// and its shard lay the area's edge (pxl-spec-core
-/// `ways::Columns::walled`).
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "ways_cs"))]
-pub fn ways_cs(
+/// The ways of the bricks `fresh` names, one a `z`, a thread a column of
+/// the brick and its ring (`x`, row by row): each its spans once off the
+/// brick's lines into the brick's scratch (`fill::spans`), which its
+/// levels and its ways' tree read its cells and its neighbors' off. Over
+/// `height_cs`'s tops: a way is told from their faces. Each brick's
+/// entry as handed whole: where it lies and its shard lay the area's edge
+/// (pxl-spec-core `way::Columns::is_walled`).
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "way_cs"))]
+pub fn way_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] scratch: &mut [u32],
 ) {
-    if pass.x == 3 {
-        fill::spans(ground, fresh, scratch, id.z, id.x);
-        return;
-    }
-    if pass.x != 1 {
-        fill::ways(ground, fresh, scratch, id.z, pass.x == 2, id.x);
-        return;
-    }
-    let t = lane.x;
-    let own = fill::stretch_runs(scratch, id.z, t);
-    fill::scanned(scratch, id.z, t, scan(sums, t, own) - own);
+    fill::spans(ground, fresh, scratch, id.z, id.x);
 }
 
 /// The lanes of a workgroup a brick: `way_tree_cs`'s, which a level's

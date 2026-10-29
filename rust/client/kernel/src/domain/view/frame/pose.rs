@@ -15,7 +15,7 @@ use pxl_spec::space::coord::world::nearest;
 use crate::domain::view::observation;
 use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
-use pxl_spec::space::camera::grid::{fov, HALF_TAN};
+use pxl_spec::space::camera::grid::fov;
 use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -29,8 +29,10 @@ pub struct View {
     /// The camera as composed this turn; None before it stands anywhere.
     pub pose: Option<ObserverPose>,
 
-    pub width: f64,
-    pub height: f64,
+    /// Its size in CSS pixels, read past the frame only through the screen
+    /// (`domain/view/frame/screen.rs`).
+    pub(super) width: f64,
+    pub(super) height: f64,
 
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
@@ -114,7 +116,8 @@ pub fn km_per_u() -> f64 {
 
 /// The view `width` × `height` CSS pixels: what its matrices are made of,
 /// made again only where one moved. The pixels it is drawn with are the
-/// drawing's alone (`lens::tau`).
+/// drawing's alone: the camera grid is an angle (pxl-spec
+/// space/camera/grid.rs `CELL`).
 pub fn view_resize(width: f64, height: f64) {
     let v = view();
     let (width, height) = (width.max(1.0), height.max(1.0));
@@ -122,7 +125,7 @@ pub fn view_resize(width: f64, height: f64) {
         return;
     }
     (v.width, v.height) = (width, height);
-    crate::domain::view::observation::forget();
+    observation::forget();
     compose();
 }
 
@@ -146,7 +149,7 @@ pub fn view_compose(pose: Option<ObserverPose>) -> bool {
         ..p
     });
     let moved = view().pose != pose;
-    crate::domain::view::observation::turn(moved);
+    observation::turn(moved);
     if moved {
         view().pose = pose;
         compose();
@@ -165,12 +168,7 @@ fn compose() {
     mat4::invert(&mut v.inv_view_matrix, &vm);
     // Reversed depth in floats with the far plane at infinity: one near
     // plane holds every height's precision.
-    mat4::perspective(
-        &mut v.proj,
-        fov(),
-        v.width / v.height,
-        crate::domain::view::param::NEAR,
-    );
+    mat4::perspective(&mut v.proj, fov(), v.width / v.height, param::NEAR);
     let proj = v.proj;
     mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;
@@ -179,12 +177,14 @@ fn compose() {
 }
 
 /// The ray through `ndc_x`/`ndc_y` in [−1, 1], x right and y up, from
-/// `pose`, framed as the view frames its pose (`compose`); `direction` is
-/// unit. A pick asks the pose its controller holds, which may have moved
-/// since the turn composed the view.
-pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
-    let v = view();
-    let tan = HALF_TAN;
+/// `pose`, framed as the view frames its pose (`compose`), its tangents the
+/// view's lens as the cast's eye takes them (pxl-spec `Frustum::lens`), along
+/// its forward where it has no screen yet; `direction` is unit. A pick asks
+/// the pose its controller holds, which may have moved since the turn
+/// composed the view: the lens's tangents are the screen's alone, whatever
+/// the pose.
+pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: &mut V3) {
+    let tan = view().frustum.lens().map_or([0.0; 2], |l| l.tan);
     // The rotation turns the world's axes to the camera's; a rotation's
     // transpose turns them back.
     let mut back = mat4::new();

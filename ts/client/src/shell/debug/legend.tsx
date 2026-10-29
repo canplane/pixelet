@@ -10,9 +10,9 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Defs, LinearGradient, Rect, Stop, Svg } from "react-native-svg";
 
-import { SETTINGS } from "@/shell/setting/schema.ts";
+import { SETTING } from "@/shell/setting/schema.ts";
 import { gauge, Head } from "./profiler/gauge.tsx";
-import { Fold } from "./fold.tsx";
+import { Accordion } from "./accordion.tsx";
 import { coverage, frame } from "@/abi/gizmo.spec.ts";
 import { grid, share, steps } from "@/abi/debug_look.spec.ts";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -24,7 +24,7 @@ interface Look {
 }
 
 const FRAME: Record<keyof typeof frame, string> = {
-  focus: "focus and its cell",
+  pivot: "pivot and its cell",
   level: "level ring",
   forward: "upright ring, forward",
   north: "ring through north",
@@ -50,44 +50,56 @@ const SHARE: Record<keyof typeof share, string> = {
 const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0")}`;
 
 const useShown = (name: "world_gizmo" | "camera_gizmo" | "ray_steps") =>
-  useKernel((s) => s.settings[SETTINGS[name].key] === 1);
+  useKernel((s) => s.settings[SETTING[name].key] === 1);
 
 /**
  * In the spec's order, or `reversed` to list the one drawn over the rest
  * first; a line's look as a stroke, or `filled` a tint's as a patch.
  */
-function Rows<K extends string>(
-  { looks, labels, reversed, filled }: {
-    looks: Record<K, Look>;
-    labels: Record<K, string>;
-    reversed?: boolean;
-    filled?: boolean;
-  },
-) {
+function Rows<K extends string>({
+  looks,
+  labels,
+  reversed,
+  filled,
+}: {
+  looks: Record<K, Look>;
+  labels: Record<K, string>;
+  reversed?: boolean;
+  filled?: boolean;
+}) {
   const keys = Object.keys(looks) as K[];
   return (reversed ? keys.reverse() : keys).map((k) => (
-    <Row key={k} look={looks[k]} filled={filled}>{labels[k]}</Row>
+    <Row key={k} look={looks[k]} filled={filled}>
+      {labels[k]}
+    </Row>
   ));
 }
 
-function Row(
-  { look, filled, children }: {
-    look: Look;
-    filled?: boolean;
-    children: string;
-  },
-) {
+function Row({
+  look,
+  filled,
+  children,
+}: {
+  look: Look;
+  filled?: boolean;
+  children: string;
+}) {
   return (
     <View style={styles.row}>
       <View style={styles.chip}>
         <View
-          style={filled
-            ? [styles.patch, { backgroundColor: hex(look.rgb) }]
-            : [styles.stroke, {
-              borderColor: hex(look.rgb),
-              borderStyle: look.dashed ? "dashed" : "solid",
-              opacity: look.alpha ?? 1,
-            }]}
+          style={
+            filled
+              ? [styles.patch, { backgroundColor: hex(look.rgb) }]
+              : [
+                  styles.stroke,
+                  {
+                    borderColor: hex(look.rgb),
+                    borderStyle: look.dashed ? "dashed" : "solid",
+                    opacity: look.alpha ?? 1,
+                  },
+                ]
+          }
         />
       </View>
       <Text style={gauge.text}>{children}</Text>
@@ -98,24 +110,24 @@ function Row(
 export function WorldGizmoLegend() {
   if (!useShown("world_gizmo")) return null;
   return (
-    <Fold name="world_gizmo" title="World Gizmo">
+    <Accordion name="world_gizmo" title="World Gizmo">
       <Head>Frame</Head>
       <Rows looks={frame} labels={FRAME} />
       <Head>Coverage</Head>
       <Rows looks={coverage} labels={COVERAGE} reversed />
-    </Fold>
+    </Accordion>
   );
 }
 
 export function CameraGizmoLegend() {
   if (!useShown("camera_gizmo")) return null;
   return (
-    <Fold name="camera_gizmo" title="Camera Gizmo">
+    <Accordion name="camera_gizmo" title="Camera Gizmo">
       <Head>Grid</Head>
       <Row look={grid}>a cell of one solid angle</Row>
       <Head>Share</Head>
       <Rows looks={share} labels={SHARE} filled />
-    </Fold>
+    </Accordion>
   );
 }
 
@@ -127,7 +139,7 @@ export function RayStepsLegend() {
   if (!useShown("ray_steps")) return null;
   const last = steps.ramp.length - 1;
   return (
-    <Fold name="ray_steps" title="Ray Steps">
+    <Accordion name="ray_steps" title="Ray Steps">
       <Head>Steps</Head>
       <View style={styles.ramp}>
         <Svg width="100%" height={8}>
@@ -151,8 +163,10 @@ export function RayStepsLegend() {
           ))}
         </View>
       </View>
-      <Row look={{ rgb: steps.none }} filled>none walked</Row>
-    </Fold>
+      <Row look={{ rgb: steps.none }} filled>
+        none walked
+      </Row>
+    </Accordion>
   );
 }
 

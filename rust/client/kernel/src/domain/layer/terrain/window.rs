@@ -138,14 +138,14 @@ struct Windows {
     /// first and present while it is laid out, none while its center is not
     /// (pxl-spec-core `window::ORIGIN_AT`): the GPU's table as it is
     /// (`table`).
-    slots: [Slot; (SQUARES + WINDOWS) as usize],
-    /// The squares the windows want, each in one berth (`Berth`).
-    berths: [Berth; SQUARES as usize],
-    /// The eye's windows' levels over their squares, folded over the
-    /// squares as they are held here (`fold`), the zero entry, none, before
+    entries: [Entry; (SLOTS + WINDOWS) as usize],
+    /// The bricks the windows want, each in one slot (`Slot`).
+    slots: [Slot; SLOTS as usize],
+    /// The eye's windows' levels over their bricks, folded over the
+    /// bricks as they are held here (`fold`), the zero entry, none, before
     /// any is.
     joined: [[u32; window::JOINED_WORDS as usize]; (EYE_WINDOWS * window::JOINED_ENTRIES) as usize],
-    /// The device the slots' squares were handed to (`device_generation`):
+    /// The device the entries' bricks were handed to (`device_generation`):
     /// one that went took them all.
     on: u32,
     ticket: u32,
@@ -185,8 +185,8 @@ fn fresh() -> Windows {
         windows: core::array::from_fn(|w| Window {
             cell: layout(w as u32).1,
         }),
-        slots: [Slot::absent([i32::MIN; 2]); (SQUARES + WINDOWS) as usize],
-        berths: [Berth::FREE; SQUARES as usize],
+        entries: [Entry::absent([i32::MIN; 2]); (SLOTS + WINDOWS) as usize],
+        slots: [Slot::FREE; SLOTS as usize],
         joined: [[0; window::JOINED_WORDS as usize];
             (EYE_WINDOWS * window::JOINED_ENTRIES) as usize],
         on: 0,
@@ -231,7 +231,7 @@ pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
     )
 }
 
-/// Every square's planes on the CPU, in `.fixed.terrain` (fixed.rs): its
+/// Every brick's planes on the CPU, in `.fixed.terrain` (fixed.rs): its
 /// cells as they come back; a test's own. Its ways' trees' families are the
 /// heap's (mirror.rs).
 pub(crate) struct Planes {
@@ -248,20 +248,20 @@ fn planes() -> &'static mut Planes {
         // SAFETY: the planes are the windows' alone, plain numbers, zeroed at boot.
         unsafe {
             Planes {
-                cells: lane(r, cells_off(0), (SQUARES * CELLS_LANE_BYTES / 4) as usize),
+                cells: lane(r, cells_off(0), (SLOTS * CELLS_LANE_BYTES / 4) as usize),
             }
         }
     })
 }
 
-/// The eye's windows' levels over their squares folded again, a level at a
+/// The eye's windows' levels over their bricks folded again, a level at a
 /// time, as the GPU folds its own (pxl-spec-core `window::fold`; pxl-shader
-/// `joined_cs`), over the squares as they are held here. The writers of a
-/// square a window wants or its presence are `berth`, a turn's step's,
+/// `joined_cs`), over the bricks as they are held here. The writers of a
+/// brick a window wants or its presence are `assign_slots`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
-/// (`landed`), folded once after all of them (`refold`): no read of a bound
+/// (`on_landed`), folded once after all of them (`refold`): no read of a bound
 /// (`Windowed`) comes between a write and its fold, so none finds one of
-/// other squares than its read of the cells does. Read through the windows
+/// other bricks than its read of the cells does. Read through the windows
 /// it is handed (`Holding`), which its writer holds while it runs.
 fn fold(w: &mut Windows) {
     for l in 1..=window::JOINED_LEVELS {
@@ -269,7 +269,7 @@ fn fold(w: &mut Windows) {
         for win in 0..EYE_WINDOWS {
             for b in 0..blocks {
                 let e = window::fold(&Holding(w), FIRST_CELL + win, l, b);
-                let at = win * window::JOINED_ENTRIES + window::joined_index(l, [0, 0]) + b;
+                let at = win * window::JOINED_ENTRIES + window::joined_idx(l, [0, 0]) + b;
                 w.joined[at as usize] = e;
             }
         }
@@ -421,15 +421,15 @@ fn wake(w: &mut Windows) -> bool {
     true
 }
 
-/// Each square a laid window wants held in one berth: the device that went
-/// took every berth's cells; a berth no window wants any more is given up,
-/// a fill on its way to it laying nothing (`landed`); and a square wanted
-/// that no berth holds takes a free one of its slot's, its window's own
-/// first, absent. Then every slot's row shows its berth (`show`), and the
+/// Each brick a laid window wants held in one slot: the device that went
+/// took every slot's cells; a slot no window wants any more is given up,
+/// a fill on its way to it laying nothing (`on_landed`); and a brick wanted
+/// that no slot holds takes a free one of its entry's, its window's own
+/// first, absent. Then every entry's row shows its slot (`show`), and the
 /// windows are folded over them (`fold`).
-fn berth(w: &mut Windows, lost: bool) {
-    for b in 0..SQUARES as usize {
-        let held = w.berths[b];
+fn assign_slots(w: &mut Windows, lost: bool) {
+    for b in 0..SLOTS as usize {
+        let held = w.slots[b];
         if held.is_free() {
             continue;
         }
@@ -523,11 +523,11 @@ const _: () = assert!(WAITING > DONE - 1, "no fill's ticket waits");
 /// again (`Landing::Again`), it is absent, handed again; refused, or its
 /// families past the mirror's cap, it is absent and `REFUSED` while a window
 /// wants it; its families refused the mirror's room by the heap, it is absent
-/// and `WAITING` on the heap. A fill no berth waits on lays
-/// nothing: its families may be another's by now. Every window's slot
-/// holding the square shows it (`show`). The windows are folded over it
+/// and `WAITING` on the heap. A fill no slot waits on lays
+/// nothing: its families may be another's by now. Every window's entry
+/// holding the brick shows it (`show`). The windows are folded over it
 /// once the read-back's landings are all in (`refold`).
-pub fn landed(b: u32, ticket: u32, landing: Landing) {
+pub fn on_landed(b: u32, ticket: u32, landing: Landing) {
     let w = windows();
     let held = &mut w.slots[b as usize];
     if held.ticket != ticket {
@@ -554,14 +554,6 @@ pub fn landed(b: u32, ticket: u32, landing: Landing) {
     for i in of_entry(b % ENTRIES) {
         show(w, i);
     }
-}
-
-/// The windows folded again over the squares a frame's read-back landed
-/// (`landed`), once after all of them: the stage's, as soon as the frame it
-/// renders returns (domain/scene/stage.rs `stage_render`), between whose
-/// landings nothing reads a bound here, the renderer reading only the GPU's.
-pub fn refold() {
-    fold(windows());
 }
 
 /// The windows folded again over the bricks a frame's read-back landed
@@ -811,7 +803,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> b
 }
 
 /// The windows as the CPU holds them, for pxl-spec-core's one reading of a
-/// cell (`window::step`, `window::bound_over`): each square's columns,
+/// cell (`window::step`, `window::bound_over`): each brick's columns,
 /// levels and ways' tree's root as the GPU drew them, read back (its tree's
 /// families in the pool's mirror, `pool`), the eye's windows' levels over
 /// them folded here (`fold`); and the service area they end at
@@ -832,17 +824,17 @@ impl Area for Windowed {
 /// kernel's (`fold`, which runs while its writer holds them).
 struct Holding<'a>(&'a Windows);
 
-impl Squares for Holding<'_> {
-    /// Present as the GPU holds it: its cells back, in the berth holding
+impl Bricks for Holding<'_> {
+    /// Present as the GPU holds it: its cells back, in the slot holding
     /// it, whichever windows want it.
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
         let w = self.0;
-        let held = berth_of(w, cell, q).filter(|&b| w.berths[b as usize].present);
+        let held = slot_of(w, cell, q).filter(|&b| w.slots[b as usize].present);
         (held.unwrap_or(0), held.is_some())
     }
 
-    fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
-        self.0.slots[((cell - FIRST_CELL) * SLOTS + slot) as usize].held()
+    fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
+        self.0.entries[((cell - FIRST_CELL) * ENTRIES + entry) as usize].held()
     }
 
     /// The CPU reads a cell's own look alone, as laid: its four are it four
@@ -851,7 +843,7 @@ impl Squares for Holding<'_> {
         word([self.laid(cell, b, i) & 0xff; 4])
     }
 
-    /// As this side folded it over its squares (`fold`).
+    /// As this side folded it over its bricks (`fold`).
     fn joined(&self, cell: Zoom, e: u32) -> [u32; window::JOINED_WORDS as usize] {
         self.0.joined[((cell - FIRST_CELL) * window::JOINED_ENTRIES + e) as usize]
     }
@@ -879,12 +871,12 @@ impl Squares for Holding<'_> {
 }
 
 /// The kernel's windows as they are held (`Holding`).
-impl Squares for Windowed {
+impl Bricks for Windowed {
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
         Holding(windows()).present(cell, q)
     }
-    fn square(&self, cell: Zoom, slot: u32) -> ([i32; 2], bool) {
-        Holding(windows()).square(cell, slot)
+    fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
+        Holding(windows()).brick(cell, entry)
     }
     fn look(&self, cell: Zoom, b: u32, i: u32) -> u32 {
         Holding(windows()).look(cell, b, i)
@@ -909,7 +901,7 @@ impl Squares for Windowed {
     }
 }
 
-const _: () = assert!(LEVELS <= SQUARE_SHIFT);
+const _: () = assert!(LEVELS <= BRICK_SHIFT);
 
 #[cfg(test)]
 #[path = "window.test.rs"]

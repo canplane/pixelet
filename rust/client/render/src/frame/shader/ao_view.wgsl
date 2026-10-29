@@ -6,19 +6,8 @@
 // Safari's WebGPU its GPU process. The screen's size and the fog are the frame's.
 @group(0) @binding(6) var<uniform> ao_words: array<vec4f, AO_VEC4S>;
 
-fn ao_proj() -> mat4x4f { return mat4x4f(ao_words[0], ao_words[1], ao_words[2], ao_words[3]); }
-fn ao_inv_proj() -> mat4x4f { return mat4x4f(ao_words[4], ao_words[5], ao_words[6], ao_words[7]); }
-fn ao_half() -> vec2f { return ao_words[8].xy; }
-
-const AO_RADIUS: f32 = 1.5;
-const AO_DISTANCE_FALLOFF: f32 = 1.0;
-const AO_INTENSITY: f32 = 1.2;
-const AO_SAMPLES: i32 = 4;
-const AO_DENOISE_SAMPLES: i32 = 4;
-// N8AO's 12-texel denoise radius, halved for half resolution.
-const AO_DENOISE_RADIUS: f32 = 6.0;
-// The blue-noise texture's side; a pixel reads it tiled.
-const AO_NOISE_MASK: i32 = 127;
+// The blue-noise texture's side less one; a pixel reads it tiled.
+const AO_NOISE_MASK: i32 = i32(AO_NOISE_SIDE) - 1;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

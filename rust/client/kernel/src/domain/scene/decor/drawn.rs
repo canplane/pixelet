@@ -10,7 +10,7 @@
 
 use pxl_render::gpu::grown::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_distance, SPLIT};
+use pxl_spec::space::camera::grid::{split_dist, SPLIT, WINDOW_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
@@ -21,6 +21,7 @@ use xpute_guest::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::query::World;
+use crate::domain::scene::decor::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::catalog;
 use pxl_spec::asset::decor::Decor;
@@ -32,26 +33,24 @@ use pxl_spec_core::decor;
 use pxl_spec_core::window::FIRST_CELL;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
-/// cell, the model's edge, an angle about the eye in radians (`lens::cell`),
-/// so no screen's size or ratio moves it. No fade: the edge is per instance,
+/// cell, the model's edge, an angle about the eye in radians (pxl-spec
+/// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it. No fade: the edge is per instance,
 /// so it staggers.
 pub fn decor_model_angle() -> f64 {
-    crate::domain::scene::decor::param::DECOR_MODEL_CELLS
-        * crate::domain::view::lens::cell(crate::domain::view::lens::tau())
+    param::DECOR_MODEL_CELLS * grid::CELL
 }
 
 /// The sprite's edge, `DECOR_SPRITE_CELLS` of a camera cell, as an angle as
 /// the model's is (`decor_model_angle`).
 pub fn decor_sprite_angle() -> f64 {
-    crate::domain::scene::decor::param::DECOR_SPRITE_CELLS
-        * crate::domain::view::lens::cell(crate::domain::view::lens::tau())
+    param::DECOR_SPRITE_CELLS * grid::CELL
 }
 
-/// How far a thing `extent_u` wide is a sprite's worth at the finest τ
-/// (`Tau::FINEST`), whose cells are half the view's: where it spans
-/// `DECOR_SPRITE_CELLS` of them, twice as far as `decor_sprite_angle` puts the
-/// sprite's edge, an upper bound. `decor_shown` takes both its sides at that
-/// τ, so its zooms are the view's.
+/// How far a thing `extent_u` wide is a sprite's worth as a window holds it:
+/// where it spans `DECOR_SPRITE_CELLS` of the window's cells (`SPLIT`),
+/// `WINDOW_MARGIN` times as far as `decor_sprite_angle` puts the sprite's
+/// edge, an upper bound. `is_decor_shown` takes both its sides at the
+/// window's, so its zooms are the view's.
 pub const fn sprite_reach(extent_u: f64) -> f64 {
     extent_u * SPLIT / param::DECOR_SPRITE_CELLS
 }
@@ -71,9 +70,9 @@ fn shown() -> [u32; DECORS.len()] {
 }
 
 /// `shown`, each kind's extent `extent` gives.
-fn shown_by(extent: impl Fn(&pxl_spec::asset::decor::Decor) -> f64) -> [u32; DECORS.len()] {
+fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {
-        u32::from(decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
+        u32::from(is_decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
     })
 }
 
@@ -95,11 +94,11 @@ struct Handed {
     walked: Option<Walked>,
 }
 
-/// What the params are made of: the unit the eye stands in (its anchor), the
-/// ground's decor the eraser leaves out, and
-/// whether the catalog that measures the variants is read. A new input goes
-/// here or the params never see it change. The eye within its unit moves
-/// only the translation.
+/// What the drawing words are made of: the unit the eye stands in (its
+/// anchor), the ground's decor the eraser leaves out, and whether the
+/// catalog that measures the variants is read. A new input goes here or the
+/// drawing words never see it change. The eye within its unit moves only
+/// the translation.
 #[derive(Clone, Copy, PartialEq)]
 struct Seen {
     anchor: V3,
@@ -169,10 +168,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
         / decor_sprite_angle())
-    .min(pxl_spec::space::layer::lattice::draw_reach(
-        pxl_spec::space::layer::lattice::GROUND,
-        pxl_spec::space::layer::tile::LEAF_ZOOM,
-    ));
+    .min(lattice::draw_reach(lattice::GROUND, tile::LEAF_ZOOM));
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < reach {
         zoom -= 1;

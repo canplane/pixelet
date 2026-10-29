@@ -242,13 +242,7 @@ export class PacketWriter {
   }
 
   /** A packet whose root is a branch of `cnt`, its children written next. */
-  begin(
-    bytes: U8Array,
-    view: DataView,
-    start: u32,
-    cap: u32,
-    cnt: u32,
-  ): this {
+  begin(bytes: U8Array, view: DataView, start: u32, cap: u32, cnt: u32): this {
     this.root(bytes, view, start, cap);
     const at = this.branch_open(cnt);
     this.root_type = SpecialType.BRANCH;

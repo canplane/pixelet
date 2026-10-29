@@ -386,13 +386,13 @@ impl MarkerPass {
         let cnt = placed().take(SETS).count() as u32;
         let mut before = 0;
         self.uniforms
-            .write(g, self.built.layouts[1], count, placed(), true, |buf, d| {
+            .write(g, self.built.layouts[1], cnt, placed(), true, |buf, d| {
                 let mut s = [0.0f32; MARKER_FLOATS];
                 s[marker::VIEW..marker::VIEW + 16].copy_from_slice(&view);
                 s[marker::PROJ..marker::PROJ + 16].copy_from_slice(&proj);
                 s[marker::TRANSLATION..marker::TRANSLATION + 3]
                     .copy_from_slice(&uniform_of(uniforms, d)[..3]);
-                s[marker::PX_K] = px_k;
+                s[marker::PX_PER_UNIT] = px_per_unit;
                 s[marker::BEFORE] = before as f32;
                 buf[..word_bytes(MARKER_FLOATS) as usize].copy_from_slice(bytes(&s));
                 before += d[1];

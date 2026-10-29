@@ -4,7 +4,7 @@
 //! orthographic about the eye and as wide as the casters reach (the
 //! kernel's `STAGE_AT::SHADOWS`), so its texel follows the camera grid.
 //! The world is cast a ray a texel through the world's query, as the eye's
-//! rays are, off samples and the raster's pick (pxl-shader `sun_cs`), into
+//! rays are, off samples and the visible sample (pxl-shader `sun_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
 //! texel each frame it is cast (pxl-spec-core `sun`); laid into the map
 //! each frame in the box's own order
@@ -36,10 +36,6 @@ const _: () = assert!(
     SIZE as i32 <= ANCHOR,
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
 );
-
-/// An anchor of the rays' starts (`Shadow::starts`): its world texel, its
-/// start in Q3 and what rounding to it left.
-type Anchor = ([i32; 2], [i32; 3], [f32; 3]);
 
 /// An anchor of the rays' starts (`Shadow::starts`): its world texel, its
 /// start in Q3 and what rounding to it left.
@@ -349,14 +345,14 @@ impl Shadow {
     /// first (`PIPELINE_SUN_MAP` writes every texel it covers), which a
     /// frame that casts alone may. The casters are drawn into it next, then
     /// it ends.
-    pub fn begin(
+    pub fn begin<'a>(
         &self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext<'a>,
         cast: bool,
         rect: Option<[u32; 4]>,
-        stamp: &mut Stamp,
-    ) -> u32 {
+    ) -> TrackedRenderPass<'a> {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::shadow);
         let load = if rect.is_some() {
             Load::Load
         } else {
@@ -366,8 +362,9 @@ impl Shadow {
             encoder,
             &pass_desc(0, Load::Clear, self.map_view, load, 1.0, stamp.pass()),
         );
+        let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(r) = rect {
-            g.set_scissor(pass, r);
+            pass.set_scissor(r);
         }
         if cast {
             pass.set_pipeline(self.lay.pipeline);

@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn a_comment_or_a_doc_is_no_part_of_what_a_rust_file_means() {
+fn comments_ignored() {
     let bare = meaning("a.rs", "pub fn f(x: u32) -> u32 { x + 1 }").unwrap();
     let said = meaning(
         "a.rs",
@@ -24,7 +24,7 @@ fn a_token_is() {
 }
 
 #[test]
-fn a_toml_file_means_its_value() {
+fn toml_val() {
     let bare = meaning("a.toml", "[a]\nb = 1\nc = \"#d\"\n").unwrap();
     let said = meaning("a.toml", "# The table.\n[a]\nc = \"#d\"  # kept\n\nb = 1\n").unwrap();
     let moved = meaning("a.toml", "[a]\nb = 2\nc = \"#d\"\n").unwrap();
@@ -33,7 +33,7 @@ fn a_toml_file_means_its_value() {
 }
 
 #[test]
-fn a_workspace_inherited_from_means_what_its_members_take() {
+fn workspace_inheritance() {
     let base = "[workspace]\nmembers = [\"a\"]\n[workspace.package]\nedition = \"2021\"\n[profile.dev]\nopt-level = 0\n";
     let profiled = "[workspace]\nmembers = [\"a\", \"b\"]\n[workspace.package]\nedition = \"2021\"\n[profile.dev]\nopt-level = 1\n";
     let edition = "[workspace]\nmembers = [\"a\"]\n[workspace.package]\nedition = \"2024\"\n";

@@ -22,7 +22,7 @@
 //! a node can have, and from a child it steps to the next across the face
 //! it leaves by, so no frame holds its siblings.
 
-use crate::answer::{box_of, kept, side, touch, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
+use crate::answer::{box_of, kept, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
 use crate::grid::cell_at;
 use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
@@ -40,12 +40,12 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
     [d[0] / l, d[1] / l, d[2] / l]
 }
 
-/// A ray's cone, as wide as `across + angle · d` units at `d` from the eye
-/// (`Detail::eye`): the eye's an angle, its camera grid's cell
-/// (`beam::spacing`); parallel rays' a width, the sun's texel. Only a beam
-/// reads it: its rays lie `Detail::apart` cones apart, which its widening
-/// and `narrow` take (`Until::Beam`). An asker that casts no beam, control
-/// and physics, fills in none (`EXACT`).
+/// How far apart a beam's rays lie, `across + angle · d` units at `d` from
+/// the eye (`Detail::eye`): the eye's an angle, its camera grid's cell
+/// (`grid::CELL`); the sun's, whose rays are parallel, a width, `sun::BEAM`
+/// of its map's texels. Only a beam reads it, its widening and `narrow`
+/// (`Until::Beam`); an asker that casts no beam, control and physics, fills
+/// in none (`NONE`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spacing {
     pub angle: f32,
@@ -70,15 +70,13 @@ impl Spacing {
 /// The distance is the eye's, `eye` units from the walk's origin: none for
 /// the eye's own rays; for a ray from elsewhere, a ray toward the sun from
 /// what an eye's ray met, where the eye stands from it, so a node is asked
-/// at the zooms the eye's rays ask it (`reach`). `cone` is the ray's own
-/// (`Cone`), and `apart` how many of its widths a beam ray lies from the
-/// next of its grid (`Until::Beam`, `narrow`): 1 for the eye's, whose
-/// cone is the grid's cell, `sun::BEAM` for the sun's.
+/// at the zooms the eye's rays ask it (`reach`). `spacing` is how far a
+/// beam ray lies from the next of its grid (`Spacing`, `Until::Beam`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
     pub range: [Zoom; 2],
     pub eye: [f32; 3],
-    pub beam: f32,
+    pub spacing: Spacing,
 }
 
 impl Detail {
@@ -90,13 +88,26 @@ impl Detail {
 
 /// Whether a node `side` wide, squared, is too narrow for a beam ray to
 /// share where the grid's rays lie `width` apart, squared: under twice the
-/// width that holds one of them for certain, `2√2 · width`; the eye's
+/// width that holds one of them for certain, `NARROW · width`; the eye's
 /// `s · d` at the node's farthest point.
 pub fn narrow(side2: f32, width2: f32) -> bool {
-    side2 < 8.0 * width2
+    side2 < NARROW_SQUARED * width2
 }
 
-/// Which block a ray stops at: the first it cannot see through
+/// The spacings a node is narrow under (`narrow`): twice the width that
+/// holds one ray for certain, `2√2`; and its brick, exact.
+pub const NARROW: f32 = 2.0 * core::f32::consts::SQRT_2;
+const NARROW_SQUARED: f32 = 8.0;
+const _: () = assert!(
+    NARROW * NARROW - NARROW_SQUARED < 1e-6 && NARROW_SQUARED - NARROW * NARROW < 1e-6,
+    "`NARROW_SQUARED` is `NARROW`'s brick"
+);
+
+/// √6, as an f32 rounds it: a cube `NARROW` spacings wide spans `√3 ·
+/// NARROW`, `2√6` of them, corner to corner.
+pub const SQRT_6: f32 = 2.449_489_8;
+
+/// Which cell a ray stops at: the first it cannot see through
 /// (`answer::transparent`), as an eye sees; or the first it can, as what is
 /// climbed out of ends; or, for a beam ray of the camera grid, the first it
 /// cannot see through or the first split too narrow to hold one of the
@@ -235,7 +246,7 @@ impl Node {
                 self.roots[a] - (og.wrapping_add(d.unsigned_abs()) < og) as i32
             }
         };
-        // [naga] each axis by itself, not a loop (caves.rs `node_seed`).
+        // [naga] each axis by itself, not a loop (cave.rs `node_seed`).
         Node {
             corner: self.corner,
             zoom: self.zoom,
@@ -411,45 +422,24 @@ fn entered(ray: &Ray, near: [f32; 3]) -> (f32, u32) {
 }
 
 /// A cell's planes as it is drawn, its node's planes `(lo, hi)`
-/// (`bounds`) made the box of the share of its cube its word `asset` keeps
-/// (`answer::kept`), placed by the faces it touches (`answer::touch`): it
-/// spans an axis whose two faces touch, sits flush against the one that
-/// does, and is centered where none does, the `a` axes it does not span each
-/// `f^(1/(3 − a))` of the node, so its volume is the share `f`. Its node
-/// itself where it keeps it whole or every face touches; with no face
-/// touching, a cube about its center (`answer::side`).
+/// (`bounds`) inset about their center on every axis alike by the share of
+/// its cube its word `asset` keeps (`answer::kept`, `answer::side`): a box
+/// that share's volume, its node itself where it keeps it whole.
 pub fn kept_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f32; 3]) {
     let k = kept(asset);
-    let t = touch(asset);
-    let both = |a: u32| t >> (2 * a) & 3 == 3;
-    let spanned = both(0) as u32 + both(1) as u32 + both(2) as u32;
-    if k == EIGHTHS || spanned == 3 {
+    if k == EIGHTHS {
         return (lo, hi);
     }
-    let f = k as f32 / EIGHTHS as f32;
-    // [rust-gpu] By the free axes' count, as a GPU has no cube root.
-    let s = match spanned {
-        0 => side(k),
-        1 => libm::sqrtf(f),
-        _ => f,
-    };
-    let (mut a_lo, mut a_hi) = (lo, hi);
-    let mut a = 0;
-    while a < 3 {
-        let (low, high) = (t >> (2 * a) & 1 != 0, t >> (2 * a + 1) & 1 != 0);
-        let len = (hi[a] - lo[a]) * s;
-        if low && !high {
-            a_hi[a] = lo[a] + len;
-        } else if high && !low {
-            a_lo[a] = hi[a] - len;
-        } else if !low {
-            let inset = 0.5 * (hi[a] - lo[a] - len);
-            a_lo[a] = lo[a] + inset;
-            a_hi[a] = hi[a] - inset;
-        }
-        a += 1;
-    }
-    (a_lo, a_hi)
+    let by = 0.5 * (1.0 - side(k));
+    let inset = [
+        (hi[0] - lo[0]) * by,
+        (hi[1] - lo[1]) * by,
+        (hi[2] - lo[2]) * by,
+    ];
+    (
+        [lo[0] + inset[0], lo[1] + inset[1], lo[2] + inset[2]],
+        [hi[0] - inset[0], hi[1] - inset[1], hi[2] - inset[2]],
+    )
 }
 
 /// The top of the cell a stop met, as it is drawn (`kept_bounds`): the
@@ -461,20 +451,20 @@ pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
     (n.idx(o)[2], kept_bounds(([0.0; 3], [1.0; 3]), asset).1[2])
 }
 
-/// The block `block` at the node `n` as drawn from the origin `o`, in units
+/// The asset `asset` at the node `n` as drawn from the origin `o`, in units
 /// from it (`bounds`, `kept_bounds`): the box `entry` asks a ray into, as
 /// the samples' boxes are drawn (`raster`).
-pub fn drawn(o: [i32; 3], n: &Node, block: u32) -> ([f32; 3], [f32; 3]) {
-    kept_bounds(bounds(n, grid_of(o)), block)
+pub fn drawn(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
+    kept_bounds(bounds(n, grid_of(o)), asset)
 }
 
-/// Where `ray` from the origin `o` enters the block `block` (a block's word,
+/// Where `ray` from the origin `o` enters the cell `asset` is in (an asset's word,
 /// `answer`) at the node `n`, and whether it does within its reach: its span
-/// in the block as drawn from the origin (`drawn`, `spans`), and
+/// in the cell as drawn from the origin (`drawn`, `spans`), and
 /// where that span begins (`entered`). Only touched, at a face or an edge,
 /// is not entered, as the walk has it.
-pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, block: u32) -> (f32, u32, bool) {
-    let (x, y, z) = spans(ray, drawn(o, n, block), 0.0);
+pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, asset: u32) -> (f32, u32, bool) {
+    let (x, y, z) = spans(ray, drawn(o, n, asset), 0.0);
     let (t0, t1) = (
         greater(greater(greater(0.0, x.0), y.0), z.0),
         lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),
@@ -651,17 +641,6 @@ pub fn rooted<Q: Query>(
     )
 }
 
-/// The nodes holding the origin `o`, from its root down: the line every ray
-/// from `o` enters first, asked as each such ray's walk asks it, by that
-/// walk, of a ray that goes nowhere, so it enters every node holding the
-/// origin and no other. Asked once ahead of the rays, so a reader that
-/// keeps the answers hands them to every ray (pxl-shader eye.rs
-/// `origin`). The nodes asked.
-pub fn origin_line<Q: Query>(q: &mut Q, o: [i32; 3], detail: Detail) -> u32 {
-    let nowhere = Ray::new([0.0, 0.0, -1.0], f32::MIN_POSITIVE);
-    rooted(q, o, &nowhere, detail, Until::Beam, &mut ()).visits
-}
-
 /// What was handed each node over where a walk starts, by its zoom: the
 /// line it resumes from, as a beam ray left it (`Keep`), read where the
 /// walk climbs over its start, and where it ends for what keeps its line.
@@ -776,31 +755,50 @@ pub fn walk<Q: Query>(
             // The planes the ray enters where it stops: the node's, or the
             // box a cell keeping less than its cube is.
             let mut near = [x.0, y.0, z.0];
-            // ESVO's contour (Laine & Karras 2010): whether the ray's span in
-            // a split node meets the slab along z its content lies in,
-            // widened by `w` above and below, its planes a face's own
-            // (`level`).
-            let meets_slab = |w: f32| {
-                let [lo, hi] = slab_of(i.block[0]);
-                let level = |v: i32| {
-                    let root = v >> UNIT_ZOOM;
-                    units(
-                        ((v - (root << UNIT_ZOOM)) as u32) << FRAC_W,
-                        og[2],
-                        root - r0[2],
-                    )
+            // ESVO's contour (Laine & Karras 2010) on every axis alike:
+            // whether the ray's span in a split node meets the box in its
+            // steps its content lies in (`answer::box_of`), grown by `w`
+            // on every side. Nothing a ray meets is passed for being thin.
+            let meets_box = |w: f32| {
+                let (first, past) = box_of(i.asset);
+                // Step `e` of the box on axis `a`, on the grid's own planes
+                // (`units`), as a node's own are: the far one the node's.
+                let step = |a: usize, e: u32, out: u32| {
+                    if e >= BOX_STEPS {
+                        return hi[a];
+                    }
+                    // A step's width a whole count of the finest grid's
+                    // over a node `BOX_STEPS` or more of them wide; finer,
+                    // rounded out (`out` the step less one to round up), as
+                    // `e · side` fits a u32 there.
+                    let at = if u >= BOX_STEPS - 1 {
+                        e * ((u >> BOX_BITS) + 1)
+                    } else {
+                        (e * (u + 1) + out) >> BOX_BITS
+                    };
+                    units(n.corner[a].wrapping_add(at), og[a], n.roots[a])
                 };
-                let (bottom, top) = planes(
-                    ray.direction[2],
-                    ray.inverse[2],
-                    level(lo) - w,
-                    level(hi) + w,
-                    (t0, t1),
+                let (bx, by, bz) = spans(
+                    ray,
+                    (
+                        [
+                            step(0, first[0], 0) - w,
+                            step(1, first[1], 0) - w,
+                            step(2, first[2], 0) - w,
+                        ],
+                        [
+                            step(0, past[0], BOX_STEPS - 1) + w,
+                            step(1, past[1], BOX_STEPS - 1) + w,
+                            step(2, past[2], BOX_STEPS - 1) + w,
+                        ],
+                    ),
+                    t0,
                 );
-                greater(t0, bottom) < lesser(t1, top)
+                greater(greater(greater(t0, bx.0), by.0), bz.0)
+                    < lesser(lesser(lesser(t1, bx.1), by.1), bz.1)
             };
             let ends = match i.kind {
-                Kind::Lacks => Ends::Lacks,
+                Kind::Lacks => End::Lacks,
                 // A cell keeping less than its cube is the box its share
                 // fills (`kept_bounds`): an eye's ray stops where it enters
                 // the box and passes it as air where it misses; a beam ray
@@ -818,9 +816,9 @@ pub fn walk<Q: Query>(
                     );
                     near = [bx.0, by.0, bz.0];
                     if b1 > b0 {
-                        Ends::Stop
+                        End::Stop
                     } else {
-                        Ends::On
+                        End::On
                     }
                 }
                 Kind::Cell
@@ -830,37 +828,37 @@ pub fn walk<Q: Query>(
                         Until::Beam => !transparent(i.asset[0]),
                     } =>
                 {
-                    Ends::Stop
+                    End::Stop
                 }
-                Kind::Block => Ends::On,
-                // A beam ray passes whole a split whose slab it clears by
+                Kind::Cell => End::On,
+                // A beam ray passes whole a split whose box it clears by
                 // `2√2` of the grid's width there, as the grid's rays about
                 // it clear it too; else it stops at one it may not share with
                 // them, and enters every other.
                 Kind::Split if until == Until::Beam => {
-                    // The grid's rays `apart` cones apart at the node's far
-                    // corner: a split narrower than `2√2` of that may lie
-                    // between them (`narrow`, pxl-spec-core `sun::BEAM`).
-                    let width = detail.apart * detail.cone.width(libm::sqrtf(reach[0]));
+                    // The grid's rays' spacing at the node's far corner: a
+                    // split narrower than `2√2` of that may lie between them
+                    // (`narrow`).
+                    let width = detail.spacing.width(libm::sqrtf(reach[0]));
                     let narrow = narrow(side * side, width * width);
-                    let meets = meets_box(2.0 * core::f32::consts::SQRT_2 * width);
+                    let meets = meets_box(NARROW * width);
                     into = meets && !narrow;
                     if meets && narrow {
-                        Ends::Stop
+                        End::Stop
                     } else {
-                        Ends::On
+                        End::On
                     }
                 }
-                // A span wholly out of the slab, or touching it alone, meets
-                // nothing that fills, and a walk to what fills passes the
-                // node whole. A walk to air goes in: its stop is where that
-                // span begins.
+                // A span wholly out of the box, or touching it alone, meets
+                // nothing a ray cannot see through, and a walk to that passes
+                // the node whole. A walk to what is transparent goes in: its
+                // stop is where that span begins.
                 Kind::Split => {
-                    into = until == Until::Air || meets_slab(0.0);
-                    Ends::On
+                    into = until == Until::Transparent || meets_box(0.0);
+                    End::On
                 }
             };
-            if ends != Ends::On {
+            if ends != End::On {
                 // Where the walk ends, its stop, made there and nowhere else:
                 // where the ray enters the node, or its asset's box
                 // (`entered`).
@@ -918,7 +916,7 @@ pub fn walk<Q: Query>(
                     asset: AIR,
                 };
                 let met = Met {
-                    ends: Ends::On,
+                    ends: End::On,
                     stop,
                     visits,
                 };
@@ -1011,40 +1009,6 @@ mod tests {
     /// A node held from one origin is the same world node held from
     /// another a little off, across a root's edge and X's seam alike.
     #[test]
-    fn a_node_moves_to_another_origin() {
-        let edges = [0i32, -1, 5, i32::MAX - 3, i32::MIN + 2, 1 << 20];
-        for &a in &edges {
-            for d in [-700i32, -1, 0, 1, 700] {
-                // Y and Z do not go round: about their roots' edge at 0.
-                let near = |v: i32| (v % 1000).wrapping_sub(500);
-                let from = [a, near(a.wrapping_add(13)), near(a.wrapping_sub(29))];
-                let to = from.map(|v| v.wrapping_add(d));
-                for zoom in [1, 9, 20, 30] {
-                    let ray = Ray::new([0.6, -0.48, 0.64], 1000.0);
-                    let p = point_at(from, &ray, 2.5);
-                    let (n, _) = Node {
-                        corner: [0; 3],
-                        zoom,
-                        roots: [0; 3],
-                    }
-                    .over(p);
-                    let n = Node {
-                        zoom: n.zoom.min(zoom),
-                        ..n
-                    };
-                    let m = n.moved(from, to);
-                    assert_eq!(m.index(to), n.index(from), "{a} {d} {zoom}");
-                }
-            }
-        }
-    }
-    use crate::answer::{kept_word, slab_word, ANY, EIGHTHS};
-    use crate::cube::ground::stone;
-    use crate::overwrite::{AIR, FULL};
-
-    /// A node held from one origin is the same world node held from
-    /// another a little off, across a root's edge and X's seam alike.
-    #[test]
     fn node_moves_origin() {
         let edges = [0i32, -1, 5, i32::MAX - 3, i32::MIN + 2, 1 << 20];
         for &a in &edges {
@@ -1127,7 +1091,7 @@ mod tests {
         let detail = Detail {
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
-            beam: 0.0,
+            spacing: Spacing::NONE,
         };
         first(&mut One { kept }, o, &ray, detail, Until::Opaque)
     }
@@ -1145,137 +1109,9 @@ mod tests {
             assert!((lo[0] + hi[0] - 1.0).abs() < 1e-6);
         }
         // What fills a share keeps its eighths, floored.
-        assert_eq!(crate::answer::eighths(FULL), EIGHTHS);
-        assert_eq!(crate::answer::eighths(FULL / 8 - 1), 0);
-        assert_eq!(crate::answer::eighths(3 * FULL / 8), 3);
-    }
-
-    /// Over every face it may touch and every share: the box spans an axis
-    /// both of whose faces touch, sits flush on the one that does, and is
-    /// centered on one where none does, and its volume is its share, but
-    /// where every face touches, when it is its node.
-    #[test]
-    fn a_box_spans_what_it_touches_and_keeps_its_share() {
-        use crate::answer::touch_word;
-        for t in 0..64u32 {
-            for k in 1..=EIGHTHS {
-                let asset = touch_word(kept_word(0, k), t);
-                let (lo, hi) = kept_bounds(([0.0; 3], [1.0; 3]), asset);
-                let whole = (0..3).all(|a| t >> (2 * a) & 3 == 3);
-                let volume = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2]);
-                let want = if whole { 1.0 } else { k as f32 / EIGHTHS as f32 };
-                assert!((volume - want).abs() < 1e-5, "{t:06b} {k}: {volume}");
-                if whole || k == EIGHTHS {
-                    continue;
-                }
-                for a in 0..3 {
-                    let (low, high) = (t >> (2 * a) & 1 != 0, t >> (2 * a + 1) & 1 != 0);
-                    match (low, high) {
-                        (true, true) => assert!(lo[a] == 0.0 && hi[a] == 1.0, "{t:06b} {k} {a}"),
-                        (true, false) => assert!(lo[a] == 0.0 && hi[a] < 1.0, "{t:06b} {k} {a}"),
-                        (false, true) => assert!(lo[a] > 0.0 && hi[a] == 1.0, "{t:06b} {k} {a}"),
-                        (false, false) => assert!((lo[a] + hi[a] - 1.0).abs() < 1e-6),
-                    }
-                }
-            }
-        }
-    }
-
-    /// A terrace: every unit cell at z = 0 keeping `kept` eighths, touching
-    /// the faces `touch`, stone whole under it and air over it.
-    struct Terrace {
-        kept: u32,
-        touch: u32,
-    }
-
-    impl Query for Terrace {
-        type At = ();
-        fn root(&mut self, _: [i32; 3]) {}
-        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
-        fn node(
-            &mut self,
-            _: &mut (),
-            zoom: Zoom,
-            node: [i32; 3],
-            _: [Zoom; 2],
-            _: f32,
-        ) -> In<[u32; 2]> {
-            let s = UNIT_ZOOM - zoom;
-            let z = node[2] << s;
-            if zoom < UNIT_ZOOM {
-                // Over the terrace, or holding it or the stone under it.
-                return if z > 0 {
-                    In {
-                        kind: Kind::Cell,
-                        asset: [AIR, 0],
-                    }
-                } else {
-                    In {
-                        kind: Kind::Split,
-                        asset: BOX_WHOLE,
-                    }
-                };
-            }
-            let asset = match node[2] {
-                0 => crate::answer::touch_word(kept_word(stone as u32, self.kept), self.touch),
-                z if z < 0 => stone as u32,
-                _ => crate::answer::AIR[0],
-            };
-            In {
-                kind: Kind::Cell,
-                asset: [asset, 0],
-            }
-        }
-    }
-
-    /// The faces a terrace's interior cell touches: its four sides and its
-    /// floor, open above.
-    const INTERIOR: u32 = 0b01_1111;
-
-    fn on_terrace(touch: u32, o: [f32; 3], d: [f32; 3]) -> Met<()> {
-        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
-        let o = [steps(o[0]), steps(o[1]), steps(o[2])];
-        let ray = Ray::new(d, 64.0);
-        let detail = Detail {
-            tau: 1.0,
-            range: [UNIT_ZOOM, UNIT_ZOOM],
-            eye: [0.0; 3],
-            cone: Cone::EXACT,
-            apart: 0.0,
-        };
-        first(&mut Terrace { kept: 4, touch }, o, &ray, detail, Until::Opaque)
-    }
-
-    /// Down onto a terrace whose cells touch, a ray stops on its one level
-    /// wherever it falls, on a cell's edge too; with nothing touching it
-    /// falls between the centered boxes onto the stone.
-    #[test]
-    fn a_ray_down_never_falls_between_cells_that_touch() {
-        for x in [0.0f32, 0.03, 0.5, 0.97, 1.0, 3.999] {
-            let met = on_terrace(INTERIOR, [x, 0.25, 4.0], [0.0, 0.0, -1.0]);
-            assert_eq!(met.ends, Ends::Stop, "{x}");
-            assert!((met.stop.t - 3.5).abs() < 1e-4, "{x}: {}", met.stop.t);
-        }
-        let met = on_terrace(0, [1.0, 0.25, 4.0], [0.0, 0.0, -1.0]);
-        assert!(met.stop.t > 3.99, "{}", met.stop.t);
-    }
-
-    /// The box's shape adds no walk: a ray grazing a terrace over every box
-    /// asks the same nodes whether its cells touch or are boxes apart, as
-    /// what the descent asks is the splits' and the cells' kinds, never their
-    /// boxes (the cone's prune, which keeps the horizon cheap, is untouched).
-    #[test]
-    fn a_grazing_ray_asks_the_same_nodes_where_cells_touch() {
-        let d = {
-            let v = [1.0f32, 0.0, -0.0005];
-            let n = libm::sqrtf(v[0] * v[0] + v[2] * v[2]);
-            [v[0] / n, 0.0, v[2] / n]
-        };
-        let apart = on_terrace(0, [0.5, 0.5, 0.95], d);
-        let touching = on_terrace(INTERIOR, [0.5, 0.5, 0.95], d);
-        assert_eq!((apart.ends, touching.ends), (Ends::On, Ends::On));
-        assert_eq!(touching.visits, apart.visits);
-        assert!(apart.visits > 0);
+        assert_eq!(answer::eighths(FULL), EIGHTHS);
+        assert_eq!(answer::eighths(FULL / 8 - 1), 0);
+        assert_eq!(answer::eighths(3 * FULL / 8), 3);
     }
 
     #[test]
@@ -1331,7 +1167,7 @@ mod tests {
             range: [UNIT_ZOOM, UNIT_ZOOM],
             eye: [0.0; 3],
             spacing: Spacing {
-                angle: crate::grid::CELL,
+                angle: grid::CELL,
                 across: 0.0,
             },
         };
@@ -1373,7 +1209,8 @@ mod tests {
         assert_eq!(beam(1.0).visits, 1);
         assert!(beam(1.0e4).visits > 1);
         // Nothing is passed for being thin: a slab one step thick about the
-        // origin, 2^14 units, is entered by a ray whose cone is far wider.
+        // origin, 2^14 units, is entered by a ray whose beam's spacing is far
+        // wider, which no walk but a beam's reads.
         let wide = Detail {
             spacing: Spacing {
                 angle: 0.0,
@@ -1399,105 +1236,5 @@ mod tests {
         assert_eq!(met.ends, End::On);
         // The whole cube stops it there.
         assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Stop);
-    }
-
-    /// What a walk asks, in order: each node, and the zooms it is asked at.
-    struct Asked<Q> {
-        q: Q,
-        log: [(Zoom, [i32; 3], [Zoom; 2]); 512],
-        len: usize,
-    }
-
-    impl<Q: Query<At = ()>> Query for Asked<Q> {
-        type At = ();
-        fn root(&mut self, node: [i32; 3]) {
-            self.q.root(node)
-        }
-        fn child(&mut self, at: &(), zoom: Zoom, node: [i32; 3]) {
-            self.q.child(at, zoom, node)
-        }
-        fn node(
-            &mut self,
-            at: &mut (),
-            zoom: Zoom,
-            node: [i32; 3],
-            asked: [Zoom; 2],
-            t0: f32,
-        ) -> In<[u32; 2]> {
-            if self.len < self.log.len() {
-                self.log[self.len] = (zoom, node, asked);
-                self.len += 1;
-            }
-            self.q.node(at, zoom, node, asked, t0)
-        }
-    }
-
-    fn asked_by<Q: Query<At = ()>>(q: Q) -> Asked<Q> {
-        Asked {
-            q,
-            log: [(0, [0; 3], [0; 2]); 512],
-            len: 0,
-        }
-    }
-
-    /// The nodes holding the origin, asked once, are the nodes every ray from
-    /// it enters first, each asked at the same zooms: what a ray reads of
-    /// them kept is what it would have asked.
-    #[test]
-    fn every_ray_enters_the_origin_s_line_first_as_it_is_asked() {
-        use crate::answer::box_word;
-        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
-        let detail = Detail {
-            range: [12, UNIT_ZOOM],
-            eye: [0.0; 3],
-            spacing: Spacing {
-                angle: crate::grid::CELL,
-                across: 0.0,
-            },
-        };
-        for o in [
-            [steps(5.3), steps(0.4), steps(1.6)],
-            [steps(-2.7), steps(30.1), steps(-0.2)],
-            [steps(1.0e5), steps(-7.5e3), steps(300.0)],
-        ] {
-            let world = || Boxed(box_word([0; 3], [1024; 3]));
-            let mut line = asked_by(world());
-            let visits = origin_line(&mut line, o, detail);
-            assert_eq!(visits as usize, line.len);
-            assert!(line.len > 1);
-            for d in [
-                [1.0, 0.2, -0.3],
-                [-0.5, 0.9, 0.1],
-                [0.1, -0.2, -1.0],
-                [-0.7, -0.7, 0.05],
-            ] {
-                let l = libm::sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-                let ray = Ray::new([d[0] / l, d[1] / l, d[2] / l], 50.0);
-                let mut walk = asked_by(world());
-                first(&mut walk, o, &ray, detail, Until::Opaque);
-                // Each node the walk asks that holds the origin is the
-                // line's at its zoom, asked alike.
-                let (og, mut k) = (grid_of(o), 0);
-                while k < walk.len {
-                    let (zoom, node, asked) = walk.log[k];
-                    let keep = !under(zoom);
-                    let holding = Node {
-                        corner: [og[0] & keep, og[1] & keep, og[2] & keep],
-                        zoom,
-                        roots: [0; 3],
-                    };
-                    if holding.index(o) == node && (zoom as usize) < line.len {
-                        assert_eq!(line.log[zoom as usize], (zoom, node, asked));
-                    }
-                    k += 1;
-                }
-                // And it enters them first, root down.
-                let mut z = 0;
-                while z < line.len.min(walk.len) && walk.log[z] == line.log[z] {
-                    z += 1;
-                }
-                assert!(z > 1, "{o:?} {d:?}: {z}");
-            }
-        }
     }
 }

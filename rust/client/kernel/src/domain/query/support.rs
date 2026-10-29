@@ -36,13 +36,12 @@ pub fn under(z: f64) -> f64 {
     z - units(GROUND.cell()) / 2.0
 }
 
-/// Whether a walker at `at`, seen from `eye`, walks: the camera grid at every
-/// view's τ (`Tau::VIEW`, domain/view/lens.rs `tau`) draws the ground there
-/// at its own cells (`cell_at`), X the short way round. Else the world is a
-/// map to it (`step_slide`).
+/// Whether a walker at `at`, seen from `eye`, walks: the camera grid draws
+/// the ground there at its own cells (`cell_at`), X the short way round.
+/// Else the world is a map to it (`step_slide`).
 pub fn walks(at: &Q3, eye: &Q3) -> bool {
     let (a, e) = (q3::unpack(at), q3::unpack(eye));
-    cell_at(e, Tau::VIEW, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.cell()
+    cell_at(e, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.cell()
 }
 
 /// A point's place on the ground, in units.

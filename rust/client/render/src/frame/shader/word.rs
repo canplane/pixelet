@@ -232,7 +232,7 @@ uniform! {
         VIEW: Mat4 = 0,
         PROJ: Mat4 = 16,
         TRANSLATION: Vec3 = 32,
-        PX_K: F32 = 35,
+        PX_PER_UNIT: F32 = 35,
         BEFORE: F32 = 36,
     }
 }
@@ -245,7 +245,7 @@ pub const MARKER_INSTANCE_FLOATS: u32 = 11;
 pub const PUCK_ZONE_INSTANCE_FLOATS: u32 = 8;
 
 /// A star's record as the sky reads it (gpu/star.rs, star.wgsl): its
-/// direction and flux, then its colour and a pad.
+/// direction and flux, then its color and a pad.
 pub const STAR_RECORD_FLOATS: usize = 8;
 
 /// The raster's view's words (gpu/ray/raster.rs, raster.wgsl `Raster`),

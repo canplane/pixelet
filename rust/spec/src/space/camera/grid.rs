@@ -16,7 +16,6 @@ use pxl_spec_core::grid;
 /// distance, a field of 53.13° (`fov`).
 pub const HALF_TAN: f64 = 0.5;
 
-
 // ---- derived from the knobs ----
 
 /// The vertical field of view, in radians (`HALF_TAN`).
@@ -42,8 +41,8 @@ pub const CELL: f64 = 1.0 / CELLS_A_RAD;
 /// Where ground starts being drawn with cells at `cell_zoom`, going out: where
 /// its side spans `SPANS` of the view's cells (pxl-spec-core `grid`). A window
 /// holds them out to `WINDOW_MARGIN` times as far.
-pub const fn split_distance(cell_zoom: Zoom) -> f64 {
-    CELLS_A_RADIAN * units(cell_zoom) / pxl_spec_core::grid::SPANS as f64
+pub const fn split_dist(cell_zoom: Zoom) -> f64 {
+    CELLS_A_RAD * units(cell_zoom) / grid::SPANS as f64
 }
 
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared: the

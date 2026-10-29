@@ -2,7 +2,7 @@
 
 **2026-10-26.** Above 1.5 km the cloud sheets are a fullscreen pass with depth
 always, a march along every pixel's ray to both sheets before it can discard.
-Drawing them as an eye-centred disc, depth-tested, would cover only the pixels
+Drawing them as an eye-centered disc, depth-tested, would cover only the pixels
 a sheet can be on. Before building that, this weighs what the pass costs.
 
 ## How

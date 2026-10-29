@@ -39,15 +39,17 @@ const isPanel = (name: SettingName): name is PanelName =>
 /** Whether any panel is up, so the corner is the window's. */
 export function useDebugWindow(): boolean {
   return useKernel((s) =>
-    settingsIn("debug").some((name) =>
-      isPanel(name) && s.settings[SETTING[name].key] === 1
-    )
+    settingsIn("debug").some(
+      (name) => isPanel(name) && s.settings[SETTING[name].key] === 1,
+    ),
   );
 }
 
 export function DebugWindow() {
-  return settingsIn("debug").filter(isPanel).map((name) => {
-    const Panel = PANEL[name];
-    return <Panel key={name} />;
-  });
+  return settingsIn("debug")
+    .filter(isPanel)
+    .map((name) => {
+      const Panel = PANEL[name];
+      return <Panel key={name} />;
+    });
 }

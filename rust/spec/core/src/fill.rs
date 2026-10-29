@@ -3,17 +3,15 @@
 //! gpu-portable: a brick's fill, a thread at a time, off its record in the
 //! frame's fresh list (`window::HANDED_WORDS`, its words, looks, samples and
 //! lines) into the buffer its words lie in from `base`
-//! (`window::SQUARE_WORDS`): each column's ground
-//! top off its tile's samples and its cell as laid (`heights`), its ways'
-//! runs off its lines into its scratch, the frame's (`window::FIRSTS_AT`),
-//! in four passes (each column's spans once, `spans`; then `ways`, a
-//! workgroup's scan between them, `stretch_runs` and `scanned`), and its
-//! levels, level 0 each column's own
-//! (`level`), and its ways' tree off the runs (`ways::tree`). A GPU runs
-//! each pass a thread a column or entry
-//! (pxl-shader `heights_cs`, `ways_cs`, `bound_cs`); a bake runs its
-//! columns' passes in order over one square (`square`), so the runs it
-//! sizes a tile's room by are the ones a GPU writes.
+//! (`window::BRICK_WORDS`): each column's ground top off its tile's
+//! samples and its cell as laid (`heights`), its ways' spans off its lines,
+//! each column's once, into its scratch, the frame's (`spans`,
+//! `window::SPANS_AT`), and off them its levels, level 0 each column's own
+//! (`level`), and its ways' tree (`way::tree`). A GPU runs each pass a
+//! thread a column or entry (pxl-shader `height_cs`, `way_cs`,
+//! `bound_cs`); a bake runs its columns' passes in order over one brick
+//! (`brick`), so the spans it sizes a tile's room by are the ones a GPU
+//! keeps.
 
 use crate::answer;
 use crate::area;
@@ -149,12 +147,12 @@ impl Scratch<'_> {
 impl way::Kept for Scratch<'_> {
     fn head(&self, c: [i32; 2]) -> (i32, u32) {
         let w = at(self.words, self.column(c));
-        let top = w as i32 >> 16;
+        let face = w as i32 >> 16;
         (
-            if top == i16::MIN as i32 {
+            if face == i16::MIN as i32 {
                 i32::MIN
             } else {
-                top
+                face
             },
             w & SPANS_CNT,
         )
@@ -170,17 +168,17 @@ impl way::Kept for Scratch<'_> {
 
 /// A column's spans' head word's count (`window::SPANS_COLUMN_WORDS`); the
 /// bit over it, where they did not fit.
-const SPANS_COUNT: u32 = SPANS_PAST - 1;
+const SPANS_CNT: u32 = SPANS_PAST - 1;
 const SPANS_PAST: u32 = 0x8000;
 
 /// The head word of a column's spans (`window::SPANS_COLUMN_WORDS`).
 fn head_word(s: &way::Spans, fits: bool) -> u32 {
-    let top = if s.top == i32::MIN {
+    let face = if s.face == i32::MIN {
         i16::MIN as i32
     } else {
-        s.top.clamp(i16::MIN as i32 + 1, i16::MAX as i32)
+        s.face.clamp(i16::MIN as i32 + 1, i16::MAX as i32)
     };
-    s.n | if fits { 0 } else { SPANS_PAST } | (top as u32) << 16
+    s.n | if fits { 0 } else { SPANS_PAST } | (face as u32) << 16
 }
 
 /// Where the brick a frame hands `k`-th has its scratch in the frame's
@@ -203,16 +201,9 @@ struct Filling<'a> {
     rec: u32,
     cell: u32,
     place: [u32; 2],
-    /// The scratch its columns' spans are kept in from (`spans`), where
-    /// they were worked out already; `NOT_KEPT` where not.
-    kept: &'a [u32],
-    mine: u32,
 }
 
-/// No columns' spans kept: each worked out off its lines.
-const NOT_KEPT: u32 = u32::MAX;
-
-impl window::Square for Filling<'_> {
+impl window::Brick for Filling<'_> {
     fn cell(&self) -> u32 {
         self.cell
     }
@@ -246,13 +237,6 @@ impl window::Square for Filling<'_> {
             samples(self.fresh, self.rec),
             [first[0] + c[0], first[1] + c[1]],
         )
-    }
-    fn kept_spans(&self, c: [i32; 2]) -> (bool, ways::Spans, bool) {
-        if self.mine == NOT_KEPT {
-            return (false, ways::Spans::NONE, true);
-        }
-        let (spans, fits) = stored(self.kept, self.mine, c);
-        (true, spans, fits)
     }
 }
 
@@ -353,22 +337,10 @@ pub fn keep(sq: &impl window::Brick, scratch: &mut [u32], mine: u32, i: u32) -> 
     if i >= SPANS_COLUMNS {
         return 0;
     }
-    let (around, fits) = {
-        let filling = Filling {
-            ground,
-            base,
-            fresh,
-            rec,
-            cell,
-            place,
-            kept: scratch,
-            mine,
-        };
-        let [x, y] = window::of_index(i);
-        crate::ways::around(&filling, [x as i32, y as i32])
-    };
-    let (from, room) = if write {
-        (at(scratch, firsts + i), RUNS_SQUARE)
+    let c = [(i % SPANS_ACROSS) as i32 - 1, (i / SPANS_ACROSS) as i32 - 1];
+    let edge = |v: i32| v == -1 || v == BRICK as i32;
+    let (s, fits) = if edge(c[0]) && edge(c[1]) {
+        (way::Spans::NONE, true)
     } else {
         way::column(sq, c)
     };
@@ -390,129 +362,12 @@ pub fn keep(sq: &impl window::Brick, scratch: &mut [u32], mine: u32, i: u32) -> 
     }
 }
 
-/// The spans of column `i` of the square handed `k`-th and its ring
-/// (`window::SPANS_COLUMNS`, row by row from the ring's first) into its
-/// scratch (`window::SPANS_AT`): worked out once a column, off its lines and
-/// its face (`ways::column`), before its runs and its neighbours' read them
-/// (`ways`), where each column's own and its four neighbours' were each
-/// worked out again by every column beside it, in the count and the write
-/// alike.
-pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32) {
-    if i >= window::SPANS_COLUMNS {
-        return;
-    }
-    let (rec, base, place, cell) = handed(fresh, k);
-    let c = [
-        (i % window::SPANS_ACROSS) as i32 - 1,
-        (i / window::SPANS_ACROSS) as i32 - 1,
-    ];
-    let filling = Filling {
-        ground,
-        base,
-        fresh,
-        rec,
-        cell,
-        place,
-        kept: ground,
-        mine: NOT_KEPT,
-    };
-    let (s, fits) = crate::ways::column(&filling, c);
-    let at = scratch_at(scratch, k) + window::SPANS_AT + i * window::SPANS_COLUMN_WORDS;
-    put(scratch, at, s.n | u32::from(!fits) << 31);
-    let mut j = 0;
-    while j < s.n as usize {
-        let w = at + 1 + 2 * j as u32;
-        let held = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32);
-        let run = [held(s.run[j][0]), held(s.run[j][1])];
-        put(scratch, w, crate::answer::bound_word(run) as u32);
-        put(scratch, w + 1, s.value[j]);
-        j += 1;
-    }
-}
-
-/// Column `c`'s spans as `spans` stored them in the scratch from `mine`,
-/// `c` in the square's cells, its ring one past each side.
-fn stored(scratch: &[u32], mine: u32, c: [i32; 2]) -> (ways::Spans, bool) {
-    let i = (c[1] + 1) as u32 * window::SPANS_ACROSS + (c[0] + 1) as u32;
-    let at = mine + window::SPANS_AT + i * window::SPANS_COLUMN_WORDS;
-    let head = self::at(scratch, at);
-    let mut s = ways::Spans::NONE;
-    s.n = head & !(1 << 31);
-    let mut j = 0;
-    while j < s.n as usize && j < ways::SPANS {
-        let w = at + 1 + 2 * j as u32;
-        s.run[j] = crate::answer::bound_of(self::at(scratch, w) as i32);
-        s.value[j] = self::at(scratch, w + 1);
-        j += 1;
-    }
-    (s, head >> 31 == 0)
-}
-
-/// The threads that sum a square's columns' counts into their firsts, a
-/// workgroup (pxl-shader `ways_cs`), each over a stretch of the
-/// columns in their order.
-pub const SCAN_THREADS: u32 = 64;
-const STRETCH: u32 = SQUARE_CELLS / SCAN_THREADS;
-
-/// Thread `t`'s stretch of the square handed `k`-th: its columns' runs, as
-/// counted into their firsts in its scratch (`ways`), summed.
-pub fn stretch_runs(scratch: &[u32], k: u32, t: u32) -> u32 {
-    let firsts = scratch_at(scratch, k) + FIRSTS_AT + t * STRETCH;
-    let (mut n, mut k) = (0, 0);
-    while k < STRETCH {
-        (n, k) = (n + at(scratch, firsts + k), k + 1);
-    }
-    n
-}
-
-/// Thread `t`'s stretch of the square handed `k`-th, its columns' firsts
-/// in its scratch written where their runs begin, `before` the runs of the
-/// stretches before it (an exclusive scan of `stretch_runs` over the
-/// threads, Blelloch 1990): each column's the runs before it; the last
-/// thread's, the square's count past them (`window::FIRSTS_AT`).
-pub fn scanned(scratch: &mut [u32], k: u32, t: u32, before: u32) {
-    let firsts = scratch_at(scratch, k) + FIRSTS_AT;
-    let (mut n, mut k) = (before, t * STRETCH);
-    while k < (t + 1) * STRETCH {
-        let count = at(scratch, firsts + k);
-        put(scratch, firsts + k, n);
-        (n, k) = (n + count, k + 1);
-    }
-    if t + 1 == SCAN_THREADS {
-        put(scratch, firsts + SQUARE_CELLS, n);
-    }
-}
-
-const _: () = assert!(
-    STRETCH * SCAN_THREADS == SQUARE_CELLS,
-    "the stretches cover the columns"
-);
-
-/// A column's runs off its spans and those beside it (`ways::runs`) into
-/// the scratch at `scratch`'s runs from `first`, as far as `room`; how
-/// many there are.
-fn put_runs(
-    words: &mut [u32],
-    scratch: u32,
-    around: &ways::Around,
-    cell: u32,
-    first: u32,
-    room: u32,
-) -> u32 {
-    ways::runs(around, cell, move |k, w| {
-        if first + k < room {
-            put(words, scratch + RUNS_AT + first + k, w);
-        }
-    })
-}
-
-/// Entry `[x, y]` of level `j` of the square at `base`, its cells at `cell`:
+/// Entry `[x, y]` of level `j` of the brick at `base`, its cells at `cell`:
 /// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
 /// the ways write in it off the spans its fill kept (`way::bound`;
-/// `ground::Bounds`), and over its column word's top which columns beside it
-/// touch its top cell (`touches`); a higher one over the level under it,
-/// written before (`window::join`). A bore's air counts as far as the column's top, as the
-/// ways write it: the cells of the square's ways tree under it lie in the
+/// `ground::Bounds`); a higher one over the level under it, written before
+/// (`window::join`). A bore's air counts as far as the column's top, as the
+/// ways write it: the cells of the brick's ways tree under it lie in the
 /// bound (`way::tree`), and a node it splits more holds only air or void
 /// there. Over the top it is air whatever writes it; a bound reaching up
 /// there, past a tunnel's mouth where the ground falls away under its
@@ -526,15 +381,8 @@ pub fn level(
     at: [u32; 2],
 ) {
     let w = if j == 0 {
-        let (i, c) = (window::index_of(at), [at[0] as i32, at[1] as i32]);
-        let word = column_of(ground, base, i);
-        let top = column_top(word);
-        put(
-            ground,
-            base + COLUMNS_AT + i,
-            word & 0xffff | touches(kept, c) << 16,
-        );
-        let lines = way::bound(kept, c, cell, top);
+        let top = column_top(column_of(ground, base, window::idx_of(at)));
+        let lines = way::bound(kept, [at[0] as i32, at[1] as i32], cell, top);
         ground::bounds_word([[top, top], lines])
     } else {
         let under: &[u32] = ground;
@@ -554,28 +402,7 @@ pub fn level(
     put(ground, e + 1, w[1] as u32);
 }
 
-/// Which of the four columns beside column `c` touch its ground's top cell
-/// (`window::column_touches`): those whose top in cells, as its fill kept it
-/// in the spans' heads, reaches this one's, a ring column's off the tile's
-/// samples as every one's. None where the column has no top (past the area
-/// or walled) or the one beside has none.
-fn touches(kept: &impl way::Kept, c: [i32; 2]) -> u32 {
-    let (own, _) = kept.head(c);
-    let touch = |d: [i32; 2], bit: u32| {
-        let (top, _) = kept.head([c[0] + d[0], c[1] + d[1]]);
-        if own != i32::MIN && top != i32::MIN && top >= own {
-            bit
-        } else {
-            0
-        }
-    };
-    touch([-1, 0], window::TOUCH_X_LO)
-        | touch([1, 0], window::TOUCH_X_HI)
-        | touch([0, -1], window::TOUCH_Y_LO)
-        | touch([0, 1], window::TOUCH_Y_HI)
-}
-
-/// A square filled whole, its passes in a GPU's order (pxl-render
+/// A brick filled whole, its passes in a GPU's order (pxl-render
 /// gpu/ray/ground.rs `grids`): `fresh` its record (`window::HANDED_WORDS`),
 /// its looks, samples and lines as handed, its words laid here; `lane` its
 /// words, and `scratch` its scratch (`way::tree::SCRATCH_WORDS`); its cells
@@ -604,9 +431,6 @@ pub fn brick(
         for x in 0..BRICK {
             heights(lane, fresh, 0, [x, y]);
         }
-    }
-    for i in 0..window::SPANS_COLUMNS {
-        spans(lane, fresh, scratch, 0, i);
     }
     let mut most = 0;
     for i in 0..SPANS_COLUMNS {
@@ -659,9 +483,9 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
     let mut p = Lane(pool);
     t::root(&mut p, z0, FAMILY * from);
     // Each level's candidates, the families the level over it took, from the
-    // square's own zoom.
-    let top = cell - window::SQUARE_SHIFT;
-    let mut levels = [[0u32; 2]; window::SQUARE_SHIFT as usize + 1];
+    // brick's own zoom.
+    let top = cell - window::BRICK_SHIFT;
+    let mut levels = [[0u32; 2]; window::BRICK_SHIFT as usize + 1];
     let (mut b, mut n, mut taken) = (FAMILY * from, FAMILY, 1);
     let mut zoom = top;
     while zoom < cell {
@@ -675,7 +499,7 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
         let next = FAMILY * (from + taken);
         let mut k = 0;
         for s in b..b + n {
-            if t::flag(&p, &square, 0, cell, zoom, s) {
+            if t::flag(&p, &brick, 0, cell, zoom, s) {
                 t::branch(&mut p, s, next + FAMILY * k);
                 k += 1;
             } else {
@@ -745,9 +569,12 @@ mod tests {
                 let c = [(i % SPANS_ACROSS) as i32 - 1, (i / SPANS_ACROSS) as i32 - 1];
                 let top = tops[i as usize];
                 let mut s = way::Spans::NONE;
-                s.top = ground::cells(cell, top as f32);
-                let inside = (0..16).contains(&(c[0] - patch[0]))
-                    && (0..16).contains(&(c[1] - patch[1]));
+                s.face = ground::face_cell(
+                    cell,
+                    ground::face_height(cell, ground::cells(cell, top as f32)),
+                );
+                let inside =
+                    (0..16).contains(&(c[0] - patch[0])) && (0..16).contains(&(c[1] - patch[1]));
                 if inside {
                     s.n = next(4);
                     for j in 0..s.n as usize {
@@ -782,29 +609,7 @@ mod tests {
                     level(&mut lane, 0, &kept, cell, j, [k % side, k / side]);
                 }
             }
-            // Each column's touches, against its neighbours' tops in cells.
-            let cells_at = |x: i32, y: i32| {
-                let ring = ((y + 1) as u32 * SPANS_ACROSS + (x + 1) as u32) as usize;
-                ground::cells(cell, tops[ring] as f32)
-            };
-            for i in 0..SQUARE_CELLS {
-                let [x, y] = window::of_index(i);
-                let (x, y) = (x as i32, y as i32);
-                let own = cells_at(x, y);
-                let want = [
-                    (cells_at(x - 1, y), window::TOUCH_X_LO),
-                    (cells_at(x + 1, y), window::TOUCH_X_HI),
-                    (cells_at(x, y - 1), window::TOUCH_Y_LO),
-                    (cells_at(x, y + 1), window::TOUCH_Y_HI),
-                ]
-                .iter()
-                .filter(|(t, _)| *t >= own)
-                .fold(0, |b, (_, bit)| b | bit);
-                let word = column_of(&lane, 0, i);
-                assert_eq!(window::column_touches(word), want, "round {round}, column {x}, {y}");
-                assert_eq!(column_top(word), tops[((y + 1) as u32 * SPANS_ACROSS + (x + 1) as u32) as usize]);
-            }
-            let mut pool = vec![0u32; 16 * (tree::SQUARE_FAMILIES as usize + 1)];
+            let mut pool = vec![0u32; 16 * (tree::BRICK_FAMILIES as usize + 1)];
             let [taken, held, root] = tree(&lane, &scratch, cell, &mut pool, 1);
             assert!(taken != u32::MAX && held <= taken, "round {round}: refused");
             let p = Read(&pool);

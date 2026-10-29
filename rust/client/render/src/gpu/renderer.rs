@@ -12,9 +12,8 @@ use pxl_spec_core::eye;
 use pxl_spec_core::param::sun;
 use pxl_spec_core::ray;
 use pxl_spec_core::scatter::GROUPS;
-use pxl_spec_core::sun;
-use pxl_spec_core::ways;
-use pxl_spec_core::window::{self, FreshSquare};
+use pxl_spec_core::way;
+use pxl_spec_core::window::{FRESH_WORDS, HANDED};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -23,7 +22,7 @@ use xpute_kit::status::errno::Errno;
 use crate::api_spec::surface_role;
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{
-    census_slot, uniform_of, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID,
+    census_slot, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID,
     PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
     PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS,
     UPLOAD_WORDS,
@@ -39,6 +38,7 @@ use crate::frame::shader::word::{
 };
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::{ScreenAo, MAP_BINDING};
+use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
     pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
@@ -56,7 +56,7 @@ use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
 use crate::gpu::pass::marker::MarkerPass;
-use crate::gpu::pass::model::{frame_layout, skins_lost, FrameGroups, Stage};
+use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::puck::{PuckPass, BEACON_VERTICES};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -64,7 +64,7 @@ use crate::gpu::put::put_mat;
 use crate::gpu::ray::{RaysPass, RAY_SUMS};
 use crate::gpu::read::Read;
 use crate::gpu::resolve::Resolve;
-use crate::gpu::shadow::Shadow;
+use crate::gpu::shadow::{self, Shadow};
 use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
@@ -76,22 +76,12 @@ use crate::gpu::text::TextOf;
 use crate::gpu::upload::{uploads, Draws, Uploads};
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SUN};
 
-const DRAWS_INITIAL: u32 = 256 * DRAW_FLOATS as u32;
+const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
 const _: () = assert!(
     GPU_SPAN_NAMES <= 32,
     "a span a bit of the mask the host is told"
 );
-const SPAN_AIR: usize = GpuSpanName::air as usize;
-const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
-const SPAN_AO: usize = GpuSpanName::ao as usize;
-const SPAN_WORLD: usize = GpuSpanName::world as usize;
-const SPAN_RESOLVE: usize = GpuSpanName::resolve as usize;
-const SPAN_MARKER: usize = GpuSpanName::marker as usize;
-const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
-const SPAN_CASE: usize = GpuSpanName::case as usize;
-const SPAN_FILL: usize = GpuSpanName::fill as usize;
-const SPAN_SHADOW: usize = GpuSpanName::shadow as usize;
 
 type Frame = [f32; FRAME_FLOATS];
 
@@ -239,7 +229,7 @@ pub const READS: u32 = 2 * HANDED;
 pub const RECORD_ROOMS_BYTES: u64 =
     READS as u64 * (way::tree::RECORDS_BYTES as u64).next_power_of_two();
 
-/// A square whose cells came back, the fill they are of
+/// A brick whose cells came back, the fill they are of
 /// (`CellsBack::ticket`), and how its ways' tree landed; what is told may
 /// borrow its caller's for the frame.
 pub type CellsLanded<'a> = dyn FnMut(u32, u32, Landing<'_>) + 'a;
@@ -265,6 +255,10 @@ pub struct Cast<'a> {
     pub overwrites: Overwrites<'a>,
     /// The decor the GPU grows and draws over the same world (gpu/grown.rs).
     pub decor: DecorFrame<'a>,
+    /// Where each actor drawn stands, units from the eye, as its draw is
+    /// placed (frame/draw.rs `Lists::stands`): receivers of the shadow map as
+    /// decor is (pxl-spec-core `sun::ACTORS_AT`).
+    pub actors: &'a [[f32; 3]],
     /// Whether what the eye's cast and the sun's walked and took is counted
     /// (gpu/ray/tally.rs).
     pub ray_counts: bool,
@@ -359,17 +353,17 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
 /// and its cast. The air's
 /// tables, the fill and the decor's growth, the thumbnails, markers and debug
 /// cost what they cost at any resolution.
-const PER_PIXEL: [GpuSpanName; 11] = [
+const PER_PX: [GpuSpanName; 11] = [
     GpuSpanName::prepass,
     GpuSpanName::ao,
     GpuSpanName::world,
     GpuSpanName::resolve,
     GpuSpanName::cast,
     GpuSpanName::beam,
-    GpuSpanName::cells,
+    GpuSpanName::cell,
     GpuSpanName::sample,
     GpuSpanName::sraster,
-    GpuSpanName::pixel,
+    GpuSpanName::px,
     GpuSpanName::miss,
 ];
 
@@ -419,7 +413,7 @@ static REDRAW: Global<bool> = Global::new();
 /// renderer numbers on.
 static DRAWN_FRAMES: Global<f64> = Global::new();
 
-pub fn gpu_lost() {
+pub fn on_gpu_lost() {
     RENDERER.set(None);
     on_skins_lost();
     on_device_lost();
@@ -489,6 +483,17 @@ pub struct Renderer {
     frame_read: Read,
     /// The jitter in the frame's words as the GPU holds them (`JITTER`).
     jitter_written: [f32; 2],
+    /// The lists as the last frame drew them, apart from the rest of its
+    /// input: their records, uniforms and uploads (`listed`), and the
+    /// records and uniforms of the draws a region does not stand for, with
+    /// whether an upload they read moved (`beside`, `BESIDE`).
+    listed: Read,
+    beside: Read,
+    /// The region a frame draws again cleared, under its scissor.
+    clear: Built,
+    /// The eye's view-projection as `lay_out` took it, which the moved
+    /// spheres are seen through (`regions`).
+    view_proj: Mat4,
     /// What the occlusion was last made from: the frame's words, its own,
     /// the surface and the decor its prepass draws. The frame is drawn
     /// again for more than these, and the occlusion only where they moved.
@@ -544,7 +549,7 @@ impl Renderer {
             query_set,
             read_px: 0.0,
             read_frame: 0.0,
-            ghost: pipelines.build(g, PIPELINE_GHOST_BOX, g.canvas()),
+            ghost: pipelines.build(g, PIPELINE_GHOST_BOX, WORLD_COLOR),
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
@@ -552,10 +557,14 @@ impl Renderer {
             marker: MarkerPass::new(g, &mut pipelines, frame_buf, device.align),
             finish: Finish::new(g, &mut pipelines),
             resolve: Resolve::new(g, &mut pipelines),
-            debug: DebugPass::new(g, &mut pipelines, frame_buffer, sky_buffer, device.align),
+            debug: DebugPass::new(g, &mut pipelines, frame_buf, sky_buf, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
+            listed: Read::default(),
+            beside: Read::default(),
+            clear: pipelines.build(g, PIPELINE_SCREEN_CLEAR, WORLD_COLOR),
+            view_proj: mat4::new(),
             ao_read: Read::default(),
             pipelines,
             frame_buf,
@@ -618,13 +627,21 @@ impl Renderer {
         self.box_groups(g);
         self.models.rebind(
             g,
-            self.frame_buffer,
+            self.frame_buf,
             [self.ao.entry(MAP_BINDING), self.ao.blank_entry(MAP_BINDING)],
         );
     }
 
     /// `reach` how far the eye draws, in units; none without an eye.
-    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32], reach: f32) {
+    fn lay_out(
+        &mut self,
+        g: &Gpu,
+        width: u32,
+        height: u32,
+        screen: (u32, u32),
+        env: &[f32],
+        reach: f32,
+    ) {
         let s = stage_lane();
         let (mut m, mut proj) = (mat4::new(), mat4::new());
         proj.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
@@ -940,6 +957,11 @@ impl Renderer {
         }
         self.frame[JITTER] = 2.0 * j[0] / world.width as f32;
         self.frame[JITTER + 1] = -2.0 * j[1] / world.height as f32;
+        // Where what the kernel animates moved, on the screen and in the
+        // sun's map, laid out as this frame's eye and light see it.
+        let (region, sun_rect) = self
+            .regions(input.moved, world.width, world.height)
+            .map_or((None, None), |(r, s)| (Some(r), s));
         let ao_remade = self.screen_ao && self.ao.ensure(g, world.width, world.height);
         if ao_remade {
             self.rebind(g);
@@ -973,7 +995,7 @@ impl Renderer {
         let jitter = [self.frame[JITTER], self.frame[JITTER + 1]];
         let words_moved = read.read(&self.frame[..JITTER]);
         if words_moved || jitter != self.jitter_written {
-            g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
+            g.write_buf(self.frame_buf, 0, bytes(&self.frame));
             self.jitter_written = jitter;
         }
         if words_moved {
@@ -1038,13 +1060,9 @@ impl Renderer {
         let folded = self.screen.fold(&mut ctx);
         let (tables, exposed) = self.atmosphere.draw(&mut ctx);
         read.mark(tables);
-        let aired = self.atmosphere.froxel(
-            g,
-            ahead,
-            [&self.frame[..JITTER], &self.sky],
-            exposed,
-            &mut stamps[SPAN_AIR],
-        );
+        let aired = self
+            .atmosphere
+            .froxel(&mut ctx, [&self.frame[..JITTER], &self.sky], exposed);
         read.mark(aired);
         if baked || gridded || folded || exposed || aired {
             g.submit(ahead);
@@ -1057,14 +1075,23 @@ impl Renderer {
         if read.read(self.clouds.words()) {
             self.clouds.write(g);
         }
-        // Nothing moved but the jitter: all the frame draws from read as
-        // last time but it, over rays cast again at most at their pixels.
-        let quiet =
+        // The world as it stood: all the frame draws from read as last time
+        // but its lists and its jitter, over rays cast again at most at
+        // their pixels.
+        let stands =
             read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows() && !gridded;
+        // Nothing moved but the jitter.
+        let quiet = stands && listed_same;
+        // Only what the region bounds moved: it alone is drawn again. Else
+        // the frame is drawn whole, its pixels cast whole.
+        let region = region.filter(|_| stands);
+        if region.is_none() {
+            self.screen.whole(g);
+        }
         // The frame stands where nothing moved, the jitter neither: nothing
         // is drawn, nothing submitted, and the canvases keep the frame they
         // show.
-        if quiet && !self.screen.casts_pixels() && !self.screen.sun_casts() {
+        if quiet && !self.screen.casts_px() && !self.screen.sun_casts() {
             self.frame_read = read;
             let mut stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
             // Nothing drawn, so no number a read could name.
@@ -1092,10 +1119,7 @@ impl Renderer {
             (None, _) => Some(None),
         };
         if let Some(rect) = map.filter(|_| self.shadows) {
-            let pass = self
-                .shadow
-                .begin(g, encoder, cast, rect, &mut stamps[SPAN_SHADOW]);
-            let mut bound = 0;
+            let mut pass = self.shadow.begin(&mut ctx, cast, rect);
             let light = self.shadow.light_group;
             self.decor
                 .draw_grown(&mut pass, self.screen.grown(), b, Stage::Depth, light);
@@ -1121,19 +1145,19 @@ impl Renderer {
         ]);
         // The world's depth is the rays', so a cast that laid them again
         // lays the occlusion again.
-        a.mark(ao_remade || self.screen.grows() || self.screen.casts_pixels());
+        a.mark(ao_remade || self.screen.grows() || self.screen.casts_px());
         let ao_moved = !a.end();
         // A region drawn again alone moves no depth the occlusion reads: its
         // prepass draws the rays and the grown decor, never what the kernel
         // animates (gpu/pass/model.rs, drawn over it), so it stands.
         if self.screen_ao && ao_moved && region.is_none() {
-            let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
-            self.screen.draw_depth(g, pass);
-            self.draw_opaque(g, pass, b, Stage::Prepass);
-            g.end(pass);
-            self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
+            let mut pass = self.ao.begin_prepass(&mut ctx);
+            self.screen.draw_depth(&mut pass);
+            self.draw_opaque(&mut pass, b, Stage::Prepass);
+            pass.end();
+            self.ao.run(&mut ctx);
         }
-        let canvas_view = g.current(world.handle);
+        let canvas_view = g.cur(world.handle);
         // A region drawn again alone keeps the rest as the last frame left
         // it, the region cleared under the scissor first.
         let load = if region.is_some() {
@@ -1152,13 +1176,14 @@ impl Renderer {
                 ctx.stamp(GpuSpanName::world).pass(),
             ),
         );
+        let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(r) = region {
-            g.set_scissor(pass, r.rect());
-            g.set_pipeline(pass, self.clear.pipeline);
-            g.draw(pass, 3, 1, 0, 0);
+            pass.set_scissor(r.rect());
+            pass.set_pipeline(self.clear.pipeline);
+            pass.draw(3, 1, 0, 0);
         }
-        self.draw_opaque(g, pass, b, Stage::Lit);
-        let mut bound = self.screen.draw(g, pass);
+        self.draw_opaque(&mut pass, b, Stage::Lit);
+        self.screen.draw(&mut pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
         self.impostor
             .draw_grown(&mut pass, self.screen.grown(), GROUPS, self.models.frame);
@@ -1181,27 +1206,11 @@ impl Renderer {
         self.puck.draw_zone(&mut pass, &draws, b);
         self.draw_boxes(&mut pass, &draws);
         self.decor
-            .draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
-        g.end(pass);
-        let gathered = self.resolve.draw(
-            g,
-            encoder,
-            self.frame_buffer,
-            world,
-            quiet,
-            &mut stamps[SPAN_RESOLVE],
-        );
-        // At the canvas's size, as what is drawn over it: counted with the
-        // markers', not the world's pixels.
-        self.finish.draw(
-            g,
-            encoder,
-            self.frame_buffer,
-            world,
-            gathered,
-            canvas_view,
-            &mut stamps[SPAN_MARKER],
-        );
+            .draw_ghosts(&mut pass, &draws, b, self.models.frame);
+        pass.end();
+        let gathered = self
+            .resolve
+            .draw(&mut ctx, self.frame_buf, world, quiet, region);
         // At the canvas's size, as what is drawn over it: counted with the
         // markers', not the world's pixels.
         self.finish.draw(
@@ -1209,6 +1218,7 @@ impl Renderer {
             GpuSpanName::marker,
             self.frame_buf,
             world,
+            gathered,
             canvas_view,
         );
         self.marker
@@ -1230,7 +1240,7 @@ impl Renderer {
         release(canvas_view);
         // The read that landed is the one that was on its way; this frame's
         // takes its place where one was asked.
-        let gpu_read = q != 0 && g.gpu_landed();
+        let gpu_read = q != 0 && g.has_gpu_landed();
         let (gpu_spans, gpu_px, gpu_frame) = if gpu_read {
             (
                 core::array::from_fn(|k| g.gpu_ms(k as u32)),
@@ -1258,9 +1268,14 @@ impl Renderer {
             self.beside.forget();
             self.ao_read.forget();
         } else {
-            self.resolve.on_drawn(quiet);
-            // The jitter's sequence run through while the view stands.
-            if self.resolve.gathering() {
+            self.resolve.on_drawn(quiet, region.is_some());
+            // The jitter's sequence run through once anything moved, as
+            // nothing else asks for those frames while it stands. What
+            // moves on its own (an actor, the clouds, the puck) wakes the
+            // turn at its own steps and takes a place of the sequence a
+            // step, held to the pixels about it: it is not hurried to the
+            // display's rate.
+            if self.resolve.gathering() && (quiet || !animated) {
                 REDRAW.set(true);
             }
             if self.screen.grows() {
@@ -1364,7 +1379,7 @@ impl Renderer {
                 PIPELINE_GHOST_BOX => d[1] * BOX_VERTICES / 3,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
                 PIPELINE_IMPOSTOR => 2 * d[2],
-                PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
+                PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3),
                 PIPELINE_PUCK_ZONE => BOX_VERTICES / 3 * d[1],
                 PIPELINE_PUCK_BEACON => BEACON_VERTICES / 3,
                 PIPELINE_MARKER => 2 * d[1],
@@ -1383,7 +1398,7 @@ impl Renderer {
             gpu_px: 0.0,
             gpu_frame: 0.0,
             frame: *DRAWN_FRAMES.get(|| 0.0),
-            uploads: b.count as f64,
+            uploads: b.cnt as f64,
             upload_bytes: b.bytes as f64,
             // The depth targets: the world's own and the canvas's, one f32 a
             // pixel, AO's and the markers' regions'.
@@ -1441,7 +1456,9 @@ fn targets(g: &Gpu, s: &mut Surface) {
     (s.history, s.history_view) = ([0; 2], [0; 2]);
     if s.role == surface_role::WORLD {
         for k in 0..2 {
-            s.history[k] = g.texture(width, height, 1, WORLD_COLOR, 1, usage);
+            // Copied within where a region alone is drawn again (gpu/resolve.rs).
+            let copied = usage | texture_usage::COPY_SRC | texture_usage::COPY_DST;
+            s.history[k] = g.texture(width, height, 1, WORLD_COLOR, 1, copied);
             s.history_view[k] = g.view(s.history[k], false, 0, 1, 0, 1);
         }
         // Written by the cast, read by the screen pass.

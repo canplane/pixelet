@@ -168,15 +168,14 @@ impl Case {
         );
         pass.end();
         // Encoded onto its canvas at its own frame's words, no vignette.
-        let view_id = g.current(s.handle);
+        let view_id = g.cur(s.handle);
         self.finish.draw(
-            g,
-            encoder,
-            self.frame_buffer,
+            ctx,
+            GpuSpanName::case,
+            self.frame_buf,
             s,
             s.color_view,
             view_id,
-            stamp,
         );
         release(view_id);
     }

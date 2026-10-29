@@ -1,12 +1,12 @@
 // pxl-shader/raster.rs
 
 //! The samples' stops handed to the rasterizer (pxl-spec-core `raster`):
-//! each stopped sample's box written for the raster's draw (`boxes_cs`),
+//! each stopped sample's box written for the raster's draw (`sample_box_cs`),
 //! which pxl-render raster.wgsl draws and pxl-shader cast.rs `cast_cs`
-//! reads each pixel's pick off; and what lies about each box's face asked
-//! once a box (`faces_cs`).
+//! reads each pixel's visible sample off; and what lies about each box's face
+//! asked once a box (`face_cs`).
 
-use pxl_spec_core::cast::{Ends, Met, Stop};
+use pxl_spec_core::cast::{End, Met, Stop};
 use pxl_spec_core::{beam, cast, raster, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
@@ -21,7 +21,7 @@ use crate::world::{Unlooked, World};
 use crate::{add, most};
 
 /// Whether samples at words `a` and `b` stopped on the same box, alike in
-/// every word a pixel reads of them: the node, the block, whether it lacks
+/// every word a pixel reads of them: the node, the asset, whether it lacks
 /// and the axis entered across, so what lies about its face is alike too
 /// (world.rs `World::faced`, its face the axis's turned to the eye).
 fn alike<W: Words + ?Sized>(w: &W, a: u32, b: u32) -> bool {
@@ -50,7 +50,7 @@ pub(crate) const NONE: u32 = u32::MAX;
 /// stops on it (`cast::drawn`) from `origin`, appended to `boxes`, counted
 /// in `args` (`raster::ARGS_INSTANCES`), its number and its axis,
 /// `raster::EYED` where it lies about the eye at the screen's tangents
-/// `tan` (`raster::eyed`), where `eyed` asks (the sun's has none); none
+/// `tan` (`raster::is_eyed`), where `eyed` asks (the sun's has none); none
 /// where it went on to its reach, or where a sample at `before`, the one
 /// across or up, `NONE` where there is none, stopped alike (`alike`), which
 /// some sample before it in turn draws. Its place among the boxes, `NONE`
@@ -75,9 +75,9 @@ pub(crate) fn boxed<W: Words + ?Sized>(
         return NONE;
     }
     let node = node_at(w, k + beam::SAMPLE_NODE);
-    let (lo, hi) = cast::drawn(origin, &node, w.word(k + beam::SAMPLE_BLOCK));
+    let (lo, hi) = cast::drawn(origin, &node, w.word(k + beam::SAMPLE_ASSET));
     let lacks = w.word(k + beam::SAMPLE_LACKS) != 0;
-    let eyed = eyed && raster::eyed(lo, hi, tan);
+    let eyed = eyed && raster::is_eyed(lo, hi, tan);
     let box_at = add(args, raster::ARGS_INSTANCES, 1);
     let at = box_at * raster::BOX_WORDS;
     put(boxes, at + raster::BOX_LO, lo[0].to_bits());
@@ -95,35 +95,35 @@ pub(crate) fn boxed<W: Words + ?Sized>(
     box_at
 }
 
-/// The block a ray from `origin` takes off the raster's pick, the sample at
+/// The cell a ray from `origin` takes off the visible sample, the sample at
 /// word `k` of `w`: where the ray enters it (`cast::entry`) across the axis
 /// the sample entered by, the eye's pixels and the sun's slots alike, and
 /// whether it does.
-pub(crate) fn picked<W: Words + ?Sized>(
+pub(crate) fn taken<W: Words + ?Sized>(
     w: &W,
     k: u32,
     origin: [i32; 3],
     ray: &cast::Ray,
 ) -> (cast::Stop<u32>, bool) {
     let node = node_at(w, k + beam::SAMPLE_NODE);
-    let block = [
-        w.word(k + beam::SAMPLE_BLOCK),
-        w.word(k + beam::SAMPLE_BLOCK + 1),
+    let asset = [
+        w.word(k + beam::SAMPLE_ASSET),
+        w.word(k + beam::SAMPLE_ASSET + 1),
     ];
-    let (enter, axis, enters) = cast::entry(origin, ray, &node, block[0]);
+    let (enter, axis, enters) = cast::entry(origin, ray, &node, asset[0]);
     let stop = cast::Stop {
         t: enter,
         axis,
         node,
         at: 0u32,
-        block,
+        asset,
     };
     (stop, enters && axis == w.word(k + beam::SAMPLE_AXIS))
 }
 
 /// Each sample of its observer's lattice, a thread each: written as a box
 /// for the raster's draw (observer.rs `sample_box`), the screen's or the
-/// sun's map's as its head names (either.rs `Either`); and, the screen's, the
+/// shadow map's as its head names (either.rs `Either`); and, the screen's, the
 /// dispatch that asks its face raised to hold it (`raster::ARGS_FACES`),
 /// as its pixels draw the face.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_box_cs"))]
@@ -146,18 +146,18 @@ pub fn sample_box_cs(
     }
 }
 
-/// Each box `boxes_cs` wrote, a thread each, `raster::FACES_LANES` a
+/// Each box `sample_box_cs` wrote, a thread each, `raster::FACES_LANES` a
 /// workgroup, dispatched off its args (`raster::ARGS_FACES`), each past the
 /// boxes' count returning at once: what lies about the face its sample
 /// entered (`World::faced`), asked of the world's query once a box rather
 /// than once a sample, and left in its sample's words
 /// (`beam::SAMPLE_FACES`), the one sample of the box a pixel reads
 /// (cast.rs `cast_cs`). Its sample's ray is the one `sample_cs` cast, and
-/// its stop the node, block and axis it left; a sample that lacks met no
+/// its stop the node, asset and axis it left; a sample that lacks met no
 /// face.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "faces_cs"))]
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "face_cs"))]
 #[allow(clippy::too_many_arguments)]
-pub fn faces_cs(
+pub fn face_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
@@ -183,15 +183,15 @@ pub fn faces_cs(
         let (origin, _) = eye_origin(eye);
         let ray = eye_ray(eye, g.sample(sample));
         let met = Met {
-            ends: Ends::Stop,
+            ends: End::Stop,
             stop: Stop {
                 t: 0.0,
                 axis: seen_at(beams, k + beam::SAMPLE_AXIS),
                 node: node_at(beams, k + beam::SAMPLE_NODE),
                 at: 0u32,
-                block: [
-                    seen_at(beams, k + beam::SAMPLE_BLOCK),
-                    seen_at(beams, k + beam::SAMPLE_BLOCK + 1),
+                asset: [
+                    seen_at(beams, k + beam::SAMPLE_ASSET),
+                    seen_at(beams, k + beam::SAMPLE_ASSET + 1),
                 ],
             },
             visits: 0,
@@ -203,7 +203,7 @@ pub fn faces_cs(
             shards,
             overwrites,
             eye,
-            pool: ways::tree::Read(pool),
+            pool: way::tree::Read(pool),
         };
         world.faced(origin, &ray, &met, support::line)
     };

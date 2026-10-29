@@ -139,8 +139,8 @@ class Words {
 
 /** Whether `a`'s generation is behind `b`'s, generations wrapping in their bits. */
 function older(a: u32, b: u32): boolean {
-  const behind = ((a >>> SLOT_BITS) - (b >>> SLOT_BITS)) &
-    ((1 << GENERATION_BITS) - 1);
+  const behind =
+    ((a >>> SLOT_BITS) - (b >>> SLOT_BITS)) & ((1 << GENERATION_BITS) - 1);
   return behind >= 1 << (GENERATION_BITS - 1);
 }
 

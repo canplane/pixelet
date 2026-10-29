@@ -12,10 +12,11 @@ use crate::frame::shader::record::PIPELINE_STAR;
 use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
 use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
+use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
+use crate::gpu::surface::WORLD_COLOR;
 use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
 use crate::param::sky::star::DRAWN_ABOVE;
 
@@ -53,8 +54,8 @@ impl StarPass {
             word_bytes(stars.len()),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buffer(catalog, 0, bytes(&stars));
-        let mut frame = vec![buffer_entry(0, frame_buffer)];
+        g.write_buf(catalog, 0, bytes(&stars));
+        let mut frame = vec![buf_entry(0, frame_buf)];
         frame.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
         let frame_group = g.bind_group(built.layouts[0], &frame);
         let group = g.bind_group(
@@ -111,7 +112,7 @@ impl StarPass {
 }
 
 /// A record's star (pxl-spec asset/star.rs `star`, the bake's one layout)
-/// as the sky draws it: its direction, its flux, its colour.
+/// as the sky draws it: its direction, its flux, its color.
 fn star_floats(packed: &[u8; RECORD_BYTES]) -> [f32; STAR_RECORD_FLOATS] {
     let s = star::star(packed);
     let (ra, dec) = (s.ra.to_radians(), s.dec.to_radians());

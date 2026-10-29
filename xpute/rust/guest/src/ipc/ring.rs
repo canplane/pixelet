@@ -29,7 +29,7 @@ fn padded(bytes: usize) -> usize {
 }
 
 /// In u64: a length word near 2^32 must read as too long, not wrap on wasm32.
-fn packet_bytes(u8: &[u8], at: usize) -> u64 {
+fn pkt_bytes(u8: &[u8], at: usize) -> u64 {
     let word = at + WORD_SZ as usize;
     let payload = u32::from_le_bytes([u8[word], u8[word + 1], u8[word + 2], u8[word + 3]]);
     (u64::from(HDR_SZ) + u64::from(payload)).next_multiple_of(u64::from(WORD_SZ))
@@ -221,7 +221,7 @@ impl Ring {
             return Ok(None);
         }
         let bad = || MarshalError::new(Errno::EBADMSG);
-        let off = f.packet_at.checked_sub(self.slot_base).ok_or_else(bad)? as usize;
+        let off = f.pkt_at.checked_sub(self.slot_base).ok_or_else(bad)? as usize;
         if !off.is_multiple_of(self.slot_bytes as usize)
             || off + HDR_SZ as usize > self.slots().len()
         {

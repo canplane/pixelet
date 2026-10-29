@@ -224,3 +224,11 @@ holes, untraced. What it leaves for the next attempt is
 the question it got wrong: a raster that only starts the ray saves the march,
 not the descent or the writing a cell's pixels share, so a split between
 raster and ray has to give the raster that shared work, not only the start.
+
+The split taken is the other way round, a decision on today's measurements
+rather than a rule for every pass: the samples still walk, and the raster keeps
+each pixel's block off the blocks they stopped at
+([the raster keeps](../experiment/20261026-the-raster-keeps.md), "Taken").
+The shared discovery stays where cells share it; the per-pixel 4 × 4 lookup,
+the costly part, is the raster's depth test; and the boxes are derived from the
+samples, with no chunk, mesh or frontier beside them.

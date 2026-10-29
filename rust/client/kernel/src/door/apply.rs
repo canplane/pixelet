@@ -100,7 +100,7 @@ pub(super) fn apply(
             )?;
             // The step is the one clock's change since the last frame: none on
             // the first, and none where the clock was set back.
-            let last = crate::sys::sched::clock::wall_now();
+            let last = clock::wall_now();
             let delta = if last > 0.0 {
                 ((p.unix_ms - last) / 1000.0).max(0.0)
             } else {
@@ -115,7 +115,7 @@ pub(super) fn apply(
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            crate::sys::sched::clock::set_wall_now(p.unix_ms);
+            clock::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
@@ -246,16 +246,16 @@ pub(super) fn apply(
         Command::INPUT_GOTO => {
             let p = abi::InputGoto::read(given(pkt)?)?;
             refuse_unless(on_earth(p.lon, p.lat), Errno::EINVAL)?;
-            // Asked after the going's coming in, so a dist asked wins over it.
-            ui::go_to_degrees(p.lon, p.lat);
-            crate::domain::control::camera::controller::set_intent(
-                crate::domain::control::camera::state::IntentPatch {
+            ui::go_to_deg(
+                p.lon,
+                p.lat,
+                IntentPatch {
                     dist: p.dist,
                     azimuth: p.azimuth,
                     polar: p.polar,
                 },
             );
-            applied(s)
+            ask_turn(s)
         }
         Command::INPUT_XR_POSE => {
             let p = abi::InputXrPose::read(given(pkt)?)?;
@@ -426,7 +426,7 @@ pub(super) fn apply(
         }
         // Memory is at most 1 GiB, so an address fits an i32.
         Command::PROFILER_READ => {
-            let window_ms = abi::ProfilerRead::read(packet(pkt)?)?.window_ms;
+            let window_ms = abi::ProfilerRead::read(given(pkt)?)?.window_ms;
             Ok(Some(read_timed(|| profiler_read(window_ms)) as i32))
         }
         Command::PROFILER_RINGS => Ok(Some(read_timed(profiler_rings) as i32)),
@@ -454,14 +454,14 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
 /// A read of the profiler, its time the profiler's cost to the interval
 /// (profiler/record.rs `profiler_record_read`).
 fn read_timed(read: impl FnOnce() -> u32) -> u32 {
-    let at = xpute_guest::clock::now();
-    let address = read();
-    crate::profiler::record::profiler_record_read(xpute_guest::clock::now() - at);
-    address
+    let at = now();
+    let addr = read();
+    record::profiler_record_read(now() - at);
+    addr
 }
 
-/// The address of READ's words (profiler.json): the summary over
-/// `window_ms`. Read in place rather than posted: `Door::post` asserts on a
+/// The address of READ's words (profiler.json): the statistics over
+/// `window_ms`, and what holds now. Read in place rather than posted: `Door::post` asserts on a
 /// full completion ring, and reading allocates nothing in the heap being
 /// measured. Valid until the next turn.
 fn profiler_read(window_ms: Option<f64>) -> u32 {

@@ -82,11 +82,11 @@ std::optional<Frame> Ring::peek() const noexcept {
 Result<std::span<const std::uint8_t>> Ring::pkt(const Frame &f) const noexcept {
     if (f.pkt_at == 0) return std::span<const std::uint8_t>();
     std::uint32_t base = slot_base_, slot = slot_bytes_;
-    if (f.packet_at < base) return marshal_error(Errno::ebadmsg);
-    std::uint64_t off = f.packet_at - base;
+    if (f.pkt_at < base) return marshal_error(Errno::ebadmsg);
+    std::uint64_t off = f.pkt_at - base;
     if (off % slot != 0 || off + xtp::HDR_SZ > slots_bytes(cap(), slot)) return marshal_error(Errno::ebadmsg);
     // The header, then the payload its second word names, to the word.
-    std::uint64_t n = padded(xtp::HDR_SZ + std::uint64_t{mem_.word(f.packet_at + xtp::WORD_SZ)});
+    std::uint64_t n = padded(xtp::HDR_SZ + std::uint64_t{mem_.word(f.pkt_at + xtp::WORD_SZ)});
     if (n > slot) return marshal_error(Errno::ebadmsg);
     return std::span<const std::uint8_t>(mem_.at(f.pkt_at), static_cast<std::size_t>(n));
 }

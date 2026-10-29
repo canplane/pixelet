@@ -12,7 +12,7 @@
 
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::LOOK_LANE;
-use pxl_spec_core::window::{BACK_WORDS, LINES_WORDS, SQUARE_CELLS, WAYS_SQUARE_SEGMENTS};
+use pxl_spec_core::window::{BACK_WORDS, BRICK_CELLS, LINES_WORDS, WAYS_BRICK_SEGMENTS};
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::mem::fixed::lane_bytes;
@@ -84,7 +84,7 @@ pub const FILL_LANE_BYTES: [u32; 4] = [
 ];
 
 /// Where the fill's room starts, on a cache line.
-const FILL_AT: u32 = lane_bytes(cells_off(SQUARES) as usize, 1);
+const FILL_AT: u32 = lane_bytes(cells_off(SLOTS) as usize, 1);
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_LANE_BYTES);
 

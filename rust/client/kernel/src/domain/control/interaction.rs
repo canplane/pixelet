@@ -134,7 +134,7 @@ enum Struck {
 /// box it claims, which the hit carries.
 fn flush_against(hit: &Hit) -> Option<Aabb> {
     match hit.struck {
-        crate::domain::query::Struck::Object(_) => resolve_hit_object(hit).map(|o| object_aabb(&o)),
+        Object(_) => resolve_hit_object(hit).map(|o| object_aabb(&o)),
         _ => None,
     }
 }
@@ -163,7 +163,7 @@ pub(crate) struct Picked {
 /// the box struck.
 fn cell_struck(hit: &Hit) -> Aabb {
     match hit.struck {
-        crate::domain::query::Struck::Decor(i) => i.cell(),
+        Decor(i) => i.cell(),
         _ => hit.cube,
     }
 }
@@ -184,14 +184,14 @@ impl Picked {
 /// What the hover picks at `ndc_x`, `ndc_y`,
 /// from the pose as the camera holds it now, which a door event or a
 /// controller may have moved since the turn composed the view.
-pub(crate) fn picked(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
-    let pose = crate::domain::control::camera::controller::pose()?;
-    let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
-    ray_of(pose, ndc_x, ndc_y, &mut origin, &mut direction);
-    let hit = ray_pick(origin, direction)?;
-    let drawn = crate::domain::view::observation::eye().map(|eye| {
+pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
+    let pose = controller::pose()?;
+    let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
+    ray_of(pose, ndc_x, ndc_y, &mut origin, &mut dir);
+    let hit = ray_pick(origin, dir)?;
+    let drawn = observation::eye().map(|eye| {
         let v = v3::sub(&cell_struck(&hit).center(), &eye);
-        crate::domain::query::by_distance().at(v3::dot(&v, &v) as f32)
+        query::by_dist().at(v3::dot(&v, &v) as f32)
     });
     Some(Picked { hit, drawn })
 }

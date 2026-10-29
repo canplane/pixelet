@@ -34,8 +34,8 @@ pxl-spec-core.workspace = true
 naga = { version = "30", features = ["wgsl-in"] }
 
 [dev-dependencies]
-# The Moon's shipped map read back, so its mean holds `sky::moon::MAP_MEAN`
-# (param.test.rs).
+# The Moon's shipped map read back, so its mean holds `MOON_MAP_MEAN`
+# (frame/shader/word.test.rs).
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 [lints]

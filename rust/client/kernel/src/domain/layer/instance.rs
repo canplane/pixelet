@@ -41,7 +41,7 @@ impl Instance {
 
     /// The cell it stands in: the leaf the ground grew it in, or its entry's.
     pub fn cell(&self) -> Aabb {
-        match self.source {
+        match self.src {
             Source::Ground(cell) => cube(GROUND.cell(), cell),
             Source::Object(e) => cube(e.zoom(), e.at()),
         }

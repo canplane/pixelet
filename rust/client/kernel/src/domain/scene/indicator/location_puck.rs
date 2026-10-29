@@ -21,9 +21,13 @@ use crate::domain::scene::indicator::param::{
 };
 use crate::domain::scene::region;
 use crate::domain::scene::scene;
+use crate::domain::view::frame::coord;
+use crate::domain::view::lens;
 use crate::domain::view::lens::{seen_step_s, Stepped};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, wake_at};
+use pxl_render::frame::shader::word;
+use pxl_render::param::puck::beacon;
 use xpute_guest::clock::now;
 
 // The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
@@ -108,13 +112,13 @@ fn lay_zone(
     const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     let ring = zone_reach() + 1;
     let across = (2 * ring + 1) as usize;
-    let index = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
+    let idx = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
     rise.clear();
     rise.resize(across * across, None);
     for s in zone_samples() {
         for d in [[0, 0]].iter().chain(&BESIDE) {
             let at = [s.at[0] + d[0], s.at[1] + d[1]];
-            if rise[index(at)].is_none() {
+            if rise[idx(at)].is_none() {
                 let off = [
                     s.off[0] + f64::from(d[0]) * cell,
                     s.off[1] + f64::from(d[1]) * cell,
@@ -123,13 +127,13 @@ fn lay_zone(
                 // An unloaded neighbor tile falls back to the center's height; 0 would
                 // sink or launch that instance.
                 let ground = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
-                rise[index(at)] = Some(ground - center_pos[2]);
+                rise[idx(at)] = Some(ground - center_pos[2]);
             }
         }
     }
     // The box on the ground's cell `d` from the sample, relative to the center.
     let box_at = |s: &ZoneSample, d: [i32; 2]| {
-        let delta_ele = rise[index([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
+        let delta_ele = rise[idx([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
         let off = [
             s.off[0] + f64::from(d[0]) * cell,
             s.off[1] + f64::from(d[1]) * cell,
@@ -163,7 +167,7 @@ fn lay_zone(
 fn beacon_speed() -> f64 {
     libm::hypot(
         BEACON_BOB * BEACON_BOB_RATE,
-        BEACON_SPIN_RATE * f64::from(pxl_render::param::puck::beacon::RADIUS),
+        BEACON_SPIN_RATE * f64::from(beacon::RADIUS),
     )
 }
 
@@ -171,8 +175,7 @@ fn beacon_speed() -> f64 {
 /// the faces open to the air it draws (1, a bit a face): the stride
 /// puck_zone.wgsl reads (pxl-render frame/shader/word.rs
 /// `PUCK_ZONE_INSTANCE_FLOATS`).
-pub const ZONE_INSTANCE_FLOATS: usize =
-    pxl_render::frame::shader::word::PUCK_ZONE_INSTANCE_FLOATS as usize;
+pub const ZONE_INSTANCE_FLOATS: usize = word::PUCK_ZONE_INSTANCE_FLOATS as usize;
 
 /// The zone shown and its beacon.
 struct Zone {
@@ -265,7 +268,7 @@ impl LocationPuck {
         );
         lay_zone(
             center_pos,
-            |at| world.surface_support(at).value().flatten(),
+            |at| world.surface_support(at).val().flatten(),
             &mut rise,
             &mut lane,
         );
@@ -345,7 +348,7 @@ impl LocationPuck {
             wake_at(now() + (next - p.run) * 1000.0);
         }
         if slides || stepped {
-            crate::domain::scene::region::animated();
+            region::animated();
         }
         slides
     }
@@ -358,7 +361,7 @@ impl LocationPuck {
         let shown = p.shown.unwrap_or(p.target);
         // The zone about its center and the beacon over it, as drawn
         // (`region`).
-        let state = crate::domain::scene::region::digest(&[
+        let state = region::digest(&[
             p.center[0],
             p.center[1],
             p.center[2],
@@ -368,7 +371,7 @@ impl LocationPuck {
             f64::from(u8::from(p.night)),
             f64::from(self.held.handle),
         ]);
-        crate::domain::scene::region::drawn(
+        region::drawn(
             u32::MAX,
             p.center,
             libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB) + libm::hypot(shown[0], shown[1]),

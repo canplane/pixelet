@@ -33,13 +33,15 @@ export const GENDERS = Object.keys(PERSON_GENDER_PREFIX) as Gender[];
 
 export function personVariantsOf(gender: Gender): readonly CharacterVariant[] {
   return PERSON_VARIANTS.filter((v) =>
-    v.key.startsWith(PERSON_GENDER_PREFIX[gender])
+    v.key.startsWith(PERSON_GENDER_PREFIX[gender]),
   );
 }
 
 export function genderOf(variant: CharacterVariant): Gender {
-  return GENDERS.find((g) => variant.key.startsWith(PERSON_GENDER_PREFIX[g])) ??
-    GENDERS[0];
+  return (
+    GENDERS.find((g) => variant.key.startsWith(PERSON_GENDER_PREFIX[g])) ??
+    GENDERS[0]
+  );
 }
 
 /** The variant numbered `number`, else the setting's default. */

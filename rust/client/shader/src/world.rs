@@ -33,7 +33,7 @@ pub(crate) fn brick_at(brick: u32) -> u32 {
 /// bricks the eye's windows hold, their columns, levels and runs, the
 /// service area, and what is placed with a preview's cuts; the caves are a
 /// hash, held nowhere. Decor is not here (pxl-spec-core `cast::Query`).
-/// The squares' cells' four looks are `L`'s: their own buffer for the
+/// The bricks' cells' four looks are `L`'s: their own buffer for the
 /// cast's walks, every observer's alike, none where a pass reads no cell's
 /// look (`Unlooked`).
 #[derive(Clone, Copy)]
@@ -222,27 +222,25 @@ impl<L: Looks> World<'_, L> {
     /// What lies about the face a ray stopped on (pxl-spec-core
     /// `face::word`): each cell beside the stop's at its zoom, hiding its
     /// cube whole (`answer::whole`), asked off the line down to the stop's
-    /// node (`support::line`, `support::asset`), each from the deepest node
-    /// it shares with it, never again from the top; a box's own, a cell
-    /// kept short of its cube, by the faces it touches (`face::kept_box`);
-    /// nothing where the ray stopped on none.
+    /// node (`support::asset`), each from the deepest node it shares with
+    /// it, never again from the top: `line`'s, the line its walk left where
+    /// it kept one (observed.rs `Lined`), else one walked down to it (`support::line`); a
+    /// box's own, a cell kept short of its cube (`face::BOX`); nothing where
+    /// the ray stopped on none.
     pub(crate) fn faced<A: Copy>(
         &mut self,
         origin: [i32; 3],
         ray: &cast::Ray,
         met: &Met<A>,
-        line: impl FnOnce(&mut Self, u32, [i32; 3]) -> support::Line<At>,
+        line: impl FnOnce(&mut Self, u32, [i32; 3]) -> support::Line<Handed>,
     ) -> u32 {
         if met.ends != End::Stop {
             return 0;
         }
         if answer::kept(met.stop.asset[0]) < answer::EIGHTHS {
-            return face::kept_box(
-                face_of(ray, met.stop.axis),
-                answer::touch(met.stop.asset[0]),
-            );
+            return face::BOX;
         }
-        let (zoom, c) = (met.stop.node.zoom, met.stop.node.index(origin));
+        let (zoom, c) = (met.stop.node.zoom, met.stop.node.idx(origin));
         let line = line(self, zoom, c);
         face::word(face_of(ray, met.stop.axis), |d| {
             answer::whole(support::asset(self, &line, zoom, face::beside(zoom, c, d)))

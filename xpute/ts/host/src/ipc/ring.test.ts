@@ -33,13 +33,10 @@ test("ring - frames come out in order across the wrap, and a full ring refuses",
     for (let k = 0; k < 4; k++) {
       const at = r.peek();
       assert(at >= 0);
-      assertEquals([
-        r.tag(at),
-        r.cmd(at),
-        r.flags(at),
-        r.result(at),
-        r.pkt(at),
-      ], [round * 4 + k, 7, frame.ACKREQ, -(round * 4 + k), null]);
+      assertEquals(
+        [r.tag(at), r.cmd(at), r.flags(at), r.result(at), r.pkt(at)],
+        [round * 4 + k, 7, frame.ACKREQ, -(round * 4 + k), null],
+      );
       r.advance();
     }
     assertEquals(r.peek(), -1);
@@ -69,24 +66,20 @@ test("ring - one payload a slot, so the payloads run out with the slots and neve
     const at = r.peek();
     assertEquals(r.pkt(at)!.byteLength, 56);
     const root = new TreeReader(r.pkt(at)!).read_branch();
-    assertEquals([
-      r.tag(at),
-      root.at(0).get<number>(),
-      root.at(1).get<number>(),
-    ], [n, n, n * 2 ** 40]);
+    assertEquals(
+      [r.tag(at), root.at(0).get<number>(), root.at(1).get<number>()],
+      [n, n, n * 2 ** 40],
+    );
     r.advance();
   }
   assertEquals(push(9), Errno.OK, "a slot freed is a payload freed");
 
   assert(r.write(w, 1));
   assertEquals(r.push(10, 0x0101, 0, w.str("x".repeat(40))), Errno.EMSGSIZE);
-  assertThrows(
-    () => {
-      const at = r.entry_at(r.tail);
-      r.push(11, 0);
-      r.words[at + 3] = 4;
-      r.pkt(at);
-    },
-    MarshalError,
-  );
+  assertThrows(() => {
+    const at = r.entry_at(r.tail);
+    r.push(11, 0);
+    r.words[at + 3] = 4;
+    r.pkt(at);
+  }, MarshalError);
 });

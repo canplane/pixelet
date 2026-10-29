@@ -10,6 +10,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::bake::constant::EntryAt;
 
 use super::changed::Columns;
+use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::{Store, Walk};
 use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::layer::Answer;
@@ -21,11 +22,14 @@ use pxl_spec::space::coord::aabb::Aabb;
 /// as one.
 #[derive(Clone, Copy)]
 pub struct World<'a> {
-    pub(super) terrain: &'a Residency<TerrainTile>,
-    pub(super) objects: &'a Store,
+    pub(super) terrain: &'a TileCache<TerrainTile>,
+    pub(super) object: &'a Store,
     /// Whether decor is struck, as the boxes it claims; else a ray passes
     /// through decor.
     pub(super) decor: bool,
+    /// Whether it is unplaced, nothing placed asked of it: the ground's alone
+    /// (pxl-spec-core `world::Handed::unplaced`).
+    pub(super) unplaced: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
     pub(super) carve: Option<EntryAt>,
@@ -55,8 +59,9 @@ impl<'a> World<'a> {
     pub fn new(terrain: &'a TileCache<TerrainTile>, object: &'a Store) -> World<'a> {
         World {
             terrain,
-            objects,
+            object,
             decor: false,
+            unplaced: false,
             hide: None,
             carve: None,
             reading: None,

@@ -22,7 +22,12 @@ pub const BRANCH: u32 = 1 << 31;
 /// The family of the root what is placed is under.
 pub const PLACED: u32 = 0;
 
-pub use crate::answer::FULL;
+use crate::answer;
+use crate::answer::BoxWords;
+use crate::answer::FULL;
+
+/// `FULL`'s bits: a share shifted past them is none.
+const FULL_BITS: u32 = FULL.trailing_zeros();
 
 /// The edits a frame hands what reads them at most (pxl-kernel
 /// domain/scene/decor/drawn.rs): each the columns an overwrite wrote, a box
@@ -514,12 +519,8 @@ fn cells_by(lanes: &impl Lanes, held: Held, d: Zoom) -> bool {
     if !held.is_folded() {
         return voxel(low(word));
     }
-    let shift = crate::answer::KEPT_BITS * (d + 1);
-    let eighth = if shift <= FULL_BITS {
-        FULL >> shift
-    } else {
-        0
-    };
+    let shift = answer::KEPT_BITS * (d + 1);
+    let eighth = if shift <= FULL_BITS { FULL >> shift } else { 0 };
     high(word) + 2 > eighth
 }
 

@@ -35,14 +35,14 @@ pub fn eye() -> Option<V3> {
 /// as the source's top is, past where it is drawn by the windows' margin.
 /// None before the source declares its top.
 pub fn eye_demand_reach() -> Option<f64> {
-    crate::sys::io::source::top().map(|top| demand_reach(GROUND, top))
+    source::top().map(|top| demand_reach(GROUND, top))
 }
 
 /// How far the eye draws, the rays and the clouds alike: as far as the
 /// source's top is drawn, short of what the windows hold past it
 /// (`eye_demand_reach`). None before the source declares its top.
 pub fn eye_draw_reach() -> Option<f64> {
-    crate::sys::io::source::top().map(|top| draw_reach(GROUND, top))
+    source::top().map(|top| draw_reach(GROUND, top))
 }
 
 /// The turn's observation, made by its first reader after the view is
@@ -64,7 +64,7 @@ pub fn turn(moved: bool) {
         && match *OBSERVED.get(|| None) {
             Some(Some(o)) => {
                 Some(o.reach) == eye_demand_reach()
-                    && !crate::domain::query::changed::within([[o.eye[0], o.eye[1]]; 2], &[])
+                    && !changed::within([[o.eye[0], o.eye[1]]; 2], &[])
             }
             Some(None) => eye().is_none() || eye_demand_reach().is_none(),
             None => false,

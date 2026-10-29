@@ -21,7 +21,7 @@ use super::buddy_tree::{BuddyMalloc, Range};
 const MIN_CLASS_LOG2: usize = 4;
 
 /// Enough for any smallest block in the address space.
-const MAX_CLASSES: usize = super::ADDRESS_BITS;
+const MAX_CLASSES: usize = super::ADDR_BITS;
 
 /// At least sixteen slots a run, so its header takes at most a sixteenth.
 const MIN_SLOTS_LOG2: usize = 4;

@@ -6,7 +6,7 @@ use super::*;
 /// the near plane's point under the inverse of the view and projection,
 /// from the eye.
 #[test]
-fn a_ray_from_a_pose_is_the_composed_views() {
+fn pose_ray_matches_view() {
     view_resize(1280.0, 720.0);
     let mut look = mat4::new();
     mat4::look_at(

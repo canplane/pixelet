@@ -53,7 +53,7 @@ pub const CELL: f32 = 1.0 / CELLS_A_RAD;
 /// (pxl-spec space/camera/grid.rs, `scatter::drawn_at`), so a distance on a
 /// power of two falls the same side everywhere.
 pub fn cell_at(r2: f32) -> Zoom {
-    let split = CELLS_A_RADIAN / SPANS;
+    let split = CELLS_A_RAD / SPANS;
     let x2 = r2 / (split * split);
     let e = (((x2.to_bits() >> 23) & 0xff) as i32 - 127) >> 1;
     (UNIT_ZOOM as i32 - e).clamp(0, FINEST_ZOOM as i32) as Zoom

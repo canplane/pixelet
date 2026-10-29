@@ -1,13 +1,13 @@
 // pxl-render/frame/shader/raster.wgsl
 
-// The samples' stops drawn at the eye's rays' pixels (pxl-spec-core
-// raster.rs): each box an instance, its three faces turned to the eye, one
-// an axis, as `corner` winds them, the faces turned away never drawn, each
-// grown in its own plane by `GROWN` of a drawn pixel. A hit's box draws the
-// face across its sample's axis alone, a lack's every face turned to the
-// eye. A face keeps a pixel only where the pixel's own ray enters the box
-// across that face's axis (`raster_enters`). A ray enters a box through one
-// face, and the face lies in its plane, so a kept fragment's depth is where
+// The samples' stops drawn at the eye's rays' pixels (pxl-spec-core raster.rs):
+// each box an instance, its three faces turned to the eye, one an axis, as
+// `corner` winds them, the faces turned away never drawn, each grown in its own
+// plane by `GROWN` (pxl-spec-core param.rs `raster::GROWN`) of a drawn pixel. A
+// hit's box draws the face across its sample's axis alone, a lack's every face
+// turned to the eye. A face keeps a pixel only where the pixel's own ray enters
+// the box across that face's axis (`raster_enters`). A ray enters a box through
+// one face, and the face lies in its plane, so a kept fragment's depth is where
 // the ray enters the box: the depth test, early, keeps the nearest box the
 // pixel's ray enters of every sample's. A pixel keeps that face's sample's
 // number, which the cast's pixels read (pxl-shader cast.rs `cast_cs`). A box
@@ -16,7 +16,7 @@
 // but for the axis.
 //
 // The sun's samples' stops are drawn the same way into the sun's box
-// (pxl-spec-core sun.rs `SAMPLE`), orthographic, where
+// (pxl-spec-core param.rs `param::sun::SAMPLE`), orthographic, where
 // `turn.y` says: a texel's ray starts on the box's near plane at its middle,
 // off `first`, and runs along the sun; a box's face turned to it is the one
 // its rays enter across; its depth is how far along the rays, a share of
@@ -29,7 +29,7 @@ struct Raster {
   right: vec4f,
   up: vec4f,
   forward: vec4f,
-  // 36 where the eye's axes turn the other way (`flipped`), each triangle
+  // 36 where the eye's axes turn the other way (`is_flipped`), each triangle
   // then wound the other way, else 0; then 1 where the view is the sun's,
   // whose `right` and `up` are then its box's steps across and down a
   // texel, as unit vectors over their lengths, and `forward` its rays'.
@@ -129,7 +129,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
     );
     return o;
   }
-  // The cast's projection (pxl-shader cast.rs `pixel_tan`), reversed and
+  // The cast's projection (pxl-shader cast.rs `px_tan`), reversed and
   // infinite: depth RASTER_NEAR over the view depth, which along a pixel's
   // ray falls as the ray's distance grows; moved against the rays' offset,
   // so a pixel's middle draws what its own ray goes through.
@@ -169,11 +169,9 @@ fn raster_planes(d: f32, lo: f32, hi: f32, reach: f32) -> vec2f {
 }
 
 // The drawn pixel's tangents across and up at `at`, where its ray goes
-// through it (pixel.wgsl `pixel_tan`), off the raster's own view.
+// through it (px.wgsl `px_tan`), off the raster's own view.
 fn raster_tan(at: vec2f) -> vec2f {
-  let ndc_x = at.x / raster.screen.y * 2.0 - 1.0;
-  let ndc_y = 1.0 - at.y / raster.screen.z * 2.0;
-  return vec2f(ndc_x * raster.right.w, ndc_y * raster.up.w);
+  return px_tan(at, raster.screen.yz, vec2f(raster.right.w, raster.up.w));
 }
 
 // Whether the ray from `o` along the unit `u` enters the box `lo`..`hi`

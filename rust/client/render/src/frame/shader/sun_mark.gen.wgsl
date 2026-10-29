@@ -4,7 +4,6 @@
 // Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,
 // through rust/client/shader, by
 // rust-gpu 0.10.0-alpha.1 (nightly-2026-04-11) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build.
-// Inputs: dfd3d4d3ad8a2403c3c9a51936983118243ec5b144ba9b9a572d58b1bc31283d
 struct type_12 {
     member: vec4<i32>,
     member_1: vec4<f32>,
@@ -72,7 +71,6 @@ fn function_() {
     var phi_231_: u32;
     var phi_234_: array<i32, 2>;
     var local: array<i32, 2>;
-    var local_1: array<i32, 2>;
 
     let _e35 = global;
     let _e38 = textureDimensions(global_4);

@@ -34,37 +34,11 @@ pub const LINE_SHIFT: u32 = EDGES;
 pub const CORNER_SHIFT: u32 = 2 * EDGES;
 pub const BITS: u32 = 3 * EDGES;
 
-/// Over the edges' bits, the faces the cell a ray stopped in touches
-/// (`answer::touch`), so the screen pass draws the box every reader meets
-/// (cast.rs `kept_bounds`).
-pub const TOUCH_SHIFT: u32 = BITS;
-const _: () = assert!(TOUCH_SHIFT + crate::answer::TOUCH_BITS <= 32);
-
 /// The bits of a face of a cell kept short of its cube
 /// (`answer::kept`), a box inset in it apart from every cell about it:
 /// every edge meets the air, and nothing rises across one. Beside it, it is
 /// no cell that hides for a face's bits (`answer::whole`).
 pub const BOX: u32 = ((1 << EDGES) - 1) << LINE_SHIFT;
-
-/// The bits of face `face` of a cell kept short of its cube, its box placed
-/// by the faces it touches, `touch` (`answer::touch`, cast.rs
-/// `kept_bounds`): an edge across a face it touches goes on into what fills
-/// the cell beside, so it meets no air; every other edge does, as `BOX`'s.
-pub fn kept_box(face: u32, touch: u32) -> u32 {
-    let axis = face / 2;
-    let (u, v) = ((axis + 1) % 3, (axis + 2) % 3);
-    let mut w = BOX;
-    let mut k = 0;
-    while k < EDGES {
-        // Edge `k`'s way across (`edge`): +u, −u, +v, −v.
-        let a = if k < 2 { u } else { v };
-        if touch >> (2 * a + 1 - (k & 1)) & 1 != 0 {
-            w &= !(1 << (LINE_SHIFT + k));
-        }
-        k += 1;
-    }
-    w
-}
 
 /// The bits of face `face` (a ray's: 2·axis, plus one where its outward
 /// normal points down the axis) of a cell, `hides(d)` whether the cell
@@ -133,18 +107,6 @@ mod tests {
 
     const TOP: u32 = 4;
     const WEST: u32 = 1;
-
-    /// A kept box's face draws a line along every edge but those across a
-    /// face it touches: a slab's top, its four sides touching, draws none,
-    /// and one touching only +x loses that edge's line alone.
-    #[test]
-    fn a_kept_box_draws_no_line_where_it_touches() {
-        assert_eq!(kept_box(TOP, 0), BOX);
-        assert_eq!(kept_box(TOP, 0b01_1111), 0);
-        assert_eq!(kept_box(TOP, 0b00_0010), BOX & !(1 << LINE_SHIFT));
-        // Touching below or above changes no edge of a top face.
-        assert_eq!(kept_box(TOP, 0b11_0000), BOX);
-    }
 
     /// The bits of `face` among the cells `filled`, offsets from the
     /// cell's, and how many cells were asked.

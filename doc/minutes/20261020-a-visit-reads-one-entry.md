@@ -11,7 +11,7 @@ records why that cast missed the deploy gate, and the structure that fixes it.
 
 It is built as the observed pyramid (pxl-spec-core observed.rs), filled where
 the rays asked: the beam rays, the samples, and the pixels that take neither
-the raster's pick nor the sky (`ray::MISS`; pxl-shader observer.rs
+the visible sample nor the sky (`ray::MISS`; pxl-shader observer.rs
 `resolve`), walked from their cell's start (pxl-shader cast.rs
 `miss_list_cs`, `miss_cs`, off the list `cast_cs` makes of them). It is a table
 of slots keyed by the node's zoom and index, a bucket of `BUCKET` slots by its
@@ -255,8 +255,8 @@ the probe was kept.
 
 Every walk writes the pyramid (pxl-shader observed.rs `Writing`): it composes
 a node its entry does not hold, from what was handed it, and keeps that in the
-entry (`world::At::words`). The pixel pass walks nothing, taking the raster's
-pick or the sky and listing the rest for the walk again (pxl-shader cast.rs
+entry (`world::At::words`). The pixel pass walks nothing, taking the visible
+sample or the sky and listing the rest for the walk again (pxl-shader cast.rs
 `cast_cs`). Where an entry holds the node, a walk is free of:
 
 - Every source's composition inside the cast: placed, ground, zoom loop,

@@ -10,7 +10,7 @@ use super::decor::Strike;
 use super::node::{coarsest, At};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
-use crate::domain::layer::residency::Lines;
+use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::{Answer, Base};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
@@ -44,7 +44,7 @@ pub fn at_zoom(tile: Zoom) -> Detail {
     Detail {
         range: [z, z],
         eye: [0.0; 3],
-        beam: 0.0,
+        spacing: Spacing::NONE,
     }
 }
 
@@ -57,7 +57,7 @@ pub fn held() -> Detail {
     Detail {
         range: [finest, finest],
         eye: [0.0; 3],
-        beam: 0.0,
+        spacing: Spacing::NONE,
     }
 }
 
@@ -69,7 +69,7 @@ pub fn by_dist() -> Detail {
     Detail {
         range: asked(),
         eye: [0.0; 3],
-        beam: 0.0,
+        spacing: Spacing::NONE,
     }
 }
 
@@ -217,7 +217,7 @@ impl<'a> Query for Walker<'_, 'a> {
 fn decor_hit(ray: &Ray, t: f64, axis: usize, i: Instance) -> Hit {
     let claimed = super::decor::claim(&i).unwrap_or_else(|| i.cell());
     let mut normal = [0.0; 3];
-    normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
+    normal[axis] = if ray.dir[axis] > 0.0 { -1.0 } else { 1.0 };
     Hit {
         t,
         point: ray.at(t),
@@ -238,7 +238,7 @@ impl<'a> World<'a> {
         let (met, strike) = self.along(ray, detail, Until::Opaque, self.strike(ray));
         let decor = strike
             .and_then(|s| s.best)
-            .filter(|&(d, ..)| met.value().flatten().is_none_or(|h: Hit| d < h.t));
+            .filter(|&(d, ..)| met.val().flatten().is_none_or(|h: Hit| d < h.t));
         match (decor, met) {
             (Some((d, i, k)), Answer::Nothing(l)) => {
                 Answer::Coarser(Some(decor_hit(ray, d, k, i)), l)
@@ -295,8 +295,8 @@ impl<'a> World<'a> {
         let side = units(cell);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
-        let f = pxl_spec_core::support::footing(&mut walker, cell, g);
-        let met = (f.ends == Ends::Stop).then_some(f.top);
+        let f = support::footing(&mut walker, cell, g);
+        let met = (f.ends == End::Stop).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
             (m, None, _) => Answer::Exact(m),
             (Some(m), Some(l), _) => Answer::Coarser(Some(m), l),

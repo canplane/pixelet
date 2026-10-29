@@ -1,37 +1,36 @@
 // pxl-shader/cast.rs
 
-//! Each drawn pixel's ray (`cast_cs`) off the block the raster kept at it
+//! Each drawn pixel's ray (`cast_cs`) off the cell the raster kept at it
 //! or the sky, and the rest walked (`miss_list_cs` over their list,
 //! `miss_cs` over every pixel where the list was full).
 
-use pxl_spec_core::cast::{self, Ends, Met};
-use pxl_spec_core::{answer, beam, face, observed, ray, tally, way};
+use pxl_spec_core::cast::{self, End, Met};
+use pxl_spec_core::{beam, observed, ray, support, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
 
-use crate::beam::{resumed, started, Beams};
-use crate::eye::{eye_origin, grid, Eye};
-use crate::observed::{seen_at, seen_put, tallied, Reading, Seen, Writing, MISSED};
-use crate::raster::picked;
-use crate::world::{face_of, Unlooked, World};
+use crate::beam::Beams;
+use crate::eye::{grid, Eye};
+use crate::observed::{seen_at, seen_put, Lined, Seen};
+use crate::observer::{self, Observer, Take};
+use crate::world::{face_of, World};
 use crate::{add, most};
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
 /// pxl-spec-core `ray`): the cast writes them.
 pub(crate) type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
-/// The raster's pick at each drawn pixel (pxl-render gpu/ray/raster.rs): its
+/// The visible sample at each drawn pixel (pxl-render gpu/ray/raster.rs): its
 /// sample's number (pxl-spec-core `raster::id_of`), 0 where it kept none,
 /// read as an array of one layer.
-type Picks = Image!(2D, type = u32, sampled = true, arrayed = true);
+type Visibility = Image!(2D, type = u32, sampled = true, arrayed = true);
 
 /// A ray's words, a layer each of `Rays`: the value it stopped on and the
 /// face it entered through, then how far as f32 bits, then the four looks
 /// the ground's asset is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about, then what lies about its
-/// face (`World::faced`) and the faces its cell touches; where it met
-/// nothing, the first two zero.
+/// face (`World::faced`); where it met nothing, the first two zero.
 fn word<A: Copy>(
     ray: &cast::Ray,
     met: Met<A>,
@@ -47,7 +46,7 @@ fn word<A: Copy>(
         ray::first_word(val, face_of(ray, s.axis), s.node.zoom),
         s.t.to_bits(),
         if steps { met.visits } else { four },
-        faces | answer::touch(value) << face::TOUCH_SHIFT,
+        faces,
     ]
 }
 const _: () = assert!(
@@ -59,7 +58,7 @@ const _: () = assert!(
 /// its middle off by the eye's jitter (pxl-spec-core `eye::JITTER`), of the
 /// `size` the rays are, row 0 at the top, as the screen pass forms its own
 /// pixel's: the screen's half-angles' scaled by where it lies.
-pub(crate) fn pixel_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
+pub(crate) fn px_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
     let ndc_x = (p.x as f32 + 0.5 + eye.jitter.x) / size.x as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p.y as f32 + 0.5 + eye.jitter.y) / size.y as f32 * 2.0;
     [ndc_x * eye.tan.x, ndc_y * eye.tan.y]
@@ -75,7 +74,11 @@ fn write_ray(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
     }
 }
 
-/// Each pixel's ray: the block the raster kept at it (pxl-spec-core
+/// `cast_cs`'s workgroup a side, a square of pixels (pxl-tool check_rules.rs
+/// `WORKGROUPS`).
+const CAST_SIDE: u32 = 8;
+
+/// Each pixel's ray: the cell the raster kept at it (pxl-spec-core
 /// `raster`; pxl-render gpu/ray/raster.rs), the nearest a sample stopped at
 /// that its ray enters across the axis that sample entered by, tested again
 /// exactly (`cast::entry`) where a GPU's f32 may part the two, its words, no
@@ -86,7 +89,7 @@ fn write_ray(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
 /// `ray::MISS`; `miss_list_cs`, `miss_cs`), so no lane carries a walk's
 /// footprint for the few that walk. A marked pixel is listed for that walk
 /// (pxl-spec-core `observed::MARKS_AT`) by a plain write, its place taken
-/// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_COUNT`),
+/// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_CNT`),
 /// so no word of the pyramid is typed atomic here; one past the list's room
 /// has the walk over every pixel dispatched instead.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "cast_cs"))]
@@ -97,7 +100,7 @@ pub fn cast_cs(
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
-    #[spirv(descriptor_set = 0, binding = 13)] picks: &Picks,
+    #[spirv(descriptor_set = 0, binding = 13)] visibility: &Visibility,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] marks: &mut [u32],
 ) {
     let size: UVec3 = rays.query_size();
@@ -112,64 +115,22 @@ pub fn cast_cs(
         return;
     }
     let g = grid(eye);
-    let px = pixel_tan(eye, id, size);
+    let px = px_tan(eye, id, size);
     let aim = eye.aim(px);
     let ray = aim.ray;
-    // The nearest block entered, at the reach where none is.
-    let mut hit = cast::Stop {
-        t: ray.reach,
-        axis: 0,
-        node: cast::Node::ROOT,
-        at: 0u32,
-        block: [0; 2],
-    };
-    // What lies about its face, the sample's, and the nodes the sample's
-    // walk visited, which the steps view shows as this pixel's.
-    let mut faces = 0;
-    let mut visits = 0;
     // [naga] Fetched at u32s, as the raster wrote them.
-    let kept: UVec4 = picks.fetch(UVec3::new(id.x, id.y, 0));
-    let pick = kept.x;
-    if pick != 0 && pick & raster::LACK == 0 {
-        let (stop, k, enters) = observer::took(eye, beams, &aim, pick);
-        if enters {
-            hit = stop;
-            faces = seen_at(beams, k + beam::SAMPLE_FACES);
-            visits = seen_at(beams, k + beam::SAMPLE_VISITS);
-        }
-    }
+    let kept: UVec4 = visibility.fetch(UVec3::new(id.x, id.y, 0));
+    // The cell off its visible sample, the sky, or a walk of its own
+    // (observer.rs `resolve`), the nearest cell entered at the reach where none
+    // is.
+    let (took, hit, k) = observer::resolve(eye, beams, px, &aim, kept.x);
     let steps = eye.origin.w != 0;
     let on = seen_at(seen, observed::TALLY_ON) != 0;
     // No sample about it met anything: the sky, taken without a walk of its
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
-    if pick == 0 && observer::sky(eye, beams, px) {
-        written(
-            rays,
-            id,
-            word(
-                &ray,
-                Met {
-                    ends: Ends::On,
-                    stop: hit,
-                    visits: if steps {
-                        seen_at(
-                            beams,
-                            g.sample_at(g.sample_before(px)) + beam::SAMPLE_VISITS,
-                        )
-                    } else {
-                        0
-                    },
-                },
-                steps,
-                0,
-            ),
-        );
-        return;
-    }
-    if hit.t < ray.reach {
-        counted(marks, on, tally::PICKED, 1);
-        written(
+    if took == Take::Sky {
+        write_ray(
             rays,
             id,
             word(
@@ -218,54 +179,35 @@ pub fn cast_cs(
     }
     // Neither: marked and listed for its walk (`miss_list_cs`), which reads
     // and writes the pyramid. No walk is this pass's own, so a lane that
-    // takes its pick pays none of a walk's footprint.
-    counted(marks, on, tally::WALKED, 1);
-    counted(marks, on, tally::PIXEL, met.visits);
-    if met.ends == Ends::Lacks && met.stop.block[0] == MISSED[0] {
-        // SAFETY: within the rays, bounded by their size above.
-        unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
-        let whole = [size.x.div_ceil(8), size.y.div_ceil(8)];
-        let at = listed(marks, observed::MARKS, whole);
-        if at < observed::MARKS {
-            seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
-        }
-    } else {
-        let mut world = World {
-            window,
-            ground,
-            looks: Unlooked(0),
-            shards,
-            overwrites,
-            eye,
-            pool: ways::tree::Read(pool),
-        };
-        let faces = world.faced(origin, &ray, &met);
-        let met = Met {
-            visits: met.visits + line.visits(),
-            ..met
-        };
-        written(rays, id, word(&ray, met, steps, faces));
+    // takes its visible sample pays none of a walk's footprint.
+    add_cnt(marks, on, tally::WALKED, 1);
+    // SAFETY: within the rays, bounded by their size above.
+    unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
+    let whole = [size.x.div_ceil(CAST_SIDE), size.y.div_ceil(CAST_SIDE)];
+    let at = enlist(marks, observed::MARKS, whole);
+    if at < observed::MARKS {
+        seen_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
     }
 }
 
 /// `v` added to lane `lane` of a pixel's or a slot's (pxl-spec-core
-/// `tally::PICKED` on) in its walk again's args `args`, where `on`
+/// `tally::TOOK` on) in its walk again's args `args`, where `on`
 /// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the sun's slots alike.
-pub(crate) fn counted(args: &mut [u32], on: bool, lane: u32, v: u32) {
+pub(crate) fn add_cnt(args: &mut [u32], on: bool, lane: u32, v: u32) {
     if on {
-        add(args, ray::MISS_ARGS_TALLY + lane - tally::PICKED, v);
+        add(args, ray::MISS_ARGS_TALLY + lane - tally::TOOK, v);
     }
 }
 
 /// One more missed ray listed for its walk again, the eye's pixels and the
 /// sun's slots alike (pxl-shader sun.rs `sun_cs`): its place off the count
-/// in its dispatch's words `args` (pxl-spec-core `ray::MISS_ARGS_COUNT`),
+/// in its dispatch's words `args` (pxl-spec-core `ray::MISS_ARGS_CNT`),
 /// the rows the list fills raised to hold it (`ray::MISS_ARGS_LIST`); one
 /// past the list's `room` has the walk over `whole` workgroups dispatched
 /// instead (`ray::MISS_ARGS_WHOLE`). Its place, which the caller writes
 /// where it is under `room`.
-pub(crate) fn listed(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
-    let at = add(args, ray::MISS_ARGS_COUNT, 1);
+pub(crate) fn enlist(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
+    let at = add(args, ray::MISS_ARGS_CNT, 1);
     if at < room {
         most(
             args,
@@ -304,24 +246,14 @@ fn missed(
         shards,
         overwrites,
         eye,
-        pool: ways::tree::Read(pool),
+        pool: way::tree::Read(pool),
     };
-    let met = resumed(
-        &mut Writing {
-            world,
-            seen: &mut *seen,
-            tag,
-            blocks: true,
-        },
-        origin,
-        &ray,
-        detail,
-        t,
-        &line,
-        line.node(),
-    );
-    tallied(seen, tally::EYE, tally::MISS, met.visits);
-    let faces = world.faced(origin, &ray, &met);
+    let mut lined = Lined::before();
+    let (aim, met, before) =
+        observer::walked(eye, world, seen, beams, px_tan(eye, id, size), &mut lined);
+    let faces = world.faced(aim.origin, &aim.ray, &met, |_, _, _| {
+        support::Line::kept(aim.origin, &met.stop.node, lined.live, &lined.stack)
+    });
     let met = Met {
         visits: met.visits + before,
         ..met
@@ -362,7 +294,7 @@ pub fn miss_cs(
     let w = missed(
         eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
     );
-    written(rays, id, w);
+    write_ray(rays, id, w);
 }
 
 /// Each pixel `cast_cs` listed (pxl-spec-core `observed::MARKS_AT`), its
@@ -370,7 +302,7 @@ pub fn miss_cs(
 /// workgroup and `ray::MISS_ACROSS` workgroups a row, dispatched over the
 /// rows the list filled (`ray::MISS_ARGS_LIST`), each past the count
 /// returning at once. The count is copied into the pyramid's buffer once
-/// `cast_cs` is done (`observed::MARKS_COUNT`).
+/// `cast_cs` is done (`observed::MARKS_CNT`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "miss_list_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn miss_list_cs(
@@ -389,8 +321,8 @@ pub fn miss_list_cs(
 ) {
     let (window, beams): (&[IVec4], &Beams) = (window, beams);
     let k = (group.y * ray::MISS_ACROSS + group.x) * ray::MISS_LANES + lane.x;
-    let count = seen_at(seen, observed::MARKS_COUNT);
-    if k >= count || k >= observed::MARKS {
+    let cnt = seen_at(seen, observed::MARKS_CNT);
+    if k >= cnt || k >= observed::MARKS {
         return;
     }
     let listed = seen_at(seen, observed::MARKS_AT + k);
@@ -402,5 +334,5 @@ pub fn miss_list_cs(
     let w = missed(
         eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
     );
-    written(rays, id, w);
+    write_ray(rays, id, w);
 }

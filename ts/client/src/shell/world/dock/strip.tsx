@@ -125,9 +125,13 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   return responder.current.panHandlers;
 }
 
-function SwatchButton(
-  { cube, gesture }: { cube: Cube; gesture: Omit<SizeGesture, "press"> },
-) {
+function SwatchButton({
+  cube,
+  gesture,
+}: {
+  cube: Cube;
+  gesture: Omit<SizeGesture, "press">;
+}) {
   const { t } = useTranslation();
   const selectCube = useDockStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
@@ -263,13 +267,15 @@ function ToolButton({
 }
 
 /** `span` is the bar's width, past which it never reaches; the picks scroll unless the sizes are open. */
-export function Strip(
-  { span, scrolls, gesture }: {
-    span: f64;
-    scrolls: boolean;
-    gesture: Omit<SizeGesture, "press">;
-  },
-) {
+export function Strip({
+  span,
+  scrolls,
+  gesture,
+}: {
+  span: f64;
+  scrolls: boolean;
+  gesture: Omit<SizeGesture, "press">;
+}) {
   const { t } = useTranslation();
   const activeTool = useKernel((s) => s.holding.tool);
   const recentPicks = useDockStore((s) => s.recentPicks);
@@ -301,17 +307,17 @@ export function Strip(
         contentContainerStyle={styles.picksContent}
       >
         {recentPicks.map((pick) =>
-          pick.tool === ActiveTool.Object
-            ? (
-              <SwatchButton
-                key={cubeId(pick.cube)}
-                cube={pick.cube}
-                gesture={gesture}
-              />
-            )
-            : pick.tool === ActiveTool.Decor
-            ? <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
-            : <MarkerButton key="marker" />
+          pick.tool === ActiveTool.Object ? (
+            <SwatchButton
+              key={cubeId(pick.cube)}
+              cube={pick.cube}
+              gesture={gesture}
+            />
+          ) : pick.tool === ActiveTool.Decor ? (
+            <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
+          ) : (
+            <MarkerButton key="marker" />
+          ),
         )}
       </ScrollView>
 

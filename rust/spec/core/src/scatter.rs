@@ -274,29 +274,69 @@ pub const fn grown_for(head: [u32; 3], q: [i32; 2]) -> bool {
     head[2] == 1 && head[0] as i32 == q[0] && head[1] as i32 == q[1]
 }
 
-/// The edits and cuts a frame's growth is asked over, the objects' own
-/// (`overwrite::EDITS`, `overwrite::BOXES`, `overwrite::cut_box`).
-pub use crate::overwrite::{cut_box, BOXES, EDITS};
-/// What `decor_mark_cs` reads first: whether every slot grows, decor having
-/// been off; the squares filled this frame; the boxes; then the boxes, four
-/// words each.
-pub const MARKS_AT: u32 = 4;
-pub const MARKS_WORDS: u32 = MARKS_AT + 4 * BOXES;
-/// What `decor_mark_cs` writes and `decor_cs` is dispatched by: its
-/// workgroups across, up and the slot-decor pairs listed, a pad, then the list,
-/// a slot and its decor (`<< 16`) each, in no order.
-pub const GROWS_AT: u32 = 4;
+/// The boxes a frame's growth is asked over at most: the edits and cuts
+/// held (`overwrite::BOXES`), and each brick handed this frame, which
+/// reaches its window's zoom alone.
+pub const MARKED: u32 = overwrite::BOXES + window::HANDED;
+/// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
+/// window zoom whose candidates it reaches, `EVERY` for all.
+pub const BOX_WORDS: u32 = 5;
+pub const EVERY: u32 = 0;
+const _: () = assert!(window::FIRST_CELL > EVERY);
+
+/// What `decor_mark_cs` reads and lists and `decor_stand_cs` and `decor_cs`
+/// are dispatched by, in words: each one's workgroups across, up and the
+/// entry-decor pairs listed, a pad (`STAND_ARGS`, `GROW_ARGS`); whether every
+/// entry grows whole, decor having been off (`GROWS_EVERY`), and how many
+/// boxes (`GROWS_BOXES`), two pads; the boxes, `BOX_WORDS` each; then the
+/// list, an entry, its decor (`<< 16`) and whether it grows whole (`WHOLE`)
+/// each, in no order.
+pub const STAND_ARGS: u32 = 0;
+pub const GROW_ARGS: u32 = 4;
+pub const GROWS_EVERY: u32 = 8;
+pub const GROWS_BOXES: u32 = 9;
+pub const BOXES_AT: u32 = 12;
+pub const GROWS_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
+pub const WHOLE: u32 = 1 << 31;
 
 /// The words of what `decor_mark_cs` lists.
 pub const GROWS_WORDS: u32 = GROWS_AT + EYE_ENTRIES * DECORS.len() as u32;
 
-/// Whether the box `b` of leaf cells meets square `q` of the window at
-/// `cell` or a square beside it: what decor in the square stands and grows
-/// on reads that far (`stand`'s faces), X round the world.
-pub fn meets(cell: Zoom, q: [i32; 2], b: [i32; 4]) -> bool {
-    let k = SQUARE_SHIFT + LEAF_CELL - cell;
-    let side = 1i32 << k;
-    let (lo, wide) = ([(q[0] << k) - side, (q[1] << k) - side], 3 * side);
+/// How far about its own, in its window's cells, a candidate's growth reads
+/// the world (`grown`): the cells its pose votes on, its box, and the placed
+/// decor that may claim it, none wider than the widest decor.
+const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
+
+/// The leaf cells, `[x0, y0, x1, y1)`, of brick `q` of the window at `cell`.
+pub const fn brick_box(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
+    let k = BRICK_SHIFT + LEAF_CELL - cell;
+    [q[0] << k, q[1] << k, (q[0] + 1) << k, (q[1] + 1) << k]
+}
+
+/// The leaf cells a candidate at leaf cell `c` reads where it grows at
+/// `cell`: its window's cells within `READ_REACH` of its own.
+pub const fn reads(cell: Zoom, c: [i32; 2]) -> [i32; 4] {
+    let s = LEAF_CELL - cell;
+    let (x, y) = (c[0] >> s, c[1] >> s);
+    [
+        (x - READ_REACH) << s,
+        (y - READ_REACH) << s,
+        (x + READ_REACH + 1) << s,
+        (y + READ_REACH + 1) << s,
+    ]
+}
+
+/// The leaf cells any candidate in brick `q` of the window at `cell` reads
+/// (`reads`).
+pub const fn brick_reads(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
+    let ([x0, y0, x1, y1], r) = (brick_box(cell, q), READ_REACH << (LEAF_CELL - cell));
+    [x0 - r, y0 - r, x1 + r, y1 + r]
+}
+
+/// Whether the box `b` of leaf cells meets the leaf cells `reads`
+/// (`reads`, `brick_reads`), each X on any lap, X round the world.
+pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
+    let wide = reads[2] - reads[0];
     // The box's first column from the region's, the short way round.
     let (from, width) = (wrap_idx(LEAF_CELL, b[0] - reads[0]), b[2] - b[0]);
     // Met where it starts in the region or over it, or runs on round the
@@ -381,15 +421,16 @@ pub mod drawn {
     /// device's dynamic offset alignment), its index list's first slot at
     /// `UNIFORM_IDX` within it: the lanes' base, to which the args pass adds
     /// the region's first slot once the regions are laid out.
-    pub const UNIFORM_WORDS: u32 = OFFSET_BYTES / 4;
+    pub const UNIFORM_WORDS: u32 = OFF_BYTES / 4;
     /// The dynamic offset alignment every WebGPU device meets: its
     /// `minUniformBufferOffsetAlignment` is 256 bytes at most.
-    const OFFSET_BYTES: u32 = 256;
-    pub const UNIFORM_INDEX: u32 = 7;
-    /// The frame's words: the model's and the sprite's floors, each an
-    /// angle about the eye in radians, the anchor the lanes' positions are
-    /// about (unit cells, X wrapping), the left-out decor's corner and
-    /// whether there is one, then each group's extent.
+    const OFF_BYTES: u32 = 256;
+    pub const UNIFORM_IDX: u32 = 7;
+    /// The drawing words, what a frame's decor is drawn by: the model's and
+    /// the sprite's floors, each an angle about the eye in radians, the
+    /// anchor the lanes' positions are about (unit cells, X wrapping), the
+    /// left-out decor's corner and whether there is one, then each group's
+    /// extent.
     pub const MODEL_ANGLE: u32 = 0;
     pub const SPRITE_ANGLE: u32 = 1;
     pub const ANCHOR: u32 = 4;
@@ -546,7 +587,7 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
 }
 
 /// What growing decor asks of the world, as either side holds it: of the
-/// world unplaced (`world::At::unplaced`), the ground's alone, its column's
+/// world unplaced (`world::Handed::unplaced`), the ground's alone, its column's
 /// footing and the assets about it; of the world as edited, whether an edit holds a
 /// cell and what is placed in a box; and the catalog's rows where it reads
 /// them.
@@ -565,8 +606,8 @@ pub trait Grounds {
     /// unplaced's answer (`support::asset`): `void` or the ground's value.
     fn asset(&mut self, f: &Self::Footing, zoom: Zoom, c: [i32; 3]) -> u32;
     /// Whether an edit holds the cell `c` of `zoom` in the world as edited,
-    /// something placed or air (`answer::placed`).
-    fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
+    /// something placed or air (`answer::is_placed`).
+    fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
     /// The next leaf placed in `p`'s box, its cell and its word, false past
     /// the last (`world::Placed::next`).
     fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool);
@@ -585,39 +626,13 @@ pub struct Grown {
     pub sink: u32,
 }
 
-/// The footing down column `g` at `cell`: the first block that fills on
-/// the world's one ray straight down the column's middle, at `cell`'s
-/// blocks alone, from the top of the world (`HEIGHT_BITS`) — where a walker
-/// stands (pxl-kernel domain/query/support.rs `highest`), whichever layer holds
-/// it. Its top as drawn, at `cell` (`cast::top`); false where the ray
-/// meets none.
-pub fn footing<Q: crate::cast::Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ((i32, f32), bool) {
-    let (o, ray, detail) = footing_ray(cell, g);
-    let met = crate::cast::first(q, o, &ray, detail, crate::cast::Until::Fills);
-    (
-        crate::cast::top(o, &met.stop.node, met.stop.block[0]),
-        met.ends == crate::cast::Ends::Stop,
-    )
-}
-
-/// The footing's ray down column `g` at `cell`: from the top of the world
-/// over the column's middle, straight down, at `cell`'s blocks alone.
-fn footing_ray(cell: Zoom, g: [i32; 2]) -> ([i32; 3], crate::cast::Ray, crate::cast::Detail) {
-    let s = crate::FINEST_ZOOM - cell;
-    let mid = |v: i32| v.wrapping_shl(s).wrapping_add((1 << s) >> 1);
-    let top = ((1i32 << (crate::HEIGHT_BITS - 1)) << FRAC_W) - 1;
-    let o = [mid(g[0]), mid(g[1]), top];
-    let ray = crate::cast::Ray::new([0.0, 0.0, -1.0], (1u32 << crate::HEIGHT_BITS) as f32);
-    (
-        o,
-        ray,
-        crate::cast::Detail {
-            tau: 1.0,
-            range: [cell, cell],
-            eye: [0.0; 3],
-            beam: 0.0,
-        },
-    )
+impl Grown {
+    pub const NONE: Grown = Grown {
+        variant: 0,
+        turn: 0,
+        at: [0; 3],
+        sink: 0,
+    };
 }
 
 /// Where candidate `c` of `decor` stands at `cell`: on its column's footing
@@ -626,8 +641,8 @@ fn footing_ray(cell: Zoom, g: [i32; 2]) -> ([i32; 3], crate::cast::Ray, crate::c
 /// footing's level vote there (`asks`); then, where `boxed`, whether it
 /// grows there: every cell of its box void and every one under its base a
 /// look it grows on, as the ground holds them; no edit in its box, air
-/// included (`Grounds::edited`); and no placed decor claims its room
-/// (`claimed`). Every cell both ask is asked at one place about one footing
+/// included (`Grounds::is_edited`); and no placed decor claims its room
+/// (`is_claimed`). Every cell both ask is asked at one place about one footing
 /// (`asks`). Where it stands, whether it does, and whether it grows there,
 /// true where not `boxed`.
 pub fn grown(
@@ -734,7 +749,7 @@ fn asks<Q: Grounds>(
             let holds = if b[2] == lo[2] {
                 decor.allows(val(v))
             } else {
-                v == sentinel::void as u32 && !q.edited(cell, b)
+                v == sentinel::void as u32 && !q.is_edited(cell, b)
             };
             if !holds {
                 return (g, false);
@@ -831,13 +846,11 @@ const CLAIM_REACH: [i32; 3] = {
     [wide as i32 - 1, wide as i32 - 1, tall as i32 - 1]
 };
 
-/// The tallest decor, in unit cells: as high over what it stands on as
-/// anything grown reaches (pxl-shader sun.rs `sun_mark_cs`).
+/// The tallest decor and the widest, in unit cells: as high over what it
+/// stands on as anything grown reaches, and as far across (pxl-spec-core
+/// sun.rs `Sun::up`, `Sun::ring`).
 pub const TALLEST: i32 = CLAIM_REACH[2] + 1;
-
-/// The nodes placed decor is first asked at, so a box with nothing placed
-/// near it is told so in a few looks: 8 unit cells a side.
-const CLAIM_ZOOM: Zoom = UNIT_ZOOM - 3;
+pub const WIDEST: i32 = CLAIM_REACH[0] + 1;
 
 /// Whether placed decor claims a cell of the box from `at` (unit cells),
 /// `cells` a side: one whose corner, posed as placed (`placed_pose`), holds

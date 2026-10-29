@@ -125,8 +125,8 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         }
         for (k, prim) in gltf.meshes[node.mesh as usize].iter().enumerate() {
             parts.push((n, node.mesh as usize, k));
-            vertex_cnt = vertex_cnt.checked_add(u32::try_from(prim.position.len() / 3).ok()?)?;
-            index_cnt = index_cnt.checked_add(u32::try_from(prim.index.len()).ok()?)?;
+            vertex_cnt = vertex_cnt.checked_add(u32::try_from(prim.pos.len() / 3).ok()?)?;
+            idx_cnt = idx_cnt.checked_add(u32::try_from(prim.idx.len()).ok()?)?;
         }
     }
     if vertex_cnt == 0 {

@@ -27,7 +27,7 @@ pub const fn coarsest(lattice: Lattice) -> Zoom {
 /// where the grid asks the cell a zoom coarser, which nothing holds, so a ray
 /// past it would cross cells finer than its distance asks.
 pub const fn draw_reach(lattice: Lattice, zoom: Zoom) -> f64 {
-    split_distance(lattice.grid_zoom(zoom - 1))
+    split_dist(lattice.grid_zoom(zoom - 1))
 }
 
 /// How far from an observer's foot a demand at `zoom` can lie: where a

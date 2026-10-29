@@ -47,8 +47,8 @@ export const LIST_NAMES: Record<ListLane, readonly string[]> = {
 };
 
 export type FrameGroup = Exclude<keyof typeof FRAME_GROUP, "$doc">;
-export const GROUPS = Object.keys(FRAME_GROUP).filter((g) =>
-  !g.startsWith("$")
+export const GROUPS = Object.keys(FRAME_GROUP).filter(
+  (g) => !g.startsWith("$"),
 ) as FrameGroup[];
 
 export const n1 = (n: number) => fixed(n ?? 0, 1);

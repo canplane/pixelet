@@ -26,8 +26,6 @@ mod param;
 mod part;
 #[path = "src/frame/shader/word.rs"]
 mod word;
-#[path = "src/frame/shader/debug_look.spec.rs"]
-mod debug_look;
 
 fn main() {
     let dir = Path::new("src/frame/shader");
@@ -68,21 +66,16 @@ fn main() {
         )
     };
     // Its word of what lies about its face, and that word's fields, a bit an
-    // edge or a corner (pxl-spec-core face.rs), and the faces its cell
-    // touches, a bit a face (answer.rs `touch`).
-    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT, TOUCH_SHIFT};
-    let faces = format!(
-        "const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\nfn faces_touch(w: u32) -> u32 {{ return (w >> {TOUCH_SHIFT}u) & {}u; }}\n",
-        (1u32 << pxl_spec_core::answer::TOUCH_BITS) - 1
-    );
+    // edge or a corner (pxl-spec-core face.rs).
+    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
+    let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
     // The side of the box a cell kept short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
     let sides: String = (1..answer::EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
         .collect();
     let kept = format!(
-        "const KEPT_EIGHTHS: u32 = {}u;\nfn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n",
-        pxl_spec_core::answer::EIGHTHS
+        "fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
     // A coarse cell's four looks, its ray's third word, as a cell's word
     // holds them (pxl-spec-core ground.rs `looks`).
@@ -111,13 +104,15 @@ fn main() {
         use pxl_spec_core::raster::{
             corner, BOX_AXIS, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, LACK, NEAR,
         };
-        let corners: Vec<String> = (0..72)
-            .map(|k| corner(k % 36, k >= 36))
+        let n = word::BOX_VERTICES;
+        let corners: Vec<String> = (0..2 * n)
+            .map(|k| corner(k % n, k >= n))
             .map(|c| format!("vec3f({}.0, {}.0, {}.0)", c[0], c[1], c[2]))
             .collect();
         let eyed_depth = 1.0f32 - 1.0 / (1u32 << 20) as f32;
         let raster = format!(
-            "const RASTER_CORNERS = array<vec3f, 72>({});\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
+            "const RASTER_CORNERS = array<vec3f, {}>({});\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
+            2 * n,
             corners.join(", "),
             EYED - 1
         );
@@ -180,14 +175,22 @@ fn main() {
 /// are, which the pass writes to the screen; the ramp read straight between
 /// its stops.
 fn debug_looks() -> String {
-    use debug_look::{grid, share, steps};
+    use debug_look::{share, steps};
+    // A world's cell spans (1, `SPANS`] of the view's cells where the rays
+    // stop on it (pxl-spec-core grid.rs `cell_at`), so its share of a cell
+    // squared is within (1, `SPANS`²]: the tints' bounds are those.
+    let spans = grid::SPANS;
+    assert!(
+        share::finer::most == 1.0 && share::within::most == spans * spans,
+        "debug_look.json's share bounds are the split's"
+    );
     let srgb = |c: u32| [c >> 16, c >> 8, c].map(|v| (v & 255) as f32 / 255.0);
     let light = |c: u32| {
         srgb(c).map(|v| {
             if v <= 0.04045 {
                 v / 12.92
             } else {
-                ((v + 0.055) / 1.055).powf(2.4)
+                libm::powf((v + 0.055) / 1.055, 2.4)
             }
         })
     };
@@ -197,8 +200,8 @@ fn debug_looks() -> String {
     let last = steps::ramp.len() - 1;
     format!(
         "const GRID_COLOR = vec4f({}, {:?});\nconst SHARE_FINER = {};\nconst SHARE_FINER_MOST: f32 = {:?};\nconst SHARE_WITHIN = {};\nconst SHARE_WITHIN_MOST: f32 = {:?};\nconst SHARE_COARSER = {};\nconst STEPS_MOST: f32 = {:?};\nconst STEPS_NONE = {};\nconst STEPS_RAMP = array<vec3f, {}>({});\nfn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(STEPS_RAMP[i], STEPS_RAMP[i + 1u], f - f32(i)); }}\n",
-        parts(light(grid::rgb)),
-        grid::alpha,
+        parts(light(debug_look::grid::rgb)),
+        debug_look::grid::alpha,
         vec3(light(share::finer::rgb)),
         share::finer::most,
         vec3(light(share::within::rgb)),
@@ -330,17 +333,6 @@ fn params() -> String {
     out
 }
 
-/// The pxl-spec-core settings (its param.rs) a hand-written shader names,
-/// each by its path as `params` names render's (`night::FALL` is
-/// `NIGHT_FALL`), so one shared with render's would not build.
-fn spec_params() -> String {
-    let [from, to] = pxl_spec_core::param::night::FALL.map(|v| v as f32);
-    let spread = pxl_spec_core::param::sun::SPREAD;
-    format!(
-        "const NIGHT_FALL: vec2f = vec2f({from:?}, {to:?});\nconst SUN_SPREAD: f32 = {spread:?};\n"
-    )
-}
-
 /// What the host lays out and every shader reads (frame/shader/word.rs), as
 /// WGSL: a uniform's floats as its vec4s; and the pxl-spec-core values every
 /// shader may name, the world's height and the sun's taps apart.
@@ -372,7 +364,8 @@ fn words() -> String {
         .concat(),
         format!("const SHEET_FILL: u32 = {SHEET_FILL}u;\nconst SHEET_STROKE: u32 = {SHEET_STROKE}u;\nconst SHEET_TRIANGLE: u32 = {SHEET_TRIANGLE}u;\nconst SHEET_TEXT: u32 = {SHEET_TEXT}u;\nconst SHEET_HALO: u32 = {SHEET_HALO}u;\n"),
         format!("const BOX_XY_STEPS: u32 = {BOX_XY_STEPS}u;\nconst BOX_VERTICES: u32 = {BOX_VERTICES}u;\n"),
-        format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\n"),
+        format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\nconst HALF_STEP: f32 = {HALF_STEP:?};\n"),
+        format!("const MOON_ANGULAR_RADIUS: f32 = {MOON_ANGULAR_RADIUS:?};\nconst MOON_ALBEDO: f32 = {MOON_ALBEDO:?};\nconst MOON_MAP_MEAN: f32 = {MOON_MAP_MEAN:?};\n"),
         format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),

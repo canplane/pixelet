@@ -17,11 +17,14 @@ use crate::domain::scene::frame::Frame;
 use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
+use crate::domain::view::lens::Stepped;
+use crate::domain::view::observation;
 use crate::domain::view::setting::schema_spec::SkyTime;
 use crate::domain::view::setting::store::settings_store;
-use crate::sys::sched::edge::wake_at;
 use crate::sys::sched::clock::wall_now;
-use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
+use crate::sys::sched::edge::wake_at;
+use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
+use pxl_render::param::night;
 use xpute_guest::clock::now;
 
 /// Runs before the markers' step: the sky moves with the wall clock and
@@ -157,12 +160,13 @@ impl EnvironmentDraw {
     /// the sky as drawn moves one display level (pxl-render `sky_steps`, its
     /// views' own slopes), at the rate the sun's or the moon's height moves;
     /// a light with no step landed yet asks none, its view's first slope
-    /// landing waking the turn. The clouds' is the wind carrying them a pixel
-    /// at the nearest (`cloud::drift_step_s`). Between steps their words
-    /// stand. A clock set back before where a light last stepped steps it
-    /// there at once. The sky's clock is the hour the `sky_time` setting
-    /// shows (`shown`), which a held hour never steps; the clouds' is the
-    /// wall clock's.
+    /// landing waking the turn. The clouds' is the wind carrying them the
+    /// seen step at the nearest (`cloud::drift_step_s`). Between steps their
+    /// words stand (`lens::Stepped`); before the sky starts, every
+    /// observation steps them. A clock set back before where a light last
+    /// stepped steps it there at once. The sky's clock is the hour
+    /// the `sky_time` setting shows (`shown`), which a held hour never steps;
+    /// the clouds' is the wall clock's.
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.observed();
@@ -179,19 +183,22 @@ impl EnvironmentDraw {
                 .fold(f64::INFINITY, f64::min)
         };
         let clouds_next = |at: f64| at + cloud::drift_step_s() * 1000.0;
-        let mut next = sky_next(self.sky_at);
-        if !self.started || sky_ms >= next || sky_ms < self.sky_at {
-            (self.days, self.sky_at) = (j2000_days(sky_ms), sky_ms);
-            next = sky_next(self.sky_at);
+        if !self.started {
+            (self.sky_at, self.clouds_at) = Default::default();
+        }
+        let (sky, next, stepped) = self.sky_at.at(sky_ms, sky_next);
+        if stepped {
+            self.days = j2000_days(sky);
             self.aim();
         }
         let (clouds, clouds_due, drifted) = self.clouds_at.at(unix_ms, clouds_next);
         // The clouds drifting step on their own, waking the turn.
         if drifted && self.started {
-            crate::domain::scene::region::animated();
+            region::animated();
         }
+        self.time = (clouds - first) / 1000.0;
         let sky_in = if held { f64::INFINITY } else { next - sky_ms };
-        sky_in.min(clouds_next(self.clouds_at) - unix_ms).max(0.0)
+        sky_in.min(clouds_due - unix_ms).max(0.0)
     }
 
     /// The sun and moon and the stars' turn at the sky's days and anchor.

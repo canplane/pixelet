@@ -9,8 +9,8 @@
 
 use crate::answer;
 use crate::answer::{
-    box_join, box_none, cover, eighths, fills, kept_word, touch_word, In, Kind, BOX_NONE,
-    BOX_WHOLE, EIGHTHS, FULL, PLACED_ASSET,
+    box_join, box_none, cover, eighths, fills, kept_word, In, Kind, BOX_NONE, BOX_WHOLE, FULL,
+    PLACED_ASSET,
 };
 use crate::area::Shard;
 use crate::cave::Cave;
@@ -81,8 +81,8 @@ impl Handed {
     /// `of` with nothing placed: the node as the world unplaced holds it,
     /// the ground's alone, which decor grows on (`scatter::Grounds::footing`);
     /// nothing placed stays nothing down a descent (`overwrite::child`).
-    pub fn unplaced((zoom, c): (Zoom, [i32; 3])) -> At {
-        At {
+    pub fn unplaced((zoom, c): (Zoom, [i32; 3])) -> Handed {
+        Handed {
             cave: Cave::of(zoom, c),
             placed: overwrite::Held::NOTHING,
             shard: Shard::UNKNOWN,
@@ -140,8 +140,11 @@ impl Handed {
 /// where the ground is not held, the lack. Whether a cell is the zoom asked's
 /// or coarser air is the asker's: its zoom against the finest asked (`near`),
 /// past the ground's cells, where nothing finer is, a cell either way.
-#[allow(clippy::too_many_arguments)]
-pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the world's four stores, where the node is, and the zooms and cuts it is asked at, each its own"
+)]
+pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
     held: &mut H,
     bricks: &W,
     lanes: &L,
@@ -243,10 +246,6 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
         } else {
             0
         };
-        // The ground's top cell as the ground alone draws it, nothing written
-        // over it: the one cell whose neighbours the ground knows
-        // (`answer::touch`, `Cell::touch`), its floor whole under it.
-        let ground_top = fills(value) && c[2] == cell.top - 1 && way == VOID && over.says != CELL;
         if way != VOID {
             // A way's look four times where one wrote it, whatever its value.
             let w = tree::read(way);
@@ -277,8 +276,6 @@ pub fn node<H: Held, W: Squares, L: Lanes, P: Lanes>(
                 },
                 0,
             ]
-        } else if ground_top && kept < EIGHTHS {
-            [touch_word(kept_word(value, kept), cell.touch | 1 << 4), four]
         } else {
             [kept_word(val, kept), four]
         };

@@ -8,15 +8,15 @@
 use core::mem::{offset_of, size_of};
 
 use crate::profiler::frame::{FrameSample, EFFECTS, GPU_SPANS};
-use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY, WAKES};
+use crate::profiler::spec::{FRAME, LIMIT, NOW, SPREAD, STAT, STEP_STAT, STREAM_STAT, WAKES};
 use crate::profiler::word::{words, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use pxl_render::gpu::span_spec::FRAME_KINDS;
 use xpute_guest::sched::tick::PHASES;
 
-const REASONS: usize = LIMITS::REASONS as usize;
-const REASON_WORDS: usize = LIMITS::REASON_WORDS as usize;
-const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
+const REASONS: usize = LIMIT::REASONS as usize;
+const REASON_WORDS: usize = LIMIT::REASON_WORDS as usize;
+const STEP_SLOTS: usize = LIMIT::STEP_SLOTS as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES;
 const CATEGORIES: usize = STREAM_NAMES;
 
@@ -90,20 +90,20 @@ const _: () = assert!(
     "the last frame runs past STAT's frames section"
 );
 
-words!(FramesSection, SUMMARY::frames::WORDS,
-    present => SUMMARY::frames::present, n => SUMMARY::frames::n, seconds => SUMMARY::frames::seconds,
-    moving => SUMMARY::frames::moving, moving_ms => SUMMARY::frames::moving_ms,
-    missed => SUMMARY::frames::missed, overran => SUMMARY::frames::overran,
-    long => SUMMARY::frames::long, turns => SUMMARY::frames::turns, gpu_read => SUMMARY::frames::gpu_read,
-    interval => SUMMARY::frames::interval, busy => SUMMARY::frames::busy,
-    tick => SUMMARY::frames::tick, effects => SUMMARY::frames::effects,
-    stage => SUMMARY::frames::stage, tasks => SUMMARY::frames::tasks,
-    profiler => SUMMARY::frames::profiler, rest => SUMMARY::frames::rest,
-    effects_p95 => SUMMARY::frames::effects_p95, gpu => SUMMARY::frames::gpu,
-    phases_p95 => SUMMARY::frames::phases_p95, gpu_spans_p95 => SUMMARY::frames::gpu_spans_p95,
-    kinds => SUMMARY::frames::kinds, wakes => SUMMARY::frames::wakes,
-    heap_used_delta_bytes => SUMMARY::frames::heap_used_delta_bytes,
-    first => SUMMARY::frames::first, last => SUMMARY::frames::last,
+words!(FramesSection, STAT::frames::WORDS,
+    present => STAT::frames::present, n => STAT::frames::n, seconds => STAT::frames::seconds,
+    moving => STAT::frames::moving, moving_ms => STAT::frames::moving_ms,
+    missed => STAT::frames::missed, overran => STAT::frames::overran,
+    long => STAT::frames::long, turns => STAT::frames::turns, gpu_read => STAT::frames::gpu_read,
+    interval => STAT::frames::interval, busy => STAT::frames::busy,
+    tick => STAT::frames::tick, effects => STAT::frames::effects,
+    stage => STAT::frames::stage, tasks => STAT::frames::tasks,
+    profiler => STAT::frames::profiler, rest => STAT::frames::rest,
+    effects_p95 => STAT::frames::effects_p95, gpu => STAT::frames::gpu,
+    phases_p95 => STAT::frames::phases_p95, gpu_spans_p95 => STAT::frames::gpu_spans_p95,
+    kinds => STAT::frames::kinds, wakes => STAT::frames::wakes,
+    heap_used_delta_bytes => STAT::frames::heap_used_delta_bytes,
+    first => STAT::frames::first, last => STAT::frames::last,
 );
 
 #[repr(C)]

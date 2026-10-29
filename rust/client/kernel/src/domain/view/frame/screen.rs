@@ -26,7 +26,7 @@ pub(crate) fn px_per_unit() -> f64 {
 /// The units a CSS pixel spans at `dist` from the eye (`px_per_unit`): what a
 /// drag at that distance moves, and what a thing there is worth on the screen.
 pub(crate) fn units_per_px_at(dist: f64) -> f64 {
-    2.0 * dist * HALF_TAN / view().height
+    dist / px_per_unit()
 }
 
 /// `ndc` in [−1, 1], y up, as CSS pixels from the view's top left.

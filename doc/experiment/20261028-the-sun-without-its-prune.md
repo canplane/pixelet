@@ -8,7 +8,7 @@ mitigations that kept it were dropped
 
 ## Why
 
-The sun's map passed what its texel could not tell apart by the same
+The shadow map passed what its texel could not tell apart by the same
 machinery as the eye's prune (pxl-spec-core cast.rs `walk`, `meets_box`'s
 inner shrink and its `facing`). With the eye's prune gone, the sun's was
 the only reason left for that machinery. The question was whether the sun
@@ -44,7 +44,7 @@ not in this view, so whether they change is not seen here.
 | gpu p50/p95 | 8.1/21.6, 8.6/21.6 | 9.2/23.5, 9.0/29.2 |
 | sun_beam | 2.5 | 2.4–2.5 |
 | sun_sample | 1.2–1.3 | 1.2 |
-| sun_raster / sun_pick | 0.3 / 0.3 | 0.2–0.3 / 0.3 |
+| sun_raster / sun_texel | 0.3 / 0.3 | 0.2–0.3 / 0.3 |
 | sun_walk | 0.7–0.8 | 0.7 |
 
 **The sun's lanes** (ray_counts, nodes a cast):
@@ -54,7 +54,7 @@ not in this view, so whether they change is not seen here.
 | beam | 328 839 | 311 480 |
 | sample | 260 944 | 252 723 |
 | miss | 377 754 | 365 628 |
-| picked / walked | 6.02% / 0.62% | 5.81% / 0.60% |
+| took / walked   | 6.02% / 0.62% | 5.81% / 0.60% |
 | boxes | 10 679 | 9 712 |
 
 The eye's lanes on :5178 are E2's with the eye's prune off: miss 2.04 M

@@ -42,7 +42,7 @@ proposed twice, on 2026-10-17 and on 2026-10-28, and both times it was dropped.
   ways' tops and clearances (`pxl-spec bake/separation.rs`), not the ground's. A coarser tile's samples are the box mean of those under it
   (`pxl-spec bake/fold.rs` `fold_ele`). They are the surface drawn at that zoom,
   not a bound on the finer surfaces under it. Its padding is taken from its
-  neighbours' samples, its own edge repeated where a neighbour is not baked yet,
+  neighbors' samples, its own edge repeated where a neighbor is not baked yet,
   so the tile's edge can be drawn without them, and is no second height.
 - **Air is skipped by the windows' levels.** Each square holds, per level, the
   lowest and highest under an entry, the ground's and the ways' apart

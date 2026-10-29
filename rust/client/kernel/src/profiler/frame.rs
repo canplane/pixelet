@@ -178,9 +178,8 @@ pub struct ObserverSample {
     pub beam: f64,
     pub sample: f64,
     pub miss: f64,
-    pub picked: f64,
+    pub took: f64,
     pub walked: f64,
-    pub pixel: f64,
     pub boxes: f64,
 }
 
@@ -195,9 +194,8 @@ impl RaySample {
                 beam: lane(tally::BEAM),
                 sample: lane(tally::SAMPLE),
                 miss: lane(tally::MISS),
-                picked: lane(tally::PICKED),
+                took: lane(tally::TOOK),
                 walked: lane(tally::WALKED),
-                pixel: lane(tally::PIXEL),
                 boxes: lane(tally::BOXES),
             }
         };
@@ -242,27 +240,25 @@ words!(FrameSample, FRAME::WORDS,
     rays.eye.beam => FRAME::eye_beam,
     rays.eye.sample => FRAME::eye_sample,
     rays.eye.miss => FRAME::eye_miss,
-    rays.eye.picked => FRAME::eye_picked,
+    rays.eye.took => FRAME::eye_took,
     rays.eye.walked => FRAME::eye_walked,
-    rays.eye.pixel => FRAME::eye_pixel,
     rays.eye.boxes => FRAME::eye_boxes,
     rays.sun.casts => FRAME::sun_casts,
     rays.sun.rays => FRAME::sun_rays,
     rays.sun.beam => FRAME::sun_beam,
     rays.sun.sample => FRAME::sun_sample,
     rays.sun.miss => FRAME::sun_miss,
-    rays.sun.picked => FRAME::sun_picked,
+    rays.sun.took => FRAME::sun_took,
     rays.sun.walked => FRAME::sun_walked,
-    rays.sun.pixel => FRAME::sun_pixel,
     rays.sun.boxes => FRAME::sun_boxes,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
-pub const EFFECTS: usize = crate::turn::spec::EFFECT_NAMES;
-pub const STREAMS: usize = crate::sys::io::demand_spec::STREAM_NAMES;
-pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
+pub const EFFECTS: usize = spec::EFFECT_NAMES;
+pub const STREAMS: usize = demand_spec::STREAM_NAMES;
+pub const ZOOMS: usize = LIMIT::ZOOMS as usize;
 
 const _: () = assert!(
     lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,
@@ -275,7 +271,7 @@ const _: () = assert!(
 /// one nearer the last turn than the paced interval less that (xpute host
 /// sched/strobe.ts `turn`). Still frames take a larger budget on purpose, and
 /// a repeated image is no visible stutter.
-pub fn missed(f: &FrameSample) -> bool {
+pub fn is_missed(f: &FrameSample) -> bool {
     f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
 }
 

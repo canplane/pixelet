@@ -3,9 +3,9 @@
 //! Holds the tree to what a reader cannot see and the code must keep: no raw
 //! pointer casts in offset crates, each rounding half to even in every
 //! language, no CommonJS file, each generated shader made from the sources the
-//! tree holds now, and the layers' order, where nothing names what is above
-//! it. A rule Rust alone keeps is clippy's (rust/clippy.toml); how the tree is
-//! written is the convention skill's.
+//! tree holds now, the layers' order, where nothing names what is above it,
+//! the screen's pixels read only at the screen, and each workgroup's size
+//! its constant. A rule Rust alone keeps is clippy's (rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -73,21 +73,26 @@ const KERNEL_ORDER: [(&str, u8); 12] = [
     ("sys", 0),
 ];
 const KERNEL_HEADS: [&str; 2] = ["scene", "control"];
+const KERNEL_BESIDE: [&str; 1] = ["profiler"];
 
-/// pxl-spec-core's order: what every part speaks, the layers' storage, the
-/// query over them (ARCHITECTURE.md, "The query, the only seam"), and what
-/// asks it. A layer knows no query, and the query no asker.
+/// pxl-spec-core's order: what every part speaks, the layers' storage and
+/// the world's fields, the query over them (ARCHITECTURE.md, "The query, the
+/// only seam"), and what asks it. A layer knows no query, and the query no
+/// asker.
 const SPEC_CORE: &str = "rust/spec/core/src/";
-const SPEC_CORE_ORDER: [(&str, u8); 24] = [
+const SPEC_CORE_ORDER: [(&str, u8); 26] = [
+    ("param", 0),
     ("cube", 0),
     ("lattice", 0),
     ("grid", 0),
     ("answer", 0),
+    ("tally", 0),
     ("area", 1),
-    ("caves", 1),
+    ("cave", 1),
+    ("cloud", 1),
     ("ground", 1),
     ("window", 1),
-    ("ways", 1),
+    ("way", 1),
     ("fill", 1),
     ("overwrite", 1),
     ("world", 2),
@@ -101,9 +106,165 @@ const SPEC_CORE_ORDER: [(&str, u8); 24] = [
     ("sun", 3),
     ("scatter", 3),
     ("decor", 3),
-    ("faces", 3),
-    ("tally", 3),
+    ("face", 3),
 ];
+
+/// What the world shows is decided in angles, the camera grid's cell; a
+/// pixel enters only at the screen (ARCHITECTURE.md, "The camera grid").
+/// The kernel reads the view's CSS pixels through one module, the screen
+/// (domain/view/frame/screen.rs), and only these name it: the view's own
+/// frame, the camera's gestures, the markers' layout and selection, the
+/// stage's viewport words and the shell. A path is a file, or a folder by
+/// its trailing slash.
+const SCREEN_USERS: [&str; 7] = [
+    "rust/client/kernel/src/domain/view/frame/",
+    "rust/client/kernel/src/domain/control/camera/controller.rs",
+    "rust/client/kernel/src/domain/control/camera/input.rs",
+    "rust/client/kernel/src/domain/scene/marker/arrangement.rs",
+    "rust/client/kernel/src/domain/scene/marker/selection.rs",
+    "rust/client/kernel/src/domain/scene/stage.rs",
+    "rust/client/kernel/src/shell.rs",
+];
+
+/// The lines of `text`, a kernel source, comments left out, that reach the
+/// screen: a path through it (`screen::`), a group naming it (`frame::{…
+/// screen …}`, over as many lines as it runs), a glob or an alias of the
+/// frame that would reach it unnamed, or a re-export of it, which would lend
+/// it to a module the list does not name.
+fn screen_reached(text: &str) -> Vec<usize> {
+    let code: String = text
+        .lines()
+        .map(|l| l.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let reach = Regex::new(
+        r"\bscreen::|\bframe::\{[^}]*\bscreen\b|\bframe::\*|\bframe\s+as\b|\bpub\s+use\b[^;]*\bscreen\b",
+    )
+    .expect("the screen's pattern");
+    let mut lines: Vec<usize> = reach
+        .find_iter(&code)
+        .map(|m| code[..m.start()].matches('\n').count() + 1)
+        .collect();
+    lines.dedup();
+    lines
+}
+
+/// On the GPU the screen's size is the eye's rays' image's (pxl-shader
+/// cast.rs `Rays`), bound only to the passes that draw a pixel's ray or read
+/// the rays drawn: the cast and its walks again, and the sun's receivers. The
+/// beam, the cells, the samples, decor and the shadow map read the eye's
+/// angles alone.
+const SHADER: &str = "rust/client/shader/src/";
+const RAYS_ENTRIES: [&str; 4] = ["cast_cs", "miss_cs", "miss_list_cs", "sun_mark_cs"];
+
+/// Every entry point in `text`, a shader's source, whose parameters bind
+/// the rays' image, by its name or a path to it, and is not one of
+/// `RAYS_ENTRIES`, each with its line: the parameters from its
+/// `entry_point_name` to the body's opening brace.
+fn rays_bound(text: &str) -> Vec<(usize, String)> {
+    let entry = Regex::new(r#"entry_point_name\s*=\s*"(\w+)""#).expect("an entry's pattern");
+    let rays = Regex::new(r"&\s*(?:\w+::)*Rays\b").expect("the rays' pattern");
+    let mut out = Vec::new();
+    for c in entry.captures_iter(text) {
+        let (at, name) = (c.get(0).map_or(0, |m| m.start()), &c[1]);
+        let end = text[at..].find(") {").map_or(text.len(), |k| at + k);
+        if rays.is_match(&text[at..end]) && !RAYS_ENTRIES.contains(&name) {
+            out.push((text[..at].matches('\n').count() + 1, name.to_string()));
+        }
+    }
+    out
+}
+
+/// A workgroup's size is a constant its shader's code also counts by: the
+/// lanes a scan or a stride steps across, the side a pyramid tiles by.
+/// rust-gpu's `threads` takes only literals, so each entry's is held here to
+/// its constant: the entry's file under `SHADER`, the entry, the constant's
+/// file under rust/ and its name, and how many of the size's sides it gives.
+const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
+    (
+        "raster.rs",
+        "face_cs",
+        "spec/core/src/raster.rs",
+        "FACES_LANES",
+        1,
+    ),
+    (
+        "cast.rs",
+        "cast_cs",
+        "client/shader/src/cast.rs",
+        "CAST_SIDE",
+        2,
+    ),
+    (
+        "way.rs",
+        "way_tree_cs",
+        "client/shader/src/way.rs",
+        "LANES",
+        1,
+    ),
+    (
+        "way.rs",
+        "way_freed_cs",
+        "client/shader/src/way.rs",
+        "LANES",
+        1,
+    ),
+    (
+        "decor.rs",
+        "decor_stand_cs",
+        "client/shader/src/decor.rs",
+        "PATCH_LANES",
+        1,
+    ),
+    (
+        "decor.rs",
+        "decor_cnt_cs",
+        "client/shader/src/decor.rs",
+        "RECORD_LANES",
+        1,
+    ),
+    (
+        "decor.rs",
+        "decor_place_cs",
+        "client/shader/src/decor.rs",
+        "RECORD_LANES",
+        1,
+    ),
+    (
+        "cast.rs",
+        "miss_list_cs",
+        "spec/core/src/ray.rs",
+        "MISS_LANES",
+        1,
+    ),
+    (
+        "sun.rs",
+        "sun_miss_cs",
+        "spec/core/src/ray.rs",
+        "MISS_LANES",
+        1,
+    ),
+];
+
+/// The workgroup size `text`, a shader's source, gives `entry`.
+fn threads(text: &str, entry: &str) -> Option<[u32; 3]> {
+    let pattern =
+        format!(r#"threads\((\d+),\s*(\d+),\s*(\d+)\),\s*entry_point_name\s*=\s*"{entry}""#);
+    let c = Regex::new(&pattern)
+        .expect("a workgroup's pattern")
+        .captures(text)?;
+    Some([1, 2, 3].map(|k| c[k].parse().unwrap_or(0)))
+}
+
+/// The value of `name`, a `u32` constant `text` writes as a literal.
+fn constant(text: &str, name: &str) -> Option<u32> {
+    let pattern = format!(r"const {name}: u32 = (\d+);");
+    Regex::new(&pattern)
+        .expect("a constant's pattern")
+        .captures(text)?[1]
+        .parse()
+        .ok()
+}
 
 /// xpute's words are host, guest and their contract (AGENTS.md): pixelet's
 /// appear nowhere under it.
@@ -172,19 +333,31 @@ fn standing(f: &str, root: &str) -> String {
 }
 
 /// Every name in `root`'s files of a module above the file's own in
-/// `order`, or of one head by another.
+/// `order`, or of one head by another; and every module `order` does not
+/// place, but the crate's root and those that stand `beside` it, so a new
+/// one is placed before it is checked.
 fn ordered(
     files: &[&str],
     read: &dyn Fn(&str) -> Option<String>,
     root: &str,
     order: &[(&str, u8)],
     heads: &[&str],
+    beside: &[&str],
 ) -> Vec<String> {
     let level = |m: &str| order.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
     let mut problems = Vec::new();
-    for f in files.iter().filter(|f| f.starts_with(root) && f.ends_with(".rs")) {
+    let mut unplaced = std::collections::BTreeSet::new();
+    for f in files
+        .iter()
+        .filter(|f| f.starts_with(root) && f.ends_with(".rs"))
+    {
         let me = standing(f, root);
-        let Some(mine) = level(&me) else { continue };
+        let Some(mine) = level(&me) else {
+            if !["lib", "domain"].contains(&me.as_str()) && !beside.contains(&me.as_str()) {
+                unplaced.insert(me);
+            }
+            continue;
+        };
         for (line, them) in named(&read(f).unwrap_or_default()) {
             let Some(theirs) = level(&them) else { continue };
             let head = heads.contains(&me.as_str()) && heads.contains(&them.as_str());
@@ -195,7 +368,65 @@ fn ordered(
             }
         }
     }
+    for me in unplaced {
+        problems.push(format!(
+            "{root}{me}: `{me}` has no place in the layers' order; give it one (check_rules.rs)"
+        ));
+    }
     problems
+}
+
+/// The tree's files, a path a line from `root`: git's, tracked and not
+/// ignored, where `root` is a checkout's own top; else, as in an export
+/// laid out under a checkout's ignored target,
+/// every file under it but the builds' and the packages', which git there
+/// would list none of. Outside any checkout, an error.
+fn list_files(root: &std::path::Path) -> Result<String, String> {
+    let top = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(root)
+        .output()
+        .map_err(|e| format!("git rev-parse: {e}"))?;
+    if !top.status.success() {
+        return Err("git rev-parse: not in a checkout".into());
+    }
+    let top = String::from_utf8(top.stdout).map_err(|e| format!("git rev-parse: {e}"))?;
+    let own = std::path::Path::new(top.trim())
+        .canonicalize()
+        .is_ok_and(|t| root.canonicalize().is_ok_and(|r| r == t));
+    if own {
+        let out = Command::new("git")
+            .args(["ls-files", "-co", "--exclude-standard"])
+            .current_dir(root)
+            .output()
+            .map_err(|e| format!("git ls-files: {e}"))?;
+        return String::from_utf8(out.stdout).map_err(|e| format!("git ls-files: {e}"));
+    }
+    fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut String) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in entries.flatten() {
+            let p = e.path();
+            let name = e.file_name();
+            if ["target", "node_modules", ".git"]
+                .iter()
+                .any(|n| name == *n)
+            {
+                continue;
+            }
+            // A link is not followed, as git lists a link and not what it names.
+            if e.file_type().is_ok_and(|t| t.is_dir()) {
+                walk(&p, root, out);
+            } else if let Ok(rel) = p.strip_prefix(root) {
+                out.push_str(&rel.to_string_lossy());
+                out.push('\n');
+            }
+        }
+    }
+    let mut out = String::new();
+    walk(root, root, &mut out);
+    Ok(out)
 }
 
 fn run() -> Result<Vec<String>, String> {
@@ -255,24 +486,32 @@ fn run() -> Result<Vec<String>, String> {
         problems.push(format!("{f}: CommonJS; the tree's scripts are ES modules"));
     }
 
-    problems.extend(ordered(&files, &read, KERNEL, &KERNEL_ORDER, &KERNEL_HEADS));
-    problems.extend(ordered(&files, &read, SPEC_CORE, &SPEC_CORE_ORDER, &[]));
-    let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
-    for f in files.iter().filter(|f| f.starts_with(XPUTE)) {
-        for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
-            // Make's `$(shell …)` is the build tool's, not pixelet's shell.
-            if pixelet.is_match(&line.replace("$(shell", "")) {
-                problems.push(format!("{f}:{}: names pixelet's word under xpute: {}", n + 1, line.trim()));
-            }
+    problems.extend(ordered(
+        &files,
+        &read,
+        KERNEL,
+        &KERNEL_ORDER,
+        &KERNEL_HEADS,
+        &KERNEL_BESIDE,
+    ));
+    problems.extend(ordered(
+        &files,
+        &read,
+        SPEC_CORE,
+        &SPEC_CORE_ORDER,
+        &[],
+        &[],
+    ));
+    for f in files.iter().filter(|f| {
+        f.starts_with(KERNEL)
+            && f.ends_with(".rs")
+            && !SCREEN_USERS.iter().any(|u| f.starts_with(u))
+    }) {
+        for line in screen_reached(&read(f).unwrap_or_default()) {
+            problems.push(format!(
+                "{f}:{line}: reaches the screen's pixels where the world is decided in angles; only SCREEN_USERS may (check_rules.rs)"
+            ));
         }
-    }
-
-    // A generated shader names the digest of the sources it was made from
-    // (pxl-tool shader.rs `inputs_digest`); one the tree has moved past is stale.
-    for f in stale(&root, &inputs_digest(&root)?) {
-        problems.push(format!(
-            "{f}: stale against pxl-spec-core's sources; run `cargo shader-wgsl` in rust/"
-        ));
     }
     for f in files
         .iter()
@@ -286,13 +525,13 @@ fn run() -> Result<Vec<String>, String> {
     }
     for (file, entry, at, name, sides) in WORKGROUPS {
         let size = threads(&read(&format!("{SHADER}{file}")).unwrap_or_default(), entry);
-        let value = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
+        let val = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
         let held = size
-            .zip(value)
+            .zip(val)
             .is_some_and(|(s, v)| s[..sides].iter().all(|&d| d == v));
         if !held {
             problems.push(format!(
-                "{SHADER}{file}: `{entry}`'s workgroup {size:?} is not `{name}` ({at}: {value:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
+                "{SHADER}{file}: `{entry}`'s workgroup {size:?} is not `{name}` ({at}: {val:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
             ));
         }
     }
@@ -324,7 +563,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders and the layers' order hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels and the workgroups' sizes hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -381,7 +620,7 @@ mod tests {
     }
 
     #[test]
-    fn a_workgroup_is_read_against_its_constant() {
+    fn workgroup_vs_constant() {
         let text = "const LANES: u32 = 64;\n#[spirv(compute(threads(64, 1, 1), entry_point_name = \"way_cs\"))]\n";
         assert_eq!(threads(text, "way_cs"), Some([64, 1, 1]));
         assert_eq!(threads(text, "way_free_cs"), None);

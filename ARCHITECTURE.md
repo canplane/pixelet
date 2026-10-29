@@ -82,7 +82,9 @@ Every size in the world is one number, its zoom. X goes once round the world in
 is half as wide (`pxl-spec space/coord/zoom.rs`). A **cell** is the granule at a
 zoom, possibly empty. A **tile** is what is fetched and stored as one, and a
 layer's tile has the same number of cells a side at every zoom. The **pyramid**
-is the tree of all tiles: a tile at z covers the 2 × 2 under it at z + 1. A
+is the tree of all tiles: a tile at z covers the 2 × 2 under it at z + 1. The
+same zooms, cut through the height as well, make an octree of nodes, eight under
+each, and that octree is what a ray descends (The query, the only seam). A
 **shard** is the coarsest cube, a tile as wide as the world is tall with the
 world's whole height over it (`pxl-spec-core lib.rs` `SHARD_ZOOM`); the world is
 ingested, baked and kept a shard at a time.
@@ -136,8 +138,7 @@ object/ext.rs` `class_of`), placed and erased with its leaf.
 Carto draws there at that web map zoom (`pxl-spec bake/tile/place.rs`), by one
 table taken from Carto's rules (`spec/spec/bake/place_theme.json`). A cell one
 icon wide keeps one place, so each place carries the zoom it shows from, and a
-parent is its children with what shows from its zoom on
-([places follow Carto](./doc/minutes/20261009-places-follow-carto.md)).
+parent is its children with what shows from its zoom on.
 
 The **earth** layer is the planet's picture, baked at its top zoom only
 (`pxl-spec bake/tile/earth.rs`).
@@ -168,11 +169,10 @@ is a function of the cell, a seed and the ground's face, one rule on both sides
 (`pxl-spec-core scatter.rs`). Two grown decors never share a cell.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
-stands at its folded height, its look the majority of those it folds
-([the ground is a Carto palette](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)),
-and its top cell is filled to the share its height reaches (`pxl-spec-core
-ground.rs` `top`). What is placed and the ways fold to the kind most of their
-fill is (`overwrite.rs` `fold`).
+stands at its folded height, its look the majority of those it folds, and its
+top cell is filled to the share its height reaches (`pxl-spec-core ground.rs`
+`top`). What is placed and the ways fold to the kind most of their fill is
+(`overwrite.rs` `fold`).
 
 A coarse cell keeps how much of its cube the ground and what is written over it
 fill (`answer.rs` `cover`), in eighths, floored: its **kept eighths**. It is
@@ -202,16 +202,16 @@ pointed at (`pxl-kernel domain/control/interaction.rs` `Picked`).
 
 One **camera** looks, and every controller moves it
 (`domain/control/camera/controller.rs` `Camera`). It is an **eye** and the
-direction it faces, the camera's **look**, in spherical coordinates about the
+direction it faces, the camera's **facing**, in spherical coordinates about the
 world's Z: θ the polar angle from straight down, φ the azimuth from north toward
 east. Nothing else keeps a copy.
 
-The free camera turns about its eye; the orbit turns about a point a distance
-ahead of the eye along the look. The point a camera turns about is the
-**focus**, the eye itself in the free camera, derived and never kept
-(`controller.rs` `focus`). The character stands there, and a change from one
-camera to the other moves the camera about the focus, never the focus. Code past
-the controllers reads the eye, the look and the focus.
+The first-person camera turns about its eye; the orbit turns about a point a distance
+ahead of the eye along the facing. The point a camera turns about is the
+**pivot**, the eye itself in the first-person camera, derived and never kept
+(`controller.rs` `pivot`). The character stands there, and a change from one
+camera to the other moves the camera about the pivot, never the pivot. Code past
+the controllers reads the eye, the facing and the pivot.
 
 The **pose** is the eye and the turn from the world's axes to the camera's
 (`domain/view/frame/pose.rs`). The world stays in its own axes, in doubles; what
@@ -227,7 +227,7 @@ is 1/`CELLS_A_RAD` radians on every view (`CELL`), so what is observed at a
 distance is the same on every screen; a display only draws it.
 
 That sets the rule of detail. A node is drawn at the zoom at which it spans one
-to two angular cells at its distance (`Tau::cell_at`): each zoom is drawn over a
+to two angular cells at its distance (`cell_at`): each zoom is drawn over a
 band of distance, and the bands double going out, as an angular cell widens with
 distance.
 
@@ -277,14 +277,12 @@ alike (`pxl-spec-core world.rs` `node`, which `pxl-kernel domain/query/world.rs`
    way.rs`);
 4. then what is placed, air included.
 
-A ray descends the pyramid
-([a ray asks the world whether a node is empty](./doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md)),
-by one function the CPU and the GPU compile alike (`pxl-spec-core cast.rs`
-`first`). A node coarser than the zoom its distance asks is not what is drawn
-there, so it is asked only whether anything under it fills at the zooms the ray
-asks; what those zooms fold away is not there to miss. Each part answers that
-from what it already keeps, a bound, a hash node or nothing held under the node
-(`pxl-kernel domain/query/node.rs` `World::node`).
+A ray descends the pyramid, by one function the CPU and the GPU compile alike
+(`pxl-spec-core cast.rs` `first`). A node coarser than the zoom its distance
+asks is not what is drawn there, so it is asked only whether anything under it
+fills at the zooms the ray asks; what those zooms fold away is not there to
+miss. Each part answers that from what it already keeps, a bound, a hash node or
+nothing held under the node (`pxl-kernel domain/query/node.rs` `World::node`).
 
 ```text
 a node coarser than the zoom its distance asks
@@ -298,16 +296,17 @@ a cell at the zoom its distance asks
    +-- not known ----------------------> the ray stops there
 ```
 
-A reader that asks about the cells beside one it reached asks them off that
-descent's line, from the deepest node holding each (`pxl-spec-core support.rs`
-`asset`), never again from the top.
+A descent leaves its **line**: the node it reached and every node over it, each
+with what was handed it (`pxl-spec-core support.rs` `Line`). A reader that asks
+about the cells beside one it reached asks them off that line, from the deepest
+node holding each (`support.rs` `asset`), never again from the top.
 
 Control asks the same world, one ray at a time, at the zoom the eye's rays draw
 there, so what control meets is what is drawn (`pxl-kernel domain/query/ray.rs`
 `first_hit`). A walker stands on the first cell that fills down its cell's
 columns, at the finest zoom placed there (`domain/query/support.rs`), and the
-pointer's ray strikes decor by its model where the rays draw decor as it is
-(`domain/query/decor.rs`). None reads a layer.
+pointer's ray strikes decor as the box it claims where the rays draw decor as it
+is (`domain/query/decor.rs`). None reads a layer.
 
 What the bucket serves is said in its **declaration**: the coarsest zoom
 supplied whole, each kind's format and version, and the shards served
@@ -324,65 +323,65 @@ every tile within that zoom's band about the eye (`domain/view/observation.rs`
 `ByEye`), mapped to the layer's tiles (`domain/view/demand.rs` `observe`). It is
 a function of the eye alone, never of what the rays met. A tile it names that is
 not held is a miss. Every layer is asked this way and holds what it is asked for
-in its own **residency** (`domain/layer/residency.rs`):
+in its own **tile cache** (`domain/layer/tile_cache.rs`):
 
 - Every observation has an answer: the coarsest zoom the declaration supplies
   whole is held all around the eye, the **floor**
-  (`domain/layer/residency/floor.rs`).
+  (`domain/layer/tile_cache/floor.rs`).
 - A tile is held hard for the floor or for demand while it is demanded, or else
-  as cache; only the hard set is correctness. The slots tiles are held in, the
-  **residency frames**, are counted at compile time and asserted to hold all
-  that can be held hard at once and one frame more to land in
-  (`Residency::FRAMES`). A tile that arrives takes a free one, or else the
-  farthest nothing holds hard and the view does not read.
+  as cache; only the hard set is correctness. The tile cache's **slots**, which
+  tiles are held in, are counted at compile time and asserted to hold all that
+  can be held hard at once and one slot more to land in (`TileCache::SLOTS`). A
+  tile that arrives takes a free one, or else the farthest nothing holds hard
+  and the view does not read.
 - A region goes from unresolved to coarse to as fine as it is observed, and
   never back. The view is loading until something has reached the screen and
-  every tile demanded shows, exact or coarser (`Residency::shown`).
+  every tile demanded shows, exact or coarser (`TileCache::is_shown`).
 - Nothing is prefetched: a view converges to exact on its misses alone.
 
 The GPU holds the ground's cells in **windows**. A ray observes a zoom's cells
 only within a fixed reach of the eye (`pxl-spec-core window.rs` `RADIUS`), so a
-window about a centre holds every cell it can observe at its zoom. The eye has
-one at every zoom drawn; the focus two, at the leaves and the zoom over them;
-and a place the camera is travelling to one, at the leaves
+window about a center holds every cell it can observe at its zoom. The eye has
+one at every zoom drawn; the pivot two, at the leaves and the zoom over them;
+and a place the camera is traveling to one, at the leaves
 (`domain/layer/terrain/window.rs`):
 
-- A window is a few **squares** of cells a side, each held in the slot of the
-  window its place names, so the window follows its centre a square at a time
-  and no held cell moves. A square at a zoom is held once however many windows
+- A window is a few **bricks** of cells a side, each held in the entry of the
+  window its place names, so the window follows its center a brick at a time
+  and no held cell moves. A brick at a zoom is held once however many windows
   want it, and kept while any does.
-- A square is filled on the GPU as its tile lands (`pxl-render
-  gpu/ray/ground.rs` `grids`): its cells, a pyramid of bounds over them, its
-  **levels**, and its ways as a tree in one pool every square shares
+- A brick is filled on the GPU as its tile lands (`pxl-render
+  gpu/ray/ground.rs` `grids`): its cells, a min-max mipmap over them, its
+  **levels**, and its ways as a tree in one pool every brick shares
   (pxl-spec-core `way::tree`). All three are read back into the kernel, so the
   CPU's query and the GPU's cast meet the same bridge or tunnel.
-- A square whose tree the pool cannot hold at its cap stays absent while a
-  window wants it. Where a square is not present, a reader reads the coarser
+- A brick whose tree the pool cannot hold at its cap stays absent while a
+  window wants it. Where a brick is not present, a reader reads the coarser
   window's (pxl-spec-core `window::step`).
-- Nothing of a tile is kept for a square still to come: a square that enters
+- Nothing of a tile is kept for a brick still to come: a brick that enters
   asks its tile again, and the browser's cache answers.
 
 ```text
-  one axis of a window, ACROSS squares a side (drawn as 8); square x is
-  held in slot x mod ACROSS
+  one axis of a window, ACROSS bricks a side (drawn as 8); brick x is
+  held in entry x mod ACROSS
 
-  square x    12   13   14   15   16   17   18   19
+  brick x     12   13   14   15   16   17   18   19
             ┌────┬────┬────┬────┬────┬────┬────┬────┐
-  slot      │ 4  │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │
+  entry     │ 4  │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │
             └────┴────┴────┴────┴────┴────┴────┴────┘
-  the centre moves a square east: 20 enters and takes slot 4, which 12
+  the centre moves a brick east: 20 enters and takes entry 4, which 12
   leaves; 13 to 19 stay where they are
 
-  square x         13   14   15   16   17   18   19   20
+  brick x          13   14   15   16   17   18   19   20
                  ┌────┬────┬────┬────┬────┬────┬────┬────┐
-  slot           │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │ 4  │
+  entry          │ 5  │ 6  │ 7  │ 0  │ 1  │ 2  │ 3  │ 4  │
                  └────┴────┴────┴────┴────┴────┴────┴────┘
 ```
 
-## What stands over the squares
+## What stands over the bricks
 
 Decor and the markers stand beside the ground, and both are gathered over the
-eye's windows' squares.
+eye's windows' bricks.
 
 Decor is grown on the GPU from the same windows the rays read (`pxl-render
 gpu/grown.rs`). The candidates of a patch, the cells a decor may stand in, are
@@ -396,8 +395,8 @@ sprite below it. Placed decor is handed in as records the GPU draws beside it
 A **marker** is drawn flat to the camera: a place, a pin someone put up, or the
 chat's line. Each kind reads its own, and one arrangement draws them together
 (`domain/scene/marker/arrangement.rs`). The places and the pins are read over
-the squares, taken as one partition of the ground at the zooms the eye asks
-(`domain/view/observation.rs` `squares`), each standing at its cell's center on
+the bricks, taken as one partition of the ground at the zooms the eye asks
+(`domain/view/observation.rs` `bricks`), each standing at its cell's center on
 the surface drawn there. A place shows what Carto shows at the zoom its spot is
 drawn at (`domain/scene/marker/place.rs` `point_of`), so where nothing is drawn
 there is no place. The chat's line hangs over its speaker's head
@@ -414,7 +413,7 @@ with its own bound:
 | Query      | what a node holds, a point, or first on a ray | —; it holds nothing                                                                    | `domain/query.rs`                                         |
 | Drawing    | what each pixel's ray meets                   | the screen's rays                                                                      | `domain/scene/cast.rs`, `pxl-render gpu/ray/cast.rs`      |
 | Demand     | which records an observation requires         | a zoom's reach about the eye (`reach_tiles`)                                           | `pxl-spec space/layer/demand.rs`, `domain/view/demand.rs` |
-| Residency  | which records are held, and why               | its residency frames, asserted at compile time                                         | `domain/layer/residency.rs`                               |
+| Tile cache | which records are held, and why               | its slots, asserted at compile time                                                    | `domain/layer/tile_cache.rs`                              |
 | Scheduling | which waiting work runs now                   | a turn's time and the fetches let out at once ([Reads](#reads-and-the-one-scheduler)) | `sys/io/request.rs`, `sys/io/policy.rs`                   |
 
 Every number a person would tune is named once, with its reason, in a `param.rs`
@@ -433,12 +432,10 @@ This part turns the eye's rays and the kernel's list into a frame.
 Each drawn pixel is one ray on the GPU, walking the query's descent over the
 ground's windows, the caves, the ways and the objects' tree as the GPU holds
 them. What a ray stops on is the query's answer; the rasterizer only orders
-what the rays found
-([the ray finds, the raster hands out](./doc/minutes/20261026-the-ray-finds-the-raster-hands-out.md)).
+what the rays found.
 
-Neighbouring rays share most of their descent, so the cast walks that part
-once an angular cell and hands the rest to the rasterizer
-([a cell casts a beam](./doc/minutes/20261022-a-cell-casts-a-beam.md)):
+Neighboring rays share most of their descent, so the cast walks that part once
+an angular cell and hands the rest to the rasterizer:
 
 ```text
   one angular cell of the camera grid
@@ -476,15 +473,15 @@ pass** paints them with the one function every lit face uses
 (`frame/shader/screen_ray.wgsl` `pixel_ray`, `frame/shader/paint.wgsl` `paint`):
 its swatch or image, shaded edges, light, and the air before it.
 
-## The sun's map
+## The shadow map
 
-Shadows read the **sun's map**, the world's depth from the sun in a square box
-of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world and
-held in a map slot by its index modulo the map's side (`pxl-spec-core sun.rs`
-`Sun`). The sun is an observer as the eye is: one set of passes, written once
-over an interface both implement (`pxl-shader observer.rs` `Observer`), asks the
-world at the eye's zooms, so a shadow has the detail of what it falls on
-([a receiver marks what it reads](./doc/minutes/20261027-a-receiver-marks-what-it-reads.md)).
+Shadows are read off the shadow map, the world's depth from the sun in a square
+box of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world
+and held in a map slot by its index modulo the map's side
+(`pxl-spec-core sun.rs` `Sun`). The sun is an observer as the eye is: one set of
+passes, written once over an interface both implement (`pxl-shader observer.rs`
+`Observer`), asks the world at the eye's zooms, so a shadow has the detail of
+what it falls on.
 
 It casts only what a receiver reads:
 
@@ -516,7 +513,7 @@ by the pipeline that draws them, each with its mesh and uniform, for what the
 kernel decides to draw beside the world — the cumulus clouds, the actors, the
 location puck that shows where the device is, an edit's ghost box, the markers
 and the debug lines. An actor's draw also records where it stands
-(`DrawList::stand`), for the sun's map. The rays and the grown decor are not in
+(`DrawList::stand`), for the shadow map. The rays and the grown decor are not in
 it.
 
 The kernel stages the frame (`domain/scene/stage.rs`) and calls the renderer
@@ -526,9 +523,9 @@ whether it wants another turn. Its passes are modules by what they draw
 (`gpu/ray/`, `gpu/pass/`):
 
 ```text
-ahead       impostor atlases, fresh squares filled, the atmosphere's
+ahead       impostor atlases, fresh bricks filled, the atmosphere's
             tables, the air's volume
-cast        the screen's rays; decor grown; the sun's map; the
+cast        the screen's rays; decor grown; the shadow map; the
             occlusion prepass
 world pass  grown decor → rays at their depth → grown impostors
             → sky and stars at the far plane → listed actors,
@@ -579,8 +576,7 @@ Markers are one instanced quad over one texture packed shelf by shelf, the
 by who shows it, so equal designs share one place on the sheet
 (`domain/scene/marker/design.rs` `Design`). It is drawn on the GPU only when
 what it shows changes: its shapes as signed distances, its text as lines the
-platform drew, so shaping, bidirectional text and emoji are each platform's own
-([text by the line](./doc/minutes/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
+platform drew, so shaping, bidirectional text and emoji are each platform's own.
 
 ---
 
@@ -770,9 +766,10 @@ doorbell, with what the turn may spend and draw into
 (`ts/client/src/abi/input.ts` `submit_frame`); a turn rung for a command alone
 carries none and draws nothing. The quota's values are the kernel's
 (`sys/sched/tick.rs` `QUANTUM`), written into the **directory** the host reads
-at boot. In the tick, what moves the eye runs in `interaction`, what it then
-sees, demand and the scene, in `visible`, and the later phases hold what the
-quota leaves them (`turn.rs`).
+at boot. In the tick, what moves the eye runs in `interaction`, and after it
+what the pointer is over where the eye now stands, the edit it would make and
+its ghost; what the eye then sees, demand and the scene, in `visible`; and the
+later phases hold what the quota leaves them (`turn.rs`).
 
 Once a turn, before the layers observe, the kernel says what moved (`turn.rs`
 `changes_step`): the tiles whose answer moved, and the regions the object store
@@ -868,16 +865,13 @@ order, ties broken by the row's own id, so no row order decides a cell
 (`terrain/pipeline/feature.rs` `Rank`). A cell takes the look of what covers its
 center as seen from above, so a tunnel paints nothing. Polygons are filled
 even-odd, and a way paints each cell whose center it covers by the rule the
-client's ways cross a column by (`pxl-spec-core way.rs` `on_way`)
-([the ground is a Carto palette](./doc/minutes/20261005-the-ground-is-a-carto-palette.md)).
+client's ways cross a column by (`pxl-spec-core way.rs` `on_way`).
 
 Bridges and tunnels are solved from the tile and as much of its 1-ring as its
 structures reach, and never further, starting from Arnis's rules
-(`separation/solve.rs`;
-[as Arnis solves them](./doc/minutes/20261006-bridges-and-tunnels-as-arnis-solves-them.md)).
-A height leans on nothing further than a tile, so two neighbours solve the same
-height where they meet. A deck is a line in the terrain tile
-([ways off the ground](./doc/minutes/archive/20261001-ways-off-the-ground.md)).
+(`separation/solve.rs`). A height leans on nothing further than a tile, so two
+neighbors solve the same height where they meet. A deck is a line in the terrain
+tile.
 
 The elevation is sampled at the leaf's resolution, as heights in leaf cells at
 the tile's scale, with a **pad** of samples past each edge for the interpolant
@@ -928,14 +922,14 @@ runs. A change of a provider's release, the code or the coverage is a purge: the
 set deleted and every shard baked again.
 
 A set holds only what a client can. A terrain tile is refused as it is made
-where a square of it would not fill or build as a client's does
+where a brick of it would not fill or build as a client's does
 (`pxl-spec bake/tile/terrain.rs` `fill_fit`, `pxl-geo-bake terrain.rs`
-`stored`). That one pass also says what each square's tree of ways takes, and
-the set keeps it beside its tiles (`pyramid.rs` `FITS`). Whether those trees fit
-the client's pool wherever the eye is is a fact of the whole set, since a window
-lies across tiles. The commit answers it before anything moves, from what each
-tile kept, the stage's over the set's (`terrain/pool.rs` `fits`). So at the
-pool's cap no square of a published set is refused
+`encode_stored`). That one pass also says what each brick's tree of ways
+takes, and the set keeps it beside its tiles (`pyramid.rs` `FITS`). Whether
+those trees fit the client's pool wherever the eye is is a fact of the whole
+set, since a window lies across tiles. The commit answers it before anything
+moves, from what each tile kept, the stage's over the set's (`terrain/pool.rs`
+`fits`). So at the pool's cap no brick of a published set is refused
 ([What the view holds](#what-the-view-holds);
 `pxl-spec-core way/tree.rs` `POOL_FAMILIES`).
 
@@ -959,11 +953,9 @@ scheduler](#reads-and-the-one-scheduler)'s. Going back is serving an older
 version again.
 
 The bucket is private and read only by the Worker, which serves a tile under its
-kind, version and name
-([deployment hosting](./doc/minutes/20260816-deployment-hosting.md)). A version
-never changes meaning, so a tile is cached as immutable. In development a tile
-server bakes on demand by the same functions and answers as the bucket does
-([infra/README.md](./infra/README.md)).
+kind, version and name. A version never changes meaning, so a tile is cached as
+immutable. In development a tile server bakes on demand by the same functions
+and answers as the bucket does ([infra/README.md](./infra/README.md)).
 
 ## Catalogs and assets
 

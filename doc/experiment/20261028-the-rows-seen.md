@@ -14,7 +14,7 @@ what turning the prune off costs.
 Since at least 10-27 14:00, rows of coarse cells went empty at grazing
 angles. Looking straight down, none did. The user saw them early and let them
 pass for speed. When they were raised (the screenshot of 10-27 22:30), the
-sessions first read them as centred kept boxes and built a touch rule that
+sessions first read them as centered kept boxes and built a touch rule that
 only the ground set. It broke the symmetry between the ground and what is
 placed, and was reverted whole (`8ee81810d`).
 
@@ -95,7 +95,7 @@ frames past their interval; — where it was not kept):
 | eye beam | 875 998 | 901 460 (+3%) |
 | eye sample | 1 807 993 | 1 847 604 (+2%) |
 | eye miss | 721 159 | 1 941 742 (×2.7) |
-| eye picked / walked | 58.65% / 0.21% (38.0 each) | 58.45% / 0.53% (40.4 each) |
+| eye took / walked   | 58.65% / 0.21% (38.0 each) | 58.45% / 0.53% (40.4 each) |
 | eye boxes | 2 708.5 | 2 147.4 |
 | sun beam / sample / miss | 322 797 / 256 447 / 371 684 | 340 062 / 266 581 / 384 527 |
 
@@ -111,7 +111,7 @@ frames past their interval; — where it was not kept):
 With shadows on, the sun's spans are the same on both (beam 2.5–2.6, sample
 1.1, walk 0.4–0.5). ray_counts looking down: eye beam 573 933 against
 574 810, sample 1 342 178 against 1 299 616, miss 7 against 29, every ray
-picked; the few percent between them are the frames landing apart.
+took a sample; the few percent between them are the frames landing apart.
 
 ## What it says
 

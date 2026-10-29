@@ -12,7 +12,7 @@ Per cell: a beam ray at each of the grid's corners walks the shared descent and
 stops early; each cell takes its start from the beam rays about it; samples
 four a cell a side (`param::beam::SAMPLE`) walk on from that start; the raster
 hands each pixel the nearest block a sample stopped at that its own ray enters
-([the raster picks](../experiment/20261026-the-raster-picks.md)), tested again
+([the raster keeps](../experiment/20261026-the-raster-keeps.md)), tested again
 exactly (`cast::entry`); a pixel none is handed walks on from its cell's start
 itself. The proof below is that a walk from a cell's start, a sample's or a
 pixel's, ends where the walk from the root ends. A pixel that takes a sample's
@@ -105,7 +105,7 @@ as a block near the eye is.
   then no farther than where the other ray enters `Y`, and that is no farther
   than `e`.
 - **The window.** The corner whose ray passes through `Y` lies within `Y`'s
-  image, at most `√6 · s · (1 + γ)` from its centre as an angle, stretched by
+  image, at most `√6 · s · (1 + γ)` from its center as an angle, stretched by
   the screen's slope at that cell's corner farthest from the axis. A cell
   starts from the least of the beam rays within that many cells of its own, a
   square window over the corners each cell takes for itself
@@ -133,7 +133,7 @@ resume alike (pxl-shader observer.rs `resume`, `walked`).
 - **Beam rays:** one a corner of the grid, each a full walk.
 - **The window:** a minimum over the corners about each cell, once a cell.
 - **Samples:** four a cell a side, each a walk from its cell's start.
-- **Pixels:** the raster's pick, and a walk from the cell's start only for the
+- **Pixels:** the visible sample, and a walk from the cell's start only for the
   pixels it hands nothing.
 
 What the rays asked is kept between frames in the observed pyramid
@@ -146,9 +146,9 @@ order the threads ran in, so the image is a function of the world and the eye
 ## As built
 
 pxl-shader writes the passes once over the one a cast is for, the eye or the
-sun's map (observer.rs `Observer`): `beam_cs`, `cell_cs`, `sample_cs`,
+shadow map (observer.rs `Observer`): `beam_cs`, `cell_cs`, `sample_cs`,
 `sample_box_cs` and the raster's draw; the eye's pixels then take `cast_cs`,
-and `miss_list_cs` and `miss_cs` for the pixels it marked; the sun's map its
+and `miss_list_cs` and `miss_cs` for the pixels it marked; the shadow map its
 own (sun.rs).
 
 - **pxl-spec-core `cast`:** the beam's stop rule beside `Until::Opaque` and

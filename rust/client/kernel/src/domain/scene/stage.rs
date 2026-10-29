@@ -10,7 +10,7 @@ use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::renderer::{
-    render_frame, Cast, EarthTiles, FrameInput, GroundSquares, Landing,
+    render_frame, Cast, EarthTiles, FrameInput, GroundBricks, Landing,
 };
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
@@ -32,7 +32,7 @@ use crate::domain::scene::marker::sheet;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::profiler::report::{set_host_frame, set_rays};
+use crate::profiler::report::{set_host_frame, set_rays, GpuRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -96,10 +96,9 @@ pub fn stage_write() {
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
     s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
-    let [width, height] = crate::domain::view::frame::screen::size();
-    s[STAGE_AT::VIEWPORT] = width;
-    s[STAGE_AT::VIEWPORT + 1] = height;
-    s[STAGE_AT::FOV] = pxl_spec::space::camera::grid::fov().to_degrees();
+    s[STAGE_AT::VIEWPORT_WIDTH] = screen::size()[0];
+    // The markers are drawn at the size the kernel lays them out at.
+    s[STAGE_AT::PX_PER_UNIT] = screen::px_per_unit();
     // The camera grid's cell angle: the footprint a drawn cell covers per
     // unit of distance, square on.
     s[STAGE_AT::CELL] = grid::CELL;
@@ -115,7 +114,7 @@ pub fn stage_write() {
     };
     // The screen's occlusion takes the corners' too, which it reads softer.
     s[STAGE_AT::CORNER_AO] = if matches!(settings.ao, AoMode::corner | AoMode::screen) {
-        crate::domain::scene::param::AO_STRENGTH
+        param::AO_STRENGTH
     } else {
         0.0
     };
@@ -148,7 +147,7 @@ pub fn stage_render(pace: Pace) {
     let models = model::models();
     // Each decor variant at its draw group (pxl-spec-core scatter.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
-    for d in &pxl_spec::asset::decor::DECORS {
+    for d in &decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {
             let extent = catalog()
                 .map_or([0.0; 3], |c| c.extent(variant.model))
@@ -178,13 +177,13 @@ pub fn stage_render(pace: Pace) {
     let on = api::device_generation();
     let (window, layers) = earth_window(Earth::demand().floor(), on);
     let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
-    let o = crate::domain::view::observation::observation();
-    let eye = o.as_ref().and_then(crate::domain::scene::cast::eye);
-    let mut terrain_upload = crate::domain::scene::cast::upload;
+    let o = observation::observation();
+    let eye = o.as_ref().and_then(cast::eye);
+    let mut terrain_upload = cast::upload;
     let landed = core::cell::Cell::new(false);
     let mut terrain_landed = |b: u32, ticket: u32, landing: Landing<'_>| {
         landed.set(true);
-        crate::domain::layer::terrain::window::landed(b, ticket, landing);
+        window::on_landed(b, ticket, landing);
     };
     // What the scene animates changed, about the eye.
     let (moved, animated) = {
@@ -209,20 +208,17 @@ pub fn stage_render(pace: Pace) {
         ground: GroundBricks {
             upload: &mut terrain_upload,
             landed: &mut terrain_landed,
-            pool: crate::domain::scene::param::WAYS_POOL_FIRST_BYTES
-                / (4 * pxl_spec_core::way::tree::FAMILY_WORDS),
-            scratch: pxl_spec_core::way::tree::scratch_families(
-                crate::domain::scene::param::WAYS_SCRATCH_FIRST_BYTES
-                    / (4 * pxl_spec_core::window::HANDED),
-            ),
-            records: crate::domain::scene::param::WAYS_RECORDS_FIRST_BYTES,
+            pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::FAMILY_WORDS),
+            scratch: tree::scratch_families(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HANDED)),
+            records: param::WAYS_RECORDS_FIRST_BYTES,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
-            window: crate::domain::layer::terrain::window::table(),
-            shards: crate::domain::scene::cast::shards(),
-            overwrites: crate::domain::scene::cast::overwrites(),
-            decor: crate::domain::scene::decor::drawn::frame(),
+            window: window::table(),
+            shards: cast::shards(),
+            overwrites: cast::overwrites(),
+            decor: drawn::frame(),
+            actors,
             ray_counts: settings_store().ray_counts,
         }),
         text: text_raster,
@@ -236,7 +232,7 @@ pub fn stage_render(pace: Pace) {
     // What landed, folded once after all of it, before anything reads a
     // bound again (domain/layer/terrain/window.rs `refold`).
     if landed.get() {
-        crate::domain::layer::terrain::window::refold();
+        window::refold();
     }
     if out.redraw {
         request_world_tick();
@@ -269,7 +265,7 @@ pub fn stage_render(pace: Pace) {
         );
         return;
     };
-    DRAWN.set(Some(pxl_render::gpu::api::device_generation()));
+    DRAWN.set(Some(api::device_generation()));
     set_rays(RaySample::of(stat.rays));
     set_host_frame(
         out.kind,

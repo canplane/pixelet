@@ -15,6 +15,7 @@ use xpute_guest::mem::heap::{alloc, free};
 
 use crate::domain::query::model::registry::{blend, Models};
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::region;
 use crate::domain::view::lens::{cell_there, seen_step_s, Stepped};
 use crate::sys::sched::edge::wake_at;
 use xpute_guest::clock::now;
@@ -160,8 +161,8 @@ impl Actor {
             f64::from(m.reach(self.cur.map(|p| p.clip)) * stance.scale),
         );
         // What spans a camera cell at the actor's distance is observed.
-        let distance = v3::len(&v3::sub(&about, &frame.camera));
-        let cell_there = cell_there(distance);
+        let dist = v3::len(&v3::sub(&about, &frame.camera));
+        let cell_there = cell_there(dist);
         let seen = frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
         self.seen = seen;
         // A clip of some length plays, or one fades into the next.
@@ -175,7 +176,7 @@ impl Actor {
         // A clip alone, seen to move, steps a seen step at a time; a fade
         // runs a frame a step.
         if let Some(p) = playing.filter(|_| moves && self.previous.is_none()) {
-            let step = seen_step_s(distance, f64::from(m.speed(p.clip) * stance.scale));
+            let step = seen_step_s(dist, f64::from(m.speed(p.clip) * stance.scale));
             let wall = now();
             let since = if self.last > 0.0 {
                 (wall - self.last) / 1000.0
@@ -192,7 +193,7 @@ impl Actor {
             self.shown = time;
             (moves, asks) = (stepped, false);
             if stepped {
-                crate::domain::scene::region::animated();
+                region::animated();
             }
         } else {
             self.last = 0.0;
@@ -231,7 +232,7 @@ impl Actor {
         }
         self.posed = true;
         self.poses = self.poses.wrapping_add(1);
-        m.pose(self.current.map(|p| (p.clip, p.time)), &mut self.local);
+        m.pose(self.cur.map(|p| (p.clip, p.time)), &mut self.local);
         if let Some(prev) = self.previous {
             self.from.resize(joints, [0.0; 10]);
             m.pose(Some((prev.clip, prev.time)), &mut self.from);
@@ -275,15 +276,15 @@ impl Actor {
                 .max(self.previous.map_or(0.0, |p| m.reach(Some(p.clip))));
             let r = f64::from(reach * stance.scale);
             let at = stance.at;
-            let state = crate::domain::scene::region::digest(&[
+            let state = region::digest(&[
                 at[0],
                 at[1],
                 at[2],
-                f64::from(stance.rotation_z),
+                f64::from(stance.rot_z),
                 f64::from(stance.scale),
                 f64::from(self.poses),
             ]);
-            crate::domain::scene::region::drawn(self.palette_handle, at, r, true, state);
+            region::drawn(self.palette_handle, at, r, true, state);
         }
         let t = DrawList::translation(stance.at, eye);
         draw.draw_scaled(

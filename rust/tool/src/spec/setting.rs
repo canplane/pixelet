@@ -321,19 +321,19 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             })
             .collect::<Result<_, _>>()?;
         dev_arms.push(format!(
-            "            SettingKey::{} => matches!(value, {}),",
+            "            SettingKey::{} => matches!(val, {}),",
             s.key,
             dev.join(" | ")
         ));
     }
     if dev_arms.is_empty() {
         rs.extend([
-            "    pub fn dev_option(self, _value: u32) -> bool {".to_string(),
+            "    pub fn dev_option(self, _val: u32) -> bool {".to_string(),
             "        false".into(),
         ]);
     } else {
         rs.extend([
-            "    pub fn dev_option(self, value: u32) -> bool {".to_string(),
+            "    pub fn dev_option(self, val: u32) -> bool {".to_string(),
             "        match self {".into(),
         ]);
         rs.extend(dev_arms);

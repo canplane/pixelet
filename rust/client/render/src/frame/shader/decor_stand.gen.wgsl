@@ -45,8 +45,6 @@ struct type_35 {
 }
 
 var<private> global: vec3<u32>;
-@group(0) @binding(0)
-var<storage> global_1: type_12;
 @group(0) @binding(2)
 var<storage> global_1: type_28;
 @group(0) @binding(0)

@@ -51,7 +51,7 @@ pub mod LAYOUT {
 
 /// TEXT_LAYOUT's answer at its `at`: how many lines, then `LINE` apiece.
 pub mod LAYOUT_ANSWER {
-    pub const count: u32 = 0;
+    pub const cnt: u32 = 0;
     pub const WORDS: u32 = 1;
 }
 

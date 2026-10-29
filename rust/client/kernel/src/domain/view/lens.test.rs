@@ -14,7 +14,7 @@ fn stepped_as_written(at: &mut Option<f64>, t: f64, next: impl Fn(f64) -> f64) -
 }
 
 #[test]
-fn a_stepped_clock_steps_where_the_clocks_stepped_before() {
+fn stepped_clock_steps() {
     // A wall clock's readings, on and with a step back, and a next step
     // fixed, growing with the reading, and never.
     let readings = [
@@ -36,7 +36,7 @@ fn a_stepped_clock_steps_where_the_clocks_stepped_before() {
 }
 
 #[test]
-fn a_stepped_clock_says_when_it_stepped() {
+fn stepped_clock_reports() {
     let mut clock = Stepped::default();
     assert_eq!(clock.at(0.0, |a| a + 1.0), (0.0, 1.0, true));
     assert_eq!(clock.at(0.5, |a| a + 1.0), (0.0, 1.0, false));

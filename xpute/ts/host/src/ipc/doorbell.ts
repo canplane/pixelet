@@ -120,9 +120,9 @@ export class Doorbell implements PacketRoom {
     take: (result: i32, reply: BranchCursor | null) => T,
   ): T {
     if (this.trapped) throw new InvariantError(Errno.ENOTRECOVERABLE);
-    const tag = this.next_call = (this.next_call + 1) >>> 0;
+    const tag = (this.next_call = (this.next_call + 1) >>> 0);
     let out: { val: T } | null = null;
-    this.waiting.set(tag, (result, f) => out = { val: take(result, f) });
+    this.waiting.set(tag, (result, f) => (out = { val: take(result, f) }));
     try {
       this.submit(tag, cmd, pkt, frame.ACKREQ);
       while (out === null) {

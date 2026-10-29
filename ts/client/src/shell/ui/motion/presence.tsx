@@ -119,19 +119,25 @@ export function Swap({
   if (init !== null && init !== id) setInit(null);
   const { list, gone } = usePresent(ids, (k) => k);
   const leaving = list.some((p) => !p.present);
-  return list.filter((p) => !p.present || !leaving).map(({ key, present }) => (
-    <Motion
-      key={key}
-      from={key === init ? undefined : from}
-      to={present ? {} : exit}
-      transition={present ? transition : exitTransition}
-      onSettled={present ? undefined : () => {
-        nodes.current.delete(key);
-        gone(key);
-      }}
-      style={style}
-    >
-      {nodes.current.get(key)}
-    </Motion>
-  ));
+  return list
+    .filter((p) => !p.present || !leaving)
+    .map(({ key, present }) => (
+      <Motion
+        key={key}
+        from={key === init ? undefined : from}
+        to={present ? {} : exit}
+        transition={present ? transition : exitTransition}
+        onSettled={
+          present
+            ? undefined
+            : () => {
+                nodes.current.delete(key);
+                gone(key);
+              }
+        }
+        style={style}
+      >
+        {nodes.current.get(key)}
+      </Motion>
+    ));
 }

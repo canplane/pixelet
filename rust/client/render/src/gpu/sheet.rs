@@ -48,7 +48,7 @@ pub struct Halo {
 /// Device pixels a sheet draws per logical pixel: the symbols' masks', laid
 /// texel for texel (pxl-spec asset/symbol.spec.rs `SYMBOL_RATIO`). A display
 /// finer than it shows a marker drawn up from it.
-pub const SHEET_SCALE: f64 = pxl_spec::asset::symbol::SYMBOL_RATIO as f64;
+pub const SHEET_SCALE: f64 = symbol::SYMBOL_RATIO as f64;
 
 #[derive(Default)]
 pub struct Sketch {

@@ -11,6 +11,7 @@ use pxl_spec_core::{observed, raster, ray, tally};
 use xpute_guest::mem::off_of;
 
 use crate::gpu::api::{buffer_usage, bytes, word_bytes, Gpu, DONE};
+use xpute_guest::global::Global;
 
 const WORDS: usize = tally::WORDS as usize;
 
@@ -60,18 +61,21 @@ pub(super) struct Tally {
     mapping: Box<u32>,
     copied: bool,
     mapped: bool,
-    sums: [f64; RAY_SUMS],
 }
+
+/// The sums since boot (`Tally::sums`): beside the tally, so a lost device's
+/// next cast sums on.
+static SUMS: Global<[f64; RAY_SUMS]> = Global::new();
 
 impl Tally {
     /// Its buffers, made with the cast's: a few words.
     pub(super) fn new(g: &Gpu) -> Tally {
         Tally {
-            counts: g.buffer(
+            counts: g.buf(
                 word_bytes(WORDS),
                 buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             ),
-            read: g.buffer(
+            read: g.buf(
                 word_bytes(WORDS),
                 buffer_usage::MAP_READ | buffer_usage::COPY_DST,
             ),
@@ -82,7 +86,6 @@ impl Tally {
             mapping: Box::new(DONE),
             copied: false,
             mapped: false,
-            sums: [0.0; RAY_SUMS],
         }
     }
 
@@ -100,12 +103,12 @@ impl Tally {
         }
         let mut head = [0u32; 1 + (tally::OBSERVERS * tally::WALKS) as usize];
         head[0] = u32::from(self.on);
-        g.write_buffer(seen, word_bytes(observed::TALLY_ON as usize), bytes(&head));
+        g.write_buf(seen, word_bytes(observed::TALLY_ON as usize), bytes(&head));
         if !self.on {
             return;
         }
         self.frame = frame;
-        g.write_buffer(self.counts, 0, bytes(&[0u32; WORDS]));
+        g.write_buf(self.counts, 0, bytes(&[0u32; WORDS]));
     }
 
     /// The counts gathered into the array and copied where none are out,
@@ -120,32 +123,27 @@ impl Tally {
                 continue;
             }
             // Each run where it was counted, into its lanes.
-            for (buffer, word, lane, words) in [
+            for (buf, word, lane, words) in [
                 (
                     from.seen,
-                    tally::walk_at(o, tally::BEAM),
+                    observed::tally_at(o, tally::BEAM),
                     tally::BEAM,
                     tally::WALKS,
                 ),
-                (
-                    from.args[k],
-                    ray::MISS_ARGS_TALLY,
-                    tally::PICKED,
-                    tally::RAYS,
-                ),
+                (from.args[k], ray::MISS_ARGS_TALLY, tally::TOOK, tally::RAYS),
                 (from.boxes[k], raster::ARGS_INSTANCES, tally::BOXES, 1),
             ] {
                 let to = word_bytes(tally::at(o, lane) as usize);
                 let size = word_bytes(words as usize);
-                g.copy_buffer(
+                g.copy_buf(
                     encoder,
-                    (buffer, word_bytes(word as usize)),
+                    (buf, word_bytes(word as usize)),
                     (self.counts, to),
                     size,
                 );
             }
         }
-        g.copy_buffer(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
+        g.copy_buf(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
         (self.copied, self.copied_frame) = (true, self.frame);
     }
 
@@ -154,7 +152,8 @@ impl Tally {
     /// copied them was submitted.
     pub(super) fn back(&mut self, g: &Gpu) {
         if self.mapped && *self.mapping & DONE != 0 {
-            let (l, f, s) = (&self.landed, self.copied_frame, &mut self.sums);
+            let (l, f) = (&self.landed, self.copied_frame);
+            let s = SUMS.get(|| [0.0; RAY_SUMS]);
             s[FRAMES] += 1.0;
             for o in 0..tally::OBSERVERS {
                 if !f.casts[o as usize] {
@@ -170,26 +169,19 @@ impl Tally {
             self.mapped = false;
         }
         if self.copied && *self.mapping & DONE != 0 {
-            let address = off_of(self.landed.as_ptr()) as u32;
-            g.map_read(
-                self.read,
-                0,
-                word_bytes(WORDS),
-                address,
-                &mut self.mapping,
-                1,
-            );
+            let addr = off_of(self.landed.as_ptr()) as u32;
+            g.map_read(self.read, 0, word_bytes(WORDS), addr, &mut self.mapping, 1);
             (self.copied, self.mapped) = (false, true);
         }
     }
 
     /// Its sums since boot (`RAY_SUMS`).
-    pub(super) fn sums(&self) -> [f64; RAY_SUMS] {
-        self.sums
+    pub(super) fn sums() -> [f64; RAY_SUMS] {
+        *SUMS.get(|| [0.0; RAY_SUMS])
     }
 
     /// The frame its copy was encoded in was dropped.
-    pub(super) fn dropped(&mut self) {
+    pub(super) fn on_dropped(&mut self) {
         self.copied = false;
     }
 }

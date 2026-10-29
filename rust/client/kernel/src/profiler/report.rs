@@ -14,9 +14,11 @@ use xpute_guest::sched::tick::TickReport;
 use crate::domain::layer::Base;
 use crate::door;
 use crate::profiler::frame::{
-    DeviceSample, FrameSample, GpuSample, HeapSample, RaySample, RingSample, TileSample,
+    DeviceSample, FrameSample, GpuSample, HeapSample, RaySample, RingSample, TileSample, GPU_SPANS,
 };
 use crate::profiler::record::{profiler_record_frame, profiler_record_gpu, profiler_recording};
+use crate::sys::boot;
+use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::request::stream_counts;
 use crate::turn;
@@ -138,7 +140,7 @@ pub fn profiler_frame(t: FrameTurn) {
     for (p, _) in TerrainTile::tile_cache().held() {
         tiles.by_zoom[p.zoom as usize] += 1.0;
     }
-    tiles.place = PlaceTile::residency().held().count() as f64;
+    tiles.place = PlaceTile::tile_cache().held().count() as f64;
     let counts = Stream::ALL.map(stream_counts);
     let record = FrameSample {
         // As the stage ended, before the record is taken.
@@ -150,7 +152,7 @@ pub fn profiler_frame(t: FrameTurn) {
         tick_ms: t.tick.total_ms,
         phases: t.tick.phase_ms,
         stage_ms: t.stage_ms,
-        effects: crate::turn::effect_times(),
+        effects: turn::effect_times(),
         kind: f64::from(host.kind as u8),
         gpu: host.gpu,
         device: host.device,

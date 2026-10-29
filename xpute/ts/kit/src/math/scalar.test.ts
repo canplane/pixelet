@@ -54,7 +54,7 @@ test("scalar computes what the record holds", async () => {
   });
 });
 
-Deno.test("the tolerance is the record's", async () => {
+test("the tolerance is the record's", async () => {
   const v = await Golden.load("golden/math/scalar.tsv");
   assertEquals(bits(EPS), bits(v.f64("eps")));
 });

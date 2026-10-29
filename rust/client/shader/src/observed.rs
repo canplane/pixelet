@@ -5,9 +5,9 @@
 //! what the query reads changed (`forget_cs`).
 
 use pxl_spec_core::answer::In;
-use pxl_spec_core::cast::Query;
-use pxl_spec_core::{observed, tally};
-use pxl_spec_core::world::At;
+use pxl_spec_core::cast::{self, Met, Query};
+use pxl_spec_core::observed;
+use pxl_spec_core::world::{self, Handed};
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
@@ -54,7 +54,7 @@ fn seen_store(w: &mut Seen, i: u32, v: u32) {
 /// `visits`, the nodes a walk of `observer`'s asked, added to its lane
 /// `lane` of the head where the walks count (pxl-spec-core
 /// `observed::TALLY_ON`, `tally`).
-pub(crate) fn tallied(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
+pub(crate) fn add_tally(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
     if seen_load(w, observed::TALLY_ON) != 0 {
         // SAFETY: as `seen_at`.
         unsafe {
@@ -63,7 +63,7 @@ pub(crate) fn tallied(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
                 { Scope::QueueFamily as u32 },
                 { Semantics::NONE.bits() },
             >(
-                w.index_mut(tally::walk_at(observer, lane) as usize),
+                w.index_mut(observed::tally_at(observer, lane) as usize),
                 visits,
             );
         }
@@ -116,15 +116,15 @@ pub(crate) struct Writ {
 /// it stopped on is asked off it (world.rs `World::faced`), none walked down
 /// again.
 pub(crate) struct Lined {
-    pub(crate) live: At,
-    pub(crate) stack: [At; cast::DEPTH],
+    pub(crate) live: Handed,
+    pub(crate) stack: [Handed; cast::DEPTH],
 }
 
 impl Lined {
     /// Before its walk, which leaves its own over it wherever it ends, so
     /// nothing of this is read.
     pub(crate) fn before() -> Lined {
-        let none = At::of_words([0; world::AT_WORDS as usize]);
+        let none = Handed::of_words([0; world::HANDED_WORDS as usize]);
         Lined {
             live: none,
             stack: [none; cast::DEPTH],
@@ -204,8 +204,8 @@ impl<L: Looks> Query for Writing<'_, L> {
                             free = observed::NONE;
                             break;
                         }
-                        let a = w + observed::W_AT;
-                        let at = At::of_words([
+                        let a = w + observed::W_HANDED;
+                        let at = Handed::of_words([
                             seen_at(self.seen, a),
                             seen_at(self.seen, a + 1),
                             seen_at(self.seen, a + 2),
@@ -213,14 +213,14 @@ impl<L: Looks> Query for Writing<'_, L> {
                             seen_at(self.seen, a + 4),
                         ]);
                         let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
-                        let block = [
-                            seen_at(self.seen, w + observed::W_BLOCK),
-                            seen_at(self.seen, w + observed::W_BLOCK + 1),
+                        let asset = [
+                            seen_at(self.seen, w + observed::W_ASSET),
+                            seen_at(self.seen, w + observed::W_ASSET + 1),
                         ];
                         if seen_load(self.seen, w) == held {
                             n.entry = first + k;
                             n.at = at;
-                            return In { kind, block };
+                            return In { kind, asset };
                         }
                         to = observed::NONE;
                         free = observed::NONE;
@@ -249,9 +249,9 @@ impl<L: Looks> Query for Writing<'_, L> {
         let answer = Query::node(&mut self.world, &mut n.at, zoom, c, asked, t0);
         let w = observed::entry_at(to);
         if to != observed::NONE
-            && (self.blocks
-                || answer.kind != pxl_spec_core::answer::Kind::Block
-                || !pxl_spec_core::answer::fills(answer.block[0]))
+            && (self.assets
+                || answer.kind != pxl_spec_core::answer::Kind::Cell
+                || pxl_spec_core::answer::transparent(answer.asset[0]))
             && key != observed::CLAIMED
             && seen_swap(self.seen, w, key, observed::CLAIMED) == key
         {
@@ -282,7 +282,7 @@ impl<L: Looks> Query for Writing<'_, L> {
 
 /// What the observed pyramid kept forgotten, a thread a slot, where what
 /// the world's query reads changed (pxl-spec-core `observed::FORGETS`):
-/// every slot's key, or the key of each slot over a square that moved
+/// every slot's key, or the key of each slot over a brick that moved
 /// (`observed::forgets`), over a box of what is placed or cut that changed
 /// (`observed::over_box`), or handed a slot of a family of what is placed
 /// that was written (`observed::reads_written`).

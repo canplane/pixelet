@@ -53,7 +53,7 @@ template <Range R> class BuddyMalloc {
     // A tree of fewer than four buckets has no split bit to keep, and one of
     // more than an exponent each, 0 through ADDR_BITS, a bitmap past what a
     // range can address.
-    static_assert(BUCKET_COUNT >= 4 && BUCKET_COUNT <= ADDRESS_BITS + 1, "a buddy tree's bucket count");
+    static_assert(BUCKET_CNT >= 4 && BUCKET_CNT <= ADDR_BITS + 1, "a buddy tree's bucket count");
 
     struct List {
         List *prev;

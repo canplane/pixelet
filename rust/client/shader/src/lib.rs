@@ -6,7 +6,7 @@
 //! casts for (observer.rs), a pass both observers take one entry
 //! (either.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
 //! observed pyramid (observed.rs), the world's depth from the sun (sun.rs),
-//! each handed square's ground (ground.rs) and ways (way.rs), and the decor
+//! each handed brick's ground (ground.rs) and ways (way.rs), and the decor
 //! the ground grows (decor.rs). An entry is named
 //! by `entry_point_name`, never by its module's path, so each keeps the
 //! name pxl-tool shader.rs `ENTRIES` reads.
@@ -29,11 +29,13 @@ mod sun;
 mod way;
 mod world;
 
-pub use beam::{beam_cs, cell_cs, origin_cs, sample_cs};
+pub use beam::{beam_cs, cell_cs, sample_cs};
 pub use cast::{cast_cs, miss_cs, miss_list_cs};
-pub use decor::{decor_args_cs, decor_count_cs, decor_cs, decor_mark_cs, decor_place_cs};
+pub use decor::{
+    decor_args_cs, decor_cnt_cs, decor_cs, decor_mark_cs, decor_place_cs, decor_stand_cs,
+};
 pub use eye::Eye;
-pub use ground::{bound_cs, heights_cs, joined_cs};
+pub use ground::{bound_cs, height_cs, joined_cs};
 pub use observed::forget_cs;
 pub use raster::{face_cs, sample_box_cs};
 pub use sun::{sun_cs, sun_mark_cs, sun_mark_drawn_cs, sun_miss_cs, sun_reach_cs, Moved};

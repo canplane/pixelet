@@ -10,11 +10,14 @@
 //!   cargo shader-wgsl --force    write them, made again whatever they name
 //!   cargo shader-wgsl --check    fail if one is not current
 //!
-//! A write makes nothing when every file already names the digest of what
-//! makes it as it is now (pxl-tool shader.rs `INPUT_ROOTS`), the record
-//! check_rules holds each to, so the container would write the same bytes.
-//! A file edited by hand under its digest is what `--force` is for; `--check`
-//! always makes them and compares.
+//! A write makes nothing when the stamp already names the digest of what
+//! makes the entries as it is now (pxl-tool shader.rs `inputs_digest`), the
+//! record check_rules holds them to, so the container would write the same bytes.
+//! A digest the machine has made before, from any checkout, export or
+//! worktree, is copied from what it made (`made_home`) with no container;
+//! one it has not is built in the one volume all of them share. A file
+//! edited by hand under its digest is what `--force` is for; `--check`
+//! always builds them and compares.
 //!
 //! Whether the browser's compiler takes what this writes is the web app's
 //! test (ts/app/web src/shader.test.ts, Tint through Dawn), which make
@@ -29,13 +32,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use pxl_tool::root;
-use pxl_tool::shader::{header, inputs_digest, made_from, stale, DIR, ENTRIES};
+use pxl_tool::shader::{header, inputs, inputs_digest, made_from, stale, DIR, ENTRIES, STAMP};
 
 /// The image rustup runs in, by its digest: its compiler builds SPIRV-Tools
 /// (rustc_codegen_spirv's `use-compiled-tools`), so a tag that moved could
 /// move the output.
-const IMAGE: &str =
-    "rust@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6";
+const IMAGE: &str = "rust@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6";
 /// The machine's one home for the build: the toolchain, the crates and the
 /// target, a Docker volume rather than any checkout's directory, so a
 /// checkout, an export or a worktree each compiles only what its sources
@@ -46,7 +48,8 @@ const HOME: &str = "pxl-shader";
 /// anew under the lock, so cargo, which judges a path crate by its files'
 /// times, never takes another run's build for this one's.
 const WORK: &str = "/cache/w";
-const BUILT: &str = "/cache/target/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
+const BUILT: &str =
+    "/cache/target/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
 /// How many sources' entries the machine keeps made, the most lately used.
 const KEPT: usize = 100;
 
@@ -65,6 +68,9 @@ fn made_home() -> Result<PathBuf, String> {
     Ok(caches.join("pixelet/shader"))
 }
 
+/// An entry, the file it is checked in as, and its module as checked in.
+type Module = (&'static str, &'static str, String);
+
 /// Each entry's module as it is checked in, under its header, and the digest
 /// of the sources it was made of. Taken from the machine's entries of the
 /// sources' digest where it has them; else, or always when `fresh`, built of
@@ -72,10 +78,7 @@ fn made_home() -> Result<PathBuf, String> {
 /// what is built is what the digest names, whatever the checkout does
 /// meanwhile. The toolchain comes from rust/client/shader/rust-toolchain.toml,
 /// which rustup's cargo installs on first use.
-fn generate(
-    root: &Path,
-    fresh: bool,
-) -> Result<(String, Vec<(&'static str, &'static str, String)>), String> {
+fn generate(root: &Path, fresh: bool) -> Result<(String, Vec<Module>), String> {
     let home = made_home()?;
     let mut digest = inputs_digest(root)?;
     if fresh || !home.join(&digest).join("done").is_file() {
@@ -189,19 +192,19 @@ fn run() -> Result<bool, String> {
     let root = root();
     let digest = inputs_digest(&root)?;
     if !check && !force && stale(&root, &digest).is_empty() {
-        println!("current: every entry names the sources' digest {digest}");
+        println!("current: the entries were made from the sources' digest {digest}");
         return Ok(true);
     }
-    let made = generate(&root, &digest)?;
-    let mut current = true;
-    for (_, file, text) in &made {
-        let target = root.join(DIR).join(file);
-        if check {
-            if std::fs::read_to_string(&target).ok().as_deref() == Some(text.as_str()) {
-                println!("current: {}", target.display());
-            } else {
-                let named = std::fs::read_to_string(&target)
-                    .is_ok_and(|text| made_from(&text) == Some(digest.as_str()));
+    let (built, made) = generate(&root, check || force)?;
+    let stamp = root.join(DIR).join(STAMP);
+    if check {
+        let named = made_from(&root).as_deref() == Some(built.as_str());
+        let mut cur = named;
+        for (_, file, text) in &made {
+            let target = root.join(DIR).join(file);
+            if std::fs::read_to_string(&target).ok().as_deref() != Some(text.as_str()) {
+                // Made from these sources by the stamp, yet not what they
+                // make: an entry edited by hand.
                 let mend = if named { " --force" } else { "" };
                 eprintln!(
                     "stale: {} is not what the source makes now; run `cargo shader-wgsl{mend}`",
@@ -209,14 +212,24 @@ fn run() -> Result<bool, String> {
                 );
                 cur = false;
             }
-        } else {
-            // Renamed into place: a run killed mid-write would leave a body cut
-            // short under a head that names the current digest, which a write
-            // then takes as made.
-            let part = target.with_extension("wgsl.part");
-            std::fs::write(&part, text)
-                .and_then(|()| std::fs::rename(&part, &target))
-                .map_err(|e| format!("{}: {e}", target.display()))?;
+        }
+        if !named {
+            eprintln!(
+                "stale: {} names other sources; run `cargo shader-wgsl`",
+                stamp.display()
+            );
+        }
+        return Ok(cur);
+    }
+    // The stamp is taken away first and put back last, each entry renamed
+    // into place between: a run cut short leaves no stamp, so the set reads
+    // as stale whatever the sources go back to. An entry already what it
+    // makes is left alone, so a build or a watcher that reads it is not woken.
+    let _ = std::fs::remove_file(&stamp);
+    for (_, file, text) in &made {
+        let target = root.join(DIR).join(file);
+        if std::fs::read_to_string(&target).ok().as_deref() != Some(text.as_str()) {
+            replace(&target, text)?;
             println!("wrote {} ({} bytes)", target.display(), text.len());
         }
     }

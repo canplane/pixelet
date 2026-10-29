@@ -6,7 +6,7 @@
 // where it is shown, its `section`: one of the settings sheet's, or
 // `profiler`, the profiler panel's own. The store reads the defaults from
 // here and the sheet renders rows from here, so adding a setting to the
-// sheet is one entry in SETTINGS plus its two strings in the locale catalog
+// sheet is one entry in SETTING plus its two strings in the locale catalog
 // under `settings.<section>.<key>`. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
@@ -241,7 +241,7 @@ pub enum SettingKey {
     ao = 10,
     /// The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
     /// cast once more from the sun as the eye's rays are, beams and samples on
-    /// the observed pyramid, the boxes they stop at drawn and a texel's pick
+    /// the observed pyramid, the boxes they stop at drawn and a texel's sample
     /// taken, the rest walked (pxl-shader sun.rs), recast only where what it
     /// reads moves; decor and the actors drawn into it depth only, and a 3x3
     /// compare per fragment; 16 MB of map.
@@ -259,9 +259,9 @@ pub enum SettingKey {
     camera_gizmo = 16,
     person = 17,
     pet = 18,
-    /// Each ray's pixel coloured by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl).
+    /// Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl).
     ray_steps = 19,
-    /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the raster's pick or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
+    /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
     ray_counts = 20,
     /// The hour the sky is drawn at; SKY_TIMES says each.
     sky_time = 21,
@@ -333,10 +333,13 @@ impl SettingKey {
 
     /// Written to the settings' kept slot and read from it; one schema.json
     /// marks `kept` false is held for the session alone.
-    pub fn kept(self) -> bool {
+    pub fn is_kept(self) -> bool {
         !matches!(
             self,
-            SettingKey::place | SettingKey::camera_mode | SettingKey::sky_time
+            SettingKey::place
+                | SettingKey::camera_mode
+                | SettingKey::orbit_obstacle
+                | SettingKey::sky_time
         )
     }
 
@@ -344,12 +347,15 @@ impl SettingKey {
     pub fn dev(self) -> bool {
         matches!(
             self,
-            SettingKey::surface_follow | SettingKey::ray_counts | SettingKey::sky_time
+            SettingKey::surface_follow
+                | SettingKey::orbit_obstacle
+                | SettingKey::ray_counts
+                | SettingKey::sky_time
         )
     }
 
     /// A choice's option a development build only offers.
-    pub fn dev_option(self, _value: u32) -> bool {
+    pub fn dev_option(self, _val: u32) -> bool {
         false
     }
 }
@@ -478,9 +484,9 @@ impl Settings {
                 Ok(n) => self.pet = n,
                 Err(_) => return false,
             },
-            SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
-            SettingKey::ray_counts if value <= 1 => self.ray_counts = value == 1,
-            SettingKey::sky_time => match SkyTime::of(value) {
+            SettingKey::ray_steps if val <= 1 => self.ray_steps = val == 1,
+            SettingKey::ray_counts if val <= 1 => self.ray_counts = val == 1,
+            SettingKey::sky_time => match SkyTime::of(val) {
                 Some(o) => self.sky_time = o,
                 None => return false,
             },

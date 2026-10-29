@@ -53,9 +53,10 @@ export function LocationStack() {
           onPress: () => void kernel_tracking(press),
           isActive: following,
           disabled: status !== SensorStatus.Ready || !hasLocation,
-          face: status === SensorStatus.Loading
-            ? <Spinner size={chrome.glyph} color={LABEL.primary} />
-            : (
+          face:
+            status === SensorStatus.Loading ? (
+              <Spinner size={chrome.glyph} color={LABEL.primary} />
+            ) : (
               // One turn as following starts.
               <Motion
                 to={{ rotate: 0 }}

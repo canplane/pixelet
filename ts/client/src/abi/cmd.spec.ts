@@ -317,9 +317,9 @@ export const enum Command {
    * asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
    * reads it without the location. */
   INPUT_LOCATE = 0x110f,
-  /** A search result: the focus moved there, and the view asked with it at once, as the
+  /** A search result: the pivot moved there, and the view asked with it at once, as the
    * controls ask it where the camera stands; a view field absent keeps what the view has. */
-  INPUT_GO_TO = 0x1108,
+  INPUT_GOTO = 0x1108,
   /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
    * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
    * first of a run is taken to be where the camera already is, so nothing moves as
@@ -606,9 +606,13 @@ export function encode_world_boot(
   orient_permission: boolean,
   orient_silence_is_loss: boolean,
 ): PacketWriter {
-  return to.writer(5).bool(development).bool(geolocation).bool(orient).bool(
-    orient_permission,
-  ).bool(orient_silence_is_loss);
+  return to
+    .writer(5)
+    .bool(development)
+    .bool(geolocation)
+    .bool(orient)
+    .bool(orient_permission)
+    .bool(orient_silence_is_loss);
 }
 
 /** Command.WORLD_FRAME's packet, written in place into `to`.
@@ -821,12 +825,12 @@ export function encode_input_tracking(
   return to.writer(1).u32(tracking);
 }
 
-/** Command.INPUT_GO_TO's packet, written in place into `to`.
+/** Command.INPUT_GOTO's packet, written in place into `to`.
  *
- * @param dist The zoom, the eye's distance from the focus, clamped to the zoom's range; absent, a view far out comes in.
+ * @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
  * @param azimuth The heading about Z in radians, wrapped.
  * @param polar The angle down from vertical in radians, clamped. */
-export function encode_input_go_to(
+export function encode_input_goto(
   to: PacketRoom,
   lon: f64,
   lat: f64,

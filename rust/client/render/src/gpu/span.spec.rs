@@ -35,12 +35,12 @@ pub enum GpuSpanName {
     cell = 11,
     sample = 12,
     sraster = 13,
-    pixel = 14,
+    px = 14,
     miss = 15,
     sun_beam = 16,
     sun_sample = 17,
     sun_raster = 18,
-    sun_pick = 19,
+    sun_slot = 19,
     sun_walk = 20,
     grow = 21,
     shadow = 22,
@@ -61,19 +61,19 @@ impl GpuSpanName {
         GpuSpanName::fill,
         GpuSpanName::cast,
         GpuSpanName::beam,
-        GpuSpanName::cells,
+        GpuSpanName::cell,
         GpuSpanName::sample,
         GpuSpanName::sraster,
-        GpuSpanName::pixel,
+        GpuSpanName::px,
         GpuSpanName::miss,
         GpuSpanName::sun_beam,
         GpuSpanName::sun_sample,
         GpuSpanName::sun_raster,
-        GpuSpanName::sun_pick,
+        GpuSpanName::sun_slot,
         GpuSpanName::sun_walk,
         GpuSpanName::grow,
         GpuSpanName::shadow,
-        GpuSpanName::faces,
+        GpuSpanName::face,
     ];
 
     /// The member a number names, or none for a number the set does not
@@ -85,7 +85,7 @@ impl GpuSpanName {
     }
 }
 
-pub const FRAME_KINDS: usize = 9;
+pub const FRAME_KINDS: usize = 10;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FrameKind {
@@ -97,12 +97,13 @@ pub enum FrameKind {
     standing = 5,
     cast = 6,
     stood = 7,
-    pixels = 8,
+    px = 8,
+    region = 9,
 }
 
 impl FrameKind {
     /// Every member, in the JSON's own order.
-    pub const ALL: [FrameKind; 9] = [
+    pub const ALL: [FrameKind; 10] = [
         FrameKind::none,
         FrameKind::unready,
         FrameKind::held,
@@ -111,7 +112,8 @@ impl FrameKind {
         FrameKind::standing,
         FrameKind::cast,
         FrameKind::stood,
-        FrameKind::pixels,
+        FrameKind::px,
+        FrameKind::region,
     ];
 
     /// The member a number names, or none for a number the set does not

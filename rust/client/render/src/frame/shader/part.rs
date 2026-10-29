@@ -89,7 +89,7 @@ pub const SHADER_FORGET: u32 = 43;
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 44;
 /// The world's depth from the sun into its clipmap, generated with the cast
-/// from pxl-spec-core's `sun`: every slot taking the raster's pick, a
+/// from pxl-spec-core's `sun`: every slot taking the visible sample, a
 /// workgroup a tile, a compute entry; that depth laid into the map
 /// (sun_map.wgsl, gpu/shadow.rs); and the slots that took none walked
 /// apart (pxl-spec-core `sun::misses_at`), a compute entry of its own.
@@ -103,7 +103,7 @@ pub const SHADER_CAMERA_GRID: u32 = 49;
 /// their boxes written, a compute entry; and the boxes drawn, the nearest
 /// face a pixel's ray enters kept with its sample (raster.wgsl), which the
 /// cast's pixels read (`SHADER_CAST`).
-pub const SHADER_BOXES: u32 = 50;
+pub const SHADER_SAMPLE_BOX: u32 = 50;
 pub const SHADER_RASTER: u32 = 51;
 /// The pixels the cast's reading walk missed, walked again from their list
 /// (pxl-spec-core `observed::MARKS_AT`), a thread each: a compute entry.
@@ -125,7 +125,10 @@ pub const SHADER_GROWN_STAND: u32 = 57;
 pub const SHADER_SCREEN_FINISH: u32 = 58;
 /// The world's color gathered over frames (screen_resolve.wgsl).
 pub const SHADER_SCREEN_RESOLVE: u32 = 59;
-pub const SHADERS: u32 = 60;
+/// The region a frame draws again set back to nothing at the far plane
+/// (screen_clear.wgsl).
+pub const SHADER_SCREEN_CLEAR: u32 = 60;
+pub const SHADERS: u32 = 61;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -262,7 +265,16 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MARKER_REGION
     &["frame", "encode", "marker", "marker_region"],
     // SHADER_SCREEN_RAY
-    lit!["lattice", "ray", "eye", "paint", "debug_look", "screen_ray", "screen_lit"],
+    lit![
+        "lattice",
+        "ray",
+        "eye",
+        "paint",
+        "debug_look",
+        "px",
+        "screen_ray",
+        "screen_lit"
+    ],
     // SHADER_CAST
     &["cast.gen"],
     // SHADER_BOUND
@@ -334,7 +346,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_SAMPLE_BOX
     &["sample_box.gen"],
     // SHADER_RASTER
-    &["raster_box", "raster"],
+    &["raster_box", "px", "raster"],
     // SHADER_MISS_LIST
     &["miss_list.gen"],
     // SHADER_FACE
@@ -351,4 +363,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["frame", "encode", "finish", "screen_finish"],
     // SHADER_SCREEN_RESOLVE
     &["frame", "screen_resolve"],
+    // SHADER_SCREEN_CLEAR
+    &["screen_clear"],
 ];

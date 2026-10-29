@@ -22,7 +22,7 @@ use crate::gpu::upload::{Draws, Uploads};
 use pxl_spec_core::scatter;
 
 const _: () = assert!(
-    pxl_spec_core::scatter::GROUPS as usize <= DECOR_GROUPS,
+    scatter::GROUPS as usize <= DECOR_GROUPS,
     "a decor variant past the draw groups"
 );
 

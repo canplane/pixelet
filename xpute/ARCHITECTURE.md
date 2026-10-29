@@ -437,7 +437,7 @@ admitted are unfinished than its frame latency (`GpuHost::admit`), so taking a
 surface's texture never blocks. The answer reaches the guest as a value the
 program hands its renderer (`xpute-gpu/admit.rs` `Admit`); a page's GPU host
 admits every drawn frame (`every`). The GPU host's numbers and choices are the
-program's, said in its plan (`Plan`) and none defaulted, among them where a
+program's, said in its config (`Config`) and none defaulted, among them where a
 surface is configured (`ConfigureAt`). It opens the device too, as the program
 asks (`open`, `Ask`); on the web the browser's `requestAdapter` and
 `requestDevice` are that call already.

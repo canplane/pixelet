@@ -1,59 +1,65 @@
 ---
 name: write-documents
-description: How the documents people read are written and reviewed — README.md, ARCHITECTURE.md, xpute's two and the READMEs beside the code. Use before writing or reworking one, before committing a change to one, and when one is hard to read but it is not obvious why. Not for doc/, AGENTS.md or the skills.
+description: How the documents people read are written and reviewed — README.md, ARCHITECTURE.md, xpute's two and the READMEs beside the code. Use when writing or editing one. Not for doc/, AGENTS.md or the skills.
 ---
 
 # Writing the documents
 
-The documents this holds are read by people, someone who has not seen the
-code. They are not reference cards and not essays: each one explains a
-mechanism in an order that can be followed from the top.
+## Rules
 
-What agents mostly write for each other is not held to it: `doc/` — the
-backlog, the minutes and the experiments — `AGENTS.md` and the skills. Their
-reader already knows the tree, and the care this asks for costs more there than
-it buys.
+- **Lead with the core.** Put first the claim the rest follows from. The
+  masthead (tagline, date, play link, screenshot) stays on top.
+- **Earn a name before you use it.** Say the need first, then name what meets
+  it, in a main clause:
 
-What a document should be, with the faults each rule was written after, is
-[reference.md](./reference.md). Read it before writing a document or
-restructuring one, and when one reads badly for no reason you can name. For an
-edit that leaves the order as it is, the checks below are enough. How code is
-cited is the convention skill's.
+  > On the host side, something has to decide when to ring at all. That is the
+  > **strobe** (`sched/strobe.ts`): one turn on an animation frame, and only
+  > when something asked for a turn.
 
-## Before committing
+  Only names invented here need this (`strobe`, `doorbell`, `ring`, `handle`,
+  `band`, `run`, `XTP`). World terms (`arena`, `errno`, `slab`,
+  `golden records`) are used as they are.
+- **Order by dependency.** A catalog of module names goes at the end, a model's
+  vocabulary before the machine that uses it.
+- **One word, one meaning.** Watch for words used in two senses (`frame` as a
+  drawn frame and a frame of reference; `page` as a pyramid square and a
+  browser tab). Where the code uses one word for both, qualify it where it is
+  defined (`a frame of reference`).
+- **Diagrams** are hand-aligned ASCII under about 78 columns, built with a short
+  script; a diagram's branches name what comes out.
+- **Each document says what is its own.** A document over another layer
+  (pixelet over xpute) says what it inherits, links it, and moves on. It defers
+  only to a document its reader opens: a README sends a person to another README
+  or to ARCHITECTURE.md, never to AGENTS.md. ARCHITECTURE.md holds the
+  structure: the parts, the rule each follows, and what crosses between them.
+  How one module works goes in its doc comment or the README beside its code,
+  and ARCHITECTURE.md points there. A file assembled at build time reads
+  correctly on its own.
+- **Name what outlives the document.** A README describes the system;
+  hostnames, device models and version floors go in the masthead.
+- **A fact the code holds is generated or derived.** A value from `spec/` is
+  generated from it; a size, a count or an offset is stated by what it is
+  derived from; code is cited as a path, then a name.
 
-- **Nothing named is lost.** Every path, identifier and constant of the old
-  version is still there, or is gone on purpose. A rewrite loses `-errno` or
-  `16 bits` without anyone noticing, so diff the backticked tokens:
+## Checks
+
+- **Nothing named is lost.** Every path, identifier and constant in the old
+  version is still there, or was removed on purpose. Diff the backticked
+  tokens:
 
   ```sh
   f=README.md; diff <(git show HEAD:$f | grep -o '`[^`]*`' | sort -u) \
     <(grep -o '`[^`]*`' $f | sort -u)
   ```
 
-- **No coined term comes before its definition.** For each name the tree
-  invented, its first use is not earlier than where it is earned. A heading
-  naming its own subject, and an opening line calling the thing what the world
-  calls it, are exempt.
+- **No coined term is used before it is defined.** A heading that names its own
+  subject, and an opening line that uses the thing's common name, are exempt.
 - **Nothing points at what the document no longer holds.** After moving or
-  cutting a section, reread what describes the document: counts and summaries
-  ("in two parts"), a table row for a task that has grown, the sibling documents
-  where the same word stands, a forward reference the move created, and any
-  sentence whose antecedent was cut.
-- **Prose wraps at 80 columns.** No formatter touches the documents outside
-  the code trees (`Makefile`), so `README.md`, `ARCHITECTURE.md`, xpute's two
-  and `infra/README.md` are wrapped by hand: a paragraph breaks after the last
-  word that fits in 80 columns, mid-sentence, as `deno fmt` wraps a Markdown
-  file under `ts/` or `xpute/ts/`, which `make check` holds. A table, a figure
-  or a link that cannot break runs past it. Rewrap only the paragraphs an
-  edit touches.
-- **Read the whole document from the top**, on the page rather than in a diff.
-
-The last is not a formality, and the others do not replace it. Each check above
-finds the class of fault it was written for and no other. A repetition eight
-lines apart slips a similarity test when the sentences around it differ; a
-diagram one column out looks fine in a diff; a pronoun with nothing to point at
-parses cleanly; a count that has gone stale is still a number. Worst of all, a
-document that defines nothing passes the defined-before-use check perfectly,
-because there is nothing for a use to be early of. Reading is what finds those,
-and there is no substitute for reading all of it.
+  cutting a section, recheck counts and summaries ("in two parts"), table rows,
+  sibling documents that use the same word, forward references, and sentences
+  whose antecedent was cut.
+- **No minute is linked.** A document cites the code, another document or an
+  outside source, never a record under `doc/`.
+- **Prose wraps at 80 columns** in `README.md`, `ARCHITECTURE.md`, xpute's two
+  and `infra/README.md`, by hand: break after the last word that fits in 80
+  columns. Rewrap only the paragraphs you touched.

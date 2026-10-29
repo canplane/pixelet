@@ -51,19 +51,6 @@ export const movingFps = (f: { moving: f64; moving_ms: f64 }): f64 | null =>
 /** The window the header's rate is over: short, so a dip shows as it happens. */
 export const RECENT_MS = 1_000;
 
-/**
- * Frames a second while frames are drawn: the moving frames over their
- * intervals summed, none where none moved. A window's average (`fps`)
- * counts the still spans between moves as frames not drawn, and the median
- * interval holds at the refresh until half the frames miss it.
- */
-export const movingFps = (
-  f: { moving: f64; moving_ms: f64 },
-): f64 | null => (f.moving >= 1 && f.moving_ms > 0 ? (1000 * f.moving) / f.moving_ms : null);
-
-/** The window the header's rate is over: short, so a dip shows as it happens. */
-export const RECENT_MS = 1_000;
-
 export interface Gauge {
   /** The frames and tasks the rings hold, as RINGS counts them. */
   rec: {

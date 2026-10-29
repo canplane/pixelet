@@ -1,21 +1,23 @@
 // pxl-shader/beam.rs
 
-//! The beam rays (pxl-spec-core `beam`): the eye's line asked once ahead of
-//! them (`origin_cs`), each corner's walk and line (`beam_cs`), where each
-//! cell's rays start off them (`cell_cs`), and the
+//! The beam rays (pxl-spec-core `beam`): each corner's walk and line
+//! (`beam_cs`), where each cell's rays start off them (`cell_cs`), and the
 //! samples walked from those starts (`sample_cs`), each its pass's one
-//! entry, cast for the eye's camera grid or the sun's map as the head it is
+//! entry, cast for the eye's camera grid or the shadow map as the head it is
 //! handed names (either.rs `Either`); and the words a line, a node and a
 //! sample are held in, every observer's.
 
-use pxl_spec_core::cast::{self, Detail, Ends, Met, Query, Until};
-use pxl_spec_core::world::At;
-use pxl_spec_core::{beam, observed, tally, ways};
+use pxl_spec_core::cast::{self, Detail, End, Met, Query, Until};
+use pxl_spec_core::world::Handed;
+use pxl_spec_core::{beam, observed, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
-use crate::eye::{eye_origin, eye_ray, grid, Eye};
-use crate::observed::{seen_at, seen_put, tallied, Seen, Writ, Writing};
+use crate::either::Either;
+use crate::eye::Eye;
+use crate::observed::{seen_at, seen_put, Seen, Writ};
+use crate::observer::{self, Observer};
+use crate::sun::Moved;
 use crate::world::World;
 
 /// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
@@ -28,7 +30,7 @@ pub(crate) type Beams = spirv_std::RuntimeArray<u32>;
 
 /// A beam ray's line (pxl-spec-core `beam::LINE_WORDS`, at `base` of the
 /// words `W` hold: the eye's beam rays' buffer or the sun's list) as a walk
-/// resumes from one: what was handed each node of it (`world::At::words`),
+/// resumes from one: what was handed each node of it (`world::Handed::words`),
 /// its own at its zoom. A node's entry is its key's (`observed::entry_of`),
 /// so none is read off the line.
 pub(crate) struct Beamed<'a, W: ?Sized>(pub(crate) &'a W, pub(crate) u32);
@@ -54,9 +56,9 @@ impl<W: Words + ?Sized> Beamed<'_, W> {
     }
 
     /// What was handed the line's node of `zoom`.
-    fn at(self, zoom: u32) -> At {
-        let (w, k) = (self.0, self.1 + beam::LINE_AT + beam::LINE_STEP * zoom);
-        At::of_words([
+    fn at(self, zoom: u32) -> Handed {
+        let (w, k) = (self.0, self.1 + beam::LINE_HANDED + beam::LINE_STEP * zoom);
+        Handed::of_words([
             w.word(k),
             w.word(k + 1),
             w.word(k + 2),
@@ -141,27 +143,27 @@ pub(crate) fn node_put<W: Words + ?Sized>(w: &mut W, k: u32, n: &cast::Node) {
 
 /// A sample's stop `met` put at word `base` (pxl-spec-core
 /// `beam::SAMPLE_WORDS`), as the raster reads it (raster.rs): the node and
-/// block it stopped at, `beam::SAMPLE_NONE` where it went on to its reach,
+/// cell it stopped at, `beam::SAMPLE_NONE` where it went on to its reach,
 /// whether what it stopped at lacks, and the axis it entered across; what
 /// lies about that face is the eye's box's, asked once a box (raster.rs
-/// `faces_cs`).
+/// `face_cs`).
 pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A>) {
     let stop = &met.stop;
     node_put(w, base + beam::SAMPLE_NODE, &stop.node);
-    if met.ends == Ends::On {
+    if met.ends == End::On {
         w.set(
             base + beam::SAMPLE_NODE + beam::NODE_ZOOM,
             beam::SAMPLE_NONE,
         );
     }
-    w.set(base + beam::SAMPLE_LACKS, (met.ends == Ends::Lacks) as u32);
-    w.set(base + beam::SAMPLE_BLOCK, stop.block[0]);
-    w.set(base + beam::SAMPLE_BLOCK + 1, stop.block[1]);
+    w.set(base + beam::SAMPLE_LACKS, (met.ends == End::Lacks) as u32);
+    w.set(base + beam::SAMPLE_ASSET, stop.asset[0]);
+    w.set(base + beam::SAMPLE_ASSET + 1, stop.asset[1]);
     w.set(base + beam::SAMPLE_AXIS, stop.axis);
     w.set(base + beam::SAMPLE_VISITS, met.visits);
 }
 
-/// `ray`'s walk to the block that fills, resumed at `t` from the deepest
+/// `ray`'s walk to the cell that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
 /// root, from the root at it; through `q`, reading or writing, its line
 /// left where it ends to `keep`.
@@ -192,35 +194,8 @@ where
     cast::walk(q, origin, ray, detail, Until::Opaque, from, line, keep)
 }
 
-/// The eye's line, asked once ahead of its beam rays (eye.rs
-/// `origin`): one thread, the frame's shared descent paid once.
-#[spirv(compute(threads(1, 1, 1), entry_point_name = "origin_cs"))]
-#[allow(clippy::too_many_arguments)]
-pub fn origin_cs(
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
-) {
-    let window: &[IVec4] = window;
-    let world = World {
-        window,
-        ground,
-        looks,
-        shards,
-        overwrites,
-        eye,
-        pool: way::tree::Read(pool),
-    };
-    crate::eye::origin(eye, world, seen);
-}
-
 /// Each beam ray of its observer's lattice, a thread a corner: the camera
-/// grid's (pxl-spec-core `beam::Grid::corners`), or the sun's map's
+/// grid's (pxl-spec-core `beam::Grid::corners`), or the shadow map's
 /// (`sun::BEAM`), as its head names (observer.rs `beam`; either.rs `Either`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "beam_cs"))]
 #[allow(clippy::too_many_arguments)]
@@ -252,23 +227,7 @@ pub fn beam_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    let base = beam::Grid::line(g.corner_index([id.x, id.y]));
-    let met = cast::rooted(
-        &mut Writing {
-            world,
-            seen: &mut *seen,
-            tag,
-            blocks: true,
-        },
-        origin,
-        &ray,
-        detail,
-        Until::Beam,
-        &mut Leaving(beams, base),
-    );
-    tallied(seen, tally::EYE, tally::BEAM, met.visits);
-    seen_put(beams, base + beam::LINE_T, g.handed(met.stop.t).to_bits());
-    seen_put(beams, base + beam::LINE_VISITS, met.visits);
+    observer::beam(&o, world, seen, beams, [id.x, id.y]);
 }
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
@@ -286,7 +245,7 @@ impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
         while z <= n.zoom {
             let held = if z == n.zoom { live } else { stack[z as usize] };
             let a = held.at.words();
-            let k = base + beam::LINE_AT + beam::LINE_STEP * z;
+            let k = base + beam::LINE_HANDED + beam::LINE_STEP * z;
             w.set(k, a[0]);
             w.set(k + 1, a[1]);
             w.set(k + 2, a[2]);
@@ -300,7 +259,7 @@ impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
 /// Where each cell's rays start (pxl-spec-core `beam::CELL_WORDS`), a
 /// thread a cell of its observer's lattice (observer.rs `cell`): the
 /// screen's (`beam::Grid::span`), past the lines in the beam rays' buffer
-/// (`Grid::cell_at`), or the sun's map's (`sun::cell`).
+/// (`Grid::cell_at`), or the shadow map's (`sun::cell`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "cell_cs"))]
 pub fn cell_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -318,7 +277,7 @@ pub fn cell_cs(
 
 /// Each sample of its observer's lattice, a thread each (observer.rs
 /// `sample`): the screen's (pxl-spec-core `beam::Grid::samples`) or the
-/// sun's map's (`sun::SAMPLE`). The node and asset it stopped at left for
+/// shadow map's (`param::sun::SAMPLE`). The node and asset it stopped at left for
 /// the raster (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where
 /// it went on to its reach, and whether what it stopped at lacks. What lies
 /// about the face it entered is asked only of a sample that draws a box,
@@ -353,24 +312,5 @@ pub fn sample_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    let met = resumed(
-        &mut Writing {
-            world,
-            seen: &mut *seen,
-            tag,
-            blocks: true,
-        },
-        origin,
-        &ray,
-        detail,
-        t,
-        &line,
-        line.node(),
-    );
-    tallied(seen, tally::EYE, tally::SAMPLE, met.visits);
-    let met = Met {
-        visits: met.visits + line.visits(),
-        ..met
-    };
-    sample_put(beams, g.sample_at([id.x, id.y]), &met);
+    observer::sample(&o, world, seen, beams, [id.x, id.y]);
 }

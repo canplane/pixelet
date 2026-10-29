@@ -5,8 +5,8 @@ description: Bake terrain, place and division tiles from the geo DB into each ki
 
 # Baking tiles
 
-How a set is built and checked. What a tile holds and how the bake folds it is
-ARCHITECTURE.md's "Making the data"; getting a set into the bucket is
+How to build a tile set and check it. What a tile holds and how the bake folds
+it is in ARCHITECTURE.md, "Making the data"; uploading a set is
 [publish-bucket](../publish-bucket/SKILL.md).
 
 ## The bakes
@@ -20,9 +20,9 @@ make bake-star       # the Yale catalog's stars (make download-star first)
 make bake-geoid ARGS=egm2008-5.pgm   # EGM2008, into spec/spec/space/geoid.json
 ```
 
-The first four write a tile set, `out/<kind>/`; star and geoid are not tile sets
-and are not published. The binaries make runs are the Makefile's `TOOLS`, each
-rust/'s cargo alias of the same name.
+The first four write a tile set to `out/<kind>/`; star and geoid are not tile
+sets and are not published. Each binary these run is listed in the Makefile's
+`TOOLS` and has a cargo alias of the same name in `rust/`.
 
 ## Before starting
 
@@ -32,19 +32,17 @@ The bakes read the geo database directly:
 docker compose -f infra/local/docker-compose.yml up -d
 ```
 
-A missing or partial table is an ingest's job, not a bake's: the bake refuses
-and names the ingest to run
-([infra/geo/README.md](../../../infra/geo/README.md)). **Never `down -v` to
-"reset" the database**: the volume is several gigabytes of ingested data.
+A missing or partial table needs an ingest; the bake names it
+([infra/geo/README.md](../../../infra/geo/README.md)). **Never `down -v`.**
 
 ## Stages and flags
 
-A bake changes its set only through `out/<kind>.stage/`, a shard at a time:
-`leaf` (the named shards' leaves), then `fold`, then `commit`; `publish`, only
-when named, makes `out/<kind>.publish/` for an upload. Every stage can stop and
-run again, and `commit` refuses to run before `fold`. A change of source, code
-or coverage is a purge: `rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`,
-then bake every shard.
+A bake changes its set only through `out/<kind>.stage/`, one shard at a time:
+`leaf` (the named shards' leaves), then `fold`, then `commit`. `publish` runs
+only when named and makes `out/<kind>.publish/` for an upload. Any stage can be
+stopped and rerun, and `commit` refuses to run before `fold`. After a change of
+source, code or coverage, purge
+(`rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`) and bake every shard.
 
 ```bash
 make bake-terrain ARGS="--shard 01033210 --stage leaf"
@@ -60,13 +58,10 @@ make bake-terrain ARGS="--stage fold --stage commit"
 
 ## Verifying
 
-1. **Zero failures.** The leaf stage's line reports `failed=`; above zero, tiles
-   are missing, so repeat the stage.
+1. **Zero failures** in the leaf stage's `failed=`.
 2. **Terrain: spot-check against the dev tile server, at more than one zoom.**
-   It bakes a missed tile with the same functions, but packs at zstd's quick
-   level, so compare the decompressed packets, not the objects. Run
-   `make serve-tile` — not `dev`, which proxies every route to the live
-   deployment:
+   Compare the decompressed packets, not the files. Run `make serve-tile`, not
+   `dev`:
 
    ```bash
    v=$(curl -s localhost:3001/tile/source | jq -r .version.terrain)
@@ -74,24 +69,19 @@ make bake-terrain ARGS="--stage fold --stage commit"
    zstd -dcq ./out/terrain/<name> | shasum
    ```
 
-   A tile coarser than z13 makes the server bake what is under it first, so the
-   first ask takes seconds to a minute. A mismatch means the two paths have
-   drifted: investigate before publishing.
+   A tile coarser than z13 takes up to a minute on its first request. On a
+   mismatch, investigate before publishing.
 3. **Places:** the manifest's `zooms` reach the coarsest the client reads
    (pxl-spec `lattice.rs` `coarsest`), and a leaf decodes
-   (`pxl-spec bake/tile/place.rs` `decode`). The client draws places only with
-   the `place` setting on, which is off by default, so a world without them is
-   not a failed bake.
+   (`pxl-spec bake/tile/place.rs` `decode`). Places draw only with the `place`
+   setting on (off by default).
 4. **Divisions:** `failed=` is zero and a tile decodes
    (`pxl-spec bake/tile/division.rs` `decode`).
 
 ## Versions
 
-**Every bake is a new version name**, whatever made it, and a published version
-is never rewritten: going back is `./script/publish.py serve <kind> <version>`.
-Only a change to how the client reads a tile — its format in `pxl-spec bake/` —
-bumps the kind's `FORMAT` (`spec/spec/bake/published.json`).
+**Every bake gets a new version name.** Bump the kind's `FORMAT` (`spec/spec/bake/published.json`) only when how the client
+reads a tile changes (its format in `pxl-spec bake/`).
 
-The dev tile server keeps what it baked on demand under `out/oven/` across
-restarts. After a re-ingest or a bake change, run `rm -rf out/oven`, or it
-serves the old tiles.
+After a re-ingest or a bake change, `rm -rf out/oven` (the dev tile server's
+cache).

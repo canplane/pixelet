@@ -5,14 +5,14 @@
 //! to its registered height; what draws it turns it Z-up. A model poses its
 //! joints at a clip's time and writes their palette for whatever plays it.
 
-use pxl_render::asset::gltf::{MAX_SCENE_INDICES, MAX_SCENE_VERTICES};
+use pxl_render::asset::gltf::{MAX_SCENE_IDXS, MAX_SCENE_VERTICES};
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS};
 use xpute_guest::mem;
 use xpute_guest::mem::heap::alloc;
 
 // The most a parse lets one model draw fits a block's size.
 const _: () = assert!(
-    (MAX_SCENE_VERTICES as u64 * MODEL_VERTEX_WORDS as u64 + MAX_SCENE_INDICES as u64) * 4
+    (MAX_SCENE_VERTICES as u64 * MODEL_VERTEX_WORDS as u64 + MAX_SCENE_IDXS as u64) * 4
         <= u32::MAX as u64
 );
 
@@ -225,7 +225,7 @@ impl Models {
     ) -> Option<(u32, usize)> {
         let bytes = vertex_cnt
             .checked_mul(MODEL_VERTEX_WORDS)
-            .and_then(|words| words.checked_add(index_cnt))
+            .and_then(|words| words.checked_add(idx_cnt))
             .and_then(|words| words.checked_mul(4))?;
         let (at, bytes) = alloc(bytes)?;
         let j = joint_cnt as usize;

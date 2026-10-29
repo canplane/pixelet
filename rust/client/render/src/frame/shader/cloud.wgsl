@@ -87,7 +87,7 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let footprint = max(length(fwidth(cloud_lattice(v.world))), 1e-6);
   let alpha = sheet_opacity(sheet_of(v.sheet), v.world, t, footprint, clouds_reach()) * clouds_shown();
   // Where none of it stands, nothing more is read.
-  if (alpha <= DISPLAY_FLOOR) {
+  if (alpha <= HALF_STEP) {
     discard;
   }
   // The air before it and the lights on it, as every painter reads them
@@ -96,5 +96,5 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let seen = seen_from_eye(v.world);
   let up = up_at(v.world);
   let lit = CLOUD_ALBEDO * surface_light(-sign(dot(dir, up)) * up, up, seen.light);
-  return vec4f(finish(lit * seen.through + seen.scattered, v.clip.xy), alpha);
+  return vec4f(tone(lit * seen.through + seen.scattered), alpha);
 }

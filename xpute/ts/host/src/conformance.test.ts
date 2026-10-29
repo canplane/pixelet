@@ -76,15 +76,11 @@ function native(path: string): Opener {
   const regions: unknown[] = [];
   return {
     open() {
-      // Words of eight bytes, so the region is 8-aligned, as a guest asks.
-      const mem = new Float64Array(MEM_BYTES / 8).buffer;
-      const bytes = new Uint8Array(mem);
-      const directory_at = lib.symbols.xpute_conformance_boot(
-        bytes,
-        now.pointer,
-      );
+      const at = koffi.alloc("double", MEM_BYTES / 8);
+      regions.push(at);
+      const directory_at = boot(at, now);
       return {
-        mem,
+        mem: koffi.view(at, MEM_BYTES),
         directory_at,
         intr: (quota) => intr(at, quota),
       };

@@ -10,7 +10,13 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_upper_case_globals, non_snake_case, dead_code)]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::absolute_paths,
+    dead_code,
+    reason = "generated from the spec"
+)]
 
 /// The camera grid's lines.
 pub mod grid {
@@ -39,7 +45,7 @@ pub mod steps {
     pub const most: f32 = 1024.0;
     pub const none: u32 = 0x808080;
     /// Google's Turbo, dark blue at none through green and yellow to dark red at
-    /// `most`, at even stops a pixel's colour runs straight between.
+    /// `most`, at even stops a pixel's color runs straight between.
     pub const ramp: [u32; 17] = [
         0x23171b, 0x493eaf, 0x446aee, 0x3295f7, 0x26bde1, 0x29ddbb, 0x40f392, 0x66fd6d, 0x96fa50,
         0xc6eb3b, 0xeed02d, 0xffab24, 0xff801d, 0xee5415, 0xc92d0c, 0xa11202, 0x900d00,

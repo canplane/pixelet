@@ -108,20 +108,22 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
     input.requestFrame();
   };
 
-  const touches = (...phases: PointerPhase[]) => (e: GestureResponderEvent) => {
-    for (const t of e.nativeEvent.changedTouches) {
-      for (const phase of phases) {
-        input.pointer(
-          phase,
-          "touch",
-          Number(t.identifier),
-          0,
-          t.locationX,
-          t.locationY,
-        );
+  const touches =
+    (...phases: PointerPhase[]) =>
+    (e: GestureResponderEvent) => {
+      for (const t of e.nativeEvent.changedTouches) {
+        for (const phase of phases) {
+          input.pointer(
+            phase,
+            "touch",
+            Number(t.identifier),
+            0,
+            t.locationX,
+            t.locationY,
+          );
+        }
       }
-    }
-  };
+    };
 
   return (
     <SurfaceView

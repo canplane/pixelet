@@ -77,10 +77,7 @@ function useSaid(id: Report, said: Said | null, holdMs = 0): void {
 const error = (key: string): Said => ({ key, tone: ToastTone.Error });
 const loading = (key: string): Said => ({ key, tone: ToastTone.Loading });
 
-function location(
-  status: SensorStatus,
-  failure: Message | null,
-): Said | null {
+function location(status: SensorStatus, failure: Message | null): Said | null {
   if (failure !== null) return error(messageKey(failure));
   return status === SensorStatus.Loading
     ? loading("toast.location_checking")
@@ -134,8 +131,8 @@ export function ToastController() {
 
   const outside = useKernel((s) => s.pivot.outside);
   const shown = useKernel((s) => s.pivot.status === GroundStatus.Success);
-  const companionLoading = useKernel((s) =>
-    !s.companion.person_ready || !s.companion.pet_ready
+  const companionLoading = useKernel(
+    (s) => !s.companion.person_ready || !s.companion.pet_ready,
   );
   const [greeting, setGreeting] = useState(Greeting.Waiting);
   const ready = !outside && shown && !companionLoading;

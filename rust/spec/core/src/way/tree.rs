@@ -2,14 +2,14 @@
 
 //! gpu-portable: a brick's ways as cells, in a tree of the placed tree's
 //! shape (pxl-spec-core overwrite.rs), so a reader asks them by the one
-//! rule it asks what is placed by: from the square's own nodes along z down
+//! rule it asks what is placed by: from the brick's own nodes along z down
 //! to its cells, a node's eight slots a family, children only where they
 //! differ, each branch its eight folded (`overwrite::fold`), its leaves what
-//! the ways write at its cells (`way::lined`, read off the square's spans). A
-//! reader asks a square's ways only of a node the square's or under it, a
-//! wider one the windows' bound over its squares (`window::bound_over`), so
-//! the tree holds nothing over the square. Its families are taken from one
-//! pool every square's tree shares, off a free stack, and a square's root
+//! the ways write at its cells (`way::lined`, read off the brick's spans). A
+//! reader asks a brick's ways only of a node the brick's or under it, a
+//! wider one the windows' bound over its bricks (`window::bound_over`), so
+//! the tree holds nothing over the brick. Its families are taken from one
+//! pool every brick's tree shares, off a free stack, and a brick's root
 //! word names the family of its nodes along z (`root_word`,
 //! `window::ROOT_AT`), from which a reader steps down as the placed tree's
 //! does (`cursor`).
@@ -104,7 +104,10 @@ pub const fn root_word(family: u32, z0: i32) -> u32 {
 
 /// A root word's family's first slot and its first slot's Z.
 pub const fn root_slot(w: u32) -> (u32, i32) {
-    (overwrite::FAMILY * (w & (POOL_FAMILIES - 1)), w as i32 >> ROOT_ID_BITS)
+    (
+        overwrite::FAMILY * (w & (POOL_FAMILIES - 1)),
+        w as i32 >> ROOT_ID_BITS,
+    )
 }
 
 /// A root word's family id bits, `POOL_FAMILIES`'s.
@@ -178,8 +181,8 @@ pub const NONE: u32 = u32::MAX;
 /// `GroundBuffers::grow_scratch`), every brick's alike, so a frame's
 /// scratch is `window::HANDED` of them and each brick's length is a
 /// `HANDED`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
-/// `SQUARE_FAMILIES` it is `SCRATCH_WORDS`.
-pub const FREED_AT: u32 = crate::window::TREE_AT;
+/// `BRICK_FAMILIES` it is `SCRATCH_WORDS`.
+pub const FREED_AT: u32 = window::TREE_AT;
 pub const RECORD_WORDS: u32 = 1 + FAMILY_WORDS;
 
 /// A brick's scratch for a tree of `families` at most, in words.
@@ -424,7 +427,10 @@ pub fn lay(pool: &mut impl Pool, records: &[u32]) {
         let mut k = 0;
         while k < overwrite::FAMILY {
             pool.set_heap(first + k, crate::at(records, at + 1 + k));
-            pool.set_data(first + k, crate::at(records, at + 1 + overwrite::FAMILY + k));
+            pool.set_data(
+                first + k,
+                crate::at(records, at + 1 + overwrite::FAMILY + k),
+            );
             k += 1;
         }
         r += 1;

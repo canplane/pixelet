@@ -29,12 +29,14 @@ pub mod ground;
 pub mod lattice;
 pub mod observed;
 pub mod overwrite;
+pub mod param;
 pub mod raster;
 pub mod ray;
 pub mod scatter;
 pub mod sun;
+pub mod support;
 pub mod tally;
-pub mod ways;
+pub mod way;
 pub mod window;
 pub mod world;
 

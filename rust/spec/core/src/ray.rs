@@ -55,18 +55,18 @@ const _: () = assert!(MISS >> (KEPT_SHIFT + KEPT_BITS) != 0);
 /// marked pixel found the list full, else none (`MISS_ARGS_WHOLE`); and the
 /// count listed or not (`MISS_ARGS_CNT`); then what its pixels, or the
 /// sun's slots, counted where the `ray_counts` setting asks (`tally::RAYS`
-/// lanes from `tally::PICKED`, `MISS_ARGS_TALLY`). Each frame's start
+/// lanes from `tally::TOOK`, `MISS_ARGS_TALLY`). Each frame's start
 /// (`MISS_ARGS_EMPTY`) dispatches neither and counts none.
 pub const MISS_LANES: u32 = 64;
 pub const MISS_ACROSS: u32 = 64;
 pub const MISS_ARGS_LIST: u32 = 0;
 pub const MISS_ARGS_WHOLE: u32 = 3;
-pub const MISS_ARGS_COUNT: u32 = 6;
+pub const MISS_ARGS_CNT: u32 = 6;
 pub const MISS_ARGS_TALLY: u32 = 7;
-pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + crate::tally::RAYS) as usize;
-pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0, 0];
+pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + tally::RAYS) as usize;
+pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0];
 
-/// The first word of a stop at `block`, a block's word (`answer`): its
+/// The first word of a stop at `asset`, an asset's word (`answer`): its
 /// value and the share it keeps, the face and the zoom.
 pub const fn first_word(asset: u32, face: u32, zoom: Zoom) -> u32 {
     let kept = asset >> answer::KEPT_SHIFT & ((1 << KEPT_BITS) - 1);

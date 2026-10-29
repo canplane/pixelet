@@ -23,9 +23,8 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
 
 /** Typed for the table as it is, which may hold no setting with dev options. */
 function devOption(setting: Setting, option: string): boolean {
-  const options = "dev_options" in setting
-    ? setting.dev_options as readonly string[]
-    : [];
+  const options =
+    "dev_options" in setting ? (setting.dev_options as readonly string[]) : [];
   return options.includes(option);
 }
 

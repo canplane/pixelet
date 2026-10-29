@@ -180,15 +180,6 @@ pub mod cloud {
     }
 }
 
-/// What an 8-bit screen shows.
-pub mod display {
-    params! {
-        /// Below one 8-bit step, half of it: a star's light or a cloud
-        /// sheet's opacity this faint is not drawn.
-        FLOOR: f32 = 0.5 / 255.0;
-    }
-}
-
 /// What the eye's lens adds to the light that reaches it.
 pub mod lens {
     params! {
@@ -308,12 +299,6 @@ pub mod sky {
 
     pub mod moon {
         params! {
-            ANGULAR_RADIUS: f32 = 0.004522;
-            ALBEDO: f32 = 0.12;
-            /// The map's mean over the disc (printed by download_moon, and
-            /// param.test.rs holds the shipped map to it) scales it to
-            /// `ALBEDO`.
-            MAP_MEAN: f32 = 0.2459;
             /// The eye adapts to the Moon, so its seas show where the sky's
             /// exposure would drown the disc white.
             FACE_SHOWN: f32 = 0.6;
@@ -333,9 +318,9 @@ pub mod sky {
             SIGMA_PX: f32 = 0.85;
             SWELL_PX: f32 = 0.6;
             /// A faint wide halo shows which star is brighter once both cores
-            /// are white: from a first-magnitude star's flux, 10^(−0.4·1)
-            /// (gpu/star.rs `star_floats`).
-            HALO_FROM: f32 = 0.398;
+            /// are white: from a first-magnitude star on (star.wgsl
+            /// `HALO_FROM`).
+            HALO_MAG: f32 = 1.0;
             HALO_SIGMA: f32 = 4.0;
             HALO_GAIN: f32 = 0.06;
             /// The faintest light a star is drawn at, in linear light, a

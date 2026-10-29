@@ -48,22 +48,6 @@
       "tilt_lock": {
         "label": "Lock tilt",
         "description": "Fixes the tilt; turns left and right only."
-      },
-      "orbit_obstacle": {
-        "label": "Third-person collision",
-        "through": {
-          "label": "Pass through",
-          "description": "Ignores obstacles and passes through."
-        },
-        "stop": {
-          "label": "Stop",
-          "description": "Stops the camera control just short of the obstacle."
-        },
-        "climb": {
-          "label": "Climb over",
-          "description": "Tilts the camera up to climb over what blocks it. Stops where the way up is blocked too; zooming in there drops it under the roof."
-        },
-        "description": "Controls what happens when zooming, turning, or tilting would move the camera into terrain or an object."
       }
     },
     "lighting": {
@@ -85,7 +69,7 @@
         },
         "screen": {
           "label": "Everything (SSAO)",
-          "description": "The corners' shading, plus soft shading on everything on screen, decor and characters too. The most demanding option, as it processes the whole screen."
+          "description": "Adds soft shading to decor, characters and wider gaps on top of the corners for greater depth. This is the most demanding option because it processes the entire screen."
         }
       },
       "shadows": {
@@ -113,7 +97,7 @@
         "description": "Draws rings that mark the screen's center and directions, and colors the ground by how far its terrain has loaded. The legend shown with it explains the colors."
       },
       "camera_gizmo": {
-        "label": "Camera Gizmo",
+        "label": "Camera gizmo",
         "description": "Overlays a ring-shaped grid around the screen's center and colors cubes by how large they appear on screen against a grid cell. The legend shown with it explains the colors."
       },
       "ray_steps": {

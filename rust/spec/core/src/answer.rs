@@ -9,8 +9,11 @@
 use crate::cube::{object, sentinel};
 
 /// A cube filled whole, as a share counts it: a share is in 2⁻¹⁵ of its
-/// cube, floored at each fold, so eighths stay exact five folds deep.
-pub const FULL: u32 = 1 << 15;
+/// cube, floored at each fold, so eighths stay exact `FULL_FOLDS` folds deep.
+pub const FULL: u32 = 1 << (KEPT_BITS * FULL_FOLDS);
+
+/// The folds a share's eighths stay exact through.
+const FULL_FOLDS: u32 = 5;
 
 /// What a node is to a descent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -171,7 +174,7 @@ pub fn fills(val: u32) -> bool {
 /// A cell's kept share over its asset's value and `PLACED_ASSET`: the eighths of
 /// its cube it keeps of what fills it (`kept`), 0 for all eight, so a leaf's
 /// word, and every cell's whole, sets no bit of it.
-pub const KEPT_SHIFT: u32 = VALUE_BITS + 1;
+pub const KEPT_SHIFT: u32 = VAL_BITS + 1;
 pub const KEPT_BITS: u32 = EIGHTHS.trailing_zeros();
 /// A cube's eighths: its children, what a share is kept in.
 pub const EIGHTHS: u32 = 8;
@@ -241,29 +244,6 @@ pub const fn side(k: u32) -> f32 {
         7 => 0.956_465_6,
         _ => 1.0,
     }
-}
-
-/// Which faces of a cell kept short of its cube touch a neighbour filled at
-/// its height, a bit a face over `KEPT_SHIFT`'s: `2a` the low face on axis
-/// `a`, `2a + 1` the high. Where its box is drawn follows from them alone,
-/// so every reader draws and meets one shape (cast.rs `kept_bounds`): a
-/// box spans an axis whose two faces touch, sits flush against the one
-/// face that does, and is centered where none does, the axes it does not
-/// span sharing its volume alike. A producer sets them only for what it
-/// knows its neighbours by, the ground at the zoom its square holds; every
-/// other cell's are clear, a box centered on every axis.
-pub const TOUCH_SHIFT: u32 = KEPT_SHIFT + KEPT_BITS;
-pub const TOUCH_BITS: u32 = 6;
-const _: () = assert!(TOUCH_SHIFT + TOUCH_BITS <= 32);
-
-/// The faces `asset`'s cell touches (`TOUCH_SHIFT`).
-pub const fn touch(asset: u32) -> u32 {
-    asset >> TOUCH_SHIFT & ((1 << TOUCH_BITS) - 1)
-}
-
-/// `asset` touching the faces `t` (`TOUCH_SHIFT`).
-pub const fn touch_word(asset: u32, t: u32) -> u32 {
-    asset & !(((1 << TOUCH_BITS) - 1) << TOUCH_SHIFT) | (t & ((1 << TOUCH_BITS) - 1)) << TOUCH_SHIFT
 }
 
 /// Whether an asset hides its cube whole: it is not transparent and keeps

@@ -41,7 +41,7 @@ use pxl_spec::space::layer::tile::tile_at;
 /// What it reads, and where `make download-earth` keeps it.
 const SRC: &str = "infra/earth/source.json";
 const RAW: &str = "infra/earth/raw";
-const GLOBAL: (u32, u32) = pxl_spec::bake::tile::earth::PICTURE;
+const GLOBAL: (u32, u32) = earth::PICTURE;
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
 /// (Stöckli et al. 2005, table 1): 0, 25, 75 and 100% are 0, 179, 240 and 255.
@@ -141,7 +141,7 @@ impl<const N: usize> Plate<'_, N> {
     /// The mean over a box of longitude and latitude, in degrees, each pixel
     /// weighed by how much of it the box covers; a box narrower than a pixel is
     /// widened to one, so a coarse source is read as a tent, not as steps.
-    fn mean(&self, [lng0, lng1]: [f64; 2], [lat0, lat1]: [f64; 2]) -> [f32; N] {
+    fn mean(&self, [lon0, lon1]: [f64; 2], [lat0, lat1]: [f64; 2]) -> [f32; N] {
         let span = |a: f64, b: f64| {
             let (mid, half) = ((a + b) / 2.0, ((b - a).abs() / 2.0).max(0.5));
             (mid - half, mid + half)

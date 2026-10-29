@@ -28,7 +28,7 @@ function storage(
 
 const PKT = bytes_to_b64url(new Uint8Array([0x58, 0x54, 0x50, 0, 1, 2, 3]));
 
-Deno.test("migrate - the objects carry over with their format before them, and stay where they were", () => {
+test("migrate - the objects carry over with their format before them, and stay where they were", () => {
   const s = storage({ "pxl:object:v15": PKT });
   migrate(s);
   const slot = b64url_to_bytes(s.map.get(kept_key(kept.OBJECTS)!)!);

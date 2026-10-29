@@ -31,15 +31,19 @@ export const HINT_INK = alpha(color.white, 0.55);
  * A panel whose title opens and closes it; `note` follows the title, a reading
  * rather than a name, so it is not bold; `end` sits by the caret.
  */
-export function Accordion(
-  { name, title, note, end, children }: {
-    name: PanelName;
-    title: string;
-    note?: string;
-    end?: ReactNode;
-    children?: ReactNode;
-  },
-) {
+export function Accordion({
+  name,
+  title,
+  note,
+  end,
+  children,
+}: {
+  name: PanelName;
+  title: string;
+  note?: string;
+  end?: ReactNode;
+  children?: ReactNode;
+}) {
   const open = useOpenAccordion((s) => s.open === name);
   return (
     <View style={styles.panel}>

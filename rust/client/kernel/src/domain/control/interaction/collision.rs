@@ -85,7 +85,7 @@ fn room(tool: PlacementTool, corner: &Q3) -> Aabb {
 pub fn placement_reads(tool: PlacementTool, corner: &Q3) -> [[f64; 2]; 2] {
     let room = room(tool, corner);
     let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
-    let pad = crate::domain::query::decor::strike::reach() + width;
+    let pad = strike::reach() + width;
     [
         [room.min[0] - pad, room.min[1] - pad],
         [room.max[0] + pad, room.max[1] + pad],

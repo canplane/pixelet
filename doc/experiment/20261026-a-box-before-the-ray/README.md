@@ -131,7 +131,7 @@ same count widened to them.
 - **The count is the buried stacks.** Under the ground the slab runs to the
   world's floor, so every column stacks boxes down to it. Tops are 1 to 5 % of
   the boxes. A bottom clip at the lowest face of a node and its eight
-  neighbours (nine reads of the windows' levels, still no state) would drop
+  neighbors (nine reads of the windows' levels, still no state) would drop
   the buried ones. It is conservative only for an eye over the ground: an eye
   in a cave reaches buried nodes without crossing a box, so it would fall back
   to starting at the eye. That clip is not built or proved here.
@@ -189,9 +189,9 @@ Where they are looser than the cut, and why:
 2. Each of the two or three windows the cast reads at a distance boxes its
    own column, as a window's faces bound its own reads alone.
 3. Where the cast lacks, the entry's own ground at the coarsest zoom asked
-   held nowhere or a neighbour held nowhere, the column stands to the world's
+   held nowhere or a neighbor held nowhere, the column stands to the world's
    top, at every height.
-4. A neighbour read off another window leaves no floor known: the column
+4. A neighbor read off another window leaves no floor known: the column
    runs to the world's bottom (one box still, not a stack).
 5. What is placed is not in the levels: boxed off a descent of the objects'
    tree, so not wholly without a descent.

@@ -252,9 +252,9 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     const timer = setTimeout(() => {
       const snapshot = kernel_snapshot();
       const near = snapshot.pivot.lon_lat ?? undefined;
-      const home = snapshot.division.find((p) =>
-        p.subtype === DIVISION_SUBTYPE.COUNTRY
-      )?.name ?? null;
+      const home =
+        snapshot.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)
+          ?.name ?? null;
       fetchSearch(q, { near, signal: controller.signal })
         .then(
           (results) =>
@@ -274,8 +274,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
   function select(result: SearchResult) {
     kernel_command(
-      Command.INPUT_GO_TO,
-      encode_input_go_to(kernel_room, result.lon, result.lat, null, null, null),
+      Command.INPUT_GOTO,
+      encode_input_goto(kernel_room, result.lon, result.lat, null, null, null),
     );
     onClose();
   }

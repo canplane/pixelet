@@ -6,7 +6,7 @@
 //! where what it reads changed (`decor_mark_cs`, `Growth`), its record
 //! standing otherwise; then each frame each
 //! record taken where the rays ask the leaf cell's zoom or finer and sized
-//! for the screen, counted a draw region (`decor_count_cs`), the regions laid
+//! for the screen, counted a draw region (`decor_cnt_cs`), the regions laid
 //! out with their indirect args (`decor_args_cs`), and each record drawn
 //! into the decor's instances in the layout the decor and impostor shaders read
 //! (`decor_place_cs`). The CPU hands what only it knows and never reads
@@ -267,17 +267,17 @@ impl Grown {
         for &b in f.edits {
             hold(&mut self.held, &mut self.holding, b);
         }
-        cut_boxes(&self.cuts, grows.cuts, |b| {
-            hold(&mut self.held, &mut self.holding, b)
+        cut_boxes(&self.cuts, growth.cuts, |b| {
+            hold(&mut self.held, &mut self.holding, b);
         });
-        self.cuts = *grows.cuts;
+        self.cuts = *growth.cuts;
         let w = &mut self.window;
         w.begin();
         w.read(growth.window);
         let moved = !w.end();
         self.marked = self.holding;
-        // A square filled at a coarser window than the leaves' grows no decor.
-        let fresh = grows
+        // A brick filled at a coarser window than the leaves' grows no decor.
+        let fresh = growth
             .fresh
             .iter()
             .any(|f| f[window::FRESH_CELL as usize] == pxl_spec_core::LEAF_CELL);
@@ -546,12 +546,14 @@ impl Grown {
         self.on && self.counting
     }
 
-    /// What the sun's mark reads of the decor placed, while decor is on: its
-    /// frame's words, its regions and its instances (pxl-shader sun.rs
-    /// `sun_mark_drawn_cs`), and the slots the instances hold.
-    pub fn placed(&self) -> Option<([u32; 3], u32)> {
-        (self.on && self.instances != 0)
-            .then_some(([self.params, self.regions, self.instances], self.room))
+    /// The decor placed, while decor is on (`Instances`).
+    pub fn placed(&self) -> Option<Instances> {
+        (self.on && self.instances != 0).then_some(Instances {
+            drawing: self.drawing,
+            regions: self.regions,
+            instances: self.instances,
+            room: self.room,
+        })
     }
 
     /// What the draws read, while decor is on: the decor's instances, their slots,
@@ -616,7 +618,7 @@ pub(crate) fn hold(held: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
 }
 
 /// The boxes a preview's cuts changed, `was` against `is`: each cut that
-/// moved as it was and as it is (pxl-spec-core `scatter::cut_box`).
+/// moved as it was and as it is (pxl-spec-core `overwrite::cut_box`).
 pub(crate) fn cut_boxes(
     was: &[u32; eye::CUTS],
     is: &[u32; eye::CUTS],
@@ -626,7 +628,7 @@ pub(crate) fn cut_boxes(
         let (was, is) = (&was[k..k + eye::CUT_WORDS], &is[k..k + eye::CUT_WORDS]);
         if was != is {
             for c in [was, is].into_iter().filter(|c| c[3] != eye::NO_CUT) {
-                each(scatter::cut_box(
+                each(overwrite::cut_box(
                     c[3],
                     [c[0] as i32, c[1] as i32, c[2] as i32],
                 ));
