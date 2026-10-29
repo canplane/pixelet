@@ -2,6 +2,7 @@
 
 /** Runs spec/conformance/sys/file.tsv against the host's end of the system calls. */
 
+import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -61,10 +62,9 @@ async function run(g: Golden, scenario: string): Promise<void> {
       const b = kept.get(key);
       if (b === undefined || b === "ENOENT") throw new FileError(Errno.ENOENT);
       if (b === "later") {
-        return new Promise((
-          res,
-          rej,
-        ) => (waiting.set(key, res), failing.set(key, rej)));
+        return new Promise(
+          (res, rej) => (waiting.set(key, res), failing.set(key, rej)),
+        );
       }
       return hex(b);
     },
@@ -88,11 +88,15 @@ async function run(g: Golden, scenario: string): Promise<void> {
         kept.set(`${a[0]} ${a[1]}`, a[2]);
         break;
       case "openat":
-        turn.record(op.OPENAT, [
-          Number(a[0]),
-          Number(a[1]),
-          a[2] === "wr" ? flag.O_WRONLY : flag.O_RDONLY,
-        ], text.encode(path(a[3])));
+        turn.record(
+          op.OPENAT,
+          [
+            Number(a[0]),
+            Number(a[1]),
+            a[2] === "wr" ? flag.O_WRONLY : flag.O_RDONLY,
+          ],
+          text.encode(path(a[3])),
+        );
         break;
       case "read":
         turn.record(op.READ, [Number(a[0]), SCRATCH, Number(a[1])]);
@@ -155,7 +159,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
   }
 }
 
-Deno.test("the file service keeps the trace", async () => {
+test("the file service keeps the trace", async () => {
   const g = await Golden.load("conformance/sys/file.tsv");
   for (const scenario of g.s("scenarios").split(" ")) await run(g, scenario);
 });

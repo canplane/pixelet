@@ -56,7 +56,9 @@ export interface Popover {
 /** `x` and `y` on the page. */
 function tierAt(at: Popover, x: f64, y: f64): u32 | null {
   if (Math.abs(x - at.bar[0] - at.centerX) > POPOVER_WIDTH / 2) return null;
-  const top = at.bar[1] - POPOVER_LIFT_PX -
+  const top =
+    at.bar[1] -
+    POPOVER_LIFT_PX -
     (2 * POPOVER_PAD_Y + OBJECT_TIERS * POPOVER_PITCH - POPOVER_GAP_PX);
   const along = y - top - POPOVER_PAD_Y;
   if (along < 0) return null;
@@ -68,9 +70,10 @@ function tierAt(at: Popover, x: f64, y: f64): u32 | null {
 }
 
 /** Where the popover stands, and what a swatch's gesture does to it; `bar` is the dock's, whose place it is measured from. */
-export function usePopover(
-  bar: React.RefObject<View | null>,
-): { popover: Popover | null; gesture: Omit<SizeGesture, "press"> } {
+export function usePopover(bar: React.RefObject<View | null>): {
+  popover: Popover | null;
+  gesture: Omit<SizeGesture, "press">;
+} {
   const [popover, setPopover] = useState<Popover | null>(null);
   // A release can come before the swatch's place is measured.
   const pressing = useRef(false);
@@ -102,7 +105,7 @@ export function usePopover(
             bar: [bx, by],
             highlighted: null,
             open,
-          })
+          }),
         );
       });
       flashTimer.current = setTimeout(() => setPopover(null), FLASH_MS);
@@ -138,7 +141,9 @@ export function SizePopover({ popover }: { popover: Popover }) {
         { left: popover.centerX - POPOVER_WIDTH / 2 },
       ]}
     >
-      {popover.open ? <SizeMarks highlighted={popover.highlighted} /> : (
+      {popover.open ? (
+        <SizeMarks highlighted={popover.highlighted} />
+      ) : (
         <Backing
           fill={STRIP.ground}
           material={material.popover}
@@ -182,8 +187,8 @@ function SizeMarks({ highlighted }: { highlighted: u32 | null }) {
                   highlighted === tier
                     ? styles.markHighlighted
                     : objectTier === tier
-                    ? styles.markHeld
-                    : styles.markIdle,
+                      ? styles.markHeld
+                      : styles.markIdle,
                 ]}
               />
             </Motion>

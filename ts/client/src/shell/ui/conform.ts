@@ -3,7 +3,7 @@
 /**
  * Holds every platform file to the default beside it, which a bundler swaps
  * in by the file's suffix (pill.ios.tsx for pill.tsx on an iPhone) and so no
- * import ever names. Nothing imports this; `deno check src` reads it.
+ * import ever names. Nothing imports this; `tsc` reads it.
  */
 
 import type * as AboveKeyboard from "./above-keyboard.tsx";

@@ -45,9 +45,11 @@ function version_of(d: Declaration, kind: BaseLayer, name: string): string {
     for (const [key, shard] of Object.entries(d.shard)) {
       const own = shard.version?.[kind];
       if (
-        own !== undefined && name.startsWith(key) &&
+        own !== undefined &&
+        name.startsWith(key) &&
         (finest === null || key.length >= finest[0])
-      ) finest = [key.length, own];
+      )
+        finest = [key.length, own];
     }
   }
   return finest?.[1] ?? d.version[kind];
@@ -73,8 +75,10 @@ export function tile_object(
  * device whose own decode (ts/app/native/src/origin.ts) was skipped.
  */
 function packed(body: U8Array): boolean {
-  return (body[0] === 0x28 && body[1] === 0xb5) ||
-    (body[0] === 0x1f && body[1] === 0x8b);
+  return (
+    (body[0] === 0x28 && body[1] === 0xb5) ||
+    (body[0] === 0x1f && body[1] === 0x8b)
+  );
 }
 
 /** A bake's object by its number, under the source `declared`; none before
@@ -85,9 +89,8 @@ export async function read_object(
   number: bigint,
   signal: AbortSignal,
 ): Promise<U8Array> {
-  const name = declared === null
-    ? null
-    : tile_object(declared, BASE_LAYERS[bake], number);
+  const name =
+    declared === null ? null : tile_object(declared, BASE_LAYERS[bake], number);
   if (name === null) throw new FileError(Errno.ENOENT);
   const body = await get(tile_url(BASE_LAYERS[bake], name), name, signal);
   if (body.byteLength > 0 && packed(body)) {

@@ -2,6 +2,7 @@
 
 /** Holds the TypeScript side to golden/collection/deque.tsv, which every language's ring must match. */
 
+import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 
 import { Golden } from "@xpute/kit/golden.ts";
@@ -10,9 +11,9 @@ import { Deque } from "@xpute/kit/collection/deque.ts";
 const show = (x: number | undefined): string =>
   x === undefined ? "none" : `${x}`;
 
-Deno.test("deque holds what the record holds", async () => {
+test("deque holds what the record holds", async () => {
   const v = await Golden.load("golden/collection/deque.tsv");
-  const d = new Deque<number>(new Array(8).fill(undefined));
+  const d = new Deque<number>(Array.from({ length: 8 }));
   v.each("", (k) => {
     const step = Number(k);
     const r = v.u32(`${k}.r`);

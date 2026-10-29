@@ -23,18 +23,16 @@ interface PresenceProps {
   children: ReactNode;
 }
 
-export function Presence(
-  {
-    show,
-    from,
-    to = {},
-    exit,
-    transition,
-    exitTransition = transition,
-    style,
-    children,
-  }: PresenceProps,
-) {
+export function Presence({
+  show,
+  from,
+  to = {},
+  exit,
+  transition,
+  exitTransition = transition,
+  style,
+  children,
+}: PresenceProps) {
   const [held, setHeld] = useState(show);
   if (show && !held) setHeld(true);
   if (!show && !held) return null;
@@ -77,9 +75,9 @@ export function usePresent<T>(
   if (prev !== items) {
     const asked = new Set(items.map(keyOf));
     const held = new Set(leaving.map((l) => l.key));
-    const left = prev.map((item) => ({ item, key: keyOf(item) })).filter((l) =>
-      !asked.has(l.key) && !held.has(l.key)
-    );
+    const left = prev
+      .map((item) => ({ item, key: keyOf(item) }))
+      .filter((l) => !asked.has(l.key) && !held.has(l.key));
     current = [...leaving.filter((l) => !asked.has(l.key)), ...left];
     setLeaving(current);
     setPrev(items);
@@ -104,10 +102,15 @@ interface SwapProps {
   children: ReactNode;
 }
 
-export function Swap(
-  { id, from, exit, transition, exitTransition = transition, style, children }:
-    SwapProps,
-) {
+export function Swap({
+  id,
+  from,
+  exit,
+  transition,
+  exitTransition = transition,
+  style,
+  children,
+}: SwapProps) {
   const ids = useMemo(() => [id], [id]);
   // What each id last drew, so a leaving one keeps drawing it.
   const nodes = useRef(new Map<Key, ReactNode>());
@@ -116,19 +119,25 @@ export function Swap(
   if (init !== null && init !== id) setInit(null);
   const { list, gone } = usePresent(ids, (k) => k);
   const leaving = list.some((p) => !p.present);
-  return list.filter((p) => !p.present || !leaving).map(({ key, present }) => (
-    <Motion
-      key={key}
-      from={key === init ? undefined : from}
-      to={present ? {} : exit}
-      transition={present ? transition : exitTransition}
-      onSettled={present ? undefined : () => {
-        nodes.current.delete(key);
-        gone(key);
-      }}
-      style={style}
-    >
-      {nodes.current.get(key)}
-    </Motion>
-  ));
+  return list
+    .filter((p) => !p.present || !leaving)
+    .map(({ key, present }) => (
+      <Motion
+        key={key}
+        from={key === init ? undefined : from}
+        to={present ? {} : exit}
+        transition={present ? transition : exitTransition}
+        onSettled={
+          present
+            ? undefined
+            : () => {
+                nodes.current.delete(key);
+                gone(key);
+              }
+        }
+        style={style}
+      >
+        {nodes.current.get(key)}
+      </Motion>
+    ));
 }

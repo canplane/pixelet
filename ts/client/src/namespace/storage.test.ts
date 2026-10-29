@@ -1,5 +1,6 @@
 // @pxl/client/namespace/storage.test.ts
 
+import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/kit/codec/encoding.ts";
 
@@ -27,7 +28,7 @@ function storage(
 
 const PKT = bytes_to_b64url(new Uint8Array([0x58, 0x54, 0x50, 0, 1, 2, 3]));
 
-Deno.test("migrate - the objects carry over with their format before them, and stay where they were", () => {
+test("migrate - the objects carry over with their format before them, and stay where they were", () => {
   const s = storage({ "pxl:object:v15": PKT });
   migrate(s);
   const slot = b64url_to_bytes(s.map.get(kept_key(kept.OBJECTS)!)!);
@@ -36,7 +37,7 @@ Deno.test("migrate - the objects carry over with their format before them, and s
   assertEquals(s.map.get("pxl:object:v15"), PKT);
 });
 
-Deno.test("migrate - once: a slot that holds anything is not written", () => {
+test("migrate - once: a slot that holds anything is not written", () => {
   const s = storage({
     "pxl:object:v15": PKT,
     "pxl:kept:objects": "",
@@ -48,7 +49,7 @@ Deno.test("migrate - once: a slot that holds anything is not written", () => {
   assertEquals(s.map.get("pxl:kept:settings"), "AQIB");
 });
 
-Deno.test("migrate - the settings carry over as they are, for the kernel to read or refuse", () => {
+test("migrate - the settings carry over as they are, for the kernel to read or refuse", () => {
   const s = storage({ "pxl:settings": '{"ao":"screen"}' });
   migrate(s);
   assertEquals(s.map.get("pxl:kept:settings"), '{"ao":"screen"}');
@@ -57,12 +58,12 @@ Deno.test("migrate - the settings carry over as they are, for the kernel to read
   assertEquals(none.map.size, 0);
 });
 
-Deno.test("formatted - what is not base64url stays as it is", () => {
+test("formatted - what is not base64url stays as it is", () => {
   assertEquals(formatted(15, "{not base64}"), "{not base64}");
   assertEquals(formatted(15, ""), "");
 });
 
-Deno.test("set_aside - a refused file is copied, read back, then its slot emptied", () => {
+test("set_aside - a refused file is copied, read back, then its slot emptied", () => {
   const s = storage({
     "pxl:kept:objects": "AAAA",
     "pxl:kept:objects:aside:7": "older",
@@ -73,14 +74,14 @@ Deno.test("set_aside - a refused file is copied, read back, then its slot emptie
   assertEquals(s.map.get("pxl:kept:objects:aside:7-1"), "AAAA");
 });
 
-Deno.test("set_aside - storage that refuses the copy keeps the slot as it was", () => {
+test("set_aside - storage that refuses the copy keeps the slot as it was", () => {
   const s = storage({ "pxl:kept:objects": "AAAA" }, true);
   assertEquals(set_aside(s, kept.OBJECTS, 7), false);
   assertEquals(s.map.get("pxl:kept:objects"), "AAAA");
   assertEquals(set_aside(storage(), 99, 7), false);
 });
 
-Deno.test("follow_refused - each refused slot is set aside and emptied once", () => {
+test("follow_refused - each refused slot is set aside and emptied once", () => {
   const s = storage({ "pxl:kept:settings": '{"ao":"screen"}' });
   const told: number[] = [];
   follow_refused([kept.SETTINGS], (slot) => told.push(slot), s);

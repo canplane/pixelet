@@ -2,6 +2,7 @@
 
 /** Holds the TypeScript side to golden/collection/heap.tsv, which every language's heaps must match. */
 
+import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 
 import { Golden } from "@xpute/kit/golden.ts";
@@ -15,7 +16,7 @@ import {
 const show = (e: Element<number, number> | undefined): string =>
   e === undefined ? "none" : `${e.key}:${e.val}`;
 
-Deno.test("heaps pop what the record holds", async () => {
+test("heaps pop what the record holds", async () => {
   const v = await Golden.load("golden/collection/heap.tsv");
   const min = new MinHeap<number, number>([]);
   const max = new MaxHeap<number, number>([]);

@@ -66,9 +66,11 @@ export function toastShow(id: u32, spec: ToastSpec): void {
   const shown = entries.find((e) => e.id === id);
   // Said again as it is, as a toast kept past its cause is: no card to bring forward.
   if (
-    shown !== undefined && shown.message === spec.message &&
+    shown !== undefined &&
+    shown.message === spec.message &&
     shown.tone === spec.tone
-  ) return;
+  )
+    return;
   if (shown !== undefined) {
     set({ entries: entries.map((e) => (e.id === id ? { id, ...spec } : e)) });
     // Reshuffling mid-drag would move the held card out of front.

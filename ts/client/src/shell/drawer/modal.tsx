@@ -52,13 +52,15 @@ const DECOR_SECTIONS = sectioned(decorIds, decorSection);
 // A circle cut a block's texture away, so a rounded square.
 const ITEM_RADIUS = 12;
 
-function CubeItem(
-  { cube, cell, onPick }: {
-    cube: Cube;
-    cell: f64;
-    onPick: (cube: Cube) => void;
-  },
-) {
+function CubeItem({
+  cube,
+  cell,
+  onPick,
+}: {
+  cube: Cube;
+  cell: f64;
+  onPick: (cube: Cube) => void;
+}) {
   const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Object, cube });
 
@@ -79,9 +81,15 @@ function CubeItem(
   );
 }
 
-function DecorItem(
-  { kind, cell, onPick }: { kind: u8; cell: f64; onPick: (kind: u8) => void },
-) {
+function DecorItem({
+  kind,
+  cell,
+  onPick,
+}: {
+  kind: u8;
+  cell: f64;
+  onPick: (kind: u8) => void;
+}) {
   const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
@@ -189,7 +197,8 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                           cell={cell}
                           onPick={pickCube}
                         />
-                      ))}
+                      ))
+                    }
                   </Grid>
                 ))}
 
@@ -211,7 +220,8 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                           cell={cell}
                           onPick={pickDecor}
                         />
-                      ))}
+                      ))
+                    }
                   </Grid>
                 ))}
               {tab === DrawerTab.Marker && (

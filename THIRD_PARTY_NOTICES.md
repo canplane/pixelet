@@ -7,7 +7,7 @@ this repository and keeps its own record of what it ported:
 [xpute/THIRD_PARTY_NOTICES.md](./xpute/THIRD_PARTY_NOTICES.md).
 
 This file covers copied source only. Crates and npm packages that are merely
-depended on are not listed: `rust/Cargo.toml` and `ts/app/web/deno.jsonc` name
+depended on are not listed: `rust/Cargo.toml` and the `package.json` files name
 them, and each carries its own license where it is published.
 
 Data sources have their own obligations and their own place:

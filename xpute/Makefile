@@ -1,6 +1,6 @@
 # Makefile
 #
-# Routes only. Each tree is a root of its own: ts/ as Deno's; rust/ as
+# Routes only. Each tree is a root of its own: ts/ as pnpm's; rust/ as
 # Cargo's, its commands as aliases in rust/.cargo/config.toml; and cpp/ as
 # Make's (cpp/Makefile). script/ is the repository's own, run by path. Here
 # is a target a tree for each verb, the aggregates over them, and two
@@ -24,7 +24,7 @@
 
 check: check-ts check-cpp check-rust
 check-ts:
-	deno task --cwd ts check
+	pnpm --dir ts check
 check-cpp:
 	$(MAKE) -C cpp check
 check-rust:
@@ -40,28 +40,28 @@ build-rust:
 
 test: test-ts test-cpp test-rust test-conformance
 test-ts:
-	deno task --cwd ts test
+	pnpm --dir ts test
 test-cpp: build-cpp
 	$(MAKE) -C cpp test
 test-rust:
 	+cd rust && cargo test --all
 test-conformance: build
-	deno task --cwd ts test:conformance
+	pnpm --dir ts test:conformance
 
 # What needs a GPU: the web host in Chrome (ts/gpu/script/browser.ts), and the
 # native one on wgpu.
 test-gpu: test-gpu-web test-gpu-native
 test-gpu-web:
-	deno task --cwd ts test:gpu:web
+	pnpm --dir ts test:gpu:web
 test-gpu-native:
 	+cd rust && cargo test-gpu
 
 fmt: fmt-ts fmt-rust
 fmt-ts:
-	deno task --cwd ts fmt
+	pnpm --dir ts fmt
 fmt-rust:
 	cd rust && cargo fmt --all
 
 lint: lint-ts
 lint-ts:
-	deno task --cwd ts lint
+	pnpm --dir ts lint

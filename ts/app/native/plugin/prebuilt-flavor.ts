@@ -40,8 +40,8 @@ export default (config) =>
         throw new Error("prebuilt-flavor: the Podfile has no post_install");
       }
       const end = podfile.indexOf("\n", at) + 1;
-      config.modResults.contents = podfile.slice(0, end) + STEP.slice(1) +
-        podfile.slice(end);
+      config.modResults.contents =
+        podfile.slice(0, end) + STEP.slice(1) + podfile.slice(end);
     }
     return config;
   });

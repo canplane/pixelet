@@ -30,9 +30,10 @@ function line_ends(
   max_width: number,
   width: (s: string) => number,
 ): number[] {
-  const words = [...text.matchAll(/\S+/g)].map((
-    m,
-  ) => [m.index, m.index + m[0].length]);
+  const words = [...text.matchAll(/\S+/g)].map((m) => [
+    m.index,
+    m.index + m[0].length,
+  ]);
   if (max_width <= 0 || words.length === 0) return [text.length];
   const spans: [number, number][] = [];
   let [start, end] = words[0];

@@ -56,38 +56,50 @@ const useShown = (name: "world_gizmo" | "camera_gizmo" | "ray_steps") =>
  * In the spec's order, or `reversed` to list the one drawn over the rest
  * first; a line's look as a stroke, or `filled` a tint's as a patch.
  */
-function Rows<K extends string>(
-  { looks, labels, reversed, filled }: {
-    looks: Record<K, Look>;
-    labels: Record<K, string>;
-    reversed?: boolean;
-    filled?: boolean;
-  },
-) {
+function Rows<K extends string>({
+  looks,
+  labels,
+  reversed,
+  filled,
+}: {
+  looks: Record<K, Look>;
+  labels: Record<K, string>;
+  reversed?: boolean;
+  filled?: boolean;
+}) {
   const keys = Object.keys(looks) as K[];
   return (reversed ? keys.reverse() : keys).map((k) => (
-    <Row key={k} look={looks[k]} filled={filled}>{labels[k]}</Row>
+    <Row key={k} look={looks[k]} filled={filled}>
+      {labels[k]}
+    </Row>
   ));
 }
 
-function Row(
-  { look, filled, children }: {
-    look: Look;
-    filled?: boolean;
-    children: string;
-  },
-) {
+function Row({
+  look,
+  filled,
+  children,
+}: {
+  look: Look;
+  filled?: boolean;
+  children: string;
+}) {
   return (
     <View style={styles.row}>
       <View style={styles.chip}>
         <View
-          style={filled
-            ? [styles.patch, { backgroundColor: hex(look.rgb) }]
-            : [styles.stroke, {
-              borderColor: hex(look.rgb),
-              borderStyle: look.dashed ? "dashed" : "solid",
-              opacity: look.alpha ?? 1,
-            }]}
+          style={
+            filled
+              ? [styles.patch, { backgroundColor: hex(look.rgb) }]
+              : [
+                  styles.stroke,
+                  {
+                    borderColor: hex(look.rgb),
+                    borderStyle: look.dashed ? "dashed" : "solid",
+                    opacity: look.alpha ?? 1,
+                  },
+                ]
+          }
         />
       </View>
       <Text style={gauge.text}>{children}</Text>
@@ -151,7 +163,9 @@ export function RayStepsLegend() {
           ))}
         </View>
       </View>
-      <Row look={{ rgb: steps.none }} filled>none walked</Row>
+      <Row look={{ rgb: steps.none }} filled>
+        none walked
+      </Row>
     </Accordion>
   );
 }

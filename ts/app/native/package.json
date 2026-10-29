@@ -1,6 +1,5 @@
 {
   "name": "@pxl/native",
-  "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "index.ts",
@@ -8,7 +7,7 @@
     "node": "^22.18.0 || >=23.6.0"
   },
   "scripts": {
-    "start": "EXPO_NO_TYPESCRIPT_SETUP=1 deno run -A npm:expo@57.0.25 start"
+    "start": "EXPO_NO_TYPESCRIPT_SETUP=1 expo start"
   },
   "dependencies": {
     "@expo/ui": "~57.0.20",
@@ -26,5 +25,8 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-svg": "15.15.4",
     "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@pxl/build": "workspace:*"
   }
 }

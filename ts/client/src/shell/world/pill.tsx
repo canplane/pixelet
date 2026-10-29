@@ -50,24 +50,22 @@ export interface PillProps {
 
 const SHADOW_ROOM = 32;
 // `tint`, `place` and `interactive` only apply on an iPhone.
-export function Pill(
-  {
-    x,
-    width,
-    height,
-    span,
-    fill,
-    border,
-    shadow,
-    fade = 1,
-    fadeFrom,
-    fadeTransition = SNAP,
-    touch,
-    touchBelow = 0,
-    children,
-    onContentWidth,
-  }: PillProps,
-) {
+export function Pill({
+  x,
+  width,
+  height,
+  span,
+  fill,
+  border,
+  shadow,
+  fade = 1,
+  fadeFrom,
+  fadeTransition = SNAP,
+  touch,
+  touchBelow = 0,
+  children,
+  onContentWidth,
+}: PillProps) {
   const transition = SNAP;
   const veil = useVeil(fade, fadeTransition, fadeFrom);
   const r = height / 2;
@@ -101,10 +99,13 @@ export function Pill(
     <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
       <Motion
         {...veil.motion}
-        style={[styles.fade, {
-          width: span + 2 * SHADOW_ROOM,
-          height: height + 2 * SHADOW_ROOM,
-        }]}
+        style={[
+          styles.fade,
+          {
+            width: span + 2 * SHADOW_ROOM,
+            height: height + 2 * SHADOW_ROOM,
+          },
+        ]}
       >
         {
           // Never flattened: as `touch` came and went, Android's Fabric lost the
@@ -114,12 +115,15 @@ export function Pill(
           <View
             collapsable={false}
             {...touch}
-            style={[touch ? styles.reach : styles.box, {
-              left: -reach,
-              top: -reach,
-              width: width + 2 * reach,
-              height: height + 2 * reach + touchBelow,
-            }]}
+            style={[
+              touch ? styles.reach : styles.box,
+              {
+                left: -reach,
+                top: -reach,
+                width: width + 2 * reach,
+                height: height + 2 * reach + touchBelow,
+              },
+            ]}
           >
             <View
               collapsable={false}
@@ -147,10 +151,13 @@ export function Pill(
                       style={body}
                     >
                       <View
-                        style={[styles.fill, {
-                          borderRadius: r,
-                          boxShadow: shadow,
-                        }]}
+                        style={[
+                          styles.fill,
+                          {
+                            borderRadius: r,
+                            boxShadow: shadow,
+                          },
+                        ]}
                       />
                     </Motion>
                   </View>
@@ -158,11 +165,15 @@ export function Pill(
               )}
 
               <View
-                style={[edge, styles.circle, {
-                  width: height,
-                  height,
-                  backgroundColor: fill,
-                }]}
+                style={[
+                  edge,
+                  styles.circle,
+                  {
+                    width: height,
+                    height,
+                    backgroundColor: fill,
+                  },
+                ]}
               />
               <View style={[styles.clip, clipRight]}>
                 <Motion
@@ -184,8 +195,10 @@ export function Pill(
                 <Motion
                   to={{ translateX: -slide }}
                   transition={transition}
-                  onLayout={onContentWidth && ((e) =>
-                    onContentWidth(e.nativeEvent.layout.width))}
+                  onLayout={
+                    onContentWidth &&
+                    ((e) => onContentWidth(e.nativeEvent.layout.width))
+                  }
                   style={[styles.content, { height }]}
                 >
                   {children}

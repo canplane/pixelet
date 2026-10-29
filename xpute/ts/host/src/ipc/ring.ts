@@ -40,7 +40,10 @@ function is_pow2(n: u32): boolean {
 /** A packet's header plus the payload its second word names. */
 function pkt_bytes(u8: U8Array, at: u32): u32 {
   const word = at + WORD_SZ;
-  const payload = u8[word] | (u8[word + 1] << 8) | (u8[word + 2] << 16) |
+  const payload =
+    u8[word] |
+    (u8[word + 1] << 8) |
+    (u8[word + 2] << 16) |
     (u8[word + 3] << 24);
   return padded(HDR_SZ + (payload >>> 0));
 }
@@ -185,9 +188,11 @@ export class Ring {
     if (pkt_at === 0) return null;
     const off = pkt_at - this.slot_base;
     if (
-      off < 0 || off % this.slot_bytes !== 0 ||
+      off < 0 ||
+      off % this.slot_bytes !== 0 ||
       off + HDR_SZ > this.slots.byteLength
-    ) throw new MarshalError(Errno.EBADMSG);
+    )
+      throw new MarshalError(Errno.EBADMSG);
     const len = pkt_bytes(this.slots, off);
     if (len > this.slot_bytes) throw new MarshalError(Errno.EBADMSG);
     return this.slots.subarray(off, off + len);

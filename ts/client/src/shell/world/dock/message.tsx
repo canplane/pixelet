@@ -95,9 +95,13 @@ export function useMessage(mode: DockMode) {
   };
 }
 
-export function Message(
-  { message, width }: { message: ReturnType<typeof useMessage>; width: f64 },
-) {
+export function Message({
+  message,
+  width,
+}: {
+  message: ReturnType<typeof useMessage>;
+  width: f64;
+}) {
   const { t } = useTranslation();
   const {
     wording,
@@ -125,9 +129,11 @@ export function Message(
           value={messageText}
           onChangeText={changeText}
           onSubmit={sendMessage}
-          placeholder={wording
-            ? t("world.dock.pin_placeholder")
-            : t("world.dock.message_placeholder")}
+          placeholder={
+            wording
+              ? t("world.dock.pin_placeholder")
+              : t("world.dock.message_placeholder")
+          }
           placeholderTextColor={LABEL.placeholder}
           style={styles.messageInput}
         />
@@ -143,12 +149,10 @@ export function Message(
           onPress={sendMessage}
           disabled={isSending || !fits}
           accessibilityRole="button"
-          accessibilityLabel={wording
-            ? t("world.dock.pin_done")
-            : t("world.dock.send")}
-          style={(
-            { pressed },
-          ) => [
+          accessibilityLabel={
+            wording ? t("world.dock.pin_done") : t("world.dock.send")
+          }
+          style={({ pressed }) => [
             styles.send,
             wording && styles.confirm,
             pressed && styles.sendPressed,

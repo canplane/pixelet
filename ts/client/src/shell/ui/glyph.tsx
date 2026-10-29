@@ -11,9 +11,10 @@ import { Icon, type IconProps } from "@/shell/ui/icon.tsx";
  * applies it per stroke, so crossings showed darker. `struck` crosses it out,
  * so a state never rests on color alone.
  */
-export function Glyph(
-  { struck = false, ...icon }: IconProps & { struck?: boolean },
-) {
+export function Glyph({
+  struck = false,
+  ...icon
+}: IconProps & { struck?: boolean }) {
   const [color, opacity] = opaque(icon.color);
   const drawn = { ...icon, color };
   return (

@@ -1,0 +1,17 @@
+// The Worker, without the workspace's aliases, as wrangler's bundler resolves
+// it: an alias or a bare specifier it could not be bundled with fails here.
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "lib": ["esnext", "dom"],
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["."]
+}

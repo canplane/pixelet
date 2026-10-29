@@ -131,7 +131,7 @@ formatted = [path for path in present if re.search(r"\.(ts|tsx|js|json|jsonc|md)
 for tree in ["ts/"]:
     own = [path[len(tree):] for path in formatted if path.startswith(tree)]
     if own:
-        runs.append((f"fmt {tree}", ["deno", "fmt", "--check", *own], ROOT / tree))
+        runs.append((f"fmt {tree}", ["node_modules/.bin/prettier", "--check", *own], ROOT / tree))
 task("check-rules")
 if xpute:
     task("check-xpute")

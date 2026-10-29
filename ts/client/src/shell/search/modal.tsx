@@ -63,16 +63,19 @@ function formatDistance(m: f64): string {
 
 /** Where a result is comes from its coordinates, never a source's address text, which could name another city.
  * The country is its section's title, so the row leaves it out. */
-function ResultRow(
-  { result, lang, distance, onPress }: {
-    result: SearchResult;
-    lang: string;
-    distance: string | null;
-    onPress: () => void;
-  },
-) {
-  const within = result.context.filter((p) =>
-    p.subtype !== DIVISION_SUBTYPE.COUNTRY
+function ResultRow({
+  result,
+  lang,
+  distance,
+  onPress,
+}: {
+  result: SearchResult;
+  lang: string;
+  distance: string | null;
+  onPress: () => void;
+}) {
+  const within = result.context.filter(
+    (p) => p.subtype !== DIVISION_SUBTYPE.COUNTRY,
   );
   const where = within.length > 0 ? assembleLabel(within, lang) : "";
   const theme = result.kind === "place" ? placeTheme(result.category) : null;
@@ -81,24 +84,24 @@ function ResultRow(
     <Pressable onPress={onPress} accessibilityRole="button" style={styles.row}>
       {theme && (
         <View style={styles.badge}>
-          {symbol
-            ? (
-              <Svg
-                width={SYMBOL_SIZE}
-                height={SYMBOL_SIZE}
-                viewBox={`0 0 ${symbol.box[0]} ${symbol.box[1]}`}
-              >
-                {symbol.shapes.map(([d, evenOdd], i) => (
-                  <Path
-                    key={i}
-                    d={d}
-                    fill={theme.fill}
-                    fillRule={evenOdd ? "evenodd" : "nonzero"}
-                  />
-                ))}
-              </Svg>
-            )
-            : <View style={[styles.dot, { backgroundColor: theme.fill }]} />}
+          {symbol ? (
+            <Svg
+              width={SYMBOL_SIZE}
+              height={SYMBOL_SIZE}
+              viewBox={`0 0 ${symbol.box[0]} ${symbol.box[1]}`}
+            >
+              {symbol.shapes.map(([d, evenOdd], i) => (
+                <Path
+                  key={i}
+                  d={d}
+                  fill={theme.fill}
+                  fillRule={evenOdd ? "evenodd" : "nonzero"}
+                />
+              ))}
+            </Svg>
+          ) : (
+            <View style={[styles.dot, { backgroundColor: theme.fill }]} />
+          )}
         </View>
       )}
       <View style={styles.rowText}>
@@ -125,8 +128,9 @@ function countryOf(result: SearchResult): Name | null {
   if (result.kind === "division" && result.category === "country") {
     return { name: result.name, names: result.common };
   }
-  return result.context.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY) ??
-    null;
+  return (
+    result.context.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY) ?? null
+  );
 }
 
 interface CountrySection {
@@ -209,7 +213,9 @@ function MapCenter() {
       </SectionTitle>
       <View style={styles.center}>
         {place !== null && (
-          <Text numberOfLines={2} style={styles.name}>{place}</Text>
+          <Text numberOfLines={2} style={styles.name}>
+            {place}
+          </Text>
         )}
         <Text style={[styles.small, styles.numbers]}>{coordinates}</Text>
       </View>
@@ -246,16 +252,18 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     const timer = setTimeout(() => {
       const snapshot = kernel_snapshot();
       const near = snapshot.pivot.lon_lat ?? undefined;
-      const home = snapshot.division.find((p) =>
-        p.subtype === DIVISION_SUBTYPE.COUNTRY
-      )?.name ?? null;
+      const home =
+        snapshot.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)
+          ?.name ?? null;
       fetchSearch(q, { near, signal: controller.signal })
-        .then((results) =>
-          controller.signal.aborted || setFound({ query: q, results, home })
+        .then(
+          (results) =>
+            controller.signal.aborted || setFound({ query: q, results, home }),
         )
-        .catch(() =>
-          controller.signal.aborted ||
-          setFound({ query: q, results: [], home: null })
+        .catch(
+          () =>
+            controller.signal.aborted ||
+            setFound({ query: q, results: [], home: null }),
         );
     }, DEBOUNCE_MS);
     return () => {
@@ -455,9 +463,11 @@ const styles = StyleSheet.create({
 function placeTheme(
   category: string,
 ): { fill: string; symbol?: string | null } | null {
-  return (THEME as Record<string, { fill: string; symbol?: string | null }>)[
-    category
-  ] ?? null;
+  return (
+    (THEME as Record<string, { fill: string; symbol?: string | null }>)[
+      category
+    ] ?? null
+  );
 }
 
 const SYMBOL_SIZE = 18;

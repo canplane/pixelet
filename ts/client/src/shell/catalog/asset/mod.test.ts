@@ -1,10 +1,11 @@
 // @pxl/client/shell/catalog/asset/mod.test.ts
 
+import { test } from "vitest";
 import { assert } from "@std/assert";
 
 import { allCubes, cubeHex, cubeId } from "./mod.ts";
 
-Deno.test("ALL_CUBES - every cube is spelled once and has a color to swatch", () => {
+test("ALL_CUBES - every cube is spelled once and has a color to swatch", () => {
   const seen = new Set<string>();
   for (const cube of allCubes) {
     const id = cubeId(cube);

@@ -41,10 +41,8 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
           ]}
         >
           <RNHostView>
-            {
-              /* Absolute: in flow, a long list took its full height and its
-                            ScrollView could not scroll. */
-            }
+            {/* Absolute: in flow, a long list took its full height and its
+                            ScrollView could not scroll. */}
             <View accessibilityLabel={label} style={StyleSheet.absoluteFill}>
               {children}
             </View>

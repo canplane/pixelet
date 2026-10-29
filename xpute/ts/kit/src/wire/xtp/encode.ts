@@ -85,9 +85,11 @@ export class TreeEncoder {
         return buf.subarray(0, w.finished());
       } catch (e) {
         if (
-          !(e instanceof MarshalError) || e.errnum !== Errno.EOVERFLOW ||
+          !(e instanceof MarshalError) ||
+          e.errnum !== Errno.EOVERFLOW ||
           cap === max_cap
-        ) throw e;
+        )
+          throw e;
         cap = cap > max_cap / 2 ? max_cap : cap * 2;
       }
     }
@@ -240,13 +242,7 @@ export class PacketWriter {
   }
 
   /** A packet whose root is a branch of `cnt`, its children written next. */
-  begin(
-    bytes: U8Array,
-    view: DataView,
-    start: u32,
-    cap: u32,
-    cnt: u32,
-  ): this {
+  begin(bytes: U8Array, view: DataView, start: u32, cap: u32, cnt: u32): this {
     this.root(bytes, view, start, cap);
     const at = this.branch_open(cnt);
     this.root_type = SpecialType.BRANCH;
@@ -406,15 +402,11 @@ export class PacketWriter {
   /** An array of `type`, its elements as they lie in `a`, little-endian. */
   array(type: SequenceType, a: TypedArray | BigTypedArray | null): this {
     if (a === null) return this.entry(-1, type);
-    return this.seq(
-      type,
-      a.length,
-      a.byteLength,
-      (payload) =>
-        this.bytes.set(
-          new Uint8Array(a.buffer, a.byteOffset, a.byteLength),
-          payload,
-        ),
+    return this.seq(type, a.length, a.byteLength, (payload) =>
+      this.bytes.set(
+        new Uint8Array(a.buffer, a.byteOffset, a.byteLength),
+        payload,
+      ),
     );
   }
 
@@ -440,12 +432,13 @@ export class PacketWriter {
     }
     const base: u32 = ALIGN(this.lim, WORD_SZ);
     const payload: u32 = base + WORD_SZ;
-    const res = payload < this.cap
-      ? encoding.te.encodeInto(
-        s,
-        this.bytes.subarray(this.start + payload, this.start + this.cap),
-      )
-      : null;
+    const res =
+      payload < this.cap
+        ? encoding.te.encodeInto(
+            s,
+            this.bytes.subarray(this.start + payload, this.start + this.cap),
+          )
+        : null;
     const end: number = res === null ? 0 : payload + word_up(res.written + 1);
     if (res === null || res.read < s.length || end > this.cap) {
       return this.entry(this.spoil(Errno.EOVERFLOW), SequenceType.STR);

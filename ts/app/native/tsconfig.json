@@ -1,0 +1,9 @@
+// The device's own sources, as ../../tsconfig.json checks the rest, without
+// Vite's types: Metro bundles the app.
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "@webgpu/types"]
+  },
+  "include": ["src", "../../client/@types"]
+}

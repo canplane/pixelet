@@ -15,9 +15,13 @@ import { useKernel } from "@/shell/store/watch.ts";
  * releasing a drag over a control clicks it. A handheld's finger cannot do
  * that, so it is left alone.
  */
-export function BusyDim(
-  { style, children }: { style?: StyleProp<ViewStyle>; children: ReactNode },
-) {
+export function BusyDim({
+  style,
+  children,
+}: {
+  style?: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
   const busy = useKernel((s) => s.camera_busy) && !bracket.device.handheld;
   return (
     <Dim.Provider value={busy ? 0.4 : 1}>

@@ -59,10 +59,15 @@ function backdrop(fill: string, m: Material): ViewStyle {
   } as ViewStyle;
 }
 
-export function Backing(
-  { fill, material, fade = 1, fadeFrom, transition = SNAP, style, children }:
-    BackingProps,
-) {
+export function Backing({
+  fill,
+  material,
+  fade = 1,
+  fadeFrom,
+  transition = SNAP,
+  style,
+  children,
+}: BackingProps) {
   const veil = useVeil(fade, transition, fadeFrom);
   return (
     <Motion

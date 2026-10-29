@@ -18,10 +18,10 @@ function label(): string {
   const which = /iPad|iPhone|iPod/.test(ua)
     ? "ios"
     : /Android/.test(ua)
-    ? "android"
-    : /Macintosh/.test(ua)
-    ? "mac"
-    : "web";
+      ? "android"
+      : /Macintosh/.test(ua)
+        ? "mac"
+        : "web";
   return which;
 }
 
@@ -65,9 +65,8 @@ export function install(): void {
       send(level, args);
     };
   }
-  addEventListener(
-    "error",
-    (e) => send("uncaught", [e.message, `${e.filename}:${e.lineno}`]),
+  addEventListener("error", (e) =>
+    send("uncaught", [e.message, `${e.filename}:${e.lineno}`]),
   );
   addEventListener("unhandledrejection", (e) => send("unhandled", [e.reason]));
   console.info(`remote console open — ${navigator.userAgent}`);

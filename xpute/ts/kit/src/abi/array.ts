@@ -24,15 +24,23 @@ export type TypedArray<B extends ArrayBufferLike = ArrayBuffer> =
   | F32Array<B>
   | F64Array<B>;
 
-export type ElementOf<T extends TypedArray> = T extends U8Array ? u8
-  : T extends I8Array ? i8
-  : T extends U16Array ? u16
-  : T extends I16Array ? i16
-  : T extends U32Array ? u32
-  : T extends I32Array ? i32
-  : T extends F32Array ? f32
-  : T extends F64Array ? f64
-  : never;
+export type ElementOf<T extends TypedArray> = T extends U8Array
+  ? u8
+  : T extends I8Array
+    ? i8
+    : T extends U16Array
+      ? u16
+      : T extends I16Array
+        ? i16
+        : T extends U32Array
+          ? u32
+          : T extends I32Array
+            ? i32
+            : T extends F32Array
+              ? f32
+              : T extends F64Array
+                ? f64
+                : never;
 
 export type TypedArrayCtor<T extends TypedArray = TypedArray> = {
   new (length: number): T;
@@ -99,7 +107,7 @@ export const to_ta = <T extends TypedArray>(
   arr: T | number[],
   ctor: TypedArrayCtor<T>,
 ): T => {
-  return (arr instanceof ctor) ? (arr as T) : new ctor(arr);
+  return arr instanceof ctor ? (arr as T) : new ctor(arr);
 };
 
 export const copy_ab_view = <T extends TypedArray>(
@@ -128,20 +136,19 @@ export const to_bytes = (arr: TypedArray | BigTypedArray): Bytes =>
 export const copy_bytes = (buf: ArrayBuffer, off: u32, nbyte: u32): Bytes =>
   copy_ab_view(buf, off, nbyte, Uint8Array);
 
-export type U64Array<B extends ArrayBufferLike = ArrayBuffer> = BigUint64Array<
-  B
->;
-export type I64Array<B extends ArrayBufferLike = ArrayBuffer> = BigInt64Array<
-  B
->;
+export type U64Array<B extends ArrayBufferLike = ArrayBuffer> =
+  BigUint64Array<B>;
+export type I64Array<B extends ArrayBufferLike = ArrayBuffer> =
+  BigInt64Array<B>;
 
 export type BigTypedArray<B extends ArrayBufferLike = ArrayBuffer> =
-  | U64Array<B>
-  | I64Array<B>;
+  U64Array<B> | I64Array<B>;
 
-export type BigElementOf<T extends BigTypedArray> = T extends U64Array ? u64
-  : T extends I64Array ? i64
-  : never;
+export type BigElementOf<T extends BigTypedArray> = T extends U64Array
+  ? u64
+  : T extends I64Array
+    ? i64
+    : never;
 
 export type BigTypedArrayCtor<T extends BigTypedArray = BigTypedArray> = {
   new (length: number): T;
@@ -151,8 +158,7 @@ export type BigTypedArrayCtor<T extends BigTypedArray = BigTypedArray> = {
 };
 
 export const is_bta = (vals: unknown): vals is BigTypedArray =>
-  vals instanceof BigUint64Array ||
-  vals instanceof BigInt64Array;
+  vals instanceof BigUint64Array || vals instanceof BigInt64Array;
 
 export const is_bta_ab = <T extends BigTypedArray>(
   vals: T | null | undefined,
@@ -196,7 +202,7 @@ export const to_bta = <T extends BigTypedArray>(
   arr: T | bigint[],
   ctor: BigTypedArrayCtor<T>,
 ): T => {
-  return (arr instanceof ctor) ? (arr as T) : new ctor(arr);
+  return arr instanceof ctor ? (arr as T) : new ctor(arr);
 };
 
 export const copy_bta_view = <T extends BigTypedArray>(
@@ -222,17 +228,27 @@ export type AnyTypedArray<B extends ArrayBufferLike = ArrayBuffer> =
   | U64Array<B>
   | I64Array<B>;
 
-export type AnyElementOf<T extends AnyTypedArray> = T extends U8Array ? u8
-  : T extends I8Array ? i8
-  : T extends U16Array ? u16
-  : T extends I16Array ? i16
-  : T extends U32Array ? u32
-  : T extends I32Array ? i32
-  : T extends F32Array ? f32
-  : T extends F64Array ? f64
-  : T extends U64Array ? u64
-  : T extends I64Array ? i64
-  : never;
+export type AnyElementOf<T extends AnyTypedArray> = T extends U8Array
+  ? u8
+  : T extends I8Array
+    ? i8
+    : T extends U16Array
+      ? u16
+      : T extends I16Array
+        ? i16
+        : T extends U32Array
+          ? u32
+          : T extends I32Array
+            ? i32
+            : T extends F32Array
+              ? f32
+              : T extends F64Array
+                ? f64
+                : T extends U64Array
+                  ? u64
+                  : T extends I64Array
+                    ? i64
+                    : never;
 
 export interface AnyTypedArrayCtor<T extends AnyTypedArray> {
   new (length: number): T;

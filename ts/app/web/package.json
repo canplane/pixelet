@@ -1,0 +1,31 @@
+{
+  "name": "@pxl/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "./script/build-wasm.py",
+    "build:wasm:published": "./script/build-wasm.py --published",
+    "build:brand": "cd \"$(git rev-parse --show-toplevel)/rust\" && cargo run -q -p pxl-tool --bin render_brand",
+    "dev": "pnpm build:wasm && pnpm build:brand && vite",
+    "dev:oven": "pnpm build:wasm && pnpm build:brand && VITE_DEV_SOURCE=oven vite",
+    "dev:shelf": "pnpm build:wasm && pnpm build:brand && VITE_DEV_SOURCE=shelf vite",
+    "build": "pnpm build:wasm:published && pnpm build:brand && vite build",
+    "preview": "pnpm build && vite preview",
+    "preview:oven": "pnpm build:wasm:published && pnpm build:brand && VITE_DEV_SOURCE=oven vite build && VITE_DEV_SOURCE=oven vite preview",
+    "preview:shelf": "pnpm build:wasm:published && pnpm build:brand && VITE_DEV_SOURCE=shelf vite build && VITE_DEV_SOURCE=shelf vite preview"
+  },
+  "dependencies": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-web": "~0.21.2",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@pxl/build": "workspace:*",
+    "@pxl/client": "workspace:*",
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.0",
+    "webgpu": "0.6.2"
+  }
+}

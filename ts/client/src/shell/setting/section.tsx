@@ -23,9 +23,8 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
 
 /** Typed for the table as it is, which may hold no setting with dev options. */
 function devOption(setting: Setting, option: string): boolean {
-  const options = "dev_options" in setting
-    ? setting.dev_options as readonly string[]
-    : [];
+  const options =
+    "dev_options" in setting ? (setting.dev_options as readonly string[]) : [];
   return options.includes(option);
 }
 
@@ -42,7 +41,9 @@ export function SettingsSection(props: { section: SettingSection }) {
       icon={SECTION_ICONS[section]}
       caption={t(`settings.${section}.section_caption`)}
     >
-      {keys.map((key) => <SettingControl key={key} name={key} />)}
+      {keys.map((key) => (
+        <SettingControl key={key} name={key} />
+      ))}
     </Section>
   );
 }
@@ -73,24 +74,28 @@ function SettingControl(props: { name: SettingName }) {
       return (
         <SettingGroup
           label={t(`${base}.label`)}
-          description={i18n.exists(`${base}.description`)
-            ? t(`${base}.description`)
-            : undefined}
+          description={
+            i18n.exists(`${base}.description`)
+              ? t(`${base}.description`)
+              : undefined
+          }
           cost={cost}
           dev={dev}
         >
           {Object.entries(setting.options).map(([option, number], i) => {
             const devOnly = devOption(setting, option);
-            return (__IS_DEV__ || !devOnly) && (
-              <SettingChoiceRow
-                key={option}
-                label={t(`${base}.${option}.label`)}
-                description={t(`${base}.${option}.description`)}
-                selected={value === number}
-                onSelect={() => kernel_setting(key, number)}
-                cost={("costs" in setting ? setting.costs[i] : "") || cost}
-                dev={devOnly}
-              />
+            return (
+              (__IS_DEV__ || !devOnly) && (
+                <SettingChoiceRow
+                  key={option}
+                  label={t(`${base}.${option}.label`)}
+                  description={t(`${base}.${option}.description`)}
+                  selected={value === number}
+                  onSelect={() => kernel_setting(key, number)}
+                  cost={("costs" in setting ? setting.costs[i] : "") || cost}
+                  dev={devOnly}
+                />
+              )
             );
           })}
         </SettingGroup>

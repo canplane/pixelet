@@ -26,12 +26,13 @@ import {
  * one layer so overlaps are no darker. The box includes the rings, since
  * Android cuts a layer at its view's bounds.
  */
-function Halo(
-  { style, draw }: {
-    style: StyleProp<ViewStyle>;
-    draw: (ink?: string) => ReactNode;
-  },
-) {
+function Halo({
+  style,
+  draw,
+}: {
+  style: StyleProp<ViewStyle>;
+  draw: (ink?: string) => ReactNode;
+}) {
   return (
     <View style={[style, styles.reach]}>
       {haloRings.map((px) => (
@@ -44,9 +45,12 @@ function Halo(
           {around(px).map(([x, y], i) => (
             <View
               key={i}
-              style={[styles.copy, {
-                transform: [{ translateX: x }, { translateY: y }],
-              }]}
+              style={[
+                styles.copy,
+                {
+                  transform: [{ translateX: x }, { translateY: y }],
+                },
+              ]}
             >
               {draw(theme.black)}
             </View>
@@ -66,9 +70,10 @@ export function haloGap(gap: f64): f64 {
   return gap - 2 * halo.reach;
 }
 
-export function HaloIcon(
-  { struck, ...icon }: IconProps & { struck?: boolean },
-) {
+export function HaloIcon({
+  struck,
+  ...icon
+}: IconProps & { struck?: boolean }) {
   return (
     <Halo
       style={{
@@ -82,9 +87,13 @@ export function HaloIcon(
   );
 }
 
-export function HaloText(
-  { style, children }: { style: StyleProp<TextStyle>; children: ReactNode },
-) {
+export function HaloText({
+  style,
+  children,
+}: {
+  style: StyleProp<TextStyle>;
+  children: ReactNode;
+}) {
   return (
     <Halo
       style={styles.shrink}

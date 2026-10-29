@@ -9,7 +9,8 @@ import type { LongFrame, LongFrameSource } from "@pxl/client/bracket.tsx";
 const LONG_TASK_MS = 50;
 
 export function sources(): readonly LongFrameSource[] {
-  const has = typeof PerformanceObserver !== "undefined" &&
+  const has =
+    typeof PerformanceObserver !== "undefined" &&
     (PerformanceObserver.supportedEntryTypes?.includes("longtask") ?? false);
   return has ? ["longtask"] : [];
 }

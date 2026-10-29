@@ -77,16 +77,21 @@ const TINT: Record<Tint, TintLook> = {
 };
 
 /** The hint shows under the buttons on hover or hold, since a device has no tooltip. */
-function PanelButton(
-  { label, hint, tint = Tint.Plain, onPress, onHint, disabled }: {
-    label: string;
-    hint: string;
-    tint?: Tint;
-    onPress: () => void;
-    onHint: (hint: string | null) => void;
-    disabled?: boolean;
-  },
-) {
+function PanelButton({
+  label,
+  hint,
+  tint = Tint.Plain,
+  onPress,
+  onHint,
+  disabled,
+}: {
+  label: string;
+  hint: string;
+  tint?: Tint;
+  onPress: () => void;
+  onHint: (hint: string | null) => void;
+  disabled?: boolean;
+}) {
   const [hovered, setHovered] = useState(false);
   const t = TINT[tint];
   return (
@@ -107,12 +112,13 @@ function PanelButton(
       disabled={disabled}
       accessibilityRole="button"
       accessibilityHint={hint}
-      style={(
-        { pressed },
-      ) => [styles.button, {
-        borderColor: t.border,
-        backgroundColor: hovered || pressed ? t.lit : t.ground,
-      }]}
+      style={({ pressed }) => [
+        styles.button,
+        {
+          borderColor: t.border,
+          backgroundColor: hovered || pressed ? t.lit : t.ground,
+        },
+      ]}
     >
       {({ pressed }) => (
         <Text
@@ -133,7 +139,8 @@ const SAID_MS = 2500;
 
 /** A setting the panel holds (section `profiler`). */
 type Own = {
-  [K in SettingName]: (typeof SETTING)[K]["section"] extends "profiler" ? K
+  [K in SettingName]: (typeof SETTING)[K]["section"] extends "profiler"
+    ? K
     : never;
 }[SettingName];
 
@@ -209,11 +216,8 @@ export function ProfilerPanel() {
   // saw none move in it.
   const r = g?.recent ?? null;
   const rate = r === null ? null : movingFps(r);
-  const note = rate !== null
-    ? `${n1(rate)} fps`
-    : recording
-    ? "idle"
-    : undefined;
+  const note =
+    rate !== null ? `${n1(rate)} fps` : recording ? "idle" : undefined;
 
   return (
     <Accordion
@@ -248,8 +252,10 @@ export function ProfilerPanel() {
           label="Report"
           hint="copy the window's summary as text"
           onPress={() =>
-            void profilerReportCopy(profilerReportText(profilerReportRead()))
-              .then(setSaid)}
+            void profilerReportCopy(
+              profilerReportText(profilerReportRead()),
+            ).then(setSaid)
+          }
         />
         <PanelButton
           onHint={setHint}

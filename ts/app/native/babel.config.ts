@@ -12,7 +12,7 @@ import * as path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { enumAt, readEnums, stale as staleIn } from "@pxl/build/const-enum.ts";
-import { REPO, WORKSPACE } from "@pxl/build/import-map.ts";
+import { REPO, WORKSPACE } from "@pxl/build/paths.ts";
 
 /**
  * The const enums of the shell, the xpute packages and this app, read by the
@@ -56,10 +56,10 @@ const inlineEnums = ({ types: t }) => ({
       const members = !binding
         ? state.own.get(object.name)
         : state.declared.has(binding.identifier)
-        ? state.declared.get(binding.identifier)
-        : binding.path.isImportSpecifier()
-        ? state.imports.get(object.name)
-        : undefined;
+          ? state.declared.get(binding.identifier)
+          : binding.path.isImportSpecifier()
+            ? state.imports.get(object.name)
+            : undefined;
       if (!members) return;
       if (!members.has(property.name)) {
         throw p.buildCodeFrameError(stale(`${object.name}.${property.name}`));
@@ -95,10 +95,9 @@ const inlineEnums = ({ types: t }) => ({
         p.traverse({
           TSEnumDeclaration(d) {
             if (!d.node.const) return;
-            const members =
-              (d.parentPath.isExportNamedDeclaration() ? exported : local).get(
-                d.node.id.name,
-              );
+            const members = (
+              d.parentPath.isExportNamedDeclaration() ? exported : local
+            ).get(d.node.id.name);
             if (members) state.declared.set(d.node.id, members);
           },
         });
@@ -127,13 +126,17 @@ const inlineEnums = ({ types: t }) => ({
               !state.names.has(r.node.name) ||
               r.parentPath.isTSTypeReference() ||
               r.parentPath.isTSQualifiedName()
-            ) return;
+            )
+              return;
             if (
-              r.findParent((a) =>
-                a.isTSType() || a.isTSTypeAnnotation() ||
-                a.isTSTypeParameterInstantiation()
+              r.findParent(
+                (a) =>
+                  a.isTSType() ||
+                  a.isTSTypeAnnotation() ||
+                  a.isTSTypeParameterInstantiation(),
               )
-            ) return;
+            )
+              return;
             const binding = r.scope.getBinding(r.node.name);
             if (binding && !binding.path.isImportSpecifier()) return;
             throw r.buildCodeFrameError(
@@ -163,9 +166,11 @@ export default (api) => {
       Identifier(p) {
         const name = p.node.name;
         if (
-          !Object.hasOwn(DEFINE, name) || !p.isReferencedIdentifier() ||
+          !Object.hasOwn(DEFINE, name) ||
+          !p.isReferencedIdentifier() ||
           p.scope.hasBinding(name)
-        ) return;
+        )
+          return;
         p.replaceWith(t.valueToNode(DEFINE[name]));
       },
     },
@@ -183,9 +188,11 @@ export default (api) => {
   // cache key, and Babel refuses a RegExp it has nothing to test against.
   return {
     presets: [preset],
-    overrides: [{
-      exclude: (file) => /[\\/]node_modules[\\/]/.test(file ?? ""),
-      plugins: [define, inlineEnums],
-    }],
+    overrides: [
+      {
+        exclude: (file) => /[\\/]node_modules[\\/]/.test(file ?? ""),
+        plugins: [define, inlineEnums],
+      },
+    ],
   };
 };

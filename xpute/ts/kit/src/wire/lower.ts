@@ -9,15 +9,11 @@ export function to_tuple<T extends Record<PropertyKey, unknown>>(
   obj: T,
   keys: readonly (keyof T)[],
 ): T[keyof T][] {
-  const len = keys.length;
-  const out: T[keyof T][] = new Array(len);
-
-  for (let i = 0; i < len; i++) {
+  return Array.from({ length: keys.length }, (_, i) => {
     const key = keys[i];
     if (!(key in obj)) throw new MarshalError(Errno.EINVAL);
-    out[i] = obj[key];
-  }
-  return out;
+    return obj[key];
+  });
 }
 
 export function from_tuple<T extends Record<PropertyKey, unknown>>(

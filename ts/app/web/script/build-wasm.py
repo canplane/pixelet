@@ -16,10 +16,10 @@ WEB = Path(__file__).resolve().parent.parent
 
 def repo_of(start):
     """The repository over `start`: the nearest directory up holding the
-    TypeScript workspace's manifest, ts/deno.jsonc, as pxl-tool finds it by
+    TypeScript workspace's manifest, ts/pnpm-workspace.yaml, as pxl-tool finds it by
     its own manifest. It works in a tree copied without .git."""
     for d in [start, *start.parents]:
-        if (d / "ts" / "deno.jsonc").is_file():
+        if (d / "ts" / "pnpm-workspace.yaml").is_file():
             return d
     sys.exit(f"no repository over {start}")
 
@@ -33,7 +33,7 @@ OUT = WEB / "src/guest.wasm"
 # The source path each number in a published module's panics stands for; kept by the deploy, never bundled.
 PATHS = WEB / "src/guest.paths.json"
 
-# What `deno task build` bundles: no dev features, numbered panic paths.
+# What `pnpm build` bundles: no dev features, numbered panic paths.
 PUBLISHED = "--published" in sys.argv[1:]
 # The published module is release's bytes; the dev server's, watch's, which a
 # change rebuilds in part (rust/Cargo.toml). Each in its own directory, so

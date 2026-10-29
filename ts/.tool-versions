@@ -1,6 +1,5 @@
-# The Deno this workspace builds and runs with, as rust/rust-toolchain.toml
-# is the Rust its tree's. denoland/setup-deno reads it through
-# `deno-version-file`, and asdf and mise read it under ts/; Deno has no
-# rustup, so without one of those it is a number to upgrade to rather than
-# one that arrives.
-deno 2.9.7
+# The Node this workspace builds and runs with, as rust/rust-toolchain.toml
+# is the Rust its tree's. actions/setup-node reads it through
+# `node-version-file`, and asdf and mise read it under ts/. pnpm's version is
+# package.json's `packageManager`, which corepack runs.
+nodejs 24.21.0

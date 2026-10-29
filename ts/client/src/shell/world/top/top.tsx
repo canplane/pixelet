@@ -56,9 +56,9 @@ export function TopOverlays() {
             >
               {[
                 ...SCRIM_EASE.map(([at, k]) => [ramp * at, k] as const),
-                ...[...SCRIM_EASE].reverse().map(([at, k]) =>
-                  [1 - ramp * at, k] as const
-                ),
+                ...[...SCRIM_EASE]
+                  .reverse()
+                  .map(([at, k]) => [1 - ramp * at, k] as const),
               ].map(([at, k], i) => (
                 <Stop
                   key={i}

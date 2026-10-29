@@ -1,9 +1,9 @@
 // pxl-tool/fmt.rs
 
-//! Generated files are written as the formatters leave them, since `deno fmt
-//! --check` and `cargo fmt --check` are gates: each by the config of the tree
-//! it lies in, found from the file up, as that tree's own check reads it. A
-//! file under no tree's config is written as generated.
+//! Generated files are written as the formatters leave them, since `prettier
+//! --check` and `cargo fmt --check` are gates: each by the tree it lies in,
+//! found from the file up, as that tree's own check reads it. A file under no
+//! tree is written as generated.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -15,19 +15,19 @@ pub fn format_text(path: &str, text: String) -> Result<String, String> {
         let mut c = Command::new("rustfmt");
         c.args(["--edition", "2021", "--emit", "stdout"]);
         c
-    } else if let Some(ext) = [".ts", ".json"].into_iter().find(|e| path.ends_with(e)) {
+    } else if [".ts", ".json"].iter().any(|e| path.ends_with(e)) {
         let root = root();
         let file = root.join(path);
         let Some(tree) = file
             .ancestors()
             .skip(1)
             .take_while(|d| d.starts_with(&root))
-            .find(|d| d.join("deno.jsonc").exists() || d.join("deno.json").exists())
+            .find(|d| d.join("pnpm-workspace.yaml").exists())
         else {
             return Ok(text);
         };
-        let mut c = Command::new("deno");
-        c.args(["fmt", "--ext", &ext[1..], "-"]).current_dir(tree);
+        let mut c = Command::new(tree.join("node_modules/.bin/prettier"));
+        c.arg("--stdin-filepath").arg(&file).current_dir(tree);
         c
     } else {
         return Ok(text);

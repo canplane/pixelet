@@ -20,9 +20,11 @@ export interface SegmentedProps<T extends string | number> {
   onChange: (value: T) => void;
 }
 
-export function Segmented<T extends string | number>(
-  { segments, value, onChange }: SegmentedProps<T>,
-) {
+export function Segmented<T extends string | number>({
+  segments,
+  value,
+  onChange,
+}: SegmentedProps<T>) {
   return (
     <View accessibilityRole="tablist" style={styles.track}>
       {segments.map((s) => {

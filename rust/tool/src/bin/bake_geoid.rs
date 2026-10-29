@@ -135,7 +135,7 @@ fn run() -> Result<(), String> {
     let vals: Vec<String> = m.iter().map(|v| format!("{v}")).collect();
     let json = format!(
         "{{\n  \"$doc\": [\n    \"EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what a GPS height,\",\n    \"the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30, EPSG:3855). From GeographicLib's\",\n    \"5' grid (egm2008-5) by pxl-tool/bin/bake_geoid.rs; bilinear between these misses it by at\",\n    \"most {worst:.1} m, {rms:.1} m RMS.\"\n  ],\n  \"GEOID_STEP_DEG\": {{\n    \"$val\": {STEP_DEG},\n    \"$doc\": [\"The grid's spacing; rows from 90N down, {cols} columns from 0E east.\"]\n  }},\n  \"GEOID_M\": {{\n    \"$type\": \"f32\",\n    \"$val\": [\n      {}\n    ]\n  }}\n}}\n",
-        // One a line, as `deno fmt` lays an array out.
+        // One a line.
         vals.join(",\n      ")
     );
     std::fs::write(root().join(OUT), json).map_err(|e| format!("{OUT}: {e}"))?;

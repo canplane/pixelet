@@ -35,28 +35,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         ]}
       >
         {(tab) =>
-          tab === SettingsTab.Options
-            ? (
-              <>
-                <Text style={settingText.faint}>
-                  {t("settings.cost_legend")}
-                </Text>
-                <Separator />
-                <SettingsSection section="display" />
-                <SettingsSection section="camera" />
-                <SettingsSection section="lighting" />
-                <SettingsSection section="debug" />
-              </>
-            )
-            : (
-              <>
-                <LanguageSection />
-                <Separator />
-                <DisclaimerSection />
-                <AttributionSection />
-                <AboutSection />
-              </>
-            )}
+          tab === SettingsTab.Options ? (
+            <>
+              <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
+              <Separator />
+              <SettingsSection section="display" />
+              <SettingsSection section="camera" />
+              <SettingsSection section="lighting" />
+              <SettingsSection section="debug" />
+            </>
+          ) : (
+            <>
+              <LanguageSection />
+              <Separator />
+              <DisclaimerSection />
+              <AttributionSection />
+              <AboutSection />
+            </>
+          )
+        }
       </Tabbed>
     </Panel>
   );

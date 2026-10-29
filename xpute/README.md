@@ -131,7 +131,8 @@ the policy belongs to the program.
 
 ## Running it
 
-Deno 2.x, rustup (it installs what `rust/rust-toolchain.toml` names), a C++20
+Node 24 with pnpm (`pnpm --dir ts install` first), rustup (it installs what
+`rust/rust-toolchain.toml` names), a C++20
 compiler as `c++` or `$CXX`, GNU Make, and the [WASI
 SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
 `$WASI_SDK_PATH`, for the C++ guest built as a module.
@@ -141,7 +142,7 @@ make -j8 check     # formats, lints and types checked, the C++ compiled
 make -j8 test      # every tree's tests, then the traces against every guest
 make -j8 build     # the guests the traces drive; test builds them first
 make -j8 test-gpu  # the GPU hosts, on wgpu and in Chrome ($CHROME)
-make fmt           # deno fmt, cargo fmt
+make fmt           # prettier, cargo fmt
 ```
 
 `check-ts`, `test-cpp`, `test-rust` and the like run one tree's. The copy to

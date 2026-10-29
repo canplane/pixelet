@@ -34,14 +34,17 @@ export function AttributionSection() {
             <Line>
               <Link href="https://www.openstreetmap.org/copyright">
                 © OpenStreetMap contributors
-              </Link>,{" "}
+              </Link>
+              ,{" "}
               <Link href="https://overturemaps.org">
                 Overture Maps Foundation
-              </Link>; modified. The datasets are subject to the licenses of
-              third party data providers: see Overture's{" "}
+              </Link>
+              ; modified. The datasets are subject to the licenses of third
+              party data providers: see Overture's{" "}
               <Link href="https://docs.overturemaps.org/attribution/">
                 attribution and licensing guide
-              </Link>.
+              </Link>
+              .
             </Line>
           </Provider>
           <Provider name="OpenStreetMap Land Polygons">

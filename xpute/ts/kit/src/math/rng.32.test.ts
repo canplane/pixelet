@@ -2,6 +2,7 @@
 
 /** Holds the TypeScript side to golden/math/rng.32.tsv, which every language's stream must match. */
 
+import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 
 import { Golden } from "@xpute/kit/golden.ts";
@@ -12,7 +13,7 @@ import {
   u32_to_unit,
 } from "@xpute/kit/math/rng.ts";
 
-Deno.test("rng32 computes what the record holds", async () => {
+test("rng32 computes what the record holds", async () => {
   const v = await Golden.load("golden/math/rng.32.tsv");
   v.each("", (k) => {
     const seed = v.u32(`${k}.seed`);

@@ -2,6 +2,7 @@
 
 /** Holds the TypeScript side to golden/wire/tlv.tsv, which every language's TLV must match. */
 
+import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 
 import { Golden } from "@xpute/kit/golden.ts";
@@ -15,12 +16,16 @@ function show(v: TlvValue): string {
   return `${typeof v}:${v}`;
 }
 
-Deno.test("tlv computes what the typescript computes", async () => {
+test("tlv computes what the typescript computes", async () => {
   const v = await Golden.load("golden/wire/tlv.tsv");
 
   const w = new TlvWriter(4);
   w.u8(200).i8(-3).u16(65535).i16(-2).u32(4000000000).i32(-7);
-  w.u64(1n << 63n).i64(-(1n << 40n)).f32(0.25).f64(-1.5).bool(true);
+  w.u64(1n << 63n)
+    .i64(-(1n << 40n))
+    .f32(0.25)
+    .f64(-1.5)
+    .bool(true);
   w.str("€€").bytes(new Uint8Array([9, 8, 7]));
   w.write_all([
     true,

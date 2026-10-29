@@ -43,23 +43,32 @@ export function declaration(text: string): Declaration | null {
     return null;
   }
   const versions = (v: unknown, every: boolean) =>
-    typeof v === "object" && v !== null &&
-    Object.entries(v).every(([k, s]) =>
-      (BASE_LAYERS as readonly string[]).includes(k) && typeof s === "string" &&
-      VERSION.test(s)
+    typeof v === "object" &&
+    v !== null &&
+    Object.entries(v).every(
+      ([k, s]) =>
+        (BASE_LAYERS as readonly string[]).includes(k) &&
+        typeof s === "string" &&
+        VERSION.test(s),
     ) &&
     (!every || BASE_LAYERS.every((k) => k in v));
   if (
-    typeof d !== "object" || d === null || !("version" in d) ||
+    typeof d !== "object" ||
+    d === null ||
+    !("version" in d) ||
     !versions(d.version, true)
-  ) return null;
+  )
+    return null;
   const whole = (n: unknown) =>
     typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
   if (!("top_zoom" in d) || !whole(d.top_zoom)) return null;
   if (
-    !("format" in d) || typeof d.format !== "object" || d.format === null ||
+    !("format" in d) ||
+    typeof d.format !== "object" ||
+    d.format === null ||
     !BASE_LAYERS.every((k) => whole((d.format as Record<string, unknown>)[k]))
-  ) return null;
+  )
+    return null;
   if (!("shard" in d)) return null;
   const shard = d.shard;
   if (typeof shard !== "object" || shard === null || Array.isArray(shard)) {
@@ -67,9 +76,11 @@ export function declaration(text: string): Declaration | null {
   }
   for (const s of Object.values(shard)) {
     if (
-      typeof s !== "object" || s === null ||
+      typeof s !== "object" ||
+      s === null ||
       ("version" in s && !versions(s.version, false))
-    ) return null;
+    )
+      return null;
   }
   return d as Declaration;
 }
@@ -148,7 +159,7 @@ export async function declare_source(send: SendSource): Promise<void> {
     if (online()) {
       set(Source.Failing);
       await new Promise((resolve) =>
-        setTimeout(resolve, Math.random() * wait_ms)
+        setTimeout(resolve, Math.random() * wait_ms),
       );
       wait_ms = Math.min(2 * wait_ms, ASK_AGAIN_MOST_MS);
     } else await when_online();

@@ -21,9 +21,11 @@ interface SegmentedControlProps extends ViewProps {
 const SegmentedControl: ComponentType<SegmentedControlProps> =
   requireNativeView("PxlPlatform", "SegmentedControl");
 
-export function Segmented<T extends string | number>(
-  { segments, value, onChange }: SegmentedProps<T>,
-) {
+export function Segmented<T extends string | number>({
+  segments,
+  value,
+  onChange,
+}: SegmentedProps<T>) {
   return (
     <SegmentedControl
       labels={segments.map((s) => s.label)}

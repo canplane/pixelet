@@ -105,8 +105,9 @@ here, rebuilds the servers, publishes the client and smoke-tests the result
 
 ## Getting Started
 
-> Requires GNU Make, Python 3.11 or newer, [Deno](https://deno.land/) at the
-> version `ts/.tool-versions` pins, Rust through [rustup](https://rustup.rs/)
+> Requires GNU Make, Python 3.11 or newer, [Node](https://nodejs.org/) at the
+> version `ts/.tool-versions` pins with pnpm (`corepack enable`, or
+> `npm i -g pnpm@10`), Rust through [rustup](https://rustup.rs/)
 > (the toolchain is `rust/rust-toolchain.toml`'s), Binaryen's `wasm-opt`, and
 > Docker for the local databases and the shaders' build. `make check` and
 > `make test` take what [xpute/README.md](./xpute/README.md#running-it) lists
@@ -122,6 +123,7 @@ cp ts/app/web/.env.example ts/app/web/.env
 cp infra/local/.env.example infra/local/.env
 cp rust/server/.env.example rust/server/.env
 
+pnpm --dir ts install
 make dev
 ```
 
@@ -198,7 +200,7 @@ language by where a thing runs.
 
 ```
 .
-├── ts/                  # The TypeScript workspace (Deno)
+├── ts/                  # The TypeScript workspace (pnpm)
 │   ├── client/          #   the client both apps bundle
 │   │   └── src/
 │   │       ├── host/    #     xpute's host, mounted

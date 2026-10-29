@@ -70,7 +70,7 @@ const CURSOR = (pkt: U8Array, base: u32, type: NodeType): NodeCursor => {
   throw new MarshalError(Errno.EBADMSG);
 };
 
-const ENTRY_OFF = (base: u32, idx: u32) => (base + WORD_SZ) + idx * WORD_SZ;
+const ENTRY_OFF = (base: u32, idx: u32) => base + WORD_SZ + idx * WORD_SZ;
 
 /** Throws on a malformed packet; `pkt` must start WORD_SZ-aligned. */
 export class TreeReader {
@@ -444,20 +444,21 @@ export abstract class BranchCursor extends NodeCursor {
   override get<T>(idx?: u32): T {
     if (idx !== undefined) return this.at(idx).get() as unknown as T;
 
-    const arr: (NodeValue | BranchCursor)[] = new Array(this.len);
-    for (let i = 0; i < this.len; i++) {
-      const cur: NodeCursor = this.at(i);
-      arr[i] = cur.is_branch() ? cur : cur.get();
-    }
+    const arr: (NodeValue | BranchCursor)[] = Array.from(
+      { length: this.len },
+      (_, i) => {
+        const cur: NodeCursor = this.at(i);
+        return cur.is_branch() ? cur : cur.get();
+      },
+    );
     return arr as unknown as T;
   }
 
   get_deep<T extends NodeValue[] = NodeValue[]>(): T {
-    const arr: NodeValue[] = new Array(this.len);
-    for (let i = 0; i < this.len; i++) {
+    const arr: NodeValue[] = Array.from({ length: this.len }, (_, i) => {
       const cur: NodeCursor = this.at(i);
-      arr[i] = cur.is_branch() ? cur.get_deep() : cur.get();
-    }
+      return cur.is_branch() ? cur.get_deep() : cur.get();
+    });
     return arr as unknown as T;
   }
 
@@ -497,11 +498,7 @@ export abstract class BranchCursor extends NodeCursor {
   }
 
   children(): NodeCursor[] {
-    const arr = new Array<NodeCursor>(this.len);
-    for (let i = 0; i < this.len; i++) {
-      arr[i] = this.at(i);
-    }
-    return arr;
+    return Array.from({ length: this.len }, (_, i) => this.at(i));
   }
 
   *[Symbol.iterator](): IterableIterator<NodeCursor> {

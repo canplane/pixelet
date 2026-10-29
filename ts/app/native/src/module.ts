@@ -34,6 +34,5 @@ interface PxlPlatform {
   tappableBottom(): f64;
 }
 
-export const PLATFORM: PxlPlatform = requireNativeModule<PxlPlatform>(
-  "PxlPlatform",
-);
+export const PLATFORM: PxlPlatform =
+  requireNativeModule<PxlPlatform>("PxlPlatform");

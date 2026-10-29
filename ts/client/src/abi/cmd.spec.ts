@@ -574,9 +574,12 @@ export function encode_sensor_orient(
   beta: f64 | null,
   gamma: f64 | null,
 ): PacketWriter {
-  return to.writer(4).f64(webkit_compass_heading).f64(alpha).f64(beta).f64(
-    gamma,
-  );
+  return to
+    .writer(4)
+    .f64(webkit_compass_heading)
+    .f64(alpha)
+    .f64(beta)
+    .f64(gamma);
 }
 
 /** Command.SENSOR_FAILED's packet, written in place into `to`.
@@ -603,9 +606,13 @@ export function encode_world_boot(
   orient_permission: boolean,
   orient_silence_is_loss: boolean,
 ): PacketWriter {
-  return to.writer(5).bool(development).bool(geolocation).bool(orient).bool(
-    orient_permission,
-  ).bool(orient_silence_is_loss);
+  return to
+    .writer(5)
+    .bool(development)
+    .bool(geolocation)
+    .bool(orient)
+    .bool(orient_permission)
+    .bool(orient_silence_is_loss);
 }
 
 /** Command.WORLD_FRAME's packet, written in place into `to`.
@@ -623,9 +630,15 @@ export function encode_world_frame(
   credits: u32,
   unix_ms: f64,
 ): PacketWriter {
-  return to.writer(7).f64(width).f64(height).f64(refresh_ms).f64(paced_ms).bool(
-    interactive,
-  ).u32(credits).f64(unix_ms);
+  return to
+    .writer(7)
+    .f64(width)
+    .f64(height)
+    .f64(refresh_ms)
+    .f64(paced_ms)
+    .bool(interactive)
+    .u32(credits)
+    .f64(unix_ms);
 }
 
 /** Command.WORLD_VISIBILITY's packet, written in place into `to`. */
@@ -647,10 +660,11 @@ export function encode_world_source(
   format: u32[],
   shard: string[],
 ): PacketWriter {
-  return to.writer(3).u32(top_zoom).array(
-    SequenceType.U32_ARRAY,
-    Uint32Array.from(format),
-  ).strs(shard);
+  return to
+    .writer(3)
+    .u32(top_zoom)
+    .array(SequenceType.U32_ARRAY, Uint32Array.from(format))
+    .strs(shard);
 }
 
 /** Command.WORLD_KEPT_EMPTIED's packet, written in place into `to`.
@@ -693,7 +707,13 @@ export function encode_input_pointer(
   x: f64,
   y: f64,
 ): PacketWriter {
-  return to.writer(6).u32(phase).u32(pointer_type).i32(id).i32(button).f64(x)
+  return to
+    .writer(6)
+    .u32(phase)
+    .u32(pointer_type)
+    .i32(id)
+    .i32(button)
+    .f64(x)
     .f64(y);
 }
 
@@ -747,9 +767,12 @@ export function encode_surface_resize(
   height: u32,
   device_pixel_ratio: f64,
 ): PacketWriter {
-  return to.writer(4).u32(surface).u32(width).u32(height).f64(
-    device_pixel_ratio,
-  );
+  return to
+    .writer(4)
+    .u32(surface)
+    .u32(width)
+    .u32(height)
+    .f64(device_pixel_ratio);
 }
 
 /** Command.SURFACE_CLOSE's packet, written in place into `to`. */

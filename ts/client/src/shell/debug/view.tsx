@@ -18,9 +18,10 @@ export function ViewPanel() {
   const v = useProfilerView(show);
 
   if (!show) return null;
-  const note = v === null || Number.isNaN(v.pivot_lat)
-    ? undefined
-    : `${fixed(v.pivot_lat, 5)}°, ${fixed(v.pivot_lon, 5)}°`;
+  const note =
+    v === null || Number.isNaN(v.pivot_lat)
+      ? undefined
+      : `${fixed(v.pivot_lat, 5)}°, ${fixed(v.pivot_lon, 5)}°`;
   return (
     <Accordion name="view" title="View" note={note}>
       {v !== null && <ProfilerView v={v} />}

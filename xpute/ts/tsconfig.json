@@ -1,0 +1,25 @@
+// tsc checks and emits nothing. Every alias is here, and vitest reads it from
+// here.
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "types": ["node", "@webgpu/types"],
+
+    "paths": {
+      "@xpute/kit/*": ["./kit/src/*"],
+      "@xpute/host/*": ["./host/src/*"],
+      "@xpute/gpu/*": ["./gpu/src/*"]
+    }
+  },
+  "include": ["kit", "host", "gpu", "vitest.config.ts", "vitest.setup.ts"],
+  "exclude": ["**/node_modules", "target"]
+}

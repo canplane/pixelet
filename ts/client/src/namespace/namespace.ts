@@ -43,13 +43,13 @@ function by_number(backend: Backend): Bound {
 /** Each bake to its tiles at the edge, ASSET to the shipped assets, STORAGE to the platform's storage. */
 export function namespace(): Namespace {
   const bound: [u32, Backend][] = [
-    ...BASE_LAYERS.map((
-      _,
+    ...BASE_LAYERS.map((_, bake): [u32, Backend] => [
       bake,
-    ): [u32, Backend] => [bake, {
-      open: (number, signal) =>
-        read_object(source_declared(), bake, number, signal),
-    }]),
+      {
+        open: (number, signal) =>
+          read_object(source_declared(), bake, number, signal),
+      },
+    ]),
     [root.ASSET, { open: read_asset }],
     [root.STORAGE, { open: open_storage, commit: commit_storage }],
   ];

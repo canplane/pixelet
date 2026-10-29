@@ -15,22 +15,10 @@ declare global {
 
   /** Whether this is a development bundle — a dev server's, not a built
    * one — which is not the same question as __IS_DEV__'s (deploy.ts
-   * says why). Absent where no bundler ran: Deno's tests. */
+   * says why). Absent where none is defined: the tests. */
   const __DEV_BUNDLE__: boolean | undefined;
 
   /** Where the tiles come from: `delivery`, the deployment's, or the servers
    * of `dev:oven` or `dev:shelf`, named as the task is. */
   const __DEV_SOURCE__: string;
-}
-
-/** What a build is, from vite.config.ts#buildStamp on a page and the device
- * app's metro.config.ts#buildStamp on a device: read through
- * deploy.ts, which names each. */
-declare module "virtual:pxl-build" {
-  /** ISO-8601 UTC. */
-  export const time: string;
-  /** `r<commits>-<hash>[-dirty]`, from git. */
-  export const id: string;
-  /** `b<n>`, `b<n>+` after it, or `b?`. */
-  export const number: string;
 }

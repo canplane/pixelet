@@ -57,11 +57,8 @@ const OBJECTS_BEFORE = `pxl:object:v${OBJECTS_BEFORE_FORMAT}`;
  * with their format put before them. */
 export function migrate(s: Storage = STORAGE): void {
   carry(s, kept.SETTINGS, SETTINGS_BEFORE, (text) => text);
-  carry(
-    s,
-    kept.OBJECTS,
-    OBJECTS_BEFORE,
-    (text) => formatted(OBJECTS_BEFORE_FORMAT, text),
+  carry(s, kept.OBJECTS, OBJECTS_BEFORE, (text) =>
+    formatted(OBJECTS_BEFORE_FORMAT, text),
   );
 }
 

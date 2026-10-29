@@ -28,7 +28,7 @@ export function boot(): void {
       if (__IS_DEV__) installConsole();
       store.setState({ boot: Boot.Started });
       kernel.on_stop(() =>
-        store.setState({ boot: Boot.Stopped, stop: kernel.stop_code() })
+        store.setState({ boot: Boot.Stopped, stop: kernel.stop_code() }),
       );
     },
     (err) => {

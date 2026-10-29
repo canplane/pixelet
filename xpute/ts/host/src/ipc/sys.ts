@@ -16,7 +16,10 @@ import { abort, args, flag, HEAD, op } from "./sys.spec.ts";
 /** Why an open did not answer with a file: an errno, and whatever number the
  * host refused with (an HTTP status) for a reader to print. */
 export class FileError extends Error {
-  constructor(readonly errnum: Errno, readonly detail: u32 = 0) {
+  constructor(
+    readonly errnum: Errno,
+    readonly detail: u32 = 0,
+  ) {
     super(detail === 0 ? strerror(errnum) : `${strerror(errnum)} (${detail})`);
   }
 }
@@ -60,9 +63,9 @@ interface File {
 
 /** No name empty, `.` or `..`, so a path never leaves its root. */
 function walks_down(path: string): boolean {
-  return path.split("/").every((name) =>
-    name !== "" && name !== "." && name !== ".."
-  );
+  return path
+    .split("/")
+    .every((name) => name !== "" && name !== "." && name !== "..");
 }
 
 export class Sys {
@@ -116,7 +119,8 @@ export class Sys {
         break;
       }
       case op.ABORT: {
-        const num = (i: u32) => BigInt(w[a + i]) | BigInt(w[a + i + 1]) << 32n;
+        const num = (i: u32) =>
+          BigInt(w[a + i]) | (BigInt(w[a + i + 1]) << 32n);
         this.host.abort({
           errnum: w[a] | 0,
           line: w[a + 1],
@@ -157,9 +161,8 @@ export class Sys {
           }`,
         );
       }
-      const [errnum, detail] = err instanceof FileError
-        ? [err.errnum, err.detail]
-        : [Errno.EIO, 0];
+      const [errnum, detail] =
+        err instanceof FileError ? [err.errnum, err.detail] : [Errno.EIO, 0];
       answer(errnum, detail);
     };
     const read = (bytes: U8Array) => {

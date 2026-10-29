@@ -2,6 +2,7 @@
 
 /** Holds the TypeScript side to golden/math/scalar.tsv, bit for bit. */
 
+import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 
 import { Golden } from "@xpute/kit/golden.ts";
@@ -25,7 +26,7 @@ const bits = (x: number): bigint => {
   return view.getBigUint64(0);
 };
 
-Deno.test("scalar computes what the record holds", async () => {
+test("scalar computes what the record holds", async () => {
   const v = await Golden.load("golden/math/scalar.tsv");
   v.each("", (k) => {
     const x = v.f64(`${k}.x`);
@@ -53,7 +54,7 @@ Deno.test("scalar computes what the record holds", async () => {
   });
 });
 
-Deno.test("the tolerance is the record's", async () => {
+test("the tolerance is the record's", async () => {
   const v = await Golden.load("golden/math/scalar.tsv");
   assertEquals(bits(EPS), bits(v.f64("eps")));
 });

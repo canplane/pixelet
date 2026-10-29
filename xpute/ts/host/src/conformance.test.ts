@@ -6,8 +6,12 @@
  * first (`make build` at xpute's root): Cargo for Rust, cpp/Makefile for C++.
  */
 
+import { test } from "vitest";
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
-import { fromFileUrl, join, resolve } from "@std/path";
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import koffi from "koffi";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
@@ -22,28 +26,25 @@ import { each_record } from "@xpute/host/ipc/stream.ts";
 import { cmd, key, MEM_BYTES } from "@xpute/host/conformance.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
 
-const ROOT = fromFileUrl(new URL("../../../", import.meta.url));
+const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 /** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
 const CARGO_TARGET = resolve(
   join(ROOT, "rust"),
-  Deno.env.get("CARGO_TARGET_DIR") ?? "target",
+  process.env.CARGO_TARGET_DIR ?? "target",
 );
 
 function library(dir: string, name: string): string {
   return join(
     dir,
-    Deno.build.os === "darwin"
+    process.platform === "darwin"
       ? `lib${name}.dylib`
-      : Deno.build.os === "windows"
-      ? `${name}.dll`
-      : `lib${name}.so`,
+      : process.platform === "win32"
+        ? `${name}.dll`
+        : `lib${name}.so`,
   );
 }
 
-const SYMBOLS = {
-  xpute_conformance_boot: { parameters: ["buffer", "function"], result: "u32" },
-  xpute_conformance_intr: { parameters: ["buffer", "f64"], result: "f64" },
-} as const;
+const NOW = koffi.proto("double xpute_now(void)");
 
 /** Room past the guest's range for the module's own stack and data, which the build decides. */
 const MODULE_BYTES = 4 << 20;
@@ -61,38 +62,42 @@ interface Opener {
 }
 
 function native(path: string): Opener {
-  const lib = Deno.dlopen(path, SYMBOLS);
-  const now = new Deno.UnsafeCallback(
-    { parameters: [], result: "f64" } as const,
-    () => clock_ms,
+  const lib = koffi.load(path);
+  const boot = lib.func(
+    "uint32_t xpute_conformance_boot(void *mem, xpute_now *now)",
   );
+  const intr = lib.func(
+    "double xpute_conformance_intr(void *mem, double quota)",
+  );
+  const now = koffi.register(() => clock_ms, koffi.pointer(NOW));
+  // The guest keeps the region between calls, so it is memory that does not
+  // move, seen from here without a copy. Words of eight bytes, so it is
+  // 8-aligned, as a guest asks.
+  const regions: unknown[] = [];
   return {
     open() {
-      // Words of eight bytes, so the region is 8-aligned, as a guest asks.
-      const mem = new Float64Array(MEM_BYTES / 8).buffer;
-      const bytes = new Uint8Array(mem);
-      const directory_at = lib.symbols.xpute_conformance_boot(
-        bytes,
-        now.pointer,
-      );
+      const at = koffi.alloc("double", MEM_BYTES / 8);
+      regions.push(at);
+      const directory_at = boot(at, now);
       return {
-        mem,
+        mem: koffi.view(at, MEM_BYTES),
         directory_at,
-        intr: (quota) => lib.symbols.xpute_conformance_intr(bytes, quota),
+        intr: (quota) => intr(at, quota),
       };
     },
     close() {
-      now.close();
-      lib.close();
+      koffi.unregister(now);
+      lib.unload();
+      for (const at of regions) koffi.free(at);
     },
   };
 }
 
 function module(path: string): Opener {
-  const compiled = new WebAssembly.Module(Deno.readFileSync(path));
-  const imports = WebAssembly.Module.imports(compiled).map((i) =>
-    `${i.module}.${i.name}`
-  ).sort();
+  const compiled = new WebAssembly.Module(readFileSync(path));
+  const imports = WebAssembly.Module.imports(compiled)
+    .map((i) => `${i.module}.${i.name}`)
+    .sort();
   assertEquals(
     imports,
     MODULE_IMPORTS,
@@ -234,8 +239,10 @@ function cmd_number(name: string): number {
 }
 
 function cmd_name(n: number): string {
-  return CMD_NAMES.find(([, v]) => v === n)?.[0] ??
-    `0x${n.toString(16).padStart(4, "0")}`;
+  return (
+    CMD_NAMES.find(([, v]) => v === n)?.[0] ??
+    `0x${n.toString(16).padStart(4, "0")}`
+  );
 }
 
 /** A completion ring's sequence as a trace writes it: a reply TAG:CMD=RESULT,
@@ -430,13 +437,15 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
     );
   }
   if (g.has(at("wake.before_last"))) {
-    turns.slice(0, -1).forEach((turn, t) =>
-      assertEquals(
-        wake_name(turn.wake),
-        g.s(at("wake.before_last")),
-        `${name} turn ${t}: what it asked for next`,
-      )
-    );
+    turns
+      .slice(0, -1)
+      .forEach((turn, t) =>
+        assertEquals(
+          wake_name(turn.wake),
+          g.s(at("wake.before_last")),
+          `${name} turn ${t}: what it asked for next`,
+        ),
+      );
   }
   if (g.has(at("wake.last"))) {
     assertEquals(
@@ -464,7 +473,7 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
 
 for (const trace of ["directory", "door", "handle", "clock", "file"]) {
   for (const [guest, open] of Object.entries(GUESTS)) {
-    Deno.test(`trace ${trace} - the ${guest} guest`, async () => {
+    test(`trace ${trace} - the ${guest} guest`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);
       const opener = open();
       try {

@@ -18,7 +18,7 @@ XPUTE = Path(__file__).resolve().parent.parent
 # Neither written nor compared: build output and lock files, a lock or
 # node_modules/ in any tree, as .gitignore has them.
 UNMANAGED = ["rust/target/", "cpp/target/", "ts/target/", "rust/Cargo.lock"]
-UNMANAGED_ANYWHERE = ["deno.lock", "node_modules"]
+UNMANAGED_ANYWHERE = ["pnpm-lock.yaml", "node_modules"]
 
 # Made by the step the C++ tree runs itself, from what git tracks there, and
 # shipped at cpp/amalgamation/ as SQLite ships its two files; here they are

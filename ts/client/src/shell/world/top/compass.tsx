@@ -23,7 +23,7 @@ const [QUARTERS, EIGHTHS] = [0, 1].map((odd) =>
     const a = ((2 * i + odd) * Math.PI) / 4;
     const [x, y] = [Math.sin(a), -Math.cos(a)];
     return `M${TICK_FROM * x} ${TICK_FROM * y}L${TICK_TO * x} ${TICK_TO * y}`;
-  }).join("")
+  }).join(""),
 );
 const BOX = `${-chrome.control / 2} ${
   -chrome.control / 2
@@ -70,9 +70,12 @@ export function CompassFace() {
         // RN's transform: a device's SVG refuses a CSS string.
       }
       <View
-        style={[StyleSheet.absoluteFill, {
-          transform: [{ rotate: `${turn}rad` }],
-        }]}
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            transform: [{ rotate: `${turn}rad` }],
+          },
+        ]}
       >
         <Svg width={chrome.control} height={chrome.control} viewBox={BOX}>
           {

@@ -32,7 +32,6 @@ order, the checks below are enough.
 - **No minute is linked.** A document cites the code, another document or an
   outside source, never a record under `doc/`.
 - **Prose wraps at 80 columns** in `README.md`, `ARCHITECTURE.md`, xpute's two
-  and `infra/README.md`, by hand, the way `deno fmt` wraps Markdown under `ts/`:
-  break after the last word that fits in 80 columns. Rewrap only the paragraphs
-  you touched.
+  and `infra/README.md`, by hand: break after the last word that fits in 80
+  columns. Rewrap only the paragraphs you touched.
 - **Read the whole document from the top**, rendered, not as a diff.

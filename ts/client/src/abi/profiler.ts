@@ -71,29 +71,27 @@ export const LIST_LANES = [
   "waiting",
   "out",
 ] as const;
-export type ListLane = typeof LIST_LANES[number];
+export type ListLane = (typeof LIST_LANES)[number];
 export type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarLane = Exclude<FrameLane, ListLane>;
 
-export type Frame =
-  & { [K in ScalarLane]: f64 }
-  & {
-    phases: f64[];
-    effects: f64[];
-    gpu_spans: f64[];
-    census: [f64, f64][];
-    zoom_tiles: f64[];
-    gpu_objects: f64[];
-    waiting: f64[];
-    out: f64[];
-  };
+export type Frame = { [K in ScalarLane]: f64 } & {
+  phases: f64[];
+  effects: f64[];
+  gpu_spans: f64[];
+  census: [f64, f64][];
+  zoom_tiles: f64[];
+  gpu_objects: f64[];
+  waiting: f64[];
+  out: f64[];
+};
 
 /** Each lane at its word, and the words it spans: to the next lane's, the last to FRAME's end. */
 export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] =
   (() => {
-    const at = (Object.entries(FRAME) as [FrameLane | "WORDS", u32][]).filter((
-      [k],
-    ) => k !== "WORDS") as [FrameLane, u32][];
+    const at = (Object.entries(FRAME) as [FrameLane | "WORDS", u32][]).filter(
+      ([k]) => k !== "WORDS",
+    ) as [FrameLane, u32][];
     at.sort((a, b) => a[1] - b[1]);
     return at.map(([name, a], i) => ({
       name,
@@ -279,8 +277,8 @@ function task_summaries(s: F64Array): TaskSummary[] {
         return { fail: s[w], detail: s[w + 1], n: s[w + 2] };
       },
     );
-    const means = TASK_PHASE_NAMES.map((name, p) =>
-      [name, s[a + STREAM_STAT.phase_mean + p]] as [string, f64]
+    const means = TASK_PHASE_NAMES.map(
+      (name, p) => [name, s[a + STREAM_STAT.phase_mean + p]] as [string, f64],
     ).filter(([, v]) => !Number.isNaN(v));
     out.push({
       stream,
@@ -385,11 +383,7 @@ export function profiler_tasks(last: u32 | null = null): TaskRecord[] {
   const at = ring + from * TASK.WORDS * WORD;
   const cnt = held - from;
   const w = words(at, cnt * TASK.WORDS);
-  const subjects = new BigUint64Array(
-    HOST.guest.mem,
-    at,
-    cnt * TASK.WORDS,
-  );
+  const subjects = new BigUint64Array(HOST.guest.mem, at, cnt * TASK.WORDS);
   return Array.from({ length: cnt }, (_, i) => {
     const o = i * TASK.WORDS;
     const phase_cnt = w[o + TASK.phase_cnt];

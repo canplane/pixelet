@@ -151,7 +151,7 @@ const STRS_NODE = (items: string[] | null): Node => ({
 });
 
 function val_to_node(val: NodeValue<NodeView>): Node {
-  if (val instanceof NodeView) return (val.node);
+  if (val instanceof NodeView) return val.node;
 
   if (val === null) return NIL_NODE;
 
@@ -181,7 +181,7 @@ function val_to_node(val: NodeValue<NodeView>): Node {
   if (Array.isArray(val)) {
     const branch = new BranchViewImpl();
     for (const child of val) branch.put(child);
-    return (branch.node);
+    return branch.node;
   }
 
   throw new MarshalError(Errno.EINVAL);

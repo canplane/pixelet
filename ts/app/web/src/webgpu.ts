@@ -79,8 +79,8 @@ export async function acquire(
       `[gpu] adapter ${
         info
           ? `${info.vendor ?? "?"}/${info.architecture ?? "?"}/${
-            info.device ?? "?"
-          }`
+              info.device ?? "?"
+            }`
           : "?"
       } features [${[...d.features].join(",")}] ` +
         [
@@ -91,7 +91,9 @@ export async function acquire(
           "minStorageBufferOffsetAlignment",
           "minUniformBufferOffsetAlignment",
           "maxBindGroups",
-        ].map(of).join(" "),
+        ]
+          .map(of)
+          .join(" "),
     );
   }
   const h = new GpuHost(d, () => memory!, wake);
@@ -104,7 +106,7 @@ export async function acquire(
   });
   d.onuncapturederror = (e) => console.error(`[gpu] ${e.error.message}`);
   canvases.forEach((canvas, handle) =>
-    h.bind(handle, canvas.getContext("webgpu")!)
+    h.bind(handle, canvas.getContext("webgpu")!),
   );
   host = h;
   return true;

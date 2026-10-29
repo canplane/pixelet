@@ -39,9 +39,9 @@ function buildLabel(): string {
   const d = new Date(BUILD_TIME);
   if (Number.isNaN(d.getTime())) return BUILD_TIME;
   const s = d.toISOString();
-  return `${s.slice(0, 10).replaceAll("-", "")}T${
-    s.slice(11, 16).replace(":", "")
-  }Z`;
+  return `${s.slice(0, 10).replaceAll("-", "")}T${s
+    .slice(11, 16)
+    .replace(":", "")}Z`;
 }
 
 export function AboutSection() {
@@ -68,7 +68,9 @@ export function AboutSection() {
             {` · ${buildLabel()}`}
           </Text>
           {bakeLines(source).map((line) => (
-            <Text key={line} style={settingText.faint}>{line}</Text>
+            <Text key={line} style={settingText.faint}>
+              {line}
+            </Text>
           ))}
           <Text style={settingText.faint}>{objectLabel()}</Text>
         </View>

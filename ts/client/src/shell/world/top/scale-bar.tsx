@@ -34,9 +34,8 @@ export function MapScaleBar({ show }: { show: boolean }) {
   const barWidthPx = mPerPx > 0 ? totalMeters / mPerPx : 0;
 
   // SI units are case-sensitive: never upper-case the label.
-  const label: string = totalMeters >= 1000
-    ? `${totalMeters / 1000}km`
-    : `${totalMeters}m`;
+  const label: string =
+    totalMeters >= 1000 ? `${totalMeters / 1000}km` : `${totalMeters}m`;
 
   const width = barWidthPx + PAD_PX * 2;
   const left = PAD_PX + 0.5;
@@ -45,7 +44,8 @@ export function MapScaleBar({ show }: { show: boolean }) {
   const tick = (f: f64, px: f64) => `M${at(f)} ${PAD_PX}V${PAD_PX + px}`;
   const d =
     `M${left} ${PAD_PX + TICK_PX}V${PAD_PX}H${right}V${PAD_PX + TICK_PX}` +
-    tick(0.5, TICK_PX) + tick(0.25, QUARTER_TICK_PX) +
+    tick(0.5, TICK_PX) +
+    tick(0.25, QUARTER_TICK_PX) +
     tick(0.75, QUARTER_TICK_PX);
   const svgHeight = PAD_PX + TICK_PX + PAD_PX;
 

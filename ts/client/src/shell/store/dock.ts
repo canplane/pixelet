@@ -35,10 +35,13 @@ const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
-type RecentPick = { tool: ActiveTool.Object; cube: Cube } | {
-  tool: ActiveTool.Decor;
-  kind: u16;
-} | { tool: ActiveTool.Marker };
+type RecentPick =
+  | { tool: ActiveTool.Object; cube: Cube }
+  | {
+      tool: ActiveTool.Decor;
+      kind: u16;
+    }
+  | { tool: ActiveTool.Marker };
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
   if (a.tool === ActiveTool.Object) {
@@ -130,11 +133,13 @@ function load(): Stored {
   let stored: Partial<Stored> | null = null;
   try {
     stored = JSON.parse(bracket.storage.get(STORAGE_KEY) ?? "null");
-  } catch { /* nothing stored that reads */ }
+  } catch {
+    /* nothing stored that reads */
+  }
   const picks = Array.isArray(stored?.picks)
-    ? stored.picks.filter((p) =>
-      typeof p === "object" && p !== null && isKnownPick(p)
-    ).slice(0, RECENT_PICKS)
+    ? stored.picks
+        .filter((p) => typeof p === "object" && p !== null && isKnownPick(p))
+        .slice(0, RECENT_PICKS)
     : [];
   // Padded from the seed: an empty tail reads as broken.
   for (const seed of SEED) {
@@ -198,9 +203,10 @@ export const useDockStore = create<DockState>()((set) => ({
   setDockMode: (dockMode) => set({ dockMode }),
   switchDockMode: () =>
     set((state) => ({
-      dockMode: state.dockMode === DockMode.Message
-        ? DockMode.Palette
-        : DockMode.Message,
+      dockMode:
+        state.dockMode === DockMode.Message
+          ? DockMode.Palette
+          : DockMode.Message,
     })),
 
   swatchFlash: { n: 0, cube: null, open: false },
