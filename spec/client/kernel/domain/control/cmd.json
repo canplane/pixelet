@@ -1016,7 +1016,7 @@
               "type": "ActiveTool"
             },
             {
-              "name": "value",
+              "name": "val",
               "type": "u32",
               "$doc": [
                 "The held cube or decor kind, by its number in the catalog's one value space (cube.json)."

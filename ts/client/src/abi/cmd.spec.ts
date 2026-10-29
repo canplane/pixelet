@@ -699,15 +699,15 @@ export function encode_input_pointer(
 
 /** Command.INPUT_HOLD's packet, written in place into `to`.
  *
- * @param value The held cube or decor kind, by its number in the catalog's one value space (cube.json).
+ * @param val The held cube or decor kind, by its number in the catalog's one value space (cube.json).
  * @param tier The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
 export function encode_input_hold(
   to: PacketRoom,
   tool: ActiveTool,
-  value: u32,
+  val: u32,
   tier: u32,
 ): PacketWriter {
-  return to.writer(3).u32(tool).u32(value).u32(tier);
+  return to.writer(3).u32(tool).u32(val).u32(tier);
 }
 
 /** Command.INPUT_MARKER_WORDS's packet, written in place into `to`. */

@@ -1246,7 +1246,7 @@ impl InputPointer {
 pub struct InputHold {
     pub tool: ActiveTool,
     /// The held cube or decor kind, by its number in the catalog's one value space (cube.json).
-    pub value: u32,
+    pub val: u32,
     /// The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs).
     pub tier: u32,
 }
@@ -1257,7 +1257,7 @@ impl InputHold {
         Ok(InputHold {
             tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
-            value: integer::<u32>(f.at(1)?.get_number()?)?,
+            val: integer::<u32>(f.at(1)?.get_number()?)?,
             tier: integer::<u32>(f.at(2)?.get_number()?)?,
         })
     }

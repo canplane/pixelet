@@ -172,11 +172,11 @@ pub(super) fn apply(
             holding.object_tier = p.tier;
             match p.tool {
                 abi::ActiveTool::Object => {
-                    holding.object_cube = or_refuse(cube_of(p.value), Errno::EINVAL)?;
+                    holding.object_cube = or_refuse(cube_of(p.val), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Decor => {
                     holding.decor_id = or_refuse(
-                        u16::try_from(p.value).ok().and_then(DecorId::of),
+                        u16::try_from(p.val).ok().and_then(DecorId::of),
                         Errno::EINVAL,
                     )?;
                 }
