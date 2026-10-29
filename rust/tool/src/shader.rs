@@ -150,11 +150,11 @@ fn meaning(f: &str, text: &str) -> Result<Vec<u8>, String> {
         let stream: proc_macro2::TokenStream = text.parse().map_err(|e| format!("{f}: {e:?}"))?;
         tokens(stream, &mut out);
     } else if f.ends_with(".toml") {
-        let mut value: toml::Value = toml::from_str(text).map_err(|e| format!("{f}: {e}"))?;
+        let mut val: toml::Value = toml::from_str(text).map_err(|e| format!("{f}: {e}"))?;
         if INHERITED.contains(&f) {
-            value = inherited(&value);
+            val = inherited(&val);
         }
-        out.extend(value.to_string().into_bytes());
+        out.extend(val.to_string().into_bytes());
     } else {
         out.extend(text.as_bytes());
     }
@@ -240,9 +240,9 @@ pub fn made_from(root: &Path) -> Option<String> {
 /// Each checked-in entry not made from `digest`: all of them when the stamp
 /// names another, else those missing.
 pub fn stale(root: &Path, digest: &str) -> Vec<String> {
-    let current = made_from(root).as_deref() == Some(digest);
+    let cur = made_from(root).as_deref() == Some(digest);
     generated()
-        .filter(|f| !current || !root.join(f).is_file())
+        .filter(|f| !cur || !root.join(f).is_file())
         .collect()
 }
 

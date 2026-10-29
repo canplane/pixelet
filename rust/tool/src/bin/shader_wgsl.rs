@@ -199,7 +199,7 @@ fn run() -> Result<bool, String> {
     let stamp = root.join(DIR).join(STAMP);
     if check {
         let named = made_from(&root).as_deref() == Some(built.as_str());
-        let mut current = named;
+        let mut cur = named;
         for (_, file, text) in &made {
             let target = root.join(DIR).join(file);
             if std::fs::read_to_string(&target).ok().as_deref() != Some(text.as_str()) {
@@ -210,7 +210,7 @@ fn run() -> Result<bool, String> {
                     "stale: {} is not what the source makes now; run `cargo shader-wgsl{mend}`",
                     target.display()
                 );
-                current = false;
+                cur = false;
             }
         }
         if !named {
@@ -219,7 +219,7 @@ fn run() -> Result<bool, String> {
                 stamp.display()
             );
         }
-        return Ok(current);
+        return Ok(cur);
     }
     // The stamp is taken away first and put back last, each entry renamed
     // into place between: a run cut short leaves no stamp, so the set reads
