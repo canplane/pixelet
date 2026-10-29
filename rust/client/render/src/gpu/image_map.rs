@@ -8,7 +8,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{place, release, texture_usage, Format, Gpu, Image};
 
-use crate::gpu::mip::{mip_levels, Mips};
+use crate::gpu::mip::{mip_levels, MipPass};
 
 pub struct ImageMap {
     texture: u32,
@@ -46,7 +46,7 @@ impl ImageMap {
     }
 
     /// Whether the image came this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<Image>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mips: &MipPass, image: fn() -> Option<Image>) -> bool {
         if self.loaded {
             return false;
         }

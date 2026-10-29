@@ -58,13 +58,13 @@ function sendMove(): void {
 }
 
 function pickSlot(slot: number): void {
-  const { recentPicks, selectCube, selectDecor, selectMarker, cueSwatch } =
+  const { recentPicks, selectCube, selectDecor, selectMarker, flashSwatch } =
     useDockStore.getState();
   const pick = recentPicks[slot];
   if (pick.tool === ActiveTool.Decor) return selectDecor(pick.kind);
   if (pick.tool === ActiveTool.Marker) return selectMarker();
   selectCube(pick.cube);
-  cueSwatch(pick.cube, false);
+  flashSwatch(pick.cube, false);
 }
 
 /** Whether the key is one the shell answers, so a driver can leave the rest alone. */

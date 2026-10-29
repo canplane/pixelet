@@ -16,7 +16,7 @@ use crate::gpu::api::{
     buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
     Format, Gpu, Load, RenderContext,
 };
-use crate::gpu::mip::{mip_levels, Mips};
+use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::{Paint, Sheet, SlotSet};
@@ -211,7 +211,7 @@ impl MarkerPass {
 
     /// A sticker whose text is not drawn yet is left for a later frame.
     /// Whether the sheet changed: made again, or a sticker drawn on it.
-    pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, sheet: &mut Sheet, text: TextOf) -> bool {
+    pub fn sync_sheet(&mut self, g: &Gpu, mips: &MipPass, sheet: &mut Sheet, text: TextOf) -> bool {
         let flush = sheet.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
         if flush.whole {

@@ -28,7 +28,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* A long press aims at a control (the size flyout); the iOS callout,
+  /* A long press aims at a control (the size popover); the iOS callout,
      selection and drag ghost would interrupt it. */
   -webkit-touch-callout: none;
   -webkit-user-select: none;

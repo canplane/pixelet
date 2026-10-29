@@ -104,7 +104,7 @@ export function WorldView() {
       </View>
 
       {
-        /* Under the chrome: the size flyout is meant to cover the toasts. */
+        /* Under the chrome: the size popover is meant to cover the toasts. */
       }
       <AboveKeyboard inset={chrome.inset} lift={DOCK_HEIGHT + TOAST_LIFT_PX}>
         <Toaster />

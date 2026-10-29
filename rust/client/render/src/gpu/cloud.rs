@@ -15,7 +15,7 @@ use crate::gpu::api::{
     word_bytes, Entry, Format, Gpu, Load, TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
-use crate::gpu::mip::{mip_levels, Mips};
+use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::WORLD_COLOR;
 use crate::look::environment::ENV_SKY;
@@ -163,7 +163,7 @@ fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
     pass.end();
     release(level);
     g.submit(encoder);
-    let mips = Mips::new(g, pipelines, Format::r8unorm);
+    let mips = MipPass::new(g, pipelines, Format::r8unorm);
     mips.build(g, tile, levels, 0, 1);
     mips.release();
 }

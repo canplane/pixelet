@@ -147,5 +147,3 @@ so its name may change freely.
 - The language server renames a name, not its mentions: search the comments,
   the documents and `$doc` for the old name, backticked or not. A backticked
   identifier follows the code; a prose word ("count", "packet") does not.
-- The records under `doc/` are renamed with the code, as the user asked on
-  2026-10-29, but a name quoted from someone else (an API's field) stays.

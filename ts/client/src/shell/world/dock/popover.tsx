@@ -1,4 +1,4 @@
-// @pxl/client/shell/world/dock/flyout.tsx
+// @pxl/client/shell/world/dock/popover.tsx
 
 /** A swatch's sizes above the card: a press shows their seed, and held, it grows into them. */
 
@@ -20,11 +20,11 @@ import { DOCK_HEIGHT } from "./card.tsx";
 import { type SizeGesture, STRIP } from "./strip.tsx";
 
 /** Above the card, where the sizes and their seed stand. */
-const FLYOUT_LIFT_PX = 6;
-const FLYOUT_GAP_PX = 8;
-const FLYOUT_PAD_Y = 8;
-const FLYOUT_WIDTH = chrome.target + 12;
-const FLYOUT_PITCH = chrome.target + FLYOUT_GAP_PX;
+const POPOVER_LIFT_PX = 6;
+const POPOVER_GAP_PX = 8;
+const POPOVER_PAD_Y = 8;
+const POPOVER_WIDTH = chrome.target + 12;
+const POPOVER_PITCH = chrome.target + POPOVER_GAP_PX;
 
 /** A dot whose area halves per tier, so the finest stays visible: 28, 20, 14, 10. */
 const MARK_COARSEST = 28;
@@ -38,132 +38,129 @@ const TIERS: readonly u32[] = Array.from(
   (_, i) => OBJECT_TIERS - 1 - i,
 );
 
-/** A press on a swatch shows the sizes' seed; held, it grows into them. */
-export const enum Sizes {
-  Seed = 0,
-  Open = 1,
-}
-
 /** The seed of the sizes, at their foot. */
 const SEED = 10;
 
-/** How long a key leaves the seed or the sizes up, long enough to read the one held. */
-const CUE_MS = 900;
+/** How long a key's flash leaves the seed or the sizes up, long enough to read the one held. */
+const FLASH_MS = 900;
 
 /** In the bar's frame, whose top is the card's; `bar` is where the bar is on the page. */
-export interface Flyout {
+export interface Popover {
   centerX: f64;
   bar: [f64, f64];
-  hover: u32 | null;
-  sizes: Sizes;
+  highlighted: u32 | null;
+  /** The sizes open; else their seed. */
+  open: boolean;
 }
 
 /** `x` and `y` on the page. */
-function tierAt(at: Flyout, x: f64, y: f64): u32 | null {
-  if (Math.abs(x - at.bar[0] - at.centerX) > FLYOUT_WIDTH / 2) return null;
-  const top = at.bar[1] - FLYOUT_LIFT_PX -
-    (2 * FLYOUT_PAD_Y + OBJECT_TIERS * FLYOUT_PITCH - FLYOUT_GAP_PX);
-  const along = y - top - FLYOUT_PAD_Y;
+function tierAt(at: Popover, x: f64, y: f64): u32 | null {
+  if (Math.abs(x - at.bar[0] - at.centerX) > POPOVER_WIDTH / 2) return null;
+  const top = at.bar[1] - POPOVER_LIFT_PX -
+    (2 * POPOVER_PAD_Y + OBJECT_TIERS * POPOVER_PITCH - POPOVER_GAP_PX);
+  const along = y - top - POPOVER_PAD_Y;
   if (along < 0) return null;
-  const row = Math.floor(along / FLYOUT_PITCH);
-  if (row >= OBJECT_TIERS || along - row * FLYOUT_PITCH > chrome.target) {
+  const row = Math.floor(along / POPOVER_PITCH);
+  if (row >= OBJECT_TIERS || along - row * POPOVER_PITCH > chrome.target) {
     return null;
   }
   return TIERS[row];
 }
 
-/** Where the flyout stands, and what a swatch's gesture does to it; `bar` is the dock's, whose place it is measured from. */
-export function useFlyout(
+/** Where the popover stands, and what a swatch's gesture does to it; `bar` is the dock's, whose place it is measured from. */
+export function usePopover(
   bar: React.RefObject<View | null>,
-): { flyout: Flyout | null; sizes: Omit<SizeGesture, "tap"> } {
-  const [flyout, setFlyout] = useState<Flyout | null>(null);
+): { popover: Popover | null; gesture: Omit<SizeGesture, "press"> } {
+  const [popover, setPopover] = useState<Popover | null>(null);
   // A release can come before the swatch's place is measured.
   const pressing = useRef(false);
-  const cueTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
-  const sizes: Omit<SizeGesture, "tap"> = {
-    press: (swatch) => {
+  const gesture: Omit<SizeGesture, "press"> = {
+    pressIn: (swatch) => {
       pressing.current = true;
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) => {
           if (!pressing.current) return;
-          setFlyout({
+          setPopover({
             centerX: sx + sw / 2 - bx,
             bar: [bx, by],
-            hover: null,
-            sizes: Sizes.Seed,
+            highlighted: null,
+            open: false,
           });
         });
       });
     },
-    cue: (swatch, open) => {
-      clearTimeout(cueTimer.current);
+    flash: (swatch, open) => {
+      clearTimeout(flashTimer.current);
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) =>
-          setFlyout({
+          setPopover({
             centerX: sx + sw / 2 - bx,
             bar: [bx, by],
-            hover: null,
-            sizes: open ? Sizes.Open : Sizes.Seed,
+            highlighted: null,
+            open,
           })
         );
       });
-      cueTimer.current = setTimeout(() => setFlyout(null), CUE_MS);
+      flashTimer.current = setTimeout(() => setPopover(null), FLASH_MS);
     },
-    open: () => setFlyout((f) => f && { ...f, sizes: Sizes.Open }),
+    longPress: () => setPopover((f) => f && { ...f, open: true }),
     move: (x, y) => {
-      if (flyout?.sizes !== Sizes.Open) return;
-      const hover = tierAt(flyout, x, y);
-      if (hover !== flyout.hover) setFlyout({ ...flyout, hover });
+      if (!popover?.open) return;
+      const highlighted = tierAt(popover, x, y);
+      if (highlighted !== popover.highlighted) {
+        setPopover({ ...popover, highlighted });
+      }
     },
-    lift: (x, y) => {
-      const tier = flyout?.sizes === Sizes.Open ? tierAt(flyout, x, y) : null;
+    release: (x, y) => {
+      const tier = popover?.open ? tierAt(popover, x, y) : null;
       if (tier !== null) holdTier(tier);
     },
-    close: () => {
+    end: () => {
       pressing.current = false;
-      setFlyout(null);
+      setPopover(null);
     },
   };
 
-  return { flyout, sizes };
+  return { popover, gesture };
 }
 
 /** The seed or the sizes over the swatch. Drawn from the bar, not the swatch, whose scrolling strip would clip it. */
-export function SizeFlyout({ flyout }: { flyout: Flyout }) {
+export function SizePopover({ popover }: { popover: Popover }) {
   return (
     <View
       style={[
-        styles.flyoutAt,
-        flyout.sizes === Sizes.Open ? styles.flyoutTakes : touches.block,
-        { left: flyout.centerX - FLYOUT_WIDTH / 2 },
+        styles.popoverAt,
+        popover.open ? styles.popoverTakes : touches.block,
+        { left: popover.centerX - POPOVER_WIDTH / 2 },
       ]}
     >
-      {flyout.sizes === Sizes.Open
-        ? <SizeMarks hover={flyout.hover} />
-        : (
-          <Backing
-            fill={STRIP.ground}
-            material={material.flyout}
-            place={BackingPlace.OverMap}
-            style={styles.seed}
-          />
-        )}
+      {popover.open ? <SizeMarks highlighted={popover.highlighted} /> : (
+        <Backing
+          fill={STRIP.ground}
+          material={material.popover}
+          place={BackingPlace.OverMap}
+          style={styles.seed}
+        />
+      )}
     </View>
   );
 }
 
 /** The sizes open, a mark a tier. */
-function SizeMarks({ hover }: { hover: u32 | null }) {
+function SizeMarks({ highlighted }: { highlighted: u32 | null }) {
   const { t } = useTranslation();
   const objectTier = useKernel((s) => s.holding.tier);
 
   return (
     <Backing
       fill={STRIP.ground}
-      material={material.flyout}
+      material={material.popover}
       place={BackingPlace.OverMap}
-      style={styles.flyout}
+      style={styles.popover}
     >
       {TIERS.map((tier) => {
         const mark = sizeMark(tier);
@@ -173,14 +170,17 @@ function SizeMarks({ hover }: { hover: u32 | null }) {
             accessibilityLabel={t("world.dock.object_size", {
               n: OBJECT_TIERS - tier,
             })}
-            style={styles.flyoutItem}
+            style={styles.popoverItem}
           >
-            <Motion to={{ scale: hover === tier ? 1.25 : 1 }} transition={SNAP}>
+            <Motion
+              to={{ scale: highlighted === tier ? 1.25 : 1 }}
+              transition={SNAP}
+            >
               <View
                 style={[
                   { width: mark, height: mark, borderRadius: mark / 2 },
-                  hover === tier
-                    ? styles.markHover
+                  highlighted === tier
+                    ? styles.markHighlighted
                     : objectTier === tier
                     ? styles.markHeld
                     : styles.markIdle,
@@ -195,14 +195,14 @@ function SizeMarks({ hover }: { hover: u32 | null }) {
 }
 
 const styles = StyleSheet.create({
-  flyoutAt: {
+  popoverAt: {
     position: "absolute",
-    bottom: DOCK_HEIGHT + FLYOUT_LIFT_PX,
-    width: FLYOUT_WIDTH,
+    bottom: DOCK_HEIGHT + POPOVER_LIFT_PX,
+    width: POPOVER_WIDTH,
     zIndex: 10,
   },
   // Takes the pointer whole, so the map under it draws no hover.
-  flyoutTakes: { pointerEvents: "box-only" },
+  popoverTakes: { pointerEvents: "box-only" },
   seed: {
     alignSelf: "center",
     width: SEED,
@@ -210,14 +210,14 @@ const styles = StyleSheet.create({
     borderRadius: SEED / 2,
     boxShadow: shadow.lift,
   },
-  flyout: {
+  popover: {
     alignItems: "center",
-    gap: FLYOUT_GAP_PX,
-    paddingVertical: FLYOUT_PAD_Y,
-    borderRadius: FLYOUT_WIDTH / 2,
+    gap: POPOVER_GAP_PX,
+    paddingVertical: POPOVER_PAD_Y,
+    borderRadius: POPOVER_WIDTH / 2,
     boxShadow: shadow.lift,
   },
-  flyoutItem: {
+  popoverItem: {
     width: chrome.target,
     height: chrome.target,
     alignItems: "center",
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   },
   markIdle: { backgroundColor: alpha(STRIP.mark, 0.4) },
   markHeld: { backgroundColor: alpha(STRIP.mark, 0.8) },
-  markHover: {
+  markHighlighted: {
     backgroundColor: STRIP.mark,
     boxShadow: `0 0 0 1px ${STRIP.mark}`,
   },

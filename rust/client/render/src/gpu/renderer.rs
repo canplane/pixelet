@@ -49,7 +49,7 @@ use crate::gpu::cloud::CloudPass;
 use crate::gpu::finish::Finish;
 use crate::gpu::grown::DecorFrame;
 use crate::gpu::image_map::ImageMap;
-use crate::gpu::mip::Mips;
+use crate::gpu::mip::MipPass;
 use crate::gpu::pack::Pack;
 use crate::gpu::pass::case::Case;
 use crate::gpu::pass::debug::DebugPass;
@@ -462,7 +462,7 @@ pub struct Renderer {
     atmosphere: Atmosphere,
     stars: StarPass,
     clouds: CloudPass,
-    mips: Mips,
+    mips: MipPass,
     pack: Pack,
     moon: ImageMap,
     decor: DecorPass,
@@ -517,7 +517,7 @@ impl Renderer {
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, frame_buf, air);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buf, air);
-        let mips = Mips::new(g, &mut pipelines, Format::rgba8unorm_srgb);
+        let mips = MipPass::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let pack = Pack::new(g);
         let sky_built = pipelines.build(g, PIPELINE_SKY, WORLD_COLOR);
         let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);

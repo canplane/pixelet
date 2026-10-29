@@ -3,7 +3,7 @@
 //! The decor the GPU grows and draws (pxl-spec-core `scatter`): what the
 //! ground grows in the eye's windows over the cast's world (`decor_cs`),
 //! placed decor handed as records beside it — a candidate grown again only
-//! where what it reads changed (`decor_mark_cs`, `Grows`), its record
+//! where what it reads changed (`decor_mark_cs`, `Growth`), its record
 //! standing otherwise; then each frame each
 //! record taken where the rays ask the leaf cell's zoom or finer and sized
 //! for the screen, counted a draw region (`decor_cnt_cs`), the regions laid
@@ -60,7 +60,7 @@ pub struct DecorFrame<'a> {
 /// reaches its own window's zoom alone: a finer candidate reading it where
 /// its own window lacks a brick grows again when that brick is filled, at
 /// its own zoom, and is drawn off the coarser one until then.
-pub struct Grows<'a> {
+pub struct Growth<'a> {
     pub window: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
     /// The bricks handed this frame (pxl-spec-core `window::FRESH_WORDS`).
@@ -203,7 +203,7 @@ impl Grown {
         }
     }
 
-    /// The frame's decor handed over and what its growth reads (`grows`);
+    /// The frame's decor handed over and what its growth reads (`growth`);
     /// `meshes` each group's index count, none while its model loads.
     /// Grouped again where `world` is not the one its groups bind or the
     /// records' room grew, so a frame without a cast misses no change.
@@ -211,7 +211,7 @@ impl Grown {
         &mut self,
         g: &Gpu,
         f: DecorFrame,
-        grows: Grows,
+        growth: Growth,
         meshes: &[u32; GROUPS as usize],
         world: World,
     ) {
@@ -267,17 +267,17 @@ impl Grown {
         for &b in f.edits {
             hold(&mut self.held, &mut self.holding, b);
         }
-        cut_boxes(&self.cuts, grows.cuts, |b| {
+        cut_boxes(&self.cuts, growth.cuts, |b| {
             hold(&mut self.held, &mut self.holding, b);
         });
-        self.cuts = *grows.cuts;
+        self.cuts = *growth.cuts;
         let w = &mut self.window;
         w.begin();
-        w.read(grows.window);
+        w.read(growth.window);
         let moved = !w.end();
         self.marked = self.holding;
         // A brick filled at a coarser window than the leaves' grows no decor.
-        let fresh = grows
+        let fresh = growth
             .fresh
             .iter()
             .any(|f| f[window::FRESH_CELL as usize] == pxl_spec_core::LEAF_CELL);
@@ -286,7 +286,7 @@ impl Grown {
             // The boxes held, at every zoom, then each brick handed, at
             // its window's alone.
             let mut boxes = [0u32; (scatter::MARKED * scatter::BOX_WORDS) as usize];
-            let fresh = grows.fresh.iter().map(|f| {
+            let fresh = growth.fresh.iter().map(|f| {
                 let cell = f[window::FRESH_CELL as usize];
                 let q = window::fresh_brick([
                     f[window::FRESH_FIRST as usize],
@@ -351,8 +351,12 @@ impl Grown {
         }
         let c = &mut self.counted;
         c.begin();
-        c.read(&grows.eye[eye::ORIGIN..eye::ORIGIN + 3]);
-        c.read(&[grows.eye[eye::RANGE], grows.eye[eye::RANGE + 1], self.room]);
+        c.read(&growth.eye[eye::ORIGIN..eye::ORIGIN + 3]);
+        c.read(&[
+            growth.eye[eye::RANGE],
+            growth.eye[eye::RANGE + 1],
+            self.room,
+        ]);
         c.read(f.drawing);
         c.read(meshes);
         c.read(&f.translation);

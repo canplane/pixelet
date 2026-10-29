@@ -13,7 +13,7 @@ use pxl_spec::asset::{shipped_sentinel_tile, shipped_texture_tile, TileOrigin};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_usage, bytes, place, release, texture_usage, Format, Gpu, Image};
-use crate::gpu::mip::{mip_levels, Mips};
+use crate::gpu::mip::{mip_levels, MipPass};
 use crate::mesh::paint::palette::{palette, LAYERS, SENTINELS};
 
 pub const LAYER_TEX_SIZE: u32 = PACK.cell;
@@ -128,7 +128,7 @@ impl Pack {
     }
 
     /// Whether the pack came this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<Image>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mips: &MipPass, pack: fn() -> Option<Image>) -> bool {
         if self.loaded {
             return false;
         }

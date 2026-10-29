@@ -14,15 +14,15 @@ pub fn mip_levels(width: u32, height: u32) -> u32 {
     32 - width.max(height).max(1).leading_zeros()
 }
 
-pub struct Mips {
+pub struct MipPass {
     pipeline: u32,
     layout: u32,
     sampler: u32,
 }
 
-impl Mips {
+impl MipPass {
     /// A pipeline draws into the format it was built for, so each format needs its own.
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: Format) -> Mips {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: Format) -> MipPass {
         let built = pipelines.build(g, PIPELINE_MIP, format);
         let sampler = g.sampler(
             FilterMode::linear,
@@ -32,7 +32,7 @@ impl Mips {
             None,
             1,
         );
-        Mips {
+        MipPass {
             pipeline: built.pipeline,
             layout: built.layouts[0],
             sampler,

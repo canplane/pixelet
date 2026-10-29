@@ -24,7 +24,7 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
     RenderContext,
 };
-use crate::gpu::grown::{cut_boxes, hold, Drawn, Grown, Grows};
+use crate::gpu::grown::{cut_boxes, hold, Drawn, Grown, Growth};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::renderer::{Cast, Overwrites};
@@ -622,7 +622,7 @@ impl RaysPass {
         // Decor grown first: where it stands is what the sun's cast reads
         // of it, and its buffers what the sun's groups bind.
         let world = [c.eye, c.window, ground, c.shards, c.overwrites, pool];
-        let grows = Grows {
+        let growth = Growth {
             window: cast.window,
             cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
                 .try_into()
@@ -633,7 +633,7 @@ impl RaysPass {
                 .map_or(&[][..], |gb| &gb.handed[..fresh as usize]),
             eye: &cast.eye,
         };
-        c.grown.prepare(g, cast.decor, grows, meshes, world);
+        c.grown.prepare(g, cast.decor, growth, meshes, world);
         // The shadow map is cast, every slot a receiver reads, as the eye's
         // rays are (pxl-spec-core `sun`), where what it reads moved: the
         // light's frame or box, the eye's place or zooms, which the

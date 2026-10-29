@@ -39,13 +39,13 @@ use tokio::runtime::Builder;
 
 /// Where the tiles come from: the oven, baked on demand, or the shelf, each
 /// kind's set under a directory.
-enum Tiles {
+enum TileSource {
     Oven(Server),
     Shelf(PathBuf),
 }
 
 struct App {
-    tiles: Tiles,
+    tile_source: TileSource,
     /// The oven's cache, whose token names what it serves.
     cache: PathBuf,
     top_zoom: Zoom,
@@ -69,14 +69,14 @@ fn named(bytes: &[u8]) -> String {
 /// every bake writes again; the oven's, its cache's token.
 fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
-    match &app.tiles {
+    match &app.tile_source {
         _ if !is_sharded(layer) => {
             read(&app.out.join(EARTH).join(pyramid::MANIFEST)).map(|b| named(&b))
         }
-        Tiles::Shelf(dir) => {
+        TileSource::Shelf(dir) => {
             read(&dir.join(layer.name()).join(pyramid::MANIFEST)).map(|b| named(&b))
         }
-        Tiles::Oven(_) => {
+        TileSource::Oven(_) => {
             let token = app.cache.join(OVEN_TOKEN);
             if !token.exists() {
                 std::fs::create_dir_all(&app.cache)
@@ -98,19 +98,19 @@ fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
 fn declaration(app: &App) -> Result<String, String> {
     let kinds = source::try_kinds(|l| {
         let version = version_of(app, l)?;
-        match &app.tiles {
+        match &app.tile_source {
             _ if !is_sharded(l) => Ok(source::Kind {
                 shard: None,
                 ..source::of_set(&app.out.join(EARTH), &version)?
             }),
-            Tiles::Shelf(dir) => match source::of_set(&dir.join(l.name()), &version)? {
+            TileSource::Shelf(dir) => match source::of_set(&dir.join(l.name()), &version)? {
                 k if k.shard.is_some() => Ok(k),
                 _ => Err(format!(
                     "{}: its manifest names no shards the set holds",
                     dir.join(l.name()).display()
                 )),
             },
-            Tiles::Oven(_) => Ok(source::Kind {
+            TileSource::Oven(_) => Ok(source::Kind {
                 format: FORMAT.of(l),
                 version,
                 shard: Some(source::tiles(app.coverage.iter().map(String::as_str))?),
@@ -167,9 +167,9 @@ async fn tile(
     let Some(kind) = Kind::parse(&kind) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let demand = match &app.tiles {
-        Tiles::Oven(demand) => demand,
-        Tiles::Shelf(dir) => return from_shelf(dir, kind, &name).await,
+    let demand = match &app.tile_source {
+        TileSource::Oven(demand) => demand,
+        TileSource::Shelf(dir) => return from_shelf(dir, kind, &name).await,
     };
     match demand.get(kind, &name).await {
         Ok(Some(bytes)) => packed(bytes),
@@ -292,22 +292,22 @@ fn run() -> Result<(), String> {
         }
     }
 
-    let (tiles, top_zoom) = match shelf {
-        Some(dir) => (Tiles::Shelf(dir), TOP_ZOOM),
+    let (tile_source, top_zoom) = match shelf {
+        Some(dir) => (TileSource::Shelf(dir), TOP_ZOOM),
         None => {
             let top_zoom = LEAF_ZOOM
                 .checked_sub(folds)
                 .filter(|&z| z >= TOP_ZOOM)
                 .ok_or("--folds past the pyramid's top")?;
             (
-                Tiles::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?),
+                TileSource::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?),
                 top_zoom,
             )
         }
     };
     let coverage: Vec<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
     let app = Arc::new(App {
-        tiles,
+        tile_source,
         cache: cache.clone(),
         top_zoom,
         coverage,
