@@ -58,10 +58,10 @@ unit and lives in a position's fraction, down to z32, a 256th.
 
 A size answers the same questions at every zoom (`coord/zoom.rs`): its side in
 units (`units`), which cell a point lies in and where that cell begins
-(`index_of`, `base_of`), and its box (`cube`). The world is zoom 0's cell, once
+(`idx_of`, `base_of`), and its box (`cube`). The world is zoom 0's cell, once
 around in X (`coord/world.rs` `ROUND`, `around`), and a stored X stands where it
 is nearest the eye (`nearest`); which lap a cell's X is named on is
-pxl-spec-core's `wrap_index`, which every walk names it by.
+pxl-spec-core's `wrap_idx`, which every walk names it by.
 
 A zoom's side can reach the world's extent on an axis, and then that axis
 collapses: the world is 2^16 units tall, so from z8 coarser a cell is

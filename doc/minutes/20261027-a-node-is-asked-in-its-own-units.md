@@ -55,9 +55,9 @@ rule each change is held to.
 
 - **The work a ray does is closed.** At each distance a ray steps in the
   cells asked there (`grid::cell_at`), each at least the view's cell wide,
-  1/`CELLS_A_RADIAN` radians (`grid::CELL`), so per octave of distance it
-  crosses at most about `CELLS_A_RADIAN` (96) of them, and a ray crosses at
-  most about `CELLS_A_RADIAN · log₂(reach / d_near)` cells, and enters about
+  1/`CELLS_A_RAD` radians (`grid::CELL`), so per octave of distance it
+  crosses at most about `CELLS_A_RAD` (96) of them, and a ray crosses at
+  most about `CELLS_A_RAD · log₂(reach / d_near)` cells, and enters about
   twice that many nodes, every node over them on its path included, plus the
   near-eye floor where a block is wider than a cell, plus the levels it
   descends. It holds whatever the world holds.

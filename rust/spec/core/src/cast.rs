@@ -255,7 +255,7 @@ impl Node {
     }
 
     /// The world's node it is from the origin `o`, X named as the world
-    /// names it (pxl-spec space/coord/world.rs `wrap_index`).
+    /// names it (pxl-spec space/coord/world.rs `wrap_idx`).
     pub fn idx(&self, o: [i32; 3]) -> [i32; 3] {
         let r0 = roots_of(o);
         [

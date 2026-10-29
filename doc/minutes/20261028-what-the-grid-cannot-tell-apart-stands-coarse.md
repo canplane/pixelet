@@ -71,7 +71,7 @@ regression, not an answer. What stands:
   `walk`, `meets_box`), the eye's and the sun's alike, so the rows are gone and
   the eye's horizon pays about a millisecond of GPU p95 more for it
   ([a node is asked in its own units](./20261027-a-node-is-asked-in-its-own-units.md)).
-- Every view is cast at the view's grid, a cell 1/`CELLS_A_RADIAN` radians
+- Every view is cast at the view's grid, a cell 1/`CELLS_A_RAD` radians
   (pxl-spec-core grid.rs `CELL`), an angle, so the display draws and decides
   nothing (`0c84382cd`).
 - The rays find and the raster hands out

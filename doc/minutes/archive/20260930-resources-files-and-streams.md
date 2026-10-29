@@ -51,7 +51,7 @@ they did by the same commands as on the page
 | Command                                     | Way | How often       | Order  | What matters               | Candidate                    | Fits                       |
 | ------------------------------------------- | --- | --------------- | ------ | -------------------------- | ---------------------------- | -------------------------- |
 | `INPUT_POINTER`, `INPUT_WHEEL`              | H→G | continuous      | strict | every event                | a queue, WASI's `stream<T>`  | yes                        |
-| `SENSOR_UPDATE`, `SENSOR_ORIENTATION`       | H→G | continuous      | yes    | mostly the latest          | a queue or a latest value    | half                       |
+| `SENSOR_UPDATE`, `SENSOR_ORIENT`            | H→G | continuous      | yes    | mostly the latest          | a queue or a latest value    | half                       |
 | `SENSOR_ERROR`, `SENSOR_ORIENTATION_LOST`   | H→G | once            | —      | the end of the above       | a stream's end               | yes, on the stream         |
 | `WORLD_SNAPSHOT` (raised)                   | G→H | when it changes | —      | the latest, replaced whole | published state and a notice | not as a lossless stream   |
 | `FETCH_UPDATE`, `LOAD_UPDATE`, `LOAD_IMAGE` | H→G | once per open   | —      | the result                 | a future                     | a completion, not a stream |

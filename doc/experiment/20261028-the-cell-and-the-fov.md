@@ -31,7 +31,7 @@ What `SPLIT` sizes followed it in the export:
 - `window::RADIUS` and `ACROSS`. `ACROSS` rounds up to a power of two by
   itself, so nothing assumes one of `SPLIT`.
 - `cell_at`, `beam::spacing`, decor's sprite edge and the clouds' thinning.
-- pxl-spec `split_distance` and `target_cell_px`.
+- pxl-spec `split_dist` and `target_cell_px`.
 
 pxl-spec-core's tests passed on B. The kernel decor test
 `decor_s_edges_are_angles_the_reference_view_draws_as_set` failed on B (16 px
@@ -68,5 +68,5 @@ one place. Today they sit apart:
 - a test writes the 12 px cell as a literal.
 
 **Then (10-28):** with the knobs gathered (`FOV_DEG` in pxl-spec
-space/camera/grid.rs, `CELLS_A_RADIAN` in pxl-spec-core grid.rs), the user
+space/camera/grid.rs, `CELLS_A_RAD` in pxl-spec-core grid.rs), the user
 took C: 53.13°, the cell kept at 1/96 rad.

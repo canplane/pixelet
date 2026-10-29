@@ -48,7 +48,7 @@ export function place(
   const coord: PVF3 = { i, f };
   const level = Math.round(Math.log2(size));
   const is_whole_cell = level >= OBJECT_LAYOUT.max;
-  const [ix, iy, iz] = cell_index(coord);
+  const [ix, iy, iz] = cell_idx(coord);
   const key = cell_key(ix, iy, iz);
   let tree = cells.get(key);
   if (!tree) {
@@ -71,7 +71,7 @@ The default object size takes the `is_whole_cell` branch
 (`OBJECT_LAYOUT.max = CELL_SHAMT = 0`, and `Math.log2(1) = 0`), which calls
 `sparse_tree.fill()` — a `mem.data.fill(val, 0, mem.head)` that **never reads
 the coordinate at all**. For that common case a write cannot fail based on
-elevation; only `cell_index()` (which cell the object lands in) can differ, and
+elevation; only `cell_idx()` (which cell the object lands in) can differ, and
 that's exact `BigInt` floor-division, no floats involved.
 
 For sub-cell sizes, `sparse_tree.write()` descends the tree using only the low 3

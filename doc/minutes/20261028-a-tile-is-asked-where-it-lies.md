@@ -52,7 +52,7 @@ proposed twice, on 2026-10-17 and on 2026-10-28, and both times it was dropped.
 ## Why no bound goes into the tile
 
 - The demand needs none. Its rule is a ratio of distance to cell size
-  (`pxl-spec space/camera/grid.rs` `split_distance`). A coarse surface differs
+  (`pxl-spec space/camera/grid.rs` `split_dist`). A coarse surface differs
   from the fine one by the relief inside one of its cells, and that difference
   is small against the distance at which the cell is drawn.
 - The ray needs none past what the windows' levels give, since those are made

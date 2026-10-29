@@ -585,7 +585,7 @@ scheduler then changes no concern above it.
   declaration; that merge is also what makes a record wait once.
 - **The chunk table still draws from `Domain`'s cover**, so `Domain` cannot go
   before the cache is chosen. For the time between, the reach and the cover come
-  from one `split_distance`, with an assertion that every page the cover draws
+  from one `split_dist`, with an assertion that every page the cover draws
   is inside the reach.
 - **The device's pin is ranked last today** (`policy::pinned`); a lock for
   physics comes first. Two kinds: a hard pin, correctness; a soft one, as now.

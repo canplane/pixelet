@@ -58,7 +58,7 @@ neighboring rays are never found, and nothing covers their pixels.
 
 The last group is the structure taken. The coarse rays here are the camera
 grid's own: the corners of its cells, so the beam's spacing is the view's cell,
-`grid::CELL`, 1/`CELLS_A_RADIAN` radians, and does not depend on the screen.
+`grid::CELL`, 1/`CELLS_A_RAD` radians, and does not depend on the screen.
 
 ## The beam
 

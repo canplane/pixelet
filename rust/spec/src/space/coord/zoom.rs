@@ -76,7 +76,7 @@ pub fn idx_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
     at.map(|v| (i64::from(v) >> shift) as i32)
 }
 
-/// `index_of`'s inverse, to the cell's base.
+/// `idx_of`'s inverse, to the cell's base.
 pub fn base_of(zoom: Zoom, idx: [i32; 3]) -> Q3 {
     let shift = FRAC_W as i32 + shamt(zoom);
     let [x, y, z] = idx.map(i64::from);

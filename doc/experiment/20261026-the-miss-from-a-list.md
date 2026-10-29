@@ -37,7 +37,7 @@ pays before it returns.
 room for 2^20), taking its place off a count in a small buffer of its own
 (`ray::MISS_ARGS_WORDS`), which it binds as its eighth storage buffer and
 raises the walk's dispatch in, 64 workgroups a row of 4096 listed. The count
-is copied into the pyramid's buffer after `cast_cs` (`observed::MARKS_COUNT`),
+is copied into the pyramid's buffer after `cast_cs` (`observed::MARKS_CNT`),
 and `miss_list_cs` walks each listed pixel as `miss_cs` did (`missed`), 64
 lanes a workgroup, dispatched indirect. A pixel past the list's room has
 `cast_cs` raise the second dispatch, `miss_cs` over every pixel as before,
@@ -86,7 +86,7 @@ nothing left to win.
 
 The list is the cast now: `cast_cs` lists the pixels it marks and counts
 them in `ray::MISS_ARGS_WORDS`, the count is copied to
-`observed::MARKS_COUNT`, `miss_list_cs` walks the list off an indirect
+`observed::MARKS_CNT`, `miss_list_cs` walks the list off an indirect
 dispatch, and `miss_cs` over every pixel runs only where the list's 2^20 are
 full, its dispatch otherwise none. The check is not kept, nor are the
 measuring variants above.

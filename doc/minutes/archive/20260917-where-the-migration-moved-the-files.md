@@ -41,7 +41,7 @@ There was no `apps/web/src/world/`. What was in `module/world/*` and
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `world/sched.rs`                                     | `module/world/sched/chunk_table.ts` (5/9), `render/chunk_lod.ts`                   |
 | `world/decor.rs`                                     | `module/world/decor/instance.ts` (3/8)                                             |
-| `world/environment.rs`                               | `module/world/environment/celestial_position.ts` (`sun_position`, `moon_position`) |
+| `world/environment.rs`                               | `module/world/environment/celestial_position.ts` (`sun_pos`, `moon_pos`)           |
 | `world/raycast.rs` and `module/world/raycast.rs`     | `render/layer/pipeline/chunk_raycast.ts`, one file made two                        |
 | `world/billboard.rs`, `world/marker.rs`              | no source; the drawing half taken out of `module/world/billboard/` and `marker/`   |
 | `world/object.rs`                                    | one name from `contract.ts`; none of `compositor.ts`'s names survive               |

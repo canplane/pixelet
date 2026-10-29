@@ -14,7 +14,7 @@ const MASTER_SEED: u32 = 0x5eed_0001;
 
 /// A node's seed for one use: `tag` names the use, and the node's zoom and
 /// each of its indices are folded in, in order, X named as the world names
-/// it (`wrap_index`), so a node seeds alike on whichever lap its asker counts
+/// it (`wrap_idx`), so a node seeds alike on whichever lap its asker counts
 /// it. Every procedural draw seeds by it, each use under a tag of its own,
 /// so no two uses draw one stream.
 pub fn node_seed<const D: usize>(tag: u32, (zoom, at): (Zoom, [i32; D])) -> u32 {

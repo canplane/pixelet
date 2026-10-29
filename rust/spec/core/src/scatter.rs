@@ -417,9 +417,9 @@ pub mod drawn {
     /// instance 0, which a device without `indirect-first-instance` holds
     /// every indirect draw to.
     pub const ARGS_WORDS: u32 = 5;
-    /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFFSET_BYTES`, every
+    /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFF_BYTES`, every
     /// device's dynamic offset alignment), its index list's first slot at
-    /// `UNIFORM_INDEX` within it: the lanes' base, to which the args pass adds
+    /// `UNIFORM_IDX` within it: the lanes' base, to which the args pass adds
     /// the region's first slot once the regions are laid out.
     pub const UNIFORM_WORDS: u32 = OFF_BYTES / 4;
     /// The dynamic offset alignment every WebGPU device meets: its

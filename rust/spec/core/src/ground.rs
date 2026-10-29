@@ -70,7 +70,7 @@ pub fn ceiling(face: i32) -> i32 {
 }
 
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
-/// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
+/// in leaf cells, off its padded elevation samples `ele` (`ele_idx`): the
 /// one producer of a cell's height, which a GPU runs once a cell of a held
 /// tile (`height_cs`), and the CPU reads back.
 pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {

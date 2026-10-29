@@ -53,7 +53,7 @@ const _: () = assert!(MISS >> (KEPT_SHIFT + KEPT_BITS) != 0);
 /// workgroups a row and a row each `MISS_LANES * MISS_ACROSS` listed
 /// (`MISS_ARGS_LIST`); over every pixel, 8 × 8 a workgroup, where any
 /// marked pixel found the list full, else none (`MISS_ARGS_WHOLE`); and the
-/// count listed or not (`MISS_ARGS_COUNT`); then what its pixels, or the
+/// count listed or not (`MISS_ARGS_CNT`); then what its pixels, or the
 /// sun's slots, counted where the `ray_counts` setting asks (`tally::RAYS`
 /// lanes from `tally::TOOK`, `MISS_ARGS_TALLY`). Each frame's start
 /// (`MISS_ARGS_EMPTY`) dispatches neither and counts none.

@@ -562,7 +562,7 @@ pub const fn sample_words(size: u32) -> u32 {
 /// (pxl-shader cast.rs `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
-/// (`observed::MARKS_COUNT`), then a slot each, its X and its Y over 16 bits.
+/// (`observed::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_words(size)
 }

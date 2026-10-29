@@ -14,7 +14,7 @@ document left open.
 
 ## The bitmap is the ratio, not the device
 
-`SPLIT_BYTES` is `(1 << (BUCKET_COUNT - 1)) / 8` and `BUCKET_COUNT` is
+`SPLIT_BYTES` is `(1 << (BUCKET_CNT - 1)) / 8` and `BUCKET_CNT` is
 `MAX_ALLOC_LOG2 - MIN_ALLOC_LOG2 + 1`, so the bitmap is `2^(MAX-MIN) / 8` — a
 function of the two exponents alone. It is a field of a `static`, sized at
 compile time, so the phone carries the same array the desktop does:

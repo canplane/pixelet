@@ -31,7 +31,7 @@ split while its nearest 3D distance from the eye is under
 ## What holds
 
 The rule is the invariant's. `Domain::split_at` splits by `D_min` against
-`split_distance(z)` from the eye alone, with no tilt and no floor at z16; one
+`split_dist(z)` from the eye alone, with no tilt and no floor at z16; one
 `Order` ranks fetch, mount, build and the record given up; the pages wanted are
 the drawn chunks' and every ancestor to the top.
 

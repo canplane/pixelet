@@ -12,7 +12,7 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 // (pxl-spec space/camera/grid.rs `HALF_TAN`) and the display's pixels.
 
 /// The camera grid, the one knob of resolution: the view's cells a radian,
-/// a cell 1/`CELLS_A_RADIAN` radians about the eye whatever the screen. An
+/// a cell 1/`CELLS_A_RAD` radians about the eye whatever the screen. An
 /// angle, so what is observed is the display's pixels' to draw, never
 /// theirs to decide.
 pub const CELLS_A_RAD: f32 = 96.0;
@@ -26,7 +26,7 @@ pub const WINDOW_MARGIN: f32 = 2.0;
 // ---- the split's rule ----
 
 /// The view's cells a zoom's cell spans where it begins to be drawn, going out:
-/// its split distance is `CELLS_A_RADIAN / SPANS` of its sides (pxl-spec
+/// its split distance is `CELLS_A_RAD / SPANS` of its sides (pxl-spec
 /// space/camera/grid.rs `split_dist`): the rule the cell is told by,
 /// not a setting of it.
 pub const SPANS: f32 = 2.0;
@@ -42,7 +42,7 @@ pub const SPLIT: f32 = CELLS_A_RAD * WINDOW_MARGIN;
 pub const CELL: f32 = 1.0 / CELLS_A_RAD;
 
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared, in
-/// units: the widest cell whose split distance (`CELLS_A_RADIAN / SPANS` of its
+/// units: the widest cell whose split distance (`CELLS_A_RAD / SPANS` of its
 /// sides) is within the distance, held to what a zoom can name. The power of
 /// two is the float's own exponent, halved, so neither a logarithm nor a square
 /// root rounds it: a distance over the half split, `m·2^e` with `m` in [1, 2),

@@ -185,7 +185,7 @@ _a resource the canvas reads every frame is linear memory_.
 No external precedent was found for or against. Three constraints, all checked
 against this code, decide it:
 
-1. **The memory does not grow.** `reserve_memory` takes `initial === maximum`;
+1. **The memory does not grow.** `reserve_mem` takes `initial === maximum`;
    the kernel owns the range it is given and nothing else.
 2. **The large buffers are walked by address every frame**, so they stay in
    linear memory and stay directly addressable.

@@ -135,7 +135,7 @@ pub const fn idx_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
 }
 
 /// X named as the world names it at `zoom`, X going round: from minus half
-/// its count to under half (pxl-spec space/coord/world.rs `wrap_index`).
+/// its count to under half (pxl-spec space/coord/world.rs `wrap_idx`).
 pub fn wrap_idx(zoom: Zoom, x: i32) -> i32 {
     match zoom {
         0 => 0,

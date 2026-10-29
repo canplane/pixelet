@@ -759,7 +759,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> b
         let key = w.slots[b as usize].brick;
         let place = tile_of(cell, key).1;
         // The brick's cells out of the tile's, four looks a cell, each at
-        // its index in the brick (`window::index_of`).
+        // its index in the brick (`window::idx_of`).
         let side = GROUND.tile_cells() as usize;
         let (x0, y0) = ((place[0] * BRICK) as usize, (place[1] * BRICK) as usize);
         for i in 0..BRICK_CELLS {

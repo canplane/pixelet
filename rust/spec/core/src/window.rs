@@ -129,7 +129,7 @@ pub const fn fresh_brick(first: [u32; 2]) -> [i32; 2] {
 }
 
 /// How far from its center a window holds every cell, in its own cells: a
-/// zoom's band ends `CELLS_A_RADIAN` of its cells from the eye, and the
+/// zoom's band ends `CELLS_A_RAD` of its cells from the eye, and the
 /// window holds `WINDOW_MARGIN` times that (`grid::SPLIT`).
 pub const RADIUS: u32 = grid::SPLIT as u32;
 
@@ -153,7 +153,7 @@ pub fn entry(q: [i32; 2]) -> u32 {
 }
 
 /// The brick holding cell `g`, and where the cell lies in it, X then Y:
-/// a reader spreads it to an index (`index_of`) only where it reads a
+/// a reader spreads it to an index (`idx_of`) only where it reads a
 /// column, and shifts it to a level's entry as it is.
 pub fn brick_of(g: [i32; 2]) -> ([i32; 2], [u32; 2]) {
     let m = (BRICK - 1) as i32;
@@ -172,7 +172,7 @@ pub const fn level_at(j: u32) -> u32 {
 }
 
 /// Entry `[x, y]` of level `j` among a brick's levels, each level laid as
-/// its cells are (`index_of`).
+/// its cells are (`idx_of`).
 pub const fn level_idx(j: u32, at: [u32; 2]) -> u32 {
     level_at(j) + idx_of(at)
 }
@@ -187,7 +187,7 @@ pub const fn idx_of([x, y]: [u32; 2]) -> u32 {
     spread(x) | spread(y) << 1
 }
 
-/// The cell at index `i` (`index_of`'s inverse).
+/// The cell at index `i` (`idx_of`'s inverse).
 pub const fn of_idx(i: u32) -> [u32; 2] {
     [gather(i), gather(i >> 1)]
 }
@@ -741,7 +741,7 @@ pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_WINDOWS;
 
 /// Entry of level `l` (from 1) over a brick, its block `at` in blocks of
 /// that level, among a window's: the levels' entries in order, a level's
-/// in Morton order (`index_of`), so an entry's four halves are the four
+/// in Morton order (`idx_of`), so an entry's four halves are the four
 /// entries `4b..4b + 4` of the level under it. The levels under `l` hold
 /// `(ACROSS >> m)²` each, `m` from 1: a geometric sum, `(ACROSS² −
 /// (ACROSS >> (l − 1))²) / 3`, whole as a difference of two powers of four.
@@ -757,7 +757,7 @@ const fn key_word(v: i32) -> u32 {
 }
 
 /// Entry `b` of level `l` over a brick, its Morton index there
-/// (`joined_index`), of the eye's window at `cell`, folded off the level
+/// (`joined_idx`), of the eye's window at `cell`, folded off the level
 /// under it: what a ray reads at `cell` in the block of `2^l` entries a side
 /// at `b`, aligned as the entries are (`ACROSS` a multiple of the block's
 /// side), the join of its four halves' joins, each read once where the
