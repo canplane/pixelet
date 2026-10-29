@@ -69,7 +69,7 @@
         },
         "screen": {
           "label": "Everything (SSAO)",
-          "description": "The corners' shading, plus soft shading on everything on screen, decor and characters too. The most demanding option, as it processes the whole screen."
+          "description": "Adds soft shading to decor, characters and wider gaps on top of the corners for greater depth. This is the most demanding option because it processes the entire screen."
         }
       },
       "shadows": {
