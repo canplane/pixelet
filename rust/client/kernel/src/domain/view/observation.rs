@@ -8,7 +8,7 @@ use pxl_spec::space::layer::lattice::{demand_reach, draw_reach};
 use xpute_guest::global::Global;
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::split_distance;
+use pxl_spec::space::camera::grid::split_dist;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::hierarchy::tree::Node;
@@ -92,7 +92,7 @@ pub fn observation() -> Option<Observation> {
 /// the eye cut into one partition: from the coarsest bricks within the
 /// floor's ring (tile_cache/floor.rs `ring`), the far edge cut by the ground,
 /// a brick splits into its four while its nearest point is nearer than its
-/// cells' split distance (pxl-spec space/camera/grid.rs `split_distance`),
+/// cells' split distance (pxl-spec space/camera/grid.rs `split_dist`),
 /// the rule a ray's descent asks by, taken about the eye's height; each brick left is at the zoom
 /// its nearest point asks, and handed with the heights the world stands
 /// between in it. A function of the eye and the world alone, never of what
@@ -128,15 +128,11 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
         if d > o.reach {
             continue;
         }
-        if cell < GROUND.cell() && d < split_distance(cell) {
+        if cell < GROUND.cell() && d < split_dist(cell) {
             stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
             continue;
         }
-        let Some(b) = world
-            .bounds(&mut walked, (zoom, xy), cell)
-            .value()
-            .flatten()
-        else {
+        let Some(b) = world.bounds(&mut walked, (zoom, xy), cell).val().flatten() else {
             continue;
         };
         each((zoom, xy), [b.min[2], b.max[2]]);
@@ -185,5 +181,5 @@ impl ByEye {
 /// all of it where nothing is known or nothing stands.
 pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, walked: &mut Walked) -> Order {
     let stands = World::now().bounds(walked, p.node(), lattice.grid_zoom(p.zoom));
-    Order::of(o, &stands.value().flatten().unwrap_or(p.region()))
+    Order::of(o, &stands.val().flatten().unwrap_or(p.region()))
 }

@@ -40,7 +40,7 @@ pub fn set(edits: RenderEdits) -> Option<RenderEdits> {
 }
 
 /// The preview in force.
-pub fn current() -> RenderEdits {
+pub fn cur() -> RenderEdits {
     *PREVIEW.get(RenderEdits::default)
 }
 
@@ -72,7 +72,7 @@ pub enum Ghost {
 #[derive(Clone, Copy)]
 pub struct GhostBox {
     pub at: V3,
-    pub size: f64,
+    pub sz: f64,
     pub cube: Option<Cube>,
     pub erase: bool,
 }

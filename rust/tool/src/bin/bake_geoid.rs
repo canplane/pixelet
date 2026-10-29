@@ -50,7 +50,7 @@ impl Grid {
 
 fn read(path: &str) -> Result<Grid, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
-    let (mut offset, mut scale) = (None, None);
+    let (mut off, mut scale) = (None, None);
     let mut fields: Vec<usize> = Vec::new();
     let mut at = 0;
     // Header: "P5", comments, width, height, maxval, then one whitespace byte.
@@ -68,7 +68,7 @@ fn read(path: &str) -> Result<Grid, String> {
         if let Some(c) = line.strip_prefix('#') {
             let mut words = c.split_whitespace();
             match (words.next(), words.next()) {
-                (Some("Offset"), Some(v)) => offset = v.parse::<f64>().ok(),
+                (Some("Offset"), Some(v)) => off = v.parse::<f64>().ok(),
                 (Some("Scale"), Some(v)) => scale = v.parse::<f64>().ok(),
                 _ => {}
             }
@@ -82,7 +82,7 @@ fn read(path: &str) -> Result<Grid, String> {
             });
         }
     }
-    let (offset, scale) = (offset.ok_or("no Offset")?, scale.ok_or("no Scale")?);
+    let (offset, scale) = (off.ok_or("no Offset")?, scale.ok_or("no Scale")?);
     let [_, width, height, maxval] = [fields[0], fields[1], fields[2], fields[3]];
     if maxval != 65535 {
         return Err(format!("maxval {maxval}: two bytes a sample expected"));
@@ -132,11 +132,11 @@ fn run() -> Result<(), String> {
         }
     }
     let rms = (bricks / (fine.width * fine.height) as f64).sqrt();
-    let values: Vec<String> = m.iter().map(|v| format!("{v}")).collect();
+    let vals: Vec<String> = m.iter().map(|v| format!("{v}")).collect();
     let json = format!(
         "{{\n  \"$doc\": [\n    \"EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what a GPS height,\",\n    \"the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30, EPSG:3855). From GeographicLib's\",\n    \"5' grid (egm2008-5) by pxl-tool/bin/bake_geoid.rs; bilinear between these misses it by at\",\n    \"most {worst:.1} m, {rms:.1} m RMS.\"\n  ],\n  \"GEOID_STEP_DEG\": {{\n    \"$value\": {STEP_DEG},\n    \"$doc\": [\"The grid's spacing; rows from 90N down, {cols} columns from 0E east.\"]\n  }},\n  \"GEOID_M\": {{\n    \"$type\": \"f32\",\n    \"$value\": [\n      {}\n    ]\n  }}\n}}\n",
         // One a line, as `deno fmt` lays an array out.
-        values.join(",\n      ")
+        vals.join(",\n      ")
     );
     std::fs::write(root().join(OUT), json).map_err(|e| format!("{OUT}: {e}"))?;
     println!("[bake_geoid] {} points every {STEP_DEG}°, bilinear off the 5' grid by at most {worst:.2} m, {rms:.2} m RMS", m.len());

@@ -15,16 +15,16 @@ use crate::domain::control::camera::controller::{put_pivot, Motion};
 use crate::domain::control::navigation::support::{exact, is_unknown, nearest, unknown_z};
 use xpute_guest::global::Global;
 
-static DESTINATION: Global<Option<(Q3, Motion)>> = Global::new();
+static DST: Global<Option<(Q3, Motion)>> = Global::new();
 
-fn destination() -> &'static mut Option<(Q3, Motion)> {
-    DESTINATION.get(|| None)
+fn dst() -> &'static mut Option<(Q3, Motion)> {
+    DST.get(|| None)
 }
 
 /// A later destination or a `go_to` replaces it. `at`'s Z, where known, is
 /// the height whose nearest floor it stands on; unknown, the surface.
 pub fn go_to_ground(at: Q3, motion: Motion) {
-    *destination() = Some((at, motion));
+    *dst() = Some((at, motion));
     crate::sys::sched::edge::request_world_tick();
 }
 
@@ -37,22 +37,22 @@ pub fn go_to(at: Q3, motion: Motion) {
 /// The user put the pivot by hand; reaching the destination after would
 /// undo it. Turning or zooming leaves it.
 pub fn cancel() {
-    *destination() = None;
+    *dst() = None;
 }
 
 /// The place asked for and not yet put.
 pub fn pending() -> Option<Q3> {
-    destination().map(|(at, _)| at)
+    dst().map(|(at, _)| at)
 }
 
 /// Whose ground the terrain is asked for.
 pub fn tile() -> Option<Tile> {
-    destination().map(|(at, _)| GROUND.cell_of(LEAF_ZOOM, &at).tile())
+    dst().map(|(at, _)| GROUND.cell_of(LEAF_ZOOM, &at).tile())
 }
 
 /// Only the exact ground puts it; a coarser tile over it is not its ground.
-pub fn destination_step() {
-    let Some((at, motion)) = *destination() else {
+pub fn dst_step() {
+    let Some((at, motion)) = *dst() else {
         return;
     };
     let Some(to) = (if is_unknown(&at) {
@@ -62,7 +62,7 @@ pub fn destination_step() {
     }) else {
         return;
     };
-    *destination() = None;
+    *dst() = None;
     put_pivot(to, motion);
 }
 

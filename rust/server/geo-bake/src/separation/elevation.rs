@@ -10,7 +10,7 @@ use fnv::FnvHashMap;
 use crate::terrain::CELL_U;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg3857::u_from_mer;
-use pxl_spec::space::coord::zoom::index_of;
+use pxl_spec::space::coord::zoom::idx_of;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use pxl_spec_core::ground::bicubic;
 
@@ -40,6 +40,6 @@ pub fn sample_cells(
 
 pub fn tile_of([x, y]: [f64; 2]) -> [i32; 2] {
     let at = epsg3857::project(x, y, 0.0);
-    let [x, y, _] = index_of(LEAF_ZOOM, &at);
+    let [x, y, _] = idx_of(LEAF_ZOOM, &at);
     [x, y]
 }

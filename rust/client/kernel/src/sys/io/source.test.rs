@@ -15,7 +15,7 @@ fn formats() -> Vec<u32> {
 // Read off the source parsed, never declared: a declaration is the process's
 // once, and the world's tests walk ground no shard of this one serves.
 #[test]
-fn source_serves_by_shard() {
+fn src_serves_by_shard() {
     let s = parse(4, &formats(), ["0103300", "01033210"]).expect("a declaration the client reads");
     for served in [
         "01033",

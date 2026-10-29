@@ -11,8 +11,8 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::frame::shader::word::clouds::{BASE, COUNT, DRIFT, FRAC, REACH, SHOWN};
 use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
-    view_entry, word_bytes, Entry, Format, Gpu, Load,
+    buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
+    word_bytes, Entry, Format, Gpu, Load,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, Mips};
@@ -44,7 +44,7 @@ impl CloudPass {
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
-        frame_buffer: u32,
+        frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> CloudPass {
         let built = pipelines.build(g, PIPELINE_CLOUD, WORLD_COLOR);
@@ -73,13 +73,13 @@ impl CloudPass {
             None,
             1,
         );
-        let uniform = g.buffer(
+        let uniform = g.buf(
             word_bytes(CLOUDS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let mut e = vec![
-            buffer_entry(0, frame_buffer),
-            buffer_entry(1, uniform),
+            buf_entry(0, frame_buf),
+            buf_entry(1, uniform),
             view_entry(2, tile_view),
             sampler_entry(3, tile_sampler),
         ];
@@ -111,7 +111,7 @@ impl CloudPass {
 
     /// `words` written, where the frame's read found them moved.
     pub fn write(&self, g: &Gpu) {
-        g.write_buffer(self.uniform, 0, bytes(&self.words));
+        g.write_buf(self.uniform, 0, bytes(&self.words));
     }
 
     /// The sheets, over the world's pass.

@@ -48,7 +48,7 @@ pub fn at_zoom(tile: Zoom) -> Detail {
 
 /// What is held, as finely as it is held: the ground at its cells, which
 /// answer alike asked finer, and what is placed at its own. Where the eye
-/// draws it coarser is the asker's to judge by `by_distance`
+/// draws it coarser is the asker's to judge by `by_dist`
 /// (domain/control/interaction.rs `Picked`).
 pub fn held() -> Detail {
     let [_, finest] = asked();
@@ -63,7 +63,7 @@ pub fn held() -> Detail {
 /// (pxl-spec space/camera/grid.rs `cell_at`), whose cell, drawn whole, spans
 /// at least one cell of the grid from any direction: the rule that sizes
 /// every drawn cell.
-pub fn by_distance() -> Detail {
+pub fn by_dist() -> Detail {
     Detail {
         range: asked(),
         eye: [0.0; 3],
@@ -84,13 +84,13 @@ pub fn cell_at(eye: V3, at: V3) -> Zoom {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ray {
     pub origin: V3,
-    pub direction: V3,
+    pub dir: V3,
     pub reach: f64,
 }
 
 impl Ray {
     pub fn at(&self, t: f64) -> V3 {
-        std::array::from_fn(|k| self.origin[k] + self.direction[k] * t)
+        std::array::from_fn(|k| self.origin[k] + self.dir[k] * t)
     }
 }
 
@@ -215,7 +215,7 @@ impl<'a> Query for Walker<'_, 'a> {
 fn decor_hit(ray: &Ray, t: f64, axis: usize, i: Instance) -> Hit {
     let claimed = super::decor::claim(&i).unwrap_or_else(|| i.cell());
     let mut normal = [0.0; 3];
-    normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
+    normal[axis] = if ray.dir[axis] > 0.0 { -1.0 } else { 1.0 };
     Hit {
         t,
         point: ray.at(t),
@@ -236,7 +236,7 @@ impl<'a> World<'a> {
         let (met, strike) = self.along(ray, detail, Until::Opaque, self.strike(ray));
         let decor = strike
             .and_then(|s| s.best)
-            .filter(|&(d, ..)| met.value().flatten().is_none_or(|h: Hit| d < h.t));
+            .filter(|&(d, ..)| met.val().flatten().is_none_or(|h: Hit| d < h.t));
         match (decor, met) {
             (Some((d, i, k)), Answer::Nothing(l)) => {
                 Answer::Coarser(Some(decor_hit(ray, d, k, i)), l)
@@ -266,7 +266,7 @@ impl<'a> World<'a> {
         let o = ray.origin;
         let end = ray.at(ray.reach);
         self.read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
-        let from = cast::Ray::new(ray.direction.map(|v| v as f32), ray.reach as f32);
+        let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.reach as f32);
         let q = origin(o[0], o[1], o[2]);
         let met = cast::first(&mut walker, q, &from, detail, until);
         let met = (met.ends == Ends::Stop).then(|| self.hit(ray, q, met.stop));
@@ -310,9 +310,9 @@ impl<'a> World<'a> {
     /// it.
     pub(super) fn asset_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
         let mut walker = self.walker();
-        let value = pxl_spec_core::support::asset(&mut walker, l, zoom, c);
+        let val = pxl_spec_core::support::asset(&mut walker, l, zoom, c);
         match walker.lack {
-            None => Answer::Exact(value),
+            None => Answer::Exact(val),
             Some(t) => Answer::Nothing(t),
         }
     }
@@ -345,7 +345,7 @@ impl<'a> World<'a> {
         let min: V3 = std::array::from_fn(|k| unit[k] + q3::to_real(steps(k)));
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
-        normal[axis] = if ray.direction[axis] > 0.0 { -1.0 } else { 1.0 };
+        normal[axis] = if ray.dir[axis] > 0.0 { -1.0 } else { 1.0 };
         let struck = match answer::is_placed(s.asset[0]) {
             true => self
                 .objects

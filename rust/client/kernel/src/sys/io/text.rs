@@ -29,7 +29,7 @@ struct Answer<T> {
 
 struct RasterAt {
     pixels: Box<[u8]>,
-    size: [u32; 2],
+    sz: [u32; 2],
     origin: [f32; 2],
     advance: f32,
 }
@@ -110,18 +110,15 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
     let pairs = answer.at[LAYOUT_ANSWER::WORDS as usize..]
         .as_chunks::<{ LINE::WORDS as usize }>()
         .0;
-    let count = answer.at[LAYOUT_ANSWER::count as usize] as usize;
-    let mut lines = Vec::with_capacity(count.min(pairs.len()));
+    let cnt = answer.at[LAYOUT_ANSWER::count as usize] as usize;
+    let mut lines = Vec::with_capacity(cnt.min(pairs.len()));
     let mut start = 0;
-    for pair in pairs.iter().take(count) {
+    for pair in pairs.iter().take(cnt) {
         let (end, width) = (
             pair[LINE::end as usize] as usize,
             f32::from_bits(pair[LINE::width as usize]) as f64,
         );
-        if count > pairs.len()
-            || end < start
-            || !text_in.is_char_boundary(end)
-            || !width.is_finite()
+        if cnt > pairs.len() || end < start || !text_in.is_char_boundary(end) || !width.is_finite()
         {
             return Some(unlaid(text_in));
         }
@@ -148,9 +145,9 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
         // earliest, and a raster is read within the frame it was handed out in.
         let pixels = unsafe { core::slice::from_raw_parts(a.pixels.as_ptr(), a.pixels.len()) };
         return Some(Raster {
-            pixels,
-            width: a.size[0],
-            height: a.size[1],
+            px: pixels,
+            width: a.sz[0],
+            height: a.sz[1],
             origin: a.origin,
             advance: a.advance,
         });
@@ -172,7 +169,7 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
     }
     let at = RasterAt {
         pixels,
-        size,
+        sz: size,
         origin,
         advance: advance * scale,
     };

@@ -59,11 +59,11 @@ pub fn fmt_dur(ms: f64) -> String {
 /// starts, which is when its binary was built: commits made while it runs
 /// are not what it ran.
 pub fn git_sha() -> Option<String> {
-    let index = std::env::temp_dir().join(format!("pxl-bake-index-{}", std::process::id()));
+    let idx = std::env::temp_dir().join(format!("pxl-bake-index-{}", std::process::id()));
     let git = |args: &[&str]| {
         let out = Command::new("git")
             .args(args)
-            .env("GIT_INDEX_FILE", &index)
+            .env("GIT_INDEX_FILE", &idx)
             .output()
             .ok()?;
         out.status
@@ -72,7 +72,7 @@ pub fn git_sha() -> Option<String> {
     };
     let head = git(&["rev-parse", "HEAD"])?;
     let tree = git(&["add", "-A"]).and_then(|_| git(&["write-tree"]));
-    let _ = std::fs::remove_file(&index);
+    let _ = std::fs::remove_file(&idx);
     match tree {
         Some(t) if git(&["rev-parse", "HEAD^{tree}"]).as_deref() != Some(t.as_str()) => {
             Some(format!("{head}+{t}"))

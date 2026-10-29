@@ -24,7 +24,7 @@ fn a_token_is() {
 }
 
 #[test]
-fn toml_value() {
+fn toml_val() {
     let bare = meaning("a.toml", "[a]\nb = 1\nc = \"#d\"\n").unwrap();
     let said = meaning("a.toml", "# The table.\n[a]\nc = \"#d\"  # kept\n\nb = 1\n").unwrap();
     let moved = meaning("a.toml", "[a]\nb = 2\nc = \"#d\"\n").unwrap();

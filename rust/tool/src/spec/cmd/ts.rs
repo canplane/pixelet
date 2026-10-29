@@ -35,16 +35,16 @@ fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
     })
 }
 
-fn ts_write(spec: &Spec, f: &Field, value: &str) -> Result<String, String> {
+fn ts_write(spec: &Spec, f: &Field, val: &str) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list && kind == Kind::Number {
         check_packed(f)?;
         return Ok(format!(
-            ".array(SequenceType.U32_ARRAY, Uint32Array.from({value}))"
+            ".array(SequenceType.U32_ARRAY, Uint32Array.from({val}))"
         ));
     }
     if f.list && kind == Kind::Str {
-        return Ok(format!(".strs({value})"));
+        return Ok(format!(".strs({val})"));
     }
     if f.list || kind == Kind::Record {
         return Err(format!(
@@ -59,7 +59,7 @@ fn ts_write(spec: &Spec, f: &Field, value: &str) -> Result<String, String> {
         Kind::Str => "str",
         _ => "u32",
     };
-    Ok(format!(".{method}({value})"))
+    Ok(format!(".{method}({val})"))
 }
 
 fn ts_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {

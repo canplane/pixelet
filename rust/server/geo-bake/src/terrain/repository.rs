@@ -104,7 +104,7 @@ pub struct BuildingRow {
 
 pub struct BaseRow {
     /// Which table: "land_use", "water", "land" or "infrastructure".
-    pub source: String,
+    pub src: String,
     pub gers_id: String,
     /// The whole source's, before a tile clips it or its parts are split.
     pub way_area: f64,
@@ -161,7 +161,7 @@ impl TerrainRepository {
         self.raster.tile_grid(client, tile)
     }
 
-    pub fn fetch_tile_source(
+    pub fn fetch_tile_src(
         &self,
         client: &mut Client,
         tile: [i32; 2],
@@ -201,7 +201,7 @@ impl TerrainRepository {
                 )?
                 .iter()
                 .map(|row| BaseRow {
-                    source: row.get("source"),
+                    src: row.get("source"),
                     gers_id: row.get("gers_id"),
                     way_area: row.get("way_area"),
                     subtype: row.get("subtype"),

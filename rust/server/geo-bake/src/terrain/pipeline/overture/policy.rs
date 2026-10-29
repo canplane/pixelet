@@ -270,7 +270,7 @@ pub const INFRASTRUCTURE: &[(&str, Paint)] = {
 const LINE_ONLY: [&str; 2] = ["weir", "cutline"];
 
 fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
-    let &(_, (look, layer, feature)) = INFRASTRUCTURE.iter().find(|(c, _)| *c == class)?;
+    let &(_, (look, layer, feat)) = INFRASTRUCTURE.iter().find(|(c, _)| *c == class)?;
     if closed && LINE_ONLY.contains(&class) {
         return None;
     }
@@ -281,7 +281,7 @@ fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
         } else {
             layer
         },
-        feature,
+        feat,
     ))
 }
 
@@ -290,8 +290,8 @@ pub const WIDEST_LINE: f64 = 24.0;
 
 /// A Base line's width in u: Carto's at z16, as a way's
 /// (`overture/width.rs`), its casing included.
-fn line_width(source: &str, class: &str) -> f64 {
-    if source == "water" {
+fn line_width(src: &str, class: &str) -> f64 {
+    if src == "water" {
         return waterway_width(class).unwrap_or(0.0);
     }
     carto_u(match class {
@@ -379,8 +379,8 @@ pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
 
 /// Every Base row with a Carto fill; an area layer paints larger areas first.
 pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
-    let (source, subtype, class) = (
-        row.source.as_str(),
+    let (src, subtype, class) = (
+        row.src.as_str(),
         row.subtype.as_deref().unwrap_or(""),
         row.class.as_deref().unwrap_or(""),
     );
@@ -388,7 +388,7 @@ pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
         .iter()
         .filter_map(|geom| {
             let closed = closes(geom);
-            let (look, layer, feature) = match source {
+            let (look, layer, feat) = match src {
                 "water" => water_paint(subtype, class, closed),
                 "land" => land_paint(class),
                 "infrastructure" => infrastructure_paint(class, closed),
@@ -400,16 +400,16 @@ pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
             let rank = match layer {
                 // Carto's `aeroways` puts a runway over a taxiway.
                 Layer::Aeroway => {
-                    Rank::new(layer, i64::from(class == "runway"), feature, &row.gers_id)
+                    Rank::new(layer, i64::from(class == "runway"), feat, &row.gers_id)
                 }
                 Layer::WaterBarrier | Layer::Pier => {
-                    Rank::new(layer, barrier_order(class, closed), feature, &row.gers_id)
+                    Rank::new(layer, barrier_order(class, closed), feat, &row.gers_id)
                 }
-                _ => Rank::by_area(layer, row.way_area, feature, &row.gers_id),
+                _ => Rank::by_area(layer, row.way_area, feat, &row.gers_id),
             };
             let mut f = Feature::of(geom, tile_min, look, rank)?;
             if !closed {
-                f.width = line_width(source, class);
+                f.width = line_width(src, class);
             }
             Some(f)
         })

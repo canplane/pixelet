@@ -313,7 +313,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     }
     // Per window, whether its zoom moved, and whether it moved at all.
     let (mut moved, mut changed) = ([false; WINDOWS as usize], [lost; WINDOWS as usize]);
-    let kept = crate::domain::layer::terrain::tile::kept().count();
+    let kept = crate::domain::layer::terrain::tile::kept().cnt();
     let released = wake(w);
     let mut stale = lost
         || released
@@ -327,9 +327,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             // Where its line says the ground: open sea's leaf is the tile over it.
             (Centre::Destination, Some(p)) => {
                 let leaf = tile_at(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
-                terrain
-                    .source(leaf)
-                    .map_or(laid, |t| GROUND.cell_zoom(t.zoom))
+                terrain.src(leaf).map_or(laid, |t| GROUND.cell_zoom(t.zoom))
             }
             _ => laid,
         };

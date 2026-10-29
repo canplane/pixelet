@@ -41,12 +41,12 @@ fn glb(json: &str, bin: &[u8]) -> Vec<u8> {
 }
 
 /// Three positions, then three u16 indices from byte 36.
-fn triangle_bin(index: [u16; 3]) -> Vec<u8> {
+fn triangle_bin(idx: [u16; 3]) -> Vec<u8> {
     let mut bin = Vec::new();
     for v in [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0] {
         bin.extend(v.to_le_bytes());
     }
-    for i in index {
+    for i in idx {
         bin.extend(i.to_le_bytes());
     }
     bin
@@ -102,12 +102,12 @@ fn every_shipped_model_parses() {
 fn triangle_parses() {
     let gltf = parse(&edited(&[])).unwrap();
     assert_eq!(gltf.roots, [0]);
-    assert_eq!(gltf.meshes[0][0].position.len(), 9);
-    assert_eq!(gltf.meshes[0][0].index, [0, 1, 2]);
+    assert_eq!(gltf.meshes[0][0].pos.len(), 9);
+    assert_eq!(gltf.meshes[0][0].idx, [0, 1, 2]);
 }
 
 #[test]
-fn index_past_vertices_refused() {
+fn idx_past_vertices_refused() {
     let bytes = glb(TRIANGLE, &triangle_bin([0, 1, 3]));
     assert_eq!(refused(&bytes), Errno::EBADMSG);
 }

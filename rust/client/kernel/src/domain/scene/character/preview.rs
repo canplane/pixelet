@@ -108,7 +108,7 @@ pub fn preview_step(ctx: &mut TickContext) {
                 case.actor = section::map().and_then(|_| {
                     Actor::new(draw_list(), crate::domain::query::model::models(), id)
                 });
-                if let (Some(actor), true) = (case.actor.as_mut(), IDLE_CLIP < model.clip_count) {
+                if let (Some(actor), true) = (case.actor.as_mut(), IDLE_CLIP < model.clip_cnt) {
                     actor.play(IDLE_CLIP, 0.0);
                 }
             }

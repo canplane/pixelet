@@ -22,7 +22,7 @@ use crate::domain::query::World;
 use crate::domain::query::{cell_at, over, under, walks};
 use crate::domain::scene::actor::{Actor, Stance};
 use crate::domain::scene::character::param::{
-    CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFFSET,
+    CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
 };
 use crate::domain::scene::character::path::{heading_to, SettleTracker, WalkPlan};
@@ -189,7 +189,7 @@ impl Figure {
             // A release fixes the destination at once: a pan begun inside the settle
             // delay holds the target moving, so waiting would plan nothing. The settle
             // tracker covers every other way the pivot moves.
-            let destination = if released {
+            let dst = if released {
                 self.settle = SettleTracker::new(target, now);
                 Some(target)
             } else if just_settled {
@@ -197,7 +197,7 @@ impl Figure {
             } else {
                 None
             };
-            if let Some(to) = destination {
+            if let Some(to) = dst {
                 // Re-planning toward the same place would restart the clock and slow the
                 // walk to a crawl.
                 let under_way = self
@@ -268,7 +268,7 @@ impl Figure {
             IDLE_CLIP
         };
         if self.actor_clip != Some(clip) {
-            if clip < held.model.clip_count {
+            if clip < held.model.clip_cnt {
                 held.actor.play(
                     clip,
                     if self.actor_clip.is_none() {
@@ -387,7 +387,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         person.step(ctx, target, z, &p);
     }
 
-    let pet_target = [p.pivot[0] + PET_OFFSET[0], p.pivot[1] + PET_OFFSET[1]];
+    let pet_target = [p.pivot[0] + PET_OFF[0], p.pivot[1] + PET_OFF[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
     // Its own floor beside the person, walked to from the person.
     let reached = |(beside, _): &([f64; 2], f64)| {
@@ -499,7 +499,7 @@ fn drawn_floor(
     let zoom = GROUND.z_at(r2);
     asked.of(World::now(), (at, stands, zoom), |w| {
         w.floor_under(&world_to_canonical(&center), zoom)
-            .value()
+            .val()
             .flatten()
             .unwrap_or(stands)
     })

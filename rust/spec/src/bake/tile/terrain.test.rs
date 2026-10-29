@@ -90,7 +90,7 @@ fn formats_round_trip() {
 
 /// A tile at every lane's longest is as long as `MAX_PACKET_BYTES` says.
 #[test]
-fn full_tile_packet_size() {
+fn full_tile_packet_sz() {
     use separation::{MAX_LINES, MAX_POINTS};
     let starts: Vec<u32> = (0..=MAX_LINES)
         .map(|d| (d * MAX_POINTS / MAX_LINES) as u32)
@@ -130,7 +130,7 @@ fn non_tile_packet_refused() {
 
 /// Every valid occupancy byte round-trips.
 #[test]
-fn occupancy_values() {
+fn occupancy_vals() {
     for bits in 0..=u8::MAX {
         if let Some(o) = Occupancy::of_bits(bits) {
             assert_eq!(o.bits(), bits);

@@ -18,7 +18,7 @@
 //! than `SCALE_BUDGET_FLOOR_MS`, and its load is the samples its frames took,
 //! summed against their own budgets. Where the device keeps timestamps the
 //! sample is the GPU time of the passes drawn at the world's pixels
-//! (pxl-render gpu/renderer.rs `pixels_ms`), from a read that landed, which
+//! (pxl-render gpu/renderer.rs `px_ms`), from a read that landed, which
 //! not every frame has, and a window none landed in is not judged. Timed, a
 //! window over its budget by more than `SCALE_BAND` steps down at once, and
 //! `SCALE_UP_WINDOWS` windows in a row in which the step above, cost times its

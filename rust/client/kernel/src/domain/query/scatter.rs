@@ -67,7 +67,7 @@ impl Grounds for Asked<'_, '_> {
     fn asset(&mut self, f: &Footing<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
         self.unplaced
             .asset_about(&f.line, zoom, c)
-            .value()
+            .val()
             .unwrap_or(u32::from(sentinel::void))
     }
 
@@ -75,7 +75,7 @@ impl Grounds for Asked<'_, '_> {
     fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool {
         self.world
             .asset((zoom, c))
-            .value()
+            .val()
             .is_some_and(pxl_spec_core::answer::is_placed)
     }
 
@@ -107,9 +107,9 @@ pub fn instance(decor: &Decor, g: &Grown) -> Instance {
     let base = f64::from(z) - f64::from(g.sink) / f64::from(1u32 << FRAC_W);
     let (at, meta) = decor.stand([f64::from(x), f64::from(y), base], g.variant, g.turn, 1.0);
     Instance {
-        id: decor.value(),
+        id: decor.val(),
         at,
-        source: Source::Ground([x, y, z]),
+        src: Source::Ground([x, y, z]),
         meta,
     }
 }

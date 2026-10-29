@@ -5,9 +5,9 @@ use xpute_kit::status::errno::Errno;
 
 fn kept_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     let mut bytes = Vec::new();
-    for &(number, value) in pairs {
+    for &(number, val) in pairs {
         leb(&mut bytes, number);
-        leb(&mut bytes, value);
+        leb(&mut bytes, val);
     }
     bytes
 }

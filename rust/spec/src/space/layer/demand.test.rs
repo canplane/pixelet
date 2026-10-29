@@ -79,12 +79,12 @@ fn fault_bound_zoom_end() {
 }
 
 #[test]
-fn zoom_by_distance() {
+fn zoom_by_dist() {
     let mut last = i32::MAX;
     // Inside the world: no cell is coarser than z0's, and none finer than a
     // position names (`FINEST_ZOOM`), even scaled finer by 2^3 below.
-    for r in core::iter::successors(Some(split_distance(FINEST_ZOOM - 3)), |r| Some(r * 1.01))
-        .take_while(|r| r * 32.0 < split_distance(0))
+    for r in core::iter::successors(Some(split_dist(FINEST_ZOOM - 3)), |r| Some(r * 1.01))
+        .take_while(|r| r * 32.0 < split_dist(0))
     {
         let z = zoom_at(r);
         assert!(z <= last, "{r}: z{z} after z{last}");
@@ -95,12 +95,12 @@ fn zoom_by_distance() {
     }
     for z in TOP_ZOOM as i32..=LEAF_ZOOM as i32 + 3 {
         assert_eq!(
-            zoom_at(split_distance(GROUND.grid_zoom(z as Zoom))),
+            zoom_at(split_dist(GROUND.grid_zoom(z as Zoom))),
             z,
             "a zoom begins at its split distance"
         );
         assert_eq!(
-            zoom_at(short_of(split_distance(GROUND.grid_zoom(z as Zoom - 1)))),
+            zoom_at(short_of(split_dist(GROUND.grid_zoom(z as Zoom - 1)))),
             z,
             "and ends where the next coarser begins"
         );

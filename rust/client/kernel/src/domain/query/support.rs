@@ -95,7 +95,7 @@ impl<'w, 'a> Upright<'w, 'a> {
         until: Until,
     ) -> impl Iterator<Item = Aabb> + use<'_, 'w, 'a> {
         (0..self.across * self.across)
-            .filter_map(move |k| self.met(k, z, to, until).value().flatten())
+            .filter_map(move |k| self.met(k, z, to, until).val().flatten())
     }
 
     /// Column `k`'s ray, with what the world held of the way: a ray that
@@ -108,7 +108,7 @@ impl<'w, 'a> Upright<'w, 'a> {
                 middle(k / self.across, self.corner[1]),
                 z,
             ],
-            direction: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
+            dir: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             reach: (to - z).abs(),
         };
         let (answer, _) = self.world.along(&ray, self.detail, until, None);
@@ -178,7 +178,7 @@ impl<'w, 'a> Upright<'w, 'a> {
             if let Some(l) = answer.lack() {
                 self.lack.get_or_insert(l);
             }
-            if let Some(Some((at, rise))) = answer.value() {
+            if let Some(Some((at, rise))) = answer.val() {
                 let top = ((f64::from(at) + f64::from(rise)) * unit).min(REACH.max[2]);
                 most = Some(most.map_or(top, |m| m.max(top)));
             }
@@ -198,7 +198,7 @@ impl<'w, 'a> Upright<'w, 'a> {
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
-        answer.value().flatten().map(|s| s.top)
+        answer.val().flatten().map(|s| s.top)
     }
 
     /// `v`, with the first tile its answers lacked.

@@ -145,11 +145,11 @@ fn members(e: &Enum) -> impl Iterator<Item = &Member> {
     })
 }
 
-fn literal(value: u32, format: &str) -> String {
+fn literal(val: u32, format: &str) -> String {
     match format {
-        "dec" => value.to_string(),
-        "hex2" => format!("0x{value:02x}"),
-        _ => format!("0x{value:04x}"),
+        "dec" => val.to_string(),
+        "hex2" => format!("0x{val:02x}"),
+        _ => format!("0x{val:04x}"),
     }
 }
 
@@ -251,10 +251,10 @@ fn check_base(spec: &Spec, json: &str) -> Result<(), String> {
     let edge = base
         .program_major
         .ok_or(format!("{base_path}: no program_major"))?;
-    for (value, name) in majors(&base) {
-        if value >= edge {
+    for (val, name) in majors(&base) {
+        if val >= edge {
             return Err(format!(
-                "{base_path}: major {name} at {value:#x} is a program's"
+                "{base_path}: major {name} at {val:#x} is a program's"
             ));
         }
     }

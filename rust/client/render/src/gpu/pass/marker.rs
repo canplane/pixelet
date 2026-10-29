@@ -13,7 +13,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::word::{marker, MARKER_FLOATS};
 use crate::gpu::api::{
-    buffer_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
+    buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
     Format, Gpu, Load, Stamp,
 };
 use crate::gpu::mip::{mip_levels, Mips};
@@ -150,7 +150,7 @@ pub struct MarkerPass {
     numbers_view: u32,
     regions: u32,
     regions_view: u32,
-    regions_size: (u32, u32),
+    regions_sz: (u32, u32),
     painter: SheetPainter,
     sampler: u32,
     sheet: u32,
@@ -171,10 +171,10 @@ pub struct MarkerPass {
 impl MarkerPass {
     /// Its regions' depth's bytes, one f32 a pixel.
     pub fn depth_bytes(&self) -> f64 {
-        self.regions_size.0 as f64 * self.regions_size.1 as f64 * 4.0
+        self.regions_sz.0 as f64 * self.regions_sz.1 as f64 * 4.0
     }
 
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, align: u32) -> MarkerPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> MarkerPass {
         let sampler = g.sampler(
             FilterMode::nearest,
             FilterMode::linear,
@@ -184,7 +184,7 @@ impl MarkerPass {
             1,
         );
         let built = pipelines.build(g, PIPELINE_MARKER, g.canvas());
-        let frame_group = g.bind_group(built.layouts[0], &[buffer_entry(0, frame_buffer)]);
+        let frame_group = g.bind_group(built.layouts[0], &[buf_entry(0, frame_buf)]);
         MarkerPass {
             built,
             region_built: pipelines.build(g, PIPELINE_MARKER_REGION, Format::rgba8unorm),
@@ -192,7 +192,7 @@ impl MarkerPass {
             numbers_view: 0,
             regions: 0,
             regions_view: 0,
-            regions_size: (0, 0),
+            regions_sz: (0, 0),
             frame_group,
             painter: SheetPainter::new(g, pipelines),
             sampler,
@@ -216,16 +216,16 @@ impl MarkerPass {
         let flush = sheet.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
         if flush.whole {
-            if flush.size == 0 {
+            if flush.sz == 0 {
                 return false;
             }
             for id in [self.sheet_group, self.sheet_view, self.sheet] {
                 release(id);
             }
-            self.levels = mip_levels(flush.size, flush.size);
+            self.levels = mip_levels(flush.sz, flush.sz);
             self.sheet = g.texture(
-                flush.size,
-                flush.size,
+                flush.sz,
+                flush.sz,
                 1,
                 Format::rgba8unorm_srgb,
                 self.levels,
@@ -321,7 +321,7 @@ impl MarkerPass {
         &mut self,
         g: &Gpu,
         depth: u32,
-        size: (u32, u32),
+        sz: (u32, u32),
         draws: &Draws,
         uniforms: &[f32],
         uploads: &Uploads,
@@ -329,7 +329,7 @@ impl MarkerPass {
         if self.sheet_group == 0 {
             return;
         }
-        if self.regions_size != size {
+        if self.regions_sz != sz {
             for id in [
                 self.numbers_view,
                 self.numbers,
@@ -339,8 +339,8 @@ impl MarkerPass {
                 release(id);
             }
             self.numbers = g.texture(
-                size.0,
-                size.1,
+                sz.0,
+                sz.1,
                 1,
                 Format::rgba8unorm,
                 1,
@@ -348,15 +348,15 @@ impl MarkerPass {
             );
             self.numbers_view = g.view(self.numbers, false, 0, 1, 0, 1);
             self.regions = g.texture(
-                size.0,
-                size.1,
+                sz.0,
+                sz.1,
                 1,
                 Format::depth32float,
                 1,
                 texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
             );
             self.regions_view = g.view(self.regions, false, 0, 1, 0, 1);
-            self.regions_size = size;
+            self.regions_sz = sz;
         }
         let placed = draws
             .of(PIPELINE_MARKER)
@@ -369,7 +369,7 @@ impl MarkerPass {
                 || set.group == 0
             {
                 let bound = |layout: u32, before: u32| {
-                    g.bind_group(layout, &[buffer_entry(0, upload), view_entry(1, before)])
+                    g.bind_group(layout, &[buf_entry(0, upload), view_entry(1, before)])
                 };
                 release(set.group);
                 release(set.region_group);
@@ -387,10 +387,10 @@ impl MarkerPass {
                 .filter(|d| uploads.get(d[0]).is_some())
         };
         let (view, proj, px_per_unit) = (self.view, self.proj, self.px_per_unit);
-        let count = placed().take(SETS).count() as u32;
+        let cnt = placed().take(SETS).count() as u32;
         let mut before = 0;
         self.uniforms
-            .write(g, self.built.layouts[1], count, placed(), true, |buf, d| {
+            .write(g, self.built.layouts[1], cnt, placed(), true, |buf, d| {
                 let mut s = [0.0f32; MARKER_FLOATS];
                 s[marker::VIEW..marker::VIEW + 16].copy_from_slice(&view);
                 s[marker::PROJ..marker::PROJ + 16].copy_from_slice(&proj);
@@ -444,8 +444,8 @@ impl MarkerPass {
         g.set_pipeline(pass, self.region_built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         for (k, (set, d)) in self.sets.iter().zip(placed()).enumerate() {
-            let (group, offset) = slots.at(k as u32);
-            g.set_bind_group(pass, 1, group, &[offset]);
+            let (group, off) = slots.at(k as u32);
+            g.set_bind_group(pass, 1, group, &[off]);
             g.set_bind_group(pass, 2, set.region_group, &[]);
             g.draw(pass, 4, d[1], 0, 0);
         }

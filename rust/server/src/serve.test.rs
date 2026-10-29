@@ -15,7 +15,7 @@ fn cfg() -> config::Config {
         max_body_sz: 1 << 20,
         admin_token: TOKEN.to_string(),
         db_url: String::new(),
-        db_pool_size: 1,
+        db_pool_sz: 1,
     }
 }
 

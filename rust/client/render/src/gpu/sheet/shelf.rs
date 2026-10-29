@@ -41,20 +41,20 @@ pub enum Paint {
 const WIDTH_BUCKET: u32 = 16;
 const HEIGHT_BUCKET: u32 = 16;
 
-pub const INITIAL_SIZE: u32 = 1024;
+pub const INITIAL_SZ: u32 = 1024;
 
 /// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen markers (one per
 /// places cell); past the limit a sticker waits unshown (`NO_SLOT`).
-const MAX_SIZE: u32 = 2048;
+const MAX_SZ: u32 = 2048;
 
 /// Transparent margin so a linear or mipmapped sample cannot reach a neighbor.
 pub const PAD: u32 = 1;
 
 /// The most slots a sheet holds: a live or free one holds a rectangle of a
 /// size class at least (`WIDTH_BUCKET` × `HEIGHT_BUCKET`), none overlapping,
-/// in a sheet `MAX_SIZE` a side at most; an unused one is reused before
+/// in a sheet `MAX_SZ` a side at most; an unused one is reused before
 /// another is made.
-pub const SLOTS_MAX: usize = ((MAX_SIZE / WIDTH_BUCKET) * (MAX_SIZE / HEIGHT_BUCKET)) as usize;
+pub const SLOTS_MAX: usize = ((MAX_SZ / WIDTH_BUCKET) * (MAX_SZ / HEIGHT_BUCKET)) as usize;
 
 /// A set of a sheet's slots, a bit each.
 #[derive(Clone, Copy)]
@@ -116,12 +116,11 @@ struct Shelves {
 
 impl Shelves {
     /// The first shelf of height `h` with room, else a new one; none past `size`.
-    fn fit(&mut self, w: u32, h: u32, size: u32) -> Option<(u32, u32)> {
-        let shelf = match (0..self.h.len()).find(|&s| self.h[s] == h && self.cursor[s] + w <= size)
-        {
+    fn fit(&mut self, w: u32, h: u32, sz: u32) -> Option<(u32, u32)> {
+        let shelf = match (0..self.h.len()).find(|&s| self.h[s] == h && self.cursor[s] + w <= sz) {
             Some(s) => s,
             None => {
-                if self.next_y + h > size || w > size {
+                if self.next_y + h > sz || w > sz {
                     return None;
                 }
                 self.y.push(self.next_y);
@@ -144,10 +143,10 @@ struct Plan {
     shelves: Shelves,
 }
 
-fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Plan> {
+fn pack(sz: u32, ws: &[u32], hs: &[u32]) -> Option<Plan> {
     let mut shelves = Shelves::default();
     let at = (0..ws.len())
-        .map(|i| shelves.fit(ws[i], hs[i], size))
+        .map(|i| shelves.fit(ws[i], hs[i], sz))
         .collect::<Option<_>>()?;
     Some(Plan { at, shelves })
 }
@@ -155,7 +154,7 @@ fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Plan> {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Flush {
     pub whole: bool,
-    pub size: u32,
+    pub sz: u32,
     pub generation: u32,
 }
 
@@ -186,7 +185,7 @@ pub struct Sheet {
 impl Sheet {
     pub fn new() -> Sheet {
         Sheet {
-            size: INITIAL_SIZE,
+            size: INITIAL_SZ,
             ..Default::default()
         }
     }
@@ -272,7 +271,7 @@ impl Sheet {
         self.dirty = SlotSet::default();
         Flush {
             whole,
-            size: self.size,
+            sz: self.size,
             generation: self.generation,
         }
     }
@@ -335,7 +334,7 @@ impl Sheet {
     /// dense view grew stays that large, canvas and texture, for a dozen stickers.
     pub fn compact(&mut self) -> bool {
         let mut changed = false;
-        while self.size > INITIAL_SIZE {
+        while self.size > INITIAL_SZ {
             let target = self.size / 2;
             if self.used_px > (target * target) / 2 {
                 break;
@@ -352,7 +351,7 @@ impl Sheet {
 
     /// Slots keep their indices; only their rectangles move.
     fn grow(&mut self) -> bool {
-        if self.size >= MAX_SIZE {
+        if self.size >= MAX_SZ {
             return false;
         }
         let (slots, ws, hs) = self.live_slots();
@@ -364,8 +363,8 @@ impl Sheet {
         true
     }
 
-    fn rebuild(&mut self, size: u32, slots: &[usize], plan: Plan) {
-        self.size = size;
+    fn rebuild(&mut self, sz: u32, slots: &[usize], plan: Plan) {
+        self.size = sz;
         self.shelves = plan.shelves;
         for st in self.state.iter_mut() {
             if *st == FREE {

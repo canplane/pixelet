@@ -44,7 +44,7 @@ pub async fn serve(server: Server<'_>, routes: impl FnOnce(Pool) -> Router) -> E
 
 async fn run(server: Server<'_>, routes: impl FnOnce(Pool) -> Router) -> Result<(), db::DbError> {
     let cfg = config::Config::from_env(&server.env)?;
-    let pool = db::connect(&cfg.db_url, cfg.db_pool_size, &server.probe).await?;
+    let pool = db::connect(&cfg.db_url, cfg.db_pool_sz, &server.probe).await?;
     let listener = tokio::net::TcpListener::bind((cfg.host.as_str(), cfg.port)).await?;
     println!("[app] listening on {}:{}", cfg.host, cfg.port);
     axum::serve(listener, shell(&cfg, server.internal, routes(pool))).await?;

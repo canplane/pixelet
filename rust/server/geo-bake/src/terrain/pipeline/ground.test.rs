@@ -48,7 +48,7 @@ fn at(g: &Ground, x: i64, y: i64) -> GroundId {
 
 #[test]
 fn sea_from_coast() {
-    let features = [
+    let feats = [
         area(
             [0.0, 0.0, 100.0, 100.0],
             10_000.0,
@@ -69,16 +69,16 @@ fn sea_from_coast() {
         Vec::new(),
     )]);
     for coast in [Coast::Land, shore] {
-        let g = bake_ground(&features, &coast);
+        let g = bake_ground(&feats, &coast);
         assert_eq!(at(&g, 50, 50), ground::grass);
         assert_eq!(at(&g, 10, 10), ground::water);
     }
 }
 
 #[test]
-fn source_rank_per_tile() {
+fn src_rank_per_tile() {
     // A pond's sliver on this tile is smaller than the grass over it; the pond's whole is not.
-    let features = [
+    let feats = [
         area(
             [0.0, 0.0, 10.0, 100.0],
             10_000.0,
@@ -94,10 +94,7 @@ fn source_rank_per_tile() {
             "grass",
         ),
     ];
-    assert_eq!(
-        at(&bake_ground(&features, &Coast::Land), 5, 50),
-        ground::grass
-    );
+    assert_eq!(at(&bake_ground(&feats, &Coast::Land), 5, 50), ground::grass);
 }
 
 #[test]
@@ -135,7 +132,7 @@ fn ground_row_order_free() {
         way(70.0, 4.0, ground::residential_road, "south"),
         way(71.0, 4.0, ground::secondary, "north"),
     ];
-    let bake = |features: &[Feature]| bake_ground(features, &Coast::Land).cells.into_owned();
+    let bake = |feats: &[Feature]| bake_ground(feats, &Coast::Land).cells.into_owned();
     let forward = bake(&features);
     features.reverse();
     assert_eq!(bake(&features), forward);

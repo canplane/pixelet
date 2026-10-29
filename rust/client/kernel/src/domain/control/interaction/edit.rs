@@ -35,13 +35,13 @@ use pxl_spec::bake::constant::EntryAt;
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
 fn is_carved(at: &Q3) -> bool {
-    World::now().asset_of(at).value() == Some(PLACED_ASSET | AIR)
+    World::now().asset_of(at).val() == Some(PLACED_ASSET | AIR)
 }
 
 // ---- Mutations ----
 
 /// A write of VOID collapses its path back, so a redundant record never sits in a save.
-fn write_object_value(at: EntryAt, val: u32) {
+fn write_object_val(at: EntryAt, val: u32) {
     submit(Write::at(at, val));
 }
 
@@ -60,7 +60,7 @@ fn submit(write: Write) {
 /// an AIR leaf, and the ground there without it is that look, its stratum's
 /// at that depth (without the carve, every cube stacked on matching ground
 /// was dropped).
-fn place_value_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
+fn place_val_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
     if zoom > GROUND.cell() || !is_carved(at) {
         return false;
     }
@@ -91,25 +91,25 @@ pub(super) fn middle(at: EntryAt) -> Q3 {
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
 pub fn place(at: &Q3, zoom: Zoom, cube: Cube) {
-    let val = if place_value_is_redundant(at, zoom, cube) {
+    let val = if place_val_is_redundant(at, zoom, cube) {
         VOID
     } else {
         cube_id(cube)
     };
-    write_object_value(EntryAt::holding(zoom, at), val);
+    write_object_val(EntryAt::holding(zoom, at), val);
 }
 
 /// Placing the decor a scatter stands in a cell an erase emptied writes
 /// VOID, so the scattered instance returns as it was.
 pub fn place_decor(at: &Q3, decor_id: DecorId) {
-    let value = if restores_scattered(at, decor_id).is_some() {
+    let val = if restores_scattered(at, decor_id).is_some() {
         VOID
     } else {
         decor_num_id(decor_id)
     };
-    write_object_value(
+    write_object_val(
         EntryAt::holding(PlacementTool::Decor(decor_id).zoom(), at),
-        value,
+        val,
     );
 }
 
@@ -180,7 +180,7 @@ pub fn put_marker() {
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
 /// baked terrain, which has no leaf of its own to delete.
 pub fn place_air(at: EntryAt) {
-    write_object_value(at, cube::object::air as u32);
+    write_object_val(at, cube::object::air as u32);
 }
 
 /// The eraser leaves its cell empty: where the ground fills it once the
@@ -196,7 +196,7 @@ pub fn remove(at: EntryAt) {
         .filter(|&c| is_carved(&base_of(GROUND.cell(), c)))
         .collect();
     // Only the resident finest leaf can say what fills the cube without it, as
-    // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
+    // `place_val_is_redundant` asks; elsewhere it is emptied as asked.
     let id = match world
         .previewing(Some(at), None)
         .asset_of(&middle(at))
@@ -212,7 +212,7 @@ pub fn remove(at: EntryAt) {
         ext: None,
     });
     for c in erased {
-        write_object_value(EntryAt::new(GROUND.cell(), c), VOID);
+        write_object_val(EntryAt::new(GROUND.cell(), c), VOID);
     }
 }
 

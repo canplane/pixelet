@@ -29,7 +29,7 @@ use crate::domain::layer::earth::Earth;
 use crate::domain::query::decor::asset::decor_models_step;
 use crate::domain::query::model::draw_list;
 use crate::domain::scene::character::companion::{companion_step, CompanionProps};
-use crate::domain::scene::environment::environment_step;
+use crate::domain::scene::environment::env_step;
 use crate::domain::scene::indicator::location_puck::location_puck_step;
 use crate::domain::scene::scene;
 use crate::domain::scene::stage::visible_step;
@@ -158,8 +158,8 @@ fn camera_tick(ctx: &mut TickContext) {
     }
 }
 
-fn environment_tick(_: &mut TickContext) {
-    environment_step();
+fn env_tick(_: &mut TickContext) {
+    env_step();
 }
 
 /// Registers the tick's steps and spawns the tasks. Called from outside a
@@ -179,11 +179,7 @@ pub fn boot() {
     on_tick(Phase::interaction, edit_tick, StepName::edit as u32);
     on_tick(Phase::interaction, ghost_tick, StepName::ghost as u32);
     // After the view has moved, so the environment sees this tick's camera.
-    on_tick(
-        Phase::interaction,
-        environment_tick,
-        StepName::environment as u32,
-    );
+    on_tick(Phase::interaction, env_tick, StepName::environment as u32);
     on_tick(
         Phase::interaction,
         companion_tick,
@@ -256,7 +252,7 @@ pub fn world_turn() -> f64 {
     effect!(times, destination, {
         // What the walker found under an unknown Z, let go where it moved.
         crate::domain::control::navigation::support::support_step();
-        crate::domain::control::navigation::destination::destination_step()
+        crate::domain::control::navigation::destination::dst_step()
     });
     effect!(times, decor, decor_models_step());
     effect!(

@@ -44,7 +44,7 @@ fn point_geometry() {
     let g = wkb_to_geometries(&Wkb::new(1).point(1.5, -2.5).0);
     assert_eq!(g.len(), 1);
     assert_eq!(g[0].points, vec![[1.5, -2.5, 0.0]]);
-    assert!(!g[0].is_polygon_source);
+    assert!(!g[0].is_polygon_src);
     assert!(g[0].holes.is_empty());
 }
 
@@ -57,7 +57,7 @@ fn linestring_open() {
         g[0].points,
         vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 10.0, 0.0]]
     );
-    assert!(!g[0].is_polygon_source);
+    assert!(!g[0].is_polygon_src);
 }
 
 #[test]
@@ -69,20 +69,20 @@ fn polygon_rings() {
         .0;
     let g = wkb_to_geometries(&bytes);
     assert_eq!(g.len(), 1);
-    assert!(g[0].is_polygon_source);
+    assert!(g[0].is_polygon_src);
     assert_eq!(g[0].points.len(), 4);
     assert_eq!(g[0].holes.len(), 1);
     assert_eq!(g[0].holes[0][0], [2.0, 2.0, 0.0]);
 }
 
-/// `is_polygon_source` is what closes a feature, so a ringless row must not
+/// `is_polygon_src` is what closes a feature, so a ringless row must not
 /// read as a line.
 #[test]
 fn empty_polygon() {
     let bytes = Wkb::new(3).u32(0).0;
     let g = wkb_to_geometries(&bytes);
     assert_eq!(g.len(), 1);
-    assert!(g[0].is_polygon_source);
+    assert!(g[0].is_polygon_src);
     assert!(g[0].points.is_empty());
 }
 
@@ -97,7 +97,7 @@ fn multipolygon_flattened() {
     let bytes = Wkb::new(6).u32(2).raw(one).raw(two).0;
     let g = wkb_to_geometries(&bytes);
     assert_eq!(g.len(), 2);
-    assert!(g.iter().all(|x| x.is_polygon_source));
+    assert!(g.iter().all(|x| x.is_polygon_src));
     assert_eq!(g[0].points[0], [0.0, 0.0, 0.0]);
     assert_eq!(g[1].points[0], [5.0, 5.0, 0.0]);
 }

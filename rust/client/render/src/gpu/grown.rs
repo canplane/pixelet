@@ -23,9 +23,7 @@ use crate::frame::shader::record::{
     SHADER_GROWN_STAND,
 };
 use crate::frame::shader::word::DRAW_FLOATS;
-use crate::gpu::api::{
-    buffer_entry, buffer_range_entry, buffer_usage, bytes, release, word_bytes, Gpu,
-};
+use crate::gpu::api::{buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::surface::WORLD_COLOR;
@@ -76,7 +74,7 @@ pub struct Grown {
     mark: Built,
     stand: Built,
     grow: Built,
-    count: Built,
+    cnt: Built,
     args_built: Built,
     place: Built,
     groups: [u32; 6],
@@ -104,7 +102,7 @@ pub struct Grown {
     instances_group: u32,
     room: u32,
     /// The placed decor's records, as last handed.
-    placed_count: u32,
+    placed_cnt: u32,
     /// The world its groups bind: grouped again exactly when it is another.
     bound: World,
     on: bool,
@@ -142,7 +140,7 @@ pub type World = [u32; 6];
 
 impl Grown {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Grown {
-        let buffer = |size: u32, usage: u32| g.buffer(size, usage);
+        let buffer = |sz: u32, usage: u32| g.buf(sz, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let rows = buffer(core::mem::size_of_val(&DECORS) as u32, storage);
         let table = DECORS;
@@ -153,7 +151,7 @@ impl Grown {
                 core::mem::size_of_val(&table) / 4,
             )
         };
-        g.write_buffer(rows, 0, bytes(words));
+        g.write_buf(rows, 0, bytes(words));
         let drawn_by = pipelines.build(g, PIPELINE_DECOR, WORLD_COLOR);
         let draw_layouts = [drawn_by.layouts[1], drawn_by.layouts[3]];
         let uniforms = buffer(
@@ -164,7 +162,7 @@ impl Grown {
             mark: pipelines.build_compute(g, SHADER_GROWN_MARK, &compute::DECOR_MARK_GROUP),
             stand: pipelines.build_compute(g, SHADER_GROWN_STAND, &compute::DECOR_STAND_GROUP),
             grow: pipelines.build_compute(g, SHADER_GROWN, &compute::DECOR_GROUP),
-            count: pipelines.build_compute(g, SHADER_GROWN_COUNT, &compute::DECOR_COUNT_GROUP),
+            cnt: pipelines.build_compute(g, SHADER_GROWN_COUNT, &compute::DECOR_COUNT_GROUP),
             args_built: pipelines.build_compute(g, SHADER_GROWN_ARGS, &compute::DECOR_ARGS_GROUP),
             place: pipelines.build_compute(g, SHADER_GROWN_PLACE, &compute::DECOR_PLACE_GROUP),
             groups: [0; 6],
@@ -187,11 +185,11 @@ impl Grown {
             draw_layouts,
             uniform_group: g.bind_group(
                 draw_layouts[0],
-                &[buffer_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))],
+                &[buf_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))],
             ),
             instances_group: 0,
             room: 0,
-            placed_count: 0,
+            placed_cnt: 0,
             bound: [0; 6],
             on: false,
             shown_read: Read::default(),
@@ -226,17 +224,17 @@ impl Grown {
         if grew {
             // The slots' records carried over: the placed tail is laid anew.
             let (records, instances) = (self.records, self.instances);
-            self.records = g.buffer(
+            self.records = g.buf(
                 word_bytes(scatter::record_at(need) as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
-            self.instances = g.buffer(
+            self.instances = g.buf(
                 word_bytes(((drawn::LANES + 1) * need) as usize),
                 buffer_usage::STORAGE,
             );
             if records != 0 {
                 let e = g.encoder();
-                g.copy_buffer(
+                g.copy_buf(
                     e,
                     (records, 0),
                     (self.records, 0),
@@ -248,7 +246,7 @@ impl Grown {
             release(instances);
             release(self.instances_group);
             self.instances_group =
-                g.bind_group(self.draw_layouts[1], &[buffer_entry(0, self.instances)]);
+                g.bind_group(self.draw_layouts[1], &[buf_entry(0, self.instances)]);
             self.room = need;
             self.placed.forget();
         }
@@ -263,7 +261,7 @@ impl Grown {
         if !s.end() {
             // What each slot grew was grown at the zooms it was shown at:
             // every slot grows again.
-            g.write_buffer(self.shown, 0, bytes(f.shown));
+            g.write_buf(self.shown, 0, bytes(f.shown));
             self.stale = true;
         }
         // The boxes the slots they meet grow again in: the edits, and each
@@ -310,7 +308,7 @@ impl Grown {
                 n += 1;
             }
             let (s, w) = (compute::DECOR_STAND_WORKGROUP, compute::DECOR_WORKGROUP);
-            g.write_buffer(
+            g.write_buf(
                 self.grows,
                 0,
                 bytes(&[
@@ -328,7 +326,7 @@ impl Grown {
                     0,
                 ]),
             );
-            g.write_buffer(
+            g.write_buf(
                 self.grows,
                 scatter::BOXES_AT * 4,
                 bytes(&boxes[..n * scatter::BOX_WORDS as usize]),
@@ -338,16 +336,16 @@ impl Grown {
         p.begin();
         p.read(f.placed);
         let placed_moved = !p.end();
-        self.placed_count = f.placed.len() as u32;
+        self.placed_cnt = f.placed.len() as u32;
         if placed_moved {
-            g.write_buffer(
+            g.write_buf(
                 self.records,
                 scatter::PLACED_HEAD * 4,
                 bytes(&[f.placed.len() as u32, 0, 0, 0]),
             );
             if !f.placed.is_empty() {
                 // Read where the kernel holds them, one record however many.
-                g.upload_buffer(
+                g.upload_buf(
                     self.records,
                     scatter::record_at(scatter::SLOT_RECORDS) * 4,
                     bytes(f.placed.as_flattened()),
@@ -366,9 +364,9 @@ impl Grown {
         if !self.counting {
             return;
         }
-        g.write_buffer(self.drawing, 0, bytes(f.drawing));
-        g.write_buffer(self.meshes, 0, bytes(meshes));
-        g.write_buffer(self.regions, 0, bytes(&[0u32; 2 * drawn::REGIONS as usize]));
+        g.write_buf(self.drawing, 0, bytes(f.drawing));
+        g.write_buf(self.meshes, 0, bytes(meshes));
+        g.write_buf(self.regions, 0, bytes(&[0u32; 2 * drawn::REGIONS as usize]));
         // Each region's uniform, its index the lanes' base until the args
         // pass adds its first slot: a model's group drawn about the anchor,
         // a sprite's its group's layer too.
@@ -388,14 +386,14 @@ impl Grown {
                 drawn::LANES * self.room,
             ]);
         }
-        g.write_buffer(self.uniforms, 0, bytes(&uniforms));
+        g.write_buf(self.uniforms, 0, bytes(&uniforms));
     }
 
     fn regroup(&mut self, g: &Gpu, world: World) {
         let group = |built: &Built, ids: &[u32]| {
-            let mut entries = [buffer_entry(0, 0); 9];
+            let mut entries = [buf_entry(0, 0); 9];
             for (k, &b) in ids.iter().enumerate() {
-                entries[k] = buffer_entry(k as u32, b);
+                entries[k] = buf_entry(k as u32, b);
             }
 
             g.bind_group(built.layouts[0], &entries[..ids.len()])
@@ -425,7 +423,7 @@ impl Grown {
                 ],
             ),
             group(
-                &self.count,
+                &self.cnt,
                 &[
                     eye,
                     self.drawing,
@@ -529,9 +527,9 @@ impl Grown {
         // A workgroup a slot, reading the records its patches bear, then
         // placed decor's, `scatter::RUNS` a workgroup (pxl-shader
         // `records`): the records held, not the room.
-        let records = scatter::EYE_ENTRIES + self.placed_count.div_ceil(scatter::RUNS);
+        let records = scatter::EYE_ENTRIES + self.placed_cnt.div_ceil(scatter::RUNS);
         let passes = [
-            (&self.count, records),
+            (&self.cnt, records),
             (&self.args_built, 1),
             (&self.place, records),
         ];

@@ -186,14 +186,14 @@ fn compose() {
 /// the pose its controller holds, which may have moved since the turn
 /// composed the view: the lens's tangents are the screen's alone, whatever
 /// the pose.
-pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
+pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: &mut V3) {
     let tan = view().frustum.lens().map_or([0.0; 2], |l| l.tan);
     // The rotation turns the world's axes to the camera's; a rotation's
     // transpose turns them back.
     let mut back = mat4::new();
     mat4::transpose(&mut back, &pose.rotation);
     *origin = pose.eye;
-    mat4::transform_direction(direction, &back, ndc_x * tan[0], ndc_y * tan[1], -1.0);
+    mat4::transform_dir(dir, &back, ndc_x * tan[0], ndc_y * tan[1], -1.0);
 }
 
 #[cfg(test)]

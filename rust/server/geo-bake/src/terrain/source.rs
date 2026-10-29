@@ -17,8 +17,8 @@ pub fn fetch_surface(
     tile_idx: [i32; 2],
     drawn: &[Drawn],
 ) -> Result<Surface, String> {
-    let source = repo
-        .fetch_tile_source(client, tile_idx)
+    let src = repo
+        .fetch_tile_src(client, tile_idx)
         .map_err(|e| e.to_string())?;
-    Ok(bake_surface(tile_idx, source, drawn))
+    Ok(bake_surface(tile_idx, src, drawn))
 }

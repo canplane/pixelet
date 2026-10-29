@@ -9,7 +9,7 @@ use pxl_spec::bake::tile::place::{self, category_of, Place, PlaceTile};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::index_of;
+use pxl_spec::space::coord::zoom::idx_of;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 impl crate::pyramid::Base for PlaceTile {
@@ -60,7 +60,7 @@ pub fn leaves(
     let mut places: BTreeMap<Tile, Vec<(Q3, String, u16, String)>> = BTreeMap::new();
     for row in rows {
         let at = epsg3857::project(row.get(0), row.get(1), 0.0);
-        let [x, y, _] = index_of(LEAF_ZOOM, &at);
+        let [x, y, _] = idx_of(LEAF_ZOOM, &at);
         let leaf = Tile::new(LEAF_ZOOM, [x, y]);
         if Tile::over(within.zoom, leaf.at) != within || !coverage.contains(leaf.at) {
             continue;

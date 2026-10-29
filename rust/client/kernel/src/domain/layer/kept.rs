@@ -73,7 +73,7 @@ impl Kept {
     }
 
     /// The packets kept.
-    pub fn count(&self) -> u32 {
+    pub fn cnt(&self) -> u32 {
         self.waiting
     }
 

@@ -226,7 +226,7 @@ pub(super) fn apply(
         Command::INPUT_GO_TO => {
             let p = abi::InputGoTo::read(packet(pkt)?)?;
             refuse_unless(on_earth(p.lon, p.lat), Errno::EINVAL)?;
-            ui::go_to_degrees(
+            ui::go_to_deg(
                 p.lon,
                 p.lat,
                 crate::domain::control::camera::state::IntentPatch {
@@ -445,11 +445,11 @@ pub(super) fn apply(
 fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
     match cmd {
         xpute_cmd::Command::NOP => {
-            let value = match pkt {
+            let val = match pkt {
                 Some(pkt) => xpute_cmd::Nop::read(pkt)?.value,
                 None => 0,
             };
-            Ok(Some(value as i32))
+            Ok(Some(val as i32))
         }
         xpute_cmd::Command::SYS_OPENED => {
             let p = xpute_cmd::SysOpened::read(packet(pkt)?)?;
@@ -463,9 +463,9 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
 /// (profiler/record.rs `profiler_record_read`).
 fn read_timed(read: impl FnOnce() -> u32) -> u32 {
     let at = xpute_guest::clock::now();
-    let address = read();
+    let addr = read();
     crate::profiler::record::profiler_record_read(xpute_guest::clock::now() - at);
-    address
+    addr
 }
 
 /// The address of READ's words (profiler.json): the summary over

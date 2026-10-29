@@ -8,7 +8,7 @@ use pxl_spec::space::coord::adapter::epsg3857::G3857;
 pub struct WkbGeometry {
     pub points: Vec<G3857>,
     pub holes: Vec<Vec<G3857>>,
-    pub is_polygon_source: bool,
+    pub is_polygon_src: bool,
 }
 
 /// A short buffer ends the decode rather than panicking.
@@ -80,7 +80,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
             Some(vec![WkbGeometry {
                 points: vec![p],
                 holes: Vec::new(),
-                is_polygon_source: false,
+                is_polygon_src: false,
             }])
         }
         2 => {
@@ -88,7 +88,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
             Some(vec![WkbGeometry {
                 points: pts,
                 holes: Vec::new(),
-                is_polygon_source: false,
+                is_polygon_src: false,
             }])
         }
         3 => {
@@ -98,7 +98,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
                 return Some(vec![WkbGeometry {
                     points: Vec::new(),
                     holes: Vec::new(),
-                    is_polygon_source: true,
+                    is_polygon_src: true,
                 }]);
             }
             let outer = read_ring(r, le, dims)?;
@@ -109,7 +109,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
             Some(vec![WkbGeometry {
                 points: outer,
                 holes,
-                is_polygon_source: true,
+                is_polygon_src: true,
             }])
         }
         6 => {
@@ -117,7 +117,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
             let mut out: Vec<WkbGeometry> = Vec::new();
             for _ in 0..np {
                 for mut g in read_any(r)? {
-                    g.is_polygon_source = true;
+                    g.is_polygon_src = true;
                     out.push(g);
                 }
             }

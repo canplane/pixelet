@@ -12,7 +12,7 @@ use crate::frame::shader::record::PIPELINE_STAR;
 use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
 use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
+use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
@@ -36,11 +36,11 @@ impl StarPass {
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
-        frame_buffer: u32,
+        frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> StarPass {
         let built = pipelines.build(g, PIPELINE_STAR, WORLD_COLOR);
-        let uniform = g.buffer(
+        let uniform = g.buf(
             word_bytes(STARS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
@@ -50,17 +50,17 @@ impl StarPass {
             .iter()
             .flat_map(star_floats)
             .collect();
-        let catalog = g.buffer(
+        let catalog = g.buf(
             word_bytes(stars.len()),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buffer(catalog, 0, bytes(&stars));
-        let mut frame = vec![buffer_entry(0, frame_buffer)];
+        g.write_buf(catalog, 0, bytes(&stars));
+        let mut frame = vec![buf_entry(0, frame_buf)];
         frame.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
         let frame_group = g.bind_group(built.layouts[0], &frame);
         let group = g.bind_group(
             built.layouts[1],
-            &[buffer_entry(0, uniform), buffer_entry(1, catalog)],
+            &[buf_entry(0, uniform), buf_entry(1, catalog)],
         );
         StarPass {
             built,
@@ -97,7 +97,7 @@ impl StarPass {
 
     /// `words` written, where the frame's read found them moved.
     pub fn write(&self, g: &Gpu) {
-        g.write_buffer(self.uniform, 0, bytes(&self.words));
+        g.write_buf(self.uniform, 0, bytes(&self.words));
     }
 
     pub fn draw(&self, g: &Gpu, pass: u32) {

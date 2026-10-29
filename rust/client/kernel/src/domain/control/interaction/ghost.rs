@@ -45,7 +45,7 @@ pub fn ghost() -> Ghost {
         active_tool,
         ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser
     ) || hovered_object.is_some();
-    let current_scale = units(if use_object_style {
+    let cur_scale = units(if use_object_style {
         preview_zoom
     } else {
         GROUND.cell()
@@ -60,7 +60,7 @@ pub fn ghost() -> Ghost {
         (Some(h), true) => carved.of(World::now(), *h, |w| {
             cube_of(
                 w.asset_of(&middle(EntryAt::holding(GROUND.cell(), h)))
-                    .value()
+                    .val()
                     .map_or(0, pxl_spec_core::answer::value),
             )
         }),
@@ -123,7 +123,7 @@ pub fn ghost() -> Ghost {
             let c = q3::unpack(&h);
             let box_ghost = GhostBox {
                 at: [x, y, z],
-                size: current_scale,
+                sz: cur_scale,
                 cube,
                 erase,
             };

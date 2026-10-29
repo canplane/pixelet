@@ -116,21 +116,21 @@ pub fn brick_lines(
     xpute_kit::ensure!(scratch.len() == WAYS_BRICK_SEGMENTS, ENOTRECOVERABLE);
     let bins = BRICK >> WAYS_SHIFT;
     // Each bin of the brick a segment's footprint reaches, and the point it starts at.
-    let mut count = 0;
+    let mut cnt = 0;
     separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
         let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
         if [x / bins, y / bins] == place {
-            if let Some(e) = scratch.get_mut(count) {
+            if let Some(e) = scratch.get_mut(cnt) {
                 *e = (
                     (y % bins) * bins + x % bins,
                     separation.starts[d] + s as u32,
                 );
             }
-            count += 1;
+            cnt += 1;
         }
     });
-    xpute_kit::ensure!(count <= WAYS_BRICK_SEGMENTS, ENOTRECOVERABLE, count);
-    let scratch = &mut scratch[..count];
+    xpute_kit::ensure!(cnt <= WAYS_BRICK_SEGMENTS, ENOTRECOVERABLE, cnt);
+    let scratch = &mut scratch[..cnt];
     let frame = Frame::of(tile);
     out[..HEADER_WORDS as usize].copy_from_slice(&header(frame.per_m(), &frame.stations()));
     // The segments, each once in their points' order, each entry then its

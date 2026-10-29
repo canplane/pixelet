@@ -4,7 +4,7 @@ use super::*;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::ROUND;
-use pxl_spec::space::coord::zoom::{index_of, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{idx_of, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix64;
 
 /// Taken back by its cell, a point the floats leave a hair under itself
@@ -55,7 +55,7 @@ fn x_continuous_at_seam() {
         2.0
     );
     assert_eq!(
-        index_of(UNIT_ZOOM, &world_to_canonical(&[eye + 1.0, 0.0, 0.0]))[0],
-        index_of(UNIT_ZOOM, &west)[0]
+        idx_of(UNIT_ZOOM, &world_to_canonical(&[eye + 1.0, 0.0, 0.0]))[0],
+        idx_of(UNIT_ZOOM, &west)[0]
     );
 }

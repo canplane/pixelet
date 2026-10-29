@@ -29,7 +29,7 @@ pub const WORLD_COLOR: Format = Format::rgba16float;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Region {
     pub at: [u32; 2],
-    pub size: [u32; 2],
+    pub sz: [u32; 2],
 }
 
 /// The drawn pixels a region is grown by each way: the resolve's pixels
@@ -63,12 +63,12 @@ impl Region {
         let ([ax, sx], [ay, sy]) = (whole(lo[0], hi[0], width), whole(lo[1], hi[1], height));
         let (at, size) = ([ax, ay], [sx, sy]);
         let share = f64::from(size[0]) * f64::from(size[1]) / (f64::from(w) * f64::from(h));
-        (share <= REGION_MOST).then_some(Region { at, size })
+        (share <= REGION_MOST).then_some(Region { at, sz: size })
     }
 
     /// As a pass's scissor takes it.
     pub fn rect(&self) -> [u32; 4] {
-        [self.at[0], self.at[1], self.size[0], self.size[1]]
+        [self.at[0], self.at[1], self.sz[0], self.sz[1]]
     }
 }
 

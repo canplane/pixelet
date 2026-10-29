@@ -37,8 +37,8 @@ struct Db {
     repo: TerrainRepository,
 }
 
-fn connect(source: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
-    let mut client = source.connect()?;
+fn connect(src: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
+    let mut client = src.connect()?;
     let repo =
         TerrainRepository::prepare(&mut client, raster.clone()).map_err(|e| e.to_string())?;
     Ok(Db { client, repo })
@@ -77,7 +77,7 @@ fn run() -> Result<(), String> {
     pxl_geo_bake::cli::enter()?;
     let run = Run::parse("terrain")?;
     if run.leaf {
-        let (source, mut client) =
+        let (src, mut client) =
             Overture::reading(&leaf::READS, &run.shards.iter().copied().collect())?;
         let raster = Arc::new(Raster::open(&mut client)?);
         for &shard in &run.shards {
@@ -96,12 +96,7 @@ fn run() -> Result<(), String> {
                     bands.len(),
                     1000,
                     |[x, y]| format!("{x}:{y}"),
-                    || {
-                        Ok((
-                            connect(&source, &raster)?,
-                            separation::source::Walk::default(),
-                        ))
-                    },
+                    || Ok((connect(&src, &raster)?, separation::source::Walk::default())),
                     |(db, held), tile| {
                         held.keep_around(tile);
                         let reader = &mut separation::Reader {

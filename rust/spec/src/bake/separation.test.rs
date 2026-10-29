@@ -42,7 +42,7 @@ fn diagonal_line_one_band() {
 /// A parent's neighbourhood with `d` its first child's lines and no other.
 fn first_child(d: &Separation) -> [Option<&Separation>; 16] {
     let mut around = [None; 16];
-    around[crate::space::layer::tile::neighbor_index(0, 0)] = Some(d);
+    around[crate::space::layer::tile::neighbor_idx(0, 0)] = Some(d);
     around
 }
 

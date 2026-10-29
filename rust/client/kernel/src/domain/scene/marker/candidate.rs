@@ -4,7 +4,7 @@
 
 #[derive(Clone, Debug, Default)]
 pub struct Candidates {
-    pub count: u32,
+    pub cnt: u32,
 
     /// Relative to the local world frame's origin.
     pub local_x: Vec<f64>,
@@ -37,7 +37,7 @@ impl Candidates {
     }
 
     pub fn reset(&mut self) {
-        self.count = 0;
+        self.cnt = 0;
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -50,8 +50,8 @@ impl Candidates {
         anchor_px: f64,
         tiebreak: f64,
     ) {
-        let i = self.count as usize;
-        self.count += 1;
+        let i = self.cnt as usize;
+        self.cnt += 1;
         if i >= self.cap() {
             self.reserve((i + 1).max(self.cap() * 2));
         }

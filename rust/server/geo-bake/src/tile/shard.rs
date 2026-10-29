@@ -24,7 +24,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::cli::Flags;
-use crate::coverage::{source_of, Coverage, Node};
+use crate::coverage::{src_of, Coverage, Node};
 use crate::pyramid::{
     ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
 };
@@ -97,7 +97,7 @@ impl Stage {
 
     /// The shards staged whole.
     fn whole(&self) -> Result<Vec<Node>, String> {
-        Ok(Coverage::of_source()?
+        Ok(Coverage::of_src()?
             .shards()
             .filter(|s| self.done(&s.name()).exists())
             .collect())
@@ -384,7 +384,7 @@ pub struct Run {
 
 impl Run {
     pub fn parse(kind: &str) -> Result<Run, String> {
-        let coverage = Coverage::of_source()?;
+        let coverage = Coverage::of_src()?;
         let (mut stages, mut named, mut out, mut concurrency) = (
             Vec::new(),
             Vec::new(),
@@ -394,9 +394,9 @@ impl Run {
         let mut flags = Flags::from_env();
         while let Some(flag) = flags.arg() {
             match flag.as_str() {
-                "--stage" => stages.push(flags.value()?),
-                "--shard" => named.push(flags.value()?),
-                "--out" => out = PathBuf::from(flags.value()?),
+                "--stage" => stages.push(flags.val()?),
+                "--shard" => named.push(flags.val()?),
+                "--out" => out = PathBuf::from(flags.val()?),
                 "--concurrency" => concurrency = flags.parse()?,
                 other => return Err(format!("unknown flag: {other}")),
             }
@@ -456,7 +456,7 @@ impl Run {
         if self.commit {
             self.stage.commit::<L>(self.concurrency)?;
             let mut fields =
-                serde_json::json!({ "source": source_of(reads)?, "format": FORMAT.of(L::LAYER) });
+                serde_json::json!({ "source": src_of(reads)?, "format": FORMAT.of(L::LAYER) });
             // The commit wrote them before it moved anything.
             if let Some(held) = source::manifest(&self.stage.set.root)?
                 .as_ref()

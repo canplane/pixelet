@@ -141,12 +141,12 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     for kids in children.values_mut() {
         kids.sort_by(|a, b| a.1.cmp(&b.1));
     }
-    for index in 0..(n * n) as u32 {
-        let mut at = cells[index as usize];
+    for idx in 0..(n * n) as u32 {
+        let mut at = cells[idx as usize];
         if at == NONE {
             continue;
         }
-        let [tx, ty] = GROUND.in_tile(index);
+        let [tx, ty] = GROUND.in_tile(idx);
         let center = [
             min[0] + (f64::from(tx) + 0.5) * step,
             min[1] + (f64::from(ty) + 0.5) * step,
@@ -165,7 +165,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
             at = ids.of(id);
             taken.push(at);
         }
-        cells[index as usize] = at;
+        cells[idx as usize] = at;
     }
     if cells.iter().all(|&c| c == NONE) {
         return Ok(None);

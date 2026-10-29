@@ -32,22 +32,22 @@ fn development() -> bool {
 /// A dev-only setting outside a development build is not offered: storage
 /// outlives the build, and a value with no row left to turn it off would stay
 /// in force. Loading drops it and `set_setting` refuses it from the console.
-pub fn is_offered(key: SettingKey, value: u32) -> bool {
-    !(key.dev() || key.dev_option(value)) || (cfg!(feature = "dev") && development())
+pub fn is_offered(key: SettingKey, val: u32) -> bool {
+    !(key.dev() || key.dev_option(val)) || (cfg!(feature = "dev") && development())
 }
 
 impl Settings {
     /// Whether it changed; none for a value the key may not hold or a
     /// setting not offered (see `is_offered`). What a change sets off is its
     /// caller's.
-    pub fn set_setting(&mut self, key: SettingKey, value: u32) -> Option<bool> {
-        if !is_offered(key, value) {
+    pub fn set_setting(&mut self, key: SettingKey, val: u32) -> Option<bool> {
+        if !is_offered(key, val) {
             return None;
         }
-        if self.get(key) == value {
+        if self.get(key) == val {
             return Some(false);
         }
-        if !self.set(key, value) {
+        if !self.set(key, val) {
             return None;
         }
         if key.is_kept() {
@@ -59,12 +59,12 @@ impl Settings {
     fn kept(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         for key in SettingKey::ALL {
-            let value = self.get(key);
-            if !key.is_kept() || !is_offered(key, value) || value == Settings::DEFAULT.get(key) {
+            let val = self.get(key);
+            if !key.is_kept() || !is_offered(key, val) || val == Settings::DEFAULT.get(key) {
                 continue;
             }
             leb(&mut bytes, key as u32);
-            leb(&mut bytes, value);
+            leb(&mut bytes, val);
         }
         bytes
     }
@@ -72,23 +72,23 @@ impl Settings {
 
 /// An unsigned LEB128: seven bits a byte, low first, the top bit set on
 /// every byte but the last.
-fn leb(out: &mut Vec<u8>, mut value: u32) {
-    while value > 0x7f {
-        out.push(value as u8 | 0x80);
-        value >>= 7;
+fn leb(out: &mut Vec<u8>, mut val: u32) {
+    while val > 0x7f {
+        out.push(val as u8 | 0x80);
+        val >>= 7;
     }
-    out.push(value as u8);
+    out.push(val as u8);
 }
 
 /// None where the bytes end inside one or it runs past a u32.
 fn unleb(bytes: &[u8], at: &mut usize) -> Option<u32> {
-    let mut value = 0u64;
+    let mut val = 0u64;
     for shift in (0..35).step_by(7) {
         let byte = *bytes.get(*at)?;
         *at += 1;
-        value |= u64::from(byte & 0x7f) << shift;
+        val |= u64::from(byte & 0x7f) << shift;
         if byte & 0x80 == 0 {
-            return u32::try_from(value).ok();
+            return u32::try_from(val).ok();
         }
     }
     None
@@ -177,11 +177,11 @@ pub fn settings_keep_step() {
 fn read_kept(bytes: &[u8]) -> Settings {
     let mut s = Settings::DEFAULT;
     let mut at = 0;
-    while let (Some(number), Some(value)) = (unleb(bytes, &mut at), unleb(bytes, &mut at)) {
+    while let (Some(number), Some(val)) = (unleb(bytes, &mut at), unleb(bytes, &mut at)) {
         if let Some(key) =
-            SettingKey::of(number).filter(|&key| key.is_kept() && is_offered(key, value))
+            SettingKey::of(number).filter(|&key| key.is_kept() && is_offered(key, val))
         {
-            s.set(key, value);
+            s.set(key, val);
         }
     }
     s

@@ -10,10 +10,10 @@
 
 use pxl_render::gpu::grown::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_distance, SPLIT, WINDOW_MARGIN};
+use pxl_spec::space::camera::grid::{split_dist, SPLIT, WINDOW_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::{index_of, units, Zoom, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
 use pxl_spec_core::overwrite;
 use pxl_spec_core::scatter::{self, drawn, row_of};
 use pxl_spec_core::LEAF_CELL;
@@ -52,7 +52,7 @@ pub const fn sprite_reach(extent_u: f64) -> f64 {
 /// Whether a decor `extent_u` wide is a sprite's worth anywhere cells of
 /// `cell_zoom` are drawn: as it spans where that zoom begins.
 fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    split_distance(cell_zoom) * WINDOW_MARGIN <= sprite_reach(extent_u)
+    split_dist(cell_zoom) * WINDOW_MARGIN <= sprite_reach(extent_u)
 }
 
 /// Each kind's window zooms, a bit each: the leaves' alone, where it is a
@@ -190,7 +190,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
             return;
         }
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
-        let [x, y, z] = index_of(UNIT_ZOOM, &e.corner());
+        let [x, y, z] = idx_of(UNIT_ZOOM, &e.corner());
         placed.push([
             scatter::record_word(k, variant, turn, scatter::PLACED_AT),
             wrapped(x),

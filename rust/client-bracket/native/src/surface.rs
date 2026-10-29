@@ -65,9 +65,9 @@ xpute_gpu::native_abi!(crate::guest, ASK, PLAN, target);
 
 /// The turn's edge, on the kernel's thread: what the device has answered
 /// since, written into `memory` before the turn reads it.
-pub fn before_turn(memory: &mut Memory<'_>) {
+pub fn before_turn(mem: &mut Memory<'_>) {
     if let Some(h) = native::host() {
-        h.poll(memory);
+        h.poll(mem);
     }
 }
 
@@ -81,9 +81,9 @@ pub fn admit() -> bool {
 }
 
 /// The turn's calls run on the device, and its frames shown.
-pub fn after_turn(memory: &mut Memory<'_>) {
+pub fn after_turn(mem: &mut Memory<'_>) {
     if let (Some(h), Some(at)) = (native::host(), pxl_render::gpu::api::stream_at()) {
-        h.run(memory, at, stream::HEAD);
+        h.run(mem, at, stream::HEAD);
         h.present();
     }
 }

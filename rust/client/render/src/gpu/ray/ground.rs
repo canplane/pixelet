@@ -17,8 +17,8 @@ use crate::frame::shader::record::{
     SHADER_WAY_TREE,
 };
 use crate::gpu::api::{
-    buffer_entry, buffer_range_entry, buffer_usage, bytes, release, room, word_bytes,
-    write_buffer_bytes, Gpu, Stamp, DONE, UNIFORM_ALIGN_MAX,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, room, word_bytes, write_buffer_bytes,
+    Gpu, Stamp, DONE, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{CellsBack, GroundBricks, Landing};
@@ -127,11 +127,11 @@ const _: () = assert!(
 
 /// The ways' pool of `families` and its free stack, zeroed: each copied
 /// from as it grows, and into.
-fn pool_buffers(g: &Gpu, families: u32) -> (u32, u32) {
+fn pool_bufs(g: &Gpu, families: u32) -> (u32, u32) {
     let usage = buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST;
     (
-        g.buffer(pool_bytes(families), usage),
-        g.buffer(word_bytes(families as usize), usage),
+        g.buf(pool_bytes(families), usage),
+        g.buf(word_bytes(families as usize), usage),
     )
 }
 
@@ -148,8 +148,8 @@ const _: () = assert!(
 
 /// The handed bricks' scratch, each brick's for a tree of `families`,
 /// which its records are copied out of.
-fn scratch_buffer(g: &Gpu, families: u32) -> u32 {
-    g.buffer(
+fn scratch_buf(g: &Gpu, families: u32) -> u32 {
+    g.buf(
         scratch_bytes(families),
         buffer_usage::STORAGE | buffer_usage::COPY_SRC,
     )
@@ -221,42 +221,42 @@ impl GroundBuffers {
         self.bound_group = g.bind_group(
             self.bound_built.layouts[0],
             &[
-                buffer_range_entry(0, self.slots, 0, 16),
-                buffer_entry(1, fresh),
-                buffer_entry(2, ground),
-                buffer_entry(3, scratch),
+                buf_range_entry(0, self.slots, 0, 16),
+                buf_entry(1, fresh),
+                buf_entry(2, ground),
+                buf_entry(3, scratch),
             ],
         );
         self.ways_group = g.bind_group(
             self.ways_built.layouts[0],
             &[
-                buffer_entry(0, fresh),
-                buffer_entry(1, ground),
-                buffer_entry(2, scratch),
+                buf_entry(0, fresh),
+                buf_entry(1, ground),
+                buf_entry(2, scratch),
             ],
         );
         self.free_group = g.bind_group(
             self.free_built.layouts[0],
             &[
-                buffer_entry(0, fresh),
-                buffer_entry(1, ground),
-                buffer_entry(2, pool),
-                buffer_entry(3, stack),
+                buf_entry(0, fresh),
+                buf_entry(1, ground),
+                buf_entry(2, pool),
+                buf_entry(3, stack),
             ],
         );
         self.tree_group = g.bind_group(
             self.tree_built.layouts[0],
             &[
-                buffer_entry(0, fresh),
-                buffer_entry(1, ground),
-                buffer_entry(2, pool),
-                buffer_entry(3, stack),
-                buffer_entry(4, scratch),
+                buf_entry(0, fresh),
+                buf_entry(1, ground),
+                buf_entry(2, pool),
+                buf_entry(3, stack),
+                buf_entry(4, scratch),
             ],
         );
         self.freed_group = g.bind_group(
             self.freed_built.layouts[0],
-            &[buffer_entry(0, scratch), buffer_entry(1, stack)],
+            &[buf_entry(0, scratch), buf_entry(1, stack)],
         );
     }
 
@@ -279,17 +279,17 @@ impl GroundBuffers {
         if families <= self.families {
             return;
         }
-        let (pool, stack) = pool_buffers(g, families);
+        let (pool, stack) = pool_bufs(g, families);
         let half = |families: u32| pool_bytes(families) / 2;
         let e = g.encoder();
-        g.copy_buffer(e, (self.pool, 0), (pool, 0), half(self.families));
-        g.copy_buffer(
+        g.copy_buf(e, (self.pool, 0), (pool, 0), half(self.families));
+        g.copy_buf(
             e,
             (self.pool, half(self.families)),
             (pool, half(families)),
             half(self.families),
         );
-        g.copy_buffer(
+        g.copy_buf(
             e,
             (self.stack, 0),
             (stack, 0),
@@ -314,7 +314,7 @@ impl GroundBuffers {
         if families <= self.scratch_families {
             return;
         }
-        let scratch = scratch_buffer(g, families);
+        let scratch = scratch_buf(g, families);
         release(self.scratch);
         (self.scratch, self.scratch_families) = (scratch, families);
         self.ways_groups(g);
@@ -338,7 +338,7 @@ impl GroundBuffers {
             room.resize(words, 0);
         }
         release(self.record_reads[k]);
-        self.record_reads[k] = g.buffer(
+        self.record_reads[k] = g.buf(
             word_bytes(room.len()),
             buffer_usage::MAP_READ | buffer_usage::COPY_DST,
         );
@@ -385,18 +385,18 @@ impl RaysPass {
         let families = ground.pool.min(way::tree::POOL_FAMILIES);
         let scratch_families = ground.scratch.clamp(1, way::tree::BRICK_FAMILIES);
         let gb = self.ground.get_or_insert_with(|| {
-            let buffer = |size: u32, usage: u32| g.buffer(size, usage);
+            let buffer = |sz: u32, usage: u32| g.buf(sz, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            let frames_buffer = buffer(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
+            let frames_buf = buffer(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
             let fresh = buffer(word_bytes((HANDED_WORDS * HANDED) as usize), storage);
             let looks = buffer(LOOKS_BYTES as u32, storage);
             let heights_built = pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP);
             let heights_group = g.bind_group(
                 heights_built.layouts[0],
                 &[
-                    buffer_entry(0, fresh),
-                    buffer_entry(1, frames_buffer),
-                    buffer_entry(2, looks),
+                    buf_entry(0, fresh),
+                    buf_entry(1, frames_buf),
+                    buf_entry(2, looks),
                 ],
             );
             // Each slot's number in it, written once: `bound_cs`'s level.
@@ -405,20 +405,20 @@ impl RaysPass {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
             for k in 0..=LEVELS {
-                g.write_buffer(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
+                g.write_buf(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
-            let scratch = scratch_buffer(g, scratch_families);
+            let scratch = scratch_buf(g, scratch_families);
             let (bound_built, ways_built) = (
                 pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
                 pipelines.build_compute(g, SHADER_WAY, &compute::WAY_GROUP),
             );
-            let (pool, stack) = pool_buffers(g, families);
+            let (pool, stack) = pool_bufs(g, families);
             let free_built = pipelines.build_compute(g, SHADER_WAY_FREE, &compute::WAY_FREE_GROUP);
             let tree_built = pipelines.build_compute(g, SHADER_WAY_TREE, &compute::WAY_TREE_GROUP);
             let freed_built =
                 pipelines.build_compute(g, SHADER_WAY_FREED, &compute::WAY_FREED_GROUP);
             let mut gb = GroundBuffers {
-                ground: frames_buffer,
+                ground: frames_buf,
                 looks,
                 fresh,
                 fresh_len: 0,
@@ -492,10 +492,10 @@ impl RaysPass {
                 q.fresh[window::FRESH_BRICK as usize],
                 window::handed_at(fresh) * 4,
             );
-            g.write_buffer(gb.fresh, at, bytes(&q.fresh));
-            g.write_buffer(gb.fresh, at + LOOKS_AT * 4, q.looks);
-            g.write_buffer(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
-            g.write_buffer(gb.fresh, at + LINES_AT * 4, bytes(q.lines));
+            g.write_buf(gb.fresh, at, bytes(&q.fresh));
+            g.write_buf(gb.fresh, at + LOOKS_AT * 4, q.looks);
+            g.write_buf(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
+            g.write_buf(gb.fresh, at + LINES_AT * 4, bytes(q.lines));
             gb.asked[brick as usize] = q.back;
             gb.handed[fresh as usize] = q.fresh;
             fresh += 1;
@@ -650,7 +650,7 @@ impl RaysPass {
             };
             free = k + 1;
             c.room(g, k);
-            g.copy_buffer(
+            g.copy_buf(
                 e,
                 (c.ground, s * BRICK_BYTES + COLUMNS_AT * 4),
                 (c.reads[k], 0),
@@ -661,7 +661,7 @@ impl RaysPass {
             let words = c.record_rooms[k]
                 .len()
                 .min((1 + sb * way::tree::RECORD_WORDS) as usize);
-            g.copy_buffer(
+            g.copy_buf(
                 e,
                 (c.scratch, word_bytes(records)),
                 (c.record_reads[k], 0),

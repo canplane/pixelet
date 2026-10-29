@@ -18,7 +18,7 @@ use pxl_spec::bake::tile::place::{stands, symbol_of, PLACE_FIRST, PLACE_LATTICE}
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::REACH;
-use pxl_spec::space::coord::zoom::{index_of, Zoom};
+use pxl_spec::space::coord::zoom::{idx_of, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Cell};
@@ -67,7 +67,7 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
             return;
         }
         let ground = stands(src, h.at);
-        let [x, y, _] = index_of(z, &ground.mid());
+        let [x, y, _] = idx_of(z, &ground.mid());
         if [x, y] != named {
             return;
         }

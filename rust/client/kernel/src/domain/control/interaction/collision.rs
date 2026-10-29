@@ -6,7 +6,7 @@ use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::zoom::{cube, index_of, units, Zoom};
+use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::control::interaction::{ActiveTool, Holding};
@@ -56,7 +56,7 @@ impl PlacementTool {
     }
 
     /// The side of the cube it places in, in units.
-    pub fn size(self) -> f64 {
+    pub fn sz(self) -> f64 {
         units(self.zoom())
     }
 }
@@ -64,7 +64,7 @@ impl PlacementTool {
 /// The room a placement at `corner` takes, in units.
 fn room(tool: PlacementTool, corner: &Q3) -> Aabb {
     let zoom = tool.zoom();
-    let cell = cube(zoom, index_of(zoom, corner));
+    let cell = cube(zoom, idx_of(zoom, corner));
     match tool {
         PlacementTool::Decor(id) => {
             let decor = Decor::of(id);
@@ -126,7 +126,7 @@ pub fn anchor_center(anchor: &Q3) -> Q3 {
 /// In the world's doubles, the space the pick works in.
 pub fn object_aabb(obj: &Entry) -> Aabb {
     let min = crate::domain::view::frame::coord::to_world(&obj.corner());
-    let max = min.map(|v| v + obj.size());
+    let max = min.map(|v| v + obj.sz());
     Aabb { min, max }
 }
 

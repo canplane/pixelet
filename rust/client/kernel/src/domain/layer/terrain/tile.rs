@@ -109,7 +109,7 @@ pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
     let coming = TerrainTile::tile_cache()
         .asked_again(|p| !crate::sys::io::request::has_object_failed(Stream::terrain, p.subject()));
-    most_kept().saturating_sub(kept().count() + coming)
+    most_kept().saturating_sub(kept().cnt() + coming)
 }
 
 /// The tiles whose bricks the windows want filled, off their packets.

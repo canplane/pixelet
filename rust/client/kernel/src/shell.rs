@@ -257,7 +257,7 @@ pub fn tracking_action(tracking: Tracking) {
 
 /// A search's place and the view asked with it: a view far out comes in,
 /// and the view is asked after, so a dist asked wins over the coming in.
-pub fn go_to_degrees(lon: f64, lat: f64, view: IntentPatch) {
+pub fn go_to_deg(lon: f64, lat: f64, view: IntentPatch) {
     crate::domain::control::navigation::destination::go_on_ground(
         epsg4326::project(&[lon, lat, 0.0]),
         Motion::Snap,

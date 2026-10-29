@@ -12,15 +12,14 @@ use xpute_kit::status::errno::Errno;
 
 use super::raster::Raster;
 use super::tally::{self, Counted, Tally};
-use super::{casts_pixels, RaysPass};
+use super::{casts_px, RaysPass};
 use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FORGET, SHADER_JOINED,
     SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SUN, SHADER_SUN_MARK,
     SHADER_SUN_MARK_DRAWN, SHADER_SUN_MISS, SHADER_SUN_REACH, UNIFORM,
 };
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
-    Stamp,
+    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu, Stamp,
 };
 use crate::gpu::grown::{cut_boxes, hold, Drawn, Grown, Grows};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -155,7 +154,7 @@ pub(super) struct CastBuffers {
     /// Shards the buffer holds.
     shard_room: usize,
     /// The drawn pixels it casts, a ray each: the world surface's.
-    size: [u32; 2],
+    sz: [u32; 2],
     /// The overwrites' heap lane then their data lane, each `overwrite_room`
     /// words, the lanes' own room; the revision it holds, none at first.
     overwrites: u32,
@@ -177,12 +176,12 @@ pub(super) struct CastBuffers {
     origin: [f32; 2],
     /// The samples' stops handed to the rasterizer (ray/raster.rs), whose
     /// visible sample at each pixel the pixels read (`cast_cs`), over a group
-    /// of their own (`pixel_group`): the eye, the rays, the beam's words, the
+    /// of their own (`px_group`): the eye, the rays, the beam's words, the
     /// pyramid and the visibility buffer (`pixel_bound`), made again exactly
     /// when one of them is another.
     raster: Raster,
-    pixel_group: u32,
-    pixel_bound: [u32; 5],
+    px_group: u32,
+    px_bound: [u32; 5],
     /// What the sun's cast and the eye's recast, counted where the setting
     /// asks (ray/tally.rs).
     tally: Tally,
@@ -227,7 +226,7 @@ pub(super) const HEAD_BINDING: u32 = 11;
 /// passes of those bind it over the sun's buffers (`sun_groups`); the
 /// sun's own bind its world and its clipmap (`SUN_GROUP`), past the floor's
 /// storage buffers were they one group; the pixels' (`cast_cs`) read the
-/// visibility buffer and no world (`pixel_group`).
+/// visibility buffer and no world (`px_group`).
 const WORLD_GROUP: [u32; compute::MISS_GROUP.len() + 3] = {
     let mut g = [0; compute::MISS_GROUP.len() + 3];
     let mut k = 0;
@@ -279,7 +278,7 @@ impl RaysPass {
             pipelines.build_compute(g, SHADER_SUN_REACH, &compute::SUN_REACH_GROUP);
         let raster = Raster::new(g, pipelines);
         let tally = Tally::new(g);
-        let buffer = |size: u32, usage: u32| g.buffer(size, usage);
+        let buffer = |sz: u32, usage: u32| g.buf(sz, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let c = CastBuffers {
             built,
@@ -352,7 +351,7 @@ impl RaysPass {
             ),
             shards: 0,
             shard_room: 0,
-            size: [0; 2],
+            sz: [0; 2],
             overwrites: 0,
             overwrite_room: 0,
             overwrite_revision: None,
@@ -362,8 +361,8 @@ impl RaysPass {
             region: None,
             origin: [0.0; 2],
             raster,
-            pixel_group: 0,
-            pixel_bound: [0; 5],
+            px_group: 0,
+            px_bound: [0; 5],
             tally,
             sun_grouped: [0; 3],
         };
@@ -443,17 +442,17 @@ impl RaysPass {
             (true, true) => FrameKind::pixels,
             (false, _) => FrameKind::cast,
         };
-        let (kind, casts) = (self.kind, casts_pixels(self.kind));
+        let (kind, casts) = (self.kind, casts_px(self.kind));
         xpute_kit::ensure!(
             cast.window.len() == (4 * window::JOINED_AT) as usize,
             ENOTRECOVERABLE,
             cast.window.len()
         );
         if window_moved {
-            g.write_buffer(c.window, 0, bytes(cast.window));
+            g.write_buf(c.window, 0, bytes(cast.window));
             c.refold = true;
         }
-        c.size = rays.1;
+        c.sz = rays.1;
         // The grid as the eye's words lay it (pxl-spec-core `eye::GRID`), the
         // dispatches' sizes, and room for its corners' lines, its cells'
         // starts and its samples' stops, made again only where they outgrow
@@ -480,7 +479,7 @@ impl RaysPass {
                 need
             );
             (c.beams, c.beam_room) = (
-                g.buffer(size, buffer_usage::STORAGE | buffer_usage::COPY_DST),
+                g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST),
                 need,
             );
         }
@@ -490,14 +489,14 @@ impl RaysPass {
                 release(c.shards);
             }
             c.shard_room = cast.shards.len();
-            c.shards = g.buffer(
+            c.shards = g.buf(
                 word_bytes(4 * c.shard_room),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             );
         }
         if shards_moved || shards_grow {
             // Read where the kernel holds it, one record however large.
-            g.upload_buffer(c.shards, 0, bytes(cast.shards));
+            g.upload_buf(c.shards, 0, bytes(cast.shards));
         }
         let o = &cast.overwrites;
         let overwrites_grow = o.room != c.overwrite_room;
@@ -506,7 +505,7 @@ impl RaysPass {
                 release(c.overwrites);
             }
             c.overwrite_room = o.room;
-            c.overwrites = g.buffer(
+            c.overwrites = g.buf(
                 word_bytes(2 * o.room),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             );
@@ -540,20 +539,20 @@ impl RaysPass {
                 && crate::gpu::api::room(listed(o.heap) + listed(o.data))
             {
                 for &first in o.written {
-                    g.write_buffer(
+                    g.write_buf(
                         c.overwrites,
                         word_bytes(first as usize),
                         bytes(family(o.heap, first)),
                     );
-                    g.write_buffer(
+                    g.write_buf(
                         c.overwrites,
                         word_bytes(o.room + first as usize),
                         bytes(family(o.data, first)),
                     );
                 }
             } else {
-                g.upload_buffer(c.overwrites, 0, bytes(o.heap));
-                g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
+                g.upload_buf(c.overwrites, 0, bytes(o.heap));
+                g.upload_buf(c.overwrites, word_bytes(o.room), bytes(o.data));
             }
             c.overwrite_revision = Some(o.revision);
         }
@@ -683,7 +682,7 @@ impl RaysPass {
             head[sun::MOVED_CAST] = c.sun_number;
             head[sun::MOVED_EPOCH] = c.sun_epoch;
             head[sun::MOVED_COUNTED] = u32::from(ray_counts);
-            head[sun::MOVED_SIZE] = shadow::SIZE;
+            head[sun::MOVED_SIZE] = shadow::SZ;
             let at = 4 * sun::STARTS_AT;
             head[at..at + 4 * sun::STARTS_VEC4S].copy_from_slice(&sun_map.2.words());
             // The actors drawn, receivers as decor is (`sun_mark_drawn_cs`).
@@ -694,12 +693,12 @@ impl RaysPass {
                 let w = at + 4 * (1 + k);
                 head[w..w + 3].copy_from_slice(&a.map(f32::to_bits));
             }
-            g.write_buffer(c.sun_moved, 0, bytes(&head));
-            g.write_buffer(c.sun_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
-            c.raster.sun_prepare(g, &cast.eye, shadow::SIZE);
+            g.write_buf(c.sun_moved, 0, bytes(&head));
+            g.write_buf(c.sun_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
+            c.raster.sun_prepare(g, &cast.eye, shadow::SZ);
         }
         if eye_moved || jittered || c.sun_cast {
-            g.write_buffer(c.eye, 0, bytes(&cast.eye));
+            g.write_buf(c.eye, 0, bytes(&cast.eye));
             c.origin = [0.0; 2];
         }
         // Only the pixels within the region, where only they moved; a cast
@@ -708,7 +707,7 @@ impl RaysPass {
         c.region = region.filter(|_| kind == FrameKind::pixels);
         let origin = c.region.map_or([0.0; 2], |r| r.at.map(|v| v as f32));
         if casts && origin != c.origin {
-            g.write_buffer(c.eye, word_bytes(eye::JITTER + 2), bytes(&origin));
+            g.write_buf(c.eye, word_bytes(eye::JITTER + 2), bytes(&origin));
             c.origin = origin;
         }
         if casts {
@@ -739,8 +738,8 @@ impl RaysPass {
             let written = observed::WRITTEN_AT as usize;
             head[written] = c.writes as u32;
             head[written + 1..written + 1 + c.writes].copy_from_slice(&c.written[..c.writes]);
-            g.write_buffer(c.seen, 0, bytes(&head));
-            g.write_buffer(c.marks, 0, bytes(&ray::MISS_ARGS_EMPTY));
+            g.write_buf(c.seen, 0, bytes(&head));
+            g.write_buf(c.marks, 0, bytes(&ray::MISS_ARGS_EMPTY));
             c.sent = Some(Forgot {
                 all: c.forgets == observed::FORGETS_ALL,
                 moved: c.moved,
@@ -758,7 +757,7 @@ impl RaysPass {
             // A full cast's alone, so what a cast asks is not shared out
             // over the frames that cast only the pixels.
             casts: [self.kind == FrameKind::cast, c.sun_cast],
-            rays: [c.size[0] * c.size[1], shadow::SIZE * shadow::SIZE],
+            rays: [c.sz[0] * c.sz[1], shadow::SZ * shadow::SZ],
         };
         c.tally.begin(g, ray_counts, c.seen, frame);
         let bound = [
@@ -783,17 +782,17 @@ impl RaysPass {
             c.raster.prepare(
                 g,
                 &cast.eye,
-                c.size,
+                c.sz,
                 &c.grid,
                 self.kind == FrameKind::cast,
                 [c.eye, c.beams, c.eye_head],
                 [c.window, ground, c.shards, c.overwrites, pool],
             );
             let pixel_bound = [c.eye, rays.0, c.beams, c.seen, c.raster.visibility_array];
-            if pixel_bound != c.pixel_bound {
-                release(c.pixel_group);
-                c.pixel_group = pixel_group(g, &c.built, pixel_bound, c.marks);
-                c.pixel_bound = pixel_bound;
+            if pixel_bound != c.px_bound {
+                release(c.px_group);
+                c.px_group = px_group(g, &c.built, pixel_bound, c.marks);
+                c.px_bound = pixel_bound;
             }
         }
         let [drawing, regions, instances] = c
@@ -856,7 +855,7 @@ impl RaysPass {
         };
         c.region = None;
         c.origin = [0.0; 2];
-        g.write_buffer(c.eye, word_bytes(eye::JITTER + 2), bytes(&c.origin));
+        g.write_buf(c.eye, word_bytes(eye::JITTER + 2), bytes(&c.origin));
     }
 
     /// The eye's windows folded over their bricks where their entries moved
@@ -889,9 +888,9 @@ impl RaysPass {
     /// each a pass of its own over the cast's group, timed in its own span,
     /// so what each costs is read apart; the sun's in the shadow's, with
     /// the map's pass, which is not drawn at the world's pixels
-    /// (`PER_PIXEL`).
+    /// (`PER_PX`).
     pub fn dispatch(&mut self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
-        let (grows, casts, kind) = (self.grows(), self.casts_pixels(), self.kind);
+        let (grows, casts, kind) = (self.grows(), self.casts_px(), self.kind);
         let Some(c) = self.cast.as_mut() else { return };
         if casts {
             // The observed pyramid forgotten first where it is; then the
@@ -944,7 +943,7 @@ impl RaysPass {
                 (
                     GpuSpanName::pixel,
                     &c.built,
-                    c.region.map_or(c.size, |r| r.size),
+                    c.region.map_or(c.sz, |r| r.sz),
                     compute::CAST_WORKGROUP,
                 ),
             ] {
@@ -961,7 +960,7 @@ impl RaysPass {
                         kind == FrameKind::cast,
                         c.region,
                     );
-                    group = c.pixel_group;
+                    group = c.px_group;
                 }
                 let pass = g.compute_pass(encoder, stamps[span as usize].pass());
                 g.set_bind_group(pass, 0, group, &[]);
@@ -971,7 +970,7 @@ impl RaysPass {
             }
             // The marked pixels' count where their walk reads it, then that
             // walk over their list, and over every pixel where it was full.
-            g.copy_buffer(
+            g.copy_buf(
                 encoder,
                 (c.marks, word_bytes(ray::MISS_ARGS_COUNT as usize)),
                 (c.seen, word_bytes(observed::MARKS_COUNT as usize)),
@@ -1010,7 +1009,7 @@ impl RaysPass {
                 g.set_bind_group(pass, 0, c.sun_groups[4], &[]);
                 g.set_pipeline(pass, c.sun_mark_built.pipeline);
                 let w = compute::SUN_MARK_WORKGROUP;
-                let [x, y] = c.size.map(|v| v.div_ceil(sun::MARK));
+                let [x, y] = c.sz.map(|v| v.div_ceil(sun::MARK));
                 g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             }
             g.set_bind_group(pass, 0, c.sun_groups[5], &[]);
@@ -1021,21 +1020,21 @@ impl RaysPass {
             g.set_bind_group(pass, 0, c.sun_groups[6], &[]);
             g.set_pipeline(pass, c.sun_reach_built.pipeline);
             let w = compute::SUN_REACH_WORKGROUP;
-            let n = sun::tiles(shadow::SIZE);
+            let n = sun::tiles(shadow::SZ);
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             // The beam and the cells' starts by the eye's passes over the
             // sun's world's group, which hands them the sun's head.
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);
             g.set_pipeline(pass, c.beam_built.pipeline);
-            let n = sun::beam_across(shadow::SIZE);
+            let n = sun::beam_across(shadow::SZ);
             let w = compute::BEAM_WORKGROUP;
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.set_pipeline(pass, c.cells_built.pipeline);
-            let n = sun::cells_across(shadow::SIZE);
+            let n = sun::cells_across(shadow::SZ);
             let w = compute::CELL_WORKGROUP;
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.end(pass);
-            let n = shadow::SIZE / pxl_spec_core::param::sun::SAMPLE;
+            let n = shadow::SZ / pxl_spec_core::param::sun::SAMPLE;
             let stamp = stamps[GpuSpanName::sun_sample as usize].pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);
@@ -1054,16 +1053,16 @@ impl RaysPass {
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_slot as usize].pass());
             g.set_bind_group(pass, 0, c.sun_groups[0], &[]);
             g.set_pipeline(pass, c.sun_built.pipeline);
-            let tiles = shadow::SIZE / sun::TILE;
+            let tiles = shadow::SZ / sun::TILE;
             g.dispatch(pass, tiles, tiles, 1);
             g.end(pass);
             // Their count where their walk reads it, then that walk.
-            g.copy_buffer(
+            g.copy_buf(
                 encoder,
                 (c.sun_misses, word_bytes(ray::MISS_ARGS_COUNT as usize)),
                 (
                     c.sun_list,
-                    word_bytes(sun::misses_count(shadow::SIZE) as usize),
+                    word_bytes(sun::misses_count(shadow::SZ) as usize),
                 ),
                 4,
             );
@@ -1097,7 +1096,7 @@ impl RaysPass {
             c.sun_list = sun_list(g, true);
             c.sun_list_whole = true;
         }
-        c.sun_ready = c.raster.sun_made(g, shadow::SIZE);
+        c.sun_ready = c.raster.sun_made(g, shadow::SZ);
     }
 
     /// The counts copied last frame mapped back (`Tally::back`).
@@ -1178,17 +1177,17 @@ impl RaysPass {
 fn cast_group(g: &Gpu, built: &Built, bound: [u32; 11]) -> u32 {
     let [eye, window, ground, rays, looks, shards, overwrites, pool, beams, seen, head] = bound;
     let entries = [
-        buffer_entry(0, eye),
-        buffer_entry(1, window),
-        buffer_entry(2, ground),
+        buf_entry(0, eye),
+        buf_entry(1, window),
+        buf_entry(2, ground),
         view_entry(3, rays),
-        buffer_entry(4, looks),
-        buffer_entry(5, shards),
-        buffer_entry(6, overwrites),
-        buffer_entry(7, pool),
-        buffer_entry(8, beams),
-        buffer_entry(9, seen),
-        buffer_entry(HEAD_BINDING, head),
+        buf_entry(4, looks),
+        buf_entry(5, shards),
+        buf_entry(6, overwrites),
+        buf_entry(7, pool),
+        buf_entry(8, beams),
+        buf_entry(9, seen),
+        buf_entry(HEAD_BINDING, head),
     ];
     g.bind_group(built.layouts[0], &entries)
 }
@@ -1197,21 +1196,21 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 11]) -> u32 {
 /// the pyramid, which the marked pixels are listed in, the visibility buffer,
 /// a one-layer array, and the words the marked are counted in (`marks`).
 /// No world: a pixel walks nothing of its own (`cast_cs`).
-fn pixel_group(g: &Gpu, built: &Built, bound: [u32; 5], marks: u32) -> u32 {
+fn px_group(g: &Gpu, built: &Built, bound: [u32; 5], marks: u32) -> u32 {
     let [eye, rays, beams, seen, visibility] = bound;
     let entries = [
-        buffer_entry(0, eye),
+        buf_entry(0, eye),
         view_entry(3, rays),
-        buffer_entry(8, beams),
-        buffer_entry(9, seen),
+        buf_entry(8, beams),
+        buf_entry(9, seen),
         view_entry(13, visibility),
-        buffer_entry(14, marks),
+        buf_entry(14, marks),
     ];
     g.bind_group(built.layouts[0], &entries)
 }
 
 const _: () = assert!(
-    sun::tiles(shadow::SIZE).is_multiple_of(sun::COARSE),
+    sun::tiles(shadow::SZ).is_multiple_of(sun::COARSE),
     "the map's tiles are a whole number of squares a side (`sun::coarse_square`)"
 );
 
@@ -1220,11 +1219,11 @@ const _: () = assert!(
 /// them (`sun::list_words`).
 fn sun_list(g: &Gpu, whole: bool) -> u32 {
     let words = if whole {
-        sun::list_words(shadow::SIZE) as usize
+        sun::list_words(shadow::SZ) as usize
     } else {
         4
     };
-    g.buffer(
+    g.buf(
         word_bytes(words),
         buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::INDIRECT,
     )
@@ -1251,25 +1250,25 @@ fn sun_groups(
     let [eye, window, ground, looks, shards, overwrites, pool, sun, rays, drawing, regions, instances] =
         bound;
     let entries = [
-        (0, buffer_entry(0, eye)),
-        (1, buffer_entry(1, window)),
-        (2, buffer_entry(2, ground)),
+        (0, buf_entry(0, eye)),
+        (1, buf_entry(1, window)),
+        (2, buf_entry(2, ground)),
         (3, view_entry(3, rays)),
-        (4, buffer_entry(4, looks)),
-        (5, buffer_entry(5, shards)),
-        (6, buffer_entry(6, overwrites)),
-        (7, buffer_entry(7, pool)),
-        (9, buffer_entry(9, seen)),
+        (4, buf_entry(4, looks)),
+        (5, buf_entry(5, shards)),
+        (6, buf_entry(6, overwrites)),
+        (7, buf_entry(7, pool)),
+        (9, buf_entry(9, seen)),
         (10, view_entry(10, sun)),
-        (HEAD_BINDING, buffer_entry(HEAD_BINDING, moved)),
-        (12, buffer_entry(12, list)),
-        (14, buffer_entry(14, boxes)),
+        (HEAD_BINDING, buf_entry(HEAD_BINDING, moved)),
+        (12, buf_entry(12, list)),
+        (14, buf_entry(14, boxes)),
         (15, view_entry(15, visibility)),
-        (16, buffer_entry(16, args)),
-        (17, buffer_entry(17, misses)),
-        (18, buffer_entry(18, drawing)),
-        (19, buffer_entry(19, regions)),
-        (20, buffer_entry(20, instances)),
+        (16, buf_entry(16, args)),
+        (17, buf_entry(17, misses)),
+        (18, buf_entry(18, drawing)),
+        (19, buf_entry(19, regions)),
+        (20, buf_entry(20, instances)),
     ];
     // Each the entries its layout declares (build.rs `compute`).
     let of = |declared: &[u32]| {
@@ -1295,11 +1294,11 @@ fn sun_groups(
             g.bind_group(
                 boxes_built.layouts[0],
                 &[
-                    buffer_entry(0, eye),
-                    buffer_entry(8, list),
-                    buffer_entry(HEAD_BINDING, moved),
-                    buffer_entry(14, boxes),
-                    buffer_entry(16, args),
+                    buf_entry(0, eye),
+                    buf_entry(8, list),
+                    buf_entry(HEAD_BINDING, moved),
+                    buf_entry(14, boxes),
+                    buf_entry(16, args),
                 ],
             )
         },

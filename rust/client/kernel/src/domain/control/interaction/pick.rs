@@ -24,12 +24,12 @@ const SAME_EXTENT_EPS: f64 = units(OBJECT_FINEST) / 16.0;
 
 /// The octree only stores a `size` object on these lines; any other corner
 /// was re-snapped by the write later, which caused overlapping placements.
-fn grid_ceil(v: f64, size: f64) -> f64 {
-    ((v - SAME_EXTENT_EPS) / size).ceil() * size
+fn grid_ceil(v: f64, sz: f64) -> f64 {
+    ((v - SAME_EXTENT_EPS) / sz).ceil() * sz
 }
 
-fn grid_floor(v: f64, size: f64) -> f64 {
-    ((v + SAME_EXTENT_EPS) / size).floor() * size
+fn grid_floor(v: f64, sz: f64) -> f64 {
+    ((v + SAME_EXTENT_EPS) / sz).floor() * sz
 }
 
 /// The corner a new `new_size` cube takes flush against what `hit` struck,
@@ -38,7 +38,7 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// cell the hit point falls in. `precise_box` overrides the hit's box (a
 /// placed cube's entry, as it is stored).
 #[allow(clippy::needless_range_loop)]
-pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb>) -> Q3 {
+pub fn world_adjacent_corner(hit: &Hit, new_sz: f64, precise_box: Option<&Aabb>) -> Q3 {
     let Aabb {
         min: box_min,
         max: box_max,
@@ -48,11 +48,11 @@ pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb
     for axis in 0..3 {
         let n = hit.normal[axis];
         out[axis] = if n > 0.0 {
-            grid_ceil(box_max[axis], new_size)
+            grid_ceil(box_max[axis], new_sz)
         } else if n < 0.0 {
-            grid_floor(box_min[axis], new_size) - new_size
+            grid_floor(box_min[axis], new_sz) - new_sz
         } else {
-            grid_floor(hit.point[axis], new_size)
+            grid_floor(hit.point[axis], new_sz)
         };
     }
 
@@ -62,16 +62,16 @@ pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb
 /// The `size` voxel `hit` struck, for the eraser's terrain dig: as
 /// world_adjacent_corner but staying inside the struck box on the normal axis.
 #[allow(clippy::needless_range_loop)]
-pub fn world_struck_corner(hit: &Hit, size: f64) -> Q3 {
+pub fn world_struck_corner(hit: &Hit, sz: f64) -> Q3 {
     let mut out: V3 = [0.0; 3];
     for axis in 0..3 {
         let n = hit.normal[axis];
         out[axis] = if n > 0.0 {
-            grid_ceil(hit.cube.max[axis], size) - size
+            grid_ceil(hit.cube.max[axis], sz) - sz
         } else if n < 0.0 {
-            grid_floor(hit.cube.min[axis], size)
+            grid_floor(hit.cube.min[axis], sz)
         } else {
-            grid_floor(hit.point[axis], size)
+            grid_floor(hit.point[axis], sz)
         };
     }
     world_to_canonical(&out)
@@ -82,7 +82,7 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     match hit.struck {
         Struck::Object(at)
         | Struck::Decor(Instance {
-            source: Source::Object(at),
+            src: Source::Object(at),
             ..
         }) => World::now().placed(at),
         Struck::Ground | Struck::Objects | Struck::Decor(_) => None,
@@ -93,10 +93,10 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
 /// Decor is struck where the frame holds it. The world
 /// asked is the stored one (`World::now`), not as the eraser's preview draws
 /// it: what to erase is what is stored.
-pub fn ray_pick(origin: V3, direction: V3) -> Option<Hit> {
+pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     let ray = Ray {
         origin,
-        direction,
+        dir,
         reach: PICK_REACH_U,
     };
     // A coarser tile's answer is a summary, not what is held.

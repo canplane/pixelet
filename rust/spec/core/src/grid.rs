@@ -27,7 +27,7 @@ pub const WINDOW_MARGIN: f32 = 2.0;
 
 /// The view's cells a zoom's cell spans where it begins to be drawn, going out:
 /// its split distance is `CELLS_A_RADIAN / SPANS` of its sides (pxl-spec
-/// space/camera/grid.rs `split_distance`): the rule the cell is told by,
+/// space/camera/grid.rs `split_dist`): the rule the cell is told by,
 /// not a setting of it.
 pub const SPANS: f32 = 2.0;
 

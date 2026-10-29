@@ -119,7 +119,7 @@ pub fn of_stream(stream: Stream) -> Option<&'static Layer> {
 #[derive(Clone, Copy, PartialEq)]
 struct Seen {
     o: Option<Observation>,
-    destination: Option<Tile>,
+    dst: Option<Tile>,
 }
 
 pub struct Demand<L: Observed> {
@@ -211,7 +211,7 @@ impl<L: Observed> Demand<L> {
     pub fn observe(
         &mut self,
         o: Option<&Observation>,
-        destination: impl Iterator<Item = Tile>,
+        dst: impl Iterator<Item = Tile>,
         estimator: &ByEye,
         top: Zoom,
     ) {
@@ -233,7 +233,7 @@ impl<L: Observed> Demand<L> {
             demand.sort_unstable_by_key(|p| key_of::<2>(p.zoom, p.at));
             demand.dedup();
             for &p in &demand {
-                let at = L::tile_cache().seek(&mut lines, p).source.unwrap_or(p);
+                let at = L::tile_cache().seek(&mut lines, p).src.unwrap_or(p);
                 ask(
                     &mut asks,
                     at,
@@ -294,7 +294,7 @@ impl<L: Observed> Demand<L> {
         // known only once those above are, and asking one at a time would cost a
         // round trip per zoom.
         let mut named = 0u32;
-        for p in destination {
+        for p in dst {
             named += 1;
             ask(
                 &mut asks,
@@ -310,7 +310,7 @@ impl<L: Observed> Demand<L> {
                 <= if matches!(L::ASKS, Asks::Floor) {
                     0
                 } else {
-                    TileCache::<L>::DESTINATION_TILES + L::PINNED
+                    TileCache::<L>::DST_TILES + L::PINNED
                 },
             ENOTRECOVERABLE,
             named
@@ -385,7 +385,10 @@ impl<L: Observed> Demand<L> {
             return;
         }
         self.idled = None;
-        let now = Seen { o, destination };
+        let now = Seen {
+            o,
+            dst: destination,
+        };
         if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
             let line = destination
                 .into_iter()

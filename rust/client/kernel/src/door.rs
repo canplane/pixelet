@@ -66,8 +66,8 @@ const _: () = assert!(
     "a full submission ring's replies and the turn's signals do not fit the completion ring"
 );
 
-fn raise(cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
-    door().raise(cmd as u32, count, f);
+fn raise(cmd: Command, cnt: u32, f: impl Fn(&mut PacketWriter)) {
+    door().raise(cmd as u32, cnt, f);
 }
 
 static STATE: Global<State> = Global::new();

@@ -6,7 +6,7 @@ use pxl_spec::space::coord::v3::{self, V3};
 
 pub fn place(at: V3, dist: f64, polar: f64, azimuth: f64) {
     use crate::domain::control::camera::controller::{camera, set_eye_world};
-    use crate::domain::control::camera::orbit::{orbit, orbit_eye_offset};
+    use crate::domain::control::camera::orbit::{orbit, orbit_eye_off};
     use crate::domain::control::camera::state::{camera_state, Intent};
     orbit().dist = dist;
     let cam = camera();
@@ -16,6 +16,6 @@ pub fn place(at: V3, dist: f64, polar: f64, azimuth: f64) {
         azimuth,
         polar,
     };
-    let e = orbit_eye_offset(dist, polar, azimuth);
+    let e = orbit_eye_off(dist, polar, azimuth);
     set_eye_world(&v3::add(&at, &e));
 }

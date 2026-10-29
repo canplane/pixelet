@@ -17,7 +17,7 @@ use regex::Regex;
 
 /// The crates that address the core memory by offset, where an offset becomes
 /// a pointer only through `xpute_guest::mem::at` or `Memory::at`.
-const OFFSET_CRATES: [&str; 6] = [
+const OFF_CRATES: [&str; 6] = [
     "xpute/rust/guest/src/",
     "xpute/rust/host/src/",
     "rust/client/kernel/src/",
@@ -445,7 +445,7 @@ fn run() -> Result<Vec<String>, String> {
     let comment = Regex::new(r"^\s*//").expect("the comment's pattern");
     for f in files
         .iter()
-        .filter(|f| f.ends_with(".rs") && OFFSET_CRATES.iter().any(|c| f.starts_with(c)))
+        .filter(|f| f.ends_with(".rs") && OFF_CRATES.iter().any(|c| f.starts_with(c)))
     {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
             if !comment.is_match(line) && cast.is_match(line) {
@@ -524,14 +524,14 @@ fn run() -> Result<Vec<String>, String> {
         }
     }
     for (file, entry, at, name, sides) in WORKGROUPS {
-        let size = threads(&read(&format!("{SHADER}{file}")).unwrap_or_default(), entry);
-        let value = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
-        let held = size
-            .zip(value)
+        let sz = threads(&read(&format!("{SHADER}{file}")).unwrap_or_default(), entry);
+        let val = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
+        let held = sz
+            .zip(val)
             .is_some_and(|(s, v)| s[..sides].iter().all(|&d| d == v));
         if !held {
             problems.push(format!(
-                "{SHADER}{file}: `{entry}`'s workgroup {size:?} is not `{name}` ({at}: {value:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
+                "{SHADER}{file}: `{entry}`'s workgroup {sz:?} is not `{name}` ({at}: {val:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
             ));
         }
     }

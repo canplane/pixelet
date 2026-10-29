@@ -9,7 +9,7 @@ pub mod cloud;
 pub mod param;
 
 use pxl_render::gpu::renderer::sky_steps;
-use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
+use pxl_render::look::environment::{write_env, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3;
 
 use crate::domain::scene::environment::param::SKY_EASE_RATE;
@@ -21,14 +21,14 @@ use crate::domain::view::setting::schema_spec::SkyTime;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::sched::clock::wall_now;
 use crate::sys::sched::edge::wake_at;
-use celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
+use celestial_position::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
 use xpute_guest::clock::now;
 
 /// Runs before the markers' step: the sky moves with the wall clock and
 /// nothing else asks for a frame while the view is still, so the clock asks
 /// for one when its next step falls (`EnvironmentDraw::observe`).
-pub fn environment_step() {
-    let next_ms = scene().environment.observe(wall_now());
+pub fn env_step() {
+    let next_ms = scene().env.observe(wall_now());
     wake_at(now() + next_ms);
 }
 
@@ -37,10 +37,7 @@ pub fn environment_step() {
 /// distance.
 fn heights(days: f64, [lon, lat]: [f64; 2]) -> [f64; 2] {
     let mu = |p: [f64; 3]| p[2] / v3::len(&p);
-    [
-        mu(sun_position(days, lat, lon)),
-        mu(moon_position(days, lat, lon)),
-    ]
+    [mu(sun_pos(days, lat, lon)), mu(moon_pos(days, lat, lon))]
 }
 
 /// The Unix ms the sky is drawn at, `unix_ms` the wall clock's, seen from
@@ -209,10 +206,7 @@ impl EnvironmentDraw {
     /// The sun and moon and the stars' turn at the sky's days and anchor.
     fn aim(&mut self) {
         let [lon, lat] = self.anchor;
-        self.aimed = [
-            sun_position(self.days, lat, lon),
-            moon_position(self.days, lat, lon),
-        ];
+        self.aimed = [sun_pos(self.days, lat, lon), moon_pos(self.days, lat, lon)];
         self.star_frame = equatorial_to_local(self.days, lat, lon);
     }
 
@@ -264,11 +258,11 @@ impl EnvironmentDraw {
             altitude_km: over * km_per_u,
             ground_km: ground * km_per_u,
             km_per_u,
-            latitude: lat.to_radians(),
-            longitude: lon.to_radians(),
+            lat: lat.to_radians(),
+            lng: lon.to_radians(),
             star_frame: self.star_frame,
         };
-        write_environment(&mut self.out, &light);
+        write_env(&mut self.out, &light);
         self.eased < 1.0 || self.stars < 1.0
     }
 }

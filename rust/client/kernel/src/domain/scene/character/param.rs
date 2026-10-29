@@ -4,7 +4,7 @@
 //! and settle, and where a line hangs over them.
 
 /// Arbitrary, so the pet does not share the person's footprint.
-pub const PET_OFFSET: [f64; 2] = [-0.6, -0.6];
+pub const PET_OFF: [f64; 2] = [-0.6, -0.6];
 
 /// A fixed duration, not a fixed speed (domain/scene/character/path.rs
 /// `WalkPlan`).

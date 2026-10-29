@@ -98,11 +98,11 @@ impl SkinnedPass {
             _ => self.lit.pipeline,
         };
         draw_models(g, pass, &self.lit, pipeline, frame, slots, 0, draws, |d| {
-            let (mesh, vertex_cnt, index_cnt) = uploads.get(d[0])?;
+            let (mesh, vertex_cnt, idx_cnt) = uploads.get(d[0])?;
             let skin = skin_made(self.image_of(d[2])?.0)?;
             Some(ModelDraw {
                 groups: [skin, uploads.group(g, d[1])?],
-                mesh: Some((mesh, vertex_cnt, index_cnt)),
+                mesh: Some((mesh, vertex_cnt, idx_cnt)),
                 instances: 1,
             })
         });

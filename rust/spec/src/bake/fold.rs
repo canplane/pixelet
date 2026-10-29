@@ -11,7 +11,7 @@
 
 use crate::space::layer::lattice::Cells;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use crate::space::layer::tile::{neighbor_index, CHILDREN};
+use crate::space::layer::tile::{neighbor_idx, CHILDREN};
 use xpute_kit::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
@@ -26,8 +26,8 @@ use pxl_spec_core::ground::own;
 pub fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {
     let under = GROUND.cell_zoom(zoom) + 1;
     let out = (0..TILE_CELLS * TILE_CELLS)
-        .flat_map(|index| {
-            let (q, block) = GROUND.child_cells(index);
+        .flat_map(|idx| {
+            let (q, block) = GROUND.child_cells(idx);
             let cells = &children[q].cells;
             block.map(|i| {
                 own(
@@ -40,7 +40,7 @@ pub fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {
     Ground { cells: out.into() }
 }
 
-/// The elevation folded: `around[neighbor_index(qx, qy)]` is the padded grid of
+/// The elevation folded: `around[neighbor_idx(qx, qy)]` is the padded grid of
 /// the child at (qx, qy), qx, qy in −1..=2. A parent's padding reaches four
 /// child samples past the block, so it is read from the neighbors' inner
 /// samples. A ring tile not baked yet lends nothing: the block's own
@@ -50,7 +50,7 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     let inner = TILE_ELE_SPAN as i64;
     let (pad, padded) = (ELE_PAD as i64, ELE_PADDED_SPAN as usize);
     let read = |qx: i64, qy: i64, mx: i64, my: i64| -> Option<i64> {
-        let grid = around[neighbor_index(qx as i32, qy as i32)]?;
+        let grid = around[neighbor_idx(qx as i32, qy as i32)]?;
         Some(
             grid[ele_index(
                 (mx - qx * inner + pad) as u32,

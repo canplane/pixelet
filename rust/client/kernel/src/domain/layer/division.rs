@@ -10,7 +10,7 @@
 use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS, DIVISION_LEAF};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{index_of, Zoom};
+use pxl_spec::space::coord::zoom::{idx_of, Zoom};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -65,7 +65,7 @@ impl Base for DivisionTile {
 /// The finest tile of the pivot's line, which demand asks for with the line.
 pub fn line(pivot: Option<Q3>) -> Option<Tile> {
     pivot.map(|at| {
-        let [x, y, _] = index_of(LEAF_ZOOM, &at);
+        let [x, y, _] = idx_of(LEAF_ZOOM, &at);
         Tile::over(DivisionTile::LEAF, [x, y])
     })
 }
@@ -75,7 +75,7 @@ pub fn line(pivot: Option<Q3>) -> Option<Tile> {
 /// the cell in it. A tile's identity fixes what it names.
 pub fn naming(at: &Q3) -> Option<(Tile, u32)> {
     let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().drawn_from(p))?;
-    Some((from, GROUND.cell_of(from.zoom, at).index()))
+    Some((from, GROUND.cell_of(from.zoom, at).idx()))
 }
 
 /// The divisions named at `naming`'s cell, broad to narrow.

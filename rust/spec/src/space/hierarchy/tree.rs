@@ -49,7 +49,7 @@ pub fn ancestor_of<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
 
 /// Where `at` lies in its ancestor `steps` up, from that ancestor's first
 /// descendant.
-pub fn offset_in<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
+pub fn off_in<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
     at.map(|v| v & ((1 << steps) - 1))
 }
 

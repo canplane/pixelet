@@ -17,7 +17,7 @@ impl Serve for ByWhy {
     fn rank(&self, _category: Stream, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         Rank {
             class: ask.why as u8,
-            distance: ask.order.near,
+            dist: ask.order.near,
             detail: 0,
         }
     }
@@ -306,7 +306,7 @@ fn outage_counts_once() {
 }
 
 #[test]
-fn current_demand_said() {
+fn cur_demand_said() {
     let mut l = scheduler();
     l.declare(Stream::terrain, &[(1, unseen(0.0)), (2, unseen(1.0))], 0.0);
     l.pump(0.0);
@@ -372,7 +372,7 @@ impl Serve for Restless {
     fn rank(&self, _category: Stream, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         Rank {
             class: 0,
-            distance: ask.order.near,
+            dist: ask.order.near,
             detail: 0,
         }
     }

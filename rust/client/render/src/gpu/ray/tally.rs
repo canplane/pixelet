@@ -70,11 +70,11 @@ impl Tally {
     /// Its buffers, made with the cast's: a few words.
     pub(super) fn new(g: &Gpu) -> Tally {
         Tally {
-            counts: g.buffer(
+            counts: g.buf(
                 word_bytes(WORDS),
                 buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             ),
-            read: g.buffer(
+            read: g.buf(
                 word_bytes(WORDS),
                 buffer_usage::MAP_READ | buffer_usage::COPY_DST,
             ),
@@ -102,12 +102,12 @@ impl Tally {
         }
         let mut head = [0u32; 1 + (tally::OBSERVERS * tally::WALKS) as usize];
         head[0] = u32::from(self.on);
-        g.write_buffer(seen, word_bytes(observed::TALLY_ON as usize), bytes(&head));
+        g.write_buf(seen, word_bytes(observed::TALLY_ON as usize), bytes(&head));
         if !self.on {
             return;
         }
         self.frame = frame;
-        g.write_buffer(self.counts, 0, bytes(&[0u32; WORDS]));
+        g.write_buf(self.counts, 0, bytes(&[0u32; WORDS]));
     }
 
     /// The counts gathered into the array and copied where none are out,
@@ -122,7 +122,7 @@ impl Tally {
                 continue;
             }
             // Each run where it was counted, into its lanes.
-            for (buffer, word, lane, words) in [
+            for (buf, word, lane, words) in [
                 (
                     from.seen,
                     observed::tally_at(o, tally::BEAM),
@@ -133,16 +133,16 @@ impl Tally {
                 (from.boxes[k], raster::ARGS_INSTANCES, tally::BOXES, 1),
             ] {
                 let to = word_bytes(tally::at(o, lane) as usize);
-                let size = word_bytes(words as usize);
-                g.copy_buffer(
+                let sz = word_bytes(words as usize);
+                g.copy_buf(
                     encoder,
-                    (buffer, word_bytes(word as usize)),
+                    (buf, word_bytes(word as usize)),
                     (self.counts, to),
-                    size,
+                    sz,
                 );
             }
         }
-        g.copy_buffer(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
+        g.copy_buf(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
         (self.copied, self.copied_frame) = (true, self.frame);
     }
 
@@ -168,15 +168,8 @@ impl Tally {
             self.mapped = false;
         }
         if self.copied && *self.mapping & DONE != 0 {
-            let address = off_of(self.landed.as_ptr()) as u32;
-            g.map_read(
-                self.read,
-                0,
-                word_bytes(WORDS),
-                address,
-                &mut self.mapping,
-                1,
-            );
+            let addr = off_of(self.landed.as_ptr()) as u32;
+            g.map_read(self.read, 0, word_bytes(WORDS), addr, &mut self.mapping, 1);
             (self.copied, self.mapped) = (false, true);
         }
     }

@@ -13,21 +13,21 @@ use pxl_spec_core::scatter::drawn::LANES;
 #[derive(Clone, Copy)]
 pub struct GroupLanes {
     pub first: usize,
-    pub count: usize,
+    pub cnt: usize,
 }
 
 impl GroupLanes {
-    pub const fn words(count: usize) -> usize {
-        LANES as usize * count + count.div_ceil(4)
+    pub const fn words(cnt: usize) -> usize {
+        LANES as usize * cnt + cnt.div_ceil(4)
     }
 
     /// Lanes: 0 x, 1 y, 2 z, 3 spin, 4 scale.
     pub const fn f32_at(self, lane: usize, i: usize) -> usize {
-        self.first + lane * self.count + i
+        self.first + lane * self.cnt + i
     }
 
     pub const fn flags(self) -> usize {
-        self.first + LANES as usize * self.count
+        self.first + LANES as usize * self.cnt
     }
 }
 

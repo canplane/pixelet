@@ -5,14 +5,14 @@
 //! to its registered height; what draws it turns it Z-up. A model poses its
 //! joints at a clip's time and writes their palette for whatever plays it.
 
-use pxl_render::asset::gltf::{MAX_SCENE_INDICES, MAX_SCENE_VERTICES};
+use pxl_render::asset::gltf::{MAX_SCENE_IDXS, MAX_SCENE_VERTICES};
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS};
 use xpute_guest::mem;
 use xpute_guest::mem::heap::alloc;
 
 // The most a parse lets one model draw fits a block's size.
 const _: () = assert!(
-    (MAX_SCENE_VERTICES as u64 * MODEL_VERTEX_WORDS as u64 + MAX_SCENE_INDICES as u64) * 4
+    (MAX_SCENE_VERTICES as u64 * MODEL_VERTEX_WORDS as u64 + MAX_SCENE_IDXS as u64) * 4
         <= u32::MAX as u64
 );
 
@@ -27,7 +27,7 @@ struct Channel {
     step: bool,
     times: Vec<f32>,
     /// 3 or 4 floats a key.
-    values: Vec<f32>,
+    vals: Vec<f32>,
 }
 
 struct Clip {
@@ -46,7 +46,7 @@ pub struct MeshRef {
     pub at: usize,
     pub handle: u32,
     pub vertex_cnt: u32,
-    pub index_cnt: u32,
+    pub idx_cnt: u32,
     pub radius: f32,
     pub scale: f32,
 }
@@ -159,7 +159,7 @@ fn sample(ch: &Channel, time: f32, out: &mut [f32; 10]) {
         return;
     }
     let width = width(ch.path);
-    let at = |k: usize| &ch.values[k * width..k * width + width];
+    let at = |k: usize| &ch.vals[k * width..k * width + width];
     let (k0, k1, t) = if time <= ch.times[0] {
         (0, 0, 0.0)
     } else if time >= ch.times[n - 1] {
@@ -214,12 +214,12 @@ impl Models {
     pub fn new_model(
         &mut self,
         vertex_cnt: u32,
-        index_cnt: u32,
+        idx_cnt: u32,
         joint_cnt: u32,
     ) -> Option<(u32, usize)> {
         let bytes = vertex_cnt
             .checked_mul(MODEL_VERTEX_WORDS)
-            .and_then(|words| words.checked_add(index_cnt))
+            .and_then(|words| words.checked_add(idx_cnt))
             .and_then(|words| words.checked_mul(4))?;
         let (at, bytes) = alloc(bytes)?;
         let j = joint_cnt as usize;
@@ -228,7 +228,7 @@ impl Models {
             bytes,
             handle: 0,
             vertex_cnt,
-            index_cnt,
+            index_cnt: idx_cnt,
             parent: vec![-1; j],
             rest: vec![[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]; j],
             root_pre: vec![
@@ -290,7 +290,7 @@ impl Models {
 
     /// `values` end to end: four a key for a rotation, three otherwise.
     #[allow(clippy::too_many_arguments)]
-    pub fn channel(
+    pub fn ch(
         &mut self,
         model: u32,
         clip: u32,
@@ -314,7 +314,7 @@ impl Models {
             path,
             step,
             times,
-            values,
+            vals: values,
         });
     }
 
@@ -368,7 +368,7 @@ impl Models {
             at: m.at,
             handle: m.handle,
             vertex_cnt: m.vertex_cnt,
-            index_cnt: m.index_cnt,
+            idx_cnt: m.index_cnt,
             radius: m.radius,
             scale: m.scale,
         })

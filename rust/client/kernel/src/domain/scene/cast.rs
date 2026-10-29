@@ -52,7 +52,7 @@ pub fn shards() -> &'static [[i32; 4]] {
 pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     lens::gpu_cast(o, settings_store().ray_steps, &mut words)?;
-    let edits = preview::current();
+    let edits = preview::cur();
     let cut = |e: Option<EntryAt>| {
         e.map_or([0, 0, 0, eye::NO_CUT], |e| {
             [

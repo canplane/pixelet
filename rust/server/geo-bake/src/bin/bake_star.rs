@@ -15,13 +15,13 @@ use flate2::read::GzDecoder;
 use pxl_spec::asset::star::{record, Star, RECORD_BYTES};
 
 /// The catalog as pxl-tool bin/download_star.rs keeps it.
-const SOURCE: &str = "asset/raw/sky/star/catalog.gz";
+const SRC: &str = "asset/raw/sky/star/catalog.gz";
 const OUT: &str = "rust/client/render/src/frame/shader/bright-star.bin";
 const SOLAR_BV: f64 = 0.65;
 
 fn catalog() -> Result<String, String> {
     let packed =
-        std::fs::read(SOURCE).map_err(|e| format!("{SOURCE}: {e} — run `make download-star`"))?;
+        std::fs::read(SRC).map_err(|e| format!("{SRC}: {e} — run `make download-star`"))?;
     let mut text = String::new();
     GzDecoder::new(packed.as_slice())
         .read_to_string(&mut text)

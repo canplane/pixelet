@@ -328,7 +328,7 @@ impl Lines {
                 .or_insert_with(|| {
                     let z = access
                         .surface_support(&world::point(x, y, 0.0))
-                        .value()
+                        .val()
                         .flatten()
                         .unwrap_or(0.0);
                     [

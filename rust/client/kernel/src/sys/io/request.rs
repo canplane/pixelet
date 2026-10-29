@@ -39,7 +39,7 @@ use crate::sys::io::param::MAX_CREDITS;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rank {
     pub class: u8,
-    pub distance: f64,
+    pub dist: f64,
     pub detail: u8,
 }
 
@@ -141,7 +141,7 @@ impl Placed {
         self.rank
             .class
             .cmp(&other.rank.class)
-            .then(self.rank.distance.total_cmp(&other.rank.distance))
+            .then(self.rank.dist.total_cmp(&other.rank.dist))
             .then(other.rank.detail.cmp(&self.rank.detail))
             // Meaningless tie-break, so two runs of the same turn start the same work.
             .then((self.stream as u8, self.subject).cmp(&(other.stream as u8, other.subject)))
@@ -511,7 +511,7 @@ fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
         let mut row = TaskRow {
             stream: a.stream as u32 as f64,
             subject: a.subject,
-            priority: a.rank.class as f64 + a.rank.distance,
+            priority: a.rank.class as f64 + a.rank.dist,
             enqueue_ms: a.enqueue_ms,
             start_ms: a.start_ms,
             end_ms: at,
@@ -530,14 +530,14 @@ fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
             Ended::Failed(fail) => fail.at,
             Ended::Ok | Ended::Aborted | Ended::Refused(_) => None,
         } {
-            row.at_file = off_of_slice(file_in_memory(at.file()).as_bytes()) as f64;
+            row.at_file = off_of_slice(file_in_mem(at.file()).as_bytes()) as f64;
             row.at_file_bytes = at.file().len() as f64;
             row.at_line = at.line() as f64;
         }
-        for (k, (name, value)) in phases.iter().flat_map(|p| p.iter()).enumerate() {
+        for (k, (name, val)) in phases.iter().flat_map(|p| p.iter()).enumerate() {
             row.phase_ids[k] = name as u32 as f64;
-            row.phase_values[k] = value;
-            row.phase_count = (k + 1) as f64;
+            row.phase_vals[k] = val;
+            row.phase_cnt = (k + 1) as f64;
         }
         row
     });
@@ -547,7 +547,7 @@ static FILES: Global<FnvHashMap<usize, Box<str>>> = Global::new();
 
 /// A location's file name lies outside kernel memory on a device, so rows
 /// name a heap copy; the names are few and kept for good.
-fn file_in_memory(file: &'static str) -> &'static str {
+fn file_in_mem(file: &'static str) -> &'static str {
     FILES
         .get(FnvHashMap::default)
         .entry(file.as_ptr().addr())

@@ -18,7 +18,7 @@ use super::cast::HEAD_BINDING;
 use crate::frame::shader::record::{compute, PIPELINE_RASTER, SHADER_FACE, SHADER_SAMPLE_BOX};
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
+    buf_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
     Load, Stamp,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -47,7 +47,7 @@ pub(super) struct Raster {
     pub(super) visibility_array: u32,
     depth: u32,
     depth_view: u32,
-    size: [u32; 2],
+    sz: [u32; 2],
     groups: [u32; 3],
     bound: [u32; 9],
     /// The sun's, made where its shadows are first cast (`sun_made`); and a
@@ -83,7 +83,7 @@ impl Raster {
             boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &compute::SAMPLE_BOX_GROUP),
             faces_built: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
-            args: g.buffer(
+            args: g.buf(
                 word_bytes(raster::ARGS_WORDS as usize),
                 buffer_usage::STORAGE
                     | buffer_usage::COPY_DST
@@ -92,7 +92,7 @@ impl Raster {
             ),
             boxes: 0,
             room: 0,
-            uniform: g.buffer(
+            uniform: g.buf(
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
@@ -101,7 +101,7 @@ impl Raster {
             visibility_array: 0,
             depth: 0,
             depth_view: 0,
-            size: [0; 2],
+            sz: [0; 2],
             groups: [0; 3],
             bound: [0; 9],
             sun: SunRaster::default(),
@@ -132,13 +132,13 @@ impl Raster {
         let samples = grid.samples[0] * grid.samples[1];
         if samples > self.room {
             release(self.boxes);
-            self.boxes = g.buffer(
+            self.boxes = g.buf(
                 word_bytes(raster::words(samples) as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             );
             self.room = samples;
         }
-        if size != self.size {
+        if size != self.sz {
             for v in [
                 self.visibility_view,
                 self.visibility_array,
@@ -155,7 +155,7 @@ impl Raster {
             self.visibility_array = g.view(self.visibility, true, 0, 1, 0, 1);
             self.depth = g.texture(w, h, 1, Format::depth32float, 1, usage);
             self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
-            self.size = size;
+            self.sz = size;
         }
         // The cast's view (pxl-shader cast.rs `pixel_tan`): its axes, the
         // screen's half-angles, the near plane, the angle a face grows by,
@@ -166,7 +166,7 @@ impl Raster {
         let tan = [e[eye::TAN], e[eye::TAN + 1]].map(f32::from_bits);
         let [w, h] = size.map(|s| s.max(1) as f32);
         let reach = f32::from_bits(e[eye::REACH]);
-        let pixel = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
+        let px = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
         let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, u, f));
         let uniform: [f32; RASTER_FLOATS] = [
             r[0],
@@ -185,7 +185,7 @@ impl Raster {
             0.0,
             0.0,
             0.0,
-            pxl_spec_core::param::raster::GROWN * pixel,
+            pxl_spec_core::param::raster::GROWN * px,
             w,
             h,
             reach,
@@ -194,13 +194,13 @@ impl Raster {
             0.0,
             0.0,
         ];
-        g.write_buffer(self.uniform, 0, bytes(&uniform));
+        g.write_buf(self.uniform, 0, bytes(&uniform));
         if samples_cast {
             let mut args = [0u32; raster::ARGS_WORDS as usize];
             args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
             args[raster::ARGS_FACES as usize + 1] = 1;
             args[raster::ARGS_FACES as usize + 2] = 1;
-            g.write_buffer(self.args, 0, bytes(&args));
+            g.write_buf(self.args, 0, bytes(&args));
         }
         let [window, ground, shards, overwrites, pool] = world;
         let bound = [
@@ -214,29 +214,29 @@ impl Raster {
                 g.bind_group(
                     self.boxes_built.layouts[0],
                     &[
-                        buffer_entry(0, eye),
-                        buffer_entry(8, beams),
-                        buffer_entry(HEAD_BINDING, head),
-                        buffer_entry(14, self.boxes),
-                        buffer_entry(16, self.args),
+                        buf_entry(0, eye),
+                        buf_entry(8, beams),
+                        buf_entry(HEAD_BINDING, head),
+                        buf_entry(14, self.boxes),
+                        buf_entry(16, self.args),
                     ],
                 ),
                 g.bind_group(
                     self.draw_built.layouts[0],
-                    &[buffer_entry(0, self.uniform), buffer_entry(1, self.boxes)],
+                    &[buf_entry(0, self.uniform), buf_entry(1, self.boxes)],
                 ),
                 g.bind_group(
                     self.faces_built.layouts[0],
                     &[
-                        buffer_entry(0, eye),
-                        buffer_entry(1, window),
-                        buffer_entry(2, ground),
-                        buffer_entry(5, shards),
-                        buffer_entry(6, overwrites),
-                        buffer_entry(7, pool),
-                        buffer_entry(8, beams),
-                        buffer_entry(14, self.boxes),
-                        buffer_entry(16, self.args),
+                        buf_entry(0, eye),
+                        buf_entry(1, window),
+                        buf_entry(2, ground),
+                        buf_entry(5, shards),
+                        buf_entry(6, overwrites),
+                        buf_entry(7, pool),
+                        buf_entry(8, beams),
+                        buf_entry(14, self.boxes),
+                        buf_entry(16, self.args),
                     ],
                 ),
             ];
@@ -303,30 +303,30 @@ impl Raster {
 impl Raster {
     /// The sun's buffers and its targets at the map's `size`, made once;
     /// whether they are.
-    pub(super) fn sun_made(&mut self, g: &Gpu, size: u32) -> bool {
+    pub(super) fn sun_made(&mut self, g: &Gpu, sz: u32) -> bool {
         let s = &mut self.sun;
         if s.group == 0 {
-            let samples = (size / pxl_spec_core::param::sun::SAMPLE)
-                * (size / pxl_spec_core::param::sun::SAMPLE);
+            let samples =
+                (sz / pxl_spec_core::param::sun::SAMPLE) * (sz / pxl_spec_core::param::sun::SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            s.boxes = g.buffer(word_bytes(raster::words(samples) as usize), storage);
-            s.args = g.buffer(
+            s.boxes = g.buf(word_bytes(raster::words(samples) as usize), storage);
+            s.args = g.buf(
                 word_bytes(raster::ARGS_WORDS as usize),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             );
-            s.uniform = g.buffer(
+            s.uniform = g.buf(
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
             let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-            s.visibility = g.texture(size, size, 1, Format::r32uint, 1, usage);
+            s.visibility = g.texture(sz, sz, 1, Format::r32uint, 1, usage);
             s.visibility_view = g.view(s.visibility, false, 0, 1, 0, 1);
             s.visibility_array = g.view(s.visibility, true, 0, 1, 0, 1);
-            s.depth = g.texture(size, size, 1, Format::depth32float, 1, usage);
+            s.depth = g.texture(sz, sz, 1, Format::depth32float, 1, usage);
             s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
             s.group = g.bind_group(
                 self.draw_built.layouts[0],
-                &[buffer_entry(0, s.uniform), buffer_entry(1, s.boxes)],
+                &[buf_entry(0, s.uniform), buf_entry(1, s.boxes)],
             );
         }
         s.group != 0
@@ -344,7 +344,7 @@ impl Raster {
 
     /// The sun's view off the eye's words `e` (pxl-spec-core `sun::Sun`) for
     /// the map `size` a side, as `prepare` lays the eye's; the args cleared.
-    pub(super) fn sun_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
+    pub(super) fn sun_prepare(&self, g: &Gpu, e: &[u32], sz: u32) {
         let s = &self.sun;
         if s.group == 0 {
             return;
@@ -361,7 +361,7 @@ impl Raster {
         let (r, d) = (unit(v.across), unit(v.down));
         let up = [-d[0], -d[1], -d[2]];
         let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, up, v.dir));
-        let n = size as f32;
+        let n = sz as f32;
         let uniform: [f32; RASTER_FLOATS] = [
             r[0],
             r[1],
@@ -390,10 +390,10 @@ impl Raster {
             0.0,
             0.0,
         ];
-        g.write_buffer(s.uniform, 0, bytes(&uniform));
+        g.write_buf(s.uniform, 0, bytes(&uniform));
         let mut args = [0u32; raster::ARGS_WORDS as usize];
         args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
-        g.write_buffer(s.args, 0, bytes(&args));
+        g.write_buf(s.args, 0, bytes(&args));
     }
 
     /// The sun's boxes drawn into its targets as many as their args say,

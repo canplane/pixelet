@@ -84,19 +84,19 @@ fn trim(img: &RgbaImage, threshold: u8) -> RgbaImage {
 }
 
 /// One rounding: centring twice lands a pixel off.
-fn symbol_icon(symbol: &RgbaImage, size: u32, pad: f64) -> RgbaImage {
-    let inner = size as f64 * (1.0 - pad);
+fn symbol_icon(symbol: &RgbaImage, sz: u32, pad: f64) -> RgbaImage {
+    let inner = sz as f64 * (1.0 - pad);
     let scale = (inner / symbol.width() as f64).min(inner / symbol.height() as f64);
     let (w, h) = (
         ((symbol.width() as f64 * scale).round_ties_even() as u32).max(1),
         ((symbol.height() as f64 * scale).round_ties_even() as u32).max(1),
     );
-    let mut out = RgbaImage::from_pixel(size, size, CLEAR);
+    let mut out = RgbaImage::from_pixel(sz, sz, CLEAR);
     image::imageops::overlay(
         &mut out,
         &resize(symbol, w, h),
-        ((size - w) / 2) as i64,
-        ((size - h) / 2) as i64,
+        ((sz - w) / 2) as i64,
+        ((sz - h) / 2) as i64,
     );
     out
 }

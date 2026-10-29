@@ -1,7 +1,7 @@
 // pxl-tool/bin/download_texture_pack.rs
 
 //! Fetches each `asset/raw/cube/manifest.json` entry not already cached there
-//! and normalizes it to a `TILE_SIZE` opaque PNG in `asset/content/cube/`.
+//! and normalizes it to a `TILE_SZ` opaque PNG in `asset/content/cube/`.
 //! Follow with `make ingest-asset`.
 //!
 //!   make download-pack
@@ -10,7 +10,7 @@ use std::process::ExitCode;
 
 use image::{ImageFormat, RgbaImage};
 
-use pxl_tool::asset::pack::{self, Item, Style, TILE_SIZE};
+use pxl_tool::asset::pack::{self, Item, Style, TILE_SZ};
 use pxl_tool::root;
 
 const RETRY_ATTEMPTS: u32 = 3;
@@ -70,7 +70,7 @@ fn process(item: &Item, state: &mut pack::State) -> Result<Outcome, String> {
         }
     };
 
-    if img.width() != TILE_SIZE || img.height() != TILE_SIZE {
+    if img.width() != TILE_SZ || img.height() != TILE_SZ {
         if pack::looks_like_sprite_sheet(img.width(), img.height()) {
             return Err(format!(
                 "suspected sprite sheet / non-square source ({}x{}) — needs manual review, not auto-resized",
@@ -81,14 +81,14 @@ fn process(item: &Item, state: &mut pack::State) -> Result<Outcome, String> {
         img = match item.style {
             Style::Painted => image::imageops::resize(
                 &img,
-                TILE_SIZE,
-                TILE_SIZE,
+                TILE_SZ,
+                TILE_SZ,
                 image::imageops::FilterType::Lanczos3,
             ),
             Style::Legacy => {
                 let (w, h) = (img.width(), img.height());
-                let raw = pack::nearest_resize(img.as_raw(), w, h, TILE_SIZE, TILE_SIZE);
-                RgbaImage::from_raw(TILE_SIZE, TILE_SIZE, raw)
+                let raw = pack::nearest_resize(img.as_raw(), w, h, TILE_SZ, TILE_SZ);
+                RgbaImage::from_raw(TILE_SZ, TILE_SZ, raw)
                     .ok_or("nearest resize produced the wrong length")?
             }
         };
@@ -105,7 +105,7 @@ fn process(item: &Item, state: &mut pack::State) -> Result<Outcome, String> {
     let written = image::open(&item.dest)
         .map_err(|e| format!("post-write: {e}"))?
         .to_rgba8();
-    if written.width() != TILE_SIZE || written.height() != TILE_SIZE {
+    if written.width() != TILE_SZ || written.height() != TILE_SZ {
         return Err(format!(
             "post-write validation failed: got {}x{}",
             written.width(),

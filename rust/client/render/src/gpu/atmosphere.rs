@@ -32,7 +32,7 @@ use crate::frame::shader::word::{
     TRANSMITTANCE_SIZE,
 };
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
+    buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
     word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE,
 };
 use crate::gpu::image_map::ImageMap;
@@ -154,13 +154,8 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(
-        g: &Gpu,
-        pipelines: &mut Pipelines,
-        frame_buffer: u32,
-        sky_buffer: u32,
-    ) -> Atmosphere {
-        let uniform = g.buffer(
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, sky_buf: u32) -> Atmosphere {
+        let uniform = g.buf(
             word_bytes(ATMOS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
@@ -251,11 +246,11 @@ impl Atmosphere {
             baked: false,
             drawn_for: [None; 2],
             slopes: (
-                g.buffer(
+                g.buf(
                     8,
                     buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
                 ),
-                g.buffer(8, buffer_usage::MAP_READ | buffer_usage::COPY_DST),
+                g.buf(8, buffer_usage::MAP_READ | buffer_usage::COPY_DST),
             ),
             slopes_of: [false; 2],
             landed: [0; 2],
@@ -290,11 +285,11 @@ impl Atmosphere {
             shared.chain(own).copied().collect()
         };
         let multiscatter = view_entry(12, views[MULTISCATTER]);
-        let frame = buffer_entry(0, frame_buffer);
+        let frame = buf_entry(0, frame_buf);
         let light = |which: f32| {
-            let light = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            g.write_buffer(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
-            buffer_entry(14, light)
+            let light = g.buf(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            g.write_buf(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
+            buf_entry(14, light)
         };
         // The exposure reads the air but what it writes, and the volume made of it.
         let unexposed: Vec<u32> = air
@@ -316,7 +311,7 @@ impl Atmosphere {
                         multiscatter,
                         light(0.0),
                         frame,
-                        buffer_entry(20, atmosphere.slopes.0),
+                        buf_entry(20, atmosphere.slopes.0),
                     ],
                 ),
             ),
@@ -328,7 +323,7 @@ impl Atmosphere {
                         multiscatter,
                         light(1.0),
                         frame,
-                        buffer_entry(20, atmosphere.slopes.0),
+                        buf_entry(20, atmosphere.slopes.0),
                     ],
                 ),
             ),
@@ -339,7 +334,7 @@ impl Atmosphere {
         }
         let froxel = of(
             &[8, 9, 11, 12, 13],
-            &[frame, view_entry(1, volume), buffer_entry(19, sky_buffer)],
+            &[frame, view_entry(1, volume), buf_entry(19, sky_buf)],
         );
         atmosphere.froxel_group = g.bind_group(atmosphere.froxel.layouts[0], &froxel);
         atmosphere
@@ -347,7 +342,7 @@ impl Atmosphere {
 
     pub fn entries(&self) -> [Entry; AIR_ENTRIES] {
         [
-            buffer_entry(8, self.uniform),
+            buf_entry(8, self.uniform),
             view_entry(9, self.views[TRANSMITTANCE]),
             view_entry(10, self.views[SKY_VIEW]),
             sampler_entry(11, self.sampler),
@@ -449,7 +444,7 @@ impl Atmosphere {
         r.read(&self.words);
         self.moved = !r.end();
         if self.moved {
-            g.write_buffer(self.uniform, 0, bytes(&self.words));
+            g.write_buf(self.uniform, 0, bytes(&self.words));
         }
     }
 
@@ -484,14 +479,14 @@ impl Atmosphere {
             if !(free && lit && has_moved(self.drawn_for[k], now)) {
                 continue;
             }
-            g.write_buffer(self.slopes.0, 4 * k as u32, bytes(&[0u32]));
+            g.write_buf(self.slopes.0, 4 * k as u32, bytes(&[0u32]));
             self.table(g, encoder, table, stamp);
             self.drawn_for[k] = Some(now);
             self.slopes_of[k] = true;
             drew = true;
         }
         if self.slopes_of.contains(&true) && free {
-            g.copy_buffer(encoder, (self.slopes.0, 0), (self.slopes.1, 0), 8);
+            g.copy_buf(encoder, (self.slopes.0, 0), (self.slopes.1, 0), 8);
         }
         let exposed = drew || self.moved;
         if exposed {
@@ -504,8 +499,8 @@ impl Atmosphere {
     /// is submitted; their landing wakes the turn that reads them.
     pub fn read_back(&mut self, g: &Gpu) {
         if self.slopes_of.contains(&true) && self.landed_word == 0 {
-            let address = off_of(self.landed.as_ptr()) as u32;
-            g.map_read(self.slopes.1, 0, 8, address, &mut self.landed_word, 1);
+            let addr = off_of(self.landed.as_ptr()) as u32;
+            g.map_read(self.slopes.1, 0, 8, addr, &mut self.landed_word, 1);
         }
     }
 

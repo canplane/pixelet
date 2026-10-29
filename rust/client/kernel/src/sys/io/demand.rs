@@ -31,9 +31,9 @@ impl Default for Phases {
 
 impl Phases {
     /// Past PHASES_MAX a timing is left out.
-    pub fn push(&mut self, name: TaskPhaseName, value: f64) {
+    pub fn push(&mut self, name: TaskPhaseName, val: f64) {
         if self.len < PHASES_MAX {
-            self.items[self.len] = (name, value);
+            self.items[self.len] = (name, val);
             self.len += 1;
         }
     }

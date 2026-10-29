@@ -49,7 +49,7 @@ impl Setting<'_> {
 struct List<'a> {
     name: &'a str,
     /// Each option and its number, in the JSON's order.
-    values: Vec<(String, u32)>,
+    vals: Vec<(String, u32)>,
     doc: Option<Vec<String>>,
 }
 
@@ -100,27 +100,27 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         if name == "SETTINGS" {
             continue;
         }
-        let values = n
+        let vals = n
             .is_wrapper()
             .then(|| n.value())
             .filter(|v| v.is_obj())
             .ok_or(format!(
                 "{JSON}: {name} is not a table of options by number"
             ))?;
-        let values = values
+        let vals = vals
             .named()
             .map(|(o, v)| Ok((o.to_string(), number(v, &format!("{name}'s {o}"))?)))
             .collect::<Result<Vec<_>, String>>()?;
         check_numbers(
             name,
-            &values
+            &vals
                 .iter()
                 .map(|(o, v)| (o.as_str(), *v))
                 .collect::<Vec<_>>(),
         )?;
         lists.push(List {
             name,
-            values,
+            vals,
             doc: n.lines_at("$doc"),
         });
     }
@@ -128,7 +128,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let options_of = |s: &Setting| {
         s.options()
             .and_then(list)
-            .map(|l| l.values.clone())
+            .map(|l| l.vals.clone())
             .ok_or(format!("{JSON}: {}'s options name no list", s.key))
     };
     let mut choices: Vec<&str> = Vec::new();
@@ -153,7 +153,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     rs.extend(casing_note());
     rs.push("#![allow(non_camel_case_types)]".into());
     for name in &choices {
-        let List { values, doc, .. } = list(name).ok_or(format!("{JSON}: no list {name}"))?;
+        let List { vals, doc, .. } = list(name).ok_or(format!("{JSON}: no list {name}"))?;
         let e = enum_name(name);
         rs.push(String::new());
         rs.extend(rs_doc(doc.as_deref().unwrap_or_default(), "", "///"));
@@ -163,8 +163,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             format!("pub enum {e} {{"),
         ]);
         rs.extend(
-            values
-                .iter()
+            vals.iter()
                 .map(|(v, n)| format!("    {} = {n},", rs_ident(v))),
         );
         rs.extend(["}".to_string(), String::new()]);
@@ -172,9 +171,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             format!("impl {e} {{"),
             format!(
                 "    pub const ALL: [{e}; {}] = [{}];",
-                values.len(),
-                values
-                    .iter()
+                vals.len(),
+                vals.iter()
                     .map(|(v, _)| format!("{e}::{}", rs_ident(v)))
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -477,7 +475,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             if f == "$doc" || f == "number" {
                 continue;
             }
-            let value = match f.as_str() {
+            let val = match f.as_str() {
                 "options" => Node::Obj(
                     options_of(s)?
                         .into_iter()
@@ -488,8 +486,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 _ => v.clone(),
             };
             match out.iter_mut().find(|(k, _)| k == f) {
-                Some(slot) => slot.1 = value,
-                None => out.push((f.clone(), value)),
+                Some(slot) => slot.1 = val,
+                None => out.push((f.clone(), val)),
             }
         }
         Ok(Node::Obj(out))

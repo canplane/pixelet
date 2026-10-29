@@ -139,7 +139,7 @@ pub struct Lists<'a> {
 }
 
 impl DrawList {
-    pub fn upload(&mut self, at: u32, bytes: u32, vertex_cnt: u32, index_cnt: u32) -> u32 {
+    pub fn upload(&mut self, at: u32, bytes: u32, vertex_cnt: u32, idx_cnt: u32) -> u32 {
         self.next_handle = self.next_handle.wrapping_add(1).max(1);
         let handle = self.next_handle;
         let lane = &mut lanes().uploads[self.side];
@@ -149,7 +149,7 @@ impl DrawList {
             lane.len()
         );
         lane[self.uploads..self.uploads + UPLOAD_WORDS]
-            .copy_from_slice(&[handle, at, bytes, vertex_cnt, index_cnt]);
+            .copy_from_slice(&[handle, at, bytes, vertex_cnt, idx_cnt]);
         self.uploads += UPLOAD_WORDS;
         handle
     }
@@ -294,7 +294,7 @@ impl DrawList {
         pipeline: u32,
         handle: u32,
         vertex_cnt: u32,
-        index_cnt: u32,
+        idx_cnt: u32,
         translation: [f32; 3],
         opacity: f32,
         unit: f32,
@@ -312,7 +312,7 @@ impl DrawList {
             0.0,
         ]);
         self.draws
-            .extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
+            .extend_from_slice(&[handle, vertex_cnt, idx_cnt, uniform, pipeline]);
     }
 
     /// Words are exact in an f32 up to 2^24.
@@ -322,25 +322,25 @@ impl DrawList {
         pipeline: u32,
         handle: u32,
         group: u32,
-        count: u32,
+        cnt: u32,
         lanes: [u32; 3],
         translation: [f32; 3],
         opacity: f32,
     ) {
-        let [offset, stride, index] = lanes;
+        let [off, stride, idx] = lanes;
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[
             translation[0],
             translation[1],
             translation[2],
-            offset as f32,
+            off as f32,
             opacity,
             stride as f32,
-            index as f32,
+            idx as f32,
             0.0,
         ]);
         self.draws
-            .extend_from_slice(&[handle, group, count, uniform, pipeline]);
+            .extend_from_slice(&[handle, group, cnt, uniform, pipeline]);
     }
 
     /// Uploads, rewrites and frees start fresh, on the lanes' other side;

@@ -964,8 +964,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     rs.extend(items);
                 }
             }
-            let (first, count) = run_of(d.json)?;
-            if scope.slot.get() != first + count {
+            let (first, cnt) = run_of(d.json)?;
+            if scope.slot.get() != first + cnt {
                 return Err(format!(
                     "{}: its file references are not the catalog's",
                     d.json
@@ -1069,12 +1069,12 @@ fn cpp_items(
         ));
         return Ok(());
     }
-    let (value, t) = if n.is_wrapper() {
+    let (val, t) = if n.is_wrapper() {
         (n.value(), type_of(n, ty))
     } else {
         (n, ty)
     };
-    let number = value
+    let number = val
         .num()
         .ok_or(format!("{name}: a C++ header takes numbers only"))?;
     let (ty, suffix) = match t {

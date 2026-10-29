@@ -27,7 +27,7 @@ use crate::gpu::surface::Surface;
 use crate::gpu::upload::uploads;
 
 pub struct Case {
-    frame_buffer: u32,
+    frame_buf: u32,
     frames: FrameGroups,
     pub skinned: SkinnedPass,
     finish: Finish,
@@ -52,17 +52,17 @@ impl Case {
         air: [Entry; AIR_ENTRIES],
         align: u32,
     ) -> Case {
-        let frame_buffer = g.buffer(
+        let frame_buf = g.buf(
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let layout = frame_layout(g, pipelines);
         Case {
-            frame_buffer,
+            frame_buf,
             frames: FrameGroups::new(
                 g,
                 layout,
-                frame_buffer,
+                frame_buf,
                 shadow.blank_entries(1),
                 [ao.blank_entry(MAP_BINDING); 2],
                 air,
@@ -75,7 +75,7 @@ impl Case {
 
     pub fn release(self) {
         self.frames.release();
-        release(self.frame_buffer);
+        release(self.frame_buf);
         self.skinned.release();
         self.finish.release();
     }
@@ -141,7 +141,7 @@ impl Case {
         if r.end() {
             return;
         }
-        g.write_buffer(self.frame_buffer, 0, bytes(&frame));
+        g.write_buf(self.frame_buf, 0, bytes(&frame));
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -163,16 +163,9 @@ impl Case {
         );
         g.end(pass);
         // Encoded onto its canvas at its own frame's words, no vignette.
-        let view_id = g.current(s.handle);
-        self.finish.draw(
-            g,
-            encoder,
-            self.frame_buffer,
-            s,
-            s.color_view,
-            view_id,
-            stamp,
-        );
+        let view_id = g.cur(s.handle);
+        self.finish
+            .draw(g, encoder, self.frame_buf, s, s.color_view, view_id, stamp);
         release(view_id);
     }
 }

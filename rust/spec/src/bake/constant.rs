@@ -2,7 +2,7 @@
 
 use crate::space::coord::q3::Q3;
 use crate::space::coord::world::{wrap_cell, EXTENT};
-use crate::space::coord::zoom::{index_of, Zoom, UNIT_ZOOM};
+use crate::space::coord::zoom::{idx_of, Zoom, UNIT_ZOOM};
 use crate::space::layer::lattice::GROUND;
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
@@ -41,7 +41,7 @@ impl EntryAt {
 
     /// The cube of `zoom` that holds `p`.
     pub fn holding(zoom: Zoom, p: &Q3) -> EntryAt {
-        EntryAt::new(zoom, index_of(zoom, p))
+        EntryAt::new(zoom, idx_of(zoom, p))
     }
 
     pub fn zoom(self) -> Zoom {

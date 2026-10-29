@@ -9,7 +9,7 @@
 use super::lattice::{Lattice, GROUND};
 use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 use crate::space::camera::eye::Observation;
-use crate::space::camera::grid::split_distance;
+use crate::space::camera::grid::split_dist;
 use crate::space::coord::zoom::{units, Zoom};
 use crate::space::layer::lattice::{demand_reach, draw_reach};
 
@@ -21,7 +21,7 @@ pub fn band(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<
     let from = if zoom == LEAF_ZOOM {
         0.0
     } else {
-        split_distance(lattice.grid_zoom(zoom))
+        split_dist(lattice.grid_zoom(zoom))
     };
     let to = if zoom == top {
         demand_reach(lattice, zoom)

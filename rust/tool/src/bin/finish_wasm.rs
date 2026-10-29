@@ -44,8 +44,8 @@ fn exported_only(bytes: &[u8], keep: &[String]) -> Result<Vec<u8>, String> {
         let start = at;
         let id = bytes[at];
         at += 1;
-        let size = leb(bytes, &mut at)? as usize;
-        let end = at + size;
+        let sz = leb(bytes, &mut at)? as usize;
+        let end = at + sz;
         if id != EXPORT_SECTION {
             out.extend_from_slice(
                 bytes

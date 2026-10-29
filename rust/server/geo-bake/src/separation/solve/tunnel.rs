@@ -37,9 +37,9 @@ use super::bridge::Decks;
 use super::*;
 
 // ---- Arnis's numbers for a bore, in metres, under its names ----
-const TUNNEL_CEIL_OFFSET_M: f64 = 5.0;
+const TUNNEL_CEIL_OFF_M: f64 = 5.0;
 const TUNNEL_COVER_DROP_M: f64 = 7.0;
-const TUNNEL_ROOF_COVER_M: f64 = TUNNEL_CEIL_OFFSET_M + 1.0;
+const TUNNEL_ROOF_COVER_M: f64 = TUNNEL_CEIL_OFF_M + 1.0;
 const TUNNEL_RAMP_STEP: i32 = 1;
 const TUNNEL_RAMP_RUN: i32 = 3;
 const TUNNEL_LAYER_DROP_M: f64 = 7.0;
@@ -70,7 +70,7 @@ pub(super) fn bores(
     scale: Scale,
     lines: &mut Vec<(Line, Drawn)>,
 ) {
-    let ceiling = (scale.c(TUNNEL_CEIL_OFFSET_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
+    let ceiling = (scale.c(TUNNEL_CEIL_OFF_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
     for (q, ys, covered) in road_bores(src, stretches, decks, scale, lines) {
         let r = &stretches[q];
         // a stretch under cover keeps its ceiling, one open to the sky is cut to the surface, and

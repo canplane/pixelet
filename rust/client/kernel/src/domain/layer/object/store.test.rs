@@ -163,7 +163,7 @@ fn solid_block_folds() {
 }
 
 #[test]
-fn air_folds_as_value() {
+fn air_folds_as_val() {
     let (out, [x, y]) = folded(
         &[
             (0, 0, 0, AIR),
@@ -198,8 +198,7 @@ fn axis_turn() {
         cube_at(&mut stores[1], turn(at), state);
         cube_at(&mut stores[2], turn(turn(at)), state);
     }
-    let bound =
-        |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).value().flatten();
+    let bound = |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).val().flatten();
     for _ in 0..500 {
         let (zoom, at) = some_node(&mut rng, 200.0);
         let given = bound(&stores[0], (zoom, at));
@@ -360,7 +359,7 @@ fn whole_shard_meets_leaves() {
     assert_eq!(met, 1);
     assert!(store
         .bounds::<3>((SHARD_ZOOM, shard), SHARD_ZOOM)
-        .value()
+        .val()
         .flatten()
         .is_some());
 }

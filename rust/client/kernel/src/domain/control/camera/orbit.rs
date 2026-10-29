@@ -55,7 +55,7 @@ pub fn orbit() -> &'static mut OrbitState {
     })
 }
 
-pub fn orbit_eye_offset(dist: f64, polar: f64, azimuth: f64) -> V3 {
+pub fn orbit_eye_off(dist: f64, polar: f64, azimuth: f64) -> V3 {
     facing_dir(polar, azimuth).map(|v| -v * dist)
 }
 
@@ -115,7 +115,7 @@ pub(crate) fn put(at: Q3, snap: bool) {
     if snap {
         let (o, cam) = (orbit(), camera());
         let at = resolve_to(&mut o.to, pivot_world().unwrap_or_default());
-        let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
+        let e = orbit_eye_off(o.dist, cam.polar, cam.azimuth);
         set_eye_world(&v3::add(&at, &e));
     }
 }
@@ -153,7 +153,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
 
     // Written only where something moved, so nothing is written back at rest.
     if (at, o.dist, cam.polar, cam.azimuth) != was {
-        let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
+        let e = orbit_eye_off(o.dist, cam.polar, cam.azimuth);
         set_eye_world(&v3::add(&at, &e));
     }
     Some(moving)

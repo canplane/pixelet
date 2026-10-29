@@ -88,7 +88,7 @@ pub fn location_puck_step(device_coord: Option<Q3>) {
     let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else {
         return;
     };
-    let night = scene.environment.night();
+    let night = scene.env.night();
     scene.puck.step(draw, device_coord, night);
 }
 
@@ -107,13 +107,13 @@ fn lay_zone(
     const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     let ring = zone_reach() + 1;
     let across = (2 * ring + 1) as usize;
-    let index = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
+    let idx = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
     rise.clear();
     rise.resize(across * across, None);
     for s in zone_samples() {
         for d in [[0, 0]].iter().chain(&BESIDE) {
             let at = [s.at[0] + d[0], s.at[1] + d[1]];
-            if rise[index(at)].is_none() {
+            if rise[idx(at)].is_none() {
                 let off = [
                     s.off[0] + f64::from(d[0]) * cell,
                     s.off[1] + f64::from(d[1]) * cell,
@@ -122,13 +122,13 @@ fn lay_zone(
                 // An unloaded neighbor tile falls back to the center's height; 0 would
                 // sink or launch that instance.
                 let ground = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
-                rise[index(at)] = Some(ground - center_pos[2]);
+                rise[idx(at)] = Some(ground - center_pos[2]);
             }
         }
     }
     // The box on the ground's cell `d` from the sample, relative to the center.
     let box_at = |s: &ZoneSample, d: [i32; 2]| {
-        let delta_ele = rise[index([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
+        let delta_ele = rise[idx([s.at[0] + d[0], s.at[1] + d[1]])].unwrap_or_default();
         let off = [
             s.off[0] + f64::from(d[0]) * cell,
             s.off[1] + f64::from(d[1]) * cell,
@@ -251,7 +251,7 @@ impl LocationPuck {
     fn ground(&mut self, world: World, draw: &mut DrawList, seen: Seen) -> Option<V3> {
         let (device, pos) = (seen.device, seen.pos);
         // The fix names a place and not how high.
-        if let Some(z) = world.surface_support(&device).value().flatten() {
+        if let Some(z) = world.surface_support(&device).val().flatten() {
             self.last_known_center_z = Some(z);
         }
         let center_z = self.last_known_center_z?;
@@ -264,7 +264,7 @@ impl LocationPuck {
         );
         lay_zone(
             center_pos,
-            |at| world.surface_support(at).value().flatten(),
+            |at| world.surface_support(at).val().flatten(),
             &mut rise,
             &mut lane,
         );
@@ -375,11 +375,11 @@ impl LocationPuck {
             state,
         );
         let center = DrawList::translation(p.center, eye);
-        let count = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
+        let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
         draw.draw_as(
             PIPELINE_PUCK_ZONE,
             self.held.handle,
-            count,
+            cnt,
             0,
             center,
             0.0,

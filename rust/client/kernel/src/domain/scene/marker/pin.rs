@@ -14,7 +14,7 @@ use super::arrangement::{surface, Brick, Instance, Key, Went};
 use crate::domain::layer::object::preview::draft;
 use crate::domain::query::{cell_at, World};
 use crate::domain::scene::marker::design::Design;
-use pxl_render::look::marker::{COUNT_FILL, COUNT_INK, PILL_FILL, PILL_INK};
+use pxl_render::look::marker::{CNT_FILL, CNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::object::is_marker;
@@ -71,11 +71,11 @@ fn pill(words: &str) -> Design {
 
 /// The count of `n` pins in one pin's cell, on a pin's pill in the
 /// count's colors.
-fn count(n: usize) -> Design {
+fn cnt(n: usize) -> Design {
     Design::Pill {
         words: n.to_string().into(),
-        fill: COUNT_FILL,
-        ink: COUNT_INK,
+        fill: CNT_FILL,
+        ink: CNT_INK,
     }
 }
 
@@ -145,7 +145,7 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
         run.iter_mut().for_each(|p| p.crowd = Some((cell, at)));
         out.push(Instance {
             key: Key::Pin(Held::Cell(cell)),
-            design: count(n),
+            design: cnt(n),
             stands: at,
             tap: Some(Went::To(at)),
         });

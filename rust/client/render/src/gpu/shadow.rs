@@ -22,7 +22,7 @@ use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_SUN_MAP};
 use crate::frame::shader::word::frame::VIEW_PROJ;
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, pass_desc, sampler_entry, texture_usage, view_entry,
+    buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, texture_usage, view_entry,
     word_bytes, Entry, Format, Gpu, Load, Stamp,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -30,9 +30,9 @@ use crate::gpu::put::put_mat;
 use crate::param::shadow::DEPTH_STEP;
 
 /// The map's side in texels.
-pub const SIZE: u32 = 2048;
+pub const SZ: u32 = 2048;
 const _: () = assert!(
-    SIZE as i32 <= ANCHOR,
+    SZ as i32 <= ANCHOR,
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
 );
 
@@ -92,8 +92,8 @@ pub struct Shadow {
 impl Shadow {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Shadow {
         let map = g.texture(
-            SIZE,
-            SIZE,
+            SZ,
+            SZ,
             1,
             Format::depth32float,
             1,
@@ -126,8 +126,8 @@ impl Shadow {
             1,
         );
         let world = g.texture(
-            SIZE,
-            SIZE,
+            SZ,
+            SZ,
             1,
             Format::r32uint,
             1,
@@ -135,21 +135,21 @@ impl Shadow {
         );
         let world = g.view(world, true, 0, 1, 0, 1);
         let lay = pipelines.build(g, PIPELINE_SUN_MAP, Format::depth32float);
-        let corner = g.buffer(
+        let corner = g.buf(
             word_bytes(4),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let lay_group = g.bind_group(
             lay.layouts[0],
-            &[view_entry(0, world), buffer_entry(1, corner)],
+            &[view_entry(0, world), buf_entry(1, corner)],
         );
-        let light_frame = g.buffer(
+        let light_frame = g.buf(
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let light_group = g.bind_group(
             pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()).layouts[0],
-            &[buffer_entry(0, light_frame)],
+            &[buf_entry(0, light_frame)],
         );
         Shadow {
             map_view,
@@ -196,7 +196,7 @@ impl Shadow {
     /// it a receiver reads within; `fixed` is a point that stays put in the
     /// world as the eye moves, in the eye's frame.
     pub fn aim(&mut self, sun_dir: &[f32], target: V3, reach: f64, rim: f32, fixed: V3) {
-        self.texel = reach * 2.0 / f64::from(SIZE);
+        self.texel = reach * 2.0 / f64::from(SZ);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
         // the sun goes, on purpose: the sun read as moving. Turned on every
         // frame instead, the grid below snapped another way each time and a
@@ -251,7 +251,7 @@ impl Shadow {
         };
         self.sun = Sun::of(
             [column(0), column(1), column(2), column(3)],
-            SIZE,
+            SZ,
             corner,
             rim,
         )
@@ -276,7 +276,7 @@ impl Shadow {
             corner[1].div_euclid(ANCHOR) * ANCHOR,
         ];
         let q3 = f64::from(1u32 << pxl_spec_core::FRAC_W);
-        let texel = 2.0 / f64::from(SIZE);
+        let texel = 2.0 / f64::from(SZ);
         let (inverse, eye) = (self.inverse, self.eye_world);
         let mut anchor = |k: usize| {
             let w = [
@@ -331,9 +331,9 @@ impl Shadow {
     /// The light's frame, where the casters' depth pipelines read their
     /// view, and the box's corner the world's depth is laid in off.
     pub fn write(&self, g: &Gpu) {
-        g.write_buffer(self.light_frame, 0, bytes(&self.light));
+        g.write_buf(self.light_frame, 0, bytes(&self.light));
         let corner = [self.sun[sun::CORNER[0]], self.sun[sun::CORNER[1]], 0, 0];
-        g.write_buffer(self.corner, 0, bytes(&corner));
+        g.write_buf(self.corner, 0, bytes(&corner));
     }
 
     /// The map's pass, timed in `stamp`, the world's depth laid in first

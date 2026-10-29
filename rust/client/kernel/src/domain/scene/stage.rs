@@ -70,7 +70,7 @@ pub fn stage_write() {
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
     s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
-    s[STAGE_AT::VIEWPORT_WIDTH] = crate::domain::view::frame::screen::size()[0];
+    s[STAGE_AT::VIEWPORT_WIDTH] = crate::domain::view::frame::screen::sz()[0];
     // The markers are drawn at the size the kernel lays them out at.
     s[STAGE_AT::PX_PER_UNIT] = crate::domain::view::frame::screen::px_per_unit();
     // The camera grid's cell angle: the footprint a drawn cell covers per
@@ -103,7 +103,7 @@ pub fn stage_write() {
     s[STAGE_AT::CLOUDS] = crate::domain::scene::environment::cloud::clouds_shown();
     // Out to where the grid's cells one zoom coarser than the ground's leaf begin.
     s[STAGE_AT::SHADOWS] = if settings.shadows {
-        pxl_spec::space::camera::grid::split_distance(GROUND.cell() - 1)
+        pxl_spec::space::camera::grid::split_dist(GROUND.cell() - 1)
     } else {
         0.0
     };
@@ -164,11 +164,11 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
         let s = stage_lane();
         let view_proj: [f64; 16] = core::array::from_fn(|k| s[STAGE_AT::EYE_VIEW_PROJ + k]);
         let eye = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
-        crate::domain::scene::region::take(&view_proj, eye, scene().environment.sun())
+        crate::domain::scene::region::take(&view_proj, eye, scene().env.sun())
     };
     let out = render_frame(FrameInput {
         lists,
-        environment: &scene().environment.out,
+        env: &scene().env.out,
         decor: &decor,
         skins: &skins[..skin_cnt],
         cases: &cases[..case_cnt],
@@ -225,7 +225,7 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     let scale = crate::domain::view::frame::resolution::drawn_scale();
     let gpu = out.stat.as_ref().filter(|stat| stat.gpu_read).map(|stat| {
         (
-            pxl_render::gpu::renderer::pixels_ms(&stat.gpu_spans),
+            pxl_render::gpu::renderer::px_ms(&stat.gpu_spans),
             stat.gpu_px,
         )
     });
@@ -305,7 +305,7 @@ pub fn visible_step(
         animating
     });
     {
-        let edits = crate::domain::layer::object::preview::current();
+        let edits = crate::domain::layer::object::preview::cur();
         // Decor's records leave out only a decor: hidden, anything else is
         // the rays' to cut, and its walk is kept.
         let hide = edits.hide.filter(|&at| {

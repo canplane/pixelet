@@ -196,7 +196,7 @@ async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
 }
 
 /// Made again at each ask, so a set baked again under a running server is a new version.
-async fn source(State(app): State<Arc<App>>) -> Response {
+async fn src(State(app): State<Arc<App>>) -> Response {
     match declaration(&app) {
         Ok(declared) => (
             [
@@ -274,15 +274,15 @@ fn run() -> Result<(), String> {
     while let Some(flag) = flags.arg() {
         match flag.as_str() {
             "--port" => port = flags.parse()?,
-            "--host" => host = flags.value()?,
-            "--asset" => asset_dir = PathBuf::from(flags.value()?),
+            "--host" => host = flags.val()?,
+            "--asset" => asset_dir = PathBuf::from(flags.val()?),
             "--queue" => limits.queued = flags.parse()?,
             "--job-seconds" => limits.seconds = flags.parse()?,
             "--workers" => workers = flags.parse()?,
-            "--cache" => cache = PathBuf::from(flags.value()?),
+            "--cache" => cache = PathBuf::from(flags.val()?),
             "--folds" => folds = flags.parse()?,
-            "--shelf" => shelf = Some(PathBuf::from(flags.value()?)),
-            "--out" => out = PathBuf::from(flags.value()?),
+            "--shelf" => shelf = Some(PathBuf::from(flags.val()?)),
+            "--out" => out = PathBuf::from(flags.val()?),
             other => return Err(format!("unknown flag: {other}")),
         }
     }
@@ -300,7 +300,7 @@ fn run() -> Result<(), String> {
             )
         }
     };
-    let coverage: Vec<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
+    let coverage: Vec<String> = Coverage::of_src()?.shards().map(|s| s.name()).collect();
     let app = Arc::new(App {
         tiles,
         cache: cache.clone(),
@@ -313,7 +313,7 @@ fn run() -> Result<(), String> {
     declaration(&app)?;
 
     let router = Router::new()
-        .route(&format!("{TILE_ROOT}/source"), get(source))
+        .route(&format!("{TILE_ROOT}/source"), get(src))
         .route(&format!("{TILE_ROOT}/{{kind}}/{{*object}}"), get(tile))
         .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
         .with_state(app.clone());

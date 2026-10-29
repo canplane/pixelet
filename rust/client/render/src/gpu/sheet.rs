@@ -13,7 +13,7 @@ use crate::frame::shader::word::{
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
+    buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
     write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -81,7 +81,7 @@ fn px(v: f32) -> f32 {
 
 /// The texture is sRGB, and what a shader writes into it is linear.
 fn linear(rgba: u32) -> [f32; 4] {
-    let channel = |shift: u32| {
+    let ch = |shift: u32| {
         let c = ((rgba >> shift) & 0xff) as f32 / 255.0;
         if c <= 0.04045 {
             c / 12.92
@@ -89,12 +89,7 @@ fn linear(rgba: u32) -> [f32; 4] {
             libm::powf((c + 0.055) / 1.055, 2.4)
         }
     };
-    [
-        channel(24),
-        channel(16),
-        channel(8),
-        (rgba & 0xff) as f32 / 255.0,
-    ]
+    [ch(24), ch(16), ch(8), (rgba & 0xff) as f32 / 255.0]
 }
 
 fn shape(kind: u32, rect: [f32; 4], color: u32, p: [f32; 4], q: [f32; 2]) -> [f32; SHAPE_FLOATS] {
@@ -336,15 +331,15 @@ impl SheetPainter {
         }
         // What goes into the stream whole, asked of it at once: the text's and
         // the icons' pixels, the size and the shapes, as their writers measure them.
-        let size_bytes = [w as f32, h as f32, 0.0, 0.0];
+        let sz_bytes = [w as f32, h as f32, 0.0, 0.0];
         let instance_bytes = bytes(shapes.as_flattened());
         let pixels = rasters
             .iter()
-            .map(|r| r.pixels)
+            .map(|r| r.px)
             .chain(icons.iter().map(Vec::as_slice));
         if !room(
             pixels.map(write_texture_bytes).sum::<usize>()
-                + write_buffer_bytes(bytes(&size_bytes))
+                + write_buffer_bytes(bytes(&sz_bytes))
                 + write_buffer_bytes(instance_bytes),
         ) {
             return false;
@@ -358,7 +353,7 @@ impl SheetPainter {
             texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
         );
         for (layer, r) in rasters.iter().enumerate() {
-            g.write_texture(lines, layer as u32, r.width, r.height, r.pixels);
+            g.write_texture(lines, layer as u32, r.width, r.height, r.px);
         }
         for (k, pixels) in icons.iter().enumerate() {
             g.write_texture(
@@ -371,17 +366,17 @@ impl SheetPainter {
         }
         let lines_view = g.view(lines, true, 0, 1, 0, layers);
 
-        let size = g.buffer(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        g.write_buffer(size, 0, bytes(&size_bytes));
-        let instances = g.buffer(
+        let sz = g.buf(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.write_buf(sz, 0, bytes(&sz_bytes));
+        let instances = g.buf(
             instance_bytes.len().max(16) as u32,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buffer(instances, 0, instance_bytes);
+        g.write_buf(instances, 0, instance_bytes);
 
         let entry_group = g.bind_group(
             self.built.layouts[0],
-            &[buffer_entry(0, size), buffer_entry(1, instances)],
+            &[buf_entry(0, sz), buf_entry(1, instances)],
         );
         let lines_group = g.bind_group(
             self.built.layouts[1],
@@ -414,7 +409,7 @@ impl SheetPainter {
             lines_group,
             entry_group,
             instances,
-            size,
+            sz,
             lines_view,
             lines,
         ]);

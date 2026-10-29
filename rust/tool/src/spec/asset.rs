@@ -12,7 +12,7 @@ const COLOR_JSON: &str = "spec/spec/asset/color.json";
 
 struct Entry<'a> {
     name: &'a str,
-    value: u32,
+    val: u32,
     transport: bool,
     doc: Option<Vec<String>>,
 }
@@ -38,7 +38,7 @@ fn entries<'a>(list: &'a Node, what: &str) -> Result<Vec<Result<Entry<'a>, &'a s
                 .ok_or(format!("{CUBE_JSON}: {name} has no value"))? as u32;
             Ok(Ok(Entry {
                 name,
-                value,
+                val: value,
                 transport: matches!(e.get("transport"), Some(Node::Bool(true))),
                 doc: e.lines_at("$doc"),
             }))
@@ -88,7 +88,7 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
 
 /// One of the object's colors: what past a ground byte it gives out to be placed.
 fn is_color(e: &Entry) -> bool {
-    e.value > 256
+    e.val > 256
 }
 
 /// Each placeable cube with the section heading it is listed under.
@@ -263,15 +263,15 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         })
         .collect::<Result<_, _>>()?;
     let mut seen = std::collections::BTreeMap::new();
-    for (name, value) in named(&sentinel)
+    for (name, val) in named(&sentinel)
         .chain(named(&ground))
         .chain(named(&object))
-        .map(|e| (e.name, e.value))
+        .map(|e| (e.name, e.val))
         .chain(decor.iter().copied())
     {
-        if let Some(other) = seen.insert(value, name) {
+        if let Some(other) = seen.insert(val, name) {
             return Err(format!(
-                "{CUBE_JSON}, {DECOR_JSON}: {name} and {other} are both {value}"
+                "{CUBE_JSON}, {DECOR_JSON}: {name} and {other} are both {val}"
             ));
         }
     }
@@ -290,32 +290,32 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
             .ok_or(format!("{ID_JSON}: no kind {name}"))
     };
     let (cube_kind, decor_kind) = (kind("cube")?, kind("decor")?);
-    for (name, value) in &decor {
-        if *value > u32::from(u16::MAX) || value >> shape_bits != decor_kind {
+    for (name, val) in &decor {
+        if *val > u32::from(u16::MAX) || val >> shape_bits != decor_kind {
             return Err(format!(
-                "{DECOR_JSON}: {name} is {value}, not of the decor kind within a u16"
+                "{DECOR_JSON}: {name} is {val}, not of the decor kind within a u16"
             ));
         }
     }
     for e in named(&ground) {
-        if e.value == 0 || e.value >= 255 {
+        if e.val == 0 || e.val >= 255 {
             return Err(format!(
                 "{CUBE_JSON}: ground.{} is {}, not within 1-254",
-                e.name, e.value
+                e.name, e.val
             ));
         }
     }
     for e in named(&object) {
-        if e.value <= 255 || e.value >> shape_bits != cube_kind {
+        if e.val <= 255 || e.val >> shape_bits != cube_kind {
             return Err(format!(
                 "{CUBE_JSON}: object.{} is {}, not past a byte of the cube kind",
-                e.name, e.value
+                e.name, e.val
             ));
         }
     }
-    for (group, values) in [("ground", &ground), ("object", &object)] {
-        let values: Vec<u32> = named(values).map(|e| e.value).collect();
-        if values.windows(2).any(|w| w[0] >= w[1]) {
+    for (group, vals) in [("ground", &ground), ("object", &object)] {
+        let vals: Vec<u32> = named(vals).map(|e| e.val).collect();
+        if vals.windows(2).any(|w| w[0] >= w[1]) {
             return Err(format!(
                 "{CUBE_JSON}: {group} is numbered ascending, as its order is read"
             ));
@@ -387,7 +387,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
                 }
             }));
         }
-        ts.push(format!("    {}: 0x{:02x},", e.name, e.value));
+        ts.push(format!("    {}: 0x{:02x},", e.name, e.val));
     }
     ts.push("  },".into());
     ts.extend(note(ground_node, "  "));
@@ -409,7 +409,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
                         }
                     }));
                 }
-                ts.push(format!("    {}: {},", e.name, e.value));
+                ts.push(format!("    {}: {},", e.name, e.val));
             }
         }
     }
@@ -423,7 +423,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
                 format!("    // ---- {section} ----"),
                 String::new(),
             ]),
-            Ok(e) => ts.push(format!("    {}: {},", e.name, e.value)),
+            Ok(e) => ts.push(format!("    {}: {},", e.name, e.val)),
         }
     }
     ts.extend([
@@ -436,7 +436,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     ts.extend(
         cube_sections
             .iter()
-            .map(|(s, e)| format!("  {}: \"{s}\",", e.value)),
+            .map(|(s, e)| format!("  {}: \"{s}\",", e.val)),
     );
     ts.extend(["};".to_string()]);
 
@@ -462,7 +462,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         }
         rs.push(format!(
             "        pub const {}: u8 = 0x{:02x};",
-            e.name, e.value
+            e.name, e.val
         ));
     }
     rs.extend(["    }".to_string(), String::new()]);
@@ -479,7 +479,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
                 if let Some(doc) = &e.doc {
                     rs.extend(rs_doc(doc, "        ", "///"));
                 }
-                rs.push(format!("        pub const {}: u8 = {};", e.name, e.value));
+                rs.push(format!("        pub const {}: u8 = {};", e.name, e.val));
             }
         }
     }
@@ -509,7 +509,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
                 if let Some(doc) = &e.doc {
                     rs.extend(rs_doc(doc, "        ", "///"));
                 }
-                rs.push(format!("        pub const {}: u16 = {};", e.name, e.value));
+                rs.push(format!("        pub const {}: u16 = {};", e.name, e.val));
             }
         }
     }
@@ -521,7 +521,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "    #[repr(u8)]".into(),
         "    pub enum Ground {".into(),
     ]);
-    rs.extend(named(&ground).map(|e| format!("        {} = {},", e.name, e.value)));
+    rs.extend(named(&ground).map(|e| format!("        {} = {},", e.name, e.val)));
     rs.extend([
         "    }".to_string(),
         String::new(),
@@ -541,7 +541,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "            match value {".into(),
     ]);
     rs.extend(
-        named(&ground).map(|e| format!("                {} => Some(Ground::{}),", e.value, e.name)),
+        named(&ground).map(|e| format!("                {} => Some(Ground::{}),", e.val, e.name)),
     );
     rs.extend([
         "                _ => None,".to_string(),
@@ -553,7 +553,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// names.".into(),
         format!(
             "        pub const fn grounds(value: u32) -> bool {{ matches!(value, {}) }}",
-            runs(named(&ground).map(|e| e.value)).join(" | ")
+            runs(named(&ground).map(|e| e.val)).join(" | ")
         ),
         String::new(),
         "        /// A way: decor faces along it and no pier stands on it.".into(),
@@ -562,7 +562,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// Whether a look read into a word is a way (`transport`).".into(),
         format!(
             "        pub const fn transports(value: u32) -> bool {{ matches!(value, {}) }}",
-            runs(named(&ground).filter(|e| e.transport).map(|e| e.value)).join(" | ")
+            runs(named(&ground).filter(|e| e.transport).map(|e| e.val)).join(" | ")
         ),
     ]);
     rs.extend(["    }".to_string(), String::new()]);
@@ -577,7 +577,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     rs.extend(
         colors
             .iter()
-            .map(|e| format!("        {} = {},", e.name, e.value)),
+            .map(|e| format!("        {} = {},", e.name, e.val)),
     );
     rs.extend([
         "    }".to_string(),
@@ -599,7 +599,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     rs.extend(
         colors
             .iter()
-            .map(|e| format!("                {} => Some(Object::{}),", e.value, e.name)),
+            .map(|e| format!("                {} => Some(Object::{}),", e.val, e.name)),
     );
     rs.extend([
         "                _ => None,".to_string(),
@@ -609,7 +609,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// Whether a value read into a word, as a GPU has it, is one `of` names.".into(),
         format!(
             "        pub const fn objects(value: u32) -> bool {{ matches!(value, {}) }}",
-            runs(colors.iter().map(|e| e.value)).join(" | ")
+            runs(colors.iter().map(|e| e.val)).join(" | ")
         ),
         "    }".into(),
         "}".into(),
@@ -624,9 +624,9 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
 }
 
 /// Ascending values as patterns, each run of consecutive ones a range.
-fn runs(values: impl Iterator<Item = u32>) -> Vec<String> {
+fn runs(vals: impl Iterator<Item = u32>) -> Vec<String> {
     let mut out: Vec<(u32, u32)> = Vec::new();
-    for v in values {
+    for v in vals {
         match out.last_mut() {
             Some((_, hi)) if *hi + 1 == v => *hi = v,
             _ => out.push((v, v)),
@@ -772,7 +772,7 @@ fn ground_looks() -> Result<Vec<(String, u32)>, String> {
     let spec = read(CUBE_JSON)?;
     Ok(
         named(&entries(spec.get("ground").ok_or("no ground")?, "ground")?)
-            .map(|e| (e.name.to_string(), e.value))
+            .map(|e| (e.name.to_string(), e.val))
             .collect(),
     )
 }
@@ -861,12 +861,12 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             .and_then(Node::arr)
             .ok_or(at("variants"))?
         {
-            let size = v
+            let sz = v
                 .get("size")
                 .and_then(Node::arr)
                 .filter(|s| s.len() == 3)
                 .map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
-            match (v.str_at("model"), v.str_at("skin"), size.flatten()) {
+            match (v.str_at("model"), v.str_at("skin"), sz.flatten()) {
                 (Some(_), Some(_), Some(size))
                     if size
                         .iter()
@@ -891,14 +891,14 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         if sizes.is_empty() {
             return Err(at("variants"));
         }
-        let value = k
+        let val = k
             .get("value")
             .and_then(Node::num)
             .map(js_num)
             .ok_or(at("value"))?;
         rows.push(Row {
             name: name.clone(),
-            value,
+            value: val,
             doc: k.lines_at("$doc").unwrap_or_default(),
             seed: seed.to_string(),
             counts: shares

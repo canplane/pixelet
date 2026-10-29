@@ -22,7 +22,7 @@ use pxl_spec::space::layer::tile::Tile;
 fn run() -> Result<(), String> {
     pxl_geo_bake::cli::enter()?;
     let run = Run::parse("place")?;
-    let coverage = Coverage::of_source()?;
+    let coverage = Coverage::of_src()?;
     if run.leaf {
         let (_, mut client) =
             Overture::reading(&[&place::READS], &run.shards.iter().copied().collect())?;

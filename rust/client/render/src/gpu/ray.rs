@@ -13,7 +13,7 @@ mod tally;
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAY};
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Format, Gpu,
+    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Format, Gpu,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::FrameKind;
@@ -26,7 +26,7 @@ pub use tally::{sum_at, CASTS, FRAMES, LANES_AT, RAYS, RAY_SUMS};
 /// Whether a frame of `kind` casts the pixels' rays, whole or off the
 /// samples that stand: the rays, their depth and where they met the world
 /// are laid again.
-fn casts_pixels(kind: FrameKind) -> bool {
+fn casts_px(kind: FrameKind) -> bool {
     kind == FrameKind::cast || kind == FrameKind::pixels
 }
 
@@ -57,11 +57,11 @@ impl RaysPass {
         let built = pipelines.build(g, PIPELINE_SCREEN_RAY, WORLD_COLOR);
         let depth = pipelines.build(g, PIPELINE_SCREEN_PREPASS, Format::depth32float);
         let words = look_words();
-        let looks = g.buffer(
+        let looks = g.buf(
             word_bytes(4 * words.len()),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buffer(looks, 0, bytes(&words));
+        g.write_buf(looks, 0, bytes(&words));
         RaysPass {
             built,
             depth,
@@ -75,9 +75,9 @@ impl RaysPass {
         }
     }
 
-    /// Whether this frame casts the pixels' rays (`casts_pixels`).
-    pub fn casts_pixels(&self) -> bool {
-        casts_pixels(self.kind)
+    /// Whether this frame casts the pixels' rays (`casts_px`).
+    pub fn casts_px(&self) -> bool {
+        casts_px(self.kind)
     }
 
     /// The lit pass's entries, handed again whenever one of its objects is
@@ -96,8 +96,8 @@ impl RaysPass {
         release(self.group);
         let mut e = self.lit.clone();
         e.push(view_entry(3, bound[0]));
-        e.push(buffer_entry(20, self.looks));
-        e.push(buffer_entry(21, bound[1]));
+        e.push(buf_entry(20, self.looks));
+        e.push(buf_entry(21, bound[1]));
         self.group = g.bind_group(self.built.layouts[0], &e);
         self.bound = bound;
     }

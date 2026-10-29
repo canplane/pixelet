@@ -142,7 +142,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     };
 
     let mut rs = head("pxl-spec/route.spec.rs");
-    for (name, value) in &all {
+    for (name, val) in &all {
         rs.extend(doc(name).unwrap_or_default().iter().map(|l| {
             if l.is_empty() {
                 "///".to_string()
@@ -151,7 +151,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             }
         }));
         rs.extend([
-            format!("pub const {name}: &str = {};", json_str(value)),
+            format!("pub const {name}: &str = {};", json_str(val)),
             String::new(),
         ]);
     }
@@ -188,10 +188,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     ]);
 
     let mut ts = head("@pxl/client/namespace/route.spec.ts");
-    for (name, value) in &all {
+    for (name, val) in &all {
         ts.extend(ts_doc(&doc(name).unwrap_or_default(), ""));
         ts.extend([
-            format!("export const {name} = {};", json_str(value)),
+            format!("export const {name} = {};", json_str(val)),
             String::new(),
         ]);
     }

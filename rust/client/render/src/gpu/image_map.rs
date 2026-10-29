@@ -14,7 +14,7 @@ pub struct ImageMap {
     texture: u32,
     pub view: u32,
     pub sampler: u32,
-    size: (u32, u32),
+    sz: (u32, u32),
     levels: u32,
     pub loaded: bool,
 }
@@ -39,7 +39,7 @@ impl ImageMap {
             texture,
             view,
             sampler,
-            size: (width, height),
+            sz: (width, height),
             levels,
             loaded: false,
         }
@@ -63,8 +63,8 @@ impl ImageMap {
             0,
             0,
             0,
-            self.size.0,
-            self.size.1,
+            self.sz.0,
+            self.sz.1,
         );
         g.submit(encoder);
         release(face);

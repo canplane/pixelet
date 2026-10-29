@@ -88,7 +88,7 @@ struct Patch {
     at: u32,
     bytes: u32,
     handle: u32,
-    index: u32,
+    idx: u32,
     heights: [f32; 2],
 }
 
@@ -157,7 +157,7 @@ pub fn clouds_shown() -> f64 {
     if !settings_store().clouds {
         return 0.0;
     }
-    let altitude_km = f64::from(scene().environment.out[ENV_AIR]);
+    let altitude_km = f64::from(scene().env.out[ENV_AIR]);
     let t = ((altitude_km - CLOUD_GONE_KM / 2.0) / (CLOUD_GONE_KM / 2.0)).clamp(0.0, 1.0);
     1.0 - t * t * (3.0 - 2.0 * t)
 }
@@ -173,7 +173,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         }
     }
     let Some(eye) = eye() else { return };
-    let env = &scene().environment.out;
+    let env = &scene().env.out;
     // None, nothing is built or drawn, and what is held waits.
     let opacity = clouds_shown() as f32;
     if opacity <= 0.0 {
@@ -290,7 +290,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         let patch = Shown {
             handle: b.handle,
             at: b.at,
-            index: b.index,
+            index: b.idx,
             bytes: b.bytes,
             corner: [nearest(corner[0], eye[0]), corner[1]],
             side: PATCH,
@@ -377,7 +377,7 @@ fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
         .flat_map(move |((first, n), file)| {
             let lane = GroupLanes {
                 first: first as usize,
-                count: n as usize,
+                cnt: n as usize,
             };
             (0..n as usize).map(move |i| {
                 let at = |k: usize| f64::from(f32::from_bits(words[lane.f32_at(k, i)]));
@@ -434,7 +434,7 @@ fn build(
         out[1 + g] = l.len() as u32;
         let lane = GroupLanes {
             first,
-            count: l.len(),
+            cnt: l.len(),
         };
         for (i, v) in l.iter().enumerate() {
             for (k, &w) in v.iter().enumerate() {
@@ -449,7 +449,7 @@ fn build(
         at: at as u32,
         bytes,
         handle,
-        index,
+        idx: index,
         heights: if instances == 0 { [0.0; 2] } else { heights },
     })
 }
@@ -507,16 +507,16 @@ fn present_patch(
     // A patch all within THIN_FROM shows every cloud, and asks none.
     let thin = farthest > THIN_FROM;
     let (mut at, mut changed) = (0usize, false);
-    for ((offset, count), (group, (extent, [least, most]))) in lane::groups(lanes_of).zip(groups) {
+    for ((off, cnt), (group, (extent, [least, most]))) in lane::groups(lanes_of).zip(groups) {
         let lane = GroupLanes {
-            first: offset as usize,
-            count: count as usize,
+            first: off as usize,
+            cnt: cnt as usize,
         };
         let first = at;
         sprites.clear();
         let gone = tier(extent * most / nearest) == drawn::GONE;
         let modeled = tier(extent * least / farthest) == drawn::MODEL;
-        for i in 0..if gone { 0 } else { count as usize } {
+        for i in 0..if gone { 0 } else { cnt as usize } {
             if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
             }
@@ -550,7 +550,7 @@ fn present_patch(
         changed |= list[at..at + sprites.len()] != sprites[..];
         list[at..at + sprites.len()].copy_from_slice(sprites);
         at += sprites.len();
-        let index = b.index / 4 + first as u32;
+        let idx = b.index / 4 + first as u32;
         if models > 0 {
             let pipeline = if opacity < 1.0 {
                 PIPELINE_GHOST_DECOR
@@ -562,7 +562,7 @@ fn present_patch(
                 b.handle,
                 group,
                 models,
-                [offset, count, index],
+                [off, cnt, idx],
                 translation,
                 opacity,
             );
@@ -573,7 +573,7 @@ fn present_patch(
                 b.handle,
                 group,
                 sprites.len() as u32,
-                [offset, count, index + models],
+                [off, cnt, idx + models],
                 translation,
                 1.0,
             );

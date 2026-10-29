@@ -183,7 +183,7 @@ fn run() -> Result<(), String> {
 
     let laid = Pack {
         image,
-        cell: pack::TILE_SIZE,
+        cell: pack::TILE_SZ,
         columns: pack::COLUMNS,
         tiles: composed.tiles,
         means: composed.means,

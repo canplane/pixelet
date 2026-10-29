@@ -237,8 +237,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     if queue.is_empty() {
         return Ok(Solved::default());
     }
-    let reach =
-        mer_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
+    let reach = mer_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DIST_M) + 16) * CELL_U);
     // each piece is looked at once, against the pieces read so far; a piece a later read brings in
     // is held against what was looked at before it (`seen`), so no pass is repeated
     let lies_on = |o: &Piece, ends: &FnvHashSet<End>| {
@@ -563,15 +562,15 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
             keep.push((along(k), r.at[k], f64::from(ys[k])));
         }
     }
-    let mut distance = 0.0;
+    let mut dist = 0.0;
     for seg in r.piece.way.points.windows(2) {
-        distance += libm::hypot(seg[1][0] - seg[0][0], seg[1][1] - seg[0][1]);
-        if distance > along(a) && distance < along(b) {
-            let i = ((distance / step).floor() as usize)
+        dist += libm::hypot(seg[1][0] - seg[0][0], seg[1][1] - seg[0][1]);
+        if dist > along(a) && dist < along(b) {
+            let i = ((dist / step).floor() as usize)
                 .saturating_sub(r.k0)
                 .clamp(a, b - 1);
-            let z = f64::from(ys[i]) + f64::from(ys[i + 1] - ys[i]) * (distance - along(i)) / step;
-            keep.push((distance, [seg[1][0], seg[1][1]], round(z)));
+            let z = f64::from(ys[i]) + f64::from(ys[i + 1] - ys[i]) * (dist - along(i)) / step;
+            keep.push((dist, [seg[1][0], seg[1][1]], round(z)));
         }
     }
     keep.sort_by(|x, y| x.0.total_cmp(&y.0));

@@ -10,7 +10,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 use xpute_kit::math::scalar::wrap;
 
-use crate::domain::control::camera::orbit::orbit_eye_offset;
+use crate::domain::control::camera::orbit::orbit_eye_off;
 use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, GATE_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST};
@@ -19,7 +19,7 @@ use crate::domain::query::{held, over, Hit, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
-use pxl_spec::space::coord::zoom::{index_of, units};
+use pxl_spec::space::coord::zoom::{idx_of, units};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The pivot is part of the pose: the eye is `pivot + offset`, and a gate
@@ -45,10 +45,7 @@ fn pose(view: Intent) -> Option<ViewPose> {
 /// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);
-    let ground = World::now()
-        .floor_under(&eye, LEAF_ZOOM)
-        .value()
-        .flatten()?;
+    let ground = World::now().floor_under(&eye, LEAF_ZOOM).val().flatten()?;
     Some(ground + EYE_CLEARANCE_U - at.pivot[2])
 }
 
@@ -57,7 +54,7 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
 fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
     let (_, eye) = eye(at);
     let pivot = world_to_canonical(&at.pivot);
-    let floor = index_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
+    let floor = idx_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
     let from = world::at(
         i64::from(pivot[0]),
         i64::from(pivot[1]),
@@ -71,7 +68,7 @@ fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
     if i64::from(walked[0]) != i64::from(eye[0]) || i64::from(walked[1]) != i64::from(eye[1]) {
         return None;
     }
-    let ground = access.floor_under(&walked, LEAF_ZOOM).value().flatten()?;
+    let ground = access.floor_under(&walked, LEAF_ZOOM).val().flatten()?;
     Some(ground + EYE_CLEARANCE_U - at.pivot[2])
 }
 
@@ -82,8 +79,8 @@ fn penetration(at: &ViewPose) -> Option<f64> {
 
 /// The eye, local and canonical.
 fn eye(at: &ViewPose) -> (V3, Q3) {
-    let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let world: V3 = v3::add(&at.pivot, &offset);
+    let off = orbit_eye_off(at.dist, at.polar, at.azimuth);
+    let world: V3 = v3::add(&at.pivot, &off);
     (world, world_to_canonical(&world))
 }
 
@@ -156,7 +153,7 @@ fn in_solid(at: &ViewPose, access: &World) -> bool {
     let (world, eye) = eye(at);
     access
         .floor_under(&eye, LEAF_ZOOM)
-        .value()
+        .val()
         .flatten()
         .is_some_and(|top| top > world[2])
 }
@@ -250,7 +247,7 @@ fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose
 fn toward_eye(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
     let ray = Ray {
         origin: at.pivot,
-        direction: orbit_eye_offset(1.0, at.polar, at.azimuth),
+        dir: orbit_eye_off(1.0, at.polar, at.azimuth),
         reach,
     };
     access.first_hit(&ray, held()).exact().flatten()
@@ -260,7 +257,7 @@ fn toward_eye(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
 /// in its lowest cell, which the eye's rays do not meet (pxl-spec-core
 /// `cast::walk`), on its floor and not its ceiling as the walk's `inside` is.
 fn under(roof: &Hit, at: &ViewPose, dist: f64) -> bool {
-    let eye = v3::add(&at.pivot, &orbit_eye_offset(dist, at.polar, at.azimuth));
+    let eye = v3::add(&at.pivot, &orbit_eye_off(dist, at.polar, at.azimuth));
     let b = roof.cube;
     dist < roof.t || (0..3).all(|k| b.min[k] <= eye[k] && eye[k] < b.max[k])
 }

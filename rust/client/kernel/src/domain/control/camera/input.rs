@@ -20,7 +20,7 @@ use crate::domain::control::cmd::{InputRect, PointerType};
 use crate::domain::control::interaction::{clear_hover, clear_hover_coord};
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
-use crate::domain::view::frame::screen::size;
+use crate::domain::view::frame::screen::sz;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::clock::now;
@@ -133,7 +133,7 @@ fn input() -> &'static mut Input {
 
 /// Negative because dragging up tilts toward the horizon.
 fn tilt_gain() -> f64 {
-    -core::f64::consts::PI / (TILT_SWEEP_FRACTION * size()[1])
+    -core::f64::consts::PI / (TILT_SWEEP_FRACTION * sz()[1])
 }
 
 pub fn camera_input_rect(rect: InputRect) {

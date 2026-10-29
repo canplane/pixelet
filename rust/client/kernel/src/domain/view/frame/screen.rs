@@ -12,7 +12,7 @@ use pxl_spec::space::camera::grid::HALF_TAN;
 use crate::domain::view::frame::pose::view;
 
 /// The view's width and height in CSS pixels.
-pub(crate) fn size() -> [f64; 2] {
+pub(crate) fn sz() -> [f64; 2] {
     let v = view();
     [v.width, v.height]
 }

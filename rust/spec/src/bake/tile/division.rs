@@ -349,8 +349,8 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
     };
 
     let cells: Vec<u32> = (0..CELLS as u32)
-        .map(|index| {
-            let (q, block) = GROUND.child_cells(index);
+        .map(|idx| {
+            let (q, block) = GROUND.child_cells(idx);
             majority(
                 block.map(|i| global(q, children[q].cells[i as usize])),
                 GROUND.cell_zoom(zoom),

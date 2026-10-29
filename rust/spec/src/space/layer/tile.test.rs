@@ -29,7 +29,7 @@ fn cell_from_point() {
 
 /// Two lattices with equal cell sizes cut the same ground.
 #[test]
-fn lattice_cell_offset() {
+fn lattice_cell_off() {
     let coarse = Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 2);
     let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
     for zoom in [LEAF_ZOOM, 13] {

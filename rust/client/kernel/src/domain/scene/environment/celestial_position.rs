@@ -25,9 +25,9 @@ fn sun_equatorial(d: f64) -> (f64, f64, f64) {
 fn moon_equatorial(d: f64, obliquity: f64) -> (f64, f64) {
     let mean_long = norm360(218.316 + 13.176_396 * d);
     let mean_anomaly = norm360(134.963 + 13.064_993 * d);
-    let arg_latitude = norm360(93.272 + 13.229_35 * d);
+    let arg_lat = norm360(93.272 + 13.229_35 * d);
     let lon = norm360(mean_long + 6.289 * libm::sin(mean_anomaly * DEG)) * DEG;
-    let lat = 5.128 * libm::sin(arg_latitude * DEG) * DEG;
+    let lat = 5.128 * libm::sin(arg_lat * DEG) * DEG;
     let e = obliquity * DEG;
     let ra = norm360(
         libm::atan2(
@@ -50,7 +50,7 @@ fn local_sidereal(d: f64, lon: f64) -> f64 {
 /// X east, Y north, Z up, at distance 100: right ascension `ra` and
 /// declination `dec`, in degrees, turned by the sky's one rotation
 /// (`equatorial_to_local`).
-fn local_direction(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> [f64; 3] {
+fn local_dir(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> [f64; 3] {
     let m = equatorial_to_local(d, lat, lon);
     let ((sa, ca), (sd, cd)) = (libm::sincos(ra * DEG), libm::sincos(dec * DEG));
     let e = [cd * ca, cd * sa, sd];
@@ -62,9 +62,9 @@ pub fn j2000_days(unix_ms: f64) -> f64 {
     unix_ms / 86_400_000.0 + 2_440_587.5 - 2_451_545.0
 }
 
-pub fn sun_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
+pub fn sun_pos(d: f64, lat: f64, lon: f64) -> [f64; 3] {
     let (ra, dec, _) = sun_equatorial(d);
-    local_direction(ra, dec, lat, lon, d)
+    local_dir(ra, dec, lat, lon, d)
 }
 
 /// Equatorial (X to the vernal equinox, Z to the pole) to local (X east,
@@ -80,8 +80,8 @@ pub fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [[f64; 3]; 3] {
     ]
 }
 
-pub fn moon_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
+pub fn moon_pos(d: f64, lat: f64, lon: f64) -> [f64; 3] {
     let (_, _, obliquity) = sun_equatorial(d);
     let (ra, dec) = moon_equatorial(d, obliquity);
-    local_direction(ra, dec, lat, lon, d)
+    local_dir(ra, dec, lat, lon, d)
 }

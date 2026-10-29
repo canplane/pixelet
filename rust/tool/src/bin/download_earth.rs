@@ -12,14 +12,14 @@ use pxl_tool::root;
 fn run() -> Result<(), String> {
     let path = root().join("infra/earth/source.json");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let source: serde_json::Value =
+    let src: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-    let night = source["night"]
+    let night = src["night"]
         .as_array()
         .into_iter()
         .flatten()
         .flat_map(|row| row.as_array().into_iter().flatten());
-    let urls: Vec<&str> = std::iter::once(&source["day"])
+    let urls: Vec<&str> = std::iter::once(&src["day"])
         .chain(night)
         .filter_map(serde_json::Value::as_str)
         .collect();

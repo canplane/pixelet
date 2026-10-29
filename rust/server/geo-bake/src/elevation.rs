@@ -83,7 +83,7 @@ struct RasterTileAt {
 }
 
 struct RasterTile {
-    values: Vec<f32>,
+    vals: Vec<f32>,
 }
 
 /// Taken before its tile is read, so two workers asking for one tile read it once.
@@ -98,7 +98,7 @@ struct Held {
 impl Raster {
     /// Refused unless the raster holds exactly the coverage's shards, each whole.
     pub fn open(client: &mut Client) -> Result<Raster, String> {
-        let want: BTreeSet<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
+        let want: BTreeSet<String> = Coverage::of_src()?.shards().map(|s| s.name()).collect();
         let have: BTreeSet<String> = client
             .query("SELECT shard FROM elevation_catalog", &[])
             .map_err(|e| e.to_string())?
@@ -288,7 +288,7 @@ impl Raster {
         };
         let x_axis = Axis::of(to_src(0.0, 0.0).0, to_src(out_w as f64, 0.0).0, out_w, mw);
         let y_axis = Axis::of(to_src(0.0, 0.0).1, to_src(0.0, out_h as f64).1, out_h, mh);
-        let source = Source {
+        let src = Source {
             mosaic: &mosaic,
             w: mw,
             x: x_axis,
@@ -310,7 +310,7 @@ impl Raster {
                 let (px, py) = (s0.0 + dx * dist, s0.1 + dy * dist);
                 // PostgreSQL rounds half to even. No data is 0, the source's
                 // sea: a shard's apron covers every pad, so none lacks a shard.
-                if let Some(v) = source.sample(px, py) {
+                if let Some(v) = src.sample(px, py) {
                     grid[ele_index(c as u32, (span - 1 - r) as u32)] =
                         pxl_spec_core::cells_of_m(v, per_m) as i16;
                 }
@@ -360,13 +360,13 @@ impl Raster {
 }
 
 impl RasterTile {
-    fn of_wkb(b: &[u8], pixels: usize) -> RasterTile {
-        RasterTile::read(b, pixels).unwrap_or(RasterTile {
-            values: vec![f32::NAN; pixels],
+    fn of_wkb(b: &[u8], px: usize) -> RasterTile {
+        RasterTile::read(b, px).unwrap_or(RasterTile {
+            vals: vec![f32::NAN; px],
         })
     }
 
-    fn read(b: &[u8], pixels: usize) -> Option<RasterTile> {
+    fn read(b: &[u8], px: usize) -> Option<RasterTile> {
         let le = *b.first()? == 1;
         // endian 1, version 2, bands 2, scale, origin and skew as f64, srid 4,
         // width 2, height 2, then the band's pixel type and nodata.
@@ -386,14 +386,14 @@ impl RasterTile {
             })
         };
         let nodata = (band & HAS_NODATA != 0).then(|| f32_at(62)).flatten();
-        let values = (0..pixels)
+        let values = (0..px)
             .map(|i| f32_at(66 + 4 * i).map(|v| if Some(v) == nodata { f32::NAN } else { v }))
             .collect::<Option<Vec<f32>>>()?;
-        Some(RasterTile { values })
+        Some(RasterTile { vals: values })
     }
 
     fn at(&self, i: usize) -> Option<f32> {
-        self.values.get(i).copied().filter(|v| !v.is_nan())
+        self.vals.get(i).copied().filter(|v| !v.is_nan())
     }
 }
 
@@ -401,7 +401,7 @@ impl RasterTile {
 #[derive(Clone, Copy)]
 struct Axis {
     off: i64,
-    size: i64,
+    sz: i64,
     scale: f64,
     radius: i64,
 }
@@ -419,7 +419,7 @@ impl Axis {
         let lo_clamped = lo.max(0.0) as i64;
         let hi_clamped = hi.ceil().min(raster as f64) as i64;
         let raw = ((raster - lo_clamped) as f64).min(hi - lo).max(0.0);
-        let (off, size) = if (hi_clamped - lo_clamped) as f64 > 0.9 * raster as f64 {
+        let (off, sz) = if (hi_clamped - lo_clamped) as f64 > 0.9 * raster as f64 {
             (0, raster)
         } else {
             let off = (lo_clamped - window_radius).min(raster).max(0);
@@ -429,7 +429,7 @@ impl Axis {
             )
         };
         let mut scale = out / raw;
-        if size as f64 >= out && size as f64 <= out + (size as f64 - raw) {
+        if sz as f64 >= out && sz as f64 <= out + (sz as f64 - raw) {
             scale = 1.0;
         }
         if scale < 1.0 {
@@ -446,7 +446,7 @@ impl Axis {
         };
         Axis {
             off,
-            size,
+            sz,
             scale,
             radius,
         }
@@ -471,13 +471,13 @@ impl Source<'_> {
         let (x, y) = (self.x, self.y);
         if px < x.off as f64
             || py < y.off as f64
-            || px + 1e-10 > (x.size + x.off) as f64
-            || py + 1e-10 > (y.size + y.off) as f64
+            || px + 1e-10 > (x.sz + x.off) as f64
+            || py + 1e-10 > (y.sz + y.off) as f64
         {
             return None;
         }
-        let cx = ((px + 1e-10) as i64 - x.off).min(x.size - 1);
-        let cy = ((py + 1e-10) as i64 - y.off).min(y.size - 1);
+        let cx = ((px + 1e-10) as i64 - x.off).min(x.sz - 1);
+        let cy = ((py + 1e-10) as i64 - y.off).min(y.sz - 1);
         self.pixel(cx + x.off, cy + y.off)?;
 
         let (sx, sy) = (px - x.off as f64, py - y.off as f64);
@@ -496,32 +496,32 @@ impl Source<'_> {
                 0.0
             }
         };
-        let (j0, j1) = ((-y.radius).max(-iy), y.radius.min(y.size - iy - 1));
-        let (i0, i1) = ((-x.radius).max(-ix), x.radius.min(x.size - ix - 1));
+        let (j0, j1) = ((-y.radius).max(-iy), y.radius.min(y.sz - iy - 1));
+        let (i0, i1) = ((-x.radius).max(-ix), x.radius.min(x.sz - ix - 1));
         // Weights are renormalized over pixels with data, except when they already
         // sum to one within the warper's tolerance.
-        let (mut value, mut total) = (0.0, 0.0);
+        let (mut val, mut total) = (0.0, 0.0);
         for j in j0..=j1 {
             let wy = weight(j as f64 - fy, y);
-            let (mut row_value, mut row_total) = (0.0, 0.0);
+            let (mut row_val, mut row_total) = (0.0, 0.0);
             for i in i0..=i1 {
                 let Some(v) = self.pixel(ix + i + x.off, iy + j + y.off) else {
                     continue;
                 };
                 let wx = weight(i as f64 - fx, x);
-                row_value += v * wx;
+                row_val += v * wx;
                 row_total += wx;
             }
-            value += row_value * wy;
+            val += row_val * wy;
             total += row_total * wy;
         }
         if total < 0.000001 {
             return None;
         }
         Some(if !(0.99999..=1.00001).contains(&total) {
-            value / total
+            val / total
         } else {
-            value
+            val
         } as f32)
     }
 }

@@ -7,7 +7,7 @@ use crate::frame::draw::{uniform_of, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
 use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
-use crate::gpu::api::{buffer_entry, bytes, pass_desc, Gpu, Load, Stamp};
+use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, Stamp};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::{Draws, Uploads};
@@ -29,17 +29,17 @@ impl DebugPass {
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
-        frame_buffer: u32,
-        sky_buffer: u32,
+        frame_buf: u32,
+        sky_buf: u32,
         align: u32,
     ) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
-        let frame_group = g.bind_group(built.layouts[0], &[buffer_entry(0, frame_buffer)]);
+        let frame_group = g.bind_group(built.layouts[0], &[buf_entry(0, frame_buf)]);
         let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, g.canvas());
         let grid_group = g.bind_group(
             grid.layouts[0],
-            &[buffer_entry(0, frame_buffer), buffer_entry(19, sky_buffer)],
+            &[buf_entry(0, frame_buf), buf_entry(19, sky_buf)],
         );
         DebugPass {
             built,
@@ -105,9 +105,9 @@ impl DebugPass {
             g.set_pipeline(pass, self.faces.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
             for (k, _, buffer, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
-                let (group, offset) = slots.at(k as u32);
-                g.set_bind_group(pass, 1, group, &[offset]);
-                g.set_vertex_buffer(
+                let (group, off) = slots.at(k as u32);
+                g.set_bind_group(pass, 1, group, &[off]);
+                g.set_vertex_buf(
                     pass,
                     0,
                     buffer,
@@ -136,10 +136,10 @@ impl DebugPass {
             }
             g.set_pipeline(pass, self.built.pipeline);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, buffer, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
+            for (k, _, buf, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
                 let (group, offset) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[offset]);
-                g.set_vertex_buffer(pass, 0, buffer, 0, lines * DEBUG_VERTEX_BYTES);
+                g.set_vertex_buf(pass, 0, buf, 0, lines * DEBUG_VERTEX_BYTES);
                 // A segment an instance: its two vertices, read as one.
                 g.draw(pass, 6, lines / 2, 0, 0);
             }

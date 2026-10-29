@@ -84,7 +84,7 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
     let at = to_world(pivot);
     s.about = at;
     s.lines.clear();
-    let ground = World::now().floor_under(pivot, LEAF_ZOOM).value().flatten();
+    let ground = World::now().floor_under(pivot, LEAF_ZOOM).val().flatten();
     let cell = v3::floor(&[at[0], at[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
     s.cube(cell, units(GROUND.cell()));
     s.point(at, linear_rgb(frame::pivot::rgb));

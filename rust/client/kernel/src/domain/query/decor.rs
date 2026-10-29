@@ -21,7 +21,7 @@ use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{cube, index_of, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::{draw_reach, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -190,7 +190,7 @@ impl Around {
             let hi = world
                 .terrain
                 .relief(&line, &mut found, (zoom, n), [cell, cell])
-                .value()
+                .val()
                 .map(|[[_, hi], _]| hi);
             self.columns[z][k] = Some(Column { line, found, hi });
         }
@@ -294,11 +294,11 @@ impl<'a> World<'a> {
     /// What the ground grows of `decor` standing in the leaf cell `at` lies
     /// in; none where it grows nothing there or the windows do not hold it.
     pub fn grown(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
-        let [x, y, z] = index_of(GROUND.cell(), at);
+        let [x, y, z] = idx_of(GROUND.cell(), at);
         let mut met = None;
         self.grown_in([x, y], false, |d, i, _| {
             met = Some(i)
-                .filter(|i| d.value() == decor.value() && i.grown_in().is_some_and(|c| c[2] == z));
+                .filter(|i| d.val() == decor.val() && i.grown_in().is_some_and(|c| c[2] == z));
             met.is_some()
         });
         met
@@ -424,12 +424,7 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
 }
 
 fn meet(s: &mut Strike, ray: &Ray, i: Instance) {
-    if let Some((t, axis)) = strike(
-        &i,
-        ray.origin,
-        ray.direction,
-        s.best.map_or(s.held, |b| b.0),
-    ) {
+    if let Some((t, axis)) = strike(&i, ray.origin, ray.dir, s.best.map_or(s.held, |b| b.0)) {
         s.best = Some((t, i, axis));
     }
 }

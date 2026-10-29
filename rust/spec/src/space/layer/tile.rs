@@ -12,7 +12,7 @@ use crate::space::coord::world;
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{
-    ancestor_of, child_of, first_descendant_of, offset_in, parent_of, region, slot_of, Node,
+    ancestor_of, child_of, first_descendant_of, off_in, parent_of, region, slot_of, Node,
 };
 use pxl_spec_core::wrap_index;
 
@@ -127,7 +127,7 @@ pub fn top_over(leaf: Zoom, top: Zoom) -> Zoom {
 }
 
 /// The 4×4 tiles a zoom finer around a tile's children, each at
-/// `neighbor_index`; X wraps and a tile past Y's edge has no object.
+/// `neighbor_idx`; X wraps and a tile past Y's edge has no object.
 pub fn neighborhood(p: Tile) -> [Tile; 16] {
     let [x, y] = child_of(p.at, 0);
     std::array::from_fn(|k| {
@@ -138,7 +138,7 @@ pub fn neighborhood(p: Tile) -> [Tile; 16] {
 
 /// Where the tile (qx, qy) from a parent's first child, each −1 to 2, lies in
 /// its `neighborhood`.
-pub const fn neighbor_index(qx: i32, qy: i32) -> usize {
+pub const fn neighbor_idx(qx: i32, qy: i32) -> usize {
     ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
@@ -180,7 +180,7 @@ impl Cell {
     }
 
     /// Its place in its tile, as every lane of the tile numbers it.
-    pub fn index(self) -> u32 {
+    pub fn idx(self) -> u32 {
         let [tx, ty] = self.in_tile();
         self.lattice.cell_index(tx, ty)
     }
@@ -199,7 +199,7 @@ impl Cell {
     }
 
     pub fn in_tile(self) -> [u32; 2] {
-        offset_in(self.at, self.shamt()).map(|v| v as u32)
+        off_in(self.at, self.shamt()).map(|v| v as u32)
     }
 
     pub fn base(self) -> Q3 {
@@ -227,13 +227,13 @@ impl Cell {
 
     /// The cell at `zoom` of `lattice` that lies `offset` of its sides into
     /// this one, no coarser.
-    pub fn inner_at(self, lattice: Lattice, zoom: Zoom, offset: [u32; 2]) -> Cell {
+    pub fn inner_at(self, lattice: Lattice, zoom: Zoom, off: [u32; 2]) -> Cell {
         let zoom = lattice.cell_zoom(zoom);
         let [x, y] = first_descendant_of(self.at, zoom - self.zoom);
         Cell {
             lattice,
             zoom,
-            at: [x + offset[0] as i32, y + offset[1] as i32],
+            at: [x + off[0] as i32, y + off[1] as i32],
         }
     }
 

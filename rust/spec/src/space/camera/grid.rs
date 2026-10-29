@@ -23,7 +23,7 @@ pub fn fov() -> f64 {
 }
 
 /// The view's cells a radian (pxl-spec-core `grid::CELLS_A_RADIAN`).
-pub const CELLS_A_RADIAN: f64 = pxl_spec_core::grid::CELLS_A_RADIAN as f64;
+pub const CELLS_A_RAD: f64 = pxl_spec_core::grid::CELLS_A_RADIAN as f64;
 
 /// How many times as far a window holds its zoom's cells as the view draws
 /// them (pxl-spec-core `grid::WINDOW_MARGIN`).
@@ -35,13 +35,13 @@ pub const SPLIT: f64 = pxl_spec_core::grid::SPLIT as f64;
 
 /// The view's camera grid cell, an angle in radians, 1/`CELLS_A_RADIAN`
 /// (pxl-spec-core `grid::CELL`).
-pub const CELL: f64 = 1.0 / CELLS_A_RADIAN;
+pub const CELL: f64 = 1.0 / CELLS_A_RAD;
 
 /// Where ground starts being drawn with cells at `cell_zoom`, going out: where
 /// its side spans `SPANS` of the view's cells (pxl-spec-core `grid`). A window
 /// holds them out to `WINDOW_MARGIN` times as far.
-pub const fn split_distance(cell_zoom: Zoom) -> f64 {
-    CELLS_A_RADIAN * units(cell_zoom) / pxl_spec_core::grid::SPANS as f64
+pub const fn split_dist(cell_zoom: Zoom) -> f64 {
+    CELLS_A_RAD * units(cell_zoom) / pxl_spec_core::grid::SPANS as f64
 }
 
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared: the

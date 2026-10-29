@@ -78,8 +78,8 @@ impl DecorPass {
         skin: impl FnOnce(Image) -> Option<u32>,
     ) -> Option<(u32, u32, u32, u32)> {
         let (mesh, image) = *self.groups.get(group as usize)?;
-        let (buffer, vertex_cnt, index_cnt) = uploads.get(mesh)?;
-        Some((buffer, vertex_cnt, index_cnt, skin(image?)?))
+        let (buf, vertex_cnt, idx_cnt) = uploads.get(mesh)?;
+        Some((buf, vertex_cnt, idx_cnt, skin(image?)?))
     }
 
     /// 0 while it loads.
@@ -87,7 +87,7 @@ impl DecorPass {
         self.groups
             .get(group as usize)
             .and_then(|&(mesh, _)| uploads.get(mesh))
-            .map_or(0, |(_, _, index_cnt)| index_cnt / 3)
+            .map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
     }
 
     /// Every skin and upload group the draws will bind is made here, so drawing
@@ -102,11 +102,11 @@ impl DecorPass {
         uploads: &mut Uploads,
     ) {
         let (opaque, ghost) = (draws.of(PIPELINE_DECOR), draws.of(PIPELINE_GHOST_DECOR));
-        let count = (opaque.len() + ghost.len()) as u32;
+        let cnt = (opaque.len() + ghost.len()) as u32;
         self.uniforms.write(
             g,
             self.lit.layouts[1],
-            count,
+            cnt,
             opaque.clone().chain(ghost.clone()),
             moved,
             |buf, d| {
@@ -192,11 +192,11 @@ impl DecorPass {
             first,
             draws.of(which),
             |d| {
-                let (model, vertex_cnt, index_cnt, skin) = self.model_drawn(d[1], uploads)?;
+                let (model, vertex_cnt, idx_cnt, skin) = self.model_drawn(d[1], uploads)?;
                 let upload = uploads.group(g, d[0])?;
                 Some(ModelDraw {
                     groups: [skin, upload],
-                    mesh: Some((model, vertex_cnt, index_cnt)),
+                    mesh: Some((model, vertex_cnt, idx_cnt)),
                     instances: d[2],
                 })
             },
@@ -223,8 +223,7 @@ impl DecorPass {
         g.set_bind_group(pass, 3, d.instances_group, &[]);
         let mut mesh_bound = 0;
         for group in 0..pxl_spec_core::scatter::GROUPS {
-            let Some((model, vertex_cnt, index_cnt, skin)) = self.model_drawn(group, uploads)
-            else {
+            let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(group, uploads) else {
                 continue;
             };
             g.set_bind_group(pass, 1, d.uniform_group, &[d.uniform_at(2 * group)]);
@@ -236,7 +235,7 @@ impl DecorPass {
                 &mut mesh_bound,
                 model,
                 vertex_cnt,
-                index_cnt,
+                idx_cnt,
             );
             g.draw_indexed_indirect(pass, d.args, d.args_at(2 * group));
         }

@@ -133,12 +133,7 @@ fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
 fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     match here {
         false => Answer::Nothing(line.tile),
-        true if line
-            .source
-            .is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) =>
-        {
-            Answer::Exact(v)
-        }
+        true if line.src.is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) => Answer::Exact(v),
         true => Answer::Coarser(v, line.tile),
     }
 }

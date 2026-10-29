@@ -23,7 +23,7 @@ impl World<'static> {
         let held: &'static _ = PlaceTile::tile_cache();
         let mut lines = Lines::default();
         for tile in tiles {
-            let Some(src) = held.seek(&mut lines, tile).source else {
+            let Some(src) = held.seek(&mut lines, tile).src else {
                 continue;
             };
             let Some(places) = held.get(src) else {

@@ -15,8 +15,8 @@ use crate::domain::query::asked;
 
 /// The camera grid's cell `distance` from the eye, in units: what spans it is
 /// observed there, and a motion that carries something this far is seen.
-pub fn cell_there(distance: f64) -> f64 {
-    CELL * distance
+pub fn cell_there(dist: f64) -> f64 {
+    CELL * dist
 }
 
 /// How long a motion at `speed` u/s takes to carry what it moves the seen
@@ -24,8 +24,8 @@ pub fn cell_there(distance: f64) -> f64 {
 /// (`cell_there`), in seconds: the quantum a clock animating it is stepped
 /// by, its words standing between steps. Infinite where nothing is drawn
 /// (`distance` infinite) or nothing moves.
-pub fn seen_step_s(distance: f64, speed: f64) -> f64 {
-    crate::domain::view::param::SEEN_STEP_CELLS * cell_there(distance) / speed
+pub fn seen_step_s(dist: f64, speed: f64) -> f64 {
+    crate::domain::view::param::SEEN_STEP_CELLS * cell_there(dist) / speed
 }
 
 /// A clock as it is seen, stepped a quantum at a time: what it shows stands

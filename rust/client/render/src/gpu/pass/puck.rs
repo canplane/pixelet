@@ -4,12 +4,12 @@
 
 use crate::frame::draw::{uniform_of, DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use crate::frame::shader::word::BOX_VERTICES;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, Entry, Gpu};
+use crate::gpu::api::{buf_entry, buffer_usage, bytes, Entry, Gpu};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::WORLD_COLOR;
-use crate::gpu::upload::{buffer_size, Draws, Uploads};
+use crate::gpu::upload::{buf_sz, Draws, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
 use crate::param::puck::beacon;
@@ -26,7 +26,7 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTICES as usize]) {
         [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         [[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
     ];
-    let (mut position, mut uv, mut index) = ([0.0; 72], [0.0; 48], [0u32; BOX_VERTICES as usize]);
+    let (mut pos, mut uv, mut idx) = ([0.0; 72], [0.0; 48], [0u32; BOX_VERTICES as usize]);
     for (f, [n, u, w]) in faces.iter().enumerate() {
         for (c, (a, b)) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
             .into_iter()
@@ -34,16 +34,16 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTICES as usize]) {
         {
             let k = f * 4 + c;
             for x in 0..3 {
-                position[k * 3 + x] = n[x] * 0.5 + u[x] * (a - 0.5) + w[x] * (b - 0.5);
+                pos[k * 3 + x] = n[x] * 0.5 + u[x] * (a - 0.5) + w[x] * (b - 0.5);
             }
             uv[k * 2] = a;
             uv[k * 2 + 1] = b;
         }
         for (i, d) in [0, 1, 2, 0, 2, 3].into_iter().enumerate() {
-            index[f * 6 + i] = (f * 4) as u32 + d;
+            idx[f * 6 + i] = (f * 4) as u32 + d;
         }
     }
-    (position, uv, index)
+    (pos, uv, idx)
 }
 
 /// A float lane of the octahedron's: three a vertex.
@@ -51,7 +51,7 @@ const BEACON_LANE: usize = 3 * BEACON_VERTICES as usize;
 
 fn octahedron_lanes() -> ([f32; BEACON_LANE], [f32; BEACON_LANE]) {
     let r = beacon::RADIUS;
-    let (mut position, mut normal) = ([0.0; BEACON_LANE], [0.0; BEACON_LANE]);
+    let (mut pos, mut normal) = ([0.0; BEACON_LANE], [0.0; BEACON_LANE]);
     let len = 3f32.sqrt();
     let mut k = 0;
     for sx in [1.0f32, -1.0] {
@@ -63,14 +63,14 @@ fn octahedron_lanes() -> ([f32; BEACON_LANE], [f32; BEACON_LANE]) {
                     tri.reverse();
                 }
                 for p in tri {
-                    position[k * 3..k * 3 + 3].copy_from_slice(&p);
+                    pos[k * 3..k * 3 + 3].copy_from_slice(&p);
                     normal[k * 3..k * 3 + 3].copy_from_slice(&[sx / len, sy / len, sz / len]);
                     k += 1;
                 }
             }
         }
     }
-    (position, normal)
+    (pos, normal)
 }
 
 pub struct PuckPass {
@@ -81,21 +81,18 @@ pub struct PuckPass {
     beacon_uniforms: DrawUniforms,
     frame_group: u32,
     beacon_frame_group: u32,
-    box_position: u32,
+    box_pos: u32,
     box_uv: u32,
-    box_index: u32,
-    oct_position: u32,
+    box_idx: u32,
+    oct_pos: u32,
     oct_normal: u32,
     /// The UI's action color, in linear light.
     color: [f32; 3],
 }
 
 fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
-    let id = g.buffer(
-        buffer_size(data.len() as u32),
-        usage | buffer_usage::COPY_DST,
-    );
-    g.write_buffer(id, 0, data);
+    let id = g.buf(buf_sz(data.len() as u32), usage | buffer_usage::COPY_DST);
+    g.write_buf(id, 0, data);
     id
 }
 
@@ -108,7 +105,7 @@ impl PuckPass {
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
-        frame_buffer: u32,
+        frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
         align: u32,
     ) -> PuckPass {
@@ -118,20 +115,20 @@ impl PuckPass {
         let (oct_p, oct_n) = octahedron_lanes();
         let [r, gr, b] = linear_rgb(indicator::ACTION);
         // The beacon is lit through the air: the air's words, transmittance and sampler.
-        let mut lit = vec![buffer_entry(0, frame_buffer)];
+        let mut lit = vec![buf_entry(0, frame_buf)];
         lit.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
         let beacon_frame_group = g.bind_group(beacon.layouts[0], &lit);
         PuckPass {
-            frame_group: g.bind_group(zone.layouts[0], &[buffer_entry(0, frame_buffer)]),
+            frame_group: g.bind_group(zone.layouts[0], &[buf_entry(0, frame_buf)]),
             beacon_frame_group,
             zone_uniforms: DrawUniforms::new(DRAW_BYTES, align),
             beacon_uniforms: DrawUniforms::new(DRAW_BYTES, align),
             zone,
             beacon,
-            box_position: put(g, bytes(&box_p), buffer_usage::VERTEX),
+            box_pos: put(g, bytes(&box_p), buffer_usage::VERTEX),
             box_uv: put(g, bytes(&box_uv), buffer_usage::VERTEX),
-            box_index: put(g, bytes(&box_i), buffer_usage::INDEX),
-            oct_position: put(g, bytes(&oct_p), buffer_usage::VERTEX),
+            box_idx: put(g, bytes(&box_i), buffer_usage::INDEX),
+            oct_pos: put(g, bytes(&oct_p), buffer_usage::VERTEX),
             oct_normal: put(g, bytes(&oct_n), buffer_usage::VERTEX),
             color: [r as f32, gr as f32, b as f32],
         }
@@ -183,17 +180,17 @@ impl PuckPass {
         let Some(slots) = self.beacon_uniforms.slots() else {
             return;
         };
-        let count = draws.of(PIPELINE_PUCK_BEACON).len() as u32;
-        if count == 0 {
+        let cnt = draws.of(PIPELINE_PUCK_BEACON).len() as u32;
+        if cnt == 0 {
             return;
         }
         g.set_pipeline(pass, self.beacon.pipeline);
         g.set_bind_group(pass, 0, self.beacon_frame_group, &[]);
-        g.set_vertex_buffer(pass, 0, self.oct_position, 0, 0);
-        g.set_vertex_buffer(pass, 1, self.oct_normal, 0, 0);
-        for k in 0..count {
-            let (group, offset) = slots.at(k);
-            g.set_bind_group(pass, 1, group, &[offset]);
+        g.set_vertex_buf(pass, 0, self.oct_pos, 0, 0);
+        g.set_vertex_buf(pass, 1, self.oct_normal, 0, 0);
+        for k in 0..cnt {
+            let (group, off) = slots.at(k);
+            g.set_bind_group(pass, 1, group, &[off]);
             g.draw(pass, BEACON_VERTICES, 1, 0, 0);
         }
     }
@@ -210,15 +207,15 @@ impl PuckPass {
         }
         g.set_pipeline(pass, self.zone.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
-        g.set_vertex_buffer(pass, 0, self.box_position, 0, 0);
-        g.set_vertex_buffer(pass, 1, self.box_uv, 0, 0);
-        g.set_index_buffer(pass, self.box_index, 0, 0);
+        g.set_vertex_buf(pass, 0, self.box_pos, 0, 0);
+        g.set_vertex_buf(pass, 1, self.box_uv, 0, 0);
+        g.set_idx_buf(pass, self.box_idx, 0, 0);
         for (k, d) in zones(draws).enumerate() {
             let Some(upload) = uploads.group(g, d[0]) else {
                 continue;
             };
-            let (group, offset) = slots.at(k as u32);
-            g.set_bind_group(pass, 1, group, &[offset]);
+            let (group, off) = slots.at(k as u32);
+            g.set_bind_group(pass, 1, group, &[off]);
             g.set_bind_group(pass, 2, upload, &[]);
             g.draw_indexed(pass, BOX_VERTICES, d[1], 0, 0);
         }

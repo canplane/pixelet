@@ -21,8 +21,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RESOLVE;
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, view_entry, Gpu, Load,
-    Stamp,
+    buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, view_entry, Gpu, Load, Stamp,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::{Region, Surface, WORLD_COLOR};
@@ -75,7 +74,7 @@ impl Resolve {
                 None,
                 1,
             ),
-            uniform: g.buffer(
+            uniform: g.buf(
                 (4 * UNIFORM_FLOATS) as u32,
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
@@ -147,19 +146,19 @@ impl Resolve {
         }
         u[16] = blend;
         u[17] = if quiet { 0.0 } else { 1.0 };
-        g.write_buffer(self.uniform, 0, bytes(&u));
+        g.write_buf(self.uniform, 0, bytes(&u));
         let bound = [frame, s.color_view, s.depth_view, s.history_view[was]];
         if bound != self.bound[k] {
             release(self.groups[k]);
             self.groups[k] = g.bind_group(
                 self.built.layouts[0],
                 &[
-                    buffer_entry(0, frame),
+                    buf_entry(0, frame),
                     view_entry(1, s.color_view),
                     view_entry(2, s.depth_view),
                     view_entry(3, s.history_view[was]),
                     sampler_entry(4, self.sampler),
-                    buffer_entry(5, self.uniform),
+                    buf_entry(5, self.uniform),
                 ],
             );
             self.bound[k] = bound;
@@ -192,8 +191,8 @@ impl Resolve {
             r.at[0],
             r.at[1],
             0,
-            r.size[0],
-            r.size[1],
+            r.sz[0],
+            r.sz[1],
         );
         s.history_view[was]
     }

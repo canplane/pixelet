@@ -34,15 +34,15 @@ pub struct Light {
     pub time: f64,
     pub altitude_km: f64,
     pub km_per_u: f64,
-    pub latitude: f64,
-    pub longitude: f64,
+    pub lat: f64,
+    pub lng: f64,
     /// Where the sky draws its own ground, so the terrain does not stand over it.
     pub ground_km: f64,
     /// The equatorial frame to the local one, as rows.
     pub star_frame: [V3; 3],
 }
 
-pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
+pub fn write_env(o: &mut [f32; ENV_FLOATS], light: &Light) {
     // Both lights, summed so the light does not snap where they cross at
     // dusk, each as it reaches the air, against a sun overhead at sea
     // level, which the shaders take as white (atmos_lut.wgsl
@@ -62,11 +62,11 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     put3(o, ENV_MOON_COLOR, f32s(&moon_color));
     o[ENV_SKY] = (light.stars * night) as f32;
     o[ENV_SKY + 1] = light.time as f32;
-    o[ENV_SKY + 2] = light.longitude as f32;
+    o[ENV_SKY + 2] = light.lng as f32;
 
     o[ENV_AIR] = light.altitude_km as f32;
     o[ENV_AIR + 1] = light.km_per_u as f32;
-    o[ENV_AIR + 2] = light.latitude as f32;
+    o[ENV_AIR + 2] = light.lat as f32;
     o[ENV_AIR + 3] = light.ground_km as f32;
 
     let columns: [V3; 3] = core::array::from_fn(|k| light.star_frame.map(|row| row[k]));

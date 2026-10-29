@@ -57,7 +57,7 @@ impl Entry {
         EntryAt::new(self.zoom, self.at)
     }
 
-    pub fn size(&self) -> f64 {
+    pub fn sz(&self) -> f64 {
         units(self.zoom)
     }
 
@@ -435,14 +435,14 @@ impl Store {
                 },
                 None => NONE,
             };
-            let value = Leaf {
+            let val = Leaf {
                 id: id16,
                 ext: handle,
             }
             .word();
             let set = self
                 .tree
-                .set(depth(zoom), path(zoom, at), value, |tree, family, d| {
+                .set(depth(zoom), path(zoom, at), val, |tree, family, d| {
                     fold(tree, family, d - 1)
                 });
             if set || handle != NONE {

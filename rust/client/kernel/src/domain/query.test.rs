@@ -19,7 +19,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 
 use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
-use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
+use pxl_spec::space::coord::zoom::{idx_of, units, Zoom};
 
 use crate::domain::layer::object::store::Write;
 use crate::sys::serial;
@@ -117,7 +117,7 @@ fn point(x: f64, y: f64) -> Q3 {
 fn down(at: [f64; 2]) -> Ray {
     Ray {
         origin: [at[0], at[1], 10_000.0],
-        direction: [0.0, 0.0, -1.0],
+        dir: [0.0, 0.0, -1.0],
         reach: 20_000.0,
     }
 }
@@ -125,7 +125,7 @@ fn down(at: [f64; 2]) -> Ray {
 pub(crate) fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     let at = world::point(corner[0], corner[1], corner[2]);
     store.write([Write {
-        key: pxl_spec::space::hierarchy::morton::key_of::<3>(side, index_of(side, &at)),
+        key: pxl_spec::space::hierarchy::morton::key_of::<3>(side, idx_of(side, &at)),
         id: state,
         ext: None,
     }]);
@@ -154,7 +154,7 @@ fn no_surface_placed_stands() {
                 GROUND.cell(),
                 GROUND.cell_of(LEAF_ZOOM, &point(at[0], at[1])).node().1
             )
-            .value()
+            .val()
             .unwrap(),
         None
     );
@@ -165,7 +165,7 @@ fn no_surface_placed_stands() {
     assert_eq!(
         access
             .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-            .value()
+            .val()
             .flatten(),
         None
     );
@@ -185,7 +185,7 @@ fn no_surface_placed_stands() {
     );
     let hit = access
         .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-        .value()
+        .val()
         .flatten()
         .unwrap();
     assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
@@ -224,7 +224,7 @@ fn deck_over_void_met() {
     );
     let hit = access
         .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-        .value()
+        .val()
         .flatten()
         .unwrap();
     assert_eq!(hit.point[2], 10.0, "{hit:?}");
@@ -260,7 +260,7 @@ fn ray_across_antimeridian() {
                 .node()
                 .1,
         )
-        .value()
+        .val()
         .flatten()
         .unwrap()
         .top;
@@ -283,7 +283,7 @@ fn ray_across_antimeridian() {
 
     let along = Ray {
         origin: [seam - 30.0, 100.5, top + 0.5],
-        direction: [1.0, 0.0, 0.0],
+        dir: [1.0, 0.0, 0.0],
         reach: 200.0,
     };
     let hit = access
@@ -322,19 +322,19 @@ fn ray_from_above_meets_ground() {
     let access = World::new(&tile_cache, &store);
     let top = access
         .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-        .value()
+        .val()
         .flatten()
         .unwrap()
         .point[2];
     let high = 2.0 * world::REACH.max[2];
     let over = Ray {
         origin: [at[0], at[1], high],
-        direction: [0.0, 0.0, -1.0],
+        dir: [0.0, 0.0, -1.0],
         reach: 2.0 * high,
     };
     let met = access.first_hit(&over, at_zoom(LEAF_ZOOM));
     assert!(matches!(met, Answer::Exact(_)), "{met:?}");
-    let hit = met.value().flatten().unwrap();
+    let hit = met.val().flatten().unwrap();
     assert_eq!([hit.point[2], hit.t], [top, high - top], "{hit:?}");
 }
 
@@ -588,7 +588,7 @@ fn box_placed_matches_store() {
         write(&mut store, c, unit, 100 + k as u32);
     }
     // The first three, the box their cells span; the last two past it.
-    let cell = |c: V3| index_of(unit, &world::point(c[0], c[1], c[2]));
+    let cell = |c: V3| idx_of(unit, &world::point(c[0], c[1], c[2]));
     let (a, b, c) = (cell(corners[0]), cell(corners[1]), cell(corners[2]));
     let lo = [a[0].min(c[0]), a[1].min(b[1]), c[2].min(a[2])];
     let hi = [a[0].max(c[0]), a[1].max(b[1]), c[2].max(a[2])];
@@ -666,7 +666,7 @@ fn late_brick_spike() {
     let met = |access: &World| {
         access
             .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-            .value()
+            .val()
             .flatten()
             .unwrap()
             .point[2]
@@ -796,7 +796,7 @@ fn grown_decor_edit_removes() {
         "it grows on bare ground"
     );
     let red = cube_id(Cube::Object(cube::Object::red));
-    for (dz, value, what, kept) in [
+    for (dz, val, what, kept) in [
         (0, AIR, "air in its box", false),
         (0, red, "a cube in its box", false),
         (-1, AIR, "air under it", true),
@@ -805,7 +805,7 @@ fn grown_decor_edit_removes() {
     ] {
         let mut store = Store::default();
         let at = [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
-        write(&mut store, at, OBJECT_COARSEST, value);
+        write(&mut store, at, OBJECT_COARSEST, val);
         assert_eq!(grows(&store), Some(kept), "{what}");
     }
 }

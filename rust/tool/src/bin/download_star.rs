@@ -10,11 +10,11 @@ use std::process::ExitCode;
 use pxl_tool::root;
 
 /// What it fetches; pxl-geo-bake bin/bake_star.rs reads it by this name.
-const SOURCE: &str = "https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz";
+const SRC: &str = "https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz";
 
 fn run() -> Result<(), String> {
     let dir = root().join("asset/raw/sky/star");
-    let bytes = pxl_tool::fetch::fetch_kept(SOURCE, &dir)?;
+    let bytes = pxl_tool::fetch::fetch_kept(SRC, &dir)?;
     println!("[star] {} bytes in {}", bytes.len(), dir.display());
     Ok(())
 }

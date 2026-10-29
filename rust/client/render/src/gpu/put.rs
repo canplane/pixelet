@@ -37,8 +37,8 @@ impl Scratch {
                 // SAFETY: the block this scratch held alone.
                 unsafe { free((self.at, self.bytes)) };
             }
-            let size = bytes.next_power_of_two().max(4096);
-            (self.at, self.bytes) = alloc(size).or_bug(Errno::ENOMEM);
+            let sz = bytes.next_power_of_two().max(4096);
+            (self.at, self.bytes) = alloc(sz).or_bug(Errno::ENOMEM);
         }
         // SAFETY: a heap block this scratch holds alone, at least `bytes` long.
         unsafe { core::slice::from_raw_parts_mut(mem::at::<u8>(self.at), bytes as usize) }

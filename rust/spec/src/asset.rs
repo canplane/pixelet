@@ -66,7 +66,7 @@ fn model_extent(v: &decor::Variant, catalog: Option<&Catalog>) -> [f64; 3] {
 
 impl decor::Decor {
     /// What a placed one is stored as.
-    pub const fn value(&self) -> u16 {
+    pub const fn val(&self) -> u16 {
         self.id as u16
     }
 
@@ -82,8 +82,8 @@ impl decor::Decor {
     /// turns, in units.
     pub fn reach(&self) -> f64 {
         let cell = units(self.row.cell_zoom());
-        let reach = |size: &[u32; 3]| {
-            let [x, y, z] = size.map(|n| f64::from(n) * cell);
+        let reach = |sz: &[u32; 3]| {
+            let [x, y, z] = sz.map(|n| f64::from(n) * cell);
             let across = x.max(y);
             libm::sqrt(2.0 * across * across + z * z)
         };
@@ -235,7 +235,7 @@ pub fn shipped_sentinel_tile(sentinel: u8) -> Option<TileOrigin> {
 }
 
 /// The width and height a PNG's or a WebP's header gives; none for any other file.
-pub fn image_size(file: &[u8]) -> Option<(u32, u32)> {
+pub fn image_sz(file: &[u8]) -> Option<(u32, u32)> {
     let be = |at: usize| Some(u32::from_be_bytes(file.get(at..at + 4)?.try_into().ok()?));
     let le24 = |at: usize| {
         Some(u32::from_le_bytes([

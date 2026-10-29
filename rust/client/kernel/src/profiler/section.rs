@@ -115,7 +115,7 @@ pub struct TaskSummary {
     pub error: f64,
     pub lat_p50: f64,
     pub lat_p95: f64,
-    pub reason_count: f64,
+    pub reason_cnt: f64,
     /// (reason, status, count) each, commonest first.
     pub reasons: [[f64; REASON_WORDS]; REASONS],
     pub phase_n: f64,
@@ -125,7 +125,7 @@ pub struct TaskSummary {
 
 words!(TaskSummary, TASK_SUMMARY::WORDS,
     n => TASK_SUMMARY::n, ok => TASK_SUMMARY::ok, aborted => TASK_SUMMARY::aborted, error => TASK_SUMMARY::error,
-    lat_p50 => TASK_SUMMARY::lat_p50, lat_p95 => TASK_SUMMARY::lat_p95, reason_count => TASK_SUMMARY::reason_count, reasons => TASK_SUMMARY::reasons,
+    lat_p50 => TASK_SUMMARY::lat_p50, lat_p95 => TASK_SUMMARY::lat_p95, reason_cnt => TASK_SUMMARY::reason_count, reasons => TASK_SUMMARY::reasons,
     phase_n => TASK_SUMMARY::phase_n, phase_mean => TASK_SUMMARY::phase_mean,
 );
 
@@ -185,19 +185,19 @@ pub struct Step {
     pub phase: f64,
     pub name: f64,
     pub ms: f64,
-    pub count: f64,
+    pub cnt: f64,
     pub max_ms: f64,
 }
 
 words!(Step, STEP::WORDS,
-    phase => STEP::phase, name => STEP::name, ms => STEP::ms, count => STEP::count, max_ms => STEP::max_ms,
+    phase => STEP::phase, name => STEP::name, ms => STEP::ms, cnt => STEP::count, max_ms => STEP::max_ms,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepsSection {
-    pub count: f64,
+    pub cnt: f64,
     pub slots: [Step; STEP_SLOTS],
 }
 
-words!(StepsSection, SUMMARY::steps::WORDS, count => SUMMARY::steps::count, slots => SUMMARY::steps::slots);
+words!(StepsSection, SUMMARY::steps::WORDS, cnt => SUMMARY::steps::count, slots => SUMMARY::steps::slots);

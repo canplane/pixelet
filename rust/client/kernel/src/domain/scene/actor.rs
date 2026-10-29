@@ -36,7 +36,7 @@ pub struct Stance {
 
 pub struct Actor {
     model: u32,
-    current: Option<Playing>,
+    cur: Option<Playing>,
     previous: Option<Playing>,
     fade: f32,
     fade_len: f32,
@@ -87,7 +87,7 @@ impl Actor {
         let palette_handle = draw.upload(palette_at as u32, palette_bytes, 0, 0);
         Some(Actor {
             model,
-            current: None,
+            cur: None,
             previous: None,
             fade: 0.0,
             fade_len: 0.0,
@@ -114,11 +114,11 @@ impl Actor {
 
     /// A clip already playing is left alone.
     pub fn play(&mut self, clip: u32, fade_s: f32) {
-        if self.current.is_some_and(|c| c.clip == clip) {
+        if self.cur.is_some_and(|c| c.clip == clip) {
             return;
         }
-        self.previous = self.current;
-        self.current = Some(Playing { clip, time: 0.0 });
+        self.previous = self.cur;
+        self.cur = Some(Playing { clip, time: 0.0 });
         self.posed = false;
         self.fade = 0.0;
         self.fade_len = if self.previous.is_some() {
@@ -160,12 +160,12 @@ impl Actor {
             f64::from(m.radius() * stance.scale),
         );
         // What spans a camera cell at the actor's distance is observed.
-        let distance = v3::len(&v3::sub(&about, &frame.camera));
-        let cell_there = cell_there(distance);
+        let dist = v3::len(&v3::sub(&about, &frame.camera));
+        let cell_there = cell_there(dist);
         let seen = frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
         self.seen = seen;
         // A clip of some length plays, or one fades into the next.
-        let playing = self.current.filter(|p| length(p).is_some());
+        let playing = self.cur.filter(|p| length(p).is_some());
         let moving = playing.is_some() || self.previous.is_some();
         let mut moves = seen
             && (self.previous.is_some()
@@ -175,7 +175,7 @@ impl Actor {
         // A clip alone, seen to move, steps a seen step at a time; a fade
         // runs a frame a step.
         if let Some(p) = playing.filter(|_| moves && self.previous.is_none()) {
-            let step = seen_step_s(distance, f64::from(m.speed(p.clip) * stance.scale));
+            let step = seen_step_s(dist, f64::from(m.speed(p.clip) * stance.scale));
             let wall = now();
             let since = if self.last > 0.0 {
                 (wall - self.last) / 1000.0
@@ -206,7 +206,7 @@ impl Actor {
         // Seen, its clip holds where its motion is too small to see.
         let runs = moves || !seen;
         if runs {
-            if let Some(p) = self.current.as_mut() {
+            if let Some(p) = self.cur.as_mut() {
                 wrap(p);
             }
             if let Some(p) = self.previous.as_mut() {
@@ -231,7 +231,7 @@ impl Actor {
         }
         self.posed = true;
         self.poses = self.poses.wrapping_add(1);
-        m.pose(self.current.map(|p| (p.clip, p.time)), &mut self.local);
+        m.pose(self.cur.map(|p| (p.clip, p.time)), &mut self.local);
         if let Some(prev) = self.previous {
             self.from.resize(joints, [0.0; 10]);
             m.pose(Some((prev.clip, prev.time)), &mut self.from);
@@ -270,7 +270,7 @@ impl Actor {
         // Seen, what it covers and shades as drawn (`region`): its rest's
         // bound, grown by as far as its clip moves it.
         if self.seen {
-            let clip = self.current.map_or(0.0, |p| m.motion(p.clip));
+            let clip = self.cur.map_or(0.0, |p| m.motion(p.clip));
             let r = f64::from((m.radius() + clip) * stance.scale);
             let at = stance.at;
             let state = crate::domain::scene::region::digest(&[

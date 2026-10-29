@@ -23,12 +23,12 @@ fn pose_ray_matches_view() {
     };
     view_compose(Some(pose));
     for [x, y] in [[0.0, 0.0], [0.7, -0.3], [-1.0, 1.0], [0.25, 0.9]] {
-        let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
-        ray_of(pose, x, y, &mut origin, &mut direction);
+        let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
+        ray_of(pose, x, y, &mut origin, &mut dir);
         let mut near = [0.0; 3];
         mat4::transform_point(&mut near, &view().inv_world_view_proj, x, y, 1.0);
         let mut composed = [0.0; 3];
-        mat4::transform_direction(
+        mat4::transform_dir(
             &mut composed,
             &mat4::new(),
             near[0] - origin[0],
@@ -38,8 +38,8 @@ fn pose_ray_matches_view() {
         assert_eq!(origin, pose.eye);
         for k in 0..3 {
             assert!(
-                (direction[k] - composed[k]).abs() < 1e-9,
-                "{x},{y}: {direction:?} against {composed:?}"
+                (dir[k] - composed[k]).abs() < 1e-9,
+                "{x},{y}: {dir:?} against {composed:?}"
             );
         }
     }

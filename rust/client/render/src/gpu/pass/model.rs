@@ -9,7 +9,7 @@ use xpute_guest::global::Global;
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
-    buffer_entry, buffer_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
+    buf_entry, buf_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
     Entry, Gpu, Image,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
@@ -25,7 +25,7 @@ fn frame_group(
     ao: Entry,
     air: [Entry; AIR_ENTRIES],
 ) -> u32 {
-    let mut e = vec![buffer_entry(0, frame), shadow[0], shadow[1], ao];
+    let mut e = vec![buf_entry(0, frame), shadow[0], shadow[1], ao];
     e.extend(air);
     g.bind_group(layout, &e)
 }
@@ -119,23 +119,23 @@ impl FrameGroups {
     pub fn new(
         g: &Gpu,
         layout: u32,
-        frame_buffer: u32,
+        frame_buf: u32,
         shadow: [Entry; 2],
         [ao, open]: [Entry; 2],
         air: [Entry; AIR_ENTRIES],
     ) -> FrameGroups {
         FrameGroups {
-            frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
-            over: frame_group(g, layout, frame_buffer, shadow, open, air),
+            frame: frame_group(g, layout, frame_buf, shadow, ao, air),
+            over: frame_group(g, layout, frame_buf, shadow, open, air),
             layout,
             shadow,
             air,
         }
     }
 
-    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, ao: [Entry; 2]) {
+    pub fn rebind(&mut self, g: &Gpu, frame_buf: u32, ao: [Entry; 2]) {
         self.release();
-        *self = FrameGroups::new(g, self.layout, frame_buffer, self.shadow, ao, self.air);
+        *self = FrameGroups::new(g, self.layout, frame_buf, self.shadow, ao, self.air);
     }
 
     pub fn release(&self) {
@@ -149,7 +149,7 @@ pub struct DrawUniforms {
     /// `bytes` rounded up to the device's offset alignment.
     stride: u32,
     buffer: u32,
-    capacity: u32,
+    cap: u32,
     group: u32,
     scratch: Scratch,
 }
@@ -172,7 +172,7 @@ impl DrawUniforms {
             bytes,
             stride: bytes.next_multiple_of(align),
             buffer: 0,
-            capacity: 0,
+            cap: 0,
             group: 0,
             scratch: Scratch::default(),
         }
@@ -186,31 +186,31 @@ impl DrawUniforms {
         &mut self,
         g: &Gpu,
         layout: u32,
-        count: u32,
+        cnt: u32,
         draws: impl Iterator<Item = T>,
         moved: bool,
         mut put: impl FnMut(&mut [u8], T),
     ) {
-        if count == 0 {
+        if cnt == 0 {
             return;
         }
-        let need = self.stride * count.next_power_of_two().max(8);
-        if !moved && need <= self.capacity {
+        let need = self.stride * cnt.next_power_of_two().max(8);
+        if !moved && need <= self.cap {
             return;
         }
-        if need > self.capacity {
+        if need > self.cap {
             release(self.group);
             release(self.buffer);
-            self.buffer = g.buffer(need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            self.group = g.bind_group(layout, &[buffer_range_entry(0, self.buffer, 0, self.bytes)]);
-            self.capacity = need;
+            self.buffer = g.buf(need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            self.group = g.bind_group(layout, &[buf_range_entry(0, self.buffer, 0, self.bytes)]);
+            self.cap = need;
         }
         let stride = self.stride as usize;
-        let buf = self.scratch.take(count * self.stride);
-        for (k, draw) in draws.take(count as usize).enumerate() {
+        let buf = self.scratch.take(cnt * self.stride);
+        for (k, draw) in draws.take(cnt as usize).enumerate() {
             put(&mut buf[k * stride..(k + 1) * stride], draw);
         }
-        g.write_buffer(self.buffer, 0, buf);
+        g.write_buf(self.buffer, 0, buf);
     }
 
     pub fn slots(&self) -> Option<Slots> {
@@ -279,8 +279,8 @@ pub fn draw_models<'a>(
                 *bound = frame;
             }
         }
-        let (group, offset) = slots.at(first + k as u32);
-        g.set_bind_group(pass, 1, group, &[offset]);
+        let (group, off) = slots.at(first + k as u32);
+        g.set_bind_group(pass, 1, group, &[off]);
         for (i, (held, id)) in groups.iter_mut().zip(m.groups).enumerate() {
             if *held != id {
                 g.set_bind_group(pass, 2 + i as u32, id, &[]);
@@ -288,14 +288,14 @@ pub fn draw_models<'a>(
             }
         }
         match m.mesh {
-            Some((mesh, vertex_cnt, index_cnt)) => draw_model(
+            Some((mesh, vertex_cnt, idx_cnt)) => draw_model(
                 g,
                 pass,
                 lit,
                 &mut mesh_bound,
                 mesh,
                 vertex_cnt,
-                index_cnt,
+                idx_cnt,
                 m.instances,
             ),
             None => g.draw(pass, 4, m.instances, 0, 0),
@@ -311,11 +311,11 @@ pub fn draw_model(
     bound: &mut u32,
     mesh: u32,
     vertex_cnt: u32,
-    index_cnt: u32,
+    idx_cnt: u32,
     instances: u32,
 ) {
-    bind_mesh(g, pass, lit, bound, mesh, vertex_cnt, index_cnt);
-    g.draw_indexed(pass, index_cnt, instances, 0, 0);
+    bind_mesh(g, pass, lit, bound, mesh, vertex_cnt, idx_cnt);
+    g.draw_indexed(pass, idx_cnt, instances, 0, 0);
 }
 
 /// A mesh's vertex lanes and indices bound, unless `bound` is it already.
@@ -326,21 +326,16 @@ pub fn bind_mesh(
     bound: &mut u32,
     mesh: u32,
     vertex_cnt: u32,
-    index_cnt: u32,
+    idx_cnt: u32,
 ) {
     if *bound != mesh {
         let mut at = 0;
         for lane in 0..lit.lanes {
-            let size = vertex_cnt * lit.strides[lane];
-            g.set_vertex_buffer(pass, lane as u32, mesh, at, size);
-            at += size;
+            let sz = vertex_cnt * lit.strides[lane];
+            g.set_vertex_buf(pass, lane as u32, mesh, at, sz);
+            at += sz;
         }
-        g.set_index_buffer(
-            pass,
-            mesh,
-            vertex_cnt * MODEL_VERTEX_WORDS * 4,
-            index_cnt * 4,
-        );
+        g.set_idx_buf(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, idx_cnt * 4);
         *bound = mesh;
     }
 }

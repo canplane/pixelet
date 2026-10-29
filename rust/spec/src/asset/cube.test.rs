@@ -13,12 +13,12 @@ fn cube_round_trip() {
 
 #[test]
 fn non_cubes() {
-    for value in [
+    for val in [
         sentinel::void as u32,
         sentinel::unknown as u32,
         object::air as u32,
     ] {
-        assert_eq!(cube_of(value), None, "{value}");
+        assert_eq!(cube_of(val), None, "{val}");
     }
     for &id in decor_ids.iter() {
         assert_eq!(cube_of(decor_num_id(id)), None, "{id:?}");

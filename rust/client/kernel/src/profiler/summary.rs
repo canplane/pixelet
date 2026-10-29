@@ -42,9 +42,9 @@ fn summary() -> &'static mut Summary {
     })
 }
 
-fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
+fn spread(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Spread {
     let mut n = 0;
-    for v in values.take(scratch.len()) {
+    for v in vals.take(scratch.len()) {
         scratch[n] = v;
         n += 1;
     }
@@ -95,7 +95,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     let moving = || frames.iter().filter(|f| f.settled == 0.0);
     let n = frames.len() as f64;
 
-    let count = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
+    let cnt = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
     // A span the frame did not run reads 0 and is left out.
     // The GPU's figures over the frames a read timed, each read once.
     let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
@@ -106,8 +106,8 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         moving: moving().count() as f64,
         moving_ms: moving().map(|f| f.interval_ms).sum(),
         missed: moving().filter(|f| is_missed(f)).count() as f64,
-        overran: count(&overran),
-        long: count(&long),
+        overran: cnt(&overran),
+        long: cnt(&long),
         turns: sum(&|f| f.turns),
         interval: spread(scratch, moving().map(|f| f.interval_ms)),
         busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
@@ -120,7 +120,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         effects_p95: core::array::from_fn(|k| {
             spread(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
-        gpu_read: count(&|f| f.gpu.read != 0.0),
+        gpu_read: cnt(&|f| f.gpu.read != 0.0),
         gpu: spread(
             scratch,
             read().map(|f| pxl_render::gpu::renderer::gpu_ms(&f.gpu.spans)),
@@ -135,8 +135,8 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
             )
             .p95
         }),
-        kinds: core::array::from_fn(|k| count(&|f| f.kind == k as f64)),
-        wakes: core::array::from_fn(|k| count(&|f| f.wake == k as f64)),
+        kinds: core::array::from_fn(|k| cnt(&|f| f.kind == k as f64)),
+        wakes: core::array::from_fn(|k| cnt(&|f| f.wake == k as f64)),
         heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
         first: *first,
         last: *last,
@@ -178,12 +178,12 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
         let mut sums = [0.0f64; TASK_PHASES];
         let mut seen = [false; TASK_PHASES];
         let mut phase_n = 0;
-        for r in mine().filter(|r| r.phase_count > 0.0) {
+        for r in mine().filter(|r| r.phase_cnt > 0.0) {
             phase_n += 1;
-            for k in 0..r.phase_count as usize {
+            for k in 0..r.phase_cnt as usize {
                 let id = r.phase_ids[k];
                 if id >= 0.0 {
-                    sums[id as usize] += r.phase_values[k];
+                    sums[id as usize] += r.phase_vals[k];
                     seen[id as usize] = true;
                 }
             }
@@ -202,7 +202,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
             error: mine().filter(|r| r.outcome == error).count() as f64,
             lat_p50: lat.p50,
             lat_p95: lat.p95,
-            reason_count: shown as f64,
+            reason_cnt: shown as f64,
             reasons: core::array::from_fn(|i| {
                 if i < shown {
                     [counted[i].0, counted[i].1, counted[i].2]
@@ -234,13 +234,13 @@ fn side(out: &mut [f64]) {
         crate::domain::view::frame::pose::ray_of(pose.at(), x, y, &mut origin, &mut direction);
         let ray = crate::domain::query::Ray {
             origin,
-            direction,
+            dir: direction,
             reach: crate::domain::view::observation::eye_draw_reach().unwrap_or(0.0),
         };
-        let detail = crate::domain::query::by_distance();
+        let detail = crate::domain::query::by_dist();
         let hit = crate::domain::query::World::now()
             .first_hit(&ray, detail)
-            .value()
+            .val()
             .flatten()?;
         Some((
             crate::domain::view::frame::coord::world_to_canonical(&hit.point),
@@ -311,14 +311,14 @@ fn side(out: &mut [f64]) {
         .filter(|s| s.count > 0)
         .take(STEP_SLOTS)
     {
-        steps.slots[steps.count as usize] = Step {
+        steps.slots[steps.cnt as usize] = Step {
             phase: s.phase as u8 as f64,
             name: s.name as f64,
             ms: s.ms,
-            count: s.count as f64,
+            cnt: s.count as f64,
             max_ms: s.max_ms,
         };
-        steps.count += 1.0;
+        steps.cnt += 1.0;
     }
     put(out, SUMMARY::steps::AT, &steps);
 }

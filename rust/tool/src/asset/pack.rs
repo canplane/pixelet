@@ -11,7 +11,7 @@ use image::RgbaImage;
 use serde::Deserialize;
 
 /// One size for every layer of the shared array texture.
-pub const TILE_SIZE: u32 = 256;
+pub const TILE_SZ: u32 = 256;
 /// Tiles a row of the laid-out image.
 pub const COLUMNS: u32 = 8;
 
@@ -313,9 +313,9 @@ fn toward_carto(img: &mut RgbaImage, carto: u32) {
         return;
     }
     let t = (d - TOWARD_CARTO) / d;
-    let offset: [f64; 3] = core::array::from_fn(|k| (target[k] - mean[k]) * t);
+    let off: [f64; 3] = core::array::from_fn(|k| (target[k] - mean[k]) * t);
     for (px, lab) in img.pixels_mut().zip(labs) {
-        let [r, g, b] = rgb_of(core::array::from_fn(|k| lab[k] + offset[k]));
+        let [r, g, b] = rgb_of(core::array::from_fn(|k| lab[k] + off[k]));
         px.0 = [r, g, b, px.0[3]];
     }
 }
@@ -359,14 +359,14 @@ fn linear_to_srgb(c: f64) -> u8 {
     (s * 255.0).round_ties_even().clamp(0.0, 255.0) as u8
 }
 
-/// Every tile must be exactly `TILE_SIZE` square; a wrong size is an upstream mistake
+/// Every tile must be exactly `TILE_SZ` square; a wrong size is an upstream mistake
 /// and is refused rather than resized. Each tile is its path and the bytes it ships as.
 pub fn compose(tiles: &[(String, &[u8])]) -> Result<Image, String> {
     let rows = tiles.len().div_ceil(COLUMNS as usize) as u32;
     // Opaque black, so an uncovered cell is visible rather than blended.
     let mut laid = RgbaImage::from_pixel(
-        COLUMNS * TILE_SIZE,
-        rows.max(1) * TILE_SIZE,
+        COLUMNS * TILE_SZ,
+        rows.max(1) * TILE_SZ,
         image::Rgba([0, 0, 0, 255]),
     );
     let mut means = Vec::with_capacity(tiles.len());
@@ -375,16 +375,16 @@ pub fn compose(tiles: &[(String, &[u8])]) -> Result<Image, String> {
         let img = image::load_from_memory(bytes)
             .map_err(|e| format!("{tile}: {e}"))?
             .to_rgba8();
-        if img.width() != TILE_SIZE || img.height() != TILE_SIZE {
+        if img.width() != TILE_SZ || img.height() != TILE_SZ {
             return Err(format!(
-                "{tile} is {}x{}, not {TILE_SIZE} square",
+                "{tile} is {}x{}, not {TILE_SZ} square",
                 img.width(),
                 img.height()
             ));
         }
         let (x, y) = (
-            (n as u32 % COLUMNS) * TILE_SIZE,
-            (n as u32 / COLUMNS) * TILE_SIZE,
+            (n as u32 % COLUMNS) * TILE_SZ,
+            (n as u32 / COLUMNS) * TILE_SZ,
         );
         means.push(mean_of(&img));
         image::imageops::replace(&mut laid, &img, x as i64, y as i64);

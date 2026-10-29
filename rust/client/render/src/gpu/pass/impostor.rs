@@ -11,7 +11,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::word::DECOR_GROUPS;
 use crate::gpu::api::{
-    buffer_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
+    buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
     view_entry, Format, Gpu, Load,
 };
 use crate::gpu::grown::Drawn;
@@ -87,7 +87,7 @@ impl ImpostorPass {
             texture_usage::RENDER_ATTACHMENT,
         );
         let depth_view = g.view(depth, false, 0, 1, 0, 1);
-        let fits = g.buffer(
+        let fits = g.buf(
             DECOR_GROUPS as u32 * FIT_BYTES,
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
@@ -96,7 +96,7 @@ impl ImpostorPass {
             &[
                 view_entry(0, atlas_view),
                 sampler_entry(1, sampler),
-                buffer_range_entry(2, fits, 0, DECOR_GROUPS as u32 * FIT_BYTES),
+                buf_range_entry(2, fits, 0, DECOR_GROUPS as u32 * FIT_BYTES),
             ],
         );
         ImpostorPass {
@@ -152,23 +152,23 @@ impl ImpostorPass {
         let Some(slots) = self.fit_uniforms.slots() else {
             return false;
         };
-        for (n, &(k, w, (model, vertex_cnt, index_cnt, skin))) in due.iter().enumerate() {
-            let (fit_group, offset) = slots.at(n as u32);
+        for (n, &(k, w, (model, vertex_cnt, idx_cnt, skin))) in due.iter().enumerate() {
+            let (fit_group, off) = slots.at(n as u32);
             let layer = g.view(self.atlas, false, 0, 1, k as u32, 1);
             let pass = g.pass(
                 encoder,
                 &pass_desc(layer, Load::Clear, self.depth_view, Load::Clear, 1.0, None),
             );
             g.set_pipeline(pass, self.bake.pipeline);
-            g.set_bind_group(pass, 0, fit_group, &[offset]);
+            g.set_bind_group(pass, 0, fit_group, &[off]);
             g.set_bind_group(pass, 1, skin, &[]);
-            draw_model(g, pass, &self.bake, &mut 0, model, vertex_cnt, index_cnt, 1);
+            draw_model(g, pass, &self.bake, &mut 0, model, vertex_cnt, idx_cnt, 1);
             g.end(pass);
             release(layer);
             self.fit[k] = fit_of(w.2);
             self.baked[k] = Some(w);
         }
-        g.write_buffer(self.fits, 0, bytes(self.fit.as_flattened()));
+        g.write_buf(self.fits, 0, bytes(self.fit.as_flattened()));
         true
     }
 

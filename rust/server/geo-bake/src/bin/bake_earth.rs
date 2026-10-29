@@ -38,7 +38,7 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::tile_at;
 
 /// What it reads, and where `make download-earth` keeps it.
-const SOURCE: &str = "infra/earth/source.json";
+const SRC: &str = "infra/earth/source.json";
 const RAW: &str = "infra/earth/raw";
 const GLOBAL: (u32, u32) = pxl_spec::bake::tile::earth::PICTURE;
 
@@ -123,7 +123,7 @@ fn lights_byte(v: f32) -> u8 {
 }
 
 /// A file `SOURCE` names, as `download earth` kept it.
-fn source(url: &str) -> Result<Vec<u8>, String> {
+fn src(url: &str) -> Result<Vec<u8>, String> {
     let path = Path::new(RAW).join(url.rsplit('/').next().ok_or("a file name")?);
     std::fs::read(&path).map_err(|e| format!("{}: {e} — run `make download-earth`", path.display()))
 }
@@ -183,8 +183,8 @@ fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Op
     let mut rgba = vec![0u8; earth::EARTH_BYTES];
     for ty in 0..TILE_CELLS {
         for tx in 0..TILE_CELLS {
-            let index = GROUND.cell_index(tx, ty);
-            let cell = GROUND.cell_at(tile, index);
+            let idx = GROUND.cell_index(tx, ty);
+            let cell = GROUND.cell_at(tile, idx);
             let (base, side) = (cell.base(), cell.side());
             let (x, y) = (
                 q3::to_real(i64::from(base[0])),
@@ -192,7 +192,7 @@ fn tile_texels(px: i32, py: i32, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Op
             );
             let ([lng0, lat0], [lng1, lat1]) = (lng_lat(x, y), lng_lat(x + side, y + side));
             let [r, g, b] = day.mean([lng0, lng1], [lat0, lat1]).map(to_srgb);
-            let at = index as usize * 4;
+            let at = idx as usize * 4;
             rgba[at..at + 4].copy_from_slice(&[
                 r,
                 g,
@@ -269,7 +269,7 @@ fn night_mosaic(rows: &[Vec<&str>]) -> Result<(Vec<u8>, usize, usize), String> {
     let (mut tile, mut width) = (0, 0);
     for (row, names) in rows.iter().enumerate() {
         for (col, name) in names.iter().enumerate() {
-            let t = decode(&source(name)?)?.to_luma8();
+            let t = decode(&src(name)?)?.to_luma8();
             if mosaic.is_empty() {
                 tile = t.width() as usize;
                 width = tile * names.len();
@@ -297,16 +297,16 @@ fn decode(jpeg: &[u8]) -> Result<image::DynamicImage, String> {
 fn run() -> Result<(), String> {
     pxl_geo_bake::cli::enter()?;
     let out = PathBuf::from("./out/earth");
-    let text = std::fs::read_to_string(SOURCE).map_err(|e| format!("{SOURCE}: {e}"))?;
+    let text = std::fs::read_to_string(SRC).map_err(|e| format!("{SRC}: {e}"))?;
     let named: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("{SOURCE}: {e}"))?;
-    let day = decode(&source(
-        named["day"].as_str().ok_or(format!("{SOURCE}: no day"))?,
-    )?)?
+        serde_json::from_str(&text).map_err(|e| format!("{SRC}: {e}"))?;
+    let day = decode(&src(named["day"]
+        .as_str()
+        .ok_or(format!("{SRC}: no day"))?)?)?
     .to_rgb8();
     let rows: Vec<Vec<&str>> = named["night"]
         .as_array()
-        .ok_or(format!("{SOURCE}: no night"))?
+        .ok_or(format!("{SRC}: no night"))?
         .iter()
         .map(|r| {
             r.as_array()

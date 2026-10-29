@@ -7,18 +7,18 @@
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Anchor {
-    value: f64,
+    val: f64,
     at: f64,
 }
 
 impl Anchor {
-    pub const fn new(value: f64, at: f64) -> Anchor {
-        Anchor { value, at }
+    pub const fn new(val: f64, at: f64) -> Anchor {
+        Anchor { val, at }
     }
 
     /// `map(value, at, now)`.
     pub fn ask(&self, now: f64, map: impl Fn(f64, f64, f64) -> f64) -> f64 {
-        map(self.value, self.at, now)
+        map(self.val, self.at, now)
     }
 
     /// Where it took less than asked, the gesture goes on from there.
@@ -31,12 +31,12 @@ impl Anchor {
 
 /// The value moved by the hand's travel times `gain`.
 pub fn linear(gain: f64) -> impl Fn(f64, f64, f64) -> f64 {
-    move |value, at, now| value + (now - at) * gain
+    move |val, at, now| val + (now - at) * gain
 }
 
 /// Spreading the fingers brings the camera nearer.
-pub fn spread(value: f64, at: f64, now: f64) -> f64 {
-    value * at / now
+pub fn spread(val: f64, at: f64, now: f64) -> f64 {
+    val * at / now
 }
 
 #[cfg(test)]

@@ -37,7 +37,7 @@ use crate::frame::shader::word::{
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::{ScreenAo, MAP_BINDING};
 use crate::gpu::api::{
-    buffer_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
+    buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
     pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
     Format, Gpu, Image, Load, Stamp,
 };
@@ -93,7 +93,7 @@ type Frame = [f32; FRAME_FLOATS];
 
 pub struct FrameInput<'a> {
     pub lists: Lists<'a>,
-    pub environment: &'a [f32],
+    pub env: &'a [f32],
     /// 0 while it loads.
     pub decor: &'a [(u32, Option<Image>, Extent)],
     pub skins: &'a [(u32, Image)],
@@ -326,7 +326,7 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
 /// and its cast. The air's
 /// tables, the fill and the decor's growth, the thumbnails, markers and debug
 /// cost what they cost at any resolution.
-const PER_PIXEL: [GpuSpanName; 11] = [
+const PER_PX: [GpuSpanName; 11] = [
     GpuSpanName::prepass,
     GpuSpanName::ao,
     GpuSpanName::world,
@@ -340,10 +340,10 @@ const PER_PIXEL: [GpuSpanName; 11] = [
     GpuSpanName::miss,
 ];
 
-/// A frame's GPU time in the passes drawn at the world's pixels (`PER_PIXEL`):
+/// A frame's GPU time in the passes drawn at the world's pixels (`PER_PX`):
 /// what its drawn resolution can buy back.
-pub fn pixels_ms(spans: &[f64]) -> f64 {
-    PER_PIXEL.iter().map(|&s| spans[s as usize]).sum()
+pub fn px_ms(spans: &[f64]) -> f64 {
+    PER_PX.iter().map(|&s| spans[s as usize]).sum()
 }
 
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, the screen's lens
@@ -416,14 +416,14 @@ pub struct Renderer {
     read_px: f64,
     read_frame: f64,
     pipelines: Pipelines,
-    frame_buffer: u32,
+    frame_buf: u32,
     frame: Frame,
-    sky_buffer: u32,
+    sky_buf: u32,
     sky: [f32; SKY_FLOATS],
     sky_built: Built,
     sky_group: u32,
     ghost: Built,
-    draws_buffer: u32,
+    draws_buf: u32,
     draws_bytes: u32,
     bind_group: u32,
     models: FrameGroups,
@@ -474,11 +474,11 @@ pub struct Renderer {
 impl Renderer {
     fn new(g: &Gpu, device: Device) -> Renderer {
         let mut pipelines = Pipelines::new();
-        let frame_buffer = g.buffer(
+        let frame_buffer = g.buf(
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
-        let sky_buffer = g.buffer(
+        let sky_buffer = g.buf(
             word_bytes(SKY_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
@@ -492,14 +492,14 @@ impl Renderer {
         let sky_built = pipelines.build(g, PIPELINE_SKY, WORLD_COLOR);
         let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);
         let mut sky_entries = vec![
-            buffer_entry(0, frame_buffer),
-            buffer_entry(19, sky_buffer),
+            buf_entry(0, frame_buffer),
+            buf_entry(19, sky_buffer),
             view_entry(2, moon.view),
             sampler_entry(3, moon.sampler),
         ];
         sky_entries.extend(air);
         let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
-        let draws_buffer = g.buffer(
+        let draws_buffer = g.buf(
             DRAWS_INITIAL * 4,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
@@ -535,13 +535,13 @@ impl Renderer {
             clear: pipelines.build(g, PIPELINE_SCREEN_CLEAR, WORLD_COLOR),
             ao_read: Read::default(),
             pipelines,
-            frame_buffer,
+            frame_buf: frame_buffer,
             frame: [0.0; FRAME_FLOATS],
-            sky_buffer,
+            sky_buf: sky_buffer,
             sky: [0.0; SKY_FLOATS],
             sky_built,
             sky_group,
-            draws_buffer,
+            draws_buf: draws_buffer,
             draws_bytes: DRAWS_INITIAL * 4,
             bind_group: 0,
             models,
@@ -568,11 +568,11 @@ impl Renderer {
     fn lit_entries(&self, frame: u32) -> Vec<Entry> {
         let [map, sampler] = self.shadow.entries(1);
         let mut e = vec![
-            buffer_entry(0, frame),
+            buf_entry(0, frame),
             map,
             sampler,
             view_entry(4, self.pack.view),
-            buffer_entry(5, self.pack.table),
+            buf_entry(5, self.pack.table),
             sampler_entry(6, self.pack.sampler),
             self.ao.entry(MAP_BINDING),
         ];
@@ -583,10 +583,10 @@ impl Renderer {
     /// The ghost boxes' group 0: what a cell's face is painted by, and the draws.
     fn box_groups(&mut self, g: &Gpu) {
         release(self.bind_group);
-        let mut e = self.lit_entries(self.frame_buffer);
-        e.push(buffer_entry(3, self.draws_buffer));
+        let mut e = self.lit_entries(self.frame_buf);
+        e.push(buf_entry(3, self.draws_buf));
         self.bind_group = g.bind_group(self.ghost.layouts[0], &e);
-        let lit = self.lit_entries(self.frame_buffer);
+        let lit = self.lit_entries(self.frame_buf);
         self.screen.set_lit(lit);
     }
 
@@ -595,7 +595,7 @@ impl Renderer {
         self.box_groups(g);
         self.models.rebind(
             g,
-            self.frame_buffer,
+            self.frame_buf,
             [self.ao.entry(MAP_BINDING), self.ao.blank_entry(MAP_BINDING)],
         );
     }
@@ -703,10 +703,10 @@ impl Renderer {
         let mut bound = 0;
         for d in draws.of(PIPELINE_GHOST_BOX) {
             let (handle, box_cnt, first_box, uniform) = (d[0], d[1], d[2], d[3]);
-            let buffer = b.get(handle).map(|(buffer, ..)| buffer);
+            let buf = b.get(handle).map(|(buffer, ..)| buffer);
             // A missing buffer is a fault in the list: skipped, it would draw
             // nothing with every gauge reading normal.
-            let Some(buffer) = buffer else {
+            let Some(buffer) = buf else {
                 xpute_kit::bug!(ENOTRECOVERABLE, handle)
             };
             if bound == 0 {
@@ -714,8 +714,8 @@ impl Renderer {
                 g.set_bind_group(pass, 0, self.bind_group, &[]);
             }
             if buffer != bound {
-                g.set_vertex_buffer(pass, 0, buffer, 0, 0);
-                g.set_vertex_buffer(pass, 1, buffer, 0, 0);
+                g.set_vertex_buf(pass, 0, buffer, 0, 0);
+                g.set_vertex_buf(pass, 1, buffer, 0, 0);
                 bound = buffer;
             }
             g.draw(
@@ -842,14 +842,7 @@ impl Renderer {
         let reach = cast
             .as_ref()
             .map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
-        self.lay_out(
-            g,
-            world.width,
-            world.height,
-            world.screen,
-            input.environment,
-            reach,
-        );
+        self.lay_out(g, world.width, world.height, world.screen, input.env, reach);
         // The light box the world is cast from, as the map is aimed; none
         // where no shadow is cast.
         if let Some(c) = cast.as_mut() {
@@ -878,9 +871,9 @@ impl Renderer {
         let uniform_bytes = word_bytes(uniforms.len());
         let grew = uniform_bytes > self.draws_bytes;
         if grew {
-            release(self.draws_buffer);
+            release(self.draws_buf);
             self.draws_bytes = uniform_bytes * 2;
-            self.draws_buffer = g.buffer(
+            self.draws_buf = g.buf(
                 self.draws_bytes,
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             );
@@ -888,7 +881,7 @@ impl Renderer {
         }
         if !uniforms.is_empty() && (grew || uniforms_moved) {
             // Read where the draw list holds them, one record however many.
-            g.upload_buffer(self.draws_buffer, 0, bytes(uniforms));
+            g.upload_buf(self.draws_buf, 0, bytes(uniforms));
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
@@ -903,7 +896,7 @@ impl Renderer {
         let jitter = [self.frame[JITTER], self.frame[JITTER + 1]];
         let words_moved = read.read(&self.frame[..JITTER]);
         if words_moved || jitter != self.jitter_written {
-            g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
+            g.write_buf(self.frame_buf, 0, bytes(&self.frame));
             self.jitter_written = jitter;
         }
         if words_moved {
@@ -911,7 +904,7 @@ impl Renderer {
             self.shadow.write(g);
         }
         if read.read(&self.sky) {
-            g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
+            g.write_buf(self.sky_buf, 0, bytes(&self.sky));
         }
         if read.read(self.stars.words()) {
             self.stars.write(g);
@@ -1002,7 +995,7 @@ impl Renderer {
         // The frame stands where nothing moved, the jitter neither: nothing
         // is drawn, nothing submitted, and the canvases keep the frame they
         // show.
-        if quiet && !self.screen.casts_pixels() && !self.screen.sun_casts() {
+        if quiet && !self.screen.casts_px() && !self.screen.sun_casts() {
             self.frame_read = read;
             let mut stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
             // Nothing drawn, so no number a read could name.
@@ -1059,7 +1052,7 @@ impl Renderer {
         ]);
         // The world's depth is the rays', so a cast that laid them again
         // lays the occlusion again.
-        a.mark(ao_remade || self.screen.grows() || self.screen.casts_pixels());
+        a.mark(ao_remade || self.screen.grows() || self.screen.casts_px());
         let ao_moved = !a.end();
         if self.screen_ao && ao_moved {
             let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
@@ -1068,7 +1061,7 @@ impl Renderer {
             g.end(pass);
             self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
         }
-        let canvas_view = g.current(world.handle);
+        let canvas_view = g.cur(world.handle);
         // A region drawn again alone keeps the rest as the last frame left
         // it, the region cleared under the scissor first.
         let load = if region.is_some() {
@@ -1135,7 +1128,7 @@ impl Renderer {
         let gathered = self.resolve.draw(
             g,
             encoder,
-            self.frame_buffer,
+            self.frame_buf,
             world,
             quiet,
             region,
@@ -1146,7 +1139,7 @@ impl Renderer {
         self.finish.draw(
             g,
             encoder,
-            self.frame_buffer,
+            self.frame_buf,
             world,
             gathered,
             canvas_view,
@@ -1328,7 +1321,7 @@ impl Renderer {
                 PIPELINE_GHOST_BOX => d[1] * BOX_VERTICES / 3,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
                 PIPELINE_IMPOSTOR => 2 * d[2],
-                PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
+                PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3),
                 PIPELINE_PUCK_ZONE => BOX_VERTICES / 3 * d[1],
                 PIPELINE_PUCK_BEACON => BEACON_VERTICES / 3,
                 PIPELINE_MARKER => 2 * d[1],
@@ -1347,7 +1340,7 @@ impl Renderer {
             gpu_px: 0.0,
             gpu_frame: 0.0,
             frame: *DRAWN_FRAMES.get(|| 0.0),
-            uploads: b.count as f64,
+            uploads: b.cnt as f64,
             upload_bytes: b.bytes as f64,
             // The depth targets: the world's own and the canvas's, one f32 a
             // pixel, AO's and the markers' regions'.

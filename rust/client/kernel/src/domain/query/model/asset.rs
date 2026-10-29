@@ -24,7 +24,7 @@ use pxl_spec::asset::catalog::Slot;
 pub struct ModelHandle {
     pub model: u32,
     /// One per animation in file order, so a clip's number is its animation's index.
-    pub clip_count: u32,
+    pub clip_cnt: u32,
     /// What it is drawn at to stand the height it was registered at.
     pub scale: f32,
 }
@@ -115,7 +115,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
     let joint_cnt = joint_nodes.len().max(1) as u32;
 
     let mut parts: Vec<(u32, usize, usize)> = Vec::new();
-    let (mut vertex_cnt, mut index_cnt) = (0u32, 0u32);
+    let (mut vertex_cnt, mut idx_cnt) = (0u32, 0u32);
     for &n in &order {
         let node = &gltf.nodes[n as usize];
         if node.mesh < 0 || (skinned && node.skin < 0) {
@@ -123,8 +123,8 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         }
         for (k, prim) in gltf.meshes[node.mesh as usize].iter().enumerate() {
             parts.push((n, node.mesh as usize, k));
-            vertex_cnt = vertex_cnt.checked_add(u32::try_from(prim.position.len() / 3).ok()?)?;
-            index_cnt = index_cnt.checked_add(u32::try_from(prim.index.len()).ok()?)?;
+            vertex_cnt = vertex_cnt.checked_add(u32::try_from(prim.pos.len() / 3).ok()?)?;
+            idx_cnt = idx_cnt.checked_add(u32::try_from(prim.idx.len()).ok()?)?;
         }
     }
     if vertex_cnt == 0 {
@@ -133,8 +133,8 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
 
     section::map().and_then(|_| {
         let models = crate::domain::query::model::models();
-        let (model, block) = models.new_model(vertex_cnt, index_cnt, joint_cnt)?;
-        let n = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) as usize;
+        let (model, block) = models.new_model(vertex_cnt, idx_cnt, joint_cnt)?;
+        let n = (vertex_cnt * MODEL_VERTEX_WORDS + idx_cnt) as usize;
         // SAFETY: the model's block, `n` words, ours until sealed.
         let words = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(block), n) };
         let lane = |k: usize| k * vertex_cnt as usize;
@@ -143,10 +143,10 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
         let (mut v0, mut i0) = (0usize, 0usize);
         let mut p = [0.0; 3];
-        for &(node_index, mesh, prim_index) in &parts {
-            let node = &gltf.nodes[node_index as usize];
-            let prim = &gltf.meshes[mesh][prim_index];
-            let count = prim.position.len() / 3;
+        for &(node_idx, mesh, prim_idx) in &parts {
+            let node = &gltf.nodes[node_idx as usize];
+            let prim = &gltf.meshes[mesh][prim_idx];
+            let cnt = prim.pos.len() / 3;
             // A skinned vertex is already in the skin's space; an unskinned one is
             // placed by its node's joint.
             let remap: Option<Vec<u32>> = (skinned && node.skin >= 0).then(|| {
@@ -156,22 +156,19 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                     .map(|j| *joint_of.get(j).unwrap_or(&0))
                     .collect()
             });
-            let own_joint = *joint_of.get(&node_index).unwrap_or(&0);
-            let world_m = &worlds[node_index as usize];
-            for i in 0..count {
+            let own_joint = *joint_of.get(&node_idx).unwrap_or(&0);
+            let world_m = &worlds[node_idx as usize];
+            for i in 0..cnt {
                 let v = v0 + i;
-                let (mut x, mut y, mut z) = (
-                    prim.position[i * 3],
-                    prim.position[i * 3 + 1],
-                    prim.position[i * 3 + 2],
-                );
+                let (mut x, mut y, mut z) =
+                    (prim.pos[i * 3], prim.pos[i * 3 + 1], prim.pos[i * 3 + 2]);
                 let mut normal = prim.normal.as_ref().map_or([0.0, 1.0, 0.0], |nm| {
                     [nm[i * 3], nm[i * 3 + 1], nm[i * 3 + 2]]
                 });
                 if still {
                     let at = mat4::transform_point(&mut p, world_m, x as f64, y as f64, z as f64);
                     (x, y, z) = (at[0] as f32, at[1] as f32, at[2] as f32);
-                    let n = mat4::transform_direction(
+                    let n = mat4::transform_dir(
                         &mut p,
                         world_m,
                         normal[0] as f64,
@@ -183,8 +180,8 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                 put_f(words, lane(0) + v * 3, x);
                 put_f(words, lane(0) + v * 3 + 1, y);
                 put_f(words, lane(0) + v * 3 + 2, z);
-                for (c, value) in normal.into_iter().enumerate() {
-                    put_f(words, lane(3) + v * 3 + c, value);
+                for (c, val) in normal.into_iter().enumerate() {
+                    put_f(words, lane(3) + v * 3 + c, val);
                 }
                 let uv = prim
                     .uv
@@ -217,11 +214,11 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                 lo = lo.min(at_y);
                 hi = hi.max(at_y);
             }
-            for (i, &index) in prim.index.iter().enumerate() {
-                words[lane(MODEL_VERTEX_WORDS as usize) + i0 + i] = v0 as u32 + index;
+            for (i, &idx) in prim.idx.iter().enumerate() {
+                words[lane(MODEL_VERTEX_WORDS as usize) + i0 + i] = v0 as u32 + idx;
             }
-            v0 += count;
-            i0 += prim.index.len();
+            v0 += cnt;
+            i0 += prim.idx.len();
         }
 
         let mut inverse_bind_of: FnvHashMap<u32, [f32; 16]> = FnvHashMap::default();
@@ -289,19 +286,11 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
 
         for anim in &gltf.animations {
             let c = models.clip(model, anim.duration as f32);
-            for channel in &anim.channels {
-                let Some(&joint) = joint_of.get(&channel.node) else {
+            for ch in &anim.channels {
+                let Some(&joint) = joint_of.get(&ch.node) else {
                     continue;
                 };
-                models.channel(
-                    model,
-                    c,
-                    joint,
-                    channel.path as u8,
-                    channel.step,
-                    &channel.times,
-                    &channel.values,
-                );
+                models.ch(model, c, joint, ch.path as u8, ch.step, &ch.times, &ch.vals);
             }
         }
 
@@ -314,7 +303,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         unsafe { models.seal(crate::domain::query::model::draw_list(), model, scale) };
         Some(ModelHandle {
             model,
-            clip_count: gltf.animations.len() as u32,
+            clip_cnt: gltf.animations.len() as u32,
             scale,
         })
     })

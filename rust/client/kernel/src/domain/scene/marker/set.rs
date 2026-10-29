@@ -20,26 +20,20 @@ pub const INSTANCE_FLOATS: usize = pxl_render::frame::shader::word::MARKER_INSTA
 /// region it keeps, as tall as it and centered on it: a marker is one
 /// thing, hidden whole where a nearer one's region is in front of its anchor
 /// (marker.wgsl).
-pub fn instance(
-    at: V3,
-    size: [f64; 2],
-    slot: u32,
-    down: f64,
-    region: f64,
-) -> [f32; INSTANCE_FLOATS] {
+pub fn instance(at: V3, sz: [f64; 2], slot: u32, down: f64, region: f64) -> [f32; INSTANCE_FLOATS] {
     let sheet = sheet();
     [
         at[0],
         at[1],
         at[2],
-        size[0],
-        size[1],
+        sz[0],
+        sz[1],
         sheet.u0(slot),
         sheet.v0(slot),
         sheet.u1(slot),
         sheet.v1(slot),
         down,
-        region.max(size[0]),
+        region.max(sz[0]),
     ]
     .map(|v| v as f32)
 }
@@ -50,14 +44,14 @@ pub fn instance(
 pub struct Set {
     origin: V3,
     held: Held,
-    count: u32,
+    cnt: u32,
 }
 
 impl Set {
     /// `lane` holds INSTANCE_FLOATS floats an instance, relative to `origin`.
     pub fn write(&mut self, draw: &mut DrawList, origin: V3, lane: &[f32]) {
         let written = self.held.write(draw, bytes(lane));
-        self.count = if written {
+        self.cnt = if written {
             (lane.len() / INSTANCE_FLOATS) as u32
         } else {
             0
@@ -69,16 +63,16 @@ impl Set {
     pub fn free(&mut self, draw: &mut DrawList) -> bool {
         let held = self.held.bytes > 0;
         self.held.free(draw);
-        self.count = 0;
+        self.cnt = 0;
         held
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
-        if self.count > 0 && self.held.handle != 0 {
+        if self.cnt > 0 && self.held.handle != 0 {
             draw.draw_as(
                 PIPELINE_MARKER,
                 self.held.handle,
-                self.count,
+                self.cnt,
                 0,
                 DrawList::translation(self.origin, eye),
                 0.0,

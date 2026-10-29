@@ -8,7 +8,7 @@ pub struct Config {
     pub max_body_sz: usize,
     pub admin_token: String,
     pub db_url: String,
-    pub db_pool_size: usize,
+    pub db_pool_sz: usize,
 }
 
 /// A server's own variable names; distinct prefixes keep two local servers off one port.
@@ -71,7 +71,7 @@ impl Config {
             // Required even with nothing mounted under `internal/`.
             admin_token: must("ADMIN_TOKEN")?,
             db_url: must(env.db_url_key)?,
-            db_pool_size: must_int("DB_POOL_SIZE", 8, 1, 1024)? as usize,
+            db_pool_sz: must_int("DB_POOL_SIZE", 8, 1, 1024)? as usize,
         })
     }
 }

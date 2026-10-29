@@ -106,11 +106,11 @@ impl Pack {
             4,
         );
         let blank: Vec<u32> = vec![NO_SLOTS; LAYERS];
-        let table = g.buffer(
+        let table = g.buf(
             (blank.len() * 4) as u32,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        g.write_buffer(table, 0, bytes(&blank));
+        g.write_buf(table, 0, bytes(&blank));
         // A chain is under four thirds of its first level.
         let bytes = (0..levels)
             .map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots)
@@ -154,7 +154,7 @@ impl Pack {
         g.submit(encoder);
         release(texture);
         mips.build(g, self.tex, self.levels, 0, self.slots);
-        g.write_buffer(self.table, 0, bytes(&table));
+        g.write_buf(self.table, 0, bytes(&table));
         self.loaded = true;
         true
     }

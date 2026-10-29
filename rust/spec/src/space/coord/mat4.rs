@@ -239,7 +239,7 @@ pub fn transform_point<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) ->
     out
 }
 
-pub fn transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
+pub fn transform_dir<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
     let ox = m[0] * x + m[4] * y + m[8] * z;
     let oy = m[1] * x + m[5] * y + m[9] * z;
     let oz = m[2] * x + m[6] * y + m[10] * z;

@@ -46,18 +46,18 @@ impl World<'_> {
     pub fn editable(&self, space: &Aabb) -> bool {
         let (cell, unit) = (GROUND.cell(), units(GROUND.cell()));
         let first = |k: usize| (space.min[k] / unit).floor() as i32;
-        let count = |k: usize| ((space.max[k] / unit).ceil() as i32 - first(k)).max(1);
+        let cnt = |k: usize| ((space.max[k] / unit).ceil() as i32 - first(k)).max(1);
         // The leaf tiles under it, the area a fact of each.
         let t = GROUND.tile_cell_shamt();
-        let tiles = |k: usize| first(k) >> t..=(first(k) + count(k) - 1) >> t;
+        let tiles = |k: usize| first(k) >> t..=(first(k) + cnt(k) - 1) >> t;
         if !tiles(1).all(|y| tiles(0).all(|x| within_tile([wrap_index(LEAF_ZOOM, x), y]))) {
             return false;
         }
-        let s = (count(0).max(count(1)) as u64)
+        let s = (cnt(0).max(cnt(1)) as u64)
             .next_power_of_two()
             .trailing_zeros();
         let zoom = cell - s;
-        let nodes = |k: usize| first(k) >> s..=(first(k) + count(k) - 1) >> s;
+        let nodes = |k: usize| first(k) >> s..=(first(k) + cnt(k) - 1) >> s;
         nodes(1).all(|y| {
             nodes(0).all(|x| {
                 let node = (zoom, [wrap_index(zoom, x), y]);

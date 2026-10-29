@@ -76,7 +76,7 @@ fn thin_area_tie() {
 }
 
 #[test]
-fn two_cell_feature_survives() {
+fn two_cell_feat_survives() {
     let road = plane(|x, _| if x == 10 || x == 11 { 3 } else { 0 });
     let empty = plane(|_, _| 0);
     let out = fold([&road, &empty, &empty, &empty], LEAF_ZOOM - 1);
@@ -126,7 +126,7 @@ fn fold_grids_held(f: impl Fn(i64, i64) -> i64 + Copy, held: impl Fn(usize) -> b
 /// Folding from the four children alone matches the bake bit for bit except
 /// the outermost padding sample.
 #[test]
-fn elevation_fold_padding() {
+fn ele_fold_padding() {
     let f = |x: i64, y: i64| 7 * x - 3 * y + 11;
     let whole = fold_grids(f);
     let four = fold_grids_held(f, |k| [5, 6, 9, 10].contains(&k));
@@ -146,7 +146,7 @@ fn elevation_fold_padding() {
 }
 
 #[test]
-fn elevation_center_sample() {
+fn ele_center_sample() {
     // A ramp of height 2m folds to 4i + 1 exactly: the parent's center in child samples.
     let out = fold_grids(|mx, _| 2 * mx);
     let pad = ELE_PAD as i64;
@@ -157,7 +157,7 @@ fn elevation_center_sample() {
 }
 
 #[test]
-fn elevation_skirt() {
+fn ele_skirt() {
     // The outermost padding lies four child samples past the block, in the neighbors.
     let out = fold_grids(|mx, my| {
         100 * mx.div_euclid(TILE_ELE_SPAN as i64) + my.div_euclid(TILE_ELE_SPAN as i64)
@@ -168,7 +168,7 @@ fn elevation_skirt() {
 }
 
 #[test]
-fn elevation_round_half_even() {
+fn ele_round_half_even() {
     // Rounding half up would drift every fold upward.
     let lows = fold_grids(|mx, _| mx.rem_euclid(2));
     assert!(

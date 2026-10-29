@@ -28,8 +28,8 @@ pub const GHOST_OPACITY: f32 = 0.5;
 #[derive(Clone, Copy, PartialEq)]
 enum Shape {
     Box {
-        size_bits: u64,
-        offset_bits: [u64; 3],
+        sz_bits: u64,
+        off_bits: [u64; 3],
         rgb: [u8; 3],
         layer: u8,
     },
@@ -86,7 +86,7 @@ impl GhostDraw {
         draw: &mut DrawList,
         GhostBox {
             at,
-            size,
+            sz: size,
             cube,
             erase,
         }: GhostBox,
@@ -103,10 +103,10 @@ impl GhostDraw {
             [(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8],
             NO_LAYER as u8,
         ));
-        let offset = on_whole_units(at).1;
+        let off = on_whole_units(at).1;
         let shape = Shape::Box {
-            size_bits: size.to_bits(),
-            offset_bits: offset.map(f64::to_bits),
+            sz_bits: size.to_bits(),
+            off_bits: off.map(f64::to_bits),
             rgb,
             layer,
         };
@@ -115,7 +115,7 @@ impl GhostDraw {
             return moved;
         }
         let mut m = [0; BOX_WORDS as usize];
-        self.z_step = write_lone_box(&mut m, offset, size, rgb, layer);
+        self.z_step = write_lone_box(&mut m, off, size, rgb, layer);
         self.write(draw, shape, bytes(&m));
         true
     }
@@ -154,7 +154,7 @@ impl GhostDraw {
         }
         // One group of one, with no header: its lanes, its flags, and the
         // index list.
-        let lane = GroupLanes { first: 0, count: 1 };
+        let lane = GroupLanes { first: 0, cnt: 1 };
         let mut m = [0u32; GroupLanes::words(1) + 1];
         (m[lane.f32_at(3, 0)], m[lane.f32_at(4, 0)]) = (rotation.to_bits(), scale.to_bits());
         self.write(draw, shape, bytes(&m));
@@ -175,7 +175,9 @@ impl GhostDraw {
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(shape) = self.shape else { return };
         match shape {
-            Shape::Box { size_bits, .. } => {
+            Shape::Box {
+                sz_bits: size_bits, ..
+            } => {
                 let t = DrawList::translation(on_whole_units(self.at).0, eye);
                 // Written in a cell of its own size (write_lone_box).
                 let unit = f64::from_bits(size_bits) as f32;
@@ -191,13 +193,13 @@ impl GhostDraw {
                 );
             }
             Shape::Decor { group, .. } => {
-                let index = GroupLanes::words(1) as u32;
+                let idx = GroupLanes::words(1) as u32;
                 draw.draw_instances(
                     PIPELINE_GHOST_DECOR,
                     self.held.handle,
                     group,
                     1,
-                    [0, 1, index],
+                    [0, 1, idx],
                     DrawList::translation(self.at, eye),
                     GHOST_OPACITY,
                 )

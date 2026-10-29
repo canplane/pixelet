@@ -90,7 +90,7 @@ impl<L: Base> TileCache<L> {
     pub const ZOOMS: u32 = (L::LEAF - L::COARSEST + 1);
 
     /// A destination's line from its leaf to the top.
-    pub const DESTINATION_TILES: u32 = Self::ZOOMS;
+    pub const DST_TILES: u32 = Self::ZOOMS;
 
     /// The most of its tiles a zoom's demand names, by its lattice.
     pub const ZOOM_DEMAND_TILES: u32 = reach_tiles(L::LATTICE);
@@ -112,8 +112,8 @@ impl<L: Base> TileCache<L> {
     /// what a reader that cannot take a coarser answer declares (`Base::PINNED`).
     const PINNED_TILES: u32 = match L::ASKS {
         Asks::Floor => floor::tiles(L::LATTICE),
-        Asks::Line => Self::DESTINATION_TILES + L::PINNED,
-        Asks::View => floor::tiles(L::LATTICE) + Self::DESTINATION_TILES + L::PINNED,
+        Asks::Line => Self::DST_TILES + L::PINNED,
+        Asks::View => floor::tiles(L::LATTICE) + Self::DST_TILES + L::PINNED,
     };
 
     /// What is held hard at most.
@@ -162,7 +162,7 @@ pub struct Line {
     /// The finest resident tile on the line, which the tile is drawn from.
     pub drawn: Option<Tile>,
     /// The resident tile that says the tile's ground exactly.
-    pub source: Option<Tile>,
+    pub src: Option<Tile>,
     /// Some tile on the line is said.
     pub settled: bool,
     /// Answered for itself, or its parent holds no child there.
@@ -198,7 +198,7 @@ impl Line {
             at: [0, 0],
         },
         drawn: None,
-        source: None,
+        src: None,
         settled: false,
         said: false,
         over: None,
@@ -299,7 +299,7 @@ impl<L: Base> TileCache<L> {
             } else {
                 parent.drawn
             },
-            source: if held.is_some() { Some(child) } else { says },
+            src: if held.is_some() { Some(child) } else { says },
             settled: said || parent.settled,
             said,
             over,
@@ -315,8 +315,8 @@ impl<L: Base> TileCache<L> {
 
     /// The resident tile that says `p`'s ground exactly; none where `p` is a
     /// miss. A resident tile above that does not say `p` only draws it coarser.
-    pub fn source(&self, p: Tile) -> Option<Tile> {
-        self.line(p).source
+    pub fn src(&self, p: Tile) -> Option<Tile> {
+        self.line(p).src
     }
 
     /// Empty tiles and tiles answered above are kept only while asked:

@@ -8,7 +8,7 @@
 //! (`Surface::screen_depth`).
 
 use crate::frame::shader::record::PIPELINE_SCREEN_FINISH;
-use crate::gpu::api::{buffer_entry, pass_desc, release, view_entry, Gpu, Load, Stamp};
+use crate::gpu::api::{buf_entry, pass_desc, release, view_entry, Gpu, Load, Stamp};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::surface::Surface;
 
@@ -53,7 +53,7 @@ impl Finish {
             self.group = g.bind_group(
                 self.built.layouts[0],
                 &[
-                    buffer_entry(0, frame),
+                    buf_entry(0, frame),
                     view_entry(1, color),
                     view_entry(2, s.depth_view),
                 ],
