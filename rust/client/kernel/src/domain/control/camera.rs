@@ -3,7 +3,7 @@
 //! The camera and everything that moves it.
 
 pub mod controller;
-pub mod free;
+pub mod first_person;
 pub mod gesture;
 pub mod input;
 pub mod orbit;

@@ -12,7 +12,7 @@ import {
 } from "@/abi/cmd.spec.ts";
 
 const INITIAL: Snapshot = {
-  focus: {
+  pivot: {
     status: GroundStatus.Idle,
     is_off_center: false,
     center: null,

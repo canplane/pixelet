@@ -158,7 +158,7 @@ and data, never estimated.
   them: they are not empty.
 - Count only the shells where each zoom is asked: zoom c from 96 to 192 of its
   cells from the eye (`grid::SPLIT`, `window::RADIUS`). Take flat ground at sea
-  level and the E120 eye, 120 units from its focus at a polar of 0.9, so 74.6
+  level and the E120 eye, 120 units from its pivot at a polar of 0.9, so 74.6
   units up. That is still 11,765,311 blocks under the face:
 
   | Zoom | Blocks under the face |
@@ -236,7 +236,7 @@ the probe was kept.
     grid.rs `CELLS_A_RADIAN`), an angle, never pixels: on a view 1080 CSS
     pixels high at 50°, about 24 drawn pixels at ratio 2.
   - The world is composed 68,677 times a frame, not 146 million.
-- **A frame after a drag.** The eye moved 1.21 units (12 CSS px at the focus)
+- **A frame after a drag.** The eye moved 1.21 units (12 CSS px at the pivot)
   and the table was the one the frame before left:
   - 145,391,503 of 146,524,411 visits (99.2%) read a key already there.
   - 996 keys were filled, in 6 fill passes.

@@ -639,7 +639,7 @@ pub enum Command {
     /// asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
     /// reads it without the location.
     INPUT_LOCATE = 0x110f,
-    /// A search result: the focus moved there, and the view asked with it at once, as the
+    /// A search result: the pivot moved there, and the view asked with it at once, as the
     /// controls ask it where the camera stands; a view field absent keeps what the view has.
     INPUT_GO_TO = 0x1108,
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
@@ -719,7 +719,7 @@ impl Command {
 
 /// What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole.
 pub struct Snapshot<'a> {
-    pub focus: FocusState,
+    pub pivot: PivotState,
     pub location: LocationState,
     pub companion: CompanionState,
     pub holding: HoldingState<'a>,
@@ -735,10 +735,10 @@ pub struct Snapshot<'a> {
     /// Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
     /// has read its kept slot, a few turns from boot.
     pub settings: &'a [u32],
-    /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
+    /// The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
     pub m_per_px: f64,
-    /// The division the focus is in and every one above it, broad to narrow; empty
-    /// where the focus is in none or the tile it is read out of has not arrived.
+    /// The division the pivot is in and every one above it, broad to narrow; empty
+    /// where the pivot is in none or the tile it is read out of has not arrived.
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
@@ -755,7 +755,7 @@ impl Snapshot<'_> {
     pub const FIELDS: u32 = 16;
 
     pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(FocusState::FIELDS, |w| self.focus.write(w));
+        w.branch(PivotState::FIELDS, |w| self.pivot.write(w));
         w.branch(LocationState::FIELDS, |w| self.location.write(w));
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
         w.branch(HoldingState::FIELDS, |w| self.holding.write(w));
@@ -780,16 +780,16 @@ impl Snapshot<'_> {
     }
 }
 
-pub struct FocusState {
+pub struct PivotState {
     pub status: GroundStatus,
     pub is_off_center: bool,
-    /// The focus in degrees: what the search measures distance from.
+    /// The pivot in degrees: what the search measures distance from.
     pub center: Option<LonLat>,
-    /// The focus is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs).
+    /// The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs).
     pub outside: bool,
 }
 
-impl FocusState {
+impl PivotState {
     /// The children it is written as.
     pub const FIELDS: u32 = 4;
 
@@ -1456,7 +1456,7 @@ impl InputTracking {
 pub struct InputGoTo {
     pub lon: f64,
     pub lat: f64,
-    /// The zoom, the eye's distance from the focus, clamped to the zoom's range; absent, a view far out comes in.
+    /// The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
     pub dist: Option<f64>,
     /// The heading about Z in radians, wrapped.
     pub azimuth: Option<f64>,

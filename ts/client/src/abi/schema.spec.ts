@@ -83,8 +83,8 @@ export const SETTINGS = {
     section: "camera",
   },
   /** Which controller makes the camera's pose; CAMERA_MODES says each. To
-   * first person the person stands at the focus, the eye at its
-   * height over the ground; to third the focus is laid on the ground
+   * first person the person stands at the pivot, the eye at its
+   * height over the ground; to third the pivot is laid on the ground
    * and the eye steps back by the radius. */
   camera_mode: {
     key: 5 as number,
@@ -92,12 +92,12 @@ export const SETTINGS = {
     default: "orbit",
     options: {
       orbit: 0 as number,
-      free: 1 as number,
+      first_person: 1 as number,
     },
     section: "world",
     kept: false,
   },
-  /** The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
+  /** The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
   surface_follow: {
     key: 6 as number,
     kind: "toggle",
@@ -191,7 +191,7 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs). */
+  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs). */
   world_gizmo: {
     key: 15 as number,
     kind: "toggle",
@@ -311,8 +311,8 @@ export const SETTINGS_SHIPPED = {
     section: "camera",
   },
   /** Which controller makes the camera's pose; CAMERA_MODES says each. To
-   * first person the person stands at the focus, the eye at its
-   * height over the ground; to third the focus is laid on the ground
+   * first person the person stands at the pivot, the eye at its
+   * height over the ground; to third the pivot is laid on the ground
    * and the eye steps back by the radius. */
   camera_mode: {
     key: 5 as number,
@@ -320,7 +320,7 @@ export const SETTINGS_SHIPPED = {
     default: "orbit",
     options: {
       orbit: 0 as number,
-      free: 1 as number,
+      first_person: 1 as number,
     },
     section: "world",
     kept: false,
@@ -397,7 +397,7 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs). */
+  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs). */
   world_gizmo: {
     key: 15 as number,
     kind: "toggle",

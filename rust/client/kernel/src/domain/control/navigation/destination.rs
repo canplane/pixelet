@@ -34,7 +34,7 @@ pub fn go_to(at: Q3, motion: Motion) {
     put_center(at, motion);
 }
 
-/// The user put the focus by hand; reaching the destination after would
+/// The user put the pivot by hand; reaching the destination after would
 /// undo it. Turning or zooming leaves it.
 pub fn cancel() {
     *destination() = None;

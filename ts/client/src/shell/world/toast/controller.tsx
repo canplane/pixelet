@@ -132,8 +132,8 @@ export function ToastController() {
   useSaid(Report.Network, useOnline() ? null : error("toast.network_unstable"));
   useSaid(Report.Server, serverError(useSource(), stall), SERVER_HOLD_MS);
 
-  const outside = useKernel((s) => s.focus.outside);
-  const shown = useKernel((s) => s.focus.status === GroundStatus.Success);
+  const outside = useKernel((s) => s.pivot.outside);
+  const shown = useKernel((s) => s.pivot.status === GroundStatus.Success);
   const companionLoading = useKernel((s) =>
     !s.companion.person_ready || !s.companion.pet_ready
   );

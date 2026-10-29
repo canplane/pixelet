@@ -119,7 +119,7 @@ impl DebugPass {
             g.end(pass);
         }
         // A set's faces hide only its own lines: the faced sets' lines over
-        // their faces' depth, then the rest over none, so the focus's frame
+        // their faces' depth, then the rest over none, so the pivot's frame
         // is whole under the coverage laid on the ground.
         let depth_load = if faced { Load::Load } else { Load::Clear };
         let mut pass = g.pass(

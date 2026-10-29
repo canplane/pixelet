@@ -144,7 +144,7 @@ badge goes; pins crowded in one pin's cell keep theirs, shown on a pin's pill
 ## Divisions
 
 The divisions' format is Overture's already. Their theme does not carry over:
-what the shell writes is the focus's address, UI text, and Carto has no
+what the shell writes is the pivot's address, UI text, and Carto has no
 precedent for how deep an address reads. Its depth stays overture-tiles' rule
 (`center.ts`). Drawn on the map one day, division names would follow Carto's
 `placenames.mss`.

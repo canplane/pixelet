@@ -9,7 +9,7 @@ distinct.
 An actor's instance is held by its holder, which stands it where it is (its
 `Stance`) and declares how many it holds. This directory holds every holder:
 
-- the companion, the person and the pet at the focus, each a figure the walk
+- the companion, the person and the pet at the pivot, each a figure the walk
   moves (`companion.rs` `Figure`, `FIGURES`), placed each tick in the
   interaction phase (`../../../turn.rs` `companion_tick`);
 - the variant picker's display cases, a character idling in its case's own

@@ -146,7 +146,7 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
     s.pointer_y = -((client_y - rect.top) / rect.height) * 2.0 + 1.0;
 }
 
-/// A pan puts the focus by hand, so a pending destination is canceled;
+/// A pan puts the pivot by hand, so a pending destination is canceled;
 /// tracked, nothing pans.
 fn by_hand(pan: impl FnOnce()) {
     if active() != Active::Tracked {

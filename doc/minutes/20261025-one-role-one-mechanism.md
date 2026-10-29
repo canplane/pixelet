@@ -75,7 +75,7 @@ pack's load number, `variant.json`) are left out.
       (`scene/stage.rs`, `turn.rs`).
     - `io/source.rs` `past_at` calls itself the one judgement for what is drawn,
       walked, edited and said, and has one reader.
-    - The division layer's focus line enters as a destination (`turn.rs`,
+    - The division layer's pivot line enters as a destination (`turn.rs`,
       `io/demand.rs` `Why::Destination`).
     - Stream to layer written by hand in several places (`door.rs`,
       `view/demand.rs`, `turn.rs`).

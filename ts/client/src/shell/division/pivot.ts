@@ -1,4 +1,4 @@
-// @pxl/client/shell/division/focus.ts
+// @pxl/client/shell/division/pivot.ts
 
 import { useTranslation } from "react-i18next";
 
@@ -7,7 +7,7 @@ import { assembleLabel, primaryLanguage } from "./label.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
-/** The focus's division, assembled per snapshot, so a language switch needs no refetch; the
+/** The pivot's division, assembled per snapshot, so a language switch needs no refetch; the
  * kernel says which of its names the view is in far enough to show. */
 export function useDivisionLabel(): string | null {
   const { i18n } = useTranslation();
@@ -26,7 +26,7 @@ export function useDivisionLabel(): string | null {
 }
 
 export function useCenterCoordinates(): string | null {
-  return useKernel((s) => s.focus.center && coordinateLabel(s.focus.center));
+  return useKernel((s) => s.pivot.center && coordinateLabel(s.pivot.center));
 }
 
 /** Four decimals: about eleven meters. */

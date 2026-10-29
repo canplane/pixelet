@@ -29,20 +29,20 @@
 
 /// Which controller makes the camera's pose.
 ///
-///   orbit — third person: the camera turns about the focus, its
-///           radius ahead of the eye, and a drag moves the focus.
-///   free  — first person: the eye is the focus and turns in place;
-///           a drag walks it as the orbit's center walks, the eye at its
-///           height over where the walk stands.
+///   orbit        — third person: the camera turns about the pivot, its
+///                  radius ahead of the eye, and a drag moves the pivot.
+///   first_person — the eye is the pivot and turns in place; a drag
+///                  walks it as the orbit's pivot walks, the eye at its
+///                  height over where the walk stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum CameraMode {
     orbit = 0,
-    free = 1,
+    first_person = 1,
 }
 
 impl CameraMode {
-    pub const ALL: [CameraMode; 2] = [CameraMode::orbit, CameraMode::free];
+    pub const ALL: [CameraMode; 2] = [CameraMode::orbit, CameraMode::first_person];
 
     /// The option a number names, or none for a number the list does not give out.
     pub fn of(number: u32) -> Option<CameraMode> {
@@ -228,11 +228,11 @@ pub enum SettingKey {
     /// have, and locking it reads as the app being stuck.
     tilt_lock = 4,
     /// Which controller makes the camera's pose; CAMERA_MODES says each. To
-    /// first person the person stands at the focus, the eye at its
-    /// height over the ground; to third the focus is laid on the ground
+    /// first person the person stands at the pivot, the eye at its
+    /// height over the ground; to third the pivot is laid on the ground
     /// and the eye steps back by the radius.
     camera_mode = 5,
-    /// The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
+    /// The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
     surface_follow = 6,
     /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/terrain_gate.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
     orbit_obstacle = 7,
@@ -259,7 +259,7 @@ pub enum SettingKey {
     view = 13,
     /// The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`).
     profiler = 14,
-    /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs).
+    /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs).
     world_gizmo = 15,
     /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them.
     camera_gizmo = 16,

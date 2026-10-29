@@ -5,7 +5,7 @@ use pxl_spec::space::coord::adapter::epsg4326;
 use crate::domain::view::param::FALLBACK_G4326;
 use pxl_spec::space::coord::q3::{FRAC_W, Q3};
 
-use crate::domain::control::camera::controller::focus;
+use crate::domain::control::camera::controller::pivot;
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::navigation::destination::{go_to_ground, pending};
 use crate::domain::control::navigation::off_center::off_center;
@@ -18,7 +18,7 @@ fn fallback_seed() -> Q3 {
     unknown_z(&epsg4326::project(&FALLBACK_G4326))
 }
 
-/// Within a cell: the focus comes back through the camera's floats, not
+/// Within a cell: the pivot comes back through the camera's floats, not
 /// to the bit.
 fn is_at(a: &Q3, b: &Q3) -> bool {
     let cell = 1i64 << FRAC_W;
@@ -43,7 +43,7 @@ pub fn map_bootstrap_step() {
     // The fallback only once GPS has given up (Error) and the camera was never
     // placed; a later dropout leaves the camera where it was.
     let fallback = fallback_seed();
-    let center = focus();
+    let center = pivot();
     let seed = match device_coord {
         Some(device) => device,
         None if center.is_none() && location_status == DevicePoseStatus::Error => fallback,

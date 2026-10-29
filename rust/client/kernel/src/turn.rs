@@ -48,7 +48,7 @@ pub struct Platform {
     pub orientation: OrientationPlatform,
 }
 
-/// None while the eye is the focus: then the character is the one looking.
+/// None while the eye is the pivot: then the character is the one looking.
 fn companion_props() -> Option<CompanionProps> {
     if crate::domain::control::camera::controller::dist() == 0.0 {
         return None;
@@ -56,14 +56,14 @@ fn companion_props() -> Option<CompanionProps> {
     // Where the camera is going, not where its easing has got to: walked toward
     // only once the eased center settled, it set off as the glide's long tail ended.
     let goal = crate::domain::control::camera::controller::target_center()
-        .or_else(crate::domain::control::camera::controller::focus)?;
+        .or_else(crate::domain::control::camera::controller::pivot)?;
     let eye = crate::domain::view::frame::coord::world_to_canonical(
         &crate::domain::control::camera::controller::eye_world()?,
     );
     let center = crate::domain::view::frame::coord::to_world(&goal);
     Some(CompanionProps {
         center: [center[0], center[1]],
-        floor: crate::domain::scene::character::companion::focus_floor(goal, |w| {
+        floor: crate::domain::scene::character::companion::pivot_floor(goal, |w| {
             crate::domain::control::navigation::support::floor_seen(w, &goal)
         }),
         azimuth: crate::domain::control::camera::controller::azimuth(),
@@ -103,7 +103,7 @@ fn demand_tick(ctx: &mut TickContext) {
     let pinned = crate::domain::layer::terrain::window::step(
         [
             crate::domain::view::observation::eye().map(|e| [e[0], e[1]]),
-            crate::domain::control::camera::controller::focus().map(at),
+            crate::domain::control::camera::controller::pivot().map(at),
             crate::domain::control::navigation::destination::pending().map(at),
         ],
         pxl_render::gpu::api::device_generation(),
@@ -124,18 +124,18 @@ fn demand_tick(ctx: &mut TickContext) {
     }
     Earth::demand().step(None, &[]);
     DivisionTile::demand().step(
-        crate::domain::layer::division::line(crate::domain::control::camera::controller::focus()),
+        crate::domain::layer::division::line(crate::domain::control::camera::controller::pivot()),
         &[],
     );
 }
 
-/// The scene's turn, handed the camera's focus and, third person, its
+/// The scene's turn, handed the camera's pivot and, third person, its
 /// heading, which the world gizmo is drawn about.
 fn scene_tick(ctx: &mut TickContext) {
     let third_person = crate::domain::control::camera::controller::dist() != 0.0;
     visible_step(
         ctx,
-        crate::domain::control::camera::controller::focus(),
+        crate::domain::control::camera::controller::pivot(),
         third_person.then(crate::domain::control::camera::controller::azimuth),
     );
 }
@@ -264,7 +264,7 @@ pub fn world_turn() -> f64 {
         objects,
         crate::domain::layer::object::repository::step()
     );
-    // device_coord is not gated like focus: the puck keeps its last coordinate across a transient none.
+    // device_coord is not gated like pivot: the puck keeps its last coordinate across a transient none.
     effect!(times, puck, location_puck_step(off_center().device_coord));
     effect!(
         times,

@@ -260,27 +260,33 @@ fn side(out: &mut [f64]) {
     let place = interaction::hover().coord.filter(|_| tool.is_some());
     let [place_x, place_y, place_z] = place.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
-    let [hover_lon, hover_lat, hover_alt] =
-        hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
-    let [center_lon, center_lat, center_z] =
-        controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
+    let eye =
+        controller::eye_world().map(|e| crate::domain::view::frame::coord::world_to_canonical(&e));
+    let [eye_x, eye_y, eye_z] = eye.map_or([f64::NAN; 3], |p| q3::unpack(&p));
+    let pivot = controller::pivot();
+    let [pivot_x, pivot_y, pivot_z] = pivot.map_or([f64::NAN; 3], |p| q3::unpack(&p));
+    let [pivot_lon, pivot_lat, pivot_alt] =
+        pivot.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
     let zoom = |z: Option<Zoom>| z.map_or(f64::NAN, f64::from);
     put(
         out,
         SUMMARY::view::AT,
         &ViewSection {
+            eye_x,
+            eye_y,
+            eye_z,
             dist: controller::dist(),
             polar: controller::polar(),
             azimuth: controller::azimuth(),
-            center_lon,
-            center_lat,
-            center_z,
+            pivot_x,
+            pivot_y,
+            pivot_z,
+            pivot_lon,
+            pivot_lat,
+            pivot_alt,
             hover_x,
             hover_y,
             hover_z,
-            hover_lon,
-            hover_lat,
-            hover_alt,
             cell: zoom(cell),
             struck,
             held: zoom(picked.as_ref().map(|p| p.held())),

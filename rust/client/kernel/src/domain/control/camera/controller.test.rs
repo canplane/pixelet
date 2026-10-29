@@ -28,7 +28,7 @@ fn third_person() {
 
 /// The orbit's distance third person, none first.
 #[test]
-fn focus_along_look() {
+fn pivot_along_facing() {
     let _g = serial();
     third_person();
     let mut rng = Rng(0x5eed);
@@ -45,22 +45,22 @@ fn focus_along_look() {
         );
         place(center, dist, polar, azimuth);
         assert!(
-            near(focus_world().unwrap(), center, 1e-9),
+            near(pivot_world().unwrap(), center, 1e-9),
             "{n}: third person"
         );
-        controllers().base = CameraMode::free;
+        controllers().base = CameraMode::first_person;
         assert!(
-            near(focus_world().unwrap(), eye_world().unwrap(), 1e-12),
+            near(pivot_world().unwrap(), eye_world().unwrap(), 1e-12),
             "{n}: first person"
         );
         controllers().base = CameraMode::orbit;
     }
 }
 
-/// A change of person moves the camera about the focus, never the
+/// A change of person moves the camera about the pivot, never the
 /// center; under a tracker it waits until the tracker lets go.
 #[test]
-fn person_change_keeps_focus() {
+fn person_change_keeps_pivot() {
     let _g = serial();
     third_person();
     // A canonical point keeps 256ths of a unit: the first change lands within
@@ -81,13 +81,13 @@ fn person_change_keeps_focus() {
         place(center, dist, polar, azimuth);
         let mut first: Option<V3> = None;
         for mode in [
-            CameraMode::free,
+            CameraMode::first_person,
             CameraMode::orbit,
-            CameraMode::free,
+            CameraMode::first_person,
             CameraMode::orbit,
         ] {
             assert!(take_mode(mode), "{n}: the change to {mode:?} taken");
-            let got = focus_world().unwrap();
+            let got = pivot_world().unwrap();
             assert!(
                 near(got, center, 2.0 / 256.0),
                 "{n}: moved by the change to {mode:?}: {got:?} vs {center:?}"
@@ -98,7 +98,9 @@ fn person_change_keeps_focus() {
                 "{n}: drifted by the change to {mode:?}: {got:?} vs {first:?}"
             );
             let target = match mode {
-                CameraMode::free => crate::domain::control::camera::free::target_center(),
+                CameraMode::first_person => {
+                    crate::domain::control::camera::first_person::target_center()
+                }
                 CameraMode::orbit => crate::domain::control::camera::orbit::target_center(),
             };
             let target = to_world(&target.unwrap());
@@ -115,7 +117,10 @@ fn person_change_keeps_focus() {
         turn: mat4::new(),
         at: [0.0; 3],
     });
-    assert!(!take_mode(CameraMode::free), "taken under a tracker");
+    assert!(
+        !take_mode(CameraMode::first_person),
+        "taken under a tracker"
+    );
     assert_eq!(
         controllers().base,
         CameraMode::orbit,
@@ -123,7 +128,7 @@ fn person_change_keeps_focus() {
     );
     controllers().tracked = None;
     assert!(
-        take_mode(CameraMode::free),
+        take_mode(CameraMode::first_person),
         "not taken once the tracker let go"
     );
     third_person();

@@ -1,8 +1,8 @@
 // pxl-kernel/domain/scene/character/companion.rs
 
-//! A companion (person + pet) at focus. When focus comes to rest it
+//! A companion (person + pet) at pivot. When pivot comes to rest it
 //! makes a fixed-duration catch-up walk there; in follow mode, where
-//! focus is a ~1 Hz GPS stream that never rests, or steered by the keys,
+//! pivot is a ~1 Hz GPS stream that never rests, or steered by the keys,
 //! it instead glides at the world-scroll rate so the two cancel and it
 //! holds at screen center.
 //!
@@ -188,7 +188,7 @@ impl Figure {
             }
             // A release fixes the destination at once: a pan begun inside the settle
             // delay holds the target moving, so waiting would plan nothing. The settle
-            // tracker covers every other way the focus moves.
+            // tracker covers every other way the pivot moves.
             let destination = if released {
                 self.settle = SettleTracker::new(target, now);
                 Some(target)
@@ -213,7 +213,7 @@ impl Figure {
                     });
                 }
             }
-            // A plan in flight finishes even once the focus moves again: dropping it
+            // A plan in flight finishes even once the pivot moves again: dropping it
             // stalled the figure during gestures and a run of quick pans ended in one jump.
             let (step, heading) = self
                 .walk_plan
@@ -295,7 +295,7 @@ struct Companion {
     /// the person's place and floor, the pet's target and whether the eye
     /// sees a walk there (`walks`).
     beside: Asked<([f64; 2], f64, [f64; 2], bool), f64>,
-    /// The floor the focus is drawn on, of the focus (`focus_floor`).
+    /// The floor the pivot is drawn on, of the pivot (`pivot_floor`).
     floor: Asked<Q3, Option<f64>>,
 }
 
@@ -314,7 +314,7 @@ fn companion() -> &'static mut Companion {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
     pub center: [f64; 2],
-    /// The top of the floor the focus is drawn on; none while nothing is
+    /// The top of the floor the pivot is drawn on; none while nothing is
     /// known there, when the figures hold where they are.
     pub floor: Option<f64>,
     /// The camera's heading, which the companion turns its back to.
@@ -329,10 +329,10 @@ pub struct CompanionProps {
     pub eye: Q3,
 }
 
-/// The floor the focus `goal` is drawn on: `ask`'s of the world, kept while
-/// the focus stands and no change touched what it read (`Asked`), as the
+/// The floor the pivot `goal` is drawn on: `ask`'s of the world, kept while
+/// the pivot stands and no change touched what it read (`Asked`), as the
 /// figures' own floors are.
-pub fn focus_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
+pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
     let c = companion();
     c.floor.forget_touched();
     c.floor.of(World::now(), goal, ask)
@@ -357,7 +357,7 @@ fn figure_for<'a>(
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let c = companion();
     c.beside.forget_touched();
-    // Looked at each frame turn, a focus not asked of this one too.
+    // Looked at each frame turn, a pivot not asked of this one too.
     c.floor.forget_touched();
     for f in [&mut c.person, &mut c.pet].into_iter().flatten() {
         f.drawn.forget_touched();
@@ -380,7 +380,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
     let person_target = p.center;
     let person = figure_for(&mut c.person, person_variant, person_target);
-    // While nothing is known under the focus each figure holds where it is,
+    // While nothing is known under the pivot each figure holds where it is,
     // and the rest of it steps on.
     let hold = |f: &Figure| f.stands_z.map(|z| (f.at, z));
     if let Some((target, z)) = p.floor.map(|z| (person_target, z)).or_else(|| hold(person)) {

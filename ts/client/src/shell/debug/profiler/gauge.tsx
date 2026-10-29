@@ -62,9 +62,10 @@ const units3 = (
   : `${Math.floor(x)}, ${Math.floor(y)}, ${Math.floor(z)}`);
 
 /**
- * Live: where the camera and the pointer are now, not over the window. The
- * pointer twice: what it meets at the eye's zooms, and what the tool held strikes
- * there, so a hover that takes nothing shows where the two part.
+ * Live: where the camera's eye, its pivot and the pointer are now, not over
+ * the window, each in units and the pivot on the Earth as well. The pointer
+ * twice: what it meets at the eye's zooms, and what the tool held strikes there,
+ * so a hover that takes nothing shows where the two part.
  */
 export function ProfilerView({ v }: { v: Gauge["view"] }) {
   const picked = !Number.isNaN(v.struck);
@@ -72,19 +73,25 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
   return (
     <>
       <Head>Camera</Head>
+      <Row
+        k="eye x/y/z (units)"
+        v={units3(v.eye_x, v.eye_y, v.eye_z)}
+      />
       <Row k="distance (units)" v={n1(v.dist)} />
       <Row
         k="polar/azimuth"
         v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`}
       />
-      <Row k="center lat/lon" v={geo(v.center_lat, v.center_lon)} />
-      <Row k="center altitude" v={metres(v.center_z)} />
-      <Head>Under the pointer, as drawn</Head>
+      <Head>Pivot</Head>
+      <Row
+        k="x/y/z (units)"
+        v={units3(v.pivot_x, v.pivot_y, v.pivot_z)}
+      />
+      <Row k="lat/lon" v={geo(v.pivot_lat, v.pivot_lon)} />
+      <Row k="altitude" v={metres(v.pivot_alt)} />
+      <Head>Pointer</Head>
       <Row k="x/y/z (units)" v={units3(v.hover_x, v.hover_y, v.hover_z)} />
-      <Row k="lat/lon" v={geo(v.hover_lat, v.hover_lon)} />
-      <Row k="altitude" v={metres(v.hover_alt)} />
       <Row k="drawn at" v={zoomName(v.cell)} />
-      <Head>What the tool strikes</Head>
       <Row
         k="struck"
         v={picked

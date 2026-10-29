@@ -1247,7 +1247,7 @@
           "name": "INPUT_GO_TO",
           "value": 4360,
           "$doc": [
-            "A search result: the focus moved there, and the view asked with it at once, as the",
+            "A search result: the pivot moved there, and the view asked with it at once, as the",
             "controls ask it where the camera stands; a view field absent keeps what the view has."
           ],
           "packet": [
@@ -1264,7 +1264,7 @@
               "type": "f64",
               "optional": true,
               "$doc": [
-                "The zoom, the eye's distance from the focus, clamped to the zoom's range; absent, a view far out comes in."
+                "The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in."
               ]
             },
             {
@@ -1413,8 +1413,8 @@
       ],
       "fields": [
         {
-          "name": "focus",
-          "type": "FocusState"
+          "name": "pivot",
+          "type": "PivotState"
         },
         {
           "name": "location",
@@ -1474,7 +1474,7 @@
           "name": "m_per_px",
           "type": "f64",
           "$doc": [
-            "The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`)."
+            "The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`)."
           ]
         },
         {
@@ -1482,8 +1482,8 @@
           "type": "DivisionPart",
           "list": true,
           "$doc": [
-            "The division the focus is in and every one above it, broad to narrow; empty",
-            "where the focus is in none or the tile it is read out of has not arrived."
+            "The division the pivot is in and every one above it, broad to narrow; empty",
+            "where the pivot is in none or the tile it is read out of has not arrived."
           ]
         },
         {
@@ -1515,7 +1515,7 @@
       ]
     },
     {
-      "name": "FocusState",
+      "name": "PivotState",
       "fields": [
         {
           "name": "status",
@@ -1530,14 +1530,14 @@
           "type": "LonLat",
           "optional": true,
           "$doc": [
-            "The focus in degrees: what the search measures distance from."
+            "The pivot in degrees: what the search measures distance from."
           ]
         },
         {
           "name": "outside",
           "type": "bool",
           "$doc": [
-            "The focus is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs)."
+            "The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs)."
           ]
         }
       ]

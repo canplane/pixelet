@@ -75,7 +75,7 @@ impl Stream {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Why {
     Floor,
-    /// On a line asked for exactly: the camera's destination's, or the division layer's focus's.
+    /// On a line asked for exactly: the camera's destination's, or the division layer's pivot's.
     Destination,
     /// On the line over a miss, so a coarser answer is held wherever the view
     /// looks and leaving a zoom shows its parent at once (Cesium's `preloadAncestors`).

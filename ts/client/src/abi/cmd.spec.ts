@@ -317,7 +317,7 @@ export const enum Command {
    * asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
    * reads it without the location. */
   INPUT_LOCATE = 0x110f,
-  /** A search result: the focus moved there, and the view asked with it at once, as the
+  /** A search result: the pivot moved there, and the view asked with it at once, as the
    * controls ask it where the camera stands; a view field absent keeps what the view has. */
   INPUT_GO_TO = 0x1108,
   /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
@@ -359,7 +359,7 @@ function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {
 
 /** What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole. */
 export interface Snapshot {
-  focus: FocusState;
+  pivot: PivotState;
   location: LocationState;
   companion: CompanionState;
   holding: HoldingState;
@@ -375,10 +375,10 @@ export interface Snapshot {
   /** Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
    * has read its kept slot, a few turns from boot. */
   settings: u32[];
-  /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
+  /** The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
   m_per_px: f64;
-  /** The division the focus is in and every one above it, broad to narrow; empty
-   * where the focus is in none or the tile it is read out of has not arrived. */
+  /** The division the pivot is in and every one above it, broad to narrow; empty
+   * where the pivot is in none or the tile it is read out of has not arrived. */
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
@@ -392,7 +392,7 @@ export interface Snapshot {
 
 export function read_snapshot(b: BranchCursor): Snapshot {
   return {
-    focus: read_focus_state(b.at_branch(0)),
+    pivot: read_pivot_state(b.at_branch(0)),
     location: read_location_state(b.at_branch(1)),
     companion: read_companion_state(b.at_branch(2)),
     holding: read_holding_state(b.at_branch(3)),
@@ -411,16 +411,16 @@ export function read_snapshot(b: BranchCursor): Snapshot {
   };
 }
 
-export interface FocusState {
+export interface PivotState {
   status: GroundStatus;
   is_off_center: boolean;
-  /** The focus in degrees: what the search measures distance from. */
+  /** The pivot in degrees: what the search measures distance from. */
   center: LonLat | null;
-  /** The focus is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs). */
+  /** The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs). */
   outside: boolean;
 }
 
-export function read_focus_state(b: BranchCursor): FocusState {
+export function read_pivot_state(b: BranchCursor): PivotState {
   return {
     status: b.at(0).get<GroundStatus>(),
     is_off_center: b.at(1).get<boolean>(),
@@ -803,7 +803,7 @@ export function encode_input_tracking(
 
 /** Command.INPUT_GO_TO's packet, written in place into `to`.
  *
- * @param dist The zoom, the eye's distance from the focus, clamped to the zoom's range; absent, a view far out comes in.
+ * @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
  * @param azimuth The heading about Z in radians, wrapped.
  * @param polar The angle down from vertical in radians, clamped. */
 export function encode_input_go_to(

@@ -38,7 +38,7 @@ pub const EYE_WINDOWS: u32 = LEAF_CELL - FIRST_CELL + 1;
 pub const fn eye_cell(w: u32) -> Zoom {
     FIRST_CELL + w
 }
-/// Every window: the eye's; the focus's, the leaves' and one over, what
+/// Every window: the eye's; the pivot's, the leaves' and one over, what
 /// walking and editing read; a destination's one, at the zoom its line says
 /// its ground, found exactly (pxl-kernel domain/layer/terrain/window.rs).
 pub const WINDOWS: u32 = EYE_WINDOWS + 3;

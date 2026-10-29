@@ -270,11 +270,11 @@ pub fn stage_render(pace: crate::domain::view::frame::resolution::Pace) {
     );
 }
 
-/// The scene's turn, `focus` and `heading` the camera's as the turn hands
+/// The scene's turn, `pivot` and `heading` the camera's as the turn hands
 /// them (pxl-kernel turn.rs `scene_tick`), for the world gizmo.
 pub fn visible_step(
     ctx: &mut TickContext,
-    focus: Option<pxl_spec::space::coord::q3::Q3>,
+    pivot: Option<pxl_spec::space::coord::q3::Q3>,
     heading: Option<f64>,
 ) {
     let v = view();
@@ -294,7 +294,7 @@ pub fn visible_step(
     // went up under the last origin, and every rebuild flung the lines by how
     // far it moved.
     let show = settings_store().world_gizmo;
-    frame_gizmo_step(show, focus, heading);
+    frame_gizmo_step(show, pivot, heading);
     coverage_gizmo_step(show);
     let draw = section::map().is_some_and(|_| {
         let (scene, list) = (scene(), draw_list());

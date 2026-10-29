@@ -36,15 +36,15 @@
     ]
   },
   "CAMERA_MODES": {
-    "$value": { "orbit": 0, "free": 1 },
+    "$value": { "orbit": 0, "first_person": 1 },
     "$doc": [
       "Which controller makes the camera's pose.",
       "",
-      "  orbit — third person: the camera turns about the focus, its",
-      "          radius ahead of the eye, and a drag moves the focus.",
-      "  free  — first person: the eye is the focus and turns in place;",
-      "          a drag walks it as the orbit's center walks, the eye at its",
-      "          height over where the walk stands."
+      "  orbit        — third person: the camera turns about the pivot, its",
+      "                 radius ahead of the eye, and a drag moves the pivot.",
+      "  first_person — the eye is the pivot and turns in place; a drag",
+      "                 walks it as the orbit's pivot walks, the eye at its",
+      "                 height over where the walk stands."
     ]
   },
   "ORBIT_OBSTACLE_MODES": {
@@ -179,8 +179,8 @@
       "number": 5,
       "$doc": [
         "Which controller makes the camera's pose; CAMERA_MODES says each. To",
-        "first person the person stands at the focus, the eye at its",
-        "height over the ground; to third the focus is laid on the ground",
+        "first person the person stands at the pivot, the eye at its",
+        "height over the ground; to third the pivot is laid on the ground",
         "and the eye steps back by the radius."
       ],
       "kind": "choice",
@@ -192,7 +192,7 @@
     "surface_follow": {
       "number": 6,
       "$doc": [
-        "The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."
+        "The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."
       ],
       "kind": "toggle",
       "default": true,
@@ -284,7 +284,7 @@
     "world_gizmo": {
       "number": 15,
       "$doc": [
-        "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs)."
+        "Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,

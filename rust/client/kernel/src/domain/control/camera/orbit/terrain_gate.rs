@@ -34,7 +34,7 @@ pub struct ViewPose {
 
 fn pose(view: Intent) -> Option<ViewPose> {
     Some(ViewPose {
-        target: crate::domain::control::camera::controller::focus_world()?,
+        target: crate::domain::control::camera::controller::pivot_world()?,
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,
@@ -187,14 +187,14 @@ fn embedded(eye: &Q3, access: &World) -> bool {
 }
 
 /// Whether the eye comes out of something solid at `at`, from `last`,
-/// where it does not see the focus: through a wall it stood in the first cell
+/// where it does not see the pivot: through a wall it stood in the first cell
 /// of (`embedded`) to the wall's far side, which a wall one or two cells
 /// thick would otherwise let it reach.
 fn crossed(last: &ViewPose, at: &ViewPose, access: &World) -> bool {
     in_solid(last, access) && !in_solid(at, access) && toward_eye(at, at.dist, access).is_some()
 }
 
-/// What lies between the eye and the focus is not asked: that hides the
+/// What lies between the eye and the pivot is not asked: that hides the
 /// center but is not the eye running into anything, save where the eye
 /// comes out of a wall to its far side (`crossed`). The first cell of a wall
 /// or a roof is no obstacle (`embedded`).
@@ -210,14 +210,14 @@ fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
     })
 }
 
-/// A zoom in the climb holds straight down, blocked by a roof over the focus
+/// A zoom in the climb holds straight down, blocked by a roof over the pivot
 /// (a tunnel's, a cave's): the eye goes under the roof straight over the
-/// focus, as far from it as the zoom asked or the roof leaves, and eases there
-/// through it. Where the roof is nearer the focus than the orbit comes
+/// pivot, as far from it as the zoom asked or the roof leaves, and eases there
+/// through it. Where the roof is nearer the pivot than the orbit comes
 /// (`MIN_DIST`), the eye stands at `MIN_DIST` in the roof's lowest cell,
 /// which its rays do not meet (pxl-spec-core `cast::walk`): it sees down
 /// as from under the roof. Only a zoom in: a zoom out goes no higher than
-/// the roof leaves (`held_under`). None where nothing roofs the focus, or
+/// the roof leaves (`held_under`). None where nothing roofs the pivot, or
 /// `MIN_DIST` is past the roof's lowest cell.
 fn dive(to: &ViewPose, climbed: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose> {
     if to.dist >= from.dist || climbed.polar > 0.0 {
@@ -229,7 +229,7 @@ fn dive(to: &ViewPose, climbed: &ViewPose, from: &ViewPose, access: &World) -> O
     under(&roof, climbed, dist).then_some(ViewPose { dist, ..*climbed })
 }
 
-/// A zoom out from under a roof straight over the focus, where a dive left
+/// A zoom out from under a roof straight over the pivot, where a dive left
 /// the eye: as far as the roof leaves (`dive`) and no farther, so the eye
 /// does not go up through the roof it came down through, whether it stands
 /// short of the roof or in its lowest cell. None where it is not under one.
@@ -244,9 +244,9 @@ fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose
     })
 }
 
-/// What `at`'s focus meets toward its eye within `reach`: a roof, where the
+/// What `at`'s pivot meets toward its eye within `reach`: a roof, where the
 /// eye is straight over it; within the eye's own distance, what hides the
-/// focus from it.
+/// pivot from it.
 fn toward_eye(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
     let ray = Ray {
         origin: at.target,
@@ -256,7 +256,7 @@ fn toward_eye(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
     access.first_hit(&ray, held()).exact().flatten()
 }
 
-/// Whether the eye `dist` from `at`'s focus is under `roof`: short of it, or
+/// Whether the eye `dist` from `at`'s pivot is under `roof`: short of it, or
 /// in its lowest cell, which the eye's rays do not meet (pxl-spec-core
 /// `cast::walk`), on its floor and not its ceiling as the walk's `inside` is.
 fn under(roof: &Hit, at: &ViewPose, dist: f64) -> bool {

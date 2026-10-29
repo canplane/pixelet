@@ -1,6 +1,6 @@
 // pxl-kernel/domain/control/camera/orbit.rs
 
-//! The orbit camera: the eye moves over a sphere about the focus, the
+//! The orbit camera: the eye moves over a sphere about the pivot, the
 //! radius being the zoom. The controls write the target; `turn` brings what
 //! is drawn to it (domain/approach.rs). Everything that reads the world reads the
 //! drawn state.
@@ -10,7 +10,7 @@
 //! (orbit/terrain_gate.rs `allowed_view`), and the camera setting decides
 //! what follows: through ignores the ground, stop takes a control as far as
 //! it gets, and climb raises the drawn pitch instead (`climb_polar`); held
-//! straight down by a roof over the focus, a zoom in goes under it (`dive`).
+//! straight down by a roof over the pivot, a zoom in goes under it (`dive`).
 
 pub mod terrain_gate;
 
@@ -21,7 +21,7 @@ use xpute_kit::math::scalar::clamp;
 
 use crate::domain::approach::{approach_angle, approach_vec};
 use crate::domain::control::camera::controller::{
-    camera, facing_dir, facing_domain, focus, focus_world, set_eye_world,
+    camera, facing_dir, facing_domain, pivot, pivot_world, set_eye_world,
 };
 use crate::domain::control::camera::gesture::{spread, Anchor};
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
@@ -107,14 +107,14 @@ pub fn zoom_to(dist: f64) -> f64 {
 }
 
 pub(crate) fn target_center() -> Option<Q3> {
-    orbit().to.or_else(focus)
+    orbit().to.or_else(pivot)
 }
 
 pub(crate) fn put(at: Q3, snap: bool) {
     orbit().to = Some(at);
     if snap {
         let (o, cam) = (orbit(), camera());
-        let center = target(&mut o.to, focus_world().unwrap_or_default());
+        let center = target(&mut o.to, pivot_world().unwrap_or_default());
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
         set_eye_world(&v3::add(&center, &e));
     }
@@ -122,7 +122,7 @@ pub(crate) fn put(at: Q3, snap: bool) {
 
 /// Whether still moving; None where the camera stands nowhere.
 pub(crate) fn turn(delta: f64) -> Option<bool> {
-    let drawn_center = focus_world()?;
+    let drawn_center = pivot_world()?;
     let vs = camera_state().intent;
     let (o, cam) = (orbit(), camera());
     let was = (drawn_center, o.dist, cam.polar, cam.azimuth);

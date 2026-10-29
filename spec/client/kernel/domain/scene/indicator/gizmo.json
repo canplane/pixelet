@@ -1,7 +1,7 @@
 {
   "$doc": [
     "What each line of the world gizmo is drawn in, so the lines and the",
-    "shell's legend of them read one look: the frame's marks about the focus",
+    "shell's legend of them read one look: the frame's marks about the pivot",
     "(domain/scene/indicator/frame_gizmo.rs) and the coverage's over the ground",
     "(domain/scene/indicator/coverage_gizmo.rs). Each #rrggbb in sRGB, with its",
     "opacity, and dashed where a dashed line draws it: a ring of the frame, a",
@@ -9,10 +9,10 @@
   ],
   "frame": {
     "$type": "rgb",
-    "$doc": "About the focus, opaque.",
-    "focus": {
+    "$doc": "About the pivot, opaque.",
+    "pivot": {
       "rgb": "#000000",
-      "$doc": "The focus and the ground cell it floors to."
+      "$doc": "The pivot and the ground cell it floors to."
     },
     "level": {
       "rgb": "#000000",

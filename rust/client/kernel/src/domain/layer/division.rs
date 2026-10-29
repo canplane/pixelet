@@ -1,6 +1,6 @@
 // pxl-kernel/domain/layer/division.rs
 
-//! The divisions as a layer of the pyramid, held over the focus alone: its
+//! The divisions as a layer of the pyramid, held over the pivot alone: its
 //! line is asked as a destination's, and the deepest tile held on it names
 //! the cell. Nothing here is drawn; the name is read straight into the UI
 //! snapshot. A tile's record is a room in `.fixed.division` for its cells,
@@ -46,7 +46,7 @@ impl Base for DivisionTile {
         DIVISION.get(TileCache::default)
     }
 
-    /// Its cells into its record; its divisions, a handful over the focus,
+    /// Its cells into its record; its divisions, a handful over the pivot,
     /// held on the heap with their names decoded.
     fn receive(
         _tile: Tile,
@@ -62,9 +62,9 @@ impl Base for DivisionTile {
     }
 }
 
-/// The finest tile of the focus's line, which demand asks for with the line.
-pub fn line(focus: Option<Q3>) -> Option<Tile> {
-    focus.map(|at| {
+/// The finest tile of the pivot's line, which demand asks for with the line.
+pub fn line(pivot: Option<Q3>) -> Option<Tile> {
+    pivot.map(|at| {
         let [x, y, _] = index_of(LEAF_ZOOM, &at);
         Tile::over(DivisionTile::LEAF, [x, y])
     })

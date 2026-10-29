@@ -323,7 +323,7 @@
       "loading": "Searching…",
       "no_results": "No results found",
       "section_elsewhere": "Elsewhere",
-      "focus": "Current location"
+      "pivot": "Current location"
     }
   },
   "halt": {

@@ -15,7 +15,7 @@ The tier's place among the others is
 Three files here are not indicators but debug views, kept in this folder for
 convenience:
 
-- `frame_gizmo.rs`, behind the `world_gizmo` setting: the focus's cell and the
+- `frame_gizmo.rs`, behind the `world_gizmo` setting: the pivot's cell and the
   frames' rings, as debug lines;
 - `coverage_gizmo.rs`, behind the same setting: the eye's windows' bricks by
   how they stand, their tiles and shards, as translucent lines over the ground;

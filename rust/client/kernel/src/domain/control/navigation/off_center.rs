@@ -29,7 +29,7 @@ fn device_coord() -> Option<Q3> {
     })
 }
 
-/// Whether the focus has wandered off the device, as of this turn.
+/// Whether the pivot has wandered off the device, as of this turn.
 pub fn off_center() -> OffCenter {
     OffCenter {
         device_coord: device_coord(),
@@ -37,13 +37,13 @@ pub fn off_center() -> OffCenter {
     }
 }
 
-/// Whether the focus is off the device, decided once a turn.
+/// Whether the pivot is off the device, decided once a turn.
 pub fn off_center_step() {
     let off = OFF_CENTER.get(|| false);
     // Horizontal only: the fix's Z is GPS altitude and the center's a floor, and
     // their mismatch could hold it off-center forever.
     match (
-        crate::domain::control::camera::controller::focus(),
+        crate::domain::control::camera::controller::pivot(),
         device_coord(),
     ) {
         (Some(center), Some(device)) => {

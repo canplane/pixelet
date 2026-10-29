@@ -8,13 +8,13 @@ import { ButtonStack } from "./button-stack.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 
 const MODE = SETTINGS.camera_mode;
-const FREE = MODE.options.free;
+const FIRST_PERSON = MODE.options.first_person;
 const ORBIT = MODE.options.orbit;
 const PLACE = SETTINGS.place.key;
 
 export function ViewStack() {
   const { t } = useTranslation();
-  const first = useKernel((s) => s.settings[MODE.key]) === FREE;
+  const first = useKernel((s) => s.settings[MODE.key]) === FIRST_PERSON;
   const places = useKernel((s) => s.settings[PLACE]) === 1;
   return (
     <ButtonStack
@@ -26,7 +26,7 @@ export function ViewStack() {
               ? "world.controls.third_person"
               : "world.controls.first_person",
           ),
-          onPress: () => kernel_setting(MODE.key, first ? ORBIT : FREE),
+          onPress: () => kernel_setting(MODE.key, first ? ORBIT : FIRST_PERSON),
         },
         {
           glyph: places ? "mappin.circle.fill" : "mappin.circle",

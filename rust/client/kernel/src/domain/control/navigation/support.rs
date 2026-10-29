@@ -1,6 +1,6 @@
 // pxl-kernel/domain/control/navigation/support.rs
 
-//! The focus standing on the ground, and where every camera's pan
+//! The pivot standing on the ground, and where every camera's pan
 //! puts it. The center's Z is half a cell over the floor the character
 //! stands on, as a cell's center stands over its ground. Only a leaf gives
 //! that floor; a center put over coarser ground keeps its Z unknown and

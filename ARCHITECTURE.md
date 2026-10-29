@@ -208,12 +208,12 @@ direction it faces, the camera's **facing**, in spherical coordinates about the
 world's Z: θ the polar angle from straight down, φ the azimuth from north toward
 east. Nothing else keeps a copy.
 
-The free camera turns about its eye; the orbit turns about a point a distance
+The first-person camera turns about its eye; the orbit turns about a point a distance
 ahead of the eye along the facing. The point a camera turns about is the
-**focus**, the eye itself in the free camera, derived and never kept
-(`controller.rs` `focus`). The character stands there, and a change from one
-camera to the other moves the camera about the focus, never the focus. Code past
-the controllers reads the eye, the facing and the focus.
+**pivot**, the eye itself in the first-person camera, derived and never kept
+(`controller.rs` `pivot`). The character stands there, and a change from one
+camera to the other moves the camera about the pivot, never the pivot. Code past
+the controllers reads the eye, the facing and the pivot.
 
 The **pose** is the eye and the turn from the world's axes to the camera's
 (`domain/view/frame/pose.rs`). The world stays in its own axes, in doubles; what
@@ -346,7 +346,7 @@ in its own **tile cache** (`domain/layer/tile_cache.rs`):
 The GPU holds the ground's cells in **windows**. A ray observes a zoom's cells
 only within a fixed reach of the eye (`pxl-spec-core window.rs` `RADIUS`), so a
 window about a centre holds every cell it can observe at its zoom. The eye has
-one at every zoom drawn; the focus two, at the leaves and the zoom over them;
+one at every zoom drawn; the pivot two, at the leaves and the zoom over them;
 and a place the camera is travelling to one, at the leaves
 (`domain/layer/terrain/window.rs`):
 

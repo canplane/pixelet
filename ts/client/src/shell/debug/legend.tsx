@@ -24,7 +24,7 @@ interface Look {
 }
 
 const FRAME: Record<keyof typeof frame, string> = {
-  focus: "focus and its cell",
+  pivot: "pivot and its cell",
   level: "level ring",
   forward: "upright ring, forward",
   north: "ring through north",

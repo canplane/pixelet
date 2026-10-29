@@ -1,7 +1,7 @@
 // pxl-kernel/domain/layer/terrain/window.rs
 
 //! The ground's cells as the kernel holds them: a window a zoom about each
-//! centre a reader declares — the eye, the focus where walking and editing
+//! centre a reader declares — the eye, the pivot where walking and editing
 //! happen, a destination being gone to — each as deep as its reader reads
 //! (pxl-spec-core `window`). A brick at a zoom is held once, in a slot,
 //! however many windows want it (`Slot`). It is filled from its tile as it
@@ -46,7 +46,7 @@ use pxl_render::gpu::renderer::{CellsBack, FreshBrick, Landing};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Centre {
     Eye,
-    Focus,
+    Pivot,
     Destination,
 }
 
@@ -63,7 +63,7 @@ const _: () = assert!(
 const fn layout(w: u32) -> (Centre, Zoom) {
     match w {
         w if w < EYE_WINDOWS => (Centre::Eye, window::eye_cell(w)),
-        w if w < EYE_WINDOWS + 2 => (Centre::Focus, LEAF_CELL - 1 + (w - EYE_WINDOWS)),
+        w if w < EYE_WINDOWS + 2 => (Centre::Pivot, LEAF_CELL - 1 + (w - EYE_WINDOWS)),
         _ => (Centre::Destination, LEAF_CELL),
     }
 }
@@ -571,7 +571,7 @@ pub fn refold() {
 /// The slots this turn hands, nearest first, as many as a frame's fill
 /// takes: the eye's windows coarsest first, since a reader of a brick
 /// absent reads the coarser window's (pxl-spec-core `window::step`), then the
-/// focus's and a destination's; in a window by how far its brick lies from
+/// pivot's and a destination's; in a window by how far its brick lies from
 /// the centre. A brick another window listed first is not listed again.
 /// Only a brick whose tile can hand it now: one waiting on its tile does
 /// not hold a place another could take.
@@ -639,7 +639,7 @@ fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
     dx * dx + dy * dy
 }
 
-/// The tiles the focus's and a destination's windows want, which the eye's
+/// The tiles the pivot's and a destination's windows want, which the eye's
 /// demand need not name: held hard, as a destination's line is
 /// (pxl-kernel domain/view/demand.rs `observe`).
 pub fn pinned() -> &'static [Tile] {

@@ -4,8 +4,8 @@
 
 use pxl_spec::space::coord::adapter::epsg4326::G4326;
 
-/// Where the focus starts with no fix: Seoul City Hall. Also lights the first
-/// frames and decides day or night before `focus` exists.
+/// Where the pivot starts with no fix: Seoul City Hall. Also lights the first
+/// frames and decides day or night before `pivot` exists.
 pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 // ---- the drawn resolution ----

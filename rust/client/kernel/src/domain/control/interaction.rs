@@ -60,7 +60,7 @@ pub struct Hover {
     pub object_at: Option<EntryAt>,
     /// A decor the ground grew, which has no entry.
     pub scattered: Option<Instance>,
-    /// Where the focus sent there starts from.
+    /// Where the pivot sent there starts from.
     pub approach: Option<Q3>,
 }
 

@@ -49,7 +49,7 @@ import {
 import {
   useCenterCoordinates,
   useDivisionLabel,
-} from "@/shell/division/focus.ts";
+} from "@/shell/division/pivot.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/shell/fixed.ts";
@@ -137,7 +137,7 @@ interface CountrySection {
   rows: SearchResult[];
 }
 
-/** By country, a country by the provider's own name: the focus's first, as
+/** By country, a country by the provider's own name: the pivot's first, as
  * the API ranks it, then each where its best result ranked, none last. */
 function byCountry(
   results: SearchResult[],
@@ -210,7 +210,7 @@ function LocateCard() {
   );
 }
 
-/** Where the search looks from: the focus, which is not the device's location. */
+/** Where the search looks from: the pivot, which is not the device's location. */
 function MapCenter() {
   const { t } = useTranslation();
   const place = useDivisionLabel();
@@ -219,7 +219,7 @@ function MapCenter() {
   return (
     <View>
       <SectionTitle style={styles.sectionHeader}>
-        {t("world.search.focus")}
+        {t("world.search.pivot")}
       </SectionTitle>
       <View style={styles.center}>
         {place !== null && (
@@ -231,7 +231,7 @@ function MapCenter() {
   );
 }
 
-/** The focus's country is taken where the query ran, as the API measured each
+/** The pivot's country is taken where the query ran, as the API measured each
  * result's distance from, so both agree with its order while the camera drifts. */
 interface Found {
   query: string;
@@ -259,7 +259,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       const snapshot = kernel_snapshot();
-      const near = snapshot.focus.center ?? undefined;
+      const near = snapshot.pivot.center ?? undefined;
       const home = snapshot.division.find((p) =>
         p.subtype === DIVISION_SUBTYPE.COUNTRY
       )?.name ?? null;

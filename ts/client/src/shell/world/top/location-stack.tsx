@@ -35,7 +35,7 @@ export function LocationStack() {
   const status = useKernel((s) => s.location.status);
   const hasLocation = useKernel((s) => s.location.has_location);
   const following = useKernel((s) => s.is_follow_mode);
-  const offCenter = useKernel((s) => s.focus.is_off_center);
+  const offCenter = useKernel((s) => s.pivot.is_off_center);
 
   const press = following
     ? Tracking.Unfollow

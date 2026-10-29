@@ -6,7 +6,7 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import {
   useCenterCoordinates,
   useDivisionLabel,
-} from "@/shell/division/focus.ts";
+} from "@/shell/division/pivot.ts";
 import { FADE } from "@/shell/ui/motion/transition.ts";
 import { HaloText } from "./halo.tsx";
 import { color, textStyle, weight } from "@/shell/ui/theme.ts";

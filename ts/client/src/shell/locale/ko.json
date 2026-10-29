@@ -209,7 +209,7 @@
       "loading": "검색 중…",
       "no_results": "검색 결과가 없습니다.",
       "section_elsewhere": "기타",
-      "focus": "현재 위치"
+      "pivot": "현재 위치"
     }
   },
   "halt": {

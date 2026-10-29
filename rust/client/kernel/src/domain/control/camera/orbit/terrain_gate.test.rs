@@ -22,7 +22,7 @@ fn pose(target: V3, dist: f64, polar: f64) -> ViewPose {
 }
 
 /// The ground at five, a roof's underside `roof` over it where there is
-/// one, and the focus standing on the ground under it.
+/// one, and the pivot standing on the ground under it.
 fn roofed(roof: Option<f64>) -> (TileCache<TerrainTile>, Store, V3) {
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
@@ -65,17 +65,17 @@ fn dive_held_back() {
     assert_eq!(dive_to(Some(3.0), 20.0, 0.0), None);
     // Not straight down.
     assert_eq!(dive_to(Some(3.0), 10.0, 0.3), None);
-    // Nothing over the focus.
+    // Nothing over the pivot.
     assert_eq!(dive_to(None, 10.0, 0.0), None);
     // The orbit's nearest past the roof's lowest cell.
     assert_eq!(dive_to(Some(1.0), 10.0, 0.0), None);
 }
 
-/// A roof nearer the focus than the orbit comes: the eye stands at the
+/// A roof nearer the pivot than the orbit comes: the eye stands at the
 /// orbit's nearest, in the roof's lowest cell.
 #[test]
 fn dives_into_low_roof() {
-    // The roof's underside at 7, its lowest cell to 8; the focus at 5.5.
+    // The roof's underside at 7, its lowest cell to 8; the pivot at 5.5.
     assert_eq!(dive_to(Some(2.0), 10.0, 0.0), Some(MIN_DIST));
 }
 
@@ -99,7 +99,7 @@ fn under_half_open() {
     let access = World::new(&tile_cache, &store);
     let at = pose(target, MIN_DIST, 0.0);
     let roof = toward_eye(&at, 16.0, &access).unwrap();
-    // The underside at 7 and the cell's top at 8, the focus at 5.5.
+    // The underside at 7 and the cell's top at 8, the pivot at 5.5.
     let to = |z: f64| z - target[2];
     assert!(under(&roof, &at, to(7.0)));
     assert!(under(&roof, &at, to(7.9)));
@@ -112,11 +112,11 @@ fn under_half_open() {
 fn embedded_first_cell() {
     let _g = serial();
     let (tile_cache, mut store, [x, y, _]) = roofed(Some(2.0));
-    // A wall on the ground beside the focus's cell, from 5 to 6.
+    // A wall on the ground beside the pivot's cell, from 5 to 6.
     let red = cube_id(Cube::Object(cube::Object::red));
     write(&mut store, [x + 0.5, y - 0.5, 5.0], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
-    // Over the focus, or a cell beside it, in the frame the gate puts the eye in.
+    // Over the pivot, or a cell beside it, in the frame the gate puts the eye in.
     let at = |dx: f64, z: f64| world_to_canonical(&[x + dx, y, z]);
     // The roof's lowest cell, air under it.
     assert!(embedded(&at(0.0, 7.5), &access));
@@ -130,13 +130,13 @@ fn embedded_first_cell() {
     assert!(!embedded(&at(0.0, 6.0), &access));
 }
 
-/// Out of a wall's first cell the eye comes back to the focus's side, not
-/// through to the far side, where the wall hides the focus.
+/// Out of a wall's first cell the eye comes back to the pivot's side, not
+/// through to the far side, where the wall hides the pivot.
 #[test]
 fn wall_not_crossed() {
     let _g = serial();
     let (tile_cache, mut store, target) = roofed(None);
-    // A wall a cell thick east of the focus's cell, from 5 to 6.
+    // A wall a cell thick east of the pivot's cell, from 5 to 6.
     let red = cube_id(Cube::Object(cube::Object::red));
     write(
         &mut store,
@@ -145,7 +145,7 @@ fn wall_not_crossed() {
         red,
     );
     let access = World::new(&tile_cache, &store);
-    // Level with the focus, `dist` east of it.
+    // Level with the pivot, `dist` east of it.
     let east = |dist: f64| ViewPose {
         target,
         dist,

@@ -36,7 +36,7 @@ static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
 impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
-    /// The focus's and a destination's windows' tiles.
+    /// The pivot's and a destination's windows' tiles.
     const PINNED: u32 = crate::domain::layer::terrain::window::PINNED_TILES;
 
     fn occupancy(&self) -> Occupancy {
