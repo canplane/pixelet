@@ -98,7 +98,9 @@ impl OrbitObstacleMode {
 ///            (rust/client/render/src/gpu/ao.rs): the world's depth drawn
 ///            once more, the occlusion sampled from it at half resolution,
 ///            denoised, and read by every lit surface. Five passes and 11
-///            bytes a pixel.
+///            bytes a pixel. The corners' too, the darker of the two where
+///            both fall (screen_lit.wgsl), as N8AO reads a cube's corner
+///            softer at half resolution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum AoMode {
@@ -240,8 +242,8 @@ pub enum SettingKey {
     /// A uniform on an already-compiled shader term; not a pass.
     rim_light = 9,
     /// corner, the occlusion a voxel world reads off its own cubes' faces;
-    /// screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
-    /// says each.
+    /// screen, N8AO's screen-space pass with the corners' too, the costliest
+    /// of the three. AO_MODES says each.
     ao = 10,
     /// The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world
     /// cast once more from the sun as the eye's rays are, beams and samples on

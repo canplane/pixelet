@@ -80,7 +80,9 @@
       "           (rust/client/render/src/gpu/ao.rs): the world's depth drawn",
       "           once more, the occlusion sampled from it at half resolution,",
       "           denoised, and read by every lit surface. Five passes and 11",
-      "           bytes a pixel."
+      "           bytes a pixel. The corners' too, the darker of the two where",
+      "           both fall (screen_lit.wgsl), as N8AO reads a cube's corner",
+      "           softer at half resolution."
     ]
   },
   "SKY_TIMES": {
@@ -230,8 +232,8 @@
       "number": 10,
       "$doc": [
         "corner, the occlusion a voxel world reads off its own cubes' faces;",
-        "screen, N8AO's screen-space pass, the costliest of the three. AO_MODES",
-        "says each."
+        "screen, N8AO's screen-space pass with the corners' too, the costliest",
+        "of the three. AO_MODES says each."
       ],
       "kind": "choice",
       "default": "corner",

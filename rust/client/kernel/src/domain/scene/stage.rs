@@ -86,7 +86,8 @@ pub fn stage_write() {
     } else {
         0.0
     };
-    s[STAGE_AT::CORNER_AO] = if settings.ao == AoMode::corner {
+    // The screen's occlusion takes the corners' too, which it reads softer.
+    s[STAGE_AT::CORNER_AO] = if matches!(settings.ao, AoMode::corner | AoMode::screen) {
         crate::domain::scene::param::AO_STRENGTH
     } else {
         0.0

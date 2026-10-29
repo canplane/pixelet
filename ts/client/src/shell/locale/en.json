@@ -69,7 +69,7 @@
         },
         "screen": {
           "label": "Everything (SSAO)",
-          "description": "Adds soft shading to everything on screen, decor and characters too, not just cubes. The most demanding option, as it processes the whole screen."
+          "description": "The corners' shading, plus soft shading on everything on screen, decor and characters too. The most demanding option, as it processes the whole screen."
         }
       },
       "shadows": {

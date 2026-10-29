@@ -137,8 +137,8 @@ export const SETTINGS = {
     cost: "low",
   },
   /** corner, the occlusion a voxel world reads off its own cubes' faces;
-   * screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
-   * says each. */
+   * screen, N8AO's screen-space pass with the corners' too, the costliest
+   * of the three. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",
@@ -343,8 +343,8 @@ export const SETTINGS_SHIPPED = {
     cost: "low",
   },
   /** corner, the occlusion a voxel world reads off its own cubes' faces;
-   * screen, N8AO's screen-space pass, the costliest of the three. AO_MODES
-   * says each. */
+   * screen, N8AO's screen-space pass with the corners' too, the costliest
+   * of the three. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",
