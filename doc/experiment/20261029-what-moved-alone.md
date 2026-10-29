@@ -62,3 +62,19 @@ a block in front of it, as a frame drawn whole showed.
   model.
 EOF
 cd /Users/sanghoon/git/canplane/pixelet && awk 'length > 80 && !/^\|/' doc/experiment/20261029-what-moved-alone.md | head
+## Tried and taken out: the sun's cast left to the jitter's frames
+
+A `px` region frame casts the sun again because its receivers read the
+jitter (`sun_receivers`, `gpu/ray/cast.rs`). Read without it, on the reasoning
+that a jitter under half a pixel moves the tiles a ray meets by no more than
+the tile either side the receivers already read (`sun::READ_TILES`), a frame
+that moves the jitter alone casts the sun no more.
+
+On :5184 with shadows on, set to noon from the real time and switched on after
+the load, once: inside the region the trees cast no shadow and the ground stood
+lighter than outside it, a rectangle on the screen. Not seen again: on a fresh
+load, with the shadows switched off and on, and with the hour set from the real
+time to noon again. Without the change it was not seen either, though at
+another view. Whether the change caused it was not settled, and what it saves
+was not measured against the frames before it, so it was taken out; the sun's
+cast in a jittered region frame is still open.
