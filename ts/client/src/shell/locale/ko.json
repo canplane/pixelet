@@ -181,8 +181,8 @@
     "dock": {
       "pointer": "포인터",
       "eraser": "지우개",
-      "message_placeholder": "메시지 입력…",
-      "pin_placeholder": "핀에 쓸 말…",
+      "message_placeholder": "메시지 입력",
+      "pin_placeholder": "핀 메시지 입력",
       "send": "전송",
       "pin_done": "핀 세우기",
       "drawer_tooltip": "서랍 열기",
@@ -204,7 +204,7 @@
     },
     "search": {
       "trigger_aria_label": "장소 검색",
-      "placeholder": "장소 검색…",
+      "placeholder": "장소 검색",
       "clear_aria_label": "검색어 지우기",
       "loading": "검색 중…",
       "no_results": "검색 결과가 없습니다",

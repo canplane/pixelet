@@ -295,8 +295,8 @@
     "dock": {
       "pointer": "Pointer",
       "eraser": "Eraser",
-      "message_placeholder": "Type a message…",
-      "pin_placeholder": "Words for the pin…",
+      "message_placeholder": "Type a message",
+      "pin_placeholder": "Type the pin's message",
       "send": "Send",
       "pin_done": "Put up pin",
       "drawer_tooltip": "Open drawer",
@@ -318,7 +318,7 @@
     },
     "search": {
       "trigger_aria_label": "Search places",
-      "placeholder": "Search places…",
+      "placeholder": "Search places",
       "clear_aria_label": "Clear search",
       "loading": "Searching…",
       "no_results": "No results found",
