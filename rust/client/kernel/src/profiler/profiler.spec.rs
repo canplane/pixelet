@@ -68,54 +68,54 @@ pub mod FRAME {
     pub const tasks_ms: u32 = 16;
     pub const profiler_ms: u32 = 17;
     pub const effects: u32 = 18;
-    pub const kind_name: u32 = 29;
-    pub const wake_name: u32 = 30;
-    pub const wake_in_ms: u32 = 31;
-    pub const gpu_read: u32 = 32;
-    pub const gpu_spans: u32 = 33;
-    pub const gpu_px: u32 = 57;
-    pub const scale: u32 = 58;
-    pub const census: u32 = 59;
-    pub const gpu_frame: u32 = 79;
-    pub const uploads: u32 = 80;
-    pub const uploads_bytes: u32 = 81;
-    pub const depth_bytes: u32 = 82;
-    pub const pack_bytes: u32 = 83;
-    pub const gpu_objects: u32 = 84;
-    pub const zoom_tiles: u32 = 95;
-    pub const tiles_place: u32 = 119;
-    pub const heap_used_bytes: u32 = 120;
-    pub const heap_live_bytes: u32 = 121;
-    pub const heap_run_bytes: u32 = 122;
-    pub const heap_slot_bytes: u32 = 123;
-    pub const heap_range_bytes: u32 = 124;
-    pub const heap_largest_free_bytes: u32 = 125;
-    pub const heap_refusals: u32 = 126;
-    pub const ring_cq_peak: u32 = 127;
-    pub const ring_sq_peak: u32 = 128;
-    pub const ring_held_peak: u32 = 129;
-    pub const body_slots_peak: u32 = 130;
-    pub const waiting: u32 = 131;
-    pub const out: u32 = 136;
-    pub const cap_terrain_refused: u32 = 141;
-    pub const rays_frames: u32 = 142;
-    pub const eye_casts: u32 = 143;
-    pub const eye_rays: u32 = 144;
-    pub const eye_beam: u32 = 145;
-    pub const eye_sample: u32 = 146;
-    pub const eye_miss: u32 = 147;
-    pub const eye_took: u32 = 148;
-    pub const eye_walked: u32 = 149;
-    pub const eye_boxes: u32 = 150;
-    pub const sun_casts: u32 = 151;
-    pub const sun_rays: u32 = 152;
-    pub const sun_beam: u32 = 153;
-    pub const sun_sample: u32 = 154;
-    pub const sun_miss: u32 = 155;
-    pub const sun_took: u32 = 156;
-    pub const sun_walked: u32 = 157;
-    pub const sun_boxes: u32 = 158;
-    pub const WORDS: u32 = 159;
+    pub const kind_name: u32 = 27;
+    pub const wake_name: u32 = 28;
+    pub const wake_in_ms: u32 = 29;
+    pub const gpu_read: u32 = 30;
+    pub const gpu_spans: u32 = 31;
+    pub const gpu_px: u32 = 55;
+    pub const scale: u32 = 56;
+    pub const census: u32 = 57;
+    pub const gpu_frame: u32 = 77;
+    pub const uploads: u32 = 78;
+    pub const uploads_bytes: u32 = 79;
+    pub const depth_bytes: u32 = 80;
+    pub const pack_bytes: u32 = 81;
+    pub const gpu_objects: u32 = 82;
+    pub const zoom_tiles: u32 = 93;
+    pub const tiles_place: u32 = 117;
+    pub const heap_used_bytes: u32 = 118;
+    pub const heap_live_bytes: u32 = 119;
+    pub const heap_run_bytes: u32 = 120;
+    pub const heap_slot_bytes: u32 = 121;
+    pub const heap_range_bytes: u32 = 122;
+    pub const heap_largest_free_bytes: u32 = 123;
+    pub const heap_refusals: u32 = 124;
+    pub const ring_cq_peak: u32 = 125;
+    pub const ring_sq_peak: u32 = 126;
+    pub const ring_held_peak: u32 = 127;
+    pub const body_slots_peak: u32 = 128;
+    pub const waiting: u32 = 129;
+    pub const out: u32 = 134;
+    pub const cap_terrain_refused: u32 = 139;
+    pub const rays_frames: u32 = 140;
+    pub const eye_casts: u32 = 141;
+    pub const eye_rays: u32 = 142;
+    pub const eye_beam: u32 = 143;
+    pub const eye_sample: u32 = 144;
+    pub const eye_miss: u32 = 145;
+    pub const eye_took: u32 = 146;
+    pub const eye_walked: u32 = 147;
+    pub const eye_boxes: u32 = 148;
+    pub const sun_casts: u32 = 149;
+    pub const sun_rays: u32 = 150;
+    pub const sun_beam: u32 = 151;
+    pub const sun_sample: u32 = 152;
+    pub const sun_miss: u32 = 153;
+    pub const sun_took: u32 = 154;
+    pub const sun_walked: u32 = 155;
+    pub const sun_boxes: u32 = 156;
+    pub const WORDS: u32 = 157;
 }
 
 /// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it.
@@ -159,9 +159,9 @@ pub mod TASK {
 /// One of the worst moving frames since the recording started, by its interval, and the frame before it, which is zero where `has_prev` is 0: a still interval is long on purpose and is never among them.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 159;
-    pub const prev: u32 = 160;
-    pub const WORDS: u32 = 319;
+    pub const has_prev: u32 = 157;
+    pub const prev: u32 = 158;
+    pub const WORDS: u32 = 315;
 }
 
 pub mod SPREAD {
@@ -226,23 +226,23 @@ pub mod SUMMARY {
         pub const profiler: u32 = 28;
         pub const rest: u32 = 31;
         pub const effects_p95: u32 = 34;
-        pub const gpu: u32 = 45;
-        pub const phases_p95: u32 = 48;
-        pub const gpu_spans_p95: u32 = 53;
-        pub const kinds: u32 = 77;
-        pub const wakes: u32 = 86;
-        pub const heap_used_delta_bytes: u32 = 89;
-        pub const first: u32 = 90;
-        pub const last: u32 = 249;
-        pub const WORDS: u32 = 408;
+        pub const gpu: u32 = 43;
+        pub const phases_p95: u32 = 46;
+        pub const gpu_spans_p95: u32 = 51;
+        pub const kinds: u32 = 75;
+        pub const wakes: u32 = 84;
+        pub const heap_used_delta_bytes: u32 = 87;
+        pub const first: u32 = 88;
+        pub const last: u32 = 245;
+        pub const WORDS: u32 = 402;
     }
     pub mod tasks {
-        pub const AT: u32 = 411;
+        pub const AT: u32 = 405;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
     }
     pub mod steps {
-        pub const AT: u32 = 531;
+        pub const AT: u32 = 525;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
@@ -251,7 +251,7 @@ pub mod SUMMARY {
     /// The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_distance`).
     /// The pick is what the tool held strikes there (pxl-kernel domain/control/interaction.rs `pick_at`): `struck` what it met, 0 the ground, 1 a placed cube, 2 placed cubes folded into a coarser box, 3 a decor; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/interaction.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/interaction/collision.rs `is_placement_blocked`).
     pub mod view {
-        pub const AT: u32 = 692;
+        pub const AT: u32 = 686;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -276,7 +276,7 @@ pub mod SUMMARY {
         pub const blocked: u32 = 21;
         pub const WORDS: u32 = 22;
     }
-    pub const WORDS: u32 = 714;
+    pub const WORDS: u32 = 708;
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, the summary's address in the module's memory and its words.

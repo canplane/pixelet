@@ -74,8 +74,18 @@ fn companion_props() -> Option<CompanionProps> {
     })
 }
 
-/// The tool's ghost, drawn by the scene.
-fn ghost_step() {
+/// The edit the pointer would make, of what it is over where the camera now
+/// stands (`camera_tick`), so the scene draws it this turn, not the next.
+fn edit_tick(_: &mut TickContext) {
+    let edits = crate::domain::control::interaction::edit::pending_step();
+    // A new preview moves the world as drawn where it was and where it is.
+    if crate::domain::layer::object::preview::set(edits).is_some() {
+        request_world_tick();
+    }
+}
+
+/// The tool's ghost of that edit, drawn by the scene.
+fn ghost_tick(_: &mut TickContext) {
     use crate::domain::control::interaction::ghost::ghost;
     if section::map().is_some_and(|_| scene().ghost.set(draw_list(), &ghost())) {
         request_world_tick();
@@ -166,6 +176,8 @@ pub fn boot() {
         StepName::input as u32,
     );
     on_tick(Phase::interaction, camera_tick, StepName::camera as u32);
+    on_tick(Phase::interaction, edit_tick, StepName::edit as u32);
+    on_tick(Phase::interaction, ghost_tick, StepName::ghost as u32);
     // After the view has moved, so the environment sees this tick's camera.
     on_tick(
         Phase::interaction,
@@ -252,14 +264,6 @@ pub fn world_turn() -> f64 {
         objects,
         crate::domain::layer::object::repository::step()
     );
-    effect!(times, edit, {
-        let edits = crate::domain::control::interaction::edit::pending_step();
-        // A new preview moves the world as drawn where it was and where it is.
-        if crate::domain::layer::object::preview::set(edits).is_some() {
-            request_world_tick();
-        }
-    });
-    effect!(times, hover, ghost_step());
     // device_coord is not gated like focus: the puck keeps its last coordinate across a transient none.
     effect!(times, puck, location_puck_step(off_center().device_coord));
     effect!(

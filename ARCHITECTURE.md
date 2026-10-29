@@ -774,9 +774,10 @@ doorbell, with what the turn may spend and draw into
 (`ts/client/src/abi/input.ts` `submit_frame`); a turn rung for a command alone
 carries none and draws nothing. The quota's values are the kernel's
 (`sys/sched/tick.rs` `QUANTUM`), written into the **directory** the host reads
-at boot. In the tick, what moves the eye runs in `interaction`, what it then
-sees, demand and the scene, in `visible`, and the later phases hold what the
-quota leaves them (`turn.rs`).
+at boot. In the tick, what moves the eye runs in `interaction`, and after it
+what the pointer is over where the eye now stands, the edit it would make and
+its ghost; what the eye then sees, demand and the scene, in `visible`; and the
+later phases hold what the quota leaves them (`turn.rs`).
 
 Once a turn, before the layers observe, the kernel says what moved (`turn.rs`
 `changes_step`): the tiles whose answer moved, and the regions the object store

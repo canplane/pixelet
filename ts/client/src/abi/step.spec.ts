@@ -10,6 +10,8 @@ export const STEP_NAMES = [
   "controller",
   "input",
   "camera",
+  "edit",
+  "ghost",
   "environment",
   "companion",
   "preview",
@@ -25,8 +27,6 @@ export const EFFECT_NAMES = [
   "destination",
   "decor",
   "objects",
-  "edit",
-  "hover",
   "puck",
   "settings",
 ] as const;
