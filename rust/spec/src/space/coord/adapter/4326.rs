@@ -2,8 +2,10 @@
 
 //! EPSG:4326 (WGS84 lon/lat) to and from the DB's EPSG:3857 coordinates.
 
-// Uppercase as the notation these macro-like helpers are written in.
-#![allow(non_snake_case)]
+#![expect(
+    non_snake_case,
+    reason = "uppercase as the notation these macro-like helpers are written in"
+)]
 
 use crate::space::coord::q3::Q3;
 use crate::space::coord::world::REACH;

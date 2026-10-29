@@ -25,7 +25,7 @@
 // crosses as itself.
 
 // Names as the spec spells them, so one record has one name on every side.
-#![allow(non_camel_case_types)]
+#![allow(non_camel_case_types, reason = "generated from the spec")]
 
 /// Which controller makes the camera's pose.
 ///

@@ -23,10 +23,11 @@ use crate::frame::shader::word::frame::VIEW_PROJ;
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, texture_usage, view_entry,
-    word_bytes, Entry, Format, Gpu, Load, Stamp,
+    word_bytes, Entry, Format, Gpu, Load, RenderContext, TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
+use crate::gpu::span_spec::GpuSpanName;
 use crate::param::shadow::DEPTH_STEP;
 
 /// The map's side in texels.
@@ -336,7 +337,7 @@ impl Shadow {
         g.write_buf(self.corner, 0, bytes(&corner));
     }
 
-    /// The map's pass, timed in `stamp`, the world's depth laid in first
+    /// The map's pass, timed in the span `shadow`, the world's depth laid in first
     /// where `cast` (its cast holds this frame's world); else cleared to the
     /// far plane, as nothing is cast there. Where only the texels `rect`
     /// holds, `[x, y, width, height]`, are drawn again, the rest kept as the
@@ -344,14 +345,14 @@ impl Shadow {
     /// first (`PIPELINE_SUN_MAP` writes every texel it covers), which a
     /// frame that casts alone may. The casters are drawn into it next, then
     /// it ends.
-    pub fn begin(
+    pub fn begin<'a>(
         &self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext<'a>,
         cast: bool,
         rect: Option<[u32; 4]>,
-        stamp: &mut Stamp,
-    ) -> u32 {
+    ) -> TrackedRenderPass<'a> {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::shadow);
         let load = if rect.is_some() {
             Load::Load
         } else {
@@ -361,13 +362,14 @@ impl Shadow {
             encoder,
             &pass_desc(0, Load::Clear, self.map_view, load, 1.0, stamp.pass()),
         );
+        let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(r) = rect {
-            g.set_scissor(pass, r);
+            pass.set_scissor(r);
         }
         if cast {
-            g.set_pipeline(pass, self.lay.pipeline);
-            g.set_bind_group(pass, 0, self.lay_group, &[]);
-            g.draw(pass, 3, 1, 0, 0);
+            pass.set_pipeline(self.lay.pipeline);
+            pass.set_bind_group(0, self.lay_group, &[]);
+            pass.draw(3, 1, 0, 0);
         }
         pass
     }

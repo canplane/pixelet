@@ -112,7 +112,7 @@ impl Lanes for Nothing {
         0
     }
     fn data(&self, _: u32) -> u32 {
-        ground::VOID
+        VOID
     }
 }
 

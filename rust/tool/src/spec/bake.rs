@@ -81,7 +81,7 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
         [
             "/// The base layers a version is published for: the kinds of `FORMAT`,",
             "/// numbered in their order.",
-            "#[allow(non_camel_case_types)]",
+            "#[expect(non_camel_case_types, reason = \"generated from the spec\")]",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
             "#[repr(u32)]",
             "pub enum BaseLayer {",

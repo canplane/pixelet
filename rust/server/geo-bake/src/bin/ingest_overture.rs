@@ -743,7 +743,7 @@ fn span_merc(wkb: &[u8]) -> Result<[f64; 4], String> {
         f64::NEG_INFINITY,
     ];
     vertices(wkb, &mut 0, &mut |x, y| {
-        deg = [deg[0].min(x), deg[1].min(y), deg[2].max(x), deg[3].max(y)]
+        deg = [deg[0].min(x), deg[1].min(y), deg[2].max(x), deg[3].max(y)];
     })?;
     if !deg[0].is_finite() {
         return Err("a geometry with no vertex".to_string());

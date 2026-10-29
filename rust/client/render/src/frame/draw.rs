@@ -234,7 +234,10 @@ impl DrawList {
     }
 
     /// An actor's draw: a draw_as whose sixth uniform float is the model's scale.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+    )]
     pub fn draw_scaled(
         &mut self,
         pipeline: u32,
@@ -261,7 +264,10 @@ impl DrawList {
             .extend_from_slice(&[handle, a, b, uniform, pipeline]);
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+    )]
     pub fn draw_as(
         &mut self,
         pipeline: u32,
@@ -289,7 +295,10 @@ impl DrawList {
 
     /// The eighth float pads the record to two vec4s, the one layout a storage
     /// array cannot read two ways.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+    )]
     pub fn draw_in(
         &mut self,
         pipeline: u32,
@@ -317,7 +326,10 @@ impl DrawList {
     }
 
     /// Words are exact in an f32 up to 2^24.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+    )]
     pub fn draw_instances(
         &mut self,
         pipeline: u32,
@@ -388,7 +400,7 @@ impl Held {
         // SAFETY: the block is the heap's, `self.bytes` long, and at least
         // `lane` long.
         unsafe {
-            core::ptr::copy_nonoverlapping(lane.as_ptr(), mem::at::<u8>(self.at), lane.len())
+            core::ptr::copy_nonoverlapping(lane.as_ptr(), mem::at::<u8>(self.at), lane.len());
         };
         if self.handle == 0 {
             self.handle = draw.upload(self.at as u32, self.bytes, 0, 0);

@@ -12,7 +12,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::frame::shader::word::DECOR_GROUPS;
 use crate::gpu::api::{
     buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
-    view_entry, Format, Gpu, Load,
+    view_entry, Format, Gpu, Load, TrackedRenderPass,
 };
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::decor::DecorPass;
@@ -159,11 +159,12 @@ impl ImpostorPass {
                 encoder,
                 &pass_desc(layer, Load::Clear, self.depth_view, Load::Clear, 1.0, None),
             );
-            g.set_pipeline(pass, self.bake.pipeline);
-            g.set_bind_group(pass, 0, fit_group, &[off]);
-            g.set_bind_group(pass, 1, skin, &[]);
-            draw_model(g, pass, &self.bake, &mut 0, model, vertex_cnt, idx_cnt, 1);
-            g.end(pass);
+            let mut pass = TrackedRenderPass::new(g, pass);
+            pass.set_pipeline(self.bake.pipeline);
+            pass.set_bind_group(0, fit_group, &[off]);
+            pass.set_bind_group(1, skin, &[]);
+            draw_model(&mut pass, &self.bake, model, vertex_cnt, idx_cnt, 1);
+            pass.end();
             release(layer);
             self.fit[k] = fit_of(w.2);
             self.baked[k] = Some(w);
@@ -201,28 +202,25 @@ impl ImpostorPass {
     /// A group whose layer is not drawn yet is not drawn.
     pub fn draw<'a>(
         &self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
         uploads: &mut Uploads,
-        frame: (u32, &mut u32),
+        frame: u32,
     ) {
         let Some(slots) = self.uniforms.slots() else {
             return;
         };
         draw_models(
-            g,
             pass,
             &self.draw,
             self.draw.pipeline,
             frame,
             slots,
-            0,
             draws,
             |d| {
                 self.baked.get(d[1] as usize).copied().flatten()?;
                 Some(ModelDraw {
-                    groups: [self.group, uploads.group(g, d[0])?],
+                    groups: [self.group, uploads.group_of(d[0])?],
                     mesh: None,
                     instances: d[2],
                 })
@@ -235,26 +233,22 @@ impl ImpostorPass {
     /// `2·group + 1`).
     pub fn draw_grown(
         &self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         grown: Option<Drawn>,
         groups: u32,
-        (frame, bound): (u32, &mut u32),
+        frame: u32,
     ) {
         let Some(d) = grown else { return };
-        g.set_pipeline(pass, self.draw.pipeline);
-        if *bound != frame {
-            g.set_bind_group(pass, 0, frame, &[]);
-            *bound = frame;
-        }
-        g.set_bind_group(pass, 2, self.group, &[]);
-        g.set_bind_group(pass, 3, d.instances_group, &[]);
+        pass.set_pipeline(self.draw.pipeline);
+        pass.set_bind_group(0, frame, &[]);
+        pass.set_bind_group(2, self.group, &[]);
+        pass.set_bind_group(3, d.instances_group, &[]);
         for group in 0..groups.min(DECOR_GROUPS as u32) {
             if self.baked[group as usize].is_none() {
                 continue;
             }
-            g.set_bind_group(pass, 1, d.uniform_group, &[d.uniform_at(2 * group + 1)]);
-            g.draw_indirect(pass, d.args, d.args_at(2 * group + 1));
+            pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group + 1)]);
+            pass.draw_indirect(d.args, d.args_at(2 * group + 1));
         }
     }
 }

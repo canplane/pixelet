@@ -477,7 +477,6 @@ struct Shown {
 /// extent and the least and most scale its instances are drawn at. Under an
 /// `opacity` of one the models are laid over the world blended, and a sprite,
 /// which cannot be, is left out.
-#[allow(clippy::too_many_arguments)]
 fn present_patch(
     draw: &mut DrawList,
     b: &Shown,

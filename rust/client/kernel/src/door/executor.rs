@@ -35,7 +35,7 @@ fn raw() -> &'static Raw {
 
 #[embassy_executor::task(pool_size = TASKS)]
 async fn run(task: Task) {
-    task.await
+    task.await;
 }
 
 struct Embassy;

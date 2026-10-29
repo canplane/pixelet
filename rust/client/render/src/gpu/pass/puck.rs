@@ -4,7 +4,7 @@
 
 use crate::frame::draw::{uniform_of, DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use crate::frame::shader::word::BOX_VERTICES;
-use crate::gpu::api::{buf_entry, buffer_usage, bytes, Entry, Gpu};
+use crate::gpu::api::{buf_entry, buffer_usage, bytes, Entry, Gpu, TrackedRenderPass};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -176,7 +176,7 @@ impl PuckPass {
 
     /// The pipeline, the frame's group and the octahedron bound once; a
     /// draw binds its uniform's slot alone.
-    pub fn draw_beacon(&self, g: &Gpu, pass: u32, draws: &Draws) {
+    pub fn draw_beacon(&self, pass: &mut TrackedRenderPass, draws: &Draws) {
         let Some(slots) = self.beacon_uniforms.slots() else {
             return;
         };
@@ -184,40 +184,40 @@ impl PuckPass {
         if cnt == 0 {
             return;
         }
-        g.set_pipeline(pass, self.beacon.pipeline);
-        g.set_bind_group(pass, 0, self.beacon_frame_group, &[]);
-        g.set_vertex_buf(pass, 0, self.oct_pos, 0, 0);
-        g.set_vertex_buf(pass, 1, self.oct_normal, 0, 0);
+        pass.set_pipeline(self.beacon.pipeline);
+        pass.set_bind_group(0, self.beacon_frame_group, &[]);
+        pass.set_vertex_buf(0, self.oct_pos, 0, 0);
+        pass.set_vertex_buf(1, self.oct_normal, 0, 0);
         for k in 0..cnt {
             let (group, off) = slots.at(k);
-            g.set_bind_group(pass, 1, group, &[off]);
-            g.draw(pass, BEACON_VERTICES, 1, 0, 0);
+            pass.set_bind_group(1, group, &[off]);
+            pass.draw(BEACON_VERTICES, 1, 0, 0);
         }
     }
 
     /// The pipeline, the frame's group and the box bound once; a draw binds
     /// its uniform's slot and its upload alone. A zone whose upload is not on
     /// the device yet is passed over.
-    pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &Draws, uploads: &mut Uploads) {
+    pub fn draw_zone(&self, pass: &mut TrackedRenderPass, draws: &Draws, uploads: &mut Uploads) {
         let Some(slots) = self.zone_uniforms.slots() else {
             return;
         };
         if zones(draws).next().is_none() {
             return;
         }
-        g.set_pipeline(pass, self.zone.pipeline);
-        g.set_bind_group(pass, 0, self.frame_group, &[]);
-        g.set_vertex_buf(pass, 0, self.box_pos, 0, 0);
-        g.set_vertex_buf(pass, 1, self.box_uv, 0, 0);
-        g.set_idx_buf(pass, self.box_idx, 0, 0);
+        pass.set_pipeline(self.zone.pipeline);
+        pass.set_bind_group(0, self.frame_group, &[]);
+        pass.set_vertex_buf(0, self.box_pos, 0, 0);
+        pass.set_vertex_buf(1, self.box_uv, 0, 0);
+        pass.set_idx_buf(self.box_idx, 0, 0);
         for (k, d) in zones(draws).enumerate() {
-            let Some(upload) = uploads.group(g, d[0]) else {
+            let Some(upload) = uploads.group_of(d[0]) else {
                 continue;
             };
             let (group, off) = slots.at(k as u32);
-            g.set_bind_group(pass, 1, group, &[off]);
-            g.set_bind_group(pass, 2, upload, &[]);
-            g.draw_indexed(pass, BOX_VERTICES, d[1], 0, 0);
+            pass.set_bind_group(1, group, &[off]);
+            pass.set_bind_group(2, upload, &[]);
+            pass.draw_indexed(BOX_VERTICES, d[1], 0, 0);
         }
     }
 }

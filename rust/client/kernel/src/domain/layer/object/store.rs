@@ -518,7 +518,7 @@ impl Cells<'_> {
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
         let (zoom, at) = self.node;
         self.store
-            .each_in(zoom, at, self.store.cursor(self.node, zoom), visit)
+            .each_in(zoom, at, self.store.cursor(self.node, zoom), visit);
     }
 
     /// The leaf placed at exactly the node, if one is.

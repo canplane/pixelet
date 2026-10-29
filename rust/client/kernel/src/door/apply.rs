@@ -171,7 +171,7 @@ pub(super) fn apply(
             let p = abi::InputPointer::read(given(pkt)?)?;
             match p.phase {
                 abi::PointerPhase::Down => {
-                    camera_pointer_down(p.pointer_type, p.id, p.button, p.x, p.y)
+                    camera_pointer_down(p.pointer_type, p.id, p.button, p.x, p.y);
                 }
                 abi::PointerPhase::Move => camera_pointer_move(p.pointer_type, p.id, p.x, p.y),
                 abi::PointerPhase::Up => {
@@ -292,7 +292,9 @@ pub(super) fn apply(
             match p.sensor {
                 // A failure the platform named no cause for is Other's.
                 abi::Sensor::Geolocation => {
-                    geolocation::geolocation_err(p.code.unwrap_or(abi::GeolocationErrorCode::Other))
+                    geolocation::geolocation_err(
+                        p.code.unwrap_or(abi::GeolocationErrorCode::Other),
+                    );
                 }
                 abi::Sensor::Orientation => device_orientation::on_orient_lost(),
             }
@@ -323,7 +325,7 @@ pub(super) fn apply(
                     }
                 }
                 abi::Sensor::Orientation => {
-                    device_orientation::orient_permission(p.answer, world_platform().orient)
+                    device_orientation::orient_permission(p.answer, world_platform().orient);
                 }
             }
             Ok(Some(0))

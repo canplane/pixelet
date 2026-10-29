@@ -20,7 +20,8 @@
     clippy::type_complexity,
     clippy::absolute_paths,
     unused_imports,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 use core::fmt::Display;

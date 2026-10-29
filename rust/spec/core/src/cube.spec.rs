@@ -7,7 +7,11 @@
 // that palette and whose range past it is what only an object can be.
 
 // Names as the spec spells them, so one record has one name on every side.
-#![allow(non_camel_case_types, non_upper_case_globals)]
+#![allow(
+    non_camel_case_types,
+    non_upper_case_globals,
+    reason = "generated from the spec"
+)]
 
 pub mod sentinel {
     /// nothing painted: the ground before a bake writes it, and an object cell no leaf holds

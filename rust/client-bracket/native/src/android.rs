@@ -61,6 +61,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_mem(
     let mut bytes = 0u32;
     // SAFETY: our own word.
     let at = unsafe { crate::xpute_mem(&raw mut bytes) };
+    // SAFETY: the environment JNI called this with.
     let make = unsafe { jni(env) }
         .NewDirectByteBuffer
         .or_bug(Errno::ENOSYS);
@@ -77,6 +78,7 @@ unsafe fn with_bytes<R>(
     packed: jbyteArray,
     f: impl FnOnce(*const u8, usize) -> R,
 ) -> R {
+    // SAFETY: the environment JNI called this with.
     let jni = unsafe { jni(env) };
     let (length, elements, release) = (
         jni.GetArrayLength.or_bug(Errno::ENOSYS),
@@ -118,6 +120,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_unpack(
     let Ok(size) = jint::try_from(raw.len()) else {
         return core::ptr::null_mut();
     };
+    // SAFETY: the environment JNI called this with.
     let jni = unsafe { jni(env) };
     let (find, method, call, address) = (
         jni.FindClass.or_bug(Errno::ENOSYS),
@@ -169,6 +172,7 @@ struct Wake {
 // SAFETY: JNI's VM is one for the process and may be used from any thread; a
 // global reference and a method ID stay valid in every thread until let go.
 unsafe impl Send for Wake {}
+// SAFETY: as for `Send`: nothing in it is changed once it is made.
 unsafe impl Sync for Wake {}
 
 static WAKE: OnceLock<Wake> = OnceLock::new();
@@ -184,6 +188,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_gpuOpen(
     env: *mut JNIEnv,
     this: jobject,
 ) -> jboolean {
+    // SAFETY: the environment JNI called this with.
     let j = unsafe { jni(env) };
     let mut vm: *mut JavaVM = core::ptr::null_mut();
     // SAFETY: JNI's own calls on the environment it called with; the class
@@ -272,8 +277,8 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceBin
     if let Some(old) = let_go {
         // SAFETY: a window this module acquired, whose surface is gone.
         unsafe {
-            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(old))
-        };
+            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(old));
+        }
     }
     bound
 }
@@ -296,8 +301,8 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceUnbind(
     if let Some(at) = window {
         // SAFETY: a window this module acquired, whose surface is gone.
         unsafe {
-            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(at))
-        };
+            ANativeWindow_release(core::ptr::with_exposed_provenance_mut::<ANativeWindow>(at));
+        }
     }
 }
 

@@ -7,7 +7,7 @@ use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::PIPELINE_SKINNED_DEPTH;
 
-use crate::gpu::api::{bytes, Gpu, Image};
+use crate::gpu::api::{bytes, Gpu, Image, TrackedRenderPass};
 use crate::gpu::pass::model::{
     draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES,
 };
@@ -80,15 +80,13 @@ impl SkinnedPass {
 
     /// Lit, or their depth from the sun (`Stage::Depth`), `frame` the group
     /// 0 the stage reads.
-    #[allow(clippy::too_many_arguments)]
     pub fn draw<'a>(
         &self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
         uploads: &mut Uploads,
         stage: Stage,
-        frame: (u32, &mut u32),
+        frame: u32,
     ) {
         let Some(slots) = self.uniforms.slots() else {
             return;
@@ -97,11 +95,11 @@ impl SkinnedPass {
             Stage::Depth => self.depth.pipeline,
             _ => self.lit.pipeline,
         };
-        draw_models(g, pass, &self.lit, pipeline, frame, slots, 0, draws, |d| {
+        draw_models(pass, &self.lit, pipeline, frame, slots, draws, |d| {
             let (mesh, vertex_cnt, idx_cnt) = uploads.get(d[0])?;
             let skin = skin_made(self.image_of(d[2])?.0)?;
             Some(ModelDraw {
-                groups: [skin, uploads.group(g, d[1])?],
+                groups: [skin, uploads.group_of(d[1])?],
                 mesh: Some((mesh, vertex_cnt, idx_cnt)),
                 instances: 1,
             })

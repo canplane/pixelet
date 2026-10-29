@@ -51,6 +51,15 @@ pub struct GhostDraw {
     at: V3,
 }
 
+/// Where a decor instance's base stands, its turn and its scale, as Bevy's
+/// `Transform` holds a translation, a rotation and a scale.
+#[derive(Clone, Copy)]
+struct Transform {
+    at: V3,
+    rot: f32,
+    scale: f32,
+}
+
 impl GhostDraw {
     /// What the tool shows, drawn as its kind is. Whether what is drawn
     /// changed.
@@ -64,7 +73,14 @@ impl GhostDraw {
                 rot,
                 scale,
                 stand_in,
-            } => self.set_decor(draw, at, decor, variant, rot as f32, scale as f32, stand_in),
+            } => {
+                let t = Transform {
+                    at,
+                    rot: rot as f32,
+                    scale: scale as f32,
+                };
+                self.set_decor(draw, decor, variant, t, stand_in)
+            }
             Ghost::Box(b) => self.set_box(draw, b),
         }
     }
@@ -112,21 +128,19 @@ impl GhostDraw {
         true
     }
 
-    /// `decor`'s `variant`, its base at `at`. An untextured white silhouette
+    /// `decor`'s `variant`, its base at `t`'s `at`. An untextured white silhouette
     /// reads as a glitch, so until the variant's model and skin both arrive
     /// `stand_in`'s box is drawn instead; with none, the instance is the
     /// world's own and drawn as it is. Whether what is drawn changed.
-    #[allow(clippy::too_many_arguments)]
     fn set_decor(
         &mut self,
         draw: &mut DrawList,
-        at: V3,
         decor: &Decor,
         variant: u32,
-        rot: f32,
-        scale: f32,
+        t: Transform,
         stand_in: Option<GhostBox>,
     ) -> bool {
+        let Transform { at, rot, scale } = t;
         let ready = || {
             decor_model(decor, variant as usize).is_some()
                 && decor_skin(decor, variant as usize).is_some()
@@ -192,7 +206,7 @@ impl GhostDraw {
                     [0, 1, idx],
                     DrawList::translation(self.at, eye),
                     GHOST_OPACITY,
-                )
+                );
             }
         }
     }

@@ -14,7 +14,8 @@
     non_upper_case_globals,
     non_snake_case,
     clippy::absolute_paths,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 /// The camera grid's lines.

@@ -16,7 +16,8 @@
     non_snake_case,
     clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 /// An optional field left unset, an index or a handle absent.

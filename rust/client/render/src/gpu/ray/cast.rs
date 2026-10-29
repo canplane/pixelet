@@ -21,7 +21,8 @@ use crate::frame::shader::record::{
 };
 use crate::gpu::api;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu, Stamp,
+    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
+    RenderContext,
 };
 use crate::gpu::grown::{cut_boxes, hold, Drawn, Grown, Grows};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -790,8 +791,16 @@ impl RaysPass {
                 c.size,
                 &c.grid,
                 self.kind == FrameKind::cast,
-                [c.eye, c.beams, c.eye_head],
-                [c.window, ground, c.shards, c.overwrites, pool],
+                [
+                    c.eye,
+                    c.beams,
+                    c.eye_head,
+                    c.window,
+                    ground,
+                    c.shards,
+                    c.overwrites,
+                    pool,
+                ],
             );
             let px_bound = [c.eye, rays.0, c.beams, c.seen, c.raster.visibility_array];
             if px_bound != c.px_bound {
@@ -866,7 +875,9 @@ impl RaysPass {
 
     /// The eye's windows folded over their bricks where their entries moved
     /// (`joined_cs`): ahead of the frame, as the fold outlives it.
-    pub fn fold(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
+    pub fn fold(&mut self, ctx: &mut RenderContext) -> bool {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::fill);
         let Some(c) = self.cast.as_mut().filter(|c| c.refold && c.group != 0) else {
             return false;
         };
@@ -895,7 +906,8 @@ impl RaysPass {
     /// so what each costs is read apart; the sun's in the shadow's, with
     /// the map's pass, which is not drawn at the world's pixels
     /// (`PER_PX`).
-    pub fn dispatch(&mut self, g: &Gpu, encoder: u32, stamps: &mut [Stamp]) {
+    pub fn dispatch(&mut self, ctx: &mut RenderContext) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
         let (grows, casts, kind) = (self.grows(), self.casts_px(), self.kind);
         let Some(c) = self.cast.as_mut() else { return };
         if casts {
@@ -915,7 +927,7 @@ impl RaysPass {
             // only the jitter moved (`FrameKind::px`), the beam rays, the
             // cells' starts and the samples stand, and the rest is cast again
             // off them.
-            let pass = g.compute_pass(encoder, stamps[GpuSpanName::cast as usize].pass());
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::cast).pass());
             g.set_bind_group(pass, 0, c.group, &[]);
             if c.forgets != observed::FORGETS_NONE {
                 g.set_pipeline(pass, c.forget_built.pipeline);
@@ -958,17 +970,11 @@ impl RaysPass {
                 }
                 let mut group = c.group;
                 if span == GpuSpanName::px {
-                    c.raster.draw(
-                        g,
-                        encoder,
-                        stamps,
-                        &c.grid,
-                        kind == FrameKind::cast,
-                        c.region,
-                    );
+                    c.raster
+                        .draw(ctx, &c.grid, kind == FrameKind::cast, c.region);
                     group = c.px_group;
                 }
-                let pass = g.compute_pass(encoder, stamps[span as usize].pass());
+                let pass = g.compute_pass(encoder, ctx.stamp(span).pass());
                 g.set_bind_group(pass, 0, group, &[]);
                 g.set_pipeline(pass, built.pipeline);
                 g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
@@ -982,7 +988,7 @@ impl RaysPass {
                 (c.seen, word_bytes(observed::MARKS_CNT as usize)),
                 4,
             );
-            let pass = g.compute_pass(encoder, stamps[GpuSpanName::miss as usize].pass());
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::miss).pass());
             g.set_bind_group(pass, 0, c.group, &[]);
             g.set_pipeline(pass, c.miss_list_built.pipeline);
             g.dispatch_indirect(pass, c.marks, word_bytes(ray::MISS_ARGS_LIST as usize));
@@ -993,7 +999,7 @@ impl RaysPass {
         // The decor grown over the rays, before the sun's cast, which marks
         // where it stands (`sun_mark_drawn_cs`).
         if grows {
-            let pass = g.compute_pass(encoder, stamps[GpuSpanName::grow as usize].pass());
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::grow).pass());
             c.grown.dispatch(g, pass);
             g.end(pass);
         }
@@ -1002,7 +1008,7 @@ impl RaysPass {
             // their visible sample, a workgroup a tile (pxl-spec-core
             // `sun::TILE`), and the rest walked off their list as the eye's
             // missed pixels are: each a pass timed in its own span.
-            let stamp = stamps[GpuSpanName::sun_beam as usize].pass();
+            let stamp = ctx.stamp(GpuSpanName::sun_beam).pass();
             let pass = g.compute_pass(encoder, stamp);
             // The tiles its receivers read marked first, timed with the
             // beam: where the eye's rays meet the world, a thread a brick
@@ -1039,20 +1045,19 @@ impl RaysPass {
             g.set_pipeline(pass, c.cells_built.pipeline);
             g.dispatch_indirect(pass, c.sun_args, args(sun::ARGS_CELLS));
             g.end(pass);
-            let stamp = stamps[GpuSpanName::sun_sample as usize].pass();
+            let stamp = ctx.stamp(GpuSpanName::sun_sample).pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);
             g.set_pipeline(pass, c.sample_built.pipeline);
             g.dispatch_indirect(pass, c.sun_args, args(sun::ARGS_SAMPLE));
             g.end(pass);
-            let stamp = &mut stamps[GpuSpanName::sun_raster as usize];
-            let pass = g.compute_pass(encoder, stamp.pass());
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sun_raster).pass());
             g.set_bind_group(pass, 0, c.sun_groups[2], &[]);
             g.set_pipeline(pass, c.raster.boxes_built.pipeline);
             g.dispatch_indirect(pass, c.sun_args, args(sun::ARGS_SAMPLE_BOX));
             g.end(pass);
-            c.raster.sun_draw(g, encoder, stamp);
-            let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_slot as usize].pass());
+            c.raster.sun_draw(ctx);
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sun_slot).pass());
             g.set_bind_group(pass, 0, c.sun_groups[0], &[]);
             g.set_pipeline(pass, c.sun_built.pipeline);
             g.dispatch_indirect(pass, c.sun_args, args(sun::ARGS_SLOT));
@@ -1067,7 +1072,7 @@ impl RaysPass {
                 ),
                 4,
             );
-            let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_walk as usize].pass());
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sun_walk).pass());
             g.set_bind_group(pass, 0, c.sun_groups[3], &[]);
             g.set_pipeline(pass, c.sun_miss_built.pipeline);
             let list = word_bytes(ray::MISS_ARGS_LIST as usize);
@@ -1109,7 +1114,7 @@ impl RaysPass {
 
     /// The counts' sums since boot (ray/tally.rs `RAY_SUMS`).
     pub fn tally_sums(&self) -> [f64; tally::RAY_SUMS] {
-        super::tally::Tally::sums()
+        Tally::sums()
     }
 
     pub fn sun_casts(&self) -> bool {

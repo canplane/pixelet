@@ -688,10 +688,7 @@ pub struct Entry {
     pub ticket: u32,
 }
 
-const _: () = assert!(
-    core::mem::size_of::<Entry>() == 16,
-    "an entry is a row of four words"
-);
+const _: () = assert!(size_of::<Entry>() == 16, "an entry is a row of four words");
 
 impl Entry {
     pub const fn absent(brick: [i32; 2]) -> Entry {
@@ -967,8 +964,10 @@ fn bounded(
 /// column's own for a node no wider than a cell, and its entry there for
 /// the node's first cell, at `[x, y]` in its brick.
 fn entry_at(zoom: Zoom, from: Zoom, [x, y]: [u32; 2]) -> (u32, [u32; 2]) {
-    // rust-gpu has no `saturating_sub`.
-    #[allow(clippy::implicit_saturating_sub)]
+    #[expect(
+        clippy::implicit_saturating_sub,
+        reason = "rust-gpu has no `saturating_sub`"
+    )]
     let j = if zoom >= from { 0 } else { from - zoom };
     (j, [x >> j, y >> j])
 }

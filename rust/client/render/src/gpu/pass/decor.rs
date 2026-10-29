@@ -9,7 +9,7 @@ use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
 use crate::frame::shader::word::DECOR_GROUPS;
 
-use crate::gpu::api::{Gpu, Image};
+use crate::gpu::api::{Gpu, Image, TrackedRenderPass};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{
@@ -124,15 +124,14 @@ impl DecorPass {
     /// `frame` the group 0 the stage reads.
     pub fn draw(
         &mut self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         draws: &Draws,
         uploads: &mut Uploads,
         stage: Stage,
-        frame: (u32, &mut u32),
+        frame: u32,
     ) {
         let pipeline = self.pipeline(stage);
-        self.draw_pipeline(g, pass, draws, uploads, PIPELINE_DECOR, pipeline, frame);
+        self.draw_pipeline(pass, draws, uploads, PIPELINE_DECOR, pipeline, frame);
     }
 
     fn pipeline(&self, stage: Stage) -> u32 {
@@ -145,14 +144,12 @@ impl DecorPass {
 
     pub fn draw_ghosts(
         &mut self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         draws: &Draws,
         uploads: &mut Uploads,
-        frame: (u32, &mut u32),
+        frame: u32,
     ) {
         self.draw_pipeline(
-            g,
             pass,
             draws,
             uploads,
@@ -163,16 +160,14 @@ impl DecorPass {
     }
 
     /// The ghost's uniforms follow the opaque ones' (`prepare`).
-    #[allow(clippy::too_many_arguments)]
     fn draw_pipeline(
         &mut self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         draws: &Draws,
         uploads: &mut Uploads,
         which: u32,
         pipeline: u32,
-        frame: (u32, &mut u32),
+        frame: u32,
     ) {
         let Some(slots) = self.uniforms.slots() else {
             return;
@@ -184,17 +179,15 @@ impl DecorPass {
         };
         let lit = self.lit;
         draw_models(
-            g,
             pass,
             &lit,
             pipeline,
             frame,
-            slots,
-            first,
+            slots.skip(first),
             draws.of(which),
             |d| {
                 let (model, vertex_cnt, idx_cnt, skin) = self.model_drawn(d[1], uploads)?;
-                let upload = uploads.group(g, d[0])?;
+                let upload = uploads.group_of(d[0])?;
                 Some(ModelDraw {
                     groups: [skin, upload],
                     mesh: Some((model, vertex_cnt, idx_cnt)),
@@ -208,37 +201,24 @@ impl DecorPass {
     /// (pxl-spec-core `scatter::drawn`, a group's models its region `2·group`).
     pub fn draw_grown(
         &mut self,
-        g: &Gpu,
-        pass: u32,
+        pass: &mut TrackedRenderPass,
         grown: Option<Drawn>,
         uploads: &Uploads,
         stage: Stage,
-        (frame, bound): (u32, &mut u32),
+        frame: u32,
     ) {
         let Some(d) = grown else { return };
-        g.set_pipeline(pass, self.pipeline(stage));
-        if *bound != frame {
-            g.set_bind_group(pass, 0, frame, &[]);
-            *bound = frame;
-        }
-        g.set_bind_group(pass, 3, d.instances_group, &[]);
-        let mut mesh_bound = 0;
+        pass.set_pipeline(self.pipeline(stage));
+        pass.set_bind_group(0, frame, &[]);
+        pass.set_bind_group(3, d.instances_group, &[]);
         for group in 0..scatter::GROUPS {
             let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(group, uploads) else {
                 continue;
             };
-            g.set_bind_group(pass, 1, d.uniform_group, &[d.uniform_at(2 * group)]);
-            g.set_bind_group(pass, 2, skin, &[]);
-            bind_mesh(
-                g,
-                pass,
-                &self.lit,
-                &mut mesh_bound,
-                model,
-                vertex_cnt,
-                idx_cnt,
-            );
-            g.draw_indexed_indirect(pass, d.args, d.args_at(2 * group));
+            pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group)]);
+            pass.set_bind_group(2, skin, &[]);
+            bind_mesh(pass, &self.lit, model, vertex_cnt, idx_cnt);
+            pass.draw_indexed_indirect(d.args, d.args_at(2 * group));
         }
     }
 }

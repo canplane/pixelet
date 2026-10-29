@@ -163,9 +163,11 @@ fn rs_write(spec: &Spec, f: &Field) -> Result<Vec<String>, String> {
         return Ok(vec![
             "let mut n = 0;".to_string(),
             format!("({v})(&mut |_| n += 1);"),
-            format!("w.branch(n, |w| ({v})(&mut |item| {{"),
-            format!("    w.branch({fields}, |w| item.write(w));"),
-            "}));".to_string(),
+            "w.branch(n, |w| {".to_string(),
+            format!("    ({v})(&mut |item| {{"),
+            format!("        w.branch({fields}, |w| item.write(w));"),
+            "    });".to_string(),
+            "});".to_string(),
         ]);
     }
     Ok(vec![match kind {
@@ -245,7 +247,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             "// type is long to spell and is spelled once, here, for each. A table",
             "// with no signal or no enum read off the wire leaves a writer or a",
             "// number's check unused.",
-            "#![allow(non_camel_case_types, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code)]",
+            "#![allow(non_camel_case_types, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, reason = \"generated from the spec\")]",
             "",
             "use core::fmt::Display;",
             "",

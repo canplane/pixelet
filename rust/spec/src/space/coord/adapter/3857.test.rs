@@ -5,7 +5,6 @@ use super::*;
 /// A 512u square, as a size and nothing more.
 const Z15: Zoom = 15;
 use crate::space::coord::adapter::epsg4326;
-use crate::space::coord::zoom;
 use crate::space::coord::{q3, world};
 
 // The round trip goes through the fixed-point lattice; 0.5 is far looser
@@ -67,7 +66,7 @@ fn short_way_across_antimeridian() {
 #[test]
 fn tile_bbox_exclusive_edge() {
     // The last tile before X's positive edge at 2^23 units.
-    let last = (1i32 << 23) / zoom::units(Z15) as i32 - 1;
+    let last = (1i32 << 23) / units(Z15) as i32 - 1;
     let tile_idx = [last, last];
     let [_, max] = get_tile_bbox(Z15, tile_idx);
 

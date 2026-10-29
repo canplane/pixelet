@@ -7,9 +7,10 @@ use crate::frame::draw::{uniform_of, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
 use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
-use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, Stamp};
+use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::upload::{Draws, Uploads};
 
 /// Their faces go into the canvas's depth, cleared once what is drawn over
@@ -67,17 +68,16 @@ impl DebugPass {
     }
 
     /// `depth` is the world's, which nothing reads after this.
-    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
         canvas: u32,
         depth: u32,
         draws: &Draws,
         uploads: &Uploads,
-        stamp: &mut Stamp,
     ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::debug);
         let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
         let held = self
             .uniforms

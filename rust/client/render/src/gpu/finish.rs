@@ -8,8 +8,9 @@
 //! (`Surface::screen_depth`).
 
 use crate::frame::shader::record::PIPELINE_SCREEN_FINISH;
-use crate::gpu::api::{buf_entry, pass_desc, release, view_entry, Gpu, Load, Stamp};
+use crate::gpu::api::{buf_entry, pass_desc, release, view_entry, Gpu, Load, RenderContext};
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
 
 pub struct Finish {
@@ -35,18 +36,18 @@ impl Finish {
 
     /// `color`, `s`'s world color as it is shown, onto `canvas` and `s`'s
     /// depth into its screen's, a pass of its own, by the frame words in
-    /// `frame`, its time counted in `stamp`'s span.
-    #[allow(clippy::too_many_arguments)]
+    /// `frame`, its time counted in `span`.
     pub fn draw(
         &mut self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
+        span: GpuSpanName,
         frame: u32,
         s: &Surface,
         color: u32,
         canvas: u32,
-        stamp: &mut Stamp,
     ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(span);
         let bound = [frame, color, s.depth_view];
         if bound != self.bound {
             release(self.group);

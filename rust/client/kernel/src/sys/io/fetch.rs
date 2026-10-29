@@ -147,7 +147,7 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
                         file::read(
                             fd,
                             core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize),
-                        )
+                        );
                     };
                     Got::Read(Some(block))
                 }

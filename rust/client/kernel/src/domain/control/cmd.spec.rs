@@ -32,7 +32,8 @@
     clippy::type_complexity,
     clippy::absolute_paths,
     unused_imports,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 use core::fmt::Display;
@@ -771,7 +772,7 @@ impl Snapshot<'_> {
         w.branch(n, |w| {
             (self.division)(&mut |item| {
                 w.branch(DivisionPart::FIELDS, |w| item.write(w));
-            })
+            });
         });
         w.u32_array(Some(self.previews));
         w.u32_array(Some(self.kept_refused));
@@ -921,7 +922,7 @@ impl DivisionPart<'_> {
         w.branch(n, |w| {
             (self.names)(&mut |item| {
                 w.branch(LangName::FIELDS, |w| item.write(w));
-            })
+            });
         });
         w.bool(Some(self.shown));
         w.bool(Some(self.area));

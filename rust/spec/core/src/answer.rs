@@ -200,8 +200,10 @@ pub const fn eighths(fill: u32) -> u32 {
 /// bore, so it takes its share from the ground's. The look is the kind most
 /// of the fill is: the overwrite's where it fills at least as much as the
 /// ground, the ground's where air is what is written.
-// rust-gpu has no `saturating_sub`.
-#[allow(clippy::implicit_saturating_sub)]
+#[expect(
+    clippy::implicit_saturating_sub,
+    reason = "rust-gpu has no `saturating_sub`"
+)]
 pub fn cover(ground: u32, kind: u32, over: u32) -> (u32, bool) {
     if fills(kind) {
         let sum = ground + over;

@@ -252,7 +252,7 @@ fn view() -> ViewSection {
             reach: observation::eye_draw_reach().unwrap_or(0.0),
         };
         let detail = query::by_dist();
-        let hit = crate::domain::query::World::now()
+        let hit = query::World::now()
             .first_hit(&ray, detail)
             .val()
             .flatten()?;

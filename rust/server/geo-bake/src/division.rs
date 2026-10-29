@@ -27,7 +27,6 @@ use crate::wkb::wkb_to_geometries;
 use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::tile::division;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::lattice;
 use pxl_spec::space::layer::lattice::Lattice;
 
 /// Each area meeting the tile, cut to it, with its division and how deep that is.
@@ -253,7 +252,7 @@ impl Base for DivisionTile {
 
     const LEAF: Zoom = DIVISION_LEAF;
 
-    const LATTICE: Lattice = lattice::GROUND;
+    const LATTICE: Lattice = GROUND;
 
     fn encode(&self, _: Tile) -> Result<Vec<u8>, String> {
         division::encode(self).map_err(|e| format!("{e:?}"))

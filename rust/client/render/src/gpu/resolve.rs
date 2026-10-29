@@ -21,9 +21,11 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RESOLVE;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, view_entry, Gpu, Load, Stamp,
+    buf_entry, buffer_usage, bytes, pass_desc, place, release, sampler_entry, view_entry, Gpu,
+    Load, RenderContext,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::{Region, Surface, WORLD_COLOR};
 
 /// The frames the jitter's sequence covers a pixel in.
@@ -114,19 +116,18 @@ impl Resolve {
     /// the jitter moved since the last drawn frame. Where the frame draws a
     /// `region` again alone, only it, written back into the last history,
     /// which stays the one read. A pass of its own, by the frame words in
-    /// `frame`, its time counted in `stamp`'s span; the history the finish
+    /// `frame`, its time counted in the span `resolve`; the history the finish
     /// encodes.
-    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &mut self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
         frame: u32,
         s: &Surface,
         quiet: bool,
         region: Option<Region>,
-        stamp: &mut Stamp,
     ) -> u32 {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
             (self.histories, self.gathered, self.turn) = (s.history_view, 0, 0);
         }
@@ -182,17 +183,12 @@ impl Resolve {
         let Some(r) = region else {
             return s.history_view[k];
         };
+        let at = [r.at[0], r.at[1], 0];
         g.copy_texture(
             encoder,
-            s.history[k],
-            r.at[0],
-            r.at[1],
-            s.history[was],
-            r.at[0],
-            r.at[1],
-            0,
-            r.size[0],
-            r.size[1],
+            &place(s.history[k], at),
+            &place(s.history[was], at),
+            [r.size[0], r.size[1], 1],
         );
         s.history_view[was]
     }

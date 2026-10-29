@@ -16,6 +16,7 @@ use xpute_guest::global::Global;
 use xpute_guest::mem;
 
 use crate::domain::query::model;
+use crate::domain::query::model::registry::Channel;
 use crate::sys::io::loader::{load_gltf, load_of};
 use crate::sys::io::room::Refused;
 use crate::sys::mem::section;
@@ -291,7 +292,14 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                 let Some(&joint) = joint_of.get(&ch.node) else {
                     continue;
                 };
-                models.ch(model, c, joint, ch.path as u8, ch.step, &ch.times, &ch.vals);
+                let ch = Channel {
+                    joint,
+                    path: ch.path as u8,
+                    step: ch.step,
+                    times: ch.times.to_vec(),
+                    vals: ch.vals.to_vec(),
+                };
+                models.ch(model, c, ch);
             }
         }
 

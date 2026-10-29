@@ -183,7 +183,7 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     for e in &spec.entries {
         match e {
             ErrnoEntry::Section { section } => {
-                cpp.extend([String::new(), format!("    // ---- {section} ----")])
+                cpp.extend([String::new(), format!("    // ---- {section} ----")]);
             }
             ErrnoEntry::Member(m) => cpp.push(format!(
                 "    {} = {}, // {}",

@@ -140,7 +140,10 @@ impl Handed {
 /// where the ground is not held, the lack. Whether a cell is the zoom asked's
 /// or coarser air is the asker's: its zoom against the finest asked (`near`),
 /// past the ground's cells, where nothing finer is, a cell either way.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the world's four stores, where the node is, and the zooms and cuts it is asked at, each its own"
+)]
 pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
     held: &mut H,
     bricks: &W,

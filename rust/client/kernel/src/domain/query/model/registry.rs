@@ -20,14 +20,14 @@ const _: () = assert!(
 const T: u8 = 0;
 const R: u8 = 1;
 
-struct Channel {
-    joint: u32,
-    path: u8,
+pub struct Channel {
+    pub joint: u32,
+    pub path: u8,
     /// Step keys hold a value until the next; linear keys interpolate.
-    step: bool,
-    times: Vec<f32>,
+    pub step: bool,
+    pub times: Vec<f32>,
     /// 3 or 4 floats a key.
-    vals: Vec<f32>,
+    pub vals: Vec<f32>,
 }
 
 struct Clip {
@@ -296,34 +296,16 @@ impl Models {
         (m.clips.len() - 1) as u32
     }
 
-    /// `values` end to end: four a key for a rotation, three otherwise.
-    #[allow(clippy::too_many_arguments)]
-    pub fn ch(
-        &mut self,
-        model: u32,
-        clip: u32,
-        joint: u32,
-        path: u8,
-        step: bool,
-        times: &[f32],
-        vals: &[f32],
-    ) {
+    /// `ch` into `model`'s `clip`, its values a key's each, past them dropped.
+    pub fn ch(&mut self, model: u32, clip: u32, mut ch: Channel) {
         let Some(m) = self.models.get_mut(model as usize) else {
             return;
         };
         let Some(c) = m.clips.get_mut(clip as usize) else {
             return;
         };
-        let width = width(path);
-        let vals = vals[..times.len() * width].to_vec();
-        let times = times.to_vec();
-        c.channels.push(Channel {
-            joint,
-            path,
-            step,
-            times,
-            vals,
-        });
+        ch.vals.truncate(ch.times.len() * width(ch.path));
+        c.channels.push(ch);
     }
 
     /// # Safety

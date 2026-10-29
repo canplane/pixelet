@@ -48,7 +48,7 @@ fn unread_keys_unwritten() {
         declaration(TOP_ZOOM, &kinds, &Overrides::new()).is_err(),
         "a version no segment"
     );
-    let earth_held = super::try_kinds(|_| {
+    let earth_held = try_kinds(|_| {
         Ok(Kind {
             format: 1,
             version: "v1".into(),

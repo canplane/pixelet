@@ -143,7 +143,7 @@ unsafe fn room_of(record: u32) -> separation::Room {
             assert!(
                 SEPARATION_LANES[K].1 == size_of::<T>(),
                 "a lane's element as wide as the layout counts it"
-            )
+            );
         };
         let (at, bytes) = separation_lane(record, K);
         // Inside the range by the layout, so past its end is a bug.

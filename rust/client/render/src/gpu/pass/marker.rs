@@ -14,13 +14,14 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::frame::shader::word::{marker, MARKER_FLOATS};
 use crate::gpu::api::{
     buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
-    Format, Gpu, Load, Stamp,
+    Format, Gpu, Load, RenderContext,
 };
 use crate::gpu::mip::{mip_levels, Mips};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::{Paint, Sheet, SlotSet};
 use crate::gpu::sheet::{SheetPainter, Sketch, SHEET_SCALE};
+use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{Draws, Uploads};
 use crate::look::marker::{
@@ -43,7 +44,6 @@ fn anchor_dot(p: &mut Sketch, logical_w: f32) {
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 fn point(
     p: &mut Sketch,
     lines: &[String],
@@ -89,7 +89,6 @@ fn pill(p: &mut Sketch, words: &str, fill: u32, ink: u32, logical_w: f32) {
 
 /// The uncovered corners read as a pixel-art rounded corner; a real arc would
 /// anti-alias against nearest sampling.
-#[allow(clippy::too_many_arguments)]
 fn notched_rect(p: &mut Sketch, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.rect(x + notch, y, (w - notch * 2.0).max(0.0), h, fill);
     p.rect(x, y + notch, w, (h - notch * 2.0).max(0.0), fill);
@@ -290,18 +289,15 @@ impl MarkerPass {
         let mut made = Vec::new();
         let mut drawn = false;
         for (slot, p, rasters) in ready {
-            if self.painter.paint(
-                g,
-                encoder,
-                self.sheet,
-                sheet.slot_rect(slot),
-                &p,
-                rasters,
-                &mut made,
-            ) {
-                drawn = true;
-            } else {
-                sheet.mark_dirty(slot);
+            let painted =
+                self.painter
+                    .paint(g, encoder, self.sheet, sheet.slot_rect(slot), &p, rasters);
+            match painted {
+                Some(ids) => {
+                    made.extend(ids);
+                    drawn = true;
+                }
+                None => sheet.mark_dirty(slot),
             }
         }
         g.submit(encoder);
@@ -403,17 +399,16 @@ impl MarkerPass {
             });
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
         color: u32,
         depth: u32,
         draws: &Draws,
         uploads: &Uploads,
-        stamp: &mut Stamp,
     ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::marker);
         if self.sheet_group == 0 {
             return;
         }

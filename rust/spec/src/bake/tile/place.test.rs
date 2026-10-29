@@ -107,12 +107,12 @@ fn no_tile_past_coarsest() {
         assert!(
             lattice::coarsest(GROUND) == TOP_ZOOM,
             "the ground is read up to the pyramid's top"
-        )
+        );
     };
     const {
         assert!(
             lattice::coarsest(PLACE_LATTICE) > TOP_ZOOM,
             "places are read no coarser than their icon's cell allows"
-        )
+        );
     };
 }

@@ -10,7 +10,7 @@ use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
-    Entry, Gpu, Image,
+    Entry, Gpu, Image, TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -158,11 +158,20 @@ pub struct DrawUniforms {
 pub struct Slots {
     group: u32,
     stride: u32,
+    first: u32,
 }
 
 impl Slots {
     pub fn at(&self, k: u32) -> (u32, u32) {
-        (self.group, k * self.stride)
+        (self.group, (self.first + k) * self.stride)
+    }
+
+    /// The slots past the first `n`, as `Iterator::skip` takes them.
+    pub fn skip(self, n: u32) -> Slots {
+        Slots {
+            first: self.first + n,
+            ..self
+        }
     }
 }
 
@@ -217,6 +226,7 @@ impl DrawUniforms {
         (self.group != 0).then_some(Slots {
             group: self.group,
             stride: self.stride,
+            first: 0,
         })
     }
 
@@ -253,89 +263,60 @@ pub struct ModelDraw {
     pub instances: u32,
 }
 
-/// A group or a mesh the previous draw bound is not bound again.
-#[allow(clippy::too_many_arguments)]
+/// Each draw `resolve` makes, at its slot's uniforms; the pipeline and
+/// group 0 set once a draw is made.
 pub fn draw_models<'a>(
-    g: &Gpu,
-    pass: u32,
+    pass: &mut TrackedRenderPass,
     lit: &Built,
     pipeline: u32,
-    (frame, bound): (u32, &mut u32),
+    frame: u32,
     slots: Slots,
-    first: u32,
     draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
     mut resolve: impl FnMut(&[u32; DRAW_WORDS]) -> Option<ModelDraw>,
 ) {
-    let mut started = false;
-    let mut groups = [0u32; 2];
-    let mut mesh_bound = 0;
     for (k, d) in draws.enumerate() {
         let Some(m) = resolve(d) else { continue };
-        if !started {
-            started = true;
-            g.set_pipeline(pass, pipeline);
-            if *bound != frame {
-                g.set_bind_group(pass, 0, frame, &[]);
-                *bound = frame;
-            }
-        }
-        let (group, off) = slots.at(first + k as u32);
-        g.set_bind_group(pass, 1, group, &[off]);
-        for (i, (held, id)) in groups.iter_mut().zip(m.groups).enumerate() {
-            if *held != id {
-                g.set_bind_group(pass, 2 + i as u32, id, &[]);
-                *held = id;
-            }
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, frame, &[]);
+        let (group, off) = slots.at(k as u32);
+        pass.set_bind_group(1, group, &[off]);
+        for (i, id) in m.groups.into_iter().enumerate() {
+            pass.set_bind_group(2 + i as u32, id, &[]);
         }
         match m.mesh {
-            Some((mesh, vertex_cnt, idx_cnt)) => draw_model(
-                g,
-                pass,
-                lit,
-                &mut mesh_bound,
-                mesh,
-                vertex_cnt,
-                idx_cnt,
-                m.instances,
-            ),
-            None => g.draw(pass, 4, m.instances, 0, 0),
+            Some((mesh, vertex_cnt, idx_cnt)) => {
+                draw_model(pass, lit, mesh, vertex_cnt, idx_cnt, m.instances);
+            }
+            None => pass.draw(4, m.instances, 0, 0),
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn draw_model(
-    g: &Gpu,
-    pass: u32,
+    pass: &mut TrackedRenderPass,
     lit: &Built,
-    bound: &mut u32,
     mesh: u32,
     vertex_cnt: u32,
     idx_cnt: u32,
     instances: u32,
 ) {
-    bind_mesh(g, pass, lit, bound, mesh, vertex_cnt, idx_cnt);
-    g.draw_indexed(pass, idx_cnt, instances, 0, 0);
+    bind_mesh(pass, lit, mesh, vertex_cnt, idx_cnt);
+    pass.draw_indexed(idx_cnt, instances, 0, 0);
 }
 
-/// A mesh's vertex lanes and indices bound, unless `bound` is it already.
+/// A mesh's vertex lanes and indices, a lane its `lit` stride's share.
 pub fn bind_mesh(
-    g: &Gpu,
-    pass: u32,
+    pass: &mut TrackedRenderPass,
     lit: &Built,
-    bound: &mut u32,
     mesh: u32,
     vertex_cnt: u32,
     idx_cnt: u32,
 ) {
-    if *bound != mesh {
-        let mut at = 0;
-        for lane in 0..lit.lanes {
-            let size = vertex_cnt * lit.strides[lane];
-            g.set_vertex_buf(pass, lane as u32, mesh, at, size);
-            at += size;
-        }
-        g.set_idx_buf(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, idx_cnt * 4);
-        *bound = mesh;
+    let mut at = 0;
+    for lane in 0..lit.lanes {
+        let size = vertex_cnt * lit.strides[lane];
+        pass.set_vertex_buf(lane as u32, mesh, at, size);
+        at += size;
     }
+    pass.set_idx_buf(mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, idx_cnt * 4);
 }

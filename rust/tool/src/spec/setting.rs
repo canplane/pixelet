@@ -151,7 +151,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     ));
     rs.push(String::new());
     rs.extend(casing_note());
-    rs.push("#![allow(non_camel_case_types)]".into());
+    rs.push("#![allow(non_camel_case_types, reason = \"generated from the spec\")]".into());
     for name in &choices {
         let List { vals, doc, .. } = list(name).ok_or(format!("{JSON}: no list {name}"))?;
         let e = enum_name(name);

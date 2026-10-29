@@ -12,7 +12,8 @@
     non_upper_case_globals,
     non_snake_case,
     clippy::absolute_paths,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 /// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case.

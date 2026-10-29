@@ -33,11 +33,12 @@ use crate::frame::shader::word::{
 };
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
-    word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, Stamp, DONE,
+    word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, RenderContext, DONE,
 };
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
+use crate::gpu::span_spec::GpuSpanName;
 use crate::look::atmosphere as model;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_MOON_COLOR, ENV_SUN};
 
@@ -361,12 +362,12 @@ impl Atmosphere {
     /// eye's texel drawn this frame (`exposed`); whether it was.
     pub fn froxel(
         &mut self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
         [frame, sky]: [&[f32]; 2],
         exposed: bool,
-        stamp: &mut Stamp,
     ) -> bool {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::air);
         let r = &mut self.air;
         r.begin();
         r.read(frame);
@@ -455,12 +456,13 @@ impl Atmosphere {
     /// The exposure texel is a function of the words it reads and the
     /// tables, so it is drawn where `lay_out` found the words moved, or a
     /// table was drawn.
-    pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> (bool, bool) {
+    pub fn draw(&mut self, ctx: &mut RenderContext) -> (bool, bool) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
         let mut drew = !self.baked;
         if !self.baked {
-            self.table(g, encoder, TRANSMITTANCE, stamp);
-            self.table(g, encoder, MULTISCATTER, stamp);
-            self.table(g, encoder, IRRADIANCE, stamp);
+            self.table(ctx, TRANSMITTANCE);
+            self.table(ctx, MULTISCATTER);
+            self.table(ctx, IRRADIANCE);
             self.baked = true;
             self.drawn_for = [None; 2];
         }
@@ -476,7 +478,7 @@ impl Atmosphere {
                 continue;
             }
             g.write_buf(self.slopes.0, 4 * k as u32, bytes(&[0u32]));
-            self.table(g, encoder, table, stamp);
+            self.table(ctx, table);
             self.drawn_for[k] = Some(now);
             self.slopes_of[k] = true;
             drew = true;
@@ -486,7 +488,7 @@ impl Atmosphere {
         }
         let exposed = drew || self.moved;
         if exposed {
-            self.table(g, encoder, EXPOSURE_TEXEL, stamp);
+            self.table(ctx, EXPOSURE_TEXEL);
         }
         (drew, exposed)
     }
@@ -520,7 +522,9 @@ impl Atmosphere {
         self.steps
     }
 
-    fn table(&self, g: &Gpu, encoder: u32, k: usize, stamp: &mut Stamp) {
+    fn table(&self, ctx: &mut RenderContext, k: usize) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::air);
         let pass = g.pass(
             encoder,
             &pass_desc(

@@ -18,7 +18,8 @@
     non_upper_case_globals,
     non_snake_case,
     clippy::absolute_paths,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 /// "XPUT" as four bytes read little-endian: what tells a directory from memory nothing wrote.

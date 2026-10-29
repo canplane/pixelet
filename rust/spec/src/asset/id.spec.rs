@@ -19,7 +19,8 @@
     non_snake_case,
     clippy::absolute_paths,
     non_camel_case_types,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 pub const SHAPE_BITS: u32 = 10;

@@ -12,7 +12,7 @@ use pxl_spec::asset::{shipped_sentinel_tile, shipped_texture_tile, TileOrigin};
 
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_usage, bytes, release, texture_usage, Format, Gpu, Image};
+use crate::gpu::api::{buffer_usage, bytes, place, release, texture_usage, Format, Gpu, Image};
 use crate::gpu::mip::{mip_levels, Mips};
 use crate::mesh::paint::palette::{palette, LAYERS, SENTINELS};
 
@@ -140,15 +140,9 @@ impl Pack {
         for (slot, tile) in tiles.iter().enumerate() {
             g.copy_texture(
                 encoder,
-                texture,
-                tile.x,
-                tile.y,
-                self.tex,
-                0,
-                0,
-                slot as u32,
-                LAYER_TEX_SIZE,
-                LAYER_TEX_SIZE,
+                &place(texture, [tile.x, tile.y, 0]),
+                &place(self.tex, [0, 0, slot as u32]),
+                [LAYER_TEX_SIZE, LAYER_TEX_SIZE, 1],
             );
         }
         g.submit(encoder);

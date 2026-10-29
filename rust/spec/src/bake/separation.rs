@@ -592,9 +592,8 @@ pub struct Lanes<'a> {
 /// Refused unless the lanes are one tile's separation, consistently sized and within a record's room.
 pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
     let starts = d.at(0)?.get_array::<u32>()?;
-    let points = match d.at(1)?.get_array::<i16>()?.as_chunks::<2>() {
-        (points, []) => points,
-        _ => return Err(malformed()),
+    let (points, []) = d.at(1)?.get_array::<i16>()?.as_chunks::<2>() else {
+        return Err(malformed());
     };
     let lanes = Lanes {
         starts,

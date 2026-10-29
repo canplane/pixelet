@@ -81,7 +81,7 @@ fn formats_round_trip() {
     // On the CPU its lines, but for what only a bake reads: a fold's
     // coarsest zooms and a grid sweep's boxes.
     let resident = decode_into(&terrain, room()).unwrap();
-    let held = separation::Separation {
+    let held = Separation {
         coarsest: Default::default(),
         ..tile.separation.clone()
     };

@@ -15,7 +15,6 @@ use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::orbit::orbit;
 use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::domain::control::navigation::support::{is_unknown, pan_to, unknown_z};
-use crate::domain::control::param;
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::domain::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
 use crate::domain::view::frame::pose::ObserverPose;
@@ -265,7 +264,7 @@ pub fn reset_azimuth() {
 
 pub fn reset_dist() {
     set_intent(IntentPatch {
-        dist: Some(param::DEFAULT_DIST),
+        dist: Some(DEFAULT_DIST),
         ..Default::default()
     });
 }
@@ -273,7 +272,7 @@ pub fn reset_dist() {
 /// Going to a place: a view far out comes back in; one the user brought
 /// nearer stays, as map apps do.
 pub fn come_in_to_default() {
-    let default = param::DEFAULT_DIST;
+    let default = DEFAULT_DIST;
     if camera_state().intent.dist > default {
         reset_dist();
     }

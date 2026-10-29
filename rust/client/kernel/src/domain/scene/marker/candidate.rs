@@ -40,7 +40,6 @@ impl Candidates {
         self.cnt = 0;
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn push(
         &mut self,
         local_x: f64,

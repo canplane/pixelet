@@ -37,7 +37,6 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// grid_ceil(max), n < 0 ends at grid_floor(min), n = 0 takes the
 /// cell the hit point falls in. `precise_box` overrides the hit's box (a
 /// placed cube's entry, as it is stored).
-#[allow(clippy::needless_range_loop)]
 pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb>) -> Q3 {
     let Aabb {
         min: box_min,
@@ -61,7 +60,10 @@ pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb
 
 /// The `size` voxel `hit` struck, for the eraser's terrain dig: as
 /// world_adjacent_corner but staying inside the struck box on the normal axis.
-#[allow(clippy::needless_range_loop)]
+#[expect(
+    clippy::needless_range_loop,
+    reason = "an axis indexes the hit's normal, its box and the corner at once"
+)]
 pub fn world_struck_corner(hit: &Hit, size: f64) -> Q3 {
     let mut out: V3 = [0.0; 3];
     for axis in 0..3 {

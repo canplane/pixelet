@@ -14,6 +14,7 @@ mod tally;
 use crate::frame::shader::record::{PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAY};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Format, Gpu,
+    TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::FrameKind;
@@ -102,23 +103,21 @@ impl RaysPass {
         self.bound = bound;
     }
 
-    /// Returns the group 0 it leaves bound: none where no eye casts.
-    pub fn draw(&self, g: &Gpu, pass: u32) -> u32 {
-        self.draw_by(g, pass, &self.built)
+    pub fn draw(&self, pass: &mut TrackedRenderPass) {
+        self.draw_by(pass, &self.built);
     }
 
     /// Its depth alone, the occlusion's prepass's (gpu/ao.rs).
-    pub fn draw_depth(&self, g: &Gpu, pass: u32) -> u32 {
-        self.draw_by(g, pass, &self.depth)
+    pub fn draw_depth(&self, pass: &mut TrackedRenderPass) {
+        self.draw_by(pass, &self.depth);
     }
 
-    fn draw_by(&self, g: &Gpu, pass: u32, built: &Built) -> u32 {
+    fn draw_by(&self, pass: &mut TrackedRenderPass, built: &Built) {
         if self.kind == FrameKind::plain || self.group == 0 {
-            return 0;
+            return;
         }
-        g.set_pipeline(pass, built.pipeline);
-        g.set_bind_group(pass, 0, self.group, &[]);
-        g.draw(pass, 3, 1, 0, 0);
-        self.group
+        pass.set_pipeline(built.pipeline);
+        pass.set_bind_group(0, self.group, &[]);
+        pass.draw(3, 1, 0, 0);
     }
 }

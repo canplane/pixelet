@@ -12,7 +12,7 @@ use crate::frame::shader::record::PIPELINE_STAR;
 use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
 use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
-use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu};
+use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
@@ -100,14 +100,14 @@ impl StarPass {
         g.write_buf(self.uniform, 0, bytes(&self.words));
     }
 
-    pub fn draw(&self, g: &Gpu, pass: u32) {
+    pub fn draw(&self, pass: &mut TrackedRenderPass) {
         if self.words[INTENSITY] <= DRAWN_ABOVE {
             return;
         }
-        g.set_pipeline(pass, self.built.pipeline);
-        g.set_bind_group(pass, 0, self.frame_group, &[]);
-        g.set_bind_group(pass, 1, self.group, &[]);
-        g.draw(pass, 4, (CATALOG.len() / RECORD_BYTES) as u32, 0, 0);
+        pass.set_pipeline(self.built.pipeline);
+        pass.set_bind_group(0, self.frame_group, &[]);
+        pass.set_bind_group(1, self.group, &[]);
+        pass.draw(4, (CATALOG.len() / RECORD_BYTES) as u32, 0, 0);
     }
 }
 

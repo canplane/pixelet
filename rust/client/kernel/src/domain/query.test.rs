@@ -785,13 +785,8 @@ fn grown_decor_edit_removes() {
     let decor = Decor::of(DecorId::of(tree.id).unwrap());
     let grows = |store: &Store| {
         let world = World::new(&tile_cache, store);
-        super::scatter::grown_at(
-            &mut super::scatter::Asked::new(&world),
-            decor,
-            [cx, cy],
-            true,
-        )
-        .map(|(_, grows)| grows)
+        scatter::grown_at(&mut scatter::Asked::new(&world), decor, [cx, cy], true)
+            .map(|(_, grows)| grows)
     };
     assert_eq!(
         grows(&Store::default()),

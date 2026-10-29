@@ -164,7 +164,7 @@ pub fn patch_of(zoom: Zoom, [min, max]: [[i32; 2]; 2], n: u32) -> (Zoom, [i32; 2
 /// brick at the leaves, its side `window::BRICK` leaf cells, aligned to
 /// it, so a patch as wide or wider holds it whole.
 pub const BRICK_PATCHES: u32 = {
-    let side = window::BRICK_SHIFT;
+    let side = BRICK_SHIFT;
     let (mut born, mut sum) = (LEAF_ZOOM + 1, 0);
     while born > TOP_ZOOM {
         born -= 1;
@@ -936,7 +936,7 @@ impl Decor {
 
     /// Its cell's zoom: a unit's, `scale_steps` coarser.
     pub const fn cell_zoom(&self) -> Zoom {
-        (crate::UNIT_ZOOM as i32 - self.scale_steps) as Zoom
+        (UNIT_ZOOM as i32 - self.scale_steps) as Zoom
     }
 }
 

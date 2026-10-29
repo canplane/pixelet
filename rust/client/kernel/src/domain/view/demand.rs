@@ -175,7 +175,7 @@ impl<L: Observed> Demand<L> {
     pub fn absent(&mut self, p: Tile) {
         match L::empty() {
             Some(empty) if L::top().is_some_and(|top| p.zoom <= top) => {
-                L::tile_cache().set(p, empty)
+                L::tile_cache().set(p, empty);
             }
             _ => L::tile_cache().answer_above(p),
         }
@@ -204,7 +204,6 @@ impl<L: Observed> Demand<L> {
 
     /// Builds the asks for `o`: the estimator's demand, the floor and the
     /// destination's line.
-    #[allow(clippy::too_many_arguments)]
     pub fn observe(
         &mut self,
         o: Option<&Observation>,

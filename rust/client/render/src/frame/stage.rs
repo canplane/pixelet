@@ -8,7 +8,10 @@ use xpute_guest::global::Global;
 pub const STAGE_WORDS: usize = STAGE_AT::SHADOWS + 1;
 
 /// Where each value sits in the lane.
-#[allow(non_snake_case)]
+#[expect(
+    non_snake_case,
+    reason = "the lane's offsets read as consts, `STAGE_AT::SHADOWS`"
+)]
 pub mod STAGE_AT {
     /// The view matrix through the root frame (16).
     pub const MARKER_VIEW: usize = 0;

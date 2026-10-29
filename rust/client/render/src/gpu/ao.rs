@@ -14,10 +14,12 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry,
-    texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, Stamp,
+    texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, RenderContext,
+    TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
+use crate::gpu::span_spec::GpuSpanName;
 
 /// N8AO's blue noise, `AO_NOISE_SIDE` a side; its four channels are the
 /// hemisphere spin, the ray push and the two denoise spins.
@@ -260,8 +262,10 @@ impl ScreenAo {
         self.map_view = 0;
     }
 
-    pub fn begin_prepass(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> u32 {
-        g.pass(
+    pub fn begin_prepass<'a>(&self, ctx: &mut RenderContext<'a>) -> TrackedRenderPass<'a> {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::prepass);
+        let pass = g.pass(
             encoder,
             &pass_desc(
                 0,
@@ -271,10 +275,13 @@ impl ScreenAo {
                 0.0,
                 stamp.pass(),
             ),
-        )
+        );
+        TrackedRenderPass::new(g, pass)
     }
 
-    pub fn run(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
+    pub fn run(&self, ctx: &mut RenderContext) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::ao);
         let steps: [(u32, u32, u32, u32); 5] = [
             (self.downsample.pipeline, self.groups[0], self.half_view, 0),
             (self.sample.pipeline, self.groups[1], self.ping_view[0], 0),

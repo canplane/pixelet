@@ -13,8 +13,8 @@ use crate::frame::shader::word::{
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, texture_usage, view_entry,
-    write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
+    buf_entry, buffer_usage, bytes, pass_desc, place, room, sampler_entry, texture_usage,
+    view_entry, write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::PAD;
@@ -125,7 +125,6 @@ impl Sketch {
 
     /// A disc whose edge fades over `edge` and whose fill is `shade` lighter
     /// at its top and as much darker at its foot.
-    #[allow(clippy::too_many_arguments)]
     pub fn soft_circle(&mut self, cx: f32, cy: f32, r: f32, edge: f32, shade: f32, color: u32) {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
         let scale = SHEET_SCALE as f32;
@@ -227,10 +226,10 @@ impl SheetPainter {
             .collect()
     }
 
-    /// `sketch` painted with its lines' `rasters` (`rasters`); false, and
+    /// `sketch` painted with its lines' `rasters` (`rasters`), and what it
+    /// made for that, let go once the encoder is submitted; none, and
     /// nothing recorded, where its pixels do not fit this turn's stream
     /// (`room`).
-    #[allow(clippy::too_many_arguments)]
     pub fn paint(
         &self,
         g: &Gpu,
@@ -239,8 +238,7 @@ impl SheetPainter {
         rect: [u32; 4],
         sketch: &Sketch,
         rasters: Vec<Raster<'static>>,
-        made: &mut Vec<u32>,
-    ) -> bool {
+    ) -> Option<[u32; 9]> {
         let icons: Vec<Vec<u8>> = sketch
             .icons
             .iter()
@@ -343,7 +341,7 @@ impl SheetPainter {
                 + write_buffer_bytes(bytes(&size_bytes))
                 + write_buffer_bytes(instance_bytes),
         ) {
-            return false;
+            return None;
         }
         let lines = g.texture(
             layer_w,
@@ -396,8 +394,13 @@ impl SheetPainter {
         g.set_bind_group(pass, 1, lines_group, &[]);
         g.draw(pass, 4, shapes.len() as u32, 0, 0);
         g.end(pass);
-        g.copy_texture(encoder, target, 0, 0, sheet, x, y, 0, w, h);
-        made.extend([
+        g.copy_texture(
+            encoder,
+            &place(target, [0, 0, 0]),
+            &place(sheet, [x, y, 0]),
+            [w, h, 1],
+        );
+        Some([
             pass,
             target_view,
             target,
@@ -407,7 +410,6 @@ impl SheetPainter {
             size,
             lines_view,
             lines,
-        ]);
-        true
+        ])
     }
 }

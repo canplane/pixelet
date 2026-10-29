@@ -261,7 +261,7 @@ pub fn world_turn() -> f64 {
     effect!(times, dst, {
         // What the walker found under an unknown Z, let go where it moved.
         support::support_step();
-        destination::dst_step()
+        destination::dst_step();
     });
     effect!(times, decor, decor_models_step());
     effect!(times, objects, repository::step());

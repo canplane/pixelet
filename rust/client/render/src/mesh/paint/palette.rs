@@ -28,8 +28,7 @@ pub fn palette() -> impl Iterator<Item = Cube> {
     ALL_CUBES.iter().copied()
 }
 
-#[allow(non_snake_case)]
-pub fn LAYER_IDX(cube: Cube) -> u32 {
+pub fn layer_idx(cube: Cube) -> u32 {
     palette()
         .position(|c| c == cube)
         .expect("a cube of the catalog") as u32

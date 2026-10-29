@@ -19,7 +19,7 @@ use crate::frame::shader::record::{compute, PIPELINE_RASTER, SHADER_FACE, SHADER
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
-    Load, Stamp,
+    Load, RenderContext,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
@@ -117,10 +117,8 @@ impl Raster {
     /// cleared where the samples are cast again (`samples_cast`), else the
     /// boxes they left kept; its groups over the cast's `eye`, `beams` and
     /// the eye's `head` (pxl-spec-core `sun::MOVED_SIZE`), and, for the
-    /// faces' asking, the world's query's buffers (`world`: the window, the
-    /// tiles' frames, the service area's index, the overwrites, the ways'
-    /// pool).
-    #[allow(clippy::too_many_arguments)]
+    /// faces' asking, the world's query's buffers (the window, the tiles'
+    /// frames, the service area's index, the overwrites, the ways' pool).
     pub(super) fn prepare(
         &mut self,
         g: &Gpu,
@@ -128,8 +126,7 @@ impl Raster {
         size: [u32; 2],
         grid: &beam::Grid,
         samples_cast: bool,
-        [eye, beams, head]: [u32; 3],
-        world: [u32; 5],
+        [eye, beams, head, window, ground, shards, overwrites, pool]: [u32; 8],
     ) {
         let samples = grid.samples[0] * grid.samples[1];
         if samples > self.room {
@@ -204,7 +201,6 @@ impl Raster {
             args[raster::ARGS_FACES as usize + 2] = 1;
             g.write_buf(self.args, 0, bytes(&args));
         }
-        let [window, ground, shards, overwrites, pool] = world;
         let bound = [
             eye, beams, head, self.boxes, window, ground, shards, overwrites, pool,
         ];
@@ -253,14 +249,13 @@ impl Raster {
     /// timed together (span `sraster`).
     pub(super) fn draw(
         &self,
-        g: &Gpu,
-        encoder: u32,
-        stamps: &mut [Stamp],
+        ctx: &mut RenderContext,
         grid: &beam::Grid,
         samples_cast: bool,
         region: Option<Region>,
     ) {
-        let stamp = &mut stamps[GpuSpanName::sraster as usize];
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::sraster);
         if samples_cast {
             let pass = g.compute_pass(encoder, stamp.pass());
             g.set_bind_group(pass, 0, self.groups[0], &[]);
@@ -294,7 +289,7 @@ impl Raster {
         if !samples_cast {
             return;
         }
-        let pass = g.compute_pass(encoder, stamps[GpuSpanName::face as usize].pass());
+        let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::face).pass());
         g.set_bind_group(pass, 0, self.groups[2], &[]);
         g.set_pipeline(pass, self.faces_built.pipeline);
         g.dispatch_indirect(pass, self.args, word_bytes(raster::ARGS_FACES as usize));
@@ -398,9 +393,11 @@ impl Raster {
     }
 
     /// The sun's boxes drawn into its targets as many as their args say,
-    /// cleared first, timed in `stamp` (span `sun_raster`), after its boxes
+    /// cleared first, timed in the span `sun_raster`, after its boxes
     /// are written.
-    pub(super) fn sun_draw(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
+    pub(super) fn sun_draw(&self, ctx: &mut RenderContext) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::sun_raster);
         let s = &self.sun;
         let pass = g.pass(
             encoder,

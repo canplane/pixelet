@@ -156,7 +156,7 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
             spec::DIRECTORY_AT as usize,
             directory_words(DIRECTORY_ENTRIES),
             &entries,
-        )
+        );
     };
 }
 
@@ -235,8 +235,8 @@ fn post_shell(s: &mut State) {
 
     let sensor = |cmd: Command, sensor: Sensor| {
         raise(cmd, SensorStartSignal::FIELDS, |w| {
-            SensorStartSignal { sensor }.write(w)
-        })
+            SensorStartSignal { sensor }.write(w);
+        });
     };
     if let Some(c) = take_geolocation_command() {
         match c {
@@ -264,7 +264,7 @@ fn post_shell(s: &mut State) {
             len,
         };
         raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| {
-            signal.write(w)
+            signal.write(w);
         });
     }
 }

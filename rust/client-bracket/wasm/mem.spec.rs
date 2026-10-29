@@ -21,7 +21,8 @@
     non_upper_case_globals,
     non_snake_case,
     clippy::absolute_paths,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 /// The stack, at the bottom of the memory. build.rs hands this number to wasm-ld

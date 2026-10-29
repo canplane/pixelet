@@ -7,7 +7,7 @@
 // The decors as the GPU reads them too: how the ground grows each one, the
 // looks it stands on and the boxes its variants claim, in the catalog's
 // order. pxl-spec asset/decor.spec.rs adds their models over each row.
-#![allow(non_camel_case_types)]
+#![allow(non_camel_case_types, reason = "generated from the spec")]
 
 /// The Poisson process every decor is scattered by: a patch of `patch` cells a
 /// side at the zoom its candidates are born at, a zoom keeping one in `kept`

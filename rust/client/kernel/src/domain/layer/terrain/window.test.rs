@@ -166,8 +166,8 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             vec![(0, 0); window::WAYS_BRICK_SEGMENTS as usize],
             vec![0; window::LINES_WORDS as usize],
         );
-        let n = terrain::brick_lines(t, separation, place, &mut segments, &mut lines);
-        let laid = pxl_spec::bake::tile::terrain::Laid {
+        let n = brick_lines(t, separation, place, &mut segments, &mut lines);
+        let laid = terrain::Laid {
             cell,
             place,
             lines: &lines[..n],

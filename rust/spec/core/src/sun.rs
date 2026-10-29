@@ -869,7 +869,7 @@ mod tests {
         let st = starts_of(eye, &s);
         let q3 = (1u32 << FRAC_W) as f32;
         for p in [[0, 0], [5, 17], [63, 40]] {
-            let (o, ray, _) = super::ray(eye, &s, &st, p);
+            let (o, ray, _) = ray(eye, &s, &st, p);
             let v = |k: usize, t: f32| o[k].wrapping_sub(eye[k]) as f32 / q3 + ray.dir[k] * t;
             let at = s.texel_at([v(0, 3.0), v(1, 3.0), v(2, 3.0)]);
             assert!(

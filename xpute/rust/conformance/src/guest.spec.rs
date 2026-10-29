@@ -17,7 +17,8 @@
     non_upper_case_globals,
     non_snake_case,
     clippy::absolute_paths,
-    dead_code
+    dead_code,
+    reason = "generated from the spec"
 )]
 
 /// The room a guest's shared range asks for: the directory, both rings, a stream and its

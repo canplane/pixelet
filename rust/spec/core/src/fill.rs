@@ -123,7 +123,7 @@ impl Bricks for Fresh<'_> {
         laid_of(self.ground, self.base, i)
     }
     fn root(&self, _: u32, _: u32) -> u32 {
-        at(self.ground, self.base + window::ROOT_AT)
+        at(self.ground, self.base + ROOT_AT)
     }
 }
 
@@ -301,7 +301,7 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
 /// `BRICK_CELLS` a brick in the bricks' order: what a ray's hit is
 /// drawn by (`ground::Cell::four`), the one read of them past the fill.
 pub fn look(looks: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
-    let rec = window::handed_at(k);
+    let rec = handed_at(k);
     let i = window::idx_of([x, y]);
     put(
         looks,

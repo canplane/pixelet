@@ -1,7 +1,7 @@
 // pxl-spec/asset/cube.test.rs
 
 use super::*;
-use crate::asset::{decor_ids, decor_num_id};
+use crate::asset::{decor_num_id, DECOR_IDS};
 
 #[test]
 fn cube_round_trip() {
@@ -20,7 +20,7 @@ fn non_cubes() {
     ] {
         assert_eq!(cube_of(val), None, "{val}");
     }
-    for &id in decor_ids.iter() {
+    for &id in DECOR_IDS.iter() {
         assert_eq!(cube_of(decor_num_id(id)), None, "{id:?}");
     }
 }

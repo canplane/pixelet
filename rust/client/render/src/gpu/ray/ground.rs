@@ -19,11 +19,12 @@ use crate::frame::shader::record::{
 };
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, room, word_bytes, write_buffer_bytes,
-    Gpu, Stamp, DONE, UNIFORM_ALIGN_MAX,
+    Gpu, RenderContext, DONE, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer;
 use crate::gpu::renderer::{CellsBack, GroundBricks, Landing};
+use crate::gpu::span_spec::GpuSpanName;
 
 /// The buffers bricks' cells come back through: what a frame hands, a
 /// mapping still out a frame more (pxl-spec-core `window::HANDED`).
@@ -490,10 +491,7 @@ impl RaysPass {
             {
                 return false;
             }
-            let (brick, at) = (
-                q.fresh[window::FRESH_BRICK as usize],
-                window::handed_at(fresh) * 4,
-            );
+            let (brick, at) = (q.fresh[FRESH_BRICK as usize], window::handed_at(fresh) * 4);
             g.write_buf(gb.fresh, at, bytes(&q.fresh));
             g.write_buf(gb.fresh, at + LOOKS_AT * 4, q.looks);
             g.write_buf(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
@@ -512,7 +510,9 @@ impl RaysPass {
     /// as they outlive it, so no brick the window names is cast before its
     /// cells are written, even when the frame proper is dropped. Whether it
     /// recorded any.
-    pub fn grids(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> bool {
+    pub fn grids(&mut self, ctx: &mut RenderContext) -> bool {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::fill);
         let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else {
             return false;
         };

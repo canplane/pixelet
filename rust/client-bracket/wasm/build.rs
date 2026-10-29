@@ -37,7 +37,7 @@ fn main() {
         assert!(
             MIN_MEM_BYTES <= DESKTOP_BYTES,
             "the module asks for more than the larger of the two reservations"
-        )
+        );
     };
 
     wasm::link(&LinkConfig {

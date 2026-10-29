@@ -84,7 +84,7 @@ pub struct TerrainTile {
 pub fn ways_fit(separation: &Separation, brick: u32) -> Result<(), ([u32; 2], usize)> {
     let mut entries = [0usize; (WAYS_ACROSS * WAYS_ACROSS) as usize];
     separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, _, _, _| {
-        entries[k] += 1
+        entries[k] += 1;
     });
     let (bins, bricks) = (brick >> WAYS_SHIFT, TILE_CELLS / brick);
     for qy in 0..bricks {

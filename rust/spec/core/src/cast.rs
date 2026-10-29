@@ -287,7 +287,7 @@ fn roots_of(o: [i32; 3]) -> [i32; 3] {
 pub fn point_at(o: [i32; 3], ray: &Ray, t: f32) -> ([u32; 3], [i32; 3]) {
     let og = grid_of(o);
     let on = |a: usize| {
-        let d = libm::floorf(crate::axis(ray.dir, a as u32) * t * (1 << FRAC_W) as f32) as i32;
+        let d = libm::floorf(axis(ray.dir, a as u32) * t * (1 << FRAC_W) as f32) as i32;
         let p = og[a].wrapping_add(d as u32);
         (
             p,
@@ -703,7 +703,10 @@ impl<A: Copy> Keep<A> for () {
 /// by (Amanatides & Woo 1987) and the walk is at the child of the nearest
 /// ancestor holding the next node, by the highest bit the step changed
 /// (POP), or past a root, in the next root, from its top. One loop.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk's query, origin, ray, detail, stop and start, and the two visitors it hands each node, each its own (Laine & Karras 2010)"
+)]
 pub fn walk<Q: Query>(
     q: &mut Q,
     o: [i32; 3],

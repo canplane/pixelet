@@ -8,8 +8,6 @@
 //! which of its tiles a cube wears on each face (`ingested`). A cube with no
 //! image still draws as its catalog color.
 
-#![allow(non_upper_case_globals)]
-
 use std::sync::LazyLock;
 
 #[path = "asset/actor.spec.rs"]
@@ -178,7 +176,7 @@ pub fn decor_id_from_num(num_id: AssetId) -> DecorId {
 }
 
 /// In numeric order.
-pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
+pub static DECOR_IDS: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
     let mut ids = DecorId::ALL.to_vec();
     ids.sort_by_key(|id| *id as u16);
     ids

@@ -142,14 +142,11 @@ impl Grown {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Grown {
         let buf = |size: u32, usage: u32| g.buf(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-        let rows = buf(core::mem::size_of_val(&DECORS) as u32, storage);
+        let rows = buf(size_of_val(&DECORS) as u32, storage);
         let table = DECORS;
         // SAFETY: the rows are `repr(C)` words alone (pxl-spec-core decor.spec.rs), read while `table` lives.
         let words = unsafe {
-            core::slice::from_raw_parts(
-                table.as_ptr().cast::<u32>(),
-                core::mem::size_of_val(&table) / 4,
-            )
+            core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), size_of_val(&table) / 4)
         };
         g.write_buf(rows, 0, bytes(words));
         let drawn_by = pipelines.build(g, PIPELINE_DECOR, WORLD_COLOR);
@@ -271,7 +268,7 @@ impl Grown {
             hold(&mut self.held, &mut self.holding, b);
         }
         cut_boxes(&self.cuts, grows.cuts, |b| {
-            hold(&mut self.held, &mut self.holding, b)
+            hold(&mut self.held, &mut self.holding, b);
         });
         self.cuts = *grows.cuts;
         let w = &mut self.window;

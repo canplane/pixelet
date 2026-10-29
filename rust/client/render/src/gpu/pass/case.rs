@@ -13,7 +13,8 @@ use crate::frame::shader::word::frame::{
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::ao::{ScreenAo, MAP_BINDING};
 use crate::gpu::api::{
-    buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Image, Load, Stamp,
+    buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Image, Load, RenderContext,
+    TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::finish::Finish;
@@ -23,6 +24,7 @@ use crate::gpu::pipeline::Pipelines;
 use crate::gpu::put::put_mat;
 use crate::gpu::read::Read;
 use crate::gpu::shadow::Shadow;
+use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
 use crate::gpu::upload::uploads;
 
@@ -83,11 +85,13 @@ impl Case {
     /// Its actor's draw `own` into `s`, the world's `frame` aimed at the
     /// actor; nothing where its picture's makings stand, `moved` what moved
     /// without words.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is what its picture is made of, which `read` reads apart to tell whether it stands"
+    )]
     pub fn draw(
         &mut self,
-        g: &Gpu,
-        encoder: u32,
+        ctx: &mut RenderContext,
         s: &Surface,
         mut frame: [f32; FRAME_FLOATS],
         own: &[u32; DRAW_WORDS],
@@ -95,8 +99,9 @@ impl Case {
         model: u32,
         image: Image,
         moved: bool,
-        stamp: &mut Stamp,
     ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::case);
         let u = uniform_of(uniforms, own);
         let actor = [u[0] as f64, u[1] as f64, u[2] as f64];
         let u = &mut frame;
@@ -153,19 +158,25 @@ impl Case {
                 stamp.pass(),
             ),
         );
+        let mut pass = TrackedRenderPass::new(g, pass);
         self.skinned.draw(
-            g,
-            pass,
+            &mut pass,
             core::iter::once(own),
             uploads(),
             Stage::Lit,
-            (self.frames.frame, &mut 0),
+            self.frames.frame,
         );
-        g.end(pass);
+        pass.end();
         // Encoded onto its canvas at its own frame's words, no vignette.
         let view_id = g.cur(s.handle);
-        self.finish
-            .draw(g, encoder, self.frame_buf, s, s.color_view, view_id, stamp);
+        self.finish.draw(
+            ctx,
+            GpuSpanName::case,
+            self.frame_buf,
+            s,
+            s.color_view,
+            view_id,
+        );
         release(view_id);
     }
 }

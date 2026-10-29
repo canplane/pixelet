@@ -304,6 +304,12 @@ impl Uploads {
         }
         Some(self.group[i])
     }
+
+    /// The group `group` made for `handle`, for a draw, which makes none.
+    pub fn group_of(&self, handle: u32) -> Option<u32> {
+        let i = self.find(handle)?;
+        (self.group[i] != 0).then_some(self.group[i])
+    }
 }
 
 static UPLOADS: Global<Uploads> = Global::new();

@@ -915,7 +915,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 "// A table is generated whole, whether or not this crate calls an entry."
                     .to_string(),
                 format!(
-                    "#![allow(non_upper_case_globals, non_snake_case, clippy::absolute_paths, {}dead_code)]",
+                    "#![allow(non_upper_case_globals, non_snake_case, clippy::absolute_paths, {}dead_code, reason = \"generated from the spec\")]",
                     if matches!(d.enums, Enums::None) {
                         ""
                     } else {

@@ -27,7 +27,7 @@ index `idx`, indices `idxs`, value `val`, values `vals`, buffer `buf`, buffers
 `mem`, component `comp`, channel `ch`, elevation `ele`, feature `feat`,
 latitude `lat`, longitude `lon`, radian `rad`, degree `deg`, orientation
 `orient`, rotation `rot`, altitude `alt`, error `err`, packet `pkt`, initial
-`init`, matrix `mat`, configuration `cfg`, descriptor `desc`.
+`init`, matrix `mat`, configuration `cfg`, descriptor `desc`, context `ctx`.
 
 - Longitude is `lon`, as PROJ, OpenStreetMap, PostGIS and the spec name it;
   0405's `lng` was a web map library's.

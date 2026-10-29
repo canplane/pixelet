@@ -364,7 +364,7 @@ fn run() -> Result<(), String> {
                         Ok(()) => drop(written.fetch_add(1, std::sync::atomic::Ordering::Relaxed)),
                         Err(e) => {
                             *failed.lock().unwrap_or_else(|e| e.into_inner()) =
-                                Some(format!("{name}: {e}"))
+                                Some(format!("{name}: {e}"));
                         }
                     }
                 }

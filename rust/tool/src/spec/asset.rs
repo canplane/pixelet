@@ -447,7 +447,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     rs.extend(casing_note());
     rs.extend(
         [
-            "#![allow(non_camel_case_types, non_upper_case_globals)]",
+            "#![allow(non_camel_case_types, non_upper_case_globals, reason = \"generated from the spec\")]",
             "",
         ]
         .map(String::from),
@@ -695,7 +695,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     rs.extend(casing_note());
     rs.extend(
         [
-            "#![allow(non_upper_case_globals, non_camel_case_types, clippy::absolute_paths)]",
+            "#![allow(non_upper_case_globals, non_camel_case_types, clippy::absolute_paths, reason = \"generated from the spec\")]",
             "pub mod decors {",
         ]
         .map(String::from),
@@ -752,7 +752,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
             "// The decors as the GPU reads them too: how the ground grows each one, the",
             "// looks it stands on and the boxes its variants claim, in the catalog's",
             "// order. pxl-spec asset/decor.spec.rs adds their models over each row.",
-            "#![allow(non_camel_case_types)]",
+            "#![allow(non_camel_case_types, reason = \"generated from the spec\")]",
         ]
         .map(String::from),
     );

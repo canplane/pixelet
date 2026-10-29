@@ -67,6 +67,7 @@ fn bodies_share_run() {
 
     out.push(again);
     for block in out {
+        // SAFETY: from `take`, given back once.
         unsafe { give(block) };
     }
     assert_eq!(runs(), before, "a run is given back once its last slot is");
@@ -99,6 +100,7 @@ fn slots_cap_and_wake() {
     unsafe { give(out.pop().unwrap()) };
     assert!(refused.over(), "until one is given back");
     for block in out {
+        // SAFETY: from `take`, given back once.
         unsafe { give(block) };
     }
 }
@@ -113,6 +115,7 @@ fn slot_peak() {
     unsafe { give(a) };
     assert_eq!(take_peak(), 2, "two were out at once");
     assert_eq!(take_peak(), 1, "and from then, the one still out");
+    // SAFETY: from `take`, given back once.
     unsafe { give(b) };
 }
 
@@ -149,6 +152,7 @@ fn slot_refusal_waits_slots() {
     unsafe { give(out.pop().unwrap()) };
     assert!(refused.over());
     for block in out {
+        // SAFETY: from `take`, given back once.
         unsafe { give(block) };
     }
     set_heap_stat(HeapStat::default);
@@ -178,6 +182,7 @@ fn slot_return_asks_turn() {
     unsafe { give(out.pop().unwrap()) };
     assert!(!held().waited, "the slot given back asked the turn");
     for block in out {
+        // SAFETY: from `take`, given back once.
         unsafe { give(block) };
     }
 }

@@ -619,7 +619,7 @@ impl Cell {
 }
 
 const _: () = assert!(
-    crate::LEAF_CELL == crate::UNIT_ZOOM,
+    LEAF_CELL == UNIT_ZOOM,
     "a span's leaf cell is the world's unit"
 );
 const _: () = assert!(
@@ -636,12 +636,12 @@ pub fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> BoxWords {
     if lo >= hi {
         return BOX_NONE;
     }
-    if zoom >= crate::LEAF_CELL {
+    if zoom >= LEAF_CELL {
         return BOX_WHOLE;
     }
     // The step of the node a leaf cell `v` lies in, as the node's own
     // steps count it: `v` scaled by `BOX_STEPS` / side, less the node's first.
-    let shift = crate::LEAF_CELL - zoom;
+    let shift = LEAF_CELL - zoom;
     let step = |v: i32| -> i32 {
         if shift >= BOX_BITS {
             (v >> (shift - BOX_BITS)) - (z << BOX_BITS)
@@ -689,7 +689,7 @@ mod tests {
     /// node whole across; none where the node does not meet it.
     #[test]
     fn z_span_rounded_out() {
-        let zoom = crate::LEAF_CELL - 6;
+        let zoom = LEAF_CELL - 6;
         // The node of side 64 leaf cells over [128, 192), 16 steps a leaf
         // cell: [138, 140) is its steps [160, 192).
         assert_eq!(
@@ -721,7 +721,7 @@ mod tests {
         );
         // A node finer than a leaf cell: its steps scale up.
         assert_eq!(
-            box_of(box_along_z([3, 4], (crate::LEAF_CELL - 1, 1))),
+            box_of(box_along_z([3, 4], (LEAF_CELL - 1, 1))),
             ([0, 0, 512], [1024, 1024, 1024])
         );
     }

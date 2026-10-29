@@ -12,7 +12,7 @@ use crate::frame::shader::word::clouds::{BASE, CNT, DRIFT, FRAC, REACH, SHOWN};
 use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
-    word_bytes, Entry, Format, Gpu, Load,
+    word_bytes, Entry, Format, Gpu, Load, TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, Mips};
@@ -120,14 +120,14 @@ impl CloudPass {
         &self.words
     }
 
-    pub fn draw(&self, g: &Gpu, pass: u32) {
+    pub fn draw(&self, pass: &mut TrackedRenderPass) {
         if self.words[SHOWN] <= 0.0 {
             return;
         }
-        g.set_pipeline(pass, self.built.pipeline);
-        g.set_bind_group(pass, 0, self.group, &[]);
+        pass.set_pipeline(self.built.pipeline);
+        pass.set_bind_group(0, self.group, &[]);
         // A quad each, the farther sheet first (cloud.wgsl `vs`).
-        g.draw(pass, 6, 2, 0, 0);
+        pass.draw(6, 2, 0, 0);
     }
 }
 
@@ -157,9 +157,10 @@ fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
         encoder,
         &pass_desc(level, Load::Clear, 0, Load::Clear, 0.0, None),
     );
-    g.set_pipeline(pass, built.pipeline);
-    g.draw(pass, 3, 1, 0, 0);
-    g.end(pass);
+    let mut pass = TrackedRenderPass::new(g, pass);
+    pass.set_pipeline(built.pipeline);
+    pass.draw(3, 1, 0, 0);
+    pass.end();
     release(level);
     g.submit(encoder);
     let mips = Mips::new(g, pipelines, Format::r8unorm);
