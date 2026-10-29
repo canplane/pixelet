@@ -192,7 +192,7 @@
     "surface_follow": {
       "number": 6,
       "$doc": [
-        "The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."
+        "The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck."
       ],
       "kind": "toggle",
       "default": true,

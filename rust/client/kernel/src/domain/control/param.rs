@@ -40,9 +40,9 @@ pub const MAX_DIST: f64 =
 /// The first-person eye's and its facing's settling, each sub-pixel at any distance.
 pub const FIRST_PERSON_EYE_EPS: f64 = 0.001;
 pub const FIRST_PERSON_FACING_EPS: f64 = 0.0001;
-/// The orbit's center, distance, polar and azimuth settling, each sub-pixel
+/// The orbit's pivot, distance, polar and azimuth settling, each sub-pixel
 /// at any distance the view is looked across.
-pub const ORBIT_CENTER_EPS: f64 = 0.001;
+pub const ORBIT_PIVOT_EPS: f64 = 0.001;
 pub const ORBIT_DIST_EPS: f64 = 0.001;
 pub const ORBIT_POLAR_EPS: f64 = 0.0001;
 pub const ORBIT_AZIMUTH_EPS: f64 = 0.0001;

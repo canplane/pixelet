@@ -784,7 +784,7 @@ pub struct PivotState {
     pub status: GroundStatus,
     pub is_off_center: bool,
     /// The pivot in degrees: what the search measures distance from.
-    pub center: Option<LonLat>,
+    pub lon_lat: Option<LonLat>,
     /// The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs).
     pub outside: bool,
 }
@@ -796,7 +796,7 @@ impl PivotState {
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
         w.bool(Some(self.is_off_center));
-        match &self.center {
+        match &self.lon_lat {
             Some(r) => w.branch(LonLat::FIELDS, |w| r.write(w)),
             None => w.no_branch(),
         };

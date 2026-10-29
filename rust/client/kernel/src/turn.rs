@@ -54,15 +54,15 @@ fn companion_props() -> Option<CompanionProps> {
         return None;
     }
     // Where the camera is going, not where its easing has got to: walked toward
-    // only once the eased center settled, it set off as the glide's long tail ended.
-    let goal = crate::domain::control::camera::controller::target_center()
+    // only once the eased pivot settled, it set off as the glide's long tail ended.
+    let goal = crate::domain::control::camera::controller::pivot_to()
         .or_else(crate::domain::control::camera::controller::pivot)?;
     let eye = crate::domain::view::frame::coord::world_to_canonical(
         &crate::domain::control::camera::controller::eye_world()?,
     );
-    let center = crate::domain::view::frame::coord::to_world(&goal);
+    let at = crate::domain::view::frame::coord::to_world(&goal);
     Some(CompanionProps {
-        center: [center[0], center[1]],
+        pivot: [at[0], at[1]],
         floor: crate::domain::scene::character::companion::pivot_floor(goal, |w| {
             crate::domain::control::navigation::support::floor_seen(w, &goal)
         }),

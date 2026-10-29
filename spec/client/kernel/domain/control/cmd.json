@@ -1526,7 +1526,7 @@
           "type": "bool"
         },
         {
-          "name": "center",
+          "name": "lon_lat",
           "type": "LonLat",
           "optional": true,
           "$doc": [

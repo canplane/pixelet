@@ -22,11 +22,11 @@ use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use pxl_spec::space::coord::zoom::{index_of, units};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-/// The target is part of the pose: the eye is `target + offset`, and a gate
+/// The pivot is part of the pose: the eye is `pivot + offset`, and a gate
 /// that read only the offset could be walked through by panning.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewPose {
-    pub target: V3,
+    pub pivot: V3,
     pub dist: f64,
     pub polar: f64,
     pub azimuth: f64,
@@ -34,7 +34,7 @@ pub struct ViewPose {
 
 fn pose(view: Intent) -> Option<ViewPose> {
     Some(ViewPose {
-        target: crate::domain::control::camera::controller::pivot_world()?,
+        pivot: crate::domain::control::camera::controller::pivot_world()?,
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,
@@ -49,22 +49,22 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
         .floor_under(&eye, LEAF_ZOOM)
         .value()
         .flatten()?;
-    Some(ground + EYE_CLEARANCE_U - at.target[2])
+    Some(ground + EYE_CLEARANCE_U - at.pivot[2])
 }
 
 /// Rise to the ground under the eye, reached by a step-slide at the eye's
 /// height that climbs and does not fall; none where it is slid short.
 fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
     let (_, eye) = eye(at);
-    let center = world_to_canonical(&at.target);
+    let pivot = world_to_canonical(&at.pivot);
     let floor = index_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
     let from = world::at(
-        i64::from(center[0]),
-        i64::from(center[1]),
+        i64::from(pivot[0]),
+        i64::from(pivot[1]),
         q3::from_real(over(floor)),
     );
     // Near, the eye's way walks the leaves; far, it is a map and goes through.
-    // Where the leaf under the center, or a map's under the eye, is not held, the ground under the eye.
+    // Where the leaf under the pivot, or a map's under the eye, is not held, the ground under the eye.
     let walked = access
         .step_slide(&from, &eye, &eye, false, false)
         .unwrap_or(eye);
@@ -72,18 +72,18 @@ fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
         return None;
     }
     let ground = access.floor_under(&walked, LEAF_ZOOM).value().flatten()?;
-    Some(ground + EYE_CLEARANCE_U - at.target[2])
+    Some(ground + EYE_CLEARANCE_U - at.pivot[2])
 }
 
 /// Positive inside the terrain.
 fn penetration(at: &ViewPose) -> Option<f64> {
-    Some(required_rise(at)? - (eye(at).0[2] - at.target[2]))
+    Some(required_rise(at)? - (eye(at).0[2] - at.pivot[2]))
 }
 
 /// The eye, local and canonical.
 fn eye(at: &ViewPose) -> (V3, Q3) {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let world: V3 = v3::add(&at.target, &offset);
+    let world: V3 = v3::add(&at.pivot, &offset);
     (world, world_to_canonical(&world))
 }
 
@@ -145,7 +145,7 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
         core::f64::consts::PI,
     );
     ViewPose {
-        target: std::array::from_fn(|k| from.target[k] + (to.target[k] - from.target[k]) * t),
+        pivot: std::array::from_fn(|k| from.pivot[k] + (to.pivot[k] - from.pivot[k]) * t),
         dist: from.dist + (to.dist - from.dist) * t,
         polar: from.polar + (to.polar - from.polar) * t,
         azimuth: from.azimuth + turn * t,
@@ -195,7 +195,7 @@ fn crossed(last: &ViewPose, at: &ViewPose, access: &World) -> bool {
 }
 
 /// What lies between the eye and the pivot is not asked: that hides the
-/// center but is not the eye running into anything, save where the eye
+/// pivot but is not the eye running into anything, save where the eye
 /// comes out of a wall to its far side (`crossed`). The first cell of a wall
 /// or a roof is no obstacle (`embedded`).
 fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
@@ -249,7 +249,7 @@ fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose
 /// pivot from it.
 fn toward_eye(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
     let ray = Ray {
-        origin: at.target,
+        origin: at.pivot,
         direction: orbit_eye_offset(1.0, at.polar, at.azimuth),
         reach,
     };
@@ -260,7 +260,7 @@ fn toward_eye(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
 /// in its lowest cell, which the eye's rays do not meet (pxl-spec-core
 /// `cast::walk`), on its floor and not its ceiling as the walk's `inside` is.
 fn under(roof: &Hit, at: &ViewPose, dist: f64) -> bool {
-    let eye = v3::add(&at.target, &orbit_eye_offset(dist, at.polar, at.azimuth));
+    let eye = v3::add(&at.pivot, &orbit_eye_offset(dist, at.polar, at.azimuth));
     let b = roof.cube;
     dist < roof.t || (0..3).all(|k| b.min[k] <= eye[k] && eye[k] < b.max[k])
 }
@@ -282,7 +282,7 @@ pub fn allowed_view(to: Intent, from: Intent) -> Intent {
 /// rather than scanned: a scan's fixed angles made the camera judder on flat
 /// ground.
 ///
-/// It stands while what it is made of stands: the pose, where its target is
+/// It stands while what it is made of stands: the pose, where its pivot is
 /// on the world, and the ground its walks read (`Columns`).
 pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
     let Some(at) = pose(Intent {
@@ -294,7 +294,7 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
     };
     let climb = Climb {
         at,
-        center: world_to_canonical(&at.target),
+        pivot: world_to_canonical(&at.pivot),
     };
     let last = CLIMBED.get(|| Asked::NONE);
     last.forget_touched();
@@ -305,7 +305,7 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
 #[derive(Clone, Copy, PartialEq)]
 struct Climb {
     at: ViewPose,
-    center: Q3,
+    pivot: Q3,
 }
 
 /// The last climb's pitch, kept while what it is made of stands and no

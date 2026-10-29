@@ -12,9 +12,9 @@ use pxl_spec::asset::cube::{self, cube_id, Cube};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 
-fn pose(target: V3, dist: f64, polar: f64) -> ViewPose {
+fn pose(pivot: V3, dist: f64, polar: f64) -> ViewPose {
     ViewPose {
-        target,
+        pivot,
         dist,
         polar,
         azimuth: 0.0,
@@ -37,18 +37,18 @@ fn roofed(roof: Option<f64>) -> (TileCache<TerrainTile>, Store, V3) {
 /// to, if it does.
 fn dive_to(roof: Option<f64>, to: f64, polar: f64) -> Option<f64> {
     let _g = serial();
-    let (tile_cache, store, target) = roofed(roof);
+    let (tile_cache, store, pivot) = roofed(roof);
     let access = World::new(&tile_cache, &store);
-    let to = pose(target, to, polar);
-    dive(&to, &to, &pose(target, 16.0, polar), &access).map(|p| p.dist)
+    let to = pose(pivot, to, polar);
+    dive(&to, &to, &pose(pivot, 16.0, polar), &access).map(|p| p.dist)
 }
 
 /// A zoom out straight down from `from` to `to`: where it is held, if it is.
 fn held_at(roof: Option<f64>, from: f64, to: f64) -> Option<f64> {
     let _g = serial();
-    let (tile_cache, store, target) = roofed(roof);
+    let (tile_cache, store, pivot) = roofed(roof);
     let access = World::new(&tile_cache, &store);
-    held_under(&pose(target, to, 0.0), &pose(target, from, 0.0), &access).map(|p| p.dist)
+    held_under(&pose(pivot, to, 0.0), &pose(pivot, from, 0.0), &access).map(|p| p.dist)
 }
 
 #[test]
@@ -95,12 +95,12 @@ fn zoom_out_held_under_roof() {
 #[test]
 fn under_half_open() {
     let _g = serial();
-    let (tile_cache, store, target) = roofed(Some(2.0));
+    let (tile_cache, store, pivot) = roofed(Some(2.0));
     let access = World::new(&tile_cache, &store);
-    let at = pose(target, MIN_DIST, 0.0);
+    let at = pose(pivot, MIN_DIST, 0.0);
     let roof = toward_eye(&at, 16.0, &access).unwrap();
     // The underside at 7 and the cell's top at 8, the pivot at 5.5.
-    let to = |z: f64| z - target[2];
+    let to = |z: f64| z - pivot[2];
     assert!(under(&roof, &at, to(7.0)));
     assert!(under(&roof, &at, to(7.9)));
     assert!(!under(&roof, &at, to(8.0)));
@@ -135,19 +135,19 @@ fn embedded_first_cell() {
 #[test]
 fn wall_not_crossed() {
     let _g = serial();
-    let (tile_cache, mut store, target) = roofed(None);
+    let (tile_cache, mut store, pivot) = roofed(None);
     // A wall a cell thick east of the pivot's cell, from 5 to 6.
     let red = cube_id(Cube::Object(cube::Object::red));
     write(
         &mut store,
-        [target[0] + 0.5, target[1] - 0.5, 5.0],
+        [pivot[0] + 0.5, pivot[1] - 0.5, 5.0],
         OBJECT_COARSEST,
         red,
     );
     let access = World::new(&tile_cache, &store);
     // Level with the pivot, `dist` east of it.
     let east = |dist: f64| ViewPose {
-        target,
+        pivot,
         dist,
         polar: core::f64::consts::FRAC_PI_2,
         azimuth: -core::f64::consts::FRAC_PI_2,

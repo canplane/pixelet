@@ -15,7 +15,7 @@ const INITIAL: Snapshot = {
   pivot: {
     status: GroundStatus.Idle,
     is_off_center: false,
-    center: null,
+    lon_lat: null,
     outside: false,
   },
   location: { status: DevicePoseStatus.Idle, has_location: false, error: null },

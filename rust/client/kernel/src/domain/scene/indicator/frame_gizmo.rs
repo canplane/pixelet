@@ -81,35 +81,22 @@ impl Sketch {
 
 /// Into `s`, its lines cleared first.
 fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
-    let center = to_world(pivot);
-    s.about = center;
+    let at = to_world(pivot);
+    s.about = at;
     s.lines.clear();
     let ground = World::now().floor_under(pivot, LEAF_ZOOM).value().flatten();
-    let cell = v3::floor(
-        &[center[0], center[1], ground.unwrap_or(0.0)],
-        units(GROUND.cell()),
-    );
+    let cell = v3::floor(&[at[0], at[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
     s.cube(cell, units(GROUND.cell()));
-    s.point(center, linear_rgb(frame::pivot::rgb));
+    s.point(at, linear_rgb(frame::pivot::rgb));
     // First person the eye is the pivot, and nothing about it is seen.
     let Some(azimuth) = heading else { return };
     let (sin, cos) = libm::sincos(azimuth);
     let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
     let (right, forward) = ([cos, -sin, 0.0], [sin, cos, 0.0]);
-    let tip = |d: V3| -> V3 { core::array::from_fn(|k| center[k] + d[k] * RING_RADIUS) };
-    s.ring(
-        center,
-        east,
-        north,
-        (frame::level::rgb, frame::level::dashed),
-    );
-    s.ring(
-        center,
-        right,
-        up,
-        (frame::forward::rgb, frame::forward::dashed),
-    );
-    s.ring(center, north, up, (frame::north::rgb, frame::north::dashed));
+    let tip = |d: V3| -> V3 { core::array::from_fn(|k| at[k] + d[k] * RING_RADIUS) };
+    s.ring(at, east, north, (frame::level::rgb, frame::level::dashed));
+    s.ring(at, right, up, (frame::forward::rgb, frame::forward::dashed));
+    s.ring(at, north, up, (frame::north::rgb, frame::north::dashed));
     s.point(tip(forward), linear_rgb(frame::forward::rgb));
     s.point(tip(north), linear_rgb(frame::north::rgb));
     s.point(tip(up), linear_rgb(frame::up::rgb));
@@ -136,13 +123,13 @@ pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
         lines: Vec::new(),
     };
     let (drawn, shown, next) = GIZMOS.get(|| (empty(), false, empty()));
-    let Some(center) = pivot.filter(|_| show) else {
+    let Some(at) = pivot.filter(|_| show) else {
         if core::mem::take(shown) {
             set_lines([0.0; 3], &[]);
         }
         return;
     };
-    sketch(next, &center, heading);
+    sketch(next, &at, heading);
     if *shown && drawn == next {
         return;
     }

@@ -181,7 +181,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         pivot: PivotState {
             status: shown.status,
             is_off_center: shown.is_off_center,
-            center: shown.pivot.map(|c| {
+            lon_lat: shown.pivot.map(|c| {
                 let g = epsg4326::unproject(&c);
                 LonLat {
                     lon: g[0],
@@ -295,7 +295,7 @@ fn stall() -> Option<Message> {
 }
 
 /// The view's scale at the pivot, `u_per_px`, as the meters a logical pixel
-/// spans; 0 where the camera stands at the center: no distance, no scale.
+/// spans; 0 where the camera stands at the pivot: no distance, no scale.
 fn m_per_px(u_per_px: f64, pivot: Option<Q3>) -> f64 {
     let y_u = pivot.map_or(0.0, |c| q3::to_real(i64::from(c[1])));
     u_per_px / epsg3857::u_per_m(y_u)

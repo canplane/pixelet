@@ -33,7 +33,7 @@ fn pivot_along_facing() {
     third_person();
     let mut rng = Rng(0x5eed);
     for n in 0..200 {
-        let center = [
+        let at = [
             rng.unit() * 2_000.0 - 1_000.0,
             rng.unit() * 2_000.0 - 1_000.0,
             rng.unit() * 40.0,
@@ -43,11 +43,8 @@ fn pivot_along_facing() {
             rng.unit() * core::f64::consts::PI,
             rng.unit() * 6.0 - 3.0,
         );
-        place(center, dist, polar, azimuth);
-        assert!(
-            near(pivot_world().unwrap(), center, 1e-9),
-            "{n}: third person"
-        );
+        place(at, dist, polar, azimuth);
+        assert!(near(pivot_world().unwrap(), at, 1e-9), "{n}: third person");
         controllers().base = CameraMode::first_person;
         assert!(
             near(pivot_world().unwrap(), eye_world().unwrap(), 1e-12),
@@ -58,7 +55,7 @@ fn pivot_along_facing() {
 }
 
 /// A change of person moves the camera about the pivot, never the
-/// center; under a tracker it waits until the tracker lets go.
+/// at; under a tracker it waits until the tracker lets go.
 #[test]
 fn person_change_keeps_pivot() {
     let _g = serial();
@@ -68,7 +65,7 @@ fn person_change_keeps_pivot() {
     let near = |a: V3, b: V3, tol: f64| (0..3).all(|k| (a[k] - b[k]).abs() <= tol);
     let mut rng = Rng(0xc0de);
     for n in 0..100 {
-        let center = [
+        let at = [
             rng.unit() * 2_000.0 - 1_000.0,
             rng.unit() * 2_000.0 - 1_000.0,
             rng.unit() * 40.0,
@@ -78,7 +75,7 @@ fn person_change_keeps_pivot() {
             rng.unit() * core::f64::consts::PI,
             rng.unit() * 6.0 - 3.0,
         );
-        place(center, dist, polar, azimuth);
+        place(at, dist, polar, azimuth);
         let mut first: Option<V3> = None;
         for mode in [
             CameraMode::first_person,
@@ -89,23 +86,23 @@ fn person_change_keeps_pivot() {
             assert!(take_mode(mode), "{n}: the change to {mode:?} taken");
             let got = pivot_world().unwrap();
             assert!(
-                near(got, center, 2.0 / 256.0),
-                "{n}: moved by the change to {mode:?}: {got:?} vs {center:?}"
+                near(got, at, 2.0 / 256.0),
+                "{n}: moved by the change to {mode:?}: {got:?} vs {at:?}"
             );
             let first = *first.get_or_insert(got);
             assert!(
                 near(got, first, 1e-6),
                 "{n}: drifted by the change to {mode:?}: {got:?} vs {first:?}"
             );
-            let target = match mode {
+            let to = match mode {
                 CameraMode::first_person => {
-                    crate::domain::control::camera::first_person::target_center()
+                    crate::domain::control::camera::first_person::pivot_to()
                 }
-                CameraMode::orbit => crate::domain::control::camera::orbit::target_center(),
+                CameraMode::orbit => crate::domain::control::camera::orbit::pivot_to(),
             };
-            let target = to_world(&target.unwrap());
+            let to = to_world(&to.unwrap());
             assert!(
-                near(target, got, 1e-6),
+                near(to, got, 1e-6),
                 "{n}: a move under way carried into {mode:?}"
             );
         }

@@ -124,22 +124,22 @@ pub enum Motion {
 }
 
 /// A tracker's pose ignores it; no base under it moves in its place.
-pub fn put_center(target: Q3, motion: Motion) {
+pub fn put_pivot(to: Q3, motion: Motion) {
     let snap = motion == Motion::Snap;
     match active() {
         Active::Tracked => return,
-        Active::Orbit => crate::domain::control::camera::orbit::put(target, snap),
-        Active::FirstPerson => crate::domain::control::camera::first_person::put(target, snap),
+        Active::Orbit => crate::domain::control::camera::orbit::put(to, snap),
+        Active::FirstPerson => crate::domain::control::camera::first_person::put(to, snap),
     }
     request_world_tick();
 }
 
-/// Where the center is going: the place last put, which a smooth move eases
+/// Where the pivot is going to: the place last put, which a smooth move eases
 /// toward, or where it stands.
-pub fn target_center() -> Option<Q3> {
+pub fn pivot_to() -> Option<Q3> {
     match active() {
-        Active::Orbit => crate::domain::control::camera::orbit::target_center(),
-        Active::FirstPerson => crate::domain::control::camera::first_person::target_center(),
+        Active::Orbit => crate::domain::control::camera::orbit::pivot_to(),
+        Active::FirstPerson => crate::domain::control::camera::first_person::pivot_to(),
         Active::Tracked => None,
     }
 }
@@ -167,9 +167,9 @@ pub fn pan_across(cx: f64, cy: f64) {
 }
 
 fn pan_by(lx: f64, ly: f64) {
-    let Some(from) = target_center() else { return };
+    let Some(from) = pivot_to() else { return };
     let eye = eye_world().map_or(from, |e| world_to_canonical(&e));
-    put_center(
+    put_pivot(
         pan_to(&from, lx, ly, camera().azimuth, &eye),
         Motion::Smooth,
     );
@@ -334,8 +334,8 @@ fn take_mode(want: CameraMode) -> bool {
     }
     // Taken back to the nearest canonical point, or a few round trips walk the
     // character away. A height not yet known stays unknown.
-    let unknown = target_center().is_some_and(|t| is_unknown(&t));
-    let center = pivot_world().map(|local| {
+    let unknown = pivot_to().is_some_and(|t| is_unknown(&t));
+    let at = pivot_world().map(|local| {
         let c = world_to_canonical_nearest(&local);
         if unknown {
             unknown_z(&c)
@@ -352,12 +352,10 @@ fn take_mode(want: CameraMode) -> bool {
             polar: cam.polar,
         });
     }
-    if let Some(center) = center {
+    if let Some(at) = at {
         match want {
-            CameraMode::orbit => crate::domain::control::camera::orbit::put(center, true),
-            CameraMode::first_person => {
-                crate::domain::control::camera::first_person::put(center, true)
-            }
+            CameraMode::orbit => crate::domain::control::camera::orbit::put(at, true),
+            CameraMode::first_person => crate::domain::control::camera::first_person::put(at, true),
         }
     }
     true

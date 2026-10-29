@@ -11,7 +11,7 @@ import { FADE } from "@/shell/ui/motion/transition.ts";
 import { HaloText } from "./halo.tsx";
 import { color, textStyle, weight } from "@/shell/ui/theme.ts";
 
-/** Coordinates stand in where the center is in no place (sea, or not yet arrived). */
+/** Coordinates stand in where the pivot is in no place (sea, or not yet arrived). */
 export function CurrentAddress() {
   const label = useDivisionLabel();
   const position = useCenterCoordinates();

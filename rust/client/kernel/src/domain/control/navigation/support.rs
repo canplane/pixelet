@@ -1,9 +1,9 @@
 // pxl-kernel/domain/control/navigation/support.rs
 
 //! The pivot standing on the ground, and where every camera's pan
-//! puts it. The center's Z is half a cell over the floor the character
+//! puts it. The pivot's Z is half a cell over the floor the character
 //! stands on, as a cell's center stands over its ground. Only a leaf gives
-//! that floor; a center put over coarser ground keeps its Z unknown and
+//! that floor; a pivot put over coarser ground keeps its Z unknown and
 //! stands on the finest ground known there until the leaves' is.
 
 use crate::domain::query::changed::Asked;
@@ -35,7 +35,7 @@ pub fn is_unknown(at: &Q3) -> bool {
     i64::from(at[2]) == UNKNOWN_Z
 }
 
-/// A tap names the surface it struck: the center stands in the cell across
+/// A tap names the surface it struck: the pivot stands in the cell across
 /// that face, on the floor under it.
 pub fn stand(at: &Q3) -> Q3 {
     match World::now().floor_under(at, LEAF_ZOOM) {
@@ -46,9 +46,9 @@ pub fn stand(at: &Q3) -> Q3 {
     }
 }
 
-/// The top of the floor `center` stands over.
-pub fn floor_of(center: &Q3) -> f64 {
-    under(q3::to_real(i64::from(center[2])))
+/// The top of the floor `at` stands over.
+pub fn floor_of(at: &Q3) -> f64 {
+    under(q3::to_real(i64::from(at[2])))
 }
 
 pub fn stand_over(at: &Q3, top: f64) -> Q3 {
@@ -56,8 +56,8 @@ pub fn stand_over(at: &Q3, top: f64) -> Q3 {
 }
 
 /// What `standing` found under an unknown Z, of that point and its cell's
-/// columns and one about: a camera's target and a destination ask it every
-/// tick until a leaf gives the Z, and a target twice in one (`target`).
+/// columns and one about: a camera's `to` and a destination ask it every
+/// tick until a leaf gives the Z, and a `to` twice in one (`resolve_to`).
 static STOOD: Global<Asked<Q3, Answer<Option<Q3>>>> = Global::new();
 
 fn stood() -> &'static mut Asked<Q3, Answer<Option<Q3>>> {
@@ -83,10 +83,10 @@ fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
     })
 }
 
-/// The floor `center` is drawn on in `world`: its own, or where its height is
+/// The floor `at` is drawn on in `world`: its own, or where its height is
 /// not known the finest ground's there; none where nothing is known.
-pub fn floor_seen(world: World<'_>, center: &Q3) -> Option<f64> {
-    match standing(world, center) {
+pub fn floor_seen(world: World<'_>, at: &Q3) -> Option<f64> {
+    match standing(world, at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => Some(floor_of(&p)),
         _ => None,
     }
@@ -117,8 +117,8 @@ pub fn exact(at: &Q3) -> Option<Q3> {
     standing(World::now(), at).exact().flatten()
 }
 
-/// `resolve` for a camera's target, writing the leaves' Z into it once known.
-pub fn target(to: &mut Option<Q3>, held: V3) -> V3 {
+/// `resolve` for a camera's `to`, writing the leaves' Z into it once known.
+pub fn resolve_to(to: &mut Option<Q3>, held: V3) -> V3 {
     let Some(at) = *to else { return held };
     if let Some(p) = exact(&at) {
         *to = Some(p);

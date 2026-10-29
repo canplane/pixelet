@@ -11,7 +11,7 @@ use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::domain::control::camera::controller::{put_center, Motion};
+use crate::domain::control::camera::controller::{put_pivot, Motion};
 use crate::domain::control::navigation::support::{exact, is_unknown, nearest, unknown_z};
 use xpute_guest::global::Global;
 
@@ -31,7 +31,7 @@ pub fn go_to_ground(at: Q3, motion: Motion) {
 /// A pending destination is dropped: this was asked last.
 pub fn go_to(at: Q3, motion: Motion) {
     cancel();
-    put_center(at, motion);
+    put_pivot(at, motion);
 }
 
 /// The user put the pivot by hand; reaching the destination after would
@@ -63,18 +63,18 @@ pub fn destination_step() {
         return;
     };
     *destination() = None;
-    put_center(to, motion);
+    put_pivot(to, motion);
 }
 
-/// A marker's height is its zoom's, coarser than where the center stands, so
-/// the center goes on the surface once it is known exactly.
-pub(crate) fn go_on_ground(target: Q3, motion: Motion) {
+/// A marker's height is its zoom's, coarser than where the pivot stands, so
+/// the pivot goes on the surface once it is known exactly.
+pub(crate) fn go_on_ground(to: Q3, motion: Motion) {
     crate::domain::control::navigation::follow_mode::set_following(false);
-    go_to_ground(unknown_z(&target), motion);
+    go_to_ground(unknown_z(&to), motion);
 }
 
 /// A place, as the location button goes to one: a view far out comes in.
-pub fn go_to_place(target: Q3) {
-    go_on_ground(target, Motion::Smooth);
+pub fn go_to_place(to: Q3) {
+    go_on_ground(to, Motion::Smooth);
     crate::domain::control::camera::controller::come_in_to_default();
 }

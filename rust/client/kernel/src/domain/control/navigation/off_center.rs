@@ -40,15 +40,15 @@ pub fn off_center() -> OffCenter {
 /// Whether the pivot is off the device, decided once a turn.
 pub fn off_center_step() {
     let off = OFF_CENTER.get(|| false);
-    // Horizontal only: the fix's Z is GPS altitude and the center's a floor, and
+    // Horizontal only: the fix's Z is GPS altitude and the pivot's a floor, and
     // their mismatch could hold it off-center forever.
     match (
         crate::domain::control::camera::controller::pivot(),
         device_coord(),
     ) {
-        (Some(center), Some(device)) => {
+        (Some(pivot), Some(device)) => {
             // X the short way across the antimeridian.
-            let [dx, dy, _] = world::between(&center, &device).map(q3::to_real);
+            let [dx, dy, _] = world::between(&pivot, &device).map(q3::to_real);
             let dist = (dx * dx + dy * dy).sqrt();
             if !*off && dist > 10.0 {
                 *off = true;

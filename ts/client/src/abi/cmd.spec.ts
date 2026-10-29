@@ -415,7 +415,7 @@ export interface PivotState {
   status: GroundStatus;
   is_off_center: boolean;
   /** The pivot in degrees: what the search measures distance from. */
-  center: LonLat | null;
+  lon_lat: LonLat | null;
   /** The pivot is past the service area: the source serves no shard over it (pxl-kernel sys/io/source.rs). */
   outside: boolean;
 }
@@ -424,7 +424,7 @@ export function read_pivot_state(b: BranchCursor): PivotState {
   return {
     status: b.at(0).get<GroundStatus>(),
     is_off_center: b.at(1).get<boolean>(),
-    center: optional(b.at(2), read_lon_lat),
+    lon_lat: optional(b.at(2), read_lon_lat),
     outside: b.at(3).get<boolean>(),
   };
 }

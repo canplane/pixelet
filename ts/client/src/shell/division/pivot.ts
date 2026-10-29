@@ -26,7 +26,7 @@ export function useDivisionLabel(): string | null {
 }
 
 export function useCenterCoordinates(): string | null {
-  return useKernel((s) => s.pivot.center && coordinateLabel(s.pivot.center));
+  return useKernel((s) => s.pivot.lon_lat && coordinateLabel(s.pivot.lon_lat));
 }
 
 /** Four decimals: about eleven meters. */

@@ -43,16 +43,15 @@ pub fn map_bootstrap_step() {
     // The fallback only once GPS has given up (Error) and the camera was never
     // placed; a later dropout leaves the camera where it was.
     let fallback = fallback_seed();
-    let center = pivot();
+    let at = pivot();
     let seed = match device_coord {
         Some(device) => device,
-        None if center.is_none() && location_status == DevicePoseStatus::Error => fallback,
+        None if at.is_none() && location_status == DevicePoseStatus::Error => fallback,
         None => return,
     };
     // A real fix landing after the fallback takes over; a place asked for
     // and not yet put, a search's or a marker's, is not replaced.
-    if center.is_none_or(|c| is_at(&c, &fallback)) && pending().is_none_or(|p| is_at(&p, &fallback))
-    {
+    if at.is_none_or(|c| is_at(&c, &fallback)) && pending().is_none_or(|p| is_at(&p, &fallback)) {
         go_to_ground(seed, Motion::Snap);
     }
 }

@@ -313,7 +313,7 @@ fn companion() -> &'static mut Companion {
 /// In the world's doubles.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
-    pub center: [f64; 2],
+    pub pivot: [f64; 2],
     /// The top of the floor the pivot is drawn on; none while nothing is
     /// known there, when the figures hold where they are.
     pub floor: Option<f64>,
@@ -378,7 +378,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         return;
     };
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
-    let person_target = p.center;
+    let person_target = p.pivot;
     let person = figure_for(&mut c.person, person_variant, person_target);
     // While nothing is known under the pivot each figure holds where it is,
     // and the rest of it steps on.
@@ -387,17 +387,17 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         person.step(ctx, target, z, &p);
     }
 
-    let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
+    let pet_target = [p.pivot[0] + PET_OFFSET[0], p.pivot[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
     // Its own floor beside the person, walked to from the person.
     let reached = |(beside, _): &([f64; 2], f64)| {
         libm::hypot(beside[0] - pet_target[0], beside[1] - pet_target[1]) <= WALK_EPS
     };
-    let from = |floor: f64| world_to_canonical(&[p.center[0], p.center[1], over(floor)]);
+    let from = |floor: f64| world_to_canonical(&[p.pivot[0], p.pivot[1], over(floor)]);
     let mut walked = |floor: f64| {
-        let of = (p.center, floor, pet_target, walks(&from(floor), &p.eye));
+        let of = (p.pivot, floor, pet_target, walks(&from(floor), &p.eye));
         c.beside.of(World::now(), of, |w| {
-            walk_to(w, p.center, floor, pet_target, &p)
+            walk_to(w, p.pivot, floor, pet_target, &p)
                 .filter(reached)
                 .map_or(floor, |(_, z)| z)
         })

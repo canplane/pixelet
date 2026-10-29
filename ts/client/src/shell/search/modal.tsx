@@ -259,7 +259,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       const snapshot = kernel_snapshot();
-      const near = snapshot.pivot.center ?? undefined;
+      const near = snapshot.pivot.lon_lat ?? undefined;
       const home = snapshot.division.find((p) =>
         p.subtype === DIVISION_SUBTYPE.COUNTRY
       )?.name ?? null;
