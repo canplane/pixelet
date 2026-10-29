@@ -164,3 +164,31 @@ What was missing is the mean. Made ahead in space, that is the prefiltered
 world above; gathered over time, the resolve: estimated +5–10 ms a frame
 (about 0.6 ns a pixel for the resolve, 3–5 ms for the pixels cast again),
 within what the render scale can trade.
+
+## Later the same day
+
+**The samples moved with each cast.** Tried and taken out. Each cast frame
+moved the samples within their spacing (a Halton(5, 7) offset in
+`beam::Grid`'s spare words), so a row no sample hit would be hit in some of
+the frames gathered, at no cost beyond the cast's. On a fresh :5184 at
+4112×2338, the same pan both ways: 8 424 / 3.08 and 6 936 / 2.56 with the
+offset, 7 797 / 2.88 and 6 636 / 2.53 with it held at 0. A few percent more
+pops, not fewer: the resolve holds what the frames before left to the pixels
+about it, and a row the samples now catch and now miss reads to it as a
+change, not as a share.
+
+**The resolve against itself.** The first pairs set :5173 before the resolve
+against :5184 with it, and since then the two builds' first view and what a
+drag does have moved apart, so later builds were set against themselves: the
+same worktree (`07d4fa3d8`) on :5185, once as it is and once with the jitter
+held at 0 and the share at 1 (a temporary edit, not kept), the same view (a
+town), 4112×2338:
+
+| | pops / mean change |
+|---|---|
+| resolve | 4 207 / 1.62 · 2 009 / 1.18 |
+| none | 8 466 / 2.25 · 5 484 / 1.60 |
+
+Half to a third of the pops, a quarter less change. Less than the first
+pairs' tenth: this view holds more edges, and at this size the frames came
+about 85 to the pan's 150, so each moved the far terrain further.
