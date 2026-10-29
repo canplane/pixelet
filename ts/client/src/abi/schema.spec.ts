@@ -105,7 +105,7 @@ export const SETTINGS = {
     section: "navigation",
     dev: true,
   },
-  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
+  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/terrain_gate.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
   orbit_obstacle: {
     key: 7 as number,
     kind: "choice",
@@ -116,7 +116,8 @@ export const SETTINGS = {
       climb: 2 as number,
     },
     section: "camera",
-    dev_options: ["through"],
+    dev: true,
+    kept: false,
   },
   /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
@@ -323,19 +324,6 @@ export const SETTINGS_SHIPPED = {
     },
     section: "world",
     kept: false,
-  },
-  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
-  orbit_obstacle: {
-    key: 7 as number,
-    kind: "choice",
-    default: "climb",
-    options: {
-      through: 0 as number,
-      stop: 1 as number,
-      climb: 2 as number,
-    },
-    section: "camera",
-    dev_options: ["through"],
   },
   /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */

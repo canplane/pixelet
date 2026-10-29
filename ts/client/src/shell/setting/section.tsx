@@ -22,9 +22,12 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   debug: "ladybug",
 };
 
+/** Typed for the table as it is, which may hold no setting with dev options. */
 function devOption(setting: Setting, option: string): boolean {
-  return "dev_options" in setting &&
-    setting.dev_options.some((o) => o === option);
+  const options = "dev_options" in setting
+    ? setting.dev_options as readonly string[]
+    : [];
+  return options.includes(option);
 }
 
 /** Strings come from `settings.<section>.<key>` and, for a choice, `.<option>` under that. */

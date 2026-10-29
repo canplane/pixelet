@@ -232,7 +232,7 @@ pub enum SettingKey {
     camera_mode = 5,
     /// The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
     surface_follow = 6,
-    /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each.
+    /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/terrain_gate.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
     orbit_obstacle = 7,
     /// Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
@@ -340,7 +340,10 @@ impl SettingKey {
     pub fn is_kept(self) -> bool {
         !matches!(
             self,
-            SettingKey::place | SettingKey::camera_mode | SettingKey::sky_time
+            SettingKey::place
+                | SettingKey::camera_mode
+                | SettingKey::orbit_obstacle
+                | SettingKey::sky_time
         )
     }
 
@@ -348,14 +351,16 @@ impl SettingKey {
     pub fn dev(self) -> bool {
         matches!(
             self,
-            SettingKey::surface_follow | SettingKey::ray_counts | SettingKey::sky_time
+            SettingKey::surface_follow
+                | SettingKey::orbit_obstacle
+                | SettingKey::ray_counts
+                | SettingKey::sky_time
         )
     }
 
     /// A choice's option a development build only offers.
     pub fn dev_option(self, value: u32) -> bool {
         match self {
-            SettingKey::orbit_obstacle => matches!(value, 0),
             _ => false,
         }
     }
