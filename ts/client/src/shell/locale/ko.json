@@ -236,11 +236,11 @@
       "body": "페이지를 새로고침해 주세요."
     },
     "server_failed": {
-      "title": "서버 연결에 실패했습니다.",
+      "title": "서버 연결이 실패했습니다.",
       "body": "잠시 후 다시 시도해 주세요."
     },
     "gpu_failed": {
-      "title": "WebGPU 연결에 실패했습니다.",
+      "title": "WebGPU 연결이 실패했습니다.",
       "body": "잠시 후 다시 시도해 주세요."
     },
     "gpu_lost": {
