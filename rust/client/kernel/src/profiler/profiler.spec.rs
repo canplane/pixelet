@@ -176,7 +176,7 @@ pub mod STREAM_STAT {
     pub const n: u32 = 0;
     pub const ok: u32 = 1;
     pub const aborted: u32 = 2;
-    pub const error: u32 = 3;
+    pub const err: u32 = 3;
     pub const lat_p50: u32 = 4;
     pub const lat_p95: u32 = 5;
     pub const reason_cnt: u32 = 6;

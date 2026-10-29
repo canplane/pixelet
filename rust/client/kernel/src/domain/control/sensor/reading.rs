@@ -57,25 +57,25 @@ fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
 }
 
 /// Where a sensor's reading is, as the snapshot carries it: its status, and
-/// what failed where it failed (`error` is none but at `SensorStatus::Error`).
+/// what failed where it failed (`err` is none but at `SensorStatus::Error`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SensorState {
     pub status: SensorStatus,
-    pub error: Option<Message>,
+    pub err: Option<Message>,
 }
 
 impl SensorState {
     pub const fn of(status: SensorStatus) -> SensorState {
         SensorState {
             status,
-            error: None,
+            err: None,
         }
     }
 
-    pub const fn failed(error: Message) -> SensorState {
+    pub const fn failed(err: Message) -> SensorState {
         SensorState {
             status: SensorStatus::Error,
-            error: Some(error),
+            err: Some(err),
         }
     }
 }

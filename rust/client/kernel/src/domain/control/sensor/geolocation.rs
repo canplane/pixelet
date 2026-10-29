@@ -112,7 +112,7 @@ pub fn geolocation_fix(
 /// pose failed until its next fix; one that ended the watch (a denial, or a
 /// device's watch that could not start) leaves nothing watching, which a
 /// grant or a return to the foreground starts again.
-pub fn geolocation_error(code: GeolocationErrorCode) {
+pub fn geolocation_err(code: GeolocationErrorCode) {
     let store = device_location_store();
     store.state = SensorState::failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,

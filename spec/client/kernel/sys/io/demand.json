@@ -14,7 +14,7 @@
   "OUTCOME_NAMES": [
     "ok",
     "aborted",
-    "error"
+    "err"
   ],
   "TASK_PHASE_NAMES": [
     "net_ms",

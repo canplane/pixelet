@@ -274,7 +274,7 @@ pub(super) fn apply(
             let p = abi::SensorFailed::read(given(pkt)?)?;
             match p.sensor {
                 // A failure the platform named no cause for is Other's.
-                abi::Sensor::Geolocation => geolocation::geolocation_error(
+                abi::Sensor::Geolocation => geolocation::geolocation_err(
                     p.code.unwrap_or(abi::GeolocationErrorCode::Other),
                 ),
                 abi::Sensor::Orientation => device_orientation::on_orient_lost(),

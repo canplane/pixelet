@@ -60,7 +60,7 @@ impl Ended {
         match self {
             Ended::Ok => Outcome::ok,
             Ended::Aborted => Outcome::aborted,
-            Ended::Failed(_) | Ended::Refused(_) => Outcome::error,
+            Ended::Failed(_) | Ended::Refused(_) => Outcome::err,
         }
     }
 }

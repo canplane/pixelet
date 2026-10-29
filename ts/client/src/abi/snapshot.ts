@@ -18,7 +18,7 @@ const INIT: Snapshot = {
     lon_lat: null,
     outside: false,
   },
-  location: { status: SensorStatus.Idle, has_location: false, error: null },
+  location: { status: SensorStatus.Idle, has_location: false, err: null },
   companion: { person_ready: false, pet_ready: false },
   holding: {
     tool: ActiveTool.Pointer,
@@ -28,7 +28,7 @@ const INIT: Snapshot = {
     marker: false,
     words: "",
   },
-  orient: { status: SensorStatus.Idle, error: null },
+  orient: { status: SensorStatus.Idle, err: null },
   azimuth: 0,
   is_follow_mode: false,
   camera_busy: false,

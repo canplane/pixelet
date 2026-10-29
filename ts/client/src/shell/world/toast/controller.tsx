@@ -117,10 +117,10 @@ function world(
 /** Each toast is derived from what the kernel and the host say now; an error is one toast a source. */
 export function ToastController() {
   const locationStatus = useKernel((s) => s.location.status);
-  const locationError = useKernel((s) => s.location.error);
+  const locationError = useKernel((s) => s.location.err);
   useSaid(Report.Location, location(locationStatus, locationError));
 
-  const orientationError = useKernel((s) => s.orient.error);
+  const orientationError = useKernel((s) => s.orient.err);
   useSaid(
     Report.Orientation,
     orientationError !== null ? error(messageKey(orientationError)) : null,

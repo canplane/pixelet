@@ -143,7 +143,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
     [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) =>
       by(r) > 0
     );
-  const failing = g.tasks.filter((t) => t.error > 0);
+  const failing = g.tasks.filter((t) => t.err > 0);
 
   // A glance: how smooth, where the frame's time goes, what it is drawn at,
   // and whether anything leaks or fails. The report holds the rest.
@@ -210,7 +210,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row
             key={t.stream}
             k={`${t.stream} failed`}
-            v={`${t.error} of ${t.n}${
+            v={`${t.err} of ${t.n}${
               t.reasons.length > 0
                 ? ` ${failText(t.reasons[0].fail, t.reasons[0].detail)}`
                 : ""

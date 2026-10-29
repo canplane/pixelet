@@ -821,7 +821,7 @@ pub struct LocationState {
     pub status: SensorStatus,
     pub has_location: bool,
     /// Present exactly when status is Error: the failure the kernel chose.
-    pub error: Option<Message>,
+    pub err: Option<Message>,
 }
 
 impl LocationState {
@@ -831,7 +831,7 @@ impl LocationState {
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
         w.bool(Some(self.has_location));
-        w.u32(self.error.map(|m| m as u32));
+        w.u32(self.err.map(|m| m as u32));
     }
 }
 
@@ -880,7 +880,7 @@ impl HoldingState<'_> {
 pub struct OrientationState {
     pub status: SensorStatus,
     /// Present exactly when status is Error: the failure the kernel chose.
-    pub error: Option<Message>,
+    pub err: Option<Message>,
 }
 
 impl OrientationState {
@@ -889,7 +889,7 @@ impl OrientationState {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
-        w.u32(self.error.map(|m| m as u32));
+        w.u32(self.err.map(|m| m as u32));
     }
 }
 

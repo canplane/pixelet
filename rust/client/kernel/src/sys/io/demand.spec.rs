@@ -51,12 +51,12 @@ pub const OUTCOME_NAMES: usize = 3;
 pub enum OutcomeName {
     ok = 0,
     aborted = 1,
-    error = 2,
+    err = 2,
 }
 
 impl OutcomeName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [OutcomeName; 3] = [OutcomeName::ok, OutcomeName::aborted, OutcomeName::error];
+    pub const ALL: [OutcomeName; 3] = [OutcomeName::ok, OutcomeName::aborted, OutcomeName::err];
 
     /// The member a number names, or none for a number the set does not
     /// give out.

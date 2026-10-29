@@ -247,7 +247,7 @@ function tasksSection(tasks: TaskSummary[]): string[] {
         n1(t.lat.p50)
       }  p95 ${
         n1(t.lat.p95)
-      } ms   ok ${t.ok}  ab ${t.aborted}  err ${t.error}${reasons}`,
+      } ms   ok ${t.ok}  ab ${t.aborted}  err ${t.err}${reasons}`,
     );
     if (t.phase_mean !== null) {
       const means = t.phase_mean.map(phaseText).join("  ");

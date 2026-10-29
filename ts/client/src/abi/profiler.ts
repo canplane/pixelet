@@ -184,7 +184,7 @@ export interface TaskSummary {
   n: u32;
   ok: u32;
   aborted: u32;
-  error: u32;
+  err: u32;
   lat: { p50: f64; p95: f64 };
   reasons: { fail: u32; detail: u32; n: u32 }[];
   phase_mean: [string, f64][] | null;
@@ -287,7 +287,7 @@ function task_summaries(s: F64Array): TaskSummary[] {
       n,
       ok: s[a + STREAM_STAT.ok],
       aborted: s[a + STREAM_STAT.aborted],
-      error: s[a + STREAM_STAT.error],
+      err: s[a + STREAM_STAT.err],
       lat: {
         p50: s[a + STREAM_STAT.lat_p50],
         p95: s[a + STREAM_STAT.lat_p95],

@@ -112,7 +112,7 @@ pub struct StreamStats {
     pub n: f64,
     pub ok: f64,
     pub aborted: f64,
-    pub error: f64,
+    pub err: f64,
     pub lat_p50: f64,
     pub lat_p95: f64,
     pub reason_cnt: f64,
@@ -124,7 +124,7 @@ pub struct StreamStats {
 }
 
 words!(StreamStats, STREAM_STAT::WORDS,
-    n => STREAM_STAT::n, ok => STREAM_STAT::ok, aborted => STREAM_STAT::aborted, error => STREAM_STAT::error,
+    n => STREAM_STAT::n, ok => STREAM_STAT::ok, aborted => STREAM_STAT::aborted, err => STREAM_STAT::err,
     lat_p50 => STREAM_STAT::lat_p50, lat_p95 => STREAM_STAT::lat_p95, reason_cnt => STREAM_STAT::reason_cnt, reasons => STREAM_STAT::reasons,
     phase_n => STREAM_STAT::phase_n, phase_mean => STREAM_STAT::phase_mean,
 );

@@ -442,14 +442,14 @@ export interface LocationState {
   status: SensorStatus;
   has_location: boolean;
   /** Present exactly when status is Error: the failure the kernel chose. */
-  error: Message | null;
+  err: Message | null;
 }
 
 export function read_location_state(b: BranchCursor): LocationState {
   return {
     status: b.at(0).get<SensorStatus>(),
     has_location: b.at(1).get<boolean>(),
-    error: b.at(2).get<Message | null>(),
+    err: b.at(2).get<Message | null>(),
   };
 }
 
@@ -492,13 +492,13 @@ export function read_holding_state(b: BranchCursor): HoldingState {
 export interface OrientationState {
   status: SensorStatus;
   /** Present exactly when status is Error: the failure the kernel chose. */
-  error: Message | null;
+  err: Message | null;
 }
 
 export function read_orientation_state(b: BranchCursor): OrientationState {
   return {
     status: b.at(0).get<SensorStatus>(),
-    error: b.at(1).get<Message | null>(),
+    err: b.at(1).get<Message | null>(),
   };
 }
 

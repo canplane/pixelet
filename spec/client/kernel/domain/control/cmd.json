@@ -1567,7 +1567,7 @@
           "type": "bool"
         },
         {
-          "name": "error",
+          "name": "err",
           "type": "Message",
           "optional": true,
           "$doc": [
@@ -1638,7 +1638,7 @@
           "type": "SensorStatus"
         },
         {
-          "name": "error",
+          "name": "err",
           "type": "Message",
           "optional": true,
           "$doc": [

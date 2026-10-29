@@ -154,10 +154,10 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
 }
 
 fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
-    let (ok, aborted, error) = (
+    let (ok, aborted, err) = (
         Outcome::ok as u32 as f64,
         Outcome::aborted as u32 as f64,
-        Outcome::error as u32 as f64,
+        Outcome::err as u32 as f64,
     );
     let mut section = TasksSection::default();
     for (c, slot) in section.slots.iter_mut().enumerate() {
@@ -169,7 +169,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
 
         let mut counted = [(0.0f64, 0.0f64, 0.0f64); 16];
         let mut kinds = 0;
-        for r in mine().filter(|r| r.outcome == error) {
+        for r in mine().filter(|r| r.outcome == err) {
             match counted[..kinds]
                 .iter()
                 .position(|x| x.0 == r.fail && x.1 == r.detail)
@@ -209,7 +209,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
             n: n as f64,
             ok: mine().filter(|r| r.outcome == ok).count() as f64,
             aborted: mine().filter(|r| r.outcome == aborted).count() as f64,
-            error: mine().filter(|r| r.outcome == error).count() as f64,
+            err: mine().filter(|r| r.outcome == err).count() as f64,
             lat_p50: lat.p50,
             lat_p95: lat.p95,
             reason_cnt: shown as f64,

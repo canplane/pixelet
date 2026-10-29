@@ -251,7 +251,7 @@
     "n": 1,
     "ok": 1,
     "aborted": 1,
-    "error": 1,
+    "err": 1,
     "lat_p50": 1,
     "lat_p95": 1,
     "reason_cnt": 1,

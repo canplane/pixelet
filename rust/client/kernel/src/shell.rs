@@ -195,7 +195,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         location: LocationState {
             status: shown.location.0.status,
             has_location: shown.location.1,
-            error: shown.location.0.error,
+            err: shown.location.0.err,
         },
         companion: CompanionState {
             person_ready: shown.companion[0],
@@ -211,7 +211,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         },
         orient: OrientationState {
             status: shown.orient.status,
-            error: shown.orient.error,
+            err: shown.orient.err,
         },
         azimuth: shown.azimuth,
         is_follow_mode: shown.is_follow_mode,

@@ -209,7 +209,7 @@ export const STREAM_STAT = {
   n: 0 as number,
   ok: 1 as number,
   aborted: 2 as number,
-  error: 3 as number,
+  err: 3 as number,
   lat_p50: 4 as number,
   lat_p95: 5 as number,
   reason_cnt: 6 as number,
