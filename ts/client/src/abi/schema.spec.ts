@@ -165,7 +165,7 @@ export const SETTING = {
     section: "lighting",
   },
   /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
+   * CSS pixel is four times the fragments of one. RES_MODES says each. */
   res: {
     key: 12 as number,
     kind: "choice",
@@ -371,7 +371,7 @@ export const SETTING_SHIPPED = {
     section: "lighting",
   },
   /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
+   * CSS pixel is four times the fragments of one. RES_MODES says each. */
   res: {
     key: 12 as number,
     kind: "choice",

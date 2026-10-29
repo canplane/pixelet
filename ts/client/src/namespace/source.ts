@@ -4,7 +4,7 @@
  * The tile source's declaration (the bucket's, which script/publish.py writes,
  * or a dev tile server's), asked until it answers and read once. The kernel is
  * handed its own part, the top zoom, the formats and the shards
- * (WORLD_SOURCE), and observes nothing before; the versions stay here, for the
+ * (WORLD_SRC), and observes nothing before; the versions stay here, for the
  * bakes' objects (tile.ts) and the settings.
  */
 
@@ -133,7 +133,7 @@ async function asked(): Promise<string | null> {
   }
 }
 
-/** Hands the kernel its part of the declaration (WORLD_SOURCE); false where
+/** Hands the kernel its part of the declaration (WORLD_SRC); false where
  * it is more than a command carries. */
 export type SendSource = (
   top_zoom: number,

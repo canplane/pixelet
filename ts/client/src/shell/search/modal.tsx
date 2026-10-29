@@ -29,7 +29,7 @@ import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import {
   Command,
   DevicePoseStatus,
-  encode_input_go_to,
+  encode_input_goto,
 } from "@/abi/cmd.spec.ts";
 import { kernel_command, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
@@ -280,8 +280,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
   function select(result: SearchResult) {
     kernel_command(
-      Command.INPUT_GO_TO,
-      encode_input_go_to(kernel_room, result.lon, result.lat, null, null, null),
+      Command.INPUT_GOTO,
+      encode_input_goto(kernel_room, result.lon, result.lat, null, null, null),
     );
     onClose();
   }

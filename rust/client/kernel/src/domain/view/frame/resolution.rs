@@ -33,7 +33,7 @@
 //! after it are not judged, and it asks for the frame that draws it.
 
 use crate::domain::view::param;
-use crate::domain::view::setting::store::{settings_store, ResolutionMode};
+use crate::domain::view::setting::store::{settings_store, ResMode};
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface::{surfaces, Surface};
 use xpute_guest::global::Global;
@@ -169,9 +169,9 @@ fn share(step: i32) -> f64 {
 /// display of `device` pixels a CSS pixel: the setting's, `auto`'s by its step.
 fn scale(device: f64) -> f64 {
     match settings_store().res {
-        ResolutionMode::auto => share(state().step),
-        ResolutionMode::fixed => 1.0,
-        ResolutionMode::low => 1.0 / device,
+        ResMode::auto => share(state().step),
+        ResMode::fixed => 1.0,
+        ResMode::low => 1.0 / device,
     }
 }
 
@@ -223,7 +223,7 @@ pub fn load(pace: Pace, gpu: Option<(f64, f64)>) {
     let k = state();
     let started = pace.moving && !k.moving;
     k.moving = pace.moving;
-    if settings_store().res != ResolutionMode::auto {
+    if settings_store().res != ResMode::auto {
         (k.step, k.quiet) = (0, 0);
         k.restart();
     } else if started {

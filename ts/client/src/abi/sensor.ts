@@ -9,7 +9,7 @@ import {
   encode_sensor_failed,
   encode_sensor_orientation,
   encode_sensor_permission,
-  encode_sensor_position,
+  encode_sensor_pos,
   GeolocationErrorCode,
   PermissionAnswer,
   Sensor,
@@ -30,8 +30,8 @@ function kernel_position(
   course: f64 | null,
 ): void {
   HOST.send(
-    Command.SENSOR_POSITION,
-    encode_sensor_position(
+    Command.SENSOR_POS,
+    encode_sensor_pos(
       HOST.doorbell,
       lon,
       lat,

@@ -128,24 +128,18 @@ impl AoMode {
 ///   low   — one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum ResolutionMode {
+pub enum ResMode {
     auto = 0,
     fixed = 1,
     low = 2,
 }
 
-impl ResolutionMode {
-    pub const ALL: [ResolutionMode; 3] = [
-        ResolutionMode::auto,
-        ResolutionMode::fixed,
-        ResolutionMode::low,
-    ];
+impl ResMode {
+    pub const ALL: [ResMode; 3] = [ResMode::auto, ResMode::fixed, ResMode::low];
 
     /// The option a number names, or none for a number the list does not give out.
-    pub fn of(number: u32) -> Option<ResolutionMode> {
-        ResolutionMode::ALL
-            .into_iter()
-            .find(|o| *o as u32 == number)
+    pub fn of(number: u32) -> Option<ResMode> {
+        ResMode::ALL.into_iter().find(|o| *o as u32 == number)
     }
 }
 
@@ -253,7 +247,7 @@ pub enum SettingKey {
     /// compare per fragment; 16 MB of map.
     shadows = 11,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
-    /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
+    /// CSS pixel is four times the fragments of one. RES_MODES says each.
     res = 12,
     /// Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section).
     view = 13,
@@ -381,7 +375,7 @@ pub struct Settings {
     pub rim_light: bool,
     pub ao: AoMode,
     pub shadows: bool,
-    pub res: ResolutionMode,
+    pub res: ResMode,
     pub view: bool,
     pub profiler: bool,
     pub world_gizmo: bool,
@@ -408,7 +402,7 @@ impl Settings {
         rim_light: true,
         ao: AoMode::corner,
         shadows: false,
-        res: ResolutionMode::auto,
+        res: ResMode::auto,
         view: false,
         profiler: false,
         world_gizmo: false,
@@ -474,7 +468,7 @@ impl Settings {
                 None => return false,
             },
             SettingKey::shadows if val <= 1 => self.shadows = val == 1,
-            SettingKey::res => match ResolutionMode::of(val) {
+            SettingKey::res => match ResMode::of(val) {
                 Some(o) => self.res = o,
                 None => return false,
             },

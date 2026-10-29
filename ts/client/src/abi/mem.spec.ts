@@ -24,7 +24,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
  * the shell rings with no quota until there is room (@xpute/host/ipc/doorbell.ts
  * `writer`, `submit`). And small because every slot ends up resident: a
  * position only grows, so each slot is written in turn, and a slot is a page
- * since a WORLD_SOURCE's or a CHAT_SEND's packet can come near one. */
+ * since a WORLD_SRC's or a CHAT_SEND's packet can come near one. */
 export const SQ_CAP: u32 = 512 as number;
 
 /** Frames the completion ring holds: everything one turn leaves, since the

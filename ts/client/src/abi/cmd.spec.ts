@@ -245,7 +245,7 @@ export const enum Command {
   // ---- the host answers: an I/O the process started, done ----
 
   /** A GPS fix; a field is absent where the browser gave none. */
-  SENSOR_POSITION = 0x1202,
+  SENSOR_POS = 0x1202,
   /** An orientation event; a field is absent where the browser gave none. */
   SENSOR_ORIENTATION = 0x1205,
   /** A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
@@ -269,7 +269,7 @@ export const enum Command {
    * client (ts/client/src/namespace/source.ts) and handed over as numbers and names.
    * Until it comes nothing is observed: the floor is held at the zoom it names, and no
    * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
-  WORLD_SOURCE = 0x1005,
+  WORLD_SRC = 0x1005,
   /** A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
    * set aside by the host: the kernel reads it again, and writes it from then on. */
   WORLD_KEPT_EMPTIED = 0x1006,
@@ -319,7 +319,7 @@ export const enum Command {
   INPUT_LOCATE = 0x110f,
   /** A search result: the pivot moved there, and the view asked with it at once, as the
    * controls ask it where the camera stands; a view field absent keeps what the view has. */
-  INPUT_GO_TO = 0x1108,
+  INPUT_GOTO = 0x1108,
   /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
    * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
    * first of a run is taken to be where the camera already is, so nothing moves as
@@ -554,8 +554,8 @@ export function read_sensor_stop(b: BranchCursor): SensorStopSignal {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.SENSOR_POSITION's packet, written in place into `to`. */
-export function encode_sensor_position(
+/** Command.SENSOR_POS's packet, written in place into `to`. */
+export function encode_sensor_pos(
   to: PacketRoom,
   lon: f64,
   lat: f64,
@@ -635,12 +635,12 @@ export function encode_world_visibility(
   return to.writer(1).bool(visible);
 }
 
-/** Command.WORLD_SOURCE's packet, written in place into `to`.
+/** Command.WORLD_SRC's packet, written in place into `to`.
  *
  * @param top_zoom The coarsest zoom the source supplies whole.
  * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/published.spec.rs).
  * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
-export function encode_world_source(
+export function encode_world_src(
   to: PacketRoom,
   top_zoom: u32,
   format: u32[],
@@ -801,12 +801,12 @@ export function encode_input_tracking(
   return to.writer(1).u32(tracking);
 }
 
-/** Command.INPUT_GO_TO's packet, written in place into `to`.
+/** Command.INPUT_GOTO's packet, written in place into `to`.
  *
  * @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
  * @param azimuth The heading about Z in radians, wrapped.
  * @param polar The angle down from vertical in radians, clamped. */
-export function encode_input_go_to(
+export function encode_input_goto(
   to: PacketRoom,
   lon: f64,
   lat: f64,

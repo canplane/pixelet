@@ -114,8 +114,8 @@ pub(super) fn apply(
             // The shell holds the kernel's state from its first render on.
             ask_turn(s)
         }
-        Command::WORLD_SOURCE => {
-            let p = abi::WorldSource::read(packet(pkt)?)?;
+        Command::WORLD_SRC => {
+            let p = abi::WorldSrc::read(packet(pkt)?)?;
             refuse_unless(
                 crate::sys::io::source::declare(p.top_zoom, p.format, p.shard.iter()).is_ok(),
                 Errno::EINVAL,
@@ -223,8 +223,8 @@ pub(super) fn apply(
             }
             ask_turn(s)
         }
-        Command::INPUT_GO_TO => {
-            let p = abi::InputGoTo::read(packet(pkt)?)?;
+        Command::INPUT_GOTO => {
+            let p = abi::InputGoto::read(packet(pkt)?)?;
             refuse_unless(on_earth(p.lon, p.lat), Errno::EINVAL)?;
             ui::go_to_deg(
                 p.lon,
@@ -254,8 +254,8 @@ pub(super) fn apply(
             crate::domain::control::camera::controller::tracked_end();
             ask_turn(s)
         }
-        Command::SENSOR_POSITION => {
-            let p = abi::SensorPosition::read(packet(pkt)?)?;
+        Command::SENSOR_POS => {
+            let p = abi::SensorPos::read(packet(pkt)?)?;
             refuse_unless(
                 on_earth(p.lon, p.lat) && p.accuracy.is_none_or(|a| a >= 0.0) && bearing(p.course),
                 Errno::EINVAL,

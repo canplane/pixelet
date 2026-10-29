@@ -16,7 +16,7 @@ import {
   Command,
   encode_world_boot,
   encode_world_kept_emptied,
-  encode_world_source,
+  encode_world_src,
   read_sensor_start,
   read_sensor_stop,
   read_world_snapshot,
@@ -103,9 +103,9 @@ function send_source(
   formats: number[],
   shards: string[],
 ): boolean {
-  const pkt = encode_world_source(HOST.doorbell, top_zoom, formats, shards);
+  const pkt = encode_world_src(HOST.doorbell, top_zoom, formats, shards);
   if (!HOST.doorbell.fits(pkt)) return false;
-  HOST.send(Command.WORLD_SOURCE, pkt);
+  HOST.send(Command.WORLD_SRC, pkt);
   return true;
 }
 

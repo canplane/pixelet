@@ -43,7 +43,7 @@ pub const THREAD_STACK_BYTES: u32 = 8388608;
 /// the shell rings with no quota until there is room (@xpute/host/ipc/doorbell.ts
 /// `writer`, `submit`). And small because every slot ends up resident: a
 /// position only grows, so each slot is written in turn, and a slot is a page
-/// since a WORLD_SOURCE's or a CHAT_SEND's packet can come near one.
+/// since a WORLD_SRC's or a CHAT_SEND's packet can come near one.
 pub const SQ_CAP: u32 = 512;
 
 /// Frames the completion ring holds: everything one turn leaves, since the

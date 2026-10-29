@@ -569,7 +569,7 @@ pub enum Command {
 
     // ---- the host answers: an I/O the process started, done ----
     /// A GPS fix; a field is absent where the browser gave none.
-    SENSOR_POSITION = 0x1202,
+    SENSOR_POS = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
     SENSOR_ORIENTATION = 0x1205,
     /// A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
@@ -592,7 +592,7 @@ pub enum Command {
     /// client (ts/client/src/namespace/source.ts) and handed over as numbers and names.
     /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
-    WORLD_SOURCE = 0x1005,
+    WORLD_SRC = 0x1005,
     /// A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
     /// set aside by the host: the kernel reads it again, and writes it from then on.
     WORLD_KEPT_EMPTIED = 0x1006,
@@ -641,7 +641,7 @@ pub enum Command {
     INPUT_LOCATE = 0x110f,
     /// A search result: the pivot moved there, and the view asked with it at once, as the
     /// controls ask it where the camera stands; a view field absent keeps what the view has.
-    INPUT_GO_TO = 0x1108,
+    INPUT_GOTO = 0x1108,
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
     /// first of a run is taken to be where the camera already is, so nothing moves as
@@ -672,13 +672,13 @@ impl Command {
     pub const ALL: [Command; 39] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
-        Command::SENSOR_POSITION,
+        Command::SENSOR_POS,
         Command::SENSOR_ORIENTATION,
         Command::SENSOR_FAILED,
         Command::WORLD_BOOT,
         Command::WORLD_FRAME,
         Command::WORLD_VISIBILITY,
-        Command::WORLD_SOURCE,
+        Command::WORLD_SRC,
         Command::WORLD_KEPT_EMPTIED,
         Command::SENSOR_PERMISSION,
         Command::INPUT_RECT,
@@ -700,7 +700,7 @@ impl Command {
         Command::INPUT_TRACKING,
         Command::INPUT_COMPASS_RESET,
         Command::INPUT_LOCATE,
-        Command::INPUT_GO_TO,
+        Command::INPUT_GOTO,
         Command::INPUT_POSE,
         Command::INPUT_POSE_END,
         Command::WORLD_VIEW,
@@ -972,9 +972,9 @@ impl SensorStopSignal {
     }
 }
 
-/// Command::SENSOR_POSITION's packet.
+/// Command::SENSOR_POS's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct SensorPosition {
+pub struct SensorPos {
     pub lon: f64,
     pub lat: f64,
     pub altitude: Option<f64>,
@@ -982,10 +982,10 @@ pub struct SensorPosition {
     pub course: Option<f64>,
 }
 
-impl SensorPosition {
-    pub fn read(pkt: &[u8]) -> Result<SensorPosition, MarshalError> {
+impl SensorPos {
+    pub fn read(pkt: &[u8]) -> Result<SensorPos, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorPosition {
+        Ok(SensorPos {
             lon: finite(f.at(0)?.get_number()?)?,
             lat: finite(f.at(1)?.get_number()?)?,
             altitude: match f.at(2)?.opt() {
@@ -1137,9 +1137,9 @@ impl WorldVisibility {
     }
 }
 
-/// Command::WORLD_SOURCE's packet.
+/// Command::WORLD_SRC's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldSource<'a> {
+pub struct WorldSrc<'a> {
     /// The coarsest zoom the source supplies whole.
     pub top_zoom: u32,
     /// Each kind's format, one a kind, indexed by its bake's number
@@ -1150,10 +1150,10 @@ pub struct WorldSource<'a> {
     pub shard: Strs<'a>,
 }
 
-impl<'a> WorldSource<'a> {
-    pub fn read(pkt: &'a [u8]) -> Result<WorldSource<'a>, MarshalError> {
+impl<'a> WorldSrc<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<WorldSrc<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldSource {
+        Ok(WorldSrc {
             top_zoom: integer::<u32>(f.at(0)?.get_number()?)?,
             format: f.at(1)?.get_array::<u32>()?,
             shard: f.at(2)?.get_strs()?,
@@ -1451,9 +1451,9 @@ impl InputTracking {
     }
 }
 
-/// Command::INPUT_GO_TO's packet.
+/// Command::INPUT_GOTO's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputGoTo {
+pub struct InputGoto {
     pub lon: f64,
     pub lat: f64,
     /// The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
@@ -1464,10 +1464,10 @@ pub struct InputGoTo {
     pub polar: Option<f64>,
 }
 
-impl InputGoTo {
-    pub fn read(pkt: &[u8]) -> Result<InputGoTo, MarshalError> {
+impl InputGoto {
+    pub fn read(pkt: &[u8]) -> Result<InputGoto, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputGoTo {
+        Ok(InputGoto {
             lon: finite(f.at(0)?.get_number()?)?,
             lat: finite(f.at(1)?.get_number()?)?,
             dist: match f.at(2)?.opt() {

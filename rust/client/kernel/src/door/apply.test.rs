@@ -46,7 +46,7 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
     assert_eq!(
         apply(
             &mut s,
-            Command::INPUT_GO_TO as u32,
+            Command::INPUT_GOTO as u32,
             &Some(&buf[..len as usize])
         )
         .map_err(|e| e.errnum),

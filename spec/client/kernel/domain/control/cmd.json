@@ -683,7 +683,7 @@
           "section": "the host answers: an I/O the process started, done"
         },
         {
-          "name": "SENSOR_POSITION",
+          "name": "SENSOR_POS",
           "val": 4610,
           "$doc": [
             "A GPS fix; a field is absent where the browser gave none."
@@ -875,7 +875,7 @@
           ]
         },
         {
-          "name": "WORLD_SOURCE",
+          "name": "WORLD_SRC",
           "val": 4101,
           "$doc": [
             "What the tile source declares of itself, once the client has it: the tile root's",
@@ -1244,7 +1244,7 @@
           ]
         },
         {
-          "name": "INPUT_GO_TO",
+          "name": "INPUT_GOTO",
           "val": 4360,
           "$doc": [
             "A search result: the pivot moved there, and the view asked with it at once, as the",

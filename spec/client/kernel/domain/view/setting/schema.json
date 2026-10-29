@@ -22,7 +22,7 @@
     "kept elsewhere — the person and the pet are by theirs in actor.json — and",
     "crosses as itself."
   ],
-  "RESOLUTION_MODES": {
+  "RES_MODES": {
     "$val": { "auto": 0, "fixed": 1, "low": 2 },
     "$doc": [
       "How many device pixels the world is drawn at to a CSS pixel.",
@@ -260,11 +260,11 @@
       "number": 12,
       "$doc": [
         "The pixels the world is filled at, the GPU's largest cost: two to a",
-        "CSS pixel is four times the fragments of one. RESOLUTION_MODES says each."
+        "CSS pixel is four times the fragments of one. RES_MODES says each."
       ],
       "kind": "choice",
       "default": "auto",
-      "options": "RESOLUTION_MODES",
+      "options": "RES_MODES",
       "section": "display"
     },
     "view": {
