@@ -13,7 +13,7 @@ pub struct DeviceLocation {
     /// Longitude, latitude.
     pub coords: [f64; 2],
     /// Meters over sea level; none where the device gives none.
-    pub altitude: Option<f64>,
+    pub alt: Option<f64>,
     /// Meters.
     pub accuracy: f64,
     /// Course over ground, 0-360 degrees.
@@ -92,7 +92,7 @@ impl DeviceLocationStore {
     pub fn set_location(
         &mut self,
         coords: [f64; 2],
-        altitude: Option<f64>,
+        alt: Option<f64>,
         accuracy: f64,
         course: Option<f64>,
     ) {
@@ -101,7 +101,7 @@ impl DeviceLocationStore {
         let Some(prev) = self.location else {
             self.location = Some(DeviceLocation {
                 coords,
-                altitude,
+                alt,
                 accuracy,
                 course,
                 timestamp,
@@ -119,7 +119,7 @@ impl DeviceLocationStore {
         let lng_diff = (prev.coords[0] - coords[0]).abs();
         let lat_diff = (prev.coords[1] - coords[1]).abs();
         let is_significant_change =
-            lat_diff > 0.00001 || lng_diff > 0.00001 || is_delta_over(prev.altitude, altitude, 0.5);
+            lat_diff > 0.00001 || lng_diff > 0.00001 || is_delta_over(prev.alt, alt, 0.5);
 
         if !is_significant_change && prev.accuracy == accuracy && prev.course == course {
             return;
@@ -132,10 +132,10 @@ impl DeviceLocationStore {
             } else {
                 prev.coords
             },
-            altitude: if is_significant_change {
-                altitude
+            alt: if is_significant_change {
+                alt
             } else {
-                prev.altitude
+                prev.alt
             },
             accuracy,
             course,

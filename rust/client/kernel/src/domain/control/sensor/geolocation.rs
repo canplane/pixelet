@@ -89,12 +89,12 @@ pub fn on_geolocation_permission_granted(supported: bool) {
     }
 }
 
-/// `altitude` is the ellipsoid's, as GPS gives it; kept over sea level, the
+/// `alt` is the ellipsoid's, as GPS gives it; kept over sea level, the
 /// terrain's, by the geoid at the base of the leaf tile it falls in.
 pub fn geolocation_fix(
     lng: f64,
     lat: f64,
-    altitude: Option<f64>,
+    alt: Option<f64>,
     accuracy: f64,
     course: Option<f64>,
 ) {
@@ -104,8 +104,8 @@ pub fn geolocation_fix(
         .rect();
     let [lng, lat, _] =
         epsg4326::from_mercator(&[epsg3857::mer_from_u(x0), epsg3857::mer_from_u(y0), 0.0]);
-    let altitude = altitude.map(|h| h - epsg4326::geoid_m(lng, lat));
-    device_location_store().set_location([lng, lat], altitude, accuracy, course);
+    let alt = alt.map(|h| h - epsg4326::geoid_m(lng, lat));
+    device_location_store().set_location([lng, lat], alt, accuracy, course);
 }
 
 /// A momentary error (unavailable, timed out) leaves the watch running, the

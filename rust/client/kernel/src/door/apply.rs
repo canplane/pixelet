@@ -264,7 +264,7 @@ pub(super) fn apply(
             geolocation::geolocation_fix(
                 p.lon,
                 p.lat,
-                p.altitude,
+                p.alt,
                 p.accuracy.unwrap_or(f64::INFINITY),
                 p.course,
             );

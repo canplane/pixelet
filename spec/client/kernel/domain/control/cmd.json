@@ -698,7 +698,7 @@
               "type": "f64"
             },
             {
-              "name": "altitude",
+              "name": "alt",
               "type": "f64",
               "optional": true
             },

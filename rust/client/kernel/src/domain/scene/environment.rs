@@ -255,7 +255,7 @@ impl EnvironmentDraw {
             moon: self.moon,
             stars: self.stars,
             time: self.time,
-            altitude_km: over * km_per_u,
+            alt_km: over * km_per_u,
             ground_km: ground * km_per_u,
             km_per_u,
             lat: lat.to_radians(),

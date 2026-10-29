@@ -157,8 +157,8 @@ pub fn clouds_shown() -> f64 {
     if !settings_store().clouds {
         return 0.0;
     }
-    let altitude_km = f64::from(scene().environment.out[ENV_AIR]);
-    let t = ((altitude_km - CLOUD_GONE_KM / 2.0) / (CLOUD_GONE_KM / 2.0)).clamp(0.0, 1.0);
+    let alt_km = f64::from(scene().environment.out[ENV_AIR]);
+    let t = ((alt_km - CLOUD_GONE_KM / 2.0) / (CLOUD_GONE_KM / 2.0)).clamp(0.0, 1.0);
     1.0 - t * t * (3.0 - 2.0 * t)
 }
 

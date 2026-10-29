@@ -25,7 +25,7 @@ function given(n: number | null): number | null {
 function kernel_pos(
   lon: f64,
   lat: f64,
-  altitude: f64 | null,
+  alt: f64 | null,
   accuracy: f64 | null,
   course: f64 | null,
 ): void {
@@ -35,7 +35,7 @@ function kernel_pos(
       HOST.doorbell,
       lon,
       lat,
-      given(altitude),
+      given(alt),
       given(accuracy),
       given(course),
     ),

@@ -32,7 +32,7 @@ pub struct Light {
     /// The stars' fade in from the first frame, 0 to 1.
     pub stars: f64,
     pub time: f64,
-    pub altitude_km: f64,
+    pub alt_km: f64,
     pub km_per_u: f64,
     pub lat: f64,
     pub lng: f64,
@@ -64,7 +64,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     o[ENV_SKY + 1] = light.time as f32;
     o[ENV_SKY + 2] = light.lng as f32;
 
-    o[ENV_AIR] = light.altitude_km as f32;
+    o[ENV_AIR] = light.alt_km as f32;
     o[ENV_AIR + 1] = light.km_per_u as f32;
     o[ENV_AIR + 2] = light.lat as f32;
     o[ENV_AIR + 3] = light.ground_km as f32;

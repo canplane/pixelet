@@ -559,11 +559,11 @@ export function encode_sensor_pos(
   to: PacketRoom,
   lon: f64,
   lat: f64,
-  altitude: f64 | null,
+  alt: f64 | null,
   accuracy: f64 | null,
   course: f64 | null,
 ): PacketWriter {
-  return to.writer(5).f64(lon).f64(lat).f64(altitude).f64(accuracy).f64(course);
+  return to.writer(5).f64(lon).f64(lat).f64(alt).f64(accuracy).f64(course);
 }
 
 /** Command.SENSOR_ORIENT's packet, written in place into `to`. */

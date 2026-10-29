@@ -975,7 +975,7 @@ impl SensorStopSignal {
 pub struct SensorPos {
     pub lon: f64,
     pub lat: f64,
-    pub altitude: Option<f64>,
+    pub alt: Option<f64>,
     pub accuracy: Option<f64>,
     pub course: Option<f64>,
 }
@@ -986,7 +986,7 @@ impl SensorPos {
         Ok(SensorPos {
             lon: finite(f.at(0)?.get_number()?)?,
             lat: finite(f.at(1)?.get_number()?)?,
-            altitude: match f.at(2)?.opt() {
+            alt: match f.at(2)?.opt() {
                 Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },

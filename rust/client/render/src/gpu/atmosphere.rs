@@ -107,8 +107,8 @@ pub(crate) const IRRADIANCE: usize = 4;
 const MOON_VIEW: usize = 5;
 
 /// A share of the altitude, and at least a meter.
-const ALTITUDE_SHARE: f32 = 0.005;
-const ALTITUDE_FLOOR_KM: f32 = 0.001;
+const ALT_SHARE: f32 = 0.005;
+const ALT_FLOOR_KM: f32 = 0.001;
 
 pub struct Atmosphere {
     uniform: u32,
@@ -428,13 +428,13 @@ impl Atmosphere {
     /// up where the eye stands.
     pub fn lay_out(&mut self, g: &Gpu, env: &[f32], reach: f32) {
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
-        let altitude_km = env[ENV_AIR];
+        let alt_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
         self.words[MOON_DIR..MOON_DIR + 3].copy_from_slice(&moon[..3]);
         self.words[MOON_LIGHT] = moon[3];
         self.words[MOON_COLOR..MOON_COLOR + 3]
             .copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
-        self.words[CAMERA_ALTITUDE] = altitude_km;
+        self.words[CAMERA_ALTITUDE] = alt_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
         self.words[LAND_ALTITUDE_KM] = env[ENV_AIR + 3];
         self.words[DRAWN] = reach;
@@ -465,13 +465,13 @@ impl Atmosphere {
             self.drawn_for = [None; 2];
         }
         self.take_slopes();
-        let altitude = self.words[CAMERA_ALTITUDE];
+        let alt = self.words[CAMERA_ALTITUDE];
         let free = self.landed_word == 0;
         let views = [
-            (SKY_VIEW, (self.sun_mu, altitude), true),
+            (SKY_VIEW, (self.sun_mu, alt), true),
             (
                 MOON_VIEW,
-                (self.moon_mu, altitude),
+                (self.moon_mu, alt),
                 self.words[MOON_LIGHT] > 0.0,
             ),
         ];
@@ -559,7 +559,7 @@ fn has_moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
     match drawn {
         None => true,
         Some((mu, h)) => {
-            mu != now.0 || (now.1 - h).abs() > (h.abs() * ALTITUDE_SHARE).max(ALTITUDE_FLOOR_KM)
+            mu != now.0 || (now.1 - h).abs() > (h.abs() * ALT_SHARE).max(ALT_FLOOR_KM)
         }
     }
 }
