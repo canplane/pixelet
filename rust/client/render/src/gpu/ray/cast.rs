@@ -129,6 +129,9 @@ pub(super) struct CastBuffers {
     /// The misses' walk's dispatch and count, as the eye's are
     /// (pxl-spec-core `ray::MISS_ARGS_WORDS`).
     sun_misses: u32,
+    /// The workgroups of the passes that cast its tiles (pxl-spec-core
+    /// `sun::ARGS_WORDS`): none, or each whole where a tile is claimed.
+    sun_args: u32,
     /// What a tile of the shadow map holds follows, as the sun's cast last
     /// read it (`Read`): the light's frame (`Shadow::frame`), whether
     /// shadows are cast, the light box, the eye's place and zooms,
@@ -332,6 +335,10 @@ impl RaysPass {
             sun_misses: buf(
                 word_bytes(ray::MISS_ARGS_WORDS),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
+            ),
+            sun_args: buf(
+                word_bytes(sun::ARGS_WORDS as usize),
+                storage | buffer_usage::INDIRECT,
             ),
             sun_content: Read::default(),
             sun_receivers: Read::default(),
@@ -692,6 +699,7 @@ impl RaysPass {
             }
             g.write_buf(c.sun_moved, 0, bytes(&head));
             g.write_buf(c.sun_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
+            g.write_buf(c.sun_args, 0, bytes(&sun_args()));
             c.raster.sun_prepare(g, &cast.eye, shadow::SIZE);
         }
         if eye_moved || jittered || c.sun_cast {
@@ -836,6 +844,7 @@ impl RaysPass {
                     c.raster.sun_visibility(),
                     c.raster.sun.args,
                     c.sun_misses,
+                    c.sun_args,
                 ],
             );
             c.sun_bound = sun_bound;
@@ -1023,35 +1032,30 @@ impl RaysPass {
             // sun's world's group, which hands them the sun's head.
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);
             g.set_pipeline(pass, c.beam_built.pipeline);
-            let n = sun::beam_across(shadow::SIZE);
-            let w = compute::BEAM_WORKGROUP;
-            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            // Each as many workgroups as the reach left it
+            // (`sun::ARGS_WORDS`).
+            let args = |w: u32| word_bytes(w as usize);
+            g.dispatch_indirect(pass, c.sun_args, args(sun::ARGS_BEAM));
             g.set_pipeline(pass, c.cells_built.pipeline);
-            let n = sun::cells_across(shadow::SIZE);
-            let w = compute::CELL_WORKGROUP;
-            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            g.dispatch_indirect(pass, c.sun_args, args(sun::ARGS_CELLS));
             g.end(pass);
-            let n = shadow::SIZE / SAMPLE;
             let stamp = stamps[GpuSpanName::sun_sample as usize].pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.sun_groups[1], &[]);
             g.set_pipeline(pass, c.sample_built.pipeline);
-            let w = compute::SAMPLE_WORKGROUP;
-            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            g.dispatch_indirect(pass, c.sun_args, args(sun::ARGS_SAMPLE));
             g.end(pass);
             let stamp = &mut stamps[GpuSpanName::sun_raster as usize];
             let pass = g.compute_pass(encoder, stamp.pass());
             g.set_bind_group(pass, 0, c.sun_groups[2], &[]);
             g.set_pipeline(pass, c.raster.boxes_built.pipeline);
-            let w = compute::SAMPLE_BOX_WORKGROUP;
-            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            g.dispatch_indirect(pass, c.sun_args, args(sun::ARGS_SAMPLE_BOX));
             g.end(pass);
             c.raster.sun_draw(g, encoder, stamp);
             let pass = g.compute_pass(encoder, stamps[GpuSpanName::sun_slot as usize].pass());
             g.set_bind_group(pass, 0, c.sun_groups[0], &[]);
             g.set_pipeline(pass, c.sun_built.pipeline);
-            let tiles = shadow::SIZE / sun::TILE;
-            g.dispatch(pass, tiles, tiles, 1);
+            g.dispatch_indirect(pass, c.sun_args, args(sun::ARGS_SLOT));
             g.end(pass);
             // Their count where their walk reads it, then that walk.
             g.copy_buf(
@@ -1211,6 +1215,35 @@ const _: () = assert!(
     "the map's tiles are a whole number of squares a side (`sun::coarse_square`)"
 );
 
+/// The workgroups of the passes that cast the sun's tiles as a cast starts:
+/// none, then each whole (`sun::ARGS_WORDS`).
+fn sun_args() -> [u32; sun::ARGS_WORDS as usize] {
+    let across = |n: u32, w: [u32; 3]| [n.div_ceil(w[0]), n.div_ceil(w[1]), 1];
+    let samples = shadow::SIZE / SAMPLE;
+    let tiles = shadow::SIZE / sun::TILE;
+    let mut args = [0; sun::ARGS_WORDS as usize];
+    for (w, whole) in [
+        (
+            sun::ARGS_BEAM,
+            across(sun::beam_across(shadow::SIZE), compute::BEAM_WORKGROUP),
+        ),
+        (
+            sun::ARGS_CELLS,
+            across(sun::cells_across(shadow::SIZE), compute::CELL_WORKGROUP),
+        ),
+        (sun::ARGS_SAMPLE, across(samples, compute::SAMPLE_WORKGROUP)),
+        (
+            sun::ARGS_SAMPLE_BOX,
+            across(samples, compute::SAMPLE_BOX_WORKGROUP),
+        ),
+        (sun::ARGS_SLOT, [tiles, tiles, 1]),
+    ] {
+        let at = (sun::ARGS_WHOLE + w) as usize;
+        args[at..at + 3].copy_from_slice(&whole);
+    }
+    args
+}
+
 /// The sun's list, a word before shadows are cast, or `whole`: the beam's
 /// lines and the cells' starts, the raster's samples and the misses past
 /// them (`sun::list_words`).
@@ -1231,9 +1264,10 @@ fn sun_list(g: &Gpu, whole: bool) -> u32 {
 /// overwrites and the ways' pool, the cast's alone; the observed pyramid,
 /// which the sun's walks read and write as the eye's do; the clipmap; its
 /// head (`moved`), the beam's lines, the samples and the misses (`list`),
-/// the raster's boxes, visibility buffer and args, and the misses' dispatch;
-/// the eye's rays, which the mark reads, and the decor's drawing words, regions
-/// and instances, which the drawn mark reads. The slots', its world's (the
+/// the raster's boxes, visibility buffer and args, the misses' dispatch and
+/// the casting passes' workgroups (`sun::ARGS_WORDS`), which the reach
+/// writes; the eye's rays, which the mark reads, and the decor's drawing
+/// words, regions and instances, which the drawn mark reads. The slots', its world's (the
 /// passes the eye's rays take too, over `WORLD_GROUP`, its list where the
 /// eye's beam rays' buffer lies and its head where the eye's), its boxes'
 /// (the eye's raster's pass), the misses' walk's, the two marks' and the
@@ -1242,7 +1276,7 @@ fn sun_groups(
     g: &Gpu,
     [walk, world, boxes_built, miss, mark, mark_drawn, reach]: [&Built; 7],
     bound: [u32; 12],
-    [seen, moved, list, boxes, visibility, args, misses]: [u32; 7],
+    [seen, moved, list, boxes, visibility, args, misses, sun_args]: [u32; 8],
 ) -> [u32; 7] {
     let [eye, window, ground, looks, shards, overwrites, pool, sun, rays, drawing, regions, instances] =
         bound;
@@ -1266,6 +1300,7 @@ fn sun_groups(
         (18, buf_entry(18, drawing)),
         (19, buf_entry(19, regions)),
         (20, buf_entry(20, instances)),
+        (21, buf_entry(21, sun_args)),
     ];
     // Each the entries its layout declares (build.rs `compute`).
     let of = |declared: &[u32]| {

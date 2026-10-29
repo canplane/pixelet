@@ -625,6 +625,20 @@ pub const fn list_words(size: u32) -> u32 {
     coarse_at(size) + coarse(size) * coarse(size)
 }
 
+/// The workgroups of the passes that cast tiles, a buffer of their own: each
+/// pass's three words (x, y, z) from its `ARGS_*` word, then each whole from
+/// `ARGS_WHOLE`. A cast starts with none, and a tile claimed as the cast's to
+/// cast (pxl-shader sun.rs `sun_reach_cs`) copies the whole in; a cast that
+/// claims none, as where the receivers moved only within the tiles cast,
+/// casts none.
+pub const ARGS_BEAM: u32 = 0;
+pub const ARGS_CELLS: u32 = 3;
+pub const ARGS_SAMPLE: u32 = 6;
+pub const ARGS_SAMPLE_BOX: u32 = 9;
+pub const ARGS_SLOT: u32 = 12;
+pub const ARGS_WHOLE: u32 = 15;
+pub const ARGS_WORDS: u32 = 2 * ARGS_WHOLE;
+
 /// Box texel `p`'s ray: its origin, where its world texel's middle lies on
 /// the near plane, rounded to a Q3 step as its anchor lays it (`Starts`);
 /// the ray; and where the eye, at Q3 `eye`, stands from that origin, in

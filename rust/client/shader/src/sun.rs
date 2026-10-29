@@ -678,13 +678,16 @@ pub fn sun_mark_drawn_cs(
 /// its taps a tile either side), as decor and the actors stand on what the
 /// eye meets and are no taller. One read that no cast of the epoch read is
 /// the cast's to cast: its word names the cast (`sun::reads_at`), and its
-/// square's (`sun::coarse_at`). A tile's word its own thread's alone.
+/// square's (`sun::coarse_at`). A tile's word its own thread's alone. One
+/// claimed, the passes that cast tiles go whole (`sun::ARGS_WORDS`), each
+/// claim writing the same words.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sun_reach_cs"))]
 pub fn sun_reach_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 21)] args: &mut [u32],
 ) {
     let side = size(moved);
     let n = pxl_spec_core::sun::tiles(side);
@@ -730,6 +733,11 @@ pub fn sun_reach_cs(
             pxl_spec_core::sun::coarse_square(side, [id.x, id.y]),
             cast,
         );
+        let mut k = 0;
+        while k < pxl_spec_core::sun::ARGS_WHOLE {
+            put(args, k, at(args, pxl_spec_core::sun::ARGS_WHOLE + k));
+            k += 1;
+        }
     }
 }
 
