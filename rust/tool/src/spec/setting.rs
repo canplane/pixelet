@@ -297,9 +297,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "    }".into(),
         String::new(),
         "    /// A choice's option a development build only offers.".into(),
-        "    pub fn dev_option(self, value: u32) -> bool {".into(),
-        "        match self {".into(),
     ]);
+    let mut dev_arms = Vec::new();
     for s in settings
         .iter()
         .filter(|s| s.spec.get("dev_options").is_some())
@@ -323,18 +322,26 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     ))
             })
             .collect::<Result<_, _>>()?;
-        rs.push(format!(
+        dev_arms.push(format!(
             "            SettingKey::{} => matches!(value, {}),",
             s.key,
             dev.join(" | ")
         ));
     }
-    rs.extend([
-        "            _ => false,".to_string(),
-        "        }".into(),
-        "    }".into(),
-        "}".into(),
-    ]);
+    if dev_arms.is_empty() {
+        rs.extend([
+            "    pub fn dev_option(self, _value: u32) -> bool {".to_string(),
+            "        false".into(),
+        ]);
+    } else {
+        rs.extend([
+            "    pub fn dev_option(self, value: u32) -> bool {".to_string(),
+            "        match self {".into(),
+        ]);
+        rs.extend(dev_arms);
+        rs.extend(["            _ => false,".to_string(), "        }".into()]);
+    }
+    rs.extend(["    }".to_string(), "}".into()]);
     let field_type = |s: &Setting| -> Result<String, String> {
         match s.kind() {
             "toggle" => Ok("bool".to_string()),

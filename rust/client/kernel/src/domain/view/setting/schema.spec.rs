@@ -361,10 +361,8 @@ impl SettingKey {
     }
 
     /// A choice's option a development build only offers.
-    pub fn dev_option(self, value: u32) -> bool {
-        match self {
-            _ => false,
-        }
+    pub fn dev_option(self, _value: u32) -> bool {
+        false
     }
 }
 
