@@ -8,7 +8,7 @@ use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::reading::{
-    device_location_store, device_orientation_store, DevicePoseStatus,
+    device_location_store, device_orient_store, DevicePoseStatus,
 };
 use crate::sys::sched::edge::wake_at;
 use xpute_guest::clock::now;
@@ -62,9 +62,7 @@ pub fn set_following(on: bool) {
 pub fn follow_mode_step() {
     let f = follow();
     let is_follow_mode = f.on;
-    let heading = device_orientation_store()
-        .orientation
-        .and_then(|o| o.heading);
+    let heading = device_orient_store().orient.and_then(|o| o.heading);
     let device_coord = off_center().device_coord;
 
     // Follow needs the location READY; a heading only turns the camera where there

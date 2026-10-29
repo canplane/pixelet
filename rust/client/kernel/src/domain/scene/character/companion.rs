@@ -259,7 +259,7 @@ impl Figure {
         let Some(held) = &mut self.held else { return };
         self.stance = Some(Stance {
             at: [at[0], at[1], drawn_floor(&mut self.drawn, at, *stands, p)],
-            rotation_z: self.heading as f32,
+            rot_z: self.heading as f32,
             scale: held.model.scale,
         });
         let clip = if is_walking {

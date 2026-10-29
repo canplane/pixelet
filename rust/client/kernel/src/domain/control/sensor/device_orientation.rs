@@ -6,7 +6,7 @@
 
 use crate::domain::control::cmd::Message;
 
-use crate::domain::control::sensor::reading::{device_orientation_store, PermissionAnswer, Pose};
+use crate::domain::control::sensor::reading::{device_orient_store, PermissionAnswer, Pose};
 use crate::sys::sched::edge::wake_at;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -42,17 +42,17 @@ struct Orientation {
     command: Option<OrientationCommand>,
 }
 
-static ORIENTATION: Global<Orientation> = Global::new();
+static ORIENT: Global<Orientation> = Global::new();
 
-fn orientation() -> &'static mut Orientation {
-    ORIENTATION.get(|| Orientation {
+fn orient() -> &'static mut Orientation {
+    ORIENT.get(|| Orientation {
         last_event_at: 0.0,
         command: None,
     })
 }
 
 /// iOS's compass heading preferred, the alpha-derived one otherwise.
-pub fn orientation_event(
+pub fn orient_event(
     webkit_compass_heading: Option<f64>,
     alpha: Option<f64>,
     beta: Option<f64>,
@@ -60,22 +60,22 @@ pub fn orientation_event(
 ) {
     // An API with no sensor answers once, empty, and never again.
     if webkit_compass_heading.is_none() && alpha.is_none() && beta.is_none() && gamma.is_none() {
-        orientation().command = Some(OrientationCommand::Remove);
-        let store = device_orientation_store();
-        store.set_is_tracking_orientation(false);
+        orient().command = Some(OrientationCommand::Remove);
+        let store = device_orient_store();
+        store.set_is_tracking_orient(false);
         store.pose = Pose::Unavailable;
         return;
     }
-    orientation().last_event_at = now();
+    orient().last_event_at = now();
     let heading = webkit_compass_heading.or_else(|| alpha.map(|a| (360.0 - a) % 360.0));
-    device_orientation_store().set_orientation(heading, beta, gamma);
+    device_orient_store().set_orient(heading, beta, gamma);
 }
 
 /// True when tracking or asked for. Behind a permission only the shell's
 /// prompt can start it.
-pub fn request_orientation(platform: OrientationPlatform) -> bool {
-    let store = device_orientation_store();
-    if store.is_tracking_orientation {
+pub fn request_orient(platform: OrientationPlatform) -> bool {
+    let store = device_orient_store();
+    if store.is_tracking_orient {
         return true;
     }
     if !platform.supported || store.pose == Pose::Unavailable {
@@ -86,58 +86,58 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
         return false;
     }
     store.pose = Pose::Loading;
-    let o = orientation();
+    let o = orient();
     o.command = Some(OrientationCommand::Listen);
     o.last_event_at = now();
-    store.set_is_tracking_orientation(true);
+    store.set_is_tracking_orient(true);
     true
 }
 
 /// Without a prompt gate, a grant came from outside the app (device
 /// settings) and starts the listener here.
-pub fn orientation_permission(answer: PermissionAnswer, platform: OrientationPlatform) {
-    let store = device_orientation_store();
+pub fn orient_permission(answer: PermissionAnswer, platform: OrientationPlatform) {
+    let store = device_orient_store();
     match answer {
         PermissionAnswer::Asking => {
-            if !store.is_tracking_orientation {
+            if !store.is_tracking_orient {
                 store.pose = Pose::Loading;
             }
         }
         PermissionAnswer::Granted if platform.needs_permission => {
-            orientation().last_event_at = now();
-            store.set_is_tracking_orientation(true);
+            orient().last_event_at = now();
+            store.set_is_tracking_orient(true);
         }
         PermissionAnswer::Granted => {
-            request_orientation(platform);
+            request_orient(platform);
         }
         PermissionAnswer::Denied => {
-            store.set_is_tracking_orientation(false);
+            store.set_is_tracking_orient(false);
             store.pose = Pose::Failed(Message::OrientationPermissionDenied);
         }
         PermissionAnswer::Failed => {
-            store.set_is_tracking_orientation(false);
+            store.set_is_tracking_orient(false);
             store.pose = Pose::Failed(Message::OrientationPermissionError);
         }
     }
 }
 
-pub fn on_orientation_lost() {
-    let store = device_orientation_store();
-    store.set_is_tracking_orientation(false);
+pub fn on_orient_lost() {
+    let store = device_orient_store();
+    store.set_is_tracking_orient(false);
     store.pose = Pose::Failed(Message::OrientationSignalLost);
 }
 
-pub fn orientation_close() {
-    orientation().command = Some(OrientationCommand::Remove);
-    let store = device_orientation_store();
-    store.set_is_tracking_orientation(false);
+pub fn orient_close() {
+    orient().command = Some(OrientationCommand::Remove);
+    let store = device_orient_store();
+    store.set_is_tracking_orient(false);
     store.pose = Pose::Idle;
 }
 
 /// Background tabs stop dispatching, so judging the gap on return would read
 /// "was hidden" as "lost": take a fresh baseline instead.
-pub fn orientation_visible() {
-    orientation().last_event_at = now();
+pub fn orient_visible() {
+    orient().last_event_at = now();
 }
 
 /// Armed only while a heading is tracked, where silence is the only sign of
@@ -146,20 +146,20 @@ pub fn orientation_visible() {
 /// moves that deadline, so a talking sensor is never polled. A heading is
 /// asked for when the sensors open and again when the user follows
 /// (pxl-kernel shell.rs `tracking_action`), never on a timer.
-pub fn orientation_watchdog_step(platform: OrientationPlatform) {
-    if !platform.silence_is_loss || !device_orientation_store().is_tracking_orientation {
+pub fn orient_watchdog_step(platform: OrientationPlatform) {
+    if !platform.silence_is_loss || !device_orient_store().is_tracking_orient {
         return;
     }
-    let o = orientation();
+    let o = orient();
     let lost_at = o.last_event_at + WATCHDOG_TIMEOUT_MS;
     if now() < lost_at {
         wake_at(lost_at);
         return;
     }
     o.command = Some(OrientationCommand::Remove);
-    on_orientation_lost();
+    on_orient_lost();
 }
 
-pub fn take_orientation_command() -> Option<OrientationCommand> {
-    orientation().command.take()
+pub fn take_orient_command() -> Option<OrientationCommand> {
+    orient().command.take()
 }

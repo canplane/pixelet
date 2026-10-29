@@ -162,17 +162,17 @@ impl DeviceLocationStore {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeviceOrientationStore {
-    pub is_tracking_orientation: bool,
-    pub orientation: Option<DeviceOrientation>,
+    pub is_tracking_orient: bool,
+    pub orient: Option<DeviceOrientation>,
     pub pose: Pose,
 }
 
 impl DeviceOrientationStore {
     /// Dead-zone filtered: 1.5° of heading, 2° of tilt.
-    pub fn set_orientation(&mut self, heading: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
+    pub fn set_orient(&mut self, heading: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
         let timestamp = now();
-        let Some(prev) = self.orientation else {
-            self.orientation = Some(DeviceOrientation {
+        let Some(prev) = self.orient else {
+            self.orient = Some(DeviceOrientation {
                 heading,
                 beta,
                 gamma,
@@ -189,7 +189,7 @@ impl DeviceOrientationStore {
         if !is_heading_changed && !is_tilt_changed {
             return;
         }
-        self.orientation = Some(DeviceOrientation {
+        self.orient = Some(DeviceOrientation {
             heading,
             beta,
             gamma,
@@ -197,24 +197,24 @@ impl DeviceOrientationStore {
         });
     }
 
-    pub fn set_is_tracking_orientation(&mut self, enabled: bool) {
-        if self.is_tracking_orientation == enabled {
+    pub fn set_is_tracking_orient(&mut self, enabled: bool) {
+        if self.is_tracking_orient == enabled {
             return;
         }
-        self.is_tracking_orientation = enabled;
+        self.is_tracking_orient = enabled;
         if !enabled {
-            self.orientation = None;
+            self.orient = None;
         }
     }
 }
 
 static LOCATION: Global<DeviceLocationStore> = Global::new();
-static ORIENTATION: Global<DeviceOrientationStore> = Global::new();
+static ORIENT: Global<DeviceOrientationStore> = Global::new();
 
 pub fn device_location_store() -> &'static mut DeviceLocationStore {
     LOCATION.get(DeviceLocationStore::default)
 }
 
-pub fn device_orientation_store() -> &'static mut DeviceOrientationStore {
-    ORIENTATION.get(DeviceOrientationStore::default)
+pub fn device_orient_store() -> &'static mut DeviceOrientationStore {
+    ORIENT.get(DeviceOrientationStore::default)
 }

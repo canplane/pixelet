@@ -111,7 +111,7 @@ pub fn ghost() -> Ghost {
                 at: s.at,
                 decor,
                 variant: m.variant,
-                rotation: m.spin(),
+                rot: m.spin(),
                 scale: m.scale,
                 stand_in: None,
             })
@@ -133,7 +133,7 @@ pub fn ghost() -> Ghost {
                     at: [at[0] - c[0] + x, at[1] - c[1] + y, z],
                     decor,
                     variant: m.variant,
-                    rotation: m.spin(),
+                    rot: m.spin(),
                     scale: m.scale,
                     stand_in: Some(box_ghost),
                 },

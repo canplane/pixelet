@@ -61,7 +61,7 @@ pub const EFFECT_NAMES: usize = 9;
 pub enum EffectName {
     navigation = 0,
     bootstrap = 1,
-    orientation = 2,
+    orient = 2,
     follow = 3,
     dst = 4,
     decor = 5,
@@ -75,7 +75,7 @@ impl EffectName {
     pub const ALL: [EffectName; 9] = [
         EffectName::navigation,
         EffectName::bootstrap,
-        EffectName::orientation,
+        EffectName::orient,
         EffectName::follow,
         EffectName::dst,
         EffectName::decor,

@@ -43,7 +43,7 @@ pub struct GltfNode {
     pub skin: i32,
     pub local: Mat4,
     pub translation: [f64; 3],
-    pub rotation: [f64; 4],
+    pub rot: [f64; 4],
     pub scale: [f64; 3],
 }
 
@@ -542,13 +542,13 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     for (i, (node, children)) in raw_nodes.iter().zip(children).enumerate() {
         pause().await;
         let translation = floats(node.get("translation"), [0.0; 3]);
-        let rotation = floats(node.get("rotation"), [0.0, 0.0, 0.0, 1.0]);
+        let rot = floats(node.get("rotation"), [0.0, 0.0, 0.0, 1.0]);
         let scale = floats(node.get("scale"), [1.0; 3]);
         let mut local = mat4::new();
         if node.get("matrix").is_some() {
             local = floats(node.get("matrix"), local);
         } else {
-            compose_trs(&mut local, &translation, &rotation, &scale);
+            compose_trs(&mut local, &translation, &rot, &scale);
         }
         nodes.push(GltfNode {
             parent: parents[i],
@@ -557,7 +557,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
             skin: idx_of(node.get("skin"), skin_cnt)?.map_or(-1, |s| s as i32),
             local,
             translation,
-            rotation,
+            rot,
             scale,
         });
     }

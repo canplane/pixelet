@@ -101,10 +101,10 @@ pub(super) fn apply(
             crate::domain::view::setting::store::set_development(p.development);
             crate::turn::set_world_platform(crate::turn::Platform {
                 geolocation: p.geolocation,
-                orientation: device_orientation::OrientationPlatform {
-                    supported: p.orientation,
-                    needs_permission: p.orientation_permission,
-                    silence_is_loss: p.orientation_silence_is_loss,
+                orient: device_orientation::OrientationPlatform {
+                    supported: p.orient,
+                    needs_permission: p.orient_permission,
+                    silence_is_loss: p.orient_silence_is_loss,
                 },
             });
             // Both kept slots, read from a turn on: what waits on the settings,
@@ -114,8 +114,8 @@ pub(super) fn apply(
             // The shell holds the kernel's state from its first render on.
             ask_turn(s)
         }
-        Command::WORLD_SRC => {
-            let p = abi::WorldSrc::read(packet(pkt)?)?;
+        Command::WORLD_SOURCE => {
+            let p = abi::WorldSource::read(packet(pkt)?)?;
             refuse_unless(
                 crate::sys::io::source::declare(p.top_zoom, p.format, p.shard.iter()).is_ok(),
                 Errno::EINVAL,
@@ -237,8 +237,8 @@ pub(super) fn apply(
             );
             ask_turn(s)
         }
-        Command::INPUT_POSE => {
-            let p = abi::InputPose::read(packet(pkt)?)?;
+        Command::INPUT_XR_POSE => {
+            let p = abi::InputXrPose::read(packet(pkt)?)?;
             // A unit quaternion by the protocol; one of no length turns nothing.
             refuse_unless(
                 p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw > 0.0,
@@ -250,7 +250,7 @@ pub(super) fn apply(
             );
             ask_turn(s)
         }
-        Command::INPUT_POSE_END => {
+        Command::INPUT_XR_POSE_END => {
             crate::domain::control::camera::controller::tracked_end();
             ask_turn(s)
         }
@@ -277,12 +277,12 @@ pub(super) fn apply(
                 abi::Sensor::Geolocation => geolocation::geolocation_error(
                     p.code.unwrap_or(abi::GeolocationErrorCode::Other),
                 ),
-                abi::Sensor::Orientation => device_orientation::on_orientation_lost(),
+                abi::Sensor::Orientation => device_orientation::on_orient_lost(),
             }
             Ok(Some(0))
         }
-        Command::SENSOR_ORIENTATION => {
-            let p = abi::SensorOrientation::read(packet(pkt)?)?;
+        Command::SENSOR_ORIENT => {
+            let p = abi::SensorOrient::read(packet(pkt)?)?;
             // DeviceOrientationEvent's ranges, closed: a reading at an end is still one.
             let within = |v: Option<f64>, half: f64| v.is_none_or(|v| (-half..=half).contains(&v));
             refuse_unless(
@@ -292,12 +292,7 @@ pub(super) fn apply(
                     && within(p.gamma, 90.0),
                 Errno::EINVAL,
             )?;
-            device_orientation::orientation_event(
-                p.webkit_compass_heading,
-                p.alpha,
-                p.beta,
-                p.gamma,
-            );
+            device_orientation::orient_event(p.webkit_compass_heading, p.alpha, p.beta, p.gamma);
             Ok(Some(0))
         }
         Command::SENSOR_PERMISSION => {
@@ -310,10 +305,9 @@ pub(super) fn apply(
                         );
                     }
                 }
-                abi::Sensor::Orientation => device_orientation::orientation_permission(
-                    p.answer,
-                    world_platform().orientation,
-                ),
+                abi::Sensor::Orientation => {
+                    device_orientation::orient_permission(p.answer, world_platform().orient)
+                }
             }
             Ok(Some(0))
         }
@@ -321,7 +315,7 @@ pub(super) fn apply(
             let visible = abi::WorldVisibility::read(packet(pkt)?)?.visible;
             geolocation::geolocation_visibility(visible, world_platform().geolocation);
             if visible {
-                device_orientation::orientation_visible();
+                device_orientation::orient_visible();
             } else {
                 crate::domain::layer::object::repository::flush();
             }

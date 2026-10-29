@@ -23,13 +23,11 @@ use crate::domain::control::interaction::{holding, Holding};
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::follow_mode::{following, set_following};
 use crate::domain::control::navigation::off_center::off_center;
-use crate::domain::control::sensor::device_orientation::{orientation_close, request_orientation};
+use crate::domain::control::sensor::device_orientation::{orient_close, request_orient};
 use crate::domain::control::sensor::geolocation::{
     geolocation_close, geolocation_open, start_watching,
 };
-use crate::domain::control::sensor::reading::{
-    device_location_store, device_orientation_store, Pose,
-};
+use crate::domain::control::sensor::reading::{device_location_store, device_orient_store, Pose};
 use crate::domain::layer::division::{each_division, naming};
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
@@ -76,7 +74,7 @@ pub struct Shown {
     companion: [bool; 2],
     holding: Holding,
     marker: bool,
-    orientation: Pose,
+    orient: Pose,
     azimuth: f64,
     is_follow_mode: bool,
     camera_busy: bool,
@@ -118,7 +116,7 @@ fn shown() -> Shown {
         companion: companion_ready(),
         holding: holding(),
         marker: crate::domain::control::interaction::edit::marker_waiting().0,
-        orientation: device_orientation_store().pose,
+        orient: device_orient_store().pose,
         azimuth: camera_state().intent.azimuth,
         is_follow_mode: following(),
         camera_busy: dragging(),
@@ -209,9 +207,9 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
             marker: shown.marker,
             words: &words,
         },
-        orientation: OrientationState {
-            status: shown.orientation.status(),
-            error: shown.orientation.error(),
+        orient: OrientationState {
+            status: shown.orient.status(),
+            error: shown.orient.error(),
         },
         azimuth: shown.azimuth,
         is_follow_mode: shown.is_follow_mode,
@@ -245,7 +243,7 @@ pub fn tracking_action(tracking: Tracking) {
         Tracking::Follow => {
             // The heading is asked for, and the view turns with it once it comes;
             // where there is none, following is where one is alone.
-            request_orientation(world_platform().orientation);
+            request_orient(world_platform().orient);
             set_following(true);
         }
         Tracking::Unfollow => {
@@ -274,12 +272,12 @@ pub fn location_enable() {
 pub fn sensors_open() {
     let platform = world_platform();
     geolocation_open(platform.geolocation);
-    request_orientation(platform.orientation);
+    request_orient(platform.orient);
 }
 
 pub fn sensors_close() {
     geolocation_close();
-    orientation_close();
+    orient_close();
 }
 
 /// Why the server does not answer the world's reads now: failing, or given up.

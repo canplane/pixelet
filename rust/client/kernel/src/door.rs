@@ -210,7 +210,7 @@ static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_shell(s: &mut State) {
     use crate::domain::control::sensor::device_orientation::{
-        take_orientation_command, OrientationCommand,
+        take_orient_command, OrientationCommand,
     };
     use crate::domain::control::sensor::geolocation::{
         take_geolocation_command, GeolocationCommand,
@@ -227,7 +227,7 @@ fn post_shell(s: &mut State) {
             GeolocationCommand::Stop => sensor(Command::SENSOR_STOP, Sensor::Geolocation),
         }
     }
-    if let Some(c) = take_orientation_command() {
+    if let Some(c) = take_orient_command() {
         match c {
             OrientationCommand::Listen => sensor(Command::SENSOR_START, Sensor::Orientation),
             OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),

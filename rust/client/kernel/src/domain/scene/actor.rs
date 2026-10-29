@@ -30,7 +30,7 @@ struct Playing {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Stance {
     pub at: V3,
-    pub rotation_z: f32,
+    pub rot_z: f32,
     pub scale: f32,
 }
 
@@ -277,7 +277,7 @@ impl Actor {
                 at[0],
                 at[1],
                 at[2],
-                f64::from(stance.rotation_z),
+                f64::from(stance.rot_z),
                 f64::from(stance.scale),
                 f64::from(self.poses),
             ]);
@@ -290,7 +290,7 @@ impl Actor {
             self.palette_handle,
             self.model,
             t,
-            stance.rotation_z,
+            stance.rot_z,
             1.0,
             stance.scale,
         );

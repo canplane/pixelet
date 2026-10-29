@@ -28,7 +28,7 @@ const INITIAL: Snapshot = {
     marker: false,
     words: "",
   },
-  orientation: { status: DevicePoseStatus.Idle, error: null },
+  orient: { status: DevicePoseStatus.Idle, error: null },
   azimuth: 0,
   is_follow_mode: false,
   camera_busy: false,

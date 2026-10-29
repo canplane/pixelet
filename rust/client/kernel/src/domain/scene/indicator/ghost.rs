@@ -35,7 +35,7 @@ enum Shape {
     },
     Decor {
         group: u32,
-        rotation_bits: u32,
+        rot_bits: u32,
         scale_bits: u32,
     },
 }
@@ -61,18 +61,10 @@ impl GhostDraw {
                 at,
                 decor,
                 variant,
-                rotation,
+                rot,
                 scale,
                 stand_in,
-            } => self.set_decor(
-                draw,
-                at,
-                decor,
-                variant,
-                rotation as f32,
-                scale as f32,
-                stand_in,
-            ),
+            } => self.set_decor(draw, at, decor, variant, rot as f32, scale as f32, stand_in),
             Ghost::Box(b) => self.set_box(draw, b),
         }
     }
@@ -131,7 +123,7 @@ impl GhostDraw {
         at: V3,
         decor: &Decor,
         variant: u32,
-        rotation: f32,
+        rot: f32,
         scale: f32,
         stand_in: Option<GhostBox>,
     ) -> bool {
@@ -145,7 +137,7 @@ impl GhostDraw {
         let group = decor.first_group() + variant;
         let shape = Shape::Decor {
             group,
-            rotation_bits: rotation.to_bits(),
+            rot_bits: rot.to_bits(),
             scale_bits: scale.to_bits(),
         };
         let moved = core::mem::replace(&mut self.at, at) != at;
@@ -156,7 +148,7 @@ impl GhostDraw {
         // index list.
         let lane = GroupLanes { first: 0, cnt: 1 };
         let mut m = [0u32; GroupLanes::words(1) + 1];
-        (m[lane.f32_at(3, 0)], m[lane.f32_at(4, 0)]) = (rotation.to_bits(), scale.to_bits());
+        (m[lane.f32_at(3, 0)], m[lane.f32_at(4, 0)]) = (rot.to_bits(), scale.to_bits());
         self.write(draw, shape, bytes(&m));
         true
     }

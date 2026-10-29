@@ -54,7 +54,7 @@ export const enum WorldMinor {
   FRAME = 0x02,
   VISIBILITY = 0x03,
   SNAPSHOT = 0x04,
-  SRC = 0x05,
+  SOURCE = 0x05,
   KEPT_EMPTIED = 0x06,
   VIEW = 0x07,
 }
@@ -69,8 +69,8 @@ export const enum InputMinor {
   VIEW = 0x05,
   COMPASS_RESET = 0x07,
   GOTO = 0x08,
-  POSE = 0x09,
-  POSE_END = 0x0a,
+  XR_POSE = 0x09,
+  XR_POSE_END = 0x0a,
   HOLD = 0x0b,
   MARKER_WORDS = 0x0c,
   MARKER_CANCEL = 0x0d,
@@ -83,7 +83,7 @@ export const enum SensorMinor {
   START = 0x01,
   POS = 0x02,
   STOP = 0x03,
-  ORIENTATION = 0x05,
+  ORIENT = 0x05,
   PERMISSION = 0x06,
   FAILED = 0x0b,
 }
@@ -247,10 +247,10 @@ export const enum Command {
   /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_POS = 0x1202,
   /** An orientation event; a field is absent where the browser gave none. */
-  SENSOR_ORIENTATION = 0x1205,
+  SENSOR_ORIENT = 0x1205,
   /** A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
    * or cut off; the compass's, where the platform says so (WORLD_BOOT's
-   * orientation_silence_is_loss). */
+   * orient_silence_is_loss). */
   SENSOR_FAILED = 0x120b,
 
   // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
@@ -269,7 +269,7 @@ export const enum Command {
    * client (ts/client/src/namespace/source.ts) and handed over as numbers and names.
    * Until it comes nothing is observed: the floor is held at the zoom it names, and no
    * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
-  WORLD_SRC = 0x1005,
+  WORLD_SOURCE = 0x1005,
   /** A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
    * set aside by the host: the kernel reads it again, and writes it from then on. */
   WORLD_KEPT_EMPTIED = 0x1006,
@@ -324,9 +324,9 @@ export const enum Command {
    * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
    * first of a run is taken to be where the camera already is, so nothing moves as
    * it begins; the camera follows the tracker from there until POSE_END. */
-  INPUT_POSE = 0x1109,
+  INPUT_XR_POSE = 0x1109,
   /** The tracker let the camera go: back to the controller it had. */
-  INPUT_POSE_END = 0x110a,
+  INPUT_XR_POSE_END = 0x110a,
   /** The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.
    * The kernel watches a sensor only while both hold, the page visible and the world view
    * shown; which sensors it watches then is its own (SENSOR_START). */
@@ -363,7 +363,7 @@ export interface Snapshot {
   location: LocationState;
   companion: CompanionState;
   holding: HoldingState;
-  orientation: OrientationState;
+  orient: OrientationState;
   /** The view's azimuth. */
   azimuth: f64;
   is_follow_mode: boolean;
@@ -396,7 +396,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     location: read_location_state(b.at_branch(1)),
     companion: read_companion_state(b.at_branch(2)),
     holding: read_holding_state(b.at_branch(3)),
-    orientation: read_orientation_state(b.at_branch(4)),
+    orient: read_orientation_state(b.at_branch(4)),
     azimuth: b.at(5).get<f64>(),
     is_follow_mode: b.at(6).get<boolean>(),
     camera_busy: b.at(7).get<boolean>(),
@@ -566,8 +566,8 @@ export function encode_sensor_pos(
   return to.writer(5).f64(lon).f64(lat).f64(altitude).f64(accuracy).f64(course);
 }
 
-/** Command.SENSOR_ORIENTATION's packet, written in place into `to`. */
-export function encode_sensor_orientation(
+/** Command.SENSOR_ORIENT's packet, written in place into `to`. */
+export function encode_sensor_orient(
   to: PacketRoom,
   webkit_compass_heading: f64 | null,
   alpha: f64 | null,
@@ -593,18 +593,19 @@ export function encode_sensor_failed(
 /** Command.WORLD_BOOT's packet, written in place into `to`.
  *
  * @param development A development build, which offers the settings schema.json marks `dev`.
- * @param orientation_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
- * @param orientation_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_FAILED). */
+ * @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
+ * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_FAILED). */
 export function encode_world_boot(
   to: PacketRoom,
   development: boolean,
   geolocation: boolean,
-  orientation: boolean,
-  orientation_permission: boolean,
-  orientation_silence_is_loss: boolean,
+  orient: boolean,
+  orient_permission: boolean,
+  orient_silence_is_loss: boolean,
 ): PacketWriter {
-  return to.writer(5).bool(development).bool(geolocation).bool(orientation)
-    .bool(orientation_permission).bool(orientation_silence_is_loss);
+  return to.writer(5).bool(development).bool(geolocation).bool(orient).bool(
+    orient_permission,
+  ).bool(orient_silence_is_loss);
 }
 
 /** Command.WORLD_FRAME's packet, written in place into `to`.
@@ -635,12 +636,12 @@ export function encode_world_visibility(
   return to.writer(1).bool(visible);
 }
 
-/** Command.WORLD_SRC's packet, written in place into `to`.
+/** Command.WORLD_SOURCE's packet, written in place into `to`.
  *
  * @param top_zoom The coarsest zoom the source supplies whole.
  * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/published.spec.rs).
  * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
-export function encode_world_src(
+export function encode_world_source(
   to: PacketRoom,
   top_zoom: u32,
   format: u32[],
@@ -817,8 +818,8 @@ export function encode_input_goto(
   return to.writer(5).f64(lon).f64(lat).f64(dist).f64(azimuth).f64(polar);
 }
 
-/** Command.INPUT_POSE's packet, written in place into `to`. */
-export function encode_input_pose(
+/** Command.INPUT_XR_POSE's packet, written in place into `to`. */
+export function encode_input_xr_pose(
   to: PacketRoom,
   x: f64,
   y: f64,

@@ -121,7 +121,7 @@ pub fn preview_step(ctx: &mut TickContext) {
         let scale = model.scale / case.variant.height_u as f32;
         case.stance = Some(Stance {
             at,
-            rotation_z: case.spin as f32,
+            rot_z: case.spin as f32,
             scale,
         });
         turned = true;

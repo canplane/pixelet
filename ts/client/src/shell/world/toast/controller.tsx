@@ -120,7 +120,7 @@ export function ToastController() {
   const locationError = useKernel((s) => s.location.error);
   useSaid(Report.Location, location(locationStatus, locationError));
 
-  const orientationError = useKernel((s) => s.orientation.error);
+  const orientationError = useKernel((s) => s.orient.error);
   useSaid(
     Report.Orientation,
     orientationError !== null ? error(messageKey(orientationError)) : null,

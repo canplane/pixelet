@@ -136,7 +136,7 @@ fn facing_tilt_domain() {
     for n in 0..=360 {
         let polar = n as f64 * core::f64::consts::PI / 360.0;
         for azimuth in [0.0, 1.1, -2.7] {
-            let r = facing_rotation(polar, azimuth);
+            let r = facing_rot(polar, azimuth);
             let row = |i: usize| [r[i], r[4 + i], r[8 + i]];
             let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
             for i in 0..3 {
@@ -175,7 +175,7 @@ fn pole_headings_agree() {
     }
     for theta in [0.0, 1e-12, 1e-6, pi - 1e-6, pi - 1e-12, pi] {
         for phi in [0.0, 1.3, -2.9] {
-            let r = facing_rotation(theta, phi);
+            let r = facing_rot(theta, phi);
             assert!(r.iter().all(|v| v.is_finite()), "θ {theta}, φ {phi}: {r:?}");
             let row = |i: usize| [r[i], r[4 + i], r[8 + i]];
             for i in 0..3 {

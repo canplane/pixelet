@@ -82,7 +82,7 @@ pub enum WorldMinor {
     FRAME = 0x02,
     VISIBILITY = 0x03,
     SNAPSHOT = 0x04,
-    SRC = 0x05,
+    SOURCE = 0x05,
     KEPT_EMPTIED = 0x06,
     VIEW = 0x07,
 }
@@ -93,7 +93,7 @@ impl WorldMinor {
         WorldMinor::FRAME,
         WorldMinor::VISIBILITY,
         WorldMinor::SNAPSHOT,
-        WorldMinor::SRC,
+        WorldMinor::SOURCE,
         WorldMinor::KEPT_EMPTIED,
         WorldMinor::VIEW,
     ];
@@ -116,8 +116,8 @@ pub enum InputMinor {
     VIEW = 0x05,
     COMPASS_RESET = 0x07,
     GOTO = 0x08,
-    POSE = 0x09,
-    POSE_END = 0x0a,
+    XR_POSE = 0x09,
+    XR_POSE_END = 0x0a,
     HOLD = 0x0b,
     MARKER_WORDS = 0x0c,
     MARKER_CANCEL = 0x0d,
@@ -135,8 +135,8 @@ impl InputMinor {
         InputMinor::VIEW,
         InputMinor::COMPASS_RESET,
         InputMinor::GOTO,
-        InputMinor::POSE,
-        InputMinor::POSE_END,
+        InputMinor::XR_POSE,
+        InputMinor::XR_POSE_END,
         InputMinor::HOLD,
         InputMinor::MARKER_WORDS,
         InputMinor::MARKER_CANCEL,
@@ -157,7 +157,7 @@ pub enum SensorMinor {
     START = 0x01,
     POS = 0x02,
     STOP = 0x03,
-    ORIENTATION = 0x05,
+    ORIENT = 0x05,
     PERMISSION = 0x06,
     FAILED = 0x0b,
 }
@@ -167,7 +167,7 @@ impl SensorMinor {
         SensorMinor::START,
         SensorMinor::POS,
         SensorMinor::STOP,
-        SensorMinor::ORIENTATION,
+        SensorMinor::ORIENT,
         SensorMinor::PERMISSION,
         SensorMinor::FAILED,
     ];
@@ -571,10 +571,10 @@ pub enum Command {
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_POS = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
-    SENSOR_ORIENTATION = 0x1205,
+    SENSOR_ORIENT = 0x1205,
     /// A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
     /// or cut off; the compass's, where the platform says so (WORLD_BOOT's
-    /// orientation_silence_is_loss).
+    /// orient_silence_is_loss).
     SENSOR_FAILED = 0x120b,
 
     // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
@@ -592,7 +592,7 @@ pub enum Command {
     /// client (ts/client/src/namespace/source.ts) and handed over as numbers and names.
     /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
-    WORLD_SRC = 0x1005,
+    WORLD_SOURCE = 0x1005,
     /// A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
     /// set aside by the host: the kernel reads it again, and writes it from then on.
     WORLD_KEPT_EMPTIED = 0x1006,
@@ -646,9 +646,9 @@ pub enum Command {
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
     /// first of a run is taken to be where the camera already is, so nothing moves as
     /// it begins; the camera follows the tracker from there until POSE_END.
-    INPUT_POSE = 0x1109,
+    INPUT_XR_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
-    INPUT_POSE_END = 0x110a,
+    INPUT_XR_POSE_END = 0x110a,
     /// The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.
     /// The kernel watches a sensor only while both hold, the page visible and the world view
     /// shown; which sensors it watches then is its own (SENSOR_START).
@@ -673,12 +673,12 @@ impl Command {
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::SENSOR_POS,
-        Command::SENSOR_ORIENTATION,
+        Command::SENSOR_ORIENT,
         Command::SENSOR_FAILED,
         Command::WORLD_BOOT,
         Command::WORLD_FRAME,
         Command::WORLD_VISIBILITY,
-        Command::WORLD_SRC,
+        Command::WORLD_SOURCE,
         Command::WORLD_KEPT_EMPTIED,
         Command::SENSOR_PERMISSION,
         Command::INPUT_RECT,
@@ -701,8 +701,8 @@ impl Command {
         Command::INPUT_COMPASS_RESET,
         Command::INPUT_LOCATE,
         Command::INPUT_GOTO,
-        Command::INPUT_POSE,
-        Command::INPUT_POSE_END,
+        Command::INPUT_XR_POSE,
+        Command::INPUT_XR_POSE_END,
         Command::WORLD_VIEW,
         Command::PROFILER_START,
         Command::PROFILER_STOP,
@@ -723,7 +723,7 @@ pub struct Snapshot<'a> {
     pub location: LocationState,
     pub companion: CompanionState,
     pub holding: HoldingState<'a>,
-    pub orientation: OrientationState,
+    pub orient: OrientationState,
     /// The view's azimuth.
     pub azimuth: f64,
     pub is_follow_mode: bool,
@@ -759,7 +759,7 @@ impl Snapshot<'_> {
         w.branch(LocationState::FIELDS, |w| self.location.write(w));
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
         w.branch(HoldingState::FIELDS, |w| self.holding.write(w));
-        w.branch(OrientationState::FIELDS, |w| self.orientation.write(w));
+        w.branch(OrientationState::FIELDS, |w| self.orient.write(w));
         w.f64(Some(self.azimuth));
         w.bool(Some(self.is_follow_mode));
         w.bool(Some(self.camera_busy));
@@ -1004,19 +1004,19 @@ impl SensorPos {
     }
 }
 
-/// Command::SENSOR_ORIENTATION's packet.
+/// Command::SENSOR_ORIENT's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct SensorOrientation {
+pub struct SensorOrient {
     pub webkit_compass_heading: Option<f64>,
     pub alpha: Option<f64>,
     pub beta: Option<f64>,
     pub gamma: Option<f64>,
 }
 
-impl SensorOrientation {
-    pub fn read(pkt: &[u8]) -> Result<SensorOrientation, MarshalError> {
+impl SensorOrient {
+    pub fn read(pkt: &[u8]) -> Result<SensorOrient, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorOrientation {
+        Ok(SensorOrient {
             webkit_compass_heading: match f.at(0)?.opt() {
                 Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
@@ -1067,13 +1067,13 @@ pub struct WorldBoot {
     /// A development build, which offers the settings schema.json marks `dev`.
     pub development: bool,
     pub geolocation: bool,
-    pub orientation: bool,
+    pub orient: bool,
     /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
-    pub orientation_permission: bool,
+    pub orient_permission: bool,
     /// A browser's compass talks while the device is still and cannot say it stopped, so
     /// silence is the only sign of loss; a device's speaks only when the heading turns and
     /// reports a failure itself (SENSOR_FAILED).
-    pub orientation_silence_is_loss: bool,
+    pub orient_silence_is_loss: bool,
 }
 
 impl WorldBoot {
@@ -1082,9 +1082,9 @@ impl WorldBoot {
         Ok(WorldBoot {
             development: f.at(0)?.get_bool()?,
             geolocation: f.at(1)?.get_bool()?,
-            orientation: f.at(2)?.get_bool()?,
-            orientation_permission: f.at(3)?.get_bool()?,
-            orientation_silence_is_loss: f.at(4)?.get_bool()?,
+            orient: f.at(2)?.get_bool()?,
+            orient_permission: f.at(3)?.get_bool()?,
+            orient_silence_is_loss: f.at(4)?.get_bool()?,
         })
     }
 }
@@ -1137,9 +1137,9 @@ impl WorldVisibility {
     }
 }
 
-/// Command::WORLD_SRC's packet.
+/// Command::WORLD_SOURCE's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldSrc<'a> {
+pub struct WorldSource<'a> {
     /// The coarsest zoom the source supplies whole.
     pub top_zoom: u32,
     /// Each kind's format, one a kind, indexed by its bake's number
@@ -1150,10 +1150,10 @@ pub struct WorldSrc<'a> {
     pub shard: Strs<'a>,
 }
 
-impl<'a> WorldSrc<'a> {
-    pub fn read(pkt: &'a [u8]) -> Result<WorldSrc<'a>, MarshalError> {
+impl<'a> WorldSource<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<WorldSource<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldSrc {
+        Ok(WorldSource {
             top_zoom: integer::<u32>(f.at(0)?.get_number()?)?,
             format: f.at(1)?.get_array::<u32>()?,
             shard: f.at(2)?.get_strs()?,
@@ -1486,9 +1486,9 @@ impl InputGoto {
     }
 }
 
-/// Command::INPUT_POSE's packet.
+/// Command::INPUT_XR_POSE's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputPose {
+pub struct InputXrPose {
     pub x: f64,
     pub y: f64,
     pub z: f64,
@@ -1498,10 +1498,10 @@ pub struct InputPose {
     pub qw: f64,
 }
 
-impl InputPose {
-    pub fn read(pkt: &[u8]) -> Result<InputPose, MarshalError> {
+impl InputXrPose {
+    pub fn read(pkt: &[u8]) -> Result<InputXrPose, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputPose {
+        Ok(InputXrPose {
             x: finite(f.at(0)?.get_number()?)?,
             y: finite(f.at(1)?.get_number()?)?,
             z: finite(f.at(2)?.get_number()?)?,

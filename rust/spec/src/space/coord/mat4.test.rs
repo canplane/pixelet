@@ -13,7 +13,7 @@ fn assert_almost(a: f64, b: f64, tol: f64) {
 #[test]
 fn inverse_identity() {
     let (mut r, mut t, mut m, mut inv, mut p) = (new(), new(), new(), new(), new());
-    rotation_z(&mut r, 0.7);
+    rot_z(&mut r, 0.7);
     translation(&mut t, 5.0, -3.0, 2.0);
     mul(&mut m, &r, &t);
     invert(&mut inv, &m);

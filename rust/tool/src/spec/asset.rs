@@ -811,7 +811,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         doc: Vec<String>,
         seed: String,
         counts: [Vec<u32>; 2],
-        orientation: String,
+        orient: String,
         on: [u32; 8],
         scale_steps: i32,
         sizes: Vec<String>,
@@ -832,10 +832,10 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             .and_then(Node::num)
             .filter(|d| *d > 0.0)
             .ok_or(at("density"))?;
-        let orientation = k
-            .str_at("orientation")
+        let orient = k
+            .str_at("orient")
             .filter(|o| matches!(*o, "random" | "along_transport"))
-            .ok_or(at("orientation"))?;
+            .ok_or(at("orient"))?;
         let mut on = [0u32; 8];
         for l in k.get("on").and_then(Node::arr).ok_or(at("on"))? {
             let v = l
@@ -900,7 +900,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             seed: seed.to_string(),
             counts: shares
                 .map(|share| poisson_thresholds(density * f64::from(patch * patch) * share)),
-            orientation: orientation.to_string(),
+            orient: orient.to_string(),
             on,
             scale_steps: scale_steps as i32,
             sizes,
@@ -993,7 +993,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
                 "        counts: [{}],",
                 counts.collect::<Vec<_>>().join(", ")
             ),
-            format!("        orientation: Orientation::{},", r.orientation),
+            format!("        orientation: Orientation::{},", r.orient),
             format!(
                 "        on: [{}],",
                 r.on.map(|w| format!("{w:#010x}")).join(", ")

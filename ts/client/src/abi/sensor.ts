@@ -7,7 +7,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
   Command,
   encode_sensor_failed,
-  encode_sensor_orientation,
+  encode_sensor_orient,
   encode_sensor_permission,
   encode_sensor_pos,
   GeolocationErrorCode,
@@ -56,8 +56,8 @@ function kernel_orientation(
   gamma: f64 | null,
 ): void {
   HOST.send(
-    Command.SENSOR_ORIENTATION,
-    encode_sensor_orientation(
+    Command.SENSOR_ORIENT,
+    encode_sensor_orient(
       HOST.doorbell,
       given(webkit_compass_heading),
       given(alpha),

@@ -41,15 +41,15 @@ pub fn facing_dir(polar: f64, azimuth: f64) -> V3 {
 
 /// Straight down at polar 0 with the azimuth up the screen; at the poles the
 /// azimuth only turns the screen about the facing.
-pub fn facing_rotation(polar: f64, azimuth: f64) -> Mat4 {
+pub fn facing_rot(polar: f64, azimuth: f64) -> Mat4 {
     let mut about_z = mat4::new();
-    mat4::rotation_z(&mut about_z, azimuth);
+    mat4::rot_z(&mut about_z, azimuth);
     let (s, c) = (libm::sin(polar), libm::cos(polar));
     let mut about_x = mat4::new();
     (about_x[5], about_x[6], about_x[9], about_x[10]) = (c, -s, s, c);
-    let mut rotation: Mat4 = mat4::new();
-    mat4::mul(&mut rotation, &about_x, &about_z);
-    rotation
+    let mut rot: Mat4 = mat4::new();
+    mat4::mul(&mut rot, &about_x, &about_z);
+    rot
 }
 
 /// The eye is kept in the world's doubles: a canonical point's 1/256 rounding
@@ -220,20 +220,19 @@ pub fn pose() -> Option<ObserverPose> {
     let c = controllers();
     match (&c.tracked, c.base) {
         (Some(t), _) => {
-            let (mut camera_to_world, mut rotation, mut moved) =
-                (mat4::new(), mat4::new(), [0.0; 3]);
+            let (mut camera_to_world, mut rot, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
             mat4::mul(&mut camera_to_world, &t.world_turn, &t.turn);
             mat4::transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
             Some(ObserverPose {
                 eye: v3::add(&t.world_at, &moved),
-                rotation: *mat4::transpose(&mut rotation, &camera_to_world),
+                rot: *mat4::transpose(&mut rot, &camera_to_world),
             })
         }
         (None, _) => {
             let cam = camera();
             Some(ObserverPose {
                 eye: eye_world()?,
-                rotation: facing_rotation(cam.polar, cam.azimuth),
+                rot: facing_rot(cam.polar, cam.azimuth),
             })
         }
     }
@@ -366,13 +365,13 @@ fn take_mode(want: CameraMode) -> bool {
 /// the camera stands anywhere there is nowhere to place it.
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let mut turn = mat4::new();
-    mat4::rotation_quat(&mut turn, q);
+    mat4::rot_quat(&mut turn, q);
     let c = controllers();
     if c.tracked.is_none() {
         let Some(now) = pose() else { return };
         let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) =
             (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
-        mat4::transpose(&mut camera_to_world, &now.rotation);
+        mat4::transpose(&mut camera_to_world, &now.rot);
         mat4::mul(
             &mut world_turn,
             &camera_to_world,

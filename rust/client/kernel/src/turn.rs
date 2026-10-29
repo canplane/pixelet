@@ -18,7 +18,7 @@ use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
 use crate::domain::control::sensor::device_orientation::{
-    orientation_watchdog_step, OrientationPlatform,
+    orient_watchdog_step, OrientationPlatform,
 };
 use crate::sys::io::request::{pump, set_credits};
 use crate::sys::io::text::text_rise;
@@ -45,7 +45,7 @@ use xpute_guest::sched::tick::{Phase, TickReport};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {
     pub geolocation: bool,
-    pub orientation: OrientationPlatform,
+    pub orient: OrientationPlatform,
 }
 
 /// None while the eye is the pivot: then the character is the one looking.
@@ -247,11 +247,7 @@ pub fn world_turn() -> f64 {
     });
     effect!(times, navigation, off_center_step());
     effect!(times, bootstrap, map_bootstrap_step());
-    effect!(
-        times,
-        orientation,
-        orientation_watchdog_step(platform.orientation)
-    );
+    effect!(times, orient, orient_watchdog_step(platform.orient));
     effect!(times, follow, follow_mode_step());
     effect!(times, dst, {
         // What the walker found under an unknown Z, let go where it moved.
@@ -284,7 +280,7 @@ pub fn set_world_platform(platform: Platform) {
 pub fn world_platform() -> Platform {
     PLATFORM.get(|| None).unwrap_or(Platform {
         geolocation: false,
-        orientation: OrientationPlatform {
+        orient: OrientationPlatform {
             supported: false,
             needs_permission: false,
             silence_is_loss: false,

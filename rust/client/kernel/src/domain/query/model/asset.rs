@@ -264,7 +264,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                 continue;
             }
             let t = node.translation;
-            let r = node.rotation;
+            let r = node.rot;
             let s = node.scale;
             let rest =
                 [t[0], t[1], t[2], r[0], r[1], r[2], r[3], s[0], s[1], s[2]].map(|v| v as f32);

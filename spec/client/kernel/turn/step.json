@@ -19,7 +19,7 @@
   "EFFECT_NAMES": [
     "navigation",
     "bootstrap",
-    "orientation",
+    "orient",
     "follow",
     "dst",
     "decor",

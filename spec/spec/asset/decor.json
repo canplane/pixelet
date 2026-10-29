@@ -48,7 +48,7 @@
       ],
       "seed": "0x7902530c",
       "density": 0.04,
-      "orientation": "random",
+      "orient": "random",
       "on": ["park", "forest", "land"],
       "variants": [
         { "model": "decor/kenney_fantasy_town/tree.glb", "skin": "decor/kenney_fantasy_town/colormap.png", "sz": [1, 1, 3] },
@@ -71,7 +71,7 @@
       ],
       "seed": "0xb0a5802d",
       "density": 0.002,
-      "orientation": "random",
+      "orient": "random",
       "on": ["water"],
       "variants": [
         { "model": "decor/kenney_watercraft_pack/boat-row-small.glb", "skin": "decor/kenney_watercraft_pack/colormap.png", "sz": [3, 2, 1] },
@@ -90,7 +90,7 @@
       ],
       "seed": "0x0ca63010",
       "density": 0.004,
-      "orientation": "along_transport",
+      "orient": "along_transport",
       "on": ["motorway", "trunk", "primary", "secondary", "residential_road"],
       "variants": [
         { "model": "decor/kenney_car_kit/sedan.glb", "skin": "decor/kenney_car_kit/colormap.png", "sz": [1, 3, 1] },
@@ -109,7 +109,7 @@
       ],
       "seed": "0x7ba5802d",
       "density": 0.004,
-      "orientation": "along_transport",
+      "orient": "along_transport",
       "on": ["tram", "light_rail", "subway", "monorail", "rail"],
       "variants": [
         { "model": "decor/kenney_train_kit/train-locomotive-a.glb", "skin": "decor/kenney_train_kit/colormap.png", "sz": [1, 3, 2] },

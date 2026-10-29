@@ -15,11 +15,11 @@ fn pose_ray_matches_view() {
         [40.0, 15.0, 2.0],
         [0.0, 0.0, 1.0],
     );
-    let mut rotation = look;
-    rotation[12..15].fill(0.0);
+    let mut rot = look;
+    rot[12..15].fill(0.0);
     let pose = ObserverPose {
         eye: [10.0, -20.0, 30.0],
-        rotation,
+        rot,
     };
     view_compose(Some(pose));
     for [x, y] in [[0.0, 0.0], [0.7, -0.3], [-1.0, 1.0], [0.25, 0.9]] {

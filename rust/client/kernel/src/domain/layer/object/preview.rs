@@ -59,7 +59,7 @@ pub enum Ghost {
         at: V3,
         decor: &'static Decor,
         variant: u32,
-        rotation: f64,
+        rot: f64,
         scale: f64,
         stand_in: Option<GhostBox>,
     },

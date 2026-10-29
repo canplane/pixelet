@@ -20,7 +20,7 @@ use xpute_guest::global::Global;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ObserverPose {
     pub eye: V3,
-    pub rotation: Mat4,
+    pub rot: Mat4,
 }
 
 pub struct View {
@@ -62,7 +62,7 @@ impl View {
     pub fn at(&self) -> ObserverPose {
         self.pose.unwrap_or(ObserverPose {
             eye: [0.0, 0.0, 1.0],
-            rotation: mat4::new(),
+            rot: mat4::new(),
         })
     }
 
@@ -70,9 +70,9 @@ impl View {
     /// no eye position in either, so nothing large cancels in floats.
     pub fn eye_frame(&self) -> (Mat4, Mat4) {
         let mut view_proj = mat4::new();
-        let rotation = self.at().rotation;
-        mat4::mul(&mut view_proj, &self.proj, &rotation);
-        (view_proj, rotation)
+        let rot = self.at().rot;
+        mat4::mul(&mut view_proj, &self.proj, &rot);
+        (view_proj, rot)
     }
 }
 
@@ -161,7 +161,7 @@ fn compose() {
     let e = at.eye;
     let mut to_eye = mat4::new();
     mat4::translation(&mut to_eye, -e[0], -e[1], -e[2]);
-    mat4::mul(&mut v.view_matrix, &at.rotation, &to_eye);
+    mat4::mul(&mut v.view_matrix, &at.rot, &to_eye);
     let vm = v.view_matrix;
     mat4::invert(&mut v.inv_view_matrix, &vm);
     // Reversed depth in floats with the far plane at infinity: one near
@@ -191,7 +191,7 @@ pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: 
     // The rotation turns the world's axes to the camera's; a rotation's
     // transpose turns them back.
     let mut back = mat4::new();
-    mat4::transpose(&mut back, &pose.rotation);
+    mat4::transpose(&mut back, &pose.rot);
     *origin = pose.eye;
     mat4::transform_dir(dir, &back, ndc_x * tan[0], ndc_y * tan[1], -1.0);
 }
