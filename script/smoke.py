@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # What a deployment must answer, checked against a running one. Addresses
 # come from spec/spec/route.json, which every relay is written from, so a
-# moved root cannot leave this checking a dead URL. `--origin` skips the
-# bucket's branches, which only the edge serves.
+# moved root cannot leave this checking a dead URL: by default its site, with
+# `--origin` its origin, the VM behind the edge, where the bucket's branches,
+# which only the edge serves, are skipped. A base URL given checks that one.
 #
 # A rough check, not a test: each answer's status, and what it plainly is —
 # the app's HTML, the source's JSON, a tile's packed bytes once and not twice,
@@ -10,8 +11,9 @@
 # asset's type. What depends on the edge's mood (whether the second ask hit
 # the cache) is said, not failed.
 #
-#   ./script/smoke.py https://plei.me
-#   ./script/smoke.py https://api.plei.me --origin
+#   ./script/smoke.py
+#   ./script/smoke.py --origin
+#   ./script/smoke.py http://localhost:5173
 
 import json
 import re
@@ -24,6 +26,7 @@ from pathlib import Path
 
 SPEC = Path(__file__).resolve().parent.parent / "spec" / "spec"
 route = json.loads((SPEC / "route.json").read_text())
+published = json.loads((SPEC / "bake" / "published.json").read_text())
 
 
 def root(name):
@@ -40,8 +43,8 @@ SEARCH_URL, GEO_INTERNAL, API_INTERNAL = branch("SEARCH_URL"), branch("GEO_INTER
 
 
 def tile_object(version, name):
-    """A tile's object under its kind, route.json's `object` filled in."""
-    return route["roots"]["TILE_ROOT"]["object"].replace("{version}", version).replace("{name}", name)
+    """A tile's object under its kind, published.json's `OBJECT` filled in."""
+    return published["OBJECT"].replace("{version}", version).replace("{name}", name)
 
 
 # Any shipped asset's bucket key: the first ingested.json lists.
@@ -213,10 +216,10 @@ def line(mark, got, path, note):
 def main():
     args = [a for a in sys.argv[1:] if a != "--origin"]
     origin_only = "--origin" in sys.argv[1:]
-    if not args:
-        print("usage: ./script/smoke.py <base-url> [--origin]", file=sys.stderr)
+    if len(args) > 1:
+        print("usage: ./script/smoke.py [<base-url>] [--origin]", file=sys.stderr)
         return 2
-    base = args[0].rstrip("/")
+    base = (args[0] if args else route["origins"]["ORIGIN" if origin_only else "SITE"]["url"]).rstrip("/")
 
     version = {} if origin_only else served_versions(base)
     checks = origin_checks() if origin_only else edge_checks(version)

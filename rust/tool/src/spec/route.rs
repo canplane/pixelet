@@ -1,7 +1,9 @@
 // pxl-tool/spec/route.rs
 
-//! The address space from one JSON, written into the shell, the kernel, the
-//! Worker and wrangler's `run_worker_first`.
+//! The address space from one JSON, written into the client's driver, the
+//! Worker and the servers, and its part of wrangler's and Caddy's
+//! configurations: the roots the edge claims, the site it answers on and the
+//! origin it relays to.
 
 use regex::Regex;
 
@@ -64,44 +66,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .map(|(n, _)| format!("{}/*", path(n)))
         .collect();
 
-    // A tile's object under its kind: the one place its segments are ordered.
-    let object = roots
-        .iter()
-        .find(|(n, _)| *n == "TILE_ROOT")
-        .and_then(|(_, r)| r.str_at("object"))
-        .ok_or(format!("{JSON}: TILE_ROOT has no object"))?;
-    let segments: Vec<&str> = object
-        .split('/')
-        .map(|s| {
-            s.strip_prefix('{')
-                .and_then(|s| s.strip_suffix('}'))
-                .unwrap_or_default()
-        })
-        .collect();
-    // A version is a folder its tiles go up in whole (script/publish.py), so it comes first.
-    if segments != ["version", "name"] {
-        return Err(format!(
-            "{JSON}: TILE_ROOT.object {object:?} is not {{version}}/{{name}}"
-        ));
-    }
-    let object_doc = [format!(
-        "A kind's tile under `TILE_PREFIX` and the kind, `{object}`."
-    )];
-    let sphere = roots
-        .iter()
-        .find(|(n, _)| *n == "TILE_ROOT")
-        .and_then(|(_, r)| r.str_at("sphere"))
-        .ok_or(format!("{JSON}: TILE_ROOT has no sphere"))?;
-    if sphere.is_empty()
-        || !sphere.bytes().all(|b| b.is_ascii_lowercase())
-        || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b))
-    {
-        return Err(format!(
-            "{JSON}: TILE_ROOT.sphere {sphere:?} is no name a tile could have"
-        ));
-    }
-    let sphere_doc = "The Earth's picture whole, in place of a tile's name under the earth layer's version: the sphere's, no tile of the pyramid.";
-
     // Every root, so none is answered by the static-asset fallback with
     // index.html, which reads as the app loading rather than as no route.
     let wrangler_path = "ts/server/edge/wrangler.jsonc";
@@ -117,6 +81,69 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let wrangler = claim
         .replace(&wrangler, format!(r#""run_worker_first": {list}"#).as_str())
         .into_owned();
+
+    // The site the edge answers on and the origin it relays to, each an
+    // https URL of a host alone.
+    let origin = |name: &str| -> Result<(String, String, Vec<String>), String> {
+        let o = spec
+            .get("origins")
+            .and_then(|o| o.get(name))
+            .ok_or(format!("{JSON}: no origins.{name}"))?;
+        let url = o.str_at("url").unwrap_or_default();
+        let host = url
+            .strip_prefix("https://")
+            .filter(|h| {
+                !h.is_empty()
+                    && h.bytes().all(|b| {
+                        b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-'
+                    })
+            })
+            .ok_or(format!(
+                "{JSON}: origins.{name} {url:?} is no https URL of a host alone"
+            ))?;
+        Ok((
+            url.to_string(),
+            host.to_string(),
+            o.lines_at("$doc").unwrap_or_default(),
+        ))
+    };
+    let (site, site_host, site_doc) = origin("SITE")?;
+    let (relay, relay_host, relay_doc) = origin("ORIGIN")?;
+    let write = |text: &str, path: &str, pattern: &str, with: &str| -> Result<String, String> {
+        let re = Regex::new(pattern).map_err(|e| e.to_string())?;
+        if !re.is_match(text) {
+            return Err(format!("{path}: nothing matches {pattern}"));
+        }
+        Ok(re.replace(text, with).into_owned())
+    };
+    let wrangler = write(
+        &wrangler,
+        wrangler_path,
+        r#""pattern"\s*:\s*"[^"]*""#,
+        &format!(r#""pattern": "{site_host}""#),
+    )?;
+    let wrangler = write(
+        &wrangler,
+        wrangler_path,
+        r#""GEO_ORIGIN"\s*:\s*"[^"]*""#,
+        &format!(r#""GEO_ORIGIN": "{relay}""#),
+    )?;
+    let wrangler = write(
+        &wrangler,
+        wrangler_path,
+        r#""API_ORIGIN"\s*:\s*"[^"]*""#,
+        &format!(r#""API_ORIGIN": "{relay}""#),
+    )?;
+    // The origin's one site block, its address the host.
+    let caddy_path = "infra/prod/Caddyfile";
+    let caddy = std::fs::read_to_string(root().join(caddy_path))
+        .map_err(|e| format!("{caddy_path}: {e}"))?;
+    let caddy = write(
+        &caddy,
+        caddy_path,
+        r"(?m)^[a-z0-9.-]+ \{$",
+        &format!("{relay_host} {{"),
+    )?;
 
     let mut all: Vec<(String, String)> = Vec::new();
     all.extend(roots.iter().map(|(n, _)| (n.to_string(), path(n))));
@@ -155,24 +182,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             String::new(),
         ]);
     }
-    rs.extend(object_doc.iter().map(|l| format!("/// {l}")));
-    rs.extend([
-        "/// Written into `w`, so a key is made where it is wanted, not allocated.".to_string(),
-        "pub fn tile_object(w: &mut impl core::fmt::Write, version: &str, name: impl core::fmt::Display) -> core::fmt::Result {".to_string(),
-        format!("    write!(w, {})", json_str(object)),
-        "}".into(),
-        String::new(),
-        format!("/// {sphere_doc}"),
-        format!("pub const TILE_SPHERE: &str = {};", json_str(sphere)),
-        String::new(),
-        "/// `tile_object`'s version and name, none for what it never writes.".into(),
-        "pub fn tile_object_parts(object: &str) -> Option<(&str, &str)> {".into(),
-        "    let mut segment = object.split('/');".into(),
-        format!("    let ({}) = ({});", segments.join(", "), segments.iter().map(|_| "segment.next()?").collect::<Vec<_>>().join(", ")),
-        "    segment.next().is_none().then_some((version, name))".into(),
-        "}".into(),
-        String::new(),
-    ]);
     rs.extend([
         "/// Every root, as the edge claims them.".to_string(),
         format!(
@@ -196,18 +205,16 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ]);
     }
 
-    ts.extend(ts_doc(&object_doc, ""));
-    ts.extend([
-        "export function tileObject(version: string, name: string): string {".to_string(),
-        format!("  return `{}`;", object.replace('{', "${")),
-        "}".into(),
-        String::new(),
-    ]);
-    ts.extend(ts_doc(&[sphere_doc.to_string()], ""));
-    ts.extend([
-        format!("export const TILE_SPHERE = {};", json_str(sphere)),
-        String::new(),
-    ]);
+    for (name, url, doc) in [
+        ("SITE_URL", &site, &site_doc),
+        ("ORIGIN_URL", &relay, &relay_doc),
+    ] {
+        ts.extend(ts_doc(doc, ""));
+        ts.extend([
+            format!("export const {name} = {};", json_str(url)),
+            String::new(),
+        ]);
+    }
 
     let mut worker = head("@pxl/edge/route.spec.ts");
     worker.extend(
@@ -226,27 +233,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .map(|(n, v)| format!("export const {n} = {};", json_str(v))),
     );
     worker.push(String::new());
-    // A version is any one segment the declaration names; a name, a digit a zoom (pxl-spec space/hierarchy/morton.rs).
-    let pattern = object
-        .replace("{version}", "[^/]+")
-        .replace("{name}", "[0-3]+")
-        .replace('/', "\\/");
-    worker.extend(ts_doc(
-        &[format!(
-            "A tile's object under its kind, `{object}`, as a pattern."
-        )],
-        "",
-    ));
-    worker.extend([
-        format!("export const TILE_OBJECT = String.raw`{pattern}`;"),
-        String::new(),
-    ]);
-    worker.extend(ts_doc(&[sphere_doc.to_string()], ""));
-    worker.extend([
-        format!("export const TILE_SPHERE = {};", json_str(sphere)),
-        String::new(),
-    ]);
-
     Ok(vec![
         Output::new("rust/spec/src/route.spec.rs", rs.join("\n")),
         Output::new(
@@ -255,5 +241,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ),
         Output::new("ts/server/edge/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),
+        Output::new(caddy_path, caddy),
     ])
 }

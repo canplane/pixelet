@@ -23,6 +23,31 @@ pub const FORMAT: Format = Format {
 /// before its name (ts/client/src/driver/namespace/route.spec.ts `tileObject`).
 pub const VERSION_BYTES: usize = 32;
 
+/// A kind's object in a published set, the one place its segments are
+/// ordered: the version its source declares, then the tile's name. A version
+/// is a folder its tiles go up in whole (script/publish.py), so it comes
+/// first. Under its kind it is a tile's address below the tile root
+/// (route.json `TILE_ROOT`), and its key in the bucket.
+/// Written into `w`, so a key is made where it is wanted, not allocated.
+pub fn tile_object(
+    w: &mut impl core::fmt::Write,
+    version: &str,
+    name: impl core::fmt::Display,
+) -> core::fmt::Result {
+    write!(w, "{version}/{name}")
+}
+
+/// `tile_object`'s version and name, none for what it never writes.
+pub fn tile_object_parts(object: &str) -> Option<(&str, &str)> {
+    let mut segment = object.split('/');
+    let (version, name) = (segment.next()?, segment.next()?);
+    segment.next().is_none().then_some((version, name))
+}
+
+/// The Earth's picture whole, in place of a tile's name under the earth
+/// layer's version: the sphere's, no tile of the pyramid.
+pub const TILE_SPHERE: &str = "sphere";
+
 /// The base layers a version is published for: the kinds of `FORMAT`,
 /// numbered in their order.
 #[expect(non_camel_case_types, reason = "generated from the spec")]

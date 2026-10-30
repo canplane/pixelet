@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "Tile objects as the kernel named them when it composed them itself (pxl-spec route `tile_object`, under the version pxl-kernel sys/io/source.rs then picked for each), recorded from that code: each kind's tile by its subject, the path its root's object is, under the source declared here, and the Earth's sphere. the host must make the same (tile.test.ts), and each name is its subject's (pxl-kernel sys/io/fetch.test.rs)."
+    "Tile objects as the kernel named them when it composed them itself (pxl-spec `tile_object`, then route.spec.rs's, under the version pxl-kernel sys/io/source.rs then picked for each), recorded from that code: each kind's tile by its subject, the path its root's object is, under the source declared here, and the Earth's sphere. the host must make the same (tile.test.ts), and each name is its subject's (pxl-kernel sys/io/fetch.test.rs)."
   ],
   "source": {
     "top_zoom": 4,

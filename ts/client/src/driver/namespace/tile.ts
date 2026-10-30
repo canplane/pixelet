@@ -13,8 +13,12 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
-import { BASE_LAYERS, type BaseLayer } from "./published.spec.ts";
-import { TILE_SPHERE, tileObject } from "./route.spec.ts";
+import {
+  BASE_LAYERS,
+  type BaseLayer,
+  TILE_SPHERE,
+  tileObject,
+} from "./published.spec.ts";
 import { tile_url } from "@/driver/namespace/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { get } from "@/driver/namespace/read.ts";

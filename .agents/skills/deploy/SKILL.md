@@ -79,7 +79,7 @@ The jobs run `number` → `deploy-server` → `deploy-web` → `smoke` → `reco
 
 - `deploy-server` fails: the client is not deployed either.
 - `deploy-web` fails: the servers are new and the client is old, which is safe.
-  If it fails at `wrangler deploy`, its last line says whether plei.me serves
+  If it fails at `wrangler deploy`, its last line says whether the site serves
   the build anyway, and `record` logs that.
 
 ### When the smoke fails
@@ -88,8 +88,8 @@ The client and servers are already out, and `record` has logged what the smoke
 found. Run it again:
 
 ```bash
-./script/smoke.py https://plei.me
-./script/smoke.py https://api.plei.me --origin    # the VM only, bypassing the edge
+./script/smoke.py                # the site (spec/spec/route.json `origins`)
+./script/smoke.py --origin       # the VM only, bypassing the edge
 ```
 
 - A `/geo/search` 521 that passes on the second try: the stack was still

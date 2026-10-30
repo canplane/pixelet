@@ -25,9 +25,9 @@ use pxl_geo_bake::demand::{
 use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, Overrides};
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::published::{BaseLayer, FORMAT};
+use pxl_spec::bake::published::{tile_object_parts, BaseLayer, FORMAT, TILE_SPHERE};
 use pxl_spec::bake::source::is_sharded;
-use pxl_spec::route::{tile_object_parts, ASSET_ROOT, TILE_ROOT, TILE_SPHERE};
+use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 use std::path::{Path as FsPath, PathBuf};

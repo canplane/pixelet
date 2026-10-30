@@ -2,10 +2,11 @@
 
 import { Platform } from "react-native";
 
+import { SITE_URL } from "@pxl/client/driver/namespace/route.spec.ts";
 import { PLATFORM } from "./module.ts";
 
-/** A device's app has no origin of its own. */
-export const url = "https://plei.me";
+/** A device's app has no origin of its own: it reads from the site's. */
+export const url = SITE_URL;
 
 /** The reads Expo's fetch runs at once. On Android its OkHttp client runs at most
  * five calls a host, a sixth waiting in OkHttp's own queue (`Dispatcher`

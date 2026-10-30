@@ -11,11 +11,14 @@
 # PxlNative: a pod is a Swift module of its own name, and that one is the
 # guest's.
 
+require 'json'
+
 Pod::Spec.new do |s|
   s.name = 'PxlPlatform'
   s.version = '0.0.0'
   s.summary = 'The pixelet kernel on a device, and the platform it asks of.'
-  s.homepage = 'https://plei.me'
+  # The site's (spec/spec/route.json `origins`).
+  s.homepage = JSON.parse(File.read(File.join(__dir__, '../../../../../../spec/spec/route.json')))['origins']['SITE']['url']
   s.license = { type: 'UNLICENSED' }
   s.author = 'pixelet'
   s.source = { git: '' }

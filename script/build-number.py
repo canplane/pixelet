@@ -12,7 +12,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-SITE = "https://plei.me"
+SITE = json.loads((Path(__file__).resolve().parent.parent / "spec/spec/route.json").read_text())["origins"]["SITE"]["url"]
 CACHE = Path(__file__).resolve().parent.parent / "ts/client/.build_number"
 
 try:

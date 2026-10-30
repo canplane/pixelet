@@ -1,7 +1,7 @@
 // pxl-kernel/sys/io/fetch.test.rs
 
 use crate::sys::io::host_spec;
-use pxl_spec::route::TILE_SPHERE;
+use pxl_spec::bake::published::TILE_SPHERE;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::codec::json::read_json;
 

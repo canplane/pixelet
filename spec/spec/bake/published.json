@@ -19,5 +19,18 @@
   "$VERSION_BYTES": [
     "The longest version a declaration names: one segment of a tile's URL,",
     "before its name (ts/client/src/driver/namespace/route.spec.ts `tileObject`)."
+  ],
+  "OBJECT": "{version}/{name}",
+  "$OBJECT": [
+    "A kind's object in a published set, the one place its segments are",
+    "ordered: the version its source declares, then the tile's name. A version",
+    "is a folder its tiles go up in whole (script/publish.py), so it comes",
+    "first. Under its kind it is a tile's address below the tile root",
+    "(route.json `TILE_ROOT`), and its key in the bucket."
+  ],
+  "SPHERE": "sphere",
+  "$SPHERE": [
+    "The Earth's picture whole, in place of a tile's name under the earth",
+    "layer's version: the sphere's, no tile of the pyramid."
   ]
 }

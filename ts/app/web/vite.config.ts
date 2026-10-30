@@ -22,6 +22,7 @@ import {
   API_PREFIX,
   ASSET_PREFIX,
   GEO_PREFIX,
+  SITE_URL,
   TILE_PREFIX,
 } from "@pxl/client/driver/namespace/route.spec.ts";
 import {
@@ -153,6 +154,15 @@ function remoteConsole(): Plugin {
         });
       });
     },
+  };
+}
+
+/** The page's own URL where index.html names it (`%SITE_URL%`), its links'
+ * previews: the site's (spec/spec/route.json `origins`). */
+function siteUrl(): Plugin {
+  return {
+    name: "pxl-site-url",
+    transformIndexHtml: (html) => html.replaceAll("%SITE_URL%", SITE_URL),
   };
 }
 
@@ -322,11 +332,9 @@ function constEnum(roots: string[]): Plugin {
 }
 
 // Where `make dev` points when nothing overrides it: the project's
-// own published deployment. VITE_REMOTE_ORIGIN overrides it, and
-// .env.example carries this same value, so the origin is changed there;
-// this constant is only for a checkout that has not copied .env.example to
-// .env yet. A domain that is retired at the Cloudflare edge answers 404 to
-// everything, and nothing here would say why.
+// own published deployment, the site (spec/spec/route.json `origins`).
+// VITE_REMOTE_ORIGIN overrides it. A domain that is retired at the Cloudflare
+// edge answers 404 to everything, and nothing here would say why.
 /**
  * Prefixes a dev server forwards, split as the Worker splits them: `tiles` to
  * the tile server, the rest to the search server. `published` ones go to the
@@ -344,7 +352,7 @@ export const DEV_PROXY_ROUTES: readonly {
   { path: API_PREFIX, app: true, published: true },
 ];
 
-const remoteOriginDefault = "https://plei.me";
+const remoteOriginDefault = SITE_URL;
 
 // anti-HMR. All of the client below the shell is here too, its host, abi/,
 // port/ and driver/: their modules hold the one kernel's memory and device, the
@@ -568,6 +576,7 @@ export default defineConfig(({ mode }) => {
     clearScreen: false,
 
     plugins: [
+      siteUrl(),
       buildStamp(),
       remoteConsole(),
       constEnum([

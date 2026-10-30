@@ -13,6 +13,7 @@
 #
 #   ./script/deploy.py
 
+import json
 import os
 import re
 import secrets
@@ -31,8 +32,8 @@ NUMBER = os.environ.get("PXL_BUILD_NUMBER")
 # The panics' `#n` → path table the page's build wrote beside its guest.
 PATHS = REPO / "ts/app/web/src/guest.paths.json"
 BUILT = EDGE / "dist/index.html"
-# The custom domain the Worker answers on (wrangler.jsonc `routes`).
-SITE = "https://plei.me"
+# The custom domain the Worker answers on (spec/spec/route.json `origins`).
+SITE = json.loads((REPO / "spec/spec/route.json").read_text())["origins"]["SITE"]["url"]
 
 
 def loads(html):

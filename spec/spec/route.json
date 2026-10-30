@@ -1,6 +1,7 @@
 {
   "$doc": [
-    "The address space, as four reserved roots and the branches under them.",
+    "The address space, as four reserved roots and the branches under them,",
+    "and the two origins they are served from.",
     "",
     "The app routes on paths of its own, so a relay tells a deep link from a",
     "request meant for a server by a root alone — which is why the reservation is",
@@ -8,8 +9,9 @@
     "",
     "Every relay reads a root or a branch and never a route name: adding a route",
     "is a change to the one server that answers it and to nothing else. This file",
-    "is where all of them read it from — the client's shell, its kernel and the",
-    "Worker are written from it."
+    "is where all of them read it from: the client's driver, the Worker and the",
+    "servers are written from it, and wrangler's and Caddy's configurations take",
+    "their part of it. The kernel names what it opens and never an address."
   ],
   "roots": {
     "GEO_ROOT": {
@@ -31,13 +33,10 @@
     },
     "TILE_ROOT": {
       "path": "/tile",
-      "object": "{version}/{name}",
-      "sphere": "sphere",
       "$doc": [
-        "Baked tiles by kind, version and name: under the root a kind's own,",
-        "and under that its `object`, the version its source declares and the",
-        "tile's name; beside the Earth's tiles, under its version, `sphere`, its",
-        "picture whole, the sphere's and no tile of the pyramid. Its own root for",
+        "Baked tiles by kind, version and name: under the root a kind's own, and",
+        "under that its object as a published set lays it out (bake/published.json",
+        "`OBJECT`, and `SPHERE` for the Earth's picture whole). Its own root for",
         "the reason the asset root is: the bake",
         "puts them in the bucket and the edge serves them, so neither server",
         "answers them, and the edge tells them from the geo server's routes by",
@@ -77,6 +76,26 @@
       "name": "internal",
       "$doc": [
         "pxl-api's own, gated the same way."
+      ]
+    }
+  },
+  "origins": {
+    "SITE": {
+      "url": "https://plei.me",
+      "$doc": [
+        "The site: the custom domain the Worker answers on (wrangler.jsonc `routes`),",
+        "the app's page and every root, the bucket's served at the edge and the",
+        "servers' relayed to the origin. A device's app, which has no origin of its",
+        "own, reads from it, and so does a dev server's published deployment."
+      ]
+    },
+    "ORIGIN": {
+      "url": "https://api.plei.me",
+      "$doc": [
+        "The origin behind the edge: the VM, where Caddy sends the geo root to",
+        "pxl-geo and the application's to pxl-api (infra/prod/Caddyfile). One host,",
+        "two roots: a hostname is a box and a root a service. The Worker relays",
+        "both roots here (wrangler.jsonc `GEO_ORIGIN`, `API_ORIGIN`)."
       ]
     }
   }
