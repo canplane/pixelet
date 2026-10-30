@@ -3,6 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 
+use pxl_spec::dirs;
 use xpute_kit::math::scalar::round;
 use zstd::bulk;
 use zstd::stream;
@@ -61,9 +62,8 @@ pub fn fmt_dur(ms: f64) -> String {
 /// starts, which is when its binary was built: commits made while it runs
 /// are not what it ran.
 pub fn git_sha() -> Option<String> {
-    let dir = std::env::temp_dir().join("pixelet");
-    std::fs::create_dir_all(&dir).ok()?;
-    let idx = dir.join(format!("bake-index-{}", std::process::id()));
+    let idx = dirs::temp_dir(&format!("bake-index-{}", std::process::id()));
+    std::fs::create_dir_all(idx.parent()?).ok()?;
     let git = |args: &[&str]| {
         let out = Command::new("git")
             .args(args)

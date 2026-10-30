@@ -27,6 +27,7 @@ use std::process::ExitCode;
 use fnv::FnvHasher;
 use pxl_geo_bake::pyramid::{Base, TileSet};
 use pxl_spec::bake::tile::terrain::{self, Built, TerrainTile};
+use pxl_spec::dirs;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec_core::overwrite::{self, Held, Lanes};
 use pxl_spec_core::way::tree::{self, Read};
@@ -55,15 +56,7 @@ fn root() -> PathBuf {
 
 /// Where the machine keeps the lines, a file a digest.
 fn kept_home() -> Result<PathBuf, String> {
-    let home = std::env::var_os("HOME").ok_or("no $HOME")?;
-    let caches = if cfg!(target_os = "macos") {
-        PathBuf::from(home).join("Library/Caches")
-    } else {
-        std::env::var_os("XDG_CACHE_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(home).join(".cache"))
-    };
-    Ok(caches.join("pixelet/fill"))
+    dirs::cache_dir("fill")
 }
 
 /// Every file under `path`, a directory's in name order, `target`

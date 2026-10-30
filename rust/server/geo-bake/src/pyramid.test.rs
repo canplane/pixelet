@@ -4,6 +4,7 @@ use super::*;
 use crate::util::{pack, Level};
 use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::tile::place::PLACE_LATTICE;
+use pxl_spec::dirs;
 use pxl_spec::space::layer::lattice::GROUND;
 
 /// A count, summed up the pyramid, read as `PLACE` says: places' lattice or the ground's.
@@ -41,7 +42,7 @@ impl<const PLACE: bool> Base for Count<PLACE> {
 
 /// The zooms one leaf folds to.
 fn folded<const PLACE: bool>() -> Vec<Zoom> {
-    let root = std::env::temp_dir().join(format!("pixelet/pyramid-{PLACE}-{}", std::process::id()));
+    let root = dirs::temp_dir(&format!("pyramid-{PLACE}-{}", std::process::id()));
     let (set, stage) = (
         TileSet::new(root.join("set")),
         TileSet::new(root.join("stage")),

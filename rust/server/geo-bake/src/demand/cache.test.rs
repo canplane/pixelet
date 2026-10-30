@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::util;
+use pxl_spec::dirs;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::time;
 
@@ -9,8 +10,8 @@ fn cache() -> Arc<Cache> {
     static SERIAL: AtomicUsize = AtomicUsize::new(0);
     Arc::new(
         Cache::new(
-            std::env::temp_dir().join(format!(
-                "pixelet/demand-{}-{}",
+            dirs::temp_dir(&format!(
+                "demand-{}-{}",
                 std::process::id(),
                 SERIAL.fetch_add(1, Ordering::Relaxed)
             )),
