@@ -14,5 +14,29 @@
     tile, and is not the host.
   - Don't propose removing a part of xpute's `kit` because nothing here calls
     it.
-- Performance analysis or optimization, anywhere: apply the `performance`
-  skill (`.agents/skills/performance/SKILL.md`).
+
+## Reading and changing
+
+- Read the architecture sections and the READMEs beside the code for the
+  roles and boundaries the change touches, and the skills its task takes:
+  performance analysis or optimization, anywhere, takes `performance`
+  (`.agents/skills/performance/SKILL.md`).
+- `ARCHITECTURE.md`, `xpute/ARCHITECTURE.md` and the READMEs beside the code
+  state the parts' contracts; a skill gives a task's procedure; the code shows
+  the implementation, its debt and its work in progress among it. A pattern in
+  the code, however often repeated, is not by itself a rule, and an asymmetry
+  is not by itself debt.
+- The records under `doc/` recover intent, scope and limits. A record that
+  attributes a decision to the user explicitly makes it an adopted decision;
+  check its scope, and whether a later adopted decision replaced it. A
+  proposal, an attempt or a measurement is no decision, however recent. The
+  user's explicit word now applies within its scope before the documents
+  catch up.
+- Keep an established symmetry by role and contract, not by matching module
+  lists. A local gain alone does not weaken one or cross a boundary. A
+  contract changed on purpose is named as such, with what keeps or replaces
+  the properties it held.
+- Where the code and a stated contract disagree, tell debt, an outdated
+  document and an unfinished transition apart by the records and the history,
+  and copy no unresolved pattern as precedent. Ask only when the doubt changes
+  what the task should do; go on with what it does not touch.
