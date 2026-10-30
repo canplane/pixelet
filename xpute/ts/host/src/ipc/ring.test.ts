@@ -33,7 +33,7 @@ test("ring - frames come out in order across the wrap, and a full ring refuses",
     for (let k = 0; k < 4; k++) {
       const at = r.peek();
       assert.ok(at >= 0);
-      // The result as the i32 it is kept as, so the first is 0, not -0.
+      // The result as the i32 it is kept as.
       assert.deepStrictEqual(
         [r.tag(at), r.cmd(at), r.flags(at), r.result(at), r.pkt(at)],
         [round * 4 + k, 7, frame.ACKREQ, -(round * 4 + k) | 0, null],

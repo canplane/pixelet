@@ -497,8 +497,8 @@ Each rule is one the other end could catch being broken.
    learns outside. A key appears at most once, an unknown key is passed over,
    and an unknown magic or version is refused.
 1. **The core memory.** It never moves or grows while the guest lives, and every
-   address that crosses is an offset into it. Offset 0 names nothing, as a
-   frame with no packet says, so nothing that crosses lies there.
+   address that crosses is an offset into it. Offset 0 names nothing, and
+   nothing that crosses lies there.
 2. **The turn.** The guest runs only inside `run`, and the two sides never run
    at once: the host touches nothing a turn writes until it has returned, but
    what a hostcall names while it runs (rule 8). The quota is advice, not a
@@ -633,15 +633,14 @@ end, and `spec/conformance/file.tsv` every guest.
 One host runs them against every guest through the boundary alone
 (`@xpute/host/conformance.test.ts`): the Rust guest
 (`xpute-conformance/guest.rs`) and the C++ one (`cpp/conformance/guest.cpp`),
-each over the commands `spec/conformance/guest.json` numbers. A host could pass
-a guest by assuming where its rings lie, so each guest's boot takes a seed and
-lays what it shares, the directory among them, in the order and with the gaps
-the seed draws (`LAYOUTS`), and the host runs every trace under each: only a
-host that finds them all through the directory, as rule 0 asks, passes. Each
-guest is built both as a native library and as a WebAssembly module that imports
-nothing but its memory, the clock and the hostcall; the C++ one from the
-library's amalgamation (`cpp/amalgamation.awk`), the two files a C++ program
-takes, so what the traces hold is what ships.
+each over the commands `spec/conformance/guest.json` numbers. Each guest's boot
+takes a seed and lays what it shares, the directory among them, in the order and
+with the gaps the seed draws (`LAYOUTS`), and the host runs every trace under
+each: only a host that finds them all through the directory, as rule 0 asks,
+passes. Each guest is built both as a native library and as a WebAssembly module
+that imports nothing but its memory, the clock and the hostcall; the C++ one
+from the library's amalgamation (`cpp/amalgamation.awk`), the two files a C++
+program takes, so what the traces hold is what ships.
 
 ## Prior art
 
@@ -657,7 +656,6 @@ where the tree records the source.
 | A circuit's strobe, the pulse that says when to act         | `sched/strobe`                   | Its name                                                                       |
 | "core" for main memory, as in a core dump                   | the core memory                  | Its name                                                                       |
 | A linker script's output sections                           | `mem/section`                    | Ranges placed end to end without knowing what they hold                        |
-| Address space layout randomization                          | the traces' layouts (`LAYOUTS`)  | A layout drawn on each run, so a host that assumes one fails                   |
 | [evanw/buddy-malloc](https://github.com/evanw/buddy-malloc) | `alloc/buddy_tree`               | The page allocator, ported line for line                                       |
 | SLUB                                                        | `alloc/slab`                     | A slab keeps its free list inside its free slots                               |
 | virtio's descriptor table, AF_XDP's UMEM                    | the rings (`spec/ipc/ring.json`) | Descriptors kept apart from the payload's slots                                |

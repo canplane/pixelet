@@ -4,8 +4,8 @@
  * The smallest host, beside the smallest guest (rust/example): the guest's
  * module opened over a memory of its own, the host mounted on it with a
  * policy for a host with no display and an answer to the one hostcall the
- * guest makes, then one command sent and its reply read. A test, so that
- * `make test` keeps it working; build the guest first (`make build`).
+ * guest makes, then one command sent and its reply read. Build the guest
+ * first (`make build`).
  */
 
 import { test } from "vitest";

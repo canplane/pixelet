@@ -5,9 +5,8 @@
  * the guest the place opens; xpute's host mounted on it with pixelet's drivers
  * (the roots, the program's calls, the stop report, each turn's submission) and
  * the frame pacing; the place told where to report what its sensors, its GPU,
- * its network and its visibility hear; then the kernel, by `WORLD_BOOT`. It
- * only connects: what each piece does is its driver's or the port's. The shell
- * is no part of it: it reads where the boot stands through the port
+ * its network and its visibility hear; then the kernel, by `WORLD_BOOT`. The
+ * shell is no part of it: it reads where the boot stands through the port
  * (port/shell.ts), and what the kernel shows it once it has started.
  */
 
@@ -71,7 +70,6 @@ const EVENTS: Partial<Record<Command, (f: BranchCursor) => void>> = {
 
 function on_event(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   const heard = EVENTS[cmd];
-  // Each of these carries a packet.
   if (heard) heard(f!);
   else
     console.warn(`[kernel] event 0x${cmd.toString(16)} with no one to hear it`);
@@ -79,8 +77,7 @@ function on_event(_tag: u32, cmd: Command, f: BranchCursor | null): void {
 
 /** Called once by the app, after it has set the place, so boot order is
  * explicit, not import order; where it stands is `boot_state`. A second call
- * is the app's error, refused: a page holds one client, as it holds one host
- * and one set of the place's callbacks. */
+ * is refused. */
 export function boot(): void {
   if (called) throw new InvariantError(Errno.EALREADY);
   called = true;

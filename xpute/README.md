@@ -79,11 +79,7 @@ script                                      the repository's own scripts; never 
 spec                                        the numbers every language's are generated from
 ```
 
-## Taking it into a program
-
-Until its contract settles, xpute is taken as source: a program pins a commit of
-xpute's own repository, or copies it, and [CHANGELOG.md](./CHANGELOG.md) says
-what each export changed, in the contract and in the ends' own calls.
+## Embedding a guest
 
 The smallest program shows the whole of it: a guest that answers one command
 (`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
@@ -97,24 +93,6 @@ to the guest's calls (`SysHost`, each part optional) and the scheduling policy
 that says when a turn runs and how much it gets (`sched/policy.ts`: a fixed
 quota where there is no display, frame pacing on a page); then it sends the
 command and reads the reply.
-
-Each language takes its end its own way:
-
-- **Rust**, by a git dependency on that repository pinned to a commit
-  (`xpute-guest = { git = "https://github.com/canplane/xpute", rev = "…" }`):
-  the crates take their edition and versions from `rust/`'s workspace, and do
-  not build copied out of it.
-- **TypeScript**, by `ts/kit`, `ts/host` and, for the GPU's calls, `ts/gpu` in
-  the program's tree, copied or as a submodule, with `@xpute/kit/*`,
-  `@xpute/host/*` and `@xpute/gpu/*` mapped to each one's `src/` for the type
-  checker and the bundler. The sources import `.ts` files by name and declare
-  enums, so a bundler or a runner that compiles TypeScript runs them; Node's
-  type stripping alone does not.
-- **C++**, by two files, as SQLite ships its own: a program includes
-  `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with `-ffp-contract=off`,
-  the flags `cpp/Makefile` builds with. They are at `cpp/amalgamation/` in
-  xpute's own repository; in this tree `make -C cpp amalgamation` writes them
-  to `cpp/target/amalgamation/`.
 
 A guest built as a **WebAssembly module** takes its form from
 `xpute_guest::wasm`: a call in its `build.rs`, and one `wasm_abi!`, which
@@ -137,6 +115,12 @@ A guest **linked into a native program**, on a unix platform, is booted by one
 `xpute_host::native_abi!`, beside `native::Alloc` as the program's allocator,
 and exports `xpute_run`, `xpute_mem` and `xpute_hostcall_on`
 (`rust/host/examples/native.rs` is one, and `make test` runs it).
+
+A **C++ program** takes the library in two files, as SQLite ships its own: it
+includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with
+`-ffp-contract=off`, the flags `cpp/Makefile` builds with. They are at
+`cpp/amalgamation/` in xpute's own repository; in this tree
+`make -C cpp amalgamation` writes them to `cpp/target/amalgamation/`.
 
 ## What it leaves to whoever uses it
 

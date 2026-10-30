@@ -5,8 +5,7 @@
  * reserved (mem/reserve.ts). Its imports are xpute's alone, the memory, the
  * clock and the hostcall, and its entry is `run`; what else it exports, a boot
  * call that answers its directory's offset among them, is the program's, on
- * `instance`. Compiling is the caller's, so a page compiles the bytes it
- * fetched and a test the file it read, as each needs.
+ * `instance`. Compiling is the caller's.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";

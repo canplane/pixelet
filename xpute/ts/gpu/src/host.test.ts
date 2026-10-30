@@ -17,7 +17,6 @@ import { Golden } from "@xpute/kit/golden.ts";
 import { DONE } from "./api.spec.ts";
 import { GpuHost } from "./host.ts";
 
-// Its own checks: the page it runs in has no node:assert.
 function check(ok: boolean, msg: string): asserts ok {
   if (!ok) throw new Error(msg);
 }

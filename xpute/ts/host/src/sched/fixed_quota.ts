@@ -3,8 +3,7 @@
 /**
  * A scheduling policy (policy.ts) for a host with no display to pace to: a
  * turn asked for runs at the event loop's next pass, each given the same
- * quota. A guest that asks for nothing is rung for nothing, as under any
- * policy, since the strobe asks only when a turn was asked for.
+ * quota.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";

@@ -55,8 +55,7 @@ const PART_BYTES: [u32; PARTS] = [
 ];
 
 /// The most a layout spans: the page it starts past, every part, and the most
-/// pages before each. The guest's own state follows, where no layout moves it,
-/// since no host reads it.
+/// pages before each. The guest's own state follows, where no layout moves it.
 const STATE_AT: u32 = {
     let mut end = PAGE_BYTES + PARTS as u32 * spec::GAP_PAGES * PAGE_BYTES;
     let mut p = 0;
@@ -114,8 +113,7 @@ struct State {
 
 /// Where each part lies under `seed`, from the range's start: the parts in the
 /// order the seed draws, each past the pages it draws to leave before it. The
-/// first page is left out, since a range may start at the memory's offset 0,
-/// which names nothing (the contract's rule 1).
+/// first page is left out (the contract's rule 1).
 fn layout(seed: u32) -> [u32; PARTS] {
     let mut rng = SplitMix32::new(seed);
     let mut order: [usize; PARTS] = core::array::from_fn(|p| p);

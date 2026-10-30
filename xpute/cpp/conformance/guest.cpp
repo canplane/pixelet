@@ -54,8 +54,7 @@ constexpr std::array<std::uint32_t, PARTS> PART_BYTES{
 };
 
 // The most a layout spans: the page it starts past, every part, and the most
-// pages before each. The guest's own state follows, where no layout moves it,
-// since no host reads it.
+// pages before each. The guest's own state follows, where no layout moves it.
 constexpr std::uint32_t STATE_AT = [] {
     std::uint32_t end = PAGE_BYTES + PARTS * GAP_PAGES * PAGE_BYTES;
     for (std::uint32_t bytes : PART_BYTES) end += page_up(bytes);
@@ -64,8 +63,7 @@ constexpr std::uint32_t STATE_AT = [] {
 
 // Where each part lies under `seed`, from the range's start: the parts in the
 // order the seed draws, each past the pages it draws to leave before it. The
-// first page is left out, since a range may start at the memory's offset 0,
-// which names nothing (the contract's rule 1).
+// first page is left out (the contract's rule 1).
 std::array<std::uint32_t, PARTS> layout(std::uint32_t seed) {
     SplitMix32 rng(seed);
     std::array<std::size_t, PARTS> order{};
