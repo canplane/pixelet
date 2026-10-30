@@ -271,9 +271,9 @@ impl<'a> TrackedRenderPass<'a> {
             .draw(self.pass, vertices, instances, first_vertex, first_instance);
     }
 
-    pub fn draw_indexed(&self, idxs: u32, instances: u32, first_idx: u32, first_instance: u32) {
+    pub fn draw_indexed(&self, indices: u32, instances: u32, first_idx: u32, first_instance: u32) {
         self.g
-            .draw_indexed(self.pass, idxs, instances, first_idx, first_instance);
+            .draw_indexed(self.pass, indices, instances, first_idx, first_instance);
     }
 
     pub fn draw_indirect(&self, buf: Id, off: u32) {
@@ -958,7 +958,7 @@ impl Gpu {
                 (stride, step, attributes)
             })
             .collect();
-        let bufs: Vec<encode::VertexBufferLayout> = lanes
+        let buffers: Vec<encode::VertexBufferLayout> = lanes
             .iter()
             .map(|(stride, step, attributes)| encode::VertexBufferLayout {
                 stride: *stride,
@@ -991,7 +991,7 @@ impl Gpu {
                 vertex: encode::VertexState {
                     module,
                     entry: VERTEX_ENTRY[words[record::HEAD as usize - 1] as usize],
-                    buffers: &bufs,
+                    buffers: &buffers,
                 },
                 primitive: encode::PrimitiveState {
                     topology: match words[2] {
@@ -1254,7 +1254,7 @@ impl Gpu {
     pub fn draw_indexed(
         &self,
         pass: Id,
-        idxs: u32,
+        indices: u32,
         instances: u32,
         first_idx: u32,
         first_instance: u32,
@@ -1262,7 +1262,7 @@ impl Gpu {
         call::draw_indexed(
             &mut self.s().stream,
             pass,
-            idxs,
+            indices,
             instances,
             first_idx,
             0,

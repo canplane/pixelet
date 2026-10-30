@@ -5,7 +5,10 @@ description: Send a finished line out, in one order — check and test once, squ
 
 # Deploying
 
-Do these steps in this order. Skip a step if you like; never reorder them.
+Do these steps in this order, never reordered. A step the request does not
+take is left out (a squash alone asks for no deploy); a check already passed on
+the same tree is not run again; any other step is skipped only on the user's
+word.
 
 1. **Commit everything.** A fix found later starts a new round from step 1.
 2. **Check and test once** on that tree (below). Change no file after it.
@@ -49,10 +52,27 @@ last squash, as the user says, keeping every original message.
 
 ## Deploy
 
+A push starts no run where deploy is already at the commit, or where only
+markdown changed (deploy.yml `paths-ignore`); a dispatch
+(`gh workflow run deploy.yml --ref deploy`) deploys deploy's tip again.
+
 ```bash
-git push origin main:deploy        # add --force once main has been rewritten
-gh run watch "$(gh run list --workflow deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
-gh run view <id> --log-failed       # the failed steps of a job
+sha=$(git rev-parse main)
+old=$(git ls-remote origin refs/heads/deploy | cut -f1)
+last=$(gh run list --workflow deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId // 0')
+# The commit recorded, not main, which another session may move meanwhile;
+# add --force once main has been rewritten.
+git push origin "$sha:refs/heads/deploy" || exit 1
+[ "$old" = "$sha" ] && { echo "deploy was already $sha: no run"; exit 1; }
+# This push's run: of that commit and listed after the push (a redeploy of an
+# old commit has earlier runs); never an earlier one, and not past 5 minutes.
+for _ in $(seq 60); do
+  id=$(gh run list --workflow deploy.yml --commit "$sha" --json databaseId \
+    --jq "map(select(.databaseId > $last))[0].databaseId // empty") && [ -n "$id" ] && break
+  id=; sleep 5
+done
+[ -n "$id" ] || { echo "no run for $sha (only markdown changed, or the listing failed)"; exit 1; }
+gh run watch "$id" --exit-status || gh run view "$id" --log-failed   # the failed steps of a job
 ```
 
 The jobs run `number` → `deploy-server` → `deploy-web` → `smoke` → `record`.

@@ -47,9 +47,10 @@ make bake-<kind> ARGS="--stage publish"    # terrain, place or division
 ```
 
 `publish` names the version, uploads with the manifest's content-encoding,
-checks the stored count, then writes `source`.
+checks the stored count, then writes `source`: `upload` and `serve` at once.
 
 ```bash
+./script/publish.py upload <kind>                       # up as a new version, served by no one
 ./script/publish.py serve <kind> <version>              # serve an older version again: how to roll back
 ./script/publish.py override <shard> <kind> <version>   # one shard and the tiles under it; - drops it
 ```
@@ -58,6 +59,18 @@ checks the stored count, then writes `source`.
 serve it.
 
 A missing place or division tile is not an error.
+
+### A new format
+
+The plain `publish.py <kind>` is for a version in the format the deployed
+client reads. A client takes `source` only where every kind is in its own
+format exactly (pxl-kernel `sys/io/source.rs`, `reads_every`), and
+`declare_source` judges by the tree's format, not the deployed client's, so it
+lets through a format no deployed client reads. A version in a new format is
+uploaded with `upload` and served with `serve` when the client that reads it
+is out. Under that exact match, whichever goes first, the clients of the other
+format refuse `source` until they are replaced: the switch interrupts one
+side. Whether that is taken, or avoided some other way, is the user's call.
 
 ### Earth
 

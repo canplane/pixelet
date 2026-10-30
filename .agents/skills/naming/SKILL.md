@@ -14,10 +14,10 @@ where it comes from. A thing with no precedent is named with the user.
 
 A word on this list is abbreviated; any other stays whole:
 
-index `idx`, indices `idxs`, value `val`, values `vals`, buffer `buf`, buffers
-`bufs`, source `src`, destination `dst`, offset `off`, count `cnt`, current
-`cur` (not `curr`), position `pos`, direction `dir`, pixel `px`, resolution
-`res`, distance `dist`, address `addr`, capacity `cap`, dimension `dim`, memory
+index `idx`, value `val`, values `vals`, buffer `buf`, source `src`,
+destination `dst`, offset `off`, count `cnt`, current `cur` (not `curr`),
+position `pos`, direction `dir`, pixel `px`, resolution `res`, distance
+`dist`, address `addr`, capacity `cap`, dimension `dim`, memory
 `mem`, component `comp`, channel `ch`, elevation `ele`, feature `feat`,
 latitude `lat`, longitude `lon`, radian `rad`, degree `deg`, orientation
 `orient`, rotation `rot`, altitude `alt`, error `err`, packet `pkt`, initial
@@ -93,10 +93,15 @@ the EPSG:3857 plane, `_m` a meter on the ground
 
 xpute's `gpu/` keeps WebGPU's words; i18next's `lng` (a language) stays.
 
-A wire name both ends of which ship in one deploy follows these rules. A name
-kept in storage (a database column, a bucket object, a browser storage key, a
-baked file's field) changes only with a migration or version bump. A setting's
-name may change: storage keeps its `number`.
+A wire name both ends of which are one build (the client's host and kernel)
+follows these rules. A name between the client and a server is a protocol: a
+client already loaded keeps talking to the next server, so a rename there is a
+protocol change, made as one (the server takes the new name beside the old
+before the client moves to it). No policy says how long an old client lives, so
+when the old name goes is the user's call. A name kept in storage (a database
+column, a bucket object, a browser storage key, a baked file's field) changes
+only with a migration or version bump. A setting's name may change: storage
+keeps its `number`.
 
 ## Renaming
 
