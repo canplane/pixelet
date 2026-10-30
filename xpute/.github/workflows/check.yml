@@ -1,0 +1,44 @@
+# xpute's checks and tests where it is its own repository: the make targets its
+# tree runs before each export, here showing that the exported tree builds and
+# passes alone. What needs a GPU (make test-gpu) is not run: the runner has
+# none.
+
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    env:
+      # The compiler the C++ tree is developed with.
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Node ts/.tool-versions pins, and the pnpm ts/package.json names.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ts/.tool-versions
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ts/package.json
+
+      # The Rust rust/rust-toolchain.toml pins, with its wasm target.
+      - run: rustup toolchain install
+        working-directory: rust
+
+      # The WASI SDK, for the C++ guest built as a module (cpp/Makefile).
+      - run: |
+          curl -fsSL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz | tar -xz -C "$RUNNER_TEMP"
+          echo "WASI_SDK_PATH=$RUNNER_TEMP/wasi-sdk-34.0-x86_64-linux" >> "$GITHUB_ENV"
+
+      - run: make install
+      - run: make -j4 check
+      - run: make -j4 test
