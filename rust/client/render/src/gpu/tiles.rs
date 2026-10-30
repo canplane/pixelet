@@ -92,10 +92,12 @@ pub struct Tiles {
     mark_room: usize,
     marking: bool,
     /// The marks this frame hands, those whose words the marks' pass sets
-    /// first, and the most tiles one of those holds.
+    /// first, and the most tiles one of those holds; the tiles each of the
+    /// rest holds, whose words a pass beside sets.
     mark_cnt: u32,
     set_cnt: u32,
     mark_most: u32,
+    beside_tiles: Vec<u32>,
     /// Whether a pass beside may have set tiles the host has not seen yet
     /// (gpu/reach.rs).
     unseen: bool,
@@ -136,6 +138,7 @@ impl Tiles {
             mark_cnt: 0,
             set_cnt: 0,
             mark_most: 0,
+            beside_tiles: Vec::new(),
             unseen: false,
         }
     }
@@ -175,7 +178,7 @@ impl Tiles {
     /// down, the frame numbered anew: where it is drawn through the gate
     /// (`gated`), the tiles each of `marks` covers (`mark_of`), and those
     /// of `beside`, which a pass beside sets the words of and the frame draws
-    /// by all the same (`marks`); else none where nothing it draws moved
+    /// the claimed of (`beside`); else none where nothing it draws moved
     /// (`quiet`), one of every tile where anything did.
     /// The tiles the frame draws: the claimed alone where it is gated, else
     /// every one. Set on the GPU, before anything reads them, by
@@ -217,9 +220,11 @@ impl Tiles {
             .map(|t| (t[2] - t[0]) * (t[3] - t[1]))
             .max()
             .unwrap_or(0);
-        if !whole {
-            tiles.extend(tiles_of(beside));
-        }
+        let beside = if whole { Vec::new() } else { tiles_of(beside) };
+        self.beside_tiles.clear();
+        self.beside_tiles
+            .extend(beside.iter().map(|t| (t[2] - t[0]) * (t[3] - t[1])));
+        tiles.extend(beside);
         self.mark_cnt = tiles.len() as u32;
         if self.marking {
             self.marked_at = self.now;
@@ -287,10 +292,21 @@ impl Tiles {
     }
 
     /// The marks this frame handed, each its tiles from the first to past
-    /// the last (screen_tiles.wgsl `marks`), and how many: what a pass that
-    /// draws exactly the tiles changed this frame draws, a quad a mark.
+    /// the last (screen_tiles.wgsl `marks`), and how many of them the frame
+    /// claims the tiles of exactly: what a pass that draws the tiles changed
+    /// this frame draws, a quad a mark, with `beside`.
     pub fn marks(&self) -> (u32, u32) {
-        (self.marks, self.mark_cnt)
+        (self.marks, self.set_cnt)
+    }
+
+    /// The marks past those, whose words a pass beside sets: the first
+    /// instance and the instances a draw of each takes, a tile of its tiles
+    /// each, the claimed alone drawn (screen_tiles.wgsl `mark_clip`).
+    pub fn beside(&self) -> impl Iterator<Item = (u32, u32)> + '_ {
+        let every = self.squares[0] * self.squares[1];
+        (self.set_cnt..self.mark_cnt)
+            .zip(&self.beside_tiles)
+            .map(move |(m, &n)| (every * (m + 1), n))
     }
 
     /// The tiles across and down.

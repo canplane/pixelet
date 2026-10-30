@@ -482,3 +482,33 @@ kernel waking some 280 frames a minute):
   rectangles reach, and the world's pass, the finish and the resolve fall
   with it. The marks' passes cost 0.14 ms.
 - Picture right at noon, no error.
+
+**The baseline again, the GPU free** (21:27–21:35), the step 2 commit
+(`aa08395c0`) and main (`fc60c28ca`) alternated in one window, noon,
+3728×2338 (the last run 3728×2226):
+
+| build | frames | GPU p50 | p95 | p95 `world` | `resolve` | `finish` | `sraster` | `px` | `mark` |
+|---|---|---|---|---|---|---|---|---|---|
+| step 2 | region 3548, 2184 timed | 4.8 | 5.7 | 1.5 | 1.1 | 1.7 | 0.7 | 0.7 | — |
+| main | gated 3601, all timed | 5.7 | 6.9 | 2.0 | 0.7 | 1.5 | 0.9 | 0.9 | 1.2 |
+| step 2 | region 3559, 2190 timed | 4.8 | 6.6 | 1.6 | 1.3 | 2.3 | 1.1 | 1.2 | — |
+
+- Main is about 0.9 ms over the baseline at the p50: the `mark` span
+  (the marks, the actors' marks from the eye and the light, the reach)
+  and the world's pass.
+- The two time different frames: the baseline's reads time some 62 % of
+  its frames, main's all of them.
+
+**The map drawn in its claimed tiles alone** (21:40–21:47): the map's
+gate and lay draw the actors' spheres' rectangles a tile each, the
+unclaimed collapsed (screen_tiles.wgsl `mark_clip`, `Tiles::beside`), in
+place of a quad each. One window, noon, 3728×2338, gated frames all:
+
+| build | GPU p50 | p95 | p95 `shadow` | `mark` |
+|---|---|---|---|---|
+| the change | 5.8 | 7.1 | 0.3 | 1.2 |
+| main (`fc60c28ca`) | 5.6 | 6.9 | 0.3 | 1.1 |
+| the change, again | 5.6 | 6.6 | 0.3 | 1.0 |
+
+- No cost either way: the actors' rectangles hold a few hundred of the
+  map's tiles. The picture at 7 o'clock the same.

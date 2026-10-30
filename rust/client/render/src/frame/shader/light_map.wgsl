@@ -4,7 +4,7 @@
 // the light's shadow map in the light box's own order before the decor and
 // the actors are drawn into it (gpu/shadow.rs): box texel p's slot is its
 // world texel, the box's corner on by p, modulo the map's side. Laid in the
-// map's claimed tiles alone, exactly this frame's marks', a quad a mark
+// map's claimed tiles alone, a quad a mark or a tile of one
 // (screen_tiles.wgsl `mark_clip`; one of every tile where the map is drawn
 // whole): its fragment writes its depth, so a stencil could not reject it
 // early.

@@ -604,6 +604,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&[
                 [0, TEXTURE_UINT_ARRAY],
                 [1, UNIFORM],
+                [30, STORAGE],
                 [31, UNIFORM],
                 [32, STORAGE],
             ]],
@@ -616,7 +617,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 ..depth_only(SHADER_LIGHT_GATE)
             },
             &[],
-            &[&[[31, UNIFORM], [32, STORAGE]]],
+            &[&[[30, STORAGE], [31, UNIFORM], [32, STORAGE]]],
         ),
         // The screen's depth alone into the occlusion's prepass (gpu/ao.rs),
         // the group the lit screen pass binds.

@@ -863,8 +863,9 @@ impl Renderer {
     /// and the texels of the light's map each caster covers, all of it that
     /// moves while only they do, which mark the map's tiles, and through
     /// them, reached on the GPU, the screen's that read them (gpu/reach.rs),
-    /// where a caster's shadow falls: an actor's apart, which the map is drawn
-    /// in but which marks no tile's word, its drawn self marking them. None at all where nothing moved or a
+    /// where a caster's shadow falls: an actor's apart, which marks no tile's
+    /// word, its drawn self marking them, the map drawn in those of its
+    /// tiles they claim (`Tiles::beside`). None at all where nothing moved or a
     /// sphere stands about or behind the eye.
     fn marks(
         &mut self,

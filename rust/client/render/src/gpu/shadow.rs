@@ -71,10 +71,11 @@ pub struct Shadow {
     pub world: u32,
     /// The world laid in, its group over the world, the corner, the map's
     /// tiles' uniform and their marks (`Tiles::marks`), made again where
-    /// they are others; and the map's gate, its group over the tiles alike.
+    /// they are others; and the map's gate, its group over the tiles alike;
+    /// both over the tiles' words, which a mark beside sets.
     lay: Built,
     lay_group: u32,
-    lay_bound: (u32, u32),
+    lay_bound: (u32, u32, u32),
     gate: Built,
     gate_group: u32,
     corner: u32,
@@ -174,7 +175,7 @@ impl Shadow {
             world,
             lay,
             lay_group: 0,
-            lay_bound: (0, 0),
+            lay_bound: (0, 0, 0),
             gate,
             gate_group: 0,
             corner,
@@ -385,9 +386,9 @@ impl Shadow {
     /// alone where it is drawn through its gate, its number `number` (the
     /// world's pass's `GATE_NUMBERS`), the rest kept as the last frame left
     /// it: the gate sets them back to the far plane and raises their
-    /// stencil, and the world is laid there, a quad a mark of this frame's,
-    /// whose tiles the map's claimed are exactly, which a frame that casts
-    /// alone may. The casters are drawn into it next, through
+    /// stencil, and the world is laid there, a quad a mark of this frame's
+    /// whose tiles the map claims exactly and a tile of each other the map
+    /// claims (`Tiles::beside`), which a frame that casts alone may. The casters are drawn into it next, through
     /// the stencil, then it ends.
     pub fn begin<'a>(
         &mut self,
@@ -412,7 +413,8 @@ impl Shadow {
         let pass = g.pass(encoder, &desc);
         let mut pass = TrackedRenderPass::new(g, pass);
         let (marks, cnt) = tiles.marks();
-        let bound = (tiles.bound().1, marks);
+        let (words, uniform) = tiles.bound();
+        let bound = (uniform, marks, words);
         if bound != self.lay_bound {
             release(self.lay_group);
             release(self.gate_group);
@@ -421,13 +423,18 @@ impl Shadow {
                 &[
                     view_entry(0, self.world),
                     buf_entry(1, self.corner),
+                    buf_entry(30, words),
                     buf_entry(31, bound.0),
                     buf_entry(32, bound.1),
                 ],
             );
             self.gate_group = g.bind_group(
                 self.gate.layouts[0],
-                &[buf_entry(31, bound.0), buf_entry(32, bound.1)],
+                &[
+                    buf_entry(30, words),
+                    buf_entry(31, bound.0),
+                    buf_entry(32, bound.1),
+                ],
             );
             self.lay_bound = bound;
         }
@@ -436,11 +443,17 @@ impl Shadow {
             pass.set_pipeline(self.gate.pipeline);
             pass.set_bind_group(0, self.gate_group, &[]);
             pass.draw(6, cnt, 0, 0);
+            for (first, n) in tiles.beside() {
+                pass.draw(6, n, 0, first);
+            }
         }
         if cast {
             pass.set_pipeline(self.lay.pipeline);
             pass.set_bind_group(0, self.lay_group, &[]);
             pass.draw(6, cnt, 0, 0);
+            for (first, n) in tiles.beside() {
+                pass.draw(6, n, 0, first);
+            }
         }
         pass
     }

@@ -3,8 +3,8 @@
 // The gate the light's map is drawn through where only the casters the
 // kernel bounds moved over the world its cast left as it was (gpu/shadow.rs
 // `begin`), as the world's pass is through its own (screen_gate.wgsl): the
-// map's claimed tiles, exactly this frame's marks', a quad a mark
-// (screen_tiles.wgsl `mark_clip`), set back to the far plane, which
+// map's claimed tiles, a quad a mark or a tile of one (screen_tiles.wgsl
+// `mark_clip`), set back to the far plane, which
 // a cleared map starts from, and its stencil raised, which the casters' depth
 // and the world's laid in test. Depth alone: no fragment stage.
 

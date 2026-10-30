@@ -461,10 +461,12 @@ directly, step 4 being done.
       the rest until each has its own. Done for the actors, part 1 with
       it: alone it claims no less (the claim was the reach's).
    4. **The same from the light** for the casters, setting the map's
-      tiles' words. Done for the actors: their spheres' rectangles kept for
-      the map's gate and lay, their drawn selves setting the words the
-      reach reads; about 2 ms under the commit before with the companion
-      walking (the baseline's record).
+      tiles' words. Done for the actors: their drawn selves set the words
+      the reach reads, about 2 ms under the commit before with the
+      companion walking (the baseline's record); the map's gate and lay
+      draw a tile of their spheres' rectangles each, the claimed alone
+      (`Tiles::beside`), so the map draws its claimed tiles alone, as the
+      screen does.
    5. **The host knows whether any tile gathers** from the read-back word,
       the reach's widened to the marks.
 

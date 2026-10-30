@@ -68,9 +68,20 @@ fn tile_clip(vi: u32, ii: u32) -> vec4f {
   return select(vec4f(2.0, 2.0, 0.0, 1.0), tile_px_clip(px), tile_claimed(ii));
 }
 
-// Corner `vi` of mark `ii`'s quad, over its tiles, in clip units: where the
-// tiles claimed are exactly the frame's marks', as the light's map's are.
+// Corner `vi` of a quad of the frame's marks', in clip units. Under the
+// tiles' count, mark `ii`'s over its tiles, which the frame claims exactly;
+// past it, tile `ii % count` of mark `ii / count - 1`'s, past the clip where
+// it is not claimed: a mark whose tiles' words a pass beside sets
+// (gpu/tiles.rs `Tiles::beside`). The tiles drawn are the claimed alone.
 fn mark_clip(vi: u32, ii: u32) -> vec4f {
+  let every = tiles.count.x * tiles.count.y;
+  if ii >= every {
+    let m = marks[ii / every - 1u];
+    let k = ii % every;
+    let w = m.z - m.x;
+    let t = m.xy + vec2u(k % w, k / w);
+    return tile_clip(vi, t.y * tiles.count.x + t.x);
+  }
   let m = marks[ii];
   let c = tile_corner(vi);
   let t = select(m.xy, m.zw, c == vec2u(1u));
