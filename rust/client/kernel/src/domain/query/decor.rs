@@ -8,11 +8,10 @@
 //! it. The walk follows the detail rule, not a partition the view chose,
 //! which may differ at its edges.
 //!
-//! Under it is the decors' runtime half, beside the catalog
-//! (spec/spec/asset/decor.json): their models as they arrive (`assets`),
-//! and a decor thing struck as the box it claims (`strike`).
+//! Under it, beside the catalog (spec/spec/asset/decor.json), a decor
+//! thing struck as the box it claims (`strike`); their models as they arrive
+//! are what the scene draws (domain/scene/decor/asset.rs).
 
-pub mod asset;
 pub mod strike;
 
 use pxl_spec::space::layer::lattice::Cells;

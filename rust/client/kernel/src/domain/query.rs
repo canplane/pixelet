@@ -14,7 +14,6 @@
 pub mod changed;
 pub mod decor;
 mod limit;
-pub mod model;
 mod node;
 mod place;
 mod placed;

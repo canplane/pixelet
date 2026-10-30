@@ -12,13 +12,13 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::changed::Asked;
-use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::indicator::param::{
     BEACON_BOB, BEACON_BOB_RATE, BEACON_SMOOTH_RATE, BEACON_SPIN_RATE, BEACON_Z_BIAS,
     ZONE_FOOTPRINT_U,
 };
+use crate::domain::scene::model::draw_list;
 use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::coord;

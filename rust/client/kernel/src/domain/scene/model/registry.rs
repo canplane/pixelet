@@ -1,4 +1,4 @@
-// pxl-kernel/domain/query/model/registry.rs
+// pxl-kernel/domain/scene/model/registry.rs
 
 //! The registered models. A model's mesh is one heap block read lane by lane
 //! (positions, normals, UVs, joints, weights, indices), in glTF's Y-up scaled
@@ -416,7 +416,7 @@ impl Model {
     /// unscaled: each vertex its joints' palettes blended by its weights,
     /// its lanes laid one after another a vertex count apart
     /// (`MODEL_VERTEX_WORDS`: positions 3, normals 3, UVs 2, joints 4,
-    /// weights 4; query/model/asset.rs).
+    /// weights 4; scene/model/asset.rs).
     fn reach_at(&self, at: Option<(u32, f32)>) -> f32 {
         let n = self.joints();
         if n == 0 {

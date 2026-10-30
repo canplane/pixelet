@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene.rs
 
 //! What a frame draws beside the screen's rays: each drawn layer's own
-//! state, listed into the draw list (domain/query/model.rs `draw_list`).
+//! state, listed into the draw list (domain/scene/model.rs `draw_list`).
 
 pub mod actor;
 pub mod cast;
@@ -13,6 +13,7 @@ pub mod gizmo;
 pub mod indicator;
 pub mod lane;
 pub mod marker;
+pub mod model;
 pub mod param;
 pub mod region;
 pub mod stage;
@@ -21,7 +22,6 @@ use pxl_render::frame::draw::DrawList;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::global::Global;
 
-use crate::domain::query::model::registry::Models;
 use crate::domain::scene::character::companion::{companion_animate, companion_draw};
 use crate::domain::scene::character::preview::{preview_animate, preview_draw};
 use crate::domain::scene::environment::EnvironmentDraw;
@@ -29,6 +29,7 @@ use crate::domain::scene::frame::Frame;
 use crate::domain::scene::gizmo::debug_line::DebugLines;
 use crate::domain::scene::indicator::ghost::GhostDraw;
 use crate::domain::scene::indicator::location_puck::LocationPuck;
+use crate::domain::scene::model::registry::Models;
 
 /// The scene's state, one for the module's life.
 static SCENE: Global<Scene> = Global::new();

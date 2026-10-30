@@ -1,4 +1,4 @@
-// pxl-kernel/domain/query/model/asset.rs
+// pxl-kernel/domain/scene/model/asset.rs
 
 //! A parsed glTF registered as a model, the one way any model enters the
 //! world. A skinned model's joints are its skins' joints; an unskinned one
@@ -15,8 +15,8 @@ use pxl_spec::space::coord::mat4;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 
-use crate::domain::query::model;
-use crate::domain::query::model::registry::Channel;
+use crate::domain::scene::model;
+use crate::domain::scene::model::registry::Channel;
 use crate::sys::io::loader::{load_gltf, load_of};
 use crate::sys::io::room::Refused;
 use crate::sys::mem::section;

@@ -6,13 +6,13 @@
 //! which the instance's stance scales to one unit tall, since the cases
 //! compare silhouettes, not scale.
 
-use crate::domain::query::model;
-use crate::domain::query::model::asset::{model_of, ModelHandle};
-use crate::domain::query::model::draw_list;
-use crate::domain::query::model::registry::Models;
 use crate::domain::scene::actor::{Actor, Stance};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::model;
+use crate::domain::scene::model::asset::{model_of, ModelHandle};
+use crate::domain::scene::model::draw_list;
+use crate::domain::scene::model::registry::Models;
 use crate::domain::view::frame::pose;
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::mem::section;

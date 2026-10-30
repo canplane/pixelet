@@ -10,9 +10,9 @@ use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::gizmo::gizmo_spec::frame;
+use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::coord::to_world;
 use crate::sys::mem::section;

@@ -28,14 +28,14 @@ use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::pass::Pass;
 
-use crate::domain::query::model;
-use crate::domain::query::model::asset::model_of;
 use crate::domain::scene::decor::drawn::{cull_dist_u, decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
 };
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::lane::{self, GroupLanes};
+use crate::domain::scene::model;
+use crate::domain::scene::model::asset::model_of;
 use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::km_per_u;

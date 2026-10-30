@@ -30,8 +30,8 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::query::changed;
-use crate::domain::query::model;
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::model;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;

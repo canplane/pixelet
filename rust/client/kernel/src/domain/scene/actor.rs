@@ -13,8 +13,8 @@ use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::domain::query::model::registry::{blend, Models};
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::model::registry::{blend, Models};
 use crate::domain::scene::region;
 use crate::domain::view::lens::{cell_there, seen_step_s, Stepped};
 use crate::sys::sched::edge::wake_at;

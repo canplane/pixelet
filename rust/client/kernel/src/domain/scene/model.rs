@@ -1,4 +1,4 @@
-// pxl-kernel/domain/query/model.rs
+// pxl-kernel/domain/scene/model.rs
 
 //! glTF models, each registered once as an uploaded mesh with its joints and
 //! clips: the scene's actors play them and decor stands them over the ground. The
@@ -8,7 +8,7 @@
 use pxl_render::frame::draw::DrawList;
 use xpute_guest::global::Global;
 
-use crate::domain::query::model::registry::Models;
+use crate::domain::scene::model::registry::Models;
 
 pub mod asset;
 pub mod registry;

@@ -28,9 +28,9 @@ use xpute_guest::global::Global;
 
 use crate::domain::layer::terrain::window::{eye_entries, tile_of};
 use crate::domain::layer::Base as _;
-use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
 use crate::domain::scene::gizmo::gizmo_spec;
+use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::observation::{observation, ByEye};

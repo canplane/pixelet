@@ -54,7 +54,7 @@ nothing else, which is what a ghost or a chat line wants.
   the eye (pxl-render `frame/draw.rs` `draw_scaled`, `draw_as`,
   `draw_instances`).
 - **Models** are registered once and played by the actors and stood by decor
-  alike (`domain/query/model.rs`).
+  alike (`domain/scene/model.rs`).
 - **The cumulus** is drawn on the wind's moving field and held as decor is not
   (`domain/scene/environment/cloud.rs`).
 - **The ghost** is a cube's look or a decor's model in the pointer's frame
@@ -131,7 +131,7 @@ nothing else, which is what a ghost or a chat line wants.
    asset/ingested.spec.rs` `Asset`, 163 files, which also holds
    the word asset for files alone), and what each file is for is compiled in
    beside it:
-   - the actors: `spec/client/kernel/domain/query/model/variant.json`, paired to
+   - the actors: `spec/client/kernel/domain/scene/model/variant.json`, paired to
      files in `domain/scene/character/variant.rs`, apart from the block catalog,
      and named for its entries rather than its subject;
    - the decors: `spec/spec/asset/decor.json`;
