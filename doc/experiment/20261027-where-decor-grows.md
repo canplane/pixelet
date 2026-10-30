@@ -1,6 +1,6 @@
 # Where decor grows
 
-**2026-10-27.** Panning brought `grow` spikes of 6–12 ms on frames that fill
+**2026-10-27.** Panning brought `generate` spikes of 6–12 ms on frames that fill
 squares. This splits them, and records what the reshaping read off the code
 fixed, so the open part is not rediscovered.
 
@@ -33,10 +33,10 @@ in a span of its own, for one build: `decor_cs` p50 5.05, p95 18.7; mark p95
 - **Neither the footing nor the asks make it.** Removing both leaves it.
   The coordinating session's runs the same morning, at the same pose with
   key pans:
-  - `grown` compiled out of `decor_cs`, `stands` kept: the module 1.2 MB →
+  - `generated` compiled out of `decor_cs`, `retained` kept: the module 1.2 MB →
     62 KB, p95 0.2–0.9 ms;
-  - `grown` compiled in and skipped at run time, `stands` run: 7–8 ms;
-  - returning before `stands`, the module still whole: 0.3 ms;
+  - `generated` compiled in and skipped at run time, `retained` run: 7–8 ms;
+  - returning before `retained`, the module still whole: 0.3 ms;
   - split into a stand kernel and a grow kernel: 6.5–6.7 ms.
 
   The first two run the same lanes and differ by the module's size alone, so
@@ -45,12 +45,12 @@ in a span of its own, for one build: `decor_cs` p50 5.05, p95 18.7; mark p95
   early in it. Not settled.
 - **Serializing a patch's world reads made a load frame 117 ms** (pixelet-d6,
   a thread a patch growing all its candidates). The contest stays a patch's
-  (`decor_stand_cs`), the growth a record's (`decor_cs`).
+  (`decor_thin_cs`), the growth a record's (`decor_cs`).
 
 Fixed off the code, not the numbers: the footing one support in the query;
 every block asked off the footing's line, on both sides; a square's margin
 grown again, not its 3 × 3; a patch's stream and contest drawn once, tested
-equal to `stands` over the catalog (pxl-spec-core scatter.test.rs); one
+equal to `retained` over the catalog (pxl-spec-core scatter.test.rs); one
 footing a candidate on the CPU.
 
 Timing stopped here on the user's word: what is plainly redundant is fixed by

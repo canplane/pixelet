@@ -1,136 +1,138 @@
 // @pxl/client/abi/boot.ts
 
 /**
- * Boots the kernel: hands the place the guest's config and where to tell what
- * its sensors, its GPU and its network hear; fills the host's slots with what pixelet's
- * numbers mean (the roots, the program's calls, the stop report, each frame's
- * submission and the signals); then hands the completion ring's signals to
- * whoever runs them.
+ * Boots the client, bottom up, once its app has set the place (bracket.tsx):
+ * the guest the place opens; xpute's host mounted on it with pixelet's drivers
+ * (the roots, the program's calls, the stop report, each turn's submission) and
+ * the frame pacing; the place told where to report what its sensors, its GPU,
+ * its network and its visibility hear; then the kernel, by `WORLD_BOOT`. The
+ * shell is no part of it: it reads where the boot stands through the port
+ * (port/shell.ts), and what the kernel shows it once it has started.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
+import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
-import type { SysHost } from "@xpute/host/ipc/sys.ts";
-import {
-  Command,
-  encode_world_boot,
-  encode_world_kept_emptied,
-  encode_world_source,
-  read_sensor_start,
-  read_sensor_stop,
-  read_world_snapshot,
-  Sensor,
-} from "@/abi/cmd.spec.ts";
-import { declare_source } from "@/namespace/source.ts";
-import { namespace } from "@/namespace/namespace.ts";
-import { follow_refused, migrate } from "@/namespace/storage.ts";
+import { InvariantError } from "@xpute/kit/status/error.ts";
+import { FramePacing } from "@xpute/host/sched/frame_pacing.ts";
+import { Command, encode_world_boot } from "@/abi/cmd.spec.ts";
+import { declare_source } from "@/driver/namespace/source.ts";
+import { namespace } from "@/driver/namespace/namespace.ts";
+import { follow_refused, migrate } from "@/driver/namespace/storage.ts";
 import { HOST, open_host } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
+import { BATCH_FRAMES, MARGIN_SHARE, SETTLE_MS } from "@/abi/pacing.spec.ts";
 import {
   DESKTOP_BYTES,
-  DIRECTORY_AT,
+  TOC_AT,
   PHONE_BYTES,
   REGION_BYTES,
 } from "./mem.spec.ts";
-import { key } from "@/abi/directory.spec.ts";
+import { key } from "@/abi/toc.spec.ts";
 import { stream } from "./gpu.spec.ts";
-import { SENSOR_HEARD } from "./sensor.ts";
-import { submit_frame } from "./input.ts";
-import { text_call } from "@/abi/text.ts";
-import { BUILD_NUMBER } from "@/deploy.ts";
+import { SENSOR_HEARD, sensor_start, sensor_stop } from "@/driver/sensor.ts";
+import { submit_frame } from "@/driver/frame.ts";
+import { abort } from "@/driver/stop.ts";
+import { text_call } from "@/driver/text.ts";
 import { bracket, type Config } from "@/bracket.tsx";
-import { GPU_STATE, set_gpu } from "./gpu.ts";
-import { set_online } from "@/namespace/online.ts";
-import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
+import { GPU_STATE, set_gpu } from "@/driver/gpu.ts";
+import { world_visible } from "@/driver/visibility.ts";
+import { Boot } from "@/abi/state.ts";
+import { set_online } from "@/driver/namespace/online.ts";
+import { kernel_snapshot, snapshot_posted } from "@/port/snapshot.ts";
 
-let code: string | null = null;
+let called = false;
+let state = Boot.Starting;
+const listeners = new Listeners();
 
-/** The kernel's last report, short as a stop code: its errno's name and the
- * file and line, a published build's file a number its paths decode by. None
- * where it stopped without one. */
-export function stop_code(): string | null {
-  return code;
+function set(next: Boot): void {
+  state = next;
+  listeners.notify();
 }
 
-const abort: SysHost["abort"] = ({ errnum, file, line, column, a, b }) => {
-  console.error(
-    `[kernel] stopped: ${strerror(errnum)} at ${file.replace(
-      /^\.+/,
-      "",
-    )}:${line}:${column} (${a}, ${b})`,
-  );
-  const where = `${file.split("/").pop()}:${line}`;
-  code = `${strerror(errnum).split(":")[0]} · ${
-    file.startsWith("#") ? `${where} · ${BUILD_NUMBER}` : where
-  }`;
+/** Where the boot stands, read through the port. */
+export function boot_state(): Boot {
+  return state;
+}
+
+export const watch_boot = listeners.watch;
+
+/** What the shell hears the kernel raise: the snapshot it reads, and the kept
+ * slots it names refused; the sensors the drivers start and stop. */
+const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
+  [Command.WORLD_SNAPSHOT]: (f) => {
+    snapshot_posted(f);
+    follow_refused(kernel_snapshot().kept_refused);
+  },
+  [Command.SENSOR_START]: sensor_start,
+  [Command.SENSOR_STOP]: sensor_stop,
 };
 
-function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
-  switch (cmd) {
-    case Command.WORLD_SNAPSHOT: {
-      // Too large for a ring frame; valid until the kernel writes the next, a turn away.
-      const { at, len } = read_world_snapshot(f!);
-      set_snapshot(new Uint8Array(HOST.guest.mem, at, len));
-      // Sent after the completion ring is read: the doorbell refuses a write while it reads.
-      follow_refused(kernel_snapshot().kept_refused, (slot) =>
-        queueMicrotask(() =>
-          HOST.send(
-            Command.WORLD_KEPT_EMPTIED,
-            encode_world_kept_emptied(HOST.doorbell, slot),
-          ),
-        ),
-      );
-      return;
-    }
-    case Command.SENSOR_START:
-      if (read_sensor_start(f!).sensor === Sensor.Geolocation) {
-        bracket.sensor.geo.start();
-      } else bracket.sensor.orient.start();
-      return;
-    case Command.SENSOR_STOP:
-      if (read_sensor_stop(f!).sensor === Sensor.Geolocation) {
-        bracket.sensor.geo.stop();
-      } else bracket.sensor.orient.stop();
-      return;
-  }
-  console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
+function heard(_tag: u32, cmd: u32, f: BranchCursor | null): void {
+  const take = HEARS[cmd as Command];
+  if (take) take(f!);
+  else
+    console.warn(`[kernel] event 0x${cmd.toString(16)} with no one to hear it`);
 }
 
-/** The source's declaration to the kernel, refused where it is more than a command carries. */
-function send_source(
-  top_zoom: number,
-  formats: number[],
-  shards: string[],
-): boolean {
-  const pkt = encode_world_source(HOST.doorbell, top_zoom, formats, shards);
-  if (!HOST.doorbell.fits(pkt)) return false;
-  HOST.send(Command.WORLD_SOURCE, pkt);
-  return true;
+/** Called once by the app, after it has set the place, so boot order is
+ * explicit, not import order; where it stands is `boot_state`. A second call
+ * is refused. */
+export function boot(): void {
+  if (called) throw new InvariantError(Errno.EALREADY);
+  called = true;
+  open().then(
+    () => {
+      console.info("[boot] the kernel started");
+      // Its turns end with it.
+      HOST.doorbell.stopped = () => {
+        HOST.strobe.stop();
+        set(Boot.Stopped);
+      };
+      set(Boot.Started);
+    },
+    (err) => {
+      console.error("[boot] the kernel did not start:", err);
+      set(Boot.Failed);
+    },
+  );
 }
 
-/** Called once from shell/boot.ts, so boot order is explicit, not import order. */
-export async function boot(): Promise<void> {
+async function open(): Promise<void> {
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
   const cfg: Config = {
     bytes: bracket.device.handheld ? PHONE_BYTES : DESKTOP_BYTES,
     region: REGION_BYTES,
-    directory_at: DIRECTORY_AT,
+    toc_at: TOC_AT,
     gpu_stream: key.GPU_STREAM,
     gpu_head: stream.HEAD,
   };
+  // Turns paced to the display, its numbers the kernel's own (pacing.json).
+  const pacing = new FramePacing(
+    {
+      margin_share: MARGIN_SHARE,
+      batch_frames: BATCH_FRAMES,
+      settle_ms: SETTLE_MS,
+    },
+    (run) => requestAnimationFrame(run),
+  );
   await open_host(
     cfg,
     { fs: namespace(), program: text_call, abort },
+    pacing,
     submit_frame,
   );
   bracket.sensor.hear(SENSOR_HEARD);
-  HOST.doorbell.signal = on_signal;
+  HOST.doorbell.listen(port.SHELL, heard);
   bracket.gpu.boot({
-    ready: () => HOST.send(Command.GPU_READY),
+    ready: () => HOST.send(port.SHELL, Command.GPU_READY),
     state: (state) => set_gpu(GPU_STATE[state]),
     wake: () => HOST.strobe.request(),
   });
   bracket.online.watch(set_online);
+  bracket.visibility.watch(world_visible);
   // Before the kernel opens its kept slots, which it does from WORLD_BOOT on.
   migrate();
   const pkt = encode_world_boot(
@@ -142,19 +144,12 @@ export async function boot(): Promise<void> {
     bracket.sensor.orient.silence,
   );
   const booted = HOST.doorbell.call(
+    port.SHELL,
     Command.WORLD_BOOT,
     pkt,
     (result) => result,
   );
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
-  void declare_source(send_source);
-}
-
-/** `listener` hears the kernel stop for good: its turns end with it. */
-export function on_stop(listener: () => void): void {
-  HOST.doorbell.stopped = () => {
-    HOST.strobe.stop();
-    listener();
-  };
+  void declare_source();
 }

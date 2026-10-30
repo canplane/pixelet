@@ -62,8 +62,8 @@ fn air_before(uv: vec2f, dir: vec3f, d: f32) -> vec4f {
   let end = short_of_ground(r, mu, d * km);
   let low = ray_low(r, mu, end);
   let a = min(to_sphere(r, mu, atmos_top_radius()), end);
-  let through = exp(-max(depth_along(r, mu, low, end) - depth_along(r, mu, low, a), vec3f(0.0)));
-  return vec4f(held * (vec3f(1.0) - through), dot(through, LUMA));
+  let transmittance = exp(-max(depth_along(r, mu, low, end) - depth_along(r, mu, low, a), vec3f(0.0)));
+  return vec4f(held * (vec3f(1.0) - transmittance), dot(transmittance, LUMA));
 }
 
 // The air before a point as the volume holds it at the point's place on the
@@ -81,7 +81,7 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
   let air = air_before(uv, to / max(d, 1e-6), d);
   var s: Seen;
   s.scattered = air.rgb;
-  s.through = air.a;
+  s.transmittance = air.a;
   s.light = light_of(world_pos);
   return s;
 }
@@ -155,6 +155,6 @@ fn beyond(dir: vec3f) -> vec3f {
   let face = earth_face(map_of(p), octaves);
   let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);
   let land = clamp(log2(d / atmos_drawn()) + 1.0, 0.0, 1.0);
-  return seen.scattered + seen.through * land * lit;
+  return seen.scattered + seen.transmittance * land * lit;
 }
 

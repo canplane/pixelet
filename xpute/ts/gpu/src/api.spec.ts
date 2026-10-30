@@ -1,6 +1,6 @@
 // @xpute/gpu/api.spec.ts
 //
-// GENERATED from spec/gpu/api.json — do not edit.
+// GENERATED from spec/gpu/api.json
 //
 // The calls a guest makes to a GPU it cannot reach, as records of a stream (ipc/stream):
 // WebGPU's vocabulary, its descriptors written out as words, for any program. A record is

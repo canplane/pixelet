@@ -8,15 +8,3 @@ trait is what separates it from a world-anchored billboard: the ghost box
 sit and turn in the world's own space, and neither counter-rotates toward the
 eye. Their colors are this tier's own, pxl-render `look/color.rs` `indicator`
 (`ACTION`, `ERASE`), not a general palette.
-
-Three files here are not indicators but debug views, kept in this folder for
-convenience:
-
-- `frame_gizmo.rs`, behind the `world_gizmo` setting: the pivot's cell and the
-  frames' rings, as debug lines;
-- `coverage_gizmo.rs`, behind the same setting: the eye's windows' bricks by
-  how they stand, their tiles and shards, as translucent lines over the ground;
-- `camera_gizmo.rs`, behind the `camera_gizmo` setting: the camera grid's cells,
-  drawn per pixel by the renderer (pxl-render `frame/shader/camera_grid.wgsl`),
-  and the cubes the rays stop on tinted by the share of a cell their faces show
-  the eye.

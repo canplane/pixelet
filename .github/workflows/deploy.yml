@@ -180,7 +180,7 @@ jobs:
       published: ${{ steps.deploy.outputs.published }}
     # The number's group, so that a run cannot publish while the next one is
     # already taking its number: the bucket's counter and what is live on
-    # plei.me move together.
+    # the site move together.
     concurrency:
       group: build-counter
       cancel-in-progress: false
@@ -219,7 +219,7 @@ jobs:
         id: deploy
         run: make deploy
 
-  # What plei.me answers is the two deploys composed, so it is asked once both
+  # What the site answers is the two deploys composed, so it is asked once both
   # have settled rather than from inside either. One of its checks,
   # /geo/search, is the Worker proxying to the VM: asked from deploy-web it can
   # land while deploy-server is still recreating the stack, and Cloudflare
@@ -233,7 +233,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Smoke-test the published routes
-        run: ./script/smoke.py https://plei.me
+        run: ./script/smoke.py
 
   # The one thing the repository could not answer about itself: what went out
   # in a given build. The counter is an object in the bucket and deliberately

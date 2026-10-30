@@ -1,6 +1,6 @@
 // @xpute/gpu/enum.spec.ts
 //
-// GENERATED from spec/gpu/enum.json — do not edit.
+// GENERATED from spec/gpu/enum.json
 //
 // WebGPU's own enumerations, each its spec's strings in order: a number is its
 // place in the list, so a host hands the string to the device as it is and a guest

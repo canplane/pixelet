@@ -10,7 +10,7 @@
 
 [workspace]
 resolver = "2"
-members = ["kit", "guest", "host", "gpu", "conformance"]
+members = ["kit", "guest", "host", "gpu", "conformance", "example", "tool"]
 
 [workspace.dependencies]
 # The workspace's own crates, each by its path once, so a crate names another

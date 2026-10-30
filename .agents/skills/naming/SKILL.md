@@ -1,27 +1,55 @@
 ---
 name: naming
-description: How a name in pixelet is chosen and spelled — a convention's word; abbreviations by default and the words that stay whole; the names chosen with the user; case by language and kind; bindings abbreviated, types whole; plurals, units, and names someone else owns; and how a rename is carried out. Use before naming or renaming anything, in code, spec JSON or a backticked identifier in a document.
+description: How a name in pixelet is chosen, judged and spelled — what the thing is before what the field calls it, and when a rename is worth making; what is named with the user and what takes a plain name; one word in two scopes; abbreviations by default and the words that stay whole; the names recorded as chosen with the user; case by language and kind; bindings abbreviated, types whole; plurals, units, and names someone else owns; and how a rename is carried out. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document.
 ---
 
 # Naming
 
-A name says what the thing is called where it comes from. Before naming or
-renaming, find that word: what the field calls it (graphics, GIS, game
-cameras, WAI-ARIA, the language's own idiom). Use it, and say in the proposal
-where it comes from. A thing with no precedent is named with the user.
+## What a name says
+
+Before naming or renaming, read what the thing is: its role, what it takes and
+gives, its value, unit and lifetime. The name says that, plainly. Where the
+field names the same thing, shown by its literature, an official document or a
+representative implementation and not by the word merely turning up there, use
+its word and say where it comes from. A term that only overlaps is not the
+name, and none stands in where no match is confirmed: a disk's radius is a
+radius, not another system's "max distance".
+
+A rename is made where the name misstates the thing or gets in the way of
+understanding it, and the new one clearly does better; not because a name is
+this project's own.
+
+## What is named with the user
+
+A new domain concept the project's parts share, or an alias of this project's
+for what the field already names, is named with the user. A binding, a field,
+a function or a result's type names its role in the usual words, with no
+source and no approval.
+
+The table below is the names recorded as chosen with the user, not every past
+decision. A name in neither it nor the records is of unconfirmed source, which
+is no fault in it: the records are looked up only where the source would
+change what is done, and whether to ask is AGENTS.md's.
+
+## One word in two places
+
+A word may serve two concepts in different scopes. Only where its scope and the
+words about it still leave the two confused is it qualified, by a word that
+says the meaning (a shadow's `visibility` as `shadow_visibility`, beside the
+visibility buffer); a new metaphor to escape a clash is not a fix.
 
 ## Abbreviate by default
 
 A word on this list is abbreviated; any other stays whole:
 
-index `idx`, indices `idxs`, value `val`, values `vals`, buffer `buf`, buffers
-`bufs`, source `src`, destination `dst`, offset `off`, count `cnt`, current
-`cur` (not `curr`), position `pos`, direction `dir`, pixel `px`, resolution
-`res`, distance `dist`, address `addr`, capacity `cap`, dimension `dim`, memory
-`mem`, component `comp`, channel `ch`, elevation `ele`, feature `feat`,
-latitude `lat`, longitude `lon`, radian `rad`, degree `deg`, orientation
-`orient`, rotation `rot`, altitude `alt`, error `err`, packet `pkt`, initial
-`init`, matrix `mat`, configuration `cfg`, descriptor `desc`, context `ctx`.
+index `idx`, value `val`, values `vals`, buffer `buf`, source `src`, destination
+`dst`, offset `off`, count `cnt`, current `cur` (not `curr`), position `pos`,
+direction `dir`, directory `dir`, pixel `px`, resolution `res`, distance `dist`,
+address `addr`, capacity `cap`, dimension `dim`, memory `mem`, component `comp`,
+channel `ch`, elevation `ele`, feature `feat`, latitude `lat`, longitude `lon`,
+radian `rad`, degree `deg`, orientation `orient`, rotation `rot`, altitude
+`alt`, error `err`, packet `pkt`, initial `init`, matrix `mat`, configuration
+`cfg`, descriptor `desc`, context `ctx`.
 
 `pkt` is only a wire packet (an XTP packet: a command's arguments, a baked
 tile's bytes).
@@ -45,7 +73,11 @@ tile's bytes).
 | the direction the camera faces | `facing` | look |
 | the camera modes | `orbit`, `first_person` (the UI says 1인칭/3인칭) | free |
 | what a mouse, touch or controller points with | `pointer` | cursor |
-| the raster's nearest sample at each pixel | the visibility buffer; a pixel `take`s its sample | pick |
+| the raster's nearest sample at each pixel | the visibility buffer | pick |
+| a frame's number on xpute's rings, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
+| what the shell asks of the kernel | a command | |
+| a guest's call into its host, run now or after the turn | a hostcall | system call, hypercall |
+| the number a frame names at the guest's far side, 0 the host | a port | endpoint, worker id |
 
 `at` is where a thing is, `to` where it is going.
 
@@ -74,6 +106,12 @@ SCREAMING rules (`"val"`, `"pkt"`, `"err"`, `SENSOR_POS`, `XR_POSE`,
 Abbreviate the binding, keep the type: `let idx: Index`, `let cfg: Config`,
 `SensorState { status: SensorStatus, err: Option<Message> }`.
 
+## Tests
+
+A test is named by the one fact it holds, its subject first, in a few words
+and no article: `removed_handle_stale`, `spent_quota_parks`,
+`door_answers_nop`. Two facts are two tests.
+
 ## Plurals
 
 A plural names a collection only. One value is singular (`End`, `Take`,
@@ -93,10 +131,15 @@ the EPSG:3857 plane, `_m` a meter on the ground
 
 xpute's `gpu/` keeps WebGPU's words; i18next's `lng` (a language) stays.
 
-A wire name both ends of which ship in one deploy follows these rules. A name
-kept in storage (a database column, a bucket object, a browser storage key, a
-baked file's field) changes only with a migration or version bump. A setting's
-name may change: storage keeps its `number`.
+A wire name both ends of which are one build (the client's host and kernel)
+follows these rules. A name between the client and a server is a protocol: a
+client already loaded keeps talking to the next server, so a rename there is a
+protocol change, made as one (the server takes the new name beside the old
+before the client moves to it). No policy says how long an old client lives, so
+when the old name goes is the user's call. A name kept in storage (a database
+column, a bucket object, a browser storage key, a baked file's field) changes
+only with a migration or version bump. A setting's name may change: storage
+keeps its `number`.
 
 ## Renaming
 

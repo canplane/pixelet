@@ -37,15 +37,15 @@ use crate::domain::layer::object::preview;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::window;
 use crate::domain::query::changed;
-use crate::domain::query::decor::asset::decor_models_step;
-use crate::domain::query::model::draw_list;
 use crate::domain::scene::character::companion;
 use crate::domain::scene::character::companion::{companion_step, CompanionProps};
 use crate::domain::scene::character::preview::preview_step;
+use crate::domain::scene::decor::asset::decor_models_step;
 use crate::domain::scene::decor::drawn;
 use crate::domain::scene::environment::environment_step;
 use crate::domain::scene::indicator::location_puck::location_puck_step;
 use crate::domain::scene::marker;
+use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::scene::stage;
 use crate::domain::scene::stage::visible_step;
@@ -71,7 +71,9 @@ use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
-use xpute_guest::sched::tick::{Phase, TickReport};
+use xpute_guest::sched::tick::TickReport;
+
+use crate::sys::sched::phase_spec::Phase;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {
@@ -294,12 +296,10 @@ pub fn world_platform() -> Platform {
 const MAX_STEP_S: f64 = 0.1;
 
 pub struct HostFrame {
-    pub width: f64,
-    pub height: f64,
     pub delta: f64,
     /// The display's refresh, and the interval the host paces turns at, a
-    /// whole number of refreshes: the frame's budget (xpute host
-    /// sched/quantum.ts `Grant`).
+    /// whole number of refreshes: the frame's budget (the pacing the client
+    /// boots xpute's host with, @xpute/host sched/frame_pacing.ts `FrameGrant`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     pub interactive: bool,
@@ -346,8 +346,6 @@ async fn frame_task() {
 
 fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let HostFrame {
-        width,
-        height,
         delta,
         refresh_ms,
         paced_ms,
@@ -359,7 +357,9 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     text_rise();
     let effects_ms = world_turn();
     // Before the tick, so every step and the draw see the screen it is drawn on.
-    pose::view_resize(width, height);
+    if let Some((width, height)) = input::camera_view_size() {
+        pose::view_resize(width, height);
+    }
     // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
     // a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);

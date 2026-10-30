@@ -16,7 +16,7 @@ use crate::either::Either;
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::observed::{seen_at, seen_put};
 use crate::observer::{self, Observer};
-use crate::sun::Moved;
+use crate::light::Head;
 use crate::world::{Unlooked, World};
 use crate::{add, most};
 
@@ -46,11 +46,11 @@ fn put(s: &mut [u32], i: u32, v: u32) {
 pub(crate) const NONE: u32 = u32::MAX;
 
 /// The sample at word `k` of `w`, numbered `sample`, written as a box for
-/// the raster's draw, the eye's and the sun's alike: its box as the cast
+/// the raster's draw, the eye's and the light's alike: its box as the cast
 /// stops on it (`cast::drawn`) from `origin`, appended to `boxes`, counted
 /// in `args` (`raster::ARGS_INSTANCES`), its number and its axis,
 /// `raster::EYED` where it lies about the eye at the screen's tangents
-/// `tan` (`raster::is_eyed`), where `eyed` asks (the sun's has none); none
+/// `tan` (`raster::is_eyed`), where `eyed` asks (the light's has none); none
 /// where it went on to its reach, or where a sample at `before`, the one
 /// across or up, `NONE` where there is none, stopped alike (`alike`), which
 /// some sample before it in turn draws. Its place among the boxes, `NONE`
@@ -97,7 +97,7 @@ pub(crate) fn boxed<W: Words + ?Sized>(
 
 /// The cell a ray from `origin` takes off the visible sample, the sample at
 /// word `k` of `w`: where the ray enters it (`cast::entry`) across the axis
-/// the sample entered by, the eye's pixels and the sun's slots alike, and
+/// the sample entered by, the eye's pixels and the light's slots alike, and
 /// whether it does.
 pub(crate) fn taken<W: Words + ?Sized>(
     w: &W,
@@ -131,17 +131,17 @@ pub fn sample_box_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &Beams,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] boxes: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &mut [u32],
 ) {
-    let o = Either::of(eye, moved);
+    let o = Either::of(eye, head);
     let [across, down] = o.samples();
     if id.x >= across || id.y >= down {
         return;
     }
     let box_at = observer::sample_box(&o, beams, [id.x, id.y], boxes, args);
-    if !o.sun() && box_at != NONE {
+    if !o.light() && box_at != NONE {
         most(args, raster::ARGS_FACES, box_at / raster::FACES_LANES + 1);
     }
 }

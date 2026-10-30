@@ -2,8 +2,9 @@
 
 //! The guest built as one WebAssembly module: how its build script links it
 //! (`link`), what it reads of the module (`data_end`, `stack_high`, `given`,
-//! `now`), and `wasm_abi!`, which defines its allocator and exports `intr`
-//! (xpute-host `native_abi!` is the native form's).
+//! `now`) and asks of its host (`hostcall`), and `wasm_abi!`, which defines
+//! its allocator and exports `run` (xpute-host `native_abi!` is the native
+//! form's).
 //!
 //! Only the module's reads are wasm32's: a build script runs on the build
 //! machine. Nothing here is a global allocator or an export until a program
@@ -16,7 +17,7 @@
 //!         heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES),
 //!         stack_bytes: 1 << 20,
 //!     },
-//!     my_guest::intr
+//!     my_guest::run
 //! );
 //! ```
 
@@ -26,7 +27,7 @@ mod module;
 
 pub use link::{link, LinkConfig, WASM_PAGE_BYTES};
 #[cfg(target_arch = "wasm32")]
-pub use module::{data_end, given, now, stack_high};
+pub use module::{data_end, given, hostcall, now, stack_high};
 
 /// What xpute must not assume of a module guest.
 pub struct Config {
@@ -50,12 +51,13 @@ pub fn boot_info(
         given: u32::try_from(given()).unwrap_or(u32::MAX),
         data_end: data_end(),
         clock: now,
+        hostcall,
         heap_stat,
     }
 }
 
 /// The module's `#[global_allocator]` over `[cfg.heap_at(data_end), given)`
-/// and its one export, `intr`, which runs the program's `entry::Entry`.
+/// and its one export, `run`, which runs the program's `entry::Entry`.
 #[macro_export]
 macro_rules! wasm_abi {
     ($cfg:expr, $entry:expr $(,)?) => {
@@ -84,14 +86,14 @@ macro_rules! wasm_abi {
                 $crate::wasm::boot_info(&CFG, || $crate::mem::heap::heap_stat(&WASM_HEAP))
             }
 
-            pub fn intr(quota_ms: f64) -> f64 {
-                $crate::entry::intr(quota_ms, boot_info, ENTRY)
+            pub fn run(quota_ms: f64) -> f64 {
+                $crate::entry::run(quota_ms, boot_info, ENTRY)
             }
         }
 
         #[no_mangle]
-        pub extern "C" fn intr(quota_ms: f64) -> f64 {
-            xpute_wasm::intr(quota_ms)
+        pub extern "C" fn run(quota_ms: f64) -> f64 {
+            xpute_wasm::run(quota_ms)
         }
     };
 }

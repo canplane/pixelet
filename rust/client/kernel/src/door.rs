@@ -1,28 +1,32 @@
 // pxl-kernel/door.rs
 
 //! The kernel's side of the doorbell, which a bracket (pxl-wasm, pxl-native)
-//! hands each turn to: the directory, commands applied, signals raised. The
+//! hands each turn to: the toc, commands applied, events raised. The
 //! rings are xpute's (`xpute_guest::ipc::door`), and so is the entry the
-//! kernel implements (`intr`, xpute_guest::entry) and what its host's form
+//! kernel implements (`run`, xpute_guest::entry) and what its host's form
 //! hands it (`BootInfo`).
 
 mod apply;
-/// The directory's keys, generated from directory.json.
-#[path = "door/directory.spec.rs"]
-pub mod directory;
 mod executor;
 pub mod layout;
+/// The ports at the kernel's far side, generated from port.json.
+#[path = "door/port.spec.rs"]
+pub mod port;
+/// The toc's keys, generated from toc.json.
+#[path = "door/toc.spec.rs"]
+pub mod toc;
 
-use crate::domain::control::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
+use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, WorldSnapshotEvent};
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
-use crate::door::directory::key::GPU_STREAM;
+use crate::door::toc::key::GPU_STREAM;
 use crate::profiler::record::profiler_record_turn;
 use crate::profiler::spec::Wake;
 use crate::shell;
 use crate::shell::Sent;
 use crate::sys::boot;
 use crate::sys::io::dispatch;
+use crate::sys::io::file;
 use crate::sys::io::host;
 use crate::sys::io::loader;
 use crate::sys::io::request;
@@ -30,7 +34,6 @@ use crate::sys::io::text;
 use crate::sys::mem::section;
 use crate::sys::mem::spec;
 use crate::sys::sched::edge;
-use crate::sys::sched::tick;
 use crate::sys::stop;
 use crate::sys::stop::LastWords;
 use crate::turn;
@@ -41,10 +44,8 @@ use xpute_gpu::admit::Admit;
 use xpute_guest::clock::now;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
-use xpute_guest::ipc::directory::{
-    directory_words, quantum_entries, spec::key, write_directory, Entry,
-};
-use xpute_guest::ipc::door::{Door, DoorStat};
+use xpute_guest::ipc::door::{Door, DoorStat, Submission};
+use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc, Entry};
 use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_guest::mem::{self, off_of_slice};
 use xpute_guest::sched::task;
@@ -63,7 +64,7 @@ fn door() -> &'static Door {
     DOOR.get(|| {
         // SAFETY: once, the door's first use; the ranges are the layout's alone.
         let (sq, cq) = unsafe { layout::rings() };
-        Door::new(sq, cq, SIGNALS)
+        Door::new(sq, cq, EVENTS)
     })
 }
 
@@ -76,19 +77,20 @@ pub(crate) fn take_stat() -> DoorStat {
 /// What a turn raises, all after its drain and once (`post_shell` at the
 /// falling edge): a sensor's start or stop each, and the snapshot. A command
 /// raises nothing itself, so the door's reserve past this is its reply.
-const SIGNALS: u32 = Sensor::ALL.len() as u32 + 1;
+const EVENTS: u32 = Sensor::ALL.len() as u32 + 1;
 
 // The shell reads the completion ring dry before it rings, so a ring with
 // room for a reply to every submission and the door's reserve past the last
-// (`Door::new`, SIGNALS + 1) never stops a drain partway (mem.json
+// (`Door::new`, EVENTS + 1) never stops a drain partway (mem.json
 // CQ_CAP).
 const _: () = assert!(
-    spec::SQ_CAP + SIGNALS < spec::CQ_CAP,
-    "a full submission ring's replies and the turn's signals do not fit the completion ring"
+    spec::SQ_CAP + EVENTS < spec::CQ_CAP,
+    "a full submission ring's replies and the turn's events do not fit the completion ring"
 );
 
-fn raise(cmd: Command, cnt: u32, f: impl Fn(&mut PacketWriter)) {
-    door().raise(cmd as u32, cnt, f);
+/// An event for the port `to` (port.json).
+fn raise(to: u32, cmd: Command, cnt: u32, f: impl Fn(&mut PacketWriter)) {
+    door().raise(to, cmd as u32, cnt, f);
 }
 
 static STATE: Global<State> = Global::new();
@@ -100,9 +102,8 @@ fn state() -> &'static mut State {
     })
 }
 
-/// xpute's three (two rings and the quantum) count as five entries, plus the
-/// host's stream and the GPU stream.
-const DIRECTORY_ENTRIES: usize = 7;
+/// xpute's two rings and the host's stream, and the GPU stream.
+const TOC_ENTRIES: usize = 4;
 
 /// A case lives on its surface, so it goes with it: a preview never closed
 /// held its actor for good.
@@ -128,7 +129,7 @@ fn on_host_attached(s: &mut State) {
     s.sent = Default::default();
 }
 
-/// First turn: lays out memory and writes the directory at DIRECTORY_AT.
+/// First turn: lays out memory and writes the toc at TOC_AT.
 fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
     boot::set(b);
     boot::set_admit(admit);
@@ -138,23 +139,19 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
     // A layer asks for no more tiles than its tile cache's slots.
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slots));
     turn::boot();
-    let [margin, batch, settle] = quantum_entries(&tick::QUANTUM);
-    let entries: [Entry; DIRECTORY_ENTRIES] = [
+    let entries: [Entry; TOC_ENTRIES] = [
         (key::SQ, door().sq().at() as u32),
         (key::CQ, door().cq().at() as u32),
-        margin,
-        batch,
-        settle,
         (key::SYS, layout::range(layout::Fixed::Host).off),
         (GPU_STREAM, gpu_stream),
     ];
-    // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the
-    // bracket's data; the directory's alone.
+    // SAFETY: the page at TOC_AT, kept clear of the rings and the
+    // bracket's data; the toc's alone.
     unsafe {
-        write_directory(
+        write_toc(
             mem::core(),
-            spec::DIRECTORY_AT as usize,
-            directory_words(DIRECTORY_ENTRIES),
+            spec::TOC_AT as usize,
+            toc_words(TOC_ENTRIES),
             &entries,
         );
     };
@@ -167,7 +164,7 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
 /// (`boot_info`). `last_words` is where a bracket whose process dies with the
 /// kernel reports why: no host is left to run the record, and a panic's text
 /// is not in its numbers. None where the host outlives the kernel (a page).
-pub fn intr(
+pub fn run(
     quota_ms: f64,
     boot_info: fn() -> BootInfo,
     last_words: Option<LastWords>,
@@ -187,14 +184,20 @@ pub fn intr(
         renderer::on_gpu_lost();
         loader::on_images_lost();
     }
-    door().drain(|number, pkt| apply::apply(s, number, pkt));
+    door().drain(|submission| match submission {
+        Submission::Opened(opened) => {
+            file::on_opened(&opened);
+            Ok(Some(0))
+        }
+        Submission::Program(number, pkt) => apply::apply(s, number, &pkt),
+    });
     let drained = now();
     if quota_ms > 0.0 || world_frame_waiting() {
         task::poll();
     }
     let polled = now();
     // Once a turn, where a frame was drawn or a UI command applied: a second
-    // snapshot would point into the buffer the first one's signal still names.
+    // snapshot would point into the buffer the first one's event still names.
     let asked = core::mem::take(&mut s.asked);
     if take_world_drawn() || asked {
         post_shell(s);
@@ -221,7 +224,7 @@ pub fn intr(
 }
 
 /// Grows to the largest snapshot and stays, so a settled turn allocates nothing.
-/// One is posted a turn, and the shell reads it on the signal, before the next
+/// One is posted a turn, and the shell reads it on the event, before the next
 /// turn can rewrite it.
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
@@ -234,8 +237,8 @@ fn post_shell(s: &mut State) {
     };
 
     let sensor = |cmd: Command, sensor: Sensor| {
-        raise(cmd, SensorStartSignal::FIELDS, |w| {
-            SensorStartSignal { sensor }.write(w);
+        raise(port::SHELL, cmd, SensorStartEvent::FIELDS, |w| {
+            SensorStartEvent { sensor }.write(w);
         });
     };
     if let Some(c) = take_geolocation_command() {
@@ -259,12 +262,17 @@ fn post_shell(s: &mut State) {
             let room = (buf.len() * 2).max(PAGE_BYTES as usize);
             buf.resize(room, 0);
         };
-        let signal = WorldSnapshotSignal {
+        let event = WorldSnapshotEvent {
             at: off_of_slice(&raw const buf[..]) as u32,
             len,
         };
-        raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| {
-            signal.write(w);
-        });
+        raise(
+            port::SHELL,
+            Command::WORLD_SNAPSHOT,
+            WorldSnapshotEvent::FIELDS,
+            |w| {
+                event.write(w);
+            },
+        );
     }
 }

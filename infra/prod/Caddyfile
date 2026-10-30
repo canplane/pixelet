@@ -8,7 +8,8 @@
 # two do not have to match: the Worker sends `/geo/*` and `/api/*` here with the
 # path unchanged, and each goes to the container that answers it. Matching on a
 # prefix and never on a route is what keeps adding a route a change to one
-# server.
+# server. The host is the origin's, written from spec/spec/route.json
+# `origins` (`make spec`).
 
 api.plei.me {
 	handle /geo/* {

@@ -18,7 +18,7 @@ import {
   type TaskRecord,
   type TaskSummary,
   type Worst,
-} from "@/abi/profiler.ts";
+} from "@/port/profiler.ts";
 import type { LongFrame } from "@/bracket.tsx";
 import { longFramesSince } from "./long-frame.ts";
 

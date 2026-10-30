@@ -7,9 +7,10 @@
 //! Every file is a root's object by number (host.json `root`): a tile by its
 //! subject, an asset by its load, a kept file by its slot. The number is the
 //! path's one name, in decimal; what it is and where, a version, a URL or a
-//! storage key, is what the host (ts/client/src/namespace/) binds the root to,
+//! storage key, is what the host (ts/client/src/driver/namespace/) binds the root to,
 //! `@xpute/host` carrying the open there.
 
+use xpute_guest::abi::cmd::SysOpened;
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::sys::Fd;
 
@@ -383,25 +384,27 @@ impl Opened {
     }
 }
 
-/// `res` is the file's size, or a negative errno. A file larger than the heap
-/// every device is given cannot be held anywhere: it is the host's answer
-/// refused, and the owner hears EFBIG.
-pub fn on_opened(fd: Fd, res: i32, detail: u32) {
-    let Some(&owner) = files().owner(fd) else {
+/// An open the host completed, its `res` the file's size or a negative
+/// errno; xpute's table finds its owner and closes it where it failed. A file
+/// larger than the heap every device is given cannot be held anywhere: it is
+/// the host's answer refused, closed here, and the owner hears EFBIG.
+pub fn on_opened(completed: &SysOpened) {
+    let SysOpened { fd, res, detail } = *completed;
+    let Some(owner) = sys().and_then(|sys| files().opened(sys, completed)) else {
         return;
     };
     let opened = match answered(res) {
-        Ok(n) if n > MIN_HEAP_BYTES => Opened::Failed {
-            errnum: Errno::EFBIG,
-            detail,
-        },
+        Ok(n) if n > MIN_HEAP_BYTES => {
+            close(fd);
+            Opened::Failed {
+                errnum: Errno::EFBIG,
+                detail,
+            }
+        }
         Ok(n) => Opened::Bytes(n),
         Err(Errno::ENOENT) => Opened::Absent,
         Err(errnum) => Opened::Failed { errnum, detail },
     };
-    if !matches!(opened, Opened::Bytes(_)) {
-        close(fd);
-    }
     match owner {
         Owner::Fetch { key, at_ms } => fetch::on_opened(fd, key, at_ms, opened),
         Owner::Load { key } => loader::on_opened(fd, key, opened),

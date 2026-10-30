@@ -2,7 +2,7 @@
 
 /**
  * What the client asks of the place it runs in, as pxl-kernel's door is
- * handed its place by its bracket (pxl_kernel::door `intr`): the page's
+ * handed its place by its bracket (pxl_kernel::door `run`): the page's
  * (ts/app/web) or the device's (ts/app/native), set once by the app's entry
  * before the client boots.
  */
@@ -15,13 +15,13 @@ import type { Guest } from "@xpute/host/host.ts";
 export type { Guest };
 
 /** What a place needs to open the guest, which the guest's own numbers say:
- * its memory, the offset its directory is at, and where its GPU stream's
+ * its memory, the offset its toc is at, and where its GPU stream's
  * records begin. A place that links the guest in may need none of it. */
 export interface Config {
   bytes: u32;
   region: u32;
-  directory_at: u32;
-  /** The directory's key for the GPU stream, and the stream's head, in words. */
+  toc_at: u32;
+  /** The toc's key for the GPU stream, and the stream's head, in words. */
   gpu_stream: u32;
   gpu_head: u32;
 }
@@ -84,8 +84,10 @@ export type PointerKind = "mouse" | "touch" | "pen";
 
 /** What the place's input says, in its words. */
 export interface InputDriver {
-  /** The world opened, asking `viewport` each frame; the returned call closes it. */
-  open(viewport: () => Viewport): () => void;
+  /** The world opened; the returned call closes it. */
+  open(): () => void;
+  /** The canvas's client rect, whenever it moves: where a pointer lands, and
+   * the view's size each frame is drawn at. */
   rect(left: f64, top: f64, width: f64, height: f64): void;
   pointer(
     phase: PointerPhase,
@@ -101,7 +103,6 @@ export interface InputDriver {
   keyUp(code: string): void;
   releaseKeys(): void;
   releasePointers(): void;
-  visible(visible: boolean): void;
   /** A turn, for a box that moved without the kernel's asking. */
   requestFrame(): void;
 }
@@ -170,6 +171,9 @@ export interface Bracket {
   };
   /** Whether the device is online, as far as the place can tell: a place that cannot says nothing. */
   online: { watch(report: (online: boolean) => void): void };
+  /** Whether the page or the app is seen, as the platform says, each change from then on: hidden, it gets
+   * no frame and may be ended without another word. */
+  visibility: { watch(report: (visible: boolean) => void): void };
   sensor: {
     geo: { has: boolean; start(): void; stop(): void };
     /** `gated`: a permission asked inside a gesture; `silence`: no event is how a loss shows. */

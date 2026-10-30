@@ -101,7 +101,9 @@ type ExternalImageQueue = GPUQueue & {
 class Words {
   private readonly f: Float32Array;
   at: u32 = 0;
-  constructor(readonly w: U32Array) {
+  readonly w: U32Array;
+  constructor(w: U32Array) {
+    this.w = w;
     this.f = new Float32Array(w.buffer, w.byteOffset, w.length);
   }
   u(): u32 {
@@ -184,13 +186,20 @@ export class GpuHost {
   /** Where the guest asked the device's block written, for its status. */
   private block: { address: u32; words: u32 } | undefined;
 
+  private readonly device: GPUDevice;
+  private readonly memory: () => ArrayBufferLike;
+  private readonly wake: () => void;
+
   /** `wake` asks the host's loop for a turn: a completion written between
    * turns is read only by a turn. */
   constructor(
-    private readonly device: GPUDevice,
-    private readonly memory: () => ArrayBufferLike,
-    private readonly wake: () => void,
+    device: GPUDevice,
+    memory: () => ArrayBufferLike,
+    wake: () => void,
   ) {
+    this.device = device;
+    this.memory = memory;
+    this.wake = wake;
     // The guest is told of the loss in its block; nothing here destroys the device.
     device.lost.then(() => {
       this.lost();

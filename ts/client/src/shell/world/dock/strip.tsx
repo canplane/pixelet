@@ -25,7 +25,15 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { alpha, chrome, color } from "@/shell/ui/theme.ts";
 import { openModal } from "@/shell/modal.tsx";
-import { holdTool, useDockStore, useInHand } from "@/shell/store/dock.ts";
+import {
+  holdTool,
+  selectCube,
+  selectDecor,
+  selectMarker,
+  useInHand,
+  useRecentPicks,
+  useSwatchFlash,
+} from "./store.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { type Cube, cubeId } from "@/shell/catalog/asset/mod.ts";
 import {
@@ -133,10 +141,9 @@ function SwatchButton({
   gesture: Omit<SizeGesture, "press">;
 }) {
   const { t } = useTranslation();
-  const selectCube = useDockStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
   const ref = useRef<View | null>(null);
-  const swatchFlash = useDockStore((s) => s.swatchFlash);
+  const swatchFlash = useSwatchFlash();
   useEffect(() => {
     if (swatchFlash.cube === cube && ref.current) {
       gesture.flash(ref.current, swatchFlash.open);
@@ -174,7 +181,6 @@ function SwatchButton({
 
 function DecorIconButton({ kind }: { kind: u8 }) {
   const { t } = useTranslation();
-  const selectDecor = useDockStore.getState().selectDecor;
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
@@ -204,7 +210,6 @@ function DecorIconButton({ kind }: { kind: u8 }) {
 
 function MarkerButton() {
   const { t } = useTranslation();
-  const selectMarker = useDockStore.getState().selectMarker;
   const active = useInHand({ tool: ActiveTool.Marker });
 
   return (
@@ -278,7 +283,7 @@ export function Strip({
 }) {
   const { t } = useTranslation();
   const activeTool = useKernel((s) => s.holding.tool);
-  const recentPicks = useDockStore((s) => s.recentPicks);
+  const recentPicks = useRecentPicks();
 
   return (
     <View style={[styles.strip, { maxWidth: span }]}>

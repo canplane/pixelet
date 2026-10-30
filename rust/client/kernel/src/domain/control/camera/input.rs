@@ -141,6 +141,11 @@ pub fn camera_input_rect(rect: InputRect) {
     input().rect = Some(rect);
 }
 
+/// The view's size, the canvas's as the shell last sent it; none before it has.
+pub fn camera_view_size() -> Option<(f64, f64)> {
+    input().rect.map(|r| (r.width, r.height))
+}
+
 fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
     let Some(rect) = s.rect else { return };
     s.pointer_x = ((client_x - rect.left) / rect.width) * 2.0 - 1.0;

@@ -28,7 +28,7 @@ import {
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { Command, encode_input_goto, SensorStatus } from "@/abi/cmd.spec.ts";
 import { statusColor } from "@/shell/world/top/sensor-icons.tsx";
-import { kernel_command, kernel_room, kernel_snapshot } from "@/abi/shell.ts";
+import { kernel_command, kernel_room, kernel_snapshot } from "@/port/shell.ts";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@/shell/ui/text-field.tsx";

@@ -16,8 +16,8 @@ follows one rule: **the eye decides.** The view is a grid of cells of equal
 angle about the eye, so a cell grows with distance. Space is cut into cubes at
 every zoom; one cube of space at one zoom is a **node**, an address the world is
 asked about, never something stored. Wherever it stands, the world is drawn at
-the zoom whose nodes span a cell there (`pxl-spec-core grid.rs` `cell_at`). A
-city, a mountain range or a tower behind a ridge costs the cells it covers on
+the zoom whose nodes span a cell there (`pxl-spec-core grid.rs` `cell_zoom_at`).
+A city, a mountain range or a tower behind a ridge costs the cells it covers on
 the screen, not what it holds.
 
 Every pixel's ray, every step a walker takes, the pointer and every edit ask the
@@ -43,7 +43,7 @@ Real geography is baked ahead: [Overture Maps](https://overturemaps.org/)'
 geometry, OpenStreetMap's coastline and
 [GEDTM30](https://doi.org/10.5281/zenodo.18887460)'s elevation are painted into
 tiles, fetched only when the view lacks one. What players build is kept as they
-place it, and the trees and cars the ground grows are worked out where they
+place it, and the trees and cars the ground generates are worked out where they
 stand, never stored. The same world runs in a browser and on a device, through
 one Rust kernel drawing with WebGPU.
 
@@ -64,8 +64,9 @@ on the browser's WebGPU; on a device, `pxl-native` links it into the app
 the same **client** (`ts/client`), and each hands it, once, its own **client's
 bracket**: the guest and what its platform gives, storage, text, the network,
 the sensors and the surfaces (`ts/client/src/bracket.tsx`). The client is the
-host (`src/host/`), the kernel's commands, snapshot and boot (`src/abi/`), what
-answers its opens and writes (`src/namespace/`), and the **shell**
+host (`src/host/`), what the shell holds of the kernel (`src/port/`), what
+answers the kernel's devices, its opens and writes among them (`src/driver/`),
+the numbers both read and the boot (`src/abi/`), and the **shell**
 (`src/shell/`), the UI, which changes the world only by commands the kernel
 applies.
 
@@ -205,8 +206,9 @@ language by where a thing runs.
 │   ├── client/          #   the client both apps bundle
 │   │   └── src/
 │   │       ├── host/    #     xpute's host, mounted
-│   │       ├── abi/     #     the kernel's commands, snapshot and boot
-│   │       ├── namespace/ #   what answers the kernel's opens and writes
+│   │       ├── port/    #     what the shell holds of the kernel
+│   │       ├── driver/  #     what answers the kernel's devices
+│   │       ├── abi/     #     the numbers both read, and the boot
 │   │       └── shell/   #     the UI
 │   ├── app/web/         #   the page's app and its bracket
 │   ├── app/native/      #   the device's app, its native module and bracket
@@ -220,7 +222,7 @@ language by where a thing runs.
 │   ├── client-bracket/  #   pxl-wasm and pxl-native, the kernel's two forms
 │   ├── server/          #   pxl-geo (/geo), pxl-api (/api), pxl-server,
 │   │                    #     pxl-geo-spec; pxl-geo-bake, the bakes
-│   └── tool/            #   pxl-tool: what writes the files the tree keeps
+│   └── tool/            #   pxl-tool: the repository's own Rust programs, run by cargo
 ├── spec/                # JSON every language's code is generated from
 ├── xpute/               # The system under it, its own repository's root
 ├── asset/               # The shipped models, texture pack and sky

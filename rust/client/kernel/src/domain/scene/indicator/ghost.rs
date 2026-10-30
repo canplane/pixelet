@@ -19,7 +19,7 @@ use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::domain::layer::object::preview::{Ghost, GhostBox};
-use crate::domain::query::decor::asset::{decor_model, decor_skin};
+use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::lane::GroupLanes;
 use crate::domain::view::setting::store::settings_store;
 

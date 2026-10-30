@@ -1,0 +1,11 @@
+# The toc's traces (ARCHITECTURE.md, the contract's rule 0). Every trace's host reads a guest's
+# toc before anything else and refuses one whose head is not xpute's or that names a key twice; what
+# is here is what it must then find. That a host passes over a key it does not know is the host's side of the
+# rule, held by ts/host/src/ipc/toc.test.ts. No offset is written here: the guest's boot answers
+# where the toc is, under the layout its seed draws (guest.json LAYOUTS), and where it points is
+# the guest's own.
+scenarios	C0.boot
+#
+# xpute's keys for the two rings, and the program's own for its stream, past xpute's PROGRAM bit.
+C0.boot.toc.keys	SQ CQ STREAM
+C0.boot.toc.reserved	0

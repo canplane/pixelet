@@ -10,7 +10,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { profiler_view } from "@/abi/profiler.ts";
+import { profiler_view } from "@/port/profiler.ts";
 import { type Gauge, profilerGaugeRead } from "./view.ts";
 
 const POLL_MS = 500;
@@ -18,7 +18,7 @@ const POLL_MS = 500;
 /** Folding every frame since load on each repaint grew into a 60 ms task. */
 export const LIVE_WINDOW_MS = 10_000;
 
-const useRead = create<{ gauge: Gauge | null; view: Gauge["view"] | null }>(
+const store = create<{ gauge: Gauge | null; view: Gauge["view"] | null }>()(
   () => ({ gauge: null, view: null }),
 );
 
@@ -29,8 +29,8 @@ let timer: ReturnType<typeof setInterval> | undefined;
 function read(): void {
   if (readers.gauge > 0) {
     const gauge = profilerGaugeRead(LIVE_WINDOW_MS);
-    useRead.setState({ gauge, view: gauge.view });
-  } else if (readers.view > 0) useRead.setState({ view: profiler_view() });
+    store.setState({ gauge, view: gauge.view });
+  } else if (readers.view > 0) store.setState({ view: profiler_view() });
 }
 
 /** Read at once, then every POLL_MS while anyone reads; the returned call stops reading. */
@@ -41,9 +41,9 @@ function join(what: keyof typeof readers): () => void {
   return () => {
     readers[what]--;
     // A panel shown again starts from nothing, not from what it read before.
-    if (readers.gauge === 0) useRead.setState({ gauge: null });
+    if (readers.gauge === 0) store.setState({ gauge: null });
     if (readers.view === 0 && readers.gauge === 0) {
-      useRead.setState({ view: null });
+      store.setState({ view: null });
     }
     if (readers.gauge + readers.view === 0) {
       clearInterval(timer);
@@ -55,11 +55,11 @@ function join(what: keyof typeof readers): () => void {
 /** The gauge over the live window, polled while `on`; null until the first read. */
 export function useProfilerGauge(on: boolean): Gauge | null {
   useEffect(() => (on ? join("gauge") : undefined), [on]);
-  return useRead((s) => (on ? s.gauge : null));
+  return store((s) => (on ? s.gauge : null));
 }
 
 /** Where the camera and the pointer are now, polled while `on`; null until the first read. */
 export function useProfilerView(on: boolean): Gauge["view"] | null {
   useEffect(() => (on ? join("view") : undefined), [on]);
-  return useRead((s) => (on ? s.view : null));
+  return store((s) => (on ? s.view : null));
 }

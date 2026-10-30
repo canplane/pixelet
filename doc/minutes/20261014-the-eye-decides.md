@@ -244,4 +244,4 @@ the ground behind shows a cell-shaped hole; decor already leaves its cell empty
 (`rust/spec/core/src/answer.rs` `fills`). And the fold must say what it is at a
 zoom whose block is larger than it. Within those, a mesh is a block of an
 intricate shape. Decor today is not inside the rays: the GPU grows it and draws
-it as a model or a sprite beside them (`rust/client/render/src/gpu/grown.rs`).
+it as a model or a sprite beside them (`rust/client/render/src/gpu/generated.rs`).

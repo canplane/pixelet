@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene/marker/arrangement.rs
 
 //! The markers' arrangement: where each is drawn, read by its own source
-//! over the eye's windows' bricks, as decor is grown over them
+//! over the eye's windows' bricks, as decor is generated over them
 //! (domain/view/observation.rs `bricks`), and shown at the zoom the camera
 //! grid's cell at its own point is: a place as Carto draws it at that zoom
 //! (`place.rs`); a pin someone put up, near enough (`pin.rs`); a line said,
@@ -30,8 +30,8 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::query::changed;
-use crate::domain::query::model;
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::model;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;

@@ -16,7 +16,7 @@
 
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/guest/clock.hpp"
-#include "quantum.hpp"
+#include "wake.hpp"
 #include "task.hpp"
 
 namespace xpute {

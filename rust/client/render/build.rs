@@ -7,7 +7,7 @@ use pxl_spec_core::answer;
 use pxl_spec_core::grid;
 use pxl_spec_core::ground;
 use pxl_spec_core::lattice;
-use pxl_spec_core::param::sun;
+use pxl_spec_core::param::light;
 use std::path::Path;
 
 #[path = "src/frame/shader/debug_look.spec.rs"]
@@ -134,14 +134,14 @@ fn main() {
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
-    // A sun slot's word read as its depth, a share of the light box's, as
-    // pxl-spec-core sun.rs `Sun::word` lays it: its top bits over the zoom
+    // A light slot's word read as its depth, a share of the light box's, as
+    // pxl-spec-core light.rs `Light::word` lays it: its top bits over the zoom
     // asked: the one place a word's depth is read.
-    use pxl_spec_core::sun::{DEPTH_ONE, ZOOM_BITS as SUN_ZOOM_BITS};
-    let sun = format!(
-        "fn sun_depth(w: u32) -> f32 {{ return f32(w >> {SUN_ZOOM_BITS}u) / {DEPTH_ONE}.0; }}\n"
+    use pxl_spec_core::light::{DEPTH_ONE, ZOOM_BITS as LIGHT_ZOOM_BITS};
+    let light = format!(
+        "fn light_depth(w: u32) -> f32 {{ return f32(w >> {LIGHT_ZOOM_BITS}u) / {DEPTH_ONE}.0; }}\n"
     );
-    std::fs::write(out.join("sun_word.wgsl"), sun).expect("the sun word's shader");
+    std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
     // The cloud field's lattice unit and the hash its cells draw from, the
     // cumulus's own on the CPU (pxl-spec-core cloud.rs `lattice_hash`): its
     // multipliers, its rounds and its kept bits as the Rust takes them.
@@ -177,7 +177,7 @@ fn main() {
 fn debug_looks() -> String {
     use debug_look::{share, steps};
     // A world's cell spans (1, `SPANS`] of the view's cells where the rays
-    // stop on it (pxl-spec-core grid.rs `cell_at`), so its share of a cell
+    // stop on it (pxl-spec-core grid.rs `cell_zoom_at`), so its share of a cell
     // squared is within (1, `SPANS`²]: the tints' bounds are those.
     let spans = grid::SPANS;
     assert!(
@@ -335,7 +335,7 @@ fn params() -> String {
 
 /// What the host lays out and every shader reads (frame/shader/word.rs), as
 /// WGSL: a uniform's floats as its vec4s; and the pxl-spec-core values every
-/// shader may name, the world's height and the sun's taps apart.
+/// shader may name, the world's height and the light's taps apart.
 fn words() -> String {
     use word::*;
     let vec4s = |name: &str, floats: usize| {
@@ -374,9 +374,9 @@ fn words() -> String {
         // Q3's Z, the world's height about sea level (pxl-spec-core).
         format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_spec_core::HEIGHT_BITS),
         // The receiver's taps apart in the shadow map, which the map's read
-        // pad is sized by (pxl-spec-core param.rs `sun::SPREAD`, sun.rs
+        // pad is sized by (pxl-spec-core param.rs `light::SPREAD`, light.rs
         // `READ_PAD`).
-        format!("const SUN_SPREAD: f32 = {:?};\n", sun::SPREAD),
+        format!("const LIGHT_SPREAD: f32 = {:?};\n", light::SPREAD),
     ]
     .concat()
 }

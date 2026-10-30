@@ -4,9 +4,9 @@
 
 use core::mem::{offset_of, size_of};
 
+use crate::sys::sched::phase_spec::PHASES;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec_core::tally;
-use xpute_guest::sched::tick::PHASES;
 
 use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMIT, WORST};
 use crate::profiler::word::{words, Words};
@@ -113,8 +113,8 @@ pub struct FrameSample {
     /// it filled: not the world's step, which stops at MAX_STEP_S.
     pub interval_ms: f64,
     /// The display's refresh, and the interval the host paced this frame at,
-    /// a whole number of refreshes, as the host granted them (xpute host
-    /// sched/quantum.ts `Grant`).
+    /// a whole number of refreshes, as the host granted them (@xpute/host
+    /// sched/frame_pacing.ts `FrameGrant`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     /// 1 where the host settled the interval, not interactive, as it says
@@ -128,7 +128,7 @@ pub struct FrameSample {
     /// The parts of `busy_ms`: what is left of it is unmeasured.
     pub effects_ms: f64,
     pub tick_ms: f64,
-    pub phases: [f64; PHASES.len()],
+    pub phases: [f64; PHASES],
     pub stage_ms: f64,
     pub tasks_ms: f64,
     /// What the profiler cost the interval: its own record of the frame and
@@ -157,14 +157,14 @@ pub struct FrameSample {
 
 /// The `ray_counts` setting's sums since boot, as the renderer keeps them
 /// (pxl-render gpu/ray/tally.rs `RAY_SUMS`), in profiler.json FRAME's
-/// rays, eye and sun lanes' order: the frames whose counts landed, then the
-/// eye's and the sun's.
+/// rays, eye and light lanes' order: the frames whose counts landed, then the
+/// eye's and the light's.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RaySample {
     pub frames: f64,
     pub eye: ObserverSample,
-    pub sun: ObserverSample,
+    pub light: ObserverSample,
 }
 
 /// An observer's sums (pxl-render gpu/ray/tally.rs `sum_at`): the frames it
@@ -202,7 +202,7 @@ impl RaySample {
         RaySample {
             frames: s[ray::FRAMES],
             eye: observer(tally::EYE),
-            sun: observer(tally::SUN),
+            light: observer(tally::LIGHT),
         }
     }
 }
@@ -243,14 +243,14 @@ words!(FrameSample, FRAME::WORDS,
     rays.eye.took => FRAME::eye_took,
     rays.eye.walked => FRAME::eye_walked,
     rays.eye.boxes => FRAME::eye_boxes,
-    rays.sun.casts => FRAME::sun_casts,
-    rays.sun.rays => FRAME::sun_rays,
-    rays.sun.beam => FRAME::sun_beam,
-    rays.sun.sample => FRAME::sun_sample,
-    rays.sun.miss => FRAME::sun_miss,
-    rays.sun.took => FRAME::sun_took,
-    rays.sun.walked => FRAME::sun_walked,
-    rays.sun.boxes => FRAME::sun_boxes,
+    rays.light.casts => FRAME::light_casts,
+    rays.light.rays => FRAME::light_rays,
+    rays.light.beam => FRAME::light_beam,
+    rays.light.sample => FRAME::light_sample,
+    rays.light.miss => FRAME::light_miss,
+    rays.light.took => FRAME::light_took,
+    rays.light.walked => FRAME::light_walked,
+    rays.light.boxes => FRAME::light_boxes,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);

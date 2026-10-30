@@ -30,10 +30,13 @@ test("doorbell - a call from inside a listener is refused and leaves nothing sub
     return -1;
   });
   let refused = 0;
-  door.event = () => {
-    assert.throws(() => door.call(1, null, (result) => result), InvariantError);
+  door.listen(0, () => {
+    assert.throws(
+      () => door.call(1, 1, null, (result) => result),
+      InvariantError,
+    );
     refused++;
-  };
+  });
   door.ring(0);
   assert.deepStrictEqual(refused, 1);
   assert.deepStrictEqual(

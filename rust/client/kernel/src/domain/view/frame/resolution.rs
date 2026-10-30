@@ -14,7 +14,7 @@
 //! the view stood still, so moving starts a fresh window, and the quiet
 //! windows judged before the pause still count. A window is
 //! `SCALE_WINDOW_MS` of the moving frames' budgets, the paced interval the
-//! host grants (xpute host sched/quantum.ts `Grant::paced_ms`) no tighter
+//! host grants (@xpute/host sched/frame_pacing.ts `FrameGrant::paced_ms`) no tighter
 //! than `SCALE_BUDGET_FLOOR_MS`, and its load is the samples its frames took,
 //! summed against their own budgets. Where the device keeps timestamps the
 //! sample is the GPU time of the passes drawn at the world's pixels

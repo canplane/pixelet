@@ -21,7 +21,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
       let ground = meets_ground(r, mu);
       let d = air_path(r, mu);
       let dt = d / f32(ATMOS_MULTISCATTER_STEPS);
-      var through = vec3f(1.0);
+      var transmittance = vec3f(1.0);
       for (var i = 0; i < ATMOS_MULTISCATTER_STEPS; i++) {
         let p = origin + dir * ((f32(i) + 0.5) * dt);
         let pr = length(p);
@@ -30,15 +30,15 @@ fn fs(v: TableOut) -> @location(0) vec4f {
         // Analytic integral of a constant source over the step.
         let fill = (vec3f(1.0) - step) / max(m.extinction, vec3f(1e-7));
         let lit = sun_transmittance(pr, dot(p / pr, sun));
-        second += through * m.scattering * INV_4PI * lit * fill;
-        back += through * m.scattering * fill;
-        through *= step;
+        second += transmittance * m.scattering * INV_4PI * lit * fill;
+        back += transmittance * m.scattering * fill;
+        transmittance *= step;
       }
       if (ground) {
         let p = origin + dir * d;
         let n = normalize(p);
         let lit = sun_transmittance(length(p), dot(n, sun));
-        second += through * lit * max(dot(n, sun), 0.0) * atmos_ground_albedo() / PI;
+        second += transmittance * lit * max(dot(n, sun), 0.0) * atmos_ground_albedo() / PI;
       }
     }
   }

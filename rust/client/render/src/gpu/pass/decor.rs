@@ -9,20 +9,19 @@ use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
 use crate::frame::shader::word::DECOR_GROUPS;
 
-use crate::gpu::api::{Gpu, Image, TrackedRenderPass};
-use crate::gpu::grown::Drawn;
+use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
+use crate::gpu::generated::Drawn;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{
     bind_mesh, draw_models, put_instances, skin_group, skin_made, DrawUniforms, ModelDraw, Stage,
     DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::{Draws, Uploads};
-use pxl_spec_core::scatter;
+use pxl_spec_core::generated;
 
 const _: () = assert!(
-    scatter::GROUPS as usize <= DECOR_GROUPS,
+    generated::GROUPS as usize <= DECOR_GROUPS,
     "a decor variant past the draw groups"
 );
 
@@ -39,9 +38,14 @@ pub struct DecorPass {
 impl DecorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> DecorPass {
         DecorPass {
-            lit: pipelines.build(g, PIPELINE_DECOR, WORLD_COLOR),
-            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, WORLD_COLOR),
-            depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()),
+            lit: pipelines.build_world(g, PIPELINE_DECOR),
+            ghost: pipelines.build_world(g, PIPELINE_GHOST_DECOR),
+            depth: pipelines.build_gated(
+                g,
+                PIPELINE_DECOR_DEPTH,
+                Format::depth32float,
+                Stencil::Gated,
+            ),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, g.canvas()),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
             groups: [(0, None); DECOR_GROUPS],
@@ -197,21 +201,21 @@ impl DecorPass {
         );
     }
 
-    /// The models the GPU grew, an indirect draw a group whose model is held
-    /// (pxl-spec-core `scatter::drawn`, a group's models its region `2·group`).
-    pub fn draw_grown(
+    /// The models the GPU generated, an indirect draw a group whose model is held
+    /// (pxl-spec-core `generated::drawn`, a group's models its region `2·group`).
+    pub fn draw_generated(
         &mut self,
         pass: &mut TrackedRenderPass,
-        grown: Option<Drawn>,
+        generated: Option<Drawn>,
         uploads: &Uploads,
         stage: Stage,
         frame: u32,
     ) {
-        let Some(d) = grown else { return };
+        let Some(d) = generated else { return };
         pass.set_pipeline(self.pipeline(stage));
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
-        for group in 0..scatter::GROUPS {
+        for group in 0..generated::GROUPS {
             let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(group, uploads) else {
                 continue;
             };

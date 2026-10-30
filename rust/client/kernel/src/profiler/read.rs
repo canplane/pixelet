@@ -323,7 +323,7 @@ fn steps() -> StepsSection {
         .take(STEP_SLOTS)
     {
         steps.slots[steps.cnt as usize] = StepStats {
-            phase: s.phase as u8 as f64,
+            phase: f64::from(s.phase),
             name: s.name as f64,
             ms: s.ms,
             cnt: s.cnt as f64,

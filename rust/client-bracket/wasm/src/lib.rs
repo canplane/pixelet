@@ -7,7 +7,7 @@
 //! (pxl_kernel::sys::mem); the shell reads the directory once, at an address both
 //! sides know, and everything after crosses in that memory
 //! (pxl_kernel::door). The module's form is xpute's (xpute_guest::wasm): the
-//! allocator over the memory, what the module reads of itself, and `intr`,
+//! allocator over the memory, what the module reads of itself, and `run`,
 //! the export the shell rings. What is here is pixelet's: its numbers, where
 //! its heap begins and the kernel as the entry.
 
@@ -29,9 +29,9 @@ xpute_guest::wasm_abi!(
     kernel
 );
 
-/// The kernel's turn (pxl_kernel::door::intr). A page outlives the kernel,
+/// The kernel's turn (pxl_kernel::door::run). A page outlives the kernel,
 /// so it has no last words to say; the browser paces its frames, so every
 /// one is admitted (xpute_gpu::admit).
 fn kernel(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
-    door::intr(quota_ms, boot_info, None, admit::every)
+    door::run(quota_ms, boot_info, None, admit::every)
 }

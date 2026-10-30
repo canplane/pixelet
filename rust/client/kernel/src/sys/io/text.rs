@@ -1,9 +1,11 @@
 // pxl-kernel/sys/io/text.rs
 
-//! Text laid out and drawn by the platform, asked through the host stream
-//! (TEXT_LAYOUT, TEXT_RASTER) and answered next turn. Each world frame keeps
+//! Text laid out and drawn by the platform, asked by hostcall (TEXT_LAYOUT,
+//! TEXT_RASTER) and answered before the call returns. Each world frame keeps
 //! only the answers the frame before read. A native test has no host: a text
 //! is one line of fixed width per character and is never drawn.
+
+use std::collections::hash_map::Entry;
 
 use fnv::FnvHashMap;
 
@@ -11,7 +13,7 @@ use pxl_render::gpu::sheet::SHEET_SCALE;
 use pxl_render::gpu::text::{raster_box, Font, Raster};
 use xpute_guest::mem::off_of_slice;
 
-use crate::sys::io::host::{offer, turn};
+use crate::sys::io::host::call_now;
 use crate::sys::io::host_spec::{op, LAYOUT, LAYOUT_ANSWER, LINE, RASTER};
 use xpute_guest::global::Global;
 
@@ -21,8 +23,6 @@ type LayoutKey = (u32, u32, u32, String);
 type RasterKey = (u32, u32, u32, String);
 
 struct Answer<T> {
-    /// The host has written it on any turn after this.
-    asked: u64,
     read: bool,
     at: T,
 }
@@ -55,10 +55,8 @@ pub fn text_forget() {
 
 pub fn text_rise() {
     let t = text();
-    t.layouts
-        .retain(|_, a| std::mem::take(&mut a.read) || a.asked == turn());
-    t.rasters
-        .retain(|_, a| std::mem::take(&mut a.read) || a.asked == turn());
+    t.layouts.retain(|_, a| std::mem::take(&mut a.read));
+    t.rasters.retain(|_, a| std::mem::take(&mut a.read));
 }
 
 /// One line at a width guessed from its characters, where no host lays it out.
@@ -66,7 +64,7 @@ fn unlaid(text_in: &str) -> Vec<(&str, f64)> {
     vec![(text_in, text_in.chars().count() as f64 * 7.0)]
 }
 
-/// None until the platform has laid it out; a later turn has it.
+/// None where the platform could not lay it out this turn; a later turn asks again.
 pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str, f64)>> {
     let key: LayoutKey = (
         font.weight,
@@ -74,37 +72,28 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
         (max_width as f32).to_bits(),
         text_in.to_owned(),
     );
-    let t = text();
-    let Some(answer) = t.layouts.get_mut(&key) else {
-        // No more lines than characters, and one for an empty text.
-        let lines = text_in.chars().count().max(1) as u32;
-        let mut at =
-            vec![0u32; (LAYOUT_ANSWER::WORDS + LINE::WORDS * lines) as usize].into_boxed_slice();
-        let mut args = [0u32; LAYOUT::WORDS as usize];
-        args[LAYOUT::weight as usize] = font.weight;
-        args[LAYOUT::px as usize] = font.px.to_bits();
-        args[LAYOUT::max_width as usize] = (max_width as f32).to_bits();
-        args[LAYOUT::at as usize] = off_of_slice(&raw mut *at) as u32;
-        args[LAYOUT::lines as usize] = lines;
-        match offer(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
-            None => return Some(unlaid(text_in)),
-            Some(false) => return None,
-            Some(true) => {}
+    let answer = match text().layouts.entry(key) {
+        Entry::Occupied(o) => o.into_mut(),
+        Entry::Vacant(v) => {
+            // No more lines than characters, and one for an empty text.
+            let lines = text_in.chars().count().max(1) as u32;
+            let mut at = vec![0u32; (LAYOUT_ANSWER::WORDS + LINE::WORDS * lines) as usize]
+                .into_boxed_slice();
+            let mut args = [0u32; LAYOUT::WORDS as usize];
+            args[LAYOUT::weight as usize] = font.weight;
+            args[LAYOUT::px as usize] = font.px.to_bits();
+            args[LAYOUT::max_width as usize] = (max_width as f32).to_bits();
+            args[LAYOUT::at as usize] = off_of_slice(&raw mut *at) as u32;
+            args[LAYOUT::lines as usize] = lines;
+            match call_now(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
+                None => return Some(unlaid(text_in)),
+                Some(Err(_)) => return None,
+                Some(Ok(_)) => {}
+            }
+            v.insert(Answer { read: false, at })
         }
-        t.layouts.insert(
-            key,
-            Answer {
-                asked: turn(),
-                read: true,
-                at,
-            },
-        );
-        return None;
     };
     answer.read = true;
-    if answer.asked == turn() {
-        return None;
-    }
     // The host's answer is checked here, the door it comes back through: a
     // line ending inside a character or out of order is no layout.
     let pairs = answer.at[LAYOUT_ANSWER::WORDS as usize..]
@@ -132,25 +121,27 @@ pub fn text_width(font: Font, text_in: &str) -> Option<f64> {
     text_lines(font, 0.0, text_in).map(|lines| lines.iter().map(|&(_, w)| w).sum())
 }
 
-/// `color` is 0xRRGGBBAA. None until the platform has drawn it.
+/// The answer's pixels as a raster.
+fn raster_of(a: &RasterAt) -> Raster<'static> {
+    // SAFETY: the answer's pixels stay until the next frame's rise at the
+    // earliest, and a raster is read within the frame it was handed out in.
+    let px = unsafe { core::slice::from_raw_parts(a.px.as_ptr(), a.px.len()) };
+    Raster {
+        px,
+        width: a.size[0],
+        height: a.size[1],
+        origin: a.origin,
+        advance: a.advance,
+    }
+}
+
+/// `color` is 0xRRGGBBAA. None where the platform could not draw it this
+/// turn; a later turn asks again.
 pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'static>> {
     let key: RasterKey = (font.weight, font.px.to_bits(), color, text_in.to_owned());
     if let Some(answer) = text().rasters.get_mut(&key) {
         answer.read = true;
-        if answer.asked == turn() {
-            return None;
-        }
-        let a = &answer.at;
-        // SAFETY: the answer's pixels stay until the next frame's rise at the
-        // earliest, and a raster is read within the frame it was handed out in.
-        let px = unsafe { core::slice::from_raw_parts(a.px.as_ptr(), a.px.len()) };
-        return Some(Raster {
-            px,
-            width: a.size[0],
-            height: a.size[1],
-            origin: a.origin,
-            advance: a.advance,
-        });
+        return Some(raster_of(&answer.at));
     }
     let advance = text_width(font, text_in)? as f32;
     let (size, origin) = raster_box(font, advance);
@@ -164,7 +155,10 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
     args[RASTER::width as usize] = size[0];
     args[RASTER::height as usize] = size[1];
     args[RASTER::x as usize] = origin[0].to_bits();
-    if offer(op::TEXT_RASTER, &args, text_in.as_bytes()) != Some(true) {
+    if !matches!(
+        call_now(op::TEXT_RASTER, &args, text_in.as_bytes()),
+        Some(Ok(_))
+    ) {
         return None;
     }
     let at = RasterAt {
@@ -173,13 +167,7 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
         origin,
         advance: advance * scale,
     };
-    text().rasters.insert(
-        key,
-        Answer {
-            asked: turn(),
-            read: true,
-            at,
-        },
-    );
-    None
+    let raster = raster_of(&at);
+    text().rasters.insert(key, Answer { read: true, at });
+    Some(raster)
 }

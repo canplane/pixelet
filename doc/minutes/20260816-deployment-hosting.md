@@ -406,7 +406,7 @@ prevent it. The actual cause: **`encodeBody: "manual"` does not survive the
 cache round trip.** A cached entry comes back as an ordinary `Response` with no
 memory of that flag, so the runtime re-encodes the already-compressed body on
 its way out. So the cache stores the packed bytes with their encoding parked on
-`x-pxl-stored-encoding` (`STORED_ENCODING`), and `serve()` puts it back with
+`pxl-content-encoding` (`CACHED_ENCODING`), and `serve()` puts it back with
 `encodeBody: "manual"` on both paths out (`ts/server/edge/index.ts`).
 
 Worth noting how this failed: only on the second request, only through the edge,

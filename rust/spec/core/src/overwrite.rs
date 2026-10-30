@@ -36,8 +36,8 @@ const FULL_BITS: u32 = FULL.trailing_zeros();
 pub const EDITS: u32 = 8;
 /// The boxes of leaf cells a frame's edits and a preview's cuts changed:
 /// the edits, and a preview's cut and left-out leaf as they were and as they
-/// are; past them the rest is joined into the last (pxl-render gpu/grown.rs
-/// `hold`). What reads those columns asks them again: decor's growth, the
+/// are; past them the rest is joined into the last (pxl-render gpu/generated.rs
+/// `hold`). What reads those columns asks them again: decor's generation, the
 /// observed pyramid's forgetting.
 pub const BOXES: u32 = EDITS + 4;
 

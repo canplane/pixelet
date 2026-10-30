@@ -87,9 +87,9 @@ cannot be stored. What is stored is the node's own:
 - the world at its zoom (its fold);
 - where anything under it may fill.
 
-The ray picks its zoom by distance, as now (`grid::cell_at`), and never descends
-past the zoom it asks. So a looser bound can only add visits, and only above
-that zoom. The block it stops on is the same.
+The ray picks its zoom by distance, as now (`grid::cell_zoom_at`), and never
+descends past the zoom it asks. So a looser bound can only add visits, and only
+above that zoom. The block it stops on is the same.
 
 **Filled where the sources land.** The table is composed in the passes that
 already run when a square arrives on the GPU (`height_cs`, `bound_cs`,
@@ -157,9 +157,9 @@ and data, never estimated.
   each one differs from its parent and is an entry. A child mask does not remove
   them: they are not empty.
 - Count only the shells where each zoom is asked: zoom c from 96 to 192 of its
-  cells from the eye (`grid::SPLIT`, `window::RADIUS`). Take flat ground at sea
-  level and the E120 eye, 120 units from its pivot at a polar of 0.9, so 74.6
-  units up. That is still 11,765,311 blocks under the face:
+  cells from the eye (`grid::WINDOW_CELLS_A_RAD`, `window::RADIUS`). Take flat
+  ground at sea level and the E120 eye, 120 units from its pivot at a polar of
+  0.9, so 74.6 units up. That is still 11,765,311 blocks under the face:
 
   | Zoom | Blocks under the face |
   | ---- | --------------------- |

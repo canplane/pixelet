@@ -67,6 +67,18 @@ fn callers_take_turns() {
 }
 
 #[test]
+fn hostcall_answered_by_caller() {
+    extern "C" fn answer(at: u32) -> i32 {
+        assert!(off_marked_thread(), "an answer runs on the caller's thread");
+        at as i32 + 1
+    }
+    native::answer_with(Some(answer));
+    let g = guest();
+    let boot = g.boot_info(&cfg(HEAP_AT));
+    assert_eq!(g.run(move || (boot.hostcall)(41)), 42);
+}
+
+#[test]
 fn while_idle_runs_here() {
     let here = std::thread::current().id();
     assert_eq!(guest().while_idle(|| std::thread::current().id()), here);
@@ -93,7 +105,7 @@ fn bad_heap_refused() {
 fn first_intr_installs_clock() {
     let boot = || guest().boot_info(&cfg(HEAP_AT));
     assert_eq!(
-        guest().run(move || native::intr(0.0, boot, |_, _| xpute_guest::clock::now())),
+        guest().run(move || native::run(0.0, boot, |_, _| xpute_guest::clock::now())),
         42.0
     );
 }

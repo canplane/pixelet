@@ -8,7 +8,7 @@
 @group(0) @binding(12) var multiscatter_lut: texture_2d<f32>;
 
 struct Veil {
-  through: vec3f,
+  transmittance: vec3f,
   scattered: vec3f,
 };
 
@@ -48,10 +48,10 @@ fn gather_between(r: f32, up: vec3f, dir: vec3f, t0: f32, t1: f32, sun: vec3f, m
   let lowest = clamp(-r * mu, a, end);
   let sun_phase = vec2f(rayleigh_phase(dot(dir, sun)), mie_phase(dot(dir, sun)));
   let moon_phase = vec2f(rayleigh_phase(dot(dir, moon)), mie_phase(dot(dir, moon)));
-  var through = vec3f(1.0);
+  var transmittance = vec3f(1.0);
   var light = vec3f(0.0);
   if (end <= a) {
-    return Veil(through, light);
+    return Veil(transmittance, light);
   }
   var da = depth_along(r, mu, low, a);
   var ja = per_depth(r, up, dir, a, sun, sun_phase, moon, moon_phase, moon_light);
@@ -61,12 +61,12 @@ fn gather_between(r: f32, up: vec3f, dir: vec3f, t0: f32, t1: f32, sun: vec3f, m
     let jb = per_depth(r, up, dir, tb, sun, sun_phase, moon, moon_phase, moon_light);
     let y = max(db - da, vec3f(0.0));
     let left = exp(-y);
-    light += through * stretch(ja, jb, y, left);
-    through *= left;
+    light += transmittance * stretch(ja, jb, y, left);
+    transmittance *= left;
     da = db;
     ja = jb;
   }
-  return Veil(through, light);
+  return Veil(transmittance, light);
 }
 
 // What the air `t` km along the ray sends toward the eye per unit of its depth.

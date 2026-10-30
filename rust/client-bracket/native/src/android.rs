@@ -10,9 +10,10 @@
 //! draws through (`target`).
 
 use fnv::FnvHashMap;
+use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, Once, OnceLock};
 
 use crate::surface;
 use crate::unpack;
@@ -39,14 +40,63 @@ unsafe fn jni<'e>(env: *mut JNIEnv) -> &'e JNINativeInterface_ {
     unsafe { &**env }
 }
 
-/// A turn of `quota_ms`: the entry, xpute_intr (xpute-host native `native_abi!`, lib.rs).
+thread_local! {
+    /// The environment and `PxlNative` of the call waiting in `run`, which
+    /// answers the turn's hostcalls (`hostcall`).
+    #[allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion")]
+    static INTR: Cell<Option<(*mut JNIEnv, jobject)>> = const { Cell::new(None) };
+}
+
+/// A turn of `quota_ms`: the entry, xpute_run (xpute-host native `native_abi!`, lib.rs),
+/// its hostcalls answered on this thread by `hostcall`. `this` is `PxlNative`.
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_intr(
-    _env: *mut JNIEnv,
-    _class: jclass,
+pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_run(
+    env: *mut JNIEnv,
+    this: jobject,
     quota_ms: jdouble,
 ) -> jdouble {
-    crate::xpute_intr(quota_ms)
+    static ANSWER: Once = Once::new();
+    ANSWER.call_once(|| crate::xpute_hostcall_on(Some(hostcall)));
+    INTR.with(|c| c.set(Some((env, this))));
+    let wake = crate::xpute_run(quota_ms);
+    INTR.with(|c| c.set(None));
+    wake
+}
+
+/// `PxlNative.hostcall`, on the thread waiting in `run`, the JavaScript
+/// thread, through the environment it was called with (xpute-host native
+/// `answer_with`): ENOSYS outside one, EIO where Kotlin threw.
+extern "C" fn hostcall(at: u32) -> i32 {
+    let Some((env, this)) = INTR.with(Cell::get) else {
+        return Errno::ENOSYS as i32;
+    };
+    // SAFETY: the environment and object JNI called `run` with, which wait
+    // in that call on this thread; JNI's own calls on them.
+    unsafe {
+        let j = jni(env);
+        let class = j.GetObjectClass.or_bug(Errno::ENOSYS)(env, this);
+        let method = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(
+            env,
+            class,
+            c"hostcall".as_ptr(),
+            c"(I)I".as_ptr(),
+        );
+        if method.is_null() {
+            j.ExceptionClear.or_bug(Errno::ENOSYS)(env);
+            return Errno::ENOSYS as i32;
+        }
+        let res = j.CallStaticIntMethodA.or_bug(Errno::ENOSYS)(
+            env,
+            class,
+            method,
+            &jvalue { i: at as jint },
+        );
+        if j.ExceptionCheck.or_bug(Errno::ENOSYS)(env) != 0 {
+            j.ExceptionClear.or_bug(Errno::ENOSYS)(env);
+            return Errno::EIO as i32;
+        }
+        res
+    }
 }
 
 /// The memory, as a direct buffer over the whole of it: xpute_mem (lib.rs).

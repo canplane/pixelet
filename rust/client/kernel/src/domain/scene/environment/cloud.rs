@@ -5,8 +5,8 @@
 //! nothing is built around it and a tower stands through it; it is no layer
 //! and no window's brick holds it. It is laid on the field's own map,
 //! which the wind carries (`pxl-spec-core cloud.rs` `drift`): a patch of
-//! cells there is built once and drawn moved, each instance a model, a
-//! sprite or nothing by its size on the screen (`present_patch`), by the
+//! cells there is built once and drawn moved, each instance a model, an
+//! impostor or nothing by its size on the screen (`present_patch`), by the
 //! tiers the GPU draws decor by, one rule (pxl-spec-core scatter.rs
 //! `drawn::tier`). A patch is laid in the lanes the decor and impostor
 //! shaders read (domain/scene/lane.rs).
@@ -21,21 +21,22 @@ use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
 use pxl_spec_core::cloud::{drift, lattice_hash};
+use pxl_spec_core::generated::drawn;
 use pxl_spec_core::param::cloud::{CUMULUS_KM, WIND};
-use pxl_spec_core::scatter::drawn;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::pass::Pass;
 
-use crate::domain::query::model;
-use crate::domain::query::model::asset::model_of;
-use crate::domain::scene::decor::drawn::{decor_model_angle, decor_sprite_angle, sprite_reach};
+use crate::domain::scene::decor::drawn::{cull_dist_u, decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
 };
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::lane::{self, GroupLanes};
+use crate::domain::scene::model;
+use crate::domain::scene::model::asset::model_of;
+use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::km_per_u;
 use crate::domain::view::lens;
@@ -47,8 +48,8 @@ use crate::sys::io::loader::{catalog, load_image, load_of};
 use pxl_render::gpu::api::Image;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world;
+use pxl_spec_core::generated;
 use pxl_spec_core::param::cloud;
-use pxl_spec_core::scatter;
 
 /// Its models, a cloud each one of them.
 const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
@@ -57,7 +58,7 @@ pub const MODELS_MAX: usize = VARIANTS.len();
 
 /// Its draw groups follow the decors' variants, which number the groups
 /// before it (pxl-spec-core scatter.rs `GROUPS`).
-const FIRST_GROUP: usize = scatter::GROUPS as usize;
+const FIRST_GROUP: usize = generated::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
     "a draw group each variant"
@@ -72,8 +73,8 @@ const CELLS_AROUND: i64 = 1 << (world::EXTENT[0] - CELL_SHAMT);
 /// A patch is built and drawn as one, this many cells a side.
 const PATCH_CELLS: u32 = 16;
 const PATCH: f64 = CELL * PATCH_CELLS as f64;
-/// The farthest a patch is built: where the widest cloud is a sprite's worth.
-const REACH_MAX: f64 = sprite_reach(CLOUD_WIDTH[1]);
+/// The farthest a patch is built: where the widest cloud is an impostor's worth.
+const REACH_MAX: f64 = cull_dist_u(CLOUD_WIDTH[1]);
 /// The most patches the reach spans, the keys of a side squared: its share of
 /// the renderer's upload table.
 pub const PATCHES_MAX: usize = {
@@ -109,7 +110,7 @@ struct Clouds {
     wanted: Vec<[i64; 2]>,
     gone: Vec<[i64; 2]>,
     lanes: [Vec<[f32; 5]>; VARIANTS.len()],
-    sprites: Vec<u32>,
+    impostors: Vec<u32>,
     /// How far from the eye the nearest patch drawn last turn stands; none
     /// drawn, infinite.
     seen: f64,
@@ -191,7 +192,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let base = layer_u();
     let largest = CLOUD_WIDTH[1];
     // As far as the eye draws, a flat layer hiding under no horizon, and no
-    // farther than its largest cloud is a sprite's worth.
+    // farther than its largest cloud is an impostor's worth.
     let reach = observation::eye_draw_reach().unwrap_or(0.0).min(REACH_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| {
@@ -217,8 +218,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                 && drawn::tier(
                     (largest / d) as f32,
                     decor_model_angle() as f32,
-                    decor_sprite_angle() as f32,
-                ) != drawn::GONE
+                    decor_impostor_angle() as f32,
+                ) != drawn::CULLED
             {
                 c.wanted.push([x, y]);
             }
@@ -319,7 +320,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             eye,
             groups,
             opacity,
-            &mut c.sprites,
+            &mut c.impostors,
         );
     }
 }
@@ -472,10 +473,10 @@ struct Shown {
     heights: [f32; 2],
 }
 
-/// Lists one patch's instances, model, sprite or nothing each, under the
+/// Lists one patch's instances, model, impostor or nothing each, under the
 /// draw groups `groups` names in the patch's order, each with its model's
 /// extent and the least and most scale its instances are drawn at. Under an
-/// `opacity` of one the models are laid over the world blended, and a sprite,
+/// `opacity` of one the models are laid over the world blended, and an impostor,
 /// which cannot be, is left out.
 fn present_patch(
     draw: &mut DrawList,
@@ -484,10 +485,10 @@ fn present_patch(
     eye: V3,
     groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>,
     opacity: f32,
-    sprites: &mut Vec<u32>,
+    impostors: &mut Vec<u32>,
 ) {
-    let (model, sprite) = (decor_model_angle() as f32, decor_sprite_angle() as f32);
-    let tier = |across: f64| drawn::tier(across as f32, model, sprite);
+    let (model, impostor) = (decor_model_angle() as f32, decor_impostor_angle() as f32);
+    let tier = |across: f64| drawn::tier(across as f32, model, impostor);
     let [x0, y0] = b.corner;
     let [zlo, zhi] = b.heights.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
@@ -518,10 +519,10 @@ fn present_patch(
             cnt: cnt as usize,
         };
         let first = at;
-        sprites.clear();
-        let gone = tier(extent * most / nearest) == drawn::GONE;
+        impostors.clear();
+        let culled = tier(extent * most / nearest) == drawn::CULLED;
         let modeled = tier(extent * least / farthest) == drawn::MODEL;
-        for i in 0..if gone { 0 } else { cnt as usize } {
+        for i in 0..if culled { 0 } else { cnt as usize } {
             if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
             }
@@ -547,14 +548,14 @@ fn present_patch(
                 changed |= list[at] != i as u32;
                 list[at] = i as u32;
                 at += 1;
-            } else if t == drawn::SPRITE && opacity >= 1.0 {
-                sprites.push(i as u32);
+            } else if t == drawn::IMPOSTOR && opacity >= 1.0 {
+                impostors.push(i as u32);
             }
         }
         let models = (at - first) as u32;
-        changed |= list[at..at + sprites.len()] != sprites[..];
-        list[at..at + sprites.len()].copy_from_slice(sprites);
-        at += sprites.len();
+        changed |= list[at..at + impostors.len()] != impostors[..];
+        list[at..at + impostors.len()].copy_from_slice(impostors);
+        at += impostors.len();
         let idx = b.idx / 4 + first as u32;
         if models > 0 {
             let pipeline = if opacity < 1.0 {
@@ -572,12 +573,12 @@ fn present_patch(
                 opacity,
             );
         }
-        if !sprites.is_empty() {
+        if !impostors.is_empty() {
             draw.draw_instances(
                 PIPELINE_IMPOSTOR,
                 b.handle,
                 group,
-                sprites.len() as u32,
+                impostors.len() as u32,
                 [off, cnt, idx + models],
                 translation,
                 1.0,
@@ -587,6 +588,15 @@ fn present_patch(
     if changed {
         draw.rewrite_part(b.handle, b.at, b.idx, at as u32 * 4);
     }
+    // The patch as a region stands for it: its box's sphere, casting, in a
+    // state of where the wind has it, how opaque, and what it lists.
+    let listed = list[..at].iter().fold(0u64, |h, &w| {
+        (h ^ u64::from(w)).wrapping_mul(0x0100_0000_01b3)
+    });
+    let middle = [x0 + b.side / 2.0, y0 + b.side / 2.0, (zlo + zhi) / 2.0];
+    let r = v3::len(&[b.side / 2.0, b.side / 2.0, (zhi - zlo) / 2.0]);
+    let state = region::digest(&[x0, y0, zlo, zhi, f64::from(opacity), f64::from_bits(listed)]);
+    region::drawn(b.handle, middle, r, true, state);
 }
 
 #[cfg(test)]

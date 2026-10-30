@@ -1,14 +1,13 @@
 // cpp/xpute/guest/abi/cmd.spec.hpp
 //
-// GENERATED from spec/abi/cmd.json — do not edit.
+// GENERATED from spec/abi/cmd.json
 //
-// Every program's commands, by number (kit abi/cmd: `major << 8 | minor`), and the
-// packet each carries — an XTP branch whose children are its fields, in order. A
-// command with no fields carries no packet. The majors below PROGRAM_MAJOR are xpute's;
-// a program numbers its own from there, in a table of its own that names this one as
-// its base, so the two never give out one number twice.
+// xpute's own commands, by number (kit abi/cmd: `major << 8 | minor`), and the packet
+// each carries — an XTP branch whose children are its fields, in order. A command with
+// no fields carries no packet. The host sends them, port 0 (ipc/frame.json HOST); a
+// program numbers its own as it likes, and the sender tells the two apart.
 //
-// The direction is the ring: `pkt` is what the host submits, `signal` what the guest
+// The direction is the ring: `pkt` is what the host submits, `event` what the guest
 // raises on the completion ring.
 
 #pragma once
@@ -41,7 +40,7 @@ template <> struct xpute::Members<xpute::abi::Major> {
 
 namespace xpute::abi {
 
-// The system calls' answers (ipc/sys.json).
+// The hostcalls' answers (ipc/sys.json).
 enum class SysMinor : std::uint32_t {
     OPENED = 0x01,
 };
@@ -54,7 +53,7 @@ template <> struct xpute::Members<xpute::abi::SysMinor> {
 
 namespace xpute::abi {
 
-// Every program's commands.
+// xpute's own commands.
 enum class Command : std::uint32_t {
     // Replies with its packet's value, or 0 where it has none — the rings' own test.
     NOP = 0x0000,

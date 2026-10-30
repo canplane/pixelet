@@ -80,15 +80,17 @@ const KERNEL_BESIDE: [&str; 1] = ["profiler"];
 /// only seam"), and what asks it. A layer knows no query, and the query no
 /// asker.
 const SPEC_CORE: &str = "rust/spec/core/src/";
-const SPEC_CORE_ORDER: [(&str, u8); 26] = [
+const SPEC_CORE_ORDER: [(&str, u8); 28] = [
     ("param", 0),
     ("cube", 0),
+    ("decor", 0),
     ("lattice", 0),
     ("grid", 0),
     ("answer", 0),
     ("tally", 0),
     ("area", 1),
     ("cave", 1),
+    ("scatter", 1),
     ("cloud", 1),
     ("ground", 1),
     ("window", 1),
@@ -103,9 +105,9 @@ const SPEC_CORE_ORDER: [(&str, u8); 26] = [
     ("eye", 3),
     ("raster", 3),
     ("ray", 3),
-    ("sun", 3),
-    ("scatter", 3),
-    ("decor", 3),
+    ("light", 3),
+    ("screen", 3),
+    ("generated", 3),
     ("face", 3),
 ];
 
@@ -151,11 +153,11 @@ fn screen_reached(text: &str) -> Vec<usize> {
 
 /// On the GPU the screen's size is the eye's rays' image's (pxl-shader
 /// cast.rs `Rays`), bound only to the passes that draw a pixel's ray or read
-/// the rays drawn: the cast and its walks again, and the sun's receivers. The
+/// the rays drawn: the cast and its walks again, and the light's receivers. The
 /// beam, the cells, the samples, decor and the shadow map read the eye's
 /// angles alone.
 const SHADER: &str = "rust/client/shader/src/";
-const RAYS_ENTRIES: [&str; 4] = ["cast_cs", "miss_cs", "miss_list_cs", "sun_mark_cs"];
+const RAYS_ENTRIES: [&str; 4] = ["cast_cs", "miss_cs", "miss_list_cs", "light_mark_cs"];
 
 /// Every entry point in `text`, a shader's source, whose parameters bind
 /// the rays' image, by its name or a path to it, and is not one of
@@ -211,9 +213,9 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
     ),
     (
         "decor.rs",
-        "decor_stand_cs",
+        "decor_thin_cs",
         "client/shader/src/decor.rs",
-        "PATCH_LANES",
+        "CELL_LANES",
         1,
     ),
     (
@@ -225,7 +227,7 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
     ),
     (
         "decor.rs",
-        "decor_place_cs",
+        "decor_compact_cs",
         "client/shader/src/decor.rs",
         "RECORD_LANES",
         1,
@@ -238,8 +240,8 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
         1,
     ),
     (
-        "sun.rs",
-        "sun_miss_cs",
+        "light.rs",
+        "light_miss_cs",
         "spec/core/src/ray.rs",
         "MISS_LANES",
         1,

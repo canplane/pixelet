@@ -11,8 +11,8 @@ use crate::profiler::frame::{FrameSample, EFFECTS, GPU_SPANS};
 use crate::profiler::spec::{FRAME, LIMIT, NOW, SPREAD, STAT, STEP_STAT, STREAM_STAT, WAKES};
 use crate::profiler::word::{words, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
+use crate::sys::sched::phase_spec::PHASES;
 use pxl_render::gpu::span_spec::FRAME_KINDS;
-use xpute_guest::sched::tick::PHASES;
 
 const REASONS: usize = LIMIT::REASONS as usize;
 const REASON_WORDS: usize = LIMIT::REASON_WORDS as usize;
@@ -73,7 +73,7 @@ pub struct FramesSection {
     pub effects_p95: [f64; EFFECTS],
     pub gpu: Spread,
     /// The p95 alone of each phase and each span: what is read of them.
-    pub phases_p95: [f64; PHASES.len()],
+    pub phases_p95: [f64; PHASES],
     pub gpu_spans_p95: [f64; GPU_SPANS],
     /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
     pub kinds: [f64; FRAME_KINDS],

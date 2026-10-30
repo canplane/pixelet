@@ -11,22 +11,22 @@ import { SearchModal } from "@/shell/search/modal.tsx";
 
 type Modal = "settings" | "drawer" | "search";
 
-const useAsked = create<{ asked: Modal | null }>(() => ({ asked: null }));
+const store = create<{ asked: Modal | null }>()(() => ({ asked: null }));
 
 export function openModal(modal: Modal): void {
-  useAsked.setState({ asked: modal });
+  store.setState({ asked: modal });
 }
 
 export function closeModal(): void {
-  useAsked.setState({ asked: null });
+  store.setState({ asked: null });
 }
 
 export function modalOpen(): boolean {
-  return useAsked.getState().asked !== null;
+  return store.getState().asked !== null;
 }
 
 export function Modals() {
-  const asked = useAsked((s) => s.asked);
+  const asked = store((s) => s.asked);
   // Drawn until it has slid away.
   const [shown, setShown] = useState<Modal | null>(null);
   if (asked !== null && asked !== shown) setShown(asked);

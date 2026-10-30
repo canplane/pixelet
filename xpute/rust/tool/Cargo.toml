@@ -1,0 +1,19 @@
+[package]
+name = "xpute-tool"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+# xpute's own files, generated from its spec/: `cargo spec` says what is
+# stale, `cargo spec --write` writes it.
+[[bin]]
+name = "spec"
+path = "src/bin/spec.rs"
+
+# No crate of the workspace's: it writes into them.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }

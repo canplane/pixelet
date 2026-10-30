@@ -156,14 +156,14 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     if (keyDown(e.code, { inField: inField(e) })) e.preventDefault();
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
+  // What the world held of the keyboard and the pointer is let go as the page
+  // hides; the kernel hears the hiding from the platform (visibility.ts).
   const onVisibility = () => {
     if (document.visibilityState !== "visible") {
       releaseKeys();
       releasePointers();
     }
-    input.visible(document.visibilityState === "visible");
   };
-  const onPageHide = () => input.visible(false);
 
   canvas.addEventListener("pointerdown", onDown);
   canvas.addEventListener("pointermove", onMove);
@@ -174,7 +174,6 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   globalThis.addEventListener("pointerup", onUp);
   globalThis.addEventListener("pointercancel", onCancel);
   document.addEventListener("visibilitychange", onVisibility);
-  globalThis.addEventListener("pagehide", onPageHide);
   // Captured: react-native-web's TextInput stops a key's propagation before it bubbles here.
   globalThis.addEventListener("keydown", onKeyDown, true);
   globalThis.addEventListener("keyup", onKeyUp, true);
@@ -183,15 +182,9 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const observer = new ResizeObserver(onResize);
   observer.observe(canvas);
 
+  // Before the world opens, so its first frame is drawn at the canvas's size.
   sendRect();
-  // One viewport, filled again each frame it is asked for.
-  const viewport = { width: 0, height: 0, dpr: 1 };
-  const close = input.open(() => {
-    viewport.width = canvas.clientWidth;
-    viewport.height = canvas.clientHeight;
-    viewport.dpr = dpr();
-    return viewport;
-  });
+  const close = input.open();
 
   return () => {
     releasePointers();
@@ -201,7 +194,6 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     globalThis.removeEventListener("blur", releaseKeys);
     globalThis.removeEventListener("keyup", onKeyUp, true);
     globalThis.removeEventListener("keydown", onKeyDown, true);
-    globalThis.removeEventListener("pagehide", onPageHide);
     document.removeEventListener("visibilitychange", onVisibility);
     globalThis.removeEventListener("pointercancel", onCancel);
     globalThis.removeEventListener("pointerup", onUp);

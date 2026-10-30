@@ -14,11 +14,29 @@
     "$val": 262144,
     "$type": "u32",
     "$doc": [
-      "The room a guest's shared range asks for: the directory, both rings, a stream and its",
-      "own state, with room to spare. Where the range begins, and so where the directory is,",
-      "the guest's boot answers (the contract's rule 0); what else a memory holds — a module's",
-      "stack and data — is the build's, and no number here."
+      "The room a guest's shared range asks for: the toc, both rings, the two streams",
+      "and the gaps LAYOUTS draws between them, then its own state and heap. Where the range",
+      "begins, and so where the toc is, the guest's boot answers (the contract's rule 0);",
+      "what else a memory holds — a module's stack and data — is the build's, and no number here."
     ]
+  },
+
+  "LAYOUTS": {
+    "$val": 8,
+    "$type": "u32",
+    "$doc": [
+      "The layouts a host runs every trace against, one for each seed below this. The guest's",
+      "boot takes the seed and draws from it (kit's SplitMix32) the order of what it shares",
+      "with its host, the toc among them, and the pages left before each, every guest by",
+      "the same draw; so nothing it shares lies where it lay under another seed, and only a",
+      "host that finds it all through the toc passes every layout (the contract's rule 0)."
+    ]
+  },
+
+  "GAP_PAGES": {
+    "$val": 3,
+    "$type": "u32",
+    "$doc": ["The most pages a layout leaves before each part it lays."]
   },
 
   "SQ_CAP": {
@@ -32,7 +50,7 @@
     "$type": "u32",
     "$doc": [
       "Frames the completion ring holds: fewer than eight commands raising MOST_RAISE",
-      "signals each leave, so a trace that sends those makes a turn's output outgrow it."
+      "events each leave, so a trace that sends those makes a turn's output outgrow it."
     ]
   },
 
@@ -51,7 +69,7 @@
   "SYS_WORDS": {
     "$val": 64,
     "$type": "u32",
-    "$doc": ["The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them."]
+    "$doc": ["The hostcalls' stream: OPEN and CLOSE are recorded there, and nothing runs them."]
   },
 
   "STACK_BYTES": {
@@ -78,25 +96,45 @@
   "MOST_RAISE": {
     "$val": 32,
     "$type": "u32",
-    "$doc": ["The most signals one RAISE asks for; more is refused with EINVAL."]
+    "$doc": ["The most events one RAISE asks for; more is refused with EINVAL."]
   },
 
   "key": {
     "$type": "u32",
-    "$doc": ["The guest's own entry in its directory, past xpute's PROGRAM bit."],
+    "$doc": ["The guest's own entry in its toc, past xpute's PROGRAM bit."],
     "STREAM": { "$val": 2147483649, "$doc": ["Where the stream is, run by the host after every turn."] }
+  },
+
+  "hostcall": {
+    "$type": "u32",
+    "$doc": ["The guest's own hostcall, past xpute's PROGRAM bit."],
+    "ANSWER": {
+      "$val": 2147483649,
+      "$doc": [
+        "A number and an offset: the host writes the number plus one at the offset and answers 0,",
+        "before the hostcall returns; a number of 0 it refuses with EINVAL, writing nothing."
+      ]
+    }
+  },
+
+  "SENDER": {
+    "$val": 1,
+    "$type": "u32",
+    "$doc": [
+      "The port a trace sends the guest's own commands as, and the one the guest raises",
+      "its events for (ipc/frame.json PORT_SHIFT)."
+    ]
   },
 
   "cmd": {
     "$type": "u32",
     "$doc": [
-      "The commands, `major << 8 | minor`, on the majors a program numbers its own from",
-      "(xpute's PROGRAM_MAJOR and up), so none is one of xpute's — SYS_OPENED among them. A",
-      "packet, where one is taken, is a branch whose first child is a number."
+      "The guest's own commands, `major << 8 | minor`, which a trace sends as SENDER. A packet,",
+      "where one is taken, is a branch whose first child is a number."
     ],
     "OK": { "$val": 4097, "$doc": ["Succeeds; replies 0."] },
     "FAIL": { "$val": 4098, "$doc": ["Fails with EINVAL."] },
-    "RAISE": { "$val": 4099, "$doc": ["Raises the packet's number of SIGNALs, tagged 0 up, then replies with that number."] },
+    "RAISE": { "$val": 4099, "$doc": ["Raises the packet's number of EVENTs, tagged 0 up, then replies with that number."] },
     "RECORD": { "$val": 4100, "$doc": ["Writes one record to the stream, its op the packet's number and no words; replies 0."] },
     "ISSUE": { "$val": 4101, "$doc": ["Takes a handle from the guest's table and replies with it."] },
     "RELEASE": { "$val": 4102, "$doc": ["Gives back the packet's handle; fails with EBADF for one that is not live."] },
@@ -108,7 +146,11 @@
       "$doc": ["Opens a file for the packet's number, its owner, and replies with the descriptor; the host's answer (SYS_OPENED) raises OPENED for that owner while the descriptor is open."]
     },
     "CLOSE": { "$val": 4107, "$doc": ["Closes the packet's descriptor, answered or not; fails with EBADF for one not open."] },
-    "SIGNAL": { "$val": 4353, "$doc": ["What RAISE raises."] },
+    "HOSTCALL": {
+      "$val": 4108,
+      "$doc": ["Zeroes a word of its own, makes the hostcall ANSWER of the packet's number and the word's offset, and replies with the word as it then reads it; fails with the host's errno where the host refused."]
+    },
+    "EVENT": { "$val": 4353, "$doc": ["What RAISE raises."] },
     "OPENED": { "$val": 4354, "$doc": ["An open answered: tagged with its owner, its result the host's."] }
   }
 }

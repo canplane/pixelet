@@ -4,13 +4,13 @@ import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { Message } from "@/abi/cmd.spec.ts";
-import { Gpu } from "@/abi/gpu.ts";
-import { Boot, useBoot, useStop } from "./boot.ts";
+import { Boot, Gpu } from "@/abi/state.ts";
+import { useBoot, useStop } from "./boot.ts";
 import { Modals } from "./modal.tsx";
 import { BlueScreen, Halt } from "./halt.tsx";
 import { messageKey } from "@/shell/locale/message-key.ts";
 import { KeyboardAway } from "@/shell/ui/keyboard.tsx";
-import { DockMode, useDockStore } from "@/shell/store/dock.ts";
+import { DockMode, setDockMode } from "@/shell/world/dock/store.ts";
 import { useGpu, useKernel } from "@/shell/store/watch.ts";
 
 /** What ends the app before it ran, said in place of it: no GPU to start with, or a kernel that never started. */
@@ -52,9 +52,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   if (halt !== null) return <Halt of={halt} />;
   return (
     // A touch elsewhere puts the typing away with the keyboard.
-    <KeyboardAway
-      onAway={() => useDockStore.getState().setDockMode(DockMode.Palette)}
-    >
+    <KeyboardAway onAway={() => setDockMode(DockMode.Palette)}>
       <View style={styles.page}>{boot === Boot.Started && children}</View>
       <Modals />
     </KeyboardAway>

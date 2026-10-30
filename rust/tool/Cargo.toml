@@ -8,8 +8,8 @@ publish.workspace = true
 path = "src/lib.rs"
 doctest = false
 
-# No workspace crate is a dependency: the generators write into them and must
-# build when that output is broken.
+# No crate a generator writes into is a dependency: the generators must build
+# when that output is broken.
 [dependencies]
 fnv.workspace = true
 libm.workspace = true

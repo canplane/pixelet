@@ -84,8 +84,9 @@ only what search reads: `overture_places`, `overture_division_areas` and
    hcloud firewall apply-to-resource pixelet-prod-fw --type server --server pixelet-prod
    ```
 3. **Docker.** `curl -fsSL https://get.docker.com | sh`.
-4. **DNS.** An A record for `api.plei.me` to the VM, **proxied** through
-   Cloudflare; DNS-only would bypass the edge the firewall relies on.
+4. **DNS.** An A record for the origin's host (`spec/spec/route.json`
+   `origins`) to the VM, **proxied** through Cloudflare; DNS-only would bypass
+   the edge the firewall relies on.
 5. **The tree.** Cloned whole onto the VM: both servers' Dockerfiles
    (`rust/server/geo/Dockerfile`, `rust/server/api/Dockerfile`) build from the
    repository root, since their dependencies are path dependencies across
@@ -149,7 +150,7 @@ sql psql -v ON_ERROR_STOP=1 -c "ANALYZE overture_places; ANALYZE overture_divisi
 rm ~/overture.dump
 ```
 
-`./script/smoke.py https://api.plei.me --origin` checks the result.
+`./script/smoke.py --origin` checks the result.
 
 ## 4. Cloudflare
 
@@ -209,7 +210,7 @@ unnumbered.
 wrangler login           # once a machine
 make -j8 check && make -j8 test
 make deploy              # build, publish
-./script/smoke.py https://plei.me
+./script/smoke.py
 ```
 
 A deploy uploads only changed static assets and leaves the bucket alone:
@@ -234,7 +235,7 @@ each job is as it is lives in the workflow's comments.
 | `number`        | every push to deploy  | takes a build number                                                                                    |
 | `deploy-server` | after `number`        | ssh, `infra/prod/deploy.sh`: reset to the run's commit, `docker compose up -d --build --force-recreate` |
 | `deploy-web`    | after `deploy-server` | `make deploy` under the build number: builds, keeps the panic paths, publishes                          |
-| `smoke`         | after both deployed   | `./script/smoke.py https://plei.me`                                                                     |
+| `smoke`         | after both deployed   | `./script/smoke.py`                                                                                     |
 | `record`        | after either deployed | appends the build to the log                                                                            |
 
 A deploy is whole: the client and the servers go out from the one commit, every

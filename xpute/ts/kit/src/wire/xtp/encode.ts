@@ -20,7 +20,7 @@ import type {
   U8Array,
 } from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 
 import type {
@@ -223,7 +223,7 @@ export class PacketWriter {
   /** The packet's end so far, from `start`. */
   private lim: u32 = HDR_SZ;
   /** The first reason only. */
-  private err: Errno | null = null;
+  private err: i32 | null = null;
 
   /** A packet of one root, any node. `bytes` and `view` see the same memory
    * from the same offset; `cap` is at most MAX_PKT_SZ. */
@@ -250,7 +250,7 @@ export class PacketWriter {
     return this;
   }
 
-  private spoil(errnum: Errno): -1 {
+  private spoil(errnum: i32): -1 {
     this.err ??= errnum;
     return -1;
   }

@@ -1,20 +1,25 @@
 // xpute-conformance/guest.rs
 
 //! The Rust conformance guest, exporting the C++ guest's two calls so one
-//! host drives both; `boot` answers the directory's offset. Natively the host
-//! hands it a region and a clock; as wasm it imports both, its range starts
-//! past the linker's data, and its turn is the module's `intr`.
+//! host drives both; `boot` takes a layout's seed and answers the toc's
+//! offset. Natively the host hands it a region, a clock and its hostcall; as
+//! wasm it imports all three, its range starts past the linker's data, and its
+//! turn is the module's `run`.
 
-use xpute_guest::abi::cmd::{Command, SysOpened};
+#[cfg(not(target_arch = "wasm32"))]
+use core::cell::Cell;
+
 use xpute_guest::abi::handle::Table;
-use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory};
-use xpute_guest::ipc::door::{Applied, Door};
+use xpute_guest::ipc::door::{Applied, Door, Submission};
 use xpute_guest::ipc::file::Files;
+use xpute_guest::ipc::frame;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::stream::Stream;
 use xpute_guest::ipc::sys::Sys;
+use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc};
 use xpute_guest::mem::Memory;
-use xpute_guest::sched::quantum::NO_WAKE;
+use xpute_guest::sched::wake::NO_WAKE;
+use xpute_kit::math::rng::SplitMix32;
 use xpute_kit::math::scalar::round;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -28,14 +33,38 @@ const fn page_up(bytes: u32) -> u32 {
     bytes.div_ceil(PAGE_BYTES) * PAGE_BYTES
 }
 
-const DIRECTORY_AT: u32 = 0;
-const SQ_DESC_AT: u32 = PAGE_BYTES;
-const CQ_DESC_AT: u32 = SQ_DESC_AT + page_up(ring_bytes(spec::SQ_CAP));
-const SQ_SLOT_AT: u32 = CQ_DESC_AT + page_up(ring_bytes(spec::CQ_CAP));
-const CQ_SLOT_AT: u32 = SQ_SLOT_AT + slots_bytes(spec::SQ_CAP, spec::SLOT_BYTES);
-const STREAM_AT: u32 = CQ_SLOT_AT + slots_bytes(spec::CQ_CAP, spec::SLOT_BYTES);
-const SYS_AT: u32 = STREAM_AT + spec::STREAM_WORDS * 4;
-const STATE_AT: u32 = page_up(SYS_AT + spec::SYS_WORDS * 4);
+// What the guest shares with its host, each on pages of its own, in the order
+// a layout draws (`layout`).
+const TOC: usize = 0;
+const SQ_DESC: usize = 1;
+const CQ_DESC: usize = 2;
+const SQ_SLOT: usize = 3;
+const CQ_SLOT: usize = 4;
+const STREAM: usize = 5;
+const SYS: usize = 6;
+const PARTS: usize = 7;
+
+const PART_BYTES: [u32; PARTS] = [
+    toc_words(4) as u32 * 4,
+    ring_bytes(spec::SQ_CAP),
+    ring_bytes(spec::CQ_CAP),
+    slots_bytes(spec::SQ_CAP, spec::SLOT_BYTES),
+    slots_bytes(spec::CQ_CAP, spec::SLOT_BYTES),
+    spec::STREAM_WORDS * 4,
+    spec::SYS_WORDS * 4,
+];
+
+/// The most a layout spans: the page it starts past, every part, and the most
+/// pages before each. The guest's own state follows, where no layout moves it.
+const STATE_AT: u32 = {
+    let mut end = PAGE_BYTES + PARTS as u32 * spec::GAP_PAGES * PAGE_BYTES;
+    let mut p = 0;
+    while p < PARTS {
+        end += page_up(PART_BYTES[p]);
+        p += 1;
+    }
+    end
+};
 
 /// Only as wasm; a native build allocates from the process.
 const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<Guest>() as u32);
@@ -48,12 +77,22 @@ const _: () = assert!(
     (STATE_AT as usize).is_multiple_of(core::mem::align_of::<Guest>()),
     "the state lies on its own alignment"
 );
-const _: () = assert!(
-    directory_words(4) as u32 * 4 <= PAGE_BYTES,
-    "the directory outgrows its page"
-);
 
 pub type Now = extern "C" fn() -> f64;
+pub type Hostcall = extern "C" fn(u32) -> i32;
+
+#[cfg(not(target_arch = "wasm32"))]
+thread_local! {
+    /// The native host's hostcall, which `boot` installs as the guest's.
+    static HOSTCALL: Cell<Option<Hostcall>> = const { Cell::new(None) };
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn hostcall(at: u32) -> i32 {
+    HOSTCALL
+        .with(Cell::get)
+        .map_or(Errno::ENOSYS as i32, |f| f(at))
+}
 
 struct Guest {
     door: Door,
@@ -68,6 +107,27 @@ struct State {
     now: Now,
     /// The clock at the last MARK.
     mark: f64,
+    /// What HOSTCALL's host writes.
+    word: u32,
+}
+
+/// Where each part lies under `seed`, from the range's start: the parts in the
+/// order the seed draws, each past the pages it draws to leave before it. The
+/// first page is left out (the contract's rule 1).
+fn layout(seed: u32) -> [u32; PARTS] {
+    let mut rng = SplitMix32::new(seed);
+    let mut order: [usize; PARTS] = core::array::from_fn(|p| p);
+    for i in (1..PARTS).rev() {
+        order.swap(i, (rng.next_u32() % (i as u32 + 1)) as usize);
+    }
+    let mut at = [0; PARTS];
+    let mut end = PAGE_BYTES;
+    for p in order {
+        end += rng.next_u32() % (spec::GAP_PAGES + 1) * PAGE_BYTES;
+        at[p] = end;
+        end += page_up(PART_BYTES[p]);
+    }
+    at
 }
 
 /// Every offset written is the memory's, so `range` is added to each.
@@ -75,41 +135,41 @@ struct State {
 /// # Safety
 /// The range is `spec::MEM_BYTES` inside the memory, which outlives the
 /// guest, and nothing else writes it while a call runs.
-unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
-    let at = |off: u32| (range + off) as usize;
+unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
+    let at = layout(seed).map(|off| range + off);
     // SAFETY: the caller's memory; the ranges are the layout's.
     let (sq, cq, stream, sys) = unsafe {
         (
             Ring::init(
                 mem,
-                at(SQ_DESC_AT),
+                at[SQ_DESC] as usize,
                 spec::SQ_CAP,
-                range + SQ_SLOT_AT,
+                at[SQ_SLOT],
                 spec::SLOT_BYTES,
             ),
             Ring::init(
                 mem,
-                at(CQ_DESC_AT),
+                at[CQ_DESC] as usize,
                 spec::CQ_CAP,
-                range + CQ_SLOT_AT,
+                at[CQ_SLOT],
                 spec::SLOT_BYTES,
             ),
-            Stream::new(mem, at(STREAM_AT), spec::STREAM_WORDS as usize, 1),
-            Sys::new(mem, at(SYS_AT), spec::SYS_WORDS as usize),
+            Stream::new(mem, at[STREAM] as usize, spec::STREAM_WORDS as usize, 1),
+            Sys::new(mem, at[SYS] as usize, spec::SYS_WORDS as usize),
         )
     };
     let door = Door::new(sq, cq, spec::MOST_RAISE);
     // SAFETY: as above.
     unsafe {
-        write_directory(
+        write_toc(
             mem,
-            at(DIRECTORY_AT),
-            directory_words(4),
+            at[TOC] as usize,
+            toc_words(4),
             &[
-                (key::SQ, range + SQ_DESC_AT),
-                (key::CQ, range + CQ_DESC_AT),
-                (spec::key::STREAM, range + STREAM_AT),
-                (key::SYS, range + SYS_AT),
+                (key::SQ, at[SQ_DESC]),
+                (key::CQ, at[CQ_DESC]),
+                (spec::key::STREAM, at[STREAM]),
+                (key::SYS, at[SYS]),
             ],
         )
     };
@@ -122,12 +182,13 @@ unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
             handles: Table::new(),
             now,
             mark: 0.0,
+            word: 0,
         },
     };
     // SAFETY: the state's range is the layout's, inside the memory and on
     // the state's alignment (the asserts above).
-    unsafe { mem.at::<Guest>(at(STATE_AT)).write(guest) };
-    range + DIRECTORY_AT
+    unsafe { mem.at::<Guest>((range + STATE_AT) as usize).write(guest) };
+    at[TOC]
 }
 
 /// # Safety
@@ -136,7 +197,20 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
     let Guest { door, state } = unsafe { &mut *mem.at::<Guest>((range + STATE_AT) as usize) };
     state.sys.rise();
-    door.drain(|cmd, pkt| apply(door, state, cmd, pkt));
+    door.drain(|submission| match submission {
+        Submission::Opened(opened) => {
+            if let Some(owner) = state.files.opened(&mut state.sys, &opened) {
+                door.post(
+                    frame::tagged(spec::SENDER, owner),
+                    spec::cmd::OPENED,
+                    0,
+                    opened.res,
+                );
+            }
+            Ok(Some(0))
+        }
+        Submission::Program(cmd, pkt) => apply(mem, door, state, cmd, &pkt),
+    });
     state.stream.publish();
     state.sys.fall();
     if door.pending() {
@@ -151,16 +225,23 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
 /// else writes it while a call runs.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
-pub unsafe extern "C" fn xpute_conformance_boot(mem: *mut u8, now: Now) -> u32 {
+pub unsafe extern "C" fn xpute_conformance_boot(
+    mem: *mut u8,
+    now: Now,
+    host: Hostcall,
+    seed: u32,
+) -> u32 {
+    HOSTCALL.with(|h| h.set(Some(host)));
+    xpute_guest::hostcall::set(hostcall);
     // SAFETY: the caller's memory, the range from its start.
-    unsafe { boot(given(mem), 0, now) }
+    unsafe { boot(given(mem), 0, now, seed) }
 }
 
 /// # Safety
 /// `mem` is a memory `xpute_conformance_boot` laid a guest out over.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
-pub unsafe extern "C" fn xpute_conformance_intr(mem: *mut u8, _quota_ms: f64) -> f64 {
+pub unsafe extern "C" fn xpute_conformance_run(mem: *mut u8, _quota_ms: f64) -> f64 {
     // SAFETY: the caller's memory, booted.
     unsafe { turn(given(mem), 0) }
 }
@@ -197,7 +278,7 @@ mod wasm {
     }
 
     #[no_mangle]
-    pub extern "C" fn xpute_conformance_boot() -> u32 {
+    pub extern "C" fn xpute_conformance_boot(seed: u32) -> u32 {
         let range = range_at(xpute_guest::wasm::data_end());
         // A host that sized the memory for another guest.
         xpute_kit::ensure!(
@@ -207,7 +288,7 @@ mod wasm {
         );
         // SAFETY: the module's memory, from address 0, and the range inside
         // it past what the linker placed.
-        unsafe { boot(xpute_guest::mem::core(), range, now) }
+        unsafe { boot(xpute_guest::mem::core(), range, now, seed) }
     }
 
     fn entry(_quota_ms: f64, _boot: fn() -> BootInfo) -> f64 {
@@ -221,7 +302,7 @@ mod wasm {
     }
 }
 
-fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Applied {
+fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Applied {
     let State {
         stream,
         sys,
@@ -229,6 +310,7 @@ fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Appli
         handles,
         now,
         mark,
+        word,
     } = state;
     let bad_handle = || MarshalError::new(Errno::EBADF);
     match cmd {
@@ -240,7 +322,7 @@ fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Appli
                 return Err(MarshalError::new(Errno::EINVAL));
             }
             for k in 0..n {
-                door.post(k, spec::cmd::SIGNAL, 0, 0);
+                door.post(frame::tagged(spec::SENDER, k), spec::cmd::EVENT, 0, 0);
             }
             Ok(Some(n as i32))
         }
@@ -271,12 +353,14 @@ fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Appli
             .close(sys, arg(pkt)?)
             .map(|_| Some(0))
             .ok_or_else(bad_handle),
-        c if c == Command::SYS_OPENED as u32 => {
-            let answer = SysOpened::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?;
-            if let Some(&owner) = files.owner(answer.fd) {
-                door.post(owner, spec::cmd::OPENED, 0, answer.res);
-            }
-            Ok(Some(0))
+        spec::cmd::HOSTCALL => {
+            let n = arg(pkt)?;
+            *word = 0;
+            let at = mem.off_of(&raw const *word) as u32;
+            sys.call_now(spec::hostcall::ANSWER, &[n, at], &[])
+                .map_err(MarshalError::new)?;
+            // SAFETY: the word the host wrote before the hostcall returned.
+            Ok(Some(unsafe { (&raw const *word).read_volatile() } as i32))
         }
         _ => Ok(None),
     }

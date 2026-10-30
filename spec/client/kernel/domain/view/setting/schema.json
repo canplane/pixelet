@@ -67,7 +67,7 @@
     "$doc": [
       "Where the ambient occlusion comes from. Either is the sky's visibility",
       "and darkens only the light from the sky and its bounce, never the direct",
-      "sun, which the shadows are the sun's visibility of; neither tints",
+      "sun or moon, which the shadows are its visibility of; neither tints",
       "(rust/client/render/src/frame/shader/atmos_light.wgsl `surface_light_in`).",
       "",
       "  off    — none.",
@@ -132,9 +132,9 @@
       "$doc": [
         "Procedurally scattered decor only; what the player placed stays.",
         "",
-        "Med because it is models rather than a shading term: the GPU grows the",
+        "Med because it is models rather than a shading term: the GPU generates the",
         "ground's decor where the eye's windows are (decor_cs) and the frame draws",
-        "each kind as a model, a sprite (an impostor) or nothing by the angle it",
+        "each kind as a model, an impostor or nothing by the angle it",
         "spans, so what it costs follows what is in view. The badge is an ordering,",
         "and this is the one to reach for before any shading term."
       ],
@@ -244,10 +244,11 @@
     "shadows": {
       "number": 11,
       "$doc": [
-        "The sun's shadow map (rust/client/render/src/gpu/shadow.rs): the world",
-        "cast once more from the sun as the eye's rays are, beams and samples on",
+        "The shadow map (rust/client/render/src/gpu/shadow.rs): the world cast",
+        "once more from the sun, or the moon where the sun is down, as the eye's",
+        "rays are, none where neither is up; beams and samples on",
         "the observed pyramid, the boxes they stop at drawn and a texel's sample",
-        "taken, the rest walked (pxl-shader sun.rs), recast only where what it",
+        "taken, the rest walked (pxl-shader light.rs), recast only where what it",
         "reads moves; decor and the actors drawn into it depth only, and a 3x3",
         "compare per fragment; 16 MB of map."
       ],
@@ -284,7 +285,7 @@
     "world_gizmo": {
       "number": 15,
       "$doc": [
-        "Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs)."
+        "Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,
@@ -293,7 +294,7 @@
     "camera_gizmo": {
       "number": 16,
       "$doc": [
-        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them."
+        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them."
       ],
       "kind": "toggle",
       "default": false,

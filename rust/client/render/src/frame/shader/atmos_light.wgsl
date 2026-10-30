@@ -60,18 +60,18 @@ fn ground_bounce_in(up: vec3f, l: Light, s: Lights) -> vec3f {
 // A matte face of albedo one, over pi, Lambert as three's standard material at
 // roughness 1: every lit pass's, and the Earth's past the terrain. Each of
 // its lights is darkened by its own visibility alone: `lit`, the share of the
-// sun and of the Moon the face's shadow lets reach it (shade.wgsl `shade`
-// off shadow.wgsl `sun_lit`), their direct light's; `open`, how open the face
-// is to the sky (the screen's occlusion and its corners'), the light from the
-// sky and its bounce, and the share that reaches every face alike. Each is 1
-// where nothing casts or closes in.
-fn surface_light_in(n: vec3f, up: vec3f, lit: vec2f, open: f32, l: Light, s: Lights) -> vec3f {
+// sun and of the moon the face's shadow lets reach it (shade.wgsl `shade`
+// off shadow.wgsl `shadow_visibility`), their direct light's; `ao`,
+// how open the face is to the sky (the screen's occlusion and its corners'),
+// the light from the sky and its bounce, and the share that reaches every face
+// alike. Each is 1 where nothing casts or closes in.
+fn surface_light_in(n: vec3f, up: vec3f, lit: vec2f, ao: f32, l: Light, s: Lights) -> vec3f {
   // Turned from a light, a face reads no shadow map for it.
-  let shaded = select(vec2f(1.0), mix(vec2f(1.0), lit, SHADOW_ALIKE_TAKEN), vec2<bool>(dot(n, s.sun) > 0.0, dot(n, s.moon) > 0.0));
-  let alike = (l.sun * max(dot(up, s.sun), 0.0) * shaded.x + l.other * max(dot(up, s.moon), 0.0) * shaded.y + l.fill) * open;
-  let hemi = mix(ground_bounce_in(up, l, s), l.fill, dot(n, up) * 0.5 + 0.5) * open;
-  let directed = l.sun * max(dot(n, s.sun), 0.0) * lit.x + l.other * max(dot(n, s.moon), 0.0) * lit.y + hemi;
-  return mix(alike, directed, LIGHT_DIRECTED) / PI;
+  let shaded = select(vec2f(1.0), mix(vec2f(1.0), lit, SHADOW_BY_UP_TAKEN), vec2<bool>(dot(n, s.sun) > 0.0, dot(n, s.moon) > 0.0));
+  let by_up = (l.sun * max(dot(up, s.sun), 0.0) * shaded.x + l.other * max(dot(up, s.moon), 0.0) * shaded.y + l.fill) * ao;
+  let hemi = mix(ground_bounce_in(up, l, s), l.fill, dot(n, up) * 0.5 + 0.5) * ao;
+  let by_normal = l.sun * max(dot(n, s.sun), 0.0) * lit.x + l.other * max(dot(n, s.moon), 0.0) * lit.y + hemi;
+  return mix(by_up, by_normal, LIGHT_BY_NORMAL) / PI;
 }
 
 // Where nothing casts: the Earth's picture, the clouds.

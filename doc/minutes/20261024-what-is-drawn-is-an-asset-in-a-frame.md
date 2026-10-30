@@ -18,7 +18,7 @@ already does is cited, and where it does not.
   - A **marker** is any asset drawn flat to the camera from a design on the
     sheet: a pin, a place, a chat line's bubble, each its own design.
   - An **actor** is a person or a pet: a model with clips.
-  - **Sky** is what hangs in the sky: the clouds, the Moon's picture.
+  - **Sky** is what hangs in the sky: the clouds, the moon's picture.
 - What an asset is (how it is drawn, what it occupies, what it is at a coarser
   zoom) is its own metadata.
 - A **frame** is a coordinate system, which may move: the world's grid, a
@@ -54,7 +54,7 @@ nothing else, which is what a ghost or a chat line wants.
   the eye (pxl-render `frame/draw.rs` `draw_scaled`, `draw_as`,
   `draw_instances`).
 - **Models** are registered once and played by the actors and stood by decor
-  alike (`domain/query/model.rs`).
+  alike (`domain/scene/model.rs`).
 - **The cumulus** is drawn on the wind's moving field and held as decor is not
   (`domain/scene/environment/cloud.rs`).
 - **The ghost** is a cube's look or a decor's model in the pointer's frame
@@ -121,7 +121,7 @@ nothing else, which is what a ghost or a chat line wants.
    and its by-size draw (`domain/scene/decor/cell.rs`, which only the clouds
    use). They are the sky kind's.
 
-   > Since fixed: `spec/spec/asset/sky.json` declares the cumulus and the Moon's
+   > Since fixed: `spec/spec/asset/sky.json` declares the cumulus and the moon's
    > picture; the by-size draw is the clouds' own (`cloud.rs` `present_patch`),
    > the lanes `domain/scene/lane.rs`'s, the groups numbered by pxl-spec-core's
    > `scatter`.
@@ -131,7 +131,7 @@ nothing else, which is what a ghost or a chat line wants.
    asset/ingested.spec.rs` `Asset`, 163 files, which also holds
    the word asset for files alone), and what each file is for is compiled in
    beside it:
-   - the actors: `spec/client/kernel/domain/query/model/variant.json`, paired to
+   - the actors: `spec/client/kernel/domain/scene/model/variant.json`, paired to
      files in `domain/scene/character/variant.rs`, apart from the block catalog,
      and named for its entries rather than its subject;
    - the decors: `spec/spec/asset/decor.json`;
@@ -267,7 +267,7 @@ kernel/src/
 
   > Checked (2026-10-25): it does not resolve by moving the files. The shaders
   > take the decor rows as constants: `scatter.rs` loops over `DECORS` and sizes
-  > `GROUPS`, `drawn::REGIONS`, `DRAWING_WORDS` and `GROWS_WORDS` by them, all
+  > `GROUPS`, `drawn::REGIONS`, `DRAWING_WORDS` and `LIST_WORDS` by them, all
   > compiled into the checked-in WGSL. Reading the decors at boot means the
   > scatter reads them from a buffer instead.
 - **Bounds at boot.** `.fixed`'s block slots and render's draw groups are sized

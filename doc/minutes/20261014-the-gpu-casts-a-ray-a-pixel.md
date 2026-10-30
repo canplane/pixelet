@@ -31,8 +31,8 @@ stripes: rows of rays with sky between them. The screen-cells experiment
 (`480e6b8f9`) proved the cause. Painting each ray's result over its own cell of
 the screen closed the gaps. A ray a pixel on the GPU draws the ground
 continuous, with nothing turned back into geometry. The same rule of detail
-still picks the zoom a ray asks at a distance (`grid::cell_at`). Only the rays
-per screen change.
+still picks the zoom a ray asks at a distance (`grid::cell_zoom_at`). Only the
+rays per screen change.
 
 A Retina resolution is not required. Half the screen's pixels is a legitimate
 target.

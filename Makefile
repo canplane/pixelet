@@ -76,6 +76,7 @@ lint-ts:
 # The code generated from spec/.
 spec:
 	+cd rust && cargo spec --write
+	$(MAKE) -C xpute spec
 
 # Where the tiles come from, a bakery's three: `dev` has them delivered,
 # every route the published deployment's, so not for bake work, its tile

@@ -1,11 +1,14 @@
-# A guest's files (xpute-guest ipc/file, the system calls in ARCHITECTURE.md): what a guest
+# A guest's files (xpute-guest ipc/file, the hostcalls in ARCHITECTURE.md): what a guest
 # owes the host's answers to its opens. The host's own end — roots, paths, reads, writes — is
 # sys/file.tsv's; this is the guest's, held across every guest. A descriptor is a handle, so the
 # trace binds them by name and holds them to relations, as handle.tsv does.
 #
-# The host answers an open with SYS_OPENED, xpute's own command, on a later turn however much later;
-# here a step sends it, so the answer can be made to arrive after the descriptor it names has closed.
-scenarios	files.stale
+# The host answers an open with SYS_OPENED, xpute's own command, sent as the host and on a later turn
+# however much later; here a step sends it, so the answer can be made to arrive after the descriptor it
+# names has closed.
+# A failed open is closed by the guest's library as its answer is applied, so the guest's own CLOSE of
+# it finds nothing.
+scenarios	files.stale files.failed
 
 files.stale.step.0	submit 1 OPEN ack 5
 files.stale.step.1	ring 0
@@ -27,3 +30,12 @@ files.stale.turn.2.completions	6:OPENED 6:CLOSE=-9
 files.stale.relation.0	$f1 != 0
 files.stale.relation.1	slot $f1 == slot $f2
 files.stale.relation.2	$f1 != $f2
+
+files.failed.step.0	submit 1 OPEN ack 7
+files.failed.step.1	ring 0
+files.failed.step.2	submit 2 SYS_OPENED unack $f1 -2 0
+files.failed.step.3	submit 3 CLOSE ack $f1
+files.failed.step.4	ring 0
+files.failed.turn.0.completions	1:OPEN=$f1
+files.failed.turn.1.completions	7:OPENED 3:CLOSE=-9
+files.failed.relation.0	$f1 != 0

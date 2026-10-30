@@ -12,7 +12,13 @@ import {
 } from "@/shell/world/deck.ts";
 import { type Key, usePresent } from "@/shell/ui/motion/presence.tsx";
 import { after, LEAVE, SETTLE } from "@/shell/ui/motion/transition.ts";
-import { setToastDragging, toastRotate, useToastStore } from "./store.ts";
+import {
+  rotateToasts,
+  setToastDragging,
+  toastCount,
+  useToastEntries,
+  useToastTurns,
+} from "./store.ts";
 import { Toast, TOAST_SIDE } from "./item.tsx";
 
 const PEEK_PX = 8;
@@ -21,8 +27,8 @@ const PEEK_PX = 8;
 const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
 
 export function Toaster() {
-  const entries = useToastStore((s) => s.entries);
-  const turns = useToastStore((s) => s.turns);
+  const entries = useToastEntries();
+  const turns = useToastTurns();
   const { list, gone } = usePresent(entries, (e) => e.id);
   // On a whole pixel: half an odd width is not one.
   const [center, setCenter] = useState(0);
@@ -58,9 +64,8 @@ export function Toaster() {
   if (!swipe.current) {
     swipe.current = PanResponder.create({
       // On press: by the first move, a swipe down has left the pointer to the dock.
-      onStartShouldSetPanResponder: () =>
-        useToastStore.getState().entries.length > 1,
-      ...deckSwipe(toastRotate, { drag: setToastDragging }),
+      onStartShouldSetPanResponder: () => toastCount() > 1,
+      ...deckSwipe(rotateToasts, { drag: setToastDragging }),
     });
   }
 

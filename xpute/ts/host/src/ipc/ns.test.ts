@@ -4,7 +4,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { Namespace } from "./ns.ts";
 import { FileError } from "./sys.ts";
 

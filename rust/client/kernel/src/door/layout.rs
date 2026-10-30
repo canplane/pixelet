@@ -1,7 +1,7 @@
 // pxl-kernel/door/layout.rs
 
 //! The memory's layout. Its front, below GLOBAL_BASE: the rings'
-//! descriptors, their slot payloads and the directory's page, at fixed
+//! descriptors, their slot payloads and the toc's page, at fixed
 //! addresses from mem.json. And `.fixed`: which ranges it holds, each sized
 //! by its owner and handed to it at boot (`install`), and the heap after
 //! them.
@@ -12,10 +12,10 @@ use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
 use crate::domain::layer::terrain::mirror;
-use crate::domain::query::decor::asset;
 use crate::domain::scene::character::companion;
 use crate::domain::scene::character::preview;
 use crate::domain::scene::character::variant;
+use crate::domain::scene::decor::asset;
 use crate::domain::scene::environment::cloud;
 use crate::profiler::record;
 use crate::sys::io::body;
@@ -27,7 +27,7 @@ use crate::sys::mem::section::{
     self, fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES,
 };
 use crate::sys::mem::spec::{
-    CQ_CAP, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES,
+    CQ_CAP, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES, TOC_AT,
 };
 use pxl_render::api_spec::stream;
 use pxl_render::gpu::api;
@@ -94,13 +94,10 @@ const _: () = assert!(
     DESC_END <= RING_SLOT_AT,
     "the descriptors run into the payloads"
 );
+const _: () = assert!(SLOT_END <= TOC_AT, "the payloads run into the toc");
 const _: () = assert!(
-    SLOT_END <= DIRECTORY_AT,
-    "the payloads run into the directory"
-);
-const _: () = assert!(
-    DIRECTORY_AT.is_multiple_of(PAGE_BYTES) && DIRECTORY_AT + PAGE_BYTES <= GLOBAL_BASE,
-    "the directory is a page under the bracket's data"
+    TOC_AT.is_multiple_of(PAGE_BYTES) && TOC_AT + PAGE_BYTES <= GLOBAL_BASE,
+    "the toc is a page under the bracket's data"
 );
 
 /// The ranges of `.fixed`, in address order: the resident terrain, the

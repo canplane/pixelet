@@ -10,20 +10,22 @@
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
-import { kernel_pointer } from "@/abi/input.ts";
+import { kernel_pointer } from "@/port/input.ts";
 import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
-import { DockMode, useDockStore } from "@/shell/store/dock.ts";
+import {
+  DockMode,
+  dockMode,
+  setDockMode,
+  watchDockMode,
+} from "@/shell/world/dock/store.ts";
 
 /** The pointers spent putting the typing away. */
 const spent = new Set<i32>();
 /** The pointers pressed, whose moves drag rather than hover, each with its kind. */
 const pressed = new Map<i32, PointerType>();
 
-useDockStore.subscribe((state, before) => {
-  if (
-    state.dockMode === DockMode.Message &&
-    before.dockMode !== DockMode.Message
-  )
+watchDockMode((mode) => {
+  if (mode === DockMode.Message)
     kernel_pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
 });
 
@@ -35,8 +37,7 @@ export function worldPointer(
   x: f64,
   y: f64,
 ): void {
-  const { dockMode, setDockMode } = useDockStore.getState();
-  const typing = dockMode === DockMode.Message;
+  const typing = dockMode() === DockMode.Message;
   switch (phase) {
     case PointerPhase.Down:
       pressed.set(id, pointerType);

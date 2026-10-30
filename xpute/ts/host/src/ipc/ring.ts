@@ -4,7 +4,7 @@
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { HDR_SZ, WORD_SZ } from "@xpute/kit/wire/xtp/spec.ts";
@@ -140,7 +140,7 @@ export class Ring {
     flags: u32 = 0,
     pkt: PacketWriter | null = null,
     result: i32 = 0,
-  ): Errno {
+  ): i32 {
     if (this.len >= this.cap) return Errno.EAGAIN;
     let pkt_at = 0;
     if (pkt !== null) {

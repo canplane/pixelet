@@ -12,7 +12,7 @@ use core::hash::Hasher;
 
 use super::arrangement::{surface, Brick, Instance, Key, Went};
 use crate::domain::layer::object::preview::draft;
-use crate::domain::query::{cell_at, World};
+use crate::domain::query::{cell_zoom_at, World};
 use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{CNT_FILL, CNT_INK, PILL_FILL, PILL_INK};
 use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
@@ -124,7 +124,7 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
     let drafted = draft().map(|d| d.at);
     out.extend(draft().map(|d| one(d.at, pill(&d.words), pin_at(d.at).0)));
     for p in pins.iter_mut() {
-        p.grid = cell_at(eye, p.base);
+        p.grid = cell_zoom_at(eye, p.base);
         p.cell = marker_shows(p.grid).then(|| marker_cell_of(p.grid, p.at));
     }
     pins.sort_unstable_by_key(|p| (p.brick, p.cell));

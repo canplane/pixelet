@@ -2,7 +2,9 @@
 
 //! The guest's end of its rings: submissions applied in order, completions
 //! posted in place. The host reads the completion ring dry before it rings
-//! again, so overrunning it is a sizing bug, not a state to wait out.
+//! again, so overrunning it is a sizing bug, not a state to wait out. What the
+//! host sent, port 0, is xpute's own and applied here; the program is
+//! handed every other sender's, and an open the host completed.
 
 use core::cell::Cell;
 
@@ -10,11 +12,20 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::PacketWriter;
 
+use crate::abi::cmd::{Command, Nop, SysOpened};
 use crate::ipc::frame;
 use crate::ipc::ring::Ring;
 
 /// None for an unknown command, which replies ENOSYS.
 pub type Applied = Result<Option<i32>, MarshalError>;
+
+/// What the door hands the program: an open the host completed, or a frame
+/// of the program's own, its number and its packet. A drain runs before any
+/// phase's budget, so the program records what it is handed and returns.
+pub enum Submission<'a> {
+    Opened(SysOpened),
+    Program(u32, Option<&'a [u8]>),
+}
 
 /// How full the rings ran since the stat was last taken (`Door::take_stat`):
 /// each figure the most it reached.
@@ -30,19 +41,19 @@ pub struct DoorStat {
 pub struct Door {
     sq: Ring,
     cq: Ring,
-    /// What one command may leave: its signals, or the turn's after the drain, and its reply.
+    /// What one command may leave: its events, or the turn's after the drain, and its reply.
     reserve: u32,
     stat: Cell<DoorStat>,
 }
 
 impl Door {
-    /// `most_signals` is the most one command raises, or the turn once its
+    /// `most_events` is the most one command raises, or the turn once its
     /// drain is done: the program's bound.
-    pub fn new(sq: Ring, cq: Ring, most_signals: u32) -> Door {
+    pub fn new(sq: Ring, cq: Ring, most_events: u32) -> Door {
         Door {
             sq,
             cq,
-            reserve: most_signals + 1,
+            reserve: most_events + 1,
             stat: Cell::default(),
         }
     }
@@ -87,8 +98,9 @@ impl Door {
         xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
-    pub fn raise(&self, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
-        self.post_in_place(0, cmd, 0, 0, |out: &mut [u8]| {
+    /// An event for `port`.
+    pub fn raise(&self, port: u32, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
+        self.post_in_place(frame::tagged(port, 0), cmd, 0, 0, |out: &mut [u8]| {
             let mut w = PacketWriter::new(out, cnt);
             f(&mut w);
             w.fitted()
@@ -108,7 +120,7 @@ impl Door {
     /// Applies submissions in order while there is room; the rest waits for
     /// the next turn. Replies only to `ACKREQ` and to failures. Returns how
     /// many completions it made.
-    pub fn drain(&self, mut apply: impl FnMut(u32, &Option<&[u8]>) -> Applied) -> u32 {
+    pub fn drain(&self, mut handle: impl FnMut(Submission) -> Applied) -> u32 {
         let tail = self.cq.tail();
         self.keep(|s| s.sq_peak = s.sq_peak.max(self.sq.len()));
         while self.has_room() {
@@ -116,7 +128,7 @@ impl Door {
                 break;
             };
             let result = match self.sq.pkt(&f) {
-                Ok(pkt) => match apply(f.cmd, &pkt) {
+                Ok(pkt) => match applied(&f, pkt, &mut handle) {
                     Ok(Some(val)) => Ok(val),
                     Ok(None) => Err(Errno::ENOSYS as i32),
                     Err(e) => Err(e.errnum as i32),
@@ -135,6 +147,27 @@ impl Door {
         }
         self.keep(|s| s.left_peak = s.left_peak.max(self.sq.len()));
         self.cq.tail().wrapping_sub(tail)
+    }
+}
+
+/// The host's frames applied, NOP answering its value and an open's
+/// completion handed over; any other sender's handed to the program.
+fn applied(
+    f: &frame::Frame,
+    pkt: Option<&[u8]>,
+    handle: &mut impl FnMut(Submission) -> Applied,
+) -> Applied {
+    if frame::port_of(f.tag) != frame::HOST {
+        return handle(Submission::Program(f.cmd, pkt));
+    }
+    let given = || pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG));
+    match Command::of(f.cmd) {
+        Some(Command::NOP) => Ok(Some(match pkt {
+            Some(pkt) => Nop::read(pkt)?.val as i32,
+            None => 0,
+        })),
+        Some(Command::SYS_OPENED) => handle(Submission::Opened(SysOpened::read(given()?)?)),
+        None => Ok(None),
     }
 }
 

@@ -15,13 +15,13 @@ beam.rs, cast.rs `Until::Beam`), and descends the pyramid by one rule of
 detail, the one that sizes every drawn cell: the zoom a ray asks at a
 distance is the one whose block, drawn whole, spans at least one cell of the
 camera grid there, its side at least the cell's angle times the distance
-(`grid::cell_at`). A cube is at least its side wide seen from any direction, so
-how the ray meets its face does not enter (corrected the same day; it first
-divided by the cosine to the face met, which asked an edge-on face as coarse as
-the coarsest zoom). A node coarser than the zoom asked there is not the world as
-drawn there, and is not asked what it draws. It is asked only whether anything
-under it fills at the zoom the ray asks there, the world as its level of detail
-defines it and nothing finer:
+(`grid::cell_zoom_at`). A cube is at least its side wide seen from any
+direction, so how the ray meets its face does not enter (corrected the same day;
+it first divided by the cosine to the face met, which asked an edge-on face as
+coarse as the coarsest zoom). A node coarser than the zoom asked there is not
+the world as drawn there, and is not asked what it draws. It is asked only
+whether anything under it fills at the zoom the ray asks there, the world as its
+level of detail defines it and nothing finer:
 
 - **Nothing fills under it.** The ray goes on past the node whole.
 - **Something may.** The node is split, and its children are taken in the order
@@ -89,7 +89,7 @@ fills, from what each source already keeps, with nothing new stored:
   `Held::relief`), or the node within where the ground may be taken (under its
   face block, over its bedrock, off the wall: `ground::slab`) with a cave
   through all of it.
-- **Caves**: the hash node hollow and drawing nothing again under it (`live`).
+- **Caves**: the hash node hollow and drawing nothing again under it (`branch`).
 - **Separation**: a bound of the ways' own, joined apart from the ground's
   (pxl-spec-core `way::slab`). What a node is comes from a tree of the placed
   tree's shape, built on the GPU a square at a time (pxl-spec-core

@@ -16,12 +16,8 @@
 use crate::domain::approach::damp_alpha;
 use crate::domain::param;
 use crate::domain::query::changed::Asked;
-use crate::domain::query::model;
-use crate::domain::query::model::asset::{model_of, ModelHandle};
-use crate::domain::query::model::draw_list;
-use crate::domain::query::model::registry::Models;
 use crate::domain::query::World;
-use crate::domain::query::{cell_at, over, under, walks};
+use crate::domain::query::{cell_zoom_at, over, under, walks};
 use crate::domain::scene::actor::{Actor, Stance};
 use crate::domain::scene::character::param::{
     CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
@@ -30,6 +26,10 @@ use crate::domain::scene::character::param::{
 use crate::domain::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::model;
+use crate::domain::scene::model::asset::{model_of, ModelHandle};
+use crate::domain::scene::model::draw_list;
+use crate::domain::scene::model::registry::Models;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{load_image, load_of};
@@ -450,7 +450,7 @@ pub fn line_hangs(eye: V3) -> Option<Q3> {
         feet[1],
         feet[2] + person.variant.height_u + HEAD_CLEARANCE_U,
     ];
-    marker_shows(cell_at(eye, feet)).then(|| world_to_canonical(&over))
+    marker_shows(cell_zoom_at(eye, feet)).then(|| world_to_canonical(&over))
 }
 
 /// (model, image handle) for the shell's skinned pass: the image as the

@@ -96,5 +96,5 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let seen = seen_from_eye(v.world);
   let up = up_at(v.world);
   let lit = CLOUD_ALBEDO * surface_light(-sign(dot(dir, up)) * up, up, seen.light);
-  return vec4f(tone(lit * seen.through + seen.scattered), alpha);
+  return vec4f(tone(lit * seen.transmittance + seen.scattered), alpha);
 }

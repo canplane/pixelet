@@ -52,7 +52,7 @@ fn light_of(world_pos: vec3f) -> Light {
 // which is what lets the air's volume hold them (atmos_air.wgsl); the lights
 // turn with a point's height, and are read where it stands (`light_of`).
 struct Seen {
-  through: f32,
+  transmittance: f32,
   scattered: vec3f,
   light: Light,
 };
@@ -104,7 +104,7 @@ fn air_slice(d: f32) -> f32 {
 fn air_stretch(dir: vec3f, t0: f32, t1: f32) -> Veil {
   let km = atmos_km_per_u();
   let v = gather_between(camera_r(), frame_up(), dir, t0 * km, t1 * km, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), ATMOS_AIR_STRETCH_KNOTS);
-  return Veil(v.through, v.scattered * atmos_white() * exposure());
+  return Veil(v.transmittance, v.scattered * atmos_white() * exposure());
 }
 
 // What a froxel holds of the air from the eye to it: what it scatters
@@ -114,7 +114,7 @@ fn air_stretch(dir: vec3f, t0: f32, t1: f32) -> Veil {
 // ray's 1 - T (atmos_air.wgsl `air_before`). Before the air takes anything
 // it holds none.
 fn air_held(v: Veil) -> vec4f {
-  let taken = vec3f(1.0) - v.through;
+  let taken = vec3f(1.0) - v.transmittance;
   return vec4f(select(vec3f(0.0), v.scattered / taken, taken > vec3f(1e-6)), 1.0);
 }
 

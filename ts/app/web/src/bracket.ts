@@ -15,6 +15,7 @@ import * as share from "./share.ts";
 import * as storage from "./storage.ts";
 import * as surface from "./surface.tsx";
 import * as text from "./text.ts";
+import * as visibility from "./visibility.ts";
 import { useSafeArea } from "./safe-area.ts";
 import {
   useViewportTop,
@@ -30,6 +31,7 @@ export const page: Bracket = {
   text,
   origin,
   online,
+  visibility,
   sensor,
   share,
   locale,

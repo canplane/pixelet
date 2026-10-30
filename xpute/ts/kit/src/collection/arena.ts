@@ -10,7 +10,7 @@ import type {
   AnyTypedArrayCtor,
 } from "../abi/array.ts";
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 
 export interface ArenaOptions {
   init_cap: u32;
@@ -84,7 +84,10 @@ export class Arena<T extends object> {
 class ArenaGuard<T extends object> implements Disposable {
   private readonly _mark: u32;
 
-  constructor(private readonly arena: Arena<T>) {
+  private readonly arena: Arena<T>;
+
+  constructor(arena: Arena<T>) {
+    this.arena = arena;
     this._mark = arena.len;
   }
 
@@ -100,10 +103,10 @@ export class Vector<T extends AnyTypedArray> {
   private _cap: u32;
   private _len: u32 = 0;
 
-  constructor(
-    readonly ctor: AnyTypedArrayCtor<T>,
-    opts: ArenaOptions,
-  ) {
+  readonly ctor: AnyTypedArrayCtor<T>;
+
+  constructor(ctor: AnyTypedArrayCtor<T>, opts: ArenaOptions) {
+    this.ctor = ctor;
     const { init_cap: _init_cap, max_cap } = opts;
     this.max_cap = max_cap;
     this._cap = Math.min(_init_cap, max_cap);
@@ -171,7 +174,10 @@ export class Vector<T extends AnyTypedArray> {
 class VectorGuard<T extends AnyTypedArray> implements Disposable {
   private readonly _mark: u32;
 
-  constructor(private readonly vector: Vector<T>) {
+  private readonly vector: Vector<T>;
+
+  constructor(vector: Vector<T>) {
+    this.vector = vector;
     this._mark = vector.len;
   }
 

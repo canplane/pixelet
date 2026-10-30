@@ -11,7 +11,6 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import {
-  AppState,
   type GestureResponderEvent,
   type LayoutChangeEvent,
   type NativeSyntheticEvent,
@@ -89,18 +88,9 @@ function useSurface(
 }
 
 export function World({ surface: driver, input }: WorldSurfaceProps) {
-  const { size, props } = useSurface(driver, "world");
+  const { props } = useSurface(driver, "world");
 
-  useEffect(() => {
-    const close = input.open(() => size.current);
-    const visibility = AppState.addEventListener("change", (state) =>
-      input.visible(state === "active"),
-    );
-    return () => {
-      visibility.remove();
-      close();
-    };
-  }, []);
+  useEffect(() => input.open(), []);
 
   const onLayout = (e: LayoutChangeEvent) => {
     props.onLayout?.(e);

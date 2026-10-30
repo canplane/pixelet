@@ -7,9 +7,9 @@
     "the turns, and its shell, the UI. The commands are grouped by which of them a",
     "command is between.",
     "",
-    "The same number is a command on the submission ring and a signal on the",
+    "The same number is a command on the submission ring and an event on the",
     "completion ring (its `RES` clear). The direction is the ring: `pkt` is",
-    "what the shell submits, `signal` what the kernel posts. Each is written and",
+    "what the shell submits, `event` what the kernel posts. Each is written and",
     "read by what this file generates, on both sides, so no field is found by",
     "its position anywhere else.",
     "",
@@ -21,7 +21,6 @@
     "`unknown` is the member a number it does not give out reads as; an enum",
     "without one refuses the packet. The generator refuses a number given twice."
   ],
-  "base": "xpute/spec/abi/cmd.json",
   "extern": [
     {
       "name": "BakeKind",
@@ -651,7 +650,7 @@
       "format": "hex4",
       "entries": [
         {
-          "section": "the process asks the host: its system calls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"
+          "section": "the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"
         },
         {
           "name": "SENSOR_START",
@@ -659,7 +658,7 @@
           "$doc": [
             "Start watching."
           ],
-          "signal": [
+          "event": [
             {
               "name": "sensor",
               "type": "Sensor"
@@ -672,7 +671,7 @@
           "$doc": [
             "Stop watching."
           ],
-          "signal": [
+          "event": [
             {
               "name": "sensor",
               "type": "Sensor"
@@ -767,7 +766,7 @@
           ]
         },
         {
-          "section": "the host tells the process: its start, its turn, its window, its devices and its input"
+          "section": "the host tells the process: its start, its turn, its window and its devices"
         },
         {
           "name": "WORLD_BOOT",
@@ -815,27 +814,18 @@
           "$doc": [
             "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
             "phases on what is left of the quota, the fetches within the credits. The turn leaves",
-            "its signals on the completion ring, drawn by the kernel."
+            "its events on the completion ring, drawn by the kernel. It carries the host's alone:",
+            "the turn's pacing, the network's credits and the clock; the view it is drawn at is the",
+            "shell's (INPUT_RECT)."
           ],
           "pkt": [
-            {
-              "name": "width",
-              "type": "f64",
-              "$doc": [
-                "The viewport, in CSS pixels."
-              ]
-            },
-            {
-              "name": "height",
-              "type": "f64"
-            },
             {
               "name": "refresh_ms",
               "type": "f64",
               "$doc": [
                 "The display's refresh, as the host measures it from the animation frames it is handed,",
-                "and the interval it paces turns at, a whole number of refreshes (xpute host",
-                "sched/quantum.ts `Grant`): the frame's budget."
+                "and the interval it paces turns at, a whole number of refreshes (the pacing the client",
+                "boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget."
               ]
             },
             {
@@ -880,7 +870,7 @@
           "$doc": [
             "What the tile source declares of itself, once the client has it: the tile root's",
             "`source`, the published one out of the bucket or the dev tile server's, read by the",
-            "client (ts/client/src/namespace/source.ts) and handed over as numbers and names.",
+            "client (ts/client/src/driver/namespace/source.ts) and handed over as numbers and names.",
             "Until it comes nothing is observed: the floor is held at the zoom it names, and no",
             "tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs)."
           ],
@@ -947,10 +937,21 @@
           ]
         },
         {
+          "name": "GPU_READY",
+          "val": 5121,
+          "$doc": [
+            "A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge."
+          ]
+        },
+        {
+          "section": "the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI"
+        },
+        {
           "name": "INPUT_RECT",
           "val": 4353,
           "$doc": [
-            "The canvas's client rect."
+            "The canvas's client rect, in CSS pixels, sent whenever it moves: where a pointer lands,",
+            "and the view's size each frame is drawn at."
           ],
           "pkt": [
             {
@@ -1084,16 +1085,6 @@
               "type": "i32"
             }
           ]
-        },
-        {
-          "name": "GPU_READY",
-          "val": 5121,
-          "$doc": [
-            "A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge."
-          ]
-        },
-        {
-          "section": "the shell and the process: what the UI asks of it, and what it shows the UI"
         },
         {
           "name": "SURFACE_OPEN",
@@ -1391,7 +1382,7 @@
             "The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a",
             "block the kernel holds, valid until the next snapshot."
           ],
-          "signal": [
+          "event": [
             {
               "name": "at",
               "type": "u32"

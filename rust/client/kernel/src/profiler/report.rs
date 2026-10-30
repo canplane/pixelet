@@ -150,7 +150,8 @@ pub fn profiler_frame(t: FrameTurn) {
         budget_ms: t.tick.budget_ms,
         effects_ms: t.effects_ms,
         tick_ms: t.tick.total_ms,
-        phases: t.tick.phase_ms,
+        // The kernel's phases, the first of what xpute's tick leaves room for.
+        phases: core::array::from_fn(|k| t.tick.phase_ms[k]),
         stage_ms: t.stage_ms,
         effects: turn::effect_times(),
         kind: f64::from(host.kind as u8),

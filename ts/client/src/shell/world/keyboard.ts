@@ -12,14 +12,22 @@
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
-import { kernel_keys } from "@/abi/shell.ts";
+import { kernel_keys } from "@/port/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
 import {
   DockMode,
+  dockMode,
+  flashSwatch,
   holdTool,
   RECENT_PICKS,
-  useDockStore,
-} from "@/shell/store/dock.ts";
+  recentPick,
+  selectCube,
+  selectDecor,
+  selectMarker,
+  setDockMode,
+  stepSize,
+  switchDockMode,
+} from "@/shell/world/dock/store.ts";
 
 const MOVE: Record<string, [i32, i32]> = {
   KeyW: [0, -1],
@@ -58,9 +66,7 @@ function sendMove(): void {
 }
 
 function pickSlot(slot: number): void {
-  const { recentPicks, selectCube, selectDecor, selectMarker, flashSwatch } =
-    useDockStore.getState();
-  const pick = recentPicks[slot];
+  const pick = recentPick(slot);
   if (pick.tool === ActiveTool.Decor) return selectDecor(pick.kind);
   if (pick.tool === ActiveTool.Marker) return selectMarker();
   selectCube(pick.cube);
@@ -77,14 +83,13 @@ export function keyDown(
       closeModal();
       return true;
     }
-    const { dockMode, setDockMode } = useDockStore.getState();
-    if (dockMode !== DockMode.Message) return false;
+    if (dockMode() !== DockMode.Message) return false;
     setDockMode(DockMode.Palette);
     return true;
   }
   if (modalOpen()) return false;
   if (code === "Tab") {
-    useDockStore.getState().switchDockMode();
+    switchDockMode();
     return true;
   }
   if (inField) return false;
@@ -97,7 +102,7 @@ export function keyDown(
     return true;
   }
   if (code in SIZE) {
-    useDockStore.getState().stepSize(SIZE[code]);
+    stepSize(SIZE[code]);
     return true;
   }
   if (code in MOVE) {

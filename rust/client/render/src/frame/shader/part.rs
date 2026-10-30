@@ -45,22 +45,24 @@ pub const SHADER_BOUND: u32 = 27;
 /// generated with the cast from pxl-spec-core's `ground::height`: its one
 /// compute entry.
 pub const SHADER_HEIGHT: u32 = 28;
-/// The decor the ground grows in the eye's windows, generated with the cast
+/// The decor the ground generates in the eye's windows, generated with the cast
 /// from pxl-spec-core's `scatter`: its one compute entry.
-pub const SHADER_GROWN: u32 = 29;
-/// What `SHADER_GROWN` and placed decor leave, sized for the screen and
+pub const SHADER_GENERATED: u32 = 29;
+/// What `SHADER_GENERATED` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
-/// args; each drawn into the decor's instances: pxl-spec-core `scatter::drawn`.
-pub const SHADER_GROWN_CNT: u32 = 30;
-pub const SHADER_GROWN_ARGS: u32 = 31;
-pub const SHADER_GROWN_PLACE: u32 = 32;
+/// args; each drawn compacted into the decor's instances: pxl-spec-core
+/// `generated::drawn`.
+pub const SHADER_GENERATED_CNT: u32 = 30;
+pub const SHADER_GENERATED_ARGS: u32 = 31;
+pub const SHADER_GENERATED_COMPACT: u32 = 32;
 /// Each newly held terrain frame's ways, its columns' spans off its lines,
 /// generated with the cast from pxl-spec-core's `ways`: its one compute
 /// entry.
 pub const SHADER_WAY: u32 = 33;
-/// Which eye slots' decor grows again this frame, listed for
-/// `SHADER_GROWN_STAND`'s and `SHADER_GROWN`'s dispatches: its one compute entry.
-pub const SHADER_GROWN_MARK: u32 = 34;
+/// Which eye slots' decor generates again this frame, listed for
+/// `SHADER_GENERATED_THIN`'s and `SHADER_GENERATED`'s dispatches: its one
+/// compute entry.
+pub const SHADER_GENERATED_MARK: u32 = 34;
 /// The eye's windows folded over their bricks, generated with the cast
 /// from pxl-spec-core's `window::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 35;
@@ -88,14 +90,14 @@ pub const SHADER_FORGET: u32 = 43;
 /// to the cells the pixels about them take (pxl-spec-core `beam::Grid::samples`):
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 44;
-/// The world's depth from the sun into its clipmap, generated with the cast
-/// from pxl-spec-core's `sun`: every slot taking the visible sample, a
+/// The world's depth from the light into its clipmap, generated with the cast
+/// from pxl-spec-core's `light`: every slot taking the visible sample, a
 /// workgroup a tile, a compute entry; that depth laid into the map
-/// (sun_map.wgsl, gpu/shadow.rs); and the slots that took none walked
-/// apart (pxl-spec-core `sun::misses_at`), a compute entry of its own.
-pub const SHADER_SUN: u32 = 45;
-pub const SHADER_SUN_MAP: u32 = 46;
-pub const SHADER_SUN_MISS: u32 = 47;
+/// (light_map.wgsl, gpu/shadow.rs); and the slots that took none walked
+/// apart (pxl-spec-core `light::misses_at`), a compute entry of its own.
+pub const SHADER_LIGHT: u32 = 45;
+pub const SHADER_LIGHT_MAP: u32 = 46;
+pub const SHADER_LIGHT_MISS: u32 = 47;
 pub const SHADER_SCREEN_DEPTH: u32 = 48;
 /// The camera grid's cells over the screen (camera_grid.wgsl).
 pub const SHADER_CAMERA_GRID: u32 = 49;
@@ -111,24 +113,52 @@ pub const SHADER_MISS_LIST: u32 = 52;
 /// What lies about each box's face, asked once a box (pxl-spec-core
 /// `raster::ARGS_FACES`): a compute entry.
 pub const SHADER_FACE: u32 = 53;
-/// The tiles of the sun's box its receivers stand on in a cast
-/// (pxl-spec-core `sun::stands_at`): where the eye's rays meet the world, and
+/// The tiles of the light's box its receivers stand on in a cast
+/// (pxl-spec-core `light::stands_at`): where the eye's rays meet the world, and
 /// where the decor and the actors drawn stand; then those they read
-/// (`sun::reads_at`): compute entries.
-pub const SHADER_SUN_MARK: u32 = 54;
-pub const SHADER_SUN_MARK_DRAWN: u32 = 55;
-pub const SHADER_SUN_REACH: u32 = 56;
-/// Which candidates of a slot `SHADER_GROWN_MARK` listed stand, a patch at a
-/// time, for `SHADER_GROWN` to grow: its one compute entry.
-pub const SHADER_GROWN_STAND: u32 = 57;
+/// (`light::reads_at`): compute entries.
+pub const SHADER_LIGHT_MARK: u32 = 54;
+pub const SHADER_LIGHT_MARK_DRAWN: u32 = 55;
+pub const SHADER_LIGHT_REACH: u32 = 56;
+/// Which candidates of a slot `SHADER_GENERATED_MARK` listed the thinning
+/// retains, a window cell a thread, for `SHADER_GENERATED` to generate: its
+/// one compute entry.
+pub const SHADER_GENERATED_THIN: u32 = 57;
 /// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
 pub const SHADER_SCREEN_FINISH: u32 = 58;
 /// The world's color gathered over frames (screen_resolve.wgsl).
 pub const SHADER_SCREEN_RESOLVE: u32 = 59;
-/// The region a frame draws again set back to nothing at the far plane
-/// (screen_clear.wgsl).
-pub const SHADER_SCREEN_CLEAR: u32 = 60;
-pub const SHADERS: u32 = 61;
+/// The claimed tiles set back to nothing at the far plane, their stencil
+/// raised (screen_gate.wgsl).
+pub const SHADER_SCREEN_GATE: u32 = 60;
+/// The finished picture kept at the canvas's size shown on the canvas
+/// (screen_show.wgsl).
+pub const SHADER_SCREEN_SHOW: u32 = 61;
+/// The light's map's tiles that changed reached across to the screen's
+/// (screen_reach.wgsl): its one compute entry.
+pub const SHADER_SCREEN_REACH: u32 = 62;
+/// The claimed tiles of the history the resolve wrote copied back into the
+/// last (screen_write_back.wgsl).
+pub const SHADER_SCREEN_WRITE_BACK: u32 = 63;
+/// The claimed tiles of the samples' raster set back to no sample at the far
+/// plane (raster_gate.wgsl).
+pub const SHADER_RASTER_GATE: u32 = 64;
+/// The screen's tiles the frame's marks cover, or every one, taking its
+/// number (screen_mark.wgsl): its one compute entry.
+pub const SHADER_SCREEN_MARK: u32 = 65;
+/// The claimed tiles of the light's map set back to the far plane, their
+/// stencil raised (light_gate.wgsl): a vertex stage alone.
+pub const SHADER_LIGHT_GATE: u32 = 66;
+/// Each square of the screen's least and most depth, set in the tiles drawn
+/// (screen_bound.wgsl): its one compute entry.
+pub const SHADER_SCREEN_BOUND: u32 = 67;
+/// An actor where it was and where it is, its fragments marking their screen
+/// tiles (skinned_place.wgsl, tile_mark.wgsl).
+pub const SHADER_SKINNED_MARK: u32 = 68;
+/// The tiles of the light's box whose slots' zooms the eye's place moved
+/// (pxl-spec-core `light::Light::asks`): a compute entry.
+pub const SHADER_LIGHT_DETAIL: u32 = 69;
+pub const SHADERS: u32 = 70;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -140,7 +170,7 @@ macro_rules! air {
 }
 
 /// What a lit draw reads before its own parts: the frame, the air and the
-/// volume before each point, the ground's light, the shading, the sun's
+/// volume before each point, the ground's light, the shading, the light's
 /// shadow, the finish and the screen's occlusion.
 macro_rules! lit {
     [$($own:literal),*] => {
@@ -154,22 +184,11 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_DECOR
     lit!["place", "instance", "decor"],
     // SHADER_SKINNED
-    lit!["place", "skinned"],
+    lit!["place", "skinned_place", "skinned"],
     // SHADER_PUCK_ZONE
     &["frame", "encode", "finish", "puck", "puck_zone"],
     // SHADER_PUCK_BEACON
-    &[
-        "frame",
-        "encode",
-        "finish",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_eye_unit",
-        "place",
-        "puck",
-        "puck_beacon",
-    ],
+    lit!["place", "puck", "puck_beacon"],
     // SHADER_MARKER
     &["frame", "encode", "marker", "marker_sprite"],
     // SHADER_SKY
@@ -272,6 +291,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "paint",
         "debug_look",
         "px",
+        "screen_tiles",
         "screen_ray",
         "screen_lit"
     ],
@@ -281,17 +301,17 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["bound.gen"],
     // SHADER_HEIGHT
     &["height.gen"],
-    // SHADER_GROWN
+    // SHADER_GENERATED
     &["decor.gen"],
-    // SHADER_GROWN_CNT
+    // SHADER_GENERATED_CNT
     &["decor_cnt.gen"],
-    // SHADER_GROWN_ARGS
+    // SHADER_GENERATED_ARGS
     &["decor_args.gen"],
-    // SHADER_GROWN_PLACE
-    &["decor_place.gen"],
+    // SHADER_GENERATED_COMPACT
+    &["decor_compact.gen"],
     // SHADER_WAY
     &["way.gen"],
-    // SHADER_GROWN_MARK
+    // SHADER_GENERATED_MARK
     &["decor_mark.gen"],
     // SHADER_JOINED
     &["joined.gen"],
@@ -325,12 +345,12 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["forget.gen"],
     // SHADER_SAMPLE
     &["sample.gen"],
-    // SHADER_SUN
-    &["sun.gen"],
-    // SHADER_SUN_MAP
-    &["sun_word", "sun_map"],
-    // SHADER_SUN_MISS
-    &["sun_miss.gen"],
+    // SHADER_LIGHT
+    &["light.gen"],
+    // SHADER_LIGHT_MAP
+    &["light_word", "screen_tiles", "light_map"],
+    // SHADER_LIGHT_MISS
+    &["light_miss.gen"],
     // SHADER_SCREEN_DEPTH
     lit![
         "lattice",
@@ -338,6 +358,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "eye",
         "paint",
         "px",
+        "screen_tiles",
         "screen_ray",
         "screen_depth"
     ],
@@ -351,18 +372,36 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["miss_list.gen"],
     // SHADER_FACE
     &["face.gen"],
-    // SHADER_SUN_MARK
-    &["sun_mark.gen"],
-    // SHADER_SUN_MARK_DRAWN
-    &["sun_mark_drawn.gen"],
-    // SHADER_SUN_REACH
-    &["sun_reach.gen"],
-    // SHADER_GROWN_STAND
-    &["decor_stand.gen"],
+    // SHADER_LIGHT_MARK
+    &["light_mark.gen"],
+    // SHADER_LIGHT_MARK_DRAWN
+    &["light_mark_drawn.gen"],
+    // SHADER_LIGHT_REACH
+    &["light_reach.gen"],
+    // SHADER_GENERATED_THIN
+    &["decor_thin.gen"],
     // SHADER_SCREEN_FINISH
-    &["frame", "encode", "finish", "screen_finish"],
+    &["frame", "encode", "finish", "screen_tiles", "screen_finish"],
     // SHADER_SCREEN_RESOLVE
-    &["frame", "screen_resolve"],
-    // SHADER_SCREEN_CLEAR
-    &["screen_clear"],
+    &["frame", "screen_tiles", "screen_resolve"],
+    // SHADER_SCREEN_GATE
+    &["screen_tiles", "screen_gate"],
+    // SHADER_SCREEN_SHOW
+    &["screen_show"],
+    // SHADER_SCREEN_REACH
+    &["screen_reach"],
+    // SHADER_SCREEN_WRITE_BACK
+    &["screen_tiles", "screen_write_back"],
+    // SHADER_RASTER_GATE
+    &["screen_tiles", "raster_gate"],
+    // SHADER_SCREEN_MARK
+    &["screen_mark"],
+    // SHADER_LIGHT_GATE
+    &["screen_tiles", "light_gate"],
+    // SHADER_SCREEN_BOUND
+    &["screen_tiles", "screen_bound"],
+    // SHADER_SKINNED_MARK
+    &["frame", "place", "skinned_place", "tile_mark"],
+    // SHADER_LIGHT_DETAIL
+    &["light_detail.gen"],
 ];

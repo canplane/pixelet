@@ -41,7 +41,7 @@ mod program {
         let at = unsafe { xpute_mem(&raw mut bytes) };
         assert!(!at.is_null());
         assert_eq!(bytes, MEM_BYTES);
-        assert_eq!(xpute_intr(4.0), -1.0);
+        assert_eq!(xpute_run(4.0), -1.0);
         assert!(
             guest().heap_stat().requests > 0,
             "the turn's block is the guest's heap's"

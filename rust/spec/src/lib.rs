@@ -5,6 +5,7 @@
 
 pub mod asset;
 pub mod bake;
+pub mod directory;
 pub mod division;
 #[path = "division.spec.rs"]
 mod division_spec;

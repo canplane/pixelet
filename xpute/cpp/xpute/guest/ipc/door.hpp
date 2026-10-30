@@ -15,6 +15,7 @@
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/kit/status/errno.spec.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
+#include "xpute/guest/abi/cmd.spec.hpp"
 #include "frame.hpp"
 #include "ring.hpp"
 
@@ -40,9 +41,9 @@ struct DoorStat {
 
 class Door {
   public:
-    // `most_signals` is the most one command raises, or the turn once its drain
+    // `most_events` is the most one command raises, or the turn once its drain
     // is done: the program's bound.
-    Door(Ring sq, Ring cq, std::uint32_t most_signals) noexcept : sq_(sq), cq_(cq), reserve_(most_signals + 1) {}
+    Door(Ring sq, Ring cq, std::uint32_t most_events) noexcept : sq_(sq), cq_(cq), reserve_(most_events + 1) {}
 
     const Ring &sq() const noexcept { return sq_; }
     const Ring &cq() const noexcept { return cq_; }
@@ -57,8 +58,9 @@ class Door {
         posted(cmd, cq_.push_in_place(tag, cmd, flags, result, write));
     }
 
-    template <class Fill> void raise(std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
-        post_in_place(0, cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
+    // An event for `port`.
+    template <class Fill> void raise(std::uint32_t port, std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
+        post_in_place(frame::tagged(port, 0), cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
             xtp::PacketWriter w(out);
             w.branch(cnt, fill);
             Result<std::uint32_t> n = w.finish();
@@ -68,14 +70,18 @@ class Door {
 
     // Applies waiting commands in order while there is room for what one more may
     // leave; replies to ACKREQ and to failures. Answers how many completions it made.
-    template <class Apply> std::uint32_t drain(Apply &&apply) const noexcept {
+    // What the host sent, port 0, is xpute's own and applied here: NOP answers
+    // its value, and an open the host completed goes to `opened`; every other
+    // sender's goes to `apply`. A drain runs before
+    // any phase's budget, so the program records what it is handed and returns.
+    template <class Opened, class Apply> std::uint32_t drain(Opened &&opened, Apply &&apply) const noexcept {
         std::uint32_t tail = cq_.tail();
         stat_.sq_peak = std::max(stat_.sq_peak, sq_.len());
         while (has_room()) {
             std::optional<Frame> f = sq_.peek();
             if (!f) break;
             Result<std::span<const std::uint8_t>> pkt = sq_.pkt(*f);
-            Applied a = pkt ? apply(f->cmd, *pkt) : Applied{.err = pkt.error().errnum};
+            Applied a = pkt ? applied(*f, *pkt, opened, apply) : Applied{.err = pkt.error().errnum};
             sq_.advance();
             if (a.err != Errno::ok) {
                 post(f->tag, f->cmd, frame::RES, static_cast<std::int32_t>(a.err));
@@ -92,6 +98,22 @@ class Door {
   private:
     bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.cap(); }
 
+    template <class Opened, class Apply> static Applied applied(const Frame &f, std::span<const std::uint8_t> pkt, Opened &opened, Apply &apply) noexcept {
+        if (frame::port_of(f.tag) != frame::HOST) return apply(f.cmd, pkt);
+        if (f.cmd == static_cast<std::uint32_t>(abi::Command::NOP)) {
+            if (pkt.empty()) return {};
+            Result<abi::Nop> nop = abi::Nop::read(pkt);
+            if (!nop) return {.err = nop.error().errnum};
+            return {.val = static_cast<std::int32_t>(nop->val)};
+        }
+        if (f.cmd == static_cast<std::uint32_t>(abi::Command::SYS_OPENED)) {
+            Result<abi::SysOpened> o = abi::SysOpened::read(pkt);
+            if (!o) return {.err = o.error().errnum};
+            return opened(*o);
+        }
+        return {.err = Errno::enosys};
+    }
+
     void posted(std::uint32_t cmd, Errno e) const noexcept {
         stat_.cq_peak = std::max(stat_.cq_peak, cq_.len());
         ensure(e == Errno::ok, Errno::enospc, cmd, static_cast<std::uint64_t>(static_cast<std::int64_t>(e)));
@@ -99,7 +121,7 @@ class Door {
 
     Ring sq_;
     Ring cq_;
-    // What one command may leave: its signals, or the turn's after the drain, and its reply.
+    // What one command may leave: its events, or the turn's after the drain, and its reply.
     std::uint32_t reserve_;
     // Kept by the const calls that move the rings, as the rings' own words are.
     mutable DoorStat stat_;

@@ -9,16 +9,16 @@
 # one object at once. Only code is formatted, each tree's by its own
 # formatter; the documents and the spec are not. GNU Make 3.81 is enough.
 #
-#   make install | -j8 check | test | build | test-gpu | fmt | lint
+#   make install | -j8 check | test | build | test-gpu | fmt | lint | spec
 #   make check-ts, make test-cpp, ...   one tree's
 #
 # With -j the trees run in parallel; cpp/'s make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
 .PHONY: install install-ts \
-	check check-ts check-cpp check-rust \
+	check check-ts check-cpp check-rust check-spec spec \
 	build build-cpp build-rust \
-	test test-ts test-cpp test-rust test-conformance \
+	test test-ts test-cpp test-rust test-conformance test-example \
 	test-gpu test-gpu-web test-gpu-native \
 	fmt fmt-ts fmt-rust \
 	lint lint-ts
@@ -28,23 +28,30 @@ install: install-ts
 install-ts:
 	pnpm --dir ts install
 
-check: check-ts check-cpp check-rust
+check: check-ts check-cpp check-rust check-spec
 check-ts:
 	pnpm --dir ts check
 check-cpp:
 	$(MAKE) -C cpp check
 check-rust:
 	+cd rust && cargo fmt --all --check && cargo lint
+check-spec:
+	+cd rust && cargo spec
 
-# The one thing xpute builds: the guest the contract's traces drive, in Rust
-# and in C++, each a native library and a WebAssembly module.
+# The files generated from spec/, written.
+spec:
+	+cd rust && cargo spec --write
+
+# What xpute builds: the guest the contract's traces drive, in Rust and in C++,
+# each a native library and a WebAssembly module; and the example's guest, a
+# module (rust/example).
 build: build-cpp build-rust
 build-cpp:
 	$(MAKE) -C cpp guest wasm
 build-rust:
 	+cd rust && cargo guest && cargo guest-wasm
 
-test: test-ts test-cpp test-rust test-conformance
+test: test-ts test-cpp test-rust test-conformance test-example
 test-ts:
 	pnpm --dir ts test
 test-cpp: build-cpp
@@ -53,6 +60,8 @@ test-rust:
 	+cd rust && cargo test --all
 test-conformance: build
 	pnpm --dir ts test:conformance
+test-example: build
+	pnpm --dir ts test:example
 
 # What needs a GPU: the web host in Chrome (ts/gpu/script/browser.ts), and the
 # native one on wgpu.

@@ -35,8 +35,9 @@ static ALLOC: Alloc = Alloc;
 // (GLOBAL_BASE, door/layout.rs: a device's library keeps its statics where
 // the linker put them) and its heap past `.fixed`, as the module's is — and
 // the doorbell and the memory the shell reads the directory and the rings
-// through, exported under xpute's names as `xpute_intr` and `xpute_mem`
-// (include/pxl_native.h), and `guest()` here.
+// through, exported under xpute's names as `xpute_run` and `xpute_mem`, with
+// `xpute_hostcall_on` for what answers its hostcalls (include/pxl_native.h),
+// and `guest()` here.
 xpute_host::native_abi!(
     Config {
         mem_bytes: PHONE_BYTES,
@@ -77,14 +78,14 @@ fn view() -> Memory<'static> {
     unsafe { Memory::from_raw(base, bytes) }
 }
 
-/// The doorbell's turn (pxl_kernel::door::intr), on the kernel's thread: a
+/// The doorbell's turn (pxl_kernel::door::run), on the kernel's thread: a
 /// turn of `quota_ms`, and when the kernel wants the next. The first lays
 /// the memory out, on what the host hands it and with the last words.
 /// Around it, the GPU's host: what the device answered written in before,
 /// the turn's calls run on it after (surface.rs), and the frames it admits.
 fn turn(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     surface::before_turn(&mut view());
-    let wake = door::intr(quota_ms, boot_info, Some(last_words), surface::admit);
+    let wake = door::run(quota_ms, boot_info, Some(last_words), surface::admit);
     surface::after_turn(&mut view());
     wake
 }

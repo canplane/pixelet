@@ -1,21 +1,22 @@
 // pxl-tool/spec/data.rs
 
-//! Data specs: JSON of named values written as Rust constants and, where the
-//! shell reads them, TypeScript `as const`. A number is f64 unless a `$type`
-//! says otherwise; a u64 is a hex string. `{ "$val", "$doc" }` carries a reason.
-//! pixelet's Rust carries no names: a list of them is its count, and an enum
-//! where the spec asks for one, and a table's keys are not listed; the
-//! TypeScript keeps them for what a person reads. xpute's Rust keeps its own.
+//! pixelet's data specs: JSON of named values written as Rust constants, and
+//! as TypeScript `as const` where a spec lists a TypeScript file. A number is
+//! f64 unless a `$type` says otherwise; a u64 is a hex string, an rgb a
+//! `#RRGGBB`. `{ "$val", "$doc" }` carries a reason. The Rust carries no
+//! names: a list of them is its count, and an enum where the spec asks for
+//! one, and a table's keys are not listed; the TypeScript keeps them for what
+//! a person reads. A `file` is a slot of the catalog (catalog.rs).
 
 use std::cell::Cell;
 
 use super::catalog::{run_of, FILE};
 use super::{
-    align_star, casing_note, enum_name, file, js_num, json_str, laid_out, line_comments, read,
-    rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output,
+    align_star, casing_note, enum_name, file, generated, js_num, json_str, laid_out, line_comments,
+    read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output,
 };
 
-pub enum Enums {
+enum Enums {
     None,
     All,
     Named(&'static [&'static str]),
@@ -35,10 +36,9 @@ struct DataSpec {
     enums: Enums,
     /// Absent where the TypeScript reads all of it.
     ts_names: Option<&'static [&'static str]>,
-    cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 27] = [
+const DATA_SPECS: [DataSpec; 23] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -48,7 +48,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/spec/space/geoid.json",
@@ -59,7 +58,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/spec/object/ext.json",
@@ -70,7 +68,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("ext"),
         enums: Enums::All,
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/spec/asset/marker.json",
@@ -81,7 +78,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("marker"),
         enums: Enums::None,
         ts_names: Some(&["MARKER_TEXT_CHARS"]),
-        cpp: None,
     },
     DataSpec {
         json: "spec/spec/asset/id.json",
@@ -92,7 +88,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("id"),
         enums: Enums::All,
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/spec/division.json",
@@ -103,137 +98,26 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
-        json: "xpute/spec/conformance/guest.json",
+        json: "spec/client/kernel/door/port.json",
         uses: &[],
-        ts: Some("xpute/ts/host/src/conformance.spec.ts"),
-        rs: Some("xpute/rust/conformance/src/guest.spec.rs"),
+        ts: Some("ts/client/src/abi/port.spec.ts"),
+        rs: Some("rust/client/kernel/src/door/port.spec.rs"),
         rs_also: &[],
-        module: Some("spec"),
+        module: Some("port"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/conformance/guest.spec.hpp", "xpute::conformance")),
     },
     DataSpec {
-        json: "xpute/spec/ipc/directory.json",
+        json: "spec/client/kernel/door/toc.json",
         uses: &[],
-        ts: Some("xpute/ts/host/src/ipc/directory.spec.ts"),
-        rs: Some("xpute/rust/guest/src/ipc/directory.spec.rs"),
+        ts: Some("ts/client/src/abi/toc.spec.ts"),
+        rs: Some("rust/client/kernel/src/door/toc.spec.rs"),
         rs_also: &[],
-        module: Some("spec"),
+        module: Some("toc"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some((
-            "xpute/cpp/xpute/guest/ipc/directory.spec.hpp",
-            "xpute::directory",
-        )),
-    },
-    DataSpec {
-        json: "xpute/spec/ipc/frame.json",
-        uses: &[],
-        ts: Some("xpute/ts/host/src/ipc/frame.spec.ts"),
-        rs: Some("xpute/rust/guest/src/ipc/frame.spec.rs"),
-        rs_also: &[],
-        module: Some("spec"),
-        enums: Enums::None,
-        ts_names: None,
-        cpp: Some(("xpute/cpp/xpute/guest/ipc/frame.spec.hpp", "xpute::frame")),
-    },
-    DataSpec {
-        json: "xpute/spec/ipc/ring.json",
-        uses: &[],
-        ts: Some("xpute/ts/host/src/ipc/ring.spec.ts"),
-        rs: Some("xpute/rust/guest/src/ipc/ring.spec.rs"),
-        rs_also: &[],
-        module: Some("spec"),
-        enums: Enums::None,
-        ts_names: None,
-        cpp: Some(("xpute/cpp/xpute/guest/ipc/ring.spec.hpp", "xpute::ring")),
-    },
-    DataSpec {
-        json: "xpute/spec/ipc/sys.json",
-        uses: &[],
-        ts: Some("xpute/ts/host/src/ipc/sys.spec.ts"),
-        rs: Some("xpute/rust/guest/src/ipc/sys.spec.rs"),
-        rs_also: &[],
-        module: Some("spec"),
-        enums: Enums::None,
-        ts_names: None,
-        cpp: Some(("xpute/cpp/xpute/guest/ipc/sys.spec.hpp", "xpute::sys")),
-    },
-    DataSpec {
-        json: "xpute/spec/gpu/api.json",
-        uses: &[],
-        ts: Some("xpute/ts/gpu/src/api.spec.ts"),
-        rs: Some("xpute/rust/gpu/src/api.spec.rs"),
-        rs_also: &[],
-        module: Some("spec"),
-        enums: Enums::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
-        ts_names: None,
-        cpp: Some(("xpute/cpp/xpute/gpu/api.spec.hpp", "xpute::gpu")),
-    },
-    DataSpec {
-        json: "xpute/spec/gpu/enum.json",
-        uses: &[],
-        ts: Some("xpute/ts/gpu/src/enum.spec.ts"),
-        rs: Some("xpute/rust/gpu/src/enum.spec.rs"),
-        rs_also: &[],
-        module: Some("spec"),
-        enums: Enums::Named(&[
-            "TEXTURE_FORMAT",
-            "VERTEX_FORMAT",
-            "PRIMITIVE_TOPOLOGY",
-            "INDEX_FORMAT",
-            "FRONT_FACE",
-            "CULL_MODE",
-            "COMPARE_FUNCTION",
-            "STENCIL_OPERATION",
-            "BLEND_OPERATION",
-            "BLEND_FACTOR",
-            "VERTEX_STEP_MODE",
-            "ADDRESS_MODE",
-            "FILTER_MODE",
-            "MIPMAP_FILTER_MODE",
-            "TEXTURE_DIMENSION",
-            "TEXTURE_VIEW_DIMENSION",
-            "TEXTURE_ASPECT",
-            "BUFFER_BINDING_TYPE",
-            "SAMPLER_BINDING_TYPE",
-            "TEXTURE_SAMPLE_TYPE",
-            "STORAGE_TEXTURE_ACCESS",
-            "LOAD_OP",
-            "STORE_OP",
-            "QUERY_TYPE",
-            "CANVAS_ALPHA_MODE",
-            "FEATURE_NAME",
-            "LIMIT_NAME",
-        ]),
-        ts_names: None,
-        cpp: Some(("xpute/cpp/xpute/gpu/enum.spec.hpp", "xpute::gpu")),
-    },
-    DataSpec {
-        json: "xpute/spec/sched/tick.json",
-        uses: &[],
-        ts: Some("xpute/ts/host/src/sched/tick.spec.ts"),
-        rs: Some("xpute/rust/guest/src/sched/tick.spec.rs"),
-        rs_also: &[],
-        module: Some("spec"),
-        enums: Enums::Named(&["PHASES"]),
-        ts_names: None,
-        cpp: Some(("xpute/cpp/xpute/guest/sched/tick.spec.hpp", "xpute")),
-    },
-    DataSpec {
-        json: "spec/client/kernel/door/directory.json",
-        uses: &[],
-        ts: Some("ts/client/src/abi/directory.spec.ts"),
-        rs: Some("rust/client/kernel/src/door/directory.spec.rs"),
-        rs_also: &[],
-        module: Some("directory"),
-        enums: Enums::None,
-        ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/spec/bake/place_theme.json",
@@ -244,7 +128,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: None,
         enums: Enums::None,
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/spec/asset/actor.json",
@@ -255,7 +138,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("actor"),
         enums: Enums::All,
         ts_names: Some(&["groups", "PERSON_GENDER_PREFIX"]),
-        cpp: None,
     },
     DataSpec {
         json: "spec/spec/asset/sky.json",
@@ -266,18 +148,16 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("sky"),
         enums: Enums::None,
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
-        json: "spec/client/kernel/domain/scene/indicator/gizmo.json",
+        json: "spec/client/kernel/domain/scene/gizmo/gizmo.json",
         uses: &[],
         ts: Some("ts/client/src/abi/gizmo.spec.ts"),
-        rs: Some("rust/client/kernel/src/domain/scene/indicator/gizmo.spec.rs"),
+        rs: Some("rust/client/kernel/src/domain/scene/gizmo/gizmo.spec.rs"),
         rs_also: &[],
         module: Some("gizmo_spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/client/render/frame/shader/debug_look.json",
@@ -288,7 +168,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("debug_look_spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/client/render/gpu/api.json",
@@ -299,7 +178,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("api_spec"),
         enums: Enums::None,
         ts_names: Some(&["surface_role", "stream"]),
-        cpp: None,
     },
     DataSpec {
         json: "spec/client/kernel/sys/io/host.json",
@@ -310,7 +188,16 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("host_spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: None,
+    },
+    DataSpec {
+        json: "spec/client/kernel/sys/sched/pacing.json",
+        uses: &[],
+        ts: Some("ts/client/src/abi/pacing.spec.ts"),
+        rs: Some("rust/client/kernel/src/sys/sched/pacing.spec.rs"),
+        rs_also: &[],
+        module: Some("pacing_spec"),
+        enums: Enums::None,
+        ts_names: None,
     },
     DataSpec {
         json: "spec/client/kernel/sys/io/demand.json",
@@ -321,7 +208,16 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("demand_spec"),
         enums: Enums::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
         ts_names: None,
-        cpp: None,
+    },
+    DataSpec {
+        json: "spec/client/kernel/sys/sched/phase.json",
+        uses: &[],
+        ts: Some("ts/client/src/abi/phase.spec.ts"),
+        rs: Some("rust/client/kernel/src/sys/sched/phase.spec.rs"),
+        rs_also: &[],
+        module: Some("phase_spec"),
+        enums: Enums::Named(&["PHASES"]),
+        ts_names: None,
     },
     DataSpec {
         json: "spec/client/kernel/turn/step.json",
@@ -332,7 +228,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("spec"),
         enums: Enums::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/client/render/gpu/span.json",
@@ -343,12 +238,11 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("span_spec"),
         enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS"]),
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/client/kernel/profiler/profiler.json",
         uses: &[
-            "xpute/spec/sched/tick.json",
+            "spec/client/kernel/sys/sched/phase.json",
             "spec/client/kernel/sys/io/demand.json",
             "spec/client/kernel/turn/step.json",
             "spec/client/render/gpu/span.json",
@@ -360,7 +254,6 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("spec"),
         enums: Enums::Named(&["WAKES"]),
         ts_names: None,
-        cpp: None,
     },
     DataSpec {
         json: "spec/client/kernel/sys/mem/mem.json",
@@ -375,16 +268,40 @@ const DATA_SPECS: [DataSpec; 27] = [
         module: Some("spec"),
         enums: Enums::None,
         ts_names: Some(&[
-            "DIRECTORY_AT",
+            "TOC_AT",
             "DESKTOP_BYTES",
             "PHONE_BYTES",
             "REGION_BYTES",
             "SQ_CAP",
             "CQ_CAP",
         ]),
-        cpp: None,
+    },
+    // Read, not written: the profiler uses its names; xpute generates it.
+    DataSpec {
+        json: "xpute/spec/gpu/api.json",
+        uses: &[],
+        ts: None,
+        rs: None,
+        rs_also: &[],
+        module: None,
+        enums: Enums::None,
+        ts_names: None,
     },
 ];
+
+/// A TypeScript file's directory, and the name it is imported by.
+const TS_LAYOUT: [(&str, &str); 1] = [("ts/client/src/", "@pxl/client/")];
+
+/// A Rust file's `src/`, and its crate's name.
+const RS_LAYOUT: [(&str, &str); 3] = [
+    ("rust/client/kernel/src/", "pxl-kernel"),
+    ("rust/client/render/src/", "pxl-render"),
+    ("rust/spec/src/", "pxl-spec"),
+];
+
+/// What a file reference is written as in Rust: a type whose one field is
+/// the reference's slot.
+const SLOT: &str = "crate::asset::catalog::Slot";
 
 fn type_of<'a>(n: &'a Node, or: &'a str) -> &'a str {
     n.str_at("$type").unwrap_or(or)
@@ -447,10 +364,7 @@ struct Scope {
     top: Vec<String>,
     enums: bool,
     enum_names: Vec<String>,
-    /// Names are carried as strings, as xpute's own tables are; pixelet's
-    /// Rust gets a list's count in their place.
-    names: bool,
-    /// The next file reference's slot (catalog.rs).
+    /// The next file reference's slot.
     slot: Cell<u16>,
 }
 
@@ -478,10 +392,7 @@ fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), Stri
         Node::Bool(b) => ("bool".to_string(), b.to_string()),
         Node::Str(_) if ty == FILE => {
             let slot = scope.slot.replace(scope.slot.get() + 1);
-            (
-                "crate::asset::catalog::Slot".to_string(),
-                format!("crate::asset::catalog::Slot({slot})"),
-            )
+            (SLOT.to_string(), format!("{SLOT}({slot})"))
         }
         Node::Str(s) => match ty {
             "u64" => ("u64".to_string(), s.clone()),
@@ -600,15 +511,6 @@ fn rs_items(
         for (k, v) in &keys {
             rs_items(k, v, t, &inner, &mut body, scope)?;
         }
-        if !scope.enums && scope.names {
-            body.push(format!(
-                "{indent}    pub const KEYS: &[&str] = &[{}];",
-                keys.iter()
-                    .map(|(k, _)| json_str(k))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ));
-        }
         if !body.is_empty() {
             lines.push(format!("{indent}pub mod {} {{", rs_ident(name)));
             lines.extend(body);
@@ -634,32 +536,6 @@ fn is_name(s: &str) -> bool {
         && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '-')
 }
 
-/// A member's name as a C++ enumerator: `-` an `_`, a leading digit behind
-/// an `_`, a keyword followed by one.
-fn cpp_ident(k: &str) -> String {
-    const KEYWORDS: [&str; 12] = [
-        "float", "double", "int", "char", "bool", "default", "delete", "new", "and", "or", "not",
-        "xor",
-    ];
-    let id: String = k
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if KEYWORDS.contains(&id.as_str()) {
-        format!("{id}_")
-    } else if id.starts_with(|c: char| c.is_ascii_digit()) {
-        format!("_{id}")
-    } else {
-        id
-    }
-}
-
 fn rs_leaf(
     name: &str,
     v: &Node,
@@ -671,19 +547,12 @@ fn rs_leaf(
     if let Node::Arr(a) = v {
         let strings = matches!(a.first(), Some(Node::Str(_)));
         if strings && ty != "u64" && enum_path(ty, scope).is_none() && ty != "rgb" && ty != FILE {
-            out.push(if scope.names {
-                format!(
-                    "{indent}pub const {}: &[&str] = &[{}];",
-                    rs_ident(name),
-                    a.iter()
-                        .map(|e| e.str().map(json_str).unwrap_or_default())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            } else {
-                // How many there are, as the spec's widths read a list's name.
-                format!("{indent}pub const {}: usize = {};", rs_ident(name), a.len())
-            });
+            // How many there are, as the spec's widths read a list's name.
+            out.push(format!(
+                "{indent}pub const {}: usize = {};",
+                rs_ident(name),
+                a.len()
+            ));
             if (scope.enums || scope.enum_names.iter().any(|n| n == name))
                 && a.iter().all(|e| e.str().is_some_and(is_name))
             {
@@ -729,8 +598,12 @@ fn rs_leaf(
 
 /// The names `json` may read past its own, from the specs it uses: each
 /// laid out over its own uses, a name owned by one file, no use circular.
-fn read_used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>, String> {
-    let d = DATA_SPECS
+fn read_used(
+    json: &str,
+    specs: &[DataSpec],
+    path: &mut Vec<&'static str>,
+) -> Result<Vec<(String, Node)>, String> {
+    let d = specs
         .iter()
         .find(|d| d.json == json)
         .ok_or(format!("{json}: uses a spec that is not listed"))?;
@@ -744,7 +617,7 @@ fn read_used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, No
     path.push(d.json);
     let mut names: Vec<(String, Node)> = Vec::new();
     for &u in d.uses {
-        let below = read_used(u, path)?;
+        let below = read_used(u, specs, path)?;
         let Node::Obj(entries) = laid_out(read(u)?, &below)? else {
             return Err(format!("{u}: not a table"));
         };
@@ -765,7 +638,7 @@ fn read_used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, No
 pub fn outputs() -> Result<Vec<Output>, String> {
     let mut outputs = Vec::new();
     for d in &DATA_SPECS {
-        let uses = read_used(d.json, &mut Vec::new())?;
+        let uses = read_used(d.json, &DATA_SPECS, &mut Vec::new())?;
         let spec = laid_out(read(d.json)?, &uses)?;
         if let Some(k) = spec
             .named()
@@ -777,23 +650,14 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 d.json
             ));
         }
-        let base = d.json.rsplit('/').next().unwrap_or(d.json);
         let names: Vec<&str> = spec.named().map(|(k, _)| k).collect();
         let head_doc = spec.lines_at("$doc");
         if let Some(ts_path) = d.ts {
-            let logical = [
-                ("ts/client/src/", "@pxl/client/"),
-                ("xpute/ts/host/src/", "@xpute/host/"),
-                ("xpute/ts/gpu/src/", "@xpute/gpu/"),
-            ]
-            .iter()
-            .find_map(|(dir, name)| ts_path.strip_prefix(dir).map(|p| format!("{name}{p}")))
-            .unwrap_or(ts_path.to_string());
-            let mut ts = vec![
-                format!("// {logical}"),
-                "//".into(),
-                super::generated(d.json, d.json),
-            ];
+            let logical = TS_LAYOUT
+                .iter()
+                .find_map(|(dir, name)| ts_path.strip_prefix(dir).map(|p| format!("{name}{p}")))
+                .unwrap_or(ts_path.to_string());
+            let mut ts = vec![format!("// {logical}"), "//".into(), generated(d.json)];
             if let Some(doc) = &head_doc {
                 ts.push("//".into());
                 ts.extend(line_comments(doc, ""));
@@ -889,21 +753,14 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             outputs.push(Output::new(ts_path, file(&ts)));
         }
         if let Some(rs_path) = d.rs {
-            let (crate_name, under_src) = [
-                ("rust/client/kernel/src/", "pxl-kernel"),
-                ("rust/client/render/src/", "pxl-render"),
-                ("rust/spec/src/", "pxl-spec"),
-                ("xpute/rust/guest/src/", "xpute-guest"),
-                ("xpute/rust/gpu/src/", "xpute-gpu"),
-                ("xpute/rust/conformance/src/", "xpute-conformance"),
-            ]
-            .iter()
-            .find_map(|(dir, name)| rs_path.strip_prefix(dir).map(|rest| (*name, rest)))
-            .ok_or(format!("{rs_path}: not under pxl-kernel, pxl-render, pxl-spec, xpute-guest, xpute-gpu or xpute-conformance"))?;
+            let (crate_name, under_src) = RS_LAYOUT
+                .iter()
+                .find_map(|(dir, name)| rs_path.strip_prefix(dir).map(|rest| (*name, rest)))
+                .ok_or(format!("{rs_path}: under no crate the layout names"))?;
             let mut rs = vec![
                 format!("// {crate_name}/{under_src}"),
                 "//".into(),
-                super::generated(d.json, base),
+                generated(d.json),
             ];
             if let Some(doc) = &head_doc {
                 rs.push("//".into());
@@ -946,7 +803,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     Enums::Named(list) => list.iter().map(|s| s.to_string()).collect(),
                     _ => Vec::new(),
                 },
-                names: crate_name.starts_with("xpute-"),
                 slot: Cell::new(run_of(d.json)?.0),
             };
             for name in &names {
@@ -978,117 +834,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             }
             outputs.push(Output::new(rs_path, file(&rs)));
         }
-        if let Some((cpp_path, namespace)) = d.cpp {
-            let mut cpp = vec![
-                format!("// {}", super::in_xpute(cpp_path)),
-                "//".into(),
-                super::generated(d.json, d.json),
-            ];
-            if let Some(doc) = &head_doc {
-                cpp.push("//".into());
-                cpp.extend(line_comments(doc, ""));
-            }
-            let lists = names
-                .iter()
-                .any(|k| matches!(spec.get(k), Some(Node::Arr(_))));
-            cpp.extend([String::new(), "#pragma once".into(), String::new()]);
-            if lists {
-                cpp.push("#include <array>".into());
-            }
-            cpp.push("#include <cstdint>".into());
-            if lists {
-                cpp.push("#include <string_view>".into());
-            }
-            cpp.extend([String::new(), format!("namespace {namespace} {{")]);
-            let enums: &[&str] = match d.enums {
-                Enums::Named(list) => list,
-                _ => &[],
-            };
-            for name in &names {
-                cpp_items(
-                    name,
-                    spec.get(name).ok_or("a name it listed")?,
-                    "f64",
-                    enums.contains(&&**name),
-                    &mut cpp,
-                )?;
-            }
-            cpp.extend([String::new(), format!("}} // namespace {namespace}")]);
-            outputs.push(Output::new(cpp_path, file(&cpp)));
-        }
     }
     Ok(outputs)
-}
-
-/// A list of names is a `string_view` array, and with `numbered` also an
-/// enum class of them numbered by place; any other non-number is refused.
-fn cpp_items(
-    name: &str,
-    n: &Node,
-    ty: &str,
-    numbered: bool,
-    out: &mut Vec<String>,
-) -> Result<(), String> {
-    let doc = if n.is_obj() { n.lines_at("$doc") } else { None };
-    out.push(String::new());
-    if let Some(doc) = doc {
-        out.extend(line_comments(&doc, ""));
-    }
-    if n.is_obj() && !n.is_wrapper() {
-        let t = type_of(n, ty);
-        out.push(format!("namespace {name} {{"));
-        for (k, v) in n.named() {
-            cpp_items(k, v, t, false, out)?;
-        }
-        out.push(format!("}} // namespace {name}"));
-        return Ok(());
-    }
-    if let Node::Arr(list) = if n.is_wrapper() { n.value() } else { n } {
-        let names = list
-            .iter()
-            .map(|v| {
-                v.str()
-                    .ok_or(format!("{name}: a C++ list takes names only"))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        if numbered {
-            out.push(format!("enum class {} : std::uint8_t {{", enum_name(name)));
-            out.extend(
-                names
-                    .iter()
-                    .enumerate()
-                    .map(|(k, v)| format!("    {} = {k},", cpp_ident(v))),
-            );
-            out.extend(["};".to_string(), String::new()]);
-        }
-        let quoted: Vec<String> = names.iter().map(|v| json_str(v)).collect();
-        out.push(format!(
-            "inline constexpr std::array<std::string_view, {}> {name}{{{}}};",
-            names.len(),
-            quoted.join(", ")
-        ));
-        return Ok(());
-    }
-    let (val, t) = if n.is_wrapper() {
-        (n.value(), type_of(n, ty))
-    } else {
-        (n, ty)
-    };
-    let number = val
-        .num()
-        .ok_or(format!("{name}: a C++ header takes numbers only"))?;
-    let (ty, suffix) = match t {
-        "u32" => ("std::uint32_t", "u"),
-        "i32" => ("std::int32_t", ""),
-        other => {
-            return Err(format!(
-                "{name}: a C++ header takes u32 and i32, not {other}"
-            ))
-        }
-    };
-    out.push(format!(
-        "inline constexpr {ty} {name} = {}{suffix};",
-        js_num(number)
-    ));
-    Ok(())
 }

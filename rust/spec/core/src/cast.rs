@@ -23,7 +23,7 @@
 //! it leaves by, so no frame holds its siblings.
 
 use crate::answer::{box_of, kept, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
-use crate::grid::cell_at;
+use crate::grid::cell_zoom_at;
 use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
@@ -42,7 +42,7 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
 
 /// How far apart a beam's rays lie, `across + angle · d` units at `d` from
 /// the eye (`Detail::eye`): the eye's an angle, its camera grid's cell
-/// (`grid::CELL`); the sun's, whose rays are parallel, a width, `sun::BEAM`
+/// (`grid::CELL`); the light's, whose rays are parallel, a width, `light::BEAM`
 /// of its map's texels. Only a beam reads it, its widening and `narrow`
 /// (`Until::Beam`); an asker that casts no beam, control and physics, fills
 /// in none (`NONE`).
@@ -65,10 +65,10 @@ impl Spacing {
 }
 
 /// The zoom asked at each distance: the camera grid's cells there
-/// (`cell_at`), held to `range`, asked of a distance squared (`at`). A
+/// (`cell_zoom_at`), held to `range`, asked of a distance squared (`at`). A
 /// stated zoom's cells wherever they are is a range of that zoom alone.
 /// The distance is the eye's, `eye` units from the walk's origin: none for
-/// the eye's own rays; for a ray from elsewhere, a ray toward the sun from
+/// the eye's own rays; for a ray from elsewhere, a ray toward the light from
 /// what an eye's ray met, where the eye stands from it, so a node is asked
 /// at the zooms the eye's rays ask it (`reach`). `spacing` is how far a
 /// beam ray lies from the next of its grid (`Spacing`, `Until::Beam`).
@@ -82,7 +82,7 @@ pub struct Detail {
 impl Detail {
     /// At `d2`, a distance squared.
     pub fn at(self, d2: f32) -> Zoom {
-        cell_at(d2).clamp(self.range[0], self.range[1])
+        cell_zoom_at(d2).clamp(self.range[0], self.range[1])
     }
 }
 
@@ -129,7 +129,7 @@ pub enum Until {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ray {
     pub dir: [f32; 3],
-    pub reach: f32,
+    pub t_max: f32,
     inverse: [f32; 3],
 }
 
@@ -142,7 +142,7 @@ impl Ray {
     /// `lesser` be one comparison each. The component and its reciprocal
     /// are zeroed together, as `planes` and `past` branch on the one and
     /// multiply by the other.
-    pub fn new(direction: [f32; 3], reach: f32) -> Ray {
+    pub fn new(direction: [f32; 3], t_max: f32) -> Ray {
         let moves = |d: f32| {
             if libm::fabsf(d) < f32::MIN_POSITIVE {
                 0.0
@@ -158,7 +158,7 @@ impl Ray {
         let inv = |d: f32| if d == 0.0 { 0.0 } else { 1.0 / d };
         Ray {
             dir,
-            reach,
+            t_max,
             inverse: [inv(dir[0]), inv(dir[1]), inv(dir[2])],
         }
     }
@@ -382,9 +382,9 @@ fn spans(
     t: f32,
 ) -> ((f32, f32), (f32, f32), (f32, f32)) {
     (
-        planes(ray.dir[0], ray.inverse[0], lo[0], hi[0], (t, ray.reach)),
-        planes(ray.dir[1], ray.inverse[1], lo[1], hi[1], (t, ray.reach)),
-        planes(ray.dir[2], ray.inverse[2], lo[2], hi[2], (t, ray.reach)),
+        planes(ray.dir[0], ray.inverse[0], lo[0], hi[0], (t, ray.t_max)),
+        planes(ray.dir[1], ray.inverse[1], lo[1], hi[1], (t, ray.t_max)),
+        planes(ray.dir[2], ray.inverse[2], lo[2], hi[2], (t, ray.t_max)),
     )
 }
 
@@ -398,7 +398,7 @@ pub fn holding(o: [i32; 3], ray: &Ray, mut n: Node, t: f32) -> Node {
         let (x, y, z) = spans(ray, bounds(&n, og), t);
         let (t0, t1) = (
             greater(greater(greater(t, x.0), y.0), z.0),
-            lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),
+            lesser(lesser(lesser(ray.t_max, x.1), y.1), z.1),
         );
         if (t0 <= t && t < t1) || n.zoom == 0 {
             return n;
@@ -467,7 +467,7 @@ pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, asset: u32) -> (f32, u32, bool) {
     let (x, y, z) = spans(ray, drawn(o, n, asset), 0.0);
     let (t0, t1) = (
         greater(greater(greater(0.0, x.0), y.0), z.0),
-        lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),
+        lesser(lesser(lesser(ray.t_max, x.1), y.1), z.1),
     );
     let (t, e) = entered(ray, [x.0, y.0, z.0]);
     (t, e, t1 > t0)
@@ -733,7 +733,7 @@ pub fn walk<Q: Query>(
         let (x, y, z) = spans(ray, (lo, hi), t);
         let (t0, t1) = (
             greater(greater(greater(t, x.0), y.0), z.0),
-            lesser(lesser(lesser(ray.reach, x.1), y.1), z.1),
+            lesser(lesser(lesser(ray.t_max, x.1), y.1), z.1),
         );
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
@@ -812,7 +812,7 @@ pub fn walk<Q: Query>(
                     let (bx, by, bz) = spans(ray, kept_bounds((lo, hi), i.asset[0]), t);
                     let (b0, b1) = (
                         greater(greater(greater(t, bx.0), by.0), bz.0),
-                        lesser(lesser(lesser(ray.reach, bx.1), by.1), bz.1),
+                        lesser(lesser(lesser(ray.t_max, bx.1), by.1), bz.1),
                     );
                     near = [bx.0, by.0, bz.0];
                     if b1 > b0 {
@@ -906,7 +906,7 @@ pub fn walk<Q: Query>(
             t = t0;
             (at, false)
         } else {
-            if t1 >= ray.reach {
+            if t1 >= ray.t_max {
                 // Gone on to its reach: no stop, which no asker reads.
                 let stop = Stop {
                     t: t1,

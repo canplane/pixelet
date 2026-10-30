@@ -102,7 +102,7 @@ fn goes_on(tool: Kind, under: Kind) -> bool {
 /// is where the world takes an edit (`World::editable`), nothing placed
 /// shares the room its kind occupies (`World::placed_occupying`), which
 /// holds its cell, and nothing in the cell under it is one it may not stand
-/// on (`goes_on`), a marker, as the ground grows none.
+/// on (`goes_on`), a marker, as the ground generates none.
 pub fn is_placement_blocked(tool: PlacementTool, corner: &Q3) -> bool {
     let (world, room) = (World::now(), room(tool, corner));
     let taken = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();

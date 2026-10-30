@@ -51,8 +51,8 @@ use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 /// holds moved or was handed since the last cast; and the boxes of leaf
 /// cells whose columns what is placed or a preview's cuts changed since the
 /// last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
-/// growth is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
-/// pxl-render gpu/grown.rs); and the families of what is placed written
+/// generation is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
+/// pxl-render gpu/generated.rs); and the families of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
 /// `WRITTEN` at most, past which all is forgotten (`reads_written`); and
 /// whether its walks count what they ask, and what they counted
@@ -130,16 +130,16 @@ const _: () = assert!(
 );
 
 /// The writing passes of a frame's cast, each a tag of its own (`tag`): the
-/// beam rays, the samples and the pixels that missed; then the sun's beam
+/// beam rays, the samples and the pixels that missed; then the light's beam
 /// rays, samples and slots that missed, which ask the same nodes at the
 /// zooms the eye asks them.
 pub const PASSES: u32 = 6;
 pub const BEAM_PASS: u32 = 0;
 pub const SAMPLES_PASS: u32 = 1;
 pub const MISSED_PASS: u32 = 2;
-pub const SUN_BEAM_PASS: u32 = 3;
-pub const SUN_SAMPLES_PASS: u32 = 4;
-pub const SUN_MISSED_PASS: u32 = 5;
+pub const LIGHT_BEAM_PASS: u32 = 3;
+pub const LIGHT_SAMPLES_PASS: u32 = 4;
+pub const LIGHT_MISSED_PASS: u32 = 5;
 
 /// A key's tag's bits, under its two zooms' (`key`).
 const TAG_BITS: u32 = 20;

@@ -1,21 +1,22 @@
 // xpute-guest/sched/tick.rs
 
-//! A guest's cooperative scheduler: one tick a turn, its phases in priority
-//! order against one budget, the host's quota counted from the rising edge.
-//! The interaction phase is unbudgeted and must stay O(1). The visible phase
-//! may not take `content_share`, or content starves while a load keeps it busy.
-//! A step keeps its own state.
+//! A guest's cooperative scheduler: one tick a turn, its phases in the order
+//! the program numbers them, against one budget, the host's quota counted from
+//! the rising edge. While a phase runs, the share of the budget its policy
+//! holds back for the phases after it is not its to take, so they are not
+//! starved while it keeps busy. What the phases are, and what each holds back,
+//! are the program's. A step keeps its own state.
 
 use super::pass::Pass;
 use crate::clock::now;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-#[path = "tick.spec.rs"]
-mod spec;
-pub use spec::{Phase, PHASES};
+/// A phase, by its place in the program's order.
+pub type Phase = u8;
 
-const PHASE_CNT: usize = Phase::ALL.len();
+/// The most phases a tick runs.
+pub const PHASES_MAX: usize = 8;
 
 /// Steps unregistered from inside one step.
 const OFFS_MAX: usize = 8;
@@ -25,13 +26,15 @@ pub struct TickPolicy {
     /// The hard ceiling over what is left, so steps that report no work
     /// cannot walk the whole list.
     pub hard_slack_ms: f64,
-    pub content_share: f64,
+    /// The program's phases, in the order they run: each the share of the
+    /// budget held back from it for the phases after it, 0 for none.
+    pub held_back: &'static [f64],
 }
 
 pub struct TickContext {
     pub delta: f64,
     pub pass: Pass,
-    pub phase_ms: [f64; PHASE_CNT],
+    pub phase_ms: [f64; PHASES_MAX],
     invalidated: bool,
     offs: [u32; OFFS_MAX],
     off_len: usize,
@@ -77,7 +80,7 @@ impl StepStat {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TickReport {
     pub budget_ms: f64,
-    pub phase_ms: [f64; PHASE_CNT],
+    pub phase_ms: [f64; PHASES_MAX],
     pub total_ms: f64,
     pub invalidated: bool,
 }
@@ -103,13 +106,18 @@ pub struct Tick<const N: usize> {
 
 impl<const N: usize> Tick<N> {
     pub fn new(policy: TickPolicy) -> Self {
+        xpute_kit::ensure!(
+            policy.held_back.len() <= PHASES_MAX,
+            EINVAL,
+            policy.held_back.len()
+        );
         Tick {
             policy,
             registry: [None; N],
             len: 0,
             next_id: 1,
             // Past `stats_len` a row is room, not a step.
-            stats: [StepStat::new(Phase::interaction, 0); N],
+            stats: [StepStat::new(0, 0); N],
             stats_len: 0,
             step_timing: false,
             last_report: TickReport::default(),
@@ -119,6 +127,11 @@ impl<const N: usize> Tick<N> {
     /// `name` is the caller's number the step's time is reported under.
     pub fn on_tick(&mut self, phase: Phase, step: TickStep, name: u32) -> u32 {
         xpute_kit::ensure!(self.len < N, ENOSPC, N);
+        xpute_kit::ensure!(
+            usize::from(phase) < self.policy.held_back.len(),
+            EINVAL,
+            phase
+        );
         let id = self.next_id;
         self.next_id += 1;
         self.registry[self.len] = Some(Registered {
@@ -204,7 +217,7 @@ impl<const N: usize> Tick<N> {
             }
             ctx.off_len = 0;
         }
-        ctx.phase_ms[phase as usize] = now() - start;
+        ctx.phase_ms[usize::from(phase)] = now() - start;
     }
 
     pub fn run(&mut self, delta: f64, quota_ms: f64, t0: f64) -> TickReport {
@@ -212,19 +225,18 @@ impl<const N: usize> Tick<N> {
         let mut ctx = TickContext {
             delta,
             pass: Pass::new(quota_ms, t0, self.policy.hard_slack_ms),
-            phase_ms: [0.0; PHASE_CNT],
+            phase_ms: [0.0; PHASES_MAX],
             invalidated: false,
             offs: [0; OFFS_MAX],
             off_len: 0,
         };
 
-        self.run_phase(Phase::interaction, &mut ctx);
-        ctx.pass.reserve_ms = ctx.pass.total_ms * self.policy.content_share;
-        self.run_phase(Phase::visible, &mut ctx);
-        ctx.pass.reserve_ms = 0.0;
-        for phase in [Phase::content, Phase::cosmetic, Phase::report] {
+        let held_back = self.policy.held_back;
+        for (phase, &share) in (0..).zip(held_back) {
+            ctx.pass.reserve_ms = ctx.pass.total_ms * share;
             self.run_phase(phase, &mut ctx);
         }
+        ctx.pass.reserve_ms = 0.0;
 
         self.last_report = TickReport {
             budget_ms: ctx.pass.total_ms,

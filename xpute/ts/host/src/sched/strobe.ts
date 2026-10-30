@@ -1,44 +1,47 @@
 // @xpute/host/sched/strobe.ts
 
 /**
- * When a guest's turn is rung: on an animation frame, only when the host
- * (`request`) or the guest's last falling edge asked for one, and only on
- * every `Quantum.paced()`-th refresh, the frames between skipped whole.
+ * When a guest's turn is rung: only when the host (`request`) or the guest's
+ * last falling edge asked for one, at a moment the scheduling policy it was
+ * booted with gives and admits (policy.ts); a moment it does not admit passes
+ * to the next.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Doorbell } from "../ipc/doorbell.ts";
-import { type Grant, Quantum, type QuantumPolicy } from "./quantum.ts";
+import type { Grant, SchedulingPolicy } from "./policy.ts";
 
 /** HTML's timer delay is a signed 32-bit count of ms; past it a timer fires at once. */
 const TIMER_REACH_MS = 2 ** 31 - 1;
 
-export class Strobe {
-  private readonly quantum: Quantum;
-  private frame = false;
+export class Strobe<G extends Grant = Grant> {
+  /** A moment is asked of the policy and not yet given. */
+  private asked = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private timer_at = Infinity;
   private last = -1;
-  /** When the last animation frame was handed, run or skipped. */
-  private frame_at = -1;
   private running = false;
-  private readonly run = (now: f64): void => this.turn(now);
+  private readonly consider = (now: f64): void => this.turn(now);
+
+  private readonly doorbell: Doorbell;
+  private readonly policy: SchedulingPolicy<G>;
+  private readonly submit: (grant: G, delta_s: f64) => void;
 
   /** `submit` fills the rings before the doorbell rings. */
   constructor(
-    private readonly doorbell: Doorbell,
-    policy: QuantumPolicy,
-    private readonly submit: (grant: Grant, delta_s: f64) => void,
-    private readonly next_frame: (run: (now: f64) => void) => void,
+    doorbell: Doorbell,
+    policy: SchedulingPolicy<G>,
+    submit: (grant: G, delta_s: f64) => void,
   ) {
-    this.quantum = new Quantum(policy);
+    this.doorbell = doorbell;
+    this.policy = policy;
+    this.submit = submit;
     doorbell.wake = (wake_ms) => this.wake(wake_ms);
   }
 
   start(): void {
     this.running = true;
     this.last = performance.now();
-    this.frame_at = this.last;
     this.request();
   }
 
@@ -49,13 +52,9 @@ export class Strobe {
   }
 
   request(): void {
-    if (this.frame || !this.running) return;
-    this.frame = true;
-    this.next_frame(this.run);
-  }
-
-  input(): void {
-    this.quantum.input(performance.now());
+    if (this.asked || !this.running) return;
+    this.asked = true;
+    this.policy.next(this.consider);
   }
 
   private wake(wake_ms: f64): void {
@@ -74,26 +73,19 @@ export class Strobe {
   }
 
   private turn(now: f64): void {
-    this.frame = false;
+    this.asked = false;
     if (!this.running) return;
-    this.quantum.gap(now - this.frame_at);
-    this.frame_at = now;
-    // Paced: a frame nearer the last turn than the interval, less half a
-    // refresh for the frame's own jitter, is skipped, and the next asked.
-    const refresh_ms = this.quantum.refresh();
-    if (now - this.last < this.quantum.paced(refresh_ms) - refresh_ms / 2) {
-      return this.request();
-    }
+    if (!this.policy.admit(now)) return this.request();
     // Unclamped: how long a gap still counts as motion is the guest's call,
-    // and a clamp here is where every frame worth reporting would land.
+    // and a clamp here is where every turn worth reporting would land.
     const delta_s = Math.max(0, (now - this.last) / 1000);
     this.last = now;
     clearTimeout(this.timer);
     this.timer_at = Infinity;
-    const grant = this.quantum.grant(performance.now());
+    const grant = this.policy.grant(performance.now());
     this.submit(grant, delta_s);
     const t0 = performance.now();
     const wake_ms = this.doorbell.ring(grant.quota_ms);
-    this.quantum.observe(performance.now() - t0, grant, wake_ms);
+    this.policy.observe(performance.now() - t0, grant, wake_ms);
   }
 }

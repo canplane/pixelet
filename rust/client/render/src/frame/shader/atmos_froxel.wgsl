@@ -19,7 +19,7 @@ fn column_dir(c: vec2f) -> vec3f {
   return normalize(sky_ray() * vec3f(ndc, 1.0));
 }
 
-var<workgroup> column_through: array<vec3f, AIR_FROXELS>;
+var<workgroup> column_transmittance: array<vec3f, AIR_FROXELS>;
 var<workgroup> column_scattered: array<vec3f, AIR_FROXELS>;
 var<workgroup> column_held: array<vec4f, AIR_FROXELS>;
 
@@ -40,12 +40,12 @@ fn froxel_cs(@builtin(global_invocation_id) id: vec3u) {
   let t0 = select(0.0, air_reach((f32(k) - 1.0) / last), k > 0u);
   var v = air_stretch(column_dir(vec2f(id.xy)), t0, air_reach(f32(k) / last));
   for (var step = 1u; step < AIR_FROXELS; step <<= 1u) {
-    column_through[k] = v.through;
+    column_transmittance[k] = v.transmittance;
     column_scattered[k] = v.scattered;
     workgroupBarrier();
     if (k >= step) {
-      let before = column_through[k - step];
-      v = Veil(before * v.through, column_scattered[k - step] + before * v.scattered);
+      let before = column_transmittance[k - step];
+      v = Veil(before * v.transmittance, column_scattered[k - step] + before * v.scattered);
     }
     workgroupBarrier();
   }

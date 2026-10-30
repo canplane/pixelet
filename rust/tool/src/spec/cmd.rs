@@ -1,11 +1,7 @@
 // pxl-tool/spec/cmd.rs
 
-//! The command tables, xpute's and a program's on top of it. Majors below
-//! xpute's `program_major` are xpute's; a number is given out once across
-//! both. The emitters
-//! are cmd/ts.rs, cmd/rs.rs and cmd/cpp.rs.
+//! pixelet's command table. The emitters are cmd/ts.rs and cmd/rs.rs.
 
-mod cpp;
 mod rs;
 mod ts;
 
@@ -33,7 +29,7 @@ struct Member {
     #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
     pkt: Option<Vec<Field>>,
-    signal: Option<Vec<Field>>,
+    event: Option<Vec<Field>>,
 }
 
 #[derive(Deserialize)]
@@ -78,8 +74,6 @@ struct Record {
 struct Spec {
     #[serde(rename = "$doc")]
     doc: Vec<String>,
-    base: Option<String>,
-    program_major: Option<u32>,
     #[serde(rename = "extern")]
     externs: Vec<Extern>,
     enums: Vec<Enum>,
@@ -206,88 +200,26 @@ struct Target {
     json: &'static str,
     ts: &'static str,
     ts_logical: &'static str,
-    rs_dir: &'static str,
+    rs: &'static str,
     rs_logical: &'static str,
     /// Where the number checks a packet's reader calls are.
     number: &'static str,
-    cpp: Option<(&'static str, &'static str)>,
 }
 
-const TARGETS: [Target; 2] = [
-    Target {
-        json: "xpute/spec/abi/cmd.json",
-        ts: "xpute/ts/host/src/abi/cmd.spec.ts",
-        ts_logical: "@xpute/host/abi/cmd.spec.ts",
-        rs_dir: "xpute/rust/guest/src/abi",
-        rs_logical: "xpute-guest/abi",
-        number: "crate::abi::number",
-        cpp: Some(("xpute/cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
-    },
-    Target {
-        json: "spec/client/kernel/domain/control/cmd.json",
-        ts: "ts/client/src/abi/cmd.spec.ts",
-        ts_logical: "@pxl/client/abi/cmd.spec.ts",
-        rs_dir: "rust/client/kernel/src/domain/control",
-        rs_logical: "pxl-kernel/domain/control",
-        number: "xpute_guest::abi::number",
-        cpp: None,
-    },
-];
-
-fn majors(spec: &Spec) -> Vec<(u32, &str)> {
-    spec.enums
-        .iter()
-        .filter(|e| e.name == "Major")
-        .flat_map(|e| members(e).map(|m| (m.val, m.name.as_str())))
-        .collect()
-}
-
-/// A program's majors are past the base's `program_major`, and no command is named in both.
-fn check_base(spec: &Spec, json: &str) -> Result<(), String> {
-    let Some(base_path) = &spec.base else {
-        return Ok(());
-    };
-    let base: Spec = read_as(base_path)?;
-    let edge = base
-        .program_major
-        .ok_or(format!("{base_path}: no program_major"))?;
-    for (val, name) in majors(&base) {
-        if val >= edge {
-            return Err(format!(
-                "{base_path}: major {name} at {val:#x} is a program's"
-            ));
-        }
-    }
-    for (val, name) in majors(spec) {
-        if val < edge {
-            return Err(format!(
-                "{json}: major {name} at {val:#x} is below {edge:#x}, xpute's"
-            ));
-        }
-    }
-    let base_names: Vec<String> = base.commands()?.iter().map(|c| c.name.clone()).collect();
-    for c in spec.commands()? {
-        if base_names.contains(&c.name) {
-            return Err(format!("{json}: {} is {base_path}'s", c.name));
-        }
-    }
-    Ok(())
-}
+const TARGET: Target = Target {
+    json: "spec/client/kernel/domain/control/cmd.json",
+    ts: "ts/client/src/abi/cmd.spec.ts",
+    ts_logical: "@pxl/client/abi/cmd.spec.ts",
+    rs: "rust/client/kernel/src/domain/control/cmd.spec.rs",
+    rs_logical: "pxl-kernel/domain/control/cmd.spec.rs",
+    number: "xpute_guest::abi::number",
+};
 
 pub fn outputs() -> Result<Vec<Output>, String> {
-    let mut out = Vec::new();
-    for t in &TARGETS {
-        let spec: Spec = read_as(t.json)?;
-        check_base(&spec, t.json)?;
-        check_numbers(&spec, t.json)?;
-        out.push(Output::new(t.ts, ts::emit(&spec, t)?));
-        out.push(Output::new(
-            &format!("{}/cmd.spec.rs", t.rs_dir),
-            rs::emit(&spec, t)?,
-        ));
-        if let Some((path, namespace)) = t.cpp {
-            out.push(Output::new(path, cpp::emit(&spec, t, path, namespace)?));
-        }
-    }
+    let t = &TARGET;
+    let spec: Spec = read_as(t.json)?;
+    check_numbers(&spec, t.json)?;
+    let mut out = ts::emit(&spec, t)?;
+    out.push(Output::new(t.rs, rs::emit(&spec, t)?));
     Ok(out)
 }

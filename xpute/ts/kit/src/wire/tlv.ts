@@ -36,34 +36,37 @@ import type { Bytes } from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
 import type { Stream } from "@xpute/kit/wire/scalar.ts";
 import * as scalar from "@xpute/kit/wire/scalar.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
-const enum Tag {
-  END = 0x00,
+// The tags, tlv.ts's own as Rust's `Tag` is tlv.rs's: written as a `Tag`,
+// read as a u8 compared to one.
+const Tag = {
+  END: 0x00,
 
-  BOOL = 0x01,
+  BOOL: 0x01,
 
-  U8 = 0x02,
-  I8 = 0x03,
-  U16 = 0x04,
-  I16 = 0x05,
-  U32 = 0x06,
-  I32 = 0x07,
-  U64 = 0x08,
-  I64 = 0x09,
-  F32 = 0x0a,
-  F64 = 0x0b,
+  U8: 0x02,
+  I8: 0x03,
+  U16: 0x04,
+  I16: 0x05,
+  U32: 0x06,
+  I32: 0x07,
+  U64: 0x08,
+  I64: 0x09,
+  F32: 0x0a,
+  F64: 0x0b,
 
-  STR = 0x10, // [u32 len][utf8 bytes]
+  STR: 0x10, // [u32 len][utf8 bytes]
 
-  BYTES = 0x20,
-}
+  BYTES: 0x20,
+} as const;
+type Tag = (typeof Tag)[keyof typeof Tag];
 
 export type TlvValue = primitive | Bytes;
 
 const put_tag = (s: Stream, tag: Tag): void => scalar.putu8(s, tag);
-const get_tag = (s: Stream): Tag => scalar.getu8(s);
+const get_tag = (s: Stream): u8 => scalar.getu8(s);
 
 export class TlvWriter {
   private _buf: Bytes;
@@ -252,7 +255,10 @@ export class TlvReader implements Iterable<TlvValue> {
   private _end: u32;
   private _ended: TlvEnd | null = null;
 
-  constructor(private readonly _buf: Bytes) {
+  private readonly _buf: Bytes;
+
+  constructor(_buf: Bytes) {
+    this._buf = _buf;
     this._stream = scalar.stream(_buf);
     this._end = _buf.byteLength;
   }
@@ -275,7 +281,7 @@ export class TlvReader implements Iterable<TlvValue> {
         this._ended = "unclosed";
         break;
       }
-      const tag: Tag = get_tag(this._stream);
+      const tag = get_tag(this._stream);
       if (tag === Tag.END) {
         this._ended = "closed";
         break;

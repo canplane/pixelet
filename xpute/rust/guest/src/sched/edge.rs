@@ -10,7 +10,7 @@
 use core::future::{poll_fn, Future};
 use core::task::{Poll, Waker};
 
-use super::quantum::NO_WAKE;
+use super::wake::NO_WAKE;
 use crate::clock::now;
 
 pub struct Edge<const N: usize> {

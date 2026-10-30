@@ -7,15 +7,21 @@
 //! sample, in passes timed together (span `sraster`), which the cast's
 //! pixels read (pxl-shader cast.rs `cast_cs`); then what lies about each
 //! box's face asked once a box (`face_cs`, span `face`). Its targets are
-//! written whole each frame before they are read; its args, boxes and faces
-//! each frame its samples are cast, and kept where only the pixels are cast
-//! again over them.
+//! written whole each frame before they are read: in a frame not drawn
+//! whole, through a gate of their own, the depth cleared to the nearest and
+//! the claimed tiles set back to the far plane (raster_gate.wgsl), so the
+//! boxes pass the depth test, early, there alone, and the cast's pixels,
+//! which pass the other tiles by, read nothing there. Its args, boxes and
+//! faces each frame its samples are cast, and kept where only the pixels are
+//! cast again over them.
 
-use pxl_spec_core::{beam, eye, raster, sun};
+use pxl_spec_core::{beam, eye, light, raster};
 
 use super::cast::HEAD_BINDING;
 
-use crate::frame::shader::record::{compute, PIPELINE_RASTER, SHADER_FACE, SHADER_SAMPLE_BOX};
+use crate::frame::shader::record::{
+    compute, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_SAMPLE_BOX,
+};
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
@@ -23,9 +29,8 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::surface::Region;
+use pxl_spec_core::param::light::SAMPLE;
 use pxl_spec_core::param::raster::GROWN;
-use pxl_spec_core::param::sun::SAMPLE;
 
 /// The raster's pipelines, made with the cast's; its args, made with them;
 /// its boxes, room for `room` samples, made again where the grid's samples
@@ -40,6 +45,11 @@ pub(super) struct Raster {
     pub(super) boxes_built: Built,
     faces_built: Built,
     draw_built: Built,
+    /// The gate the boxes are drawn through in a frame not drawn whole, and
+    /// its group over the claimed tiles (`Resolve::tiles`).
+    gate: Built,
+    gate_group: u32,
+    gate_bound: (u32, u32),
     pub(super) args: u32,
     boxes: u32,
     room: u32,
@@ -52,19 +62,19 @@ pub(super) struct Raster {
     size: [u32; 2],
     groups: [u32; 3],
     bound: [u32; 9],
-    /// The sun's, made where its shadows are first cast (`sun_made`); and a
+    /// The light's, made where its shadows are first cast (`light_made`); and a
     /// visibility buffer naming no sample, bound where it is not.
-    pub(super) sun: SunRaster,
+    pub(super) light: LightRaster,
     blank_array: u32,
 }
 
-/// The sun's samples' boxes, written by the eye's pass (`boxes_built`) and
-/// drawn from the sun by the same draw (pxl-spec-core `param::sun::SAMPLE`): its
-/// boxes, room for a sample every `param::sun::SAMPLE` texels; their args; its
+/// The light's samples' boxes, written by the eye's pass (`boxes_built`) and
+/// drawn from the light by the same draw (pxl-spec-core `param::light::SAMPLE`): its
+/// boxes, room for a sample every `param::light::SAMPLE` texels; their args; its
 /// view, a uniform; its targets at the map's side, in the box's order; and
 /// the draw's group.
 #[derive(Default)]
-pub(super) struct SunRaster {
+pub(super) struct LightRaster {
     pub(super) boxes: u32,
     pub(super) args: u32,
     uniform: u32,
@@ -85,6 +95,9 @@ impl Raster {
             boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &compute::SAMPLE_BOX_GROUP),
             faces_built: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
+            gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
+            gate_group: 0,
+            gate_bound: (0, 0),
             args: g.buf(
                 word_bytes(raster::ARGS_WORDS as usize),
                 buffer_usage::STORAGE
@@ -106,7 +119,7 @@ impl Raster {
             size: [0; 2],
             groups: [0; 3],
             bound: [0; 9],
-            sun: SunRaster::default(),
+            light: LightRaster::default(),
             blank_array: g.view(blank, true, 0, 1, 0, 1),
         }
     }
@@ -116,7 +129,7 @@ impl Raster {
     /// rays' `size`; the raster's view off the `eye`'s words; the args
     /// cleared where the samples are cast again (`samples_cast`), else the
     /// boxes they left kept; its groups over the cast's `eye`, `beams` and
-    /// the eye's `head` (pxl-spec-core `sun::MOVED_SIZE`), and, for the
+    /// the eye's `head` (pxl-spec-core `light::HEAD_SIZE`), and, for the
     /// faces' asking, the world's query's buffers (the window, the tiles'
     /// frames, the service area's index, the overwrites, the ways' pool).
     pub(super) fn prepare(
@@ -244,15 +257,16 @@ impl Raster {
 
     /// The boxes written off the samples, a thread a sample of `grid`, where
     /// they were cast again (`samples_cast`), else the last kept; and drawn
-    /// into its targets as many as their args say, cleared first, within the
-    /// `region` the frame casts where it casts one: in passes of their own,
-    /// timed together (span `sraster`).
+    /// into its targets as many as their args say, cleared first, through
+    /// the gate in the `claimed` tiles where the frame is not drawn whole
+    /// (`Resolve::tiles`, `cnt` of them): in passes of their own, timed
+    /// together (span `sraster`).
     pub(super) fn draw(
-        &self,
+        &mut self,
         ctx: &mut RenderContext,
         grid: &beam::Grid,
         samples_cast: bool,
-        region: Option<Region>,
+        claimed: Option<((u32, u32), u32)>,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::sraster);
@@ -265,6 +279,9 @@ impl Raster {
             g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             g.end(pass);
         }
+        // Gated, the depth starts at the nearest, which no box passes, and
+        // the gate sets the claimed tiles back to the far plane; else it
+        // starts there.
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -272,12 +289,22 @@ impl Raster {
                 Load::Clear,
                 self.depth_view,
                 Load::Clear,
-                0.0,
+                if claimed.is_some() { 1.0 } else { 0.0 },
                 stamp.pass(),
             ),
         );
-        if let Some(r) = region {
-            g.set_scissor(pass, r.rect());
+        if let Some((tiles, cnt)) = claimed {
+            if tiles != self.gate_bound {
+                release(self.gate_group);
+                self.gate_group = g.bind_group(
+                    self.gate.layouts[0],
+                    &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
+                );
+                self.gate_bound = tiles;
+            }
+            g.set_pipeline(pass, self.gate.pipeline);
+            g.set_bind_group(pass, 0, self.gate_group, &[]);
+            g.draw(pass, 6, cnt, 0, 0);
         }
         g.set_pipeline(pass, self.draw_built.pipeline);
         g.set_bind_group(pass, 0, self.groups[1], &[]);
@@ -298,10 +325,10 @@ impl Raster {
 }
 
 impl Raster {
-    /// The sun's buffers and its targets at the map's `size`, made once;
+    /// The light's buffers and its targets at the map's `size`, made once;
     /// whether they are.
-    pub(super) fn sun_made(&mut self, g: &Gpu, size: u32) -> bool {
-        let s = &mut self.sun;
+    pub(super) fn light_made(&mut self, g: &Gpu, size: u32) -> bool {
+        let s = &mut self.light;
         if s.group == 0 {
             let samples = (size / SAMPLE) * (size / SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
@@ -328,27 +355,27 @@ impl Raster {
         s.group != 0
     }
 
-    /// The sun's visibility buffer as its cast reads it, an array of one layer;
+    /// The light's visibility buffer as its cast reads it, an array of one layer;
     /// one naming no sample where it is not made.
-    pub(super) fn sun_visibility(&self) -> u32 {
-        if self.sun.group != 0 {
-            self.sun.visibility_array
+    pub(super) fn light_visibility(&self) -> u32 {
+        if self.light.group != 0 {
+            self.light.visibility_array
         } else {
             self.blank_array
         }
     }
 
-    /// The sun's view off the eye's words `e` (pxl-spec-core `sun::Sun`) for
+    /// The light's view off the eye's words `e` (pxl-spec-core `light::Light`) for
     /// the map `size` a side, as `prepare` lays the eye's; the args cleared.
-    pub(super) fn sun_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
-        let s = &self.sun;
+    pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
+        let s = &self.light;
         if s.group == 0 {
             return;
         }
-        let words: &[u32; eye::SUN_WORDS] = e[eye::SUN..eye::SUN + eye::SUN_WORDS]
+        let words: &[u32; eye::LIGHT_WORDS] = e[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
             .try_into()
-            .unwrap_or(&[0; eye::SUN_WORDS]);
-        let v = sun::Sun::of_words(words);
+            .unwrap_or(&[0; eye::LIGHT_WORDS]);
+        let v = light::Light::of_words(words);
         let length = |a: [f32; 3]| libm::sqrtf(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
         let unit = |a: [f32; 3]| {
             let l = length(a).max(f32::MIN_POSITIVE);
@@ -378,9 +405,9 @@ impl Raster {
             GROWN * length(v.across),
             n,
             n,
-            v.reach,
+            v.t_max,
             // The boxes are laid from box texel (0, 0)'s start (pxl-shader
-            // sun.rs `Map::laid`).
+            // light.rs `Map::raster_layout`).
             0.0,
             0.0,
             0.0,
@@ -392,13 +419,13 @@ impl Raster {
         g.write_buf(s.args, 0, bytes(&args));
     }
 
-    /// The sun's boxes drawn into its targets as many as their args say,
-    /// cleared first, timed in the span `sun_raster`, after its boxes
+    /// The light's boxes drawn into its targets as many as their args say,
+    /// cleared first, timed in the span `light_raster`, after its boxes
     /// are written.
-    pub(super) fn sun_draw(&self, ctx: &mut RenderContext) {
+    pub(super) fn light_draw(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::sun_raster);
-        let s = &self.sun;
+        let stamp = ctx.stamp(GpuSpanName::light_raster);
+        let s = &self.light;
         let pass = g.pass(
             encoder,
             &pass_desc(

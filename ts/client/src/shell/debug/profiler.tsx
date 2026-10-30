@@ -24,7 +24,7 @@ import {
 } from "./profiler/long-frame.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { Command } from "@/abi/cmd.spec.ts";
-import { kernel_command, kernel_setting } from "@/abi/shell.ts";
+import { kernel_command, kernel_setting } from "@/port/shell.ts";
 import {
   SETTING,
   type SettingName,

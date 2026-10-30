@@ -97,19 +97,19 @@ uniform! {
         /// much of its light a shadow takes, none where no map is drawn, the
         /// normal offset a fragment takes, a texel at the map's reach, and
         /// the share of the map's half-width the casters reach, where the
-        /// shadows end. Its light is the sun's, or the Moon's where
+        /// shadows end. Its light is the sun's, or the moon's where
         /// `SHADOW_MOON` is 1 (shadow.wgsl `shadow_light`).
         LIGHT_VIEW_PROJ: Mat4 = 32,
         SHADOW_STRENGTH: F32 = 48,
         SHADOW_TEXEL: F32 = 49,
-        SHADOW_RIM: F32 = 50,
+        SHADOW_RADIUS_NDC: F32 = 50,
         /// Whether the camera gizmo is drawn, its tint on the rays' cells
         /// with it (screen_lit.wgsl `cell_share`).
         GIZMO: F32 = 51,
         /// The canvas's device pixels, where `VIEWPORT` is the world's: what
         /// is drawn over the world, after the finish, is laid out in them.
         SCREEN: Vec2 = 52,
-        /// 1 where the shadow map is cast from the Moon (`LIGHT_VIEW_PROJ`).
+        /// 1 where the shadow map is cast from the moon (`LIGHT_VIEW_PROJ`).
         SHADOW_MOON: F32 = 54,
         /// Where this frame's pixels sample the world, off their middles, in
         /// clip units, X right and Y up: pxl-spec-core `eye::JITTER`'s offset
@@ -126,7 +126,7 @@ pub const FRAME_FLOATS: usize = floats(frame::FIELDS);
 uniform! {
     /// The sky's own (sky_word.wgsl): the ray through each point of the
     /// screen (gpu/renderer.rs `put_ray`), the celestial pole, and whether
-    /// the Moon's face has arrived.
+    /// the moon's face has arrived.
     sky {
         RAY: Mat3 = 0,
         POLE: Vec3 = 12,
@@ -306,13 +306,13 @@ pub const CLOUD_TILE_TEXELS: u32 = 1024;
 /// (gpu/atmosphere.rs `EARTH_WINDOW`).
 pub const EARTH_TILE_BITS: u32 = 4;
 
-/// The Moon's near side as download_moon cuts it, a side in texels; the
+/// The moon's near side as download_moon cuts it, a side in texels; the
 /// disc's radius is half of it.
 pub const MOON_TEXELS: u32 = 512;
-/// The Moon's angular radius: its equatorial radius, 1738.1 km, over its
+/// The moon's angular radius: its equatorial radius, 1738.1 km, over its
 /// mean distance, 384,400 km.
 pub const MOON_ANGULAR_RADIUS: f32 = 1738.1 / 384_400.0;
-/// The Moon's geometric albedo.
+/// The moon's geometric albedo.
 pub const MOON_ALBEDO: f32 = 0.12;
 /// The map's mean reflectance over the disc, as download_moon prints it from
 /// the raw map (word.test.rs holds the shipped map to it): the map is scaled

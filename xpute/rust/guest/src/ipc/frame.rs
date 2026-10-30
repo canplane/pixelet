@@ -31,3 +31,13 @@ pub fn cmd_of(word: u32) -> u32 {
 pub fn flags_of(word: u32) -> u32 {
     word >> FLAG_SHIFT
 }
+
+/// The far port a frame's tag names.
+pub fn port_of(tag: u32) -> u32 {
+    tag >> PORT_SHIFT
+}
+
+/// The tag of a frame for `port`, its id or subject `id`.
+pub fn tagged(port: u32, id: u32) -> u32 {
+    (port << PORT_SHIFT) | id
+}

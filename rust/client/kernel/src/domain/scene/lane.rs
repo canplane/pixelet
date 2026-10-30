@@ -6,7 +6,7 @@
 //! (domain/scene/indicator/ghost.rs). Each is its group count, each
 //! group's instance count, then each group's lanes, then the index list.
 
-use pxl_spec_core::scatter::drawn::LANES;
+use pxl_spec_core::generated::drawn::LANES;
 
 /// A group's lanes in one: `drawn::LANES` f32 lanes (x, y, z, spin,
 /// scale), then byte flags padded to a word.

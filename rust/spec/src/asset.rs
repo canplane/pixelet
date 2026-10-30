@@ -37,7 +37,7 @@ use catalog::Catalog;
 use cube::Cube;
 use ingested::{CubeFace, PACK};
 use pxl_spec_core::decor::DECORS;
-use pxl_spec_core::scatter;
+use pxl_spec_core::generated;
 use xpute_kit::status::errno::Errno;
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
@@ -134,7 +134,7 @@ impl decor::Decor {
     /// decor numbers them (pxl-spec-core scatter.rs `first_group`).
     pub fn first_group(&self) -> u32 {
         let kind = decor::DECORS.iter().take_while(|d| d.id != self.id).count();
-        scatter::first_group(&DECORS, kind as u32)
+        generated::first_group(&DECORS, kind as u32)
     }
 
     /// The generator writes one entry a decor, so every id has one.

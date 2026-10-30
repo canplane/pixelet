@@ -15,7 +15,6 @@ use crate::gpu::api::{
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::{put_f32, put_u32, Scratch};
-use crate::gpu::surface::WORLD_COLOR;
 
 fn frame_group(
     g: &Gpu,
@@ -100,7 +99,7 @@ pub enum Stage {
 
 /// A layout is shared by its words, so one group 0 serves every model pipeline.
 pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
-    pipelines.build(g, PIPELINE_SKINNED, WORLD_COLOR).layouts[0]
+    pipelines.build_world(g, PIPELINE_SKINNED).layouts[0]
 }
 
 /// Group 0 as the world image's models read it, the occlusion its map, and
@@ -244,7 +243,7 @@ pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
 /// A decor draw's uniform as instance.wgsl's `Draw` reads it, for the
 /// model tier and the impostors both: translation, first lane word,
 /// stride, opacity, `third`, index list's first word. `third` is decor's
-/// padding or the impostor's sprite layer.
+/// padding or the impostor's atlas layer.
 pub fn put_instances(buf: &mut [u8], u: &[f32], third: u32) {
     put_f32(buf, 0, u[0]);
     put_f32(buf, 4, u[1]);

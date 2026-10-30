@@ -31,6 +31,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
+use pxl_tool::directory;
 use pxl_tool::root;
 use pxl_tool::shader::{header, inputs, inputs_digest, made_from, stale, DIR, ENTRIES, STAMP};
 
@@ -57,15 +58,7 @@ const KEPT: usize = 100;
 /// directory a digest: whatever checkout, export or worktree's sources it
 /// was, the same digest is the same bytes, so one made is made for all.
 fn made_home() -> Result<PathBuf, String> {
-    let home = std::env::var_os("HOME").ok_or("no $HOME")?;
-    let caches = if cfg!(target_os = "macos") {
-        PathBuf::from(home).join("Library/Caches")
-    } else {
-        std::env::var_os("XDG_CACHE_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(home).join(".cache"))
-    };
-    Ok(caches.join("pixelet/shader"))
+    directory::cache_dir("shader")
 }
 
 /// An entry, the file it is checked in as, and its module as checked in.

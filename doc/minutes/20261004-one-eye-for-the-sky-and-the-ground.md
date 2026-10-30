@@ -12,13 +12,13 @@ past the terrain, floor-lit through a long air, turned the horizon yellow.
 
 ## The light
 
-The ground is lit by what lights the sky, and nothing else: the sun, the Moon,
+The ground is lit by what lights the sky, and nothing else: the sun, the moon,
 the sky's irradiance, the second of the two lights, and what the ground below
 bounces at the Earth's mean albedo. The themes, their clock, the sunrise solver
 and the floor are gone; the location marker's night is the sun under the
 horizon, as the stars' is.
 
-At night the Moon and a moonless sky's glow are lights of their own, at values
+At night the moon and a moonless sky's glow are lights of their own, at values
 the night eye reads rather than photometric ones (pxl-render
 `look/atmosphere.rs`). The glow lights the ground and is not drawn, so space
 stays black.
@@ -26,7 +26,7 @@ stays black.
 Lit by the sun's direction alone, a matte wall turned from it fell to a fifth of
 the ground beside it. A quarter of the light keeps its direction; the rest, what
 an up-facing face takes, reaches every face alike
-(pxl-render `param.rs` `light::DIRECTED`). An up-facing face is lit as
+(pxl-render `param.rs` `light::BY_NORMAL`). An up-facing face is lit as
 before, so the exposure, the sky and the far ground are untouched. No face is
 painted by its direction.
 
@@ -55,7 +55,7 @@ leaves. Neither touches the air in front, and neither tints.
 
 > Since changed (2026-10-28): neither tints, and each darkens only its own
 > light. The sun's shadow is the sun's visibility and darkens the direct sun;
-> the occlusion, the screen's (frame/shader/ao_map.wgsl `screen_open`) times
+> the occlusion, the screen's (frame/shader/ao_map.wgsl `screen_ao`) times
 > the corners' (screen_ray.wgsl `creases`), is the sky's and darkens only the
 > light from the sky and its bounce (atmos_light.wgsl `surface_light_in`).
 > The warmth a corner reads is the light left in it, the sun's among it.
@@ -74,5 +74,5 @@ actors are drawn into it depth only, still pushed back by their slope
 ## What it cost
 
 Nothing a phone pays for by default. The tone curve replaced a grade that
-converted to sRGB and back; the exposure is read once a shader; the Moon is not
+converted to sRGB and back; the exposure is read once a shader; the moon is not
 worked out by day.

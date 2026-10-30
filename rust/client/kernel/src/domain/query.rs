@@ -14,7 +14,6 @@
 pub mod changed;
 pub mod decor;
 mod limit;
-pub mod model;
 mod node;
 mod place;
 mod placed;
@@ -24,7 +23,7 @@ mod support;
 mod surface;
 mod world;
 
-pub use ray::{asked, at_zoom, by_dist, cell_at, held, Hit, Ray, Struck};
+pub use ray::{asked, at_zoom, by_dist, cell_zoom_at, held, Hit, Ray, Struck};
 pub use support::{over, under, walks};
 pub use world::{Walked, World};
 

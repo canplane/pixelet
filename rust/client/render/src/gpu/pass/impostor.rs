@@ -14,20 +14,19 @@ use crate::gpu::api::{
     buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
     view_entry, Format, Gpu, Load, TrackedRenderPass,
 };
-use crate::gpu::grown::Drawn;
+use crate::gpu::generated::Drawn;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::model::{
     draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::Uploads;
 
 /// Impostors span less than the model tier's floor, a camera grid cell
 /// (pxl-spec-core `grid::CELLS_A_RAD`), 45 drawn pixels on a view 2160
 /// CSS pixels high at ratio 2, so this is several times any one's drawn
 /// size.
-const SPRITE: u32 = 128;
+const IMPOSTOR_SIZE: u32 = 128;
 const FIT_BYTES: u32 = 16;
 
 /// glTF's across, up and deep.
@@ -59,7 +58,7 @@ fn fit_of(extent: Extent) -> [f32; 4] {
 
 impl ImpostorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> ImpostorPass {
-        let draw = pipelines.build(g, PIPELINE_IMPOSTOR, WORLD_COLOR);
+        let draw = pipelines.build_world(g, PIPELINE_IMPOSTOR);
         let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, Format::rgba8unorm_srgb);
         let sampler = g.sampler(
             FilterMode::linear,
@@ -70,8 +69,8 @@ impl ImpostorPass {
             1,
         );
         let atlas = g.texture(
-            SPRITE,
-            SPRITE,
+            IMPOSTOR_SIZE,
+            IMPOSTOR_SIZE,
             DECOR_GROUPS as u32,
             Format::rgba8unorm_srgb,
             1,
@@ -79,8 +78,8 @@ impl ImpostorPass {
         );
         let atlas_view = g.view(atlas, true, 0, 1, 0, DECOR_GROUPS as u32);
         let depth = g.texture(
-            SPRITE,
-            SPRITE,
+            IMPOSTOR_SIZE,
+            IMPOSTOR_SIZE,
             1,
             Format::depth32float,
             1,
@@ -228,17 +227,17 @@ impl ImpostorPass {
         );
     }
 
-    /// The sprites the GPU grew, an indirect draw a group whose layer is
-    /// drawn (pxl-spec-core `scatter::drawn`, a group's sprites its region
+    /// The impostors the GPU generated, an indirect draw a group whose layer
+    /// is drawn (pxl-spec-core `generated::drawn`, a group's impostors its region
     /// `2·group + 1`).
-    pub fn draw_grown(
+    pub fn draw_generated(
         &self,
         pass: &mut TrackedRenderPass,
-        grown: Option<Drawn>,
+        generated: Option<Drawn>,
         groups: u32,
         frame: u32,
     ) {
-        let Some(d) = grown else { return };
+        let Some(d) = generated else { return };
         pass.set_pipeline(self.draw.pipeline);
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(2, self.group, &[]);

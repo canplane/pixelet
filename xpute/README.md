@@ -22,10 +22,11 @@ what that program computes.
 ```text
 ┌─ host ── TypeScript ───┐                        ┌─ guest ──────────────────┐
 │ owns the clock, the    │                        │ computes, and owns       │
-│ memory, the I/O        │ ═══ intr(quota) ════▶  │ nothing                  │
+│ memory, the I/O        │ ═══ run(quota) ═════▶  │ nothing                  │
 │                        │                        │                          │
 │                        │  ◀═══ wake_ms ═══════  │                          │
 │                        │  ◀──── now() ────────  │                          │
+│                        │  ◀── hostcall(at) ───  │                          │
 └───────────┬────────────┘                        └────────────┬─────────────┘
             │                                                  │
             └──────────────────────────┬───────────────────────┘
@@ -35,12 +36,16 @@ what that program computes.
            └─────────────────────────────────────────────────────┘
 ```
 
-Three edges, and one call the other way: the guest reads the host's clock
-(`now`), because it spends its quota against that clock in the middle of a turn,
-when the host cannot run. There is no second entry point, no other callback, and
-nothing either side holds a pointer to on the other.
+Three edges, and two calls the other way, each answered before it returns: the
+guest reads the host's clock (`now`), because it spends its quota against that
+clock in the middle of a turn, when the host cannot run; and it runs a
+**hostcall**, a guest's call into its host, now rather than from the stream the
+host runs after the turn: one of its program's that the host answers from what
+it already holds, where an answer a turn later would cost it that turn. There is
+no second entry point, no other callback, and nothing either side holds a
+pointer to on the other.
 
-`intr` is the whole of the guest's life. xpute names it, as a C runtime names
+`run` is the whole of the guest's life. xpute names it, as a C runtime names
 `main`, and the guest implements it. It runs when the host rings, for as long as
 the quota it was handed, and when the call returns the guest is not running at
 all. Its answer, `wake_ms`, is when it would like the next turn. A guest that
@@ -70,15 +75,30 @@ ts/host                                     the host end in TypeScript, mounted 
 rust/host                                   the host end in Rust: a guest's memory by offset, and a guest linked in
 rust/gpu  ·  ts/gpu  ·  cpp/xpute/gpu       WebGPU's calls, which a guest writes and a host runs
 rust/conformance  ·  cpp/conformance        a guest in each, which the contract's traces drive
-script                                      the repository's own scripts; never shipped
+rust/example  ·  ts/example                 the smallest guest, and the host that drives it
+rust/tool                                   the repository's own Rust programs, run by cargo
+script                                      the repository's own scripts (Python)
 spec                                        the numbers every language's are generated from
 ```
 
 ## Embedding a guest
 
+The smallest program shows the whole of it: a guest that answers one command
+(`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
+`make test` runs. The guest lays out its own range, a page for the toc,
+then the two rings and their slots and the hostcalls' stream, and answers the
+toc's offset from a boot call; each turn it applies what waits, and asks
+the host for a number it holds by a hostcall run now. The host opens the module
+over a memory of its own (`@xpute/host/module.ts` `open_module`) and mounts on
+it in one call (`@xpute/host/host.ts` `mount`), given that offset, its answers
+to the guest's calls (`SysHost`, each part optional) and the scheduling policy
+that says when a turn runs and how much it gets (`sched/policy.ts`: a fixed
+quota where there is no display, frame pacing on a page); then it sends the
+command and reads the reply.
+
 A guest built as a **WebAssembly module** takes its form from
 `xpute_guest::wasm`: a call in its `build.rs`, and one `wasm_abi!`, which
-installs its allocator and exports `intr` (`rust/conformance` is one):
+installs its allocator and exports `run`, the entry it calls:
 
 ```rust
 // build.rs, with xpute-guest as a build dependency
@@ -89,26 +109,20 @@ fn main() {
 // lib.rs
 xpute_guest::wasm_abi!(
     xpute_guest::wasm::Config { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
-    my_guest::intr // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
+    my_guest::entry // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
 );
 ```
 
 A guest **linked into a native program**, on a unix platform, is booted by one
 `xpute_host::native_abi!`, beside `native::Alloc` as the program's allocator,
-and exports `xpute_intr` and `xpute_mem` (`rust/host/examples/native.rs` is one,
-and `make test` runs it).
+and exports `xpute_run`, `xpute_mem` and `xpute_hostcall_on`
+(`rust/host/examples/native.rs` is one, and `make test` runs it).
 
 A **C++ program** takes the library in two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with
 `-ffp-contract=off`, the flags `cpp/Makefile` builds with. They are at
 `cpp/amalgamation/` in xpute's own repository; in this tree
 `make -C cpp amalgamation` writes them to `cpp/target/amalgamation/`.
-
-On the host's side, a TypeScript program mounts the host on the guest its
-platform opened in one call (`@xpute/host/host.ts` `mount`), given the offset of
-the guest's directory, where the guest says what lies where; the program's
-answers to the system calls (`SysHost`); what it submits on each turn the host
-grants; and how it waits for an animation frame.
 
 ## What it leaves to whoever uses it
 
@@ -140,11 +154,12 @@ SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
 
 ```sh
 make install       # ts/'s packages, pnpm's
-make -j8 check     # formats, lints and types checked, the C++ compiled
+make -j8 check     # formats, lints and types checked, the C++ compiled, spec's files current
 make -j8 test      # every tree's tests, then the traces against every guest
 make -j8 build     # the guests the traces drive; test builds them first
 make -j8 test-gpu  # the GPU hosts, on wgpu and in Chrome ($CHROME)
 make fmt           # prettier, cargo fmt
+make spec          # the files generated from spec, written
 ```
 
 `check-ts`, `test-cpp`, `test-rust` and the like run one tree's. The copy to

@@ -4,7 +4,7 @@
 //! every zoom, and its scale on the camera grid's cells.
 
 use super::tile::{tile_at, Cell, Tile};
-use crate::space::camera::grid::{cell_at, split_dist, WINDOW_MARGIN};
+use crate::space::camera::grid::{cell_zoom_at, split_dist, WINDOW_MARGIN};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{idx_of, Zoom};
 use crate::space::hierarchy::tree::{
@@ -58,7 +58,7 @@ impl Cells for Lattice {
     /// The tile whose records fold into the grid's cell at `r2`, a distance
     /// squared; held to the pyramid.
     fn z_at(self, r2: f64) -> Zoom {
-        self.read_zoom(cell_at(r2))
+        self.read_zoom(cell_zoom_at(r2))
     }
 
     /// The cell at `z` a point stands in; a point, since a cell may be finer than a unit.

@@ -39,7 +39,7 @@ KINDS = ["terrain", "place", "division", "earth"]
 SOURCE = "source"
 # Beside a copy's tiles, what it is: never uploaded.
 MANIFEST = "manifest.json"
-ROUTE = json.loads((REPO / "spec/spec/route.json").read_text())
+PUBLISHED = json.loads((REPO / "spec/spec/bake/published.json").read_text())
 
 
 class Refused(Exception):
@@ -51,8 +51,8 @@ def die(message):
 
 
 def tile_object(version, name):
-    """A tile's object under its kind, route.json's `object` filled in."""
-    return ROUTE["roots"]["TILE_ROOT"]["object"].replace("{version}", version).replace("{name}", name)
+    """A tile's object under its kind, published.json's `OBJECT` filled in."""
+    return PUBLISHED["OBJECT"].replace("{version}", version).replace("{name}", name)
 
 
 def endpoint():

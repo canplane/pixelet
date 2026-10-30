@@ -1,0 +1,79 @@
+// pxl-kernel/domain/scene/gizmo/gizmo.spec.rs
+//
+// GENERATED from spec/client/kernel/domain/scene/gizmo/gizmo.json
+//
+// What each line of the world gizmo is drawn in, so the lines and the
+// shell's legend of them read one look: the frame's marks about the pivot
+// (domain/scene/gizmo/frame_gizmo.rs) and the coverage's over the ground
+// (domain/scene/gizmo/coverage_gizmo.rs). Each #rrggbb in sRGB, with its
+// opacity, and dashed where a dashed line draws it: a ring of the frame, a
+// stretch of the coverage.
+
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    clippy::absolute_paths,
+    dead_code,
+    reason = "generated from the spec"
+)]
+
+pub mod frame {
+    pub mod pivot {
+        pub const rgb: u32 = 0x000000;
+    }
+    pub mod level {
+        pub const rgb: u32 = 0x000000;
+        pub const dashed: bool = true;
+    }
+    pub mod forward {
+        pub const rgb: u32 = 0xff0000;
+        pub const dashed: bool = true;
+    }
+    pub mod north {
+        pub const rgb: u32 = 0x00ff00;
+        pub const dashed: bool = true;
+    }
+    pub mod up {
+        pub const rgb: u32 = 0x0000ff;
+    }
+}
+
+pub mod coverage {
+    pub mod drawn {
+        pub const rgb: u32 = 0xffffff;
+        pub const alpha: f32 = 0.4;
+        pub const dashed: bool = false;
+    }
+    pub mod drawn_from_floor {
+        pub const rgb: u32 = 0x00ffff;
+        pub const alpha: f32 = 0.6;
+        pub const dashed: bool = false;
+    }
+    pub mod unbuilt {
+        pub const rgb: u32 = 0xffff00;
+        pub const alpha: f32 = 0.6;
+        pub const dashed: bool = true;
+    }
+    pub mod floor_only {
+        pub const rgb: u32 = 0xff00ff;
+        pub const alpha: f32 = 0.6;
+        pub const dashed: bool = true;
+    }
+    pub mod no_tile {
+        pub const rgb: u32 = 0xff0000;
+        pub const alpha: f32 = 0.6;
+        pub const dashed: bool = true;
+    }
+    pub mod tile {
+        pub const rgb: u32 = 0xff9500;
+        pub const alpha: f32 = 0.9;
+        pub const dashed: bool = false;
+    }
+    pub mod shard {
+        pub const rgb: u32 = 0x7cff7c;
+        pub const alpha: f32 = 1.0;
+        pub const dashed: bool = false;
+    }
+}

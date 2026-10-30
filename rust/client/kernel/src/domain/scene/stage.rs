@@ -21,14 +21,14 @@ use crate::profiler::frame::{DeviceSample, GpuSample, RaySample};
 use pxl_render::gpu::api::OBJECT_OPS;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
-use crate::domain::query::decor::asset::{decor_model, decor_skin};
-use crate::domain::query::model::draw_list;
 use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::preview::preview_rows;
+use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::environment::cloud::cloud_groups;
-use crate::domain::scene::indicator::coverage_gizmo::coverage_gizmo_step;
-use crate::domain::scene::indicator::frame_gizmo::frame_gizmo_step;
+use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_step;
+use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_step;
 use crate::domain::scene::marker::sheet;
+use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
@@ -55,12 +55,12 @@ const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::object::preview;
 use crate::domain::layer::terrain::window;
-use crate::domain::query::model;
 use crate::domain::scene::cast;
 use crate::domain::scene::decor::drawn;
 use crate::domain::scene::environment::cloud;
-use crate::domain::scene::indicator::camera_gizmo;
+use crate::domain::scene::gizmo::camera_gizmo;
 use crate::domain::scene::marker;
+use crate::domain::scene::model;
 use crate::domain::scene::param;
 use crate::domain::scene::region;
 use crate::domain::view::frame::pose::{sea_under_eye, view};
@@ -186,7 +186,7 @@ pub fn stage_render(pace: Pace) {
         window::on_landed(b, ticket, landing);
     };
     // What the scene animates changed, about the eye.
-    let (moved, animated) = {
+    let (moved, moved_keys, bounded, animated) = {
         let s = stage_lane();
         let eye = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         region::take(eye)
@@ -227,6 +227,8 @@ pub fn stage_render(pace: Pace) {
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().profiler,
         moved,
+        moved_keys,
+        bounded,
         animated,
     });
     // What landed, folded once after all of it, before anything reads a

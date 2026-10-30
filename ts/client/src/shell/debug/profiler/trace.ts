@@ -17,7 +17,7 @@ import {
   LANES,
   profiler_frames,
   profiler_tasks,
-} from "@/abi/profiler.ts";
+} from "@/port/profiler.ts";
 import { LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";
 import { longFramesSince } from "./long-frame.ts";
@@ -210,7 +210,7 @@ function profilerTraceJson(): string {
 export async function profilerTraceSave(): Promise<string> {
   const json = profilerTraceJson();
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
-  const name = `pxl-profiler-${new Date()
+  const name = `profiler-${new Date()
     .toISOString()
     .replace(/[:.]/g, "-")}.json`;
   try {

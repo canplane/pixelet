@@ -7,12 +7,15 @@ import type { Guest } from "@pxl/client/bracket.tsx";
 import { PLATFORM } from "./module.ts";
 
 /** The config is not read here: the linked guest's memory is given in Rust
- * (pxl-native lib.rs `guest`), and its GPU stream played there (surface.rs). */
+ * (pxl-native lib.rs `guest`), and its GPU stream played there (surface.rs).
+ * A hostcall comes back to this thread while `run` waits (xpute-host native
+ * `answer_with`). */
 export function open(): Promise<Guest> {
   const mem = PLATFORM.mem();
-  PLATFORM.intr(0);
+  PLATFORM.run(0);
   return Promise.resolve({
     mem,
-    intr: (quota_ms: f64) => PLATFORM.intr(quota_ms),
+    run: (quota_ms: f64) => PLATFORM.run(quota_ms),
+    answer_with: (answer) => PLATFORM.hostcallOn(answer),
   });
 }

@@ -1,21 +1,22 @@
 // pxl-kernel/domain/scene/decor/drawn.rs
 
-//! What the GPU's decor takes each frame (pxl-render gpu/grown.rs), which
-//! grows what the ground grows and draws it with placed decor: what only
-//! the CPU knows, handed over and never read back. Each kind's zooms where
-//! it is a sprite's worth, the tiers' floors as angles, the anchor
+//! What the GPU's decor takes each frame (pxl-render gpu/generated.rs), which
+//! generates what the ground generates and draws it with placed decor: what
+//! only the CPU knows, handed over and never read back. Each kind's zooms
+//! where it is an impostor's worth, the tiers' floors as angles, the anchor
 //! a decor is drawn about, the decor the eraser leaves out, each
 //! variant's extent, placed decor as records, and the boxes the objects
-//! were written in, where what the ground grows may have changed.
+//! were written in, where what the ground generates may have changed.
 
-use pxl_render::gpu::grown::DecorFrame;
+use pxl_render::gpu::generated::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_dist, SPLIT, WINDOW_MARGIN};
+use pxl_spec::space::camera::grid::{split_dist, WINDOW_CELLS_A_RAD, WINDOW_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
+use pxl_spec_core::generated::{self, drawn, row_of};
 use pxl_spec_core::overwrite;
-use pxl_spec_core::scatter::{self, drawn, row_of};
+use pxl_spec_core::scatter;
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
@@ -40,31 +41,33 @@ pub fn decor_model_angle() -> f64 {
     param::DECOR_MODEL_CELLS * grid::CELL
 }
 
-/// The sprite's edge, `DECOR_SPRITE_CELLS` of a camera cell, as an angle as
+/// The impostor's edge, `DECOR_IMPOSTOR_CELLS` of a camera cell, as an angle as
 /// the model's is (`decor_model_angle`).
-pub fn decor_sprite_angle() -> f64 {
-    param::DECOR_SPRITE_CELLS * grid::CELL
+pub fn decor_impostor_angle() -> f64 {
+    param::DECOR_IMPOSTOR_CELLS * grid::CELL
 }
 
-/// How far a thing `extent_u` wide is a sprite's worth as a window holds it:
-/// where it spans `DECOR_SPRITE_CELLS` of the window's cells (`SPLIT`),
-/// `WINDOW_MARGIN` times as far as `decor_sprite_angle` puts the sprite's
-/// edge, an upper bound. `is_decor_shown` takes both its sides at the
-/// window's, so its zooms are the view's.
-pub const fn sprite_reach(extent_u: f64) -> f64 {
-    extent_u * SPLIT / param::DECOR_SPRITE_CELLS
+/// How far a thing `extent_u` wide is an impostor's worth as a window holds
+/// it, in units, past which it is culled: where it spans
+/// `DECOR_IMPOSTOR_CELLS` of the window's cells (`WINDOW_CELLS_A_RAD`),
+/// `WINDOW_MARGIN` times as far as `decor_impostor_angle` puts the
+/// impostor's edge, an upper bound. `is_decor_shown` takes both its
+/// sides at the window's, so its zooms are the view's.
+pub const fn cull_dist_u(extent_u: f64) -> f64 {
+    extent_u * WINDOW_CELLS_A_RAD / param::DECOR_IMPOSTOR_CELLS
 }
 
-/// Whether a decor `extent_u` wide is a sprite's worth anywhere cells of
+/// Whether a decor `extent_u` wide is an impostor's worth anywhere cells of
 /// `cell_zoom` are drawn: as it spans where that zoom begins.
 fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    split_dist(cell_zoom) * WINDOW_MARGIN <= sprite_reach(extent_u)
+    split_dist(cell_zoom) * WINDOW_MARGIN <= cull_dist_u(extent_u)
 }
 
-/// Each kind's window zooms, a bit each: the leaves' alone, where it is a
-/// sprite's worth. A coarser window grows none, so what the ground grows is
-/// one set wherever it is drawn, never thinned or posed again at a coarser
-/// cell; a finer one lies within the leaves'.
+/// Each kind's window zooms, a bit each, where it is an impostor's worth: the
+/// leaves', and each coarser one where one of its variants stands as itself,
+/// its own size no narrower than the window's cell (pxl-spec-core
+/// `scatter::stands_at`), the same cells' decor read at every one. A finer
+/// window lies within the leaves'.
 fn shown() -> [u32; DECORS.len()] {
     shown_by(|d| d.extent(catalog()))
 }
@@ -72,7 +75,13 @@ fn shown() -> [u32; DECORS.len()] {
 /// `shown`, each kind's extent `extent` gives.
 fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {
-        u32::from(is_decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
+        let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
+        (FIRST_CELL..=LEAF_CELL)
+            .filter(|&cell| {
+                let stands = scatter::any_stands_at(d.row, cell);
+                stands && is_decor_shown(extent, cell)
+            })
+            .fold(0, |bits, cell| bits | 1 << (cell - FIRST_CELL))
     })
 }
 
@@ -82,7 +91,7 @@ struct Handed {
     /// Made with the drawing words, from the variants' extents.
     shown: [u32; DECORS.len()],
     drawing: [u32; drawn::DRAWING_WORDS as usize],
-    placed: Vec<[u32; scatter::GROWN_WORDS as usize]>,
+    placed: Vec<[u32; generated::RECORD_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
     /// cells, and how many the next frame hands (`note_edited`, `frame`).
     edits: [[i32; 4]; overwrite::EDITS as usize],
@@ -134,13 +143,13 @@ fn handed() -> &'static mut Handed {
 }
 
 /// A leaf cell's X as the world names it (pxl-spec-core `wrap_idx`), the
-/// GPU's grown records' among them, as a word.
+/// GPU's generated records' among them, as a word.
 fn wrapped(x: i32) -> u32 {
     pxl_spec_core::wrap_idx(LEAF_CELL, x) as u32
 }
 
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the
-/// largest is a sprite's worth or the rays stop asking the leaves' cells,
+/// largest is an impostor's worth or the rays stop asking the leaves' cells,
 /// less the placed decor `hide` names, and the
 /// ground's decor at `scattered` left out.
 pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
@@ -167,7 +176,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         .iter()
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
-        / decor_sprite_angle())
+        / decor_impostor_angle())
     .min(lattice::draw_reach(lattice::GROUND, tile::LEAF_ZOOM));
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < reach {
@@ -195,7 +204,12 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
         let [x, y, z] = idx_of(UNIT_ZOOM, &e.corner());
         placed.push([
-            scatter::record_word(k, variant, turn, scatter::PLACED_AT),
+            generated::record_word(
+                k,
+                variant,
+                turn,
+                scatter::coarsest_stand(&decor::DECORS[k as usize], variant),
+            ),
             wrapped(x),
             y as u32,
             z as u32,
@@ -231,7 +245,7 @@ fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Seen) {
     let anchor = seen.anchor;
     p.fill(0);
     p[drawn::MODEL_ANGLE as usize] = (decor_model_angle() as f32).to_bits();
-    p[drawn::SPRITE_ANGLE as usize] = (decor_sprite_angle() as f32).to_bits();
+    p[drawn::IMPOSTOR_ANGLE as usize] = (decor_impostor_angle() as f32).to_bits();
     let at = drawn::ANCHOR as usize;
     p[at] = wrapped(anchor[0] as i32);
     p[at + 1] = anchor[1] as i32 as u32;
@@ -280,7 +294,7 @@ pub fn note_edited(regions: &[Aabb]) {
 }
 
 /// The hand-over `step` made; the edits `note_edited` gave, once. With the
-/// decor setting off the ground grows its decor at no zoom, and what was
+/// decor setting off the ground generates its decor at no zoom, and what was
 /// placed stays.
 pub fn frame() -> DecorFrame<'static> {
     let h = handed();

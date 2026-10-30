@@ -1,11 +1,10 @@
 // pxl-tool/spec/cmd/rs.rs
 
 //! A command table as Rust: its enums, each packet's reader and each
-//! signal's writer, for a Rust guest.
+//! event's writer, for a Rust guest.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
-use crate::spec;
-use crate::spec::{file, pascal, rs_doc};
+use crate::spec::{file, generated, pascal, rs_doc};
 
 fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
     for f in fields {
@@ -44,7 +43,7 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     }
     if f.list || kind == Kind::Record {
         return Err(format!(
-            "cmd.json: the kernel reads no {} ({})",
+            "cmd.json: Rust reads no {} ({})",
             if f.list { "list" } else { "record" },
             f.name
         ));
@@ -234,9 +233,9 @@ fn rs_writer(
 
 pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let mut out = vec![
-        format!("// {}/cmd.spec.rs", t.rs_logical),
+        format!("// {}", t.rs_logical),
         "//".into(),
-        spec::generated(t.json, t.json),
+        generated(t.json),
         "".into(),
     ];
     out.extend(rs_doc(&spec.doc, "", "//!"));
@@ -245,7 +244,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             "",
             "// A list a record carries is a function handing out its items, whose",
             "// type is long to spell and is spelled once, here, for each. A table",
-            "// with no signal or no enum read off the wire leaves a writer or a",
+            "// with no event or no enum read off the wire leaves a writer or a",
             "// number's check unused.",
             "#![allow(non_camel_case_types, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, reason = \"generated from the spec\")]",
             "",
@@ -259,7 +258,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let strs = spec
         .commands()?
         .iter()
-        .flat_map(|c| c.pkt.iter().chain(c.signal.iter()).flatten())
+        .flat_map(|c| c.pkt.iter().chain(c.event.iter()).flatten())
         .any(|f| f.list && f.ty == "str");
     out.push(format!(
         "use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};",
@@ -360,9 +359,9 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                 "}".to_string(),
             ]);
         }
-        if let Some(signal) = &c.signal {
-            let doc = [format!("Command::{}'s signal.", c.name)];
-            rs_writer(spec, &mut out, &format!("{name}Signal"), Some(&doc), signal)?;
+        if let Some(event) = &c.event {
+            let doc = [format!("Command::{}'s event.", c.name)];
+            rs_writer(spec, &mut out, &format!("{name}Event"), Some(&doc), event)?;
         }
     }
     Ok(file(&out))

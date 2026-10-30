@@ -2,9 +2,15 @@
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
-import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
+import { strerror } from "@xpute/kit/status/errno.spec.ts";
+import type { i32 } from "@xpute/kit/abi/word.ts";
 
-import type { Frame, Spread, TaskRecord, TaskSummary } from "@/abi/profiler.ts";
+import type {
+  Frame,
+  Spread,
+  TaskRecord,
+  TaskSummary,
+} from "@/port/profiler.ts";
 import { drawn, gpuMs, n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { fps, type ProfilerReport } from "./view.ts";
 import { fixed } from "@/shell/fixed.ts";
@@ -25,7 +31,7 @@ const pastText = (f: Frame) =>
 const spread = (s: Spread) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 /** The `ray_counts` setting's counts over the window: its sums since boot
- * (profiler.json FRAME's rays, eye and sun lanes) at its last frame less
+ * (profiler.json FRAME's rays, eye and light lanes) at its last frame less
  * those at its first, where any frame's counts were read back: an observer's line each where it cast — the nodes its
  * beam rays, its samples and its walk again asked a cast, its pixels or
  * slots that took the visible sample and that walked, the nodes its walk
@@ -77,19 +83,19 @@ const raysText = (first: Frame, last: Frame) => {
       walked: f.eye_walked,
       boxes: f.eye_boxes,
     }),
-    ...observer("sun", f.sun_casts, f.sun_rays, {
-      beam: f.sun_beam,
-      sample: f.sun_sample,
-      miss: f.sun_miss,
-      took: f.sun_took,
-      walked: f.sun_walked,
-      boxes: f.sun_boxes,
+    ...observer("light", f.light_casts, f.light_rays, {
+      beam: f.light_beam,
+      sample: f.light_sample,
+      miss: f.light_miss,
+      took: f.light_took,
+      walked: f.light_walked,
+      boxes: f.light_boxes,
     }),
   ];
 };
 
 export function failText(fail: u32, detail: u32): string {
-  const name = strerror(fail as Errno).split(":")[0];
+  const name = strerror(fail as i32).split(":")[0];
   return detail === 0 ? name : `${name} ${detail}`;
 }
 
@@ -231,9 +237,15 @@ function windowSection(r: ProfilerReport): string[] {
     )} ms   (busy unmeasured: the door's commands, rise and fall)`,
     f.gpu_read > 0
       ? `  gpu     ${spread(
-          f.gpu,
-        )} ms   (over the ${f.gpu_read} frames a read timed)`
+          f.gpu_busy,
+        )} ms busy   ${spread(f.gpu)} ms the spans' sum   (over the ${f.gpu_read} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
+    `  busy by kind  ${
+      f.gpu_busy_kinds
+        .filter((r) => r.p50 > 0)
+        .map((r) => `${r.name} p50 ${n1(r.p50)} p95 ${n1(r.p95)}`)
+        .join("  ") || "-"
+    } ms`,
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
     ...raysText(f.first, last),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.

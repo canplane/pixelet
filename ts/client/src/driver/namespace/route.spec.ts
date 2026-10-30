@@ -1,0 +1,73 @@
+// @pxl/client/driver/namespace/route.spec.ts
+//
+// GENERATED from spec/spec/route.json
+// The address space, as four reserved roots and the branches under them,
+// and the two origins they are served from.
+//
+// The app routes on paths of its own, so a relay tells a deep link from a
+// request meant for a server by a root alone — which is why the reservation is
+// on the server's side, where it never reaches an address bar.
+//
+// Every relay reads a root or a branch and never a route name: adding a route
+// is a change to the one server that answers it and to nothing else. This file
+// is where all of them read it from: the client's driver, the Worker and the
+// servers are written from it, and wrangler's and Caddy's configurations take
+// their part of it. The kernel names what it opens and never an address.
+
+/** The world's data: what is baked from Overture and the elevation raster,
+ * and the one query over it that cannot be baked. pxl-geo answers what the
+ * bucket does not. */
+export const GEO_ROOT = "/geo";
+
+/** The application: sessions, chat, what a player places, and the realtime
+ * half. pxl-api answers here, and answers nothing yet — the root, the
+ * origin and the process exist so that the first route arrives into a
+ * shape rather than assembling one on the day it is written. */
+export const API_ROOT = "/api";
+
+/** Baked tiles by kind, version and name: under the root a kind's own, and
+ * under that its object as a published set lays it out (bake/published.json
+ * `OBJECT`, and `SPHERE` for the Earth's picture whole). Its own root for
+ * the reason the asset root is: the bake
+ * puts them in the bucket and the edge serves them, so neither server
+ * answers them, and the edge tells them from the geo server's routes by
+ * the root alone. */
+export const TILE_ROOT = "/tile";
+
+/** Models and textures, by the sha256 of their bytes. Its own root because
+ * it is neither server's: the ingest puts them in the bucket and the edge
+ * serves them, and a content-addressed blob is as immutable as a URL gets.
+ * Under the geo root it would be claiming to be geography, and under the
+ * application's it would be claiming to be state. */
+export const ASSET_ROOT = "/asset";
+
+/** Forward search, the one geo query with no finite tile to bake it against. */
+export const SEARCH_URL = "/geo/search";
+
+/** Ops routes, behind the shared admin token. One per root rather than one
+ * shared branch: each server gates its own prefix, and a token that opened
+ * both would make either server's leak the other's. */
+export const GEO_INTERNAL = "/geo/internal";
+
+/** pxl-api's own, gated the same way. */
+export const API_INTERNAL = "/api/internal";
+
+export const GEO_PREFIX = "/geo/";
+
+export const API_PREFIX = "/api/";
+
+export const TILE_PREFIX = "/tile/";
+
+export const ASSET_PREFIX = "/asset/";
+
+/** The site: the custom domain the Worker answers on (wrangler.jsonc `routes`),
+ * the app's page and every root, the bucket's served at the edge and the
+ * servers' relayed to the origin. A device's app, which has no origin of its
+ * own, reads from it, and so does a dev server's published deployment. */
+export const SITE_URL = "https://plei.me";
+
+/** The origin behind the edge: the VM, where Caddy sends the geo root to
+ * pxl-geo and the application's to pxl-api (infra/prod/Caddyfile). One host,
+ * two roots: a hostname is a box and a root a service. The Worker relays
+ * both roots here (wrangler.jsonc `GEO_ORIGIN`, `API_ORIGIN`). */
+export const ORIGIN_URL = "https://api.plei.me";

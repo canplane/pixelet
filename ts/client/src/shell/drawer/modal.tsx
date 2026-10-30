@@ -13,7 +13,12 @@ import {
   decorSection,
 } from "@/shell/catalog/asset/mod.ts";
 
-import { useDockStore, useInHand } from "@/shell/store/dock.ts";
+import {
+  selectCube,
+  selectDecor,
+  selectMarker,
+  useInHand,
+} from "@/shell/world/dock/store.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { Panel } from "@/shell/ui/panel.tsx";
 import { Tabbed } from "@/shell/ui/tabbed.tsx";
@@ -147,8 +152,6 @@ const enum DrawerTab {
 /** Cube, decor and marker picks close the sheet; character picks apply at once and leave it open. */
 export function DrawerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
-  const selectCube = useDockStore.getState().selectCube;
-  const selectDecor = useDockStore.getState().selectDecor;
 
   function pickCube(cube: Cube): void {
     selectCube(cube);
@@ -161,7 +164,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   }
 
   function pickMarker(): void {
-    useDockStore.getState().selectMarker();
+    selectMarker();
     onClose();
   }
 

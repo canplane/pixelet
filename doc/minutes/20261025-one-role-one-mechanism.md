@@ -47,7 +47,7 @@ pack's load number, `variant.json`) are left out.
    though the file table is sized one descriptor a credit. One mechanism: an
    asset takes its body in `opened` as a tile does.
 5. **Registering a model once its glTF lands: two paths.** Decor has its own
-   effect, task, settle flag and handle table (`query/decor/asset.rs`,
+   effect, task, settle flag and handle table (`scene/decor/asset.rs`,
    `sys/io/loader.rs`, `model/asset.rs` `model_refusal_over`); everyone else
    polls `model_of`. One mechanism: `model_of` as the only table and wake.
 6. **A tile's name and version written again in the client.** Morton's name, the

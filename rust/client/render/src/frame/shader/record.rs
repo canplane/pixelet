@@ -13,14 +13,16 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_CAST => "cast_cs",
         SHADER_JOINED => "joined_cs",
         SHADER_ATMOS_FROXEL => "froxel_cs",
+        SHADER_SCREEN_REACH => "screen_reach_cs",
+        SHADER_SCREEN_MARK => "screen_mark_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHT => "height_cs",
-        SHADER_GROWN_MARK => "decor_mark_cs",
-        SHADER_GROWN_STAND => "decor_stand_cs",
-        SHADER_GROWN => "decor_cs",
-        SHADER_GROWN_CNT => "decor_cnt_cs",
-        SHADER_GROWN_ARGS => "decor_args_cs",
-        SHADER_GROWN_PLACE => "decor_place_cs",
+        SHADER_GENERATED_MARK => "decor_mark_cs",
+        SHADER_GENERATED_THIN => "decor_thin_cs",
+        SHADER_GENERATED => "decor_cs",
+        SHADER_GENERATED_CNT => "decor_cnt_cs",
+        SHADER_GENERATED_ARGS => "decor_args_cs",
+        SHADER_GENERATED_COMPACT => "decor_compact_cs",
         SHADER_WAY => "way_cs",
         SHADER_WAY_FREE => "way_free_cs",
         SHADER_WAY_TREE => "way_tree_cs",
@@ -30,14 +32,14 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_MISS => "miss_cs",
         SHADER_FORGET => "forget_cs",
         SHADER_SAMPLE => "sample_cs",
-        SHADER_SUN => "sun_cs",
-        SHADER_SUN_MISS => "sun_miss_cs",
+        SHADER_LIGHT => "light_cs",
+        SHADER_LIGHT_MISS => "light_miss_cs",
         SHADER_SAMPLE_BOX => "sample_box_cs",
         SHADER_MISS_LIST => "miss_list_cs",
         SHADER_FACE => "face_cs",
-        SHADER_SUN_MARK => "sun_mark_cs",
-        SHADER_SUN_MARK_DRAWN => "sun_mark_drawn_cs",
-        SHADER_SUN_REACH => "sun_reach_cs",
+        SHADER_LIGHT_MARK => "light_mark_cs",
+        SHADER_LIGHT_MARK_DRAWN => "light_mark_drawn_cs",
+        SHADER_LIGHT_REACH => "light_reach_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -68,11 +70,11 @@ pub const PIPELINE_MARKER_REGION: u32 = 27;
 pub const PIPELINE_DEBUG_FACE: u32 = 28;
 /// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
 pub const PIPELINE_SCREEN_RAY: u32 = 29;
-/// Decor's and the actors' depth from the sun, and the world's laid in
-/// before them, into the sun's shadow map (gpu/shadow.rs).
+/// Decor's and the actors' depth from the light, and the world's laid in
+/// before them, into the light's shadow map (gpu/shadow.rs).
 pub const PIPELINE_DECOR_DEPTH: u32 = 30;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 31;
-pub const PIPELINE_SUN_MAP: u32 = 32;
+pub const PIPELINE_LIGHT_MAP: u32 = 32;
 pub const PIPELINE_SCREEN_PREPASS: u32 = 33;
 /// The samples' boxes, the nearest face a pixel's ray enters kept with its
 /// sample (gpu/ray/raster.rs).
@@ -82,10 +84,24 @@ pub const PIPELINE_RASTER: u32 = 34;
 pub const PIPELINE_SCREEN_FINISH: u32 = 35;
 /// The world's color gathered over frames (gpu/resolve.rs).
 pub const PIPELINE_SCREEN_RESOLVE: u32 = 36;
-/// The region a frame draws again cleared, under its scissor
-/// (gpu/surface.rs `Region`).
-pub const PIPELINE_SCREEN_CLEAR: u32 = 37;
-pub const PIPELINES: u32 = 38;
+/// The gate a frame not drawn whole is drawn through: the claimed tiles
+/// cleared, their stencil raised (gpu/renderer.rs `frame`).
+pub const PIPELINE_SCREEN_GATE: u32 = 37;
+/// The finished picture kept at the canvas's size shown on the canvas
+/// (gpu/finish.rs).
+pub const PIPELINE_SCREEN_SHOW: u32 = 38;
+/// The claimed tiles of the history the resolve wrote copied back into the
+/// last (gpu/resolve.rs).
+pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 39;
+/// The gate the samples' raster is drawn through in a frame not drawn whole:
+/// the claimed tiles cleared to the far plane, the rest left at the nearest
+/// (gpu/ray/raster.rs).
+pub const PIPELINE_RASTER_GATE: u32 = 40;
+/// The gate the light's map is drawn through where only the casters the
+/// kernel bounds moved: the claimed tiles set back to the far plane, their
+/// stencil raised (gpu/shadow.rs).
+pub const PIPELINE_LIGHT_GATE: u32 = 41;
+pub const PIPELINES: u32 = 42;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -143,7 +159,7 @@ use crate::frame::draw::{
     PIPELINE_IMPOSTOR, PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
-use pxl_spec_core::param::sun;
+use pxl_spec_core::param::light;
 
 const fn f(v: f32) -> u32 {
     v.to_bits()
@@ -199,8 +215,8 @@ const fn blended(shader: u32, cull: u32) -> Head {
     }
 }
 
-/// The shadow map's casters' alike, raster and cast (pxl-spec-core `param::sun::SLOPE_BIAS`).
-const DEPTH_SLOPE_BIAS: f32 = sun::SLOPE_BIAS;
+/// The shadow map's casters' alike, raster and cast (pxl-spec-core `param::light::SLOPE_BIAS`).
+const DEPTH_SLOPE_BIAS: f32 = light::SLOPE_BIAS;
 
 /// Depth alone: plain less-than, no fragment stage, both sides, pushed back
 /// by its slope as a rasterizer's polygon offset.
@@ -253,7 +269,7 @@ const AIR: [[u32; 2]; 11] = [
     [22, TEXTURE_3D],
 ];
 
-/// The sun's shadow map and its comparing sampler (shadow.wgsl), read where
+/// The light's shadow map and its comparing sampler (shadow.wgsl), read where
 /// a lit fragment is shaded.
 const SHADOW: [[u32; 2]; 2] = [[1, DEPTH], [2, SAMPLER_COMPARISON]];
 const LIT_FRAME: [[u32; 2]; 15] = {
@@ -291,7 +307,7 @@ const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 /// The lit pass's frame, shadow, occlusion, air and layers, all read where
 /// a pixel is painted; then the rays, the looks and the eye's words: the
 /// most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 21] = and(
+const SCREEN_GROUP: [[u32; 2]; 23] = and(
     LIT_FRAME,
     [
         [3, TEXTURE_UINT_ARRAY],
@@ -300,6 +316,8 @@ const SCREEN_GROUP: [[u32; 2]; 21] = and(
         [6, SAMPLER],
         [20, STORAGE],
         [21, UNIFORM],
+        [30, STORAGE],
+        [31, UNIFORM],
     ],
 );
 
@@ -392,7 +410,7 @@ const BOX_GROUP: [[u32; 2]; 19] = and(
 );
 /// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
 /// and its upload: one layout each wherever a draw binds them, so a group
-/// one owner makes binds in every pipeline that names them (gpu/grown.rs,
+/// one owner makes binds in every pipeline that names them (gpu/generated.rs,
 /// gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
 const UPLOAD: [[u32; 2]; 1] = [[0, STORAGE]];
@@ -401,7 +419,7 @@ const UPLOAD: [[u32; 2]; 1] = [[0, STORAGE]];
 pub const UPLOAD_LAYOUT: [u32; 3] = [UPLOAD[0][0], seen(&UPLOAD, UPLOAD[0][0]), UPLOAD[0][1]];
 
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
-/// A model's depth from the sun: the light's frame alone in group 0, where
+/// A model's depth from the light: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
 /// A marker set's instances, and what its pass reads at an anchor: the
@@ -545,19 +563,34 @@ const fn desc_of(id: u32) -> Descriptor {
             Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_LANES, &DEPTH_GROUPS)
         }
         // Every texel of the box the world's cast holds, whatever lies
-        // there: its clipmap's words and the box's corner, before the
-        // casters drawn over it, into the depth alone (gpu/api.rs
-        // `pipeline`), its fragment the depth.
-        PIPELINE_SUN_MAP => Descriptor::new(
+        // there, in the map's claimed tiles: its clipmap's words and the
+        // box's corner, before the casters drawn over it, into the depth
+        // alone (gpu/api.rs `pipeline`), its fragment the depth.
+        PIPELINE_LIGHT_MAP => Descriptor::new(
             Head {
                 fragment: true,
                 depth_compare: ALWAYS,
                 depth_bias_slope: 0,
                 vertex: VS,
-                ..depth_only(SHADER_SUN_MAP)
+                ..depth_only(SHADER_LIGHT_MAP)
             },
             &[],
-            &[&[[0, TEXTURE_UINT_ARRAY], [1, UNIFORM]]],
+            &[&[
+                [0, TEXTURE_UINT_ARRAY],
+                [1, UNIFORM],
+                [31, UNIFORM],
+                [32, STORAGE],
+            ]],
+        ),
+        PIPELINE_LIGHT_GATE => Descriptor::new(
+            Head {
+                depth_compare: ALWAYS,
+                depth_bias_slope: 0,
+                vertex: VS,
+                ..depth_only(SHADER_LIGHT_GATE)
+            },
+            &[],
+            &[&[[31, UNIFORM], [32, STORAGE]]],
         ),
         // The screen's depth alone into the occlusion's prepass (gpu/ao.rs),
         // the group the lit screen pass binds.
@@ -604,17 +637,35 @@ const fn desc_of(id: u32) -> Descriptor {
                 ..screen(SHADER_SCREEN_FINISH)
             },
             &[],
-            &[&[[0, UNIFORM], [1, TEXTURE], [2, DEPTH]]],
+            &[&[
+                [0, UNIFORM],
+                [1, TEXTURE],
+                [2, DEPTH],
+                [30, STORAGE],
+                [31, UNIFORM],
+            ]],
         ),
-        PIPELINE_SCREEN_CLEAR => Descriptor::new(
+        PIPELINE_SCREEN_GATE => Descriptor::new(
             Head {
                 depth_write: true,
                 depth_compare: ALWAYS,
-                ..screen(SHADER_SCREEN_CLEAR)
+                ..screen(SHADER_SCREEN_GATE)
             },
             &[],
-            &[],
+            &[&[[30, STORAGE], [31, UNIFORM]]],
         ),
+        PIPELINE_RASTER_GATE => Descriptor::new(
+            Head {
+                depth_write: true,
+                depth_compare: ALWAYS,
+                ..screen(SHADER_RASTER_GATE)
+            },
+            &[],
+            &[&[[30, STORAGE], [31, UNIFORM]]],
+        ),
+        PIPELINE_SCREEN_SHOW => {
+            Descriptor::new(screen(SHADER_SCREEN_SHOW), &[], &[&[[1, TEXTURE]]])
+        }
         PIPELINE_SCREEN_RESOLVE => Descriptor::new(
             screen(SHADER_SCREEN_RESOLVE),
             &[],
@@ -625,7 +676,14 @@ const fn desc_of(id: u32) -> Descriptor {
                 [3, TEXTURE],
                 [4, SAMPLER],
                 [5, UNIFORM],
+                [30, STORAGE],
+                [31, UNIFORM],
             ]],
+        ),
+        PIPELINE_SCREEN_WRITE_BACK => Descriptor::new(
+            screen(SHADER_SCREEN_WRITE_BACK),
+            &[],
+            &[&[[1, TEXTURE], [30, STORAGE], [31, UNIFORM]]],
         ),
         PIPELINE_IMPOSTOR => Descriptor::new(
             Head {
@@ -894,6 +952,14 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
 }
 
 /// Every pipeline's record, worked out as the crate is built.
+#[cfg_attr(
+    target_pointer_width = "64",
+    expect(
+        clippy::large_const_arrays,
+        reason = "`is_floored` reads it as the crate is built, which a static is not; past the \
+                  lint's size where a usize is 8 bytes, not on the guest's 4"
+    )
+)]
 const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
     let mut r = [([0; RECORD_WORDS], 0); PIPELINES as usize];
     let mut id = 0;

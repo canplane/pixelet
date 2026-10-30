@@ -3,15 +3,19 @@
 // undefined; a push onto a full one throws ENOSPC.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 
 export class Deque<T> {
-  constructor(
-    public readonly buf: (T | undefined)[],
-    public head: u32 = 0,
-    public len: u32 = 0,
-  ) {}
+  readonly buf: (T | undefined)[];
+  head: u32;
+  len: u32;
+
+  constructor(buf: (T | undefined)[], head: u32 = 0, len: u32 = 0) {
+    this.buf = buf;
+    this.head = head;
+    this.len = len;
+  }
 
   cap(): u32 {
     return this.buf.length as u32;

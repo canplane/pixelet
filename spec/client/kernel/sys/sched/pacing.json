@@ -1,0 +1,27 @@
+{
+  "$doc": [
+    "The numbers of the scheduling policy pixelet boots xpute's host with on a page or a",
+    "device (@xpute/host sched/frame_pacing.ts): turns paced to the display, each given",
+    "what its frames leave. The client's boot injects them (ts/client/src/abi/boot.ts),",
+    "and the kernel reads the margin to size its tasks past a full frame",
+    "(pxl-kernel sys/sched/edge.rs)."
+  ],
+
+  "MARGIN_SHARE": {
+    "$val": 0.15,
+    "$doc": [
+      "Share of the frame left unspent for the host's own work; a share, so a fast display",
+      "does not lose most of its frame to it."
+    ]
+  },
+
+  "BATCH_FRAMES": {
+    "$val": 2,
+    "$doc": ["Frames a non-interactive turn may take: with nothing moving, two vsyncs only show the same image twice."]
+  },
+
+  "SETTLE_MS": {
+    "$val": 150,
+    "$doc": ["How long after the last input a turn is still interactive, so a pause mid-drag does not count."]
+  }
+}

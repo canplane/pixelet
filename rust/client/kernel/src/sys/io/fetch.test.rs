@@ -1,7 +1,7 @@
 // pxl-kernel/sys/io/fetch.test.rs
 
 use crate::sys::io::host_spec;
-use pxl_spec::route::TILE_SPHERE;
+use pxl_spec::bake::published::TILE_SPHERE;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::codec::json::read_json;
 
@@ -11,7 +11,7 @@ use xpute_kit::codec::json::read_json;
 /// each name there is its subject's, as pxl-spec writes it.
 const FIXTURE: &str = include_str!(concat!(
     env!("PXL_REPO"),
-    "/ts/client/src/namespace/tile.fixture.json"
+    "/ts/client/src/driver/namespace/tile.fixture.json"
 ));
 
 #[test]

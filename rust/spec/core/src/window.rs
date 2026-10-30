@@ -130,8 +130,8 @@ pub const fn fresh_brick(first: [u32; 2]) -> [i32; 2] {
 
 /// How far from its center a window holds every cell, in its own cells: a
 /// zoom's band ends `CELLS_A_RAD` of its cells from the eye, and the
-/// window holds `WINDOW_MARGIN` times that (`grid::SPLIT`).
-pub const RADIUS: u32 = grid::SPLIT as u32;
+/// window holds `WINDOW_MARGIN` times that (`grid::WINDOW_CELLS_A_RAD`).
+pub const RADIUS: u32 = grid::WINDOW_CELLS_A_RAD as u32;
 
 /// The first brick of the window at `cell` about the cell `c`:
 /// ⌊(c − RADIUS) / BRICK⌋ a side, X wrapped round the world. Its bricks

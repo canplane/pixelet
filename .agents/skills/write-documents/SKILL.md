@@ -16,9 +16,14 @@ description: How the documents people read are written and reviewed — README.m
   > **strobe** (`sched/strobe.ts`): one turn on an animation frame, and only
   > when something asked for a turn.
 
-  Only names invented here need this (`strobe`, `doorbell`, `ring`, `handle`,
-  `band`, `run`, `XTP`). World terms (`arena`, `errno`, `slab`,
-  `golden records`) are used as they are.
+  A name this project made needs this (`XTP`, `strobe`), and so does a field's
+  term the reader may not bring (`ring` as io_uring uses it, `doorbell` as NVMe
+  does, `handle`). A term used as the field uses it and widely known (`arena`,
+  `errno`, `slab`, `golden records`) is used as it is.
+
+  Which name a thing gets is the naming skill's
+  ([naming](../naming/SKILL.md)); this one explains it. Defining a name does
+  not approve it: a new name follows naming first.
 - **Order by dependency.** A catalog of module names goes at the end, a model's
   vocabulary before the machine that uses it.
 - **One word, one meaning.** Watch for words used in two senses (`frame` as a
@@ -52,8 +57,9 @@ description: How the documents people read are written and reviewed — README.m
     <(grep -o '`[^`]*`' $f | sort -u)
   ```
 
-- **No coined term is used before it is defined.** A heading that names its own
-  subject, and an opening line that uses the thing's common name, are exempt.
+- **No term of this project's is used before it is defined.** A heading that
+  names its own subject, and an opening line that uses the thing's common name,
+  are exempt.
 - **Nothing points at what the document no longer holds.** After moving or
   cutting a section, recheck counts and summaries ("in two parts"), table rows,
   sibling documents that use the same word, forward references, and sentences

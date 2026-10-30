@@ -53,7 +53,7 @@ STRIPS = [
 WASM_OPT = ["-O3", *STRIPS] if PUBLISHED else STRIPS
 
 # embassy and critical-section export their `#[no_mangle]` symbols; only these stay.
-EXPORTS = ["intr"]
+EXPORTS = ["run"]
 
 
 class Failed(Exception):
@@ -119,7 +119,7 @@ def main():
     # leaves nothing beside the module, a killed one leaves it where cargo
     # clean takes it, and a dev server's build and a check's never share a
     # file. On the module's volume, so what it holds is renamed into place.
-    work = Path(tempfile.mkdtemp(dir=TARGET_DIR, prefix="pxl-build-wasm-"))
+    work = Path(tempfile.mkdtemp(dir=TARGET_DIR, prefix="build-wasm-"))
     try:
         linked_file, done = work / "linked.wasm", work / "done.wasm"
         shutil.copyfile(BUILT, linked_file)

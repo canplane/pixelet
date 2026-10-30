@@ -642,7 +642,7 @@ pub fn pinned() -> &'static [Tile] {
 
 /// The eye's window at `cell`'s entries as it holds them, each brick
 /// present or still wanted (`Entry`); none while its center is not. A debug
-/// reader's (domain/scene/indicator/coverage_gizmo.rs): a copy, moving nothing.
+/// reader's (domain/scene/gizmo/coverage_gizmo.rs): a copy, moving nothing.
 pub fn eye_entries(cell: Zoom) -> Option<[Entry; ENTRIES as usize]> {
     let (w, win) = (
         windows(),

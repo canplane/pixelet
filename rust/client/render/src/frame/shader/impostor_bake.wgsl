@@ -1,4 +1,4 @@
-// Draws a variant's model once from the side into its sprite layer, coverage
+// Draws a variant's model once from the side into its atlas layer, coverage
 // as alpha. glTF is Y-up with +Z toward the viewer.
 
 // Center across and up, half side, half depth.

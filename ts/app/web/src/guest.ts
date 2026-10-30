@@ -1,15 +1,17 @@
 // @pxl/web/guest.ts
 
 /**
- * The kernel as a page runs it: the guest's module instantiated over a
- * reserved memory. One instance per memory, since instantiating overwrites
- * the data segments. Instantiated from bytes, not streamed: streaming needs
- * an `application/wasm` response, which a `file:` URL lacks.
+ * The kernel as a page runs it: the guest's module opened over a reserved
+ * memory (@xpute/host module.ts). One instance per memory, since
+ * instantiating overwrites the data segments. Compiled from bytes, not
+ * streamed: streaming needs an `application/wasm` response, which a `file:`
+ * URL lacks.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { reserve_mem } from "@xpute/host/mem/reserve.ts";
-import { Directory } from "@xpute/host/ipc/directory.ts";
+import { open_module } from "@xpute/host/module.ts";
+import { Toc } from "@xpute/host/ipc/toc.ts";
 import type { Config, Guest } from "@pxl/client/bracket.tsx";
 import * as webgpu from "./webgpu.ts";
 import { DEV_BUNDLE } from "./bundle.ts";
@@ -23,20 +25,18 @@ export async function open(cfg: Config): Promise<Guest> {
   const bytes = await (
     await fetch(GUEST_WASM_URL, DEV_BUNDLE ? { cache: "no-store" } : undefined)
   ).arrayBuffer();
-  const { instance } = await WebAssembly.instantiate(bytes, {
-    env: { memory, now: () => performance.now() },
-  });
-  const turn = instance.exports.intr as Guest["intr"];
-  // The first turn lays the memory out and writes the directory.
-  turn(0);
-  // The maximum is the initial size, so the buffer is never replaced.
-  const mem = memory.buffer as ArrayBuffer;
-  const gpu = new Directory(mem, cfg.directory_at).get(cfg.gpu_stream);
-  webgpu.take(mem);
-  const intr = (quota_ms: f64) => {
-    const wake = turn(quota_ms);
-    webgpu.run(gpu, cfg.gpu_head);
-    return wake;
+  const guest = open_module(await WebAssembly.compile(bytes), memory);
+  // The first turn lays the memory out and writes the toc.
+  guest.run(0);
+  const gpu = new Toc(guest.mem, cfg.toc_at).get(cfg.gpu_stream);
+  webgpu.take(guest.mem);
+  return {
+    mem: guest.mem,
+    run: (quota_ms: f64) => {
+      const wake = guest.run(quota_ms);
+      webgpu.run(gpu, cfg.gpu_head);
+      return wake;
+    },
+    answer_with: guest.answer_with,
   };
-  return { mem, intr };
 }

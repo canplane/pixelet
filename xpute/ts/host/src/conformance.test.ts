@@ -16,11 +16,11 @@ import koffi from "koffi";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { Command } from "@xpute/host/abi/cmd.spec.ts";
 import { handle_slot } from "@xpute/host/abi/handle.ts";
-import { Directory } from "@xpute/host/ipc/directory.ts";
-import { key as directory_key } from "@xpute/host/ipc/directory.spec.ts";
+import { Toc } from "@xpute/host/ipc/toc.ts";
+import { key as toc_key } from "@xpute/host/ipc/toc.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
@@ -32,6 +32,7 @@ import {
   key,
   LAYOUTS,
   MEM_BYTES,
+  SENDER,
 } from "@xpute/host/conformance.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
 
@@ -63,7 +64,7 @@ const MODULE_IMPORTS = ["env.hostcall", "env.memory", "env.now"];
 
 /** A guest as the host holds it, and the offset its boot answered. */
 interface Opened extends Guest {
-  directory_at: number;
+  toc_at: number;
 }
 
 interface Opener {
@@ -100,10 +101,10 @@ function native(path: string): Opener {
       const at = koffi.alloc("double", MEM_BYTES / 8);
       regions.push(at);
       answer = unanswered;
-      const directory_at = boot(at, now, host, seed);
+      const toc_at = boot(at, now, host, seed);
       return {
         mem: koffi.view(at, MEM_BYTES),
-        directory_at,
+        toc_at,
         run: (quota) => guest_run(at, quota),
         answer_with: (a) => (answer = a),
       };
@@ -135,7 +136,7 @@ function module(path: string): Opener {
       const boot = guest.instance.exports.xpute_conformance_boot as (
         seed: number,
       ) => number;
-      return { ...guest, directory_at: boot(seed) >>> 0 };
+      return { ...guest, toc_at: boot(seed) >>> 0 };
     },
     close() {},
   };
@@ -162,6 +163,8 @@ interface Completion {
   cmd: number;
   reply: boolean;
   result: number;
+  /** The port its tag names: whom a reply or an event is for. */
+  src: number;
 }
 
 interface Turn {
@@ -171,21 +174,24 @@ interface Turn {
 }
 
 class Host {
-  readonly directory: Directory;
-  /** The directory's word kept at 0. */
+  readonly toc: Toc;
+  /** The toc's word kept at 0. */
   readonly reserved: number;
   readonly sq: Ring;
   private readonly cq: Ring;
   private readonly stream_at: number;
   private readonly writer = new PacketWriter();
 
-  constructor(private readonly guest: Opened) {
+  private readonly guest: Opened;
+
+  constructor(guest: Opened) {
+    this.guest = guest;
     const mem = guest.mem;
-    this.directory = new Directory(mem, guest.directory_at);
-    this.reserved = new Uint32Array(mem, guest.directory_at, 4)[3];
-    this.sq = new Ring(mem, this.directory.get(directory_key.SQ));
-    this.cq = new Ring(mem, this.directory.get(directory_key.CQ));
-    this.stream_at = this.directory.get(key.STREAM);
+    this.toc = new Toc(mem, guest.toc_at);
+    this.reserved = new Uint32Array(mem, guest.toc_at, 4)[3];
+    this.sq = new Ring(mem, this.toc.get(toc_key.SQ));
+    this.cq = new Ring(mem, this.toc.get(toc_key.CQ));
+    this.stream_at = this.toc.get(key.STREAM);
     // The fixture's one call, answered through this runtime's own end, as a
     // program's host mounts it.
     const sys = new Sys(
@@ -200,21 +206,33 @@ class Host {
       },
       () => {},
     );
-    guest.answer_with((at) => sys.hostcall(mem, at));
+    guest.answer_with((at) => sys.call_now(mem, at));
   }
 
-  submit(tag: number, command: number, ack: boolean, args: number[]): void {
+  /** As the port `src`. */
+  submit(
+    tag: number,
+    cmd: number,
+    ack: boolean,
+    args: number[],
+    src: number,
+  ): void {
+    const sq = this.sq;
     let pkt: PacketWriter | null = null;
     if (args.length > 0) {
       assert.ok(
-        this.sq.write(this.writer, args.length),
+        sq.write(this.writer, args.length),
         "a full ring takes no packet",
       );
-      for (const a of args) this.writer.u32(a);
+      // A negative number, such as an open's -errno, as the i32 it is.
+      for (const a of args) {
+        if (a < 0) this.writer.i32(a);
+        else this.writer.u32(a);
+      }
       pkt = this.writer;
     }
     assert.deepStrictEqual(
-      this.sq.push(tag, command, ack ? frame.ACKREQ : 0, pkt),
+      sq.push(frame.tagged(src, tag), cmd, ack ? frame.ACKREQ : 0, pkt),
       Errno.OK,
     );
   }
@@ -224,21 +242,28 @@ class Host {
     const stream: number[] = [];
     each_record(this.guest.mem, this.stream_at, 1, (op) => stream.push(op));
     const completions: Completion[] = [];
-    for (let at = this.cq.peek(); at >= 0; at = this.cq.peek()) {
+    const cq = this.cq;
+    for (let at = cq.peek(); at >= 0; at = cq.peek()) {
       completions.push({
-        tag: this.cq.tag(at),
-        cmd: this.cq.cmd(at),
-        reply: (this.cq.flags(at) & frame.RES) !== 0,
-        result: this.cq.result(at),
+        tag: frame.id_of(cq.tag(at)),
+        cmd: cq.cmd(at),
+        reply: (cq.flags(at) & frame.RES) !== 0,
+        result: cq.result(at),
+        src: frame.port_of(cq.tag(at)),
       });
-      this.cq.advance();
+      cq.advance();
     }
     return { completions, stream, wake };
   }
 
+  /** Whether a submission waits. */
+  get pending(): boolean {
+    return this.sq.len > 0;
+  }
+
   names(k: number): boolean {
     try {
-      this.directory.get(k);
+      this.toc.get(k);
       return true;
     } catch {
       return false;
@@ -248,30 +273,42 @@ class Host {
 
 function key_number(name: string): number {
   const keys: Record<string, number> = {
-    SQ: directory_key.SQ,
-    CQ: directory_key.CQ,
+    SQ: toc_key.SQ,
+    CQ: toc_key.CQ,
     STREAM: key.STREAM,
   };
   if (!(name in keys)) throw new Error(`no key ${name}`);
   return keys[name];
 }
 
-const CMD_NAMES = [
-  ...Object.entries(cmd).filter(([, v]) => typeof v === "number"),
-  ["SYS_OPENED", Command.SYS_OPENED],
-] as [string, number][];
+/** The guest's own commands, which a trace sends as SENDER. */
+const CMD_NAMES = Object.entries(cmd).filter(
+  ([, v]) => typeof v === "number",
+) as [string, number][];
 
-function cmd_number(name: string): number {
+/** xpute's own, which a trace sends as the host. */
+const HOST_NAMES: [string, number][] = [
+  ["NOP", Command.NOP],
+  ["SYS_OPENED", Command.SYS_OPENED],
+];
+
+/** A name of either table and the port that sends it, or a number in hex,
+ * which SENDER sends. */
+function cmd_number(name: string): { cmd: number; src: number } {
   const found = CMD_NAMES.find(([n]) => n === name);
-  if (found) return found[1];
+  if (found) return { cmd: found[1], src: SENDER };
+  const own = HOST_NAMES.find(([n]) => n === name);
+  if (own) return { cmd: own[1], src: frame.HOST };
   const n = parseInt(name.replace(/^0x/, ""), 16);
   if (Number.isNaN(n)) throw new Error(`no command ${name}`);
-  return n;
+  return { cmd: n, src: SENDER };
 }
 
-function cmd_name(n: number): string {
+/** A reply to the host is to one of xpute's own; anything else the guest
+ * raised or answered is its own. */
+function cmd_name(n: number, host: boolean): string {
   return (
-    CMD_NAMES.find(([, v]) => v === n)?.[0] ??
+    (host ? HOST_NAMES : CMD_NAMES).find(([, v]) => v === n)?.[0] ??
     `0x${n.toString(16).padStart(4, "0")}`
   );
 }
@@ -282,7 +319,7 @@ function render_completions(completions: Completion[]): string {
   const out: string[] = [];
   let run: [number, number] | null = null;
   const flush = () => {
-    if (run) out.push(`${cmd_name(run[0])}*${run[1]}`);
+    if (run) out.push(`${cmd_name(run[0], false)}*${run[1]}`);
     run = null;
   };
   for (const c of completions) {
@@ -292,12 +329,12 @@ function render_completions(completions: Completion[]): string {
       } else {
         flush();
         if (c.tag === 0) run = [c.cmd, 1];
-        else out.push(`${c.tag}:${cmd_name(c.cmd)}`);
+        else out.push(`${c.tag}:${cmd_name(c.cmd, false)}`);
       }
       continue;
     }
     flush();
-    out.push(`${c.tag}:${cmd_name(c.cmd)}=${c.result}`);
+    out.push(`${c.tag}:${cmd_name(c.cmd, c.src === frame.HOST)}=${c.result}`);
   }
   flush();
   return out.length === 0 ? "-" : out.join(" ");
@@ -394,14 +431,17 @@ function run(
   for (let i = 0; g.has(`${trace}.step.${i}`); i++) {
     const step = g.s(`${trace}.step.${i}`).split(" ");
     switch (step[0]) {
-      case "submit":
+      case "submit": {
+        const { cmd, src } = cmd_number(step[2]);
         host.submit(
           Number(step[1]),
-          cmd_number(step[2]),
+          cmd,
           step[3] === "ack",
           step.slice(4).map((t) => val(t, vars)),
+          src,
         );
         break;
+      }
       case "ring": {
         // A turn is held to the trace as soon as it is seen, so the results
         // it binds can be named by the steps after it.
@@ -424,7 +464,7 @@ function run(
       case "settle":
         for (;;) {
           turns.push(host.ring(0));
-          if (host.sq.len === 0) break;
+          if (!host.pending) break;
           assert.ok(
             turns.length < MOST_SETTLE_TURNS,
             `${name}: the guest stopped applying what waits`,
@@ -494,31 +534,21 @@ function run(
   for (let r = 0; g.has(at(`relation.${r}`)); r++) {
     relation(g.s(at(`relation.${r}`)), vars, name);
   }
-  if (g.has(at("directory.keys"))) {
-    for (const k of g.s(at("directory.keys")).split(" ")) {
-      assert.ok(
-        host.names(key_number(k)),
-        `${name}: the directory names no ${k}`,
-      );
+  if (g.has(at("toc.keys"))) {
+    for (const k of g.s(at("toc.keys")).split(" ")) {
+      assert.ok(host.names(key_number(k)), `${name}: the toc names no ${k}`);
     }
   }
-  if (g.has(at("directory.reserved"))) {
+  if (g.has(at("toc.reserved"))) {
     assert.deepStrictEqual(
       host.reserved,
-      g.u32(at("directory.reserved")),
-      `${name}: the directory's reserved word`,
+      g.u32(at("toc.reserved")),
+      `${name}: the toc's reserved word`,
     );
   }
 }
 
-for (const trace of [
-  "directory",
-  "door",
-  "handle",
-  "clock",
-  "file",
-  "hostcall",
-]) {
+for (const trace of ["toc", "door", "handle", "clock", "file", "hostcall"]) {
   for (const [guest, open] of Object.entries(GUESTS)) {
     test(`trace ${trace} - the ${guest} guest`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);

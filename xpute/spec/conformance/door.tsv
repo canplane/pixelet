@@ -2,9 +2,10 @@
 # must then see. Written from the rules and not recorded from a guest. A value names only what a host
 # observes; every size is the fixture's (spec/conformance/guest.json), none a production one.
 # 
-# A step is `submit TAG CMD ack|noack [NUMBER]`, `ring QUOTA`, or `settle` (a turn of no quota after
-# another while a submission is left). Per turn t, and for the whole trace: the completion ring as
-# TAG:CMD=RESULT for a reply and TAG:CMD for a signal, a signal run tagged 0 up written CMD*n; the stream
+# A step is `submit TAG CMD ack|noack [NUMBER]` (xpute's own commands, NOP and SYS_OPENED, sent as the
+# host, port 0, and any other as the guest.json SENDER), `ring QUOTA`, or `settle` (a turn of no quota
+# after another while a command is left). Per turn t, and for the whole trace: the completion ring as
+# TAG:CMD=RESULT for a reply and TAG:CMD for an event, an event run tagged 0 up written CMD*n; the stream
 # as its records' ops; and what the turn asked for next (next, later, none). Each place is its own
 # sequence: nothing orders one against another.
 scenarios	C3.fail C3.unnumbered C4.order C5.raised C5.deferred C5.places
@@ -28,15 +29,15 @@ C4.order.step.3	submit 4 OK ack
 C4.order.step.4	ring 0
 C4.order.turn.0.completions	1:OK=0 2:FAIL=-22 4:OK=0
 # 
-# C5: one place keeps the order things were left in it. RAISE raises its signals and then replies, so
+# C5: one place keeps the order things were left in it. RAISE raises its events and then replies, so
 # they come first; that they carry no RES, and so read as no one's reply, is C3's.
 C5.raised.step.0	submit 4 RAISE ack 3
 C5.raised.step.1	ring 0
-C5.raised.turn.0.completions	SIGNAL*3 4:RAISE=3
+C5.raised.turn.0.completions	EVENT*3 4:RAISE=3
 # 
-# C5 and C4: eight commands whose signals and replies outgrow the fixture's completion ring. However a
+# C5 and C4: eight commands whose events and replies outgrow the fixture's completion ring. However a
 # guest keeps its output in bounds, what one turn leaves fits, what it could not answer waits in order
-# for a later turn it asks for, and every reply comes once, after its own signals.
+# for a later turn it asks for, and every reply comes once, after its own events.
 C5.deferred.step.0	submit 1 RAISE ack 32
 C5.deferred.step.1	submit 2 RAISE ack 32
 C5.deferred.step.2	submit 3 RAISE ack 32
@@ -46,7 +47,7 @@ C5.deferred.step.5	submit 6 RAISE ack 32
 C5.deferred.step.6	submit 7 RAISE ack 32
 C5.deferred.step.7	submit 8 RAISE ack 32
 C5.deferred.step.8	settle
-C5.deferred.completions	SIGNAL*32 1:RAISE=32 SIGNAL*32 2:RAISE=32 SIGNAL*32 3:RAISE=32 SIGNAL*32 4:RAISE=32 SIGNAL*32 5:RAISE=32 SIGNAL*32 6:RAISE=32 SIGNAL*32 7:RAISE=32 SIGNAL*32 8:RAISE=32
+C5.deferred.completions	EVENT*32 1:RAISE=32 EVENT*32 2:RAISE=32 EVENT*32 3:RAISE=32 EVENT*32 4:RAISE=32 EVENT*32 5:RAISE=32 EVENT*32 6:RAISE=32 EVENT*32 7:RAISE=32 EVENT*32 8:RAISE=32
 C5.deferred.turns.least	2
 C5.deferred.wake.before_last	next
 C5.deferred.wake.last	none

@@ -25,7 +25,7 @@ How finely the world is drawn is one rule too: a node is drawn at the zoom at
 which it spans one angular cell of the camera grid, and what a zoom folds away
 is not there, to draw, to walk on or to miss (The camera grid). Each kind of
 thing is drawn wholly on one side: the GPU's rays find the world and the GPU
-grows its decor, and everything else the kernel draws, it lists for the renderer
+generates its decor, and everything else the kernel draws, it lists for the renderer
 (Drawing).
 
 pixelet is an application over [xpute](./xpute/ARCHITECTURE.md): a Rust kernel
@@ -151,22 +151,29 @@ axes:
 - Its **kind** is how it is drawn: a cube, a decor model, or a marker facing the
   viewer. An id is its kind over its shape (`spec/spec/asset/id.json`
   `SHAPE_BITS`).
-- Its **source** is which side holds it: the base, whose ground grows it, or the
+- Its **source** is which side holds it: the base, whose ground generates it, or the
   object layer.
 
-So decor is no layer. A grown tree and a placed tree are one kind from two
+So decor is no layer. A generated tree and a placed tree are one kind from two
 sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
 `Instance`).
 
 | Kind   | Base                                | Object          |
 | ------ | ----------------------------------- | --------------- |
 | cube   | the ground's look, a cell's surface | a placed cube   |
-| decor  | what the ground grows               | a placed decor  |
+| decor  | what the ground generates           | a placed decor  |
 | marker | a place, Carto's icon and its name  | a placed marker |
 
-The ground grows decor by evaluating, never storing: what stands in a leaf cell
-is a function of the cell, a seed and the ground's face, one rule on both sides
-(`pxl-spec-core scatter.rs`). Two grown decors never share a cell.
+The ground generates decor by evaluating, never storing, a tree of hashes as the
+caves are: a column at a decor's root zoom holds as many as a hash draws about
+its mean, each column hands its count to its four a hash each, and a leaf cell
+holds one or none; where it stands is a function of the cell, a seed and the
+ground's face, one rule on both sides (`pxl-spec-core scatter.rs`). One whose
+box meets a neighbor's that drew lower gives way, so two generated decors never
+share a cell. A decor, placed or generated, stands as itself, a model or its
+impostor, at every zoom whose cell its box keeps an eighth of or more, as a
+folded cube of that box is drawn (`answer::eighths`), and is none where it
+keeps none, so neither is told from the other.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its look the majority of those it folds, and its
@@ -227,7 +234,7 @@ is 1/`CELLS_A_RAD` radians on every view (`CELL`), so what is observed at a
 distance is the same on every screen; a display only draws it.
 
 That sets the rule of detail. A node is drawn at the zoom at which it spans one
-to two angular cells at its distance (`cell_at`): each zoom is drawn over a
+to two angular cells at its distance (`cell_zoom_at`): each zoom is drawn over a
 band of distance, and the bands double going out, as an angular cell widens with
 distance.
 
@@ -383,13 +390,13 @@ and a place the camera is traveling to one, at the leaves
 Decor and the markers stand beside the ground, and both are gathered over the
 eye's windows' bricks.
 
-Decor is grown on the GPU from the same windows the rays read (`pxl-render
-gpu/grown.rs`). The candidates of a patch, the cells a decor may stand in, are
-decided a thread a patch, each candidate that stands is grown on a thread of its
-own, and a candidate is grown again only where what it reads changed. Every
-frame each grown record is taken where the rays ask the zoom it was grown at and
-placed as an instance, a model down to its own size on screen and an impostor
-sprite below it. Placed decor is handed in as records the GPU draws beside it
+Decor is generated on the GPU from the same windows the rays read (`pxl-render
+gpu/generated.rs`). The leaf cells under a window's brick are read off the hash
+a window cell a thread, each candidate that stands at the window and stands
+clear is generated on a thread of its own, and a brick's decor is generated
+again only where what it reads changed. Every frame each generated record is taken where the rays ask the zoom
+it was generated at and compacted into the instances, a model down to its own
+size on screen, an impostor below it and culled below that. Placed decor is handed in as records the GPU draws beside it
 (`domain/scene/decor/drawn.rs`).
 
 A **marker** is drawn flat to the camera: a place, a pin someone put up, or the
@@ -478,7 +485,7 @@ its swatch or image, shaded edges, light, and the air before it.
 Shadows are read off the shadow map, the world's depth from the sun in a square
 box of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world
 and held in a map slot by its index modulo the map's side
-(`pxl-spec-core sun.rs` `Sun`). The sun is an observer as the eye is: one set of
+(`pxl-spec-core light.rs` `Light`). The sun is an observer as the eye is: one set of
 passes, written once over an interface both implement (`pxl-shader observer.rs`
 `Observer`), asks the world at the eye's zooms, so a shadow has the detail of
 what it falls on.
@@ -488,22 +495,29 @@ It casts only what a receiver reads:
 ```text
   the world, where the eye's rays met it ┐
   decor, where it is placed              ├─▶ marks the tile it stands on
-  an actor, where it is drawn            ┘   (sun_mark_cs, sun_mark_drawn_cs)
+  an actor, where it is drawn            ┘   (light_mark_cs, light_mark_drawn_cs)
                                                    │
                                                    ▼
             a tile is read if it lies sunward of one stood on,
-            within the tallest decor's height (sun_reach_cs)
+            within the tallest decor's height (light_reach_cs)
                                                    │
                                                    ▼
             the tiles read anew, since what a tile holds last moved,
             are cast; the rest stand
 ```
 
+What a tile holds moves with the light, the zooms the eye asks of it, and the
+world under it. The eye moving alone keeps it: the box follows the eye a tile at
+a time, and what the cast read moves with it, so a tile the box slid onto is
+read anew, and a tile is cast again where a slot's zoom is other than the one
+the eye now asks at its depth (`light_detail_cs`, `Light::asks`). A zoom changed
+before a slot's stop, along its ray, waits until the light or the world moves.
+
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and
 casters are pushed by the same formula, so a plane does not shadow itself
-(`shadow.wgsl` `sun_lit`). Beside the shadows, the lighting settings outline an
-edge that meets the air, lift a rim, and shade corners or run N8AO
+(`shadow.wgsl` `shadow_visibility`). Beside the shadows, the lighting settings
+outline an edge that meets the air, lift a rim, and shade corners or run N8AO
 (`spec/client/kernel/domain/view/setting/schema.json`, section `lighting`).
 
 ## The frame
@@ -513,7 +527,7 @@ by the pipeline that draws them, each with its mesh and uniform, for what the
 kernel decides to draw beside the world — the cumulus clouds, the actors, the
 location puck that shows where the device is, an edit's ghost box, the markers
 and the debug lines. An actor's draw also records where it stands
-(`DrawList::stand`), for the shadow map. The rays and the grown decor are not in
+(`DrawList::stand`), for the shadow map. The rays and the generated decor are not in
 it.
 
 The kernel stages the frame (`domain/scene/stage.rs`) and calls the renderer
@@ -525,9 +539,9 @@ whether it wants another turn. Its passes are modules by what they draw
 ```text
 ahead       impostor atlases, fresh bricks filled, the atmosphere's
             tables, the air's volume
-cast        the screen's rays; decor grown; the shadow map; the
+cast        the screen's rays; decor generated; the shadow map; the
             occlusion prepass
-world pass  grown decor → rays at their depth → grown impostors
+world pass  generated decor → rays at their depth → generated impostors
             → sky and stars at the far plane → listed actors,
             cumulus, impostors → high cloud planes → puck, ghosts,
             each toned into the world's color, linear
@@ -596,7 +610,7 @@ one memory, granted once, and a share of time on each call, a **turn**
 abstractions and the policy over those grants, as a library OS does.
 
 A **bracket** plugs the kernel into one of xpute's guest forms: the kernel
-implements xpute's entry (`pxl-kernel door.rs` `intr`), and the bracket hands it
+implements xpute's entry (`pxl-kernel door.rs` `run`), and the bracket hands it
 what that form hands any guest (`xpute_guest::entry` `BootInfo`,
 `xpute_gpu::admit` `Admit`) and pixelet's place to report what stopped it
 (`sys/stop.rs` `LastWords`). `pxl-wasm` makes the kernel a WebAssembly module
@@ -607,8 +621,12 @@ since a turn that draws through wgpu outgrows React Native's JavaScript stack
 test`.
 
 The kernel records its calls during a turn, and the host runs them after it
-returns, so each is done before the next turn begins (`sys/io/host.rs`). Only
-what the bracket hands over is called directly. An answer comes back as a
+returns, so each is done before the next turn begins (`sys/io/host.rs`). What
+the host answers from what it holds, a text's lines and its pixels, the kernel
+asks by xpute's hostcall instead, answered before the call returns
+(`sys/io/text.rs`): a page's host through the module's import, a device's on the
+JavaScript thread that waits on the turn. Beside those, only what the bracket
+hands over is called directly. An answer comes back as a
 number, read once by `answered` into a count or one of xpute's `Errno` members;
 a code no member names is the host breaking the protocol.
 
@@ -619,15 +637,24 @@ app hands the client once, of what its platform gives
 mounts `@xpute/host` on the guest the bracket opened (`host/mount.ts`
 `open_host`) and names none of pixelet's numbers: what a `WORLD_FRAME` carries,
 what an open or a write means and what the stop report says are handed it by the
-client's boot (`ts/client/src/abi/boot.ts`), and what answers the kernel's opens
-and writes is `ts/client/src/namespace/`.
+client's boot (`ts/client/src/abi/boot.ts`). The kernel's two ABIs stand apart
+in the client, as a display stack's do: what the shell holds, the commands for
+the UI's intents and its input, the snapshot, the surfaces it lends and the
+profiler, is `ts/client/src/port/`; what answers the kernel's devices, its opens
+and writes (`driver/namespace/`), its text, sensors and GPU, is
+`ts/client/src/driver/`; the numbers both read, generated from `spec/` or, for
+the states a driver reports and the shell shows, written beside it
+(`abi/state.ts`), are `ts/client/src/abi/`.
 
 The host and the kernel share xpute's two rings, one for what the host submits
-and one for what the kernel completes. The **commands** are
+and one for what the kernel completes, each frame naming a port at the kernel's
+far side: the host, 0, whose are xpute's own commands (the answers to the
+kernel's opens), and the shell, 255, with the drivers
+(`spec/client/kernel/door/port.json`). The **commands** are
 `spec/client/kernel/domain/control/cmd.json`'s, from which both sides' readers
 and writers are generated, each packet an XTP tree, xpute's relocatable binary
-tree. The kernel also posts **signals** nobody asked for, such as a sensor to
-watch or a new snapshot.
+tree. The kernel also posts **events** nobody asked for, such as a sensor to
+watch or a new snapshot, each for the port that hears it.
 
 The **shell** (`ts/client/src/shell/`) is the UI: React over the kernel's
 **snapshot**, where every control is a command. The snapshot is replaced whole
@@ -635,48 +662,46 @@ after a turn only when what it is made of moved (`shell.rs` `Shown`), and
 carries only what the kernel owns; what is rounded or timed for presentation is
 the shell's. The shell hands the kernel the surfaces to draw into and computes
 no coordinate, tile or draw; what it needs of the model is generated from the
-same JSON as the Rust. The host, `abi/`, `namespace/` and the shell are one
-package, `ts/client`.
+same JSON as the Rust. The host, `port/`, `driver/`, `abi/` and the shell are
+one package, `ts/client`, and the shell reaches the kernel and the drivers
+through `port/` alone.
 
-What crosses each edge, from the shell down to the kernel:
+The kernel stands between two stacks that run opposite ways. By role, the
+shell is above it, the kernel's user, and the devices below; by substrate, the
+kernel is xpute's guest and the host is below it. The kernel's edge to the
+shell is its **upper ABI**, and its edge to the devices its **lower ABI**. Both
+ride xpute's carriers, and the host gives neither a meaning; the shell and the
+host share one process only because a page and an app hold both.
 
 ```text
-  ┌────────────────────────────────────┐
-  │ shell     React over the snapshot  │
-  └────────────────────────────────────┘
-     │ a command for       ▲ the snapshot, replaced
-     │ each control        │ whole when it moved
-     ▼                     │
-  ┌────────────────────────────────────┐
-  │ client    abi/ numbers, namespace/ │
-  │           answers opens and writes │
-  └────────────────────────────────────┘
-     │ WORLD_FRAME and the ▲ completions and signals;
-     │ commands, through   │ the opens and writes
-     │ the host's doorbell │ the host runs
-     ▼                     │
-  ┌────────────────────────────────────┐
-  │ host      @xpute/host, mounted by  │
-  │           ts/client/src/host/      │
-  └────────────────────────────────────┘
-     │ a turn: the memory  ▲ the calls a turn records;
-     │ once, the clock     │ the last words, if it
-     │ and the admit       │ stops
-     ▼                     │
-  ┌────────────────────────────────────┐
-  │ bracket   pxl-wasm or pxl-native   │
-  │ kernel    the guest: decides all,  │
-  │           owns no device           │
-  └────────────────────────────────────┘
+ pixelet, by role                          xpute, by substrate
+
+   shell     the UI: React over the          guest   the kernel, run in turns
+             snapshot                                (pxl-wasm, pxl-native)
+     │ ▲  upper ABI, ts/client/src/port/       │ ▲  xpute's contract
+     ▼ │                                       ▼ │
+   kernel    decides all, owns no device     host    @xpute/host, mounted by
+     │ ▲  lower ABI, ts/client/src/driver/           ts/client/src/host/
+     ▼ │
+   devices   the place's files, text,
+             sensors, GPU, visibility
 ```
+
+What crosses each edge:
+
+| Edge                          | Down                                                                                                                      | Up                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| shell and kernel, `port/`     | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`), the profiler's reads | the snapshot, replaced whole when it moved, and the events it is told by                                 |
+| kernel and devices, `driver/` | opens and writes, text by hostcall, a sensor started or stopped, the GPU's calls                                          | a file read whole, a sensor's reading, the GPU's state, the page's visibility, each turn's `WORLD_FRAME` |
+| host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings, the host's own as port 0 | completions and events, the streams' records, hostcalls, the last words if it stops                      |
 
 ## Reads, and the one scheduler
 
 A read is a file in xpute's sense
-([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)):
+([xpute's hostcalls and files](./xpute/ARCHITECTURE.md#hostcalls-and-files)):
 the kernel names a root by its number and an object below it by its number,
 and the client binds each root to what answers it, once at boot
-(`ts/client/src/namespace/namespace.ts` `namespace`). The roots are
+(`ts/client/src/driver/namespace/namespace.ts` `namespace`). The roots are
 `spec/client/kernel/sys/io/host.json` `root`'s, the third holding the kernel's
 own files, each a **kept slot** on the device:
 
@@ -761,15 +786,21 @@ turn.
                         the falling edge  ──▶  wake_ms
 ```
 
-Before each turn the client submits one `WORLD_FRAME` through the host's
-doorbell, with what the turn may spend and draw into
-(`ts/client/src/abi/input.ts` `submit_frame`); a turn rung for a command alone
-carries none and draws nothing. The quota's values are the kernel's
-(`sys/sched/tick.rs` `QUANTUM`), written into the **directory** the host reads
-at boot. In the tick, what moves the eye runs in `interaction`, and after it
-what the pointer is over where the eye now stands, the edit it would make and
-its ghost; what the eye then sees, demand and the scene, in `visible`; and the
-later phases hold what the quota leaves them (`turn.rs`).
+Before each turn the client submits one `WORLD_FRAME` on the kernel's rings,
+with the host's alone: the turn's pacing, the reads allowed out and
+the clock (`ts/client/src/driver/frame.ts` `submit_frame`); a turn rung for a
+command alone carries none and draws nothing. The view each frame is drawn at
+is the shell's, the canvas's rect it sends whenever it moves (`INPUT_RECT`). The host's turns are paced to the display by
+the frame pacing the client boots it with (`ts/client/src/abi/boot.ts`,
+`@xpute/host/sched/frame_pacing.ts`), its numbers the kernel's
+(`spec/client/kernel/sys/sched/pacing.json`); an input makes the turns after it
+interactive (`ts/client/src/port/input.ts` `send_input`). The tick's phases are
+the kernel's (`spec/client/kernel/sys/sched/phase.json`), and `visible` holds back
+the content's share (`sys/sched/tick.rs` `POLICY`). What moves the eye runs in
+`interaction`, and after it what the pointer is over where the eye now stands,
+the edit it would make and its ghost; what the eye then sees, demand and the
+scene, in `visible`; and the later phases hold what the quota leaves them
+(`turn.rs`).
 
 Once a turn, before the layers observe, the kernel says what moved (`turn.rs`
 `changes_step`): the tiles whose answer moved, and the regions the object store
@@ -791,7 +822,7 @@ range               what it holds                    placed by
 .stack              the stack, first                 the linker
 .ring.desc          the rings' descriptors           mem.json
 .ring.slot          the rings' payload slots         mem.json
-the directory       where the rings are, the quota   mem.json
+the toc             where the rings and streams are  mem.json
 .rodata .data .bss  the kernel's data                the linker
 .fixed              each owner's range               door/layout.rs
 .heap               the rest                         the allocator
@@ -979,7 +1010,7 @@ The asset ingest takes every file under `asset/content/` into the bucket's form,
 keyed by the SHA-256 of its bytes, so moving a file changes no key, and writes
 the table that numbers each (`spec/spec/asset/ingested.json`, `pxl-tool
 bin/ingest_asset.rs`). The client binds a number to its key
-(`ts/client/src/namespace/asset.ts`).
+(`ts/client/src/driver/namespace/asset.ts`).
 
 The texture pack is one WebP image of every cube's tiles, the file the cube
 kind's definition names (`spec/spec/asset/cube.json` `pack`), and one table of
@@ -1013,7 +1044,7 @@ them.
 | Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010)                                                                                                       | `pxl-spec-core cast.rs` `walk`                                                                                                      | Push, advance and pop down an octree; a split passed whole where the ray misses its contour, here a box                                  |
 | Laine and Karras's beams; Reshetov et al.                                                                                                                           | `pxl-shader beam.rs`, `pxl-spec-core cast.rs` `Until::Beam`                                                                         | Coarse rays at the corners of a block of pixels, from where they stopped the rays between them walk on                                   |
 | Tevs, Ihrke and Seidel's maximum mipmaps                                                                                                                            | `pxl-spec-core window.rs` `bounded`                                                                                                 | The lowest and highest drawn under a coarse cell, which a ray above it passes whole                                                      |
-| The clipmap                                                                                                                                                         | `pxl-spec-core window.rs`, `sun.rs` `Sun`                                                                                           | A zoom's square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves             |
+| The clipmap                                                                                                                                                         | `pxl-spec-core window.rs`, `light.rs` `Light`                                                                                           | A zoom's square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves             |
 | Burns and Hunt's visibility buffer (JCGT 2013)                                                                                                                      | `pxl-render gpu/ray/raster.rs` `Raster`, `frame/shader/raster.wgsl`                                                                 | Each pixel keeps the number of the nearest thing drawn over it, here a sample's box, and reads the rest off that                         |
 | OpenStreetMap Carto                                                                                                                                                 | `pxl-geo-bake terrain/pipeline/overture/policy.rs`, `spec/spec/asset/`                                                              | The ground's palette and paint order, way widths, place icons, colors and zooms                                                          |
 | Mapnik's `text_line.cpp`, CSS 2.1 `line-height: normal`                                                                                                             | `pxl-render look/marker.rs`                                                                                                         | A marker's line pitch                                                                                                                    |

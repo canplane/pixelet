@@ -1,24 +1,26 @@
 // pxl-kernel/sys/sched/tick.rs
 
-//! The world's tick: xpute's tick mechanism with the kernel's phase shares,
-//! settle time, declared quantum and step table.
+//! The world's tick: xpute's tick mechanism with the kernel's phases
+//! (sys/sched/phase.spec.rs), what each holds back, and its step table.
 
-use xpute_guest::sched::quantum::QuantumPolicy;
-use xpute_guest::sched::tick::{Phase, StepStat, Tick, TickPolicy, TickReport};
+use xpute_guest::sched::tick::{StepStat, Tick, TickPolicy, TickReport};
 pub use xpute_guest::sched::tick::{TickContext, TickStep};
 
 use crate::sys::sched::param;
+use crate::sys::sched::phase_spec::Phase;
 use xpute_guest::global::Global;
 
-pub const QUANTUM: QuantumPolicy = QuantumPolicy {
-    margin_share: param::QUANTUM_MARGIN_SHARE,
-    batch_frames: param::QUANTUM_BATCH_FRAMES,
-    settle_ms: param::QUANTUM_SETTLE_MS,
+/// Each phase's share held back for the phases after it: the visible phase
+/// keeps the content's, or content starves while a load keeps it busy.
+const HELD_BACK: [f64; Phase::ALL.len()] = {
+    let mut held = [0.0; Phase::ALL.len()];
+    held[Phase::visible as usize] = param::CONTENT_SHARE;
+    held
 };
 
 pub const POLICY: TickPolicy = TickPolicy {
     hard_slack_ms: param::HARD_SLACK_MS,
-    content_share: param::CONTENT_SHARE,
+    held_back: &HELD_BACK,
 };
 
 pub const HARD_SLACK_MS: f64 = POLICY.hard_slack_ms;
@@ -47,7 +49,7 @@ pub fn tick_step_stats_reset() {
 /// Returns the id `off_tick` takes. `name` is the caller's index into its own
 /// step names (the turn's, turn/step.spec.rs).
 pub fn on_tick(phase: Phase, step: TickStep, name: u32) -> u32 {
-    tick().on_tick(phase, step, name)
+    tick().on_tick(phase as u8, step, name)
 }
 
 pub fn off_tick(id: u32) {

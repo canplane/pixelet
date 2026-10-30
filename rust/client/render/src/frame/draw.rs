@@ -41,7 +41,7 @@ pub const PIPELINE_PUCK_BEACON: u32 = 5;
 pub const PIPELINE_MARKER: u32 = 6;
 /// Line segments: handle, line vertex count, face vertex count.
 pub const PIPELINE_DEBUG: u32 = 7;
-/// Decor drawn as sprites where a variant is too small on screen for its model.
+/// Decor drawn as impostors where a variant is too small on screen for its model.
 pub const PIPELINE_IMPOSTOR: u32 = 8;
 /// The camera grid over the screen (camera_grid.wgsl): (0, 0, 0, uniform,
 /// pipeline). Listed, it also tints the rays' cells (`frame_gizmo`).
@@ -219,7 +219,7 @@ impl DrawList {
 
     /// An actor drawn stands at `translation`, its draw's (pxl-kernel
     /// domain/scene/actor.rs `Actor::draw`): a receiver of the shadow map
-    /// (pxl-spec-core `sun::ACTORS_AT`).
+    /// (pxl-spec-core `light::ACTORS_AT`).
     pub fn stand(&mut self, translation: [f32; 3]) {
         self.stands.push(translation);
     }
