@@ -259,3 +259,24 @@ they had asked gone, goes.
   (`ground::slab` `stood`). Measured again at 20 m a division: GPU p50 28.6 ms,
   p95 44.3, every span up with it, the air's and the finish's too, which this
   change does not touch.
+
+## Decor folds into no cube; it stands as a cube keeps, 2026-10-31
+
+The user: a folded decor is to be drawn as itself, smaller, not as a cube of
+its look; "8 becomes 1" meant the decor's size counted in a coarser zoom's
+cells, not a cube. The user agreed that a decor stands by the rule a folded
+cube is drawn by.
+
+- **No fold.** The objects' tree counts no decor leaf (`overwrite::share`), the
+  node folds no decor (`scatter::folded` gone, `world::node` and `ground::slab`
+  as before the fold), and no look is named for a folded decor (`FOLDS`,
+  `LOOK_DECORS` gone).
+- **Standing as a cube keeps.** A decor stands, a model or its impostor, at
+  every zoom whose cell its box keeps an eighth of or more, floored, as a
+  folded cube of that box is drawn (`answer::eighths`, `scatter::stands`): a
+  tree a unit wide and three high stands a zoom over the leaves' and none two
+  over, as a cube of it does. A rule by the widest side rounded half to even
+  was tried first and left a unit's tree out a zoom where a unit's cube shows.
+  The counts' root is the coarsest zoom a variant stands at.
+- **Seen in the app** at 20 m a division: trees and cars drawn as themselves,
+  no block. Orbiting 30 s once: GPU p50 26.5 ms, p95 32.4.

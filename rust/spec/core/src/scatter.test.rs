@@ -3,6 +3,7 @@
 extern crate std;
 
 use super::*;
+use crate::answer::{eighths, FULL};
 use crate::window::FIRST_CELL;
 use std::vec::Vec;
 
@@ -91,45 +92,28 @@ fn counts_hand_down_whole() {
     }
 }
 
-/// A cell's folded decor is its column's count of the decor that stands on
-/// its look, each leaf cell filled whole and folded as the objects' tree
-/// folds a placed one's (`overwrite::share`), its kind the decor's; none on
-/// a look none stands on, and none at a leaf's cell.
+/// A decor stands where its box keeps an eighth of the window's cell, as a
+/// folded cube of that box is drawn (`answer::eighths`): every variant of
+/// every decor; a tree a unit wide and three high a zoom over the leaves',
+/// none two over.
 #[test]
-fn folded_counts_its_column() {
-    let tree = &DECORS[0];
-    let look = (0..256).find(|&l| tree.allows(l)).unwrap();
-    let cell = LEAF_CELL - 1;
-    let mut seen = false;
-    for y in 0..64 {
-        for x in 0..64 {
-            let n = count(0, cell, [x, y]);
-            let (share, kind) = folded(cell, [x, y], look);
-            assert_eq!(share, n * answer::FULL / 8, "{x},{y}");
-            if n > 0 {
-                seen = true;
-                assert_eq!(kind, tree.val);
+fn stands_as_a_cube_keeps() {
+    for d in &DECORS {
+        for v in 0..d.variants {
+            let [x, y, z] = d.sizes[v as usize];
+            for cell in FIRST_CELL..=LEAF_CELL {
+                let steps = 3 * (d.cell_zoom() - cell.min(d.cell_zoom()));
+                let fill = (u64::from(x * y * z) * u64::from(FULL)) >> steps;
+                assert_eq!(
+                    stands_at(d, v, cell),
+                    cell >= LEAF_CELL || eighths(fill.min(u64::from(FULL)) as u32) >= 1,
+                    "{} {v} z{cell}",
+                    d.val
+                );
             }
-            assert_eq!(folded(LEAF_CELL, [x, y], look), (0, 0));
         }
     }
-    assert!(seen, "a tree folds into some cell");
-    let none = (1..256)
-        .find(|&l| DECORS.iter().all(|d| !d.allows(l)))
-        .unwrap();
-    assert_eq!(folded(cell, [3, 4], none), (0, 0));
-}
-
-/// A placed decor's leaf folds in the objects' tree as a scattered one's
-/// does in its column: its cell filled whole, an eighth of the cell over it,
-/// its kind its stored value.
-#[test]
-fn placed_and_scattered_fold_alike() {
-    use crate::overwrite::{fold, share};
-    let tree = DECORS[0].val;
-    let mut children = [0u32; 8];
-    children[3] = share(tree);
-    let folded = fold(children, LEAF_CELL);
-    assert_eq!(folded & 0xffff, tree);
-    assert_eq!(folded >> 16, answer::FULL / 8);
+    let tree = &DECORS[0];
+    assert_eq!(tree.sizes[0], [1, 1, 3]);
+    assert!(stands_at(tree, 0, LEAF_CELL - 1) && !stands_at(tree, 0, LEAF_CELL - 2));
 }

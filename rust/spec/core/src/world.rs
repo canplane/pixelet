@@ -16,7 +16,6 @@ use crate::area::Shard;
 use crate::cave::Cave;
 use crate::ground::{self, Held, VOID};
 use crate::overwrite::{self, Cut, Lanes, AIR, CELL, PLACED, SPLIT};
-use crate::scatter;
 use crate::way;
 use crate::way::tree;
 use crate::window::{Bricks, Found};
@@ -126,10 +125,7 @@ impl Handed {
 /// placed in it where that fills it whole, air included, else the ground's
 /// asset with what the ways and what is placed write over it (their tree's
 /// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
-/// `way::tree::read`), and beside the ground the decor it scatters in its
-/// column folded into its top cell (`scatter::folded`), each folded decor,
-/// scattered or placed, in the look it names or the ground's, one value
-/// whichever source holds it, keeping the
+/// `way::tree::read`), one value whichever source holds it, keeping the
 /// eighths of its cube they fill together over it (`answer::cover`,
 /// `answer::eighths`, `answer::KEPT_SHIFT`), air where that is none;
 /// `PLACED_ASSET` over a placed value, the source control tells an edit by,
@@ -187,8 +183,8 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         ]
     };
     // Filling its cube whole, what is placed is the cell's asset, whatever is
-    // under it; a decor folded as the ground under it shows it (below).
-    if over.says == CELL && over.fill == FULL && !scatter::is_decor(over.asset) {
+    // under it.
+    if over.says == CELL && over.fill == FULL {
         return In {
             kind: Kind::Cell,
             asset: laid(),
@@ -201,19 +197,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         (BOX_NONE, false)
     };
     let before = *place;
-    // The ground's decor folds into a cell its leaf lies in, over the
-    // ground's top where the top is whole, at the zooms it folds at.
-    let stood = near >= scatter::FOLDS_FROM && far < LEAF_CELL;
-    let (i, cell, bound) = ground::node(
-        held,
-        cave,
-        shard,
-        place,
-        (zoom, c),
-        [far, near],
-        is_cell,
-        stood,
-    );
+    let (i, cell, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], is_cell);
     if place.from() != before.from()
         || place.slot() != before.slot()
         || place.here() != before.here()
@@ -262,32 +246,6 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         } else {
             0
         };
-        // A decor folded is drawn in the look it names, else the ground's
-        // under it (`scatter::fold_look`).
-        let decor_look = |decor: u32| match scatter::fold_look(decor) {
-            0 => cell.look,
-            look => look,
-        };
-        // The decor the ground scatters in its column, folded as a placed
-        // one's leaf is, read off its hashes as the caves are, into the cell
-        // its leaf lies in: the ground's top cell, or the one over it where
-        // the top is whole (`scatter::folded`).
-        let leaf_in = if cell.part == FULL {
-            cell.top
-        } else {
-            cell.top - 1
-        };
-        if c[2] == leaf_in && cell.is_grounded() {
-            let (share, decor) = scatter::folded(zoom, [c[0], c[1]], cell.look);
-            if share > 0 {
-                let look = decor_look(decor);
-                let (f, theirs) = cover(fill, look, share);
-                if theirs || !fills(val) {
-                    (val, four) = (look, ground::word([look; 4]));
-                }
-                fill = f;
-            }
-        }
         if way != VOID {
             // A way's look four times where one wrote it, whatever its value.
             let w = tree::read(way);
@@ -297,15 +255,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
             }
             fill = f;
         }
-        if over.says == CELL && scatter::is_decor(over.asset) {
-            // Placed decor folded, as the scattered is.
-            let look = decor_look(over.asset);
-            let (f, theirs) = cover(fill, look, over.fill);
-            if theirs || !fills(val) {
-                (val, four) = (PLACED_ASSET | look, ground::word([look; 4]));
-            }
-            fill = f;
-        } else if over.says == CELL {
+        if over.says == CELL {
             let (f, theirs) = cover(fill, over.asset, over.fill);
             if theirs || !fills(val) {
                 [val, four] = laid();

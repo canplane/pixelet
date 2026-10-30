@@ -22,7 +22,8 @@ fn decor_edges_cell_shares() {
 
 /// A kind is generated at the leaves' window and at each coarser one where a
 /// variant stands as itself (`scatter::stands_at`): its windows run from the
-/// leaves' up, unbroken, never at one coarser than its widest claim covers.
+/// leaves' up, unbroken, never at one whose cell its largest box keeps no
+/// eighth of, as a folded cube of it would keep none.
 #[test]
 fn decor_windows_by_size() {
     let leaf = 1 << (LEAF_CELL - FIRST_CELL);
@@ -42,9 +43,16 @@ fn decor_windows_by_size() {
                 "{:?} {extent} u: {bits:#b}",
                 d.id
             );
-            let claim = units(d.row.cell_zoom()) * f64::from(d.row.widest());
+            let volume = (0..d.row.variants as usize)
+                .map(|v| {
+                    d.row.sizes[v]
+                        .iter()
+                        .map(|&s| units(d.row.cell_zoom()) * f64::from(s))
+                        .product::<f64>()
+                })
+                .fold(0.0, f64::max);
             assert!(
-                coarsest == LEAF_CELL || claim >= units(coarsest),
+                coarsest == LEAF_CELL || 8.0 * volume >= units(coarsest).powi(3),
                 "{:?}",
                 d.id
             );

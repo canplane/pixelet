@@ -171,9 +171,9 @@ holds one or none; where it stands is a function of the cell, a seed and the
 ground's face, one rule on both sides (`pxl-spec-core scatter.rs`). One whose
 box meets a neighbor's that drew lower gives way, so two generated decors never
 share a cell. A decor, placed or generated, stands as itself, a model or its
-impostor, at every zoom its size in that zoom's cells rounds half to even to a
-cell or more, and is none where it rounds to none, so neither is told from the
-other.
+impostor, at every zoom whose cell its box keeps an eighth of or more, as a
+folded cube of that box is drawn (`answer::eighths`), and is none where it
+keeps none, so neither is told from the other.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its look the majority of those it folds, and its

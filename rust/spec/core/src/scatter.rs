@@ -6,17 +6,16 @@
 //! its four, one hash a column, to the leaf cells, a unit, which hold one or
 //! none (`count`). A leaf cell's own hash draws its variant and heading
 //! (`candidate_at`); one whose box meets a neighbor's that drew lower gives
-//! way to it (`retained`). What is as large as a cell at a zoom stands as
-//! itself there (`stands_at`); and each folds upward as a placed decor's leaf
-//! in the objects' tree does, its leaf cell filled, a column's share its
-//! count's mean, its kind the decor most of it is (`folded`,
-//! `overwrite::share`). Every draw is a u32 (xpute-kit `SplitMix32`), seeded by the
-//! decor's seed and the column (`node_seed`), so every reader, either side,
-//! draws the same.
+//! way to it (`retained`). At a zoom a decor stands as itself where its box
+//! keeps an eighth of that zoom's cell or more, as a folded cube is drawn, and
+//! is none where it keeps none (`stands_at`), placed or generated alike.
+//! Every draw is a u32 (xpute-kit `SplitMix32`), seeded by the decor's seed
+//! and the column (`node_seed`), so every reader, either side, draws the
+//! same.
 
 use xpute_kit::math::rng::SplitMix32;
 
-use crate::answer;
+use crate::answer::EIGHTHS;
 use crate::cave::node_seed;
 use crate::decor::{Decor, DECORS};
 use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
@@ -69,8 +68,8 @@ const _: () = {
 };
 
 /// Each decor's words the hashes read, a small table each, so a GPU's lane
-/// that reads one by a decor's place copies no row of the catalog: its seed,
-/// its chance, the look it folds to.
+/// that reads one by a decor's place copies no row of the catalog: its seed
+/// and its chance.
 const SEEDS: [u32; DECORS.len()] = {
     let mut t = [0; DECORS.len()];
     let mut k = 0;
@@ -89,45 +88,10 @@ const CHANCES: [u32; DECORS.len()] = {
     }
     t
 };
-const FOLDS: [u32; DECORS.len()] = {
-    let mut t = [0; DECORS.len()];
-    let mut k = 0;
-    while k < DECORS.len() {
-        t[k] = DECORS[k].fold;
-        k += 1;
-    }
-    t
-};
-
-/// Which decors stand on each ground look, a nibble a look, eight looks a
-/// word, a bit a decor in the catalog's order (`Decor::allows`).
-const LOOK_DECORS: [u32; 32] = {
-    let mut t = [0; 32];
-    let mut look = 0;
-    while look < 256 {
-        let mut k = 0;
-        while k < DECORS.len() {
-            if DECORS[k].allows(look) {
-                t[(look >> 3) as usize] |= 1 << (4 * (look & 7) + k as u32);
-            }
-            k += 1;
-        }
-        look += 1;
-    }
-    t
-};
-const _: () = assert!(DECORS.len() <= 4, "a look's decors are a nibble");
-
 /// Whether `val` is a decor's stored value: a range, no row read, so a GPU's
 /// lane asks nothing of the catalog its uniform control flow depends on.
 pub const fn is_decor(val: u32) -> bool {
     val >= FIRST_VAL && val < FIRST_VAL + DECORS.len() as u32
-}
-
-/// The look a decor stored as `val` folds to (`Decor::fold`), 0 for the
-/// ground's under it.
-pub fn fold_look(val: u32) -> u32 {
-    FOLDS[kind_of(val)]
 }
 
 /// Where the decor stored as `val` stands among the catalog's rows.
@@ -252,17 +216,21 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
 
 /// Whether `variant` of `decor` stands as itself in a window at `cell`, by
 /// its own size, not the window's: at the leaves' always, the finest window
-/// there is; at a coarser one where the brick it claims (its widest side, as
-/// `side_of` measures it) is no narrower than the window's cell. Where it is
-/// narrower it is less than a cell there, and stands in none coarser.
+/// there is; at a coarser one where its box, in one of the window's cells,
+/// keeps an eighth of it or more, floored as a folded cube's share is
+/// (`answer::eighths`), so a decor stands at the zooms a cube of its box is
+/// drawn at (`stands`). Where it keeps none it is none there, and in none
+/// coarser.
 pub const fn stands_at(decor: &Decor, variant: u32, cell: Zoom) -> bool {
     stands(decor.sizes[variant as usize], decor.cell_zoom(), cell)
 }
 
-/// `stands_at` of a box `[x, y, _]` in cells at `own`, by value.
-pub const fn stands([x, y, _]: [u32; 3], own: Zoom, cell: Zoom) -> bool {
-    let side = if x > y { x } else { y };
-    cell >= LEAF_CELL || own <= cell || (own - cell < u32::BITS && side >= 1 << (own - cell))
+/// `stands_at` of a box `[x, y, z]` in cells at `own`, by value: the eighths
+/// of a cell at `cell` its volume fills, floored (`answer::eighths`), one or
+/// more.
+const fn stands([x, y, z]: [u32; 3], own: Zoom, cell: Zoom) -> bool {
+    let steps = 3 * (own - if own < cell { own } else { cell });
+    cell >= LEAF_CELL || (steps < u32::BITS && (EIGHTHS * x * y * z) >> steps >= 1)
 }
 
 /// The coarsest window zoom `variant` of `decor` stands at (`stands_at`).
@@ -274,37 +242,21 @@ pub const fn coarsest_stand(decor: &Decor, variant: u32) -> Zoom {
     cell
 }
 
-/// The zooms past the leaves' a column's count is drawn for: a decor's leaf
-/// cell is an eighth of a cell a zoom over it, and three over, the most a
-/// column of a scattered decor's leaf cells holds rounds to no eighth.
-const FOLD_STEPS: Zoom = 3;
-
-/// Each decor's counts' root (`count`): the coarsest window it stands at, or
-/// `FOLD_STEPS` over the leaves' where that is finer.
+/// Each decor's counts' root (`count`): the coarsest window one of its
+/// variants stands at, where a window first reads its columns.
 pub const ROOTS: [Zoom; DECORS.len()] = {
     let mut roots = [LEAF_CELL; DECORS.len()];
     let mut k = 0;
     while k < DECORS.len() {
         let d = &DECORS[k];
         let mut cell = LEAF_CELL;
-        while cell > 0 && (cell > LEAF_CELL - FOLD_STEPS || any_stands_at(d, cell - 1)) {
+        while cell > 0 && any_stands_at(d, cell - 1) {
             cell -= 1;
         }
         roots[k] = cell;
         k += 1;
     }
     roots
-};
-
-/// The coarsest zoom any decor folds at, its root's (`ROOTS`): finer, the
-/// ground's top may have one folded over it.
-pub const FOLDS_FROM: Zoom = {
-    let (mut from, mut k) = (LEAF_CELL, 0);
-    while k < DECORS.len() {
-        from = if ROOTS[k] < from { ROOTS[k] } else { from };
-        k += 1;
-    }
-    from
 };
 
 /// Whether any variant of `decor` stands at `cell` (`stands_at`).
@@ -317,45 +269,6 @@ pub const fn any_stands_at(decor: &Decor, cell: Zoom) -> bool {
         v += 1;
     }
     false
-}
-
-/// The decor folded into the cell `b` at `cell` whose ground's own look is
-/// `look`, as a placed decor's leaf folds in the objects' tree
-/// (`overwrite::share`, `overwrite::fold`): each leaf cell a decor that stands
-/// on it holds fills it whole, so the cell's share is their count's eighth a
-/// zoom over the leaves', in `answer::FULL`'s units, no more than the cell;
-/// its kind the decor most of it is, by count, the first in the catalog's
-/// order on a tie, as its stored value, 0 where none is. None at a leaf's
-/// cell or finer, nor coarser than a decor's root. A hash a zoom a decor, as
-/// the caves are, each row's words read by value.
-pub fn folded(cell: Zoom, b: [i32; 2], look: u32) -> (u32, u32) {
-    let (mut leaves, mut kind, mut most) = (0, 0, 0);
-    if cell >= LEAF_CELL || look >= 256 {
-        return (0, 0);
-    }
-    let mut k = 0;
-    while k < DECORS.len() {
-        let val = FIRST_VAL + k as u32;
-        if LOOK_DECORS[(look >> 3) as usize] >> (4 * (look & 7) + k as u32) & 1 == 1
-            && cell >= ROOTS[k]
-        {
-            let n = count(k, cell, b);
-            leaves += n;
-            if n > most {
-                (kind, most) = (val, n);
-            }
-        }
-        k += 1;
-    }
-    let share = leaves * (answer::FULL >> (3 * (LEAF_CELL - cell)));
-    (
-        if share > answer::FULL {
-            answer::FULL
-        } else {
-            share
-        },
-        kind,
-    )
 }
 
 impl Decor {
