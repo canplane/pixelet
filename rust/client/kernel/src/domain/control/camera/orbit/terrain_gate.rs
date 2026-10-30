@@ -51,9 +51,13 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
 }
 
 /// Rise to the ground under the eye, reached by a step-slide at the eye's
-/// height that climbs and does not fall; none where it is slid short.
+/// height that climbs and does not fall; none where it is slid short, or
+/// where the eye may stand as it is (`embedded`), as the gate lets it.
 fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
     let (_, eye) = eye(at);
+    if embedded(&eye, access) {
+        return None;
+    }
     let pivot = world_to_canonical(&at.pivot);
     let floor = idx_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
     let from = world::at(
@@ -98,14 +102,12 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
         // (`held_under`).
         OrbitObstacleMode::climb => {
             let access = World::now();
-            let climbed = climbed(*to, &access);
+            let (climbed, failed) = climbed(*to, &access);
             if path_clear(from, &climbed) {
                 return *to;
             }
-            // Through only where the climb itself failed, the eye still in something
-            // solid at the pitch it climbed to; where only the way there is blocked,
-            // it stops.
-            let failed = in_solid(&climbed, &access) && !embedded(&eye(&climbed).1, &access);
+            // Through only where the climb itself failed (`climbed`); where only
+            // the way there is blocked, it stops.
             let dived = failed.then(|| dive(to, &climbed, from, &access)).flatten();
             if let Some(reached) = dived.or_else(|| held_under(to, from, &access)) {
                 return reached;
@@ -211,9 +213,9 @@ fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
     })
 }
 
-/// A zoom in where the climb failed (`allowed_step`), at whatever pitch it
-/// stopped, blocked by what lies between the pivot and the eye (a tunnel's roof, a cave's, a hill):
-/// the eye goes through it to the pivot's side on the climb's line, as far
+/// A zoom in where the climb failed (`climbed`), at the pitch asked, blocked
+/// by what lies between the pivot and the eye (a tunnel's roof, a cave's):
+/// the eye goes through it to the pivot's side on that line, as far
 /// from the pivot as the zoom asked or the roof leaves, and eases there
 /// through it. Where the roof is nearer the pivot than the orbit comes
 /// (`MIN_DIST`), the eye stands at `MIN_DIST` in the roof's lowest cell,
@@ -300,7 +302,7 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
     };
     let last = CLIMBED.get(|| Asked::NONE);
     last.forget_touched();
-    last.of(World::now(), climb, |w| climbed(at, &w).polar)
+    last.of(World::now(), climb, |w| climbed(at, &w).0.polar)
 }
 
 /// What a climb is made of, by value.
@@ -314,16 +316,25 @@ struct Climb {
 /// change touched what it read (`Asked`).
 static CLIMBED: Global<Asked<Climb, f64>> = Global::new();
 
-fn climbed(mut at: ViewPose, access: &World) -> ViewPose {
+/// `at` climbed, and whether the climb failed: steepened, the eye is still in
+/// something solid it may not stand in (`embedded`). Over ground alone,
+/// straight down clears it; what does not is a roof over the pivot, a
+/// tunnel's or a cave's, and there the pitch is the one asked, for a zoom
+/// in to go under it on that line (`dive`).
+fn climbed(at: ViewPose, access: &World) -> (ViewPose, bool) {
+    let mut climbed = at;
     for _ in 0..CLIMB_PASSES {
-        let Some(rise) = climb_rise(&at, access).filter(|r| *r > 0.0) else {
+        let Some(rise) = climb_rise(&climbed, access).filter(|r| *r > 0.0) else {
             break;
         };
         // Only ever steepens.
-        let solved = libm::acos((rise / at.dist).min(1.0));
-        at.polar = at.polar.min(solved);
+        let solved = libm::acos((rise / climbed.dist).min(1.0));
+        climbed.polar = climbed.polar.min(solved);
     }
-    at
+    match in_solid(&climbed, access) && !embedded(&eye(&climbed).1, access) {
+        true => (at, true),
+        false => (climbed, false),
+    }
 }
 
 #[cfg(test)]
