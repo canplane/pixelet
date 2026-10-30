@@ -145,7 +145,12 @@ they share is the descent, not a hash interface:
    > cell kept whole takes none it can show. The CPU reads a brick back once
    > its fill lands, before decor generates on it, so its node holds no
    > folded decor: the one answer the GPU and the CPU give apart, where only
-   > a coarse cell differs, which no walker or pick asks. Not measured yet.
+   > a coarse cell differs, which no walker or pick asks. Measured the same
+   > day, orbiting 30 s over a park in Wonju, the fold built and undone:
+   > decor's `generate` span p95 1.2 and 1.4 ms with it, 1.3 without; the
+   > frames' GPU was not compared, the views having come out apart. On
+   > screen the fold is faint: a retained tree is a quarter of the leaves'
+   > density a zoom coarser, and three eighths of a z23 cell.
 3. The puck's zone hides where the ground is drawn coarser than a leaf; the
    actor takes rule 2.
 
