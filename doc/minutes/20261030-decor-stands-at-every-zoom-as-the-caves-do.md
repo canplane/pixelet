@@ -154,6 +154,14 @@ they share is the descent, not a hash interface:
 3. The puck's zone hides where the ground is drawn coarser than a leaf; the
    actor takes rule 2.
 
+   > Built: the puck's zone in `c3685004f`; the actor 2026-10-31, with the
+   > user, who put it as decor's own rule, nothing drawn where it is small.
+   > The actor was drawn at every distance, its pose held under a camera
+   > cell; it now takes decor's edges (pxl-kernel domain/scene/actor.rs):
+   > posed as it plays down to the model's (`decor_model_angle`), its pose
+   > held below it, and none under the impostor's (`decor_impostor_angle`).
+   > No impostor of its own is baked: the held pose is drawn in its place.
+
 ### To check before building
 
 - A coarser window's brick spans more leaf cells: whether `BRICK_PATCHES`
@@ -164,7 +172,7 @@ they share is the descent, not a hash interface:
   folded cell is not (ARCHITECTURE.md, the layers); the ghost picks nothing
   coarse either way.
 - The actor between the two floors: the model kept, or an impostor of its
-  pose.
+  pose. Settled: the model, its pose held (step 3).
 - The cost a screen: the windows are the camera grid's, so the cells
   generated a frame stay about the same however far the eye is; measured,
   not assumed (`performance`).
