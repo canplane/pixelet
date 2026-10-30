@@ -48,8 +48,8 @@ fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0)) || ndc.z > 1.0 || ndc.z < 0.0) {
     return 1.0;
   }
-  let shadow_max_dist_ndc = frame_shadow_max_dist_ndc();
-  let strength = frame_shadow_strength() * (1.0 - smoothstep(SHADOW_FADE_START * shadow_max_dist_ndc, shadow_max_dist_ndc, length(ndc.xy)));
+  let shadow_radius_ndc = frame_shadow_radius_ndc();
+  let strength = frame_shadow_strength() * (1.0 - smoothstep(SHADOW_FADE_START * shadow_radius_ndc, shadow_radius_ndc, length(ndc.xy)));
   let size = vec2f(textureDimensions(shadow_map));
   // A tap a texel and a half off lies where the receiver's plane is that
   // much nearer the light or further: compared at its own depth there

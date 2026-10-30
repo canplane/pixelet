@@ -157,7 +157,7 @@ fn light_of(eye: &Eye) -> Light {
         dir: v3(eye.light[3]),
         bias: v3(eye.light[4]),
         corner: [i(eye.light[1]), i(eye.light[2])],
-        shadow_max_dist_ndc: eye.light[3].w,
+        shadow_radius_ndc: eye.light[3].w,
     }
 }
 
@@ -414,8 +414,8 @@ const _: () = assert!(
 );
 
 const _: () = assert!(
-    pxl_spec_core::light::SHADOW_MAX_DIST_NDC == 15,
-    "`light_of` reads the shadow's max distance off the rays' direction's fourth word"
+    pxl_spec_core::light::SHADOW_RADIUS_NDC == 15,
+    "`light_of` reads the shadow's radius off the rays' direction's fourth word"
 );
 
 const _: () = assert!(

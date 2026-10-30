@@ -31,7 +31,7 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, JITTER, LIGHT_VIEW_PROJ,
-    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_MAX_DIST_NDC, SHADOW_MOON,
+    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_MOON, SHADOW_RADIUS_NDC,
     SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
@@ -805,17 +805,17 @@ impl Renderer {
             // Up to a power of two, so the snap grid and the texel move only in steps;
             // the shadows fade by the casters' own reach.
             let half_width = libm::exp2(libm::ceil(libm::log2(far)));
-            let shadow_max_dist_ndc = (far / half_width) as f32;
+            let shadow_radius_ndc = (far / half_width) as f32;
             self.shadow.aim(
                 dir,
                 eye,
                 half_width,
-                shadow_max_dist_ndc,
+                shadow_radius_ndc,
                 eye_world.map(|v| -v),
             );
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
             u[SHADOW_TEXEL] = self.shadow.texel as f32;
-            u[SHADOW_MAX_DIST_NDC] = shadow_max_dist_ndc;
+            u[SHADOW_RADIUS_NDC] = shadow_radius_ndc;
         }
 
         self.atmosphere.lay_out(g, env, reach);

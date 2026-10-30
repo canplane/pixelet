@@ -34,7 +34,7 @@ use core::f32::consts::SQRT_2;
 /// on a face across each axis is pushed back in depth. Their fourth words
 /// hold the clipmap's: the world texel index of the box's texel (0, 0),
 /// `corner`, X then Y, Y counted down the rows; and the share of the box's
-/// half-width a receiver reads the map within, `shadow_max_dist_ndc`
+/// half-width a receiver reads the map within, `shadow_radius_ndc`
 /// (`Light::read`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
@@ -45,11 +45,11 @@ pub struct Light {
     pub dir: [f32; 3],
     pub bias: [f32; 3],
     pub corner: [i32; 2],
-    pub shadow_max_dist_ndc: f32,
+    pub shadow_radius_ndc: f32,
 }
 
-/// The word of `eye::LIGHT` the shadow's max distance lies in.
-pub const SHADOW_MAX_DIST_NDC: usize = 15;
+/// The word of `eye::LIGHT` the shadow's radius lies in.
+pub const SHADOW_RADIUS_NDC: usize = 15;
 
 /// The words of `eye::LIGHT` the corner lies in, X then Y, which the map is
 /// laid in off.
@@ -99,13 +99,13 @@ impl Light {
     /// caster's polygon offset (`param::light::SLOPE_BIAS`): the face's greatest
     /// change in depth a texel across the map (`slope`), times it.
     /// `corner` is the world texel index of the box's first texel;
-    /// `shadow_max_dist_ndc` the share of its half-width a receiver reads
+    /// `shadow_radius_ndc` the share of its half-width a receiver reads
     /// within.
     pub fn of(
         [x, y, z, w]: [[f32; 3]; 4],
         size: u32,
         corner: [i32; 2],
-        shadow_max_dist_ndc: f32,
+        shadow_radius_ndc: f32,
     ) -> Light {
         let texel = 2.0 / size as f32;
         let (ax, ay) = (1.0 - texel / 2.0, texel / 2.0 - 1.0);
@@ -133,7 +133,7 @@ impl Light {
             dir,
             bias: [bias(0), bias(1), bias(2)],
             corner,
-            shadow_max_dist_ndc,
+            shadow_radius_ndc,
         }
     }
 
@@ -206,14 +206,14 @@ impl Light {
     }
 
     /// Whether box texel `p` of the map `size` a side lies where a receiver
-    /// may read it, grown by `pad` texels: within `shadow_max_dist_ndc` of the
+    /// may read it, grown by `pad` texels: within `shadow_radius_ndc` of the
     /// box's half-width about its middle, where the eye stands, as past it a
     /// shadow has faded to nothing (pxl-render shadow.wgsl
     /// `shadow_visibility`).
     pub fn read(&self, size: u32, p: [i32; 2], pad: f32) -> bool {
         let half = size as f32 / 2.0;
         let (x, y) = (p[0] as f32 + 0.5 - half, p[1] as f32 + 0.5 - half);
-        let r = self.shadow_max_dist_ndc * half + pad;
+        let r = self.shadow_radius_ndc * half + pad;
         x * x + y * y <= r * r
     }
 
@@ -280,7 +280,7 @@ impl Light {
             dir: v(12),
             bias: v(16),
             corner: CORNER.map(|k| w[k] as i32),
-            shadow_max_dist_ndc: f32::from_bits(w[SHADOW_MAX_DIST_NDC]),
+            shadow_radius_ndc: f32::from_bits(w[SHADOW_RADIUS_NDC]),
         }
     }
 
@@ -291,7 +291,7 @@ impl Light {
             v(self.first, self.t_max.to_bits()),
             v(self.across, self.corner[0] as u32),
             v(self.down, self.corner[1] as u32),
-            v(self.dir, self.shadow_max_dist_ndc.to_bits()),
+            v(self.dir, self.shadow_radius_ndc.to_bits()),
             v(self.bias, 0),
         ];
         let mut out = [0; eye::LIGHT_WORDS];
@@ -842,15 +842,12 @@ mod tests {
     fn words_are_fields() {
         let s = Light {
             corner: [-7, 9],
-            shadow_max_dist_ndc: 0.75,
+            shadow_radius_ndc: 0.75,
             ..down()
         };
         let w = s.words();
         assert_eq!(CORNER.map(|k| w[k] as i32), s.corner);
-        assert_eq!(
-            f32::from_bits(w[SHADOW_MAX_DIST_NDC]),
-            s.shadow_max_dist_ndc
-        );
+        assert_eq!(f32::from_bits(w[SHADOW_RADIUS_NDC]), s.shadow_radius_ndc);
         assert_eq!(f32::from_bits(w[3]), s.t_max);
         assert_eq!(f32::from_bits(w[4]), s.across[0]);
         assert_eq!(f32::from_bits(w[18]), s.bias[2]);
@@ -983,12 +980,12 @@ mod tests {
         }
     }
 
-    /// A receiver reads the disk of `shadow_max_dist_ndc` about the box's
+    /// A receiver reads the disk of `shadow_radius_ndc` about the box's
     /// middle, and a pass past it its pad.
     #[test]
     fn receiver_reads_disk() {
         let s = Light {
-            shadow_max_dist_ndc: 0.5,
+            shadow_radius_ndc: 0.5,
             ..down()
         };
         // A box 16 texels a side: its middle is 8, the disk 4 texels out.

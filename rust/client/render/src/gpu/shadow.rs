@@ -211,7 +211,7 @@ impl Shadow {
     }
 
     /// `half_width` is the map's half width about `target`,
-    /// `shadow_max_dist_ndc` the share of it a receiver reads within; `fixed`
+    /// `shadow_radius_ndc` the share of it a receiver reads within; `fixed`
     /// is a point that stays put in the world as the eye moves, in the eye's
     /// frame.
     pub fn aim(
@@ -219,7 +219,7 @@ impl Shadow {
         sun_dir: &[f32],
         target: V3,
         half_width: f64,
-        shadow_max_dist_ndc: f32,
+        shadow_radius_ndc: f32,
         fixed: V3,
     ) {
         self.texel = half_width * 2.0 / f64::from(SIZE);
@@ -284,7 +284,7 @@ impl Shadow {
             [column(0), column(1), column(2), column(3)],
             SIZE,
             corner,
-            shadow_max_dist_ndc,
+            shadow_radius_ndc,
         )
         .words();
         (self.box_corner, self.inverse) = (corner, inverse);
