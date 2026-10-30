@@ -10,7 +10,7 @@
 // stage of the build, which is why they are here rather than in any of them:
 //
 //   rust/client/kernel/src/sys/mem/section.rs    the map — the fixed ranges and the heap
-//   rust/client/kernel/src/door/layout.rs        the front — the rings and the directory
+//   rust/client/kernel/src/door/layout.rs        the front — the rings and the toc
 //   rust/client-bracket/wasm/build.rs            the linker flags for the module
 //   ts/client/src/abi/boot.ts                    the reservation a tab makes, handed to the page
 //   rust/client-bracket/native/src/lib.rs        the memory a device is given
@@ -69,11 +69,11 @@ pub const RING_DESC_AT: u32 = 1048576;
 /// that a ring deepened does not move the payloads of the ring before it.
 pub const RING_SLOT_AT: u32 = 1572864;
 
-/// Where the kernel's directory is (xpute-guest ipc/directory.rs): the page under
+/// Where the kernel's toc is (xpute-guest ipc/toc.rs): the page under
 /// GLOBAL_BASE, past the rings' payloads. At an address both sides are built with
 /// rather than one the module hands out, so the shell finds it with no call but the
 /// first turn's, which lays the memory out and writes it.
-pub const DIRECTORY_AT: u32 = 8384512;
+pub const TOC_AT: u32 = 8384512;
 
 /// Where the linker may start placing `.rodata`, `.data` and `.bss` — passed to
 /// wasm-ld as `--global-base`, which is the only way to keep it out of the range

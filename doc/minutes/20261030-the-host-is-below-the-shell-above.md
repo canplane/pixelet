@@ -532,7 +532,7 @@ host hands a frame to the port it names where one is attached and drops it where
 none is, with no handshake, as the user put it, and the number is a port, as
 UDP's is (2026-10-31). pixelet's ports are its spec's
 (`spec/client/kernel/door/port.json`), as the user set them (2026-10-31): 0, 1
-and 255 are fixed roles over the core memory, the host, the core and the shell
+and 255 are fixed roles over the core memory, the host, the kernel and the shell
 with the drivers that bring the outside in, wherever each runs, and 2 to 254 are
 kept for workers, each lent slabs of little memory for a job; which threads
 stand fixed is a manifest's to say, taken up again later. The client sends as

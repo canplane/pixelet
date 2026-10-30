@@ -27,7 +27,7 @@ use std::process::ExitCode;
 use fnv::FnvHasher;
 use pxl_geo_bake::pyramid::{Base, TileSet};
 use pxl_spec::bake::tile::terrain::{self, Built, TerrainTile};
-use pxl_spec::dirs;
+use pxl_spec::directory;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec_core::overwrite::{self, Held, Lanes};
 use pxl_spec_core::way::tree::{self, Read};
@@ -56,7 +56,7 @@ fn root() -> PathBuf {
 
 /// Where the machine keeps the lines, a file a digest.
 fn kept_home() -> Result<PathBuf, String> {
-    dirs::cache_dir("fill")
+    directory::cache_dir("fill")
 }
 
 /// Every file under `path`, a directory's in name order, `target`

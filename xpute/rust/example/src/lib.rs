@@ -5,18 +5,18 @@
 //! its two numbers and one the host holds, which it asks for by hostcall.
 //!
 //! What it lays out is its own: past where the linker stopped, a page for
-//! the directory, then the two rings and their slots, then the hostcalls'
-//! stream, then the heap. The host finds them through the directory, whose
+//! the toc, then the two rings and their slots, then the hostcalls'
+//! stream, then the heap. The host finds them through the toc, whose
 //! offset `boot` answers.
 
 #![cfg(target_arch = "wasm32")]
 
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
-use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory};
 use xpute_guest::ipc::door::{Applied, Door, Submission};
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::sys::{spec::op, Sys};
+use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc};
 use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_guest::sched::wake::NO_WAKE;
 use xpute_kit::status::errno::Errno;
@@ -35,7 +35,7 @@ const SYS_WORDS: u32 = 64;
 const STACK_BYTES: u32 = 1 << 16;
 
 // From the range's start.
-const DIRECTORY_AT: u32 = 0;
+const TOC_AT: u32 = 0;
 const SQ_AT: u32 = PAGE_BYTES;
 const CQ_AT: u32 = SQ_AT + ring_bytes(CAP);
 const SQ_SLOTS_AT: u32 = CQ_AT + ring_bytes(CAP);
@@ -66,8 +66,8 @@ fn range_at(data_end: u32) -> u32 {
     data_end.next_multiple_of(PAGE_BYTES)
 }
 
-/// Lays the range out and writes the directory, before the first turn:
-/// answers the directory's offset, the one the host learns from outside.
+/// Lays the range out and writes the toc, before the first turn:
+/// answers the toc's offset, the one the host learns from outside.
 #[no_mangle]
 pub extern "C" fn boot() -> u32 {
     let mem = xpute_guest::mem::core();
@@ -82,12 +82,12 @@ pub extern "C" fn boot() -> u32 {
             Sys::new(mem, at(SYS_AT) as usize, SYS_WORDS as usize),
         )
     };
-    // SAFETY: as above; the directory's page is its own.
+    // SAFETY: as above; the toc's page is its own.
     unsafe {
-        write_directory(
+        write_toc(
             mem,
-            at(DIRECTORY_AT) as usize,
-            directory_words(3),
+            at(TOC_AT) as usize,
+            toc_words(3),
             &[
                 (key::SQ, at(SQ_AT)),
                 (key::CQ, at(CQ_AT)),
@@ -99,7 +99,7 @@ pub extern "C" fn boot() -> u32 {
         door: Door::new(sq, cq, MOST_EVENTS),
         sys,
     }));
-    at(DIRECTORY_AT)
+    at(TOC_AT)
 }
 
 /// A turn: what waits applied in order, then the next asked for while any is left.

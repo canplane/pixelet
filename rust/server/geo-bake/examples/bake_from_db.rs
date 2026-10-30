@@ -14,7 +14,7 @@ use pxl_geo_bake::separation::{self, source::Disk};
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_spec::bake::tile::terrain;
-use pxl_spec::dirs;
+use pxl_spec::directory;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 fn main() {
@@ -29,7 +29,7 @@ fn main() {
     .expect("geo DB");
     let raster = Arc::new(Raster::open(&mut client).expect("raster"));
     let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
-    let memo = dirs::temp_dir("source");
+    let memo = directory::temp_dir("source");
 
     for tile in tiles {
         let idx = Tile::of_name(tile)

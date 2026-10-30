@@ -1,11 +1,11 @@
-// xpute-guest/ipc/directory.rs
+// xpute-guest/ipc/toc.rs
 
-//! The directory a guest's first turn writes: where the host finds the rings
+//! The toc a guest's first turn writes: where the host finds the rings
 //! and streams. Keys are looked up, never
 //! counted to, so a host passes over an entry it does not know (as ELF's
 //! auxiliary vector does).
 
-#[path = "directory.spec.rs"]
+#[path = "toc.spec.rs"]
 pub mod spec;
 
 use crate::mem::Memory;
@@ -14,7 +14,7 @@ use crate::mem::Memory;
 /// and its value.
 pub type Entry = (u32, u32);
 
-pub const fn directory_words(entries: usize) -> usize {
+pub const fn toc_words(entries: usize) -> usize {
     spec::HEAD as usize + 2 * entries
 }
 
@@ -22,13 +22,9 @@ pub const fn directory_words(entries: usize) -> usize {
 /// readers can pick different values.
 ///
 /// # Safety
-/// The range is valid and nothing else holds it while the directory is written.
-pub unsafe fn write_directory(mem: Memory, at: usize, words: usize, entries: &[Entry]) {
-    xpute_kit::ensure!(
-        directory_words(entries.len()) <= words,
-        ENOSPC,
-        entries.len()
-    );
+/// The range is valid and nothing else holds it while the toc is written.
+pub unsafe fn write_toc(mem: Memory, at: usize, words: usize, entries: &[Entry]) {
+    xpute_kit::ensure!(toc_words(entries.len()) <= words, ENOSPC, entries.len());
     for (i, (key, _)) in entries.iter().enumerate() {
         xpute_kit::ensure!(entries[..i].iter().all(|(k, _)| k != key), EINVAL, *key);
     }

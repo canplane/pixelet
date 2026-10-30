@@ -822,7 +822,7 @@ range               what it holds                    placed by
 .stack              the stack, first                 the linker
 .ring.desc          the rings' descriptors           mem.json
 .ring.slot          the rings' payload slots         mem.json
-the directory       where the rings and streams are  mem.json
+the toc             where the rings and streams are  mem.json
 .rodata .data .bss  the kernel's data                the linker
 .fixed              each owner's range               door/layout.rs
 .heap               the rest                         the allocator

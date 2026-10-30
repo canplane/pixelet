@@ -32,11 +32,11 @@ const DATA_SPECS: [DataSpec; 7] = [
         cpp: ("cpp/conformance/guest.spec.hpp", "xpute::conformance"),
     },
     DataSpec {
-        json: "spec/ipc/directory.json",
-        ts: "ts/host/src/ipc/directory.spec.ts",
-        rs: "rust/guest/src/ipc/directory.spec.rs",
+        json: "spec/ipc/toc.json",
+        ts: "ts/host/src/ipc/toc.spec.ts",
+        rs: "rust/guest/src/ipc/toc.spec.rs",
         enums: Enums::None,
-        cpp: ("cpp/xpute/guest/ipc/directory.spec.hpp", "xpute::directory"),
+        cpp: ("cpp/xpute/guest/ipc/toc.spec.hpp", "xpute::toc"),
     },
     DataSpec {
         json: "spec/ipc/frame.json",

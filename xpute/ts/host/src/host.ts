@@ -1,7 +1,7 @@
 // @xpute/host/host.ts
 
 /**
- * A host mounted on a guest its platform opened: the directory, a doorbell
+ * A host mounted on a guest its platform opened: the toc, a doorbell
  * whose every turn runs the guest's host stream as it ends (a trapped turn's
  * too, so its report is read before the doorbell hears it stop), the guest's
  * rings, on which the host sends as port 0 and the program's ports as
@@ -13,8 +13,8 @@
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_sys_opened } from "@xpute/host/abi/cmd.spec.ts";
-import { Directory } from "@xpute/host/ipc/directory.ts";
-import { key } from "@xpute/host/ipc/directory.spec.ts";
+import { Toc } from "@xpute/host/ipc/toc.ts";
+import { key } from "@xpute/host/ipc/toc.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Doorbell } from "@xpute/host/ipc/doorbell.ts";
 import { Sys, type SysHost } from "@xpute/host/ipc/sys.ts";
@@ -35,7 +35,7 @@ export interface Guest {
 
 /** What the program mounts its guest with. */
 export interface Config<G extends Grant = Grant> {
-  directory_at: u32;
+  toc_at: u32;
   sys: SysHost;
   /** When turns run and how much each gets, the program's policy. */
   policy: SchedulingPolicy<G>;
@@ -45,7 +45,7 @@ export interface Config<G extends Grant = Grant> {
 
 export interface Host<G extends Grant = Grant> {
   guest: Guest;
-  directory: Directory;
+  toc: Toc;
   doorbell: Doorbell;
   strobe: Strobe<G>;
   /** Sent as `src` with the next turn. */
@@ -56,12 +56,12 @@ export interface Host<G extends Grant = Grant> {
 }
 
 export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host<G> {
-  const directory = new Directory(guest.mem, cfg.directory_at);
-  const stream = directory.get(key.SYS);
+  const toc = new Toc(guest.mem, cfg.toc_at);
+  const stream = toc.get(key.SYS);
   const doorbell = new Doorbell(
     guest.mem,
-    directory.get(key.SQ),
-    directory.get(key.CQ),
+    toc.get(key.SQ),
+    toc.get(key.CQ),
     (quota_ms) => {
       let wake: f64;
       try {
@@ -87,7 +87,7 @@ export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host<G> {
   guest.answer_with((at) => sys.call_now(guest.mem, at));
   return {
     guest,
-    directory,
+    toc,
     doorbell,
     strobe,
     send,

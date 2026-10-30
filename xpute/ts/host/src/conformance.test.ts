@@ -19,8 +19,8 @@ import { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { Command } from "@xpute/host/abi/cmd.spec.ts";
 import { handle_slot } from "@xpute/host/abi/handle.ts";
-import { Directory } from "@xpute/host/ipc/directory.ts";
-import { key as directory_key } from "@xpute/host/ipc/directory.spec.ts";
+import { Toc } from "@xpute/host/ipc/toc.ts";
+import { key as toc_key } from "@xpute/host/ipc/toc.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
@@ -64,7 +64,7 @@ const MODULE_IMPORTS = ["env.hostcall", "env.memory", "env.now"];
 
 /** A guest as the host holds it, and the offset its boot answered. */
 interface Opened extends Guest {
-  directory_at: number;
+  toc_at: number;
 }
 
 interface Opener {
@@ -101,10 +101,10 @@ function native(path: string): Opener {
       const at = koffi.alloc("double", MEM_BYTES / 8);
       regions.push(at);
       answer = unanswered;
-      const directory_at = boot(at, now, host, seed);
+      const toc_at = boot(at, now, host, seed);
       return {
         mem: koffi.view(at, MEM_BYTES),
-        directory_at,
+        toc_at,
         run: (quota) => guest_run(at, quota),
         answer_with: (a) => (answer = a),
       };
@@ -136,7 +136,7 @@ function module(path: string): Opener {
       const boot = guest.instance.exports.xpute_conformance_boot as (
         seed: number,
       ) => number;
-      return { ...guest, directory_at: boot(seed) >>> 0 };
+      return { ...guest, toc_at: boot(seed) >>> 0 };
     },
     close() {},
   };
@@ -174,8 +174,8 @@ interface Turn {
 }
 
 class Host {
-  readonly directory: Directory;
-  /** The directory's word kept at 0. */
+  readonly toc: Toc;
+  /** The toc's word kept at 0. */
   readonly reserved: number;
   readonly sq: Ring;
   private readonly cq: Ring;
@@ -187,11 +187,11 @@ class Host {
   constructor(guest: Opened) {
     this.guest = guest;
     const mem = guest.mem;
-    this.directory = new Directory(mem, guest.directory_at);
-    this.reserved = new Uint32Array(mem, guest.directory_at, 4)[3];
-    this.sq = new Ring(mem, this.directory.get(directory_key.SQ));
-    this.cq = new Ring(mem, this.directory.get(directory_key.CQ));
-    this.stream_at = this.directory.get(key.STREAM);
+    this.toc = new Toc(mem, guest.toc_at);
+    this.reserved = new Uint32Array(mem, guest.toc_at, 4)[3];
+    this.sq = new Ring(mem, this.toc.get(toc_key.SQ));
+    this.cq = new Ring(mem, this.toc.get(toc_key.CQ));
+    this.stream_at = this.toc.get(key.STREAM);
     // The fixture's one call, answered through this runtime's own end, as a
     // program's host mounts it.
     const sys = new Sys(
@@ -263,7 +263,7 @@ class Host {
 
   names(k: number): boolean {
     try {
-      this.directory.get(k);
+      this.toc.get(k);
       return true;
     } catch {
       return false;
@@ -273,8 +273,8 @@ class Host {
 
 function key_number(name: string): number {
   const keys: Record<string, number> = {
-    SQ: directory_key.SQ,
-    CQ: directory_key.CQ,
+    SQ: toc_key.SQ,
+    CQ: toc_key.CQ,
     STREAM: key.STREAM,
   };
   if (!(name in keys)) throw new Error(`no key ${name}`);
@@ -534,31 +534,21 @@ function run(
   for (let r = 0; g.has(at(`relation.${r}`)); r++) {
     relation(g.s(at(`relation.${r}`)), vars, name);
   }
-  if (g.has(at("directory.keys"))) {
-    for (const k of g.s(at("directory.keys")).split(" ")) {
-      assert.ok(
-        host.names(key_number(k)),
-        `${name}: the directory names no ${k}`,
-      );
+  if (g.has(at("toc.keys"))) {
+    for (const k of g.s(at("toc.keys")).split(" ")) {
+      assert.ok(host.names(key_number(k)), `${name}: the toc names no ${k}`);
     }
   }
-  if (g.has(at("directory.reserved"))) {
+  if (g.has(at("toc.reserved"))) {
     assert.deepStrictEqual(
       host.reserved,
-      g.u32(at("directory.reserved")),
-      `${name}: the directory's reserved word`,
+      g.u32(at("toc.reserved")),
+      `${name}: the toc's reserved word`,
     );
   }
 }
 
-for (const trace of [
-  "directory",
-  "door",
-  "handle",
-  "clock",
-  "file",
-  "hostcall",
-]) {
+for (const trace of ["toc", "door", "handle", "clock", "file", "hostcall"]) {
   for (const [guest, open] of Object.entries(GUESTS)) {
     test(`trace ${trace} - the ${guest} guest`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);

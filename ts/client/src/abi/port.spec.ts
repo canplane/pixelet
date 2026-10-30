@@ -10,8 +10,8 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
-/** The core, the guest that holds the core memory: what a worker names to reach it. */
-export const CORE: u32 = 1 as number;
+/** The kernel, the guest that holds the core memory: what a worker names to reach it. */
+export const KERNEL: u32 = 1 as number;
 
 /** The shell, with the drivers that bring the outside in (ts/client/src/port/,
  * ts/client/src/driver/). */

@@ -4,7 +4,7 @@
  * A guest built as one WebAssembly module, opened over a memory the host
  * reserved (mem/reserve.ts). Its imports are xpute's alone, the memory, the
  * clock and the hostcall, and its entry is `run`; what else it exports, a boot
- * call that answers its directory's offset among them, is the program's, on
+ * call that answers its toc's offset among them, is the program's, on
  * `instance`. Compiling is the caller's.
  */
 

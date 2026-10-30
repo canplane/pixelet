@@ -15,13 +15,13 @@ import type { Guest } from "@xpute/host/host.ts";
 export type { Guest };
 
 /** What a place needs to open the guest, which the guest's own numbers say:
- * its memory, the offset its directory is at, and where its GPU stream's
+ * its memory, the offset its toc is at, and where its GPU stream's
  * records begin. A place that links the guest in may need none of it. */
 export interface Config {
   bytes: u32;
   region: u32;
-  directory_at: u32;
-  /** The directory's key for the GPU stream, and the stream's head, in words. */
+  toc_at: u32;
+  /** The toc's key for the GPU stream, and the stream's head, in words. */
   gpu_stream: u32;
   gpu_head: u32;
 }

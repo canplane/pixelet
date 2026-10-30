@@ -50,7 +50,7 @@ test("example - a command answered with what the guest asked its host", () => {
   );
   const boot = guest.instance.exports.boot as () => number;
   const host = mount(guest, {
-    directory_at: boot() >>> 0,
+    toc_at: boot() >>> 0,
     sys: { program: (code) => (code === ASK ? HELD : Errno.ENOSYS) },
     policy: new FixedQuota(4),
     submit: () => {},

@@ -60,10 +60,10 @@ What goes in the memory is the guest's, and so is where. It lays ranges end to
 end on a unit it chooses (`mem/section`), as a linker script places output
 sections without knowing what they hold, and whatever is asked of a range is
 checked against its end (`Section::at`, `nth`). The host is told where the parts
-it reads lie by a **directory** (`ipc/directory`, `spec/ipc/directory.json`),
+it reads lie by a **toc** (`ipc/toc`, `spec/ipc/toc.json`),
 which the guest writes in its first turn, or in a boot call that returns its
 offset; the host learns that one offset from outside and finds everything else
-from there (`@xpute/host/ipc/directory.ts` `Directory`). xpute numbers a key for
+from there (`@xpute/host/ipc/toc.ts` `Toc`). xpute numbers a key for
 each part of its own — the two queues and the hostcall stream the sections
 below describe — and a program numbers its own keys with the `PROGRAM` bit set.
 
@@ -73,7 +73,7 @@ one guest's layout; the order of its ranges is the guest's, the heap last
  0 ┌─────────────────────────────────┐
    │ a module's stack and data       │
    ├─────────────────────────────────┤ ◀── the one offset the host learns
-   │ directory                       │
+   │ toc                       │
    │   MAGIC · VERSION · count · 0   │
    │   SQ  · offset ─────────────────┼──┐
    │   CQ  · offset ─────────────────┼──┼──┐
@@ -196,7 +196,7 @@ is full, and the producer waits. `EMSGSIZE` means the packet is bigger than a
 slot, and such a packet crosses by address, in a heap block.
 
 Two rings make a pair: the submission ring for what the host sends, and the
-completion ring for what the guest answers and raises, each where the directory
+completion ring for what the guest answers and raises, each where the toc
 says (`SQ`, `CQ`). The host drives the pair through the **doorbell**
 (`@xpute/host/ipc/doorbell.ts` `Doorbell`):
 
@@ -380,7 +380,7 @@ A **hostcall** is a guest's call into its host, the name Wasmtime and Lucet give
 one. Some are every program's: open, read, write and close a file, and report
 the invariant that stopped the guest; a program numbers its own with the
 `PROGRAM` bit. Each is a record (`ipc/sys`, `spec/ipc/sys.json`), run
-after the turn from one stream the directory names (`SYS`), or, a program's
+after the turn from one stream the toc names (`SYS`), or, a program's
 own, at once (below). The report (`ABORT`) drops the turn's other calls and is
 published alone, at once.
 
@@ -501,10 +501,10 @@ The contract is the part neither end may change; the rest of this document is
 how one end happens to be built.
 
 What cannot change is the rules below and the formats they travel in: the
-directory, the frame's four words, the ring's layout and the stream's records.
+toc, the frame's four words, the ring's layout and the stream's records.
 Each rule is one the other end could catch being broken.
 
-0. **The directory.** The guest writes it in its first turn or in a boot call
+0. **The toc.** The guest writes it in its first turn or in a boot call
    that returns its offset, and the host finds everything from the one offset it
    learns outside. A key appears at most once, an unknown key is passed over,
    and an unknown magic or version is refused.
@@ -575,7 +575,7 @@ decides what must match.
   reserves a module's memory and opens the module over it (`module.ts`), and
   mounts the doorbell, the hostcalls' end and the strobe on any guest its
   platform opened, in one call (`@xpute/host/host.ts` `mount`), which runs the
-  hostcall stream as each turn returns. `mount` reads the directory as it is
+  hostcall stream as each turn returns. `mount` reads the toc as it is
   called, so the turn or the boot call that writes it has run by then. Rust's
   (`rust/host`) reads a guest's memory by offset on every platform (`mem`), and
   on a unix one hosts a guest linked into the host's own native process
@@ -609,7 +609,7 @@ language:
 - it has no `Global`, which Rust needs a type for and C++ has as a plain static;
 - it uses RAII, templates and `Result`, with no exceptions and no RTTI.
 
-Its numbers — the errno table, the directory's keys, a frame's and a ring
+Its numbers — the errno table, the toc's keys, a frame's and a ring
 header's words — come from `spec/` as the other languages' do.
 
 ---
@@ -647,9 +647,9 @@ One host runs them against every guest through the boundary alone
 (`@xpute/host/conformance.test.ts`): the Rust guest
 (`xpute-conformance/guest.rs`) and the C++ one (`cpp/conformance/guest.cpp`),
 each over the commands `spec/conformance/guest.json` numbers. Each guest's boot
-takes a seed and lays what it shares, the directory among them, in the order and
+takes a seed and lays what it shares, the toc among them, in the order and
 with the gaps the seed draws (`LAYOUTS`), and the host runs every trace under
-each: only a host that finds them all through the directory, as rule 0 asks,
+each: only a host that finds them all through the toc, as rule 0 asks,
 passes. Each guest is built both as a native library and as a WebAssembly module
 that imports nothing but its memory, the clock and the hostcall; the C++ one
 from the library's amalgamation (`cpp/amalgamation.awk`), the two files a C++
@@ -678,7 +678,7 @@ where the tree records the source.
 | NVMe's asynchronous events                                  | the frame's `RES`                | An event: a completion the guest posts unasked                                 |
 | KVM's `KVM_RUN`                                             | the turn                         | `run`: the call that runs the guest until it gives the processor back          |
 | Plan 9's file access, in POSIX's words                      | `ipc/sys`, `ipc/ns`              | Descriptors the guest issues; a root and a path; the host binds the roots      |
-| The ELF auxiliary vector                                    | `ipc/directory`                  | Entries a reader skips when it does not know them                              |
+| The ELF auxiliary vector                                    | `ipc/toc`                  | Entries a reader skips when it does not know them                              |
 | Wasmtime's and Lucet's hostcalls                            | `ipc/sys`                        | The name of a guest's call into its host, answered before it returns           |
 | POSIX and Linux errno                                       | `spec/status/errno.json`         | Negative errno numbers                                                         |
 | The host's `JSON.parse`                                     | `codec/json`                     | The grammar, judged as the host's parser judges it                             |

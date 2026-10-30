@@ -1,7 +1,7 @@
-// @xpute/host/ipc/directory.ts
+// @xpute/host/ipc/toc.ts
 
 /**
- * The directory a guest's first turn writes (rust/guest/src/ipc/directory.rs):
+ * The toc a guest's first turn writes (rust/guest/src/ipc/toc.rs):
  * where the rings and streams are. An unknown key is passed over, so an older
  * host still reads a newer guest.
  */
@@ -9,9 +9,9 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import { HEAD, MAGIC, VERSION } from "./directory.spec.ts";
+import { HEAD, MAGIC, VERSION } from "./toc.spec.ts";
 
-export class Directory {
+export class Toc {
   private readonly entries = new Map<u32, u32>();
 
   /** A missing or unknown version is refused, and so is a key written twice. */

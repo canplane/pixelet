@@ -3,8 +3,8 @@
 pub mod asset;
 /// pxl-spec's, the same file compiled here, since the tool depends on no
 /// workspace crate (Cargo.toml): one place says the project's folders.
-#[path = "../../spec/src/dirs.rs"]
-pub mod dirs;
+#[path = "../../spec/src/directory.rs"]
+pub mod directory;
 pub mod fetch;
 pub mod fmt;
 pub mod shader;

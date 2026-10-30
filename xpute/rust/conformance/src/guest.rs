@@ -1,7 +1,7 @@
 // xpute-conformance/guest.rs
 
 //! The Rust conformance guest, exporting the C++ guest's two calls so one
-//! host drives both; `boot` takes a layout's seed and answers the directory's
+//! host drives both; `boot` takes a layout's seed and answers the toc's
 //! offset. Natively the host hands it a region, a clock and its hostcall; as
 //! wasm it imports all three, its range starts past the linker's data, and its
 //! turn is the module's `run`.
@@ -10,13 +10,13 @@
 use core::cell::Cell;
 
 use xpute_guest::abi::handle::Table;
-use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory};
 use xpute_guest::ipc::door::{Applied, Door, Submission};
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::frame;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::stream::Stream;
 use xpute_guest::ipc::sys::Sys;
+use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc};
 use xpute_guest::mem::Memory;
 use xpute_guest::sched::wake::NO_WAKE;
 use xpute_kit::math::rng::SplitMix32;
@@ -35,7 +35,7 @@ const fn page_up(bytes: u32) -> u32 {
 
 // What the guest shares with its host, each on pages of its own, in the order
 // a layout draws (`layout`).
-const DIRECTORY: usize = 0;
+const TOC: usize = 0;
 const SQ_DESC: usize = 1;
 const CQ_DESC: usize = 2;
 const SQ_SLOT: usize = 3;
@@ -45,7 +45,7 @@ const SYS: usize = 6;
 const PARTS: usize = 7;
 
 const PART_BYTES: [u32; PARTS] = [
-    directory_words(4) as u32 * 4,
+    toc_words(4) as u32 * 4,
     ring_bytes(spec::SQ_CAP),
     ring_bytes(spec::CQ_CAP),
     slots_bytes(spec::SQ_CAP, spec::SLOT_BYTES),
@@ -161,10 +161,10 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
     let door = Door::new(sq, cq, spec::MOST_RAISE);
     // SAFETY: as above.
     unsafe {
-        write_directory(
+        write_toc(
             mem,
-            at[DIRECTORY] as usize,
-            directory_words(4),
+            at[TOC] as usize,
+            toc_words(4),
             &[
                 (key::SQ, at[SQ_DESC]),
                 (key::CQ, at[CQ_DESC]),
@@ -188,7 +188,7 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
     // SAFETY: the state's range is the layout's, inside the memory and on
     // the state's alignment (the asserts above).
     unsafe { mem.at::<Guest>((range + STATE_AT) as usize).write(guest) };
-    at[DIRECTORY]
+    at[TOC]
 }
 
 /// # Safety

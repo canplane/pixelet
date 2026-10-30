@@ -7,10 +7,10 @@
     "ts/client/src/abi/boot.ts)."
   ],
 
-  "CORE": {
+  "KERNEL": {
     "$val": 1,
     "$type": "u32",
-    "$doc": ["The core, the guest that holds the core memory: what a worker names to reach it."]
+    "$doc": ["The kernel, the guest that holds the core memory: what a worker names to reach it."]
   },
 
   "SHELL": {

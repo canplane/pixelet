@@ -20,7 +20,7 @@
 #include "xpute/guest/abi/cmd.spec.hpp"
 #include "xpute/guest/abi/handle.hpp"
 #include "xpute/guest/hostcall.hpp"
-#include "xpute/guest/ipc/directory.hpp"
+#include "xpute/guest/ipc/toc.hpp"
 #include "xpute/guest/ipc/door.hpp"
 #include "xpute/guest/ipc/file.hpp"
 #include "xpute/guest/ipc/ring.hpp"
@@ -41,10 +41,10 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
 
 // What the guest shares with its host, each on pages of its own, in the order
 // a layout draws (`layout`).
-enum Part : std::size_t { DIRECTORY, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, SYS, PARTS };
+enum Part : std::size_t { TOC, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, SYS, PARTS };
 
 constexpr std::array<std::uint32_t, PARTS> PART_BYTES{
-    directory_words(4) * 4,
+    toc_words(4) * 4,
     ring_bytes(SQ_CAP),
     ring_bytes(CQ_CAP),
     slots_bytes(SQ_CAP, SLOT_BYTES),
@@ -175,13 +175,13 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std
     new (m.at(range + STATE_AT)) State{
         .door = door, .stream = Stream(m, at[STREAM], STREAM_WORDS), .sys = Sys(m, at[SYS], SYS_WORDS), .files = {}, .handles = {}, .now = now};
     const std::array<Entry, 4> entries{{
-        {directory::key::SQ, at[SQ_DESC]},
-        {directory::key::CQ, at[CQ_DESC]},
+        {toc::key::SQ, at[SQ_DESC]},
+        {toc::key::CQ, at[CQ_DESC]},
         {key::STREAM, at[STREAM]},
-        {directory::key::SYS, at[SYS]},
+        {toc::key::SYS, at[SYS]},
     }};
-    write_directory(m, at[DIRECTORY], directory_words(entries.size()), entries);
-    return at[DIRECTORY];
+    write_toc(m, at[TOC], toc_words(entries.size()), entries);
+    return at[TOC];
 }
 
 double turn(Memory m, std::uint32_t range) {

@@ -1,25 +1,25 @@
 // pxl-kernel/door.rs
 
 //! The kernel's side of the doorbell, which a bracket (pxl-wasm, pxl-native)
-//! hands each turn to: the directory, commands applied, events raised. The
+//! hands each turn to: the toc, commands applied, events raised. The
 //! rings are xpute's (`xpute_guest::ipc::door`), and so is the entry the
 //! kernel implements (`run`, xpute_guest::entry) and what its host's form
 //! hands it (`BootInfo`).
 
 mod apply;
-/// The directory's keys, generated from directory.json.
-#[path = "door/directory.spec.rs"]
-pub mod directory;
 mod executor;
 pub mod layout;
 /// The ports at the kernel's far side, generated from port.json.
 #[path = "door/port.spec.rs"]
 pub mod port;
+/// The toc's keys, generated from toc.json.
+#[path = "door/toc.spec.rs"]
+pub mod toc;
 
 use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, WorldSnapshotEvent};
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
-use crate::door::directory::key::GPU_STREAM;
+use crate::door::toc::key::GPU_STREAM;
 use crate::profiler::record::profiler_record_turn;
 use crate::profiler::spec::Wake;
 use crate::shell;
@@ -44,8 +44,8 @@ use xpute_gpu::admit::Admit;
 use xpute_guest::clock::now;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
-use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::{Door, DoorStat, Submission};
+use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc, Entry};
 use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_guest::mem::{self, off_of_slice};
 use xpute_guest::sched::task;
@@ -103,7 +103,7 @@ fn state() -> &'static mut State {
 }
 
 /// xpute's two rings and the host's stream, and the GPU stream.
-const DIRECTORY_ENTRIES: usize = 4;
+const TOC_ENTRIES: usize = 4;
 
 /// A case lives on its surface, so it goes with it: a preview never closed
 /// held its actor for good.
@@ -129,7 +129,7 @@ fn on_host_attached(s: &mut State) {
     s.sent = Default::default();
 }
 
-/// First turn: lays out memory and writes the directory at DIRECTORY_AT.
+/// First turn: lays out memory and writes the toc at TOC_AT.
 fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
     boot::set(b);
     boot::set_admit(admit);
@@ -139,19 +139,19 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
     // A layer asks for no more tiles than its tile cache's slots.
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slots));
     turn::boot();
-    let entries: [Entry; DIRECTORY_ENTRIES] = [
+    let entries: [Entry; TOC_ENTRIES] = [
         (key::SQ, door().sq().at() as u32),
         (key::CQ, door().cq().at() as u32),
         (key::SYS, layout::range(layout::Fixed::Host).off),
         (GPU_STREAM, gpu_stream),
     ];
-    // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the
-    // bracket's data; the directory's alone.
+    // SAFETY: the page at TOC_AT, kept clear of the rings and the
+    // bracket's data; the toc's alone.
     unsafe {
-        write_directory(
+        write_toc(
             mem::core(),
-            spec::DIRECTORY_AT as usize,
-            directory_words(DIRECTORY_ENTRIES),
+            spec::TOC_AT as usize,
+            toc_words(TOC_ENTRIES),
             &entries,
         );
     };

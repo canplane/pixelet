@@ -1,8 +1,8 @@
-// pxl-kernel/door/directory.spec.rs
+// pxl-kernel/door/toc.spec.rs
 //
-// GENERATED from spec/client/kernel/door/directory.json
+// GENERATED from spec/client/kernel/door/toc.json
 //
-// The kernel's own entries in its directory (xpute-guest ipc/directory.rs), each a
+// The kernel's own entries in its toc (xpute-guest ipc/toc.rs), each a
 // key with xpute's PROGRAM bit set: the memory the host reads besides the rings and
 // the hostcalls (pxl-kernel door.rs, ts/client/src/abi/boot.ts).
 

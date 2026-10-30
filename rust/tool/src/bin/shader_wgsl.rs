@@ -31,7 +31,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-use pxl_tool::dirs;
+use pxl_tool::directory;
 use pxl_tool::root;
 use pxl_tool::shader::{header, inputs, inputs_digest, made_from, stale, DIR, ENTRIES, STAMP};
 
@@ -58,7 +58,7 @@ const KEPT: usize = 100;
 /// directory a digest: whatever checkout, export or worktree's sources it
 /// was, the same digest is the same bytes, so one made is made for all.
 fn made_home() -> Result<PathBuf, String> {
-    dirs::cache_dir("shader")
+    directory::cache_dir("shader")
 }
 
 /// An entry, the file it is checked in as, and its module as checked in.

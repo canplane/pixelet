@@ -85,9 +85,9 @@ spec                                        the numbers every language's are gen
 
 The smallest program shows the whole of it: a guest that answers one command
 (`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
-`make test` runs. The guest lays out its own range, a page for the directory,
+`make test` runs. The guest lays out its own range, a page for the toc,
 then the two rings and their slots and the hostcalls' stream, and answers the
-directory's offset from a boot call; each turn it applies what waits, and asks
+toc's offset from a boot call; each turn it applies what waits, and asks
 the host for a number it holds by a hostcall run now. The host opens the module
 over a memory of its own (`@xpute/host/module.ts` `open_module`) and mounts on
 it in one call (`@xpute/host/host.ts` `mount`), given that offset, its answers

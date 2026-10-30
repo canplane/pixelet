@@ -26,11 +26,11 @@ import * as port from "@/abi/port.spec.ts";
 import { BATCH_FRAMES, MARGIN_SHARE, SETTLE_MS } from "@/abi/pacing.spec.ts";
 import {
   DESKTOP_BYTES,
-  DIRECTORY_AT,
+  TOC_AT,
   PHONE_BYTES,
   REGION_BYTES,
 } from "./mem.spec.ts";
-import { key } from "@/abi/directory.spec.ts";
+import { key } from "@/abi/toc.spec.ts";
 import { stream } from "./gpu.spec.ts";
 import { SENSOR_HEARD, sensor_start, sensor_stop } from "@/driver/sensor.ts";
 import { submit_frame } from "@/driver/frame.ts";
@@ -105,7 +105,7 @@ async function open(): Promise<void> {
   const cfg: Config = {
     bytes: bracket.device.handheld ? PHONE_BYTES : DESKTOP_BYTES,
     region: REGION_BYTES,
-    directory_at: DIRECTORY_AT,
+    toc_at: TOC_AT,
     gpu_stream: key.GPU_STREAM,
     gpu_head: stream.HEAD,
   };

@@ -18,8 +18,8 @@
     reason = "generated from the spec"
 )]
 
-/// The core, the guest that holds the core memory: what a worker names to reach it.
-pub const CORE: u32 = 1;
+/// The kernel, the guest that holds the core memory: what a worker names to reach it.
+pub const KERNEL: u32 = 1;
 
 /// The shell, with the drivers that bring the outside in (ts/client/src/port/,
 /// ts/client/src/driver/).

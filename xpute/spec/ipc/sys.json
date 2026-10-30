@@ -3,7 +3,7 @@
     "A guest's hostcalls, its calls into its host: its files, the report that stopped it and",
     "the program's own calls, as records in a stream (ipc/stream.rs) the host runs once each",
     "turn has returned and before the next begins. A record may name memory the guest holds:",
-    "the host reads or writes it in that gap, and the guest keeps it that long. The directory",
+    "the host reads or writes it in that gap, and the guest keeps it that long. The toc",
     "says where the stream is (key SYS).",
     "",
     "Files borrow Plan 9's file namespace, in POSIX's words. The guest issues the descriptor,",

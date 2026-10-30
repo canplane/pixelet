@@ -1,4 +1,4 @@
-// pxl-spec/dirs.rs
+// pxl-spec/directory.rs
 
 //! The project's own folders on a machine, as XDG's base directories name a
 //! machine's and the `directories` crate's `ProjectDirs` an application's

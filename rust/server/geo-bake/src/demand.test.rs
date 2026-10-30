@@ -1,11 +1,11 @@
 // pxl-geo-bake/demand.test.rs
 
 use super::*;
-use pxl_spec::dirs;
+use pxl_spec::directory;
 
 #[test]
 fn restart_keeps_tiles() {
-    let base = dirs::temp_dir(&format!("demand-claim-{}", std::process::id()));
+    let base = directory::temp_dir(&format!("demand-claim-{}", std::process::id()));
     let root = base.join("place");
     let tile = root.join("0").join("010332102301230");
     let work = root.join(".work-0");

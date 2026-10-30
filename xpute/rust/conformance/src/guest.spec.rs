@@ -21,17 +21,17 @@
     reason = "generated from the spec"
 )]
 
-/// The room a guest's shared range asks for: the directory, both rings, the two streams
+/// The room a guest's shared range asks for: the toc, both rings, the two streams
 /// and the gaps LAYOUTS draws between them, then its own state and heap. Where the range
-/// begins, and so where the directory is, the guest's boot answers (the contract's rule 0);
+/// begins, and so where the toc is, the guest's boot answers (the contract's rule 0);
 /// what else a memory holds — a module's stack and data — is the build's, and no number here.
 pub const MEM_BYTES: u32 = 262144;
 
 /// The layouts a host runs every trace against, one for each seed below this. The guest's
 /// boot takes the seed and draws from it (kit's SplitMix32) the order of what it shares
-/// with its host, the directory among them, and the pages left before each, every guest by
+/// with its host, the toc among them, and the pages left before each, every guest by
 /// the same draw; so nothing it shares lies where it lay under another seed, and only a
-/// host that finds it all through the directory passes every layout (the contract's rule 0).
+/// host that finds it all through the toc passes every layout (the contract's rule 0).
 pub const LAYOUTS: u32 = 8;
 
 /// The most pages a layout leaves before each part it lays.
@@ -66,7 +66,7 @@ pub const HANDLES: u32 = 16;
 /// The most events one RAISE asks for; more is refused with EINVAL.
 pub const MOST_RAISE: u32 = 32;
 
-/// The guest's own entry in its directory, past xpute's PROGRAM bit.
+/// The guest's own entry in its toc, past xpute's PROGRAM bit.
 pub mod key {
     /// Where the stream is, run by the host after every turn.
     pub const STREAM: u32 = 2147483649;

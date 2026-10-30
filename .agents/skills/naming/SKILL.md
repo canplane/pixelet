@@ -42,14 +42,14 @@ visibility buffer); a new metaphor to escape a clash is not a fix.
 
 A word on this list is abbreviated; any other stays whole:
 
-index `idx`, value `val`, values `vals`, buffer `buf`, source `src`,
-destination `dst`, offset `off`, count `cnt`, current `cur` (not `curr`),
-position `pos`, direction `dir`, pixel `px`, resolution `res`, distance
-`dist`, address `addr`, capacity `cap`, dimension `dim`, memory
-`mem`, component `comp`, channel `ch`, elevation `ele`, feature `feat`,
-latitude `lat`, longitude `lon`, radian `rad`, degree `deg`, orientation
-`orient`, rotation `rot`, altitude `alt`, error `err`, packet `pkt`, initial
-`init`, matrix `mat`, configuration `cfg`, descriptor `desc`, context `ctx`.
+index `idx`, value `val`, values `vals`, buffer `buf`, source `src`, destination
+`dst`, offset `off`, count `cnt`, current `cur` (not `curr`), position `pos`,
+direction `dir`, directory `dir`, pixel `px`, resolution `res`, distance `dist`,
+address `addr`, capacity `cap`, dimension `dim`, memory `mem`, component `comp`,
+channel `ch`, elevation `ele`, feature `feat`, latitude `lat`, longitude `lon`,
+radian `rad`, degree `deg`, orientation `orient`, rotation `rot`, altitude
+`alt`, error `err`, packet `pkt`, initial `init`, matrix `mat`, configuration
+`cfg`, descriptor `desc`, context `ctx`.
 
 `pkt` is only a wire packet (an XTP packet: a command's arguments, a baked
 tile's bytes).

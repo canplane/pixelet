@@ -55,7 +55,7 @@ export async function open_host(
   const guest = await bracket.guest.open(cfg);
   PACING = policy;
   HOST = mount(guest, {
-    directory_at: cfg.directory_at,
+    toc_at: cfg.toc_at,
     sys,
     policy,
     submit,
