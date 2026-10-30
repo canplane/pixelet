@@ -72,6 +72,9 @@
       // pixelet-db-geo, pixelet-network); `pxl` is for code-level identifiers.
       // Kebab, not snake, and not by preference: R2 bucket names accept only
       // lowercase letters, digits and hyphens — an underscore is rejected.
+      // Narrower than what it holds, the tiles, the assets and `source`
+      // (index.ts `KEY_RE`): `pixelet-bucket` says it. R2 renames no bucket,
+      // so that is a new bucket, its objects copied, and every name of it.
       "bucket_name": "pixelet-tiles",
     },
   ],
