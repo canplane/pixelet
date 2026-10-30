@@ -393,3 +393,34 @@ not counted), main at `127a83946` with the change uncommitted:
   1.18, `px` 0.20).
 - Twice resized, gated frames again, no error; picture right at noon, the
   companion in the open.
+
+**What the claimed area is made of** (main at `3bfcdc7d0`, noon, a
+3840×2098 canvas, the browser profile `lof-mac`). A probe not kept counted,
+each frame, the screen tiles claimed, those changed this frame (the bound's
+pass, `tile_age` 0) and those the host's marks cover (on the host); the
+reach's share is the changed less the host's.
+
+| run | claimed | changed this frame | the host's marks | GPU p50 | p95 | `world` | `finish` | `px` | `mark` |
+|---|---|---|---|---|---|---|---|---|---|
+| as committed | 527 | 526 | 360 | 7.3 | 8.5 | 2.23 | — | 0.39 | 0.52 |
+| a caster's mark not grown by the taps (kept) | 520 | 519 | 130 | 7.1 | 8.9 | 2.16 | 1.90 | 0.39 | 0.52 |
+| and the map's tiles 4 texels (not kept) | 460 | 459 | 130 | 7.5 | 9.1 | 2.03 | 1.77 | 0.39 | 1.38 |
+| nothing marked, no reach (a probe) | 0 | 0 | 0 | 2.3 | 3.5 | 1.25 | 0.72 | — | 0.07 |
+
+- The same 520-odd tiles change every frame: the companion and the
+  puck's draws change each turn where they stand. Nearly all of the claim
+  is fresh, not the gathering's trail.
+- A caster's screen mark grown by the receiver's taps was the shadow's
+  near the caster, which the reach now finds from the map: not growing it
+  takes the host's marks from 360 tiles to 130, and the reach then claims
+  nearly the same tiles itself (520): it was work done twice, and is gone.
+- The map's texel is 0.125 u, its tile of 8 texels 1 u; at this view 1 u
+  is about 100 pixels, three screen tiles. Four spheres of radius 1, where
+  they were and are, cover some 500 tiles: the claim is the spheres' size,
+  not the map's tiles (4 texels claim 460 and cost the reach 0.9 ms more).
+- A gated frame claiming nothing costs 2.3 ms here: `world` 1.25 (every
+  draw's vertices, its fragments passed by the stencil) and `finish` 0.72
+  (the kept picture shown whole). Claiming 520 tiles adds about 2 ms of the
+  cast's passes, which run once any tile is claimed, and 2 to 3 ms of
+  shading in the world's pass, the resolve and the finish: what is claimed
+  costs well past its share of the screen.

@@ -10,7 +10,6 @@ use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec_core::eye;
 use pxl_spec_core::light::TILE as LIGHT_TILE;
-use pxl_spec_core::param::light;
 use pxl_spec_core::ray;
 use pxl_spec_core::scatter::GROUPS;
 use pxl_spec_core::way;
@@ -844,12 +843,12 @@ impl Renderer {
 
     /// Where the `moved` spheres fall, each apart, as this frame's eye and
     /// light see them: on the screen, the drawn pixels of a world `width` by
-    /// `height` each covers, a caster's grown by a receiver's taps, which
-    /// mark the screen's tiles (`Tiles::mark`); and the texels of the
-    /// light's map each caster covers, all of it that moves while only they
-    /// do, which mark the map's tiles, and through them, reached on the GPU,
-    /// the screen's that read them (gpu/reach.rs). None at all where nothing
-    /// moved or a sphere stands about or behind the eye.
+    /// `height` each covers, which mark the screen's tiles (`Tiles::mark`);
+    /// and the texels of the light's map each caster covers, all of it that
+    /// moves while only they do, which mark the map's tiles, and through
+    /// them, reached on the GPU, the screen's that read them (gpu/reach.rs),
+    /// where a caster's shadow falls. None at all where nothing moved or a
+    /// sphere stands about or behind the eye.
     fn marks(
         &mut self,
         moved: &[[f32; 5]],
@@ -860,8 +859,6 @@ impl Renderer {
             return None;
         }
         let light = self.shadow.cast_from.filter(|_| self.shadows);
-        // A receiver's taps, the filter's and the normal's offset, in units.
-        let spread = (f64::from(light::SPREAD) + SHADOW_MARGIN) * self.shadow.texel;
         let casts = |s: &[f32; 5]| s[4] != 0.0 && light.is_some();
         let sphere = |s: &[f32; 5]| ([s[0], s[1], s[2]].map(f64::from), f64::from(s[3]));
         let in_map: Vec<Mark> = moved
@@ -873,16 +870,12 @@ impl Renderer {
                 tiles::mark_of(clip, n, n, SHADOW_MARGIN as f32)
             })
             .collect();
-        let grown = |s: &[f32; 5]| {
-            let (p, r) = sphere(s);
-            (p, r + spread * f64::from(u8::from(casts(s))))
-        };
         // Bounded only where every sphere is before the eye.
-        clip_of(&self.view_proj, moved.iter().map(grown))?;
+        clip_of(&self.view_proj, moved.iter().map(sphere))?;
         let marks: Vec<Mark> = moved
             .iter()
             .filter_map(|s| {
-                let clip = clip_of(&self.view_proj, core::iter::once(grown(s)))?;
+                let clip = clip_of(&self.view_proj, core::iter::once(sphere(s)))?;
                 tiles::mark_of(clip, width, height, tiles::MARK_MARGIN)
             })
             .collect();
