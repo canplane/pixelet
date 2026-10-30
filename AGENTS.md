@@ -14,3 +14,5 @@
     tile, and is not the host.
   - Don't propose removing a part of xpute's `kit` because nothing here calls
     it.
+- Performance analysis or optimization, anywhere: apply the `performance`
+  skill (`.agents/skills/performance/SKILL.md`).
