@@ -443,6 +443,30 @@ directly, step 4 being done.
 6. **The mark from the changed draws drawn depth only**, if the numbers ask;
    the kernel's spheres removed with it, and how the CPU knows whether any
    tile gathers said.
+   Taken by the user's word (2026-10-30), in parts, each leaving the
+   picture right, once the claimed area was measured to be the spheres'
+   size (some 520 tiles a frame, the baseline's record):
+   1. **What each bounded draw was drawn with, kept**: the renderer keeps
+      the last frame's record and uniform of every draw outside `BESIDE`,
+      and a skinned draw's joint palette, copied before the frame's upload
+      writes it again.
+   2. **The kernel hands the draws that changed**, not their spheres
+      (pxl-kernel region.rs); the spheres, `unbounded` and the host's marks
+      from them removed. Taken after the screen's side has its numbers.
+   3. **The changed draws drawn as they were and as they are**, their
+      vertices as their depth pipelines lay them, through a fragment that
+      sets the screen tile's word to the frame's number and keeps the
+      frame's number for the read-back, the world's depth attached read
+      only; draw by draw, the skinned first, its sphere's mark kept for
+      the rest until each has its own. Done for the actors, part 1 with
+      it: alone it claims no less (the claim was the reach's).
+   4. **The same from the light** for the casters, setting the map's
+      tiles' words. Done for the actors: their spheres' rectangles kept for
+      the map's gate and lay, their drawn selves setting the words the
+      reach reads; about 2 ms under the commit before with the companion
+      walking (the baseline's record).
+   5. **The host knows whether any tile gathers** from the read-back word,
+      the reach's widened to the marks.
 
 ## Not taken
 

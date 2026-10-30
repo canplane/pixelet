@@ -165,12 +165,15 @@ impl Uploads {
         if !room(write_buffer_bytes(mem(self.at[i], self.len[i] & !3))) {
             return false;
         }
+        // Copied from too, a palette kept as it was drawn (gpu/pass/skinned.rs
+        // `keep`).
         let buf = g.buf(
             buf_size(self.len[i]),
             buffer_usage::VERTEX
                 | buffer_usage::INDEX
                 | buffer_usage::STORAGE
-                | buffer_usage::COPY_DST,
+                | buffer_usage::COPY_DST
+                | buffer_usage::COPY_SRC,
         );
         g.write_buf(buf, 0, mem(self.at[i], self.len[i] & !3));
         self.buf[i] = buf;
@@ -303,6 +306,14 @@ impl Uploads {
             self.group[i] = id;
         }
         Some(self.group[i])
+    }
+
+    /// The buffer `handle`'s bytes are on the device in, and its size in
+    /// bytes, as `get` finds it: what a copy of it takes.
+    pub fn buf_of(&self, handle: u32) -> Option<(u32, u32)> {
+        self.find(handle)
+            .filter(|&i| self.buf[i] != 0)
+            .map(|i| (self.buf[i], buf_size(self.len[i])))
     }
 
     /// The group `group` made for `handle`, for a draw, which makes none.

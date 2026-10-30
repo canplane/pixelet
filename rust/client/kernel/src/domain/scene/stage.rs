@@ -186,7 +186,7 @@ pub fn stage_render(pace: Pace) {
         window::on_landed(b, ticket, landing);
     };
     // What the scene animates changed, about the eye.
-    let (moved, bounded, animated) = {
+    let (moved, moved_keys, bounded, animated) = {
         let s = stage_lane();
         let eye = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         region::take(eye)
@@ -227,6 +227,7 @@ pub fn stage_render(pace: Pace) {
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().profiler,
         moved,
+        moved_keys,
         bounded,
         animated,
     });

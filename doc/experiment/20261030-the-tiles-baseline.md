@@ -424,3 +424,61 @@ reach's share is the changed less the host's.
   cast's passes, which run once any tile is claimed, and 2 to 3 ms of
   shading in the world's pass, the resolve and the finish: what is claimed
   costs well past its share of the screen.
+
+**Another GPU application ran** from about 20:42 to 20:47 KST, the user
+said; the runs before it stand. In it fell two probes of step 6.3, its
+marks where the actors were left out (4.1 ms) and drawn with the palette
+as it is (5.8), which so say nothing. Step 6.3 against the commit before
+it, noon, 3728×2226, the companion walking (the kernel waking some 250
+frames a minute) and then standing (every frame woken by the timer):
+
+| time | build | frames | GPU p50 | p95 | `world` | `finish` | `resolve` | `px` | `mark` |
+|---|---|---|---|---|---|---|---|---|---|
+| 20:35, walking | step 6.3 | gated 3601 | 8.3 | 10.0 | 2.29 | 2.10 | 0.72 | 0.39 | 0.66 |
+| 20:38, walking | before it (`0fa704375`) | gated 3601 | 6.9 | 9.7 | 2.16 | 1.84 | 0.26 | 0.39 | 0.52 |
+| 20:40, walking | step 6.3 | gated 3601 | 7.9 | 9.8 | 2.29 | 2.03 | 0.46 | 0.39 | 0.66 |
+| 20:48, standing | step 6.3 | gated 3601 | 4.1 | 6.0 | 1.18 | 1.18 | 0.13 | 0.20 | 0.39 |
+| 20:50, standing | before it | gated 3600 | 4.0 | 5.6 | 1.18 | 1.18 | 0.13 | 0.20 | 0.26 |
+
+- With the companion walking, step 6.3 costs about 1 ms more: its marks
+  claim more than its sphere did (`resolve`, `finish`, `world` up), not
+  less. Why is not yet found; the actors' marks where they were, drawn off
+  the palette copied the frame before, are the first suspect, not checked.
+- With it standing, the two are alike, 4 ms: little changes.
+
+The probes again, one window, noon, 3728×2226, the GPU free, many draws
+changing each turn (`px` 0.4–0.46):
+
+| build | GPU p50 | p95 | `world` | `finish` | `px` | `mark` |
+|---|---|---|---|---|---|---|
+| step 6.3 | 7.1 | 8.2 | 2.36 | 1.84 | 0.46 | 0.66 |
+| step 6.3, no marks where the actors were (a probe) | 7.1 | 8.3 | 2.23 | 1.90 | 0.46 | 0.66 |
+| before it (`0fa704375`) | 6.8 | 8.0 | 2.23 | 1.77 | 0.39 | 0.52 |
+
+- The marks where the actors were are not the cost: without them the
+  frame costs the same.
+- Step 6.3 costs some 0.3 ms over the commit before, its marks' pass
+  (`mark` 0.14) and a little more shading; the 1 ms seen at 20:35–20:40
+  was in part the windows' scenes differing.
+- It claims no less: the claim is the reach's, the shadows found from the
+  map's tiles the casters' spheres mark (part 3's record), which step 6.4
+  would take from the drawn casters instead.
+
+**Step 6.4, the actors' shadows marking the map's tiles by their drawn
+selves**, drawn from the light as where they were and are, through the
+same mark, the map's tiles' words set by their fragments; the actors'
+spheres' rectangles kept for the map's gate and lay alone (`Tiles::mark`'s
+`beside`). The same window, noon, 3728×2226, the companion walking (the
+kernel waking some 280 frames a minute):
+
+| build | frames | GPU p50 | p95 | `world` | `finish` | `resolve` | `px` | `mark` |
+|---|---|---|---|---|---|---|---|---|
+| steps 6.3 and 6.4 | gated 3601 | 6.2 | 8.1 | 1.64 | 1.25 | 0.13 | 0.33 | 0.66 |
+| before them (`0fa704375`) | gated 3601 | 8.0 | 10.0 | 2.29 | 2.03 | 0.52 | 0.39 | 0.52 |
+| steps 6.3 and 6.4, again (the view moved: cast 138) | gated 3388 | 5.7 | 7.7 | 1.51 | 1.05 | 0.20 | 0.26 | 0.66 |
+
+- About 2 ms under the commit before at the p50: the shadows' claim is
+  now where the actors' shadows change, not where their spheres' map
+  rectangles reach, and the world's pass, the finish and the resolve fall
+  with it. The marks' passes cost 0.14 ms.
+- Picture right at noon, no error.

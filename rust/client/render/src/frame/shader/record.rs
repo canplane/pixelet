@@ -102,7 +102,10 @@ pub const PIPELINE_RASTER_GATE: u32 = 40;
 /// kernel bounds moved: the claimed tiles set back to the far plane, their
 /// stencil raised (gpu/shadow.rs).
 pub const PIPELINE_LIGHT_GATE: u32 = 41;
-pub const PIPELINES: u32 = 42;
+/// An actor drawn where it was and where it is, its fragments setting their
+/// screen tiles' words (gpu/pass/skinned.rs `draw_marks`).
+pub const PIPELINE_SKINNED_MARK: u32 = 42;
+pub const PIPELINES: u32 = 43;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -423,6 +426,15 @@ const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the light: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
+/// A model's mark (tile_mark.wgsl): the eye's frame, the screen tiles' words
+/// and their uniform in group 0; the rest as its depth reads them.
+const MARK_FRAME: Group = &[[0, UNIFORM], [30, STORAGE_RW], [31, UNIFORM]];
+const MARK_GROUPS: [Group; 4] = [
+    MARK_FRAME,
+    MODEL_GROUPS[1],
+    MODEL_GROUPS[2],
+    MODEL_GROUPS[3],
+];
 /// A marker set's instances, and what its pass reads at an anchor: the
 /// world's depth for the regions, the regions for the sprites. Its uniform is
 /// a draw's (`DRAW`).
@@ -563,6 +575,19 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_SKINNED_DEPTH => {
             Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_LANES, &DEPTH_GROUPS)
         }
+        // Its vertices as the depth pass lays them, its fragments writing
+        // no color and testing no depth: they mark their tiles.
+        PIPELINE_SKINNED_MARK => Descriptor::new(
+            Head {
+                fragment: true,
+                depth_write: false,
+                depth_compare: ALWAYS,
+                depth_bias_slope: 0,
+                ..depth_only(SHADER_SKINNED_MARK)
+            },
+            &SKINNED_LANES,
+            &MARK_GROUPS,
+        ),
         // Every texel of the box the world's cast holds, whatever lies
         // there, in the map's claimed tiles: its clipmap's words and the
         // box's corner, before the casters drawn over it, into the depth

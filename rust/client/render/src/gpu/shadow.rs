@@ -194,6 +194,13 @@ impl Shadow {
         }
     }
 
+    /// The light's frame, which a draw from the light reads in group 0, and
+    /// the map as its pass draws it: what a mark from the light binds and
+    /// attaches (gpu/pass/skinned.rs `draw_marks`).
+    pub fn frame_and_map(&self) -> (u32, u32) {
+        (self.light_frame, self.map_view)
+    }
+
     /// The map and its sampler, at `binding` and the next, as a lit pass reads them (shadow.wgsl).
     pub fn entries(&self, binding: u32) -> [Entry; 2] {
         [

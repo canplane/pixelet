@@ -152,7 +152,10 @@ pub const SHADER_LIGHT_GATE: u32 = 66;
 /// Each square of the screen's least and most depth, set in the tiles drawn
 /// (screen_bound.wgsl): its one compute entry.
 pub const SHADER_SCREEN_BOUND: u32 = 67;
-pub const SHADERS: u32 = 68;
+/// An actor where it was and where it is, its fragments marking their screen
+/// tiles (skinned_place.wgsl, tile_mark.wgsl).
+pub const SHADER_SKINNED_MARK: u32 = 68;
+pub const SHADERS: u32 = 69;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -178,7 +181,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_DECOR
     lit!["place", "instance", "decor"],
     // SHADER_SKINNED
-    lit!["place", "skinned"],
+    lit!["place", "skinned_place", "skinned"],
     // SHADER_PUCK_ZONE
     &["frame", "encode", "finish", "puck", "puck_zone"],
     // SHADER_PUCK_BEACON
@@ -405,4 +408,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["screen_tiles", "light_gate"],
     // SHADER_SCREEN_BOUND
     &["screen_tiles", "screen_bound"],
+    // SHADER_SKINNED_MARK
+    &["frame", "place", "skinned_place", "tile_mark"],
 ];

@@ -91,8 +91,10 @@ pub struct Tiles {
     marks: u32,
     mark_room: usize,
     marking: bool,
-    /// The marks this frame hands, and the most tiles one of them holds.
+    /// The marks this frame hands, those whose words the marks' pass sets
+    /// first, and the most tiles one of those holds.
     mark_cnt: u32,
+    set_cnt: u32,
     mark_most: u32,
     /// Whether a pass beside may have set tiles the host has not seen yet
     /// (gpu/reach.rs).
@@ -132,6 +134,7 @@ impl Tiles {
             mark_room: MARK_ROOM,
             marking: false,
             mark_cnt: 0,
+            set_cnt: 0,
             mark_most: 0,
             unseen: false,
         }
@@ -170,38 +173,54 @@ impl Tiles {
 
     /// The marks this frame hands, of a target `size` pixels across and
     /// down, the frame numbered anew: where it is drawn through the gate
-    /// (`gated`), the tiles each of `marks` covers (`mark_of`); else none
-    /// where nothing it draws moved (`quiet`), one of every tile where
-    /// anything did.
+    /// (`gated`), the tiles each of `marks` covers (`mark_of`), and those
+    /// of `beside`, which a pass beside sets the words of and the frame draws
+    /// by all the same (`marks`); else none where nothing it draws moved
+    /// (`quiet`), one of every tile where anything did.
     /// The tiles the frame draws: the claimed alone where it is gated, else
     /// every one. Set on the GPU, before anything reads them, by
     /// `dispatch_marks`.
-    pub fn mark(&mut self, g: &Gpu, size: [u32; 2], (gated, quiet): (bool, bool), marks: &[Mark]) {
+    pub fn mark(
+        &mut self,
+        g: &Gpu,
+        size: [u32; 2],
+        (gated, quiet): (bool, bool),
+        marks: &[Mark],
+        beside: &[Mark],
+    ) {
         let squares = self.squares;
         self.now = self.now.wrapping_add(1);
         let whole = !gated && !quiet;
         let every = [0, 0, squares[0], squares[1]];
-        let mut tiles: Vec<[u32; 4]> = marks
-            .iter()
-            .filter(|_| gated)
-            .map(|m| {
-                let lo = [m[0], m[1]].map(|v| v / self.side);
-                let hi: [u32; 2] =
-                    core::array::from_fn(|k| (m[k] + m[k + 2]).div_ceil(self.side).min(squares[k]));
-                [lo[0], lo[1], hi[0], hi[1]]
-            })
-            .filter(|t| t[2] > t[0] && t[3] > t[1])
-            .collect();
+        let side = self.side;
+        let tiles_of = |marks: &[Mark]| -> Vec<[u32; 4]> {
+            marks
+                .iter()
+                .filter(|_| gated)
+                .map(|m| {
+                    let lo = [m[0], m[1]].map(|v| v / side);
+                    let hi: [u32; 2] =
+                        core::array::from_fn(|k| (m[k] + m[k + 2]).div_ceil(side).min(squares[k]));
+                    [lo[0], lo[1], hi[0], hi[1]]
+                })
+                .filter(|t| t[2] > t[0] && t[3] > t[1])
+                .collect()
+        };
+        let mut tiles = tiles_of(marks);
         if whole {
             tiles = vec![every];
         }
         self.marking = !tiles.is_empty();
-        self.mark_cnt = tiles.len() as u32;
+        self.set_cnt = tiles.len() as u32;
         self.mark_most = tiles
             .iter()
             .map(|t| (t[2] - t[0]) * (t[3] - t[1]))
             .max()
             .unwrap_or(0);
+        if !whole {
+            tiles.extend(tiles_of(beside));
+        }
+        self.mark_cnt = tiles.len() as u32;
         if self.marking {
             self.marked_at = self.now;
         }
@@ -216,7 +235,7 @@ impl Tiles {
         if !tiles.is_empty() {
             g.write_buf(self.marks, 0, bytes(tiles.as_flattened()));
         }
-        let head = [self.mark_cnt, self.now, squares[0], 0];
+        let head = [self.set_cnt, self.now, squares[0], 0];
         g.write_buf(self.mark_head, 0, bytes(&head));
         let claimed_for = if gated { self.claimed_for } else { u32::MAX };
         let words = self.words(size, 0.0, claimed_for);
@@ -246,7 +265,7 @@ impl Tiles {
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
         g.set_bind_group(pass, 0, self.mark_group, &[]);
         g.set_pipeline(pass, self.mark.pipeline);
-        g.dispatch(pass, self.mark_most.div_ceil(64), self.mark_cnt, 1);
+        g.dispatch(pass, self.mark_most.div_ceil(64), self.set_cnt, 1);
         g.end(pass);
     }
 
