@@ -30,7 +30,6 @@ use crate::gpu::read::Read;
 use crate::gpu::renderer::{Cast, Overwrites};
 use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName};
-use crate::gpu::surface::Region;
 use pxl_spec_core::param::light::SAMPLE;
 
 /// What the GPU's cast reads; it writes the world surface's rays.
@@ -176,19 +175,17 @@ pub(super) struct CastBuffers {
     /// `eye::JITTER`). It moving alone, the beam rays, the cells' starts and
     /// the samples stand, and the pixels are cast again off them.
     jitter: [u32; 2],
-    /// The part of the pixels this frame casts again, where it moved within
-    /// a region alone (gpu/surface.rs `Region`), and the first pixel the eye's
-    /// words hold for it, as last written.
-    region: Option<Region>,
-    origin: [f32; 2],
+    /// Whether the samples' raster is drawn through its gate, in the claimed
+    /// tiles alone: where only the kernel's bounds moved.
+    gated: bool,
     /// The samples' stops handed to the rasterizer (ray/raster.rs), whose
     /// visible sample at each pixel the pixels read (`cast_cs`), over a group
     /// of their own (`px_group`): the eye, the rays, the beam's words, the
-    /// pyramid and the visibility buffer (`px_bound`), made again exactly
-    /// when one of them is another.
+    /// pyramid, the visibility buffer and the claimed tiles (`px_bound`),
+    /// made again exactly when one of them is another.
     raster: Raster,
     px_group: u32,
-    px_bound: [u32; 5],
+    px_bound: [u32; 7],
     /// What the light's cast and the eye's recast, counted where the setting
     /// asks (ray/tally.rs).
     tally: Tally,
@@ -371,11 +368,10 @@ impl RaysPass {
             grown: Grown::new(g, pipelines),
             read: Read::default(),
             jitter: [0; 2],
-            region: None,
-            origin: [0.0; 2],
+            gated: false,
             raster,
             px_group: 0,
-            px_bound: [0; 5],
+            px_bound: [0; 7],
             tally,
             light_grouped: [0; 3],
         };
@@ -384,7 +380,8 @@ impl RaysPass {
 
     /// The rays for this frame into the world surface's (`rays`, its view,
     /// and its drawn pixels), and the world's depth from the light into `light`'s
-    /// view: the GPU's cast where an eye casts, its eye handed over first.
+    /// view: the GPU's cast where an eye casts, its eye handed over first;
+    /// its samples' raster through its gate where the frame is `gated`.
     pub fn prepare(
         &mut self,
         g: &Gpu,
@@ -392,7 +389,7 @@ impl RaysPass {
         meshes: &[u32; GROUPS as usize],
         rays: (u32, [u32; 2]),
         light_map: (u32, u32, light::Starts),
-        region: Option<Region>,
+        gated: bool,
     ) {
         // No cast, no world: no ray cast, none drawn and no decor grown.
         // What the cast reads stands for the next: the ground it binds is
@@ -707,17 +704,11 @@ impl RaysPass {
         }
         if eye_moved || jittered || c.light_cast {
             g.write_buf(c.eye, 0, bytes(&cast.eye));
-            c.origin = [0.0; 2];
         }
-        // Only the pixels within the region, where only they moved; a cast
-        // whole casts every pixel. Its first pixel, in the eye's words
-        // (pxl-spec-core `eye::JITTER`).
-        c.region = region.filter(|_| kind == FrameKind::px);
-        let origin = c.region.map_or([0.0; 2], |r| r.at.map(|v| v as f32));
-        if casts && origin != c.origin {
-            g.write_buf(c.eye, word_bytes(eye::JITTER + 2), bytes(&origin));
-            c.origin = origin;
-        }
+        // The samples' raster through its gate where only the kernel's
+        // bounds moved; the pixels' cast passes by the tiles not claimed
+        // (`px_group`).
+        c.gated = gated && kind == FrameKind::px;
         if casts {
             c.forgets = if c.forget {
                 observed::FORGETS_ALL
@@ -804,7 +795,15 @@ impl RaysPass {
                     pool,
                 ],
             );
-            let px_bound = [c.eye, rays.0, c.beams, c.seen, c.raster.visibility_array];
+            let px_bound = [
+                c.eye,
+                rays.0,
+                c.beams,
+                c.seen,
+                c.raster.visibility_array,
+                self.claimed.0,
+                self.claimed.1,
+            ];
             if px_bound != c.px_bound {
                 release(c.px_group);
                 c.px_group = px_group(g, &c.built, px_bound, c.marks);
@@ -868,15 +867,11 @@ impl RaysPass {
         self.regroup(g, [rays.0, eye]);
     }
 
-    /// The frame draws whole after all: its pixels, where it casts them,
-    /// cast whole, from the first.
-    pub fn whole(&mut self, g: &Gpu) {
-        let Some(c) = self.cast.as_mut().filter(|c| c.region.is_some()) else {
-            return;
-        };
-        c.region = None;
-        c.origin = [0.0; 2];
-        g.write_buf(c.eye, word_bytes(eye::JITTER + 2), bytes(&c.origin));
+    /// The frame draws whole after all: its samples' raster drawn whole.
+    pub fn whole(&mut self) {
+        if let Some(c) = self.cast.as_mut() {
+            c.gated = false;
+        }
     }
 
     /// The eye's windows folded over their bricks where their entries moved
@@ -915,6 +910,7 @@ impl RaysPass {
     pub fn dispatch(&mut self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let (grows, casts, kind) = (self.grows(), self.casts_px(), self.kind);
+        let claimed = (self.claimed, self.tiles.1);
         let Some(c) = self.cast.as_mut() else { return };
         if casts {
             // The observed pyramid forgotten first where it is; then the
@@ -964,20 +960,15 @@ impl RaysPass {
                     c.grid.samples,
                     compute::SAMPLE_WORKGROUP,
                 ),
-                (
-                    GpuSpanName::px,
-                    &c.built,
-                    c.region.map_or(c.size, |r| r.size),
-                    compute::CAST_WORKGROUP,
-                ),
+                (GpuSpanName::px, &c.built, c.size, compute::CAST_WORKGROUP),
             ] {
                 if kind == FrameKind::px && span != GpuSpanName::px {
                     continue;
                 }
                 let mut group = c.group;
                 if span == GpuSpanName::px {
-                    c.raster
-                        .draw(ctx, &c.grid, kind == FrameKind::cast, c.region);
+                    let gated = c.gated.then_some(claimed);
+                    c.raster.draw(ctx, &c.grid, kind == FrameKind::cast, gated);
                     group = c.px_group;
                 }
                 let pass = g.compute_pass(encoder, ctx.stamp(span).pass());
@@ -1208,8 +1199,8 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 11]) -> u32 {
 /// the pyramid, which the marked pixels are listed in, the visibility buffer,
 /// a one-layer array, and the words the marked are counted in (`marks`).
 /// No world: a pixel walks nothing of its own (`cast_cs`).
-fn px_group(g: &Gpu, built: &Built, bound: [u32; 5], marks: u32) -> u32 {
-    let [eye, rays, beams, seen, visibility] = bound;
+fn px_group(g: &Gpu, built: &Built, bound: [u32; 7], marks: u32) -> u32 {
+    let [eye, rays, beams, seen, visibility, changed_at, tiles] = bound;
     let entries = [
         buf_entry(0, eye),
         view_entry(3, rays),
@@ -1217,6 +1208,8 @@ fn px_group(g: &Gpu, built: &Built, bound: [u32; 5], marks: u32) -> u32 {
         buf_entry(9, seen),
         view_entry(13, visibility),
         buf_entry(14, marks),
+        buf_entry(30, changed_at),
+        buf_entry(31, tiles),
     ];
     g.bind_group(built.layouts[0], &entries)
 }

@@ -7,7 +7,8 @@
 // where nothing was drawn; and the world's depth carried up with it, the
 // nearest of what a canvas pixel covers, which what is drawn over the world
 // is tested against. Where the two sizes are one, each is the world's own
-// texel.
+// texel. The claimed tiles alone, at the canvas's pixels (screen_tiles.wgsl),
+// into the picture the surface keeps.
 
 @group(0) @binding(1) var world: texture_2d<f32>;
 @group(0) @binding(2) var world_depth: texture_depth_2d;
@@ -22,10 +23,9 @@ struct FinishOut {
 };
 
 @vertex
-fn vs(@builtin(vertex_index) vi: u32) -> VertexOut {
-  let p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
   var o: VertexOut;
-  o.clip = vec4f(p[vi], 0.0, 1.0);
+  o.clip = tile_clip(vi, ii);
   return o;
 }
 

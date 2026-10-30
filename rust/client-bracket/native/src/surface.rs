@@ -39,13 +39,14 @@ const CFG: Config = Config {
 };
 
 /// The device the kernel asks for: the timestamps its spans are timed by
-/// where the adapter has them, and the adapter's own limits, since the
+/// and a stencil beside the world's depth, each where the adapter has it
+/// (pxl-render gpu/api.rs `Device`), and the adapter's own limits, since the
 /// simulator's Metal falls short of WebGPU's defaults and refuses a device
 /// that asks for them.
 const ASK: Ask = Ask {
     backends: wgpu::Backends::PRIMARY,
     power_preference: wgpu::PowerPreference::HighPerformance,
-    features: wgpu::Features::TIMESTAMP_QUERY,
+    features: wgpu::Features::TIMESTAMP_QUERY.union(wgpu::Features::DEPTH32FLOAT_STENCIL8),
     limits: wgpu::Adapter::limits,
     memory_hints: wgpu::MemoryHints::Performance,
 };

@@ -18,7 +18,6 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::FrameKind;
-use crate::gpu::surface::WORLD_COLOR;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 use ground::GroundBuffers;
@@ -36,10 +35,18 @@ pub struct RaysPass {
     /// The same pixels' depth alone, into the occlusion's prepass.
     depth: Built,
     /// Its group 0 over the lit pass's entries and what it binds besides
-    /// (`bound`, the surface's rays and the cast's eye): made again exactly
-    /// when one of them is another.
+    /// (`bound`, the surface's rays, the cast's eye, and the tiles' words and
+    /// uniform): made again exactly when one of them is another.
     group: u32,
-    bound: [u32; 2],
+    bound: [u32; 4],
+    /// The surface's rays and the cast's eye as last handed; the tiles the
+    /// pixels' cast casts, the claimed (`Resolve::tiles`); and those its
+    /// screen pass draws, a quad each (screen_tiles.wgsl), the claimed or,
+    /// where the world's pass has no gate, every one (`Resolve::every`):
+    /// their words and uniform, and how many tiles there are.
+    handed: [u32; 2],
+    claimed: (u32, u32),
+    tiles: ((u32, u32), u32),
     /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
     /// until the renderer hands them.
     lit: Vec<Entry>,
@@ -55,7 +62,7 @@ pub struct RaysPass {
 
 impl RaysPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> RaysPass {
-        let built = pipelines.build(g, PIPELINE_SCREEN_RAY, WORLD_COLOR);
+        let built = pipelines.build_world(g, PIPELINE_SCREEN_RAY);
         let depth = pipelines.build(g, PIPELINE_SCREEN_PREPASS, Format::depth32float);
         let words = look_words();
         let looks = g.buf(
@@ -67,7 +74,10 @@ impl RaysPass {
             built,
             depth,
             group: 0,
-            bound: [0; 2],
+            bound: [0; 4],
+            handed: [0; 2],
+            claimed: (0, 0),
+            tiles: ((0, 0), 0),
             lit: Vec::new(),
             looks,
             ground: None,
@@ -85,20 +95,34 @@ impl RaysPass {
     /// made again: the group is made again over them when next drawn.
     pub fn set_lit(&mut self, entries: Vec<Entry>) {
         self.lit = entries;
-        self.bound = [0; 2];
+        self.bound = [0; 4];
     }
 
-    /// The group over `bound`, the surface's rays and the cast's eye, made
-    /// again where either is another or the lit pass's entries were handed.
-    fn regroup(&mut self, g: &Gpu, bound: [u32; 2]) {
-        if bound == self.bound || self.lit.is_empty() {
+    /// The tiles this frame casts (`claimed`) and draws (`drawn`), `cnt` of
+    /// them, handed before it prepares, which makes its groups again where
+    /// they are others.
+    pub fn set_tiles(&mut self, claimed: (u32, u32), drawn: (u32, u32), cnt: u32) {
+        self.claimed = claimed;
+        self.tiles = (drawn, cnt);
+    }
+
+    /// The group over the surface's rays and the cast's eye (`rays`) and
+    /// the tiles, made again where one is another or the lit pass's entries
+    /// were handed; none before all are.
+    fn regroup(&mut self, g: &Gpu, [rays, eye]: [u32; 2]) {
+        self.handed = [rays, eye];
+        let ((changed_at, tiles), _) = self.tiles;
+        let bound = [rays, eye, changed_at, tiles];
+        if bound == self.bound || self.lit.is_empty() || bound.contains(&0) {
             return;
         }
         release(self.group);
         let mut e = self.lit.clone();
-        e.push(view_entry(3, bound[0]));
+        e.push(view_entry(3, rays));
         e.push(buf_entry(20, self.looks));
-        e.push(buf_entry(21, bound[1]));
+        e.push(buf_entry(21, eye));
+        e.push(buf_entry(30, changed_at));
+        e.push(buf_entry(31, tiles));
         self.group = g.bind_group(self.built.layouts[0], &e);
         self.bound = bound;
     }
@@ -118,6 +142,6 @@ impl RaysPass {
         }
         pass.set_pipeline(built.pipeline);
         pass.set_bind_group(0, self.group, &[]);
-        pass.draw(3, 1, 0, 0);
+        pass.draw(6, self.tiles.1, 0, 0);
     }
 }

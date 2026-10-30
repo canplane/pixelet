@@ -13,7 +13,8 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_CAST => "cast_cs",
         SHADER_JOINED => "joined_cs",
         SHADER_ATMOS_FROXEL => "froxel_cs",
-        SHADER_DEPTH_BOUNDS => "depth_bounds_cs",
+        SHADER_SCREEN_REACH => "screen_reach_cs",
+        SHADER_SCREEN_MARK => "screen_mark_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHT => "height_cs",
         SHADER_GROWN_MARK => "decor_mark_cs",
@@ -83,13 +84,24 @@ pub const PIPELINE_RASTER: u32 = 34;
 pub const PIPELINE_SCREEN_FINISH: u32 = 35;
 /// The world's color gathered over frames (gpu/resolve.rs).
 pub const PIPELINE_SCREEN_RESOLVE: u32 = 36;
-/// The region a frame draws again cleared, under its scissor
-/// (gpu/surface.rs `Region`).
-pub const PIPELINE_SCREEN_CLEAR: u32 = 37;
+/// The gate a frame not drawn whole is drawn through: the claimed tiles
+/// cleared, their stencil raised (gpu/renderer.rs `frame`).
+pub const PIPELINE_SCREEN_GATE: u32 = 37;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (gpu/finish.rs).
 pub const PIPELINE_SCREEN_SHOW: u32 = 38;
-pub const PIPELINES: u32 = 39;
+/// The claimed tiles of the history the resolve wrote copied back into the
+/// last (gpu/resolve.rs).
+pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 39;
+/// The gate the samples' raster is drawn through in a frame not drawn whole:
+/// the claimed tiles cleared to the far plane, the rest left at the nearest
+/// (gpu/ray/raster.rs).
+pub const PIPELINE_RASTER_GATE: u32 = 40;
+/// The gate the light's map is drawn through where only the casters the
+/// kernel bounds moved: the claimed tiles set back to the far plane, their
+/// stencil raised (gpu/shadow.rs).
+pub const PIPELINE_LIGHT_GATE: u32 = 41;
+pub const PIPELINES: u32 = 42;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -295,7 +307,7 @@ const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 /// The lit pass's frame, shadow, occlusion, air and layers, all read where
 /// a pixel is painted; then the rays, the looks and the eye's words: the
 /// most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 21] = and(
+const SCREEN_GROUP: [[u32; 2]; 23] = and(
     LIT_FRAME,
     [
         [3, TEXTURE_UINT_ARRAY],
@@ -304,6 +316,8 @@ const SCREEN_GROUP: [[u32; 2]; 21] = and(
         [6, SAMPLER],
         [20, STORAGE],
         [21, UNIFORM],
+        [30, STORAGE],
+        [31, UNIFORM],
     ],
 );
 
@@ -549,9 +563,9 @@ const fn desc_of(id: u32) -> Descriptor {
             Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_LANES, &DEPTH_GROUPS)
         }
         // Every texel of the box the world's cast holds, whatever lies
-        // there: its clipmap's words and the box's corner, before the
-        // casters drawn over it, into the depth alone (gpu/api.rs
-        // `pipeline`), its fragment the depth.
+        // there, in the map's claimed tiles: its clipmap's words and the
+        // box's corner, before the casters drawn over it, into the depth
+        // alone (gpu/api.rs `pipeline`), its fragment the depth.
         PIPELINE_LIGHT_MAP => Descriptor::new(
             Head {
                 fragment: true,
@@ -561,7 +575,22 @@ const fn desc_of(id: u32) -> Descriptor {
                 ..depth_only(SHADER_LIGHT_MAP)
             },
             &[],
-            &[&[[0, TEXTURE_UINT_ARRAY], [1, UNIFORM]]],
+            &[&[
+                [0, TEXTURE_UINT_ARRAY],
+                [1, UNIFORM],
+                [31, UNIFORM],
+                [32, STORAGE],
+            ]],
+        ),
+        PIPELINE_LIGHT_GATE => Descriptor::new(
+            Head {
+                depth_compare: ALWAYS,
+                depth_bias_slope: 0,
+                vertex: VS,
+                ..depth_only(SHADER_LIGHT_GATE)
+            },
+            &[],
+            &[&[[31, UNIFORM], [32, STORAGE]]],
         ),
         // The screen's depth alone into the occlusion's prepass (gpu/ao.rs),
         // the group the lit screen pass binds.
@@ -608,16 +637,31 @@ const fn desc_of(id: u32) -> Descriptor {
                 ..screen(SHADER_SCREEN_FINISH)
             },
             &[],
-            &[&[[0, UNIFORM], [1, TEXTURE], [2, DEPTH]]],
+            &[&[
+                [0, UNIFORM],
+                [1, TEXTURE],
+                [2, DEPTH],
+                [30, STORAGE],
+                [31, UNIFORM],
+            ]],
         ),
-        PIPELINE_SCREEN_CLEAR => Descriptor::new(
+        PIPELINE_SCREEN_GATE => Descriptor::new(
             Head {
                 depth_write: true,
                 depth_compare: ALWAYS,
-                ..screen(SHADER_SCREEN_CLEAR)
+                ..screen(SHADER_SCREEN_GATE)
             },
             &[],
+            &[&[[30, STORAGE], [31, UNIFORM]]],
+        ),
+        PIPELINE_RASTER_GATE => Descriptor::new(
+            Head {
+                depth_write: true,
+                depth_compare: ALWAYS,
+                ..screen(SHADER_RASTER_GATE)
+            },
             &[],
+            &[&[[30, STORAGE], [31, UNIFORM]]],
         ),
         PIPELINE_SCREEN_SHOW => {
             Descriptor::new(screen(SHADER_SCREEN_SHOW), &[], &[&[[1, TEXTURE]]])
@@ -632,8 +676,14 @@ const fn desc_of(id: u32) -> Descriptor {
                 [3, TEXTURE],
                 [4, SAMPLER],
                 [5, UNIFORM],
-                [6, STORAGE],
+                [30, STORAGE],
+                [31, UNIFORM],
             ]],
+        ),
+        PIPELINE_SCREEN_WRITE_BACK => Descriptor::new(
+            screen(SHADER_SCREEN_WRITE_BACK),
+            &[],
+            &[&[[1, TEXTURE], [30, STORAGE], [31, UNIFORM]]],
         ),
         PIPELINE_IMPOSTOR => Descriptor::new(
             Head {

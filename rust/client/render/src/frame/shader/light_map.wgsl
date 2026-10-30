@@ -3,15 +3,18 @@
 // read as `light_depth`, which build.rs makes off its layout), laid into
 // the light's shadow map in the light box's own order before the decor and
 // the actors are drawn into it (gpu/shadow.rs): box texel p's slot is its
-// world texel, the box's corner on by p, modulo the map's side.
+// world texel, the box's corner on by p, modulo the map's side. Laid in the
+// map's claimed tiles alone, exactly this frame's marks', a quad a mark
+// (screen_tiles.wgsl `mark_clip`; one of every tile where the map is drawn
+// whole): its fragment writes its depth, so a stencil could not reject it
+// early.
 
 @group(0) @binding(0) var world_depth: texture_2d_array<u32>;
 @group(0) @binding(1) var<uniform> corner: vec4i;
 
 @vertex
-fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-  let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u)) * 2.0 - 1.0;
-  return vec4f(p, 0.0, 1.0);
+fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
+  return mark_clip(vi, ii);
 }
 
 @fragment

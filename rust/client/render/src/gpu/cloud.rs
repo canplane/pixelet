@@ -17,7 +17,6 @@ use crate::gpu::api::{
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::surface::WORLD_COLOR;
 use crate::look::environment::ENV_SKY;
 use pxl_spec::space::coord::world::EXTENT;
 use pxl_spec_core::cloud::{drift, LATTICE_CNT};
@@ -47,7 +46,7 @@ impl CloudPass {
         frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> CloudPass {
-        let built = pipelines.build(g, PIPELINE_CLOUD, WORLD_COLOR);
+        let built = pipelines.build_world(g, PIPELINE_CLOUD);
         let tile = g.texture(
             CLOUD_TILE_TEXELS,
             CLOUD_TILE_TEXELS,

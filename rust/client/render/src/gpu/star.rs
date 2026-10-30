@@ -16,7 +16,6 @@ use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, Tr
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::gpu::surface::WORLD_COLOR;
 use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
 use crate::param::sky::star::DRAWN_ABOVE;
 
@@ -39,7 +38,7 @@ impl StarPass {
         frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> StarPass {
-        let built = pipelines.build(g, PIPELINE_STAR, WORLD_COLOR);
+        let built = pipelines.build_world(g, PIPELINE_STAR);
         let uniform = g.buf(
             word_bytes(STARS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,

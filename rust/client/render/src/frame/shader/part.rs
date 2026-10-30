@@ -125,16 +125,28 @@ pub const SHADER_GROWN_STAND: u32 = 57;
 pub const SHADER_SCREEN_FINISH: u32 = 58;
 /// The world's color gathered over frames (screen_resolve.wgsl).
 pub const SHADER_SCREEN_RESOLVE: u32 = 59;
-/// The region a frame draws again set back to nothing at the far plane
-/// (screen_clear.wgsl).
-pub const SHADER_SCREEN_CLEAR: u32 = 60;
+/// The claimed tiles set back to nothing at the far plane, their stencil
+/// raised (screen_gate.wgsl).
+pub const SHADER_SCREEN_GATE: u32 = 60;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (screen_show.wgsl).
 pub const SHADER_SCREEN_SHOW: u32 = 61;
-/// The world's depth's least and most a square of the screen
-/// (screen_depth_bounds.wgsl).
-pub const SHADER_DEPTH_BOUNDS: u32 = 62;
-pub const SHADERS: u32 = 63;
+/// The light's map's tiles that changed reached across to the screen's
+/// (screen_reach.wgsl): its one compute entry.
+pub const SHADER_SCREEN_REACH: u32 = 62;
+/// The claimed tiles of the history the resolve wrote copied back into the
+/// last (screen_write_back.wgsl).
+pub const SHADER_SCREEN_WRITE_BACK: u32 = 63;
+/// The claimed tiles of the samples' raster set back to no sample at the far
+/// plane (raster_gate.wgsl).
+pub const SHADER_RASTER_GATE: u32 = 64;
+/// The screen's tiles the frame's marks cover, or every one, taking its
+/// number (screen_mark.wgsl): its one compute entry.
+pub const SHADER_SCREEN_MARK: u32 = 65;
+/// The claimed tiles of the light's map set back to the far plane, their
+/// stencil raised (light_gate.wgsl): a vertex stage alone.
+pub const SHADER_LIGHT_GATE: u32 = 66;
+pub const SHADERS: u32 = 67;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -278,6 +290,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "paint",
         "debug_look",
         "px",
+        "screen_tiles",
         "screen_ray",
         "screen_lit"
     ],
@@ -334,7 +347,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT
     &["light.gen"],
     // SHADER_LIGHT_MAP
-    &["light_word", "light_map"],
+    &["light_word", "screen_tiles", "light_map"],
     // SHADER_LIGHT_MISS
     &["light_miss.gen"],
     // SHADER_SCREEN_DEPTH
@@ -344,6 +357,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "eye",
         "paint",
         "px",
+        "screen_tiles",
         "screen_ray",
         "screen_depth"
     ],
@@ -366,13 +380,21 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_GROWN_STAND
     &["decor_stand.gen"],
     // SHADER_SCREEN_FINISH
-    &["frame", "encode", "finish", "screen_finish"],
+    &["frame", "encode", "finish", "screen_tiles", "screen_finish"],
     // SHADER_SCREEN_RESOLVE
-    &["frame", "screen_resolve"],
-    // SHADER_SCREEN_CLEAR
-    &["screen_clear"],
+    &["frame", "screen_tiles", "screen_resolve"],
+    // SHADER_SCREEN_GATE
+    &["screen_tiles", "screen_gate"],
     // SHADER_SCREEN_SHOW
     &["screen_show"],
-    // SHADER_DEPTH_BOUNDS
-    &["screen_depth_bounds"],
+    // SHADER_SCREEN_REACH
+    &["screen_reach"],
+    // SHADER_SCREEN_WRITE_BACK
+    &["screen_tiles", "screen_write_back"],
+    // SHADER_RASTER_GATE
+    &["screen_tiles", "raster_gate"],
+    // SHADER_SCREEN_MARK
+    &["screen_mark"],
+    // SHADER_LIGHT_GATE
+    &["screen_tiles", "light_gate"],
 ];

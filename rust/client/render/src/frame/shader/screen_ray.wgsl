@@ -83,11 +83,11 @@ struct FragOut {
   @builtin(frag_depth) depth: f32,
 };
 
+// The claimed tiles alone, or every one (screen_tiles.wgsl).
 @vertex
-fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
-  let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u)) * 2.0 - 1.0;
+fn vs(@builtin(vertex_index) i: u32, @builtin(instance_index) ii: u32) -> VertexOut {
   var o: VertexOut;
-  o.clip = vec4f(p, 0.0, 1.0);
+  o.clip = tile_clip(i, ii);
   return o;
 }
 

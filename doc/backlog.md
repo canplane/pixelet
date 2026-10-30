@@ -10,7 +10,12 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-Nothing now.
+- **The screen keeps its tiles as the light does.** After the other
+  session's line (the light rename, ages by square, the kept finish) lands,
+  the steps in order, 1 to 5 whatever the picture without them, 6 only where
+  the numbers ask; steps 3 and 5 are for the symmetry the user asked (the
+  user, 2026-10-30) —
+  [20261029-the-screen-keeps-its-tiles-as-the-light-does.md](./minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md).
 
 ## P1
 

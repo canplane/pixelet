@@ -20,7 +20,6 @@ use crate::gpu::pass::model::{
     draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::Uploads;
 
 /// Impostors span less than the model tier's floor, a camera grid cell
@@ -59,7 +58,7 @@ fn fit_of(extent: Extent) -> [f32; 4] {
 
 impl ImpostorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> ImpostorPass {
-        let draw = pipelines.build(g, PIPELINE_IMPOSTOR, WORLD_COLOR);
+        let draw = pipelines.build_world(g, PIPELINE_IMPOSTOR);
         let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, Format::rgba8unorm_srgb);
         let sampler = g.sampler(
             FilterMode::linear,

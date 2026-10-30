@@ -12,9 +12,9 @@ struct Resolve {
   // A pixel's middle and depth in this frame's view, unjittered, to its
   // place in the last frame's.
   reproject: mat4x4f,
-  // The share this frame's color takes where its square changed this frame
+  // The share this frame's color takes where its tile changed this frame
   // and the last frame's view held the place, 1 where nothing before is
-  // kept; then the squares across, as bits (`ages`).
+  // kept.
   blend: vec4f,
 };
 
@@ -23,16 +23,10 @@ struct Resolve {
 @group(0) @binding(3) var history: texture_2d<f32>;
 @group(0) @binding(4) var history_sampler: sampler;
 @group(0) @binding(5) var<uniform> resolve: Resolve;
-// Each square's frames since it last changed (gpu/resolve.rs `ages`): 0
-// where it changed this frame, what the frames before left held to this
-// frame's pixels; past it, only the jitter moved there since, and the frame
-// takes its even share of the sequence, what they left standing whole.
-@group(0) @binding(6) var<storage, read> ages: array<u32>;
-
-// A square's drawn pixels a side (gpu/resolve.rs `SIDE`), and the frames
-// the jitter's sequence covers a pixel in (`JITTERS`).
-const RESOLVE_SIDE: u32 = 32u;
-const RESOLVE_JITTERS: u32 = 8u;
+// Each tile's age (screen_tiles.wgsl `tile_age`): 0 where it changed this frame,
+// what the frames before left held to this frame's pixels; past it, only the
+// jitter moved there since, and the frame takes its even share of the
+// sequence, what they left standing whole.
 
 // How far, in the spread of the pixels about it, what the frames before
 // left may lie from their mean.
@@ -42,11 +36,11 @@ struct VertexOut {
   @builtin(position) clip: vec4f,
 };
 
+// The claimed tiles alone (screen_tiles.wgsl).
 @vertex
-fn vs(@builtin(vertex_index) vi: u32) -> VertexOut {
-  let p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
   var o: VertexOut;
-  o.clip = vec4f(p[vi], 0.0, 1.0);
+  o.clip = tile_clip(vi, ii);
   return o;
 }
 
@@ -90,10 +84,10 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let was = resolve.reproject * vec4f(ndc, depth, 1.0);
   let at = was.xy / was.w;
   let uv = vec2f(at.x * 0.5 + 0.5, 0.5 - at.y * 0.5);
-  let square = vec2u(p) / RESOLVE_SIDE;
-  let age = ages[square.y * bitcast<u32>(resolve.blend.y) + square.x];
+  let tile = vec2u(p) / tile_side();
+  let age = tile_age(tile.y * tiles.count.x + tile.x);
   let still = age > 0u;
-  var blend = select(resolve.blend.x, 1.0 / f32(min(age - 1u, RESOLVE_JITTERS - 2u) + 2u), still);
+  var blend = select(resolve.blend.x, 1.0 / f32(min(age - 1u, TILE_JITTERS - 2u) + 2u), still);
   if (!(was.w > 0.0) || any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
     blend = 1.0;
   }

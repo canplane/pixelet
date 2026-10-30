@@ -10,7 +10,10 @@
 //! each frame in the box's own order
 //! (`PIPELINE_LIGHT_MAP`), and decor and the actors, which move every frame,
 //! drawn over it depth only, from the light's frame. The lit passes read
-//! the map as a plain light box. 16 MB each at 2048.
+//! the map as a plain light box. 16 MB each at 2048. Where only the casters
+//! the kernel bounds moved over the world its cast left as it was, the map
+//! is drawn again in the tiles they cover alone (gpu/tiles.rs), through a
+//! gate of its own (light_gate.wgsl), as the world's pass is.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
@@ -18,16 +21,17 @@ use pxl_spec_core::eye;
 use pxl_spec_core::light::{self, Light, Starts, ANCHOR};
 use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_MAP};
+use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_GATE, PIPELINE_LIGHT_MAP};
 use crate::frame::shader::word::frame::VIEW_PROJ;
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, texture_usage, view_entry,
-    word_bytes, Entry, Format, Gpu, Load, RenderContext, TrackedRenderPass,
+    buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
+    word_bytes, Entry, Format, Gpu, Load, RenderContext, Stencil, TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
+use crate::gpu::tiles::Tiles;
 use crate::param::shadow::DEPTH_STEP;
 
 /// The map's side in texels.
@@ -52,7 +56,11 @@ fn ortho(out: &mut Mat4, half: f64, near: f64, far: f64) {
 }
 
 pub struct Shadow {
+    /// The map as its pass draws it, with the gate's stencil where the
+    /// device carries one (`Gpu::gated_depth`), and its depth alone, as the
+    /// lit passes read it.
     map_view: u32,
+    map_depth_view: u32,
     sampler: u32,
     blank_view: u32,
     blank_sampler: u32,
@@ -61,8 +69,14 @@ pub struct Shadow {
     /// `PIPELINE_LIGHT_MAP` lays it into the map off the box's corner,
     /// `corner`'s words.
     pub world: u32,
+    /// The world laid in, its group over the world, the corner, the map's
+    /// tiles' uniform and their marks (`Tiles::marks`), made again where
+    /// they are others; and the map's gate, its group over the tiles alike.
     lay: Built,
     lay_group: u32,
+    lay_bound: (u32, u32),
+    gate: Built,
+    gate_group: u32,
     corner: u32,
     /// Group 0 of the casters' depth pipelines: the light's frame.
     pub light_group: u32,
@@ -96,11 +110,12 @@ impl Shadow {
             SIZE,
             SIZE,
             1,
-            Format::depth32float,
+            g.gated_depth(),
             1,
             texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
         );
         let map_view = g.view(map, false, 0, 1, 0, 1);
+        let map_depth_view = g.depth_only_view(map);
         let sampler = g.sampler(
             FilterMode::linear,
             FilterMode::linear,
@@ -135,14 +150,12 @@ impl Shadow {
             texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING,
         );
         let world = g.view(world, true, 0, 1, 0, 1);
-        let lay = pipelines.build(g, PIPELINE_LIGHT_MAP, Format::depth32float);
+        let depth = Format::depth32float;
+        let lay = pipelines.build_gated(g, PIPELINE_LIGHT_MAP, depth, Stencil::Unused);
+        let gate = pipelines.build_gated(g, PIPELINE_LIGHT_GATE, depth, Stencil::Gate);
         let corner = g.buf(
             word_bytes(4),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-        );
-        let lay_group = g.bind_group(
-            lay.layouts[0],
-            &[view_entry(0, world), buf_entry(1, corner)],
         );
         let light_frame = g.buf(
             word_bytes(FRAME_FLOATS),
@@ -154,12 +167,16 @@ impl Shadow {
         );
         Shadow {
             map_view,
+            map_depth_view,
             sampler,
             blank_view,
             blank_sampler,
             world,
             lay,
-            lay_group,
+            lay_group: 0,
+            lay_bound: (0, 0),
+            gate,
+            gate_group: 0,
             corner,
             light_group,
             light_frame,
@@ -180,7 +197,7 @@ impl Shadow {
     /// The map and its sampler, at `binding` and the next, as a lit pass reads them (shadow.wgsl).
     pub fn entries(&self, binding: u32) -> [Entry; 2] {
         [
-            view_entry(binding, self.map_view),
+            view_entry(binding, self.map_depth_view),
             sampler_entry(binding + 1, self.sampler),
         ]
     }
@@ -344,37 +361,66 @@ impl Shadow {
 
     /// The map's pass, timed in the span `shadow`, the world's depth laid in first
     /// where `cast` (its cast holds this frame's world); else cleared to the
-    /// far plane, as nothing is cast there. Where only the texels `rect`
-    /// holds, `[x, y, width, height]`, are drawn again, the rest kept as the
-    /// last frame left it, the pass is held to them, the world laid there
-    /// first (`PIPELINE_LIGHT_MAP` writes every texel it covers), which a
-    /// frame that casts alone may. The casters are drawn into it next, then
-    /// it ends.
+    /// far plane, as nothing is cast there. In the claimed tiles of `tiles`
+    /// alone where it is drawn through its gate, its number `number` (the
+    /// world's pass's `GATE_NUMBERS`), the rest kept as the last frame left
+    /// it: the gate sets them back to the far plane and raises their
+    /// stencil, and the world is laid there, a quad a mark of this frame's,
+    /// whose tiles the map's claimed are exactly, which a frame that casts
+    /// alone may. The casters are drawn into it next, through
+    /// the stencil, then it ends.
     pub fn begin<'a>(
-        &self,
+        &mut self,
         ctx: &mut RenderContext<'a>,
         cast: bool,
-        rect: Option<[u32; 4]>,
+        tiles: &Tiles,
+        number: Option<u32>,
     ) -> TrackedRenderPass<'a> {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::shadow);
-        let load = if rect.is_some() {
+        let load = if number.is_some() {
             Load::Load
         } else {
             Load::Clear
         };
-        let pass = g.pass(
-            encoder,
-            &pass_desc(0, Load::Clear, self.map_view, load, 1.0, stamp.pass()),
-        );
+        let desc = pass_desc(0, Load::Clear, self.map_view, load, 1.0, stamp.pass());
+        let desc = if number.is_some_and(|n| n > 1) {
+            desc.kept()
+        } else {
+            desc
+        };
+        let pass = g.pass(encoder, &desc);
         let mut pass = TrackedRenderPass::new(g, pass);
-        if let Some(r) = rect {
-            pass.set_scissor(r);
+        let (marks, cnt) = tiles.marks();
+        let bound = (tiles.bound().1, marks);
+        if bound != self.lay_bound {
+            release(self.lay_group);
+            release(self.gate_group);
+            self.lay_group = g.bind_group(
+                self.lay.layouts[0],
+                &[
+                    view_entry(0, self.world),
+                    buf_entry(1, self.corner),
+                    buf_entry(31, bound.0),
+                    buf_entry(32, bound.1),
+                ],
+            );
+            self.gate_group = g.bind_group(
+                self.gate.layouts[0],
+                &[buf_entry(31, bound.0), buf_entry(32, bound.1)],
+            );
+            self.lay_bound = bound;
+        }
+        if let Some(n) = number {
+            pass.set_stencil_reference(n);
+            pass.set_pipeline(self.gate.pipeline);
+            pass.set_bind_group(0, self.gate_group, &[]);
+            pass.draw(6, cnt, 0, 0);
         }
         if cast {
             pass.set_pipeline(self.lay.pipeline);
             pass.set_bind_group(0, self.lay_group, &[]);
-            pass.draw(3, 1, 0, 0);
+            pass.draw(6, cnt, 0, 0);
         }
         pass
     }

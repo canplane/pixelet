@@ -7,12 +7,11 @@ use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::PIPELINE_SKINNED_DEPTH;
 
-use crate::gpu::api::{bytes, Gpu, Image, TrackedRenderPass};
+use crate::gpu::api::{bytes, Format, Gpu, Image, Stencil, TrackedRenderPass};
 use crate::gpu::pass::model::{
     draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::Uploads;
 
 pub struct SkinnedPass {
@@ -26,8 +25,13 @@ pub struct SkinnedPass {
 impl SkinnedPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedPass {
         SkinnedPass {
-            lit: pipelines.build(g, PIPELINE_SKINNED, WORLD_COLOR),
-            depth: pipelines.build(g, PIPELINE_SKINNED_DEPTH, g.canvas()),
+            lit: pipelines.build_world(g, PIPELINE_SKINNED),
+            depth: pipelines.build_gated(
+                g,
+                PIPELINE_SKINNED_DEPTH,
+                Format::depth32float,
+                Stencil::Gated,
+            ),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
             skins: Vec::new(),
         }

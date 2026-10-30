@@ -6,7 +6,8 @@
 use crate::frame::shader::record::{
     compute_entry, pipeline as record_of, src, HEAD, PIPELINES, SHADERS,
 };
-use crate::gpu::api::{Format, Gpu};
+use crate::gpu::api::{Format, Gpu, Stencil};
+use crate::gpu::surface::WORLD_COLOR;
 
 pub const GROUPS: usize = 4;
 pub const LANES: usize = 8;
@@ -76,8 +77,45 @@ impl Pipelines {
         id
     }
 
+    /// Pipeline `id` drawing into `format`, depth32 its depth.
     pub fn build(&mut self, g: &Gpu, id: u32, format: Format) -> Built {
-        let key = fold(fold(0xcbf29ce484222325, id), format as u32);
+        self.build_onto(g, id, format, (Format::depth32float, Stencil::Unused))
+    }
+
+    /// Pipeline `id` drawing into a world surface's color and depth
+    /// (`WORLD_COLOR`, `Gpu::gated_depth`), through the gate where the depth
+    /// carries one (`Stencil::Gated`).
+    pub fn build_world(&mut self, g: &Gpu, id: u32) -> Built {
+        self.build_gated(g, id, WORLD_COLOR, Stencil::Gated)
+    }
+
+    /// The gate itself, onto a world surface (`Stencil::Gate`).
+    pub fn build_gate(&mut self, g: &Gpu, id: u32) -> Built {
+        self.build_gated(g, id, WORLD_COLOR, Stencil::Gate)
+    }
+
+    /// Pipeline `id` drawing into `format` and a gated depth
+    /// (`Gpu::gated_depth`), as `stencil` asks where the depth carries one:
+    /// into the depth alone where `format` is depth32's (`build`).
+    pub fn build_gated(&mut self, g: &Gpu, id: u32, format: Format, stencil: Stencil) -> Built {
+        let stencil = if g.gates() { stencil } else { Stencil::Unused };
+        self.build_onto(g, id, format, (g.gated_depth(), stencil))
+    }
+
+    fn build_onto(
+        &mut self,
+        g: &Gpu,
+        id: u32,
+        format: Format,
+        (depth, stencil): (Format, Stencil),
+    ) -> Built {
+        let key = fold(
+            fold(
+                fold(fold(0xcbf29ce484222325, id), format as u32),
+                depth as u32,
+            ),
+            stencil as u32,
+        );
         if let Some(&(_, b)) = self.built[..self.built_len].iter().find(|(k, _)| *k == key) {
             return b;
         }
@@ -98,7 +136,13 @@ impl Pipelines {
             b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
             at += 1 + 3 * n;
         }
-        b.pipeline = g.pipeline(words, &b.layouts[..groups], module, format);
+        b.pipeline = g.pipeline(
+            words,
+            &b.layouts[..groups],
+            module,
+            format,
+            (depth, stencil),
+        );
         xpute_kit::ensure!(self.built_len < BUILT, ENOSPC, BUILT);
         self.built[self.built_len] = (key, b);
         self.built_len += 1;

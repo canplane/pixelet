@@ -7,15 +7,21 @@
 //! sample, in passes timed together (span `sraster`), which the cast's
 //! pixels read (pxl-shader cast.rs `cast_cs`); then what lies about each
 //! box's face asked once a box (`face_cs`, span `face`). Its targets are
-//! written whole each frame before they are read; its args, boxes and faces
-//! each frame its samples are cast, and kept where only the pixels are cast
-//! again over them.
+//! written whole each frame before they are read: in a frame not drawn
+//! whole, through a gate of their own, the depth cleared to the nearest and
+//! the claimed tiles set back to the far plane (raster_gate.wgsl), so the
+//! boxes pass the depth test, early, there alone, and the cast's pixels,
+//! which pass the other tiles by, read nothing there. Its args, boxes and
+//! faces each frame its samples are cast, and kept where only the pixels are
+//! cast again over them.
 
 use pxl_spec_core::{beam, eye, light, raster};
 
 use super::cast::HEAD_BINDING;
 
-use crate::frame::shader::record::{compute, PIPELINE_RASTER, SHADER_FACE, SHADER_SAMPLE_BOX};
+use crate::frame::shader::record::{
+    compute, PIPELINE_RASTER, PIPELINE_RASTER_GATE, SHADER_FACE, SHADER_SAMPLE_BOX,
+};
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes, Format, Gpu,
@@ -23,7 +29,6 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::surface::Region;
 use pxl_spec_core::param::light::SAMPLE;
 use pxl_spec_core::param::raster::GROWN;
 
@@ -40,6 +45,11 @@ pub(super) struct Raster {
     pub(super) boxes_built: Built,
     faces_built: Built,
     draw_built: Built,
+    /// The gate the boxes are drawn through in a frame not drawn whole, and
+    /// its group over the claimed tiles (`Resolve::tiles`).
+    gate: Built,
+    gate_group: u32,
+    gate_bound: (u32, u32),
     pub(super) args: u32,
     boxes: u32,
     room: u32,
@@ -85,6 +95,9 @@ impl Raster {
             boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &compute::SAMPLE_BOX_GROUP),
             faces_built: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
+            gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
+            gate_group: 0,
+            gate_bound: (0, 0),
             args: g.buf(
                 word_bytes(raster::ARGS_WORDS as usize),
                 buffer_usage::STORAGE
@@ -244,15 +257,16 @@ impl Raster {
 
     /// The boxes written off the samples, a thread a sample of `grid`, where
     /// they were cast again (`samples_cast`), else the last kept; and drawn
-    /// into its targets as many as their args say, cleared first, within the
-    /// `region` the frame casts where it casts one: in passes of their own,
-    /// timed together (span `sraster`).
+    /// into its targets as many as their args say, cleared first, through
+    /// the gate in the `claimed` tiles where the frame is not drawn whole
+    /// (`Resolve::tiles`, `cnt` of them): in passes of their own, timed
+    /// together (span `sraster`).
     pub(super) fn draw(
-        &self,
+        &mut self,
         ctx: &mut RenderContext,
         grid: &beam::Grid,
         samples_cast: bool,
-        region: Option<Region>,
+        claimed: Option<((u32, u32), u32)>,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::sraster);
@@ -265,6 +279,9 @@ impl Raster {
             g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             g.end(pass);
         }
+        // Gated, the depth starts at the nearest, which no box passes, and
+        // the gate sets the claimed tiles back to the far plane; else it
+        // starts there.
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -272,12 +289,22 @@ impl Raster {
                 Load::Clear,
                 self.depth_view,
                 Load::Clear,
-                0.0,
+                if claimed.is_some() { 1.0 } else { 0.0 },
                 stamp.pass(),
             ),
         );
-        if let Some(r) = region {
-            g.set_scissor(pass, r.rect());
+        if let Some((tiles, cnt)) = claimed {
+            if tiles != self.gate_bound {
+                release(self.gate_group);
+                self.gate_group = g.bind_group(
+                    self.gate.layouts[0],
+                    &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
+                );
+                self.gate_bound = tiles;
+            }
+            g.set_pipeline(pass, self.gate.pipeline);
+            g.set_bind_group(pass, 0, self.gate_group, &[]);
+            g.draw(pass, 6, cnt, 0, 0);
         }
         g.set_pipeline(pass, self.draw_built.pipeline);
         g.set_bind_group(pass, 0, self.groups[1], &[]);

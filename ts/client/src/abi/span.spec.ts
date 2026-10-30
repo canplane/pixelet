@@ -32,6 +32,7 @@ export const GPU_SPAN_NAMES = [
   "grow",
   "shadow",
   "face",
+  "mark",
 ] as const;
 
 export const FRAME_KINDS = [
@@ -44,5 +45,5 @@ export const FRAME_KINDS = [
   "cast",
   "stood",
   "px",
-  "region",
+  "gated",
 ] as const;

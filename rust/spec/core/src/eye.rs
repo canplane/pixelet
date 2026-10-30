@@ -49,10 +49,9 @@ pub const GRID_WORDS: usize = beam::GRID_WORDS;
 pub const LIGHT: usize = GRID + GRID_WORDS;
 pub const LIGHT_WORDS: usize = 20;
 /// Where each pixel's ray goes through it this frame, its offset from the
-/// pixel's middle in drawn pixels, X right and Y down, f32 bits; then the
-/// first pixel the frame casts across and down, f32 bits, where it casts
-/// only a region of them (pxl-render gpu/surface.rs `Region`). The
-/// renderer's to write; the kernel leaves it zero.
+/// pixel's middle in drawn pixels, X right and Y down, f32 bits; then two
+/// words unused, as the eye is laid out in fours. The renderer's to write;
+/// the kernel leaves it zero.
 /// What the beams, cells and samples cast is the camera grid's and reads none
 /// of it.
 pub const JITTER: usize = LIGHT + LIGHT_WORDS;

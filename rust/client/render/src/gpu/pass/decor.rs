@@ -9,7 +9,7 @@ use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
 use crate::frame::shader::word::DECOR_GROUPS;
 
-use crate::gpu::api::{Gpu, Image, TrackedRenderPass};
+use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
 use crate::gpu::grown::Drawn;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{
@@ -17,7 +17,6 @@ use crate::gpu::pass::model::{
     DRAW_BYTES,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::{Draws, Uploads};
 use pxl_spec_core::scatter;
 
@@ -39,9 +38,14 @@ pub struct DecorPass {
 impl DecorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> DecorPass {
         DecorPass {
-            lit: pipelines.build(g, PIPELINE_DECOR, WORLD_COLOR),
-            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, WORLD_COLOR),
-            depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()),
+            lit: pipelines.build_world(g, PIPELINE_DECOR),
+            ghost: pipelines.build_world(g, PIPELINE_GHOST_DECOR),
+            depth: pipelines.build_gated(
+                g,
+                PIPELINE_DECOR_DEPTH,
+                Format::depth32float,
+                Stencil::Gated,
+            ),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, g.canvas()),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
             groups: [(0, None); DECOR_GROUPS],

@@ -17,7 +17,7 @@
     reason = "generated from the spec"
 )]
 
-pub const GPU_SPAN_NAMES: usize = 25;
+pub const GPU_SPAN_NAMES: usize = 26;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -46,11 +46,12 @@ pub enum GpuSpanName {
     grow = 22,
     shadow = 23,
     face = 24,
+    mark = 25,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 25] = [
+    pub const ALL: [GpuSpanName; 26] = [
         GpuSpanName::air,
         GpuSpanName::prepass,
         GpuSpanName::ao,
@@ -76,6 +77,7 @@ impl GpuSpanName {
         GpuSpanName::grow,
         GpuSpanName::shadow,
         GpuSpanName::face,
+        GpuSpanName::mark,
     ];
 
     /// The member a number names, or none for a number the set does not
@@ -100,7 +102,7 @@ pub enum FrameKind {
     cast = 6,
     stood = 7,
     px = 8,
-    region = 9,
+    gated = 9,
 }
 
 impl FrameKind {
@@ -115,7 +117,7 @@ impl FrameKind {
         FrameKind::cast,
         FrameKind::stood,
         FrameKind::px,
-        FrameKind::region,
+        FrameKind::gated,
     ];
 
     /// The member a number names, or none for a number the set does not
