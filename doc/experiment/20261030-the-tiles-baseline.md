@@ -724,3 +724,32 @@ samples 2,352,768 and the walks again 2,165,466 (some 16 a walked pixel);
 list's room (`observed::MARKS`, 2^20) well past it, so the pass over every
 pixel (`miss_cs`) does not run: the `miss` span's some 5 ms is 139,000 deep
 walks, the cast's own work, not a pass doing nothing.
+
+**The plan's steps in one window** (2026-10-31, 02:20–03:00): six commits
+from the plan's start, each built with the dev server started fresh on it
+(a server started on another commit keeps that commit's enums, and its runs
+are left out), noon, shadows on, the pixels fixed, 3728×2338. Still: the
+page as it opens for 60 s. Orbit: the pointer swung as above for 60 s. The
+GPU figure is the spans' sum (no older build has `gpu_busy_ms`); the
+orbit's interval is the frame's end to end.
+
+| commit | what it holds | still GPU p50 | p95 | still's moving frames | orbit interval p50 | p95 | orbit GPU p50 |
+|---|---|---|---|---|---|---|---|
+| `5553036df` | the plan's start: one rectangle | 13.6 | 16.8 | 119 | 25 | 31 | 35.4 |
+| `e6b740ab8` | the spheres tightened (step 4) | 7.4* | 14.7* | 1164* | 29 | 33 | 36.1 |
+| `e5f614ff3` | the screen's tiles (steps 3–5) | 8.3 | 11.1 | 45 | 29 | 34 | 40.2 |
+| `fc60c28ca` | the actors' drawn marks (6.3, 6.4) | 5.4 | 6.6 | 107 | 29 | 34 | 35.5 |
+| `46f776afa` | the reach's box | 5.2 | 7.3 | 0 | 29 | 34 | 35.8 |
+| `6f84e6fb8` | the light held, its marks read once | 5.5 | 7.4 | 108 | 25 | 30 | 31.5 |
+
+\* taken on a server started on another commit, its pacing off (42 % of
+vsyncs missed); its GPU figures may still stand.
+
+- Still, the GPU's time falls from 13.6 ms to 5.5 at the p50 (some 60 %),
+  the interval the display's 17 ms throughout: what the plan bought is
+  headroom. The builds' companions move differently (the moving frames),
+  so the still rows are rough.
+- Orbiting, the interval is 25 ms at the start and 25 ms now: the steps
+  from the spheres' tightening on cost some 4 ms a moving frame (29), and
+  the light's work of this session took it back. A frame drawn whole is
+  no faster than at the plan's start.
