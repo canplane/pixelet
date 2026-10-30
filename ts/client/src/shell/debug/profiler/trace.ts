@@ -210,7 +210,7 @@ function profilerTraceJson(): string {
 export async function profilerTraceSave(): Promise<string> {
   const json = profilerTraceJson();
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
-  const name = `pxl-profiler-${new Date()
+  const name = `profiler-${new Date()
     .toISOString()
     .replace(/[:.]/g, "-")}.json`;
   try {
