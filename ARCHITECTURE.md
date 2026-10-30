@@ -649,37 +649,34 @@ same JSON as the Rust. The host, `port/`, `driver/`, `abi/` and the shell are
 one package, `ts/client`, and the shell reaches the kernel and the drivers
 through `port/` alone.
 
-What crosses each edge, from the shell down to the kernel:
+The kernel stands between two stacks that run opposite ways. By role, the
+shell is above it, the kernel's user, and the devices below; by substrate, the
+kernel is xpute's guest and the host is below it. The kernel's edge to the
+shell is its **upper ABI**, and its edge to the devices its **lower ABI**. Both
+ride xpute's carriers, and the host gives neither a meaning; the shell and the
+host share one process only because a page and an app hold both.
 
 ```text
-  ┌────────────────────────────────────┐
-  │ shell     React over the snapshot  │
-  └────────────────────────────────────┘
-     │ a command for       ▲ the snapshot, replaced
-     │ each control        │ whole when it moved
-     ▼                     │
-  ┌────────────────────────────────────┐
-  │ client    port/ the shell's,       │
-  │           driver/ the devices'     │
-  └────────────────────────────────────┘
-     │ WORLD_FRAME and the ▲ completions and events;
-     │ commands, through   │ the opens and writes
-     │ the host's doorbell │ the host runs
-     ▼                     │
-  ┌────────────────────────────────────┐
-  │ host      @xpute/host, mounted by  │
-  │           ts/client/src/host/      │
-  └────────────────────────────────────┘
-     │ a turn: the memory  ▲ the calls a turn records;
-     │ once, the clock     │ the last words, if it
-     │ and the admit       │ stops
-     ▼                     │
-  ┌────────────────────────────────────┐
-  │ bracket   pxl-wasm or pxl-native   │
-  │ kernel    the guest: decides all,  │
-  │           owns no device           │
-  └────────────────────────────────────┘
+ pixelet, by role                          xpute, by substrate
+
+   shell     the UI: React over the          guest   the kernel, run in turns
+             snapshot                                (pxl-wasm, pxl-native)
+     │ ▲  upper ABI, ts/client/src/port/       │ ▲  xpute's contract
+     ▼ │                                       ▼ │
+   kernel    decides all, owns no device     host    @xpute/host, mounted by
+     │ ▲  lower ABI, ts/client/src/driver/           ts/client/src/host/
+     ▼ │
+   devices   the place's files, text,
+             sensors, GPU, visibility
 ```
+
+What crosses each edge:
+
+| Edge                          | Down                                                                                                                      | Up                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| shell and kernel, `port/`     | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`), the profiler's reads | the snapshot, replaced whole when it moved, and the events it is told by                                 |
+| kernel and devices, `driver/` | opens and writes, text by hostcall, a sensor started or stopped, the GPU's calls                                          | a file read whole, a sensor's reading, the GPU's state, the page's visibility, each turn's `WORLD_FRAME` |
+| host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the submission ring                | completions and events, the streams' records, hostcalls, the last words if it stops                      |
 
 ## Reads, and the one scheduler
 
