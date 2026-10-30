@@ -3,7 +3,7 @@
 /** Holds the TypeScript side to golden/wire/tlv.tsv, which every language's TLV must match. */
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
@@ -41,12 +41,12 @@ test("tlv computes what the typescript computes", async () => {
   ]);
   const pkt = w.finish();
 
-  assertEquals(bytes_to_hex(pkt), v.s("packet"));
+  assert.deepStrictEqual(bytes_to_hex(pkt), v.s("packet"));
 
   const read = new TlvReader(pkt).read_all().map(show);
   const want: string[] = [];
   v.each("read", (k) => want.push(v.s(k)));
-  assertEquals(read, want);
+  assert.deepStrictEqual(read, want);
 
   // How a sequence stops: the values handed out before it did, then END
   // read, the input run out at a boundary, or a fault.
@@ -60,7 +60,7 @@ test("tlv computes what the typescript computes", async () => {
     } catch (err) {
       stop = `errno:${(err as FaultError).errnum ?? Errno.OK}`;
     }
-    assertEquals(`${n}:${stop}`, v.s(`end.${k}.read`), `end.${k}`);
+    assert.deepStrictEqual(`${n}:${stop}`, v.s(`end.${k}.read`), `end.${k}`);
   }
 
   // A length past what the packet holds: the reader refuses rather than
@@ -71,5 +71,5 @@ test("tlv computes what the typescript computes", async () => {
   } catch (err) {
     huge = `errno:${(err as FaultError).errnum ?? Errno.OK}`;
   }
-  assertEquals(huge, v.s("huge.read"));
+  assert.deepStrictEqual(huge, v.s("huge.read"));
 });

@@ -1,7 +1,7 @@
 // @xpute/host/ipc/ring.test.ts
 
 import { test } from "vitest";
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
@@ -24,24 +24,25 @@ test("ring - frames come out in order across the wrap, and a full ring refuses",
   const r = ring(4, 64);
   for (let round = 0; round < 3; round++) {
     for (let k = 0; k < 4; k++) {
-      assertEquals(
+      assert.deepStrictEqual(
         r.push(round * 4 + k, 7, frame.ACKREQ, null, -(round * 4 + k)),
         Errno.OK,
       );
     }
-    assertEquals(r.push(99, 0), Errno.EAGAIN, "a full ring refuses");
+    assert.deepStrictEqual(r.push(99, 0), Errno.EAGAIN, "a full ring refuses");
     for (let k = 0; k < 4; k++) {
       const at = r.peek();
-      assert(at >= 0);
-      assertEquals(
+      assert.ok(at >= 0);
+      // The result as the i32 it is kept as, so the first is 0, not -0.
+      assert.deepStrictEqual(
         [r.tag(at), r.cmd(at), r.flags(at), r.result(at), r.pkt(at)],
-        [round * 4 + k, 7, frame.ACKREQ, -(round * 4 + k), null],
+        [round * 4 + k, 7, frame.ACKREQ, -(round * 4 + k) | 0, null],
       );
       r.advance();
     }
-    assertEquals(r.peek(), -1);
+    assert.deepStrictEqual(r.peek(), -1);
   }
-  assertEquals([r.head, r.tail], [12, 12], "positions only grow");
+  assert.deepStrictEqual([r.head, r.tail], [12, 12], "positions only grow");
 });
 
 test("ring - one payload a slot, so the payloads run out with the slots and never before them", () => {
@@ -53,30 +54,37 @@ test("ring - one payload a slot, so the payloads run out with the slots and neve
       : Errno.EAGAIN;
 
   for (let n = 1; n <= 8; n++) {
-    assertEquals(push(n), Errno.OK, "every slot has a payload of its own");
+    assert.deepStrictEqual(
+      push(n),
+      Errno.OK,
+      "every slot has a payload of its own",
+    );
   }
-  assertEquals(
+  assert.deepStrictEqual(
     push(9),
     Errno.EAGAIN,
     "and the ring fills before the payloads do",
   );
-  assertEquals(r.len, 8);
+  assert.deepStrictEqual(r.len, 8);
 
   for (let n = 1; n <= 8; n++) {
     const at = r.peek();
-    assertEquals(r.pkt(at)!.byteLength, 56);
+    assert.deepStrictEqual(r.pkt(at)!.byteLength, 56);
     const root = new TreeReader(r.pkt(at)!).read_branch();
-    assertEquals(
+    assert.deepStrictEqual(
       [r.tag(at), root.at(0).get<number>(), root.at(1).get<number>()],
       [n, n, n * 2 ** 40],
     );
     r.advance();
   }
-  assertEquals(push(9), Errno.OK, "a slot freed is a payload freed");
+  assert.deepStrictEqual(push(9), Errno.OK, "a slot freed is a payload freed");
 
-  assert(r.write(w, 1));
-  assertEquals(r.push(10, 0x0101, 0, w.str("x".repeat(40))), Errno.EMSGSIZE);
-  assertThrows(() => {
+  assert.ok(r.write(w, 1));
+  assert.deepStrictEqual(
+    r.push(10, 0x0101, 0, w.str("x".repeat(40))),
+    Errno.EMSGSIZE,
+  );
+  assert.throws(() => {
     const at = r.entry_at(r.tail);
     r.push(11, 0);
     r.words[at + 3] = 4;

@@ -3,7 +3,7 @@
 /** Holds the TypeScript side to golden/math/rng.32.tsv, which every language's stream must match. */
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import {
@@ -17,8 +17,8 @@ test("rng32 computes what the record holds", async () => {
   const v = await Golden.load("golden/math/rng.32.tsv");
   v.each("", (k) => {
     const seed = v.u32(`${k}.seed`);
-    assertEquals(mix32(seed), v.u32(`${k}.mix32`), `${k}.mix32`);
-    assertEquals(
+    assert.deepStrictEqual(mix32(seed), v.u32(`${k}.mix32`), `${k}.mix32`);
+    assert.deepStrictEqual(
       derive_seed_u32(seed, 77),
       v.u32(`${k}.derive`),
       `${k}.derive`,
@@ -26,9 +26,9 @@ test("rng32 computes what the record holds", async () => {
     const draw = make_rng32(seed);
     v.each(`${k}.draws`, (d) => {
       const got = draw();
-      assertEquals(got, v.u32(d), d);
+      assert.deepStrictEqual(got, v.u32(d), d);
       const j = d.slice(d.lastIndexOf(".") + 1);
-      assertEquals(
+      assert.deepStrictEqual(
         Object.is(u32_to_unit(got), v.f64(`${k}.unit.${j}`)),
         true,
         `${k}.unit.${j}`,

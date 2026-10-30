@@ -8,7 +8,7 @@
  */
 
 import { test } from "vitest";
-import { assert, assertEquals, assertNotEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -122,7 +122,7 @@ function module(path: string): Opener {
   const imports = WebAssembly.Module.imports(compiled)
     .map((i) => `${i.module}.${i.name}`)
     .sort();
-  assertEquals(
+  assert.deepStrictEqual(
     imports,
     MODULE_IMPORTS,
     `${path}: what the module reaches its host through`,
@@ -206,14 +206,14 @@ class Host {
   submit(tag: number, command: number, ack: boolean, args: number[]): void {
     let pkt: PacketWriter | null = null;
     if (args.length > 0) {
-      assert(
+      assert.ok(
         this.sq.write(this.writer, args.length),
         "a full ring takes no packet",
       );
       for (const a of args) this.writer.u32(a);
       pkt = this.writer;
     }
-    assertEquals(
+    assert.deepStrictEqual(
       this.sq.push(tag, command, ack ? frame.ACKREQ : 0, pkt),
       Errno.OK,
     );
@@ -316,7 +316,7 @@ function expect(
 ): void {
   const seen_tokens = seen.split(" ");
   const said_tokens = said.split(" ");
-  assertEquals(
+  assert.deepStrictEqual(
     seen_tokens.length,
     said_tokens.length,
     `${what}: saw ${seen}, the trace says ${said}`,
@@ -326,19 +326,19 @@ function expect(
     const [seen_head, val] = seen_token.split("=");
     const [said_head, v] = said_token.split("=");
     if (v !== undefined && v.startsWith("$") && val !== undefined) {
-      assertEquals(
+      assert.deepStrictEqual(
         seen_head,
         said_head,
         `${what}: saw ${seen}, the trace says ${said}`,
       );
       if (!vars.has(v)) vars.set(v, Number(val));
-      assertEquals(
+      assert.deepStrictEqual(
         vars.get(v),
         Number(val),
         `${what}: ${v} again, and not what it was`,
       );
     } else {
-      assertEquals(
+      assert.deepStrictEqual(
         seen_token,
         said_token,
         `${what}: saw ${seen}, the trace says ${said}`,
@@ -364,10 +364,10 @@ function val(term: string, vars: Map<string, number>): number {
 function relation(said: string, vars: Map<string, number>, what: string): void {
   if (said.includes(" == ")) {
     const [a, b] = said.split(" == ");
-    assertEquals(val(a, vars), val(b, vars), `${what}: ${said}`);
+    assert.deepStrictEqual(val(a, vars), val(b, vars), `${what}: ${said}`);
   } else if (said.includes(" != ")) {
     const [a, b] = said.split(" != ");
-    assertNotEquals(val(a, vars), val(b, vars), `${what}: ${said}`);
+    assert.notDeepStrictEqual(val(a, vars), val(b, vars), `${what}: ${said}`);
   } else {
     throw new Error(`${what}: no relation in ${said}`);
   }
@@ -425,7 +425,7 @@ function run(
         for (;;) {
           turns.push(host.ring(0));
           if (host.sq.len === 0) break;
-          assert(
+          assert.ok(
             turns.length < MOST_SETTLE_TURNS,
             `${name}: the guest stopped applying what waits`,
           );
@@ -438,14 +438,14 @@ function run(
   turns.forEach((turn, t) => {
     const at = (what: string) => `${trace}.turn.${t}.${what}`;
     if (g.has(at("stream"))) {
-      assertEquals(
+      assert.deepStrictEqual(
         render_stream(turn.stream),
         g.s(at("stream")),
         `${name} turn ${t}: the stream`,
       );
     }
     if (g.has(at("wake"))) {
-      assertEquals(
+      assert.deepStrictEqual(
         wake_name(turn.wake),
         g.s(at("wake")),
         `${name} turn ${t}: what it asked for next`,
@@ -454,21 +454,21 @@ function run(
   });
   const at = (what: string) => `${trace}.${what}`;
   if (g.has(at("completions"))) {
-    assertEquals(
+    assert.deepStrictEqual(
       render_completions(turns.flatMap((t) => t.completions)),
       g.s(at("completions")),
       `${name}: the completion ring`,
     );
   }
   if (g.has(at("stream"))) {
-    assertEquals(
+    assert.deepStrictEqual(
       render_stream(turns.flatMap((t) => t.stream)),
       g.s(at("stream")),
       `${name}: the stream`,
     );
   }
   if (g.has(at("turns.least"))) {
-    assert(
+    assert.ok(
       turns.length >= g.u32(at("turns.least")),
       `${name}: ${turns.length} turns`,
     );
@@ -477,7 +477,7 @@ function run(
     turns
       .slice(0, -1)
       .forEach((turn, t) =>
-        assertEquals(
+        assert.deepStrictEqual(
           wake_name(turn.wake),
           g.s(at("wake.before_last")),
           `${name} turn ${t}: what it asked for next`,
@@ -485,7 +485,7 @@ function run(
       );
   }
   if (g.has(at("wake.last"))) {
-    assertEquals(
+    assert.deepStrictEqual(
       wake_name(turns[turns.length - 1].wake),
       g.s(at("wake.last")),
       `${name}: what the last turn asked for`,
@@ -496,11 +496,14 @@ function run(
   }
   if (g.has(at("directory.keys"))) {
     for (const k of g.s(at("directory.keys")).split(" ")) {
-      assert(host.names(key_number(k)), `${name}: the directory names no ${k}`);
+      assert.ok(
+        host.names(key_number(k)),
+        `${name}: the directory names no ${k}`,
+      );
     }
   }
   if (g.has(at("directory.reserved"))) {
-    assertEquals(
+    assert.deepStrictEqual(
       host.reserved,
       g.u32(at("directory.reserved")),
       `${name}: the directory's reserved word`,

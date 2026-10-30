@@ -1,7 +1,7 @@
 // @xpute/host/ipc/ns.test.ts
 
 import { test } from "vitest";
-import { assertEquals, assertThrows } from "@std/assert";
+import assert from "node:assert/strict";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
@@ -22,19 +22,26 @@ test("a root answers by what is bound there, and refuses as nothing bound or rea
       },
     ],
   ]);
-  assertEquals(
+  assert.deepStrictEqual(
     new TextDecoder().decode(ns.open(1, "a/b", signal) as U8Array),
     "a/b",
   );
   ns.commit(2, "c", new Uint8Array([7]));
-  assertEquals(kept, [["c", new Uint8Array([7])]]);
-  const errnum = (f: () => unknown) =>
-    (assertThrows(f, FileError) as FileError).errnum;
-  assertEquals(
+  assert.deepStrictEqual(kept, [["c", new Uint8Array([7])]]);
+  const errnum = (f: () => unknown): number => {
+    try {
+      f();
+    } catch (err) {
+      assert.ok(err instanceof FileError);
+      return err.errnum;
+    }
+    assert.fail("nothing was thrown");
+  };
+  assert.deepStrictEqual(
     errnum(() => ns.open(3, "a", signal)),
     Errno.ENOENT,
   );
-  assertEquals(
+  assert.deepStrictEqual(
     errnum(() => ns.commit(1, "a", new Uint8Array())),
     Errno.EROFS,
   );

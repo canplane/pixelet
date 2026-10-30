@@ -1,7 +1,7 @@
 // @pxl/client/driver/namespace/tile.test.ts
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import type { BaseLayer } from "./published.spec.ts";
 import { tile_url } from "@/driver/namespace/route.ts";
@@ -15,22 +15,25 @@ const DECLARED = declaration(JSON.stringify(FIXTURE.source))!;
 test("tile_object - each kind's tile at each zoom, a shard's own version or not, is the URL the kernel made", () => {
   for (const { kind, subject, object } of FIXTURE.tiles) {
     const k = kind as BaseLayer;
-    assertEquals(
+    assert.deepStrictEqual(
       tile_url(k, tile_object(DECLARED, k, BigInt(subject))!),
       tile_url(k, object),
       `${kind} ${subject}`,
     );
   }
-  assertEquals(
+  assert.deepStrictEqual(
     tile_url("earth", tile_object(DECLARED, "earth", BigInt(SPHERE))!),
     tile_url("earth", FIXTURE.sphere),
   );
 });
 
 test("tile_object - a number that is no object's names none", () => {
-  assertEquals(tile_object(DECLARED, "terrain", BigInt(SPHERE)), null);
-  assertEquals(tile_name(1n << 64n), null);
-  assertEquals(
+  assert.deepStrictEqual(
+    tile_object(DECLARED, "terrain", BigInt(SPHERE)),
+    null,
+  );
+  assert.deepStrictEqual(tile_name(1n << 64n), null);
+  assert.deepStrictEqual(
     tile_name(1n << 1n),
     null,
     "an odd count of digits is no tile's",
@@ -40,7 +43,7 @@ test("tile_object - a number that is no object's names none", () => {
 test("declaration - one this client cannot read is not handed over", () => {
   const whole = FIXTURE.source;
   const { version } = whole;
-  assertEquals(
+  assert.deepStrictEqual(
     declaration(JSON.stringify(whole)) !== null,
     true,
     "the fixture's own is read",
@@ -63,6 +66,10 @@ test("declaration - one this client cannot read is not handed over", () => {
     { ...whole, top_zoom: 4.5 },
     { ...whole, format: { ...whole.format, terrain: -1 } },
   ])
-    assertEquals(declaration(JSON.stringify(bad)), null, JSON.stringify(bad));
-  assertEquals(declaration("not json"), null);
+    assert.deepStrictEqual(
+      declaration(JSON.stringify(bad)),
+      null,
+      JSON.stringify(bad),
+    );
+  assert.deepStrictEqual(declaration("not json"), null);
 });

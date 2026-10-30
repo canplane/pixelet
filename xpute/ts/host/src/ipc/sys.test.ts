@@ -3,7 +3,7 @@
 /** Runs spec/conformance/sys/file.tsv against the host's end of the system calls. */
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Golden } from "@xpute/kit/golden.ts";
@@ -133,21 +133,21 @@ async function run(g: Golden, scenario: string): Promise<void> {
               Number(a[1]),
               /^\d+$/.test(a[2]) ? Number(a[2]) : errno(a[2]),
             ];
-            assertEquals(answers.shift(), want, at);
+            assert.deepStrictEqual(answers.shift(), want, at);
             break;
           }
           case "quiet":
-            assertEquals(answers, [], at);
+            assert.deepStrictEqual(answers, [], at);
             break;
           case "read":
-            assertEquals(
+            assert.deepStrictEqual(
               Array.from(new Uint8Array(turn.mem, SCRATCH, a[1].length / 2)),
               Array.from(hex(a[1])),
               at,
             );
             break;
           case "commit":
-            assertEquals(commits.get(`${a[1]} ${a[2]}`), a[3], at);
+            assert.deepStrictEqual(commits.get(`${a[1]} ${a[2]}`), a[3], at);
             break;
           default:
             throw new Error(`${at}: no such expectation`);

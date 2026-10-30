@@ -9,7 +9,7 @@
  */
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -56,7 +56,7 @@ test("example - a command answered with what the guest asked its host", () => {
   const pkt = host.doorbell.writer(2);
   pkt.u32(2);
   pkt.u32(3);
-  assertEquals(
+  assert.deepStrictEqual(
     host.doorbell.call(SUM, pkt, (result) => result),
     2 + 3 + HELD,
   );

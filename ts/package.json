@@ -15,7 +15,6 @@
     "lint": "oxlint"
   },
   "devDependencies": {
-    "@std/assert": "jsr:^1.0.19",
     "@types/node": "^24",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

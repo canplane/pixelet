@@ -1,28 +1,32 @@
 // @xpute/kit/collection/map.test.ts
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { I64_KEYS, IndexedMap, type KeyTraits, U32_KEYS } from "./map.ts";
 
 test("IndexedMap - positions are dense and stable until a removal", () => {
   const m = new IndexedMap(I64_KEYS, 4);
-  assertEquals(m.insert(10n), 0);
-  assertEquals(m.insert(20n), 1);
-  assertEquals(m.insert(10n), 0, "an existing key keeps its position");
-  assertEquals(m.find(20n), 1);
-  assertEquals(m.find(30n), -1);
+  assert.deepStrictEqual(m.insert(10n), 0);
+  assert.deepStrictEqual(m.insert(20n), 1);
+  assert.deepStrictEqual(
+    m.insert(10n),
+    0,
+    "an existing key keeps its position",
+  );
+  assert.deepStrictEqual(m.find(20n), 1);
+  assert.deepStrictEqual(m.find(30n), -1);
 });
 
 test("IndexedMap - removal moves the last entry into the hole and says where it came from", () => {
   const m = new IndexedMap(U32_KEYS, 4);
   for (const k of [1, 2, 3]) m.insert(k);
-  assertEquals(m.remove_at(0), 2);
-  assertEquals(m.size, 2);
-  assertEquals(m.key_at(0), 3);
-  assertEquals(m.find(3), 0);
-  assertEquals(m.find(1), -1);
-  assertEquals(m.remove_at(1), 1, "removing the last moves nothing");
+  assert.deepStrictEqual(m.remove_at(0), 2);
+  assert.deepStrictEqual(m.size, 2);
+  assert.deepStrictEqual(m.key_at(0), 3);
+  assert.deepStrictEqual(m.find(3), 0);
+  assert.deepStrictEqual(m.find(1), -1);
+  assert.deepStrictEqual(m.remove_at(1), 1, "removing the last moves nothing");
 });
 
 function agrees_with_map<K extends number | bigint>(
@@ -51,8 +55,8 @@ function agrees_with_map<K extends number | bigint>(
       }
     }
   }
-  assertEquals(m.size, ref.size);
-  for (const [k, pos] of ref) assertEquals(m.find(k), pos);
+  assert.deepStrictEqual(m.size, ref.size);
+  for (const [k, pos] of ref) assert.deepStrictEqual(m.find(k), pos);
 }
 
 test("IndexedMap - agrees with a Map across growth and many removals, 64-bit keys", () => {
@@ -67,14 +71,14 @@ test("IndexedMap - a 64-bit key past 2^63 finds itself", () => {
   const m = new IndexedMap(I64_KEYS);
   const big = (1n << 63n) + 5n;
   const pos = m.insert(big);
-  assertEquals(m.find(big), pos);
+  assert.deepStrictEqual(m.find(big), pos);
 });
 
 test("IndexedMap - a seeded walk visits every position once", () => {
   const m = new IndexedMap(U32_KEYS);
   for (let k = 0; k < 37; k++) m.insert(k * 3);
   const seen = [...m.positions_seeded(99n)].sort((a, b) => a - b);
-  assertEquals(
+  assert.deepStrictEqual(
     seen,
     Array.from({ length: 37 }, (_, i) => i),
   );
@@ -84,9 +88,9 @@ test("IndexedMap - clear forgets every entry and the next inserts start from zer
   const m = new IndexedMap(U32_KEYS, 4);
   for (let k = 0; k < 40; k++) m.insert(k);
   m.clear();
-  assertEquals(m.size, 0);
-  assertEquals(m.find(3), -1);
-  assertEquals(m.insert(7), 0);
-  assertEquals(m.insert(3), 1);
-  assertEquals(m.find(7), 0);
+  assert.deepStrictEqual(m.size, 0);
+  assert.deepStrictEqual(m.find(3), -1);
+  assert.deepStrictEqual(m.insert(7), 0);
+  assert.deepStrictEqual(m.insert(3), 1);
+  assert.deepStrictEqual(m.find(7), 0);
 });

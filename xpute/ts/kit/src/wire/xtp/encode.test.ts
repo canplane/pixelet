@@ -3,7 +3,7 @@
 /** The TypeScript half of xpute-kit/wire/xtp/encode.test.rs, held to the same bytes. */
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -26,7 +26,11 @@ function encode(build: (t: TreeView) => void): U8Array {
 test("the encoder writes the bytes the typescript writes", async () => {
   const v = await Golden.load("golden/wire/xtp/encode.tsv");
   const check = (name: string, build: (t: TreeView) => void) =>
-    assertEquals(bytes_to_hex(encode(build)), expected(v, name), name);
+    assert.deepStrictEqual(
+      bytes_to_hex(encode(build)),
+      expected(v, name),
+      name,
+    );
 
   check("nil", (t) => t.nil());
   check("i32", (t) => t.set(42));
@@ -59,7 +63,7 @@ test("the encoder writes the bytes the typescript writes", async () => {
 
 test("a packet under the cap is written, whatever the cap", () => {
   const t = new TreeView().u8_array(new Uint8Array(1100) as U8Array);
-  assertEquals(
+  assert.deepStrictEqual(
     new TreeEncoder().encode(t, { init_cap: 1 << 10, max_cap: 1500 })
       .byteLength,
     16 + 8 + 1104,

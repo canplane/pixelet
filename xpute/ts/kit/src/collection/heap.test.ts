@@ -3,7 +3,7 @@
 /** Holds the TypeScript side to golden/collection/heap.tsv, which every language's heaps must match. */
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import {
@@ -22,8 +22,8 @@ test("heaps pop what the record holds", async () => {
   const max = new MaxHeap<number, number>([]);
   v.each("steps", (k) => {
     if (v.s(`${k}.op`) === "pop") {
-      assertEquals(show(min.pop()), v.s(`${k}.min`), `${k}.min`);
-      assertEquals(show(max.pop()), v.s(`${k}.max`), `${k}.max`);
+      assert.deepStrictEqual(show(min.pop()), v.s(`${k}.min`), `${k}.min`);
+      assert.deepStrictEqual(show(max.pop()), v.s(`${k}.max`), `${k}.max`);
     } else {
       const e = { key: Number(v.s(`${k}.key`)), val: Number(v.s(`${k}.val`)) };
       min.push(e);
@@ -38,5 +38,5 @@ test("heaps pop what the record holds", async () => {
   heapsort(arr);
   const want: string[] = [];
   v.each("sorted", (k) => want.push(v.s(k)));
-  assertEquals(arr.map(show), want);
+  assert.deepStrictEqual(arr.map(show), want);
 });
