@@ -237,8 +237,14 @@ function windowSection(r: ProfilerReport): string[] {
     f.gpu_read > 0
       ? `  gpu     ${spread(
           f.gpu_busy,
-        )} ms   busy, ${spread(f.gpu)} ms its spans' sum   (over the ${f.gpu_read} frames a read timed)`
+        )} ms busy   ${spread(f.gpu)} ms the spans' sum   (over the ${f.gpu_read} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
+    `  busy by kind  ${
+      f.gpu_busy_kinds
+        .filter((r) => r.p50 > 0)
+        .map((r) => `${r.name} p50 ${n1(r.p50)} p95 ${n1(r.p95)}`)
+        .join("  ") || "-"
+    } ms`,
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
     ...raysText(f.first, last),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.

@@ -152,6 +152,8 @@ export interface FrameSummary {
    * overlap counted once, which the sum overstates where passes overlap. */
   gpu: Spread;
   gpu_busy: Spread;
+  /** The busy time's p50 and p95 of each kind's frames a read timed. */
+  gpu_busy_kinds: { name: string; p50: f64; p95: f64 }[];
   /** Each phase's, each effect's and each span's p95: what is read of them. */
   phases: { name: string; p95: f64 }[];
   effects_p95: { name: string; p95: f64 }[];
@@ -251,6 +253,11 @@ function frame_summary(s: F64Array): FrameSummary | null {
     rest: spread_at(s, a + F.rest),
     gpu: spread_at(s, a + F.gpu),
     gpu_busy: spread_at(s, a + F.gpu_busy),
+    gpu_busy_kinds: FRAME_KINDS.map((name, k) => ({
+      name,
+      p50: s[a + F.gpu_busy_kinds + 2 * k],
+      p95: s[a + F.gpu_busy_kinds + 2 * k + 1],
+    })),
     phases: PHASES.map((name, k) => ({ name, p95: s[a + F.phases_p95 + k] })),
     effects_p95: EFFECT_NAMES.map((name, k) => ({
       name,

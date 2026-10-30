@@ -224,27 +224,28 @@ pub mod STAT {
         pub const effects_p95: u32 = 34;
         pub const gpu: u32 = 43;
         pub const gpu_busy: u32 = 46;
-        pub const phases_p95: u32 = 49;
-        pub const gpu_spans_p95: u32 = 54;
-        pub const kinds: u32 = 80;
-        pub const wakes: u32 = 90;
-        pub const heap_used_delta_bytes: u32 = 93;
-        pub const first: u32 = 94;
-        pub const last: u32 = 254;
-        pub const WORDS: u32 = 414;
+        pub const gpu_busy_kinds: u32 = 49;
+        pub const phases_p95: u32 = 69;
+        pub const gpu_spans_p95: u32 = 74;
+        pub const kinds: u32 = 100;
+        pub const wakes: u32 = 110;
+        pub const heap_used_delta_bytes: u32 = 113;
+        pub const first: u32 = 114;
+        pub const last: u32 = 274;
+        pub const WORDS: u32 = 434;
     }
     pub mod tasks {
-        pub const AT: u32 = 414;
+        pub const AT: u32 = 434;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
     }
     pub mod steps {
-        pub const AT: u32 = 534;
+        pub const AT: u32 = 554;
         pub const cnt: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
     }
-    pub const WORDS: u32 = 695;
+    pub const WORDS: u32 = 715;
 }
 
 /// What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.

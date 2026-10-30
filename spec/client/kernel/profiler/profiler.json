@@ -301,6 +301,7 @@
       "effects_p95": "EFFECT_NAMES",
       "gpu": "SPREAD",
       "gpu_busy": "SPREAD",
+      "gpu_busy_kinds": "2 * FRAME_KINDS",
       "phases_p95": "PHASES",
       "gpu_spans_p95": "GPU_SPAN_NAMES",
       "kinds": "FRAME_KINDS",

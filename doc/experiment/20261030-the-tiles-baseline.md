@@ -696,3 +696,14 @@ noon, 3728×2338:
   display's 60 Hz, the GPU some 4 ms of it.
 - The spans' own figures stand as they were: a render pass's takes in what
   it overlaps, and a span whose pass was dropped repeats an old reading.
+
+**One way to measure** (01:35–01:45): `pxl.profiler.drive(motion, seconds,
+hour)` (shell/debug/profiler/drive.ts) sets the display's pixels fixed, the
+shadows and the profiler on and the sky's hour, starts the window again,
+moves the camera through the canvas's input (an orbit, the pointer held at
+the middle and swung 300 px either way on a sine; a zoom, the wheel in and
+out 30 steps at a time; or still) for the seconds asked, and returns the
+report, which now holds the busy time by frame kind (`gpu_busy_kinds`). An
+orbit of 30 s, noon, 3728×2338: cast frames busy p50 24.4, p95 27.1 ms;
+the interval p50 24 ms. The runs above were taken by hand the same way;
+the runs below are taken with it.

@@ -27,6 +27,7 @@ use crate::profiler::word::put;
 use crate::sys::io::failure::Outcome;
 use crate::sys::sched::tick::tick_step_stats;
 use pxl_render::gpu::renderer;
+use pxl_render::gpu::span_spec::FRAME_KINDS;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -140,6 +141,15 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         gpu_read: cnt(&|f| f.gpu.read != 0.0),
         gpu: spread(scratch, read().map(|f| renderer::gpu_ms(&f.gpu.spans))),
         gpu_busy: spread(scratch, read().map(|f| f.gpu.busy_ms)),
+        gpu_busy_kinds: {
+            let mut by = [0.0; 2 * FRAME_KINDS];
+            for k in 0..FRAME_KINDS {
+                let busy = read().filter(|f| f.kind == k as f64).map(|f| f.gpu.busy_ms);
+                let s = spread(scratch, busy);
+                (by[2 * k], by[2 * k + 1]) = (s.p50, s.p95);
+            }
+            by
+        },
         phases_p95: core::array::from_fn(|k| {
             spread(scratch, frames.iter().map(|f| f.phases[k])).p95
         }),
