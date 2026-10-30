@@ -23,9 +23,10 @@ mark → reach → claim, each deciding on the CPU whether to work at all and on
 the GPU which tiles; the host giving no number a meaning; the shell computing
 no coordinate or tile.
 
-- A measured gain never puts on one side a condition, a constant or a path
-  its counterpart lacks. A difference their roles require is fine, and is
-  said to be one.
+- A measured gain alone does not justify weakening a shared contract or
+  symmetry. For a condition, a constant or a path on one side only, say why
+  the difference is needed and how the shared contract is kept. If it changes
+  that contract, it is a design change, as `AGENTS.md` says.
 
 ## 2. A measurement is evidence, not a fix
 
