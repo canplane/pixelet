@@ -346,16 +346,19 @@ export const DEV_PROXY_ROUTES: readonly {
 
 const remoteOriginDefault = "https://plei.me";
 
-// anti-HMR. The client's host, abi and io are here too: their modules hold the one
-// kernel's memory and device, and a hot-swapped copy ran beside them — a
-// second device beside the renderer's objects on the first. The built module
-// is the page's own, beside the guest.ts that opens it.
+// anti-HMR. All of the client below the shell is here too, its host, abi/,
+// port/ and driver/: their modules hold the one kernel's memory and device, the
+// place's callbacks and the shell's subscriptions, and a hot-swapped copy ran
+// beside them — a second device beside the renderer's objects on the first. The
+// shell's components alone take Vite's own HMR. The built module is the page's
+// own, beside the guest.ts that opens it.
 const corePathIncludes = [
   "/xpute/ts/kit/",
   "/xpute/ts/host/",
   "/ts/client/src/host/",
   "/ts/client/src/abi/",
-  "/ts/client/src/driver/namespace/",
+  "/ts/client/src/port/",
+  "/ts/client/src/driver/",
   "/ts/client/src/shell/catalog/",
   "/ts/app/web/src/guest.",
 ];
