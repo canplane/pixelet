@@ -98,6 +98,8 @@ pub struct Tiles {
     set_cnt: u32,
     mark_most: u32,
     beside_tiles: Vec<u32>,
+    /// The tiles all of them cover, from the first to past the last.
+    marks_box: [u32; 4],
     /// Whether a pass beside may have set tiles the host has not seen yet
     /// (gpu/reach.rs).
     unseen: bool,
@@ -139,6 +141,7 @@ impl Tiles {
             set_cnt: 0,
             mark_most: 0,
             beside_tiles: Vec::new(),
+            marks_box: [0; 4],
             unseen: false,
         }
     }
@@ -226,6 +229,14 @@ impl Tiles {
             .extend(beside.iter().map(|t| (t[2] - t[0]) * (t[3] - t[1])));
         tiles.extend(beside);
         self.mark_cnt = tiles.len() as u32;
+        self.marks_box = tiles.iter().fold([u32::MAX, u32::MAX, 0, 0], |b, t| {
+            [
+                b[0].min(t[0]),
+                b[1].min(t[1]),
+                b[2].max(t[2]),
+                b[3].max(t[3]),
+            ]
+        });
         if self.marking {
             self.marked_at = self.now;
         }
@@ -307,6 +318,12 @@ impl Tiles {
         (self.set_cnt..self.mark_cnt)
             .zip(&self.beside_tiles)
             .map(move |(m, &n)| (every * (m + 1), n))
+    }
+
+    /// The tiles this frame's marks cover, from the first across and down to
+    /// past the last; none changed off them (empty where it handed none).
+    pub fn marks_box(&self) -> [u32; 4] {
+        self.marks_box
     }
 
     /// The tiles across and down.

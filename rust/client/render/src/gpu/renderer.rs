@@ -1309,8 +1309,9 @@ impl Renderer {
         if reaching {
             let spread = reach::spread(SHADOW_MARGIN as f32);
             let light = &self.shadow.light_view_proj;
+            let marks_box = self.light_tiles.marks_box();
             self.reach
-                .lay_out(g, &self.view_proj, light, spread, shadow::SIZE);
+                .lay_out(g, &self.view_proj, light, spread, shadow::SIZE, marks_box);
         }
         // The tiles marked by what moved where only what the kernel bounds
         // did, however much of the screen they and the tiles still gathering

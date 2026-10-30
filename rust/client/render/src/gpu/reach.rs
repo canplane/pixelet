@@ -50,7 +50,7 @@ const BOUNDS_GROUP: [u32; 12] = [
 const BOUND_STEP: u32 = 4;
 
 /// Its uniform's floats (screen_reach.wgsl `Reach`).
-const UNIFORM_FLOATS: usize = 36;
+const UNIFORM_FLOATS: usize = 40;
 
 pub struct Reach {
     built: Built,
@@ -131,7 +131,8 @@ impl Reach {
 
     /// This frame's views: the eye's view-projection `view_proj` and the
     /// light's `light_view_proj`, both off units from the eye; a receiver's
-    /// taps `spread` texels each way of a map `side` texels a side.
+    /// taps `spread` texels each way of a map `side` texels a side; the map's
+    /// tiles the frame's marks cover (`Tiles::marks_box`).
     pub fn lay_out(
         &self,
         g: &Gpu,
@@ -139,6 +140,7 @@ impl Reach {
         light_view_proj: &Mat4,
         spread: f32,
         side: u32,
+        marks_box: [u32; 4],
     ) {
         let mut inv = mat4::new();
         mat4::invert(&mut inv, view_proj);
@@ -151,6 +153,9 @@ impl Reach {
         }
         u[32] = spread;
         u[33] = side as f32;
+        for (to, from) in u[36..].iter_mut().zip(marks_box) {
+            *to = from as f32;
+        }
         g.write_buf(self.uniform, 0, bytes(&u));
     }
 

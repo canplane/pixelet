@@ -512,3 +512,35 @@ place of a quad each. One window, noon, 3728×2338, gated frames all:
 
 - No cost either way: the actors' rectangles hold a few hundred of the
   map's tiles. The picture at 7 o'clock the same.
+
+**The `mark` span taken apart** (22:10), its passes stamped to spans no
+gated frame at noon runs (a probe, reverted), noon, 3728×2226:
+
+| pass | frames | p50 | p95 |
+|---|---|---|---|
+| the marks (screen and map, compute) | 343 | 0.07 | 0.20 |
+| the actors' marks from the eye | 3353 | 0.13 | 0.26 |
+| the actors' marks from the light | 3196 | 0.07 | 0.20 |
+| the reach | 3377 | 0.46 | 0.66 |
+
+The timestamps step by some 0.066 ms here. Within the reach, by probes:
+returning once the square's bound is read leaves nothing of it; dropping
+the per-pixel fallback alone takes some 0.26 ms off.
+
+**The reach skips what lies off the marks' box**: the host hands the box
+of the map's tiles the frame's marks cover (`Tiles::marks_box`), where no
+word changed off it, and each screen tile first takes its whole slab, its
+least and most depth gathered from its squares' bounds in the workgroup,
+into the map; off the box, the tile is done; each square likewise before
+its own box or its pixels. The same window, gated frames, noon:
+
+| build | `mark` p50 | p95 | GPU p50 | p95 |
+|---|---|---|---|---|
+| the change | 0.26 | 0.59 | 4.8 | 6.6 |
+| `c03a389e4` | 0.59 | 0.79 | 5.4 | 6.0 |
+| the change, again | 0.33 | 0.72 | 6.2 | 8.1 |
+
+- The reach falls from some 0.4 ms to under 0.1; the rest of `mark` is
+  the actors' marks. The frame's total moves with the scene more than by
+  this (the last run's `world` and `finish` p95 2.5).
+- The picture at 7 o'clock as before, no error.
