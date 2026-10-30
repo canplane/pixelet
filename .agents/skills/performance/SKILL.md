@@ -73,6 +73,24 @@ A small change that keeps the contracts, symmetries, boundaries and observable
 behavior is fine. Fewer allocations or copies is not safe by itself: check
 ownership and lifetime.
 
+## Measuring in the app
+
+- Serve the client from your own checkout or worktree on a port of its own,
+  so no other session's dev server or tab reloads: `make install`, then
+  `CARGO_TARGET_DIR=rust/target/session/<id> pnpm --dir ts/app/web dev
+  --port <port> --strictPort`. Tiles and assets come from the published
+  deployment, so the server needs the network (outside the sandbox).
+- A new origin has no location permission: place the view by the search.
+- Turn the profiler on (Settings, debug, profiler); it records only while on.
+  In the page's console, `pxl.profiler.report()` is its window as text (frames
+  by kind, GPU p50 and p95, each span's p95 over the frames that ran it), and
+  `pxl.profiler.trace()` saves the window for ui.perfetto.dev, a download.
+- An A/B is one change apart, the baseline built from the same tree with that
+  change undone, the dev server rebuilding the guest: the same place, zoom,
+  moves and window length on both. A span runs only on the frames that need it
+  (decor's `generate` as the view moves, not at rest), so the moves decide
+  what is measured. Say how many runs and what was not held equal.
+
 ## Report
 
 Short, three parts:
