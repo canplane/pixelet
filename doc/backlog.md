@@ -27,11 +27,12 @@ Nothing now.
 
 ## Parked, with the reason on file
 
-- **What made it smooth, measured, and the whole cost against 9/26.** Which
-  commits and which reuse made moving smooth, each by its "off", and the
-  frame against e78eeec55, so the gain of rays with the raster only handing
-  out is known and a regression of it is seen. Parked by the user
-  (2026-10-28) —
+- **What each reuse buys over a pure ray a pixel.** Each switched off alone at
+  the tip, against the tip and against all of them off; why rays at all is on
+  file, and the 9/26 build is no raster to set them against. Parked by the
+  user (2026-10-28), reframed with them (2026-10-31) —
+  [20261031-why-rays-and-what-makes-them-fast.md](./minutes/20261031-why-rays-and-what-makes-them-fast.md),
+  first asked by commits in
   [20261026-what-made-it-smooth.md](./experiment/20261026-what-made-it-smooth.md).
 
 - **A query over what is drawn, for an agent to read.** An agent debugging the
