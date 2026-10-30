@@ -707,3 +707,20 @@ report, which now holds the busy time by frame kind (`gpu_busy_kinds`). An
 orbit of 30 s, noon, 3728×2338: cast frames busy p50 24.4, p95 27.1 ms;
 the interval p50 24 ms. The runs above were taken by hand the same way;
 the runs below are taken with it.
+
+**The show's cost** (01:50, `pxl.profiler.drive('orbit', 40)`, a probe,
+reverted): the show pass drawn twice, the second in the finish's span,
+cast frames busy p50 24.7, p95 27.2 ms, against 24.4 and 27.1 with it once:
+the copy costs 0.3 ms at most. The finish's 6 ms read before was the
+passes it overlaps; neither it nor the copy is where a moving frame's time
+goes.
+
+**The eye's misses while orbiting** (02:00, the `ray_counts` setting on, the
+orbit for 30 s, noon, 3728×2338), a cast frame on average over 244: its
+8,716,064 pixels, of them 8,576,872 (98.4 %) taking a sample's cell and
+139,192 (1.6 %) walked alone; the nodes asked by the beam 776,621, the
+samples 2,352,768 and the walks again 2,165,466 (some 16 a walked pixel);
+9,854 boxes drawn. The walk runs over its list alone (`miss_list_cs`), the
+list's room (`observed::MARKS`, 2^20) well past it, so the pass over every
+pixel (`miss_cs`) does not run: the `miss` span's some 5 ms is 139,000 deep
+walks, the cast's own work, not a pass doing nothing.
