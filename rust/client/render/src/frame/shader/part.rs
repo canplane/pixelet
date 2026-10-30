@@ -149,7 +149,10 @@ pub const SHADER_SCREEN_MARK: u32 = 65;
 /// The claimed tiles of the light's map set back to the far plane, their
 /// stencil raised (light_gate.wgsl): a vertex stage alone.
 pub const SHADER_LIGHT_GATE: u32 = 66;
-pub const SHADERS: u32 = 67;
+/// Each square of the screen's least and most depth, set in the tiles drawn
+/// (screen_bound.wgsl): its one compute entry.
+pub const SHADER_SCREEN_BOUND: u32 = 67;
+pub const SHADERS: u32 = 68;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -400,4 +403,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["screen_mark"],
     // SHADER_LIGHT_GATE
     &["screen_tiles", "light_gate"],
+    // SHADER_SCREEN_BOUND
+    &["screen_tiles", "screen_bound"],
 ];

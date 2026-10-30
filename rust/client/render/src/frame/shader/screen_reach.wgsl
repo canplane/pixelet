@@ -5,10 +5,11 @@
 // takes the screen's receivers to the light's tiles, this takes the light's
 // tiles that changed back to the pixels that read them. A workgroup a screen
 // tile, a thread a square of its pixels: the slab of the square's world,
-// between the least and most depth the world's pass last left there, the eye
-// standing, taken into the light's map, a pixel at a time where the slab
-// spans more than a few tiles; where any texel its shadow's taps read lies in
-// a tile of the map that changed this frame (gpu/tiles.rs), the screen tile takes this frame's
+// between the least and most depth the world's pass last left there, as the
+// depth's bound keeps them (screen_bound.wgsl), the eye standing, taken into
+// the light's map, a pixel at a time where the slab spans more than a few
+// tiles; where any texel its shadow's taps read lies in a tile of the map
+// that changed this frame (gpu/tiles.rs), the screen tile takes this frame's
 // number, as a mark sets it (screen_mark.wgsl), and the frame's number is
 // kept in `reached` where it is the latest, which the host reads back to know
 // whether any tile gathers. Bounds that cover: a tile too many costs, one
@@ -36,6 +37,9 @@ struct Reach {
 @group(0) @binding(5) var<uniform> tiles: Tiles;
 // The number of the last frame the reach marked a tile in.
 @group(0) @binding(6) var<storage, read_write> reached: atomic<u32>;
+// Each square's least and most depth drawn, `REACH_STEP` pixels a side, as
+// the last frame's world's pass left them (screen_bound.wgsl).
+@group(0) @binding(7) var<storage, read> bounds: array<vec2f>;
 
 // The pixels a side of a thread's square of a screen tile, eight threads a
 // side (pxl-spec-core `screen::TILE`, 32).
@@ -116,17 +120,14 @@ fn screen_reach_cs(
   }
   let size = vec2u(textureDimensions(depth));
   let at = tile * u32(tiles.size.w) + l.xy * REACH_STEP;
-  // The square's least and most depth drawn; the sky, which no shadow
-  // falls on, left out.
-  var near = 0.0;
-  var far = 2.0;
-  for (var k = 0u; k < REACH_STEP * REACH_STEP; k++) {
-    let v = reach_depth(at + vec2u(k % REACH_STEP, k / REACH_STEP), size);
-    if (v > 0.0) {
-      near = max(near, v);
-      far = min(far, v);
-    }
+  if (any(at >= size)) {
+    return;
   }
+  // The square's least and most depth drawn, kept; the sky, which no shadow
+  // falls on, left out.
+  let b = bounds[(at.y / REACH_STEP) * ((size.x + REACH_STEP - 1u) / REACH_STEP) + at.x / REACH_STEP];
+  let far = b.x;
+  let near = b.y;
   if (!(near > 0.0)) {
     return;
   }

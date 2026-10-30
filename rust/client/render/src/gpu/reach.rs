@@ -12,13 +12,17 @@
 //! host does not see: the pass keeps the number of the last frame it marked
 //! a tile in (`reached`), copied and mapped back as the light's counts are
 //! (gpu/ray/tally.rs), and until a frame it ran in has landed the screen's
-//! tiles are taken to gather (`Tiles::unseen`).
+//! tiles are taken to gather (`Tiles::unseen`). The depth it reads is a
+//! bound, each square of 4 pixels a side its least and most depth, kept on
+//! the GPU and set after each world's pass in the tiles it drew
+//! (screen_bound.wgsl, `set_bounds`), so a frame it runs in reads no pixel's
+//! depth but where a square's bound spans past a few of the map's tiles.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec_core::param::light;
 use xpute_guest::mem::off_of;
 
-use crate::frame::shader::part::SHADER_SCREEN_REACH;
+use crate::frame::shader::part::{SHADER_SCREEN_BOUND, SHADER_SCREEN_REACH};
 use crate::frame::shader::record::{COMPUTE, DEPTH, STORAGE, STORAGE_RW, UNIFORM};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Gpu, RenderContext, DONE,
@@ -29,11 +33,21 @@ use crate::gpu::tiles::Tiles;
 
 /// What its pass binds (screen_reach.wgsl): the world's depth, its uniform,
 /// the map's words and uniform, the screen's words and uniform, the number
-/// it keeps.
-const GROUP: [u32; 21] = [
+/// it keeps, the depth's bound.
+const GROUP: [u32; 24] = [
     0, COMPUTE, DEPTH, 1, COMPUTE, UNIFORM, 2, COMPUTE, STORAGE, 3, COMPUTE, UNIFORM, 4, COMPUTE,
-    STORAGE_RW, 5, COMPUTE, UNIFORM, 6, COMPUTE, STORAGE_RW,
+    STORAGE_RW, 5, COMPUTE, UNIFORM, 6, COMPUTE, STORAGE_RW, 7, COMPUTE, STORAGE,
 ];
+
+/// What the bound's pass binds (screen_bound.wgsl): the world's depth, the
+/// bound, the screen's words and the uniform it draws by.
+const BOUNDS_GROUP: [u32; 12] = [
+    0, COMPUTE, DEPTH, 1, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
+];
+
+/// A square of the depth's bound's pixels a side (screen_bound.wgsl
+/// `BOUND_STEP`, screen_reach.wgsl `REACH_STEP`).
+const BOUND_STEP: u32 = 4;
 
 /// Its uniform's floats (screen_reach.wgsl `Reach`).
 const UNIFORM_FLOATS: usize = 36;
@@ -43,7 +57,15 @@ pub struct Reach {
     uniform: u32,
     /// Its group and what it was made over, made again where one is another.
     group: u32,
-    bound: [u32; 5],
+    bound: [u32; 6],
+    /// The depth's bound (screen_bound.wgsl `bounds`), two floats a square,
+    /// the squares across and down it was made for, and its pass and group,
+    /// made again where what it binds is another.
+    bounds: u32,
+    bounds_size: [u32; 2],
+    bounds_built: Built,
+    bounds_group: u32,
+    bounds_bound: [u32; 4],
     /// The number of the last frame it marked a tile in (screen_reach.wgsl
     /// `reached`), a word, and the buffer it is copied into and mapped
     /// from, into `landed`, `mapping` its map's word.
@@ -70,7 +92,12 @@ impl Reach {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             group: 0,
-            bound: [0; 5],
+            bound: [0; 6],
+            bounds: 0,
+            bounds_size: [0; 2],
+            bounds_built: pipelines.build_compute(g, SHADER_SCREEN_BOUND, &BOUNDS_GROUP),
+            bounds_group: 0,
+            bounds_bound: [0; 4],
             reached: g.buf(
                 word_bytes(1),
                 buffer_usage::STORAGE | buffer_usage::COPY_SRC,
@@ -90,7 +117,14 @@ impl Reach {
     }
 
     pub fn release(self) {
-        for id in [self.uniform, self.group, self.reached, self.read] {
+        for id in [
+            self.uniform,
+            self.group,
+            self.reached,
+            self.read,
+            self.bounds,
+            self.bounds_group,
+        ] {
             release(id);
         }
     }
@@ -120,13 +154,58 @@ impl Reach {
         g.write_buf(self.uniform, 0, bytes(&u));
     }
 
+    /// The depth's bound set in the tiles the world's pass drew this frame,
+    /// the words and uniform `drawn` (`Tiles::bound`, or `Tiles::every`
+    /// where the pass draws every tile), off the world's depth `depth`, `size`
+    /// pixels across and down; made anew for a new size, where every tile is
+    /// drawn. Timed with the resolve, which follows it.
+    pub fn set_bounds(
+        &mut self,
+        ctx: &mut RenderContext,
+        depth: u32,
+        size: [u32; 2],
+        drawn: (u32, u32),
+        tiles: [u32; 2],
+    ) {
+        let g = ctx.g;
+        let squares = size.map(|v| v.div_ceil(BOUND_STEP));
+        if squares != self.bounds_size {
+            release(self.bounds);
+            self.bounds = g.buf(
+                word_bytes(2 * (squares[0] * squares[1]) as usize),
+                buffer_usage::STORAGE,
+            );
+            self.bounds_size = squares;
+        }
+        let bound = [depth, self.bounds, drawn.0, drawn.1];
+        if bound != self.bounds_bound {
+            release(self.bounds_group);
+            self.bounds_group = g.bind_group(
+                self.bounds_built.layouts[0],
+                &[
+                    view_entry(0, depth),
+                    buf_entry(1, self.bounds),
+                    buf_entry(30, drawn.0),
+                    buf_entry(31, drawn.1),
+                ],
+            );
+            self.bounds_bound = bound;
+        }
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::resolve).pass());
+        g.set_bind_group(pass, 0, self.bounds_group, &[]);
+        g.set_pipeline(pass, self.bounds_built.pipeline);
+        g.dispatch(pass, tiles[0], tiles[1], 1);
+        g.end(pass);
+    }
+
     /// The map's `light` tiles that changed this frame reached across to the
-    /// `screen`'s, over the world's depth `depth` as the last frame left it;
-    /// what it keeps copied where no map of it is out.
+    /// `screen`'s, over the depth's bound and, where a square's spans past a
+    /// few tiles, the world's depth `depth`, both as the last frame left
+    /// them; what it keeps copied where no map of it is out.
     pub fn dispatch(&mut self, ctx: &mut RenderContext, depth: u32, light: &Tiles, screen: &Tiles) {
         let g = ctx.g;
         let (l, s) = (light.bound(), screen.bound());
-        let bound = [depth, l.0, l.1, s.0, s.1];
+        let bound = [depth, l.0, l.1, s.0, s.1, self.bounds];
         if bound != self.bound {
             release(self.group);
             self.group = g.bind_group(
@@ -139,6 +218,7 @@ impl Reach {
                     buf_entry(4, s.0),
                     buf_entry(5, s.1),
                     buf_entry(6, self.reached),
+                    buf_entry(7, self.bounds),
                 ],
             );
             self.bound = bound;

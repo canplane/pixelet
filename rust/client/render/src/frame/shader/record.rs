@@ -14,6 +14,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_JOINED => "joined_cs",
         SHADER_ATMOS_FROXEL => "froxel_cs",
         SHADER_SCREEN_REACH => "screen_reach_cs",
+        SHADER_SCREEN_BOUND => "screen_bound_cs",
         SHADER_SCREEN_MARK => "screen_mark_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHT => "height_cs",

@@ -1409,6 +1409,17 @@ impl Renderer {
         self.decor
             .draw_ghosts(&mut pass, &draws, b, self.models.frame);
         pass.end();
+        // The depth's bound the reach reads, in the tiles the world's pass
+        // drew: the claimed, or every one without the stencil.
+        let drawn = if g.gates() {
+            self.resolve.tiles.bound()
+        } else {
+            self.resolve.tiles.every()
+        };
+        let size = [world.width, world.height];
+        let squares = self.resolve.tiles.squares();
+        self.reach
+            .set_bounds(&mut ctx, world.depth_only_view, size, drawn, squares);
         let gathered = self.resolve.draw(&mut ctx, self.frame_buf, world, gated);
         // At the canvas's size, its own span. A frame not drawn whole
         // finishes again only its claimed tiles (screen_tiles.wgsl); not

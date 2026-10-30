@@ -370,3 +370,26 @@ once the reach's claim was measured; noon, the same window, against step 2:
 - `world`, `resolve` and `finish` follow what is claimed, which differs
   from window to window with the companion; the square's slab claims a
   little more than each pixel did.
+
+**The depth's bound kept for the reach** (gpu/reach.rs `set_bounds`,
+screen_bound.wgsl), set after the world's pass in the tiles it drew, read
+by the reach in place of every pixel's depth; predicted `mark` from 0.72
+to about 0.1 ms and 0.05 ms more for the bound. Noon, a 3728×2226 canvas
+(the window moved back to the display of ratio 2; a first run at ratio 1,
+1864×993, and one with the settings not yet set again after a reload are
+not counted), main at `127a83946` with the change uncommitted:
+
+| run | frames | GPU p50 | p95 | `mark` p50 | `resolve` p50 | `world` p50 | `px` p50 |
+|---|---|---|---|---|---|---|---|
+| the bound kept | gated 3598, px 3 | 7.9 | 8.8 | 0.46 | 0.33 | 2.49 | 0.46 |
+
+- `mark` fell 0.26 ms, not 0.6: the prediction missed again. What is left
+  is not yet split; a square whose slab spans more than 16 of the map's
+  8-texel tiles (a silhouette, far ground) is still asked a pixel at a
+  time, off the depth.
+- `resolve`, with the bound's pass in it, 0.33.
+- The window claimed much (`px` 0.46, `world` 2.49); the claimed area, not
+  the reach, is now the larger part of the gap to step 2 (4.6 ms, `world`
+  1.18, `px` 0.20).
+- Twice resized, gated frames again, no error; picture right at noon, the
+  companion in the open.
