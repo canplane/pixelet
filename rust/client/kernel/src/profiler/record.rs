@@ -13,7 +13,8 @@ use core::mem::size_of;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-use crate::profiler::frame::{FrameSample, GpuSample, WorstFrame, GPU_SPANS};
+use crate::profiler::frame::{FrameSample, GpuSample, WorstFrame};
+use crate::profiler::report::GpuRead;
 use crate::profiler::section::RecSection;
 use crate::profiler::spec::LIMIT;
 use crate::profiler::task::TaskRow;
@@ -265,17 +266,17 @@ pub fn profiler_record_frame(s: FrameSample, interval_ms: f64, settled: bool, fr
     }
 }
 
-/// The GPU's read of the frame the renderer numbered `frame`, as it lands a
+/// The GPU's read `r` of the frame the renderer numbered `r.frame`, as it lands a
 /// frame or two after it: written into that frame's record, the one in
 /// progress or one landed, and into a worst frame's that holds it.
-pub fn profiler_record_gpu(frame: f64, spans: [f64; GPU_SPANS], px: f64) {
+pub fn profiler_record_gpu(r: GpuRead) {
     let l = profiler();
-    if !l.recording || frame == 0.0 {
+    if !l.recording || r.frame == 0.0 {
         return;
     }
     let read = |g: &mut GpuSample| {
-        if g.frame == frame {
-            (g.read, g.spans, g.px) = (1.0, spans, px);
+        if g.frame == r.frame {
+            (g.read, g.spans, g.busy_ms, g.px) = (1.0, r.spans, r.busy_ms, r.px);
         }
     };
     if let Some(f) = l.open.as_mut() {
@@ -284,7 +285,7 @@ pub fn profiler_record_gpu(frame: f64, spans: [f64; GPU_SPANS], px: f64) {
     // Back from the newest to the frame it timed, however late it landed.
     for f in l.frame_ring[l.frame_head..l.frame_len].iter_mut().rev() {
         read(&mut f.gpu);
-        if f.gpu.frame != 0.0 && f.gpu.frame <= frame {
+        if f.gpu.frame != 0.0 && f.gpu.frame <= r.frame {
             break;
         }
     }

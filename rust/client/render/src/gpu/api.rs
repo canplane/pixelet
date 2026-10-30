@@ -438,6 +438,11 @@ struct State {
     /// (`frame_commit`), or no read would be asked again.
     stamps_asked: bool,
     gpu_ms: [f64; SPANS],
+    /// The time the last read's spans ran, ms, those that overlap counted
+    /// once: the frame's GPU time, as the spans' sum is not where its passes
+    /// overlap; a span whose ticks a pass left unwritten (a pass with no work
+    /// may be dropped) adds its own length, not the time since.
+    gpu_busy_ms: f64,
     /// Whether the last frame submitted took a read in: its figures are then
     /// that read's, and else the read before it, not measured again.
     gpu_landed: bool,
@@ -503,6 +508,7 @@ pub unsafe fn install(at: u32) -> u32 {
         stamps_written: 0,
         stamps_asked: false,
         gpu_ms: [0.0; SPANS],
+        gpu_busy_ms: 0.0,
         gpu_landed: false,
         images: Vec::new(),
         landed: Vec::new(),
@@ -603,11 +609,40 @@ fn take_stamps(s: &mut State) -> bool {
     let tick = |k: usize| {
         u64::from(*head(STAMPS_AT + 2 * k)) | u64::from(*head(STAMPS_AT + 2 * k + 1)) << 32
     };
+    let mut ran = [(0u64, 0u64); SPANS];
+    let mut cnt = 0;
     for k in 0..SPANS {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
-        let ran = s.stamps_written & 1 << k != 0 && e >= b;
-        s.gpu_ms[k] = if ran { (e - b) as f64 * period_ms } else { 0.0 };
+        let written = s.stamps_written & 1 << k != 0 && e >= b;
+        s.gpu_ms[k] = if written {
+            (e - b) as f64 * period_ms
+        } else {
+            0.0
+        };
+        if written {
+            ran[cnt] = (b, e);
+            cnt += 1;
+        }
     }
+    // The spans by their starts, each run of overlapping ones counted once.
+    let ran = &mut ran[..cnt];
+    ran.sort_unstable();
+    let mut busy = 0;
+    let mut run: Option<(u64, u64)> = None;
+    for &(b, e) in ran.iter() {
+        run = match run {
+            Some((rb, re)) if b <= re => Some((rb, re.max(e))),
+            Some((rb, re)) => {
+                busy += re - rb;
+                Some((b, e))
+            }
+            None => Some((b, e)),
+        };
+    }
+    if let Some((rb, re)) = run {
+        busy += re - rb;
+    }
+    s.gpu_busy_ms = busy as f64 * period_ms;
     true
 }
 
@@ -1482,6 +1517,11 @@ impl Gpu {
     /// Span `span`'s time in ms from the last read taken in.
     pub fn gpu_ms(&self, span: u32) -> f64 {
         self.s().gpu_ms[span as usize]
+    }
+
+    /// The time the last read's spans ran, ms, those that overlap counted once.
+    pub fn gpu_busy_ms(&self) -> f64 {
+        self.s().gpu_busy_ms
     }
 
     /// Whether the frame just submitted took a read in, so its figures were

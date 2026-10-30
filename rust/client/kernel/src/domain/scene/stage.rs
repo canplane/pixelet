@@ -287,6 +287,7 @@ pub fn stage_render(pace: Pace) {
         stat.gpu_read.then_some(GpuRead {
             frame: stat.gpu_frame,
             spans: stat.gpu_spans,
+            busy_ms: stat.gpu_busy_ms,
             px: stat.gpu_px,
         }),
     );

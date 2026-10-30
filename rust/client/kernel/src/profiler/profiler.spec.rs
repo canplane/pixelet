@@ -53,7 +53,7 @@ pub mod LIMIT {
     pub const ZOOMS: u32 = 24;
 }
 
-/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (@xpute/host sched/frame_pacing.ts `FrameGrant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (profiler/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms`, `tasks_ms` and `profiler_ms` are their parts, `stage_ms` the turn's pump, the stage's write and the render, and `profiler_ms` what the profiler cost it, its own record of the frame and the shell's reads of it; what they leave of `busy_ms` is unmeasured. `effects` is each effect's time in the frame turn, in EFFECT_NAMES' order, `effects_ms` their sum. `gpu_read` is 1 where the GPU's read of this frame landed, which comes a frame or two later and is written back into this frame's record (`gpu_frame` the renderer's number of it, 0 where it drew none): its `gpu_spans` are then that read's, its GPU time their sum (pxl-render gpu/renderer.rs `gpu_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`); and 0 where nothing measured it (its read not landed yet or cut off by a stop, or the device keeps no timestamps), its spans and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (sys/io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `uploads` and `uploads_bytes` are the renderer's upload table, `depth_bytes` its depth targets and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`), and `body_slots_peak` the most body slots out at once since the frame before (sys/io/body.rs `take_peak`); the ring lanes are the door's peaks since the frame before (xpute-guest ipc/door.rs `DoorStat`), `ring_held_peak` its `left_peak`. The rays, eye and light lanes are the `ray_counts` setting's, summed since boot over the frames whose counts were read back (pxl-render gpu/ray/tally.rs `RAY_SUMS`): the frames (`rays_frames`); then an observer's each, the eye's and the light's: of them those it cast in, its pixels or its map's slots in them, the nodes its beam rays, its samples and its walk again asked, its pixels or slots that took the visible sample and those that walked, and the boxes drawn (pxl-spec-core `tally`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
+/// One frame turn and the interval it opened (profiler/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (@xpute/host sched/frame_pacing.ts `FrameGrant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (profiler/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (profiler/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms`, `tasks_ms` and `profiler_ms` are their parts, `stage_ms` the turn's pump, the stage's write and the render, and `profiler_ms` what the profiler cost it, its own record of the frame and the shell's reads of it; what they leave of `busy_ms` is unmeasured. `effects` is each effect's time in the frame turn, in EFFECT_NAMES' order, `effects_ms` their sum. `gpu_read` is 1 where the GPU's read of this frame landed, which comes a frame or two later and is written back into this frame's record (`gpu_frame` the renderer's number of it, 0 where it drew none): its `gpu_spans` are then that read's, their sum (pxl-render gpu/renderer.rs `gpu_ms`), `gpu_busy_ms` the time they ran, those that overlap counted once, the frame's GPU time, which the sum overstates where passes overlap (pxl-render gpu/api.rs `Gpu::gpu_busy_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`); and 0 where nothing measured it (its read not landed yet or cut off by a stop, or the device keeps no timestamps), its spans, busy time and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (sys/io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `uploads` and `uploads_bytes` are the renderer's upload table, `depth_bytes` its depth targets and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`), and `body_slots_peak` the most body slots out at once since the frame before (sys/io/body.rs `take_peak`); the ring lanes are the door's peaks since the frame before (xpute-guest ipc/door.rs `DoorStat`), `ring_held_peak` its `left_peak`. The rays, eye and light lanes are the `ray_counts` setting's, summed since boot over the frames whose counts were read back (pxl-render gpu/ray/tally.rs `RAY_SUMS`): the frames (`rays_frames`); then an observer's each, the eye's and the light's: of them those it cast in, its pixels or its map's slots in them, the nodes its beam rays, its samples and its walk again asked, its pixels or slots that took the visible sample and those that walked, and the boxes drawn (pxl-spec-core `tally`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const interval_ms: u32 = 1;
@@ -75,49 +75,50 @@ pub mod FRAME {
     pub const wake_in_ms: u32 = 29;
     pub const gpu_read: u32 = 30;
     pub const gpu_spans: u32 = 31;
-    pub const gpu_px: u32 = 57;
-    pub const scale: u32 = 58;
-    pub const census: u32 = 59;
-    pub const gpu_frame: u32 = 79;
-    pub const uploads: u32 = 80;
-    pub const uploads_bytes: u32 = 81;
-    pub const depth_bytes: u32 = 82;
-    pub const pack_bytes: u32 = 83;
-    pub const gpu_objects: u32 = 84;
-    pub const zoom_tiles: u32 = 95;
-    pub const tiles_place: u32 = 119;
-    pub const heap_used_bytes: u32 = 120;
-    pub const heap_live_bytes: u32 = 121;
-    pub const heap_run_bytes: u32 = 122;
-    pub const heap_slot_bytes: u32 = 123;
-    pub const heap_range_bytes: u32 = 124;
-    pub const heap_largest_free_bytes: u32 = 125;
-    pub const heap_refusals: u32 = 126;
-    pub const ring_cq_peak: u32 = 127;
-    pub const ring_sq_peak: u32 = 128;
-    pub const ring_held_peak: u32 = 129;
-    pub const body_slots_peak: u32 = 130;
-    pub const waiting: u32 = 131;
-    pub const out: u32 = 136;
-    pub const cap_terrain_refused: u32 = 141;
-    pub const rays_frames: u32 = 142;
-    pub const eye_casts: u32 = 143;
-    pub const eye_rays: u32 = 144;
-    pub const eye_beam: u32 = 145;
-    pub const eye_sample: u32 = 146;
-    pub const eye_miss: u32 = 147;
-    pub const eye_took: u32 = 148;
-    pub const eye_walked: u32 = 149;
-    pub const eye_boxes: u32 = 150;
-    pub const light_casts: u32 = 151;
-    pub const light_rays: u32 = 152;
-    pub const light_beam: u32 = 153;
-    pub const light_sample: u32 = 154;
-    pub const light_miss: u32 = 155;
-    pub const light_took: u32 = 156;
-    pub const light_walked: u32 = 157;
-    pub const light_boxes: u32 = 158;
-    pub const WORDS: u32 = 159;
+    pub const gpu_busy_ms: u32 = 57;
+    pub const gpu_px: u32 = 58;
+    pub const scale: u32 = 59;
+    pub const census: u32 = 60;
+    pub const gpu_frame: u32 = 80;
+    pub const uploads: u32 = 81;
+    pub const uploads_bytes: u32 = 82;
+    pub const depth_bytes: u32 = 83;
+    pub const pack_bytes: u32 = 84;
+    pub const gpu_objects: u32 = 85;
+    pub const zoom_tiles: u32 = 96;
+    pub const tiles_place: u32 = 120;
+    pub const heap_used_bytes: u32 = 121;
+    pub const heap_live_bytes: u32 = 122;
+    pub const heap_run_bytes: u32 = 123;
+    pub const heap_slot_bytes: u32 = 124;
+    pub const heap_range_bytes: u32 = 125;
+    pub const heap_largest_free_bytes: u32 = 126;
+    pub const heap_refusals: u32 = 127;
+    pub const ring_cq_peak: u32 = 128;
+    pub const ring_sq_peak: u32 = 129;
+    pub const ring_held_peak: u32 = 130;
+    pub const body_slots_peak: u32 = 131;
+    pub const waiting: u32 = 132;
+    pub const out: u32 = 137;
+    pub const cap_terrain_refused: u32 = 142;
+    pub const rays_frames: u32 = 143;
+    pub const eye_casts: u32 = 144;
+    pub const eye_rays: u32 = 145;
+    pub const eye_beam: u32 = 146;
+    pub const eye_sample: u32 = 147;
+    pub const eye_miss: u32 = 148;
+    pub const eye_took: u32 = 149;
+    pub const eye_walked: u32 = 150;
+    pub const eye_boxes: u32 = 151;
+    pub const light_casts: u32 = 152;
+    pub const light_rays: u32 = 153;
+    pub const light_beam: u32 = 154;
+    pub const light_sample: u32 = 155;
+    pub const light_miss: u32 = 156;
+    pub const light_took: u32 = 157;
+    pub const light_walked: u32 = 158;
+    pub const light_boxes: u32 = 159;
+    pub const WORDS: u32 = 160;
 }
 
 /// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it.
@@ -125,7 +126,7 @@ pub mod FRAME_GROUP {
     pub const time: usize = 8;
     pub const turn: usize = 7;
     pub const frame: usize = 3;
-    pub const gpu: usize = 6;
+    pub const gpu: usize = 7;
     pub const cap: usize = 1;
     pub const rays: usize = 1;
     pub const eye: usize = 8;
@@ -161,9 +162,9 @@ pub mod TASK {
 /// One of the worst moving frames since the recording started, by its interval, and the frame before it, which is zero where `has_prev` is 0: a still interval is long on purpose and is never among them.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 159;
-    pub const prev: u32 = 160;
-    pub const WORDS: u32 = 319;
+    pub const has_prev: u32 = 160;
+    pub const prev: u32 = 161;
+    pub const WORDS: u32 = 321;
 }
 
 pub mod SPREAD {
@@ -222,27 +223,28 @@ pub mod STAT {
         pub const rest: u32 = 31;
         pub const effects_p95: u32 = 34;
         pub const gpu: u32 = 43;
-        pub const phases_p95: u32 = 46;
-        pub const gpu_spans_p95: u32 = 51;
-        pub const kinds: u32 = 77;
-        pub const wakes: u32 = 87;
-        pub const heap_used_delta_bytes: u32 = 90;
-        pub const first: u32 = 91;
-        pub const last: u32 = 250;
-        pub const WORDS: u32 = 409;
+        pub const gpu_busy: u32 = 46;
+        pub const phases_p95: u32 = 49;
+        pub const gpu_spans_p95: u32 = 54;
+        pub const kinds: u32 = 80;
+        pub const wakes: u32 = 90;
+        pub const heap_used_delta_bytes: u32 = 93;
+        pub const first: u32 = 94;
+        pub const last: u32 = 254;
+        pub const WORDS: u32 = 414;
     }
     pub mod tasks {
-        pub const AT: u32 = 409;
+        pub const AT: u32 = 414;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
     }
     pub mod steps {
-        pub const AT: u32 = 529;
+        pub const AT: u32 = 534;
         pub const cnt: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
     }
-    pub const WORDS: u32 = 690;
+    pub const WORDS: u32 = 695;
 }
 
 /// What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.

@@ -139,6 +139,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         }),
         gpu_read: cnt(&|f| f.gpu.read != 0.0),
         gpu: spread(scratch, read().map(|f| renderer::gpu_ms(&f.gpu.spans))),
+        gpu_busy: spread(scratch, read().map(|f| f.gpu.busy_ms)),
         phases_p95: core::array::from_fn(|k| {
             spread(scratch, frames.iter().map(|f| f.phases[k])).p95
         }),

@@ -657,3 +657,42 @@ window:
 - Some 3.2 ms off `light_beam`, 2.8 ms off the frame, as predicted (the
   marks some 7 ms of it, the reads cut to 3/8).
 - At 7 o'clock, shadows as before, no error.
+
+**What is left of the light's marks** (00:52–01:00), two probes on
+`6f84e6fb8`, reverted, the orbit, noon, 3728×2338: `light_beam` 5.24 / 6.09
+ms at the p50 / p95 as committed; 4.26 / 4.85 with no stand written, which
+also leaves nothing to cast; 5.11 / 5.77 with the rays read as a sampled
+texture in place of a storage one. Neither the writes nor how the rays are
+read is the rest of it.
+
+**The finish while the camera moves** (01:02–01:10), two probes, reverted,
+the orbit, noon, 3728×2338. The span holds two passes: the finish into the
+picture kept at the canvas's size (`Surface::shown`), the claimed tiles or
+every one, and the show, a triangle copying it whole onto the canvas.
+Stamped apart, each read some 6 ms at the p50 (5.90 and 5.96), and the
+frame's GPU sum rose by as much: on this GPU a render pass's timestamps
+take in the passes it overlaps, so a span of render passes is not their
+cost, nor the sum of spans the frame's. Left out where the frame is drawn
+whole, the show took the canvas's present with it: the interval 39 ms at
+the p50 and 55 % of vsyncs missed, a probe that measures another frame.
+What the finish costs is not known yet.
+
+**The frame's GPU time, `gpu_busy_ms`** (01:20–01:30): the time a read's
+spans ran, those that overlap counted once (pxl-render gpu/api.rs
+`take_stamps`), beside the spans' sum the report showed till now. Its first
+form, the first span's start to the last's end, read tens of seconds: a
+span marked written can hold old ticks (`cast` in a gated frame, its pass
+with no dispatch where nothing is forgotten, which the browser may drop) or
+start well before the frame (`fill`, recorded ahead of it). The same orbit,
+noon, 3728×2338:
+
+| frames | busy p50 | p95 | spans' sum p50 | p95 | interval p50 | p95 |
+|---|---|---|---|---|---|---|
+| drawn whole (`cast`), orbiting | 24.2 | 27.1 | 30.8 | 33.7 | 24 | 28 |
+| through the gate | 4.1 | 4.4 | 4.8 | 5.4 | 17 | 18 |
+
+- Orbiting, the busy time is the interval: the frame is the GPU's, some 24
+  ms, not the 31 the sum said. Through the gate the interval is the
+  display's 60 Hz, the GPU some 4 ms of it.
+- The spans' own figures stand as they were: a render pass's takes in what
+  it overlaps, and a span whose pass was dropped repeats an old reading.

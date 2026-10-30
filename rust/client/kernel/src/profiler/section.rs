@@ -71,7 +71,10 @@ pub struct FramesSection {
     pub rest: Spread,
     /// Each effect's p95, in EFFECT_NAMES' order.
     pub effects_p95: [f64; EFFECTS],
+    /// The GPU's time, its spans' sum, and the time they ran, those that
+    /// overlap counted once, which the sum overstates where passes overlap.
     pub gpu: Spread,
+    pub gpu_busy: Spread,
     /// The p95 alone of each phase and each span: what is read of them.
     pub phases_p95: [f64; PHASES],
     pub gpu_spans_p95: [f64; GPU_SPANS],
@@ -99,7 +102,7 @@ words!(FramesSection, STAT::frames::WORDS,
     tick => STAT::frames::tick, effects => STAT::frames::effects,
     stage => STAT::frames::stage, tasks => STAT::frames::tasks,
     profiler => STAT::frames::profiler, rest => STAT::frames::rest,
-    effects_p95 => STAT::frames::effects_p95, gpu => STAT::frames::gpu,
+    effects_p95 => STAT::frames::effects_p95, gpu => STAT::frames::gpu, gpu_busy => STAT::frames::gpu_busy,
     phases_p95 => STAT::frames::phases_p95, gpu_spans_p95 => STAT::frames::gpu_spans_p95,
     kinds => STAT::frames::kinds, wakes => STAT::frames::wakes,
     heap_used_delta_bytes => STAT::frames::heap_used_delta_bytes,

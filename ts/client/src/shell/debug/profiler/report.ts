@@ -236,8 +236,8 @@ function windowSection(r: ProfilerReport): string[] {
     )} ms   (busy unmeasured: the door's commands, rise and fall)`,
     f.gpu_read > 0
       ? `  gpu     ${spread(
-          f.gpu,
-        )} ms   (over the ${f.gpu_read} frames a read timed)`
+          f.gpu_busy,
+        )} ms   busy, ${spread(f.gpu)} ms its spans' sum   (over the ${f.gpu_read} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
     ...raysText(f.first, last),

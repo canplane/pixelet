@@ -39,6 +39,7 @@ struct HostFrame {
 pub struct GpuRead {
     pub frame: f64,
     pub spans: [f64; GPU_SPANS],
+    pub busy_ms: f64,
     pub px: f64,
 }
 
@@ -134,7 +135,7 @@ pub fn profiler_frame(t: FrameTurn) {
         return;
     }
     if let Some(r) = host.landed {
-        profiler_record_gpu(r.frame, r.spans, r.px);
+        profiler_record_gpu(r);
     }
     let mut tiles = TileSample::default();
     for (p, _) in TerrainTile::tile_cache().held() {

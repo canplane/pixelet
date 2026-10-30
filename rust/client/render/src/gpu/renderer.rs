@@ -371,10 +371,13 @@ pub struct FrameOutput {
 #[derive(Clone, Copy)]
 pub struct FrameStat {
     /// Whether a GPU read landed with this frame: its spans are then that
-    /// read's, `gpu_px` the world's pixels the frame it timed drew, what the
-    /// spans were measured over, and `gpu_frame` that frame's number (`frame`
-    /// as it was); else they are 0, as nothing was measured with this frame.
+    /// read's, `gpu_busy_ms` the time they ran, those that overlap counted
+    /// once, the frame's GPU time where its passes overlap (`Gpu::gpu_busy_ms`),
+    /// `gpu_px` the world's pixels the frame it timed drew, what the spans
+    /// were measured over, and `gpu_frame` that frame's number (`frame` as it
+    /// was); else they are 0, as nothing was measured with this frame.
     pub gpu_read: bool,
+    pub gpu_busy_ms: f64,
     pub gpu_px: f64,
     pub gpu_frame: f64,
     /// This frame's number, from 1, a frame the renderer encoded each; 0
@@ -1590,14 +1593,15 @@ impl Renderer {
         // The read that landed is the one that was on its way; this frame's
         // takes its place where one was asked.
         let gpu_read = q != 0 && g.has_gpu_landed();
-        let (gpu_spans, gpu_px, gpu_frame) = if gpu_read {
+        let (gpu_spans, gpu_busy_ms, gpu_px, gpu_frame) = if gpu_read {
             (
                 core::array::from_fn(|k| g.gpu_ms(k as u32)),
+                g.gpu_busy_ms(),
                 self.read_px,
                 self.read_frame,
             )
         } else {
-            ([0.0; GPU_SPAN_NAMES], 0.0, 0.0)
+            ([0.0; GPU_SPAN_NAMES], 0.0, 0.0, 0.0)
         };
         let frame = DRAWN_FRAMES.get(|| 0.0);
         *frame += 1.0;
@@ -1647,6 +1651,7 @@ impl Renderer {
         };
         let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
+        stat.gpu_busy_ms = gpu_busy_ms;
         stat.gpu_px = gpu_px;
         stat.gpu_frame = gpu_frame;
         self.order = order;
@@ -1749,6 +1754,7 @@ impl Renderer {
         let px = world.width as f64 * world.height as f64;
         FrameStat {
             gpu_read: false,
+            gpu_busy_ms: 0.0,
             gpu_px: 0.0,
             gpu_frame: 0.0,
             frame: *DRAWN_FRAMES.get(|| 0.0),

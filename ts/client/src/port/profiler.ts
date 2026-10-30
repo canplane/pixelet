@@ -148,7 +148,10 @@ export interface FrameSummary {
   tasks: Spread;
   profiler: Spread;
   rest: Spread;
+  /** The GPU's time, its spans' sum, and the time they ran, those that
+   * overlap counted once, which the sum overstates where passes overlap. */
   gpu: Spread;
+  gpu_busy: Spread;
   /** Each phase's, each effect's and each span's p95: what is read of them. */
   phases: { name: string; p95: f64 }[];
   effects_p95: { name: string; p95: f64 }[];
@@ -247,6 +250,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
     profiler: spread_at(s, a + F.profiler),
     rest: spread_at(s, a + F.rest),
     gpu: spread_at(s, a + F.gpu),
+    gpu_busy: spread_at(s, a + F.gpu_busy),
     phases: PHASES.map((name, k) => ({ name, p95: s[a + F.phases_p95 + k] })),
     effects_p95: EFFECT_NAMES.map((name, k) => ({
       name,
