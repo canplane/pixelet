@@ -14,6 +14,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_JOINED => "joined_cs",
         SHADER_ATMOS_FROXEL => "froxel_cs",
         SHADER_SCREEN_REACH => "screen_reach_cs",
+        SHADER_SCREEN_BOUND => "screen_bound_cs",
         SHADER_SCREEN_MARK => "screen_mark_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHT => "height_cs",
@@ -40,6 +41,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_LIGHT_MARK => "light_mark_cs",
         SHADER_LIGHT_MARK_DRAWN => "light_mark_drawn_cs",
         SHADER_LIGHT_REACH => "light_reach_cs",
+        SHADER_LIGHT_DETAIL => "light_detail_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -101,7 +103,10 @@ pub const PIPELINE_RASTER_GATE: u32 = 40;
 /// kernel bounds moved: the claimed tiles set back to the far plane, their
 /// stencil raised (gpu/shadow.rs).
 pub const PIPELINE_LIGHT_GATE: u32 = 41;
-pub const PIPELINES: u32 = 42;
+/// An actor drawn where it was and where it is, its fragments setting their
+/// screen tiles' words (gpu/pass/skinned.rs `draw_marks`).
+pub const PIPELINE_SKINNED_MARK: u32 = 42;
+pub const PIPELINES: u32 = 43;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -422,6 +427,15 @@ const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the light: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
+/// A model's mark (tile_mark.wgsl): the eye's frame, the screen tiles' words
+/// and their uniform in group 0; the rest as its depth reads them.
+const MARK_FRAME: Group = &[[0, UNIFORM], [30, STORAGE_RW], [31, UNIFORM]];
+const MARK_GROUPS: [Group; 4] = [
+    MARK_FRAME,
+    MODEL_GROUPS[1],
+    MODEL_GROUPS[2],
+    MODEL_GROUPS[3],
+];
 /// A marker set's instances, and what its pass reads at an anchor: the
 /// world's depth for the regions, the regions for the sprites. Its uniform is
 /// a draw's (`DRAW`).
@@ -489,7 +503,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_PUCK_BEACON => Descriptor::new(
             lit(SHADER_PUCK_BEACON, CULL_BACK),
             &PUCK_BEACON_LANES,
-            &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &DRAW],
+            &[&LIT_FRAME, &DRAW],
         ),
         PIPELINE_MARKER => Descriptor::new(
             Head {
@@ -562,6 +576,19 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_SKINNED_DEPTH => {
             Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_LANES, &DEPTH_GROUPS)
         }
+        // Its vertices as the depth pass lays them, its fragments writing
+        // no color and testing no depth: they mark their tiles.
+        PIPELINE_SKINNED_MARK => Descriptor::new(
+            Head {
+                fragment: true,
+                depth_write: false,
+                depth_compare: ALWAYS,
+                depth_bias_slope: 0,
+                ..depth_only(SHADER_SKINNED_MARK)
+            },
+            &SKINNED_LANES,
+            &MARK_GROUPS,
+        ),
         // Every texel of the box the world's cast holds, whatever lies
         // there, in the map's claimed tiles: its clipmap's words and the
         // box's corner, before the casters drawn over it, into the depth
@@ -578,6 +605,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&[
                 [0, TEXTURE_UINT_ARRAY],
                 [1, UNIFORM],
+                [30, STORAGE],
                 [31, UNIFORM],
                 [32, STORAGE],
             ]],
@@ -590,7 +618,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 ..depth_only(SHADER_LIGHT_GATE)
             },
             &[],
-            &[&[[31, UNIFORM], [32, STORAGE]]],
+            &[&[[30, STORAGE], [31, UNIFORM], [32, STORAGE]]],
         ),
         // The screen's depth alone into the occlusion's prepass (gpu/ao.rs),
         // the group the lit screen pass binds.
@@ -952,13 +980,9 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
 }
 
 /// Every pipeline's record, worked out as the crate is built.
-#[cfg_attr(
-    target_pointer_width = "64",
-    expect(
-        clippy::large_const_arrays,
-        reason = "`is_floored` reads it as the crate is built, which a static is not; past the \
-                  lint's size where a usize is 8 bytes, not on the guest's 4"
-    )
+#[expect(
+    clippy::large_const_arrays,
+    reason = "`is_floored` reads it as the crate is built, which a static is not"
 )]
 const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
     let mut r = [([0; RECORD_WORDS], 0); PIPELINES as usize];

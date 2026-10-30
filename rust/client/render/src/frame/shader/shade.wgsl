@@ -17,7 +17,20 @@ fn rim(n: vec3f, world_pos: vec3f) -> f32 {
 // `lit` is the shadow map's, the light it is cast from's alone (shadow.wgsl
 // `shadow_light`).
 fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, ao: f32, seen: Seen) -> vec3f {
-  let each = select(vec2f(lit, 1.0), vec2f(1.0, lit), frame_shadow_moon() > 0.0);
-  let color = albedo * surface_light_in(n, up_at(world_pos), each, ao, seen.light, lights_now()) * (1.0 + rim(n, world_pos));
+  let color = albedo * surface_light_in(n, up_at(world_pos), lit_each(lit), ao, seen.light, lights_now()) * (1.0 + rim(n, world_pos));
   return color * seen.transmittance + seen.scattered;
+}
+
+// `lit` as the sun's and the moon's: the light the map is cast from takes it.
+fn lit_each(lit: f32) -> vec2f {
+  return select(vec2f(lit, 1.0), vec2f(1.0, lit), frame_shadow_moon() > 0.0);
+}
+
+// A face of three's standard material: `metalness` of it mirrors, tinted its
+// color, at `roughness`; the rest scatters as `shade`'s faces do.
+fn shade_metal(albedo: vec3f, metalness: f32, roughness: f32, n: vec3f, world_pos: vec3f, lit: f32, ao: f32, seen: Seen) -> vec3f {
+  let v = normalize(frame_camera_pos() - world_pos);
+  let f0 = mix(vec3f(0.04), albedo, metalness);
+  let mirrored = surface_specular_in(n, v, f0, roughness, lit_each(lit), seen.light, lights_now());
+  return shade(albedo * (1.0 - metalness), n, world_pos, lit, ao, seen) + mirrored * seen.transmittance;
 }

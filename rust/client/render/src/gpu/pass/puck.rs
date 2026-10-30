@@ -4,11 +4,9 @@
 
 use crate::frame::draw::{uniform_of, DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use crate::frame::shader::word::BOX_VERTICES;
-use crate::gpu::api::{buf_entry, buffer_usage, bytes, Entry, Gpu, TrackedRenderPass};
-use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
+use crate::gpu::api::{buf_entry, buffer_usage, bytes, Gpu, TrackedRenderPass};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::surface::WORLD_COLOR;
 use crate::gpu::upload::{buf_size, Draws, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
@@ -80,7 +78,6 @@ pub struct PuckPass {
     zone_uniforms: DrawUniforms,
     beacon_uniforms: DrawUniforms,
     frame_group: u32,
-    beacon_frame_group: u32,
     box_pos: u32,
     box_uv: u32,
     box_idx: u32,
@@ -102,25 +99,14 @@ fn zones<'a>(draws: &Draws<'a>) -> impl Iterator<Item = &'a [u32; DRAW_WORDS]> +
 }
 
 impl PuckPass {
-    pub fn new(
-        g: &Gpu,
-        pipelines: &mut Pipelines,
-        frame_buf: u32,
-        air: [Entry; AIR_ENTRIES],
-        align: u32,
-    ) -> PuckPass {
-        let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, WORLD_COLOR);
-        let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, WORLD_COLOR);
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> PuckPass {
+        let zone = pipelines.build_world(g, PIPELINE_PUCK_ZONE);
+        let beacon = pipelines.build_world(g, PIPELINE_PUCK_BEACON);
         let (box_p, box_uv, box_i) = box_lanes();
         let (oct_p, oct_n) = octahedron_lanes();
         let [r, gr, b] = linear_rgb(indicator::ACTION);
-        // The beacon is lit through the air: the air's words, transmittance and sampler.
-        let mut lit = vec![buf_entry(0, frame_buf)];
-        lit.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
-        let beacon_frame_group = g.bind_group(beacon.layouts[0], &lit);
         PuckPass {
             frame_group: g.bind_group(zone.layouts[0], &[buf_entry(0, frame_buf)]),
-            beacon_frame_group,
             zone_uniforms: DrawUniforms::new(DRAW_BYTES, align),
             beacon_uniforms: DrawUniforms::new(DRAW_BYTES, align),
             zone,
@@ -174,9 +160,10 @@ impl PuckPass {
         }
     }
 
-    /// The pipeline, the frame's group and the octahedron bound once; a
-    /// draw binds its uniform's slot alone.
-    pub fn draw_beacon(&self, pass: &mut TrackedRenderPass, draws: &Draws) {
+    /// The pipeline, the models' group 0 `frame` (gpu/pass/model.rs
+    /// `FrameGroups`) and the octahedron bound once; a draw binds its
+    /// uniform's slot alone.
+    pub fn draw_beacon(&self, pass: &mut TrackedRenderPass, draws: &Draws, frame: u32) {
         let Some(slots) = self.beacon_uniforms.slots() else {
             return;
         };
@@ -185,7 +172,7 @@ impl PuckPass {
             return;
         }
         pass.set_pipeline(self.beacon.pipeline);
-        pass.set_bind_group(0, self.beacon_frame_group, &[]);
+        pass.set_bind_group(0, frame, &[]);
         pass.set_vertex_buf(0, self.oct_pos, 0, 0);
         pass.set_vertex_buf(1, self.oct_normal, 0, 0);
         for k in 0..cnt {

@@ -214,3 +214,69 @@ none; and the caves are no process that is born either.
 - **Not checked yet:** the app; what the GPU's thin pass costs a brick where a
   window's cell holds many leaf cells.
 
+
+## Placed and generated alike, folded as cubes, 2026-10-31
+
+Decided by the user, after the hash a cell was measured: folding a column by
+hashing every leaf cell under it, in every node a ray asks, cost the frame four
+times its GPU (p50 16.3 to 70.9 ms over a city, orbiting). In their words: decor
+and cubes are one octree of objects, an asset id apart; a placed decor is folded
+by the octree's rule, and the generated one is to look and act as a placed one
+does, a user unable to tell them apart; the cubes already fold so; the layers
+of the query stay as they are; and the leaf-only drawing of placed decor, which
+they had asked gone, goes.
+
+- **A tree of hashes, as the caves.** A decor's counts start at its root, the
+  coarsest window it stands at or three zooms over the leaves; a column there
+  holds as many as a hash draws about its mean, and each column hands its
+  count to its four a hash each, down to a leaf cell's one or none
+  (pxl-spec-core `scatter::count`). A count of none asks no hash under it.
+- **Folded as a cube.** A placed decor's leaf fills its cell in the objects'
+  tree and folds up by the tree's rule, the mean its share and the kind most
+  of it its kind (`overwrite::share`); the generated decor folds the same off
+  its column's count into the column's top cell (`scatter::folded`). A cell
+  whose kind is a decor is drawn in the look the decor names, else the ground's
+  (`world::node`).
+- **Standing by size, both.** A placed decor is drawn from the coarsest zoom its
+  variant stands at (`generated::drawn_at`, its record's zoom
+  `scatter::coarsest_stand`), as a generated one is from the window it stands
+  at.
+- **The catalog read by value.** What the hashes read of a decor, a GPU reads
+  from small tables (`SEEDS`, `CHANCES`, `FOLDS`, `LOOK_DECORS`), not the
+  catalog's rows: a row read by a decor's place copied the whole catalog into
+  every lane, which was most of the cost. A decor's value is told by its
+  range, so the objects' tree's fold, which a barrier follows, reads none.
+- **Measured** over the same city at 20 m a division, orbiting 30 s: GPU p50
+  23.4 ms and p95 30.1 against 16.3 and 20.6 before the scatter changed, the
+  cars, which stand by their size, drawn far where the zoom a candidate was
+  born at had left them out.
+- **Seen in the app.** Four trees placed by a scattered few, and the view
+  drawn back past the leaves' window: placed and scattered alike fold to a
+  small block of the forest look. The scattered folded into the ground's top
+  cell alone at first, where a placed one's leaf, over a top whole, folds to
+  the cell over it; the scattered now folds into the cell its leaf lies in,
+  the ground's slab one cell higher at the zooms a decor folds at
+  (`ground::slab` `stood`). Measured again at 20 m a division: GPU p50 28.6 ms,
+  p95 44.3, every span up with it, the air's and the finish's too, which this
+  change does not touch.
+
+## Decor folds into no cube; it stands as a cube keeps, 2026-10-31
+
+The user: a folded decor is to be drawn as itself, smaller, not as a cube of
+its look; "8 becomes 1" meant the decor's size counted in a coarser zoom's
+cells, not a cube. The user agreed that a decor stands by the rule a folded
+cube is drawn by.
+
+- **No fold.** The objects' tree counts no decor leaf (`overwrite::share`), the
+  node folds no decor (`scatter::folded` gone, `world::node` and `ground::slab`
+  as before the fold), and no look is named for a folded decor (`FOLDS`,
+  `LOOK_DECORS` gone).
+- **Standing as a cube keeps.** A decor stands, a model or its impostor, at
+  every zoom whose cell its box keeps an eighth of or more, floored, as a
+  folded cube of that box is drawn (`answer::eighths`, `scatter::stands`): a
+  tree a unit wide and three high stands a zoom over the leaves' and none two
+  over, as a cube of it does. A rule by the widest side rounded half to even
+  was tried first and left a unit's tree out a zoom where a unit's cube shows.
+  The counts' root is the coarsest zoom a variant stands at.
+- **Seen in the app** at 20 m a division: trees and cars drawn as themselves,
+  no block. Orbiting 30 s once: GPU p50 26.5 ms, p95 32.4.

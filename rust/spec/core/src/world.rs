@@ -16,7 +16,6 @@ use crate::area::Shard;
 use crate::cave::Cave;
 use crate::ground::{self, Held, VOID};
 use crate::overwrite::{self, Cut, Lanes, AIR, CELL, PLACED, SPLIT};
-use crate::scatter;
 use crate::way;
 use crate::way::tree;
 use crate::window::{Bricks, Found};
@@ -126,9 +125,7 @@ impl Handed {
 /// placed in it where that fills it whole, air included, else the ground's
 /// asset with what the ways and what is placed write over it (their tree's
 /// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
-/// `way::tree::read`), and beside the ground the decor its column holds
-/// smaller than the cell, in its top cell (`scatter::folded`), one value
-/// whichever source holds it, keeping the
+/// `way::tree::read`), one value whichever source holds it, keeping the
 /// eighths of its cube they fill together over it (`answer::cover`,
 /// `answer::eighths`, `answer::KEPT_SHIFT`), air where that is none;
 /// `PLACED_ASSET` over a placed value, the source control tells an edit by,
@@ -249,20 +246,6 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         } else {
             0
         };
-        // The decor its column holds smaller than the cell, read off its
-        // hash as the caves are, its room beside the ground's in its top cell
-        // (`scatter::folded`).
-        if fills(val) && c[2] == cell.top - 1 {
-            let (share, folds) = scatter::folded(zoom, [c[0], c[1]], cell.look);
-            if share > 0 {
-                let look = if folds != 0 { folds } else { cell.look };
-                let (f, theirs) = cover(fill, look, share);
-                if theirs {
-                    (val, four) = (look, ground::word([look; 4]));
-                }
-                fill = f;
-            }
-        }
         if way != VOID {
             // A way's look four times where one wrote it, whatever its value.
             let w = tree::read(way);

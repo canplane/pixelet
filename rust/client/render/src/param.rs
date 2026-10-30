@@ -254,8 +254,10 @@ pub mod puck {
             /// What it gives off itself, by day and by night.
             DAY_GLOW: f32 = 0.25;
             NIGHT_GLOW: f32 = 1.0;
-            /// The share of the sun's and the moon's light on it it gives back.
-            LIT: f32 = 0.2;
+            /// three's standard material's, as the gem's: metal gives its light
+            /// back as a highlight tinted its color, the rest scattered.
+            METALNESS: f32 = 0.8;
+            ROUGHNESS: f32 = 0.2;
         }
     }
 }

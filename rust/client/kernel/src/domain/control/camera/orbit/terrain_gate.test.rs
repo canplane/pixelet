@@ -1,7 +1,8 @@
 // pxl-kernel/domain/control/camera/orbit/terrain_gate.test.rs
 //
-// The dive under a roof and the zoom out held under it: flat ground at five,
-// and a cube over it for the roof.
+// The dive under a roof and the zoom out held under it, and the climb beside
+// them: flat ground at five, and a cube over it for the roof, or a tunnel's
+// slab.
 
 use super::*;
 use crate::domain::layer::object::store::Store;
@@ -59,11 +60,21 @@ fn dives_under_roof() {
     assert_eq!(dive_to(Some(3.0), 2.2, 0.0), Some(2.2));
 }
 
+/// Short of straight down, wherever the climb stopped, it dives as well,
+/// on its own line.
+#[test]
+fn dives_slanted() {
+    let polar: f64 = 0.1;
+    let under = (8.0 - over(5.0)) / libm::cos(polar) - NEAR;
+    let dist = dive_to(Some(3.0), 10.0, polar).unwrap();
+    assert!((dist - under).abs() < 1e-6);
+}
+
 #[test]
 fn dive_held_back() {
     // A zoom out.
     assert_eq!(dive_to(Some(3.0), 20.0, 0.0), None);
-    // Not straight down.
+    // A line that passes the roof by.
     assert_eq!(dive_to(Some(3.0), 10.0, 0.3), None);
     // Nothing over the pivot.
     assert_eq!(dive_to(None, 10.0, 0.0), None);
@@ -155,4 +166,82 @@ fn wall_not_crossed() {
     assert!(in_solid(&east(1.0), &access));
     assert!(crossed(&east(1.0), &east(2.0), &access));
     assert!(!crossed(&east(1.0), &east(0.4), &access));
+}
+
+/// The ground at five and a tunnel's roof over the pivot: a slab seven cells
+/// across and `thick` cells thick, its underside `roof` over the ground.
+fn tunnel(roof: f64, thick: u32) -> (TileCache<TerrainTile>, Store, V3) {
+    let (tile_cache, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    for dz in 0..thick {
+        for dx in -3..=3 {
+            for dy in -3..=3 {
+                let at = [
+                    x + f64::from(dx),
+                    y + f64::from(dy),
+                    5.0 + roof + f64::from(dz),
+                ];
+                write(&mut store, at, OBJECT_COARSEST, red);
+            }
+        }
+    }
+    (tile_cache, store, [x + 0.5, y + 0.5, over(5.0)])
+}
+
+/// In the roof's lowest cell, where the eye may stand, the climb asks no
+/// rise: a tilt there is drawn as asked, not held straight down.
+#[test]
+fn climb_stands_in_roof_cell() {
+    let _g = serial();
+    let (tile_cache, store, pivot) = tunnel(2.0, 1);
+    let access = World::new(&tile_cache, &store);
+    let (climbed, failed) = climbed(pose(pivot, MIN_DIST, 0.3), &access);
+    assert_eq!((climbed.polar, failed), (0.3, false));
+}
+
+/// In a roof thicker than its lowest cell, straight down does not clear: the
+/// climb fails and keeps the pitch asked, on the way in as at rest.
+#[test]
+fn climb_fails_under_roof() {
+    let _g = serial();
+    let (tile_cache, store, pivot) = tunnel(3.0, 2);
+    let access = World::new(&tile_cache, &store);
+    // The eye in the slab's upper cell, from 9 to 10.
+    let (climbed, failed) = climbed(pose(pivot, 3.8, 0.1), &access);
+    assert_eq!((climbed.polar, failed), (0.1, true));
+}
+
+/// Over open ground the climb steepens as it did: a block three cells
+/// across and high round the eye, deeper than a first cell, lifts it to
+/// clear the block's top.
+#[test]
+fn climb_clears_block() {
+    let _g = serial();
+    let (tile_cache, mut store, pivot) = roofed(None);
+    let red = cube_id(Cube::Object(cube::Object::red));
+    // About the cell east of the pivot where the eye stands level with it 3 off.
+    for dx in [1.5, 2.5, 3.5] {
+        for dy in [-1.5, -0.5, 0.5] {
+            for z in [5.0, 6.0, 7.0] {
+                write(
+                    &mut store,
+                    [pivot[0] + dx, pivot[1] + dy, z],
+                    OBJECT_COARSEST,
+                    red,
+                );
+            }
+        }
+    }
+    let access = World::new(&tile_cache, &store);
+    let at = ViewPose {
+        pivot,
+        dist: 3.0,
+        polar: core::f64::consts::FRAC_PI_2,
+        azimuth: -core::f64::consts::FRAC_PI_2,
+    };
+    let (climbed, failed) = climbed(at, &access);
+    assert!(!failed);
+    assert!(climbed.polar < at.polar, "{climbed:?}");
+    assert!(!in_solid(&climbed, &access), "{climbed:?}");
 }
