@@ -550,15 +550,31 @@ pub fn light_mark_cs(
     }
     let (s, n) = (light_of(eye), size(head));
     let cast = cast_number(head);
+    // Each pixel's tile read once: the square's, a column past it across and
+    // a row past it down and one before it, which its neighbors take
+    // (`MARK_READ`), none where a pixel met nothing or lies past the drawn.
+    let (cols, rows) = (m + 1, m + 2);
+    let mut met = [0u32; MARK_READ];
+    let mut tiles = [[0i32; 2]; MARK_READ];
+    let mut k = 0;
+    while k < cols * rows {
+        let (x, y) = ((id.x * m + k % cols) as i32, (id.y * m + k / cols) as i32 - 1);
+        if y >= 0 {
+            let (got, tile) = met_tile(eye, rays, &s, UVec3::new(x as u32, y as u32, 0), drawn);
+            met[k as usize] = u32::from(got);
+            tiles[k as usize] = tile;
+        }
+        k += 1;
+    }
     // The tile last marked, so a run of pixels on one marks it once.
     let mut last = [i32::MIN; 2];
     let mut y = 0;
     while y < m {
         let mut x = 0;
         while x < m {
-            let p = UVec3::new(id.x * m + x, id.y * m + y, 0);
-            let (met, tile) = met_tile(eye, rays, &s, p, drawn);
-            if met {
+            let k = ((y + 1) * cols + x) as usize;
+            if met[k] != 0 {
+                let tile = tiles[k];
                 // [rust-gpu] By its words: an array's `!=` is an intrinsic
                 // it does not lower.
                 if tile[0] != last[0] || tile[1] != last[1] {
@@ -567,18 +583,14 @@ pub fn light_mark_cs(
                 }
                 // The neighbors after it, so every pair of neighbors is taken
                 // once: across, down, and the two diagonals.
-                let mut k = 0;
-                while k < 4 {
-                    let (dx, dy) = ([1, 0, 1, 1][k], [0, 1, 1, -1][k]);
-                    let q = [p.x as i32 + dx, p.y as i32 + dy];
-                    if q[1] >= 0 {
-                        let q = UVec3::new(q[0] as u32, q[1] as u32, 0);
-                        let (also, near) = met_tile(eye, rays, &s, q, drawn);
-                        if also {
-                            stand_between(list, n, cast, tile, near);
-                        }
+                let mut j = 0;
+                while j < 4 {
+                    let (dx, dy) = ([1, 0, 1, 1][j], [0, 1, 1, -1][j]);
+                    let q = ((y as i32 + 1 + dy) as u32 * cols + x + dx) as usize;
+                    if met[q] != 0 {
+                        stand_between(list, n, cast, tile, tiles[q]);
                     }
-                    k += 1;
+                    j += 1;
                 }
             }
             x += 1;
@@ -586,6 +598,11 @@ pub fn light_mark_cs(
         y += 1;
     }
 }
+
+/// The pixels a thread of the mark reads (`light_mark_cs`): its square,
+/// `light::MARK` a side, a column past it and a row either side.
+const MARK_READ: usize =
+    ((pxl_spec_core::light::MARK + 1) * (pxl_spec_core::light::MARK + 2)) as usize;
 
 /// Whether pixel `p`'s ray met the world, and the tile it met it on. A ray
 /// that met nothing leaves its first word zero (cast.rs `word`).

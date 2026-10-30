@@ -641,3 +641,19 @@ noon, 3728×2338:
   the reach 0.07, `light_detail_cs` 0.07.
 - Stopped after an orbit at 7 o'clock, and drawn again from a fresh epoch
   (the shadows off and on): no difference seen.
+
+**The receivers' marks read each pixel once** (00:40–00:50),
+`light_mark_cs`: a thread's square of pixels, `light::MARK` a side, read
+its pixels and its neighbors' tiles once into an array, 30 a thread (a
+column past and a row either side), where each pixel read its own and its
+four neighbors' anew, 80; the same marks. The orbit, noon, 3728×2338, one
+window:
+
+| build | `light_beam` p50 | p95 | GPU p50 | p95 |
+|---|---|---|---|---|
+| the change | 5.24 | 6.09 | 31.3 | 35.2 |
+| `15944f91a` | 8.45 | 9.31 | 34.1 | 37.6 |
+
+- Some 3.2 ms off `light_beam`, 2.8 ms off the frame, as predicted (the
+  marks some 7 ms of it, the reads cut to 3/8).
+- At 7 o'clock, shadows as before, no error.
