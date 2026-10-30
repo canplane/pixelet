@@ -20,6 +20,9 @@ import { send_input } from "./input.ts";
 export { kernel_snapshot } from "@/port/snapshot.ts";
 export { kernel_hold, kernel_keys } from "./input.ts";
 
+// Where the client's boot stands, and the stop code of a kernel that stopped.
+export { boot_state, stop_code, watch_boot } from "@/abi/boot.ts";
+
 // What the drivers show the UI: the GPU's state, the network's, the world's
 // source, and where the origin serves what the shell fetches itself.
 export { gpu, watch_gpu } from "@/driver/gpu.ts";

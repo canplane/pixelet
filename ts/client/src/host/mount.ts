@@ -19,6 +19,32 @@ export let HOST: Host<FrameGrant>;
 /** The scheduling policy the host was booted with, which an input makes interactive. */
 export let PACING: FramePacing;
 
+let view_open = false;
+let page_visible = true;
+let turning = false;
+
+/** Turns run while the world's view is open and the page is seen: a hidden
+ * page gets no frame, and a closed view draws none. */
+function steer(): void {
+  const turn = view_open && page_visible;
+  if (turn === turning) return;
+  turning = turn;
+  if (turn) HOST.strobe.start();
+  else HOST.strobe.stop();
+}
+
+/** The world's view opened or closed (port/input.ts `kernel_open`). */
+export function set_view_open(open: boolean): void {
+  view_open = open;
+  steer();
+}
+
+/** The page or the app seen or hidden (driver/visibility.ts). */
+export function set_page_visible(visible: boolean): void {
+  page_visible = visible;
+  steer();
+}
+
 /** Opens the guest as `cfg` says and mounts the host on it, its system calls answered by `sys`, its turns run as `policy` says and each filled by `submit`. */
 export async function open_host(
   cfg: Config,

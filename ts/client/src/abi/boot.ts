@@ -1,14 +1,17 @@
 // @pxl/client/abi/boot.ts
 
 /**
- * Boots the kernel: hands the place the guest's config and where to tell what
- * its sensors, its GPU and its network hear; fills the host's slots with what pixelet's
- * numbers mean (the roots, the program's calls, the stop report, each frame's
- * submission and the events); then hands the completion ring's events to
- * whoever runs them.
+ * Boots the client, bottom up, once its app has set the place (bracket.tsx):
+ * the guest the place opens; xpute's host mounted on it with pixelet's drivers
+ * (the roots, the program's calls, the stop report, each turn's submission) and
+ * the frame pacing; the place told where to report what its sensors, its GPU,
+ * its network and its visibility hear; then the kernel, by `WORLD_BOOT`. The
+ * shell is no part of it: it reads where the boot stands through the port
+ * (port/shell.ts), and what the kernel shows it once it has started.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
+import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { SysHost } from "@xpute/host/ipc/sys.ts";
@@ -42,10 +45,26 @@ import { text_call } from "@/driver/text.ts";
 import { BUILD_NUMBER } from "@/deploy.ts";
 import { bracket, type Config } from "@/bracket.tsx";
 import { GPU_STATE, set_gpu } from "@/driver/gpu.ts";
+import { world_visible } from "@/driver/visibility.ts";
+import { Boot } from "@/abi/state.ts";
 import { set_online } from "@/driver/namespace/online.ts";
 import { kernel_snapshot, set_snapshot } from "@/port/snapshot.ts";
 
 let code: string | null = null;
+let state = Boot.Starting;
+const listeners = new Listeners();
+
+function set(next: Boot): void {
+  state = next;
+  listeners.notify();
+}
+
+/** Where the boot stands, read through the port. */
+export function boot_state(): Boot {
+  return state;
+}
+
+export const watch_boot = listeners.watch;
 
 /** The kernel's last report, short as a stop code: its errno's name and the
  * file and line, a published build's file a number its paths decode by. None
@@ -110,8 +129,27 @@ function send_source(
   return true;
 }
 
-/** Called once from shell/boot.ts, so boot order is explicit, not import order. */
-export async function boot(): Promise<void> {
+/** Called once by the app, after it has set the place, so boot order is
+ * explicit, not import order; where it stands is `boot_state`. */
+export function boot(): void {
+  open().then(
+    () => {
+      console.info("[boot] the kernel started");
+      // Its turns end with it.
+      HOST.doorbell.stopped = () => {
+        HOST.strobe.stop();
+        set(Boot.Stopped);
+      };
+      set(Boot.Started);
+    },
+    (err) => {
+      console.error("[boot] the kernel did not start:", err);
+      set(Boot.Failed);
+    },
+  );
+}
+
+async function open(): Promise<void> {
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
   const cfg: Config = {
     bytes: bracket.device.handheld ? PHONE_BYTES : DESKTOP_BYTES,
@@ -143,6 +181,7 @@ export async function boot(): Promise<void> {
     wake: () => HOST.strobe.request(),
   });
   bracket.online.watch(set_online);
+  bracket.visibility.watch(world_visible);
   // Before the kernel opens its kept slots, which it does from WORLD_BOOT on.
   migrate();
   const pkt = encode_world_boot(
@@ -161,12 +200,4 @@ export async function boot(): Promise<void> {
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
   void declare_source(send_source);
-}
-
-/** `listener` hears the kernel stop for good: its turns end with it. */
-export function on_stop(listener: () => void): void {
-  HOST.doorbell.stopped = () => {
-    HOST.strobe.stop();
-    listener();
-  };
 }

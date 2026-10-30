@@ -14,7 +14,6 @@ import {
   encode_input_rect,
   encode_input_wheel,
   encode_world_view,
-  encode_world_visibility,
   PointerPhase,
   PointerType,
 } from "@/abi/cmd.spec.ts";
@@ -23,7 +22,7 @@ import {
   type PointerKind,
   type PointerPhase as PlacePhase,
 } from "@/bracket.tsx";
-import { HOST, PACING } from "@/host/mount.ts";
+import { HOST, PACING, set_view_open } from "@/host/mount.ts";
 
 /** Sent with the next turn, which it makes interactive. */
 export function send_input(cmd: Command, pkt: PacketWriter): void {
@@ -75,27 +74,13 @@ export function kernel_hold(tool: ActiveTool, val: u32, tier: u32): void {
 
 export function kernel_open(): () => void {
   HOST.now(Command.WORLD_VIEW, encode_world_view(HOST.doorbell, true));
-  HOST.strobe.start();
+  set_view_open(true);
   const unfollow = bracket.sensor.follow();
   return () => {
     unfollow();
-    HOST.strobe.stop();
+    set_view_open(false);
     HOST.now(Command.WORLD_VIEW, encode_world_view(HOST.doorbell, false));
   };
-}
-
-/** Rung at once with no quota: a hidden page gets no frame, and this is the last sure moment for a save. */
-export function kernel_visible(visible: boolean): void {
-  HOST.doorbell.send(
-    0,
-    Command.WORLD_VISIBILITY,
-    encode_world_visibility(HOST.doorbell, visible),
-  );
-  HOST.doorbell.ring(0);
-  if (visible) {
-    HOST.strobe.start();
-    HOST.strobe.request();
-  } else HOST.strobe.stop();
 }
 
 /** A turn asked for now, as a moved box needs one. */

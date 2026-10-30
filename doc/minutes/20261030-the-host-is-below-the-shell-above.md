@@ -478,10 +478,23 @@ turn's pacing, the network's credits and the clock, the host's. The size, which
 the lower ABI's alone (`ts/client/src/driver/frame.ts`) and the kernel takes the
 view's size from the rect (pxl-kernel `camera_view_size`).
 
-Where `SURFACE_*` and `WORLD_VISIBILITY` fall is decided (above). Today
-`WORLD_VISIBILITY` reaches the kernel through the shell's input driver
-(`ts/client/src/shell/world/view.tsx` `INPUT.visible`); as the lower ABI's it
-moves to the platform's own path in step 2.
+Where `SURFACE_*` and `WORLD_VISIBILITY` fall is decided (above), and
+`WORLD_VISIBILITY` now takes the platform's own path: the place says the page
+or the app is hidden or shown (bracket.tsx `visibility`), the client's boot
+hands that to its driver (`ts/client/src/driver/visibility.ts`), and the shell's
+input carries it no more. The turns run while the world's view is open and the
+page is seen, both judged in one place (`ts/client/src/host/mount.ts`), as they
+ran before. Measured on the dev page: 60 turns a second shown, none hidden, 61
+shown again.
+
+The boot runs bottom up from the app: it sets the place, readies the shell's
+words, and calls the client's boot (`ts/client/src/abi/boot.ts`), which opens
+the guest, mounts xpute's host with the drivers and the pacing, and boots the
+kernel. The shell boots nothing; it reads where the boot stands through the
+port (`boot_state`, `watch_boot`) and installs its developer's console once the
+kernel runs. The port stays a module boundary (`ts/client/src/port/`): an
+object handed to the shell waits for a transport to swap, when the UI stands
+elsewhere.
 
 The first step of the order is built on the branch `worktree-layers`: the
 names (`run`, an event, a scheduling policy and frame pacing); the strobe

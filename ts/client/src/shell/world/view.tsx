@@ -9,7 +9,6 @@ import {
   kernel_frame,
   kernel_open,
   kernel_rect,
-  kernel_visible,
   kernel_wheel,
   POINTER_KIND,
   POINTER_PHASE,
@@ -39,8 +38,8 @@ const PANEL_GAP_PX = 12;
 const WORLD = surface_driver(surface_role.WORLD);
 
 /** The place's input as the world takes it: pointers and keys through the
- * shell's own stores first (`worldPointer`, `keyDown`), the box, the wheel and
- * the visibility to the kernel, and a moved box's turn to the strobe. */
+ * shell's own stores first (`worldPointer`, `keyDown`), the box and the wheel
+ * to the kernel, and a moved box's turn to the strobe. */
 const INPUT: InputDriver = {
   open: kernel_open,
   rect: kernel_rect,
@@ -51,7 +50,6 @@ const INPUT: InputDriver = {
   keyUp,
   releaseKeys,
   releasePointers,
-  visible: kernel_visible,
   requestFrame: kernel_frame,
 };
 

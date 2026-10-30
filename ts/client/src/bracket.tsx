@@ -103,7 +103,6 @@ export interface InputDriver {
   keyUp(code: string): void;
   releaseKeys(): void;
   releasePointers(): void;
-  visible(visible: boolean): void;
   /** A turn, for a box that moved without the kernel's asking. */
   requestFrame(): void;
 }
@@ -172,6 +171,9 @@ export interface Bracket {
   };
   /** Whether the device is online, as far as the place can tell: a place that cannot says nothing. */
   online: { watch(report: (online: boolean) => void): void };
+  /** Whether the page or the app is seen, as the platform says, each change from then on: hidden, it gets
+   * no frame and may be ended without another word. */
+  visibility: { watch(report: (visible: boolean) => void): void };
   sensor: {
     geo: { has: boolean; start(): void; stop(): void };
     /** `gated`: a permission asked inside a gesture; `silence`: no event is how a loss shows. */
