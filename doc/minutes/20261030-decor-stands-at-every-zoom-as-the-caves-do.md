@@ -110,6 +110,16 @@ they share is the descent, not a hash interface:
    than its brick, not the leaf's alone; each window generates the
    candidates born at its zoom or coarser, retained at that zoom, posed on
    that zoom's ground.
+
+   > Built the same day: a variant generates at a window only where it stands
+   > as itself there (pxl-spec-core `scatter::stands_at`, in `generated`), a
+   > kind is listed at each window one of its variants does (`shown_by`), and
+   > a record is drawn where the rays ask its own window's zoom
+   > (`scatter::drawn_at`, by the zoom its record names). The GPU's passes
+   > already took a window's zoom. A brick at any window meets no more
+   > patches than the leaves' bound (`brick_patches_any_window`). What is
+   > smaller than a coarser window's cell is not folded yet (2), and the cost
+   > of the windows that now generate is not measured.
 2. Decor joins the node's descent as a handed state, and its fold into the
    cell's kept eighths and look where it is smaller than the cell.
 3. The puck's zone hides where the ground is drawn coarser than a leaf; the

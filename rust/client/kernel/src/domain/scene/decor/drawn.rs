@@ -62,10 +62,12 @@ fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
     split_dist(cell_zoom) * WINDOW_MARGIN <= cull_dist_u(extent_u)
 }
 
-/// Each kind's window zooms, a bit each: the leaves' alone, where it is a
-/// impostor's worth. A coarser window generates none, so what the ground generates is
-/// one set wherever it is drawn, never thinned or posed again at a coarser
-/// cell; a finer one lies within the leaves'.
+/// Each kind's window zooms, a bit each, where it is an impostor's worth: the
+/// leaves', and each coarser one where one of its variants stands as itself,
+/// its own size no narrower than the window's cell (pxl-spec-core
+/// `scatter::stands_at`), the decor of the coarser windows a subset of the
+/// finer's, its candidates born coarser and retained at the coarser zoom.
+/// A finer window lies within the leaves'.
 fn shown() -> [u32; DECORS.len()] {
     shown_by(|d| d.extent(catalog()))
 }
@@ -73,7 +75,13 @@ fn shown() -> [u32; DECORS.len()] {
 /// `shown`, each kind's extent `extent` gives.
 fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {
-        u32::from(is_decor_shown(extent(&DECORS[k]), LEAF_CELL)) << (LEAF_CELL - FIRST_CELL)
+        let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
+        (FIRST_CELL..=LEAF_CELL)
+            .filter(|&cell| {
+                let stands = (0..d.row.variants).any(|v| scatter::stands_at(d.row, v, cell));
+                stands && is_decor_shown(extent, cell)
+            })
+            .fold(0, |bits, cell| bits | 1 << (cell - FIRST_CELL))
     })
 }
 

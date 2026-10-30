@@ -652,8 +652,9 @@ impl Generated {
 /// a look it generates on, as the ground holds them; no edit in its box, air
 /// included (`DecorQuery::is_edited`); and no placed decor's box overlaps
 /// its own (`overlaps_placed`). Every cell both ask is asked at one place
-/// about one footing (`asks`). Where it stands, whether its footing is
-/// found, and whether it generates there, true where not `boxed`.
+/// about one footing (`asks`). Its pose stands as itself only at a window its
+/// size does (`stands_at`). Where it stands, whether its footing is found,
+/// and whether it generates there, true where not `boxed` and it stands.
 pub fn generated(
     q: &mut impl DecorQuery,
     decor: &Decor,
@@ -674,7 +675,19 @@ pub fn generated(
         sink: ((1.0 - rise) * (1u32 << (s + FRAC_W)) as f32 + 0.5) as u32,
     };
     let (g, generates) = asks(q, &f, decor, cell, c.seed, g, boxed);
-    (g, true, generates)
+    (g, true, generates && stands_at(decor, g.variant, cell))
+}
+
+/// Whether `variant` of `decor` stands as itself in a window at `cell`, by
+/// its own size, not the window's: at the leaves' always, the finest window
+/// there is; at a coarser one where the brick it claims (its widest side, as
+/// `side_of` measures it) is no narrower than the window's cell. Where it is
+/// narrower it is less than a cell there, and stands in none coarser.
+pub const fn stands_at(decor: &Decor, variant: u32, cell: Zoom) -> bool {
+    let [x, y, _] = decor.sizes[variant as usize];
+    let side = if x > y { x } else { y };
+    let own = decor.cell_zoom();
+    cell >= LEAF_CELL || own <= cell || (own - cell < u32::BITS && side >= 1 << (own - cell))
 }
 
 /// Every cell generating decor asks of the world, at one place, as a GPU
@@ -796,13 +809,19 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 }
 
 /// Whether decor `d2` from the eye, its distance squared (`distance2`), is
-/// drawn: where the rays ask the leaf cell's zoom or finer at its distance
-/// (`Detail::at`), and not where they ask coarser. Decor, generated or placed,
-/// is one set at the leaf cell's window alone (pxl-kernel
-/// domain/scene/decor/drawn.rs `shown`), never thinned or posed again at a
-/// coarser one.
-pub fn drawn_at(detail: Detail, d2: f32) -> bool {
-    detail.at(d2) >= LEAF_CELL
+/// drawn, its record's zoom `cell` (`record_of`): one generated at a coarser
+/// window where the rays ask that window's zoom at its distance (`Detail::at`),
+/// so each distance draws one window's; one at the leaves', or placed
+/// (`PLACED_AT`), where they ask the leaf cell's zoom or finer. Each window
+/// generates what stands as itself at it (pxl-kernel
+/// domain/scene/decor/drawn.rs `shown`, `stands_at`).
+pub fn drawn_at(detail: Detail, d2: f32, cell: Zoom) -> bool {
+    let at = detail.at(d2);
+    if cell == PLACED_AT || cell >= LEAF_CELL {
+        at >= LEAF_CELL
+    } else {
+        at == cell
+    }
 }
 
 /// Placed decor's tag (`node_seed`).

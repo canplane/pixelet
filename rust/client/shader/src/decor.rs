@@ -402,9 +402,9 @@ fn run_of(records: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
 
 /// Each record for the eye this frame, a workgroup an entry's or a run of
 /// placed decor's (`run_of`), its region written into its first word and
-/// counted: nothing where the rays ask a coarser zoom at its distance than
-/// the leaves' cells (`scatter::drawn_at`), generated or placed, or where it
-/// is the decor left out; else sized for the screen (pxl-spec-core
+/// counted: nothing where the rays ask another zoom at its distance than the
+/// one its record's window draws at (`scatter::drawn_at`), or where it is
+/// the decor left out; else sized for the screen (pxl-spec-core
 /// `scatter::drawn`), a model where its group's extent spans `MODEL_ANGLE`
 /// at its distance, an impostor down to `IMPOSTOR_ANGLE`, else culled.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_cnt_cs"))]
@@ -453,7 +453,7 @@ fn cnt_one(
         return;
     }
     let w = records[i];
-    let (decor, variant, _, _) = scatter::record_of(w);
+    let (decor, variant, _, cell) = scatter::record_of(w);
     let corner = [
         records[i + 1] as i32,
         records[i + 2] as i32,
@@ -462,9 +462,8 @@ fn cnt_one(
     let (origin, detail) = eye_origin(eye);
     // Its distance once, for the zoom it is drawn at and its size.
     let d2 = scatter::distance2(origin, corner);
-    // Generated or placed alike, drawn only where the rays ask the leaves' cells
-    // or finer at its distance (`shown`'s one zoom).
-    let here = scatter::drawn_at(detail, d2);
+    // Drawn only where the rays ask its window's zoom at its distance.
+    let here = scatter::drawn_at(detail, d2, cell);
     let group = scatter::first_group(rows, decor) + variant;
     let hide = drawn::HIDE as usize;
     let hidden = drawing[hide + 3] != 0

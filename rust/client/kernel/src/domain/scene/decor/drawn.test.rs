@@ -20,16 +20,34 @@ fn decor_edges_cell_shares() {
     }
 }
 
-/// What the ground generates is generated at the leaves' window alone, no coarser
-/// one, so it is one set wherever it is drawn: every kind's zooms are the
-/// leaf cell's bit or none.
+/// A kind is generated at the leaves' window and at each coarser one where a
+/// variant stands as itself (`scatter::stands_at`): its windows run from the
+/// leaves' up, unbroken, never at one coarser than its widest claim covers.
 #[test]
-fn decor_leaf_window_only() {
+fn decor_windows_by_size() {
     let leaf = 1 << (LEAF_CELL - FIRST_CELL);
-    // From a tuft to a ship: what a coarser window's cells would show too.
+    // From a tuft to a ship, as it shows.
     for extent in [0.5, 2.0, 8.0, 40.0, 400.0] {
         for (k, &bits) in shown_by(|_| extent).iter().enumerate() {
-            assert_eq!(bits, leaf, "{:?} {extent} u wide: {bits:#b}", DECORS[k].id);
+            let (d, at) = (&DECORS[k], |cell: Zoom| {
+                bits >> (cell - FIRST_CELL) & 1 == 1
+            });
+            if bits == 0 {
+                continue;
+            }
+            assert_ne!(bits & leaf, 0, "{:?} {extent} u: {bits:#b}", d.id);
+            let coarsest = (FIRST_CELL..=LEAF_CELL).find(|&c| at(c)).unwrap();
+            assert!(
+                (coarsest..=LEAF_CELL).all(at),
+                "{:?} {extent} u: {bits:#b}",
+                d.id
+            );
+            let claim = units(d.row.cell_zoom()) * f64::from(d.row.widest());
+            assert!(
+                coarsest == LEAF_CELL || claim >= units(coarsest),
+                "{:?}",
+                d.id
+            );
         }
     }
 }
