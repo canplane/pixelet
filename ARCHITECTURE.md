@@ -772,10 +772,13 @@ carries none and draws nothing. The host's turns are paced to the display by
 the frame pacing the client boots it with (`ts/client/src/abi/boot.ts`,
 `@xpute/host/sched/frame_pacing.ts`), its numbers the kernel's
 (`spec/client/kernel/sys/sched/pacing.json`); an input makes the turns after it
-interactive (`ts/client/src/abi/input.ts` `send_input`). In the tick, what moves the eye runs in `interaction`, and after it
-what the pointer is over where the eye now stands, the edit it would make and
-its ghost; what the eye then sees, demand and the scene, in `visible`; and the
-later phases hold what the quota leaves them (`turn.rs`).
+interactive (`ts/client/src/abi/input.ts` `send_input`). The tick's phases are
+the kernel's (`spec/client/kernel/turn/phase.json`), and `visible` holds back
+the content's share (`sys/sched/tick.rs` `POLICY`). What moves the eye runs in
+`interaction`, and after it what the pointer is over where the eye now stands,
+the edit it would make and its ghost; what the eye then sees, demand and the
+scene, in `visible`; and the later phases hold what the quota leaves them
+(`turn.rs`).
 
 Once a turn, before the layers observe, the kernel says what moved (`turn.rs`
 `changes_step`): the tiles whose answer moved, and the regions the object store

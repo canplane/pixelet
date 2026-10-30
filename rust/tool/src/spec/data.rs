@@ -214,17 +214,6 @@ const DATA_SPECS: [DataSpec; 28] = [
         cpp: Some(("xpute/cpp/xpute/gpu/enum.spec.hpp", "xpute::gpu")),
     },
     DataSpec {
-        json: "xpute/spec/sched/tick.json",
-        uses: &[],
-        ts: Some("xpute/ts/host/src/sched/tick.spec.ts"),
-        rs: Some("xpute/rust/guest/src/sched/tick.spec.rs"),
-        rs_also: &[],
-        module: Some("spec"),
-        enums: Enums::Named(&["PHASES"]),
-        ts_names: None,
-        cpp: Some(("xpute/cpp/xpute/guest/sched/tick.spec.hpp", "xpute")),
-    },
-    DataSpec {
         json: "spec/client/kernel/door/directory.json",
         uses: &[],
         ts: Some("ts/client/src/abi/directory.spec.ts"),
@@ -335,6 +324,17 @@ const DATA_SPECS: [DataSpec; 28] = [
         cpp: None,
     },
     DataSpec {
+        json: "spec/client/kernel/turn/phase.json",
+        uses: &[],
+        ts: Some("ts/client/src/abi/phase.spec.ts"),
+        rs: Some("rust/client/kernel/src/turn/phase.spec.rs"),
+        rs_also: &[],
+        module: Some("phase_spec"),
+        enums: Enums::Named(&["PHASES"]),
+        ts_names: None,
+        cpp: None,
+    },
+    DataSpec {
         json: "spec/client/kernel/turn/step.json",
         uses: &[],
         ts: Some("ts/client/src/abi/step.spec.ts"),
@@ -359,7 +359,7 @@ const DATA_SPECS: [DataSpec; 28] = [
     DataSpec {
         json: "spec/client/kernel/profiler/profiler.json",
         uses: &[
-            "xpute/spec/sched/tick.json",
+            "spec/client/kernel/turn/phase.json",
             "spec/client/kernel/sys/io/demand.json",
             "spec/client/kernel/turn/step.json",
             "spec/client/render/gpu/span.json",

@@ -10,7 +10,7 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
-import { PHASES } from "@xpute/host/sched/tick.spec.ts";
+import { PHASES } from "@/abi/phase.spec.ts";
 import { CENSUS_TAGS, FRAME_GROUP, LIMIT, WAKES } from "@/abi/profiler.spec.ts";
 import type { Frame, ListLane } from "@/abi/profiler.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";

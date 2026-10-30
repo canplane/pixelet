@@ -252,13 +252,13 @@ levels, from the outside in.
    and more otherwise, and takes a turn's overrun off the next quota. Its
    numbers are the program's, injected with it. A host with no display may run
    a turn as soon as it is asked, or on a timer of its own.
-2. **Tick** (`sched/tick`) is the guest's. It runs phases named once for every
-   language (`spec/sched/tick.json`) in a fixed order — `interaction`,
-   `visible`, `content`, `cosmetic`, `report` — against one budget, the quota
-   counted from the rising edge. While `visible` runs, the share kept for
-   `content` (`content_share`) is held back from it; no other phase is held
-   back. What runs in each is the program's. A phase's time is recorded, never
-   stopped.
+2. **Tick** (`sched/tick`) is the guest's. It runs the program's phases, by
+   their place in its order, against one budget, the quota counted from the
+   rising edge. The program's policy gives each phase the share of the budget
+   held back from it for the phases after it (`held_back`), so a busy phase
+   cannot starve a later one; most hold back nothing. What the phases are
+   called, and what runs in each, are the program's. A phase's time is
+   recorded, never stopped.
 3. **Pass** (`sched/pass`) spends what is left of the budget on an ordered list
    of steps until the budget or a step cap says stop. Both are waived until a
    step has done work, so nothing starves behind what sits ahead of it. The hard

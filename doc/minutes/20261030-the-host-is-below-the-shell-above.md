@@ -56,6 +56,19 @@ be fused with today's one thread, through the little memory of September.
   where it fits.
 - **This design is written** ("해봅시다"). What it proposes is not adopted by
   being written.
+- **The layers read as Linux's display stack does** (the user, on the two
+  commands below): the shell is the compositor and desktop shell, the kernel a
+  client drawing into the surface it is lent, xpute's GPU host and the
+  platform's input the kernel's devices.
+- **`SURFACE_*` is the upper ABI's**, a canvas the shell lends the kernel as a
+  compositor lends a subsurface; binding that canvas to the GPU device
+  (`GpuHost.bind`, `xpute_gpu_surface_bind`) is the lower's.
+- **`WORLD_VISIBILITY` is the lower ABI's**, for the duty it cannot drop: the
+  platform is about to stop the process, so turns stop and the store is flushed,
+  as logind's `PrepareForSleep` is a system's word and not a compositor's. "No
+  one is looking", which pauses the sensors that only serve the screen, is the
+  compositor's suspended state, and splits off to the upper ABI when the UI
+  stands elsewhere.
 
 ## The IPC as it stands
 
@@ -448,9 +461,6 @@ Workers wait for the ledger, and the names for the user.
 
 ## Open
 
-- Where `SURFACE_*` and `WORLD_VISIBILITY` fall: the surface is lent by the
-  shell and bound by the GPU's host; the tab's visibility comes from the UI and
-  is the clock's.
 - Whether the upper ABI gets channels of its own (a ring pair, its own directory
   keys). Not before the UI stands elsewhere: the condition
   [20261024-plan-9-names-the-files-and-stops-there.md](./20261024-plan-9-names-the-files-and-stops-there.md)
@@ -459,3 +469,19 @@ Workers wait for the ledger, and the names for the user.
   Swift (`JavaScriptValue` kept and called) and Kotlin (`JavaScriptFunction`
   called inside a synchronous function) were type-checked by neither Xcode nor
   Gradle.
+
+## Where it stands
+
+Where `SURFACE_*` and `WORLD_VISIBILITY` fall is decided (above). Today
+`WORLD_VISIBILITY` reaches the kernel through the shell's input driver
+(`ts/client/src/shell/world/view.tsx` `INPUT.visible`); as the lower ABI's it
+moves to the platform's own path in step 2.
+
+The first step of the order is built on the branch `worktree-layers`: the
+names (`run`, an event, a scheduling policy and frame pacing); the strobe
+steered by a policy pixelet injects at boot, its numbers in pixelet's
+`spec/client/kernel/sys/sched/pacing.json`, the directory's quantum keys retired;
+and the tick's phases the program's, xpute's tick holding back what each
+phase's policy says (`held_back`), the kernel's five phases in
+`spec/client/kernel/turn/phase.json`. The pacing's numbers are no longer declared
+in the guest's directory. Steps 2 to 5 wait.

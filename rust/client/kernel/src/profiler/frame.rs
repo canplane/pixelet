@@ -4,9 +4,9 @@
 
 use core::mem::{offset_of, size_of};
 
+use crate::turn::phase_spec::PHASES;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec_core::tally;
-use xpute_guest::sched::tick::PHASES;
 
 use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMIT, WORST};
 use crate::profiler::word::{words, Words};
@@ -128,7 +128,7 @@ pub struct FrameSample {
     /// The parts of `busy_ms`: what is left of it is unmeasured.
     pub effects_ms: f64,
     pub tick_ms: f64,
-    pub phases: [f64; PHASES.len()],
+    pub phases: [f64; PHASES],
     pub stage_ms: f64,
     pub tasks_ms: f64,
     /// What the profiler cost the interval: its own record of the frame and

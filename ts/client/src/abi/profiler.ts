@@ -14,7 +14,7 @@ import { td } from "@xpute/kit/codec/encoding.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import type { Errno } from "@xpute/kit/status/errno.spec.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
-import { PHASES } from "@xpute/host/sched/tick.spec.ts";
+import { PHASES } from "@/abi/phase.spec.ts";
 import { Command, encode_profiler_read } from "@/abi/cmd.spec.ts";
 import {
   OUTCOME_NAMES,
