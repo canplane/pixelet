@@ -7,7 +7,7 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 import { HEAD, MAGIC, VERSION } from "./directory.spec.ts";
 

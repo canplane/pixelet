@@ -3,7 +3,7 @@
 // undefined; a push onto a full one throws ENOSPC.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 
 export class Deque<T> {

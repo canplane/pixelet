@@ -10,7 +10,7 @@ import type {
   AnyTypedArrayCtor,
 } from "../abi/array.ts";
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 
 export interface ArenaOptions {
   init_cap: u32;

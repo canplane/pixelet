@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { mount } from "@xpute/host/host.ts";
 import { op } from "@xpute/host/ipc/sys.spec.ts";
 import { open_module } from "@xpute/host/module.ts";

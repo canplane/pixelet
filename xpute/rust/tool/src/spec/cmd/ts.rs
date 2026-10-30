@@ -3,8 +3,8 @@
 //! A command table as TypeScript: its enums, each packet's writer and each
 //! event's reader, for the side that writes commands in TypeScript.
 
-use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
-use crate::spec::{file, generated, pascal, snake, ts_doc};
+use super::{literal, Entry, Field, Kind, Spec, Target, TsEnums, NUMBERS};
+use crate::spec::{file, generated, pascal, snake, ts_doc, Output};
 
 /// Only a list of u32 is packed.
 fn check_packed(f: &Field) -> Result<(), String> {
@@ -142,7 +142,9 @@ fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<
     ])
 }
 
-pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
+/// The table's module, and where its enums are constants, a module an enum
+/// beside it (`TsEnums::Constants`).
+pub fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     let mut out = vec![
         format!("// {}", t.ts_logical),
         "//".into(),
@@ -278,7 +280,35 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     if reads(&tail, "SequenceType.") {
         out.push("import { SequenceType } from \"@xpute/kit/wire/xtp/mod.ts\";".to_string());
     }
-    for e in &spec.enums {
+    let mut modules: Vec<Output> = Vec::new();
+    if t.ts_enums == TsEnums::Constants {
+        for e in &spec.enums {
+            out.push(format!(
+                "import * as {} from \"./cmd/{}.spec.ts\";",
+                e.name,
+                snake(&e.name)
+            ));
+        }
+        for e in &spec.enums {
+            let (path, logical) = enum_module(t, &e.name);
+            modules.push(Output::new(&path, constants(e, &logical, t.json)));
+            out.push(String::new());
+            out.push(format!(
+                "/** One of {}'s, as its enum was a type. */",
+                e.name
+            ));
+            out.push(format!(
+                "type {0} = (typeof {0})[keyof typeof {0}];",
+                e.name
+            ));
+            out.push(format!("export {{ {} }};", e.name));
+        }
+    }
+    for e in spec
+        .enums
+        .iter()
+        .filter(|_| t.ts_enums == TsEnums::ConstEnum)
+    {
         out.push(String::new());
         if let Some(doc) = &e.doc {
             out.extend(ts_doc(doc, ""));
@@ -307,5 +337,53 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         out.push("}".into());
     }
     out.extend(tail);
-    Ok(file(&out))
+    let mut outputs = vec![Output::new(t.ts, file(&out))];
+    outputs.extend(modules);
+    Ok(outputs)
+}
+
+/// An enum's module beside the table's, `cmd/<its name>.spec.ts`, and its
+/// logical path.
+fn enum_module(t: &Target, name: &str) -> (String, String) {
+    let at = |p: &str| {
+        let dir = p.rsplit_once('/').map_or("", |(d, _)| d);
+        format!("{dir}/cmd/{}.spec.ts", snake(name))
+    };
+    (at(t.ts), at(t.ts_logical))
+}
+
+/// An enum as a module of its members' constants, each its literal.
+fn constants(e: &super::Enum, logical: &str, json: &str) -> String {
+    let mut out = vec![
+        format!("// {logical}"),
+        "//".into(),
+        generated(json),
+        String::new(),
+    ];
+    if let Some(doc) = &e.doc {
+        out.extend(doc.iter().map(|l| format!("// {l}").trim_end().to_string()));
+        out.push(String::new());
+    }
+    for entry in &e.entries {
+        match entry {
+            Entry::Section(s) => {
+                out.extend([
+                    String::new(),
+                    format!("// ---- {} ----", s.section),
+                    String::new(),
+                ]);
+            }
+            Entry::Member(m) => {
+                if let Some(doc) = &m.doc {
+                    out.extend(ts_doc(doc, ""));
+                }
+                out.push(format!(
+                    "export const {} = {};",
+                    m.name,
+                    literal(m.val, &e.format)
+                ));
+            }
+        }
+    }
+    file(&out)
 }

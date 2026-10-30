@@ -12,7 +12,7 @@ import type { F64Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { td } from "@xpute/kit/codec/encoding.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
-import type { Errno } from "@xpute/kit/status/errno.spec.ts";
+import type { i32 } from "@xpute/kit/abi/word.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { PHASES } from "@/abi/phase.spec.ts";
 import { Command, encode_profiler_read } from "@/abi/cmd.spec.ts";
@@ -47,7 +47,7 @@ const WORD = 8;
 function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
   return HOST.doorbell.call(cmd, pkt, (at) => {
     // A refusal is -errno, never an address.
-    if (at < 0) throw new FaultError(-at as Errno);
+    if (at < 0) throw new FaultError(-at as i32);
     return at >>> 0;
   });
 }

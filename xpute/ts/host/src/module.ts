@@ -9,7 +9,7 @@
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import type { Guest } from "./host.ts";
 
 export interface ModuleGuest extends Guest {

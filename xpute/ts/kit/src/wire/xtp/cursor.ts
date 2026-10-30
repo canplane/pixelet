@@ -27,7 +27,7 @@ import type {
   U64Array,
   U8Array,
 } from "@xpute/kit/abi/array.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
 import type { AlignUnit, NodeType, NodeValue } from "./spec.ts";

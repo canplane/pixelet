@@ -10,7 +10,8 @@
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import { Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { each_record, text_of } from "./stream.ts";
 import { abort, args, flag, HEAD, op } from "./sys.spec.ts";
@@ -19,7 +20,7 @@ import { abort, args, flag, HEAD, op } from "./sys.spec.ts";
  * host refused with (an HTTP status) for a reader to print. */
 export class FileError extends Error {
   constructor(
-    readonly errnum: Errno,
+    readonly errnum: i32,
     readonly detail: u32 = 0,
   ) {
     super(detail === 0 ? strerror(errnum) : `${strerror(errnum)} (${detail})`);

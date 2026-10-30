@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Golden } from "@xpute/kit/golden.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { END } from "./stream.ts";
 import { FileError, type Fs, Sys } from "./sys.ts";
 import { flag, HEAD, op } from "./sys.spec.ts";

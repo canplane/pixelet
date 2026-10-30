@@ -201,6 +201,18 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// How a table's enums are written in TypeScript.
+#[derive(Clone, Copy, PartialEq)]
+pub enum TsEnums {
+    /// `const enum`, for a caller whose bundler inlines them.
+    ConstEnum,
+    /// A module of literal constants an enum, read as a namespace of the
+    /// enum's name, which is also the union of its members: no enum, so a
+    /// file transpiled alone, a stripped one or a package reads them, and a
+    /// bundle inlines them.
+    Constants,
+}
+
 pub struct Target {
     pub json: &'static str,
     pub ts: &'static str,
@@ -210,6 +222,7 @@ pub struct Target {
     /// Where the number checks a packet's reader calls are.
     pub number: &'static str,
     pub cpp: Option<(&'static str, &'static str)>,
+    pub ts_enums: TsEnums,
 }
 
 pub const TARGETS: [Target; 1] = [Target {
@@ -220,6 +233,7 @@ pub const TARGETS: [Target; 1] = [Target {
     rs_logical: "xpute-guest/abi",
     number: "crate::abi::number",
     cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
+    ts_enums: TsEnums::Constants,
 }];
 
 fn majors(spec: &Spec) -> Vec<(u32, &str)> {
@@ -268,7 +282,7 @@ pub fn outputs(targets: &[Target]) -> Result<Vec<Output>, String> {
         let spec: Spec = read_as(t.json)?;
         check_base(&spec, t.json)?;
         check_numbers(&spec, t.json)?;
-        out.push(Output::new(t.ts, ts::emit(&spec, t)?));
+        out.extend(ts::emit(&spec, t)?);
         out.push(Output::new(
             &format!("{}/cmd.spec.rs", t.rs_dir),
             rs::emit(&spec, t)?,

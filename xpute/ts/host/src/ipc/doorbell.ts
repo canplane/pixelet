@@ -7,7 +7,8 @@
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
-import { Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import {
   type BranchCursor,
   encoder,

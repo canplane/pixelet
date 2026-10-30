@@ -2,7 +2,8 @@
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
-import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
+import { strerror } from "@xpute/kit/status/errno.spec.ts";
+import type { i32 } from "@xpute/kit/abi/word.ts";
 
 import type {
   Frame,
@@ -94,7 +95,7 @@ const raysText = (first: Frame, last: Frame) => {
 };
 
 export function failText(fail: u32, detail: u32): string {
-  const name = strerror(fail as Errno).split(":")[0];
+  const name = strerror(fail as i32).split(":")[0];
   return detail === 0 ? name : `${name} ${detail}`;
 }
 

@@ -50,15 +50,14 @@ export const read = (s: Stream, dst: Bytes, nbyte: u32): void => {
   s.off = end;
 };
 
-export const enum Whence {
-  SET = 0, // SEEK_SET
-  CUR = 1, // SEEK_CUR
-  END = 2, // SEEK_END
-}
+/** Where `seek` counts from, as lseek(2)'s whence. */
+export const SEEK_SET = 0;
+export const SEEK_CUR = 1;
+export const SEEK_END = 2;
 
-export const seek = (s: Stream, off: i32, whence: Whence = Whence.SET): i32 => {
-  if (whence === Whence.CUR) s.off = s.off + off;
-  else if (whence === Whence.END) s.off = s.view.byteLength + off;
+export const seek = (s: Stream, off: i32, whence: u8 = SEEK_SET): i32 => {
+  if (whence === SEEK_CUR) s.off = s.off + off;
+  else if (whence === SEEK_END) s.off = s.view.byteLength + off;
   else s.off = off;
   return s.off;
 };

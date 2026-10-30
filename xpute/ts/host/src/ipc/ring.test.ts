@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 import * as frame from "./frame.ts";

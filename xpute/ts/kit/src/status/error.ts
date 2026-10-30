@@ -1,15 +1,16 @@
 // @xpute/kit/status/error.ts
 
-import { Errno, strerror } from "./errno.spec.ts";
+import { strerror } from "./errno.spec.ts";
+import type { i32 } from "../abi/word.ts";
 
 /**
  * An InvariantError is fatal; a FaultError is caught, isolated and dropped. The
  * class decides which, not the errno.
  */
 export class XputeError extends Error {
-  readonly errnum: Errno;
+  readonly errnum: i32;
 
-  constructor(errnum: Errno) {
+  constructor(errnum: i32) {
     super(strerror(errnum));
 
     Object.setPrototypeOf(this, new.target.prototype);

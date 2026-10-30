@@ -15,26 +15,21 @@
 
 import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import * as Major from "./cmd/major.spec.ts";
+import * as SysMinor from "./cmd/sys_minor.spec.ts";
+import * as Command from "./cmd/command.spec.ts";
 
-/** What a command is about. */
-export const enum Major {
-  NOP = 0x00,
-  SYS = 0x01,
-}
+/** One of Major's, as its enum was a type. */
+type Major = (typeof Major)[keyof typeof Major];
+export { Major };
 
-/** The system calls' answers (ipc/sys.json). */
-export const enum SysMinor {
-  OPENED = 0x01,
-}
+/** One of SysMinor's, as its enum was a type. */
+type SysMinor = (typeof SysMinor)[keyof typeof SysMinor];
+export { SysMinor };
 
-/** Every program's commands. */
-export const enum Command {
-  /** Replies with its packet's value, or 0 where it has none — the rings' own test. */
-  NOP = 0x0000,
-  /** An OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.
-   * Never sent for a descriptor already closed. */
-  SYS_OPENED = 0x0101,
-}
+/** One of Command's, as its enum was a type. */
+type Command = (typeof Command)[keyof typeof Command];
+export { Command };
 
 /** Command.NOP's packet, written in place into `to`. */
 export function encode_nop(to: PacketRoom, val: u32): PacketWriter {

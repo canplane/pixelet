@@ -16,7 +16,7 @@ import {
   td,
   te,
 } from "@xpute/kit/codec/encoding.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
 import { Command, encode_world_kept_emptied } from "@/abi/cmd.spec.ts";

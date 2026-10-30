@@ -7,7 +7,7 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 
 const WASM_PAGE_BYTES: u32 = 1 << 16;
 

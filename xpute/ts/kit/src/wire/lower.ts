@@ -2,7 +2,7 @@
 
 // A record to a tuple and back in a schema's key order, since XTP lowers arrays, not objects.
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
 export function to_tuple<T extends Record<PropertyKey, unknown>>(

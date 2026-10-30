@@ -35,7 +35,14 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     let mut ts = vec!["// @xpute/kit/status/errno.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
-    ts.extend(["".to_string(), "export const enum Errno {".into()]);
+    // One constant a member, read as a namespace (`import * as Errno`): no
+    // enum, so a file transpiled alone or a stripped one reads it, and a
+    // bundle inlines what it uses.
+    ts.extend([
+        String::new(),
+        "import type { i32 } from \"../abi/word.ts\";".to_string(),
+        String::new(),
+    ]);
     let mut rs = vec!["// xpute-kit/status/errno.spec.rs".to_string()];
     rs.extend(head.iter().cloned());
     rs.extend(
@@ -70,13 +77,13 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 rs.extend([String::new(), format!("    // ---- {section} ----")]);
                 ts.extend([
                     String::new(),
-                    format!("  // ---- {section} ----"),
+                    format!("// ---- {section} ----"),
                     String::new(),
                 ]);
             }
             ErrnoEntry::Member(m) => {
                 run.push(m);
-                ts.push(format!("  {} = {}, // {}", m.name, m.val, m.doc));
+                ts.push(format!("export const {} = {}; // {}", m.name, m.val, m.doc));
             }
         }
     }
@@ -98,7 +105,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
     }
     rs.extend(["            _ => None,", "        }", "    }", "}", ""].map(String::from));
-    ts.extend(["}".to_string(), String::new()]);
+    ts.push(String::new());
 
     let tail_doc = [
         "Conventions:",
@@ -123,17 +130,17 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "// Result pair: [errno, data]",
             "//",
             "// Conventions:",
-            "// - errno == Errno.OK  -> success",
-            "// - errno != Errno.OK  -> failure",
+            "// - errno == OK  -> success",
+            "// - errno != OK  -> failure",
             "// - data === null      -> no payload",
             "//",
             "// `null` is used as the canonical \"no value / no payload\" sentinel.",
             "// It does not imply pointer semantics; it is just the empty result slot.",
-            "export type ErrnoResult<T> = [Errno, T | null];",
+            "export type ErrnoResult<T> = [i32, T | null];",
             "",
             "/** An errno as a reader is shown it: its name and what it means. The",
             " * strings are for a person to read; an error carries the number alone. */",
-            "export function strerror(errnum: Errno): string {",
+            "export function strerror(errnum: i32): string {",
             "  return STRERROR[errnum] ?? `errno ${errnum}`;",
             "}",
             "",
@@ -155,8 +162,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         [
             "",
             "/** The member `code` is, null for a number no member has. */",
-            "export function errno_of(code: number): Errno | null {",
-            "  return Object.hasOwn(STRERROR, code) ? (code as Errno) : null;",
+            "export function errno_of(code: number): i32 | null {",
+            "  return Object.hasOwn(STRERROR, code) ? code : null;",
             "}",
         ]
         .map(String::from),

@@ -9,7 +9,7 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { type Bound, Namespace } from "@xpute/host/ipc/ns.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 

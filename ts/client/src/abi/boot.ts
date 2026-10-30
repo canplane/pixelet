@@ -13,7 +13,8 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
-import { Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { FramePacing } from "@xpute/host/sched/frame_pacing.ts";
 import { Command, encode_world_boot } from "@/abi/cmd.spec.ts";

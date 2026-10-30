@@ -7,7 +7,7 @@
 
 import type { U8Array } from "./abi/array.ts";
 import type { f64, u32, u64 } from "./abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 const SPEC = new URL("../../../spec/", import.meta.url);
 

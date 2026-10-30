@@ -9,7 +9,7 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { CATALOG } from "@/abi/host.spec.ts";
 import { CATALOG_HEX } from "@/driver/namespace/catalog.spec.ts";
