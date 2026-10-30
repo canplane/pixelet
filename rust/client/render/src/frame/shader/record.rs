@@ -980,13 +980,9 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
 }
 
 /// Every pipeline's record, worked out as the crate is built.
-#[cfg_attr(
-    target_pointer_width = "64",
-    expect(
-        clippy::large_const_arrays,
-        reason = "`is_floored` reads it as the crate is built, which a static is not; past the \
-                  lint's size where a usize is 8 bytes, not on the guest's 4"
-    )
+#[expect(
+    clippy::large_const_arrays,
+    reason = "`is_floored` reads it as the crate is built, which a static is not"
 )]
 const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
     let mut r = [([0; RECORD_WORDS], 0); PIPELINES as usize];
