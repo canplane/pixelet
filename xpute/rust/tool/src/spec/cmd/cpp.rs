@@ -1,6 +1,6 @@
 // xpute-tool/spec/cmd/cpp.rs
 
-//! A command table as a C++ guest's header: its enums and each packet's
+//! The command table as a C++ guest's header: its enums and each packet's
 //! reader; a C++ guest raises no event and writes no record.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};

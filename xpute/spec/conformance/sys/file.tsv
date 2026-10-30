@@ -1,5 +1,5 @@
-# The file service's traces: what a host's end of xpute's system calls owes a guest (ipc/sys,
-# ARCHITECTURE.md's system calls), apart from the boundary's rules C0 to C7 — the boundary
+# The file service's traces: what a host's end of xpute's hostcalls owes a guest (ipc/sys,
+# ARCHITECTURE.md's hostcalls), apart from the boundary's rules C0 to C7 — the boundary
 # carries the calls, and this is what they mean. Run against the host's end
 # (ts/host/src/ipc/sys.test.ts): a step writes a record as a guest's turn would, `turn`
 # runs them as the host does after a turn, and what reaches the guest is held to the trace.

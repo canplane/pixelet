@@ -1,7 +1,7 @@
 // @xpute/host/ipc/sys.ts
 
 /**
- * The host's end of a guest's system calls (rust/guest/src/ipc/sys.rs):
+ * The host's end of a guest's hostcalls (rust/guest/src/ipc/sys.rs):
  * the records a turn left, run after it returns and before the next begins, so
  * whatever they name in guest memory is written before the guest reads it; and
  * a program's call made as a hostcall, one record run before the hostcall
@@ -50,7 +50,7 @@ export interface Fs {
   commit(root: u32, path: string, bytes: U8Array): void;
 }
 
-/** What answers a program's system calls. Each part a program leaves out is
+/** What answers a program's hostcalls. Each part a program leaves out is
  * refused: an open with ENOENT (a write's with EROFS), a call of its own with
  * ENOSYS; a report it does not take is logged. */
 export interface SysHost {
@@ -101,7 +101,7 @@ export class Sys {
 
   /** The hostcall's record at `at`, run now: the program's answer, or ENOSYS
    * for a call that is not the program's. */
-  hostcall(mem: ArrayBuffer, at: u32): i32 {
+  call_now(mem: ArrayBuffer, at: u32): i32 {
     const [code, n] = new Uint32Array(mem, at, 2);
     if ((code & op.PROGRAM) === 0) return Errno.ENOSYS;
     if (!this.host.program) return Errno.ENOSYS;

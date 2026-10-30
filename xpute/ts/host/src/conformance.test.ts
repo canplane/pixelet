@@ -32,6 +32,7 @@ import {
   key,
   LAYOUTS,
   MEM_BYTES,
+  SENDER,
 } from "@xpute/host/conformance.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
 
@@ -162,6 +163,8 @@ interface Completion {
   cmd: number;
   reply: boolean;
   result: number;
+  /** The port its tag names: whom a reply or an event is for. */
+  src: number;
 }
 
 interface Turn {
@@ -203,14 +206,22 @@ class Host {
       },
       () => {},
     );
-    guest.answer_with((at) => sys.hostcall(mem, at));
+    guest.answer_with((at) => sys.call_now(mem, at));
   }
 
-  submit(tag: number, command: number, ack: boolean, args: number[]): void {
+  /** As the port `src`. */
+  submit(
+    tag: number,
+    cmd: number,
+    ack: boolean,
+    args: number[],
+    src: number,
+  ): void {
+    const sq = this.sq;
     let pkt: PacketWriter | null = null;
     if (args.length > 0) {
       assert.ok(
-        this.sq.write(this.writer, args.length),
+        sq.write(this.writer, args.length),
         "a full ring takes no packet",
       );
       // A negative number, such as an open's -errno, as the i32 it is.
@@ -221,7 +232,7 @@ class Host {
       pkt = this.writer;
     }
     assert.deepStrictEqual(
-      this.sq.push(tag, command, ack ? frame.ACKREQ : 0, pkt),
+      sq.push(frame.tagged(src, tag), cmd, ack ? frame.ACKREQ : 0, pkt),
       Errno.OK,
     );
   }
@@ -231,16 +242,23 @@ class Host {
     const stream: number[] = [];
     each_record(this.guest.mem, this.stream_at, 1, (op) => stream.push(op));
     const completions: Completion[] = [];
-    for (let at = this.cq.peek(); at >= 0; at = this.cq.peek()) {
+    const cq = this.cq;
+    for (let at = cq.peek(); at >= 0; at = cq.peek()) {
       completions.push({
-        tag: this.cq.tag(at),
-        cmd: this.cq.cmd(at),
-        reply: (this.cq.flags(at) & frame.RES) !== 0,
-        result: this.cq.result(at),
+        tag: frame.id_of(cq.tag(at)),
+        cmd: cq.cmd(at),
+        reply: (cq.flags(at) & frame.RES) !== 0,
+        result: cq.result(at),
+        src: frame.port_of(cq.tag(at)),
       });
-      this.cq.advance();
+      cq.advance();
     }
     return { completions, stream, wake };
+  }
+
+  /** Whether a submission waits. */
+  get pending(): boolean {
+    return this.sq.len > 0;
   }
 
   names(k: number): boolean {
@@ -263,22 +281,34 @@ function key_number(name: string): number {
   return keys[name];
 }
 
-const CMD_NAMES = [
-  ...Object.entries(cmd).filter(([, v]) => typeof v === "number"),
-  ["SYS_OPENED", Command.SYS_OPENED],
-] as [string, number][];
+/** The guest's own commands, which a trace sends as SENDER. */
+const CMD_NAMES = Object.entries(cmd).filter(
+  ([, v]) => typeof v === "number",
+) as [string, number][];
 
-function cmd_number(name: string): number {
+/** xpute's own, which a trace sends as the host. */
+const HOST_NAMES: [string, number][] = [
+  ["NOP", Command.NOP],
+  ["SYS_OPENED", Command.SYS_OPENED],
+];
+
+/** A name of either table and the port that sends it, or a number in hex,
+ * which SENDER sends. */
+function cmd_number(name: string): { cmd: number; src: number } {
   const found = CMD_NAMES.find(([n]) => n === name);
-  if (found) return found[1];
+  if (found) return { cmd: found[1], src: SENDER };
+  const own = HOST_NAMES.find(([n]) => n === name);
+  if (own) return { cmd: own[1], src: frame.HOST };
   const n = parseInt(name.replace(/^0x/, ""), 16);
   if (Number.isNaN(n)) throw new Error(`no command ${name}`);
-  return n;
+  return { cmd: n, src: SENDER };
 }
 
-function cmd_name(n: number): string {
+/** A reply to the host is to one of xpute's own; anything else the guest
+ * raised or answered is its own. */
+function cmd_name(n: number, host: boolean): string {
   return (
-    CMD_NAMES.find(([, v]) => v === n)?.[0] ??
+    (host ? HOST_NAMES : CMD_NAMES).find(([, v]) => v === n)?.[0] ??
     `0x${n.toString(16).padStart(4, "0")}`
   );
 }
@@ -289,7 +319,7 @@ function render_completions(completions: Completion[]): string {
   const out: string[] = [];
   let run: [number, number] | null = null;
   const flush = () => {
-    if (run) out.push(`${cmd_name(run[0])}*${run[1]}`);
+    if (run) out.push(`${cmd_name(run[0], false)}*${run[1]}`);
     run = null;
   };
   for (const c of completions) {
@@ -299,12 +329,12 @@ function render_completions(completions: Completion[]): string {
       } else {
         flush();
         if (c.tag === 0) run = [c.cmd, 1];
-        else out.push(`${c.tag}:${cmd_name(c.cmd)}`);
+        else out.push(`${c.tag}:${cmd_name(c.cmd, false)}`);
       }
       continue;
     }
     flush();
-    out.push(`${c.tag}:${cmd_name(c.cmd)}=${c.result}`);
+    out.push(`${c.tag}:${cmd_name(c.cmd, c.src === frame.HOST)}=${c.result}`);
   }
   flush();
   return out.length === 0 ? "-" : out.join(" ");
@@ -401,14 +431,17 @@ function run(
   for (let i = 0; g.has(`${trace}.step.${i}`); i++) {
     const step = g.s(`${trace}.step.${i}`).split(" ");
     switch (step[0]) {
-      case "submit":
+      case "submit": {
+        const { cmd, src } = cmd_number(step[2]);
         host.submit(
           Number(step[1]),
-          cmd_number(step[2]),
+          cmd,
           step[3] === "ack",
           step.slice(4).map((t) => val(t, vars)),
+          src,
         );
         break;
+      }
       case "ring": {
         // A turn is held to the trace as soon as it is seen, so the results
         // it binds can be named by the steps after it.
@@ -431,7 +464,7 @@ function run(
       case "settle":
         for (;;) {
           turns.push(host.ring(0));
-          if (host.sq.len === 0) break;
+          if (!host.pending) break;
           assert.ok(
             turns.length < MOST_SETTLE_TURNS,
             `${name}: the guest stopped applying what waits`,

@@ -38,11 +38,12 @@ what that program computes.
 
 Three edges, and two calls the other way, each answered before it returns: the
 guest reads the host's clock (`now`), because it spends its quota against that
-clock in the middle of a turn, when the host cannot run; and it makes a
-**hostcall**, a call of its program's that the host answers from what it already
-holds, where an answer a turn later would cost it that turn. There is no second
-entry point, no other callback, and nothing either side holds a pointer to on
-the other.
+clock in the middle of a turn, when the host cannot run; and it runs a
+**hostcall**, a guest's call into its host, now rather than from the stream the
+host runs after the turn: one of its program's that the host answers from what
+it already holds, where an answer a turn later would cost it that turn. There is
+no second entry point, no other callback, and nothing either side holds a
+pointer to on the other.
 
 `run` is the whole of the guest's life. xpute names it, as a C runtime names
 `main`, and the guest implements it. It runs when the host rings, for as long as
@@ -85,9 +86,9 @@ spec                                        the numbers every language's are gen
 The smallest program shows the whole of it: a guest that answers one command
 (`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
 `make test` runs. The guest lays out its own range, a page for the directory,
-then the two rings and their slots and the system calls' stream, and answers
-the directory's offset from a boot call; each turn it applies what waits, and
-asks the host by hostcall for a number the host holds. The host opens the module
+then the two rings and their slots and the hostcalls' stream, and answers the
+directory's offset from a boot call; each turn it applies what waits, and asks
+the host for a number it holds by a hostcall run now. The host opens the module
 over a memory of its own (`@xpute/host/module.ts` `open_module`) and mounts on
 it in one call (`@xpute/host/host.ts` `mount`), given that offset, its answers
 to the guest's calls (`SysHost`, each part optional) and the scheduling policy

@@ -129,7 +129,7 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         return {.err = Errno::einval};
     case cmd::RAISE:
         if (arg > MOST_RAISE) return {.err = Errno::einval};
-        for (std::uint32_t k = 0; k < arg; k++) s.door.post(k, cmd::EVENT, 0, 0);
+        for (std::uint32_t k = 0; k < arg; k++) s.door.post(frame::tagged(SENDER, k), cmd::EVENT, 0, 0);
         return {.val = static_cast<std::int32_t>(arg)};
     case cmd::RECORD:
         s.stream.record(arg, {});
@@ -157,7 +157,7 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     case cmd::HOSTCALL: {
         s.word = 0;
         const std::array<std::uint32_t, 2> args{arg, s.stream.mem().off_of(&s.word)};
-        Result<std::uint32_t> res = s.sys.hostcall(hostcall::ANSWER, args, {});
+        Result<std::uint32_t> res = s.sys.call_now(hostcall::ANSWER, args, {});
         if (!res) return {.err = res.error().errnum};
         // The word the host wrote before the hostcall returned.
         return {.val = static_cast<std::int32_t>(*static_cast<volatile std::uint32_t *>(&s.word))};
@@ -189,7 +189,7 @@ double turn(Memory m, std::uint32_t range) {
     s.sys.rise();
     s.door.drain(
         [&s](const abi::SysOpened &opened) {
-            if (std::optional<std::uint32_t> owner = s.files.opened(s.sys, opened)) s.door.post(*owner, cmd::OPENED, 0, opened.res);
+            if (std::optional<std::uint32_t> owner = s.files.opened(s.sys, opened)) s.door.post(frame::tagged(SENDER, *owner), cmd::OPENED, 0, opened.res);
             return Applied{};
         },
         [&s](std::uint32_t cmd, std::span<const std::uint8_t> pkt) { return apply(s, cmd, pkt); });

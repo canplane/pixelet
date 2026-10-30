@@ -1,6 +1,6 @@
 // @pxl/client/driver/stop.ts
 
-/** The kernel's last report, its system call `abort` (pxl-kernel
+/** The kernel's last report, its hostcall `abort` (pxl-kernel
  * `sys/stop.rs`), logged whole and kept short as a stop code for the shell's
  * halt. */
 

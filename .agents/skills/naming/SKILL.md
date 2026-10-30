@@ -74,6 +74,10 @@ tile's bytes).
 | the camera modes | `orbit`, `first_person` (the UI says 1인칭/3인칭) | free |
 | what a mouse, touch or controller points with | `pointer` | cursor |
 | the raster's nearest sample at each pixel | the visibility buffer | pick |
+| a frame's number on xpute's rings, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
+| what the shell asks of the kernel | a command | |
+| a guest's call into its host, run now or after the turn | a hostcall | system call, hypercall |
+| the number a frame names at the guest's far side, 0 the host | a port | endpoint, worker id |
 
 `at` is where a thing is, `to` where it is going.
 

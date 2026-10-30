@@ -1,6 +1,6 @@
 // cpp/xpute/guest/ipc/sys.hpp
 
-// A guest's system calls, recorded in a stream the host runs after the turn
+// A guest's hostcalls, recorded in a stream the host runs after the turn
 // returns; what a call names in the guest's memory is kept until the next
 // rise. A descriptor is a handle of the guest's own table, so a late answer to
 // a closed one names nothing. A program's call made as a `hostcall` is
@@ -64,7 +64,7 @@ class Sys {
     // `call` run by the host before this returns, from what it already holds:
     // its value or its errno, ENOSPC where the record does not fit past the
     // turn's. What `args` name it writes during the call.
-    Result<std::uint32_t> hostcall(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept;
+    Result<std::uint32_t> call_now(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes) noexcept;
 
     // `call` where it fits with `reserve` bytes left after it; false, and nothing
     // recorded, where it does not, for the caller to ask again a later turn.

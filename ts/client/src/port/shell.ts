@@ -5,8 +5,12 @@
  * that only forwards to one is that boundary, not a rename. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import type { Doorbell } from "@xpute/host/ipc/doorbell.ts";
-import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
+import type {
+  NodeValue,
+  NodeView,
+  PacketRoom,
+  PacketWriter,
+} from "@xpute/kit/wire/xtp/mod.ts";
 import {
   Command,
   encode_input_tracking,
@@ -14,6 +18,7 @@ import {
   Tracking,
 } from "@/abi/cmd.spec.ts";
 import { HOST } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import { send_input } from "./input.ts";
 
@@ -51,11 +56,15 @@ export async function kernel_tracking(tracking: Tracking): Promise<void> {
 
 /** A command of the kernel's, rung at once with no quota. */
 export function kernel_command(cmd: Command, pkt?: PacketWriter): void {
-  HOST.now(cmd, pkt);
+  HOST.now(port.SHELL, cmd, pkt);
 }
 
 export function kernel_setting(key: u32, value: u32): void {
-  HOST.now(Command.SETTING_SET, encode_setting_set(HOST.doorbell, key, value));
+  HOST.now(
+    port.SHELL,
+    Command.SETTING_SET,
+    encode_setting_set(HOST.doorbell, key, value),
+  );
 }
 
 /** Where the shell writes a command's packet (`encode_*`), in place: the
@@ -69,7 +78,9 @@ export function kernel_fits(pkt: PacketWriter): boolean {
   return HOST.doorbell.fits(pkt);
 }
 
-/** The guest's doorbell itself, for a development console's `cmd`. */
-export function kernel_doorbell(): Doorbell {
-  return HOST.doorbell;
-}
+/** A development console's `cmd`: any command by its number, its arguments
+ * its packet's fields, sent as the shell and rung. */
+export const kernel_console = {
+  cmd: (cmd: u32, ...args: NodeValue<NodeView>[]): void =>
+    HOST.doorbell.cmd(port.SHELL, cmd, ...args),
+};

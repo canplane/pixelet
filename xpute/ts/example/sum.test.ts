@@ -38,6 +38,9 @@ const ASK = (op.PROGRAM | 1) >>> 0;
 /** What the host holds and the guest asks for. */
 const HELD = 100;
 
+/** The port the program sends as: any but the host's, 0. */
+const SENDER = 1;
+
 test("example - a command answered with what the guest asked its host", () => {
   // Two MiB, never grown: the guest's stack, its data, its range and its heap.
   const memory = new WebAssembly.Memory({ initial: 32, maximum: 32 });
@@ -57,7 +60,7 @@ test("example - a command answered with what the guest asked its host", () => {
   pkt.u32(2);
   pkt.u32(3);
   assert.deepStrictEqual(
-    host.doorbell.call(SUM, pkt, (result) => result),
+    host.doorbell.call(SENDER, SUM, pkt, (result) => result),
     2 + 3 + HELD,
   );
 });

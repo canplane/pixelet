@@ -1,6 +1,6 @@
 // xpute-tool/spec/cmd/rs.rs
 
-//! A command table as Rust: its enums, each packet's reader and each
+//! The command table as Rust: its enums, each packet's reader and each
 //! event's writer, for a Rust guest.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
@@ -233,7 +233,7 @@ fn rs_writer(
 
 pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let mut out = vec![
-        format!("// {}/cmd.spec.rs", t.rs_logical),
+        format!("// {}", t.rs_logical),
         "//".into(),
         generated(t.json),
         "".into(),

@@ -1,8 +1,7 @@
 // xpute-tool/spec/cmd.rs
 
-//! The command tables, xpute's and a program's on top of it. Majors below
-//! xpute's `program_major` are xpute's; a number is given out once across
-//! both. The emitters are cmd/ts.rs, cmd/rs.rs and cmd/cpp.rs.
+//! xpute's command table. The emitters are cmd/ts.rs, cmd/rs.rs and
+//! cmd/cpp.rs.
 
 mod cpp;
 mod rs;
@@ -77,8 +76,6 @@ struct Record {
 struct Spec {
     #[serde(rename = "$doc")]
     doc: Vec<String>,
-    base: Option<String>,
-    program_major: Option<u32>,
     #[serde(rename = "extern")]
     externs: Vec<Extern>,
     enums: Vec<Enum>,
@@ -201,95 +198,34 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// How a table's enums are written in TypeScript.
-#[derive(Clone, Copy, PartialEq)]
-pub enum TsEnum {
-    /// `const enum`, for a caller whose bundler inlines them.
-    ConstEnum,
-    /// A module of literal constants an enum, read as a namespace of the
-    /// enum's name, which is also the union of its members: no enum, so a
-    /// file transpiled alone, a stripped one or a package reads them, and a
-    /// bundle inlines them.
-    Constants,
-}
-
-pub struct Target {
-    pub json: &'static str,
-    pub ts: &'static str,
-    pub ts_logical: &'static str,
-    pub rs_dir: &'static str,
-    pub rs_logical: &'static str,
+struct Target {
+    json: &'static str,
+    ts: &'static str,
+    ts_logical: &'static str,
+    rs: &'static str,
+    rs_logical: &'static str,
     /// Where the number checks a packet's reader calls are.
-    pub number: &'static str,
-    pub cpp: Option<(&'static str, &'static str)>,
-    pub ts_enum: TsEnum,
+    number: &'static str,
+    cpp: (&'static str, &'static str),
 }
 
-pub const TARGETS: [Target; 1] = [Target {
+const TARGET: Target = Target {
     json: "spec/abi/cmd.json",
     ts: "ts/host/src/abi/cmd.spec.ts",
     ts_logical: "@xpute/host/abi/cmd.spec.ts",
-    rs_dir: "rust/guest/src/abi",
-    rs_logical: "xpute-guest/abi",
+    rs: "rust/guest/src/abi/cmd.spec.rs",
+    rs_logical: "xpute-guest/abi/cmd.spec.rs",
     number: "crate::abi::number",
-    cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
-    ts_enum: TsEnum::Constants,
-}];
+    cpp: ("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi"),
+};
 
-fn majors(spec: &Spec) -> Vec<(u32, &str)> {
-    spec.enums
-        .iter()
-        .filter(|e| e.name == "Major")
-        .flat_map(|e| members(e).map(|m| (m.val, m.name.as_str())))
-        .collect()
-}
-
-/// A program's majors are past the base's `program_major`, and no command is named in both.
-fn check_base(spec: &Spec, json: &str) -> Result<(), String> {
-    let Some(base_path) = &spec.base else {
-        return Ok(());
-    };
-    let base: Spec = read_as(base_path)?;
-    let edge = base
-        .program_major
-        .ok_or(format!("{base_path}: no program_major"))?;
-    for (val, name) in majors(&base) {
-        if val >= edge {
-            return Err(format!(
-                "{base_path}: major {name} at {val:#x} is a program's"
-            ));
-        }
-    }
-    for (val, name) in majors(spec) {
-        if val < edge {
-            return Err(format!(
-                "{json}: major {name} at {val:#x} is below {edge:#x}, xpute's"
-            ));
-        }
-    }
-    let base_names: Vec<String> = base.commands()?.iter().map(|c| c.name.clone()).collect();
-    for c in spec.commands()? {
-        if base_names.contains(&c.name) {
-            return Err(format!("{json}: {} is {base_path}'s", c.name));
-        }
-    }
-    Ok(())
-}
-
-pub fn outputs(targets: &[Target]) -> Result<Vec<Output>, String> {
-    let mut out = Vec::new();
-    for t in targets {
-        let spec: Spec = read_as(t.json)?;
-        check_base(&spec, t.json)?;
-        check_numbers(&spec, t.json)?;
-        out.extend(ts::emit(&spec, t)?);
-        out.push(Output::new(
-            &format!("{}/cmd.spec.rs", t.rs_dir),
-            rs::emit(&spec, t)?,
-        ));
-        if let Some((path, namespace)) = t.cpp {
-            out.push(Output::new(path, cpp::emit(&spec, t, path, namespace)?));
-        }
-    }
+pub fn outputs() -> Result<Vec<Output>, String> {
+    let t = &TARGET;
+    let spec: Spec = read_as(t.json)?;
+    check_numbers(&spec, t.json)?;
+    let mut out = ts::emit(&spec, t)?;
+    out.push(Output::new(t.rs, rs::emit(&spec, t)?));
+    let (path, namespace) = t.cpp;
+    out.push(Output::new(path, cpp::emit(&spec, t, path, namespace)?));
     Ok(out)
 }

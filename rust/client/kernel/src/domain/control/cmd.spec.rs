@@ -561,7 +561,7 @@ impl Message {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Command {
-    // ---- the process asks the host: its system calls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json) ----
+    // ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json) ----
     /// Start watching.
     SENSOR_START = 0x1201,
     /// Stop watching.

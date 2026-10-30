@@ -3,7 +3,10 @@
 /**
  * The host's end of a guest's rings. One ring of the doorbell is one turn
  * (sched/strobe.ts). Everything a turn leaves is read before the next is rung,
- * so a listener must not ring the guest while the completion ring is read.
+ * so a listener must not ring the guest while the completion ring is read. A
+ * frame's tag names a port (ipc/frame.json): the doorbell sends as the port it
+ * is given, and hands what the guest raises to the port it names, where one
+ * listens.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -28,7 +31,7 @@ import { InvariantError } from "@xpute/kit/status/error.ts";
 const NOWHERE = new Uint8Array(0);
 const NOWHERE_VIEW = new DataView(NOWHERE.buffer);
 
-/** Valid only inside the call. */
+/** What a port hears the guest raise; valid only inside the call. */
 type OnEvent = (tag: u32, cmd: u32, f: BranchCursor | null) => void;
 
 type Run = (quota_ms: f64) => f64;
@@ -48,7 +51,7 @@ export class Doorbell implements PacketRoom {
   /** A trapped guest is gone: its turn stopped partway, and the submission
    * it was applying would trap it again on every ring. */
   private trapped = false;
-  event: OnEvent | null = null;
+  private readonly hearing = new Map<u32, OnEvent>();
   wake: ((wake_ms: f64) => void) | null = null;
   /** Told once, as the guest traps. */
   stopped: (() => void) | null = null;
@@ -76,21 +79,28 @@ export class Doorbell implements PacketRoom {
     return pkt.finish() >= 0;
   }
 
-  send(tag: u32, cmd: u32, pkt: PacketWriter | null = null): void {
-    this.submit(tag, cmd, pkt, 0);
+  /** What the guest raises for `port` is handed to `heard`; what it raises
+   * for a port none listens on is dropped. */
+  listen(port: u32, heard: OnEvent): void {
+    this.hearing.set(port, heard);
   }
 
-  /** `cmd` sent and rung, its arguments its packet's fields in turn, each
-   * lowered as XTP lowers a value (wire/xtp `TreeView.set`): a command from
-   * outside the host's own code, a console's. */
-  cmd(cmd: u32, ...args: NodeValue<NodeView>[]): void {
+  /** As the port `src`. */
+  send(src: u32, cmd: u32, pkt: PacketWriter | null = null): void {
+    this.submit(frame.tagged(src, 0), cmd, pkt, 0);
+  }
+
+  /** `cmd` sent as the port `src` and rung, its arguments its packet's fields
+   * in turn, each lowered as XTP lowers a value (wire/xtp `TreeView.set`): a
+   * command from outside the host's own code, a console's. */
+  cmd(src: u32, cmd: u32, ...args: NodeValue<NodeView>[]): void {
     const pkt = args.length === 0 ? null : this.writer(args.length);
     // Each is grafted into the slot, so a slot is its most.
     const cap = { init_cap: this.sq.slot_bytes, max_cap: this.sq.slot_bytes };
     for (const a of args) {
       pkt?.graft(encoder.encode(new TreeView().set(a), cap));
     }
-    this.send(0, cmd, pkt);
+    this.send(src, cmd, pkt);
     this.ring(0);
   }
 
@@ -112,14 +122,17 @@ export class Doorbell implements PacketRoom {
     return wake;
   }
 
-  /** Submitted with ACKREQ and rung with no quota until the reply returns; the reply is valid only inside `take`. */
+  /** Submitted as the port `src` with ACKREQ and rung with no quota until the
+   * reply returns; the reply is valid only inside `take`. */
   call<T>(
+    src: u32,
     cmd: u32,
     pkt: PacketWriter | null,
     take: (result: i32, reply: BranchCursor | null) => T,
   ): T {
     if (this.trapped) throw new InvariantError(Errno.ENOTRECOVERABLE);
-    const tag = (this.next_call = (this.next_call + 1) >>> 0);
+    this.next_call = frame.id_of(this.next_call + 1);
+    const tag = frame.tagged(src, this.next_call);
     let out: { val: T } | null = null;
     this.waiting.set(tag, (result, f) => (out = { val: take(result, f) }));
     try {
@@ -154,19 +167,13 @@ export class Doorbell implements PacketRoom {
             waiting(cq.result(at), f);
           } else if (cq.result(at) < 0) {
             console.warn(
-              `[xpute/doorbell] command 0x${cmd.toString(16)} failed: ${strerror(
-                cq.result(at),
-              )}`,
+              `[xpute/doorbell] port ${frame.port_of(tag)}'s command 0x${cmd.toString(
+                16,
+              )} failed: ${strerror(cq.result(at))}`,
             );
           }
-        } else if (this.event !== null) {
-          this.event(tag, cmd, f);
         } else {
-          console.warn(
-            `[xpute/doorbell] event 0x${cmd.toString(
-              16,
-            )} raised with no one to hear it`,
-          );
+          this.hearing.get(frame.port_of(tag))?.(tag, cmd, f);
         }
         cq.advance();
       }

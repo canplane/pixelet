@@ -9,10 +9,12 @@ import {
   encode_surface_resize,
 } from "@/abi/cmd.spec.ts";
 import { HOST } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
 
 /** 0 when the kernel has none left. */
 function surface_open(role: u32): u32 {
   return HOST.doorbell.call(
+    port.SHELL,
     Command.SURFACE_OPEN,
     encode_surface_open(HOST.doorbell, role),
     (result) => result >>> 0,
@@ -21,6 +23,7 @@ function surface_open(role: u32): u32 {
 
 function surface_size(surface: u32, width: u32, height: u32, dpr: f64): void {
   HOST.send(
+    port.SHELL,
     Command.SURFACE_RESIZE,
     encode_surface_resize(HOST.doorbell, surface, width, height, dpr),
   );
@@ -28,6 +31,7 @@ function surface_size(surface: u32, width: u32, height: u32, dpr: f64): void {
 
 function surface_close(surface: u32): void {
   HOST.doorbell.call(
+    port.SHELL,
     Command.SURFACE_CLOSE,
     encode_surface_close(HOST.doorbell, surface),
     (result) => result,

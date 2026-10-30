@@ -8,6 +8,8 @@ const SQ: u32 = 8;
 const CQ: u32 = 256;
 const SLOT: u32 = 64;
 const MOST_EVENTS: u32 = 64;
+/// A program's port, sending the program's commands.
+const PROGRAM: u32 = 1 << frame::PORT_SHIFT;
 
 fn door() -> (Door, Box<[u8]>) {
     let sq_desc = 8;
@@ -33,7 +35,7 @@ fn command_needs_reply_room() {
     for _ in 0..CQ - MOST_EVENTS {
         d.post(0, 2, 0, 0);
     }
-    assert_eq!(d.sq().push(0, 1, frame::ACKREQ, 0, None), Errno::OK);
+    assert_eq!(d.sq().push(PROGRAM, 1, frame::ACKREQ, 0, None), Errno::OK);
     d.drain(|_| {
         for _ in 0..MOST_EVENTS {
             d.post(0, 2, 0, 0);
@@ -54,7 +56,7 @@ fn ring_peaks() {
         d.post(0, 2, 0, 0);
     }
     for _ in 0..SQ {
-        assert_eq!(d.sq().push(0, 1, frame::ACKREQ, 0, None), Errno::OK);
+        assert_eq!(d.sq().push(PROGRAM, 1, frame::ACKREQ, 0, None), Errno::OK);
     }
     assert_eq!(d.drain(|_| Ok(Some(0))), 3);
     assert_eq!(
@@ -127,4 +129,39 @@ fn open_completion_handed_over() {
         Submission::Program(..) => unreachable!("an open's completion is not the program's frame"),
     });
     assert_eq!(got, Some((3, 9)));
+}
+
+#[test]
+fn program_frame_numbered_nop_handed_over() {
+    let (d, _buf) = door();
+    let tag = PROGRAM | 6;
+    assert_eq!(
+        d.sq()
+            .push(tag, Command::NOP as u32, frame::ACKREQ, 0, None),
+        Errno::OK
+    );
+    let mut got = None;
+    d.drain(|submission| match submission {
+        Submission::Program(cmd, _) => {
+            got = Some(cmd);
+            Ok(Some(1))
+        }
+        Submission::Opened(_) => unreachable!("port 1 is not the host"),
+    });
+    assert_eq!(got, Some(Command::NOP as u32));
+    let f = d.cq().peek().expect("a reply");
+    assert_eq!(
+        (f.tag, f.result),
+        (tag, 1),
+        "the reply goes back to its sender"
+    );
+}
+
+#[test]
+fn host_frame_unknown_refused() {
+    let (d, _buf) = door();
+    assert_eq!(d.sq().push(5, 0x1001, 0, 0, None), Errno::OK);
+    d.drain(|_| unreachable!("the host's command is none of the program's"));
+    let f = d.cq().peek().expect("a failure's reply");
+    assert_eq!((f.tag, f.result), (5, Errno::ENOSYS as i32));
 }

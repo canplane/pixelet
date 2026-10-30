@@ -32,9 +32,9 @@ impl Output {
 }
 
 pub fn outputs() -> Result<Vec<Output>, String> {
-    let mut out = cmd::outputs(&cmd::TARGETS)?;
+    let mut out = cmd::outputs()?;
     out.extend(errno::outputs()?);
-    out.extend(data::outputs(&data::DATA_SPECS, &data::LAYOUT)?);
+    out.extend(data::outputs()?);
     Ok(out)
 }
 
@@ -227,119 +227,6 @@ impl Node {
     }
 }
 
-/// A table with `"$packed": true` is laid end to end: each field gives its
-/// width in words, and the generator writes where it begins and the table's
-/// `WORDS` where the last ends; a section inside is a packed table given its
-/// `AT`. A width is a number or a product of terms (`"2 * CENSUS_TAGS"`), a
-/// term a number, a list or a packed table above it in the file (its length,
-/// its `WORDS`) or a number in one (`LIMIT.ZOOMS`, `op.DESTROY`), else one
-/// in a file it uses (`used`). So a lane grown moves everything after it.
-pub fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
-    let Node::Obj(entries) = node else {
-        return Ok(node);
-    };
-    let mut above: Vec<(String, Node)> = Vec::with_capacity(entries.len());
-    for (k, v) in entries {
-        let v = match v {
-            Node::Obj(ref t)
-                if t.iter()
-                    .any(|(f, x)| f == "$packed" && *x == Node::Bool(true)) =>
-            {
-                Node::Obj(lay(t.clone(), &above, used).map_err(|e| format!("{k}.{e}"))?)
-            }
-            v => v,
-        };
-        above.push((k, v));
-    }
-    Ok(Node::Obj(above))
-}
-
-fn lay(
-    entries: Vec<(String, Node)>,
-    above: &[(String, Node)],
-    used: &[(String, Node)],
-) -> Result<Vec<(String, Node)>, String> {
-    let mut at = 0.0;
-    let mut out = Vec::with_capacity(entries.len() + 1);
-    for (k, v) in entries {
-        if k.starts_with('$') {
-            out.push((k, v));
-            continue;
-        }
-        if k == "WORDS" || k == "AT" {
-            return Err(format!(
-                "{k}: a packed table's {k} is laid out, not written"
-            ));
-        }
-        match v {
-            Node::Obj(section) => {
-                let mut section = lay(section, above, used).map_err(|e| format!("{k}.{e}"))?;
-                let words = words_of(&section).unwrap_or(0.0);
-                let first = section
-                    .iter()
-                    .take_while(|(f, _)| f.starts_with('$'))
-                    .count();
-                section.insert(first, ("AT".into(), Node::Num(at)));
-                at += words;
-                out.push((k, Node::Obj(section)));
-            }
-            v => {
-                let width = width(&v, above, used).map_err(|e| format!("{k}: {e}"))?;
-                out.push((k, Node::Num(at)));
-                at += width;
-            }
-        }
-    }
-    out.push(("WORDS".into(), Node::Num(at)));
-    Ok(out)
-}
-
-fn words_of(table: &[(String, Node)]) -> Option<f64> {
-    table
-        .iter()
-        .find(|(f, _)| f == "WORDS")
-        .and_then(|(_, w)| w.num())
-}
-
-fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<f64, String> {
-    let named = |name: &str| {
-        above
-            .iter()
-            .chain(used)
-            .find(|(k, _)| k == name)
-            .map(|(_, n)| n)
-    };
-    let term = |t: &str| -> Result<f64, String> {
-        let t = t.trim();
-        if let Ok(n) = t.parse::<f64>() {
-            return Ok(n);
-        }
-        let found = match t.split_once('.') {
-            Some((table, field)) => named(table)
-                .and_then(|n| n.get(field))
-                .and_then(|f| f.value().num()),
-            None => named(t).and_then(|n| match n {
-                Node::Arr(a) => Some(a.len() as f64),
-                Node::Obj(_) if n.is_wrapper() => n.value().num(),
-                Node::Obj(o) => words_of(o),
-                _ => n.num(),
-            }),
-        };
-        found.ok_or_else(|| format!("`{t}` names no width above it"))
-    };
-    // A product of terms, less any others: `op.DESTROY - 1` is the ops below DESTROY past the first.
-    let product = |p: &str| p.split('*').map(term).product::<Result<f64, String>>();
-    match v {
-        Node::Num(n) => Ok(*n),
-        Node::Str(s) => {
-            let mut parts = s.split('-');
-            let first = product(parts.next().unwrap_or_default())?;
-            parts.try_fold(first, |w, p| Ok(w - product(p)?))
-        }
-        _ => Err("a width is a number or a product of names, less others".into()),
-    }
-}
-
 pub fn read(path: &str) -> Result<Node, String> {
     read_as(path)
 }
@@ -366,41 +253,6 @@ pub fn js_num(n: f64) -> String {
 
 pub fn json_str(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
-}
-
-pub fn pretty(n: &Node, indent: &str, out: &mut String) {
-    match n {
-        Node::Null => out.push_str("null"),
-        Node::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-        Node::Num(v) => out.push_str(&js_num(*v)),
-        Node::Str(s) => out.push_str(&json_str(s)),
-        Node::Arr(a) if a.is_empty() => out.push_str("[]"),
-        Node::Obj(o) if o.is_empty() => out.push_str("{}"),
-        Node::Arr(a) => {
-            let inner = format!("{indent}  ");
-            out.push_str("[\n");
-            for (i, v) in a.iter().enumerate() {
-                out.push_str(&inner);
-                pretty(v, &inner, out);
-                out.push_str(if i + 1 < a.len() { ",\n" } else { "\n" });
-            }
-            out.push_str(indent);
-            out.push(']');
-        }
-        Node::Obj(o) => {
-            let inner = format!("{indent}  ");
-            out.push_str("{\n");
-            for (i, (k, v)) in o.iter().enumerate() {
-                out.push_str(&inner);
-                out.push_str(&json_str(k));
-                out.push_str(": ");
-                pretty(v, &inner, out);
-                out.push_str(if i + 1 < o.len() { ",\n" } else { "\n" });
-            }
-            out.push_str(indent);
-            out.push('}');
-        }
-    }
 }
 
 pub fn ts_doc(doc: &[String], indent: &str) -> Vec<String> {
@@ -521,19 +373,6 @@ pub fn rs_ident(k: &str) -> String {
     } else {
         id
     }
-}
-
-pub fn packed(hex: &str) -> Result<u32, String> {
-    let digits = hex
-        .strip_prefix('#')
-        .filter(|d| d.len() == 6 && d.chars().all(|c| c.is_ascii_hexdigit()));
-    digits
-        .and_then(|d| u32::from_str_radix(d, 16).ok())
-        .ok_or(format!("color JSON: \"{hex}\" is not #RRGGBB"))
-}
-
-pub fn rgb_literal(hex: &str) -> Result<String, String> {
-    Ok(format!("0x{:06x}", packed(hex)?))
 }
 
 pub fn align_star(line: String, indent: &str) -> String {

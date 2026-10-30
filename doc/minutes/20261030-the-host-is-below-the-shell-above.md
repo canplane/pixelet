@@ -20,10 +20,13 @@ be fused with today's one thread, through the little memory of September.
 
 ## What the user decided
 
-- **The hostcall.** A guest's call into its host, answered before it returns,
-  is named `hostcall` (Wasmtime's and Lucet's word). On a device, where the
-  guest runs on its own thread while the JavaScript thread waits in `intr`, a
-  hostcall is handed back to that waiting thread and answered there, so the page
+- **The hostcall.** A guest's call into its host is named `hostcall`
+  (Wasmtime's and Lucet's word), whether the host runs it at once or from the
+  stream after the turn: how it is run is no part of the word, and "system call"
+  and "hypercall" are not xpute's words for it (widened 2026-10-31). On a device,
+  where the guest runs on its own thread while the JavaScript thread waits in
+  `intr`, a hostcall run now is handed back to that waiting thread and answered
+  there, so the page
   and the device answer through the same TypeScript (`ts/client/src/abi/text.ts`
   `text_call`).
 - **The two stacks run opposite ways.** xpute's host and WebAssembly guest are
@@ -69,6 +72,18 @@ be fused with today's one thread, through the little memory of September.
   one is looking", which pauses the sensors that only serve the screen, is the
   compositor's suspended state, and splits off to the upper ABI when the UI
   stands elsewhere.
+- **xpute carries frames and gives a program's no meaning** (2026-10-31). A
+  frame's number on xpute's rings is its `cmd`, a `Command`: xpute carries it
+  and its numbering (`major << 8 | minor`), the program gives each its meaning,
+  as NVMe's queues carry commands whatever they ask. For a day it was `vec`
+  beside pixelet's command, two words for the one field. xpute's own commands
+  come from the host, endpoint 0, so a program numbers its own as it likes and
+  xpute reserves no range of a program's numbers.
+- **What arrives unasked from outside is the program's plane; what the kernel
+  asks for and waits on is a hostcall** (the user, agreeing, 2026-10-31). A
+  position fix, the page's visibility, the user's input and a message a server
+  pushes come into the kernel on the program's rings; a fetch the kernel asks
+  for stays an open, a hostcall the host runs after the turn.
 
 ## The IPC as it stands
 
@@ -88,13 +103,13 @@ Laid in the memory over those:
 | ------------------------------------------- | ------------ | ------------------ | ------------------------ |
 | submission ring                             | host → guest | queue of frames    | applied the next turn    |
 | completion ring                             | guest → host | replies, events    | read as the turn returns |
-| streams (system calls, GPU)                 | guest → host | records, no reply  | run as the turn returns  |
+| streams (hostcalls, GPU)                    | guest → host | records, no reply  | run as the turn returns  |
 | in place (directory, snapshot, profiler)    | guest → host | the latest state   | between turns            |
 | answers at guest-named addresses (`READ`, `MAP_ASYNC`, `QUEUE_DONE`, `DEVICE`) | host → guest | a future | the next turn |
 
 Each direction has both timings, and each synchronous path reuses an
 asynchronous channel's shape: the doorbell's `call` is a submission rung with no
-quota; a hostcall is a system call's record run at once. Only `now` returns a
+quota; a hostcall run now is the stream's record run at once. Only `now` returns a
 value with no channel under it. Whether a call is an FFI is how a guest's form
 implements it (a module's import, a native function pointer, a thread handed
 back), not a part of the model.
@@ -194,7 +209,7 @@ one part:
 
 Policy enters at two places: the host's machinery takes a scheduling policy, the guest's
 library takes the tick's phase names and meaning. "Hypercall", strictly, is the
-synchronous trap, xpute's `hostcall`; the rings are virtqueues. Xen names the
+synchronous trap, xpute's hostcall run now; the rings are virtqueues. Xen names the
 hypercalls and its shared memory (grant tables, event channels) together as the
 guest's interface, and xpute's documents already name that whole "the
 contract", so it needs no new name.
@@ -264,7 +279,7 @@ ring, and host ends hold what their platform needs. A C++ command-line host
 would reserve the memory once; run a module under an embedded WebAssembly
 runtime, importing `env.memory`, `env.now` and `env.hostcall`, or link a native
 guest; ring on `wake_ms` with its own clock and a configured quota; answer the
-system calls from the disk and the hostcalls from its program; and reach a GPU,
+hostcalls, a file's from the disk and its program's from the program; and reach a GPU,
 if at all, headless, since a program that never reaches a GPU links none of its
 calls. A surface is the display's, an outside device.
 
@@ -507,3 +522,22 @@ in the guest's directory. Step 2 split the client into `port/`, `driver/` and `a
 it bottom up from the app; step 5 redrew `ARCHITECTURE.md`'s stack on the two
 axes, with a table of what crosses each edge. A device's build has checked none
 of it.
+
+xpute's frame word is `cmd` in every language. A frame's tag names a port at the
+guest's far side in its high bits (xpute spec/ipc/frame.json `PORT_SHIFT`): who
+sent what the guest takes, who is to have what it posts, so a reply goes back to
+its sender. The host is 0, and what it sends (`NOP`, `SYS_OPENED`) is xpute's
+own, which the door applies and hands over apart from every other sender's; the
+host hands a frame to the port it names where one is attached and drops it where
+none is, with no handshake, as the user put it, and the number is a port, as
+UDP's is (2026-10-31). pixelet's ports are its spec's
+(`spec/client/kernel/door/port.json`), as the user set them (2026-10-31): 0, 1
+and 255 are fixed roles over the core memory, the host, the core and the shell
+with the drivers that bring the outside in, wherever each runs, and 2 to 254 are
+kept for workers, each lent slabs of little memory for a job; which threads
+stand fixed is a manifest's to say, taken up again later. The client sends as
+the shell, and the kernel raises its events for it. One pair of rings again;
+`program_major` is gone. What xpute called its system calls are hostcalls, its
+documents say so, and `sys` stays the name of its system's interface (`ipc/sys`,
+`Sys`, `SysHost`); a hostcall run now is `call_now`. pxl-tool generates
+pixelet's tables with its own generators and links no part of xpute-tool.

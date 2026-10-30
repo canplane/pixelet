@@ -1,6 +1,6 @@
 // @xpute/host/ipc/sys.test.ts
 
-/** Runs spec/conformance/sys/file.tsv against the host's end of the system calls. */
+/** Runs spec/conformance/sys/file.tsv against the host's end of the hostcalls. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

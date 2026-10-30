@@ -1,9 +1,9 @@
 // xpute-tool/spec/cmd/ts.rs
 
-//! A command table as TypeScript: its enums, each packet's writer and each
-//! event's reader, for the side that writes commands in TypeScript.
+//! The command table as TypeScript: its enums, each packet's writer and each
+//! event's reader, for the host.
 
-use super::{literal, Entry, Field, Kind, Spec, Target, TsEnum, NUMBERS};
+use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
 use crate::spec::{file, generated, pascal, snake, ts_doc, Output};
 
 /// Only a list of u32 is packed.
@@ -142,8 +142,7 @@ fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<
     ])
 }
 
-/// The table's module, and where its enums are constants, a module an enum
-/// beside it (`TsEnum::Constants`).
+/// The table's module, and beside it a module of each enum's constants.
 pub fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     let mut out = vec![
         format!("// {}", t.ts_logical),
@@ -281,56 +280,26 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
         out.push("import { SequenceType } from \"@xpute/kit/wire/xtp/mod.ts\";".to_string());
     }
     let mut modules: Vec<Output> = Vec::new();
-    if t.ts_enum == TsEnum::Constants {
-        for e in &spec.enums {
-            out.push(format!(
-                "import * as {} from \"./cmd/{}.spec.ts\";",
-                e.name,
-                snake(&e.name)
-            ));
-        }
-        for e in &spec.enums {
-            let (path, logical) = enum_module(t, &e.name);
-            modules.push(Output::new(&path, constants(e, &logical, t.json)));
-            out.push(String::new());
-            out.push(format!(
-                "/** One of {}'s, as its enum was a type. */",
-                e.name
-            ));
-            out.push(format!(
-                "type {0} = (typeof {0})[keyof typeof {0}];",
-                e.name
-            ));
-            out.push(format!("export {{ {} }};", e.name));
-        }
+    for e in &spec.enums {
+        out.push(format!(
+            "import * as {} from \"./cmd/{}.spec.ts\";",
+            e.name,
+            snake(&e.name)
+        ));
     }
-    for e in spec.enums.iter().filter(|_| t.ts_enum == TsEnum::ConstEnum) {
+    for e in &spec.enums {
+        let (path, logical) = enum_module(t, &e.name);
+        modules.push(Output::new(&path, constants(e, &logical, t.json)));
         out.push(String::new());
-        if let Some(doc) = &e.doc {
-            out.extend(ts_doc(doc, ""));
-        }
-        out.push(format!("export const enum {} {{", e.name));
-        for entry in &e.entries {
-            match entry {
-                Entry::Section(s) => {
-                    out.extend([String::new(), format!("  // ---- {} ----", s.section)]);
-                    out.push(String::new());
-                }
-                Entry::Member(m) => {
-                    if let Some(doc) = &m.doc {
-                        out.extend(ts_doc(doc, "  ").into_iter().enumerate().map(|(i, l)| {
-                            if i == 0 {
-                                l
-                            } else {
-                                crate::spec::align_star(l, "  ")
-                            }
-                        }));
-                    }
-                    out.push(format!("  {} = {},", m.name, literal(m.val, &e.format)));
-                }
-            }
-        }
-        out.push("}".into());
+        out.push(format!(
+            "/** One of {}'s, as its enum was a type. */",
+            e.name
+        ));
+        out.push(format!(
+            "type {0} = (typeof {0})[keyof typeof {0}];",
+            e.name
+        ));
+        out.push(format!("export {{ {} }};", e.name));
     }
     out.extend(tail);
     let mut outputs = vec![Output::new(t.ts, file(&out))];

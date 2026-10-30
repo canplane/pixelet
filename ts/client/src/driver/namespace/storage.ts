@@ -23,6 +23,7 @@ import { Command, encode_world_kept_emptied } from "@/abi/cmd.spec.ts";
 import { kept } from "@/abi/host.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
 
 /** Storage as the bracket gives it: a refused write keeps nothing, and does not throw. */
 export interface Storage {
@@ -123,6 +124,7 @@ const emptying = new Set<u32>();
 function kept_emptied(slot: u32): void {
   queueMicrotask(() =>
     HOST.send(
+      port.SHELL,
       Command.WORLD_KEPT_EMPTIED,
       encode_world_kept_emptied(HOST.doorbell, slot),
     ),

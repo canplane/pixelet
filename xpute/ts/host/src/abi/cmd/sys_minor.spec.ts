@@ -2,6 +2,6 @@
 //
 // GENERATED from spec/abi/cmd.json
 
-// The system calls' answers (ipc/sys.json).
+// The hostcalls' answers (ipc/sys.json).
 
 export const OPENED = 0x01;

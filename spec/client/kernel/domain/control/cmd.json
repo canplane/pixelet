@@ -21,7 +21,6 @@
     "`unknown` is the member a number it does not give out reads as; an enum",
     "without one refuses the packet. The generator refuses a number given twice."
   ],
-  "base": "xpute/spec/abi/cmd.json",
   "extern": [
     {
       "name": "BakeKind",
@@ -651,7 +650,7 @@
       "format": "hex4",
       "entries": [
         {
-          "section": "the process asks the host: its system calls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"
+          "section": "the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json)"
         },
         {
           "name": "SENSOR_START",

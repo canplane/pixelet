@@ -45,7 +45,7 @@ export function set_page_visible(visible: boolean): void {
   steer();
 }
 
-/** Opens the guest as `cfg` says and mounts the host on it, its system calls answered by `sys`, its turns run as `policy` says and each filled by `submit`. */
+/** Opens the guest as `cfg` says and mounts the host on it, its hostcalls answered by `sys`, its turns run as `policy` says and each filled by `submit`. */
 export async function open_host(
   cfg: Config,
   sys: Mount["sys"],

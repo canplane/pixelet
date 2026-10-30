@@ -46,7 +46,7 @@ inline constexpr std::uint32_t SLOT_BYTES = 256u;
 // The stream's range, its END word first.
 inline constexpr std::uint32_t STREAM_WORDS = 256u;
 
-// The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
+// The hostcalls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
 inline constexpr std::uint32_t SYS_WORDS = 64u;
 
 // The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile).
@@ -77,9 +77,12 @@ namespace hostcall {
 inline constexpr std::uint32_t ANSWER = 2147483649u;
 } // namespace hostcall
 
-// The commands, `major << 8 | minor`, on the majors a program numbers its own from
-// (xpute's PROGRAM_MAJOR and up), so none is one of xpute's — SYS_OPENED among them. A
-// packet, where one is taken, is a branch whose first child is a number.
+// The port a trace sends the guest's own commands as, and the one the guest raises
+// its events for (ipc/frame.json PORT_SHIFT).
+inline constexpr std::uint32_t SENDER = 1u;
+
+// The guest's own commands, `major << 8 | minor`, which a trace sends as SENDER. A packet,
+// where one is taken, is a branch whose first child is a number.
 namespace cmd {
 
 // Succeeds; replies 0.

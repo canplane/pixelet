@@ -22,6 +22,7 @@ import { declare_source } from "@/driver/namespace/source.ts";
 import { namespace } from "@/driver/namespace/namespace.ts";
 import { follow_refused, migrate } from "@/driver/namespace/storage.ts";
 import { HOST, open_host } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
 import { BATCH_FRAMES, MARGIN_SHARE, SETTLE_MS } from "@/abi/pacing.spec.ts";
 import {
   DESKTOP_BYTES,
@@ -58,9 +59,9 @@ export function boot_state(): Boot {
 
 export const watch_boot = listeners.watch;
 
-/** Who hears each event the kernel posts: the snapshot the shell reads, and
- * the kept slots it names refused; the sensors it asks for. */
-const EVENTS: Partial<Record<Command, (f: BranchCursor) => void>> = {
+/** What the shell hears the kernel raise: the snapshot it reads, and the kept
+ * slots it names refused; the sensors the drivers start and stop. */
+const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.WORLD_SNAPSHOT]: (f) => {
     snapshot_posted(f);
     follow_refused(kernel_snapshot().kept_refused);
@@ -69,9 +70,9 @@ const EVENTS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.SENSOR_STOP]: sensor_stop,
 };
 
-function on_event(_tag: u32, cmd: Command, f: BranchCursor | null): void {
-  const heard = EVENTS[cmd];
-  if (heard) heard(f!);
+function heard(_tag: u32, cmd: u32, f: BranchCursor | null): void {
+  const take = HEARS[cmd as Command];
+  if (take) take(f!);
   else
     console.warn(`[kernel] event 0x${cmd.toString(16)} with no one to hear it`);
 }
@@ -124,9 +125,9 @@ async function open(): Promise<void> {
     submit_frame,
   );
   bracket.sensor.hear(SENSOR_HEARD);
-  HOST.doorbell.event = on_event;
+  HOST.doorbell.listen(port.SHELL, heard);
   bracket.gpu.boot({
-    ready: () => HOST.send(Command.GPU_READY),
+    ready: () => HOST.send(port.SHELL, Command.GPU_READY),
     state: (state) => set_gpu(GPU_STATE[state]),
     wake: () => HOST.strobe.request(),
   });
@@ -143,6 +144,7 @@ async function open(): Promise<void> {
     bracket.sensor.orient.silence,
   );
   const booted = HOST.doorbell.call(
+    port.SHELL,
     Command.WORLD_BOOT,
     pkt,
     (result) => result,

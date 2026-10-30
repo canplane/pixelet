@@ -10,10 +10,11 @@ import type { FrameGrant } from "@xpute/host/sched/frame_pacing.ts";
 import { Command, encode_world_frame } from "@/abi/cmd.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
 
 export function submit_frame(grant: FrameGrant): void {
   HOST.doorbell.send(
-    0,
+    port.SHELL,
     Command.WORLD_FRAME,
     encode_world_frame(
       HOST.doorbell,

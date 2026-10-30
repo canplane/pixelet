@@ -3,8 +3,9 @@
 /**
  * A host mounted on a guest its platform opened: the directory, a doorbell
  * whose every turn runs the guest's host stream as it ends (a trapped turn's
- * too, so its report is read before the doorbell hears it stop), the system
- * calls and hostcalls answered through the program's `SysHost`, and the
+ * too, so its report is read before the doorbell hears it stop), the guest's
+ * rings, on which the host sends as port 0 and the program's ports as
+ * their own, the hostcalls answered through the program's `SysHost`, and the
  * strobe, which runs turns as the scheduling policy the program boots it with
  * says (sched/policy.ts).
  */
@@ -14,6 +15,7 @@ import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_sys_opened } from "@xpute/host/abi/cmd.spec.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";
 import { key } from "@xpute/host/ipc/directory.spec.ts";
+import * as frame from "@xpute/host/ipc/frame.ts";
 import { Doorbell } from "@xpute/host/ipc/doorbell.ts";
 import { Sys, type SysHost } from "@xpute/host/ipc/sys.ts";
 import type { Grant, SchedulingPolicy } from "@xpute/host/sched/policy.ts";
@@ -46,10 +48,11 @@ export interface Host<G extends Grant = Grant> {
   directory: Directory;
   doorbell: Doorbell;
   strobe: Strobe<G>;
-  /** Sent with the next turn. */
-  send(cmd: u32, pkt?: PacketWriter): void;
-  /** Rung at once with no quota, so it is heard after the strobe stopped too. */
-  now(cmd: u32, pkt?: PacketWriter): void;
+  /** Sent as `src` with the next turn. */
+  send(src: u32, cmd: u32, pkt?: PacketWriter): void;
+  /** Sent as `src` and rung at once with no quota, so it is heard after the
+   * strobe stopped too. */
+  now(src: u32, cmd: u32, pkt?: PacketWriter): void;
 }
 
 export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host<G> {
@@ -70,22 +73,26 @@ export function mount<G extends Grant>(guest: Guest, cfg: Config<G>): Host<G> {
     },
   );
   const strobe = new Strobe(doorbell, cfg.policy, cfg.submit);
-  const send = (cmd: u32, pkt?: PacketWriter) => {
-    doorbell.send(0, cmd, pkt);
+  const send = (src: u32, cmd: u32, pkt?: PacketWriter) => {
+    doorbell.send(src, cmd, pkt);
     strobe.request();
   };
   const sys = new Sys(cfg.sys, (fd, res, detail) =>
-    send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)),
+    send(
+      frame.HOST,
+      Command.SYS_OPENED,
+      encode_sys_opened(doorbell, fd, res, detail),
+    ),
   );
-  guest.answer_with((at) => sys.hostcall(guest.mem, at));
+  guest.answer_with((at) => sys.call_now(guest.mem, at));
   return {
     guest,
     directory,
     doorbell,
     strobe,
     send,
-    now(cmd, pkt) {
-      doorbell.send(0, cmd, pkt);
+    now(src, cmd, pkt) {
+      doorbell.send(src, cmd, pkt);
       doorbell.ring(0);
       strobe.request();
     },

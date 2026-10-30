@@ -4,7 +4,7 @@
 //
 // The kernel's own entries in its directory (xpute-guest ipc/directory.rs), each a
 // key with xpute's PROGRAM bit set: the memory the host reads besides the rings and
-// the system calls (pxl-kernel door.rs, ts/client/src/abi/boot.ts).
+// the hostcalls (pxl-kernel door.rs, ts/client/src/abi/boot.ts).
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.

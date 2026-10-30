@@ -2,8 +2,9 @@
 # must then see. Written from the rules and not recorded from a guest. A value names only what a host
 # observes; every size is the fixture's (spec/conformance/guest.json), none a production one.
 # 
-# A step is `submit TAG CMD ack|noack [NUMBER]`, `ring QUOTA`, or `settle` (a turn of no quota after
-# another while a submission is left). Per turn t, and for the whole trace: the completion ring as
+# A step is `submit TAG CMD ack|noack [NUMBER]` (xpute's own commands, NOP and SYS_OPENED, sent as the
+# host, port 0, and any other as the guest.json SENDER), `ring QUOTA`, or `settle` (a turn of no quota
+# after another while a command is left). Per turn t, and for the whole trace: the completion ring as
 # TAG:CMD=RESULT for a reply and TAG:CMD for an event, an event run tagged 0 up written CMD*n; the stream
 # as its records' ops; and what the turn asked for next (next, later, none). Each place is its own
 # sequence: nothing orders one against another.

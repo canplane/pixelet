@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/abi/cmd.json
 
-// Every program's commands.
+// xpute's own commands.
 
 /** Replies with its packet's value, or 0 where it has none — the rings' own test. */
 export const NOP = 0x0000;

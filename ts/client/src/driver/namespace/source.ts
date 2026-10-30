@@ -20,6 +20,7 @@ import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
 import { Source } from "@/abi/state.ts";
 import { bracket } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
 
 /** What of a declaration this side reads: the top zoom and each kind's
  * format, for the kernel; each kind's version, and a shard's own. */
@@ -154,7 +155,7 @@ function send_source(
 ): boolean {
   const pkt = encode_world_source(HOST.doorbell, top_zoom, formats, shards);
   if (!HOST.doorbell.fits(pkt)) return false;
-  HOST.send(Command.WORLD_SOURCE, pkt);
+  HOST.send(port.SHELL, Command.WORLD_SOURCE, pkt);
   return true;
 }
 

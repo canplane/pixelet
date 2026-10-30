@@ -170,19 +170,16 @@ its mean, each column hands its count to its four a hash each, and a leaf cell
 holds one or none; where it stands is a function of the cell, a seed and the
 ground's face, one rule on both sides (`pxl-spec-core scatter.rs`). One whose
 box meets a neighbor's that drew lower gives way, so two generated decors never
-share a cell. A decor, placed or generated, stands as itself at every zoom it is
-as large as a cell at, and folds as a cube does, so neither is told from the
+share a cell. A decor, placed or generated, stands as itself, a model or its
+impostor, at every zoom its size in that zoom's cells rounds half to even to a
+cell or more, and is none where it rounds to none, so neither is told from the
 other.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its look the majority of those it folds, and its
 top cell is filled to the share its height reaches (`pxl-spec-core ground.rs`
 `top`). What is placed and the ways fold to the kind most of their fill is
-(`overwrite.rs` `fold`), a placed decor's leaf among them, filling its cell as
-a cube's does (`overwrite.rs` `share`). The ground's decor folds by the same
-rule off its column's count, into the column's top cell (`scatter.rs`
-`folded`). A cell a decor folds to is drawn in the look its kind names, else
-the ground's under it (`world.rs` `node`).
+(`overwrite.rs` `fold`).
 
 A coarse cell keeps how much of its cube the ground and what is written over it
 fill (`answer.rs` `cover`), in eighths, floored: its **kept eighths**. It is
@@ -649,14 +646,15 @@ and writes (`driver/namespace/`), its text, sensors and GPU, is
 the states a driver reports and the shell shows, written beside it
 (`abi/state.ts`), are `ts/client/src/abi/`.
 
-The host and the kernel share xpute's two pairs of rings: the system pair,
-which carries xpute's own vectors (the answers to the kernel's opens), and the
-kernel's, one ring for what the host submits and one for what the kernel
-completes. The **commands** on the kernel's are
+The host and the kernel share xpute's two rings, one for what the host submits
+and one for what the kernel completes, each frame naming a port at the kernel's
+far side: the host, 0, whose are xpute's own commands (the answers to the
+kernel's opens), and the shell, 255, with the drivers
+(`spec/client/kernel/door/port.json`). The **commands** are
 `spec/client/kernel/domain/control/cmd.json`'s, from which both sides' readers
 and writers are generated, each packet an XTP tree, xpute's relocatable binary
 tree. The kernel also posts **events** nobody asked for, such as a sensor to
-watch or a new snapshot.
+watch or a new snapshot, each for the port that hears it.
 
 The **shell** (`ts/client/src/shell/`) is the UI: React over the kernel's
 **snapshot**, where every control is a command. The snapshot is replaced whole
@@ -695,7 +693,7 @@ What crosses each edge:
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | shell and kernel, `port/`     | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`), the profiler's reads | the snapshot, replaced whole when it moved, and the events it is told by                                 |
 | kernel and devices, `driver/` | opens and writes, text by hostcall, a sensor started or stopped, the GPU's calls                                          | a file read whole, a sensor's reading, the GPU's state, the page's visibility, each turn's `WORLD_FRAME` |
-| host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the kernel's rings, opens answered on the system rings | completions and events, the streams' records, hostcalls, the last words if it stops                      |
+| host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings, the host's own as port 0 | completions and events, the streams' records, hostcalls, the last words if it stops                      |
 
 ## Reads, and the one scheduler
 

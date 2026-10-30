@@ -23,11 +23,12 @@ import {
   type PointerPhase as PlacePhase,
 } from "@/bracket.tsx";
 import { HOST, PACING, set_view_open } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
 
 /** Sent with the next turn, which it makes interactive. */
 export function send_input(cmd: Command, pkt: PacketWriter): void {
   PACING.input(performance.now());
-  HOST.send(cmd, pkt);
+  HOST.send(port.SHELL, cmd, pkt);
 }
 
 export function kernel_pointer(
@@ -59,7 +60,7 @@ export function kernel_rect(
   height: f64,
 ): void {
   HOST.doorbell.send(
-    0,
+    port.SHELL,
     Command.INPUT_RECT,
     encode_input_rect(HOST.doorbell, left, top, width, height),
   );
@@ -73,13 +74,21 @@ export function kernel_hold(tool: ActiveTool, val: u32, tier: u32): void {
 }
 
 export function kernel_open(): () => void {
-  HOST.now(Command.WORLD_VIEW, encode_world_view(HOST.doorbell, true));
+  HOST.now(
+    port.SHELL,
+    Command.WORLD_VIEW,
+    encode_world_view(HOST.doorbell, true),
+  );
   set_view_open(true);
   const unfollow = bracket.sensor.follow();
   return () => {
     unfollow();
     set_view_open(false);
-    HOST.now(Command.WORLD_VIEW, encode_world_view(HOST.doorbell, false));
+    HOST.now(
+      port.SHELL,
+      Command.WORLD_VIEW,
+      encode_world_view(HOST.doorbell, false),
+    );
   };
 }
 

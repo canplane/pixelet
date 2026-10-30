@@ -13,6 +13,7 @@ use xpute_guest::abi::handle::Table;
 use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory};
 use xpute_guest::ipc::door::{Applied, Door, Submission};
 use xpute_guest::ipc::file::Files;
+use xpute_guest::ipc::frame;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::stream::Stream;
 use xpute_guest::ipc::sys::Sys;
@@ -199,7 +200,12 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
     door.drain(|submission| match submission {
         Submission::Opened(opened) => {
             if let Some(owner) = state.files.opened(&mut state.sys, &opened) {
-                door.post(owner, spec::cmd::OPENED, 0, opened.res);
+                door.post(
+                    frame::tagged(spec::SENDER, owner),
+                    spec::cmd::OPENED,
+                    0,
+                    opened.res,
+                );
             }
             Ok(Some(0))
         }
@@ -316,7 +322,7 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
                 return Err(MarshalError::new(Errno::EINVAL));
             }
             for k in 0..n {
-                door.post(k, spec::cmd::EVENT, 0, 0);
+                door.post(frame::tagged(spec::SENDER, k), spec::cmd::EVENT, 0, 0);
             }
             Ok(Some(n as i32))
         }
@@ -351,7 +357,7 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
             let n = arg(pkt)?;
             *word = 0;
             let at = mem.off_of(&raw const *word) as u32;
-            sys.hostcall(spec::hostcall::ANSWER, &[n, at], &[])
+            sys.call_now(spec::hostcall::ANSWER, &[n, at], &[])
                 .map_err(MarshalError::new)?;
             // SAFETY: the word the host wrote before the hostcall returned.
             Ok(Some(unsafe { (&raw const *word).read_volatile() } as i32))

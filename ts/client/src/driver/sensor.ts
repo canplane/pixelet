@@ -20,6 +20,7 @@ import {
 } from "@/abi/cmd.spec.ts";
 import { bracket, type SensorHeard } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
 
 /** A device reading the device could not give — NaN, an infinity — is sent as none. */
 function given(n: number | null): number | null {
@@ -34,6 +35,7 @@ function kernel_pos(
   course: f64 | null,
 ): void {
   HOST.send(
+    port.SHELL,
     Command.SENSOR_POS,
     encode_sensor_pos(
       HOST.doorbell,
@@ -48,6 +50,7 @@ function kernel_pos(
 
 function kernel_pos_err(code: GeolocationErrorCode): void {
   HOST.send(
+    port.SHELL,
     Command.SENSOR_FAILED,
     encode_sensor_failed(HOST.doorbell, Sensor.Geolocation, code),
   );
@@ -60,6 +63,7 @@ function kernel_orient(
   gamma: f64 | null,
 ): void {
   HOST.send(
+    port.SHELL,
     Command.SENSOR_ORIENT,
     encode_sensor_orient(
       HOST.doorbell,
@@ -74,6 +78,7 @@ function kernel_orient(
 /** The compass gives no code for its failure. */
 function kernel_orient_lost(): void {
   HOST.now(
+    port.SHELL,
     Command.SENSOR_FAILED,
     encode_sensor_failed(HOST.doorbell, Sensor.Orientation, null),
   );
@@ -81,6 +86,7 @@ function kernel_orient_lost(): void {
 
 function kernel_permission(sensor: Sensor, answer: PermissionAnswer): void {
   HOST.send(
+    port.SHELL,
     Command.SENSOR_PERMISSION,
     encode_sensor_permission(HOST.doorbell, sensor, answer),
   );

@@ -50,7 +50,7 @@ pub const SLOT_BYTES: u32 = 256;
 /// The stream's range, its END word first.
 pub const STREAM_WORDS: u32 = 256;
 
-/// The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
+/// The hostcalls' stream: OPEN and CLOSE are recorded there, and nothing runs them.
 pub const SYS_WORDS: u32 = 64;
 
 /// The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile).
@@ -81,9 +81,12 @@ pub mod hostcall {
     pub const KEYS: &[&str] = &["ANSWER"];
 }
 
-/// The commands, `major << 8 | minor`, on the majors a program numbers its own from
-/// (xpute's PROGRAM_MAJOR and up), so none is one of xpute's — SYS_OPENED among them. A
-/// packet, where one is taken, is a branch whose first child is a number.
+/// The port a trace sends the guest's own commands as, and the one the guest raises
+/// its events for (ipc/frame.json PORT_SHIFT).
+pub const SENDER: u32 = 1;
+
+/// The guest's own commands, `major << 8 | minor`, which a trace sends as SENDER. A packet,
+/// where one is taken, is a branch whose first child is a number.
 pub mod cmd {
     /// Succeeds; replies 0.
     pub const OK: u32 = 4097;

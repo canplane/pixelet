@@ -40,12 +40,13 @@ import {
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { HOST } from "@/host/mount.ts";
+import * as port from "@/abi/port.spec.ts";
 
 const WORD = 8;
 
 /** A command answered inside the call: the address of its reply in the kernel's memory. */
 function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
-  return HOST.doorbell.call(cmd, pkt, (at) => {
+  return HOST.doorbell.call(port.SHELL, cmd, pkt, (at) => {
     // A refusal is -errno, never an address.
     if (at < 0) throw new FaultError(-at as i32);
     return at >>> 0;

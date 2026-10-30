@@ -1,6 +1,6 @@
 // xpute-guest/ipc/sys.rs
 
-//! A guest's system calls, recorded in a stream the host runs after the turn
+//! A guest's hostcalls, recorded in a stream the host runs after the turn
 //! returns; anything a call names must live until the next rise. The guest
 //! issues its own descriptors as handles, so a late answer to a closed one
 //! names nothing. `openat` is answered by SYS_OPENED on a later turn; a
@@ -102,7 +102,7 @@ impl Sys {
     /// `call` run by the host before this returns, from what it already
     /// holds: its value or its errno, ENOSPC where the record does not fit
     /// past the turn's. What `args` name it writes during the call.
-    pub fn hostcall(&mut self, op: u32, args: &[u32], bytes: &[u8]) -> Result<u32, Errno> {
+    pub fn call_now(&mut self, op: u32, args: &[u32], bytes: &[u8]) -> Result<u32, Errno> {
         xpute_kit::ensure!(op & spec::op::PROGRAM != 0, EINVAL, op);
         let at = self
             .stream

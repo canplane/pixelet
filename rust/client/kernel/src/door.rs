@@ -12,6 +12,9 @@ mod apply;
 pub mod directory;
 mod executor;
 pub mod layout;
+/// The ports at the kernel's far side, generated from port.json.
+#[path = "door/port.spec.rs"]
+pub mod port;
 
 use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, WorldSnapshotEvent};
 use crate::domain::scene::character::preview;
@@ -85,8 +88,9 @@ const _: () = assert!(
     "a full submission ring's replies and the turn's events do not fit the completion ring"
 );
 
-fn raise(cmd: Command, cnt: u32, f: impl Fn(&mut PacketWriter)) {
-    door().raise(cmd as u32, cnt, f);
+/// An event for the port `to` (port.json).
+fn raise(to: u32, cmd: Command, cnt: u32, f: impl Fn(&mut PacketWriter)) {
+    door().raise(to, cmd as u32, cnt, f);
 }
 
 static STATE: Global<State> = Global::new();
@@ -233,7 +237,7 @@ fn post_shell(s: &mut State) {
     };
 
     let sensor = |cmd: Command, sensor: Sensor| {
-        raise(cmd, SensorStartEvent::FIELDS, |w| {
+        raise(port::SHELL, cmd, SensorStartEvent::FIELDS, |w| {
             SensorStartEvent { sensor }.write(w);
         });
     };
@@ -262,8 +266,13 @@ fn post_shell(s: &mut State) {
             at: off_of_slice(&raw const buf[..]) as u32,
             len,
         };
-        raise(Command::WORLD_SNAPSHOT, WorldSnapshotEvent::FIELDS, |w| {
-            event.write(w);
-        });
+        raise(
+            port::SHELL,
+            Command::WORLD_SNAPSHOT,
+            WorldSnapshotEvent::FIELDS,
+            |w| {
+                event.write(w);
+            },
+        );
     }
 }

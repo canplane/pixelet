@@ -1,9 +1,9 @@
 // pxl-kernel/sys/io/host.rs
 //
-// What the kernel asks of the host, as xpute system calls recorded during a
+// What the kernel asks of the host, as xpute hostcalls recorded during a
 // turn and run by the host after it returns, so they are done before the
 // next turn rises; and what the host answers from what it holds, as
-// hostcalls answered before they return. The clock too is called directly,
+// hostcalls run before they return. The clock too is called directly,
 // since a turn measures its budget mid-turn.
 
 use core::panic::Location;
@@ -56,11 +56,11 @@ const _: () = assert!(
     "the files' calls would not fit the host stream"
 );
 
-/// A call the host answers before it returns: None where there is no host,
+/// A hostcall the host runs before it returns: None where there is no host,
 /// else its value or its errno, ENOSPC where the record does not fit past
 /// the turn's.
-pub fn hostcall(op: u32, args: &[u32], bytes: &[u8]) -> Option<Result<u32, Errno>> {
-    Some(sys()?.hostcall(op, args, bytes))
+pub fn call_now(op: u32, args: &[u32], bytes: &[u8]) -> Option<Result<u32, Errno>> {
+    Some(sys()?.call_now(op, args, bytes))
 }
 
 static TURN: Global<u64> = Global::new();

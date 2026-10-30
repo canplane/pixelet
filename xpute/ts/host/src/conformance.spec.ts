@@ -42,7 +42,7 @@ export const SLOT_BYTES: u32 = 256 as number;
 /** The stream's range, its END word first. */
 export const STREAM_WORDS: u32 = 256 as number;
 
-/** The system calls' stream: OPEN and CLOSE are recorded there, and nothing runs them. */
+/** The hostcalls' stream: OPEN and CLOSE are recorded there, and nothing runs them. */
 export const SYS_WORDS: u32 = 64 as number;
 
 /** The stack a module guest is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile). */
@@ -71,9 +71,12 @@ export const hostcall = {
   ANSWER: 2147483649 as number,
 } as const;
 
-/** The commands, `major << 8 | minor`, on the majors a program numbers its own from
- * (xpute's PROGRAM_MAJOR and up), so none is one of xpute's — SYS_OPENED among them. A
- * packet, where one is taken, is a branch whose first child is a number. */
+/** The port a trace sends the guest's own commands as, and the one the guest raises
+ * its events for (ipc/frame.json PORT_SHIFT). */
+export const SENDER: u32 = 1 as number;
+
+/** The guest's own commands, `major << 8 | minor`, which a trace sends as SENDER. A packet,
+ * where one is taken, is a branch whose first child is a number. */
 export const cmd = {
   /** Succeeds; replies 0. */
   OK: 4097 as number,

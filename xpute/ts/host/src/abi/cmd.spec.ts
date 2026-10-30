@@ -3,11 +3,10 @@
 // GENERATED from spec/abi/cmd.json
 
 /**
- * Every program's commands, by number (kit abi/cmd: `major << 8 | minor`), and the
- * packet each carries — an XTP branch whose children are its fields, in order. A
- * command with no fields carries no packet. The majors below PROGRAM_MAJOR are xpute's;
- * a program numbers its own from there, in a table of its own that names this one as
- * its base, so the two never give out one number twice.
+ * xpute's own commands, by number (kit abi/cmd: `major << 8 | minor`), and the packet
+ * each carries — an XTP branch whose children are its fields, in order. A command with
+ * no fields carries no packet. The host sends them, port 0 (ipc/frame.json HOST); a
+ * program numbers its own as it likes, and the sender tells the two apart.
  *
  * The direction is the ring: `pkt` is what the host submits, `event` what the guest
  * raises on the completion ring.

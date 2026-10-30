@@ -2,9 +2,9 @@
 
 //! The guest's end of its rings: submissions applied in order, completions
 //! posted in place. The host reads the completion ring dry before it rings
-//! again, so overrunning it is a sizing bug, not a state to wait out. xpute's
-//! own frames are applied here; the program is handed the rest, and an open the
-//! host completed.
+//! again, so overrunning it is a sizing bug, not a state to wait out. What the
+//! host sent, port 0, is xpute's own and applied here; the program is
+//! handed every other sender's, and an open the host completed.
 
 use core::cell::Cell;
 
@@ -98,8 +98,9 @@ impl Door {
         xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
-    pub fn raise(&self, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
-        self.post_in_place(0, cmd, 0, 0, |out: &mut [u8]| {
+    /// An event for `port`.
+    pub fn raise(&self, port: u32, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
+        self.post_in_place(frame::tagged(port, 0), cmd, 0, 0, |out: &mut [u8]| {
             let mut w = PacketWriter::new(out, cnt);
             f(&mut w);
             w.fitted()
@@ -127,7 +128,7 @@ impl Door {
                 break;
             };
             let result = match self.sq.pkt(&f) {
-                Ok(pkt) => match applied(f.cmd, pkt, &mut handle) {
+                Ok(pkt) => match applied(&f, pkt, &mut handle) {
                     Ok(Some(val)) => Ok(val),
                     Ok(None) => Err(Errno::ENOSYS as i32),
                     Err(e) => Err(e.errnum as i32),
@@ -149,20 +150,24 @@ impl Door {
     }
 }
 
-/// xpute's own frames applied, NOP answering its value; the rest handed over.
+/// The host's frames applied, NOP answering its value and an open's
+/// completion handed over; any other sender's handed to the program.
 fn applied(
-    cmd: u32,
+    f: &frame::Frame,
     pkt: Option<&[u8]>,
     handle: &mut impl FnMut(Submission) -> Applied,
 ) -> Applied {
+    if frame::port_of(f.tag) != frame::HOST {
+        return handle(Submission::Program(f.cmd, pkt));
+    }
     let given = || pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG));
-    match Command::of(cmd) {
+    match Command::of(f.cmd) {
         Some(Command::NOP) => Ok(Some(match pkt {
             Some(pkt) => Nop::read(pkt)?.val as i32,
             None => 0,
         })),
         Some(Command::SYS_OPENED) => handle(Submission::Opened(SysOpened::read(given()?)?)),
-        None => handle(Submission::Program(cmd, pkt)),
+        None => Ok(None),
     }
 }
 

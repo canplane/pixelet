@@ -5,7 +5,7 @@
 //! its two numbers and one the host holds, which it asks for by hostcall.
 //!
 //! What it lays out is its own: past where the linker stopped, a page for
-//! the directory, then the two rings and their slots, then the system calls'
+//! the directory, then the two rings and their slots, then the hostcalls'
 //! stream, then the heap. The host finds them through the directory, whose
 //! offset `boot` answers.
 
@@ -23,8 +23,8 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::TreeReader;
 
-/// The command, the first a program numbers (major 0x10): a branch of two
-/// numbers, answered with their sum and the host's.
+/// The command, the program's own: a branch of two numbers, answered with
+/// their sum and the host's.
 pub const SUM: u32 = 0x1001;
 /// The hostcall: the number the host adds.
 pub const ASK: u32 = op::PROGRAM | 1;
@@ -128,6 +128,6 @@ fn apply(sys: &mut Sys, cmd: u32, pkt: &Option<&[u8]>) -> Applied {
     let pkt = pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?;
     let branch = TreeReader::new(pkt)?.read_branch()?;
     let (a, b) = (branch.at(0)?.get_number()?, branch.at(1)?.get_number()?);
-    let held = sys.hostcall(ASK, &[], &[]).map_err(MarshalError::new)?;
+    let held = sys.call_now(ASK, &[], &[]).map_err(MarshalError::new)?;
     Ok(Some((a + b) as i32 + held as i32))
 }

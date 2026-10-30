@@ -2,11 +2,11 @@
 //
 // GENERATED from spec/ipc/sys.json
 //
-// A guest's system calls: its files, the report that stopped it and the program's own
-// calls, as records in a stream (ipc/stream.rs) the host runs once each turn has returned
-// and before the next begins. A record may name memory the guest holds: the host reads or
-// writes it in that gap, and the guest keeps it that long. The directory says where the
-// stream is (key SYS).
+// A guest's hostcalls, its calls into its host: its files, the report that stopped it and
+// the program's own calls, as records in a stream (ipc/stream.rs) the host runs once each
+// turn has returned and before the next begins. A record may name memory the guest holds:
+// the host reads or writes it in that gap, and the guest keeps it that long. The directory
+// says where the stream is (key SYS).
 //
 // Files borrow Plan 9's file namespace, in POSIX's words. The guest issues the descriptor,
 // a generational handle, and names a file by a root the program numbers and a path below
@@ -18,9 +18,9 @@
 // A program's own calls go in the same stream, numbered with the PROGRAM bit, and a host
 // that is not the program's refuses them.
 //
-// A program's call the host answers from what it already holds may be made as a hostcall
-// instead: the same record, laid past the last the turn has recorded and never published,
-// its offset handed to the host's `hostcall`, which runs it before it returns and answers
+// A program's hostcall the host answers from what it already holds may be run now instead:
+// the same record, laid past the last the turn has recorded and never published, its offset
+// handed to the host's `hostcall` entry, which runs it before it returns and answers
 // with a value or -errno. It writes only what the record names, and ENOSYS where the call
 // is not the program's or no program answers. xpute's own calls go in the stream alone.
 

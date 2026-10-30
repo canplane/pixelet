@@ -1,7 +1,7 @@
 // @pxl/client/driver/text.ts
 
 /**
- * The kernel's own system calls, TEXT_LAYOUT and TEXT_RASTER, answered from
+ * The kernel's own hostcalls, TEXT_LAYOUT and TEXT_RASTER, answered from
  * the platform's text. They name no root: the program numbers them past
  * xpute's PROGRAM bit, and the kernel makes them as hostcalls, so what they
  * write is in place when the hostcall returns.

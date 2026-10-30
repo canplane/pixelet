@@ -21,7 +21,7 @@ pub fn format_text(path: &str, text: String) -> Result<String, String> {
         let Some(tree) = file
             .ancestors()
             .skip(1)
-            .take_while(|d| d.starts_with(root))
+            .take_while(|d| d.starts_with(&root))
             .find(|d| d.join("pnpm-workspace.yaml").exists())
         else {
             return Ok(text);
