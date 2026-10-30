@@ -3,7 +3,7 @@
 /** Holds the TypeScript side to golden/collection/deque.tsv, which every language's ring must match. */
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import { Deque } from "@xpute/kit/collection/deque.ts";
@@ -22,9 +22,13 @@ test("deque holds what the record holds", async () => {
     else if (r === 1 && !d.full()) d.push_front(step);
     else if (r === 2) popped = show(d.pop_front());
     else if (r === 3) popped = show(d.pop_back());
-    assertEquals(popped, v.s(`${k}.popped`), `${k}.popped`);
-    assertEquals([d.head, d.len], [v.u32(`${k}.head`), v.u32(`${k}.len`)], k);
-    assertEquals(show(d.front()), v.s(`${k}.front`), `${k}.front`);
-    assertEquals(show(d.back()), v.s(`${k}.back`), `${k}.back`);
+    assert.deepStrictEqual(popped, v.s(`${k}.popped`), `${k}.popped`);
+    assert.deepStrictEqual(
+      [d.head, d.len],
+      [v.u32(`${k}.head`), v.u32(`${k}.len`)],
+      k,
+    );
+    assert.deepStrictEqual(show(d.front()), v.s(`${k}.front`), `${k}.front`);
+    assert.deepStrictEqual(show(d.back()), v.s(`${k}.back`), `${k}.back`);
   });
 });

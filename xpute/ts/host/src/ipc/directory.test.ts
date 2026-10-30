@@ -1,7 +1,7 @@
 // @xpute/host/ipc/directory.test.ts
 
 import { test } from "vitest";
-import { assertEquals, assertThrows } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { MarshalError } from "@xpute/kit/status/error.ts";
 import { Directory } from "./directory.ts";
@@ -32,14 +32,14 @@ test("directory - a key the host does not know is passed over, and one it does i
     ]),
     8,
   );
-  assertEquals(
+  assert.deepStrictEqual(
     [dir.get(key.SQ), dir.get(key.CQ), dir.get(key.PROGRAM | 9)],
     [64, 128, 11],
   );
 });
 
 test("directory - a key written twice, a head that is not xpute's, and a version this host does not read are refused", () => {
-  assertThrows(
+  assert.throws(
     () =>
       new Directory(
         written([
@@ -50,18 +50,18 @@ test("directory - a key written twice, a head that is not xpute's, and a version
       ),
     MarshalError,
   );
-  assertThrows(
+  assert.throws(
     () => new Directory(written([[key.SQ, 64]], [0, VERSION]), 8),
     MarshalError,
   );
-  assertThrows(
+  assert.throws(
     () => new Directory(written([[key.SQ, 64]], [MAGIC, VERSION + 1]), 8),
     MarshalError,
   );
 });
 
 test("directory - a key the guest did not write is refused rather than read as 0", () => {
-  assertThrows(
+  assert.throws(
     () => new Directory(written([[key.SQ, 64]]), 8).get(key.CQ),
     MarshalError,
   );

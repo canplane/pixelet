@@ -12,12 +12,31 @@
  * back: "ok", or what failed.
  */
 
-import { assert, assertEquals } from "@std/assert";
-
 import { Golden } from "@xpute/kit/golden.ts";
 
 import { DONE } from "./api.spec.ts";
 import { GpuHost } from "./host.ts";
+
+// Its own checks: the page it runs in has no node:assert.
+function check(ok: boolean, msg: string): asserts ok {
+  if (!ok) throw new Error(msg);
+}
+
+/** The same values in the same order; where not, the first place they part. */
+function same(
+  seen: ArrayLike<unknown>,
+  want: ArrayLike<unknown>,
+  msg = "not the same values",
+): void {
+  const at =
+    seen.length === want.length
+      ? Array.from(seen).findIndex((val, i) => val !== want[i])
+      : Math.min(seen.length, want.length);
+  check(
+    at === -1,
+    `${msg}: they part at ${at} of ${seen.length} and ${want.length}`,
+  );
+}
 
 async function replay(): Promise<void> {
   const g = await Golden.load("golden/gpu/programs.tsv");
@@ -56,11 +75,7 @@ async function replay(): Promise<void> {
       }
     }
     const want = g.bytes(`${p}.readback`);
-    assertEquals(
-      bytes.slice(readback, readback + want.length),
-      want,
-      `${p}.readback`,
-    );
+    same(bytes.slice(readback, readback + want.length), want, `${p}.readback`);
   }
   device.destroy();
 }
@@ -82,22 +97,18 @@ function guard(): void {
   const [old, newer] = [3 | (1 << 16), 3 | (2 << 16)];
   host.bind(old, context("old"));
   host.bind(newer, context("newer"));
-  assertEquals(
-    released,
-    ["old"],
-    "the slot's old context let go as the newer took it",
-  );
-  assert(
+  same(released, ["old"], "the slot's old context let go as the newer took it");
+  check(
     !host.bind(old, context("late")),
     "an old handle's late bind takes nothing back",
   );
-  assertEquals(released, ["old"]);
-  assert(!host.unbind(old), "an old handle unbinds nothing");
-  assertEquals(released, ["old"]);
-  assert(host.unbind(newer), "the newer handle unbinds its own");
-  assertEquals(released, ["old", "newer"]);
-  assert(!host.unbind(newer), "and only once");
-  assert(
+  same(released, ["old"]);
+  check(!host.unbind(old), "an old handle unbinds nothing");
+  same(released, ["old"]);
+  check(host.unbind(newer), "the newer handle unbinds its own");
+  same(released, ["old", "newer"]);
+  check(!host.unbind(newer), "and only once");
+  check(
     !host.bind(old, context("late")),
     "the slot remembers the newer after it is let go",
   );

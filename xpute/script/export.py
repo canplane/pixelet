@@ -54,8 +54,9 @@ def git(args: list[str], cwd: Path = XPUTE) -> str:
 
 
 def stamp() -> str:
-    """The repository this tree is developed in, by its checkout's name, and its commit."""
-    source = Path(git(["rev-parse", "--show-toplevel"])).name
+    """The repository this tree is developed in, by the name of the checkout its
+    .git lies in, a worktree's too, and its commit."""
+    source = Path(git(["rev-parse", "--path-format=absolute", "--git-common-dir"])).parent.name
     dirty = "-dirty" if git(["status", "--porcelain", "--", "."]) else ""
     return f"{source}@{git(['rev-parse', '--short', 'HEAD'])}{dirty}"
 
@@ -63,8 +64,9 @@ def stamp() -> str:
 def draft(to: Path, at: str) -> str:
     """The stamp, then the subjects since the one the repository's last commit names, when that still resolves."""
     last = run(["git", "log", "-1", "--format=%B"], to)
-    # The stamp is the message's first word; a subject below may hold an `@` of its own.
-    found = re.match(r"\S+@([0-9a-f]+)", last.stdout.decode()) if last.returncode == 0 else None
+    # The stamp is the message's last word, as `Taken from <stamp>.` ends it;
+    # a line above may hold an `@` of its own.
+    found = re.search(r"\S+@([0-9a-f]+)\.?\s*\Z", last.stdout.decode()) if last.returncode == 0 else None
     previous = found and found.group(1)
     resolves = previous is not None and run(["git", "cat-file", "-e", f"{previous}^{{commit}}"]).returncode == 0
     subjects = [s for s in git(["log", "--format=%s", f"{previous}..HEAD", "--", "."]).split("\n") if s] if resolves else []

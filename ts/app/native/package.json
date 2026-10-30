@@ -4,7 +4,7 @@
   "type": "module",
   "main": "index.ts",
   "engines": {
-    "node": "^22.18.0 || >=23.6.0"
+    "node": ">=24"
   },
   "scripts": {
     "start": "EXPO_NO_TYPESCRIPT_SETUP=1 expo start"

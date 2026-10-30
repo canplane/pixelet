@@ -3,7 +3,7 @@
 /** Holds the TypeScript side to golden/math/scalar.tsv, bit for bit. */
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import {
@@ -32,17 +32,17 @@ test("scalar computes what the record holds", async () => {
     const x = v.f64(`${k}.x`);
     const s = v.f64(`${k}.s`);
     const same = (name: string, got: number) =>
-      assertEquals(
+      assert.deepStrictEqual(
         bits(got),
         bits(v.f64(`${k}.${name}`)),
         `${k}.${name}(${x}, ${s}) = ${got}`,
       );
-    assertEquals(
+    assert.deepStrictEqual(
       approx_eq(x, x + s * 1e-6),
       v.bool(`${k}.approx_eq`),
       `${k}.approx_eq`,
     );
-    assertEquals(near(x, s, 0.3), v.bool(`${k}.near`), `${k}.near`);
+    assert.deepStrictEqual(near(x, s, 0.3), v.bool(`${k}.near`), `${k}.near`);
     same("lerp", lerp(x, s, 0.3));
     same("inv_lerp", inv_lerp(x, -s, s * 2));
     same("remap", remap(x, -1, 1, 0, s));
@@ -56,5 +56,5 @@ test("scalar computes what the record holds", async () => {
 
 test("the tolerance is the record's", async () => {
   const v = await Golden.load("golden/math/scalar.tsv");
-  assertEquals(bits(EPS), bits(v.f64("eps")));
+  assert.deepStrictEqual(bits(EPS), bits(v.f64("eps")));
 });

@@ -3,7 +3,7 @@
 /** golden/codec/json.tsv as `JSON.parse` judges it; the guests' readers are held to the same record. */
 
 import { test } from "vitest";
-import { assertEquals } from "@std/assert";
+import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/kit/golden.ts";
 
@@ -21,7 +21,7 @@ test("the host's JSON.parse takes what the record says is JSON", async () => {
     } catch {
       got = "refused";
     }
-    assertEquals(got, v.s(`grammar.${k}.read`), `grammar.${k}`);
+    assert.deepStrictEqual(got, v.s(`grammar.${k}.read`), `grammar.${k}`);
   }
 });
 
@@ -31,7 +31,7 @@ test("the host's JSON.parse reads a number past the doubles as an infinity or a 
     const bits = new BigUint64Array(
       new Float64Array([JSON.parse(v.s(`number.${k}.text`))]).buffer,
     )[0];
-    assertEquals(
+    assert.deepStrictEqual(
       bits.toString(16).padStart(16, "0"),
       v.s(`number.${k}.bits`),
       `number.${k}`,

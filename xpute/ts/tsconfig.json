@@ -20,6 +20,13 @@
       "@xpute/gpu/*": ["./gpu/src/*"]
     }
   },
-  "include": ["kit", "host", "gpu", "vitest.config.ts", "vitest.setup.ts"],
+  "include": [
+    "kit",
+    "host",
+    "gpu",
+    "script",
+    "vitest.config.ts",
+    "vitest.setup.ts"
+  ],
   "exclude": ["**/node_modules", "target"]
 }

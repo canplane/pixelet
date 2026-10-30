@@ -2,12 +2,13 @@
 
 /**
  * Runs the traces under spec/conformance/ against every guest, Rust or
- * C++, native or WebAssembly, through this runtime's host. Build the guests
- * first (`make build` at xpute's root): Cargo for Rust, cpp/Makefile for C++.
+ * C++, native or WebAssembly, through this runtime's host, under each of the
+ * layouts a guest draws from its seed (LAYOUTS). Build the guests first
+ * (`make build` at xpute's root): Cargo for Rust, cpp/Makefile for C++.
  */
 
 import { test } from "vitest";
-import { assert, assertEquals, assertNotEquals } from "@std/assert";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,7 +24,15 @@ import { key as directory_key } from "@xpute/host/ipc/directory.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
-import { cmd, key, MEM_BYTES } from "@xpute/host/conformance.spec.ts";
+import { Sys } from "@xpute/host/ipc/sys.ts";
+import { open_module } from "@xpute/host/module.ts";
+import {
+  cmd,
+  hostcall,
+  key,
+  LAYOUTS,
+  MEM_BYTES,
+} from "@xpute/host/conformance.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -45,11 +54,12 @@ function library(dir: string, name: string): string {
 }
 
 const NOW = koffi.proto("double xpute_now(void)");
+const HOSTCALL = koffi.proto("int32_t xpute_hostcall(uint32_t at)");
 
 /** Room past the guest's range for the module's own stack and data, which the build decides. */
 const MODULE_BYTES = 4 << 20;
 
-const MODULE_IMPORTS = ["env.memory", "env.now"];
+const MODULE_IMPORTS = ["env.hostcall", "env.memory", "env.now"];
 
 /** A guest as the host holds it, and the offset its boot answered. */
 interface Opened extends Guest {
@@ -57,36 +67,50 @@ interface Opened extends Guest {
 }
 
 interface Opener {
-  open(): Opened;
+  /** A guest booted under the layout `seed` draws. */
+  open(seed: number): Opened;
   close(): void;
+}
+
+/** What answers a guest's hostcalls until its host says. */
+function unanswered(): number {
+  return Errno.ENOSYS;
 }
 
 function native(path: string): Opener {
   const lib = koffi.load(path);
   const boot = lib.func(
-    "uint32_t xpute_conformance_boot(void *mem, xpute_now *now)",
+    "uint32_t xpute_conformance_boot(void *mem, xpute_now *now, xpute_hostcall *hostcall, uint32_t seed)",
   );
-  const intr = lib.func(
-    "double xpute_conformance_intr(void *mem, double quota)",
+  const guest_run = lib.func(
+    "double xpute_conformance_run(void *mem, double quota)",
   );
   const now = koffi.register(() => clock_ms, koffi.pointer(NOW));
+  let answer: (at: number) => number = unanswered;
+  const host = koffi.register(
+    (at: number) => answer(at),
+    koffi.pointer(HOSTCALL),
+  );
   // The guest keeps the region between calls, so it is memory that does not
   // move, seen from here without a copy. Words of eight bytes, so it is
   // 8-aligned, as a guest asks.
   const regions: unknown[] = [];
   return {
-    open() {
+    open(seed) {
       const at = koffi.alloc("double", MEM_BYTES / 8);
       regions.push(at);
-      const directory_at = boot(at, now);
+      answer = unanswered;
+      const directory_at = boot(at, now, host, seed);
       return {
         mem: koffi.view(at, MEM_BYTES),
         directory_at,
-        intr: (quota) => intr(at, quota),
+        run: (quota) => guest_run(at, quota),
+        answer_with: (a) => (answer = a),
       };
     },
     close() {
       koffi.unregister(now);
+      koffi.unregister(host);
       lib.unload();
       for (const at of regions) koffi.free(at);
     },
@@ -98,28 +122,20 @@ function module(path: string): Opener {
   const imports = WebAssembly.Module.imports(compiled)
     .map((i) => `${i.module}.${i.name}`)
     .sort();
-  assertEquals(
+  assert.deepStrictEqual(
     imports,
     MODULE_IMPORTS,
     `${path}: what the module reaches its host through`,
   );
   return {
-    open() {
+    open(seed) {
       const pages = MODULE_BYTES >> 16;
       const memory = new WebAssembly.Memory({ initial: pages, maximum: pages });
-      const instance = new WebAssembly.Instance(compiled, {
-        env: { memory, now: () => clock_ms },
-      });
-      const exports = instance.exports as {
-        xpute_conformance_boot(): number;
-        intr(quota_ms: number): number;
-      };
-      const directory_at = exports.xpute_conformance_boot() >>> 0;
-      return {
-        mem: memory.buffer as ArrayBuffer,
-        directory_at,
-        intr: (quota) => exports.intr(quota),
-      };
+      const guest = open_module(compiled, memory, () => clock_ms);
+      const boot = guest.instance.exports.xpute_conformance_boot as (
+        seed: number,
+      ) => number;
+      return { ...guest, directory_at: boot(seed) >>> 0 };
     },
     close() {},
   };
@@ -170,26 +186,41 @@ class Host {
     this.sq = new Ring(mem, this.directory.get(directory_key.SQ));
     this.cq = new Ring(mem, this.directory.get(directory_key.CQ));
     this.stream_at = this.directory.get(key.STREAM);
+    // The fixture's one call, answered through this runtime's own end, as a
+    // program's host mounts it.
+    const sys = new Sys(
+      {
+        program: (code, w, a) => {
+          if (code !== hostcall.ANSWER) return Errno.ENOSYS;
+          const [n, word] = [w[a], w[a + 1]];
+          if (n === 0) return Errno.EINVAL;
+          new Uint32Array(mem, word, 1)[0] = n + 1;
+          return 0;
+        },
+      },
+      () => {},
+    );
+    guest.answer_with((at) => sys.hostcall(mem, at));
   }
 
   submit(tag: number, command: number, ack: boolean, args: number[]): void {
     let pkt: PacketWriter | null = null;
     if (args.length > 0) {
-      assert(
+      assert.ok(
         this.sq.write(this.writer, args.length),
         "a full ring takes no packet",
       );
       for (const a of args) this.writer.u32(a);
       pkt = this.writer;
     }
-    assertEquals(
+    assert.deepStrictEqual(
       this.sq.push(tag, command, ack ? frame.ACKREQ : 0, pkt),
       Errno.OK,
     );
   }
 
   ring(quota_ms: number): Turn {
-    const wake = this.guest.intr(quota_ms);
+    const wake = this.guest.run(quota_ms);
     const stream: number[] = [];
     each_record(this.guest.mem, this.stream_at, 1, (op) => stream.push(op));
     const completions: Completion[] = [];
@@ -246,7 +277,7 @@ function cmd_name(n: number): string {
 }
 
 /** A completion ring's sequence as a trace writes it: a reply TAG:CMD=RESULT,
- * a signal TAG:CMD, and a run of one command's signals tagged 0 up CMD*n. */
+ * an event TAG:CMD, and a run of one command's events tagged 0 up CMD*n. */
 function render_completions(completions: Completion[]): string {
   const out: string[] = [];
   let run: [number, number] | null = null;
@@ -285,7 +316,7 @@ function expect(
 ): void {
   const seen_tokens = seen.split(" ");
   const said_tokens = said.split(" ");
-  assertEquals(
+  assert.deepStrictEqual(
     seen_tokens.length,
     said_tokens.length,
     `${what}: saw ${seen}, the trace says ${said}`,
@@ -295,19 +326,19 @@ function expect(
     const [seen_head, val] = seen_token.split("=");
     const [said_head, v] = said_token.split("=");
     if (v !== undefined && v.startsWith("$") && val !== undefined) {
-      assertEquals(
+      assert.deepStrictEqual(
         seen_head,
         said_head,
         `${what}: saw ${seen}, the trace says ${said}`,
       );
       if (!vars.has(v)) vars.set(v, Number(val));
-      assertEquals(
+      assert.deepStrictEqual(
         vars.get(v),
         Number(val),
         `${what}: ${v} again, and not what it was`,
       );
     } else {
-      assertEquals(
+      assert.deepStrictEqual(
         seen_token,
         said_token,
         `${what}: saw ${seen}, the trace says ${said}`,
@@ -333,10 +364,10 @@ function val(term: string, vars: Map<string, number>): number {
 function relation(said: string, vars: Map<string, number>, what: string): void {
   if (said.includes(" == ")) {
     const [a, b] = said.split(" == ");
-    assertEquals(val(a, vars), val(b, vars), `${what}: ${said}`);
+    assert.deepStrictEqual(val(a, vars), val(b, vars), `${what}: ${said}`);
   } else if (said.includes(" != ")) {
     const [a, b] = said.split(" != ");
-    assertNotEquals(val(a, vars), val(b, vars), `${what}: ${said}`);
+    assert.notDeepStrictEqual(val(a, vars), val(b, vars), `${what}: ${said}`);
   } else {
     throw new Error(`${what}: no relation in ${said}`);
   }
@@ -348,10 +379,16 @@ function wake_name(wake: number): string {
   return wake === 0 ? "next" : wake > 0 ? "later" : "none";
 }
 
-function run(g: Golden, guest: string, opener: Opener, trace: string): void {
-  const name = `${guest}: ${trace}`;
+function run(
+  g: Golden,
+  guest: string,
+  opener: Opener,
+  trace: string,
+  seed: number,
+): void {
+  const name = `${guest}, layout ${seed}: ${trace}`;
   clock_ms = 0;
-  const host = new Host(opener.open());
+  const host = new Host(opener.open(seed));
   const turns: Turn[] = [];
   const vars = new Map<string, number>();
   for (let i = 0; g.has(`${trace}.step.${i}`); i++) {
@@ -388,7 +425,7 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
         for (;;) {
           turns.push(host.ring(0));
           if (host.sq.len === 0) break;
-          assert(
+          assert.ok(
             turns.length < MOST_SETTLE_TURNS,
             `${name}: the guest stopped applying what waits`,
           );
@@ -401,14 +438,14 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
   turns.forEach((turn, t) => {
     const at = (what: string) => `${trace}.turn.${t}.${what}`;
     if (g.has(at("stream"))) {
-      assertEquals(
+      assert.deepStrictEqual(
         render_stream(turn.stream),
         g.s(at("stream")),
         `${name} turn ${t}: the stream`,
       );
     }
     if (g.has(at("wake"))) {
-      assertEquals(
+      assert.deepStrictEqual(
         wake_name(turn.wake),
         g.s(at("wake")),
         `${name} turn ${t}: what it asked for next`,
@@ -417,21 +454,21 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
   });
   const at = (what: string) => `${trace}.${what}`;
   if (g.has(at("completions"))) {
-    assertEquals(
+    assert.deepStrictEqual(
       render_completions(turns.flatMap((t) => t.completions)),
       g.s(at("completions")),
       `${name}: the completion ring`,
     );
   }
   if (g.has(at("stream"))) {
-    assertEquals(
+    assert.deepStrictEqual(
       render_stream(turns.flatMap((t) => t.stream)),
       g.s(at("stream")),
       `${name}: the stream`,
     );
   }
   if (g.has(at("turns.least"))) {
-    assert(
+    assert.ok(
       turns.length >= g.u32(at("turns.least")),
       `${name}: ${turns.length} turns`,
     );
@@ -440,7 +477,7 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
     turns
       .slice(0, -1)
       .forEach((turn, t) =>
-        assertEquals(
+        assert.deepStrictEqual(
           wake_name(turn.wake),
           g.s(at("wake.before_last")),
           `${name} turn ${t}: what it asked for next`,
@@ -448,7 +485,7 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
       );
   }
   if (g.has(at("wake.last"))) {
-    assertEquals(
+    assert.deepStrictEqual(
       wake_name(turns[turns.length - 1].wake),
       g.s(at("wake.last")),
       `${name}: what the last turn asked for`,
@@ -459,11 +496,14 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
   }
   if (g.has(at("directory.keys"))) {
     for (const k of g.s(at("directory.keys")).split(" ")) {
-      assert(host.names(key_number(k)), `${name}: the directory names no ${k}`);
+      assert.ok(
+        host.names(key_number(k)),
+        `${name}: the directory names no ${k}`,
+      );
     }
   }
   if (g.has(at("directory.reserved"))) {
-    assertEquals(
+    assert.deepStrictEqual(
       host.reserved,
       g.u32(at("directory.reserved")),
       `${name}: the directory's reserved word`,
@@ -471,14 +511,23 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
   }
 }
 
-for (const trace of ["directory", "door", "handle", "clock", "file"]) {
+for (const trace of [
+  "directory",
+  "door",
+  "handle",
+  "clock",
+  "file",
+  "hostcall",
+]) {
   for (const [guest, open] of Object.entries(GUESTS)) {
     test(`trace ${trace} - the ${guest} guest`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);
       const opener = open();
       try {
-        for (const scenario of g.s("scenarios").split(" ")) {
-          run(g, guest, opener, scenario);
+        for (let seed = 0; seed < LAYOUTS; seed++) {
+          for (const scenario of g.s("scenarios").split(" ")) {
+            run(g, guest, opener, scenario, seed);
+          }
         }
       } finally {
         opener.close();
