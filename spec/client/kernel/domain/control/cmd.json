@@ -7,9 +7,9 @@
     "the turns, and its shell, the UI. The commands are grouped by which of them a",
     "command is between.",
     "",
-    "The same number is a command on the submission ring and a signal on the",
+    "The same number is a command on the submission ring and an event on the",
     "completion ring (its `RES` clear). The direction is the ring: `pkt` is",
-    "what the shell submits, `signal` what the kernel posts. Each is written and",
+    "what the shell submits, `event` what the kernel posts. Each is written and",
     "read by what this file generates, on both sides, so no field is found by",
     "its position anywhere else.",
     "",
@@ -659,7 +659,7 @@
           "$doc": [
             "Start watching."
           ],
-          "signal": [
+          "event": [
             {
               "name": "sensor",
               "type": "Sensor"
@@ -672,7 +672,7 @@
           "$doc": [
             "Stop watching."
           ],
-          "signal": [
+          "event": [
             {
               "name": "sensor",
               "type": "Sensor"
@@ -815,7 +815,7 @@
           "$doc": [
             "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
             "phases on what is left of the quota, the fetches within the credits. The turn leaves",
-            "its signals on the completion ring, drawn by the kernel."
+            "its events on the completion ring, drawn by the kernel."
           ],
           "pkt": [
             {
@@ -834,8 +834,8 @@
               "type": "f64",
               "$doc": [
                 "The display's refresh, as the host measures it from the animation frames it is handed,",
-                "and the interval it paces turns at, a whole number of refreshes (xpute host",
-                "sched/quantum.ts `Grant`): the frame's budget."
+                "and the interval it paces turns at, a whole number of refreshes (the pacing the client",
+                "boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget."
               ]
             },
             {
@@ -1391,7 +1391,7 @@
             "The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a",
             "block the kernel holds, valid until the next snapshot."
           ],
-          "signal": [
+          "event": [
             {
               "name": "at",
               "type": "u32"

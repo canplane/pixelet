@@ -10,9 +10,9 @@
  * the turns, and its shell, the UI. The commands are grouped by which of them a
  * command is between.
  *
- * The same number is a command on the submission ring and a signal on the
+ * The same number is a command on the submission ring and an event on the
  * completion ring (its `RES` clear). The direction is the ring: `pkt` is
- * what the shell submits, `signal` what the kernel posts. Each is written and
+ * what the shell submits, `event` what the kernel posts. Each is written and
  * read by what this file generates, on both sides, so no field is found by
  * its position anywhere else.
  *
@@ -259,7 +259,7 @@ export const enum Command {
   WORLD_BOOT = 0x1001,
   /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
-   * its signals on the completion ring, drawn by the kernel. */
+   * its events on the completion ring, drawn by the kernel. */
   WORLD_FRAME = 0x1002,
   /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
    * page gets no frame and hiding is the save's last sure moment. */
@@ -536,21 +536,21 @@ export function read_lang_name(b: BranchCursor): LangName {
   return { lang: b.at(0).get<string>(), name: b.at(1).get<string>() };
 }
 
-/** Command.SENSOR_START's signal. */
-export interface SensorStartSignal {
+/** Command.SENSOR_START's event. */
+export interface SensorStartEvent {
   sensor: Sensor;
 }
 
-export function read_sensor_start(b: BranchCursor): SensorStartSignal {
+export function read_sensor_start(b: BranchCursor): SensorStartEvent {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
-/** Command.SENSOR_STOP's signal. */
-export interface SensorStopSignal {
+/** Command.SENSOR_STOP's event. */
+export interface SensorStopEvent {
   sensor: Sensor;
 }
 
-export function read_sensor_stop(b: BranchCursor): SensorStopSignal {
+export function read_sensor_stop(b: BranchCursor): SensorStopEvent {
   return { sensor: b.at(0).get<Sensor>() };
 }
 
@@ -618,7 +618,7 @@ export function encode_world_boot(
 /** Command.WORLD_FRAME's packet, written in place into `to`.
  *
  * @param width The viewport, in CSS pixels.
- * @param refresh_ms The display's refresh, as the host measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (xpute host sched/quantum.ts `Grant`): the frame's budget.
+ * @param refresh_ms The display's refresh, as the host measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
  * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
 export function encode_world_frame(
   to: PacketRoom,
@@ -871,12 +871,12 @@ export function encode_profiler_read(
   return to.writer(1).f64(window_ms);
 }
 
-/** Command.WORLD_SNAPSHOT's signal. */
-export interface WorldSnapshotSignal {
+/** Command.WORLD_SNAPSHOT's event. */
+export interface WorldSnapshotEvent {
   at: u32;
   len: u32;
 }
 
-export function read_world_snapshot(b: BranchCursor): WorldSnapshotSignal {
+export function read_world_snapshot(b: BranchCursor): WorldSnapshotEvent {
   return { at: b.at(0).get<u32>(), len: b.at(1).get<u32>() };
 }

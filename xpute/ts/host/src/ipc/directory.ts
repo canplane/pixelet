@@ -9,8 +9,7 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import type { QuantumPolicy } from "../sched/quantum.ts";
-import { HEAD, key, MAGIC, QUANTUM_SCALE, VERSION } from "./directory.spec.ts";
+import { HEAD, MAGIC, VERSION } from "./directory.spec.ts";
 
 export class Directory {
   private readonly entries = new Map<u32, u32>();
@@ -32,14 +31,5 @@ export class Directory {
     const val = this.entries.get(k >>> 0);
     if (val === undefined) throw new MarshalError(Errno.ENOENT);
     return val;
-  }
-
-  quantum(): QuantumPolicy {
-    const at = (k: u32) => this.get(k) / QUANTUM_SCALE;
-    return {
-      margin_share: at(key.MARGIN_SHARE),
-      batch_frames: at(key.BATCH_FRAMES),
-      settle_ms: at(key.SETTLE_MS),
-    };
   }
 }

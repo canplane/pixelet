@@ -26,7 +26,7 @@
 #include "xpute/guest/ipc/sys.hpp"
 #include "xpute/guest/mem.hpp"
 #include "xpute/guest/mem/section.hpp"
-#include "xpute/guest/sched/quantum.hpp"
+#include "xpute/guest/sched/wake.hpp"
 #include "xpute/guest/wasm.hpp"
 #include "guest.spec.hpp"
 
@@ -105,7 +105,7 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         return {.err = Errno::einval};
     case cmd::RAISE:
         if (arg > MOST_RAISE) return {.err = Errno::einval};
-        for (std::uint32_t k = 0; k < arg; k++) s.door.post(k, cmd::SIGNAL, 0, 0);
+        for (std::uint32_t k = 0; k < arg; k++) s.door.post(k, cmd::EVENT, 0, 0);
         return {.val = static_cast<std::int32_t>(arg)};
     case cmd::RECORD:
         s.stream.record(arg, {});
@@ -245,7 +245,7 @@ extern "C" std::uint32_t xpute_conformance_boot(void) {
     return boot(mem::core(), range, host_now);
 }
 
-extern "C" double intr(double) {
+extern "C" double run(double) {
     return turn(mem::core(), range_at());
 }
 
@@ -260,6 +260,6 @@ extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conform
     return boot(given(mem), 0, now);
 }
 
-extern "C" double xpute_conformance_intr(std::uint8_t *mem, double) { return turn(given(mem), 0); }
+extern "C" double xpute_conformance_run(std::uint8_t *mem, double) { return turn(given(mem), 0); }
 
 #endif

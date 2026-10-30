@@ -1,7 +1,7 @@
 // pxl-tool/spec/cmd/ts.rs
 
 //! A command table as TypeScript: its enums, each packet's writer and each
-//! signal's reader, for the host's side or the shell's.
+//! event's reader, for the host's side or the shell's.
 
 use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
 use crate::spec;
@@ -213,19 +213,19 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             ));
             tail.push("}".into());
         }
-        if let Some(signal) = &c.signal {
+        if let Some(event) = &c.event {
             tail.extend([
                 String::new(),
-                format!("/** Command.{}'s signal. */", c.name),
-                format!("export interface {name}Signal {{"),
+                format!("/** Command.{}'s event. */", c.name),
+                format!("export interface {name}Event {{"),
             ]);
-            tail.extend(uses.field_lines(spec, signal)?);
+            tail.extend(uses.field_lines(spec, event)?);
             tail.extend(["}".to_string(), String::new()]);
             tail.extend(ts_reader(
                 spec,
                 &c.name.to_lowercase(),
-                &format!("{name}Signal"),
-                signal,
+                &format!("{name}Event"),
+                event,
             )?);
         }
     }

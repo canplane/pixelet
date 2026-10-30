@@ -33,21 +33,21 @@ export async function open(cfg: Config): Promise<Guest> {
       hostcall: (at: u32) => answer(at),
     },
   });
-  const turn = instance.exports.intr as Guest["intr"];
+  const turn = instance.exports.run as Guest["run"];
   // The first turn lays the memory out and writes the directory.
   turn(0);
   // The maximum is the initial size, so the buffer is never replaced.
   const mem = memory.buffer as ArrayBuffer;
   const gpu = new Directory(mem, cfg.directory_at).get(cfg.gpu_stream);
   webgpu.take(mem);
-  const intr = (quota_ms: f64) => {
+  const run = (quota_ms: f64) => {
     const wake = turn(quota_ms);
     webgpu.run(gpu, cfg.gpu_head);
     return wake;
   };
   return {
     mem,
-    intr,
+    run,
     answer_with: (a) => {
       answer = a;
     },

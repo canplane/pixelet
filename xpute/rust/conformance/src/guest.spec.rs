@@ -31,7 +31,7 @@ pub const MEM_BYTES: u32 = 262144;
 pub const SQ_CAP: u32 = 16;
 
 /// Frames the completion ring holds: fewer than eight commands raising MOST_RAISE
-/// signals each leave, so a trace that sends those makes a turn's output outgrow it.
+/// events each leave, so a trace that sends those makes a turn's output outgrow it.
 pub const CQ_CAP: u32 = 128;
 
 /// A ring slot's payload: a packet of one number fits.
@@ -53,7 +53,7 @@ pub const HEAP_BYTES: u32 = 65536;
 /// Slots in the guest's handle table, slot 0 never handed out.
 pub const HANDLES: u32 = 16;
 
-/// The most signals one RAISE asks for; more is refused with EINVAL.
+/// The most events one RAISE asks for; more is refused with EINVAL.
 pub const MOST_RAISE: u32 = 32;
 
 /// The guest's own entry in its directory, past xpute's PROGRAM bit.
@@ -79,7 +79,7 @@ pub mod cmd {
     pub const OK: u32 = 4097;
     /// Fails with EINVAL.
     pub const FAIL: u32 = 4098;
-    /// Raises the packet's number of SIGNALs, tagged 0 up, then replies with that number.
+    /// Raises the packet's number of EVENTs, tagged 0 up, then replies with that number.
     pub const RAISE: u32 = 4099;
     /// Writes one record to the stream, its op the packet's number and no words; replies 0.
     pub const RECORD: u32 = 4100;
@@ -100,11 +100,11 @@ pub mod cmd {
     /// Zeroes a word of its own, makes the hostcall ANSWER of the packet's number and the word's offset, and replies with the word as it then reads it; fails with the host's errno where the host refused.
     pub const HOSTCALL: u32 = 4108;
     /// What RAISE raises.
-    pub const SIGNAL: u32 = 4353;
+    pub const EVENT: u32 = 4353;
     /// An open answered: tagged with its owner, its result the host's.
     pub const OPENED: u32 = 4354;
     pub const KEYS: &[&str] = &[
         "OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN",
-        "CLOSE", "HOSTCALL", "SIGNAL", "OPENED",
+        "CLOSE", "HOSTCALL", "EVENT", "OPENED",
     ];
 }

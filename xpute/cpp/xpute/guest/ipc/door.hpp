@@ -40,9 +40,9 @@ struct DoorStat {
 
 class Door {
   public:
-    // `most_signals` is the most one command raises, or the turn once its drain
+    // `most_events` is the most one command raises, or the turn once its drain
     // is done: the program's bound.
-    Door(Ring sq, Ring cq, std::uint32_t most_signals) noexcept : sq_(sq), cq_(cq), reserve_(most_signals + 1) {}
+    Door(Ring sq, Ring cq, std::uint32_t most_events) noexcept : sq_(sq), cq_(cq), reserve_(most_events + 1) {}
 
     const Ring &sq() const noexcept { return sq_; }
     const Ring &cq() const noexcept { return cq_; }
@@ -99,7 +99,7 @@ class Door {
 
     Ring sq_;
     Ring cq_;
-    // What one command may leave: its signals, or the turn's after the drain, and its reply.
+    // What one command may leave: its events, or the turn's after the drain, and its reply.
     std::uint32_t reserve_;
     // Kept by the const calls that move the rings, as the rings' own words are.
     mutable DoorStat stat_;

@@ -7,3 +7,6 @@ pub mod clock;
 pub mod edge;
 pub mod param;
 pub mod tick;
+
+#[path = "sched/pacing.spec.rs"]
+pub mod pacing_spec;

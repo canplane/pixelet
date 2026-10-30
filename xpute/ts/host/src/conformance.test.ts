@@ -73,8 +73,8 @@ function native(path: string): Opener {
   const boot = lib.func(
     "uint32_t xpute_conformance_boot(void *mem, xpute_now *now, xpute_hostcall *hostcall)",
   );
-  const intr = lib.func(
-    "double xpute_conformance_intr(void *mem, double quota)",
+  const guest_run = lib.func(
+    "double xpute_conformance_run(void *mem, double quota)",
   );
   const now = koffi.register(() => clock_ms, koffi.pointer(NOW));
   let answer: (at: number) => number = unanswered;
@@ -95,7 +95,7 @@ function native(path: string): Opener {
       return {
         mem: koffi.view(at, MEM_BYTES),
         directory_at,
-        intr: (quota) => intr(at, quota),
+        run: (quota) => guest_run(at, quota),
         answer_with: (a) => (answer = a),
       };
     },
@@ -132,13 +132,13 @@ function module(path: string): Opener {
       });
       const exports = instance.exports as {
         xpute_conformance_boot(): number;
-        intr(quota_ms: number): number;
+        run(quota_ms: number): number;
       };
       const directory_at = exports.xpute_conformance_boot() >>> 0;
       return {
         mem: memory.buffer as ArrayBuffer,
         directory_at,
-        intr: (quota) => exports.intr(quota),
+        run: (quota) => exports.run(quota),
         answer_with: (a) => (answer = a),
       };
     },
@@ -232,7 +232,7 @@ class Host {
   }
 
   ring(quota_ms: number): Turn {
-    const wake = this.guest.intr(quota_ms);
+    const wake = this.guest.run(quota_ms);
     const stream: number[] = [];
     each_record(this.guest.mem, this.stream_at, 1, (op) => stream.push(op));
     const completions: Completion[] = [];
@@ -289,7 +289,7 @@ function cmd_name(n: number): string {
 }
 
 /** A completion ring's sequence as a trace writes it: a reply TAG:CMD=RESULT,
- * a signal TAG:CMD, and a run of one command's signals tagged 0 up CMD*n. */
+ * an event TAG:CMD, and a run of one command's events tagged 0 up CMD*n. */
 function render_completions(completions: Completion[]): string {
   const out: string[] = [];
   let run: [number, number] | null = null;

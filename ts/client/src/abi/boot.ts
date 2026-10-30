@@ -4,7 +4,7 @@
  * Boots the kernel: hands the place the guest's config and where to tell what
  * its sensors, its GPU and its network hear; fills the host's slots with what pixelet's
  * numbers mean (the roots, the program's calls, the stop report, each frame's
- * submission and the signals); then hands the completion ring's signals to
+ * submission and the events); then hands the completion ring's events to
  * whoever runs them.
  */
 
@@ -12,6 +12,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { SysHost } from "@xpute/host/ipc/sys.ts";
+import { FramePacing } from "@xpute/host/sched/frame_pacing.ts";
 import {
   Command,
   encode_world_boot,
@@ -26,6 +27,7 @@ import { declare_source } from "@/namespace/source.ts";
 import { namespace } from "@/namespace/namespace.ts";
 import { follow_refused, migrate } from "@/namespace/storage.ts";
 import { HOST, open_host } from "@/host/mount.ts";
+import { BATCH_FRAMES, MARGIN_SHARE, SETTLE_MS } from "@/abi/pacing.spec.ts";
 import {
   DESKTOP_BYTES,
   DIRECTORY_AT,
@@ -65,7 +67,7 @@ const abort: SysHost["abort"] = ({ errnum, file, line, column, a, b }) => {
   }`;
 };
 
-function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
+function on_event(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   switch (cmd) {
     case Command.WORLD_SNAPSHOT: {
       // Too large for a ring frame; valid until the kernel writes the next, a turn away.
@@ -93,7 +95,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       } else bracket.sensor.orient.stop();
       return;
   }
-  console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
+  console.warn(`[kernel] event 0x${cmd.toString(16)} with no one to hear it`);
 }
 
 /** The source's declaration to the kernel, refused where it is more than a command carries. */
@@ -118,13 +120,23 @@ export async function boot(): Promise<void> {
     gpu_stream: key.GPU_STREAM,
     gpu_head: stream.HEAD,
   };
+  // Turns paced to the display, its numbers the kernel's own (pacing.json).
+  const pacing = new FramePacing(
+    {
+      margin_share: MARGIN_SHARE,
+      batch_frames: BATCH_FRAMES,
+      settle_ms: SETTLE_MS,
+    },
+    (run) => requestAnimationFrame(run),
+  );
   await open_host(
     cfg,
     { fs: namespace(), program: text_call, abort },
+    pacing,
     submit_frame,
   );
   bracket.sensor.hear(SENSOR_HEARD);
-  HOST.doorbell.signal = on_signal;
+  HOST.doorbell.event = on_event;
   bracket.gpu.boot({
     ready: () => HOST.send(Command.GPU_READY),
     state: (state) => set_gpu(GPU_STATE[state]),

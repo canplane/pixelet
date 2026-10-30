@@ -4,7 +4,7 @@
 //! host drives both; `boot` answers the directory's offset. Natively the host
 //! hands it a region, a clock and its hostcall; as wasm it imports all three,
 //! its range starts past the linker's data, and its turn is the module's
-//! `intr`.
+//! `run`.
 
 #[cfg(not(target_arch = "wasm32"))]
 use core::cell::Cell;
@@ -18,7 +18,7 @@ use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::stream::Stream;
 use xpute_guest::ipc::sys::Sys;
 use xpute_guest::mem::Memory;
-use xpute_guest::sched::quantum::NO_WAKE;
+use xpute_guest::sched::wake::NO_WAKE;
 use xpute_kit::math::scalar::round;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn xpute_conformance_boot(mem: *mut u8, now: Now, host: Ho
 /// `mem` is a memory `xpute_conformance_boot` laid a guest out over.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
-pub unsafe extern "C" fn xpute_conformance_intr(mem: *mut u8, _quota_ms: f64) -> f64 {
+pub unsafe extern "C" fn xpute_conformance_run(mem: *mut u8, _quota_ms: f64) -> f64 {
     // SAFETY: the caller's memory, booted.
     unsafe { turn(given(mem), 0) }
 }
@@ -264,7 +264,7 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
                 return Err(MarshalError::new(Errno::EINVAL));
             }
             for k in 0..n {
-                door.post(k, spec::cmd::SIGNAL, 0, 0);
+                door.post(k, spec::cmd::EVENT, 0, 0);
             }
             Ok(Some(n as i32))
         }

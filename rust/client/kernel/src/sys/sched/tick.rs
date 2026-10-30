@@ -1,20 +1,13 @@
 // pxl-kernel/sys/sched/tick.rs
 
-//! The world's tick: xpute's tick mechanism with the kernel's phase shares,
-//! settle time, declared quantum and step table.
+//! The world's tick: xpute's tick mechanism with the kernel's phase shares
+//! and step table.
 
-use xpute_guest::sched::quantum::QuantumPolicy;
 use xpute_guest::sched::tick::{Phase, StepStat, Tick, TickPolicy, TickReport};
 pub use xpute_guest::sched::tick::{TickContext, TickStep};
 
 use crate::sys::sched::param;
 use xpute_guest::global::Global;
-
-pub const QUANTUM: QuantumPolicy = QuantumPolicy {
-    margin_share: param::QUANTUM_MARGIN_SHARE,
-    batch_frames: param::QUANTUM_BATCH_FRAMES,
-    settle_ms: param::QUANTUM_SETTLE_MS,
-};
 
 pub const POLICY: TickPolicy = TickPolicy {
     hard_slack_ms: param::HARD_SLACK_MS,

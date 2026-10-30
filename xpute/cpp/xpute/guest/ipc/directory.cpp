@@ -2,7 +2,6 @@
 
 #include "directory.hpp"
 
-#include "xpute/kit/math/scalar.hpp"
 #include "xpute/kit/status/bug.hpp"
 
 namespace xpute {
@@ -24,15 +23,6 @@ void write_directory(Memory mem, std::uint32_t at, std::uint32_t words, std::spa
         mem.set_word(off + 4, e.val);
         off += 8;
     }
-}
-
-std::array<Entry, 3> quantum_entries(const QuantumPolicy &q) noexcept {
-    auto scaled = [](double v) { return saturate_as<std::uint32_t>(round(v * directory::QUANTUM_SCALE)); };
-    return {{
-        {directory::key::MARGIN_SHARE, scaled(q.margin_share)},
-        {directory::key::BATCH_FRAMES, scaled(q.batch_frames)},
-        {directory::key::SETTLE_MS, scaled(q.settle_ms)},
-    }};
 }
 
 } // namespace xpute

@@ -1,17 +1,14 @@
 // xpute-guest/ipc/directory.rs
 
 //! The directory a guest's first turn writes: where the host finds the rings
-//! and streams, and the guest's quantum policy. Keys are looked up, never
+//! and streams. Keys are looked up, never
 //! counted to, so a host passes over an entry it does not know (as ELF's
 //! auxiliary vector does).
 
 #[path = "directory.spec.rs"]
 pub mod spec;
 
-use xpute_kit::math::scalar::round;
-
 use crate::mem::Memory;
-use crate::sched::quantum::QuantumPolicy;
 
 /// A key (`spec::key`, or one the program numbers with `key::PROGRAM` set)
 /// and its value.
@@ -48,14 +45,4 @@ pub unsafe fn write_directory(mem: Memory, at: usize, words: usize, entries: &[E
         words[at] = *key;
         words[at + 1] = *val;
     }
-}
-
-/// Each number in `spec::QUANTUM_SCALE`.
-pub fn quantum_entries(q: &QuantumPolicy) -> [Entry; 3] {
-    let scaled = |v: f64| round(v * f64::from(spec::QUANTUM_SCALE)) as u32;
-    [
-        (spec::key::MARGIN_SHARE, scaled(q.margin_share)),
-        (spec::key::BATCH_FRAMES, scaled(q.batch_frames)),
-        (spec::key::SETTLE_MS, scaled(q.settle_ms)),
-    ]
 }

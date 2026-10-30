@@ -15,7 +15,7 @@
 
 namespace xpute::frame {
 
-// The submitter's, echoed on the reply; a signal's subject.
+// The submitter's, echoed on the reply; an event's subject.
 inline constexpr std::uint32_t TAG = 0u;
 
 // The command in the low FLAG_SHIFT bits, the flags above them.
@@ -33,7 +33,7 @@ inline constexpr std::uint32_t WORDS = 4u;
 // Where the flags start in the CMD word.
 inline constexpr std::uint32_t FLAG_SHIFT = 16u;
 
-// A flag: a reply, as against a signal. Set by the sender, never by a handler.
+// A flag: a reply, as against an event. Set by the sender, never by a handler.
 inline constexpr std::uint32_t RES = 1u;
 
 // A flag: always reply; without it, only a failure is replied to.

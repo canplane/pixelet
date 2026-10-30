@@ -7,22 +7,31 @@
  */
 
 import { type Config as Mount, type Host, mount } from "@xpute/host/host.ts";
+import type {
+  FrameGrant,
+  FramePacing,
+} from "@xpute/host/sched/frame_pacing.ts";
 import { bracket, type Config } from "@/bracket.tsx";
 
 /** Set once by `open_host`, which the boot awaits: Metro's bundle cannot wait on a module import. */
-export let HOST: Host;
+export let HOST: Host<FrameGrant>;
 
-/** Opens the guest as `cfg` says and mounts the host on it, its system calls answered by `sys` and each granted frame filled by `submit`. */
+/** The scheduling policy the host was booted with, which an input makes interactive. */
+export let PACING: FramePacing;
+
+/** Opens the guest as `cfg` says and mounts the host on it, its system calls answered by `sys`, its turns run as `policy` says and each filled by `submit`. */
 export async function open_host(
   cfg: Config,
   sys: Mount["sys"],
-  submit: Mount["submit"],
+  policy: FramePacing,
+  submit: Mount<FrameGrant>["submit"],
 ): Promise<void> {
   const guest = await bracket.guest.open(cfg);
+  PACING = policy;
   HOST = mount(guest, {
     directory_at: cfg.directory_at,
     sys,
+    policy,
     submit,
-    next_frame: (run) => requestAnimationFrame(run),
   });
 }

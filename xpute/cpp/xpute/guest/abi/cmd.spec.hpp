@@ -8,7 +8,7 @@
 // a program numbers its own from there, in a table of its own that names this one as
 // its base, so the two never give out one number twice.
 //
-// The direction is the ring: `pkt` is what the host submits, `signal` what the guest
+// The direction is the ring: `pkt` is what the host submits, `event` what the guest
 // raises on the completion ring.
 
 #pragma once

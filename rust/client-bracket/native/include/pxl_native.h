@@ -16,7 +16,7 @@
 
 // The entry, the doorbell: a turn of quota_ms, and when the kernel wants the
 // next, in ms (xpute_guest::sched::quantum). The first lays the memory out.
-double xpute_intr(double quota_ms);
+double xpute_run(double quota_ms);
 
 // The memory: its first byte, with its bytes written through `bytes` (which
 // may be null) — what the shell reads the directory and the rings through.
@@ -24,7 +24,7 @@ uint8_t *xpute_mem(uint32_t *bytes);
 
 // `answer`, or none for null, answers the kernel's hostcalls: each a record
 // at an offset of the memory, handed back to the thread waiting in
-// `xpute_intr` and answered there before the turn goes on, with a value or
+// `xpute_run` and answered there before the turn goes on, with a value or
 // -errno. It must not call into the guest.
 void xpute_hostcall_on(int32_t (*answer)(uint32_t at));
 

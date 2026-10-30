@@ -19,7 +19,7 @@
     reason = "generated from the spec"
 )]
 
-/// The submitter's, echoed on the reply; a signal's subject.
+/// The submitter's, echoed on the reply; an event's subject.
 pub const TAG: u32 = 0;
 
 /// The command in the low FLAG_SHIFT bits, the flags above them.
@@ -37,7 +37,7 @@ pub const WORDS: u32 = 4;
 /// Where the flags start in the CMD word.
 pub const FLAG_SHIFT: u32 = 16;
 
-/// A flag: a reply, as against a signal. Set by the sender, never by a handler.
+/// A flag: a reply, as against an event. Set by the sender, never by a handler.
 pub const RES: u32 = 1;
 
 /// A flag: always reply; without it, only a failure is replied to.

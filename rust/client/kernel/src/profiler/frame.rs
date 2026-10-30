@@ -113,8 +113,8 @@ pub struct FrameSample {
     /// it filled: not the world's step, which stops at MAX_STEP_S.
     pub interval_ms: f64,
     /// The display's refresh, and the interval the host paced this frame at,
-    /// a whole number of refreshes, as the host granted them (xpute host
-    /// sched/quantum.ts `Grant`).
+    /// a whole number of refreshes, as the host granted them (@xpute/host
+    /// sched/frame_pacing.ts `FrameGrant`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     /// 1 where the host settled the interval, not interactive, as it says

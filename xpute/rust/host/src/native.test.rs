@@ -105,7 +105,7 @@ fn bad_heap_refused() {
 fn first_intr_installs_clock() {
     let boot = || guest().boot_info(&cfg(HEAP_AT));
     assert_eq!(
-        guest().run(move || native::intr(0.0, boot, |_, _| xpute_guest::clock::now())),
+        guest().run(move || native::run(0.0, boot, |_, _| xpute_guest::clock::now())),
         42.0
     );
 }

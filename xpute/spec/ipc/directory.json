@@ -29,20 +29,15 @@
     "$doc": ["Words before the first entry."]
   },
 
-  "QUANTUM_SCALE": {
-    "$val": 1000,
-    "$type": "u32",
-    "$doc": ["What a quantum policy's number is multiplied by to cross as a word: it crosses in thousandths."]
-  },
-
   "key": {
     "$type": "u32",
-    "$doc": ["What an entry's value is."],
+    "$doc": [
+      "What an entry's value is. 3 to 5 are retired and given to nothing else: they were the",
+      "numbers of a host's scheduling policy, which the program now injects when the host",
+      "boots (the host's sched/policy.ts)."
+    ],
     "SQ": { "$val": 1, "$doc": ["Where the submission ring's words begin."] },
     "CQ": { "$val": 2, "$doc": ["Where the completion ring's words begin."] },
-    "MARGIN_SHARE": { "$val": 3, "$doc": ["The quantum policy's margin share (sched/quantum.rs), in QUANTUM_SCALE."] },
-    "BATCH_FRAMES": { "$val": 4, "$doc": ["The quantum policy's batch frames, in QUANTUM_SCALE."] },
-    "SETTLE_MS": { "$val": 5, "$doc": ["The quantum policy's settle time, in QUANTUM_SCALE of a millisecond."] },
     "SYS": { "$val": 6, "$doc": ["Where the system-call stream's words begin (ipc/sys.json)."] },
     "PROGRAM": {
       "$val": 2147483648,

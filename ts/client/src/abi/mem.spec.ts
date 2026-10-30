@@ -29,11 +29,11 @@ export const SQ_CAP: u32 = 512 as number;
 
 /** Frames the completion ring holds: everything one turn leaves, since the
  * shell reads it dry before it rings again. A turn leaves at most a reply to
- * each command it applies and its own signals after the drain (door.rs
- * `SIGNALS`), so a ring of the submission ring's capacity plus the door's
- * reserve, `SIGNALS` + 1, never stops a drain partway; twice is the present
+ * each command it applies and its own events after the drain (door.rs
+ * `EVENTS`), so a ring of the submission ring's capacity plus the door's
+ * reserve, `EVENTS` + 1, never stops a drain partway; twice is the present
  * sizing, a power of two past that. Nothing is overrun if it is short: a
- * command whose signals and reply would not fit waits for the next turn
+ * command whose events and reply would not fit waits for the next turn
  * (xpute-guest ipc/door.rs). A power of two, as the submission ring's. */
 export const CQ_CAP: u32 = 1024 as number;
 

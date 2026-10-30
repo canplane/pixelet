@@ -596,7 +596,7 @@ one memory, granted once, and a share of time on each call, a **turn**
 abstractions and the policy over those grants, as a library OS does.
 
 A **bracket** plugs the kernel into one of xpute's guest forms: the kernel
-implements xpute's entry (`pxl-kernel door.rs` `intr`), and the bracket hands it
+implements xpute's entry (`pxl-kernel door.rs` `run`), and the bracket hands it
 what that form hands any guest (`xpute_guest::entry` `BootInfo`,
 `xpute_gpu::admit` `Admit`) and pixelet's place to report what stopped it
 (`sys/stop.rs` `LastWords`). `pxl-wasm` makes the kernel a WebAssembly module
@@ -630,7 +630,7 @@ The host and the kernel share xpute's two rings, one for what the host submits
 and one for what the kernel completes. The **commands** are
 `spec/client/kernel/domain/control/cmd.json`'s, from which both sides' readers
 and writers are generated, each packet an XTP tree, xpute's relocatable binary
-tree. The kernel also posts **signals** nobody asked for, such as a sensor to
+tree. The kernel also posts **events** nobody asked for, such as a sensor to
 watch or a new snapshot.
 
 The **shell** (`ts/client/src/shell/`) is the UI: React over the kernel's
@@ -655,7 +655,7 @@ What crosses each edge, from the shell down to the kernel:
   │ client    abi/ numbers, namespace/ │
   │           answers opens and writes │
   └────────────────────────────────────┘
-     │ WORLD_FRAME and the ▲ completions and signals;
+     │ WORLD_FRAME and the ▲ completions and events;
      │ commands, through   │ the opens and writes
      │ the host's doorbell │ the host runs
      ▼                     │
@@ -768,9 +768,11 @@ turn.
 Before each turn the client submits one `WORLD_FRAME` through the host's
 doorbell, with what the turn may spend and draw into
 (`ts/client/src/abi/input.ts` `submit_frame`); a turn rung for a command alone
-carries none and draws nothing. The quota's values are the kernel's
-(`sys/sched/tick.rs` `QUANTUM`), written into the **directory** the host reads
-at boot. In the tick, what moves the eye runs in `interaction`, and after it
+carries none and draws nothing. The host's turns are paced to the display by
+the frame pacing the client boots it with (`ts/client/src/abi/boot.ts`,
+`@xpute/host/sched/frame_pacing.ts`), its numbers the kernel's
+(`spec/client/kernel/sys/sched/pacing.json`); an input makes the turns after it
+interactive (`ts/client/src/abi/input.ts` `send_input`). In the tick, what moves the eye runs in `interaction`, and after it
 what the pointer is over where the eye now stands, the edit it would make and
 its ghost; what the eye then sees, demand and the scene, in `visible`; and the
 later phases hold what the quota leaves them (`turn.rs`).
@@ -795,7 +797,7 @@ range               what it holds                    placed by
 .stack              the stack, first                 the linker
 .ring.desc          the rings' descriptors           mem.json
 .ring.slot          the rings' payload slots         mem.json
-the directory       where the rings are, the quota   mem.json
+the directory       where the rings and streams are  mem.json
 .rodata .data .bss  the kernel's data                the linker
 .fixed              each owner's range               door/layout.rs
 .heap               the rest                         the allocator

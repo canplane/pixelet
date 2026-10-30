@@ -10,9 +10,9 @@ interface PxlPlatform {
    * asking a turn (gpu.ts). */
   addListener(event: "onWake", listener: () => void): { remove(): void };
   mem(): ArrayBuffer;
-  intr(quotaMs: f64): f64;
+  run(quotaMs: f64): f64;
   /** `answer` answers the guest's hostcalls from here on, called on the
-   * JavaScript thread while `intr` waits on the turn making them. */
+   * JavaScript thread while `run` waits on the turn making them. */
   hostcallOn(answer: (at: u32) => i32): void;
   /** Whether the device opened; what it is, the kernel reads from the host. */
   gpuOpen(): boolean;

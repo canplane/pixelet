@@ -4,7 +4,8 @@
  * `POINTER_KIND`), and what each frame the strobe grants submits with the viewport. */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { Grant } from "@xpute/host/sched/quantum.ts";
+import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
+import type { FrameGrant } from "@xpute/host/sched/frame_pacing.ts";
 import {
   type ActiveTool,
   Command,
@@ -25,14 +26,20 @@ import {
   type PointerPhase as PlacePhase,
   type Viewport,
 } from "@/bracket.tsx";
-import { HOST } from "@/host/mount.ts";
+import { HOST, PACING } from "@/host/mount.ts";
 
 /** Asked every frame, so a resize needs no event of its own. */
 let driver: (() => Viewport) | null = null;
 
+/** Sent with the next turn, which it makes interactive. */
+export function send_input(cmd: Command, pkt: PacketWriter): void {
+  PACING.input(performance.now());
+  HOST.send(cmd, pkt);
+}
+
 /** What each frame the strobe grants submits: the viewport, the display's
  * pacing, whether it is interactive, the reads allowed out and the clock. */
-export function submit_frame(grant: Grant): void {
+export function submit_frame(grant: FrameGrant): void {
   if (driver === null) return;
   const { width: w, height: h } = driver();
   const width = Math.max(1, w);
@@ -61,18 +68,18 @@ export function kernel_pointer(
   x: f64,
   y: f64,
 ): void {
-  HOST.input(
+  send_input(
     Command.INPUT_POINTER,
     encode_input_pointer(HOST.doorbell, phase, pointer_type, id, button, x, y),
   );
 }
 
 export function kernel_wheel(delta_y: f64): void {
-  HOST.input(Command.INPUT_WHEEL, encode_input_wheel(HOST.doorbell, delta_y));
+  send_input(Command.INPUT_WHEEL, encode_input_wheel(HOST.doorbell, delta_y));
 }
 
 export function kernel_keys(x: i32, y: i32): void {
-  HOST.input(Command.INPUT_KEYS, encode_input_keys(HOST.doorbell, x, y));
+  send_input(Command.INPUT_KEYS, encode_input_keys(HOST.doorbell, x, y));
 }
 
 export function kernel_rect(
@@ -89,7 +96,7 @@ export function kernel_rect(
 }
 
 export function kernel_hold(tool: ActiveTool, val: u32, tier: u32): void {
-  HOST.input(
+  send_input(
     Command.INPUT_HOLD,
     encode_input_hold(HOST.doorbell, tool, val, tier),
   );

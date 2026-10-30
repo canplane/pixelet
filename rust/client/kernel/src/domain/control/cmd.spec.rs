@@ -9,9 +9,9 @@
 //! the turns, and its shell, the UI. The commands are grouped by which of them a
 //! command is between.
 //!
-//! The same number is a command on the submission ring and a signal on the
+//! The same number is a command on the submission ring and an event on the
 //! completion ring (its `RES` clear). The direction is the ring: `pkt` is
-//! what the shell submits, `signal` what the kernel posts. Each is written and
+//! what the shell submits, `event` what the kernel posts. Each is written and
 //! read by what this file generates, on both sides, so no field is found by
 //! its position anywhere else.
 //!
@@ -25,7 +25,7 @@
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
-// with no signal or no enum read off the wire leaves a writer or a
+// with no event or no enum read off the wire leaves a writer or a
 // number's check unused.
 #![allow(
     non_camel_case_types,
@@ -582,7 +582,7 @@ pub enum Command {
     WORLD_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
-    /// its signals on the completion ring, drawn by the kernel.
+    /// its events on the completion ring, drawn by the kernel.
     WORLD_FRAME = 0x1002,
     /// The tab's visibility; the host rings the doorbell for it at once, since a hidden
     /// page gets no frame and hiding is the save's last sure moment.
@@ -944,12 +944,12 @@ impl LangName<'_> {
     }
 }
 
-/// Command::SENSOR_START's signal.
-pub struct SensorStartSignal {
+/// Command::SENSOR_START's event.
+pub struct SensorStartEvent {
     pub sensor: Sensor,
 }
 
-impl SensorStartSignal {
+impl SensorStartEvent {
     /// The children it is written as.
     pub const FIELDS: u32 = 1;
 
@@ -958,12 +958,12 @@ impl SensorStartSignal {
     }
 }
 
-/// Command::SENSOR_STOP's signal.
-pub struct SensorStopSignal {
+/// Command::SENSOR_STOP's event.
+pub struct SensorStopEvent {
     pub sensor: Sensor,
 }
 
-impl SensorStopSignal {
+impl SensorStopEvent {
     /// The children it is written as.
     pub const FIELDS: u32 = 1;
 
@@ -1096,8 +1096,8 @@ pub struct WorldFrame {
     pub width: f64,
     pub height: f64,
     /// The display's refresh, as the host measures it from the animation frames it is handed,
-    /// and the interval it paces turns at, a whole number of refreshes (xpute host
-    /// sched/quantum.ts `Grant`): the frame's budget.
+    /// and the interval it paces turns at, a whole number of refreshes (the pacing the client
+    /// boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
     pub refresh_ms: f64,
     pub paced_ms: f64,
     pub interactive: bool,
@@ -1546,13 +1546,13 @@ impl ProfilerRead {
     }
 }
 
-/// Command::WORLD_SNAPSHOT's signal.
-pub struct WorldSnapshotSignal {
+/// Command::WORLD_SNAPSHOT's event.
+pub struct WorldSnapshotEvent {
     pub at: u32,
     pub len: u32,
 }
 
-impl WorldSnapshotSignal {
+impl WorldSnapshotEvent {
     /// The children it is written as.
     pub const FIELDS: u32 = 2;
 

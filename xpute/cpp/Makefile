@@ -41,9 +41,9 @@ AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OU
 STACK_BYTES := 1048576
 # A module guest's link, as xpute-guest wasm `link` prints it for a Rust
 # one: its memory imported and its stack first; and its exports, the entry
-# the floor names, `intr`, beside the guest's own boot.
+# the floor names, `run`, beside the guest's own boot.
 WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first \
-	-Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=intr
+	-Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=run
 
 SOURCES := $(sort $(shell find xpute conformance -name '*.cpp'))
 # What only the tests build: their own files, the runner and the golden reader.

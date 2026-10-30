@@ -11,7 +11,7 @@
   "TAG": {
     "$val": 0,
     "$type": "u32",
-    "$doc": ["The submitter's, echoed on the reply; a signal's subject."]
+    "$doc": ["The submitter's, echoed on the reply; an event's subject."]
   },
 
   "CMD": {
@@ -47,7 +47,7 @@
   "RES": {
     "$val": 1,
     "$type": "u32",
-    "$doc": ["A flag: a reply, as against a signal. Set by the sender, never by a handler."]
+    "$doc": ["A flag: a reply, as against an event. Set by the sender, never by a handler."]
   },
 
   "ACKREQ": {

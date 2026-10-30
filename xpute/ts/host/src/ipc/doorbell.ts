@@ -2,7 +2,7 @@
 
 /**
  * The host's end of a guest's rings. One ring of the doorbell is one turn
- * (sched/quantum.ts). Everything a turn leaves is read before the next is rung,
+ * (sched/strobe.ts). Everything a turn leaves is read before the next is rung,
  * so a listener must not ring the guest while the completion ring is read.
  */
 
@@ -18,7 +18,7 @@ import {
   TreeReader,
   TreeView,
 } from "@xpute/kit/wire/xtp/mod.ts";
-import { NO_WAKE } from "../sched/quantum.ts";
+import { NO_WAKE } from "../sched/wake.ts";
 import * as frame from "./frame.ts";
 import { Ring } from "./ring.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
@@ -28,9 +28,9 @@ const NOWHERE = new Uint8Array(0);
 const NOWHERE_VIEW = new DataView(NOWHERE.buffer);
 
 /** Valid only inside the call. */
-type SignalListener = (tag: u32, cmd: u32, f: BranchCursor | null) => void;
+type OnEvent = (tag: u32, cmd: u32, f: BranchCursor | null) => void;
 
-type Intr = (quota_ms: f64) => f64;
+type Run = (quota_ms: f64) => f64;
 
 export class Doorbell implements PacketRoom {
   private readonly sq: Ring;
@@ -47,7 +47,7 @@ export class Doorbell implements PacketRoom {
   /** A trapped guest is gone: its turn stopped partway, and the submission
    * it was applying would trap it again on every ring. */
   private trapped = false;
-  signal: SignalListener | null = null;
+  event: OnEvent | null = null;
   wake: ((wake_ms: f64) => void) | null = null;
   /** Told once, as the guest traps. */
   stopped: (() => void) | null = null;
@@ -56,7 +56,7 @@ export class Doorbell implements PacketRoom {
     mem: ArrayBufferLike,
     sq_at: u32,
     cq_at: u32,
-    private readonly intr: Intr,
+    private readonly run: Run,
   ) {
     this.sq = new Ring(mem, sq_at);
     this.cq = new Ring(mem, cq_at);
@@ -100,7 +100,7 @@ export class Doorbell implements PacketRoom {
     if (this.trapped) return NO_WAKE;
     let wake: f64;
     try {
-      wake = this.intr(quota_ms);
+      wake = this.run(quota_ms);
     } catch (err) {
       // Printed here, once: what a caller catches next is only the stop.
       console.error("[xpute/doorbell] the guest trapped:", err);
@@ -160,11 +160,11 @@ export class Doorbell implements PacketRoom {
               )}`,
             );
           }
-        } else if (this.signal !== null) {
-          this.signal(tag, cmd, f);
+        } else if (this.event !== null) {
+          this.event(tag, cmd, f);
         } else {
           console.warn(
-            `[xpute/doorbell] signal 0x${cmd.toString(
+            `[xpute/doorbell] event 0x${cmd.toString(
               16,
             )} raised with no one to hear it`,
           );

@@ -8,12 +8,12 @@
 //! a program numbers its own from there, in a table of its own that names this one as
 //! its base, so the two never give out one number twice.
 //!
-//! The direction is the ring: `pkt` is what the host submits, `signal` what the guest
+//! The direction is the ring: `pkt` is what the host submits, `event` what the guest
 //! raises on the completion ring.
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
-// with no signal or no enum read off the wire leaves a writer or a
+// with no event or no enum read off the wire leaves a writer or a
 // number's check unused.
 #![allow(
     non_camel_case_types,

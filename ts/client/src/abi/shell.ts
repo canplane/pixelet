@@ -14,6 +14,7 @@ import {
 } from "@/abi/cmd.spec.ts";
 import { HOST } from "@/host/mount.ts";
 import { bracket } from "@/bracket.tsx";
+import { send_input } from "./input.ts";
 
 export { kernel_snapshot } from "@/abi/snapshot.ts";
 export { kernel_hold, kernel_keys } from "./input.ts";
@@ -24,7 +25,7 @@ export async function kernel_tracking(tracking: Tracking): Promise<void> {
     console.error("[orientation] could not start the sensor.");
     return;
   }
-  HOST.input(
+  send_input(
     Command.INPUT_TRACKING,
     encode_input_tracking(HOST.doorbell, tracking),
   );

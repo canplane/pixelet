@@ -27,10 +27,9 @@ inline constexpr std::uint32_t VERSION = 1u;
 // Words before the first entry.
 inline constexpr std::uint32_t HEAD = 4u;
 
-// What a quantum policy's number is multiplied by to cross as a word: it crosses in thousandths.
-inline constexpr std::uint32_t QUANTUM_SCALE = 1000u;
-
-// What an entry's value is.
+// What an entry's value is. 3 to 5 are retired and given to nothing else: they were the
+// numbers of a host's scheduling policy, which the program now injects when the host
+// boots (the host's sched/policy.ts).
 namespace key {
 
 // Where the submission ring's words begin.
@@ -38,15 +37,6 @@ inline constexpr std::uint32_t SQ = 1u;
 
 // Where the completion ring's words begin.
 inline constexpr std::uint32_t CQ = 2u;
-
-// The quantum policy's margin share (sched/quantum.rs), in QUANTUM_SCALE.
-inline constexpr std::uint32_t MARGIN_SHARE = 3u;
-
-// The quantum policy's batch frames, in QUANTUM_SCALE.
-inline constexpr std::uint32_t BATCH_FRAMES = 4u;
-
-// The quantum policy's settle time, in QUANTUM_SCALE of a millisecond.
-inline constexpr std::uint32_t SETTLE_MS = 5u;
 
 // Where the system-call stream's words begin (ipc/sys.json).
 inline constexpr std::uint32_t SYS = 6u;

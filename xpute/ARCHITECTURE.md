@@ -65,8 +65,7 @@ which the guest writes in its first turn, or in a boot call that returns its
 offset; the host learns that one offset from outside and finds everything else
 from there (`@xpute/host/ipc/directory.ts` `Directory`). xpute numbers a key for
 each part of its own — the two queues and the system-call stream the sections
-below describe, and the numbers of the quantum's policy — and a program numbers
-its own keys with the `PROGRAM` bit set.
+below describe — and a program numbers its own keys with the `PROGRAM` bit set.
 
 ```text
 one guest's layout; the order of its ranges is the guest's, the heap last
@@ -79,7 +78,6 @@ one guest's layout; the order of its ranges is the guest's, the heap last
    │   SQ  · offset ─────────────────┼──┐
    │   CQ  · offset ─────────────────┼──┼──┐
    │   SYS · offset ─────────────────┼──┼──┼──┐
-   │   MARGIN_SHARE · … · a number   │  │  │  │
    │   PROGRAM | n · value           │  │  │  │
    ├─────────────────────────────────┤  │  │  │
    │ submission ring · its slots     │◀─┘  │  │
@@ -122,8 +120,9 @@ number is given out twice.
 
 Two flags decide what a frame means. `ACKREQ`, set by whoever submits, asks for
 a reply. `RES`, set by whoever completes, says the frame is a reply. A
-completion without `RES` is a **signal**, one the guest raised on its own, for
-whoever listens.
+completion without `RES` is an **event**, one the guest raised on its own, for
+whoever listens, as an NVMe controller posts an asynchronous event to its
+completion queue.
 
 Every packet has the same shape, **XTP**, the Xpute Tree Packet (`kit`
 `wire/xtp`). One decision explains the rest of it: nothing inside a packet
@@ -199,7 +198,7 @@ says (`SQ`, `CQ`). The host drives the pair through the **doorbell**
   (`writer`, `send`);
 - it rings the guest with a quota (`ring`), which is one whole turn;
 - it then reads the completion ring dry, handing each reply to the call waiting
-  for it and each signal to whoever listens.
+  for it and each event to whoever listens.
 
 Two ways in sit on top of that. A question the host needs answered at once is a
 `call`: submitted with `ACKREQ` and rung with no quota until its reply comes
@@ -210,8 +209,8 @@ sent and rung. A guest that traps is gone, and the doorbell rings it no more.
 The guest's end is the **door** (`ipc/door` `Door`). It applies the submissions
 in order, answers each, and posts what the guest raises into the completion
 ring, which holds a whole turn's output. Before each submission the door checks
-that the ring has room for the most one command may leave — its signals, a bound
-the program gives (`most_signals`), and its reply — and where it has not, it
+that the ring has room for the most one command may leave — its events, a bound
+the program gives (`most_events`), and its reply — and where it has not, it
 applies no more and leaves the rest for the next turn, in order.
 
 ---
@@ -220,17 +219,19 @@ applies no more and leaves the rest for the next turn, in order.
 
 The turn is when the guest runs at all.
 
-It runs inside one call, `intr(quota_ms)`, and when that call returns it is not
-running. The call has two edges, like a clock's. On the **rising edge** the host
-calls in with a quota, and the guest drains the submission ring, does its work
-and posts what it has. On the **falling edge** it returns `wake_ms`, when it
-would like the next turn: `0` for the next display frame, `n` for that many
-milliseconds, `NO_WAKE` for none. The host learns nothing else about what ran.
+It runs inside one call, `run(quota_ms)`, named as KVM's `KVM_RUN` is, the call
+that runs a guest until it gives the processor back; when that call returns the
+guest is not running. The call has two edges, like a clock's. On the **rising
+edge** the host calls in with a quota, and the guest drains the submission ring,
+does its work and posts what it has. On the **falling edge** it returns
+`wake_ms`, when it would like the next turn: `0` for the next the host can run,
+`n` for that many milliseconds, `NO_WAKE` for none. The host learns nothing else
+about what ran.
 
 xpute names that call, as a C runtime names the `main` it calls: the program
-implements it and never renames it (`xpute-guest/entry.rs` `intr`). A guest
-built as a module exports `intr`; a guest linked into a native program exports
-`xpute_intr`, and its memory as `xpute_mem`, under xpute's name and no
+implements it and never renames it (`xpute-guest/entry.rs` `run`). A guest
+built as a module exports `run`; a guest linked into a native program exports
+`xpute_run`, and its memory as `xpute_mem`, under xpute's name and no
 program's, since a process holds one guest, with one reservation
 (`xpute-host/native.rs`). What the guest's form hands it there is xpute's as
 well (`BootInfo`): the memory it was given, where its own ranges may begin, the
@@ -239,15 +240,18 @@ host's clock, its hostcall and its heap's reading.
 How long a turn may take, and how that time is spent, are settled at three
 levels, from the outside in.
 
-1. **Quantum** (`sched/quantum`) is the host's, and it sets the quota, a
-   cooperative slice ended by the guest's return. The host measures the
-   display's refresh from the gaps between the animation frames it is handed,
-   and paces turns a whole number of refreshes apart (`paced`). The guest's
-   directory declares the rest (`MARGIN_SHARE`, `BATCH_FRAMES`, `SETTLE_MS`):
-   the share of a display frame left unspent, how many display frames a batch
-   turn spans, and how long after input a turn counts as interactive, as one
-   after a falling edge of 0 does. A turn's overrun, measured over the turn and
-   the host's reading of what it left, comes off the next quota.
+1. **The scheduling policy** (`@xpute/host/sched/policy.ts`
+   `SchedulingPolicy`) is the host's, and the program injects it when the host
+   boots; xpute keeps none of its own. It says when a turn the host was asked
+   for may run, sets the quota, a cooperative slice ended by the guest's return,
+   and is handed what each turn took. A page's is **frame pacing**
+   (`sched/frame_pacing.ts`), named for Android's Frame Pacing library: it
+   measures the display's refresh from the gaps between the animation frames it
+   is handed, runs turns a whole number of refreshes apart, leaves a share of
+   each frame unspent, gives a turn one frame after input or a falling edge of 0
+   and more otherwise, and takes a turn's overrun off the next quota. Its
+   numbers are the program's, injected with it. A host with no display may run
+   a turn as soon as it is asked, or on a timer of its own.
 2. **Tick** (`sched/tick`) is the guest's. It runs phases named once for every
    language (`spec/sched/tick.json`) in a fixed order — `interaction`,
    `visible`, `content`, `cosmetic`, `report` — against one budget, the quota
@@ -270,35 +274,35 @@ guest installs an executor (`sched/task`), marks the edges with `rise` and
 `fall`, and polls it between them.
 
 On the host side, the **strobe** (`@xpute/host/sched/strobe.ts` `Strobe`)
-decides when a turn is rung. It is named for a circuit's strobe, the pulse that
-tells a receiver when to act, and it is the timing the cooperative turns keep.
-It rings on an animation frame, only when the host or the guest's last falling
-edge asked for a turn, and only on the refreshes the quantum paces at; a display
-frame sooner than that is skipped, and the next asked for. A positive `wake_ms`
-sets a timer that asks for a display frame when it fires. A guest that asks for
-nothing is rung for nothing, and no turn runs on a timer of the host's own.
+rings a turn. It is named for a circuit's strobe, the pulse that tells a
+receiver when to act, and it is the mechanism the policy steers. It rings only
+when the host or the guest's last falling edge asked for a turn, at a moment the
+policy gives and admits; a moment it does not admit passes to the next. A
+positive `wake_ms` sets a timer that asks for a turn when it fires. A guest that
+asks for nothing is rung for nothing, and no turn runs on a timer of the host's
+own.
 
 The strobe is not all that rings the guest. The doorbell rings with no quota to
 make room in a full submission ring, to wait for a call's reply and to send a
 `cmd`, and whatever holds the doorbell may ring it too. Those turns are outside
-what the quantum observes.
+what the policy observes.
 
 ```text
 host · TypeScript                          guest
 ─────────────────                          ─────
 
-strobe   a display frame, and only
-         when one was asked for
-quantum  a quota, from the refresh
-         it measured
+strobe   a turn, and only when one
+         was asked for
+policy   the program's: the moment,
+         and the quota
 
 commands ─────── submission ring ───────▶  drained on the rising edge
-doorbell ═══════ intr(quota_ms) ════════▶  ┌ tick   phases in a fixed order
+doorbell ═══════ run(quota_ms) ═════════▶  ┌ tick   phases in a fixed order
                                            │ tasks  that yield when
                                            │        the quota is spent
                                            │ asks   what it wants done outside
 completions ◀───── completion ring ──────  └ posted before the falling edge
-         ◀═══════════ wake_ms ═══════════  next display frame · in n ms · never
+         ◀═══════════ wake_ms ═══════════  next turn · in n ms · never
 
 requests what the turn asked for, run
          before the next rising edge
@@ -430,7 +434,7 @@ cannot answer late.
 
 A module imports it as `env.hostcall`, beside `env.now`; a guest linked into a
 native program is handed it with its clock (`BootInfo`). There the guest runs
-on its own thread while the caller of `intr` waits, so the native host hands
+on its own thread while the caller of `run` waits, so the native host hands
 each hostcall back to that caller, which answers it on its own thread and waits
 again (`xpute-host/native/thread.rs`); the program says what answers through
 `xpute_hostcall_on` (`answer_with`), under xpute's name as the entry is.
@@ -501,7 +505,7 @@ Each rule is one the other end could catch being broken.
    and an unknown magic or version is refused.
 1. **The core memory.** It never moves or grows while the guest lives, and every
    address that crosses is an offset into it.
-2. **The turn.** The guest runs only inside `intr`, and the two sides never run
+2. **The turn.** The guest runs only inside `run`, and the two sides never run
    at once: the host touches nothing a turn writes until it has returned, but
    what a hostcall names while it runs (rule 8). The quota is advice, not a
    deadline: a guest can spend a whole quota inside one function, and the host
@@ -518,7 +522,7 @@ Each rule is one the other end could catch being broken.
 4. **What the host sends** is applied in order, each submission once. The guest
    may leave some for a later turn, never out of order or skipped, and asks for
    the next turn while it does.
-5. **What a turn leaves** — signals, replies, stream records — is taken by the
+5. **What a turn leaves** — events, replies, stream records — is taken by the
    host before the next turn, none dropped. Order holds within one place a turn
    writes to, not between places, so a guest that needs one request run before
    another puts both in the same place. Running past the room set aside is a
@@ -649,8 +653,9 @@ where the tree records the source.
 | Precedent                                                   | Where                            | What is taken                                                                  |
 | ----------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
 | The exokernel and its library operating system              | the arrangement                  | The host grants real resources; the guest keeps its own abstractions over them |
-| Aegis                                                       | `sched/quantum`                  | The quota as a cooperative counterpart of its CPU slice                        |
-| Android Swappy's frame pacing                               | `sched/quantum`, `sched/strobe`  | Turns a whole number of refreshes apart                                        |
+| Aegis                                                       | `sched/policy`                   | The quota as a cooperative counterpart of its CPU slice                        |
+| Linux's scheduling policies (`sched_setscheduler`)          | `sched/policy`                   | Its name: how turns are scheduled, chosen apart from what rings them           |
+| Android's Frame Pacing library (Swappy)                     | `sched/frame_pacing`             | Its name, and turns a whole number of refreshes apart                          |
 | A circuit's strobe, the pulse that says when to act         | `sched/strobe`                   | Its name                                                                       |
 | "core" for main memory, as in a core dump                   | the core memory                  | Its name                                                                       |
 | A linker script's output sections                           | `mem/section`                    | Ranges placed end to end without knowing what they hold                        |
@@ -659,6 +664,8 @@ where the tree records the source.
 | virtio's descriptor table, AF_XDP's UMEM                    | the rings (`spec/ipc/ring.json`) | Descriptors kept apart from the payload's slots                                |
 | io_uring                                                    | the rings                        | A submission ring and a completion ring                                        |
 | NVMe's queues and their doorbell registers                  | the doorbell                     | Its name, and that ringing it carries no message                               |
+| NVMe's asynchronous events                                  | the frame's `RES`                | An event: a completion the guest posts unasked                                 |
+| KVM's `KVM_RUN`                                             | the turn                         | `run`: the call that runs the guest until it gives the processor back          |
 | Plan 9's file access, in POSIX's words                      | `ipc/sys`, `ipc/ns`              | Descriptors the guest issues; a root and a path; the host binds the roots      |
 | The ELF auxiliary vector                                    | `ipc/directory`                  | Entries a reader skips when it does not know them                              |
 | Wasmtime's and Lucet's hostcalls                            | `ipc/sys` `hostcall`             | The name of a guest's call into its host, answered before it returns           |

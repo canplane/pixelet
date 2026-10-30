@@ -41,7 +41,7 @@ class PlatformModule : Module() {
     // the buffer is.
     Function("mem") { NativeArrayBuffer(PxlNative.mem()) }
 
-    Function("intr") { quotaMs: Double -> PxlNative.intr(quotaMs) }
+    Function("run") { quotaMs: Double -> PxlNative.run(quotaMs) }
 
     Function("hostcallOn") { answer: JavaScriptFunction<Int> -> PxlNative.answer = answer }
 

@@ -20,7 +20,7 @@ use xpute_guest::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
 pub use thread::{answer_with, Answer};
-pub use xpute_guest::entry::{intr, BootInfo, Entry};
+pub use xpute_guest::entry::{run, BootInfo, Entry};
 
 pub struct Config {
     /// Reserved once, never grown.
@@ -115,7 +115,7 @@ pub fn now() -> f64 {
 }
 
 /// Boots the guest with `cfg` on the first call and exports its entry and
-/// memory under xpute's names: `xpute_intr(double quota_ms) -> double`, which
+/// memory under xpute's names: `xpute_run(double quota_ms) -> double`, which
 /// runs `entry` (`Entry`) on the guest's thread;
 /// `xpute_mem(uint32_t *bytes) -> uint8_t *`, `bytes` null or written with
 /// the memory's size; and `xpute_hostcall_on(int32_t (*answer)(uint32_t))`,
@@ -146,8 +146,8 @@ macro_rules! native_abi {
                 guest().boot_info(cfg())
             }
 
-            pub fn intr(quota_ms: f64) -> f64 {
-                guest().run(move || $crate::native::intr(quota_ms, boot_info, ENTRY))
+            pub fn run(quota_ms: f64) -> f64 {
+                guest().run(move || $crate::native::run(quota_ms, boot_info, ENTRY))
             }
 
             pub fn mem(bytes: Option<&mut u32>) -> *mut u8 {
@@ -162,8 +162,8 @@ macro_rules! native_abi {
         pub use xpute_native::guest;
 
         #[no_mangle]
-        pub extern "C" fn xpute_intr(quota_ms: f64) -> f64 {
-            xpute_native::intr(quota_ms)
+        pub extern "C" fn xpute_run(quota_ms: f64) -> f64 {
+            xpute_native::run(quota_ms)
         }
 
         #[no_mangle]

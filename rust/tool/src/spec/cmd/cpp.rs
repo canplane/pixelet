@@ -1,7 +1,7 @@
 // pxl-tool/spec/cmd/cpp.rs
 
 //! A command table as a C++ guest's header: its enums and each packet's
-//! reader; a C++ guest raises no signal and writes no record.
+//! reader; a C++ guest raises no event and writes no record.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec;
@@ -169,9 +169,9 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
-        if c.signal.is_some() {
+        if c.event.is_some() {
             return Err(format!(
-                "{}: a C++ guest raises no signal ({})",
+                "{}: a C++ guest raises no event ({})",
                 t.json, c.name
             ));
         }

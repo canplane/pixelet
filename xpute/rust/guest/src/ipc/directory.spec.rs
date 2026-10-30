@@ -31,33 +31,18 @@ pub const VERSION: u32 = 1;
 /// Words before the first entry.
 pub const HEAD: u32 = 4;
 
-/// What a quantum policy's number is multiplied by to cross as a word: it crosses in thousandths.
-pub const QUANTUM_SCALE: u32 = 1000;
-
-/// What an entry's value is.
+/// What an entry's value is. 3 to 5 are retired and given to nothing else: they were the
+/// numbers of a host's scheduling policy, which the program now injects when the host
+/// boots (the host's sched/policy.ts).
 pub mod key {
     /// Where the submission ring's words begin.
     pub const SQ: u32 = 1;
     /// Where the completion ring's words begin.
     pub const CQ: u32 = 2;
-    /// The quantum policy's margin share (sched/quantum.rs), in QUANTUM_SCALE.
-    pub const MARGIN_SHARE: u32 = 3;
-    /// The quantum policy's batch frames, in QUANTUM_SCALE.
-    pub const BATCH_FRAMES: u32 = 4;
-    /// The quantum policy's settle time, in QUANTUM_SCALE of a millisecond.
-    pub const SETTLE_MS: u32 = 5;
     /// Where the system-call stream's words begin (ipc/sys.json).
     pub const SYS: u32 = 6;
     /// The bit every key a program numbers for itself carries: xpute gives none of
     /// them a meaning, and a host that is not the program's passes over them.
     pub const PROGRAM: u32 = 2147483648;
-    pub const KEYS: &[&str] = &[
-        "SQ",
-        "CQ",
-        "MARGIN_SHARE",
-        "BATCH_FRAMES",
-        "SETTLE_MS",
-        "SYS",
-        "PROGRAM",
-    ];
+    pub const KEYS: &[&str] = &["SQ", "CQ", "SYS", "PROGRAM"];
 }

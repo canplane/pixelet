@@ -1,7 +1,7 @@
 // cpp/xpute/guest/wasm.hpp
 
 // The guest built as one WebAssembly module: what it reads of the module
-// itself, what it asks of its host (`hostcall`), and its entry, `intr`, which the floor names and the program
+// itself, what it asks of its host (`hostcall`), and its entry, `run`, which the floor names and the program
 // defines. Linked as every module guest is (cpp/Makefile `WASM_LINK`).
 
 #pragma once
@@ -25,8 +25,8 @@ __attribute__((import_module("env"), import_name("now"))) double xpute_wasm_now(
 __attribute__((import_module("env"), import_name("hostcall"))) std::int32_t xpute_wasm_hostcall(std::uint32_t at);
 
 // The entry: a turn of quota_ms, and when the guest wants the next, in ms
-// (xpute/guest/sched/quantum.hpp: 0 for the next frame, NO_WAKE for none).
-double intr(double quota_ms);
+// (0 for the next turn, NO_WAKE in xpute/guest/sched/wake.hpp for none).
+double run(double quota_ms);
 }
 
 namespace xpute::wasm {

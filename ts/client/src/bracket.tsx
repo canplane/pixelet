@@ -2,7 +2,7 @@
 
 /**
  * What the client asks of the place it runs in, as pxl-kernel's door is
- * handed its place by its bracket (pxl_kernel::door `intr`): the page's
+ * handed its place by its bracket (pxl_kernel::door `run`): the page's
  * (ts/app/web) or the device's (ts/app/native), set once by the app's entry
  * before the client boots.
  */

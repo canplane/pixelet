@@ -65,7 +65,7 @@ fn ask_turn(s: &mut State) -> Result<Option<i32>, MarshalError> {
 }
 
 /// Applies one submission. None (replied as ENOSYS) for an unknown command
-/// or a signal submitted as one.
+/// or an event submitted as one.
 pub(super) fn apply(
     s: &mut State,
     number: u32,

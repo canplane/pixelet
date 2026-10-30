@@ -22,7 +22,7 @@ what that program computes.
 ```text
 ┌─ host ── TypeScript ───┐                        ┌─ guest ──────────────────┐
 │ owns the clock, the    │                        │ computes, and owns       │
-│ memory, the I/O        │ ═══ intr(quota) ════▶  │ nothing                  │
+│ memory, the I/O        │ ═══ run(quota) ═════▶  │ nothing                  │
 │                        │                        │                          │
 │                        │  ◀═══ wake_ms ═══════  │                          │
 │                        │  ◀──── now() ────────  │                          │
@@ -44,7 +44,7 @@ holds, where an answer a turn later would cost it that turn. There is no second
 entry point, no other callback, and nothing either side holds a pointer to on
 the other.
 
-`intr` is the whole of the guest's life. xpute names it, as a C runtime names
+`run` is the whole of the guest's life. xpute names it, as a C runtime names
 `main`, and the guest implements it. It runs when the host rings, for as long as
 the quota it was handed, and when the call returns the guest is not running at
 all. Its answer, `wake_ms`, is when it would like the next turn. A guest that
@@ -82,7 +82,7 @@ spec                                        the numbers every language's are gen
 
 A guest built as a **WebAssembly module** takes its form from
 `xpute_guest::wasm`: a call in its `build.rs`, and one `wasm_abi!`, which
-installs its allocator and exports `intr` (`rust/conformance` is one):
+installs its allocator and exports `run` (`rust/conformance` is one):
 
 ```rust
 // build.rs, with xpute-guest as a build dependency
@@ -93,13 +93,13 @@ fn main() {
 // lib.rs
 xpute_guest::wasm_abi!(
     xpute_guest::wasm::Config { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
-    my_guest::intr // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
+    my_guest::run // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
 );
 ```
 
 A guest **linked into a native program**, on a unix platform, is booted by one
 `xpute_host::native_abi!`, beside `native::Alloc` as the program's allocator,
-and exports `xpute_intr`, `xpute_mem` and `xpute_hostcall_on`
+and exports `xpute_run`, `xpute_mem` and `xpute_hostcall_on`
 (`rust/host/examples/native.rs` is one, and `make test` runs it).
 
 A **C++ program** takes the library in two files, as SQLite ships its own: it

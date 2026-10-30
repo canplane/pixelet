@@ -10,7 +10,6 @@
 #include <span>
 
 #include "xpute/guest/mem.hpp"
-#include "xpute/guest/sched/quantum.hpp"
 #include "directory.spec.hpp"
 
 namespace xpute {
@@ -27,8 +26,5 @@ constexpr std::uint32_t directory_words(std::uint32_t entries) noexcept {
 // The directory at `at`, `words` long. A key may appear once, so no two
 // readers can pick different values.
 void write_directory(Memory mem, std::uint32_t at, std::uint32_t words, std::span<const Entry> entries) noexcept;
-
-// Each number in `directory::QUANTUM_SCALE`.
-std::array<Entry, 3> quantum_entries(const QuantumPolicy &q) noexcept;
 
 } // namespace xpute

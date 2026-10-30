@@ -7,7 +7,7 @@ use crate::mem::Memory;
 const SQ: u32 = 8;
 const CQ: u32 = 256;
 const SLOT: u32 = 64;
-const MOST_SIGNALS: u32 = 64;
+const MOST_EVENTS: u32 = 64;
 
 fn door() -> (Door, Box<[u8]>) {
     let sq_desc = 8;
@@ -24,18 +24,18 @@ fn door() -> (Door, Box<[u8]>) {
             Ring::init(mem, cq_desc as usize, CQ, cq_slot, SLOT),
         )
     };
-    (Door::new(sq, cq, MOST_SIGNALS), buf)
+    (Door::new(sq, cq, MOST_EVENTS), buf)
 }
 
 #[test]
 fn command_needs_reply_room() {
     let (d, _buf) = door();
-    for _ in 0..CQ - MOST_SIGNALS {
+    for _ in 0..CQ - MOST_EVENTS {
         d.post(0, 2, 0, 0);
     }
     assert_eq!(d.sq().push(0, 1, frame::ACKREQ, 0, None), Errno::OK);
     d.drain(|_, _| {
-        for _ in 0..MOST_SIGNALS {
+        for _ in 0..MOST_EVENTS {
             d.post(0, 2, 0, 0);
         }
         Ok(Some(7))
@@ -50,7 +50,7 @@ fn command_needs_reply_room() {
 fn ring_peaks() {
     let (d, _buf) = door();
     // Three commands start before the reserve runs out, so five of eight wait.
-    for _ in 0..CQ - (MOST_SIGNALS + 1) - 2 {
+    for _ in 0..CQ - (MOST_EVENTS + 1) - 2 {
         d.post(0, 2, 0, 0);
     }
     for _ in 0..SQ {
@@ -60,7 +60,7 @@ fn ring_peaks() {
     assert_eq!(
         d.take_stat(),
         DoorStat {
-            cq_peak: CQ - MOST_SIGNALS,
+            cq_peak: CQ - MOST_EVENTS,
             sq_peak: SQ,
             left_peak: SQ - 3
         }

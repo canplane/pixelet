@@ -4,7 +4,7 @@
 // calls are for tests, not an API. Natively the host hands it a region, a
 // clock and its hostcall; as a wasm module the memory starts at 0, the clock
 // is `env.now`, the hostcall `env.hostcall`, and its turn is the module's
-// entry, `intr` (xpute/guest/wasm.hpp).
+// entry, `run` (xpute/guest/wasm.hpp).
 
 #pragma once
 
@@ -17,7 +17,7 @@ typedef int32_t (*xpute_conformance_hostcall)(uint32_t at);
 
 #ifdef __wasm__
 
-// Answers the directory's offset. `intr` answers 0 while a submission
+// Answers the directory's offset. `run` answers 0 while a submission
 // waits, -1 otherwise.
 std::uint32_t xpute_conformance_boot(void);
 
@@ -27,7 +27,7 @@ std::uint32_t xpute_conformance_boot(void);
 std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_hostcall hostcall);
 
 // Answers 0 while a submission waits, -1 otherwise.
-double xpute_conformance_intr(std::uint8_t *mem, double quota_ms);
+double xpute_conformance_run(std::uint8_t *mem, double quota_ms);
 
 #endif
 }

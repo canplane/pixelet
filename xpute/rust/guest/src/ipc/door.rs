@@ -30,19 +30,19 @@ pub struct DoorStat {
 pub struct Door {
     sq: Ring,
     cq: Ring,
-    /// What one command may leave: its signals, or the turn's after the drain, and its reply.
+    /// What one command may leave: its events, or the turn's after the drain, and its reply.
     reserve: u32,
     stat: Cell<DoorStat>,
 }
 
 impl Door {
-    /// `most_signals` is the most one command raises, or the turn once its
+    /// `most_events` is the most one command raises, or the turn once its
     /// drain is done: the program's bound.
-    pub fn new(sq: Ring, cq: Ring, most_signals: u32) -> Door {
+    pub fn new(sq: Ring, cq: Ring, most_events: u32) -> Door {
         Door {
             sq,
             cq,
-            reserve: most_signals + 1,
+            reserve: most_events + 1,
             stat: Cell::default(),
         }
     }

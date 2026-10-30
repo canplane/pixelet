@@ -32,7 +32,7 @@
     "$type": "u32",
     "$doc": [
       "Frames the completion ring holds: fewer than eight commands raising MOST_RAISE",
-      "signals each leave, so a trace that sends those makes a turn's output outgrow it."
+      "events each leave, so a trace that sends those makes a turn's output outgrow it."
     ]
   },
 
@@ -78,7 +78,7 @@
   "MOST_RAISE": {
     "$val": 32,
     "$type": "u32",
-    "$doc": ["The most signals one RAISE asks for; more is refused with EINVAL."]
+    "$doc": ["The most events one RAISE asks for; more is refused with EINVAL."]
   },
 
   "key": {
@@ -108,7 +108,7 @@
     ],
     "OK": { "$val": 4097, "$doc": ["Succeeds; replies 0."] },
     "FAIL": { "$val": 4098, "$doc": ["Fails with EINVAL."] },
-    "RAISE": { "$val": 4099, "$doc": ["Raises the packet's number of SIGNALs, tagged 0 up, then replies with that number."] },
+    "RAISE": { "$val": 4099, "$doc": ["Raises the packet's number of EVENTs, tagged 0 up, then replies with that number."] },
     "RECORD": { "$val": 4100, "$doc": ["Writes one record to the stream, its op the packet's number and no words; replies 0."] },
     "ISSUE": { "$val": 4101, "$doc": ["Takes a handle from the guest's table and replies with it."] },
     "RELEASE": { "$val": 4102, "$doc": ["Gives back the packet's handle; fails with EBADF for one that is not live."] },
@@ -124,7 +124,7 @@
       "$val": 4108,
       "$doc": ["Zeroes a word of its own, makes the hostcall ANSWER of the packet's number and the word's offset, and replies with the word as it then reads it; fails with the host's errno where the host refused."]
     },
-    "SIGNAL": { "$val": 4353, "$doc": ["What RAISE raises."] },
+    "EVENT": { "$val": 4353, "$doc": ["What RAISE raises."] },
     "OPENED": { "$val": 4354, "$doc": ["An open answered: tagged with its owner, its result the host's."] }
   }
 }

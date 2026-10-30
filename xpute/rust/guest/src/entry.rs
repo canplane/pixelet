@@ -1,8 +1,8 @@
 // xpute-guest/entry.rs
 
-//! The one call a guest runs inside, `intr`, and what its host's form hands
+//! The one call a guest runs inside, `run`, and what its host's form hands
 //! it there. The floor names the entry it calls, as a C runtime names `main`:
-//! a module exports `intr` (`wasm`), a native library `xpute_intr`
+//! a module exports `run` (`wasm`), a native library `xpute_run`
 //! (xpute-host `native`), and the program implements it.
 
 use crate::mem::heap::HeapStat;
@@ -22,12 +22,12 @@ pub struct BootInfo {
 }
 
 /// A turn of `quota_ms`, answering when the guest wants the next, in ms
-/// (`sched::quantum`: 0 for the next frame, `NO_WAKE` for none).
+/// (0 for the next turn, `sched::wake::NO_WAKE` for none).
 pub type Entry = fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64;
 
 /// What a form's export runs: `entry`'s turn, the clock and the hostcall
 /// installed from `boot` on the first.
-pub fn intr(quota_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
+pub fn run(quota_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
     if !crate::clock::is_set() {
         let b = boot();
         crate::clock::set(b.clock);

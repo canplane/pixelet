@@ -23,14 +23,14 @@ object PxlNative {
   /** A turn of `quotaMs`, and when the kernel wants the next, in ms. The
    * first lays the memory out. Its hostcalls come back to this thread
    * (`hostcall`). */
-  external fun intr(quotaMs: Double): Double
+  external fun run(quotaMs: Double): Double
 
   /** What answers the kernel's hostcalls (src/guest.ts), on the JavaScript
    * thread. */
   @Volatile var answer: JavaScriptFunction<Int>? = null
 
   /** Called by the guest's host (src/android.rs `hostcall`) on the thread
-   * waiting in `intr`, the JavaScript thread: the record at `at`, answered
+   * waiting in `run`, the JavaScript thread: the record at `at`, answered
    * before the turn goes on, ENOSYS where nothing answers. */
   @JvmStatic fun hostcall(at: Int): Int = answer?.invoke(at) ?: -38
 

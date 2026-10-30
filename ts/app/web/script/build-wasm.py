@@ -53,7 +53,7 @@ STRIPS = [
 WASM_OPT = ["-O3", *STRIPS] if PUBLISHED else STRIPS
 
 # embassy and critical-section export their `#[no_mangle]` symbols; only these stay.
-EXPORTS = ["intr"]
+EXPORTS = ["run"]
 
 
 class Failed(Exception):

@@ -33,7 +33,7 @@ struct Member {
     #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
     pkt: Option<Vec<Field>>,
-    signal: Option<Vec<Field>>,
+    event: Option<Vec<Field>>,
 }
 
 #[derive(Deserialize)]

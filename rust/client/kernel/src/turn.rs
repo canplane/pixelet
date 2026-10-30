@@ -298,8 +298,8 @@ pub struct HostFrame {
     pub height: f64,
     pub delta: f64,
     /// The display's refresh, and the interval the host paces turns at, a
-    /// whole number of refreshes: the frame's budget (xpute host
-    /// sched/quantum.ts `Grant`).
+    /// whole number of refreshes: the frame's budget (the pacing the client
+    /// boots xpute's host with, @xpute/host sched/frame_pacing.ts `FrameGrant`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     pub interactive: bool,

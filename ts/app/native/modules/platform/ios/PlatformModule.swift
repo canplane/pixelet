@@ -19,7 +19,7 @@ public class PlatformModule: Module {
   /// The module `xpute_gpu_wake_on`'s function sends through.
   nonisolated(unsafe) static weak var current: PlatformModule?
   /// What answers the kernel's hostcalls (src/guest.ts), called on the
-  /// JavaScript thread while `intr` waits on the turn making them.
+  /// JavaScript thread while `run` waits on the turn making them.
   nonisolated(unsafe) static var answer: JavaScriptValue?
 
   public func definition() -> ModuleDefinition {
@@ -34,7 +34,7 @@ public class PlatformModule: Module {
       // static. Called from the thread that learned of a completion: Expo's
       // sendEvent schedules the event onto the JavaScript thread itself.
       xpute_gpu_wake_on { PlatformModule.current?.sendEvent("onWake") }
-      // On the thread waiting in `intr`, the JavaScript thread, which may
+      // On the thread waiting in `run`, the JavaScript thread, which may
       // call into JavaScript there. A host that throws refused it (EIO).
       xpute_hostcall_on { at in
         guard let answer = PlatformModule.answer else { return -38 }
@@ -65,8 +65,8 @@ public class PlatformModule: Module {
       return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(bytes)), cleanup: {})
     }
 
-    Function("intr") { (quotaMs: Double) -> Double in
-      xpute_intr(quotaMs)
+    Function("run") { (quotaMs: Double) -> Double in
+      xpute_run(quotaMs)
     }
 
     /// Kept past the call, so a copy of the value it was handed.

@@ -24,13 +24,13 @@ test("doorbell - a call from inside a listener is refused and leaves nothing sub
     SLOT,
   );
 
-  // A guest whose every turn raises one signal.
+  // A guest whose every turn raises one event.
   const door = new Doorbell(mem, sq_at, cq_at, () => {
     cq.push(0, 2);
     return -1;
   });
   let refused = 0;
-  door.signal = () => {
+  door.event = () => {
     assertThrows(() => door.call(1, null, (result) => result), InvariantError);
     refused++;
   };
