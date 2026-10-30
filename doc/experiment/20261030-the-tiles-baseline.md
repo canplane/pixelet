@@ -544,3 +544,54 @@ its own box or its pixels. The same window, gated frames, noon:
   the actors' marks. The frame's total moves with the scene more than by
   this (the last run's `world` and `finish` p95 2.5).
 - The picture at 7 o'clock as before, no error.
+
+**The baseline against main after the reach** (22:47–22:58), the step 2
+commit (`aa08395c0`) and main (`46f776afa`) alternated in one window, the
+GPU free, noon, 3728×2226:
+
+| build | frames, timed | GPU p50 | p95 | p95 `world` | `resolve` | `finish` | `shadow` | `mark` |
+|---|---|---|---|---|---|---|---|---|
+| main | gated 3591, 3569 | 4.8 | 5.4 | 1.7 | 0.5 | 1.3 | 0.3 | 0.5 |
+| step 2 | region 3600, 2553 | 5.3 | 6.7 | 2.1 | 1.6 | 2.4 | 0.8 | — |
+| main | gated 3599, 3598 | 4.9 | 5.8 | 1.8 | 0.5 | 1.5 | 0.3 | 0.7 |
+| step 2 | region 3601, 1846 | 4.7 | 5.6 | 1.4 | 1.0 | 1.5 | 0.3 | — |
+
+- Main is at the baseline in this window, within what the baseline itself
+  moves between runs (4.7–5.3 at the p50), and its p95 no worse.
+- The baseline's reads time half to seven tenths of its frames, main's
+  all of them: which frames go untimed there is not known, so the
+  baseline's numbers may leave some out.
+
+**The actors' marks' passes** (23:02), a probe (reverted): the eye's pass
+with its attachment and no draw takes one step of the timestamps (0.066
+ms) at the p50, against 0.13 with its draws; the light's, with its draws,
+one step. What attaching the world's depth costs is under a step: a
+cheaper attachment would save less than 0.07 ms, not worth a pipeline and
+a target of its own.
+
+**The clouds' marks** (23:05): zoomed out ten steps from the start, the
+clouds on, noon, main: 26 frames in 65 s, the rest none, as nothing the
+kernel bounds changed; the clouds marked no frame. With the noon window's
+343 frames of 3600 that the marks' pass ran in, the spheres' marks left
+(the puck's and the clouds') claim next to nothing in either window:
+moving them to their drawn selves would gain nothing measured here. The
+frames drawn whole after the zoom cost 18 ms at the p50 (`air` 12.5,
+`light_beam` 14.7 at the p95): the casts, not the tiles.
+
+**The camera moving** (23:10–23:28): a wheel event at the canvas's middle
+every 16 ms, in for 30 and out for 30 by turns, for some 70 s from the
+start view, noon; every frame drawn whole (`cast`). One window:
+
+| build | canvas | frames, timed | GPU p50 | p95 |
+|---|---|---|---|---|
+| main (`fc7c981c4`), first after a reload | 3728×2338 | 1318, 318 | 56.5 | 73.2 |
+| step 2 (`aa08395c0`) | 3728×2226 | 1739, 353 | 45.7 | 52.6 |
+| main (`fc7c981c4`) | 3728×2226 | 1779, 356 | 43.6 | 50.3 |
+
+- At the same canvas, main is at the baseline while the camera moves: the
+  tiles' work neither costs nor gains there. The first run, a taller
+  canvas and the first after a reload, is left out.
+- The frame is the casts': at the p95, main's `miss` 9.7, `light_beam`
+  8.5, `sample` 6.9, `air` 6.5, `finish` 5.5, `world` 4.2, `beam` 3.7,
+  `fill` 2.8, `mark` 1.7 ms (the first pass of a loaded frame, which may
+  hold the wait before it).
