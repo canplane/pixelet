@@ -198,14 +198,10 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
     across && b[1] < reads[3] && b[3] > reads[1]
 }
 
-/// The zoom a record names for placed decor, which no window generates. No
-/// window's cells are at it (`FIRST_CELL`).
-pub const PLACED_AT: Zoom = 0;
-const _: () = assert!(FIRST_CELL > PLACED_AT);
-
 /// A record's first word: its decor and variant, a byte each, its turn in
-/// quarters, and the window zoom it was generated at, `PLACED_AT` for placed
-/// decor; past them, once sized, its region (`drawn::REGION_SHIFT`).
+/// quarters, and the window zoom it was generated at, or for placed decor
+/// the coarsest it stands at (`scatter::coarsest_stand`); past them, once
+/// sized, its region (`drawn::REGION_SHIFT`).
 pub const fn record_word(decor: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
     decor | variant << 8 | turn << TURN_SHIFT | cell << CELL_SHIFT
 }
@@ -514,13 +510,16 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// Whether decor `d2` from the eye, its distance squared (`distance2`), is
 /// drawn, its record's zoom `cell` (`record_of`): one generated at a coarser
 /// window where the rays ask that window's zoom at its distance (`Detail::at`),
-/// so each distance draws one window's; one at the leaves', or placed
-/// (`PLACED_AT`), where they ask the leaf cell's zoom or finer. Each window
-/// generates what stands as itself at it (pxl-kernel
+/// so each distance draws one window's, and one at the leaves' where they ask
+/// the leaf cell's zoom or finer; one `placed` where they ask the coarsest it
+/// stands at or finer, so it stands where one the ground generates of its
+/// size would. Each window generates what stands as itself at it (pxl-kernel
 /// domain/scene/decor/drawn.rs `shown`, `stands_at`).
-pub fn drawn_at(detail: Detail, d2: f32, cell: Zoom) -> bool {
+pub fn drawn_at(detail: Detail, d2: f32, cell: Zoom, placed: bool) -> bool {
     let at = detail.at(d2);
-    if cell == PLACED_AT || cell >= LEAF_CELL {
+    if placed {
+        at >= cell
+    } else if cell >= LEAF_CELL {
         at >= LEAF_CELL
     } else {
         at == cell

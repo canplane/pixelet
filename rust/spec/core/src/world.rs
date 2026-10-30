@@ -126,8 +126,9 @@ impl Handed {
 /// placed in it where that fills it whole, air included, else the ground's
 /// asset with what the ways and what is placed write over it (their tree's
 /// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
-/// `way::tree::read`), and beside the ground the decor its column holds
-/// smaller than the cell, in its top cell (`scatter::folded`), one value
+/// `way::tree::read`), and beside the ground the decor it scatters in its
+/// column folded into its top cell (`scatter::folded`), each folded decor,
+/// scattered or placed, in the look it names or the ground's, one value
 /// whichever source holds it, keeping the
 /// eighths of its cube they fill together over it (`answer::cover`,
 /// `answer::eighths`, `answer::KEPT_SHIFT`), air where that is none;
@@ -186,8 +187,8 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         ]
     };
     // Filling its cube whole, what is placed is the cell's asset, whatever is
-    // under it.
-    if over.says == CELL && over.fill == FULL {
+    // under it; a decor folded as the ground under it shows it (below).
+    if over.says == CELL && over.fill == FULL && !scatter::is_decor(over.asset) {
         return In {
             kind: Kind::Cell,
             asset: laid(),
@@ -249,13 +250,19 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         } else {
             0
         };
-        // The decor its column holds smaller than the cell, read off its
-        // hash as the caves are, its room beside the ground's in its top cell
-        // (`scatter::folded`).
+        // A decor folded is drawn in the look it names, else the ground's
+        // under it (`scatter::fold_look`).
+        let decor_look = |decor: u32| match scatter::fold_look(decor) {
+            0 => cell.look,
+            look => look,
+        };
+        // The decor the ground scatters in its column, folded as a placed
+        // one's leaf is, read off its hashes as the caves are, beside the
+        // ground in its top cell (`scatter::folded`).
         if fills(val) && c[2] == cell.top - 1 {
-            let (share, folds) = scatter::folded(zoom, [c[0], c[1]], cell.look);
+            let (share, decor) = scatter::folded(zoom, [c[0], c[1]], cell.look);
             if share > 0 {
-                let look = if folds != 0 { folds } else { cell.look };
+                let look = decor_look(decor);
                 let (f, theirs) = cover(fill, look, share);
                 if theirs {
                     (val, four) = (look, ground::word([look; 4]));
@@ -272,7 +279,15 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
             }
             fill = f;
         }
-        if over.says == CELL {
+        if over.says == CELL && scatter::is_decor(over.asset) {
+            // Placed decor folded, as the scattered is.
+            let look = decor_look(over.asset);
+            let (f, theirs) = cover(fill, look, over.fill);
+            if theirs || !fills(val) {
+                (val, four) = (PLACED_ASSET | look, ground::word([look; 4]));
+            }
+            fill = f;
+        } else if over.says == CELL {
             let (f, theirs) = cover(fill, over.asset, over.fill);
             if theirs || !fills(val) {
                 [val, four] = laid();

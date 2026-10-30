@@ -1,15 +1,18 @@
 // pxl-spec-core/scatter.rs
 
-//! gpu-portable: the decor the ground holds, never stored, as the caves are:
-//! a hash of a leaf cell, a unit, drawn against a decor's chance says the
-//! cell holds one (`candidate_at`), its variant and heading its own draws
-//! after; one whose box meets a neighbor's that drew lower gives way to it
-//! (`retained`). At any zoom the same cells are read: what is as large as a
-//! cell there stands as itself (`stands_at`), what is smaller is folded into
-//! the cell as a cube is, its room to the cell's kept eighths (`folded`), and
-//! what folds to nothing is none. Every draw is a u32 off one stream a cell
-//! (xpute-kit `SplitMix32`), seeded by the decor's seed and the cell
-//! (`node_seed`), so every reader of a cell, either side, draws the same.
+//! gpu-portable: the decor the ground holds, never stored, a tree of hashes
+//! as the caves are: a column at a decor's root zoom (`ROOTS`) holds as many
+//! as one hash draws about its mean, and each column hands its count down to
+//! its four, one hash a column, to the leaf cells, a unit, which hold one or
+//! none (`count`). A leaf cell's own hash draws its variant and heading
+//! (`candidate_at`); one whose box meets a neighbor's that drew lower gives
+//! way to it (`retained`). What is as large as a cell at a zoom stands as
+//! itself there (`stands_at`); and each folds upward as a placed decor's leaf
+//! in the objects' tree does, its leaf cell filled, a column's share its
+//! count's mean, its kind the decor most of it is (`folded`,
+//! `overwrite::share`). Every draw is a u32 (xpute-kit `SplitMix32`), seeded by the
+//! decor's seed and the column (`node_seed`), so every reader, either side,
+//! draws the same.
 
 use xpute_kit::math::rng::SplitMix32;
 
@@ -37,24 +40,141 @@ impl Candidate {
     };
 }
 
-/// Leaf cell `cell`'s candidate of `decor`, and whether the cell holds one:
-/// its first draw under the decor's chance (`Decor::chance`).
+/// Leaf cell `cell`'s candidate of `decor`, its own draws, and whether the
+/// cell holds one (`count`).
 pub fn candidate_at(decor: &Decor, cell: [i32; 2]) -> (Candidate, bool) {
-    drawn(decor.seed, decor.chance, cell)
-}
-
-/// `candidate_at` of a decor's seed and chance, by value.
-fn drawn(seed: u32, chance: u32, cell: [i32; 2]) -> (Candidate, bool) {
-    let mut draws = SplitMix32::new(node_seed(seed, (LEAF_CELL, cell)));
-    let draw = draws.next_u32();
+    let k = kind_of(decor.val);
+    let mut draws = SplitMix32::new(node_seed(SEEDS[k], (LEAF_CELL, cell)));
     (
         Candidate {
             cell,
-            draw,
+            draw: draws.next_u32(),
             seed: draws.next_u32(),
         },
-        draw < chance,
+        count(k, LEAF_CELL, cell) > 0,
     )
+}
+
+/// The first decor's stored value, the rest in the catalog's order after it.
+const FIRST_VAL: u32 = DECORS[0].val;
+const _: () = {
+    let mut k = 0;
+    while k < DECORS.len() {
+        assert!(
+            DECORS[k].val == FIRST_VAL + k as u32,
+            "the decors' stored values run in the catalog's order"
+        );
+        k += 1;
+    }
+};
+
+/// Each decor's words the hashes read, a small table each, so a GPU's lane
+/// that reads one by a decor's place copies no row of the catalog: its seed,
+/// its chance, the look it folds to.
+const SEEDS: [u32; DECORS.len()] = {
+    let mut t = [0; DECORS.len()];
+    let mut k = 0;
+    while k < DECORS.len() {
+        t[k] = DECORS[k].seed;
+        k += 1;
+    }
+    t
+};
+const CHANCES: [u32; DECORS.len()] = {
+    let mut t = [0; DECORS.len()];
+    let mut k = 0;
+    while k < DECORS.len() {
+        t[k] = DECORS[k].chance;
+        k += 1;
+    }
+    t
+};
+const FOLDS: [u32; DECORS.len()] = {
+    let mut t = [0; DECORS.len()];
+    let mut k = 0;
+    while k < DECORS.len() {
+        t[k] = DECORS[k].fold;
+        k += 1;
+    }
+    t
+};
+
+/// Which decors stand on each ground look, a nibble a look, eight looks a
+/// word, a bit a decor in the catalog's order (`Decor::allows`).
+const LOOK_DECORS: [u32; 32] = {
+    let mut t = [0; 32];
+    let mut look = 0;
+    while look < 256 {
+        let mut k = 0;
+        while k < DECORS.len() {
+            if DECORS[k].allows(look) {
+                t[(look >> 3) as usize] |= 1 << (4 * (look & 7) + k as u32);
+            }
+            k += 1;
+        }
+        look += 1;
+    }
+    t
+};
+const _: () = assert!(DECORS.len() <= 4, "a look's decors are a nibble");
+
+/// Whether `val` is a decor's stored value: a range, no row read, so a GPU's
+/// lane asks nothing of the catalog its uniform control flow depends on.
+pub const fn is_decor(val: u32) -> bool {
+    val >= FIRST_VAL && val < FIRST_VAL + DECORS.len() as u32
+}
+
+/// The look a decor stored as `val` folds to (`Decor::fold`), 0 for the
+/// ground's under it.
+pub fn fold_look(val: u32) -> u32 {
+    FOLDS[kind_of(val)]
+}
+
+/// Where the decor stored as `val` stands among the catalog's rows.
+pub const fn kind_of(val: u32) -> usize {
+    if is_decor(val) {
+        (val - FIRST_VAL) as usize
+    } else {
+        0
+    }
+}
+
+/// The tags of a column's count and of its split among its four, beside a
+/// decor's seed (`node_seed`).
+const COUNT: u32 = 0xc047_dec0;
+const SPLIT: u32 = 0x5b17_dec0;
+
+/// How many of the `k`-th decor the column `b` at `zoom` holds, a leaf
+/// cell's one or none: its root's column (`ROOTS`) as many as a hash draws
+/// about its mean, the decor's chance a leaf cell under it, rounded at a
+/// uniform draw; then each column's count handed to its four a hash each,
+/// each one to the quarter a draw names, none past what its leaf cells
+/// hold. None coarser than the root. Every word read by value.
+pub fn count(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
+    let (seed, chance, root) = (SEEDS[k], CHANCES[k], ROOTS[k]);
+    if zoom < root {
+        return 0;
+    }
+    let at = |z: Zoom| [b[0] >> (zoom - z), b[1] >> (zoom - z)];
+    // The mean in 16.16, the chance's top half a leaf cell.
+    let mean = (chance >> 16) << (2 * (LEAF_CELL - root));
+    let draw = node_seed(seed ^ COUNT, (root, at(root)));
+    let mut n = (mean + (draw & 0xffff)) >> 16;
+    let mut z = root;
+    while z < zoom && n > 0 {
+        let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT, (z, at(z))));
+        let c = at(z + 1);
+        let quarter = (c[0] & 1 | (c[1] & 1) << 1) as u32;
+        let (mut mine, mut i) = (0, 0);
+        while i < n {
+            mine += u32::from(draws.next_u32() >> 30 == quarter);
+            i += 1;
+        }
+        let room = 1 << (2 * (LEAF_CELL - z - 1));
+        n = if mine < room { mine } else { room };
+        z += 1;
+    }
+    n
 }
 
 /// Whether `a` comes before `b` where their boxes meet, the one giving way to
@@ -140,50 +260,47 @@ pub const fn stands_at(decor: &Decor, variant: u32, cell: Zoom) -> bool {
 }
 
 /// `stands_at` of a box `[x, y, _]` in cells at `own`, by value.
-const fn stands([x, y, _]: [u32; 3], own: Zoom, cell: Zoom) -> bool {
+pub const fn stands([x, y, _]: [u32; 3], own: Zoom, cell: Zoom) -> bool {
     let side = if x > y { x } else { y };
     cell >= LEAF_CELL || own <= cell || (own - cell < u32::BITS && side >= 1 << (own - cell))
 }
 
-/// A folded share's unit, of `answer::FULL`.
-pub const FOLD_UNIT: u32 = answer::FULL / 64;
-
-/// The share of a window's cell at `cell` that `variant` of `decor` claims,
-/// in `FOLD_UNIT`s, rounded: its box's room over the cell's cube.
-/// None at its own cell or finer, where it is a cell or more.
-pub const fn fold_share(decor: &Decor, variant: u32, cell: Zoom) -> u32 {
-    share(decor.sizes[variant as usize], decor.cell_zoom(), cell)
-}
-
-/// `fold_share` of a box `[x, y, z]` in cells at `own`, by value.
-const fn share([x, y, z]: [u32; 3], own: Zoom, cell: Zoom) -> u32 {
-    if cell >= own {
-        return 0;
+/// The coarsest window zoom `variant` of `decor` stands at (`stands_at`).
+pub const fn coarsest_stand(decor: &Decor, variant: u32) -> Zoom {
+    let mut cell = LEAF_CELL;
+    while cell > 0 && stands_at(decor, variant, cell - 1) {
+        cell -= 1;
     }
-    // Each axis `own - cell` halvings narrower than the cell, the room
-    // 8 times less a halving.
-    let shift = 3 * (own - cell);
-    let units = answer::FULL / FOLD_UNIT;
-    if shift >= u32::BITS - 2 * units.trailing_zeros() {
-        return 0;
+    cell
+}
+
+/// The zooms past the leaves' a column's count is drawn for: a decor's leaf
+/// cell is an eighth of a cell a zoom over it, and three over, the most a
+/// column of a scattered decor's leaf cells holds rounds to no eighth.
+const FOLD_STEPS: Zoom = 3;
+
+/// Each decor's counts' root (`count`): the coarsest window it stands at, or
+/// `FOLD_STEPS` over the leaves' where that is finer.
+pub const ROOTS: [Zoom; DECORS.len()] = {
+    let mut roots = [LEAF_CELL; DECORS.len()];
+    let mut k = 0;
+    while k < DECORS.len() {
+        let d = &DECORS[k];
+        let mut cell = LEAF_CELL;
+        while cell > 0 && (cell > LEAF_CELL - FOLD_STEPS || any_stands_at(d, cell - 1)) {
+            cell -= 1;
+        }
+        roots[k] = cell;
+        k += 1;
     }
-    (x * y * z * units + (1 << shift >> 1)) >> shift
-}
+    roots
+};
 
-/// Whether `variant` of `decor` is folded into a window's cell at `cell`:
-/// where it does not stand as itself (`stands_at`), smaller than the cell,
-/// the room it claims added to the cell's, as a cube's is to its parent's
-/// (`ground::Cell::folded`), where that room is a unit of the share or more
-/// (`fold_share`).
-pub const fn folds_at(decor: &Decor, variant: u32, cell: Zoom) -> bool {
-    !stands_at(decor, variant, cell) && fold_share(decor, variant, cell) > 0
-}
-
-/// Whether any variant of `decor` is folded at `cell` (`folds_at`).
-pub const fn any_folds_at(decor: &Decor, cell: Zoom) -> bool {
+/// Whether any variant of `decor` stands at `cell` (`stands_at`).
+pub const fn any_stands_at(decor: &Decor, cell: Zoom) -> bool {
     let mut v = 0;
     while v < decor.variants {
-        if folds_at(decor, v, cell) {
+        if stands_at(decor, v, cell) {
             return true;
         }
         v += 1;
@@ -191,70 +308,42 @@ pub const fn any_folds_at(decor: &Decor, cell: Zoom) -> bool {
     false
 }
 
-/// The coarsest window zoom each decor is folded at (`any_folds_at`),
-/// `LEAF_CELL` where it is folded at none: past it its room rounds to none.
-const FOLDS_FROM: [Zoom; DECORS.len()] = {
-    let mut from = [LEAF_CELL; DECORS.len()];
-    let mut k = 0;
-    while k < DECORS.len() {
-        let mut cell = LEAF_CELL;
-        while cell > 0 && any_folds_at(&DECORS[k], cell - 1) {
-            cell -= 1;
-        }
-        from[k] = cell;
-        k += 1;
-    }
-    from
-};
-
 /// The decor folded into the cell `b` at `cell` whose ground's own look is
-/// `look`: of each decor that stands on it, the room of every one the leaf
-/// cells under it hold that is folded there (`folds_at`), added as a cube's
-/// is, in `answer::FULL`'s units, no more than the cell; and the look it is
-/// folded to, the greatest a decor names (`Decor::fold`), 0 for the
-/// ground's. None at a leaf's cell or finer, and none of a decor coarser
-/// than its room rounds to a unit at (`FOLDS_FROM`). Each row's words are
-/// read by value, as a GPU holds no pointer into the catalog a loop moves.
-#[inline(never)]
+/// `look`, as a placed decor's leaf folds in the objects' tree
+/// (`overwrite::share`, `overwrite::fold`): each leaf cell a decor that stands
+/// on it holds fills it whole, so the cell's share is their count's eighth a
+/// zoom over the leaves', in `answer::FULL`'s units, no more than the cell;
+/// its kind the decor most of it is, by count, the first in the catalog's
+/// order on a tie, as its stored value, 0 where none is. None at a leaf's
+/// cell or finer, nor coarser than a decor's root. A hash a zoom a decor, as
+/// the caves are, each row's words read by value.
 pub fn folded(cell: Zoom, b: [i32; 2], look: u32) -> (u32, u32) {
-    let (mut share_cnt, mut folds) = (0, 0);
+    let (mut leaves, mut kind, mut most) = (0, 0, 0);
     if cell >= LEAF_CELL || look >= 256 {
         return (0, 0);
     }
-    let s = LEAF_CELL - cell;
     let mut k = 0;
     while k < DECORS.len() {
-        let (seed, chance, variants) = (DECORS[k].seed, DECORS[k].chance, DECORS[k].variants);
-        let (on, own, fold) = (
-            DECORS[k].on[(look >> 5) as usize],
-            UNIT_ZOOM - DECORS[k].scale_steps as Zoom,
-            DECORS[k].fold,
-        );
-        if on >> (look & 31) & 1 == 1 && cell >= FOLDS_FROM[k] {
-            let mut i = 0;
-            while i < 1 << (2 * s) {
-                let leaf = [(b[0] << s) + (i & ((1 << s) - 1)), (b[1] << s) + (i >> s)];
-                let (c, here) = drawn(seed, chance, leaf);
-                let v = mul_hi(SplitMix32::new(c.seed).next_u32(), variants);
-                let size = DECORS[k].sizes[v as usize];
-                if here && !stands(size, own, cell) {
-                    let n = share(size, own, cell);
-                    share_cnt += n;
-                    folds = if n > 0 && fold > folds { fold } else { folds };
-                }
-                i += 1;
+        let val = FIRST_VAL + k as u32;
+        if LOOK_DECORS[(look >> 3) as usize] >> (4 * (look & 7) + k as u32) & 1 == 1
+            && cell >= ROOTS[k]
+        {
+            let n = count(k, cell, b);
+            leaves += n;
+            if n > most {
+                (kind, most) = (val, n);
             }
         }
         k += 1;
     }
-    let held = share_cnt * FOLD_UNIT;
+    let share = leaves * (answer::FULL >> (3 * (LEAF_CELL - cell)));
     (
-        if held > answer::FULL {
+        if share > answer::FULL {
             answer::FULL
         } else {
-            held
+            share
         },
-        folds,
+        kind,
     )
 }
 

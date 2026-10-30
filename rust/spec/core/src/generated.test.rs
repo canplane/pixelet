@@ -3,9 +3,10 @@
 use super::*;
 use crate::cast::Spacing;
 
-/// Decor of the leaves' window, or placed, is drawn where the rays ask the
-/// leaf cell's zoom or finer at its distance; decor of a coarser window
-/// where they ask that window's zoom alone, so a distance draws one window's.
+/// Decor of the leaves' window is drawn where the rays ask the leaf cell's
+/// zoom or finer at its distance, decor of a coarser window where they ask
+/// that window's zoom alone, so a distance draws one window's, and placed
+/// decor where they ask the coarsest zoom it stands at or finer.
 #[test]
 fn decor_at_its_window() {
     let detail = Detail {
@@ -18,12 +19,21 @@ fn decor_at_its_window() {
     while d < 1.0e6 {
         let d2 = d * d;
         let at = detail.at(d2);
-        for cell in [LEAF_CELL, PLACED_AT] {
-            assert_eq!(drawn_at(detail, d2, cell), at >= LEAF_CELL, "at {d}: z{at}");
+        assert_eq!(
+            drawn_at(detail, d2, LEAF_CELL, false),
+            at >= LEAF_CELL,
+            "at {d}: z{at}"
+        );
+        for cell in FIRST_CELL..=LEAF_CELL {
+            assert_eq!(
+                drawn_at(detail, d2, cell, true),
+                at >= cell,
+                "placed at {d}: z{at}"
+            );
         }
         for cell in FIRST_CELL..LEAF_CELL {
             assert_eq!(
-                drawn_at(detail, d2, cell),
+                drawn_at(detail, d2, cell, false),
                 at == cell,
                 "at {d}: z{at}, z{cell}"
             );

@@ -14,6 +14,7 @@
 //! asset, whatever is under it.
 
 use crate::cube::{object, sentinel, Ground, Object};
+use crate::scatter;
 use crate::{Zoom, LEAF_CELL};
 
 /// A slot's heap word when it is a branch, its children's family under it.
@@ -131,12 +132,13 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
 }
 
 /// A leaf's word in its parent's fold (`fold`): a leaf whose value is a
-/// voxel fills it whole; the empty word, and any other, none. The one rule
-/// whichever side builds a tree, the objects' store (pxl-spec
-/// object/volume.rs) or a brick's ways (`way::tree`).
+/// voxel or a decor fills it whole, a decor its leaf cell as a cube does;
+/// the empty word, and any other, none. The one rule whichever side builds a
+/// tree, the objects' store (pxl-spec object/volume.rs) or a brick's ways
+/// (`way::tree`), and the one a scattered decor folds by (`scatter::folded`).
 pub fn share(word: u32) -> u32 {
     let id = low(word);
-    if word != 0 && voxel(id) {
+    if word != 0 && (voxel(id) || scatter::is_decor(id)) {
         fold_word(id, FULL)
     } else {
         0
@@ -306,8 +308,9 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 
 /// What the node `at` of `zoom` holding `held` folds to, as a cell of its zoom
 /// is drawn: the leaf's value, or its fold's kind wherever any of it is
-/// filled, with what of its cube that fills (`filled`); `VOID` where nothing
-/// that is a voxel is. How much of the cell is kept is the cell's, of
+/// filled, with what of its cube that fills (`filled`), a decor's stored
+/// value among them, its leaves folded (`share`); `VOID` where nothing that
+/// is a voxel is, a decor's own leaf, drawn as itself, among it. How much of the cell is kept is the cell's, of
 /// every layer together (`answer::cover`, `answer::eighths`). `hide`, a
 /// preview's left-out leaf, is left out where it is the leaf itself.
 pub fn val(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
@@ -329,7 +332,7 @@ pub fn val(lanes: &impl Lanes, held: Held, hide: Cut, zoom: Zoom, at: [i32; 3]) 
     } else {
         VOID
     };
-    if voxel(v) {
+    if voxel(v) || held.is_folded() && scatter::is_decor(v) {
         v
     } else {
         VOID

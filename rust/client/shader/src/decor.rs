@@ -208,9 +208,9 @@ const CELL_LANES: u32 = 64;
 const _: () = assert!(BRICK_CELLS.is_multiple_of(CELL_LANES));
 
 /// The candidates of an entry `decor_mark_cs` listed, a window cell of its
-/// brick a thread: `x` the cell, `z` the entry and decor listed. Each leaf
-/// cell under the window cell is read off the decor's hash
-/// (`scatter::candidate_at`); one holding a candidate whose variant stands at
+/// brick a thread: `x` the cell, `z` the entry and decor listed. Where its
+/// column holds any (`scatter::count`), each leaf cell under it is read off
+/// the decor's hashes (`scatter::candidate_at`); one holding a candidate whose variant stands at
 /// the entry's window (`scatter::stands_at`) and which stands clear
 /// (`scatter::retained`) is laid as the decor's next record
 /// (`generated::cnt_at`), `RETAINED`, its cell and seed after it, for
@@ -236,6 +236,10 @@ pub fn decor_thin_cs(
     let [x0, y0, _, _] = generated::brick_box(cell, [held.x, held.y]);
     let (decor, s) = (&rows[j as usize], LEAF_CELL - cell);
     let corner = [x0 + ((i % BRICK) << s) as i32, y0 + ((i / BRICK) << s) as i32];
+    // None under a window cell its column holds none of.
+    if scatter::count(j as usize, cell, [corner[0] >> s, corner[1] >> s]) == 0 {
+        return;
+    }
     let side = 1u32 << s;
     let mut n = 0;
     while n < side * side {
@@ -451,8 +455,10 @@ fn cnt_one(
     let (origin, detail) = eye_origin(eye);
     // Its distance once, for the zoom it is drawn at and its size.
     let d2 = generated::distance2(origin, corner);
-    // Drawn only where the rays ask its window's zoom at its distance.
-    let here = generated::drawn_at(detail, d2, cell);
+    // Drawn only where the rays ask its window's zoom at its distance, or,
+    // placed, past the entries' records, the coarsest it stands at or finer.
+    let placed = i >= generated::record_at(generated::SLOT_RECORDS) as usize;
+    let here = generated::drawn_at(detail, d2, cell, placed);
     let group = generated::first_group(rows, decor) + variant;
     let hide = drawn::HIDE as usize;
     let hidden = drawing[hide + 3] != 0

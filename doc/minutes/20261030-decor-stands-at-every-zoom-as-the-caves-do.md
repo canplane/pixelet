@@ -214,3 +214,39 @@ none; and the caves are no process that is born either.
 - **Not checked yet:** the app; what the GPU's thin pass costs a brick where a
   window's cell holds many leaf cells.
 
+
+## Placed and generated alike, folded as cubes, 2026-10-31
+
+Decided by the user, after the hash a cell was measured: folding a column by
+hashing every leaf cell under it, in every node a ray asks, cost the frame four
+times its GPU (p50 16.3 to 70.9 ms over a city, orbiting). In their words: decor
+and cubes are one octree of objects, an asset id apart; a placed decor is folded
+by the octree's rule, and the generated one is to look and act as a placed one
+does, a user unable to tell them apart; the cubes already fold so; the layers
+of the query stay as they are; and the leaf-only drawing of placed decor, which
+they had asked gone, goes.
+
+- **A tree of hashes, as the caves.** A decor's counts start at its root, the
+  coarsest window it stands at or three zooms over the leaves; a column there
+  holds as many as a hash draws about its mean, and each column hands its
+  count to its four a hash each, down to a leaf cell's one or none
+  (pxl-spec-core `scatter::count`). A count of none asks no hash under it.
+- **Folded as a cube.** A placed decor's leaf fills its cell in the objects'
+  tree and folds up by the tree's rule, the mean its share and the kind most
+  of it its kind (`overwrite::share`); the generated decor folds the same off
+  its column's count into the column's top cell (`scatter::folded`). A cell
+  whose kind is a decor is drawn in the look the decor names, else the ground's
+  (`world::node`).
+- **Standing by size, both.** A placed decor is drawn from the coarsest zoom its
+  variant stands at (`generated::drawn_at`, its record's zoom
+  `scatter::coarsest_stand`), as a generated one is from the window it stands
+  at.
+- **The catalog read by value.** What the hashes read of a decor, a GPU reads
+  from small tables (`SEEDS`, `CHANCES`, `FOLDS`, `LOOK_DECORS`), not the
+  catalog's rows: a row read by a decor's place copied the whole catalog into
+  every lane, which was most of the cost. A decor's value is told by its
+  range, so the objects' tree's fold, which a barrier follows, reads none.
+- **Measured** over the same city at 20 m a division, orbiting 30 s: GPU p50
+  23.4 ms and p95 30.1 against 16.3 and 20.6 before the scatter changed, the
+  cars, which stand by their size, drawn far where the zoom a candidate was
+  born at had left them out. Not yet seen in the app: a placed decor folding.

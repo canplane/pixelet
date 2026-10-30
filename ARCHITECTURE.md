@@ -164,22 +164,25 @@ sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
 | decor  | what the ground generates           | a placed decor  |
 | marker | a place, Carto's icon and its name  | a placed marker |
 
-The ground generates decor by evaluating, never storing, as it does the caves: a
-leaf cell holds one of a decor where a hash of the cell draws under the decor's
-chance, and where it stands is a function of the cell, a seed and the ground's
-face, one rule on both sides (`pxl-spec-core scatter.rs`). One whose box meets a
-neighbor's that drew lower gives way, so two generated decors never share a
-cell. At any zoom the same cells are read: what is as large as a cell there
-stands as itself, and what is smaller is folded into it, as a cube is.
+The ground generates decor by evaluating, never storing, a tree of hashes as the
+caves are: a column at a decor's root zoom holds as many as a hash draws about
+its mean, each column hands its count to its four a hash each, and a leaf cell
+holds one or none; where it stands is a function of the cell, a seed and the
+ground's face, one rule on both sides (`pxl-spec-core scatter.rs`). One whose
+box meets a neighbor's that drew lower gives way, so two generated decors never
+share a cell. A decor, placed or generated, stands as itself at every zoom it is
+as large as a cell at, and folds as a cube does, so neither is told from the
+other.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its look the majority of those it folds, and its
 top cell is filled to the share its height reaches (`pxl-spec-core ground.rs`
 `top`). What is placed and the ways fold to the kind most of their fill is
-(`overwrite.rs` `fold`). Decor smaller than the cell is folded into the top
-cell of its column, the room it claims beside the ground's, its look the one its
-kind names: the node reads it off the hash of the leaf cells under it, as it
-reads the caves (`scatter.rs` `folded`, `world.rs` `node`).
+(`overwrite.rs` `fold`), a placed decor's leaf among them, filling its cell as
+a cube's does (`overwrite.rs` `share`). The ground's decor folds by the same
+rule off its column's count, into the column's top cell (`scatter.rs`
+`folded`). A cell a decor folds to is drawn in the look its kind names, else
+the ground's under it (`world.rs` `node`).
 
 A coarse cell keeps how much of its cube the ground and what is written over it
 fill (`answer.rs` `cover`), in eighths, floored: its **kept eighths**. It is

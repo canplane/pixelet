@@ -204,7 +204,12 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
         let [x, y, z] = idx_of(UNIT_ZOOM, &e.corner());
         placed.push([
-            generated::record_word(k, variant, turn, generated::PLACED_AT),
+            generated::record_word(
+                k,
+                variant,
+                turn,
+                scatter::coarsest_stand(&decor::DECORS[k as usize], variant),
+            ),
             wrapped(x),
             y as u32,
             z as u32,
