@@ -1,6 +1,6 @@
 // pxl-render/gpu/ray/tally.rs
 
-//! What the eye's cast and the sun's walked and took, counted where the
+//! What the eye's cast and the light's walked and took, counted where the
 //! `ray_counts` setting asks (pxl-spec-core `tally`): where each pass
 //! counts cleared each counted frame, gathered into one array after the
 //! frame's dispatches where no mapping of it is out (`copied`), mapped back

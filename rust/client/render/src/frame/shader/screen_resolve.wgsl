@@ -12,10 +12,9 @@ struct Resolve {
   // A pixel's middle and depth in this frame's view, unjittered, to its
   // place in the last frame's.
   reproject: mat4x4f,
-  // The share this frame's color takes where the last frame's view held
-  // the place, 1 where nothing before is kept; then 1 where what the
-  // frames before left is held to this frame's pixels, 0 where only the
-  // jitter moved since and it stands whole.
+  // The share this frame's color takes where its tile changed this frame
+  // and the last frame's view held the place, 1 where nothing before is
+  // kept.
   blend: vec4f,
 };
 
@@ -24,6 +23,10 @@ struct Resolve {
 @group(0) @binding(3) var history: texture_2d<f32>;
 @group(0) @binding(4) var history_sampler: sampler;
 @group(0) @binding(5) var<uniform> resolve: Resolve;
+// Each tile's age (screen_tiles.wgsl `tile_age`): 0 where it changed this frame,
+// what the frames before left held to this frame's pixels; past it, only the
+// jitter moved there since, and the frame takes its even share of the
+// sequence, what they left standing whole.
 
 // How far, in the spread of the pixels about it, what the frames before
 // left may lie from their mean.
@@ -33,11 +36,11 @@ struct VertexOut {
   @builtin(position) clip: vec4f,
 };
 
+// The claimed tiles alone (screen_tiles.wgsl).
 @vertex
-fn vs(@builtin(vertex_index) vi: u32) -> VertexOut {
-  let p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
   var o: VertexOut;
-  o.clip = vec4f(p[vi], 0.0, 1.0);
+  o.clip = tile_clip(vi, ii);
   return o;
 }
 
@@ -81,7 +84,10 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let was = resolve.reproject * vec4f(ndc, depth, 1.0);
   let at = was.xy / was.w;
   let uv = vec2f(at.x * 0.5 + 0.5, 0.5 - at.y * 0.5);
-  var blend = resolve.blend.x;
+  let tile = vec2u(p) / tile_side();
+  let age = tile_age(tile.y * tiles.count.x + tile.x);
+  let still = age > 0u;
+  var blend = select(resolve.blend.x, 1.0 / f32(min(age - 1u, TILE_JITTERS - 2u) + 2u), still);
   if (!(was.w > 0.0) || any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
     blend = 1.0;
   }
@@ -90,6 +96,6 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let off = h - m1;
   let room = max(spread, vec4f(1e-5));
   let k = max(max(abs(off.x) / room.x, abs(off.y) / room.y), max(abs(off.z) / room.z, abs(off.w) / room.w));
-  let held = select(h, m1 + off / k, k > 1.0 && resolve.blend.y > 0.0);
+  let held = select(h, m1 + off / k, k > 1.0 && !still);
   return resolve_rgb(mix(held, c, blend));
 }

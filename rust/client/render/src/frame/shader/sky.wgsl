@@ -32,7 +32,7 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
   return disc_light(r, mu, exposure()) * limb * edge;
 }
 
-// Lommel-Seeliger, so a full Moon is as bright at its limb as at its center.
+// Lommel-Seeliger, so a full moon is as bright at its limb as at its center.
 fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let axis = atmos_moon_dir();
   let mu = dot(dir, frame_up());

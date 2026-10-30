@@ -23,57 +23,6 @@ pub const SETTLE_TURNS: u32 = 4;
 /// levels the canvas has and none the color had.
 pub const WORLD_COLOR: Format = Format::rgba16float;
 
-/// A part of the world's drawn pixels, from `at`, `size` across and down:
-/// what a frame draws again where nothing moved but what the kernel's region
-/// holds (gpu/renderer.rs `FrameInput::moved`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Region {
-    pub at: [u32; 2],
-    pub size: [u32; 2],
-}
-
-/// The drawn pixels a region is grown by each way: the resolve's pixels
-/// beside it and a face's growth (pxl-spec-core param.rs `raster::GROWN`),
-/// with room.
-pub const REGION_MARGIN: u32 = 4;
-
-/// The share of the world's pixels past which a region is drawn whole: a
-/// region costs a clear and a scissor beside what it draws, so only one
-/// that holds nearly all of them gains nothing.
-const REGION_MOST: f64 = 0.9;
-
-impl Region {
-    /// The drawn pixels under clip `[x0, y0, x1, y1]`, Y up, of a world
-    /// `width` by `height`, grown by `margin` of them; none where they hold
-    /// more than `REGION_MOST` of it, or nothing.
-    pub fn of([x0, y0, x1, y1]: [f32; 4], width: u32, height: u32, margin: u32) -> Option<Region> {
-        let (w, h) = (width as f32, height as f32);
-        let px = |x: f32| (x * 0.5 + 0.5) * w;
-        let py = |y: f32| (0.5 - y * 0.5) * h;
-        let m = margin as f32;
-        let lo = [(px(x0) - m).max(0.0), (py(y1) - m).max(0.0)];
-        let hi = [(px(x1) + m).min(w), (py(y0) + m).min(h)];
-        if !(hi[0] > lo[0] && hi[1] > lo[1]) {
-            return None;
-        }
-        // Whole workgroups of the pixels' cast (pxl-shader cast.rs
-        // `cast_cs`, 8 by 8), so its last ones cast no pixel past it.
-        let whole = |lo: f32, hi: f32, n: u32| {
-            let size = (hi.ceil() as u32 - lo as u32).next_multiple_of(8).min(n);
-            [(lo as u32).min(n - size), size]
-        };
-        let ([ax, sx], [ay, sy]) = (whole(lo[0], hi[0], width), whole(lo[1], hi[1], height));
-        let (at, size) = ([ax, ay], [sx, sy]);
-        let share = f64::from(size[0]) * f64::from(size[1]) / (f64::from(w) * f64::from(h));
-        (share <= REGION_MOST).then_some(Region { at, size })
-    }
-
-    /// As a pass's scissor takes it.
-    pub fn rect(&self) -> [u32; 4] {
-        [self.at[0], self.at[1], self.size[0], self.size[1]]
-    }
-}
-
 #[derive(Clone, Copy, Default)]
 pub struct Surface {
     pub handle: u32,
@@ -93,9 +42,12 @@ pub struct Surface {
     pub wanted: ((u32, u32), (u32, u32)),
     pub waited: u32,
     /// The frame's depth, the world's and over it what moves on its own
-    /// (gpu/renderer.rs, stage 2).
+    /// (gpu/renderer.rs, stage 2), with a stencil where the device carries
+    /// one (`Gpu::world_depth`): `depth_view` as a pass draws into it,
+    /// `depth_only_view` as a binding reads it.
     pub depth: u32,
     pub depth_view: u32,
+    pub depth_only_view: u32,
     /// The color its passes draw into (`WORLD_COLOR`), made with the depth,
     /// which the world's gathers over frames (`history`) and the finish
     /// encodes onto the canvas.
@@ -117,12 +69,19 @@ pub struct Surface {
     /// turn (gpu/resolve.rs): the world's alone.
     pub history: [u32; 2],
     pub history_view: [u32; 2],
+    /// The finished picture at the canvas's size, the canvas's format, made
+    /// with the screen's depth: a gated frame finishes again only its
+    /// claimed tiles in it, and every frame shows it whole on the canvas, whose
+    /// texture is a new one each frame (gpu/finish.rs): the world's alone.
+    pub shown: u32,
+    pub shown_view: u32,
 }
 
 impl Surface {
     /// What it holds on the GPU, every one made again with its size.
-    pub fn targets(&self) -> [u32; 12] {
+    pub fn targets(&self) -> [u32; 15] {
         [
+            self.depth_only_view,
             self.depth_view,
             self.depth,
             self.color_view,
@@ -135,6 +94,8 @@ impl Surface {
             self.history[0],
             self.history_view[1],
             self.history[1],
+            self.shown_view,
+            self.shown,
         ]
     }
 

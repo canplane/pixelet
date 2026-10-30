@@ -3,7 +3,7 @@
 // apart: over a dark sky the encode shows it as it shows the star's own light.
 
 // Its words' fields and accessors are frame/shader/word.rs `stars`'s, which
-// build.rs writes here. The viewport and the up are the frame's, the Moon
+// build.rs writes here. The viewport and the up are the frame's, the moon
 // the air's.
 @group(1) @binding(0) var<uniform> stars_words: array<vec4f, STARS_VEC4S>;
 

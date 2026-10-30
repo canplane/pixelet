@@ -228,7 +228,7 @@ impl<L: Looks> Query for Writing<'_, L> {
                     }
                     // The node, asked at other zooms by an earlier frame:
                     // written over. One this frame asked so (the eye's and
-                    // the sun's ask the nodes near the eye apart) stands
+                    // the light's ask the nodes near the eye apart) stands
                     // beside it.
                     if observed::tag_of(held) / observed::PASSES < self.tag / observed::PASSES {
                         (to, key) = (first + k, held);

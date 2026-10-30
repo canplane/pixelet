@@ -16,9 +16,9 @@ use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction,
     CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
-    QueryType, SamplerBindingType, StorageTextureAccess, StoreOp, TextureAspect, TextureDimension,
-    TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat, VertexStepMode,
-    FEATURE_NAME, LIMIT_NAME,
+    QueryType, SamplerBindingType, StencilOperation, StorageTextureAccess, StoreOp, TextureAspect,
+    TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat,
+    VertexStepMode, FEATURE_NAME, LIMIT_NAME,
 };
 use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
 use xpute_guest::abi::handle::handle_slot;
@@ -89,6 +89,9 @@ const _: () = assert!(
 pub struct Device {
     pub align: u32,
     pub timestamps: bool,
+    /// Whether a depth target may carry a stencil beside a 32-bit float
+    /// depth, which the world's does where it can (`Gpu::world_depth`).
+    pub depth32float_stencil8: bool,
     /// What a surface shows best, and so what the canvas's pipelines target.
     pub canvas: Format,
     period_ns: f32,
@@ -266,14 +269,19 @@ impl<'a> TrackedRenderPass<'a> {
         self.g.set_scissor(self.pass, rect);
     }
 
+    /// The stencil's reference its draws test and write (`Stencil`).
+    pub fn set_stencil_reference(&self, reference: u32) {
+        call::set_stencil_reference(&mut self.g.s().stream, self.pass, reference);
+    }
+
     pub fn draw(&self, vertices: u32, instances: u32, first_vertex: u32, first_instance: u32) {
         self.g
             .draw(self.pass, vertices, instances, first_vertex, first_instance);
     }
 
-    pub fn draw_indexed(&self, idxs: u32, instances: u32, first_idx: u32, first_instance: u32) {
+    pub fn draw_indexed(&self, indices: u32, instances: u32, first_idx: u32, first_instance: u32) {
         self.g
-            .draw_indexed(self.pass, idxs, instances, first_idx, first_instance);
+            .draw_indexed(self.pass, indices, instances, first_idx, first_instance);
     }
 
     pub fn draw_indirect(&self, buf: Id, off: u32) {
@@ -290,6 +298,21 @@ impl<'a> TrackedRenderPass<'a> {
     }
 }
 
+/// What a pipeline does with the stencil beside its depth (`Gpu::gated_depth`),
+/// which holds in each tile the number of the gated frame that last claimed
+/// it, as a light tile's word names the cast that read it: nothing; passes
+/// only where it holds the pass's reference, this frame's number, as every
+/// draw of the world's pass does; or writes the reference there, as the gate
+/// does (gpu/renderer.rs `frame`). A pass clears it to 0, its reference 0,
+/// unless it keeps it (`PassDesc::kept`), so a pass with no gate passes
+/// everywhere.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Stencil {
+    Unused,
+    Gated,
+    Gate,
+}
+
 /// How an attachment starts: cleared, kept, or (depth) read and not written.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Load {
@@ -299,14 +322,27 @@ pub enum Load {
 }
 
 /// A pass's targets: color cleared to transparent or loaded, depth cleared
-/// to `depth_clear`, loaded or read only; 0 for one absent.
+/// to `depth_clear`, loaded or read only, and its stencil, where it has one,
+/// cleared to 0 or loaded where it is `kept`; 0 for one absent.
 pub struct PassDesc {
     color: Id,
     color_load: Load,
     depth: Id,
     depth_load: Load,
     depth_clear: f32,
+    stencil_kept: bool,
     stamp: Option<encode::TimestampWrites>,
+}
+
+impl PassDesc {
+    /// Its stencil loaded as the last pass left it, the numbers of the gated
+    /// frames that claimed each tile (`Stencil`).
+    pub fn kept(self) -> PassDesc {
+        PassDesc {
+            stencil_kept: true,
+            ..self
+        }
+    }
 }
 
 pub fn pass_desc(
@@ -323,6 +359,7 @@ pub fn pass_desc(
         depth,
         depth_load,
         depth_clear,
+        stencil_kept: false,
         stamp,
     }
 }
@@ -401,6 +438,11 @@ struct State {
     /// (`frame_commit`), or no read would be asked again.
     stamps_asked: bool,
     gpu_ms: [f64; SPANS],
+    /// The time the last read's spans ran, ms, those that overlap counted
+    /// once: the frame's GPU time, as the spans' sum is not where its passes
+    /// overlap; a span whose ticks a pass left unwritten (a pass with no work
+    /// may be dropped) adds its own length, not the time since.
+    gpu_busy_ms: f64,
     /// Whether the last frame submitted took a read in: its figures are then
     /// that read's, and else the read before it, not measured again.
     gpu_landed: bool,
@@ -466,6 +508,7 @@ pub unsafe fn install(at: u32) -> u32 {
         stamps_written: 0,
         stamps_asked: false,
         gpu_ms: [0.0; SPANS],
+        gpu_busy_ms: 0.0,
         gpu_landed: false,
         images: Vec::new(),
         landed: Vec::new(),
@@ -518,6 +561,7 @@ pub fn device() -> Option<Device> {
         s.device = Some(Device {
             align,
             timestamps: feat("timestamp-query"),
+            depth32float_stencil8: feat("depth32float-stencil8"),
             canvas,
             period_ns: f32::from_bits(word(PERIOD_AT)),
         });
@@ -565,11 +609,40 @@ fn take_stamps(s: &mut State) -> bool {
     let tick = |k: usize| {
         u64::from(*head(STAMPS_AT + 2 * k)) | u64::from(*head(STAMPS_AT + 2 * k + 1)) << 32
     };
+    let mut ran = [(0u64, 0u64); SPANS];
+    let mut cnt = 0;
     for k in 0..SPANS {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
-        let ran = s.stamps_written & 1 << k != 0 && e >= b;
-        s.gpu_ms[k] = if ran { (e - b) as f64 * period_ms } else { 0.0 };
+        let written = s.stamps_written & 1 << k != 0 && e >= b;
+        s.gpu_ms[k] = if written {
+            (e - b) as f64 * period_ms
+        } else {
+            0.0
+        };
+        if written {
+            ran[cnt] = (b, e);
+            cnt += 1;
+        }
     }
+    // The spans by their starts, each run of overlapping ones counted once.
+    let ran = &mut ran[..cnt];
+    ran.sort_unstable();
+    let mut busy = 0;
+    let mut run: Option<(u64, u64)> = None;
+    for &(b, e) in ran.iter() {
+        run = match run {
+            Some((rb, re)) if b <= re => Some((rb, re.max(e))),
+            Some((rb, re)) => {
+                busy += re - rb;
+                Some((b, e))
+            }
+            None => Some((b, e)),
+        };
+    }
+    if let Some((rb, re)) = run {
+        busy += re - rb;
+    }
+    s.gpu_busy_ms = busy as f64 * period_ms;
     true
 }
 
@@ -760,6 +833,22 @@ fn load_op(l: Load) -> LoadOp {
     }
 }
 
+/// A face's stencil state as `stencil` asks: a draw passing where the
+/// stencil holds the reference, the gate writing it.
+fn stencil_face(stencil: Stencil) -> encode::StencilFaceState {
+    match stencil {
+        Stencil::Unused => encode::STENCIL_UNUSED,
+        Stencil::Gated => encode::StencilFaceState {
+            compare: CompareFunction::equal,
+            ..encode::STENCIL_UNUSED
+        },
+        Stencil::Gate => encode::StencilFaceState {
+            pass: StencilOperation::replace,
+            ..encode::STENCIL_UNUSED
+        },
+    }
+}
+
 impl Gpu {
     fn s(&self) -> &'static mut State {
         state()
@@ -872,6 +961,41 @@ impl Gpu {
         ))
     }
 
+    /// The depth alone of a depth target that carries a stencil, as a
+    /// binding reads it: WebGPU binds no view of both aspects.
+    pub fn depth_only_view(&self, texture: Id) -> Id {
+        let s = self.s();
+        made(s.encoder.view(
+            &mut s.stream,
+            texture,
+            &encode::ViewDescriptor {
+                dimension: Some(TextureViewDimension::_2d),
+                aspect: Some(TextureAspect::depth_only),
+                mips: Some(1),
+                layers: Some(1),
+                ..Default::default()
+            },
+        ))
+    }
+
+    /// The depth a pass drawn through a gate draws into, the world's
+    /// surfaces' and the light's map's: a 32-bit float, with a stencil where
+    /// the device carries one beside it (`gates`).
+    pub fn gated_depth(&self) -> Format {
+        if self.gates() {
+            Format::depth32float_stencil8
+        } else {
+            Format::depth32float
+        }
+    }
+
+    /// Whether a gated depth carries a stencil, so a frame may be drawn
+    /// through a gate (`Stencil`); else every pass a gate would hold is
+    /// drawn whole.
+    pub fn gates(&self) -> bool {
+        self.s().device.is_some_and(|d| d.depth32float_stencil8)
+    }
+
     /// Both directions addressed alike; `compare` for a comparison sampler.
     pub fn sampler(
         &self,
@@ -927,10 +1051,17 @@ impl Gpu {
     }
 
     /// A render pipeline from its record (frame/shader/record.rs) over the
-    /// group layouts, drawing into `format`, depth32 its depth: into the
-    /// depth alone where `format` is depth32's, its fragment writing no
-    /// color (the shadow map, gpu/shadow.rs).
-    pub fn pipeline(&self, words: &[u32], layouts: &[Id], module: Id, format: Format) -> Id {
+    /// group layouts, drawing into `format` and `depth`, `stencil` the
+    /// stencil beside it: into the depth alone where `format` is depth32's,
+    /// its fragment writing no color (the shadow map, gpu/shadow.rs).
+    pub fn pipeline(
+        &self,
+        words: &[u32],
+        layouts: &[Id],
+        module: Id,
+        format: Format,
+        (depth, stencil): (Format, Stencil),
+    ) -> Id {
         let mut at = record::HEAD as usize;
         let mut next = || {
             at += 1;
@@ -958,7 +1089,7 @@ impl Gpu {
                 (stride, step, attributes)
             })
             .collect();
-        let bufs: Vec<encode::VertexBufferLayout> = lanes
+        let buffers: Vec<encode::VertexBufferLayout> = lanes
             .iter()
             .map(|(stride, step, attributes)| encode::VertexBufferLayout {
                 stride: *stride,
@@ -991,7 +1122,7 @@ impl Gpu {
                 vertex: encode::VertexState {
                     module,
                     entry: VERTEX_ENTRY[words[record::HEAD as usize - 1] as usize],
-                    buffers: &bufs,
+                    buffers: &buffers,
                 },
                 primitive: encode::PrimitiveState {
                     topology: match words[2] {
@@ -1009,11 +1140,11 @@ impl Gpu {
                 },
                 depth_stencil: (words[5] != record::NO_DEPTH).then_some(
                     encode::DepthStencilState {
-                        format: TextureFormat::depth32float,
+                        format: depth,
                         depth_write: words[4] != 0,
                         depth_compare: compare,
-                        stencil_front: encode::STENCIL_UNUSED,
-                        stencil_back: encode::STENCIL_UNUSED,
+                        stencil_front: stencil_face(stencil),
+                        stencil_back: stencil_face(stencil),
                         stencil_read_mask: u32::MAX,
                         stencil_write_mask: u32::MAX,
                         bias: words[6] as i32,
@@ -1158,7 +1289,11 @@ impl Gpu {
             depth_store: StoreOp::store,
             depth_clear: d.depth_clear,
             depth_read_only: d.depth_load == Load::ReadOnly,
-            stencil_load: LoadOp::load,
+            stencil_load: if d.stencil_kept {
+                LoadOp::load
+            } else {
+                LoadOp::clear
+            },
             stencil_store: StoreOp::store,
             stencil_clear: 0,
             stencil_read_only: false,
@@ -1254,7 +1389,7 @@ impl Gpu {
     pub fn draw_indexed(
         &self,
         pass: Id,
-        idxs: u32,
+        indices: u32,
         instances: u32,
         first_idx: u32,
         first_instance: u32,
@@ -1262,7 +1397,7 @@ impl Gpu {
         call::draw_indexed(
             &mut self.s().stream,
             pass,
-            idxs,
+            indices,
             instances,
             first_idx,
             0,
@@ -1382,6 +1517,11 @@ impl Gpu {
     /// Span `span`'s time in ms from the last read taken in.
     pub fn gpu_ms(&self, span: u32) -> f64 {
         self.s().gpu_ms[span as usize]
+    }
+
+    /// The time the last read's spans ran, ms, those that overlap counted once.
+    pub fn gpu_busy_ms(&self) -> f64 {
+        self.s().gpu_busy_ms
     }
 
     /// Whether the frame just submitted took a read in, so its figures were

@@ -5,6 +5,7 @@
 
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use pxl_render::gpu::api::bytes;
+use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
@@ -192,6 +193,10 @@ struct Zone {
     run: f64,
     clock: Stepped,
     visible: bool,
+    /// Whether the ground under the zone is drawn in its own cells, a leaf's
+    /// (`GROUND`), or finer: where it is drawn coarser, the zone's cells are
+    /// less than the cells they stand on, and it is not drawn.
+    zone_drawn: bool,
 }
 
 #[derive(Default)]
@@ -293,6 +298,7 @@ impl LocationPuck {
                         run: 0.0,
                         clock: Stepped::default(),
                         visible: false,
+                        zone_drawn: false,
                     });
                 }
             }
@@ -314,7 +320,8 @@ impl LocationPuck {
 
     /// Whether the beacon slides and wants frames. The puck is drawn where
     /// an actor would be (domain/scene/actor.rs `tick`): in the frustum and
-    /// spanning a camera cell at its distance; and its beacon slides to its
+    /// spanning a camera cell at its distance; its zone only where the ground
+    /// under it is drawn in its own cells (`zone_drawn`); and its beacon slides to its
     /// target, a frame a step, only where the slide spans one. Its bob and
     /// spin are stepped a seen step at a time where the bob spans one, the
     /// turn woken for the next (`lens::Stepped`); else they hold.
@@ -326,6 +333,7 @@ impl LocationPuck {
         let to = v3::sub(&frame.world_of(p.center), &frame.camera);
         let cell_there = lens::cell_there(v3::len(&to));
         p.visible = frame.sees(p.center, ZONE_RADIUS) && 2.0 * ZONE_RADIUS >= cell_there;
+        p.zone_drawn = p.visible && grid::cell_zoom_at(v3::dot(&to, &to)) >= GROUND.cell();
         let shown = p.shown.get_or_insert(p.target);
         let gap = libm::hypot(p.target[0] - shown[0], p.target[1] - shown[1]);
         let slides = p.visible && gap <= ZONE_RADIUS && gap >= cell_there;
@@ -364,13 +372,15 @@ impl LocationPuck {
         // as the zone reads no time.
         let night = f64::from(u8::from(p.night));
         let handle = f64::from(self.held.handle);
-        region::drawn(
-            u32::MAX,
-            p.center,
-            libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB),
-            false,
-            region::digest(&[p.center[0], p.center[1], p.center[2], night, handle]),
-        );
+        if p.zone_drawn {
+            region::drawn(
+                u32::MAX,
+                p.center,
+                libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB),
+                false,
+                region::digest(&[p.center[0], p.center[1], p.center[2], night, handle]),
+            );
+        }
         let beacon_at = v3::add(&p.center, &[shown[0], shown[1], BEACON_Z_BIAS]);
         region::drawn(
             u32::MAX - 1,
@@ -387,16 +397,18 @@ impl LocationPuck {
             ]),
         );
         let center = DrawList::translation(p.center, eye);
-        let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
-        draw.draw_as(
-            PIPELINE_PUCK_ZONE,
-            self.held.handle,
-            cnt,
-            0,
-            center,
-            0.0,
-            1.0,
-        );
+        if p.zone_drawn {
+            let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
+            draw.draw_as(
+                PIPELINE_PUCK_ZONE,
+                self.held.handle,
+                cnt,
+                0,
+                center,
+                0.0,
+                1.0,
+            );
+        }
         let beacon = [
             center[0] + shown[0] as f32,
             center[1] + shown[1] as f32,

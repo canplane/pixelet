@@ -263,8 +263,8 @@ pub const NODE_WORDS: u32 = 7;
 /// (`NODE_WORDS`), then, for every node from the root to it, what was
 /// handed it (`world::Handed::words`), `LINE_STEP` words a zoom, its own at its
 /// zoom. A node's entry in the observed pyramid is its key's
-/// (`observed::entry_of`), so a line holds none. The sun's beam rays leave
-/// the same, their origin after it (pxl-spec-core `sun::LINE_ORIGIN`).
+/// (`observed::entry_of`), so a line holds none. The light's beam rays leave
+/// the same, their origin after it (pxl-spec-core `light::LINE_ORIGIN`).
 pub const LINE_T: u32 = 0;
 pub const LINE_VISITS: u32 = 1;
 pub const LINE_NODE: u32 = 2;

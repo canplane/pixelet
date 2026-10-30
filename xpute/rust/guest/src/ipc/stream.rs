@@ -139,20 +139,42 @@ impl Stream {
     pub fn record(&mut self, op: u32, args: &[u32], tail: &[u32], bytes: Option<&[u8]>) {
         let n = record_words(args.len() + tail.len(), bytes.map(<[u8]>::len)) - 2;
         let Some(w) = self.reserve(op, n) else { return };
-        w[..args.len()].copy_from_slice(args);
-        w[args.len()..args.len() + tail.len()].copy_from_slice(tail);
-        if let Some(b) = bytes {
-            let k = args.len() + tail.len();
-            w[k] = b.len() as u32;
-            let dst = &mut w[k + 1..];
-            if let Some(last) = dst.last_mut() {
-                *last = 0;
-            }
-            // SAFETY: the words opened, as bytes; at least `b.len()` of them.
-            unsafe {
-                core::ptr::copy_nonoverlapping(b.as_ptr(), dst.as_mut_ptr().cast::<u8>(), b.len())
-            };
+        fill(w, args, tail, bytes);
+    }
+
+    /// A record laid past the last the turn has recorded and never published,
+    /// for a hostcall: its offset in the memory, or none where it does not
+    /// fit. The next record written takes its words.
+    pub fn past(&mut self, op: u32, args: &[u32], bytes: Option<&[u8]>) -> Option<usize> {
+        let n = record_words(args.len(), bytes.map(<[u8]>::len)) - 2;
+        let at = self.head + self.len;
+        if at + 2 + n > self.words {
+            return None;
         }
+        let w = &mut self.words()[at..at + 2 + n];
+        w[0] = op;
+        w[1] = n as u32;
+        fill(&mut w[2..], args, &[], bytes);
+        Some(self.at + at * WORD)
+    }
+}
+
+/// A record's words past its op and count: `args`, `tail`, and `bytes` as
+/// their count then words.
+fn fill(w: &mut [u32], args: &[u32], tail: &[u32], bytes: Option<&[u8]>) {
+    w[..args.len()].copy_from_slice(args);
+    w[args.len()..args.len() + tail.len()].copy_from_slice(tail);
+    if let Some(b) = bytes {
+        let k = args.len() + tail.len();
+        w[k] = b.len() as u32;
+        let dst = &mut w[k + 1..];
+        if let Some(last) = dst.last_mut() {
+            *last = 0;
+        }
+        // SAFETY: the words opened, as bytes; at least `b.len()` of them.
+        unsafe {
+            core::ptr::copy_nonoverlapping(b.as_ptr(), dst.as_mut_ptr().cast::<u8>(), b.len())
+        };
     }
 }
 

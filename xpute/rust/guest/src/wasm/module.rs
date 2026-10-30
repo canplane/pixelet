@@ -21,6 +21,8 @@ extern "C" {
 extern "C" {
     #[link_name = "now"]
     fn host_now() -> f64;
+    #[link_name = "hostcall"]
+    fn host_hostcall(at: u32) -> i32;
 }
 
 /// Its size, with the stack first.
@@ -40,4 +42,10 @@ pub fn given() -> u64 {
 pub fn now() -> f64 {
     // SAFETY: an import with no arguments.
     unsafe { host_now() }
+}
+
+pub fn hostcall(at: u32) -> i32 {
+    // SAFETY: an import of one number; what it names, the host reads and
+    // writes before it returns.
+    unsafe { host_hostcall(at) }
 }

@@ -176,6 +176,7 @@ impl Case {
             s,
             s.color_view,
             view_id,
+            None,
         );
         release(view_id);
     }

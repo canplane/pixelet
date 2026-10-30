@@ -1,6 +1,6 @@
 // pxl-render/gpu/image_map.rs
 
-//! A picture the sky draws from, the Moon's face or the Earth's, in a texture
+//! A picture the sky draws from, the moon's face or the Earth's, in a texture
 //! with its mip chain: without it a 512-texel face read at thirty pixels
 //! sparkles as the camera moves. Until it arrives the shaders draw its mean.
 

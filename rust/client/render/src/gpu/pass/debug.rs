@@ -67,7 +67,9 @@ impl DebugPass {
         );
     }
 
-    /// `depth` is the world's, which nothing reads after this.
+    /// `depth` is the world's, which nothing reads after this in the frame;
+    /// whether it was drawn into, so the next frame carries it whole
+    /// (gpu/finish.rs).
     pub fn draw(
         &self,
         ctx: &mut RenderContext,
@@ -75,7 +77,7 @@ impl DebugPass {
         depth: u32,
         draws: &Draws,
         uploads: &Uploads,
-    ) {
+    ) -> bool {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::debug);
         let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
@@ -84,7 +86,7 @@ impl DebugPass {
             .slots()
             .filter(|_| draws.of(PIPELINE_DEBUG).len() > 0);
         if held.is_none() && !grid {
-            return;
+            return false;
         }
         let slots = held.as_ref();
         // Each set held: its uniform's slot, its line and its face vertices.
@@ -150,5 +152,6 @@ impl DebugPass {
             g.draw(pass, 3, 1, 0, 0);
         }
         g.end(pass);
+        true
     }
 }

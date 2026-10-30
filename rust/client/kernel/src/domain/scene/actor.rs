@@ -5,7 +5,10 @@
 //! palette, in a block of its own; where it stands is its holder's, a
 //! figure or a case, which hands its stance in (`Stance`). Each tick
 //! advances its clips, cross-fades as three's mixer did, and writes the
-//! palette into its block.
+//! palette into its block. It is drawn by decor's tiers, by how much of a
+//! camera cell it spans: posed as it plays down to the model's edge, its pose
+//! held below it down to the impostor's, and nothing below that, as decor
+//! smaller than that is none (`decor::drawn`).
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
@@ -13,6 +16,7 @@ use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 
+use crate::domain::scene::decor::drawn::{decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::registry::{blend, Models};
 use crate::domain::scene::region;
@@ -58,6 +62,8 @@ pub struct Actor {
     /// is drawn in, not as far as its clips may move it.
     pose_reach: f32,
     seen: bool,
+    /// Whether it spans the impostor's edge at the last tick: drawn at all.
+    drawn: bool,
     /// How long its clip has run while it moves it where it is seen, in
     /// seconds: by the wall clock between its ticks, read at `last`, a stall
     /// taken as one step.
@@ -106,6 +112,7 @@ impl Actor {
             poses: 0,
             pose_reach: 0.0,
             seen: false,
+            drawn: false,
             run: 0.0,
             last: 0.0,
             clock: Stepped::default(),
@@ -165,11 +172,14 @@ impl Actor {
             v3::sub(&stance.at, &frame.anchor),
             f64::from(m.reach(self.cur.map(|p| p.clip)) * stance.scale),
         );
-        // What spans a camera cell at the actor's distance is observed.
+        // What spans the model's edge at the actor's distance is observed, as a
+        // decor's model is; what spans the impostor's is drawn, posed or not,
+        // as a decor's impostor is.
         let dist = v3::len(&v3::sub(&about, &frame.camera));
         let cell_there = cell_there(dist);
-        let seen = frame.frustum.sees(about, r) && 2.0 * r >= cell_there;
+        let seen = frame.frustum.sees(about, r) && 2.0 * r >= decor_model_angle() * dist;
         self.seen = seen;
+        self.drawn = 2.0 * r >= decor_impostor_angle() * dist;
         // A clip of some length plays, or one fades into the next.
         let playing = self.cur.filter(|p| length(p).is_some());
         let moving = playing.is_some() || self.previous.is_some();
@@ -266,9 +276,10 @@ impl Actor {
 
     /// Into the frame's list, standing at `stance`, and where it stands with
     /// it (`DrawList::stand`): every actor drawn is a receiver of the sun's
-    /// map, which reads the ones the eye sees.
+    /// map, which reads the ones the eye sees. None where it spans less than
+    /// the impostor's edge (`tick`).
     pub fn draw(&self, draw: &mut DrawList, models: &Models, stance: &Stance, eye: V3) {
-        let Some(m) = models.get(self.model) else {
+        let Some(m) = models.get(self.model).filter(|_| self.drawn) else {
             return;
         };
         if m.handle() == 0 {

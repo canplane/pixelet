@@ -5,31 +5,36 @@
 //! `eye::JITTER`), a sequence that covers the pixel in `JITTERS` frames, and
 //! each is blended into what the frames before left (screen_resolve.wgsl),
 //! two of the world surface's `history` in turn, the one written this frame
-//! what the finish encodes (gpu/finish.rs); a frame that draws a region
-//! alone writes it back into the last, which the finish then encodes.
-//! Where only the jitter moved,
-//! nothing the frames before left is stale, and each frame takes its even
-//! share of the sequence; once it has run through, the jitter holds, and
-//! the frame stands. Else what the frames before left is moved to where
-//! this frame's eye sees it and held within what this frame's pixels about
-//! it hold.
+//! what the finish encodes (gpu/finish.rs); a frame drawn through the gate
+//! writes its claimed tiles back into the last, which the finish then
+//! encodes. Each tile of the screen keeps its age, the frames since it last
+//! changed: where only the jitter moved there since, nothing the
+//! frames before left is stale, and each frame takes its even share of the
+//! sequence; where it changed this frame, what the frames before left is
+//! moved to where this frame's eye sees it and held within what this
+//! frame's pixels about it hold. A tile is claimed, drawn again, until it
+//! has run through the sequence (screen_tiles.wgsl); once every one has,
+//! the jitter holds, and the frame stands. The tiles' words are the GPU's,
+//! as the light's are (gpu/tiles.rs): each the number of the frame it last
+//! changed in, which the frame's marks set; the host hands the marks, and
+//! knows whether any tile gathers from what it handed. The resolve and the
+//! write-back draw the claimed tiles alone, a quad each (screen_tiles.wgsl).
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::world;
 
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::record::PIPELINE_SCREEN_RESOLVE;
+use crate::frame::shader::record::{PIPELINE_SCREEN_RESOLVE, PIPELINE_SCREEN_WRITE_BACK};
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, place, release, sampler_entry, view_entry, Gpu,
-    Load, RenderContext,
+    buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, view_entry, Gpu, Load,
+    RenderContext,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::surface::{Region, Surface, WORLD_COLOR};
-
-/// The frames the jitter's sequence covers a pixel in.
-const JITTERS: u32 = 8;
+use crate::gpu::surface::{Surface, WORLD_COLOR};
+use crate::gpu::tiles::{Tiles, SIDE};
+use pxl_spec_core::screen::JITTERS;
 
 /// The least share a frame takes where what the frames before left is
 /// held to it: how long a trail what moved leaves, and how still an edge
@@ -39,6 +44,11 @@ const BLEND_LEAST: f32 = 0.1;
 /// Its uniform's floats (screen_resolve.wgsl `Resolve`).
 const UNIFORM_FLOATS: usize = 20;
 
+const _: () = assert!(
+    JITTERS == 8,
+    "screen_tiles.wgsl's `TILE_JITTERS` is pxl-spec-core `screen`'s"
+);
+
 pub struct Resolve {
     built: Built,
     sampler: u32,
@@ -46,7 +56,11 @@ pub struct Resolve {
     /// A group a history written, reading the other, and what each was
     /// made over: made again exactly when one is another.
     groups: [u32; 2],
-    bound: [[u32; 4]; 2],
+    bound: [[u32; 5]; 2],
+    /// The write-back, and its group a history read, as `groups`.
+    back: Built,
+    back_groups: [u32; 2],
+    back_bound: [[u32; 2]; 2],
     /// The history this frame writes, the other the last frame's.
     turn: usize,
     /// The surface's histories it gathered into, and the frames gathered
@@ -57,17 +71,20 @@ pub struct Resolve {
     /// place (`lay_out`), and the last drawn frame's.
     view: (Mat4, [f64; 3]),
     last: (Mat4, [f64; 3]),
-    /// Where the jitter is in its sequence, the frames since anything but
-    /// it moved, and this frame's, in drawn pixels.
+    /// Where the jitter is in its sequence, and this frame's, in drawn
+    /// pixels.
     phase: u32,
-    quiet: u32,
     jitter: [f32; 2],
+    /// The screen's tiles, claimed until each has gathered the jitter's
+    /// sequence since it changed (gpu/tiles.rs): what the gate, the
+    /// pixels' cast, the resolve, the write-back and the finish draw by.
+    pub tiles: Tiles,
 }
 
 impl Resolve {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Resolve {
         Resolve {
-            built: pipelines.build(g, PIPELINE_SCREEN_RESOLVE, WORLD_COLOR),
+            built: pipelines.build_world(g, PIPELINE_SCREEN_RESOLVE),
             sampler: g.sampler(
                 FilterMode::linear,
                 FilterMode::linear,
@@ -81,15 +98,18 @@ impl Resolve {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             groups: [0; 2],
-            bound: [[0; 4]; 2],
+            bound: [[0; 5]; 2],
+            back: pipelines.build(g, PIPELINE_SCREEN_WRITE_BACK, WORLD_COLOR),
+            back_groups: [0; 2],
+            back_bound: [[0; 2]; 2],
             turn: 0,
             histories: [0; 2],
             gathered: 0,
             view: (mat4::new(), [0.0; 3]),
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
-            quiet: 0,
             jitter: [0.0; 2],
+            tiles: Tiles::new(g, pipelines, SIDE, JITTERS),
         }
     }
 
@@ -112,33 +132,24 @@ impl Resolve {
     }
 
     /// The frame's world color, `s`'s, blended into what the frames before
-    /// left, into the history its turn writes: `quiet` where nothing but
-    /// the jitter moved since the last drawn frame. Where the frame draws a
-    /// `region` again alone, only it, written back into the last history,
-    /// which stays the one read. A pass of its own, by the frame words in
-    /// `frame`, its time counted in the span `resolve`; the history the finish
-    /// encodes.
-    pub fn draw(
-        &mut self,
-        ctx: &mut RenderContext,
-        frame: u32,
-        s: &Surface,
-        quiet: bool,
-        region: Option<Region>,
-    ) -> u32 {
+    /// left, into the history its turn writes, each tile by its age
+    /// (`age`). Where the frame is drawn through the gate (`gated`), only the
+    /// claimed tiles, written back into the last history, which stays the
+    /// one read. Passes of their own, by the frame words in `frame`, their
+    /// time counted in the span `resolve`; the history the finish encodes.
+    pub fn draw(&mut self, ctx: &mut RenderContext, frame: u32, s: &Surface, gated: bool) -> u32 {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
             (self.histories, self.gathered, self.turn) = (s.history_view, 0, 0);
         }
         let (k, was) = (self.turn, 1 - self.turn);
-        // A frame where only the jitter moved takes its even share of the
-        // sequence's, and what the frames before left stands whole; else
-        // its share is held no less than `BLEND_LEAST`.
-        let blend = match (self.gathered, quiet) {
-            (0, _) => 1.0,
-            (_, true) => 1.0 / (self.quiet.min(JITTERS - 2) + 2) as f32,
-            (n, false) => (1.0 / (n + 1) as f32).max(BLEND_LEAST),
+        // A square that changed this frame takes its share held no less than
+        // `BLEND_LEAST`; one where only the jitter moved since, its even share
+        // of the sequence's, off its age (screen_resolve.wgsl).
+        let blend = match self.gathered {
+            0 => 1.0,
+            n => (1.0 / (n + 1) as f32).max(BLEND_LEAST),
         };
         let mut u = [0.0f32; UNIFORM_FLOATS];
         let m = self.reproject();
@@ -146,9 +157,14 @@ impl Resolve {
             *to = from as f32;
         }
         u[16] = blend;
-        u[17] = if quiet { 0.0 } else { 1.0 };
         g.write_buf(self.uniform, 0, bytes(&u));
-        let bound = [frame, s.color_view, s.depth_view, s.history_view[was]];
+        let bound = [
+            frame,
+            s.color_view,
+            s.depth_only_view,
+            s.history_view[was],
+            self.tiles.changed_at(),
+        ];
         if bound != self.bound[k] {
             release(self.groups[k]);
             self.groups[k] = g.bind_group(
@@ -156,40 +172,58 @@ impl Resolve {
                 &[
                     buf_entry(0, frame),
                     view_entry(1, s.color_view),
-                    view_entry(2, s.depth_view),
+                    view_entry(2, s.depth_only_view),
                     view_entry(3, s.history_view[was]),
                     sampler_entry(4, self.sampler),
                     buf_entry(5, self.uniform),
+                    buf_entry(30, self.tiles.bound().0),
+                    buf_entry(31, self.tiles.bound().1),
                 ],
             );
             self.bound[k] = bound;
         }
-        let load = if region.is_some() {
-            Load::Load
-        } else {
-            Load::Clear
-        };
+        let [across, down] = self.tiles.squares();
+        let tiles = across * down;
+        let load = if gated { Load::Load } else { Load::Clear };
         let pass = g.pass(
             encoder,
             &pass_desc(s.history_view[k], load, 0, Load::Clear, 0.0, stamp.pass()),
         );
-        if let Some(r) = region {
-            g.set_scissor(pass, r.rect());
-        }
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.groups[k], &[]);
-        g.draw(pass, 3, 1, 0, 0);
+        g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
-        let Some(r) = region else {
+        if !gated {
             return s.history_view[k];
-        };
-        let at = [r.at[0], r.at[1], 0];
-        g.copy_texture(
+        }
+        let back_bound = [s.history_view[k], self.tiles.changed_at()];
+        if back_bound != self.back_bound[k] {
+            release(self.back_groups[k]);
+            self.back_groups[k] = g.bind_group(
+                self.back.layouts[0],
+                &[
+                    view_entry(1, s.history_view[k]),
+                    buf_entry(30, self.tiles.bound().0),
+                    buf_entry(31, self.tiles.bound().1),
+                ],
+            );
+            self.back_bound[k] = back_bound;
+        }
+        let pass = g.pass(
             encoder,
-            &place(s.history[k], at),
-            &place(s.history[was], at),
-            [r.size[0], r.size[1], 1],
+            &pass_desc(
+                s.history_view[was],
+                Load::Load,
+                0,
+                Load::Clear,
+                0.0,
+                stamp.pass(),
+            ),
         );
+        g.set_pipeline(pass, self.back.pipeline);
+        g.set_bind_group(pass, 0, self.back_groups[k], &[]);
+        g.draw(pass, 6, tiles, 0, 0);
+        g.end(pass);
         s.history_view[was]
     }
 
@@ -211,12 +245,11 @@ impl Resolve {
         m
     }
 
-    /// The frame was drawn: its history is the next's to read, unless it
-    /// drew a region alone, written back into the last; its view the last,
-    /// and the jitter moves on unless it holds; `quiet` and `partial` as
-    /// `draw` was handed them.
-    pub fn on_drawn(&mut self, quiet: bool, partial: bool) {
-        if !partial {
+    /// The frame was drawn: its history is the next's to read, unless it was
+    /// drawn through the gate (`gated`), written back into the last; its
+    /// view the last, and the jitter moves on unless it holds.
+    pub fn on_drawn(&mut self, gated: bool) {
+        if !gated {
             self.turn = 1 - self.turn;
         }
         self.gathered = self.gathered.saturating_add(1);
@@ -224,13 +257,12 @@ impl Resolve {
         if self.gathering() {
             self.phase = (self.phase + 1) % JITTERS;
         }
-        self.quiet = if quiet { self.quiet + 1 } else { 0 };
     }
 
-    /// Whether the jitter has places of its sequence left to cover since
-    /// anything else last moved.
+    /// Whether the jitter has places of its sequence left to cover in a
+    /// tile since it last changed, as far as the host knows (`Tiles::claiming`).
     pub fn gathering(&self) -> bool {
-        self.quiet < JITTERS - 1
+        self.tiles.claiming()
     }
 }
 

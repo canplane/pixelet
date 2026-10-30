@@ -78,6 +78,17 @@ fn write_ray(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
 /// `WORKGROUPS`).
 const CAST_SIDE: u32 = 8;
 
+/// The tiles as a pass draws them (pxl-spec-core `screen::TILES_WORDS`): the
+/// tiles across and down, the frames a tile stays claimed once changed and
+/// this frame's number, then the world's drawn pixels and a quad's growth, which the cast
+/// reads none of.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Tiles {
+    count: UVec4,
+    size: spirv_std::glam::Vec4,
+}
+
 /// Each pixel's ray: the cell the raster kept at it (pxl-spec-core
 /// `raster`; pxl-render gpu/ray/raster.rs), the nearest a sample stopped at
 /// that its ray enters across the axis that sample entered by, tested again
@@ -102,16 +113,20 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
     #[spirv(descriptor_set = 0, binding = 13)] visibility: &Visibility,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] marks: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 30)] changed_at: &[u32],
+    #[spirv(uniform, descriptor_set = 0, binding = 31)] tiles: &Tiles,
 ) {
     let size: UVec3 = rays.query_size();
-    // The frame's region, dispatched from its first pixel (pxl-spec-core
-    // `eye::JITTER`).
-    let id = UVec3::new(
-        id.x + eye.jitter.z as u32,
-        id.y + eye.jitter.w as u32,
-        id.z,
-    );
     if id.x >= size.x || id.y >= size.y {
+        return;
+    }
+    // A tile not claimed is passed by, as the light's cast passes one by
+    // (light.rs `Map::needs`): a frame not drawn whole casts the claimed
+    // tiles' pixels alone (pxl-spec-core `screen`).
+    let side = pxl_spec_core::screen::TILE;
+    let tile = (id.y / side) * tiles.count.x + id.x / side;
+    let age = pxl_spec_core::screen::age(tiles.count.w, changed_at[tile as usize]);
+    if !pxl_spec_core::screen::claimed(age, tiles.count.z) {
         return;
     }
     let g = grid(eye);
@@ -192,7 +207,7 @@ pub fn cast_cs(
 
 /// `v` added to lane `lane` of a pixel's or a slot's (pxl-spec-core
 /// `tally::TOOK` on) in its walk again's args `args`, where `on`
-/// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the sun's slots alike.
+/// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the light's slots alike.
 pub(crate) fn add_cnt(args: &mut [u32], on: bool, lane: u32, v: u32) {
     if on {
         add(args, ray::MISS_ARGS_TALLY + lane - tally::TOOK, v);
@@ -200,7 +215,7 @@ pub(crate) fn add_cnt(args: &mut [u32], on: bool, lane: u32, v: u32) {
 }
 
 /// One more missed ray listed for its walk again, the eye's pixels and the
-/// sun's slots alike (pxl-shader sun.rs `sun_cs`): its place off the count
+/// light's slots alike (pxl-shader light.rs `light_cs`): its place off the count
 /// in its dispatch's words `args` (pxl-spec-core `ray::MISS_ARGS_CNT`),
 /// the rows the list fills raised to hold it (`ray::MISS_ARGS_LIST`); one
 /// past the list's `room` has the walk over `whole` workgroups dispatched

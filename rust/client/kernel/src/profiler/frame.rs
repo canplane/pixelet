@@ -32,12 +32,15 @@ const _: () = assert!(
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GpuSample {
     /// This frame's own read, written back as it lands a frame or two later
-    /// (record.rs `profiler_record_gpu`): where `read` is 1, its spans and
-    /// `px` the world's pixels the frame drew, what the spans were measured
-    /// over; where it is 0, nothing measured this frame and both are 0. The
-    /// frame's GPU time is its spans' sum (pxl-render renderer.rs `gpu_ms`).
+    /// (record.rs `profiler_record_gpu`): where `read` is 1, its spans, the
+    /// time they ran, those that overlap counted once (`busy_ms`), the frame's
+    /// GPU time where its passes overlap, as the spans' sum is not
+    /// (pxl-render renderer.rs `gpu_ms`), and `px` the world's pixels the
+    /// frame drew, what the spans were measured over; where it is 0, nothing
+    /// measured this frame and all are 0.
     pub read: f64,
     pub spans: [f64; GPU_SPANS],
+    pub busy_ms: f64,
     pub px: f64,
     /// The share of the display's pixels, each way, the world was drawn at.
     pub scale: f64,
@@ -222,7 +225,7 @@ words!(FrameSample, FRAME::WORDS,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     profiler_ms => FRAME::profiler_ms, effects => FRAME::effects,
     kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
-    gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
+    gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.busy_ms => FRAME::gpu_busy_ms, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
     gpu.census => FRAME::census, gpu.frame => FRAME::gpu_frame,
     device.uploads => FRAME::uploads, device.uploads_bytes => FRAME::uploads_bytes,
     device.depth_bytes => FRAME::depth_bytes, device.pack_bytes => FRAME::pack_bytes, device.objects => FRAME::gpu_objects,

@@ -65,9 +65,12 @@ export async function acquire(
     powerPreference: "high-performance",
   });
   if (!adapter) return false;
-  const timestamps = adapter.features.has("timestamp-query");
+  // What the kernel asks for where the adapter has it: the timestamps its
+  // spans are timed by, and a stencil beside the world's depth (pxl-render
+  // gpu/api.rs `Device`).
+  const wanted: GPUFeatureName[] = ["timestamp-query", "depth32float-stencil8"];
   const d = await adapter.requestDevice({
-    requiredFeatures: timestamps ? ["timestamp-query"] : [],
+    requiredFeatures: wanted.filter((f) => adapter.features.has(f)),
   });
   // A compatibility-mode WebGPU (GLES 3.1 hardware) may offer no storage
   // buffers in the vertex stage, which the terrain needs; it shows here only.
