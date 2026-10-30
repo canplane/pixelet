@@ -2,14 +2,16 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
-import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
+import { type BranchCursor, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   ActiveTool,
   GroundStatus,
   read_snapshot,
+  read_world_snapshot,
   SensorStatus,
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
+import { HOST } from "@/host/mount.ts";
 
 const INIT: Snapshot = {
   pivot: {
@@ -49,6 +51,13 @@ const listeners = new Listeners();
 export function set_snapshot(bytes: U8Array): void {
   snapshot = read_snapshot(new TreeReader(bytes).read_branch());
   listeners.notify();
+}
+
+/** The kernel's WORLD_SNAPSHOT: too large for a ring frame, so it names where
+ * the snapshot lies in the guest's memory, valid until the next, a turn away. */
+export function snapshot_posted(f: BranchCursor): void {
+  const { at, len } = read_world_snapshot(f);
+  set_snapshot(new Uint8Array(HOST.guest.mem, at, len));
 }
 
 export const watch_snapshot = listeners.watch;

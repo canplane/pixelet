@@ -16,8 +16,10 @@ import {
   type BaseLayer,
   VERSION_BYTES,
 } from "./published.spec.ts";
+import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
 import { Source } from "@/abi/state.ts";
 import { bracket } from "@/bracket.tsx";
+import { HOST } from "@/host/mount.ts";
 
 /** What of a declaration this side reads: the top zoom and each kind's
  * format, for the kernel; each kind's version, and a shard's own. */
@@ -145,7 +147,20 @@ export type SendSource = (
   shards: string[],
 ) => boolean;
 
-export async function declare_source(send: SendSource): Promise<void> {
+function send_source(
+  top_zoom: number,
+  formats: number[],
+  shards: string[],
+): boolean {
+  const pkt = encode_world_source(HOST.doorbell, top_zoom, formats, shards);
+  if (!HOST.doorbell.fits(pkt)) return false;
+  HOST.send(Command.WORLD_SOURCE, pkt);
+  return true;
+}
+
+export async function declare_source(
+  send: SendSource = send_source,
+): Promise<void> {
   let source = await asked();
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {

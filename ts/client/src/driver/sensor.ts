@@ -1,9 +1,11 @@
 // @pxl/client/driver/sensor.ts
 
 /** The device's sensors as the kernel's commands: what each platform's driver
- * heard, in its words (bracket.tsx `SensorHeard`), sent as the kernel numbers it. */
+ * heard, in its words (bracket.tsx `SensorHeard`), sent as the kernel numbers
+ * it; and the kernel's asks that one start or stop, passed to the place's. */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   Command,
   encode_sensor_failed,
@@ -12,9 +14,11 @@ import {
   encode_sensor_pos,
   GeolocationErrorCode,
   PermissionAnswer,
+  read_sensor_start,
+  read_sensor_stop,
   Sensor,
 } from "@/abi/cmd.spec.ts";
-import type { SensorHeard } from "@/bracket.tsx";
+import { bracket, type SensorHeard } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
 
 /** A device reading the device could not give — NaN, an infinity — is sent as none. */
@@ -110,3 +114,17 @@ export const SENSOR_HEARD: SensorHeard = {
   permission: (sensor, answer) =>
     kernel_permission(SENSOR[sensor], ANSWER[answer]),
 };
+
+/** The kernel's SENSOR_START. */
+export function sensor_start(f: BranchCursor): void {
+  if (read_sensor_start(f).sensor === Sensor.Geolocation) {
+    bracket.sensor.geo.start();
+  } else bracket.sensor.orient.start();
+}
+
+/** The kernel's SENSOR_STOP. */
+export function sensor_stop(f: BranchCursor): void {
+  if (read_sensor_stop(f).sensor === Sensor.Geolocation) {
+    bracket.sensor.geo.stop();
+  } else bracket.sensor.orient.stop();
+}

@@ -19,8 +19,10 @@ import {
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
+import { Command, encode_world_kept_emptied } from "@/abi/cmd.spec.ts";
 import { kept } from "@/abi/host.spec.ts";
 import { bracket } from "@/bracket.tsx";
+import { HOST } from "@/host/mount.ts";
 
 /** Storage as the bracket gives it: a refused write keeps nothing, and does not throw. */
 export interface Storage {
@@ -116,11 +118,22 @@ export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
  * twice. */
 const emptying = new Set<u32>();
 
+/** The kernel told a slot is empty (WORLD_KEPT_EMPTIED), after the completion
+ * ring is read: the doorbell refuses a write while it reads. */
+function kept_emptied(slot: u32): void {
+  queueMicrotask(() =>
+    HOST.send(
+      Command.WORLD_KEPT_EMPTIED,
+      encode_world_kept_emptied(HOST.doorbell, slot),
+    ),
+  );
+}
+
 /** The snapshot's `kept_refused`: each slot set aside once, and the kernel
  * told it is empty (`emptied`). */
 export function follow_refused(
   refused: readonly u32[],
-  emptied: (slot: u32) => void,
+  emptied: (slot: u32) => void = kept_emptied,
   s: Storage = STORAGE,
 ): void {
   for (const slot of emptying) {

@@ -5,27 +5,19 @@
  * the guest the place opens; xpute's host mounted on it with pixelet's drivers
  * (the roots, the program's calls, the stop report, each turn's submission) and
  * the frame pacing; the place told where to report what its sensors, its GPU,
- * its network and its visibility hear; then the kernel, by `WORLD_BOOT`. The
- * shell is no part of it: it reads where the boot stands through the port
+ * its network and its visibility hear; then the kernel, by `WORLD_BOOT`. It
+ * only connects: what each piece does is its driver's or the port's. The shell
+ * is no part of it: it reads where the boot stands through the port
  * (port/shell.ts), and what the kernel shows it once it has started.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
-import { strerror } from "@xpute/kit/status/errno.spec.ts";
-import type { SysHost } from "@xpute/host/ipc/sys.ts";
+import { Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
+import { InvariantError } from "@xpute/kit/status/error.ts";
 import { FramePacing } from "@xpute/host/sched/frame_pacing.ts";
-import {
-  Command,
-  encode_world_boot,
-  encode_world_kept_emptied,
-  encode_world_source,
-  read_sensor_start,
-  read_sensor_stop,
-  read_world_snapshot,
-  Sensor,
-} from "@/abi/cmd.spec.ts";
+import { Command, encode_world_boot } from "@/abi/cmd.spec.ts";
 import { declare_source } from "@/driver/namespace/source.ts";
 import { namespace } from "@/driver/namespace/namespace.ts";
 import { follow_refused, migrate } from "@/driver/namespace/storage.ts";
@@ -39,18 +31,18 @@ import {
 } from "./mem.spec.ts";
 import { key } from "@/abi/directory.spec.ts";
 import { stream } from "./gpu.spec.ts";
-import { SENSOR_HEARD } from "@/driver/sensor.ts";
+import { SENSOR_HEARD, sensor_start, sensor_stop } from "@/driver/sensor.ts";
 import { submit_frame } from "@/driver/frame.ts";
+import { abort } from "@/driver/stop.ts";
 import { text_call } from "@/driver/text.ts";
-import { BUILD_NUMBER } from "@/deploy.ts";
 import { bracket, type Config } from "@/bracket.tsx";
 import { GPU_STATE, set_gpu } from "@/driver/gpu.ts";
 import { world_visible } from "@/driver/visibility.ts";
 import { Boot } from "@/abi/state.ts";
 import { set_online } from "@/driver/namespace/online.ts";
-import { kernel_snapshot, set_snapshot } from "@/port/snapshot.ts";
+import { kernel_snapshot, snapshot_posted } from "@/port/snapshot.ts";
 
-let code: string | null = null;
+let called = false;
 let state = Boot.Starting;
 const listeners = new Listeners();
 
@@ -66,72 +58,32 @@ export function boot_state(): Boot {
 
 export const watch_boot = listeners.watch;
 
-/** The kernel's last report, short as a stop code: its errno's name and the
- * file and line, a published build's file a number its paths decode by. None
- * where it stopped without one. */
-export function stop_code(): string | null {
-  return code;
-}
-
-const abort: SysHost["abort"] = ({ errnum, file, line, column, a, b }) => {
-  console.error(
-    `[kernel] stopped: ${strerror(errnum)} at ${file.replace(
-      /^\.+/,
-      "",
-    )}:${line}:${column} (${a}, ${b})`,
-  );
-  const where = `${file.split("/").pop()}:${line}`;
-  code = `${strerror(errnum).split(":")[0]} · ${
-    file.startsWith("#") ? `${where} · ${BUILD_NUMBER}` : where
-  }`;
+/** Who hears each event the kernel posts: the snapshot the shell reads, and
+ * the kept slots it names refused; the sensors it asks for. */
+const EVENTS: Partial<Record<Command, (f: BranchCursor) => void>> = {
+  [Command.WORLD_SNAPSHOT]: (f) => {
+    snapshot_posted(f);
+    follow_refused(kernel_snapshot().kept_refused);
+  },
+  [Command.SENSOR_START]: sensor_start,
+  [Command.SENSOR_STOP]: sensor_stop,
 };
 
 function on_event(_tag: u32, cmd: Command, f: BranchCursor | null): void {
-  switch (cmd) {
-    case Command.WORLD_SNAPSHOT: {
-      // Too large for a ring frame; valid until the kernel writes the next, a turn away.
-      const { at, len } = read_world_snapshot(f!);
-      set_snapshot(new Uint8Array(HOST.guest.mem, at, len));
-      // Sent after the completion ring is read: the doorbell refuses a write while it reads.
-      follow_refused(kernel_snapshot().kept_refused, (slot) =>
-        queueMicrotask(() =>
-          HOST.send(
-            Command.WORLD_KEPT_EMPTIED,
-            encode_world_kept_emptied(HOST.doorbell, slot),
-          ),
-        ),
-      );
-      return;
-    }
-    case Command.SENSOR_START:
-      if (read_sensor_start(f!).sensor === Sensor.Geolocation) {
-        bracket.sensor.geo.start();
-      } else bracket.sensor.orient.start();
-      return;
-    case Command.SENSOR_STOP:
-      if (read_sensor_stop(f!).sensor === Sensor.Geolocation) {
-        bracket.sensor.geo.stop();
-      } else bracket.sensor.orient.stop();
-      return;
-  }
-  console.warn(`[kernel] event 0x${cmd.toString(16)} with no one to hear it`);
-}
-
-/** The source's declaration to the kernel, refused where it is more than a command carries. */
-function send_source(
-  top_zoom: number,
-  formats: number[],
-  shards: string[],
-): boolean {
-  const pkt = encode_world_source(HOST.doorbell, top_zoom, formats, shards);
-  if (!HOST.doorbell.fits(pkt)) return false;
-  HOST.send(Command.WORLD_SOURCE, pkt);
-  return true;
+  const heard = EVENTS[cmd];
+  // Each of these carries a packet.
+  if (heard) heard(f!);
+  else
+    console.warn(`[kernel] event 0x${cmd.toString(16)} with no one to hear it`);
 }
 
 /** Called once by the app, after it has set the place, so boot order is
- * explicit, not import order; where it stands is `boot_state`. */
+ * explicit, not import order; where it stands is `boot_state`. A second call
+ * is the app's error, refused: a page holds one client, as it holds one host
+ * and one set of the place's callbacks. */
 export function boot(): void {
+  if (called) throw new InvariantError(Errno.EALREADY);
+  called = true;
   open().then(
     () => {
       console.info("[boot] the kernel started");
@@ -199,5 +151,5 @@ async function open(): Promise<void> {
   );
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
-  void declare_source(send_source);
+  void declare_source();
 }
