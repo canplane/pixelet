@@ -9,6 +9,7 @@ pub mod character;
 pub mod decor;
 pub mod environment;
 pub mod frame;
+pub mod gizmo;
 pub mod indicator;
 pub mod lane;
 pub mod marker;
@@ -25,7 +26,7 @@ use crate::domain::scene::character::companion::{companion_animate, companion_dr
 use crate::domain::scene::character::preview::{preview_animate, preview_draw};
 use crate::domain::scene::environment::EnvironmentDraw;
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::indicator::debug_line::DebugLines;
+use crate::domain::scene::gizmo::debug_line::DebugLines;
 use crate::domain::scene::indicator::ghost::GhostDraw;
 use crate::domain::scene::indicator::location_puck::LocationPuck;
 
@@ -42,7 +43,7 @@ pub struct Scene {
     pub puck: LocationPuck,
     pub environment: EnvironmentDraw,
     pub debug: DebugLines,
-    /// The coverage gizmo's (domain/scene/indicator/coverage_gizmo.rs).
+    /// The coverage gizmo's (domain/scene/gizmo/coverage_gizmo.rs).
     pub coverage: DebugLines,
 }
 

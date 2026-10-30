@@ -192,14 +192,14 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs). */
+  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs). */
   world_gizmo: {
     key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them. */
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them. */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",
@@ -399,14 +399,14 @@ export const SETTING_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/indicator/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/indicator/coverage_gizmo.rs). */
+  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs). */
   world_gizmo: {
     key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/indicator/camera_gizmo.rs), in the looks debug_look.json gives them. */
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them. */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",

@@ -258,10 +258,10 @@ const DATA_SPECS: [DataSpec; 28] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/client/kernel/domain/scene/indicator/gizmo.json",
+        json: "spec/client/kernel/domain/scene/gizmo/gizmo.json",
         uses: &[],
         ts: Some("ts/client/src/abi/gizmo.spec.ts"),
-        rs: Some("rust/client/kernel/src/domain/scene/indicator/gizmo.spec.rs"),
+        rs: Some("rust/client/kernel/src/domain/scene/gizmo/gizmo.spec.rs"),
         rs_also: &[],
         module: Some("gizmo_spec"),
         enums: Enums::None,

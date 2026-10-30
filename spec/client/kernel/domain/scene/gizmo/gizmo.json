@@ -2,8 +2,8 @@
   "$doc": [
     "What each line of the world gizmo is drawn in, so the lines and the",
     "shell's legend of them read one look: the frame's marks about the pivot",
-    "(domain/scene/indicator/frame_gizmo.rs) and the coverage's over the ground",
-    "(domain/scene/indicator/coverage_gizmo.rs). Each #rrggbb in sRGB, with its",
+    "(domain/scene/gizmo/frame_gizmo.rs) and the coverage's over the ground",
+    "(domain/scene/gizmo/coverage_gizmo.rs). Each #rrggbb in sRGB, with its",
     "opacity, and dashed where a dashed line draws it: a ring of the frame, a",
     "stretch of the coverage."
   ],

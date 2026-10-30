@@ -1,4 +1,4 @@
-// pxl-kernel/domain/scene/indicator/frame_gizmo.rs
+// pxl-kernel/domain/scene/gizmo/frame_gizmo.rs
 
 //! The frame gizmo (the `world_gizmo` setting), as debug lines: the pivot and
 //! its cell, and about it a level ring, an upright ring facing the screen and
@@ -12,7 +12,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::model::draw_list;
 use crate::domain::query::World;
-use crate::domain::scene::indicator::gizmo_spec::frame;
+use crate::domain::scene::gizmo::gizmo_spec::frame;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::coord::to_world;
 use crate::sys::mem::section;
