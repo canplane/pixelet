@@ -29,8 +29,13 @@ struct Moved {
     now: Vec<Drawn>,
     last: Vec<Drawn>,
     animated: bool,
-    /// What `take` last found changed, which the renderer reads.
+    /// What `take` last found changed, which the renderer reads, and each
+    /// one's key.
     changed: Vec<[f32; 5]>,
+    changed_keys: Vec<u32>,
+    /// The keys of the turn's draws, which the renderer reads as the draws
+    /// a region stands for.
+    keys: Vec<u32>,
 }
 
 static MOVED: Global<Moved> = Global::new();
@@ -68,9 +73,11 @@ pub fn digest(words: &[f64]) -> u64 {
 /// What changed between the last turn's draws and this one's, where each
 /// was and is: a sphere each, `[x, y, z]` in units from `eye`, given in the
 /// world's doubles, its radius, and 1 where it casts a shadow that moves
-/// with it (pxl-render `FrameInput::moved`). And whether what is animated
-/// stepped. The turn's draws become the last.
-pub fn take(eye: V3) -> (&'static [[f32; 5]], bool) {
+/// with it (pxl-render `FrameInput::moved`), and each one's key
+/// (`FrameInput::moved_keys`); the keys of the turn's draws
+/// (`FrameInput::bounded`). And whether what is animated stepped. The
+/// turn's draws become the last.
+pub fn take(eye: V3) -> (&'static [[f32; 5]], &'static [u32], &'static [u32], bool) {
     let m = moved();
     let animated = core::mem::take(&mut m.animated);
     let sphere = |d: &Drawn| {
@@ -84,19 +91,29 @@ pub fn take(eye: V3) -> (&'static [[f32; 5]], bool) {
         ]
     };
     m.changed.clear();
+    m.changed_keys.clear();
     for d in &m.now {
         match m.last.iter().find(|l| l.key == d.key) {
             Some(l) if l.state == d.state => {}
-            Some(l) => m.changed.extend([sphere(d), sphere(l)]),
-            None => m.changed.push(sphere(d)),
+            Some(l) => {
+                m.changed.extend([sphere(d), sphere(l)]);
+                m.changed_keys.extend([d.key, l.key]);
+            }
+            None => {
+                m.changed.push(sphere(d));
+                m.changed_keys.push(d.key);
+            }
         }
     }
     for l in &m.last {
         if !m.now.iter().any(|d| d.key == l.key) {
             m.changed.push(sphere(l));
+            m.changed_keys.push(l.key);
         }
     }
+    m.keys.clear();
+    m.keys.extend(m.now.iter().map(|d| d.key));
     m.last = core::mem::take(&mut m.now);
     let m: &'static Moved = m;
-    (&m.changed, animated)
+    (&m.changed, &m.changed_keys, &m.keys, animated)
 }

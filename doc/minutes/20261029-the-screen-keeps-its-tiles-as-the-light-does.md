@@ -66,6 +66,10 @@ What the user decided, each by their word, and so binds (doc/README.md):
   the reach's marks, which the host cannot see. (Asked on a misreading,
   since corrected in the baseline's record: the frames that never stood
   did so on part 2 too, the companion's draws changing each turn.)
+- **The reach reads a depth's bound kept on the GPU**, a square of 4 pixels
+  a side its least and most depth, set again in the tiles each frame draws,
+  in place of every pixel's depth read each frame it runs (2026-10-30):
+  that reading was measured to be nearly all of its cost.
 
 Everything else below is proposed, reviewed between two sessions and taken
 in at the user's word to go on with, but not decided by them: the tile's
@@ -267,9 +271,27 @@ the mark's source.
 Each holds only under its conditions; where one fails, the frame is drawn
 whole, which renews all of it.
 
-- **The tile words (ages).** The CPU's in step 3, handed each frame. Valid
-  for one size of the world: a new size makes them anew, every age 0, and
-  the targets made again move what `Read` holds, so that frame is whole.
+- **The tile words** (`changed_at`), the screen's and the map's. The CPU's
+  ages in step 3; the GPU's from step 5, the number of the frame each tile
+  last changed in, set by the marks' pass and the reach. Valid for one size:
+  a new size makes them anew, and the targets made again move what `Read`
+  holds, so that frame is whole and marks every tile. A dropped frame sets
+  none; the next is whole. The numbers would come round after 2^32 frames.
+- **What the reach marked, read back** (`Reach::reached`): the latest frame
+  it marked a screen tile in, a word kept by the GPU, copied and mapped as
+  the light's counts are; until a frame it ran in lands, the screen's tiles
+  are taken to gather (`Tiles::unseen`). A dropped frame puts back the
+  frame it ran in and the copy it encoded.
+- **The map's stencil**, numbered as the world's (`GATE_NUMBERS`), kept
+  between the frames that draw the map through its gate, cleared where it is
+  drawn whole and after a dropped frame.
+- **The depth's bound** (`Reach::bounds`), a square of 4 pixels a side its
+  least and most depth drawn, the sky left out, for the reach. Set after the
+  world's pass in the tiles it drew: the claimed in a frame through the
+  gate, every one in a frame drawn whole or without the stencil, where the
+  world's pass draws every tile. Valid while the eye stands, which every
+  frame through the gate keeps; a new size makes it anew, and that frame is
+  whole and sets every square; a dropped frame drew no depth and sets none.
 - **The stencil.** In each tile, the number of the gated frame that last
   claimed it, 1 to 255 (`GATE_NUMBERS`); 0 where a frame drawn whole cleared
   it. Kept between gated frames, not cleared: the gate writes this frame's
@@ -421,6 +443,30 @@ directly, step 4 being done.
 6. **The mark from the changed draws drawn depth only**, if the numbers ask;
    the kernel's spheres removed with it, and how the CPU knows whether any
    tile gathers said.
+   Taken by the user's word (2026-10-30), in parts, each leaving the
+   picture right, once the claimed area was measured to be the spheres'
+   size (some 520 tiles a frame, the baseline's record):
+   1. **What each bounded draw was drawn with, kept**: the renderer keeps
+      the last frame's record and uniform of every draw outside `BESIDE`,
+      and a skinned draw's joint palette, copied before the frame's upload
+      writes it again.
+   2. **The kernel hands the draws that changed**, not their spheres
+      (pxl-kernel region.rs); the spheres, `unbounded` and the host's marks
+      from them removed. Taken after the screen's side has its numbers.
+   3. **The changed draws drawn as they were and as they are**, their
+      vertices as their depth pipelines lay them, through a fragment that
+      sets the screen tile's word to the frame's number and keeps the
+      frame's number for the read-back, the world's depth attached read
+      only; draw by draw, the skinned first, its sphere's mark kept for
+      the rest until each has its own. Done for the actors, part 1 with
+      it: alone it claims no less (the claim was the reach's).
+   4. **The same from the light** for the casters, setting the map's
+      tiles' words. Done for the actors: their spheres' rectangles kept for
+      the map's gate and lay, their drawn selves setting the words the
+      reach reads; about 2 ms under the commit before with the companion
+      walking (the baseline's record).
+   5. **The host knows whether any tile gathers** from the read-back word,
+      the reach's widened to the marks.
 
 ## Not taken
 

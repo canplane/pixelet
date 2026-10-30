@@ -38,7 +38,9 @@ pub use eye::Eye;
 pub use ground::{bound_cs, height_cs, joined_cs};
 pub use observed::forget_cs;
 pub use raster::{face_cs, sample_box_cs};
-pub use light::{light_cs, light_mark_cs, light_mark_drawn_cs, light_miss_cs, light_reach_cs, Head};
+pub use light::{
+    light_cs, light_detail_cs, light_mark_cs, light_mark_drawn_cs, light_miss_cs, light_reach_cs, Head,
+};
 pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
 pub use world::{Looks, Unlooked, World};
 
