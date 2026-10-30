@@ -502,7 +502,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_PUCK_BEACON => Descriptor::new(
             lit(SHADER_PUCK_BEACON, CULL_BACK),
             &PUCK_BEACON_LANES,
-            &[&[[0, UNIFORM], AIR[0], AIR[1], AIR[3]], &DRAW],
+            &[&LIT_FRAME, &DRAW],
         ),
         PIPELINE_MARKER => Descriptor::new(
             Head {

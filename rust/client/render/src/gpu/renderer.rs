@@ -633,7 +633,7 @@ impl Renderer {
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
-            puck: PuckPass::new(g, &mut pipelines, frame_buf, air, device.align),
+            puck: PuckPass::new(g, &mut pipelines, frame_buf, device.align),
             marker: MarkerPass::new(g, &mut pipelines, frame_buf, device.align),
             finish: Finish::new(g, &mut pipelines),
             resolve: Resolve::new(g, &mut pipelines),
@@ -1529,7 +1529,7 @@ impl Renderer {
         self.impostor
             .draw(&mut pass, draws.of(PIPELINE_IMPOSTOR), b, over);
         self.clouds.draw(&mut pass);
-        self.puck.draw_beacon(&mut pass, &draws);
+        self.puck.draw_beacon(&mut pass, &draws, over);
         self.puck.draw_zone(&mut pass, &draws, b);
         self.draw_boxes(&mut pass, &draws);
         self.decor

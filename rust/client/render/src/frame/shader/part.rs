@@ -185,18 +185,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_PUCK_ZONE
     &["frame", "encode", "finish", "puck", "puck_zone"],
     // SHADER_PUCK_BEACON
-    &[
-        "frame",
-        "encode",
-        "finish",
-        "atmos_medium",
-        "atmos_bind",
-        "atmos_lut",
-        "atmos_eye_unit",
-        "place",
-        "puck",
-        "puck_beacon",
-    ],
+    lit!["place", "puck", "puck_beacon"],
     // SHADER_MARKER
     &["frame", "encode", "marker", "marker_sprite"],
     // SHADER_SKY
