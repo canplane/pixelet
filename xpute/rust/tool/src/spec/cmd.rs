@@ -203,7 +203,7 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
 
 /// How a table's enums are written in TypeScript.
 #[derive(Clone, Copy, PartialEq)]
-pub enum TsEnums {
+pub enum TsEnum {
     /// `const enum`, for a caller whose bundler inlines them.
     ConstEnum,
     /// A module of literal constants an enum, read as a namespace of the
@@ -222,7 +222,7 @@ pub struct Target {
     /// Where the number checks a packet's reader calls are.
     pub number: &'static str,
     pub cpp: Option<(&'static str, &'static str)>,
-    pub ts_enums: TsEnums,
+    pub ts_enum: TsEnum,
 }
 
 pub const TARGETS: [Target; 1] = [Target {
@@ -233,7 +233,7 @@ pub const TARGETS: [Target; 1] = [Target {
     rs_logical: "xpute-guest/abi",
     number: "crate::abi::number",
     cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
-    ts_enums: TsEnums::Constants,
+    ts_enum: TsEnum::Constants,
 }];
 
 fn majors(spec: &Spec) -> Vec<(u32, &str)> {

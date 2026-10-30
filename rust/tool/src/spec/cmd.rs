@@ -3,7 +3,7 @@
 //! pixelet's command table, on xpute's (its `base`), written by xpute-tool's
 //! (xpute_tool::spec::cmd).
 
-use xpute_tool::spec::cmd::{self as xpute_cmd, Target, TsEnums};
+use xpute_tool::spec::cmd::{self as xpute_cmd, Target, TsEnum};
 
 use super::{repo, Output};
 
@@ -15,7 +15,7 @@ const TARGETS: [Target; 1] = [Target {
     rs_logical: "pxl-kernel/domain/control",
     number: "xpute_guest::abi::number",
     cpp: None,
-    ts_enums: TsEnums::ConstEnum,
+    ts_enum: TsEnum::ConstEnum,
 }];
 
 pub fn outputs() -> Result<Vec<Output>, String> {

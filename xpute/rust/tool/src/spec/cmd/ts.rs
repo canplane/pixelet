@@ -3,7 +3,7 @@
 //! A command table as TypeScript: its enums, each packet's writer and each
 //! event's reader, for the side that writes commands in TypeScript.
 
-use super::{literal, Entry, Field, Kind, Spec, Target, TsEnums, NUMBERS};
+use super::{literal, Entry, Field, Kind, Spec, Target, TsEnum, NUMBERS};
 use crate::spec::{file, generated, pascal, snake, ts_doc, Output};
 
 /// Only a list of u32 is packed.
@@ -143,7 +143,7 @@ fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<
 }
 
 /// The table's module, and where its enums are constants, a module an enum
-/// beside it (`TsEnums::Constants`).
+/// beside it (`TsEnum::Constants`).
 pub fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     let mut out = vec![
         format!("// {}", t.ts_logical),
@@ -281,7 +281,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
         out.push("import { SequenceType } from \"@xpute/kit/wire/xtp/mod.ts\";".to_string());
     }
     let mut modules: Vec<Output> = Vec::new();
-    if t.ts_enums == TsEnums::Constants {
+    if t.ts_enum == TsEnum::Constants {
         for e in &spec.enums {
             out.push(format!(
                 "import * as {} from \"./cmd/{}.spec.ts\";",
@@ -304,11 +304,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
             out.push(format!("export {{ {} }};", e.name));
         }
     }
-    for e in spec
-        .enums
-        .iter()
-        .filter(|_| t.ts_enums == TsEnums::ConstEnum)
-    {
+    for e in spec.enums.iter().filter(|_| t.ts_enum == TsEnum::ConstEnum) {
         out.push(String::new());
         if let Some(doc) = &e.doc {
             out.extend(ts_doc(doc, ""));
