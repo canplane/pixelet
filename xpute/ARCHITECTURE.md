@@ -22,7 +22,7 @@ format, an errno table, scalar math — that any program can link and call.
 
 Three things cross between the ends and nothing else does: one memory they
 share, one call in, one number out. Two calls go the other way, each answered
-before it returns: the host's clock, and a **hostcall**, a question the host
+before it returns: the host's clock, and a hostcall run now, a question the host
 answers from what it already holds (both below). The sections follow from that:
 
 1. the memory;
@@ -30,7 +30,7 @@ answers from what it already holds (both below). The sections follow from that:
    queues that carry it each way;
 3. the call that makes it run, the turn;
 4. handles, which name objects across the boundary;
-5. I/O, hostcalls and a GPU's calls, which a guest asks of its host;
+5. hostcalls and files, and a GPU's calls, which a guest asks of its host;
 6. the contract all of it comes down to;
 7. the languages, and the records that hold them to each other.
 
@@ -60,12 +60,13 @@ What goes in the memory is the guest's, and so is where. It lays ranges end to
 end on a unit it chooses (`mem/section`), as a linker script places output
 sections without knowing what they hold, and whatever is asked of a range is
 checked against its end (`Section::at`, `nth`). The host is told where the parts
-it reads lie by a **toc** (`ipc/toc`, `spec/ipc/toc.json`),
-which the guest writes in its first turn, or in a boot call that returns its
-offset; the host learns that one offset from outside and finds everything else
-from there (`@xpute/host/ipc/toc.ts` `Toc`). xpute numbers a key for
-each part of its own — the two queues and the hostcall stream the sections
-below describe — and a program numbers its own keys with the `PROGRAM` bit set.
+it reads lie by a **toc**, a table of contents as a CD's tells where each track
+begins (`ipc/toc`, `spec/ipc/toc.json`), which the guest writes in its first
+turn, or in a boot call that returns its offset; the host learns that one offset
+from outside and finds everything else from there (`@xpute/host/ipc/toc.ts`
+`Toc`). xpute numbers a key for each part of its own — the two queues and the
+hostcall stream the sections below describe — and a program numbers its own keys
+with the `PROGRAM` bit set.
 
 ```text
 one guest's layout; the order of its ranges is the guest's, the heap last
@@ -73,7 +74,7 @@ one guest's layout; the order of its ranges is the guest's, the heap last
  0 ┌─────────────────────────────────┐
    │ a module's stack and data       │
    ├─────────────────────────────────┤ ◀── the one offset the host learns
-   │ toc                       │
+   │ toc                             │
    │   MAGIC · VERSION · count · 0   │
    │   SQ  · offset ─────────────────┼──┐
    │   CQ  · offset ─────────────────┼──┼──┐
@@ -84,7 +85,7 @@ one guest's layout; the order of its ranges is the guest's, the heap last
    ├─────────────────────────────────┤     │  │
    │ completion ring · its slots     │◀────┘  │
    ├─────────────────────────────────┤        │
-   │ hostcall stream              │◀───────┘
+   │ hostcall stream                 │◀───────┘
    ├─────────────────────────────────┤
    │ the guest's own ranges          │
    ├─────────────────────────────────┤
@@ -196,8 +197,8 @@ is full, and the producer waits. `EMSGSIZE` means the packet is bigger than a
 slot, and such a packet crosses by address, in a heap block.
 
 Two rings make a pair: the submission ring for what the host sends, and the
-completion ring for what the guest answers and raises, each where the toc
-says (`SQ`, `CQ`). The host drives the pair through the **doorbell**
+completion ring for what the guest answers and raises, each where the toc says
+(`SQ`, `CQ`). The host drives the pair through the **doorbell**
 (`@xpute/host/ipc/doorbell.ts` `Doorbell`):
 
 - it writes each submission in place, into the submission ring's next slot,
@@ -379,10 +380,10 @@ transaction whole, and `commit` says so.
 A **hostcall** is a guest's call into its host, the name Wasmtime and Lucet give
 one. Some are every program's: open, read, write and close a file, and report
 the invariant that stopped the guest; a program numbers its own with the
-`PROGRAM` bit. Each is a record (`ipc/sys`, `spec/ipc/sys.json`), run
-after the turn from one stream the toc names (`SYS`), or, a program's
-own, at once (below). The report (`ABORT`) drops the turn's other calls and is
-published alone, at once.
+`PROGRAM` bit. Each is a record (`ipc/sys`, `spec/ipc/sys.json`), run after the
+turn from one stream the toc names (`SYS`), or, a program's own, at once
+(below). The report (`ABORT`) drops the turn's other calls and is published
+alone, at once.
 
 Files borrow Plan 9's file namespace:
 
@@ -440,9 +441,9 @@ cannot answer late.
 A module imports the entry as `env.hostcall`, beside `env.now`; a guest linked
 into a native program is handed it with its clock (`BootInfo`). There the guest
 runs on its own thread while the caller of `run` waits, so the native host hands
-each hostcall run now back to that caller, which answers it on its own thread and waits
-again (`xpute-host/native/thread.rs`); the program says what answers through
-`xpute_hostcall_on` (`answer_with`), under xpute's name as the entry is.
+each hostcall run now back to that caller, which answers it on its own thread
+and waits again (`xpute-host/native/thread.rs`); the program says what answers
+through `xpute_hostcall_on` (`answer_with`), under xpute's name as the entry is.
 
 ### A GPU's calls, in WebGPU's words
 
@@ -500,12 +501,12 @@ shorthand for its pipelines, stays the program's.
 The contract is the part neither end may change; the rest of this document is
 how one end happens to be built.
 
-What cannot change is the rules below and the formats they travel in: the
-toc, the frame's four words, the ring's layout and the stream's records.
-Each rule is one the other end could catch being broken.
+What cannot change is the rules below and the formats they travel in: the toc,
+the frame's four words, the ring's layout and the stream's records. Each rule is
+one the other end could catch being broken.
 
-0. **The toc.** The guest writes it in its first turn or in a boot call
-   that returns its offset, and the host finds everything from the one offset it
+0. **The toc.** The guest writes it in its first turn or in a boot call that
+   returns its offset, and the host finds everything from the one offset it
    learns outside. A key appears at most once, an unknown key is passed over,
    and an unknown magic or version is refused.
 1. **The core memory.** It never moves or grows while the guest lives, and every
@@ -513,10 +514,10 @@ Each rule is one the other end could catch being broken.
    nothing that crosses lies there.
 2. **The turn.** The guest runs only inside `run`, and the two sides never run
    at once: the host touches nothing a turn writes until it has returned, but
-   what a hostcall names while it runs (rule 8). The quota is advice, not a
-   deadline: a guest can spend a whole quota inside one function, and the host
-   cannot take the turn back until it returns. `wake_ms` is 0 for the next turn,
-   a positive number for that many milliseconds from now, and negative
+   what a hostcall run now names while it runs (rule 8). The quota is advice,
+   not a deadline: a guest can spend a whole quota inside one function, and the
+   host cannot take the turn back until it returns. `wake_ms` is 0 for the next
+   turn, a positive number for that many milliseconds from now, and negative
    (`NO_WAKE`) for none. A turn of no quota is still a turn, and a question the
    host needs answered at once is asked in one, of a command the guest answers
    from what it already holds; one that waits on anything outside is answered on
@@ -575,8 +576,8 @@ decides what must match.
   reserves a module's memory and opens the module over it (`module.ts`), and
   mounts the doorbell, the hostcalls' end and the strobe on any guest its
   platform opened, in one call (`@xpute/host/host.ts` `mount`), which runs the
-  hostcall stream as each turn returns. `mount` reads the toc as it is
-  called, so the turn or the boot call that writes it has run by then. Rust's
+  hostcall stream as each turn returns. `mount` reads the toc as it is called,
+  so the turn or the boot call that writes it has run by then. Rust's
   (`rust/host`) reads a guest's memory by offset on every platform (`mem`), and
   on a unix one hosts a guest linked into the host's own native process
   (`native`). There it reserves the memory, and runs every call into the guest
@@ -609,8 +610,8 @@ language:
 - it has no `Global`, which Rust needs a type for and C++ has as a plain static;
 - it uses RAII, templates and `Result`, with no exceptions and no RTTI.
 
-Its numbers — the errno table, the toc's keys, a frame's and a ring
-header's words — come from `spec/` as the other languages' do.
+Its numbers — the errno table, the toc's keys, a frame's and a ring header's
+words — come from `spec/` as the other languages' do.
 
 ---
 
@@ -647,13 +648,13 @@ One host runs them against every guest through the boundary alone
 (`@xpute/host/conformance.test.ts`): the Rust guest
 (`xpute-conformance/guest.rs`) and the C++ one (`cpp/conformance/guest.cpp`),
 each over the commands `spec/conformance/guest.json` numbers. Each guest's boot
-takes a seed and lays what it shares, the toc among them, in the order and
-with the gaps the seed draws (`LAYOUTS`), and the host runs every trace under
-each: only a host that finds them all through the toc, as rule 0 asks,
-passes. Each guest is built both as a native library and as a WebAssembly module
-that imports nothing but its memory, the clock and the hostcall; the C++ one
-from the library's amalgamation (`cpp/amalgamation.awk`), the two files a C++
-program takes, so what the traces hold is what ships.
+takes a seed and lays what it shares, the toc among them, in the order and with
+the gaps the seed draws (`LAYOUTS`), and the host runs every trace under each:
+only a host that finds them all through the toc, as rule 0 asks, passes. Each
+guest is built both as a native library and as a WebAssembly module that imports
+nothing but its memory, the clock and the hostcall; the C++ one from the
+library's amalgamation (`cpp/amalgamation.awk`), the two files a C++ program
+takes, so what the traces hold is what ships.
 
 ## Prior art
 
@@ -678,8 +679,9 @@ where the tree records the source.
 | NVMe's asynchronous events                                  | the frame's `RES`                | An event: a completion the guest posts unasked                                 |
 | KVM's `KVM_RUN`                                             | the turn                         | `run`: the call that runs the guest until it gives the processor back          |
 | Plan 9's file access, in POSIX's words                      | `ipc/sys`, `ipc/ns`              | Descriptors the guest issues; a root and a path; the host binds the roots      |
-| The ELF auxiliary vector                                    | `ipc/toc`                  | Entries a reader skips when it does not know them                              |
-| Wasmtime's and Lucet's hostcalls                            | `ipc/sys`                        | The name of a guest's call into its host, answered before it returns           |
+| A CD's table of contents                                    | `ipc/toc`                        | Its name: where each part begins, read before anything else                    |
+| The ELF auxiliary vector                                    | `ipc/toc`                        | Entries a reader skips when it does not know them                              |
+| Wasmtime's and Lucet's hostcalls                            | `ipc/sys`                        | Its name: a guest's call into its host                                         |
 | POSIX and Linux errno                                       | `spec/status/errno.json`         | Negative errno numbers                                                         |
 | The host's `JSON.parse`                                     | `codec/json`                     | The grammar, judged as the host's parser judges it                             |
 | IEEE 754's round half to even, as WGSL rounds               | `math/scalar`                    | One rounding in every language                                                 |

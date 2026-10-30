@@ -165,15 +165,15 @@ sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
 | marker | a place, Carto's icon and its name  | a placed marker |
 
 The ground generates decor by evaluating, never storing, a tree of hashes as the
-caves are: a column at a decor's root zoom holds as many as a hash draws about
-its mean, each column hands its count to its four a hash each, and a leaf cell
-holds one or none; where it stands is a function of the cell, a seed and the
-ground's face, one rule on both sides (`pxl-spec-core scatter.rs`). One whose
-box meets a neighbor's that drew lower gives way, so two generated decors never
-share a cell. A decor, placed or generated, stands as itself, a model or its
-impostor, at every zoom whose cell its box keeps an eighth of or more, as a
-folded cube of that box is drawn (`answer::eighths`), and is none where it
-keeps none, so neither is told from the other.
+caves are: a column at the coarsest zoom a decor stands at holds as many as a
+hash draws about its mean, each column hands its count to its four a hash each,
+and a leaf cell holds one or none; where it stands is a function of the cell, a
+seed and the ground's face, one rule on both sides (`pxl-spec-core scatter.rs`).
+One whose box meets a neighbor's that drew lower gives way, so two generated
+decors never share a cell. A decor, placed or generated, stands as itself, a
+model or its impostor, at every zoom whose cell its box keeps an eighth of or
+more, as a folded cube of that box is drawn (`answer::eighths`), and is none
+where it keeps none, so neither is told from the other.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its look the majority of those it folds, and its
@@ -394,10 +394,13 @@ Decor is generated on the GPU from the same windows the rays read (`pxl-render
 gpu/generated.rs`). The leaf cells under a window's brick are read off the hash
 a window cell a thread, each candidate that stands at the window and stands
 clear is generated on a thread of its own, and a brick's decor is generated
-again only where what it reads changed. Every frame each generated record is taken where the rays ask the zoom
-it was generated at and compacted into the instances, a model down to its own
-size on screen, an impostor below it and culled below that. Placed decor is handed in as records the GPU draws beside it
-(`domain/scene/decor/drawn.rs`).
+again, whole, only where what its brick reads changed. Every frame each
+generated record is taken where the rays ask the zoom it was generated at and
+compacted into the instances, a model down to its own size on screen, an
+impostor below it and culled below that. Placed decor is handed in as records
+the GPU draws beside it, taken where the rays ask the coarsest zoom it stands
+at or finer (`domain/scene/decor/drawn.rs`, `pxl-spec-core generated.rs`
+`drawn_at`).
 
 A **marker** is drawn flat to the camera: a place, a pin someone put up, or the
 chat's line. Each kind reads its own, and one arrangement draws them together
@@ -620,15 +623,15 @@ since a turn that draws through wgpu outgrows React Native's JavaScript stack
 (`rust/client-bracket/native/`). Without a bracket the kernel runs under `cargo
 test`.
 
-The kernel records its calls during a turn, and the host runs them after it
+The kernel records its hostcalls during a turn, and the host runs them after it
 returns, so each is done before the next turn begins (`sys/io/host.rs`). What
 the host answers from what it holds, a text's lines and its pixels, the kernel
-asks by xpute's hostcall instead, answered before the call returns
-(`sys/io/text.rs`): a page's host through the module's import, a device's on the
-JavaScript thread that waits on the turn. Beside those, only what the bracket
-hands over is called directly. An answer comes back as a
-number, read once by `answered` into a count or one of xpute's `Errno` members;
-a code no member names is the host breaking the protocol.
+asks by a hostcall run now, answered before the call returns (`sys/io/text.rs`):
+a page's host through the module's import, a device's on the JavaScript thread
+that waits on the turn. Beside those, only what the bracket hands over is called
+directly. An answer comes back as a number, read once by `answered` into a count
+or one of xpute's `Errno` members; a code no member names is the host breaking
+the protocol.
 
 The **client** (`ts/client`) is the TypeScript both apps share. Its **pixelet's
 host** is `ts/client/src/host/`, over the app's bracket: the TypeScript one each
@@ -649,7 +652,9 @@ the states a driver reports and the shell shows, written beside it
 The host and the kernel share xpute's two rings, one for what the host submits
 and one for what the kernel completes, each frame naming a port at the kernel's
 far side: the host, 0, whose are xpute's own commands (the answers to the
-kernel's opens), and the shell, 255, with the drivers
+kernel's opens), and the shell, 255, with the drivers. 2 to 254 are reserved for
+threads that would work beside the kernel on slabs it lends them, and 1, the
+kernel's own, is the number such a thread would name to reach it
 (`spec/client/kernel/door/port.json`). The **commands** are
 `spec/client/kernel/domain/control/cmd.json`'s, from which both sides' readers
 and writers are generated, each packet an XTP tree, xpute's relocatable binary
@@ -693,7 +698,7 @@ What crosses each edge:
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | shell and kernel, `port/`     | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`), the profiler's reads | the snapshot, replaced whole when it moved, and the events it is told by                                 |
 | kernel and devices, `driver/` | opens and writes, text by hostcall, a sensor started or stopped, the GPU's calls                                          | a file read whole, a sensor's reading, the GPU's state, the page's visibility, each turn's `WORLD_FRAME` |
-| host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings, the host's own as port 0 | completions and events, the streams' records, hostcalls, the last words if it stops                      |
+| host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings, the host's own as port 0 | completions and events, hostcalls and the GPU stream's records, the last words if it stops              |
 
 ## Reads, and the one scheduler
 
