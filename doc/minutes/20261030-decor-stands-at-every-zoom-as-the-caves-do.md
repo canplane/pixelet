@@ -249,4 +249,13 @@ they had asked gone, goes.
 - **Measured** over the same city at 20 m a division, orbiting 30 s: GPU p50
   23.4 ms and p95 30.1 against 16.3 and 20.6 before the scatter changed, the
   cars, which stand by their size, drawn far where the zoom a candidate was
-  born at had left them out. Not yet seen in the app: a placed decor folding.
+  born at had left them out.
+- **Seen in the app.** Four trees placed by a scattered few, and the view
+  drawn back past the leaves' window: placed and scattered alike fold to a
+  small block of the forest look. The scattered folded into the ground's top
+  cell alone at first, where a placed one's leaf, over a top whole, folds to
+  the cell over it; the scattered now folds into the cell its leaf lies in,
+  the ground's slab one cell higher at the zooms a decor folds at
+  (`ground::slab` `stood`). Measured again at 20 m a division: GPU p50 28.6 ms,
+  p95 44.3, every span up with it, the air's and the finish's too, which this
+  change does not touch.
