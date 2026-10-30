@@ -595,3 +595,49 @@ start view, noon; every frame drawn whole (`cast`). One window:
   8.5, `sample` 6.9, `air` 6.5, `finish` 5.5, `world` 4.2, `beam` 3.7,
   `fill` 2.8, `mark` 1.7 ms (the first pass of a loaded frame, which may
   hold the wait before it).
+
+**The camera orbiting** (23:31), main (`26b828e73`): a pointer held at the
+canvas's middle and swung 300 px each way on a sine, an event every 16 ms,
+for some 70 s, noon, 3728×2338; frames drawn whole (`cast`) but a few:
+
+| motion | GPU p50 | p95 | p95 `light_beam` | `finish` | `miss` | `world` | `sample` | `air` |
+|---|---|---|---|---|---|---|---|---|
+| orbit | 34.5 | 36.1 | 9.4 | 6.1 | 5.4 | 4.8 | 2.0 | 1.0 |
+| zoom (above, 3728×2226) | 43.6 | 50.3 | 8.5 | 5.5 | 9.7 | 4.2 | 6.9 | 6.5 |
+
+- The light's cast is as costly orbiting as zooming: the detail that
+  follows the eye's distance was taken to be what moves it, and an orbit
+  keeps the distance. What it casts each frame, and why, is not yet
+  counted (the tally, the `ray_counts` setting, counts its slots).
+- `finish` costs some 6 ms in a frame drawn whole, against 1.3 at the p95
+  through the gate.
+
+**What the light casts while the camera orbits** (23:50), the `ray_counts`
+setting on, the same orbit for 30 s, main: of 213 counted frames the light
+cast in all 213; its slots that took the visible sample some 632,000 a
+frame and those that walked some 11,000, some 15 % of the map's 4,194,304
+(`light_rays` is the host's figure, the whole map each frame it casts, not
+what was cast). The eye's place is read into what a tile holds
+(gpu/ray/cast.rs, `light_content`: `eye::ORIGIN..eye::STEPS`), so a moving
+eye begins an epoch each frame and every tile a receiver reads is cast
+anew: the visible receivers' tiles, every frame the camera moves.
+
+**The light's tiles held while only the eye moves** (2026-10-31, 00:20–00:36),
+`light_detail_cs`: the eye's place and the light's words out of what a
+tile holds; the box's corner a whole number of tiles, the reads moved with
+it by the host, a tile the box slid onto and one whose slots' zooms the
+eye now asks otherwise (`Light::asks`) set to be read anew. The same orbit,
+noon, 3728×2338:
+
+| | slots cast a frame (took, walked) | `light_beam` p95 | GPU p50 |
+|---|---|---|---|
+| main (`26b828e73`, above) | 632,000, 11,000 | 9.4 | 34.5 |
+| the change | 87,000, 1,400 | 8.3 | 32.7 |
+
+- The slots cast fall by some 86 %, the frame by some 1.5–2 ms.
+- `light_beam` is the receivers' marks, not the cast: split into spans (a
+  probe, reverted), orbiting, the marks (`light_mark_cs`,
+  `light_mark_drawn_cs`) 7.1 ms at the p50, the beam and the cells 0.8,
+  the reach 0.07, `light_detail_cs` 0.07.
+- Stopped after an orbit at 7 o'clock, and drawn again from a fresh epoch
+  (the shadows off and on): no difference seen.

@@ -499,6 +499,13 @@ It casts only what a receiver reads:
             are cast; the rest stand
 ```
 
+What a tile holds moves with the light, the zooms the eye asks of it, and the
+world under it. The eye moving alone keeps it: the box follows the eye a tile at
+a time, and what the cast read moves with it, so a tile the box slid onto is
+read anew, and a tile is cast again where a slot's zoom is other than the one
+the eye now asks at its depth (`light_detail_cs`, `Light::asks`). A zoom changed
+before a slot's stop, along its ray, waits until the light or the world moves.
+
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and
 casters are pushed by the same formula, so a plane does not shadow itself

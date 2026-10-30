@@ -263,6 +263,13 @@ impl Light {
         q << ZOOM_BITS | self.asked(detail, q)
     }
 
+    /// Whether slot word `w` (`word`) holds the zoom `detail` asks at its
+    /// depth: a slot cast from another eye, where it asks the same of it,
+    /// holds (pxl-shader light.rs `light_detail_cs`).
+    pub fn asks(&self, detail: Detail, w: u32) -> bool {
+        w & NO_ZOOM == self.asked(detail, w >> ZOOM_BITS)
+    }
+
     /// The light its words lay (`words`).
     pub fn of_words(w: &[u32; eye::LIGHT_WORDS]) -> Light {
         let v = |k: usize| {
@@ -306,8 +313,9 @@ impl Light {
 
 /// What the light's cast is handed beside the eye's words, a uniform: a head
 /// of `HEAD_VEC4S` vec4s, the cast's number, whether it is counted, its
-/// epoch and the map's side (`HEAD_CAST` to `HEAD_SIZE`), then the rays'
-/// starts (`Starts`, from `STARTS_AT`), then the actors (`ACTORS_AT`).
+/// epoch and the map's side (`HEAD_CAST` to `HEAD_SIZE`), the corner of the
+/// cast before (`HEAD_CORNER_WAS`), then the rays' starts (`Starts`, from
+/// `STARTS_AT`), then the actors (`ACTORS_AT`).
 pub const HEAD_VEC4S: usize = ACTORS_AT + 1 + ACTORS;
 pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
 /// The cast's number, counted up from one each cast, which a tile stood on
@@ -323,6 +331,11 @@ pub const HEAD_EPOCH: usize = 2;
 /// its place (pxl-shader either.rs `Either`): a head naming no map is the
 /// eye's.
 pub const HEAD_SIZE: usize = 3;
+/// The clipmap's corner the cast before was cast under, X and Y, the first
+/// two words of the second vec4: how many tiles the box slid since, its
+/// corners `TILE`-aligned, which the reads move by (pxl-shader light.rs
+/// `light_detail_cs`).
+pub const HEAD_CORNER_WAS: usize = 4;
 
 /// Where a texel's ray starts, the same point of the world in every frame
 /// cast in one light frame (pxl-render gpu/shadow.rs `aim`): off anchors

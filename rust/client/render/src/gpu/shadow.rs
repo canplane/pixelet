@@ -262,12 +262,16 @@ impl Shadow {
         // planes onto a coarser one along the light, so a texel kept is the
         // same ray. Where the fixed point falls on the texels' grid is the
         // world's texel index of the box's first texel, X across and Y down
-        // the rows: the clipmap's corner.
+        // the rows: the clipmap's corner, a whole number of tiles
+        // (`light::TILE`), so a tile of the box holds whole tiles of the world
+        // and what the cast read of it moves with the box a tile at a time
+        // (pxl-shader light.rs `light_detail_cs`).
         let m = &mut self.light_view_proj;
         let mut cell = [0i64; 3];
-        for (k, step) in [(0, step), (1, step), (2, DEPTH_STEP)] {
+        let tile = f64::from(light::TILE);
+        for (k, step, whole) in [(0, step, tile), (1, step, tile), (2, DEPTH_STEP, 1.0)] {
             let at = m[k] * fixed[0] + m[4 + k] * fixed[1] + m[8 + k] * fixed[2] + m[12 + k];
-            let n = (at / step).round_ties_even();
+            let n = (at / (step * whole)).round_ties_even() * whole;
             m[12 + k] -= at - n * step;
             cell[k] = n as i64;
         }

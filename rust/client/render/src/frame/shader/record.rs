@@ -41,6 +41,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_LIGHT_MARK => "light_mark_cs",
         SHADER_LIGHT_MARK_DRAWN => "light_mark_drawn_cs",
         SHADER_LIGHT_REACH => "light_reach_cs",
+        SHADER_LIGHT_DETAIL => "light_detail_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }

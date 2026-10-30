@@ -53,8 +53,9 @@ const _: () = assert!(
     pxl_spec_core::light::HEAD_CAST == 0
         && pxl_spec_core::light::HEAD_COUNTED == 1
         && pxl_spec_core::light::HEAD_EPOCH == 2
-        && pxl_spec_core::light::HEAD_SIZE == 3,
-    "the head's first vec4 is read by its words"
+        && pxl_spec_core::light::HEAD_SIZE == 3
+        && pxl_spec_core::light::HEAD_CORNER_WAS == 4,
+    "the head's first two vec4s are read by their words"
 );
 
 /// Where the rays start (`light::Starts`), off the head.
@@ -785,6 +786,63 @@ pub fn light_reach_cs(
             put(args, k, at(args, pxl_spec_core::light::ARGS_WHOLE + k));
             k += 1;
         }
+    }
+}
+
+/// The tiles of the box an earlier cast of the epoch cast, where only the
+/// eye's place moved since and the box with it, a `TILE`-aligned corner at a
+/// time (pxl-render gpu/shadow.rs `aim`): a workgroup a tile, a thread a
+/// slot, after the host moved the reads with the box, each tile's word the
+/// word of the tile that held its world texels under the corner before
+/// (`light::HEAD_CORNER_WAS`; pxl-render gpu/ray/cast.rs `prepare`). A tile
+/// the box slid onto, and one where a slot's word's zoom is other than the
+/// zoom the eye now asks at its depth (`Light::asks`), is set to none, so
+/// the reach takes it, read, as read anew (`light_reach_cs`); the rest hold
+/// what their cast left. Each writes none alone, so none waits on another.
+/// What the eye's place moves before a slot's stop, the zooms its ray
+/// passed through, is not asked: an approximation, held until the epoch
+/// moves.
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "light_detail_cs"))]
+pub fn light_detail_cs(
+    #[spirv(workgroup_id)] group: UVec3,
+    #[spirv(local_invocation_id)] lane: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(descriptor_set = 0, binding = 10)] light: &LightWords,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
+) {
+    let t = pxl_spec_core::light::TILE;
+    let m = Map::of(eye, head);
+    let n = m.side();
+    let tiles = pxl_spec_core::light::tiles(n);
+    if group.x >= tiles || group.y >= tiles {
+        return;
+    }
+    let w = pxl_spec_core::light::reads_at(n) + group.y * tiles + group.x;
+    // Where the tile lay under the corner before: one the box slid onto
+    // holds none of what it read.
+    let was = head.v[1];
+    let c = m.light.corner;
+    let from = [
+        group.x as i32 + (c[0] - was.x) / t as i32,
+        group.y as i32 + (c[1] - was.y) / t as i32,
+    ];
+    if from[0] < 0 || from[1] < 0 || from[0] >= tiles as i32 || from[1] >= tiles as i32 {
+        put(list, w, 0);
+        return;
+    }
+    if at(list, w) < epoch(head) {
+        return;
+    }
+    let p = [group.x * t + lane.x, group.y * t + lane.y];
+    let slot = [
+        (p[0] as i32).wrapping_add(c[0]) as u32 & (n - 1),
+        (p[1] as i32).wrapping_add(c[1]) as u32 & (n - 1),
+    ];
+    let aim = m.aim(slot);
+    let word: u32 = light.read(UVec3::new(slot[0], slot[1], 0));
+    if !m.light.asks(aim.detail, word) {
+        put(list, w, 0);
     }
 }
 

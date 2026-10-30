@@ -155,7 +155,10 @@ pub const SHADER_SCREEN_BOUND: u32 = 67;
 /// An actor where it was and where it is, its fragments marking their screen
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
 pub const SHADER_SKINNED_MARK: u32 = 68;
-pub const SHADERS: u32 = 69;
+/// The tiles of the light's box whose slots' zooms the eye's place moved
+/// (pxl-spec-core `light::Light::asks`): a compute entry.
+pub const SHADER_LIGHT_DETAIL: u32 = 69;
+pub const SHADERS: u32 = 70;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -399,4 +402,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["screen_tiles", "screen_bound"],
     // SHADER_SKINNED_MARK
     &["frame", "place", "skinned_place", "tile_mark"],
+    // SHADER_LIGHT_DETAIL
+    &["light_detail.gen"],
 ];
