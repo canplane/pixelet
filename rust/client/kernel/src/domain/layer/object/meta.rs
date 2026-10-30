@@ -8,7 +8,7 @@ use pxl_spec::asset::decor_id_from_num;
 use pxl_spec::object::is_decor;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{idx_of, UNIT_ZOOM};
-use pxl_spec_core::scatter::placed_pose;
+use pxl_spec_core::generated::placed_pose;
 
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store::Entry;

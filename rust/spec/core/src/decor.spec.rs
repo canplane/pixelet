@@ -9,15 +9,8 @@
 // order. pxl-spec asset/decor.spec.rs adds their models over each row.
 #![allow(non_camel_case_types, reason = "generated from the spec")]
 
-/// The Poisson process every decor is scattered by: a patch of `patch` cells a
-/// side at the zoom its candidates are born at, a zoom keeping one in `kept`
-/// of the next finer's.
-pub const PATCH: u32 = 16;
-
 /// The most variants a decor has.
 pub const VARIANTS: usize = 9;
-/// The most thresholds a decor's counts hold.
-pub const COUNTS: usize = 36;
 
 /// How a decor the ground generates faces: any way, or along the road or rail its
 /// cell lies on.
@@ -26,16 +19,6 @@ pub const COUNTS: usize = 36;
 pub enum Orientation {
     random,
     along_transport,
-}
-
-/// A patch's Poisson count as thresholds on a u32 draw: the k-th is
-/// ⌈P(N ≤ k) · 2^32⌉, as many as fall under 2^32, and a draw bears as many as
-/// it reaches (pxl-spec-core scatter.rs `Counts::of`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(C)]
-pub struct Counts {
-    pub len: u32,
-    pub at: [u32; COUNTS],
 }
 
 /// A decor as the ground generates it, in 32-bit words alone, laid out as a
@@ -47,9 +30,11 @@ pub struct Decor {
     pub val: u32,
     /// Its scatter: changing it reshuffles every one the ground generates.
     pub seed: u32,
-    /// A patch's counts, born at the top zoom and born finer.
-    pub counts: [Counts; 2],
-    pub orientation: Orientation,
+    /// The chance a cell of its holds one, over 2^32: a draw under it
+    /// does (pxl-spec-core scatter.rs `candidate_at`).
+    pub chance: u32,
+    /// How it faces, an `Orientation`'s number.
+    pub orientation: u32,
     /// The looks it may stand on, a bit each.
     pub on: [u32; 8],
     /// The ground look it is folded to in a cell coarser than it stands
@@ -69,8 +54,8 @@ pub const DECORS: [Decor; 4] = [
     Decor {
         val: 1024,
         seed: 0x7902530c,
-        counts: [Counts { len: 36, at: [153386, 1724054, 9765873, 37215281, 107485766, 251399719, 497012866, 856309813, 1316209905, 1839474009, 2375296452, 2874098435, 3299742795, 3635019582, 3880250604, 4047661648, 4154804716, 4219342658, 4256057576, 4275844985, 4285976138, 4290916282, 4293215694, 4294239432, 4294676227, 4294855138, 4294925602, 4294952326, 4294962099, 4294965550, 4294966728, 4294967117, 4294967241, 4294967280, 4294967292, 4294967295] }, Counts { len: 30, at: [1984168, 17222571, 75738039, 225537638, 513152867, 954929860, 1520404410, 2140810774, 2736400883, 3244637777, 3634963711, 3907482181, 4081894002, 4184931140, 4241454369, 4270394263, 4284285412, 4290560942, 4293238502, 4294320800, 4294736402, 4294888394, 4294941453, 4294959170, 4294964840, 4294966581, 4294967096, 4294967242, 4294967282, 4294967293, 0, 0, 0, 0, 0, 0] }],
-        orientation: Orientation::random,
+        chance: 171798692,
+        orientation: Orientation::random as u32,
         on: [0x00000902, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         fold: 11,
         scale_steps: 0,
@@ -81,8 +66,8 @@ pub const DECORS: [Decor; 4] = [
     Decor {
         val: 1025,
         seed: 0xb0a5802d,
-        counts: [Counts { len: 9, at: [2573955810, 3891821184, 4229194720, 4286773137, 4294143174, 4294897866, 4294962267, 4294966977, 4294967278, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, Counts { len: 9, at: [2925437205, 4048805091, 4264491725, 4292099614, 4294749972, 4294953519, 4294966546, 4294967261, 4294967295, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }],
-        orientation: Orientation::random,
+        chance: 8589935,
+        orientation: Orientation::random as u32,
         on: [0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         fold: 0,
         scale_steps: 0,
@@ -93,8 +78,8 @@ pub const DECORS: [Decor; 4] = [
     Decor {
         val: 1026,
         seed: 0x0ca63010,
-        counts: [Counts { len: 12, at: [1542560875, 3122143211, 3930889367, 4206941388, 4277610705, 4292083782, 4294553853, 4294915189, 4294961440, 4294966703, 4294967242, 4294967292, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, Counts { len: 11, at: [1992607218, 3522929562, 4110573342, 4261010149, 4289894016, 4294330578, 4294898458, 4294960763, 4294966744, 4294967254, 4294967294, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }],
-        orientation: Orientation::along_transport,
+        chance: 17179869,
+        orientation: Orientation::along_transport as u32,
         on: [0x00000000, 0x0001e800, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         fold: 0,
         scale_steps: 0,
@@ -105,8 +90,8 @@ pub const DECORS: [Decor; 4] = [
     Decor {
         val: 1027,
         seed: 0x7ba5802d,
-        counts: [Counts { len: 12, at: [1542560875, 3122143211, 3930889367, 4206941388, 4277610705, 4292083782, 4294553853, 4294915189, 4294961440, 4294966703, 4294967242, 4294967292, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, Counts { len: 11, at: [1992607218, 3522929562, 4110573342, 4261010149, 4289894016, 4294330578, 4294898458, 4294960763, 4294966744, 4294967254, 4294967294, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }],
-        orientation: Orientation::along_transport,
+        chance: 17179869,
+        orientation: Orientation::along_transport as u32,
         on: [0x00000000, 0x007c0000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         fold: 0,
         scale_steps: 0,

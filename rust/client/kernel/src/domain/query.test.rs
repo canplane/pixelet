@@ -10,6 +10,7 @@ use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::space::layer::lattice::{Cells, GROUND, TILE_CELLS};
 
 use super::*;
+use crate::domain::layer::instance::Instance;
 use crate::domain::layer::Answer;
 use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_LANE};
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -732,7 +733,7 @@ fn device_loss_drops_bounds() {
 
 /// What the ground generates stands where it was generated whatever is put
 /// over it or in place of the cell under it, air or a cube: it generates on
-/// the world unplaced (pxl-spec-core `scatter::generated`).
+/// the world unplaced (pxl-spec-core `generated::generated`).
 #[test]
 fn generated_decor_stays() {
     use crate::domain::layer::object::store::AIR;
@@ -765,7 +766,7 @@ fn generated_decor_stays() {
 
 /// Only an edit in its own box takes what the ground generates away, air or a
 /// cube; one under it or over it leaves it generated (pxl-spec-core
-/// `scatter::DecorQuery::is_edited`).
+/// `generated::DecorQuery::is_edited`).
 #[test]
 fn generated_decor_edit_removes() {
     use crate::domain::layer::object::store::AIR;
@@ -777,22 +778,23 @@ fn generated_decor_edit_removes() {
         min: [x - 8.0, y - 8.0, world::REACH.min[2]],
         max: [x + 8.0, y + 8.0, world::REACH.max[2]],
     };
-    let tree = *world
-        .generated_over(&space)
-        .first()
-        .expect("a decor generates about the eye");
-    let [cx, cy, cz] = tree.generated_in().unwrap();
-    let decor = Decor::of(DecorId::of(tree.id).unwrap());
-    let generates = |store: &Store| {
+    let at = |tree: &Instance| {
+        let [cx, cy, cz] = tree.generated_in().unwrap();
+        (Decor::of(DecorId::of(tree.id).unwrap()), [cx, cy, cz])
+    };
+    let generates_on = |store: &Store, decor: &Decor, [cx, cy, _]: [i32; 3]| {
         let world = World::new(&tile_cache, store);
         scatter::generated_at(&mut scatter::Asked::new(&world), decor, [cx, cy], true)
             .map(|(_, generates)| generates)
     };
-    assert_eq!(
-        generates(&Store::default()),
-        Some(true),
-        "it generates on bare ground"
-    );
+    // One that generates on bare ground, its box whole.
+    let (decor, [cx, cy, cz]) = world
+        .generated_over(&space)
+        .iter()
+        .map(at)
+        .find(|(d, c)| generates_on(&Store::default(), d, *c) == Some(true))
+        .expect("a decor generates about the eye");
+    let generates = |store: &Store| generates_on(store, decor, [cx, cy, cz]);
     let red = cube_id(Cube::Object(cube::Object::red));
     for (dz, val, what, kept) in [
         (0, AIR, "air in its box", false),

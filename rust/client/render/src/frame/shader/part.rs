@@ -51,7 +51,7 @@ pub const SHADER_GENERATED: u32 = 29;
 /// What `SHADER_GENERATED` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
 /// args; each drawn compacted into the decor's instances: pxl-spec-core
-/// `scatter::drawn`.
+/// `generated::drawn`.
 pub const SHADER_GENERATED_CNT: u32 = 30;
 pub const SHADER_GENERATED_ARGS: u32 = 31;
 pub const SHADER_GENERATED_COMPACT: u32 = 32;

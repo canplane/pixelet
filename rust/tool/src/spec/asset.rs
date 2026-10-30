@@ -784,33 +784,12 @@ fn ground_looks() -> Result<Vec<(String, u32)>, String> {
 fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec<String>), String> {
     const SLOT: &str = "crate::asset::catalog::Slot";
     let mut slot = run_of(DECOR_JSON)?.0;
-    let scatter = spec
-        .get("scatter")
-        .ok_or(format!("{DECOR_JSON}: no scatter"))?;
-    let whole = |key: &str| {
-        scatter
-            .get(key)
-            .and_then(Node::num)
-            .filter(|n| n.fract() == 0.0 && (1.0..=f64::from(u16::MAX)).contains(n))
-            .map(|n| n as u32)
-            .ok_or(format!("{DECOR_JSON}: scatter.{key}"))
-    };
-    let (patch, kept) = (whole("patch")?, whole("kept")?);
-    if !patch.is_power_of_two() || kept < 2 {
-        return Err(format!(
-            "{DECOR_JSON}: scatter.patch is a power of two and scatter.kept at least 2"
-        ));
-    }
-    // A patch's mean count: at the top all it bears, finer all but what the
-    // zoom over it kept.
-    let shares = [1.0, 1.0 - 1.0 / f64::from(kept)];
-
     struct Row {
         name: String,
         val: String,
         doc: Vec<String>,
         seed: String,
-        counts: [Vec<u32>; 2],
+        chance: u32,
         orient: String,
         on: [u32; 8],
         fold: u32,
@@ -831,7 +810,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         let density = k
             .get("density")
             .and_then(Node::num)
-            .filter(|d| *d > 0.0)
+            .filter(|d| *d > 0.0 && *d <= 1.0)
             .ok_or(at("density"))?;
         let orient = k
             .str_at("orient")
@@ -911,8 +890,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             val,
             doc: k.lines_at("$doc").unwrap_or_default(),
             seed: seed.to_string(),
-            counts: shares
-                .map(|share| poisson_thresholds(density * f64::from(patch * patch) * share)),
+            chance: libm::rint(density * 4_294_967_296.0).min(f64::from(u32::MAX)) as u32,
             orient: orient.to_string(),
             on,
             fold,
@@ -922,25 +900,10 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         });
     }
     let variants_max = rows.iter().map(|r| r.sizes.len()).max().unwrap_or(1);
-    let counts_max = rows
-        .iter()
-        .flat_map(|r| r.counts.iter().map(Vec::len))
-        .max()
-        .unwrap_or(1);
-
     let mut portable: Vec<String> = vec![String::new()];
-    portable.extend(rs_doc(
-        &scatter.lines_at("$doc").unwrap_or_default(),
-        "",
-        "///",
-    ));
     portable.extend([
-        format!("pub const PATCH: u32 = {patch};"),
-        String::new(),
         "/// The most variants a decor has.".into(),
         format!("pub const VARIANTS: usize = {variants_max};"),
-        "/// The most thresholds a decor's counts hold.".into(),
-        format!("pub const COUNTS: usize = {counts_max};"),
     ]);
     portable.extend(
         [
@@ -954,16 +917,6 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    along_transport,",
             "}",
             "",
-            "/// A patch's Poisson count as thresholds on a u32 draw: the k-th is",
-            "/// ⌈P(N ≤ k) · 2^32⌉, as many as fall under 2^32, and a draw bears as many as",
-            "/// it reaches (pxl-spec-core scatter.rs `Counts::of`).",
-            "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
-            "#[repr(C)]",
-            "pub struct Counts {",
-            "    pub len: u32,",
-            "    pub at: [u32; COUNTS],",
-            "}",
-            "",
             "/// A decor as the ground generates it, in 32-bit words alone, laid out as a",
             "/// GPU reads the table from a buffer of these words.",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
@@ -973,9 +926,11 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    pub val: u32,",
             "    /// Its scatter: changing it reshuffles every one the ground generates.",
             "    pub seed: u32,",
-            "    /// A patch's counts, born at the top zoom and born finer.",
-            "    pub counts: [Counts; 2],",
-            "    pub orientation: Orientation,",
+            "    /// The chance a cell of its holds one, over 2^32: a draw under it",
+            "    /// does (pxl-spec-core scatter.rs `candidate_at`).",
+            "    pub chance: u32,",
+            "    /// How it faces, an `Orientation`'s number.",
+            "    pub orientation: u32,",
             "    /// The looks it may stand on, a bit each.",
             "    pub on: [u32; 8],",
             "    /// The ground look it is folded to in a cell coarser than it stands",
@@ -996,22 +951,14 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
     portable.push(format!("pub const DECORS: [Decor; {}] = [", rows.len()));
     for r in &rows {
         portable.push(format!("    // {}", r.name));
-        let counts = r.counts.iter().map(|c| {
-            let mut at: Vec<String> = c.iter().map(|t| t.to_string()).collect();
-            at.resize(counts_max, "0".into());
-            format!("Counts {{ len: {}, at: [{}] }}", c.len(), at.join(", "))
-        });
         let mut sizes = r.sizes.clone();
         sizes.resize(variants_max, "[0, 0, 0]".into());
         portable.extend([
             "    Decor {".to_string(),
             format!("        val: {},", r.val),
             format!("        seed: {},", r.seed),
-            format!(
-                "        counts: [{}],",
-                counts.collect::<Vec<_>>().join(", ")
-            ),
-            format!("        orientation: Orientation::{},", r.orient),
+            format!("        chance: {},", r.chance),
+            format!("        orientation: Orientation::{} as u32,", r.orient),
             format!(
                 "        on: [{}],",
                 r.on.map(|w| format!("{w:#010x}")).join(", ")
@@ -1085,25 +1032,6 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
     }
     rs.push("];".into());
     Ok((portable, rs))
-}
-
-/// A Poisson count of mean `mean` as thresholds on a u32 draw: ⌈P(N ≤ k) ·
-/// 2^32⌉ for each k whose is under 2^32. libm, so every host writes the same.
-fn poisson_thresholds(mean: f64) -> Vec<u32> {
-    const WORD: f64 = 4_294_967_296.0;
-    let mut out = Vec::new();
-    let (mut p, mut k) = (libm::exp(-mean), 0.0);
-    let mut cumulative = p;
-    loop {
-        let t = libm::ceil(cumulative * WORD);
-        if t >= WORD || p == 0.0 {
-            return out;
-        }
-        out.push(t as u32);
-        k += 1.0;
-        p *= mean / k;
-        cumulative += p;
-    }
 }
 
 /// The lines of `rs` with the module `open` opens taken off, its body one

@@ -14,8 +14,9 @@ use pxl_spec::space::camera::grid::{split_dist, WINDOW_CELLS_A_RAD, WINDOW_MARGI
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
+use pxl_spec_core::generated::{self, drawn, row_of};
 use pxl_spec_core::overwrite;
-use pxl_spec_core::scatter::{self, drawn, row_of};
+use pxl_spec_core::scatter;
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
@@ -65,11 +66,8 @@ fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
 /// Each kind's window zooms, a bit each, where it is an impostor's worth: the
 /// leaves', and each coarser one where one of its variants stands as itself,
 /// its own size no narrower than the window's cell (pxl-spec-core
-/// `scatter::stands_at`), the decor of the coarser windows a subset of the
-/// finer's, its candidates born coarser and retained at the coarser zoom.
-/// A finer window lies within the leaves'. Then, `scatter::FOLD_BITS` higher,
-/// those where one is folded into the window's cells, smaller than them
-/// (`scatter::any_folds_at`), however far.
+/// `scatter::stands_at`), the same cells' decor read at every one. A finer
+/// window lies within the leaves'.
 fn shown() -> [u32; DECORS.len()] {
     shown_by(|d| d.extent(catalog()))
 }
@@ -78,12 +76,12 @@ fn shown() -> [u32; DECORS.len()] {
 fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {
         let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
-        (FIRST_CELL..=LEAF_CELL).fold(0, |bits, cell| {
-            let stands = (0..d.row.variants).any(|v| scatter::stands_at(d.row, v, cell));
-            let shown = u32::from(stands && is_decor_shown(extent, cell));
-            let folded = u32::from(scatter::any_folds_at(d.row, cell));
-            bits | (shown | folded << scatter::FOLD_BITS) << (cell - FIRST_CELL)
-        })
+        (FIRST_CELL..=LEAF_CELL)
+            .filter(|&cell| {
+                let stands = (0..d.row.variants).any(|v| scatter::stands_at(d.row, v, cell));
+                stands && is_decor_shown(extent, cell)
+            })
+            .fold(0, |bits, cell| bits | 1 << (cell - FIRST_CELL))
     })
 }
 
@@ -93,7 +91,7 @@ struct Handed {
     /// Made with the drawing words, from the variants' extents.
     shown: [u32; DECORS.len()],
     drawing: [u32; drawn::DRAWING_WORDS as usize],
-    placed: Vec<[u32; scatter::RECORD_WORDS as usize]>,
+    placed: Vec<[u32; generated::RECORD_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
     /// cells, and how many the next frame hands (`note_edited`, `frame`).
     edits: [[i32; 4]; overwrite::EDITS as usize],
@@ -206,7 +204,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
         let [x, y, z] = idx_of(UNIT_ZOOM, &e.corner());
         placed.push([
-            scatter::record_word(k, variant, turn, scatter::PLACED_AT),
+            generated::record_word(k, variant, turn, generated::PLACED_AT),
             wrapped(x),
             y as u32,
             z as u32,

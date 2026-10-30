@@ -695,7 +695,7 @@ pub fn light_mark_drawn_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 19)] regions: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 20)] instances: &[u32],
 ) {
-    use pxl_spec_core::scatter::{TALLEST, WIDEST};
+    use pxl_spec_core::generated::{TALLEST, WIDEST};
     let at = pxl_spec_core::light::ACTORS_AT;
     let k = id.x as usize;
     let v = if k < pxl_spec_core::light::ACTORS {

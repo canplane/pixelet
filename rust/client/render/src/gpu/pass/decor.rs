@@ -18,10 +18,10 @@ use crate::gpu::pass::model::{
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::{Draws, Uploads};
-use pxl_spec_core::scatter;
+use pxl_spec_core::generated;
 
 const _: () = assert!(
-    scatter::GROUPS as usize <= DECOR_GROUPS,
+    generated::GROUPS as usize <= DECOR_GROUPS,
     "a decor variant past the draw groups"
 );
 
@@ -202,7 +202,7 @@ impl DecorPass {
     }
 
     /// The models the GPU generated, an indirect draw a group whose model is held
-    /// (pxl-spec-core `scatter::drawn`, a group's models its region `2·group`).
+    /// (pxl-spec-core `generated::drawn`, a group's models its region `2·group`).
     pub fn draw_generated(
         &mut self,
         pass: &mut TrackedRenderPass,
@@ -215,7 +215,7 @@ impl DecorPass {
         pass.set_pipeline(self.pipeline(stage));
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
-        for group in 0..scatter::GROUPS {
+        for group in 0..generated::GROUPS {
             let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(group, uploads) else {
                 continue;
             };

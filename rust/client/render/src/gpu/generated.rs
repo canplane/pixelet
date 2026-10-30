@@ -12,8 +12,8 @@
 //! shaders read (`decor_compact_cs`). The CPU hands what only it knows and
 //! never reads what is generated.
 
-use pxl_spec_core::decor::{COUNTS, DECORS};
-use pxl_spec_core::scatter::{self, drawn, BRICK_PATCHES, GROUPS};
+use pxl_spec_core::decor::DECORS;
+use pxl_spec_core::generated::{self, drawn, GROUPS};
 use pxl_spec_core::{eye, overwrite, window};
 
 use crate::frame::draw::PIPELINE_DECOR;
@@ -32,18 +32,18 @@ pub struct DecorFrame<'a> {
     /// Per kind, the window zooms it is generated at, a bit each over the first
     /// window's (`decor_cs`).
     pub shown: &'a [u32],
-    /// pxl-spec-core `scatter::drawn`'s drawing words, `DRAWING_WORDS` of them.
+    /// pxl-spec-core `generated::drawn`'s drawing words, `DRAWING_WORDS` of them.
     pub drawing: &'a [u32],
     /// Placed decor, a record each as `decor_cs` writes one: its kind,
     /// variant and turn, then its box's min corner in leaf cells, its base
     /// sunk under it by none, as it stands where it is placed; read where
     /// it lies, unwritten until the page replays the turn.
-    pub placed: &'a [[u32; scatter::RECORD_WORDS as usize]],
+    pub placed: &'a [[u32; generated::RECORD_WORDS as usize]],
     /// The anchor the lanes are about, less the frame's eye: where the decor's
     /// instances are drawn.
     pub translation: [f32; 3],
     /// What overwrites wrote since the last frame, `overwrite::EDITS` boxes
-    /// of leaf cells at most (pxl-spec-core `scatter::meets`): the slots
+    /// of leaf cells at most (pxl-spec-core `generated::meets`): the slots
     /// whose decor they reach generate again.
     pub edits: &'a [[i32; 4]],
 }
@@ -52,7 +52,7 @@ pub struct DecorFrame<'a> {
 /// eye's place: the windows' table, a preview's cuts, and the bricks filled
 /// this frame. A slot generates whole where its brick is another; else a
 /// candidate generates again only where a box meets what it reads
-/// (`scatter::reads`): an edit, a cut as it was or is, or a brick filled at
+/// (`generated::reads`): an edit, a cut as it was or is, or a brick filled at
 /// its window's zoom. The overwrites' every write names its box (the
 /// frame's `edits`), and the service area's index is made once, before any
 /// brick is held, so neither generates a slot by itself. A brick filled
@@ -78,7 +78,7 @@ pub struct Generated {
     compact: Built,
     groups: [u32; 6],
     /// What `decor_mark_cs` reads and lists for `decor_cs`'s dispatch
-    /// (`scatter::LIST_AT`).
+    /// (`generated::LIST_AT`).
     list: u32,
     shown: u32,
     drawing: u32,
@@ -89,7 +89,7 @@ pub struct Generated {
     /// Each region's draw uniform (`drawn::UNIFORM_WORDS` apart), as the
     /// decor and impostor shaders read one, its index set by the args pass.
     uniforms: u32,
-    /// The records, laid by slot (`scatter::record_at`); then the decor's
+    /// The records, laid by slot (`generated::record_at`); then the decor's
     /// instances, `drawn::LANES` lanes and the index list, `cap` slots each.
     records: u32,
     instances: u32,
@@ -171,7 +171,7 @@ impl Generated {
             ),
             groups: [0; 6],
             list: buf(
-                word_bytes(scatter::LIST_WORDS as usize),
+                word_bytes(generated::LIST_WORDS as usize),
                 storage | buffer_usage::INDIRECT,
             ),
             shown: buf(word_bytes(DECORS.len()), storage),
@@ -223,13 +223,13 @@ impl Generated {
         world: World,
     ) {
         self.on = true;
-        let need = scatter::SLOT_RECORDS + (f.placed.len() as u32).next_power_of_two().max(64);
+        let need = generated::SLOT_RECORDS + (f.placed.len() as u32).next_power_of_two().max(64);
         let grew = need > self.cap;
         if grew {
             // The slots' records carried over: the placed tail is laid anew.
             let (records, instances) = (self.records, self.instances);
             self.records = g.buf(
-                word_bytes(scatter::record_at(need) as usize),
+                word_bytes(generated::record_at(need) as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
             self.instances = g.buf(
@@ -242,7 +242,7 @@ impl Generated {
                     e,
                     (records, 0),
                     (self.records, 0),
-                    word_bytes(scatter::record_at(scatter::SLOT_RECORDS) as usize),
+                    word_bytes(generated::record_at(generated::SLOT_RECORDS) as usize),
                 );
                 g.submit(e);
             }
@@ -292,21 +292,21 @@ impl Generated {
         if self.marking {
             // The boxes held, at every zoom, then each brick handed, at
             // its window's alone.
-            let mut boxes = [0u32; (scatter::MARKED * scatter::BOX_WORDS) as usize];
+            let mut boxes = [0u32; (generated::MARKED * generated::BOX_WORDS) as usize];
             let fresh = generation.fresh.iter().map(|f| {
                 let cell = f[window::FRESH_CELL as usize];
                 let q = window::fresh_brick([
                     f[window::FRESH_FIRST as usize],
                     f[window::FRESH_FIRST as usize + 1],
                 ]);
-                (scatter::brick_box(cell, q), cell)
+                (generated::brick_box(cell, q), cell)
             });
             let held = self.held[..self.marked]
                 .iter()
-                .map(|&b| (b, scatter::EVERY));
+                .map(|&b| (b, generated::EVERY));
             let mut n = 0;
-            for (b, zoom) in held.chain(fresh).take(scatter::MARKED as usize) {
-                let at = n * scatter::BOX_WORDS as usize;
+            for (b, zoom) in held.chain(fresh).take(generated::MARKED as usize) {
+                let at = n * generated::BOX_WORDS as usize;
                 boxes[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
                 boxes[at + 4] = zoom;
                 n += 1;
@@ -316,12 +316,12 @@ impl Generated {
                 self.list,
                 0,
                 bytes(&[
-                    BRICK_PATCHES.div_ceil(s[0]),
+                    window::BRICK_CELLS.div_ceil(s[0]),
                     1,
                     0,
                     0,
-                    (COUNTS as u32).div_ceil(w[0]),
-                    BRICK_PATCHES.div_ceil(w[1]),
+                    generated::KIND_RECORDS.div_ceil(w[0]),
+                    1,
                     0,
                     0,
                     u32::from(self.stale),
@@ -332,8 +332,8 @@ impl Generated {
             );
             g.write_buf(
                 self.list,
-                scatter::BOXES_AT * 4,
-                bytes(&boxes[..n * scatter::BOX_WORDS as usize]),
+                generated::BOXES_AT * 4,
+                bytes(&boxes[..n * generated::BOX_WORDS as usize]),
             );
         }
         let p = &mut self.placed;
@@ -344,14 +344,14 @@ impl Generated {
         if placed_moved {
             g.write_buf(
                 self.records,
-                scatter::PLACED_HEAD * 4,
+                generated::PLACED_HEAD * 4,
                 bytes(&[f.placed.len() as u32, 0, 0, 0]),
             );
             if !f.placed.is_empty() {
                 // Read where the kernel holds them, one record however many.
                 g.upload_buf(
                     self.records,
-                    scatter::record_at(scatter::SLOT_RECORDS) * 4,
+                    generated::record_at(generated::SLOT_RECORDS) * 4,
                     bytes(f.placed.as_flattened()),
                 );
             }
@@ -413,14 +413,7 @@ impl Generated {
         self.groups = [
             group(
                 &self.mark,
-                &[
-                    window,
-                    self.records,
-                    self.list,
-                    self.rows,
-                    self.shown,
-                    ground,
-                ],
+                &[window, self.records, self.list, self.rows, self.shown],
             ),
             group(&self.thin, &[window, self.records, self.rows, self.list]),
             group(
@@ -496,13 +489,6 @@ impl Generated {
         self.counted.forget();
     }
 
-    /// Whether this frame generates every entry whole, decor having been off
-    /// or shown at other zooms: what is folded into the windows' columns made
-    /// again in every one (pxl-shader decor.rs `decor_mark_cs`).
-    pub fn folds_every(&self) -> bool {
-        self.on && self.marking && self.stale
-    }
-
     /// Whether it marks or counts this frame: its passes run, and the frame
     /// draws what they leave.
     pub fn works(&self) -> bool {
@@ -529,13 +515,13 @@ impl Generated {
             g.set_bind_group(pass, 0, self.groups[0], &[]);
             g.dispatch(
                 pass,
-                scatter::EYE_ENTRIES.div_ceil(compute::DECOR_MARK_WORKGROUP[0]),
+                generated::EYE_ENTRIES.div_ceil(compute::DECOR_MARK_WORKGROUP[0]),
                 1,
                 1,
             );
             let listed = [
-                (&self.thin, scatter::THIN_ARGS),
-                (&self.generate, scatter::GENERATE_ARGS),
+                (&self.thin, generated::THIN_ARGS),
+                (&self.generate, generated::GENERATE_ARGS),
             ];
             for (k, (built, args)) in listed.into_iter().enumerate() {
                 g.set_pipeline(pass, built.pipeline);
@@ -547,9 +533,9 @@ impl Generated {
             return;
         }
         // A workgroup a slot, reading the records its patches bear, then
-        // placed decor's, `scatter::RUNS` a workgroup (pxl-shader
+        // placed decor's, `generated::RUNS` a workgroup (pxl-shader
         // `run_of`): the records held, not the capacity.
-        let records = scatter::EYE_ENTRIES + self.placed_cnt.div_ceil(scatter::RUNS);
+        let records = generated::EYE_ENTRIES + self.placed_cnt.div_ceil(generated::RUNS);
         let passes = [
             (&self.cnt, records),
             (&self.args_built, 1),

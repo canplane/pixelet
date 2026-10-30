@@ -24,6 +24,7 @@ pub mod decor;
 pub mod eye;
 pub mod face;
 pub mod fill;
+pub mod generated;
 pub mod grid;
 pub mod ground;
 pub mod lattice;

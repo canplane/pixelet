@@ -20,9 +20,9 @@ use crate::cast;
 use crate::cast::Spacing;
 use crate::cast::{Detail, End, Met, Ray};
 use crate::eye;
+use crate::generated;
 use crate::param::light;
 use crate::param::light::{SAMPLE, SPREAD};
-use crate::scatter;
 use crate::{axis, FRAC_W};
 use core::f32::consts::SQRT_2;
 
@@ -166,15 +166,15 @@ impl Light {
 
     /// How many tiles either side of its own a drawn receiver stands on
     /// (pxl-shader light.rs `light_mark_drawn_cs`): as many as half the widest
-    /// decor (`scatter::WIDEST`) spans, at least one, as its tile is one a
+    /// decor (`generated::WIDEST`) spans, at least one, as its tile is one a
     /// point of it lies in.
     pub fn ring(&self) -> i32 {
         let across = TILE as f32 * libm::sqrtf(dot(self.across, self.across));
-        let half = scatter::WIDEST as f32 / 2.0;
+        let half = generated::WIDEST as f32 / 2.0;
         (libm::ceilf(half / across) as i32).max(1)
     }
 
-    /// The way up the tallest decor (`scatter::TALLEST`) on the box, in
+    /// The way up the tallest decor (`generated::TALLEST`) on the box, in
     /// tiles across and down, and the steps it takes a tile apart at most:
     /// a receiver standing on a tile reads the box up it, decor and the
     /// actors no taller (pxl-shader light.rs `light_reach_cs`). The box is
@@ -182,7 +182,7 @@ impl Light {
     pub fn up(&self) -> ([f32; 2], u32) {
         let (low, top, tile) = (
             self.texel_at([0.0; 3]),
-            self.texel_at([0.0, 0.0, scatter::TALLEST as f32]),
+            self.texel_at([0.0, 0.0, generated::TALLEST as f32]),
             TILE as f32,
         );
         let way = [(top[0] - low[0]) / tile, (top[1] - low[1]) / tile];
@@ -709,7 +709,6 @@ mod tests {
     use crate::cast::Node;
     use crate::cast::Stop;
     use crate::param::light;
-    use crate::scatter;
 
     /// Starts as a host lays them for the eye at Q3 `eye`, off the light's
     /// words alone: each anchor where its texel lies off the eye, rounded.
@@ -933,7 +932,7 @@ mod tests {
             1.0,
         );
         let up = s.up();
-        let rise = scatter::TALLEST as f32 * 4.0 / TILE as f32 * r;
+        let rise = generated::TALLEST as f32 * 4.0 / TILE as f32 * r;
         assert!(
             (up.0[0] - rise).abs() < 1e-4 && up.0[1].abs() < 1e-6,
             "{up:?}"
@@ -978,7 +977,7 @@ mod tests {
             let texel = libm::sqrtf(dot(s.across, s.across));
             for base in [[0.1, 0.2, -3.0], [0.37, -0.81, -2.5], [-0.66, 0.45, -3.3]] {
                 let stood = s.tile_of(base);
-                for h in [0.0, 0.7, 1.9, 3.1, scatter::TALLEST as f32] {
+                for h in [0.0, 0.7, 1.9, 3.1, generated::TALLEST as f32] {
                     for (a, b) in [(0.0, 0.0), (3.5, 0.0), (-3.5, 0.0), (0.0, 3.5), (2.5, -2.5)] {
                         // A tap `(a, b)` texels off the point `h` up.
                         let p = [

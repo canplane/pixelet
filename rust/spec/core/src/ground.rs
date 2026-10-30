@@ -542,18 +542,14 @@ pub fn node<H: Held>(
 
 /// A cell's ground, as a column reads it: its look (`unknown` for the
 /// service area's wall), its top in cells of its zoom and the share of
-/// its top cell it fills (`top`), the four looks its fold took
-/// (`looks`, `dx + 2·dy`), and the decor folded into its top cell, the share
-/// of it the decor claims and the look it is folded to, 0 for the ground's
-/// (`window::column_fold`, pxl-spec-core `scatter::folds_at`).
+/// its top cell it fills (`top`), and the four looks its fold took
+/// (`looks`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub look: u32,
     pub top: i32,
     pub part: u32,
     pub fold: [u32; 4],
-    pub decor: u32,
-    pub decor_look: u32,
 }
 
 impl Cell {
@@ -563,27 +559,7 @@ impl Cell {
         top: 0,
         part: FULL,
         fold: [VOID; 4],
-        decor: 0,
-        decor_look: 0,
     };
-
-    /// The decor folded into cell `z` beside the ground: the share of it the
-    /// decor claims, in `answer::FULL`'s units, and its look, the decor's
-    /// fold where it names one, else the ground's; none but in its top
-    /// cell, where it stands.
-    pub fn folded(&self, z: i32) -> (u32, u32) {
-        if z != self.top - 1 || self.decor == 0 {
-            return (0, VOID);
-        }
-        (
-            self.decor,
-            if self.decor_look != 0 {
-                self.decor_look
-            } else {
-                self.look
-            },
-        )
-    }
 
     /// The share of cell `z` its ground fills, in `answer::FULL`'s
     /// units, where a cell of it fills there (`asset`): whole under its

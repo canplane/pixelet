@@ -12,7 +12,6 @@
 //! is present once its cells are drawn; a reader of one absent reads the
 //! coarser window's (`step`).
 
-use crate::answer;
 use crate::area;
 use crate::area::Area;
 use crate::area::Shard;
@@ -263,53 +262,12 @@ pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
 pub const TREE_AT: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
 
 /// A brick's columns, a word a cell, row by row: a cell's ground's top in
-/// leaf cells, an `i16`, low (`column_top`), its fill's; over it the decor
-/// folded into the cell (`column_fold`), its decor generation's (pxl-shader
-/// decor.rs `decor_cs`).
+/// leaf cells, an `i16`, low (`column_top`).
 pub const COLUMN_WORDS: u32 = BRICK_CELLS;
 
 /// A column word's ground top.
 pub const fn column_top(w: u32) -> i32 {
     (w << 16) as i32 >> 16
-}
-
-/// A column word's ground top, as its fill writes it, nothing folded over it.
-pub const fn column_word(top: i32) -> u32 {
-    top as u32 & 0xffff
-}
-
-/// Where a column word's folded share starts, a byte of `FOLD_UNIT`s.
-pub const FOLD_SHARE_SHIFT: u32 = 16;
-/// Where a column word's folded look starts, a byte.
-pub const FOLD_LOOK_SHIFT: u32 = 24;
-/// A folded share's unit, of `answer::FULL`.
-pub const FOLD_UNIT: u32 = answer::FULL / 64;
-
-/// A column word's decor folded into its cell (pxl-spec-core
-/// `scatter::folds_at`): the share of the cell it claims, in
-/// `answer::FULL`'s units, no more than the cell, and the look it is folded
-/// to, 0 for the ground's.
-pub const fn column_fold(w: u32) -> (u32, u32) {
-    let share = (w >> FOLD_SHARE_SHIFT & 0xff) * FOLD_UNIT;
-    (
-        if share > answer::FULL {
-            answer::FULL
-        } else {
-            share
-        },
-        w >> FOLD_LOOK_SHIFT,
-    )
-}
-
-/// Column word `w` with a decor folded into it: `share` more `FOLD_UNIT`s,
-/// held to a byte, and the greater of its look and `look`, so what is folded
-/// is the same in whatever order its decors are added.
-pub const fn fold_into(w: u32, share: u32, look: u32) -> u32 {
-    let sum = (w >> FOLD_SHARE_SHIFT & 0xff) + share;
-    let held = (w >> FOLD_LOOK_SHIFT) & 0xff;
-    w & 0xffff
-        | (if sum > 0xff { 0xff } else { sum }) << FOLD_SHARE_SHIFT
-        | (if look > held { look } else { held }) << FOLD_LOOK_SHIFT
 }
 
 /// A brick's cells as its fill lays them, two a word, cell `i` in the
@@ -672,14 +630,11 @@ pub fn ground(w: &(impl Bricks + Area), place: Found, zoom: Zoom, b: [i32; 2]) -
     let read = held_to(zoom);
     let (word, column, laid, f) = cell(w, place, read, cell_at(zoom, read, b));
     let (top, part) = ground::top(zoom, column_top(column) as f32);
-    let (decor, decor_look) = column_fold(column);
     let cell = Cell {
         look: area::laid(laid, zoom, b),
         top,
         part,
         fold: ground::looks(word),
-        decor,
-        decor_look,
     };
     (cell, f)
 }

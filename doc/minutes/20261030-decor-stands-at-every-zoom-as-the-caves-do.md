@@ -4,6 +4,11 @@
 user decided is said as theirs; everything under "Proposed" is a design, not
 built.
 
+**Superseded in part, 2026-10-31,** by "The scatter is a hash a cell again",
+below: no zoom a candidate is born at, and the fold read off the hash in the
+node, as the caves are. What the sections before it say of the process, the
+thinning and the column words is the record of what was.
+
 ## What was asked
 
 Asked how the indicators and the actors take the level of detail decor does,
@@ -176,3 +181,36 @@ they share is the descent, not a hash interface:
 - The cost a screen: the windows are the camera grid's, so the cells
   generated a frame stay about the same however far the eye is; measured,
   not assumed (`performance`).
+
+## The scatter is a hash a cell again, 2026-10-31
+
+Decided by the user. The Poisson process, its patches and the zoom a candidate
+is born at came in on 2026-10-03 (`3dcf2ae7b`), one line of an agent's commit
+on bridges and tunnels, with no decision recorded; before it a cell's hash said
+whether it held a decor (`a403b972f`). The user had it put back, in their
+words: a size is in units, a unit a z24 cell; a thing is as large as it is, a
+cell at its own zoom, smaller one zoom coarser, and nothing where it rounds to
+none; and the caves are no process that is born either.
+
+- **A cell's hash.** A leaf cell holds one of a decor where its draw falls
+  under the decor's chance (decor.json `density`, the row's `chance`); its
+  variant and heading are its own draws after (pxl-spec-core `scatter`
+  `candidate_at`). One whose box meets a neighbor's that drew lower gives way
+  (`retained`). No patch, no count, no zoom it is born at.
+- **By size at every zoom.** A window reads the leaf cells under its brick, a
+  window cell a thread (pxl-shader decor.rs `decor_thin_cs`): what stands at
+  its window is generated, a decor's records laid as many as it retains
+  (`generated::cnt_at`).
+- **Folded as the caves are.** What is smaller than a cell is folded into the
+  column's top cell by the node itself, off the hash of the leaf cells under
+  it, a few zooms deep before its room rounds to none (`scatter::folded`,
+  `world::node`), the CPU's and a GPU's alike. The column words, the slot in
+  an entry's head and the cast forgetting the entries folded into, which the
+  fold of the day before needed, are gone.
+- **The modules by layer.** `scatter`, the hash, stands beside the caves;
+  `generated`, the footing, the pose and the GPU's records, stands over the
+  query, as pxl-render's `gpu/generated.rs` does; the decor catalog stands
+  beside the cube's.
+- **Not checked yet:** the app; what the GPU's thin pass costs a brick where a
+  window's cell holds many leaf cells.
+

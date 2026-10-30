@@ -6,14 +6,14 @@
 //! it is read. Where it stands, which way it faces and whether it generates are
 //! the world unplaced, the ground's alone, its column's footing
 //! and the cells about it (`World::footing`); only an edit in its box, asked
-//! of the world as edited, takes it away (pxl-spec-core `scatter::generated`).
+//! of the world as edited, takes it away (pxl-spec-core `generated::generated`).
 
 use pxl_spec::asset::cube::sentinel;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec_core::scatter::{self as core_scatter, DecorQuery, Generated};
+use pxl_spec_core::generated::{self as core_scatter, DecorQuery, Generated};
 use pxl_spec_core::support::Footing;
 use pxl_spec_core::world::Placed;
 use pxl_spec_core::FRAC_W;
@@ -91,7 +91,7 @@ impl DecorQuery for Asked<'_, '_> {
 /// read about it (`World::generated_in`): the leaf scatter, cell by cell, which
 /// a region generates the same (pxl-spec procedural.test.rs); and, where
 /// `boxed`, whether it generates there, its box asked about the same footing
-/// (pxl-spec-core `scatter::generated`), true where not.
+/// (pxl-spec-core `generated::generated`), true where not.
 pub(super) fn generated_at(
     asked: &mut Asked,
     decor: &Decor,

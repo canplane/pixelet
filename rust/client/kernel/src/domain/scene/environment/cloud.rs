@@ -21,8 +21,8 @@ use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
 use pxl_spec_core::cloud::{drift, lattice_hash};
+use pxl_spec_core::generated::drawn;
 use pxl_spec_core::param::cloud::{CUMULUS_KM, WIND};
-use pxl_spec_core::scatter::drawn;
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
@@ -48,8 +48,8 @@ use crate::sys::io::loader::{catalog, load_image, load_of};
 use pxl_render::gpu::api::Image;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world;
+use pxl_spec_core::generated;
 use pxl_spec_core::param::cloud;
-use pxl_spec_core::scatter;
 
 /// Its models, a cloud each one of them.
 const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
@@ -58,7 +58,7 @@ pub const MODELS_MAX: usize = VARIANTS.len();
 
 /// Its draw groups follow the decors' variants, which number the groups
 /// before it (pxl-spec-core scatter.rs `GROUPS`).
-const FIRST_GROUP: usize = scatter::GROUPS as usize;
+const FIRST_GROUP: usize = generated::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
     "a draw group each variant"

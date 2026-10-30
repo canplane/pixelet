@@ -228,7 +228,7 @@ impl ImpostorPass {
     }
 
     /// The impostors the GPU generated, an indirect draw a group whose layer
-    /// is drawn (pxl-spec-core `scatter::drawn`, a group's impostors its region
+    /// is drawn (pxl-spec-core `generated::drawn`, a group's impostors its region
     /// `2·group + 1`).
     pub fn draw_generated(
         &self,

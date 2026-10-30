@@ -164,19 +164,22 @@ sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
 | decor  | what the ground generates           | a placed decor  |
 | marker | a place, Carto's icon and its name  | a placed marker |
 
-The ground generates decor by evaluating, never storing: what stands in a leaf cell
-is a function of the cell, a seed and the ground's face, one rule on both sides
-(`pxl-spec-core scatter.rs`). Two generated decors never share a cell.
+The ground generates decor by evaluating, never storing, as it does the caves: a
+leaf cell holds one of a decor where a hash of the cell draws under the decor's
+chance, and where it stands is a function of the cell, a seed and the ground's
+face, one rule on both sides (`pxl-spec-core scatter.rs`). One whose box meets a
+neighbor's that drew lower gives way, so two generated decors never share a
+cell. At any zoom the same cells are read: what is as large as a cell there
+stands as itself, and what is smaller is folded into it, as a cube is.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its look the majority of those it folds, and its
 top cell is filled to the share its height reaches (`pxl-spec-core ground.rs`
 `top`). What is placed and the ways fold to the kind most of their fill is
-(`overwrite.rs` `fold`). Decor smaller than a window's cell is folded into the
-top cell of the column it stands in, the room it claims beside the ground's,
-its look the one its kind names (`scatter.rs` `folds_at`, `ground.rs`
-`Cell::folded`): the GPU adds it as it generates the window's decor, so the
-CPU's coarse cells hold none.
+(`overwrite.rs` `fold`). Decor smaller than the cell is folded into the top
+cell of its column, the room it claims beside the ground's, its look the one its
+kind names: the node reads it off the hash of the leaf cells under it, as it
+reads the caves (`scatter.rs` `folded`, `world.rs` `node`).
 
 A coarse cell keeps how much of its cube the ground and what is written over it
 fill (`answer.rs` `cover`), in eighths, floored: its **kept eighths**. It is
@@ -388,10 +391,10 @@ Decor and the markers stand beside the ground, and both are gathered over the
 eye's windows' bricks.
 
 Decor is generated on the GPU from the same windows the rays read (`pxl-render
-gpu/generated.rs`). The candidates of a patch, the cells a decor may stand in, are
-thinned a thread a patch, each candidate the thinning retains is generated on a
-thread of its own, and a candidate is generated again only where what it reads
-changed. Every frame each generated record is taken where the rays ask the zoom
+gpu/generated.rs`). The leaf cells under a window's brick are read off the hash
+a window cell a thread, each candidate that stands at the window and stands
+clear is generated on a thread of its own, and a brick's decor is generated
+again only where what it reads changed. Every frame each generated record is taken where the rays ask the zoom
 it was generated at and compacted into the instances, a model down to its own
 size on screen, an impostor below it and culled below that. Placed decor is handed in as records the GPU draws beside it
 (`domain/scene/decor/drawn.rs`).
@@ -643,8 +646,10 @@ and writes (`driver/namespace/`), its text, sensors and GPU, is
 the states a driver reports and the shell shows, written beside it
 (`abi/state.ts`), are `ts/client/src/abi/`.
 
-The host and the kernel share xpute's two rings, one for what the host submits
-and one for what the kernel completes. The **commands** are
+The host and the kernel share xpute's two pairs of rings: the system pair,
+which carries xpute's own vectors (the answers to the kernel's opens), and the
+kernel's, one ring for what the host submits and one for what the kernel
+completes. The **commands** on the kernel's are
 `spec/client/kernel/domain/control/cmd.json`'s, from which both sides' readers
 and writers are generated, each packet an XTP tree, xpute's relocatable binary
 tree. The kernel also posts **events** nobody asked for, such as a sensor to
@@ -687,12 +692,12 @@ What crosses each edge:
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | shell and kernel, `port/`     | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`), the profiler's reads | the snapshot, replaced whole when it moved, and the events it is told by                                 |
 | kernel and devices, `driver/` | opens and writes, text by hostcall, a sensor started or stopped, the GPU's calls                                          | a file read whole, a sensor's reading, the GPU's state, the page's visibility, each turn's `WORLD_FRAME` |
-| host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the submission ring                | completions and events, the streams' records, hostcalls, the last words if it stops                      |
+| host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the kernel's rings, opens answered on the system rings | completions and events, the streams' records, hostcalls, the last words if it stops                      |
 
 ## Reads, and the one scheduler
 
 A read is a file in xpute's sense
-([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)):
+([xpute's hostcalls and files](./xpute/ARCHITECTURE.md#hostcalls-and-files)):
 the kernel names a root by its number and an object below it by its number,
 and the client binds each root to what answers it, once at boot
 (`ts/client/src/driver/namespace/namespace.ts` `namespace`). The roots are
@@ -780,8 +785,8 @@ turn.
                         the falling edge  ──▶  wake_ms
 ```
 
-Before each turn the client submits one `WORLD_FRAME` through the host's
-doorbell, with the host's alone: the turn's pacing, the reads allowed out and
+Before each turn the client submits one `WORLD_FRAME` on the kernel's rings,
+with the host's alone: the turn's pacing, the reads allowed out and
 the clock (`ts/client/src/driver/frame.ts` `submit_frame`); a turn rung for a
 command alone carries none and draws nothing. The view each frame is drawn at
 is the shell's, the canvas's rect it sends whenever it moves (`INPUT_RECT`). The host's turns are paced to the display by

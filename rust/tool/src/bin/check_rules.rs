@@ -80,15 +80,17 @@ const KERNEL_BESIDE: [&str; 1] = ["profiler"];
 /// only seam"), and what asks it. A layer knows no query, and the query no
 /// asker.
 const SPEC_CORE: &str = "rust/spec/core/src/";
-const SPEC_CORE_ORDER: [(&str, u8); 27] = [
+const SPEC_CORE_ORDER: [(&str, u8); 28] = [
     ("param", 0),
     ("cube", 0),
+    ("decor", 0),
     ("lattice", 0),
     ("grid", 0),
     ("answer", 0),
     ("tally", 0),
     ("area", 1),
     ("cave", 1),
+    ("scatter", 1),
     ("cloud", 1),
     ("ground", 1),
     ("window", 1),
@@ -105,8 +107,7 @@ const SPEC_CORE_ORDER: [(&str, u8); 27] = [
     ("ray", 3),
     ("light", 3),
     ("screen", 3),
-    ("scatter", 3),
-    ("decor", 3),
+    ("generated", 3),
     ("face", 3),
 ];
 
@@ -214,7 +215,7 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
         "decor.rs",
         "decor_thin_cs",
         "client/shader/src/decor.rs",
-        "PATCH_LANES",
+        "CELL_LANES",
         1,
     ),
     (

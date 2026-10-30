@@ -50,7 +50,7 @@ pub const CELL: f32 = 1.0 / CELLS_A_RAD;
 /// 1`, so halving it, rounding down, is `e`; and rounding the square never
 /// reaches 4, since the widest `m` short of 2, `2 − 2⁻²³`, squares to `4 −
 /// 2⁻²¹` and a bit, which rounds down to it. Every asker passes a square
-/// (pxl-spec space/camera/grid.rs, `scatter::drawn_at`), so a distance on a
+/// (pxl-spec space/camera/grid.rs, `generated::drawn_at`), so a distance on a
 /// power of two falls the same side everywhere.
 pub fn cell_zoom_at(r2: f32) -> Zoom {
     let split = CELLS_A_RAD / SPANS;

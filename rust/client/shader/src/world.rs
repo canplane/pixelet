@@ -32,8 +32,7 @@ pub(crate) fn brick_at(brick: u32) -> u32 {
 /// The world as the GPU holds it (pxl-kernel domain/scene/cast.rs fills it): the
 /// bricks the eye's windows hold, their columns, levels and runs, the
 /// service area, and what is placed with a preview's cuts; the caves are a
-/// hash, held nowhere. Decor is not here (pxl-spec-core `cast::Query`), but
-/// for what of it is folded into its columns' cells (`window::column_fold`).
+/// hash, held nowhere. Decor is not here (pxl-spec-core `cast::Query`).
 /// The bricks' cells' four looks are `L`'s: their own buffer for the
 /// cast's walks, every observer's alike, none where a pass reads no cell's
 /// look (`Unlooked`).
@@ -47,7 +46,7 @@ pub struct World<'a, L> {
     /// (`window::JOINED_AT`).
     pub(crate) window: &'a [IVec4],
     /// Per slot (`window::SLOTS`), its brick's columns (`height_cs`,
-    /// `way_cs`, the decor folded into them `decor_cs`), their levels (`bound_cs`), their runs (`way_cs`) and its
+    /// `way_cs`), their levels (`bound_cs`), their runs (`way_cs`) and its
     /// cells as laid (`height_cs`) (`window::BRICK_WORDS`), whichever
     /// window filled it.
     pub(crate) ground: &'a [u32],

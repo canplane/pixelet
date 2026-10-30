@@ -4,7 +4,7 @@
 //! world's depth from the light cast with them, and the decor generated over the
 //! world (gpu/generated.rs): what each reads, made once, and their dispatches.
 
-use pxl_spec_core::scatter::{self, GROUPS};
+use pxl_spec_core::generated::{self, GROUPS};
 use pxl_spec_core::window::{self, FRESH_CELL, FRESH_FIRST};
 use pxl_spec_core::{beam, eye, light, observed, overwrite, ray};
 use xpute_kit::status::bug::OrBug;
@@ -78,11 +78,6 @@ pub(super) struct CastBuffers {
     frame: u32,
     forget: bool,
     moved: [u32; observed::MOVED_WORDS as usize],
-    /// The eye's entries coarser than the leaves' whose decor was folded into
-    /// their columns after the last frame's cast (pxl-shader decor.rs
-    /// `decor_cs`, dispatched after it): the next frame casts, and forgets
-    /// what is over them, as over the entries that moved (`moved`).
-    folding: [u32; observed::MOVED_WORDS as usize],
     boxes: [[i32; 4]; overwrite::BOXES as usize],
     holding: usize,
     written: [u32; observed::WRITTEN as usize],
@@ -230,20 +225,6 @@ struct Forgot {
     writes: usize,
 }
 
-/// The eye's entries coarser than the leaves', a bit each as `moved` holds
-/// them: those decor may be folded into (pxl-spec-core `scatter::folds_at`).
-const COARSE: [u32; observed::MOVED_WORDS as usize] = {
-    let mut m = [0; observed::MOVED_WORDS as usize];
-    let mut k = 0;
-    while k < window::EYE_WINDOWS * window::ENTRIES {
-        if window::eye_cell(k / window::ENTRIES) < pxl_spec_core::LEAF_CELL {
-            m[(k / 32) as usize] |= 1 << (k % 32);
-        }
-        k += 1;
-    }
-    m
-};
-
 /// Family `first` of what is placed noted written among the `writes` of
 /// `written`, once; whether it found room.
 fn note(written: &mut [u32], writes: &mut usize, first: u32) -> bool {
@@ -350,7 +331,6 @@ impl RaysPass {
             frame: 0,
             forget: true,
             moved: [0; observed::MOVED_WORDS as usize],
-            folding: [0; observed::MOVED_WORDS as usize],
             boxes: [[0; 4]; overwrite::BOXES as usize],
             holding: 0,
             written: [0; observed::WRITTEN as usize],
@@ -368,7 +348,7 @@ impl RaysPass {
             light_detail_built,
             light_groups: [0; 8],
             light_bound: [0; 12],
-            light_none: buf(word_bytes(2 * scatter::drawn::REGIONS as usize), storage),
+            light_none: buf(word_bytes(2 * generated::drawn::REGIONS as usize), storage),
             light_number: 0,
             light_epoch: 0,
             light_ready: false,
@@ -494,8 +474,7 @@ impl RaysPass {
         r.read(&[*room as u32, *revision, rays.0]);
         // And the ground's bricks, written this frame or not.
         let fresh = self.ground.as_ref().map_or(0, |gb| gb.fresh_len);
-        let folds = c.folding.iter().any(|&m| m != 0);
-        let stands = r.end() && fresh == 0 && c.group != 0 && !folds;
+        let stands = r.end() && fresh == 0 && c.group != 0;
         let jitter = [eye[eye::JITTER], eye[eye::JITTER + 1]];
         let jittered = jitter != c.jitter;
         c.jitter = jitter;
@@ -643,7 +622,6 @@ impl RaysPass {
         // the turn handed: what is over them is asked again.
         c.cuts = cuts;
         let eye_rows = (window::EYE_WINDOWS * window::ENTRIES) as usize;
-        let was = c.moved;
         if window_moved {
             let rows = &cast.window[..4 * eye_rows];
             for k in 0..eye_rows {
@@ -671,14 +649,6 @@ impl RaysPass {
                 }
             }
         }
-        // The entries the last frame's decor folded into, forgotten now; and
-        // those that moved this frame, coarser than the leaves', which this
-        // frame's decor folds into after the cast, forgotten next frame.
-        let handed: [u32; observed::MOVED_WORDS as usize] =
-            core::array::from_fn(|i| c.moved[i] & !was[i] & COARSE[i]);
-        for (m, f) in c.moved.iter_mut().zip(c.folding) {
-            *m |= f;
-        }
         // Decor generated first: where it stands is what the light's cast reads
         // of it, and its buffers what the light's groups bind.
         let world = [c.eye, c.window, ground, c.shards, c.overwrites, pool];
@@ -695,11 +665,6 @@ impl RaysPass {
         };
         c.generated
             .prepare(g, cast.decor, generation, meshes, world);
-        c.folding = if c.generated.folds_every() {
-            COARSE
-        } else {
-            handed
-        };
         // The shadow map is cast, every slot a receiver reads, as the eye's
         // rays are (pxl-spec-core `light`), where what it reads moved: the
         // light's frame or box, the eye's place or zooms, which the
