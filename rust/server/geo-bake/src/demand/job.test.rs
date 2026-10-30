@@ -22,7 +22,8 @@ async fn outcomes_reported() {
 
 #[test]
 fn staging_publish() {
-    let base = std::env::temp_dir().join(format!("pxl-demand-publication-{}", std::process::id()));
+    let base =
+        std::env::temp_dir().join(format!("pixelet/demand-publication-{}", std::process::id()));
     let runner = Runner::new(1, Limits::default()).unwrap();
     let data = Dataset::open(&base, super::super::Kind::Place, &runner).unwrap();
     let stage = Staging(data.cache.root.join("stage"));

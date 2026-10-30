@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn restart_keeps_tiles() {
-    let base = std::env::temp_dir().join(format!("pxl-demand-claim-{}", std::process::id()));
+    let base = std::env::temp_dir().join(format!("pixelet/demand-claim-{}", std::process::id()));
     let root = base.join("place");
     let tile = root.join("0").join("010332102301230");
     let work = root.join(".work-0");

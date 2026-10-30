@@ -10,7 +10,7 @@ fn cache() -> Arc<Cache> {
     Arc::new(
         Cache::new(
             std::env::temp_dir().join(format!(
-                "pxl-demand-{}-{}",
+                "pixelet/demand-{}-{}",
                 std::process::id(),
                 SERIAL.fetch_add(1, Ordering::Relaxed)
             )),

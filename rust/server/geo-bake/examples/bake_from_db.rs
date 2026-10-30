@@ -28,7 +28,7 @@ fn main() {
     .expect("geo DB");
     let raster = Arc::new(Raster::open(&mut client).expect("raster"));
     let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
-    let memo = std::env::temp_dir().join("pxl-source");
+    let memo = std::env::temp_dir().join("pixelet/source");
 
     for tile in tiles {
         let idx = Tile::of_name(tile)

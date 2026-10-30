@@ -61,7 +61,9 @@ pub fn fmt_dur(ms: f64) -> String {
 /// starts, which is when its binary was built: commits made while it runs
 /// are not what it ran.
 pub fn git_sha() -> Option<String> {
-    let idx = std::env::temp_dir().join(format!("pxl-bake-index-{}", std::process::id()));
+    let dir = std::env::temp_dir().join("pixelet");
+    std::fs::create_dir_all(&dir).ok()?;
+    let idx = dir.join(format!("bake-index-{}", std::process::id()));
     let git = |args: &[&str]| {
         let out = Command::new("git")
             .args(args)
