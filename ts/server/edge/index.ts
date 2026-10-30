@@ -96,10 +96,11 @@ const KEY_RE = new RegExp(
   String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|earth\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
-/** Where a stored entry keeps the encoding its bytes are in. A header the
- * cache has no meaning for is a header it leaves alone, which is the whole
- * point: `content-encoding` is what makes it normalize an entry. */
-const STORED_ENCODING = "x-pxl-stored-encoding";
+/** Where a cached entry keeps the encoding its bytes are in: its
+ * `content-encoding` under our name. A header the cache has no meaning for is
+ * a header it leaves alone, which is the whole point: `content-encoding` is
+ * what makes it normalize an entry. */
+const CACHED_ENCODING = "pxl-content-encoding";
 
 /** An entry on its way to the client: the encoding back where HTTP expects it,
  * and the body declared final so nothing encodes it a second time.
@@ -128,9 +129,9 @@ function serve(
   from: Headers,
 ): Response {
   const headers = new Headers(from);
-  const encoding = headers.get(STORED_ENCODING);
+  const encoding = headers.get(CACHED_ENCODING);
   if (encoding) {
-    headers.delete(STORED_ENCODING);
+    headers.delete(CACHED_ENCODING);
     headers.set("content-encoding", encoding);
   }
   return new Response(body, { headers, encodeBody: "manual" });
@@ -260,7 +261,7 @@ export default {
     // (2026-09-23). Nothing failed, because the client is happy either way;
     // it only cost.
     //
-    // So the encoding is kept where the cache cannot read it. `STORED_ENCODING`
+    // So the encoding is kept where the cache cannot read it. `CACHED_ENCODING`
     // holds it while the entry is stored, the body goes in as the opaque
     // octets it is, and both paths out put it back on the way to the client.
     const object = await env.TILES.get(key);
@@ -285,7 +286,7 @@ export default {
     const encoding = headers.get("content-encoding");
     if (encoding) {
       headers.delete("content-encoding");
-      headers.set(STORED_ENCODING, encoding);
+      headers.set(CACHED_ENCODING, encoding);
     }
 
     // Read whole before anything is answered, so what goes out is a body of

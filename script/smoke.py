@@ -237,7 +237,7 @@ def main():
         line("ok  " if wrong is None else "FAIL", got, path, f"{len(a.body)}B" if wrong is None else f"{wrong} — {why}")
 
     # The edge cache's hit leaves by its own path (the Worker's
-    # `STORED_ENCODING`), so a first answer can be right and every hit after
+    # `CACHED_ENCODING`), so a first answer can be right and every hit after
     # it wrong: one tile asked twice at one URL must come back as the same bytes.
     if not origin_only:
         path = f"{TILE_ROOT}/terrain/{tile_object(version.get('terrain', ''), PAGE)}"

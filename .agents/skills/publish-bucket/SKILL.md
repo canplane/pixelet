@@ -120,7 +120,7 @@ It fails when:
 - a tile is compressed twice: the Worker's `Response` lost
   `encodeBody: "manual"` (`serve`);
 - a second request, served from the edge cache, differs from the first
-  (`STORED_ENCODING`);
+  (`CACHED_ENCODING`);
 - an unbaked page returns anything but an empty 204 (HTML means
   `run_worker_first` is missing);
 - an asset has the wrong type or a `content-encoding`.
