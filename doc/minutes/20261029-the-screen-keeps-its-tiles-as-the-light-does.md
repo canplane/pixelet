@@ -526,3 +526,37 @@ directly, step 4 being done.
   and other scales are still to be taken against the baseline.
 - Whether the mark from the kernel's spheres already meets the invariants,
   leaving step 6 unneeded.
+
+## Proposed after the steps (2026-10-31)
+
+Where the steps leave a frame, measured against the plan's start
+(`5553036df`) in one window (the baseline's record): a still frame's GPU
+some 13.6 ms then, 5.5 now; a frame drawn whole while the camera orbits
+some 25 ms then and now, the 4 ms the light's footprints put on it
+(`e6b740ab8`) taken back by the light held while only the eye moves
+(`light_detail_cs`), its marks reading each pixel once, and the footprints
+taken where the eye stands (`light::HEAD_FOOTPRINT`). The screen and the
+light are one shape; what is left of a moving frame is not the symmetry's.
+Proposals only, none taken; each a decision of its own:
+
+- **The eye's samples and what they miss.** Orbiting, 1.6 % of the pixels
+  find no sample's cell and walk alone, some 16 nodes each, some 5 ms
+  (`miss`, its list well within `observed::MARKS`); the eye's cast in all
+  some 13 ms of a moving frame's 24. Fewer walked alone means samples
+  closer where they miss (edges, thin things), which the samples' own cost
+  pays for. Both observers share the passes (pxl-shader observer.rs), so a
+  change holds for the light alike.
+- **The screen reprojected while the eye moves.** The light now holds its
+  tiles across the eye's motion, being fixed in the world; the screen,
+  fixed to the view, draws whole each frame. Last frame's rays moved to
+  the new view, with what they uncover cast anew, would give the screen the
+  same holding, by an approximation the picture must be held to.
+- **The light's marks only where the eye cast anew.** Orbiting, the marks
+  are some 4 ms (`light_beam` less the beam and the cells), every drawn
+  pixel's each moving frame. Marked only where the screen's tiles changed,
+  the rest standing as marked, they would follow the eye's own change.
+
+To measure any of them: `pxl.profiler.drive` and the busy time by frame
+kind (`gpu_busy_kinds`), A and B by turns in one sitting; a run alone has
+read the same commit 4 ms apart, and some runs the GPU at half its speed
+across every span, with no thermal or power record of it.
