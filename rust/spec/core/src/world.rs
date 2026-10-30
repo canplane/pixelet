@@ -201,7 +201,19 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         (BOX_NONE, false)
     };
     let before = *place;
-    let (i, cell, bound) = ground::node(held, cave, shard, place, (zoom, c), [far, near], is_cell);
+    // The ground's decor folds into a cell its leaf lies in, over the
+    // ground's top where the top is whole, at the zooms it folds at.
+    let stood = near >= scatter::FOLDS_FROM && far < LEAF_CELL;
+    let (i, cell, bound) = ground::node(
+        held,
+        cave,
+        shard,
+        place,
+        (zoom, c),
+        [far, near],
+        is_cell,
+        stood,
+    );
     if place.from() != before.from()
         || place.slot() != before.slot()
         || place.here() != before.here()
@@ -257,14 +269,20 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
             look => look,
         };
         // The decor the ground scatters in its column, folded as a placed
-        // one's leaf is, read off its hashes as the caves are, beside the
-        // ground in its top cell (`scatter::folded`).
-        if fills(val) && c[2] == cell.top - 1 {
+        // one's leaf is, read off its hashes as the caves are, into the cell
+        // its leaf lies in: the ground's top cell, or the one over it where
+        // the top is whole (`scatter::folded`).
+        let leaf_in = if cell.part == FULL {
+            cell.top
+        } else {
+            cell.top - 1
+        };
+        if c[2] == leaf_in && cell.is_grounded() {
             let (share, decor) = scatter::folded(zoom, [c[0], c[1]], cell.look);
             if share > 0 {
                 let look = decor_look(decor);
                 let (f, theirs) = cover(fill, look, share);
-                if theirs {
+                if theirs || !fills(val) {
                     (val, four) = (look, ground::word([look; 4]));
                 }
                 fill = f;

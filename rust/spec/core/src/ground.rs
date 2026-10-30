@@ -323,7 +323,9 @@ pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
 /// its face at sea level.
 ///
 /// Over it, past the highest top any of those zooms rounds `hi` to: a
-/// coarser zoom's cell may round past a finer's. Under it, the lowest
+/// coarser zoom's cell may round past a finer's; and, where something folded
+/// stands on the ground (`stood`), one cell of each zoom over that, the cell
+/// its fold may lie in. Under it, the lowest
 /// face's top cell and the one under it at those zooms, the ground a cave
 /// leaves there (`Cell::opens`), where a
 /// cave takes all of the node (`hollow`), no bedrock is in it and no wall
@@ -343,6 +345,7 @@ pub fn slab(
     [lo, hi]: [i32; 2],
     [far, near]: [Zoom; 2],
     hollow: bool,
+    stood: bool,
 ) -> [i32; 2] {
     let [lo, hi] = if zoom < SHARD_ZOOM {
         [lo.min(SEA_LEVEL), hi.max(SEA_LEVEL)]
@@ -362,7 +365,13 @@ pub fn slab(
     };
     let mut z = coarsest(zoom, far);
     while z <= near {
-        let top = face_height(z, cells(z, hi as f32));
+        // And one cell over it where something folded stands on it.
+        let past = if stood && z < LEAF_CELL {
+            leaf_cells(z)
+        } else {
+            0
+        };
+        let top = face_height(z, cells(z, hi as f32)) + past;
         over = if top > over { top } else { over };
         if caved {
             // Its top cell, and the cell under it where the top is a box
@@ -460,6 +469,7 @@ pub fn node<H: Held>(
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
     is_cell: bool,
+    stood: bool,
 ) -> (Answer, Cell, [i32; 2]) {
     let air = In {
         kind: Kind::Cell,
@@ -528,7 +538,14 @@ pub fn node<H: Held>(
     // Air where none of it lies where the ground may fill, else a split
     // and its box, the span along z it may fill in the node's steps.
     let (known, hollow) = cave.whole(zoom);
-    let s = slab(shard, (zoom, c), relief, [far, near], known && hollow);
+    let s = slab(
+        shard,
+        (zoom, c),
+        relief,
+        [far, near],
+        known && hollow,
+        stood,
+    );
     let answer = if meets(s, (zoom, c[2]), near) {
         In {
             kind: Kind::Split,

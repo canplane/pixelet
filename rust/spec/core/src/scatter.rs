@@ -296,6 +296,17 @@ pub const ROOTS: [Zoom; DECORS.len()] = {
     roots
 };
 
+/// The coarsest zoom any decor folds at, its root's (`ROOTS`): finer, the
+/// ground's top may have one folded over it.
+pub const FOLDS_FROM: Zoom = {
+    let (mut from, mut k) = (LEAF_CELL, 0);
+    while k < DECORS.len() {
+        from = if ROOTS[k] < from { ROOTS[k] } else { from };
+        k += 1;
+    }
+    from
+};
+
 /// Whether any variant of `decor` stands at `cell` (`stands_at`).
 pub const fn any_stands_at(decor: &Decor, cell: Zoom) -> bool {
     let mut v = 0;
