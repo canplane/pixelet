@@ -48,6 +48,19 @@ on one side. Only the world grid's instances are the world — what `world::node
 the walk, an edit and the fold read. An instance in any other frame is drawn and
 nothing else, which is what a ghost or a chat line wants.
 
+> Since 2026-10-30, with the user: a frame has a query of its own only where
+> one is needed, and today only the world's grid has one, the pyramid. The
+> cumulus lies on a frame of its own, the cloud field's lattice, which the wind
+> carries at a constant speed (pxl-spec-core `cloud.rs` `drift`), and has no
+> query: it claims no cell and nothing asks it. The other frames, the figures,
+> the pointer's ghost, a preview's case and the fix's puck, each work out where
+> they are themselves, with no type they share. Where a frame comes to need a
+> query (something in a moving frame picked or stood on), a ray or a point is
+> taken into the frame's own coordinates and asked of the frame's own
+> structure, as ray tracing asks an instance's bottom-level structure through
+> its transform; that frame's need decides the interface, not one set ahead
+> of it.
+
 ## What already holds
 
 - **The draw list.** Every draw is a handle, its group and a translation about
