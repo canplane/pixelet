@@ -815,20 +815,11 @@
           "$doc": [
             "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
             "phases on what is left of the quota, the fetches within the credits. The turn leaves",
-            "its events on the completion ring, drawn by the kernel."
+            "its events on the completion ring, drawn by the kernel. It carries the host's alone:",
+            "the turn's pacing, the network's credits and the clock; the view it is drawn at is the",
+            "shell's (INPUT_RECT)."
           ],
           "pkt": [
-            {
-              "name": "width",
-              "type": "f64",
-              "$doc": [
-                "The viewport, in CSS pixels."
-              ]
-            },
-            {
-              "name": "height",
-              "type": "f64"
-            },
             {
               "name": "refresh_ms",
               "type": "f64",
@@ -960,7 +951,8 @@
           "name": "INPUT_RECT",
           "val": 4353,
           "$doc": [
-            "The canvas's client rect."
+            "The canvas's client rect, in CSS pixels, sent whenever it moves: where a pointer lands,",
+            "and the view's size each frame is drawn at."
           ],
           "pkt": [
             {

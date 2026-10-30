@@ -37,7 +37,7 @@ import {
 import { key } from "@/abi/directory.spec.ts";
 import { stream } from "./gpu.spec.ts";
 import { SENSOR_HEARD } from "@/driver/sensor.ts";
-import { submit_frame } from "@/port/input.ts";
+import { submit_frame } from "@/driver/frame.ts";
 import { text_call } from "@/driver/text.ts";
 import { BUILD_NUMBER } from "@/deploy.ts";
 import { bracket, type Config } from "@/bracket.tsx";

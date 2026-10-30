@@ -259,7 +259,9 @@ export const enum Command {
   WORLD_BOOT = 0x1001,
   /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
-   * its events on the completion ring, drawn by the kernel. */
+   * its events on the completion ring, drawn by the kernel. It carries the host's alone:
+   * the turn's pacing, the network's credits and the clock; the view it is drawn at is the
+   * shell's (INPUT_RECT). */
   WORLD_FRAME = 0x1002,
   /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
    * page gets no frame and hiding is the save's last sure moment. */
@@ -280,7 +282,8 @@ export const enum Command {
 
   // ---- the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI ----
 
-  /** The canvas's client rect. */
+  /** The canvas's client rect, in CSS pixels, sent whenever it moves: where a pointer lands,
+   * and the view's size each frame is drawn at. */
   INPUT_RECT = 0x1101,
   /** A pointer event on the canvas, in client pixels. */
   INPUT_POINTER = 0x1102,
@@ -617,13 +620,10 @@ export function encode_world_boot(
 
 /** Command.WORLD_FRAME's packet, written in place into `to`.
  *
- * @param width The viewport, in CSS pixels.
  * @param refresh_ms The display's refresh, as the host measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
  * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
 export function encode_world_frame(
   to: PacketRoom,
-  width: f64,
-  height: f64,
   refresh_ms: f64,
   paced_ms: f64,
   interactive: boolean,
@@ -631,9 +631,7 @@ export function encode_world_frame(
   unix_ms: f64,
 ): PacketWriter {
   return to
-    .writer(7)
-    .f64(width)
-    .f64(height)
+    .writer(5)
     .f64(refresh_ms)
     .f64(paced_ms)
     .bool(interactive)

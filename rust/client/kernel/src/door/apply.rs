@@ -107,8 +107,6 @@ pub(super) fn apply(
                 0.0
             };
             turn::on_world_frame_asked(HostFrame {
-                width: p.width,
-                height: p.height,
                 delta,
                 refresh_ms: p.refresh_ms,
                 paced_ms: p.paced_ms,

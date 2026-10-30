@@ -582,7 +582,9 @@ pub enum Command {
     WORLD_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
-    /// its events on the completion ring, drawn by the kernel.
+    /// its events on the completion ring, drawn by the kernel. It carries the host's alone:
+    /// the turn's pacing, the network's credits and the clock; the view it is drawn at is the
+    /// shell's (INPUT_RECT).
     WORLD_FRAME = 0x1002,
     /// The tab's visibility; the host rings the doorbell for it at once, since a hidden
     /// page gets no frame and hiding is the save's last sure moment.
@@ -602,7 +604,8 @@ pub enum Command {
     GPU_READY = 0x1401,
 
     // ---- the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI ----
-    /// The canvas's client rect.
+    /// The canvas's client rect, in CSS pixels, sent whenever it moves: where a pointer lands,
+    /// and the view's size each frame is drawn at.
     INPUT_RECT = 0x1101,
     /// A pointer event on the canvas, in client pixels.
     INPUT_POINTER = 0x1102,
@@ -1092,9 +1095,6 @@ impl WorldBoot {
 /// Command::WORLD_FRAME's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct WorldFrame {
-    /// The viewport, in CSS pixels.
-    pub width: f64,
-    pub height: f64,
     /// The display's refresh, as the host measures it from the animation frames it is handed,
     /// and the interval it paces turns at, a whole number of refreshes (the pacing the client
     /// boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
@@ -1111,13 +1111,11 @@ impl WorldFrame {
     pub fn read(pkt: &[u8]) -> Result<WorldFrame, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(WorldFrame {
-            width: finite(f.at(0)?.get_number()?)?,
-            height: finite(f.at(1)?.get_number()?)?,
-            refresh_ms: finite(f.at(2)?.get_number()?)?,
-            paced_ms: finite(f.at(3)?.get_number()?)?,
-            interactive: f.at(4)?.get_bool()?,
-            credits: integer::<u32>(f.at(5)?.get_number()?)?,
-            unix_ms: finite(f.at(6)?.get_number()?)?,
+            refresh_ms: finite(f.at(0)?.get_number()?)?,
+            paced_ms: finite(f.at(1)?.get_number()?)?,
+            interactive: f.at(2)?.get_bool()?,
+            credits: integer::<u32>(f.at(3)?.get_number()?)?,
+            unix_ms: finite(f.at(4)?.get_number()?)?,
         })
     }
 }

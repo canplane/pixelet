@@ -773,9 +773,10 @@ turn.
 ```
 
 Before each turn the client submits one `WORLD_FRAME` through the host's
-doorbell, with what the turn may spend and draw into
-(`ts/client/src/port/input.ts` `submit_frame`); a turn rung for a command alone
-carries none and draws nothing. The host's turns are paced to the display by
+doorbell, with the host's alone: the turn's pacing, the reads allowed out and
+the clock (`ts/client/src/driver/frame.ts` `submit_frame`); a turn rung for a
+command alone carries none and draws nothing. The view each frame is drawn at
+is the shell's, the canvas's rect it sends whenever it moves (`INPUT_RECT`). The host's turns are paced to the display by
 the frame pacing the client boots it with (`ts/client/src/abi/boot.ts`,
 `@xpute/host/sched/frame_pacing.ts`), its numbers the kernel's
 (`spec/client/kernel/sys/sched/pacing.json`); an input makes the turns after it

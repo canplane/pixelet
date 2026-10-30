@@ -92,7 +92,7 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
   const { size, props } = useSurface(driver, "world");
 
   useEffect(() => {
-    const close = input.open(() => size.current);
+    const close = input.open();
     const visibility = AppState.addEventListener("change", (state) =>
       input.visible(state === "active"),
     );

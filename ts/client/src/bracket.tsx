@@ -84,8 +84,10 @@ export type PointerKind = "mouse" | "touch" | "pen";
 
 /** What the place's input says, in its words. */
 export interface InputDriver {
-  /** The world opened, asking `viewport` each frame; the returned call closes it. */
-  open(viewport: () => Viewport): () => void;
+  /** The world opened; the returned call closes it. */
+  open(): () => void;
+  /** The canvas's client rect, whenever it moves: where a pointer lands, and
+   * the view's size each frame is drawn at. */
   rect(left: f64, top: f64, width: f64, height: f64): void;
   pointer(
     phase: PointerPhase,

@@ -472,6 +472,12 @@ Workers wait for the ledger, and the names for the user.
 
 ## Where it stands
 
+`WORLD_FRAME` carried both layers: the view's size, the shell's, beside the
+turn's pacing, the network's credits and the clock, the host's. The size, which
+`INPUT_RECT` already sends whenever the canvas moves, left it, so the frame is
+the lower ABI's alone (`ts/client/src/driver/frame.ts`) and the kernel takes the
+view's size from the rect (pxl-kernel `camera_view_size`).
+
 Where `SURFACE_*` and `WORLD_VISIBILITY` fall is decided (above). Today
 `WORLD_VISIBILITY` reaches the kernel through the shell's input driver
 (`ts/client/src/shell/world/view.tsx` `INPUT.visible`); as the lower ABI's it

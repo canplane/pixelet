@@ -183,15 +183,9 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const observer = new ResizeObserver(onResize);
   observer.observe(canvas);
 
+  // Before the world opens, so its first frame is drawn at the canvas's size.
   sendRect();
-  // One viewport, filled again each frame it is asked for.
-  const viewport = { width: 0, height: 0, dpr: 1 };
-  const close = input.open(() => {
-    viewport.width = canvas.clientWidth;
-    viewport.height = canvas.clientHeight;
-    viewport.dpr = dpr();
-    return viewport;
-  });
+  const close = input.open();
 
   return () => {
     releasePointers();
