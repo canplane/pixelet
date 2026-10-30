@@ -88,19 +88,10 @@ const CHANCES: [u32; DECORS.len()] = {
     }
     t
 };
-/// Whether `val` is a decor's stored value: a range, no row read, so a GPU's
-/// lane asks nothing of the catalog its uniform control flow depends on.
-pub const fn is_decor(val: u32) -> bool {
-    val >= FIRST_VAL && val < FIRST_VAL + DECORS.len() as u32
-}
-
-/// Where the decor stored as `val` stands among the catalog's rows.
-pub const fn kind_of(val: u32) -> usize {
-    if is_decor(val) {
-        (val - FIRST_VAL) as usize
-    } else {
-        0
-    }
+/// Where the decor stored as `val` stands among the catalog's rows, by its
+/// value alone, no row read.
+const fn kind_of(val: u32) -> usize {
+    (val - FIRST_VAL) as usize
 }
 
 /// The tags of a column's count and of its split among its four, beside a
@@ -242,18 +233,23 @@ pub const fn coarsest_stand(decor: &Decor, variant: u32) -> Zoom {
     cell
 }
 
-/// Each decor's counts' root (`count`): the coarsest window one of its
-/// variants stands at, where a window first reads its columns.
+/// The coarsest window zoom any variant of `decor` stands at
+/// (`any_stands_at`).
+pub const fn root(decor: &Decor) -> Zoom {
+    let mut cell = LEAF_CELL;
+    while cell > 0 && any_stands_at(decor, cell - 1) {
+        cell -= 1;
+    }
+    cell
+}
+
+/// Each decor's counts' root (`count`, `root`): where a window first reads
+/// its columns.
 pub const ROOTS: [Zoom; DECORS.len()] = {
     let mut roots = [LEAF_CELL; DECORS.len()];
     let mut k = 0;
     while k < DECORS.len() {
-        let d = &DECORS[k];
-        let mut cell = LEAF_CELL;
-        while cell > 0 && any_stands_at(d, cell - 1) {
-            cell -= 1;
-        }
-        roots[k] = cell;
+        roots[k] = root(&DECORS[k]);
         k += 1;
     }
     roots

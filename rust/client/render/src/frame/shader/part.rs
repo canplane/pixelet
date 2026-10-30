@@ -121,8 +121,8 @@ pub const SHADER_LIGHT_MARK: u32 = 54;
 pub const SHADER_LIGHT_MARK_DRAWN: u32 = 55;
 pub const SHADER_LIGHT_REACH: u32 = 56;
 /// Which candidates of a slot `SHADER_GENERATED_MARK` listed the thinning
-/// retains, a patch at a time, for `SHADER_GENERATED` to generate: its one
-/// compute entry.
+/// retains, a window cell a thread, for `SHADER_GENERATED` to generate: its
+/// one compute entry.
 pub const SHADER_GENERATED_THIN: u32 = 57;
 /// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
 pub const SHADER_SCREEN_FINISH: u32 = 58;

@@ -12,8 +12,8 @@ use pxl_spec_core::answer::{self, In};
 use pxl_spec_core::cast::{End, Query};
 use pxl_spec_core::decor::Decor;
 use pxl_spec_core::fill::put;
-use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::generated::{self, drawn, DecorQuery};
+use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::scatter;
 use pxl_spec_core::support;
 use pxl_spec_core::window::{self, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
@@ -196,8 +196,7 @@ pub fn decor_mark_cs(
                     { Semantics::NONE.bits() },
                 >(&mut list[(generated::GENERATE_ARGS + 2) as usize], 1)
             };
-            let whole = if whole { generated::WHOLE } else { 0 };
-            put(list, generated::LIST_AT + n, s | j << 16 | whole);
+            put(list, generated::LIST_AT + n, s | j << 16);
         }
         j += 1;
     }
@@ -210,9 +209,9 @@ const _: () = assert!(BRICK_CELLS.is_multiple_of(CELL_LANES));
 /// The candidates of an entry `decor_mark_cs` listed, a window cell of its
 /// brick a thread: `x` the cell, `z` the entry and decor listed. Where its
 /// column holds any (`scatter::count`), each leaf cell under it is read off
-/// the decor's hashes (`scatter::candidate_at`); one holding a candidate whose variant stands at
-/// the entry's window (`scatter::stands_at`) and which stands clear
-/// (`scatter::retained`) is laid as the decor's next record
+/// the decor's hashes (`scatter::candidate_at`); one holding a candidate
+/// whose variant stands at the entry's window (`scatter::stands_at`) and
+/// which stands clear (`scatter::retained`) is laid as the decor's next record
 /// (`generated::cnt_at`), `RETAINED`, its cell and seed after it, for
 /// `decor_cs` to generate; none past the decor's room (`Decor::cap`). What
 /// it reads is the decor's hash alone, never the world.
@@ -224,7 +223,7 @@ pub fn decor_thin_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] list: &[u32],
 ) {
-    let (brick, j, _) = listed(list, id.z);
+    let (brick, j) = listed(list, id.z);
     let (i, cell) = (id.x, window::eye_cell(brick / ENTRIES));
     if i >= BRICK_CELLS {
         return;
@@ -235,7 +234,10 @@ pub fn decor_thin_cs(
     }
     let [x0, y0, _, _] = generated::brick_box(cell, [held.x, held.y]);
     let (decor, s) = (&rows[j as usize], LEAF_CELL - cell);
-    let corner = [x0 + ((i % BRICK) << s) as i32, y0 + ((i / BRICK) << s) as i32];
+    let corner = [
+        x0 + ((i % BRICK) << s) as i32,
+        y0 + ((i / BRICK) << s) as i32,
+    ];
     // None under a window cell its column holds none of.
     if scatter::count(j as usize, cell, [corner[0] >> s, corner[1] >> s]) == 0 {
         return;
@@ -263,7 +265,6 @@ pub fn decor_thin_cs(
                 put(out, r + 1, c.cell[0] as u32);
                 put(out, r + 2, c.cell[1] as u32);
                 put(out, r + 3, c.seed);
-                put(out, r + 4, 0);
             }
         }
         n += 1;
@@ -292,7 +293,7 @@ pub fn decor_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] list: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
 ) {
-    let (brick, j, _) = listed(list, id.z);
+    let (brick, j) = listed(list, id.z);
     // As many as the decor laid, no more than its room.
     let (cnt, cap) = (at(out, generated::cnt_at(brick, j)), rows[j as usize].cap());
     if id.x >= cnt || id.x >= cap {
@@ -333,11 +334,11 @@ pub fn decor_cs(
     }
 }
 
-/// The `z`-th entry and decor `decor_mark_cs` listed, and whether the entry
-/// generates whole (pxl-spec-core `generated::LIST_AT`).
-fn listed(list: &[u32], z: u32) -> (u32, u32, bool) {
+/// The `z`-th entry and decor `decor_mark_cs` listed (pxl-spec-core
+/// `generated::LIST_AT`).
+fn listed(list: &[u32], z: u32) -> (u32, u32) {
     let w = at(list, generated::LIST_AT + z);
-    (w & 0xffff, w >> 16 & 0xff, w & generated::WHOLE != 0)
+    (w & 0xffff, w >> 16 & 0xff)
 }
 
 /// The first word of entry `s`'s `i`-th record of decor `k` (pxl-spec-core
@@ -382,7 +383,11 @@ fn run_of(records: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
         let cnt = if laid > past { laid - past } else { 0 };
         (
             generated::entry_record(rows, g, j, past),
-            if cnt < generated::RUN { cnt } else { generated::RUN },
+            if cnt < generated::RUN {
+                cnt
+            } else {
+                generated::RUN
+            },
         )
     } else {
         let n = (g - generated::EYE_ENTRIES) * generated::RUNS + k;

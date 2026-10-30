@@ -52,7 +52,8 @@ fn decor_windows_by_size() {
                 })
                 .fold(0.0, f64::max);
             assert!(
-                coarsest == LEAF_CELL || 8.0 * volume >= units(coarsest).powi(3),
+                coarsest == LEAF_CELL
+                    || 8.0 * volume >= units(coarsest) * units(coarsest) * units(coarsest),
                 "{:?}",
                 d.id
             );

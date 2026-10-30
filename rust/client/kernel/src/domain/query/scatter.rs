@@ -13,7 +13,7 @@ use pxl_spec::asset::decor::Decor;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec_core::generated::{self as core_scatter, DecorQuery, Generated};
+use pxl_spec_core::generated::{self, DecorQuery, Generated};
 use pxl_spec_core::support::Footing;
 use pxl_spec_core::world::Placed;
 use pxl_spec_core::FRAC_W;
@@ -100,7 +100,7 @@ pub(super) fn generated_at(
 ) -> Option<(Instance, bool)> {
     let candidate = scatter_at(decor.row, cell)?;
     let (g, has_footing, generates) =
-        core_scatter::generated(asked, decor.row, GROUND.cell(), &candidate, boxed);
+        generated::generated(asked, decor.row, GROUND.cell(), &candidate, boxed);
     has_footing.then(|| (instance(decor, &g), generates))
 }
 

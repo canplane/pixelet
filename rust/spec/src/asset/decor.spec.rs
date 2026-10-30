@@ -10,11 +10,9 @@
 // Each decor is said here once: its number, its models, and how the ground
 // generates it on its own. A decor's `seed` names its scatter, so changing it
 // reshuffles every one the ground generates; `density` is the chance a cell of
-// its holds one, a hash of the cell drawn against it (pxl-spec-core
-// scatter.rs); `on` the looks it may stand on; `fold` the look
-// it is folded to in a cell coarser than it stands in, the ground's under it where
-// it names none; `orientation`
-// a random heading, or along the road or rail its cell lies on. A variant's
+// its holds one, the mean of a tree of hashes of the cells (pxl-spec-core
+// scatter.rs); `on` the looks it may stand on; `orientation` a random
+// heading, or along the road or rail its cell lies on. A variant's
 // skin is its pack's colormap, kept outside the glb.
 //
 // A variant's `size` is the box it claims, in its decor's cells: every cell

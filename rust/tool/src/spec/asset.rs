@@ -792,7 +792,6 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         chance: u32,
         orient: String,
         on: [u32; 8],
-        fold: u32,
         scale_steps: i32,
         sizes: Vec<String>,
         models: Vec<String>,
@@ -826,15 +825,6 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
                 .ok_or(format!("{}: {l:?} is no ground look", at("on")))?;
             on[(v >> 5) as usize] |= 1 << (v & 31);
         }
-        let fold = match k.get("fold") {
-            None => 0,
-            Some(l) => l
-                .str()
-                .and_then(|l| looks.iter().find(|(g, _)| g == l))
-                .map(|(_, v)| *v)
-                .filter(|v| *v < 256)
-                .ok_or(format!("{}: {l:?} is no ground look", at("fold")))?,
-        };
         let scale_steps = match k.get("scale_steps") {
             None => 0.0,
             Some(n) => n
@@ -893,7 +883,6 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             chance: libm::rint(density * 4_294_967_296.0).min(f64::from(u32::MAX)) as u32,
             orient: orient.to_string(),
             on,
-            fold,
             scale_steps: scale_steps as i32,
             sizes,
             models,
@@ -926,17 +915,12 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    pub val: u32,",
             "    /// Its scatter: changing it reshuffles every one the ground generates.",
             "    pub seed: u32,",
-            "    /// The chance a cell of its holds one, over 2^32: a draw under it",
-            "    /// does (pxl-spec-core scatter.rs `candidate_at`).",
+            "    /// The chance a cell of its holds one, over 2^32: a cell's mean",
+            "    /// (pxl-spec-core scatter.rs `count`).",
             "    pub chance: u32,",
-            "    /// How it faces, an `Orientation`'s number.",
-            "    pub orientation: u32,",
+            "    pub orientation: Orientation,",
             "    /// The looks it may stand on, a bit each.",
             "    pub on: [u32; 8],",
-            "    /// The ground look it is folded to in a cell coarser than it stands",
-            "    /// in, 0 where it takes the look of the ground it stands on",
-            "    /// (pxl-spec-core scatter.rs `folds_at`).",
-            "    pub fold: u32,",
             "    /// Its cell: a unit's zoom, this many coarser.",
             "    pub scale_steps: i32,",
             "    pub variants: u32,",
@@ -958,12 +942,11 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             format!("        val: {},", r.val),
             format!("        seed: {},", r.seed),
             format!("        chance: {},", r.chance),
-            format!("        orientation: Orientation::{} as u32,", r.orient),
+            format!("        orientation: Orientation::{},", r.orient),
             format!(
                 "        on: [{}],",
                 r.on.map(|w| format!("{w:#010x}")).join(", ")
             ),
-            format!("        fold: {},", r.fold),
             format!("        scale_steps: {},", r.scale_steps),
             format!("        variants: {},", r.models.len()),
             format!("        sizes: [{}],", sizes.join(", ")),

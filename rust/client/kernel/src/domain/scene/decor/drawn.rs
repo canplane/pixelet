@@ -78,7 +78,7 @@ fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
         let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
         (FIRST_CELL..=LEAF_CELL)
             .filter(|&cell| {
-                let stands = (0..d.row.variants).any(|v| scatter::stands_at(d.row, v, cell));
+                let stands = scatter::any_stands_at(d.row, cell);
                 stands && is_decor_shown(extent, cell)
             })
             .fold(0, |bits, cell| bits | 1 << (cell - FIRST_CELL))

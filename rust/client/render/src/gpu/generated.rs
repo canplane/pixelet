@@ -50,9 +50,9 @@ pub struct DecorFrame<'a> {
 
 /// What decor's generation reads besides the frame's decor, none of it the
 /// eye's place: the windows' table, a preview's cuts, and the bricks filled
-/// this frame. A slot generates whole where its brick is another; else a
-/// candidate generates again only where a box meets what it reads
-/// (`generated::reads`): an edit, a cut as it was or is, or a brick filled at
+/// this frame. A slot generates whole where its brick is another; else it
+/// generates again only where a box meets what its brick reads
+/// (`generated::brick_reads`): an edit, a cut as it was or is, or a brick filled at
 /// its window's zoom. The overwrites' every write names its box (the
 /// frame's `edits`), and the service area's index is made once, before any
 /// brick is held, so neither generates a slot by itself. A brick filled
@@ -503,8 +503,8 @@ impl Generated {
     }
 
     /// Within a compute pass over the cast's world, after the cast: the
-    /// slots to generate again marked, their candidates thinned a patch a
-    /// thread and generated a record a thread where any may be, then every
+    /// slots to generate again marked, their candidates thinned a window cell
+    /// a thread and generated a record a thread where any may be, then every
     /// record counted, laid out and compacted.
     pub fn dispatch(&self, g: &Gpu, pass: u32) {
         if !self.on || self.groups[0] == 0 {
@@ -532,7 +532,7 @@ impl Generated {
         if !self.counting {
             return;
         }
-        // A workgroup a slot, reading the records its patches bear, then
+        // A workgroup a slot, reading the records its decor laid, then
         // placed decor's, `generated::RUNS` a workgroup (pxl-shader
         // `run_of`): the records held, not the capacity.
         let records = generated::EYE_ENTRIES + self.placed_cnt.div_ceil(generated::RUNS);

@@ -30,17 +30,12 @@ pub struct Decor {
     pub val: u32,
     /// Its scatter: changing it reshuffles every one the ground generates.
     pub seed: u32,
-    /// The chance a cell of its holds one, over 2^32: a draw under it
-    /// does (pxl-spec-core scatter.rs `candidate_at`).
+    /// The chance a cell of its holds one, over 2^32: a cell's mean
+    /// (pxl-spec-core scatter.rs `count`).
     pub chance: u32,
-    /// How it faces, an `Orientation`'s number.
-    pub orientation: u32,
+    pub orientation: Orientation,
     /// The looks it may stand on, a bit each.
     pub on: [u32; 8],
-    /// The ground look it is folded to in a cell coarser than it stands
-    /// in, 0 where it takes the look of the ground it stands on
-    /// (pxl-spec-core scatter.rs `folds_at`).
-    pub fold: u32,
     /// Its cell: a unit's zoom, this many coarser.
     pub scale_steps: i32,
     pub variants: u32,
@@ -55,9 +50,8 @@ pub const DECORS: [Decor; 4] = [
         val: 1024,
         seed: 0x7902530c,
         chance: 171798692,
-        orientation: Orientation::random as u32,
+        orientation: Orientation::random,
         on: [0x00000902, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        fold: 11,
         scale_steps: 0,
         variants: 9,
         sizes: [[1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 2], [1, 1, 2], [1, 1, 2], [1, 1, 2]],
@@ -67,9 +61,8 @@ pub const DECORS: [Decor; 4] = [
         val: 1025,
         seed: 0xb0a5802d,
         chance: 8589935,
-        orientation: Orientation::random as u32,
+        orientation: Orientation::random,
         on: [0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        fold: 0,
         scale_steps: 0,
         variants: 4,
         sizes: [[3, 2, 1], [2, 4, 3], [2, 4, 5], [2, 3, 2], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
@@ -79,9 +72,8 @@ pub const DECORS: [Decor; 4] = [
         val: 1026,
         seed: 0x0ca63010,
         chance: 17179869,
-        orientation: Orientation::along_transport as u32,
+        orientation: Orientation::along_transport,
         on: [0x00000000, 0x0001e800, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        fold: 0,
         scale_steps: 0,
         variants: 5,
         sizes: [[1, 3, 1], [1, 3, 1], [1, 3, 1], [1, 3, 1], [1, 3, 1], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
@@ -91,9 +83,8 @@ pub const DECORS: [Decor; 4] = [
         val: 1027,
         seed: 0x7ba5802d,
         chance: 17179869,
-        orientation: Orientation::along_transport as u32,
+        orientation: Orientation::along_transport,
         on: [0x00000000, 0x007c0000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        fold: 0,
         scale_steps: 0,
         variants: 4,
         sizes: [[1, 3, 2], [1, 3, 2], [1, 3, 2], [1, 3, 2], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],

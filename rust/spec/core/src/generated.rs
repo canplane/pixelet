@@ -15,7 +15,7 @@ use crate::cube::{sentinel, Ground};
 use crate::decor::{Decor, Orientation, DECORS};
 use crate::overwrite;
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
-use crate::scatter::{mul_hi, stands_at, variant_of, Candidate};
+use crate::scatter::{mul_hi, root, stands_at, variant_of, Candidate};
 use crate::window;
 use crate::window::{BRICK, BRICK_SHIFT, ENTRIES, EYE_WINDOWS, FIRST_CELL};
 use crate::world::{placed_in, Placed};
@@ -82,8 +82,8 @@ const _: () = assert!(
 /// (`entry_record`), a decor generated again laying its own anew. A head is
 /// the brick they were generated for, X and Y, and 1 once they were — an
 /// entry whose brick the windows no longer hold there is skipped by it
-/// (`generated_for`) — then how many records each decor laid (`cnt_at`). Placed decor's head is its
-/// count.
+/// (`generated_for`) — then how many records each decor laid (`cnt_at`).
+/// Placed decor's head is its count.
 pub const CNT_AT: u32 = 3;
 pub const HEAD_WORDS: u32 = CNT_AT + DECORS.len() as u32;
 const SLOTS_AT: u32 = EYE_ENTRIES * HEAD_WORDS;
@@ -153,22 +153,20 @@ const _: () = assert!(FIRST_CELL > EVERY);
 /// entry-decor pairs listed, a pad (`THIN_ARGS`, `GENERATE_ARGS`); whether
 /// every entry generates whole, decor having been off (`LIST_EVERY`), and how
 /// many boxes (`LIST_BOXES`), two pads; the boxes, `BOX_WORDS` each; then the
-/// list, an entry, its decor (`<< 16`) and whether it generates whole
-/// (`WHOLE`) each, in no order.
+/// list, an entry and its decor (`<< 16`) each, in no order.
 pub const THIN_ARGS: u32 = 0;
 pub const GENERATE_ARGS: u32 = 4;
 pub const LIST_EVERY: u32 = 8;
 pub const LIST_BOXES: u32 = 9;
 pub const BOXES_AT: u32 = 12;
 pub const LIST_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
-pub const WHOLE: u32 = 1 << 31;
 
 /// The words of what `decor_mark_cs` lists.
 pub const LIST_WORDS: u32 = LIST_AT + EYE_ENTRIES * DECORS.len() as u32;
 
 /// How far about its own, in its window's cells, a candidate's generation
-/// reads the world (`generated`): the cells its pose votes on, its box, and the placed
-/// decor that may claim it, none wider than the widest decor.
+/// reads the world (`generated`): the cells its pose votes on, its box, and
+/// the placed decor that may claim it, none wider than the widest decor.
 const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
 
 /// The leaf cells, `[x0, y0, x1, y1)`, of brick `q` of the window at `cell`.
@@ -308,10 +306,10 @@ pub mod drawn {
 }
 
 /// What generating decor asks of the world, as either side holds it: of the
-/// world unplaced (`world::Handed::unplaced`), the ground's alone, its column's
-/// footing and the assets about it; of the world as edited, whether an edit holds a
-/// cell and what is placed in a box; and the catalog's rows where it reads
-/// them.
+/// world unplaced (`world::Handed::unplaced`), the ground's alone, its
+/// column's footing and the assets about it; of the world as edited, whether
+/// an edit holds a cell and what is placed in a box; and the catalog's rows
+/// where it reads them.
 pub trait DecorQuery {
     /// A footing as this side keeps it: what its assets are asked off.
     type Footing;
@@ -414,7 +412,7 @@ fn asks<Q: DecorQuery>(
     let (mut flip, mut voting) = (0, 0);
     let mut draws = SplitMix32::new(seed);
     g.variant = variant_of(decor, &mut draws);
-    if decor.orientation == Orientation::along_transport as u32 {
+    if decor.orientation == Orientation::along_transport {
         flip = draws.next_u32() >> 31;
         voting = 4 * ALIGN_NEIGHBOR_RADIUS;
     } else {
@@ -624,22 +622,12 @@ pub fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]) -> bo
 
 impl Decor {
     /// Its records' room in a brick, a whole number of runs (`RUN`): twice the
-    /// mean it retains at the coarsest window a variant stands at, where a
-    /// brick takes the most leaf cells, and two runs more.
+    /// mean it retains at the coarsest window a variant stands at
+    /// (`scatter::root`), where a brick takes the most leaf cells, and two runs
+    /// more.
     pub const fn cap(&self) -> u32 {
-        // The coarsest window a variant stands at, the most leaf cells a
-        // brick there takes.
-        let mut cell = FIRST_CELL;
-        'coarsest: while cell < LEAF_CELL {
-            let mut v = 0;
-            while v < self.variants {
-                if stands_at(self, v, cell) {
-                    break 'coarsest;
-                }
-                v += 1;
-            }
-            cell += 1;
-        }
+        let root = root(self);
+        let cell = if root > FIRST_CELL { root } else { FIRST_CELL };
         let side = BRICK << (LEAF_CELL - cell);
         let cells = if side < 1 << 16 {
             side * side
