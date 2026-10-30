@@ -1,6 +1,6 @@
 // cpp/conformance/guest.spec.hpp
 //
-// GENERATED from spec/conformance/guest.json — do not edit.
+// GENERATED from spec/conformance/guest.json
 //
 // The guest the contract's traces drive (spec/conformance/door.tsv): the
 // few commands every language's conformance guest implements, and the numbers a trace

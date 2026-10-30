@@ -1,11 +1,10 @@
-// pxl-tool/spec/cmd/ts.rs
+// xpute-tool/spec/cmd/ts.rs
 
 //! A command table as TypeScript: its enums, each packet's writer and each
-//! event's reader, for the host's side or the shell's.
+//! event's reader, for the side that writes commands in TypeScript.
 
 use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
-use crate::spec;
-use crate::spec::{file, pascal, snake, ts_doc};
+use crate::spec::{file, generated, pascal, snake, ts_doc};
 
 /// Only a list of u32 is packed.
 fn check_packed(f: &Field) -> Result<(), String> {
@@ -49,7 +48,7 @@ fn ts_write(spec: &Spec, f: &Field, val: &str) -> Result<String, String> {
     }
     if f.list || kind == Kind::Record {
         return Err(format!(
-            "cmd.json: the shell writes no {} ({})",
+            "cmd.json: TypeScript writes no {} ({})",
             if f.list { "list" } else { "record" },
             f.name
         ));
@@ -147,7 +146,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let mut out = vec![
         format!("// {}", t.ts_logical),
         "//".into(),
-        spec::generated(t.json, t.json),
+        generated(t.json),
         "".into(),
         "/**".into(),
     ];
@@ -297,7 +296,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                             if i == 0 {
                                 l
                             } else {
-                                spec::align_star(l, "  ")
+                                crate::spec::align_star(l, "  ")
                             }
                         }));
                     }

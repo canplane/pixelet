@@ -6,3 +6,5 @@ lint = ["clippy", "--all-targets", "--", "-D", "warnings"]
 guest = ["build", "-p", "xpute-conformance"]
 guest-wasm = ["build", "-p", "xpute-conformance", "-p", "xpute-example", "--target", "wasm32-unknown-unknown"]
 test-gpu = ["test", "-p", "xpute-gpu", "--features", "host"]
+# The files generated from spec/: `cargo spec` says what is stale, `cargo spec --write` writes it.
+spec = ["run", "-q", "-p", "xpute-tool", "--bin", "spec", "--"]

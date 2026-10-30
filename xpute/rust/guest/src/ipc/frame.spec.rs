@@ -1,6 +1,6 @@
 // xpute-guest/ipc/frame.spec.rs
 //
-// GENERATED from spec/ipc/frame.json — do not edit.
+// GENERATED from spec/ipc/frame.json
 //
 // A frame in a ring (ring.json): four words. The submitter's tag comes back on
 // the reply; the command shares its word with the flags; a reply carries a value or a

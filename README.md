@@ -222,7 +222,7 @@ language by where a thing runs.
 │   ├── client-bracket/  #   pxl-wasm and pxl-native, the kernel's two forms
 │   ├── server/          #   pxl-geo (/geo), pxl-api (/api), pxl-server,
 │   │                    #     pxl-geo-spec; pxl-geo-bake, the bakes
-│   └── tool/            #   pxl-tool: what writes the files the tree keeps
+│   └── tool/            #   pxl-tool: the repository's own Rust programs, run by cargo
 ├── spec/                # JSON every language's code is generated from
 ├── xpute/               # The system under it, its own repository's root
 ├── asset/               # The shipped models, texture pack and sky

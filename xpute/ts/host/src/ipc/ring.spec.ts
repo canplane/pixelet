@@ -1,6 +1,6 @@
 // @xpute/host/ipc/ring.spec.ts
 //
-// GENERATED from spec/ipc/ring.json — do not edit.
+// GENERATED from spec/ipc/ring.json
 //
 // A single-producer, single-consumer ring of frames (frame.json) in memory both sides
 // see, named by its offset so it means the same to either. A header, then the frames;

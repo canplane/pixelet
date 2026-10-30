@@ -9,14 +9,14 @@
 # one object at once. Only code is formatted, each tree's by its own
 # formatter; the documents and the spec are not. GNU Make 3.81 is enough.
 #
-#   make install | -j8 check | test | build | test-gpu | fmt | lint
+#   make install | -j8 check | test | build | test-gpu | fmt | lint | spec
 #   make check-ts, make test-cpp, ...   one tree's
 #
 # With -j the trees run in parallel; cpp/'s make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
 .PHONY: install install-ts \
-	check check-ts check-cpp check-rust \
+	check check-ts check-cpp check-rust check-spec spec \
 	build build-cpp build-rust \
 	test test-ts test-cpp test-rust test-conformance test-example \
 	test-gpu test-gpu-web test-gpu-native \
@@ -28,13 +28,19 @@ install: install-ts
 install-ts:
 	pnpm --dir ts install
 
-check: check-ts check-cpp check-rust
+check: check-ts check-cpp check-rust check-spec
 check-ts:
 	pnpm --dir ts check
 check-cpp:
 	$(MAKE) -C cpp check
 check-rust:
 	+cd rust && cargo fmt --all --check && cargo lint
+check-spec:
+	+cd rust && cargo spec
+
+# The files generated from spec/, written.
+spec:
+	+cd rust && cargo spec --write
 
 # What xpute builds: the guest the contract's traces drive, in Rust and in C++,
 # each a native library and a WebAssembly module; and the example's guest, a

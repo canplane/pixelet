@@ -63,6 +63,7 @@ xpute-kit = { path = "../xpute/rust/kit", default-features = false }
 xpute-guest = { path = "../xpute/rust/guest" }
 xpute-gpu = { path = "../xpute/rust/gpu" }
 xpute-host = { path = "../xpute/rust/host" }
+xpute-tool = { path = "../xpute/rust/tool" }
 pxl-spec-core = { path = "spec/core" }
 pxl-spec = { path = "spec" }
 pxl-render = { path = "client/render" }

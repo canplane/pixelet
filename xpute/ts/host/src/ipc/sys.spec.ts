@@ -1,6 +1,6 @@
 // @xpute/host/ipc/sys.spec.ts
 //
-// GENERATED from spec/ipc/sys.json — do not edit.
+// GENERATED from spec/ipc/sys.json
 //
 // A guest's system calls: its files, the report that stopped it and the program's own
 // calls, as records in a stream (ipc/stream.rs) the host runs once each turn has returned

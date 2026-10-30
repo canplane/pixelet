@@ -1,6 +1,6 @@
 // @xpute/host/abi/cmd.spec.ts
 //
-// GENERATED from spec/abi/cmd.json — do not edit.
+// GENERATED from spec/abi/cmd.json
 
 /**
  * Every program's commands, by number (kit abi/cmd: `major << 8 | minor`), and the

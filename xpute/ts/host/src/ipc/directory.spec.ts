@@ -1,6 +1,6 @@
 // @xpute/host/ipc/directory.spec.ts
 //
-// GENERATED from spec/ipc/directory.json — do not edit.
+// GENERATED from spec/ipc/directory.json
 //
 // The directory: where a host finds what its guest laid out in the memory. The guest's
 // first turn writes it, and the host reads it once, at the one offset it knows outside

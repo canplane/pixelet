@@ -1,11 +1,10 @@
-// pxl-tool/spec/cmd/rs.rs
+// xpute-tool/spec/cmd/rs.rs
 
 //! A command table as Rust: its enums, each packet's reader and each
 //! event's writer, for a Rust guest.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
-use crate::spec;
-use crate::spec::{file, pascal, rs_doc};
+use crate::spec::{file, generated, pascal, rs_doc};
 
 fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
     for f in fields {
@@ -44,7 +43,7 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     }
     if f.list || kind == Kind::Record {
         return Err(format!(
-            "cmd.json: the kernel reads no {} ({})",
+            "cmd.json: Rust reads no {} ({})",
             if f.list { "list" } else { "record" },
             f.name
         ));
@@ -236,7 +235,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
     let mut out = vec![
         format!("// {}/cmd.spec.rs", t.rs_logical),
         "//".into(),
-        spec::generated(t.json, t.json),
+        generated(t.json),
         "".into(),
     ];
     out.extend(rs_doc(&spec.doc, "", "//!"));

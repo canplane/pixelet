@@ -75,7 +75,8 @@ rust/host                                   the host end in Rust: a guest's memo
 rust/gpu  ·  ts/gpu  ·  cpp/xpute/gpu       WebGPU's calls, which a guest writes and a host runs
 rust/conformance  ·  cpp/conformance        a guest in each, which the contract's traces drive
 rust/example  ·  ts/example                 the smallest guest, and the host that drives it
-script                                      the repository's own scripts; never shipped
+rust/tool                                   the repository's own Rust programs, run by cargo
+script                                      the repository's own scripts (Python)
 spec                                        the numbers every language's are generated from
 ```
 
@@ -152,11 +153,12 @@ SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
 
 ```sh
 make install       # ts/'s packages, pnpm's
-make -j8 check     # formats, lints and types checked, the C++ compiled
+make -j8 check     # formats, lints and types checked, the C++ compiled, spec's files current
 make -j8 test      # every tree's tests, then the traces against every guest
 make -j8 build     # the guests the traces drive; test builds them first
 make -j8 test-gpu  # the GPU hosts, on wgpu and in Chrome ($CHROME)
 make fmt           # prettier, cargo fmt
+make spec          # the files generated from spec, written
 ```
 
 `check-ts`, `test-cpp`, `test-rust` and the like run one tree's. The copy to

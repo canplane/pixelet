@@ -12,6 +12,7 @@ doctest = false
 # build when that output is broken.
 [dependencies]
 fnv.workspace = true
+xpute-tool.workspace = true
 libm.workspace = true
 sha2 = "0.11"
 serde = { version = "1", features = ["derive"] }

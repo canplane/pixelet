@@ -1,6 +1,6 @@
 // @xpute/kit/status/errno.spec.ts
 //
-// GENERATED from spec/status/errno.json — do not edit.
+// GENERATED from spec/status/errno.json
 //
 // POSIX/Linux-aligned negative errno
 

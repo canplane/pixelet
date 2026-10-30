@@ -1,12 +1,12 @@
-// pxl-tool/spec/xpute.rs
+// xpute-tool/spec/errno.rs
 
 //! xpute's errno. The numbers cross the ring, so every side must agree.
 
 use serde::Deserialize;
 
-use super::{file, read_as, Output};
+use super::{file, generated, json_str, read_as, Output};
 
-const JSON: &str = "xpute/spec/status/errno.json";
+const JSON: &str = "spec/status/errno.json";
 
 #[derive(Deserialize)]
 struct ErrnoMember {
@@ -28,9 +28,9 @@ struct ErrnoSpec {
     entries: Vec<ErrnoEntry>,
 }
 
-pub fn errno_outputs() -> Result<Vec<Output>, String> {
+pub fn outputs() -> Result<Vec<Output>, String> {
     let spec: ErrnoSpec = read_as(JSON)?;
-    let mut head = vec!["//".to_string(), super::generated(JSON, JSON), "//".into()];
+    let mut head = vec!["//".to_string(), generated(JSON), "//".into()];
     head.extend(spec.doc.iter().map(|l| format!("// {l}")));
 
     let mut ts = vec!["// @xpute/kit/status/errno.spec.ts".to_string()];
@@ -146,7 +146,7 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
             ts.push(format!(
                 "  [{}]: {},",
                 m.val,
-                super::json_str(&format!("{}: {}", m.name, m.doc))
+                json_str(&format!("{}: {}", m.name, m.doc))
             ));
         }
     }
@@ -247,8 +247,8 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     Ok(vec![
-        Output::new("xpute/ts/kit/src/status/errno.spec.ts", file(&ts)),
-        Output::new("xpute/rust/kit/src/status/errno.spec.rs", file(&rs)),
-        Output::new("xpute/cpp/xpute/kit/status/errno.spec.hpp", file(&cpp)),
+        Output::new("ts/kit/src/status/errno.spec.ts", file(&ts)),
+        Output::new("rust/kit/src/status/errno.spec.rs", file(&rs)),
+        Output::new("cpp/xpute/kit/status/errno.spec.hpp", file(&cpp)),
     ])
 }
