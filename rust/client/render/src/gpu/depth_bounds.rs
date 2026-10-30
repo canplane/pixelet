@@ -28,6 +28,19 @@ const GROUP: [u32; 9] = [
     0, COMPUTE, DEPTH, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, UNIFORM,
 ];
 
+/// A read buffer let go by a resize while its map was out, with the landing
+/// and the word that map writes into: kept until the map lands, so the map
+/// ends and writes into nothing let go.
+struct Outgoing {
+    read: u32,
+    #[expect(
+        dead_code,
+        reason = "held only so the map lands into memory still owned"
+    )]
+    landed: Box<[f32]>,
+    mapping: Box<u32>,
+}
+
 pub struct DepthBounds {
     built: Built,
     group: u32,
@@ -44,6 +57,7 @@ pub struct DepthBounds {
     copied: u32,
     mapped: u32,
     landed_at: u32,
+    outgoing: Vec<Outgoing>,
 }
 
 impl DepthBounds {
@@ -66,12 +80,16 @@ impl DepthBounds {
             copied: 0,
             mapped: 0,
             landed_at: 0,
+            outgoing: Vec::new(),
         }
     }
 
     pub fn release(self) {
         for id in [self.group, self.within, self.bounds, self.read] {
             release(id);
+        }
+        for o in self.outgoing {
+            release(o.read);
         }
     }
 
@@ -91,7 +109,18 @@ impl DepthBounds {
         let squares = size.map(|v| v.div_ceil(SIDE));
         if squares != self.squares {
             release(self.bounds);
-            release(self.read);
+            // A map out lands into the buffer and the landing it was asked
+            // over, so both outlive it; what it lands is another size's.
+            if self.mapped != 0 {
+                self.outgoing.push(Outgoing {
+                    read: self.read,
+                    landed: core::mem::take(&mut self.landed),
+                    mapping: core::mem::replace(&mut self.mapping, Box::new(DONE)),
+                });
+            } else {
+                release(self.read);
+            }
+            self.mapped = 0;
             let n = (squares[0] * squares[1]) as usize;
             self.bounds = g.buf(
                 word_bytes(2 * n),
@@ -156,6 +185,13 @@ impl DepthBounds {
     /// What was copied last frame mapped back, after the frame that copied
     /// it was submitted.
     pub fn back(&mut self, g: &Gpu) {
+        self.outgoing.retain(|o| {
+            let landed = *o.mapping & DONE != 0;
+            if landed {
+                release(o.read);
+            }
+            !landed
+        });
         if self.mapped != 0 && *self.mapping & DONE != 0 {
             (self.landed_at, self.mapped) = (self.mapped, 0);
         }
