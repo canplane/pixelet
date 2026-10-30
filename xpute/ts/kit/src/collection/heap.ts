@@ -10,7 +10,11 @@ export interface Element<K extends primitive, T> {
 }
 
 export class MinHeap<K extends primitive, T> {
-  constructor(readonly a: Element<K, T>[]) {}
+  readonly a: Element<K, T>[];
+
+  constructor(a: Element<K, T>[]) {
+    this.a = a;
+  }
 
   size(): u32 {
     return this.a.length;
@@ -97,7 +101,11 @@ export class MinHeap<K extends primitive, T> {
 }
 
 export class MaxHeap<K extends primitive, T> {
-  constructor(readonly a: Element<K, T>[]) {}
+  readonly a: Element<K, T>[];
+
+  constructor(a: Element<K, T>[]) {
+    this.a = a;
+  }
 
   size(): u32 {
     return this.a.length;

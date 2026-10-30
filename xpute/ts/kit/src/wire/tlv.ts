@@ -255,7 +255,10 @@ export class TlvReader implements Iterable<TlvValue> {
   private _end: u32;
   private _ended: TlvEnd | null = null;
 
-  constructor(private readonly _buf: Bytes) {
+  private readonly _buf: Bytes;
+
+  constructor(_buf: Bytes) {
+    this._buf = _buf;
     this._stream = scalar.stream(_buf);
     this._end = _buf.byteLength;
   }

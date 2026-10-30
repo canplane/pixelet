@@ -23,12 +23,19 @@ export class Strobe<G extends Grant = Grant> {
   private running = false;
   private readonly consider = (now: f64): void => this.turn(now);
 
+  private readonly doorbell: Doorbell;
+  private readonly policy: SchedulingPolicy<G>;
+  private readonly submit: (grant: G, delta_s: f64) => void;
+
   /** `submit` fills the rings before the doorbell rings. */
   constructor(
-    private readonly doorbell: Doorbell,
-    private readonly policy: SchedulingPolicy<G>,
-    private readonly submit: (grant: G, delta_s: f64) => void,
+    doorbell: Doorbell,
+    policy: SchedulingPolicy<G>,
+    submit: (grant: G, delta_s: f64) => void,
   ) {
+    this.doorbell = doorbell;
+    this.policy = policy;
+    this.submit = submit;
     doorbell.wake = (wake_ms) => this.wake(wake_ms);
   }
 

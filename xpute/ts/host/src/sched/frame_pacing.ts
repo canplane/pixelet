@@ -63,11 +63,17 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
   /** When the last turn ran. */
   private last = -Infinity;
 
+  private readonly cfg: FramePacingConfig;
+  private readonly next_frame: (run: (now: f64) => void) => void;
+
   /** `next_frame` hands over the display's next animation frame. */
   constructor(
-    private readonly cfg: FramePacingConfig,
-    private readonly next_frame: (run: (now: f64) => void) => void,
-  ) {}
+    cfg: FramePacingConfig,
+    next_frame: (run: (now: f64) => void) => void,
+  ) {
+    this.cfg = cfg;
+    this.next_frame = next_frame;
+  }
 
   next(consider: (now: f64) => void): void {
     this.next_frame(consider);

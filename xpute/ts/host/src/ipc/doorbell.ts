@@ -53,12 +53,10 @@ export class Doorbell implements PacketRoom {
   /** Told once, as the guest traps. */
   stopped: (() => void) | null = null;
 
-  constructor(
-    mem: ArrayBufferLike,
-    sq_at: u32,
-    cq_at: u32,
-    private readonly run: Run,
-  ) {
+  private readonly run: Run;
+
+  constructor(mem: ArrayBufferLike, sq_at: u32, cq_at: u32, run: Run) {
+    this.run = run;
     this.sq = new Ring(mem, sq_at);
     this.cq = new Ring(mem, cq_at);
   }

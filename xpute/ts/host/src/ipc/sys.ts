@@ -19,11 +19,13 @@ import { abort, args, flag, HEAD, op } from "./sys.spec.ts";
 /** Why an open did not answer with a file: an errno, and whatever number the
  * host refused with (an HTTP status) for a reader to print. */
 export class FileError extends Error {
-  constructor(
-    readonly errnum: i32,
-    readonly detail: u32 = 0,
-  ) {
+  readonly errnum: i32;
+  readonly detail: u32;
+
+  constructor(errnum: i32, detail: u32 = 0) {
     super(detail === 0 ? strerror(errnum) : `${strerror(errnum)} (${detail})`);
+    this.errnum = errnum;
+    this.detail = detail;
   }
 }
 
@@ -84,11 +86,14 @@ function walks_down(path: string): boolean {
 export class Sys {
   readonly files = new Map<u32, File>();
 
+  private readonly host: SysHost;
+  private readonly opened: (fd: u32, res: i32, detail: u32) => void;
+
   /** `opened` answers an open: a size, or an errno and the host's detail. */
-  constructor(
-    private readonly host: SysHost,
-    private readonly opened: (fd: u32, res: i32, detail: u32) => void,
-  ) {}
+  constructor(host: SysHost, opened: (fd: u32, res: i32, detail: u32) => void) {
+    this.host = host;
+    this.opened = opened;
+  }
 
   run(mem: ArrayBuffer, at: u32): void {
     each_record(mem, at, HEAD, this.record);

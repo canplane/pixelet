@@ -10,7 +10,11 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Grant, SchedulingPolicy } from "./policy.ts";
 
 export class FixedQuota implements SchedulingPolicy {
-  constructor(private readonly quota_ms: f64) {}
+  private readonly quota_ms: f64;
+
+  constructor(quota_ms: f64) {
+    this.quota_ms = quota_ms;
+  }
 
   next(consider: (now: f64) => void): void {
     setTimeout(() => consider(performance.now()), 0);

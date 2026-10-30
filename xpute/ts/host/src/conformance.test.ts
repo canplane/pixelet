@@ -179,7 +179,10 @@ class Host {
   private readonly stream_at: number;
   private readonly writer = new PacketWriter();
 
-  constructor(private readonly guest: Opened) {
+  private readonly guest: Opened;
+
+  constructor(guest: Opened) {
+    this.guest = guest;
     const mem = guest.mem;
     this.directory = new Directory(mem, guest.directory_at);
     this.reserved = new Uint32Array(mem, guest.directory_at, 4)[3];
