@@ -116,10 +116,10 @@ pub fn place_decor(at: &Q3, decor_id: DecorId) {
     );
 }
 
-/// The decor the ground grows that `place_decor` would bring back, for its preview.
+/// The decor the ground generates that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
     (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && is_carved(at))
-        .then(|| World::now().grown(Decor::of(decor_id), at))?
+        .then(|| World::now().generated(Decor::of(decor_id), at))?
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: the marker
@@ -188,14 +188,14 @@ pub fn place_air(at: EntryAt) {
 
 /// The eraser leaves its cell empty: where the ground fills it once the
 /// asset is gone, air is written, so an asset taken out of a hole leaves the
-/// hole. A decor the ground grew whose box it shared comes back, its erase
+/// hole. A decor the ground generated whose box it shared comes back, its erase
 /// given back too.
 pub fn remove(at: EntryAt) {
     let world = World::now();
     let erased: Vec<[i32; 3]> = world
-        .grown_over(&cube(at.zoom(), at.at()))
+        .generated_over(&cube(at.zoom(), at.at()))
         .into_iter()
-        .filter_map(|i| i.grown_in())
+        .filter_map(|i| i.generated_in())
         .filter(|&c| is_carved(&base_of(GROUND.cell(), c)))
         .collect();
     // Only the resident finest leaf can say what fills the cube without it, as
@@ -289,7 +289,7 @@ pub fn pending_step() -> RenderEdits {
         scattered: hover
             .scattered
             .filter(|_| active_tool == ActiveTool::Eraser)
-            .and_then(|s| s.grown_in()),
+            .and_then(|s| s.generated_in()),
     };
     *PENDING.get(Pending::default) = Pending {
         object,

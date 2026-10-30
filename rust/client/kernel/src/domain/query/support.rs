@@ -19,7 +19,7 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::ray::{at_zoom, cell_at, Ray, Until};
+use super::ray::{at_zoom, cell_zoom_at, Ray, Until};
 use super::world::World;
 use crate::domain::layer::*;
 use pxl_spec::space::layer::tile::Tile;
@@ -37,11 +37,11 @@ pub fn under(z: f64) -> f64 {
 }
 
 /// Whether a walker at `at`, seen from `eye`, walks: the camera grid draws
-/// the ground there at its own cells (`cell_at`), X the short way round.
+/// the ground there at its own cells (`cell_zoom_at`), X the short way round.
 /// Else the world is a map to it (`step_slide`).
 pub fn walks(at: &Q3, eye: &Q3) -> bool {
     let (a, e) = (q3::unpack(at), q3::unpack(eye));
-    cell_at(e, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.cell()
+    cell_zoom_at(e, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.cell()
 }
 
 /// A point's place on the ground, in units.

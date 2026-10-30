@@ -44,14 +44,14 @@ const CAVES: u32 = 0xca7e_0001;
 /// hollow, so every coarser fold of the caves is solid.
 pub const CAVE_COARSEST: Zoom = LEAF_CELL - cave::COARSEST_STEPS;
 
-/// A cube's draws, `c` at `z`, from one hash: whether it turns a child over
+/// A cube's draws, `c` at `z`, from one hash: whether it flips a child
 /// (its top two bits), which (its low three), and which of its eight draw
 /// again (its second byte, a bit each). A child that does not draw is its
 /// value all through, so the caves are a sparse tree whose nodes are the
 /// cubes that draw, every cube at the root's zoom among them.
 fn draws(z: Zoom, c: [i32; 3]) -> (bool, u32, u32) {
     let h = node_seed(CAVES, (z, c));
-    (h < cave::TURN, h & 7, (h >> 8) & 0xff)
+    (h < cave::FLIP, h & 7, (h >> 8) & 0xff)
 }
 
 /// A child's place among its parent's eight.
@@ -61,11 +61,11 @@ fn slot(c: [i32; 3]) -> u32 {
 
 /// The caves at a cube as its parent hands them down, so a descent asks
 /// each cube's draws once rather than again from the caves' first zoom:
-/// its value, and whether anything under it differs (`live`).
+/// its value, and whether anything under it differs (`branch`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cave {
     hollow: bool,
-    live: bool,
+    branch: bool,
 }
 
 impl Cave {
@@ -73,41 +73,41 @@ impl Cave {
     /// caves' first zoom under it draws.
     pub const ROOT: Cave = Cave {
         hollow: false,
-        live: true,
+        branch: true,
     };
 
     /// As a word a GPU's storage holds, `bool` being none of its: hollow,
-    /// then live.
+    /// then branch.
     pub const fn word(self) -> u32 {
-        self.hollow as u32 | (self.live as u32) << 1
+        self.hollow as u32 | (self.branch as u32) << 1
     }
 
     pub const fn of_word(w: u32) -> Cave {
         Cave {
             hollow: w & 1 != 0,
-            live: w & 2 != 0,
+            branch: w & 2 != 0,
         }
     }
 
     /// The child `c` at `zoom` of a cube whose caves are `self`, by its
-    /// place among the eight (`slot`): its parent's draws, one hash, turn one
+    /// place among the eight (`slot`): its parent's draws, one hash, flip one
     /// of them or none, and say which draw again. Past the leaves a cube is
     /// its leaf's.
     pub fn child(self, zoom: Zoom, c: [i32; 3]) -> Cave {
         if zoom < CAVE_COARSEST {
             return Cave::ROOT;
         }
-        if !self.live || zoom > LEAF_CELL {
+        if !self.branch || zoom > LEAF_CELL {
             return Cave {
-                live: false,
+                branch: false,
                 ..self
             };
         }
-        let (turns, turn, live) = draws(zoom - 1, [c[0] >> 1, c[1] >> 1, c[2] >> 1]);
+        let (flips, flip, branches) = draws(zoom - 1, [c[0] >> 1, c[1] >> 1, c[2] >> 1]);
         let k = slot(c);
         Cave {
-            hollow: self.hollow ^ (turns && turn == k),
-            live: live >> k & 1 == 1,
+            hollow: self.hollow ^ (flips && flip == k),
+            branch: branches >> k & 1 == 1,
         }
     }
 
@@ -119,7 +119,7 @@ impl Cave {
         while z <= zoom && z <= LEAF_CELL {
             let s = zoom - z;
             cave = cave.child(z, [c[0] >> s, c[1] >> s, c[2] >> s]);
-            if !cave.live {
+            if !cave.branch {
                 break;
             }
             z += 1;
@@ -128,7 +128,7 @@ impl Cave {
     }
 
     /// Whether the cube is a cave's air. A cube is its parent's value unless
-    /// its parent turned it, and a parent turns at most one of its eight, so
+    /// its parent flipped it, and a parent flips at most one of its eight, so
     /// the majority of any cube's children is the cube: the caves fold to
     /// themselves at every zoom.
     pub fn hollow(self) -> bool {
@@ -139,7 +139,7 @@ impl Cave {
     /// there — its value where nothing under it differs, a leaf's or finer
     /// always, never coarser than the caves' first — and the value.
     pub fn whole(self, zoom: Zoom) -> (bool, bool) {
-        let known = zoom >= CAVE_COARSEST && (!self.live || zoom >= LEAF_CELL);
+        let known = zoom >= CAVE_COARSEST && (!self.branch || zoom >= LEAF_CELL);
         (known, known && self.hollow)
     }
 }

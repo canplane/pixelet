@@ -1,7 +1,7 @@
 // pxl-shader/world.rs
 
 //! The world as the GPU holds it, asked through pxl-spec-core's one query
-//! (`world::node`) by every entry that walks or grows over it.
+//! (`world::node`) by every entry that walks or generates over it.
 
 use pxl_spec_core::answer::{self, In};
 use pxl_spec_core::area::Area;

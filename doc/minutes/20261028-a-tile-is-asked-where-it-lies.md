@@ -25,8 +25,8 @@ proposed twice, on 2026-10-17 and on 2026-10-28, and both times it was dropped.
   top zoom is the floor's, whose ring the eye's height over the ground narrows
   (`pxl-kernel domain/layer/residency/floor.rs` `ring`).
 - **The ray reads the height.** It picks a cell's zoom by its 3D distance from
-  the eye (`pxl-spec-core grid.rs` `cell_at`), inside the world's one query. A
-  zoom that has not arrived is read from the coarser one that has.
+  the eye (`pxl-spec-core grid.rs` `cell_zoom_at`), inside the world's one
+  query. A zoom that has not arrived is read from the coarser one that has.
 - **A horizontal distance is never longer than a 3D distance.** So the demand
   may ask for more than a ray reads, never less. The excess is bounded: a zoom
   asks for at most its lattice's `reach_tiles` wherever the eye stands, the

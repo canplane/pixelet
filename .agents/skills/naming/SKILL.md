@@ -1,14 +1,72 @@
 ---
 name: naming
-description: How a name in pixelet is chosen and spelled — a convention's word; abbreviations by default and the words that stay whole; the names chosen with the user; case by language and kind; bindings abbreviated, types whole; plurals, units, and names someone else owns; and how a rename is carried out. Use before naming or renaming anything, in code, spec JSON or a backticked identifier in a document.
+description: How a name in pixelet is chosen, judged and spelled — what the thing is before what the field calls it; what is named with the user and what takes a plain name; one word in two scopes; how names are reviewed; abbreviations by default and the words that stay whole; the names recorded as chosen with the user; case by language and kind; bindings abbreviated, types whole; plurals, units, and names someone else owns; and how a rename is carried out. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document.
 ---
 
 # Naming
 
-A name says what the thing is called where it comes from. Before naming or
-renaming, find that word: what the field calls it (graphics, GIS, game
-cameras, WAI-ARIA, the language's own idiom). Use it, and say in the proposal
-where it comes from. A thing with no precedent is named with the user.
+## What the thing is, then what it is called
+
+Before naming or renaming, read what the thing is: its role, what it takes and
+gives, its value and unit, how long it lives. Then find what the same thing is
+called where it comes from: the field (graphics, GIS, game cameras, WAI-ARIA,
+systems), the language's own idiom, or the checkpoint
+(`origin/checkpoint/20260405-rpc`). A field's word is shown by its literature,
+an official document or a representative implementation using it for the same
+thing; the word turning up there is not enough. Say in the proposal where the
+name comes from.
+
+- A term that names the same thing is the name.
+- A term that only overlaps (the same aim by another structure, one part of
+  what the code does) is not; where it is used anyway, say how the thing
+  differs.
+- Where no match is confirmed, no familiar term stands in: a camera cell that
+  is an angle is not a LOD ring because both set a resolution, and a function
+  that lights and fogs what it samples is not albedo.
+
+## What is named with the user
+
+A name is settled with the user when it brings in a new domain concept the
+project's parts share, or an alias of this project's for what the field already
+names. A binding, a field, a function or a result's type names its role in the
+usual words, with no source and no approval. What decides is whether a new
+concept comes in, not whether the name is a type or a function: the type of
+what a read returns names that result as plainly as a field does (`texel`,
+`cast_from`).
+
+The table below is the names recorded as chosen with the user, not every past
+decision. A name in neither it nor the records is of unconfirmed source, not
+an agent's coinage. That is a state of what is known, not a fault in the name:
+a plain name for a role asks for no source, and the records are looked up only
+where the source would change what is done; whether to ask is AGENTS.md's.
+
+## One word in two places
+
+A word may serve two concepts in different scopes. Where its scope and the
+words about it still leave the two confused, qualify it by a word that says the
+meaning (a shadow's `visibility` as `shadow_visibility`, beside the visibility
+buffer); two uses in one file whose calls are told apart are no clash, and a
+new metaphor to escape a clash is not a fix.
+
+## Reviewing names
+
+Go one identifier at a time: where it is defined; what it is, read from the
+code (role, input and output, value, unit, lifetime); the convention or record
+behind it; a candidate that means the same thing, if one exists. An unclear
+meaning, a name that differs from the field's for the same thing, and a name
+confused with another concept here are three findings, each answered
+differently: a reading or a doc comment, the field's word, a qualifier. An
+unconfirmed source is none of them, and a word in use elsewhere is by itself no
+reason to keep, refuse or qualify a name. What the code and records show is
+kept apart from guesses at how a name arose.
+
+- A technique the code resembles is a candidate until its premises and its
+  rule are checked against the code; until then it goes in no document as the
+  code's name.
+- A thing's role, its lifetime and the state of the work it serves are separate
+  axes: a resource kept to be let go later can also be one an unfinished
+  operation still holds, so two descriptions on different axes are not
+  exclusive.
 
 ## Abbreviate by default
 
@@ -45,7 +103,7 @@ tile's bytes).
 | the direction the camera faces | `facing` | look |
 | the camera modes | `orbit`, `first_person` (the UI says 1인칭/3인칭) | free |
 | what a mouse, touch or controller points with | `pointer` | cursor |
-| the raster's nearest sample at each pixel | the visibility buffer; a pixel `take`s its sample | pick |
+| the raster's nearest sample at each pixel | the visibility buffer | pick |
 
 `at` is where a thing is, `to` where it is going.
 

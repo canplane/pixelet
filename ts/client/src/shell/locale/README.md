@@ -7,10 +7,10 @@ written for someone who has never seen the code.
 What the world holds is named on two axes: where a thing came from, and what it
 is drawn as.
 
-|             | **cube** — a box                | **decor** — a model         | **marker** — a flat design |
-| ----------- | ------------------------------- | --------------------------- | -------------------------- |
-| **terrain** | the ground, water and buildings | trees and vehicles it grows | the places it names        |
-| **object**  | cubes you placed                | decor you placed            | markers you put up         |
+|             | **cube** — a box                | **decor** — a model             | **marker** — a flat design |
+| ----------- | ------------------------------- | ------------------------------- | -------------------------- |
+| **terrain** | the ground, water and buildings | trees and vehicles it generates | the places it names        |
+| **object**  | cubes you placed                | decor you placed                | markers you put up         |
 
 | en      | ko       | means                                                           |
 | ------- | -------- | --------------------------------------------------------------- |

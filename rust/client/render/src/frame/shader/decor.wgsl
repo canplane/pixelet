@@ -16,7 +16,7 @@ struct VertexOut {
   @location(0) uv: vec2f,
   @location(1) normal: vec3f,
   @location(2) world_pos: vec3f,
-  @location(3) through: f32,
+  @location(3) transmittance: f32,
   @location(4) scattered: vec3f,
   @location(5) @interpolate(flat) fill: vec3f,
   @location(6) @interpolate(flat) sun: vec3f,
@@ -48,7 +48,7 @@ fn vs(v: VertexIn) -> VertexOut {
   o.normal = place_up(v.normal, p.spin);
   o.world_pos = p.world;
   let seen = seen_from_eye(p.world);
-  o.through = seen.through;
+  o.transmittance = seen.transmittance;
   o.scattered = seen.scattered;
   o.sun = seen.light.sun;
   o.other = seen.light.other;
@@ -65,6 +65,6 @@ fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
-  let color = shade(albedo, n, i.world_pos, light_lit(i.world_pos, n), screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
+  let color = shade(albedo, n, i.world_pos, shadow_visibility(i.world_pos, n), screen_ao(i.clip.xy), Seen(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill)));
   return vec4f(tone(color), draw_opacity());
 }

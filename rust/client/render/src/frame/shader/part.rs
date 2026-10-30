@@ -45,22 +45,24 @@ pub const SHADER_BOUND: u32 = 27;
 /// generated with the cast from pxl-spec-core's `ground::height`: its one
 /// compute entry.
 pub const SHADER_HEIGHT: u32 = 28;
-/// The decor the ground grows in the eye's windows, generated with the cast
+/// The decor the ground generates in the eye's windows, generated with the cast
 /// from pxl-spec-core's `scatter`: its one compute entry.
-pub const SHADER_GROWN: u32 = 29;
-/// What `SHADER_GROWN` and placed decor leave, sized for the screen and
+pub const SHADER_GENERATED: u32 = 29;
+/// What `SHADER_GENERATED` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
-/// args; each drawn into the decor's instances: pxl-spec-core `scatter::drawn`.
-pub const SHADER_GROWN_CNT: u32 = 30;
-pub const SHADER_GROWN_ARGS: u32 = 31;
-pub const SHADER_GROWN_PLACE: u32 = 32;
+/// args; each drawn compacted into the decor's instances: pxl-spec-core
+/// `scatter::drawn`.
+pub const SHADER_GENERATED_CNT: u32 = 30;
+pub const SHADER_GENERATED_ARGS: u32 = 31;
+pub const SHADER_GENERATED_COMPACT: u32 = 32;
 /// Each newly held terrain frame's ways, its columns' spans off its lines,
 /// generated with the cast from pxl-spec-core's `ways`: its one compute
 /// entry.
 pub const SHADER_WAY: u32 = 33;
-/// Which eye slots' decor grows again this frame, listed for
-/// `SHADER_GROWN_STAND`'s and `SHADER_GROWN`'s dispatches: its one compute entry.
-pub const SHADER_GROWN_MARK: u32 = 34;
+/// Which eye slots' decor generates again this frame, listed for
+/// `SHADER_GENERATED_THIN`'s and `SHADER_GENERATED`'s dispatches: its one
+/// compute entry.
+pub const SHADER_GENERATED_MARK: u32 = 34;
 /// The eye's windows folded over their bricks, generated with the cast
 /// from pxl-spec-core's `window::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 35;
@@ -118,9 +120,10 @@ pub const SHADER_FACE: u32 = 53;
 pub const SHADER_LIGHT_MARK: u32 = 54;
 pub const SHADER_LIGHT_MARK_DRAWN: u32 = 55;
 pub const SHADER_LIGHT_REACH: u32 = 56;
-/// Which candidates of a slot `SHADER_GROWN_MARK` listed stand, a patch at a
-/// time, for `SHADER_GROWN` to grow: its one compute entry.
-pub const SHADER_GROWN_STAND: u32 = 57;
+/// Which candidates of a slot `SHADER_GENERATED_MARK` listed the thinning
+/// retains, a patch at a time, for `SHADER_GENERATED` to generate: its one
+/// compute entry.
+pub const SHADER_GENERATED_THIN: u32 = 57;
 /// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
 pub const SHADER_SCREEN_FINISH: u32 = 58;
 /// The world's color gathered over frames (screen_resolve.wgsl).
@@ -300,17 +303,17 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["bound.gen"],
     // SHADER_HEIGHT
     &["height.gen"],
-    // SHADER_GROWN
+    // SHADER_GENERATED
     &["decor.gen"],
-    // SHADER_GROWN_CNT
+    // SHADER_GENERATED_CNT
     &["decor_cnt.gen"],
-    // SHADER_GROWN_ARGS
+    // SHADER_GENERATED_ARGS
     &["decor_args.gen"],
-    // SHADER_GROWN_PLACE
-    &["decor_place.gen"],
+    // SHADER_GENERATED_COMPACT
+    &["decor_compact.gen"],
     // SHADER_WAY
     &["way.gen"],
-    // SHADER_GROWN_MARK
+    // SHADER_GENERATED_MARK
     &["decor_mark.gen"],
     // SHADER_JOINED
     &["joined.gen"],
@@ -377,8 +380,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["light_mark_drawn.gen"],
     // SHADER_LIGHT_REACH
     &["light_reach.gen"],
-    // SHADER_GROWN_STAND
-    &["decor_stand.gen"],
+    // SHADER_GENERATED_THIN
+    &["decor_thin.gen"],
     // SHADER_SCREEN_FINISH
     &["frame", "encode", "finish", "screen_tiles", "screen_finish"],
     // SHADER_SCREEN_RESOLVE

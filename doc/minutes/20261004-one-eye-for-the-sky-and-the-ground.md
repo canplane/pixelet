@@ -26,7 +26,7 @@ stays black.
 Lit by the sun's direction alone, a matte wall turned from it fell to a fifth of
 the ground beside it. A quarter of the light keeps its direction; the rest, what
 an up-facing face takes, reaches every face alike
-(pxl-render `param.rs` `light::DIRECTED`). An up-facing face is lit as
+(pxl-render `param.rs` `light::BY_NORMAL`). An up-facing face is lit as
 before, so the exposure, the sky and the far ground are untouched. No face is
 painted by its direction.
 
@@ -55,7 +55,7 @@ leaves. Neither touches the air in front, and neither tints.
 
 > Since changed (2026-10-28): neither tints, and each darkens only its own
 > light. The sun's shadow is the sun's visibility and darkens the direct sun;
-> the occlusion, the screen's (frame/shader/ao_map.wgsl `screen_open`) times
+> the occlusion, the screen's (frame/shader/ao_map.wgsl `screen_ao`) times
 > the corners' (screen_ray.wgsl `creases`), is the sky's and darkens only the
 > light from the sky and its bounce (atmos_light.wgsl `surface_light_in`).
 > The warmth a corner reads is the light left in it, the sun's among it.

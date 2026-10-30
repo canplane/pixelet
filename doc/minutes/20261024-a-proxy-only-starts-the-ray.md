@@ -42,7 +42,7 @@ persists, nothing to invalidate"._
    pixel's.
 4. **The camera grid picks the boxes.** At each distance the proxy draws the
    bound level whose cell spans a camera cell there, the rule a ray already asks
-   by (`grid::cell_at`), so the level of detail stays one rule.
+   by (`grid::cell_zoom_at`), so the level of detail stays one rule.
 
 ## What it would replace
 

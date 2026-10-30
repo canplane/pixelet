@@ -10,7 +10,7 @@ use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS}
 use crate::frame::shader::word::DECOR_GROUPS;
 
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
-use crate::gpu::grown::Drawn;
+use crate::gpu::generated::Drawn;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{
     bind_mesh, draw_models, put_instances, skin_group, skin_made, DrawUniforms, ModelDraw, Stage,
@@ -201,17 +201,17 @@ impl DecorPass {
         );
     }
 
-    /// The models the GPU grew, an indirect draw a group whose model is held
+    /// The models the GPU generated, an indirect draw a group whose model is held
     /// (pxl-spec-core `scatter::drawn`, a group's models its region `2·group`).
-    pub fn draw_grown(
+    pub fn draw_generated(
         &mut self,
         pass: &mut TrackedRenderPass,
-        grown: Option<Drawn>,
+        generated: Option<Drawn>,
         uploads: &Uploads,
         stage: Stage,
         frame: u32,
     ) {
-        let Some(d) = grown else { return };
+        let Some(d) = generated else { return };
         pass.set_pipeline(self.pipeline(stage));
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);

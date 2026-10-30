@@ -111,7 +111,7 @@ fn far(l: vec4u) -> vec3f {
 
 struct Drawn {
   rgb: vec3f,
-  taps: vec4f,
+  layers: vec4f,
 };
 
 // What the cell a px's ray met is drawn as, by its val, whichever
@@ -228,7 +228,7 @@ fn occlusion_of(d: f32) -> f32 {
 // corners leave it to the light.
 struct Creases {
   edge: f32,
-  open: f32,
+  ao: f32,
 };
 
 // Off the face's own bits (pxl-spec-core `face`), edge `k` +u, -u, +v, -v
@@ -252,21 +252,21 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
   let px = max(footprint(p), vec3f(1e-9));
   let across = vec4f(px[u], px[u], px[v], px[v]);
   var edge = 0.0;
-  var open = 1.0;
+  var ao = 1.0;
   for (var k = 0u; k < 4u; k++) {
     if (((faces >> (FACES_LINE + k)) & 1u) != 0u || ((faces >> (FACES_RISE + k)) & 1u) != 0u) {
       edge = max(edge, line_at(to[k] * h.side, across[k]));
     }
     if (((faces >> (FACES_RISE + k)) & 1u) != 0u) {
-      open *= 1.0 - occlusion_of(to[k]);
+      ao *= 1.0 - occlusion_of(to[k]);
     }
     if (((faces >> (FACES_CORNER + k)) & 1u) != 0u) {
       let a = k & 1u;
       let b = 2u + (k >> 1u);
-      open *= 1.0 - occlusion_of(length(vec2f(to[a], to[b])));
+      ao *= 1.0 - occlusion_of(length(vec2f(to[a], to[b])));
     }
   }
-  let k = frame_corner_ao() * (1.0 - open);
+  let k = frame_corner_ao() * (1.0 - ao);
   return Creases(edge, 1.0 - k);
 }
 

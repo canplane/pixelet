@@ -17,7 +17,7 @@ use crate::either::Either;
 use crate::eye::Eye;
 use crate::observed::{seen_at, seen_put, Seen, Writ};
 use crate::observer::{self, Observer};
-use crate::light::Moved;
+use crate::light::Head;
 use crate::world::World;
 
 /// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
@@ -210,10 +210,10 @@ pub fn beam_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
     let window: &[IVec4] = window;
-    let o = Either::of(eye, moved);
+    let o = Either::of(eye, head);
     let [across, down] = o.corners();
     if id.x >= across || id.y >= down {
         return;
@@ -265,9 +265,9 @@ pub fn cell_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
-    let o = Either::of(eye, moved);
+    let o = Either::of(eye, head);
     let [across, down] = o.cells();
     if id.x >= across || id.y >= down {
         return;
@@ -295,10 +295,10 @@ pub fn sample_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
     let window: &[IVec4] = window;
-    let o = Either::of(eye, moved);
+    let o = Either::of(eye, head);
     let [across, down] = o.samples();
     if id.x >= across || id.y >= down {
         return;

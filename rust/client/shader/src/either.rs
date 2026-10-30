@@ -7,10 +7,10 @@
 use crate::beam::Words;
 use crate::eye::Eye;
 use crate::observer::{Aim, Level, Observer};
-use crate::light::{self, Map, Moved};
+use crate::light::{self, Map, Head};
 
 /// The observer of a pass both take, read off the head it is handed
-/// (pxl-spec-core `light::MOVED_SIZE`): the shadow map where the head names
+/// (pxl-spec-core `light::HEAD_SIZE`): the shadow map where the head names
 /// one, else the eye, whose head is all zero. Each call is its observer's;
 /// no walk asks which, so the walk is one in the module whichever casts.
 /// Both walk the same world, its looks too, which only what a stop is drawn
@@ -22,11 +22,11 @@ pub(crate) struct Either<'a> {
 }
 
 impl<'a> Either<'a> {
-    pub(crate) fn of(eye: &'a Eye, moved: &Moved) -> Either<'a> {
+    pub(crate) fn of(eye: &'a Eye, head: &Head) -> Either<'a> {
         Either {
             eye,
-            map: Map::of(eye, moved),
-            light: light::size(moved) != 0,
+            map: Map::of(eye, head),
+            light: light::size(head) != 0,
         }
     }
 
@@ -213,11 +213,11 @@ impl Observer for Either<'_> {
         }
     }
 
-    fn laid(&self) -> ([i32; 3], (bool, [f32; 2])) {
+    fn raster_layout(&self) -> ([i32; 3], (bool, [f32; 2])) {
         if self.light {
-            self.map.laid()
+            self.map.raster_layout()
         } else {
-            self.eye.laid()
+            self.eye.raster_layout()
         }
     }
 

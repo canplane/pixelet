@@ -1,7 +1,7 @@
 // pxl-kernel/domain/query/decor.rs
 
-//! Decor as the world answers it: what the ground grows, evaluated cell by
-//! cell as the frame grows it (`grown_at`), off the ground's cells about the
+//! Decor as the world answers it: what the ground generates, evaluated cell
+//! by cell as the frame generates it (`generated_at`), off the ground's cells about the
 //! cell, each read as asked (`World::surfaces`), and what objects place, each
 //! struck as the box it claims. A ray strikes it as the ground walk passes, only
 //! where the frame draws it as held, at the leaf cells: a fold strikes none of
@@ -27,7 +27,7 @@ use pxl_spec::space::layer::lattice::{draw_reach, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::ray::Ray;
-use super::scatter::{grown_at, Asked};
+use super::scatter::{generated_at, Asked};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::meta::placed;
@@ -252,28 +252,28 @@ impl Around {
 }
 
 impl<'a> World<'a> {
-    /// What the ground stands on the leaf `cell`, each decor's, handed to
+    /// What the ground generates on the leaf `cell`, each decor's, handed to
     /// `each` until `each` says it has what it wants: each on its column's
     /// footing in the world unplaced (`World::footing`), with, where
-    /// `boxed`, whether it grows
-    /// there as the frame drawing it draws it (`grown_at`), true where not.
+    /// `boxed`, whether it generates
+    /// there as the frame drawing it draws it (`generated_at`), true where not.
     /// Nothing where the world does not hold the column.
-    fn grown_in(
+    fn generated_in(
         &self,
         cell: [i32; 2],
         boxed: bool,
         mut each: impl FnMut(&Decor, Instance, bool) -> bool,
     ) -> bool {
         DECORS.iter().any(|decor| {
-            grown_at(&mut Asked::new(self), decor, cell, boxed)
-                .is_some_and(|(i, grows)| each(decor, i, grows))
+            generated_at(&mut Asked::new(self), decor, cell, boxed)
+                .is_some_and(|(i, generates)| each(decor, i, generates))
         })
     }
 
-    /// Every decor the ground's scatter stands on the leaves whose box shares
-    /// room with `space`, whether or not its footing is there now: what an
-    /// erase took away included.
-    pub fn grown_over(&self, space: &Aabb) -> Vec<Instance> {
+    /// Every decor the ground's scatter generates on the leaves whose box
+    /// shares room with `space`, whether or not its footing is there now: what
+    /// an erase took away included.
+    pub fn generated_over(&self, space: &Aabb) -> Vec<Instance> {
         let (r, unit) = (reach(), units(GROUND.cell()));
         let cells = |k: usize| {
             libm::floor((space.min[k] - r) / unit) as i32..libm::ceil(space.max[k] / unit) as i32
@@ -281,7 +281,7 @@ impl<'a> World<'a> {
         let mut out = Vec::new();
         for y in cells(1) {
             for x in cells(0) {
-                self.grown_in([x, y], false, |_, i, _| {
+                self.generated_in([x, y], false, |_, i, _| {
                     if claim(&i).is_some_and(|c| c.shares(*space)) {
                         out.push(i);
                     }
@@ -292,14 +292,14 @@ impl<'a> World<'a> {
         out
     }
 
-    /// What the ground grows of `decor` standing in the leaf cell `at` lies
-    /// in; none where it grows nothing there or the windows do not hold it.
-    pub fn grown(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
+    /// What the ground generates of `decor` standing in the leaf cell `at` lies
+    /// in; none where it generates nothing there or the windows do not hold it.
+    pub fn generated(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
         let [x, y, z] = idx_of(GROUND.cell(), at);
         let mut met = None;
-        self.grown_in([x, y], false, |d, i, _| {
+        self.generated_in([x, y], false, |d, i, _| {
             met = Some(i)
-                .filter(|i| d.val() == decor.val() && i.grown_in().is_some_and(|c| c[2] == z));
+                .filter(|i| d.val() == decor.val() && i.generated_in().is_some_and(|c| c[2] == z));
             met.is_some()
         });
         met
@@ -344,7 +344,7 @@ impl<'a> World<'a> {
         for y in cell[1] - r..=cell[1] + r {
             for x in cell[0] - r..=cell[0] + r {
                 if fresh([x, y]) {
-                    self.grown_near(s, ray, [x, y]);
+                    self.generated_near(s, ray, [x, y]);
                 }
             }
         }
@@ -409,9 +409,9 @@ impl<'a> World<'a> {
         ground || s.about.holds((z, a))
     }
 
-    fn grown_near(&self, s: &mut Strike, ray: &Ray, cell: [i32; 2]) {
-        self.grown_in(cell, true, |_, i, grows| {
-            if grows {
+    fn generated_near(&self, s: &mut Strike, ray: &Ray, cell: [i32; 2]) {
+        self.generated_in(cell, true, |_, i, generates| {
+            if generates {
                 meet(s, ray, i);
             }
             false

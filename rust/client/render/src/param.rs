@@ -198,9 +198,9 @@ pub mod lens {
 pub mod light {
     params! {
         /// The share that keeps its direction; the rest, an up-facing face's,
-        /// reaches every face alike. Directed alone, a wall turned from the
-        /// sun read as a toy's.
-        DIRECTED: f32 = 0.25;
+        /// reaches every face alike. By the normal alone, a wall turned from
+        /// the sun read as a toy's.
+        BY_NORMAL: f32 = 0.25;
         /// The exponent only sets the band's width; `frame_rim_intensity()`
         /// scales the peak.
         RIM_POWER: f32 = 1.0;
@@ -264,12 +264,12 @@ pub mod puck {
 pub mod shadow {
     params! {
         /// The share of the sunlight every face takes alike
-        /// (`light::DIRECTED`'s rest) a cast shadow takes away; all of it left
+        /// (`light::BY_NORMAL`'s rest) a cast shadow takes away; all of it left
         /// the shade as dark.
-        ALIKE_TAKEN: f32 = 0.5;
+        BY_UP_TAKEN: f32 = 0.5;
         /// The share of the casters' reach past which a shadow fades to
         /// nothing at it.
-        FADE: f32 = 0.75;
+        FADE_START: f32 = 0.75;
         /// The share of the box's depth its planes step along the sun by, on
         /// a grid fixed in the world as its texels are across: a step casts
         /// the world again, since every texel's ray starts on the near plane.

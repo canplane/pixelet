@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene/marker/arrangement.rs
 
 //! The markers' arrangement: where each is drawn, read by its own source
-//! over the eye's windows' bricks, as decor is grown over them
+//! over the eye's windows' bricks, as decor is generated over them
 //! (domain/view/observation.rs `bricks`), and shown at the zoom the camera
 //! grid's cell at its own point is: a place as Carto draws it at that zoom
 //! (`place.rs`); a pin someone put up, near enough (`pin.rs`); a line said,

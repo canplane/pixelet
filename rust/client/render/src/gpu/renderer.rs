@@ -31,8 +31,8 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, JITTER, LIGHT_VIEW_PROJ,
-    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_MOON, SHADOW_RIM, SHADOW_STRENGTH,
-    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_MAX_DIST_NDC, SHADOW_MOON,
+    SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
@@ -48,7 +48,7 @@ use crate::gpu::api::{
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
 use crate::gpu::finish::Finish;
-use crate::gpu::grown::DecorFrame;
+use crate::gpu::generated::DecorFrame;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::mip::MipPass;
 use crate::gpu::pack::Pack;
@@ -135,7 +135,7 @@ pub struct FrameInput<'a> {
 
 /// The texels beside a caster's that it changes, in the sun's map and,
 /// through a receiver's taps, on the screen: the map's filter, a slope's
-/// push and the normal's offset, with room (shadow.wgsl `light_lit`).
+/// push and the normal's offset, with room (shadow.wgsl `shadow_visibility`).
 const SHADOW_MARGIN: f64 = 4.0;
 
 /// Where a flat polygon `p`, units from the eye, falls through `m`: the clip
@@ -304,7 +304,7 @@ pub struct Cast<'a> {
     /// unwritten until the page replays the turn.
     pub shards: &'a [[i32; 4]],
     pub overwrites: Overwrites<'a>,
-    /// The decor the GPU grows and draws over the same world (gpu/grown.rs).
+    /// The decor the GPU generates and draws over the same world (gpu/generated.rs).
     pub decor: DecorFrame<'a>,
     /// Where each actor drawn stands, units from the eye, as its draw is
     /// placed (frame/draw.rs `Lists::stands`): receivers of the shadow map as
@@ -402,7 +402,7 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
 /// The passes drawn at the world's own pixels, whose cost goes with them:
 /// its depth prepass, its occlusion, its drawing, its gathering over frames
 /// and its cast. The air's
-/// tables, the fill and the decor's growth, the thumbnails, markers and debug
+/// tables, the fill and the decor's generation, the thumbnails, markers and debug
 /// cost what they cost at any resolution.
 const PER_PX: [GpuSpanName; 11] = [
     GpuSpanName::prepass,
@@ -804,12 +804,18 @@ impl Renderer {
         if let Some((dir, _)) = light {
             // Up to a power of two, so the snap grid and the texel move only in steps;
             // the shadows fade by the casters' own reach.
-            let half = libm::exp2(libm::ceil(libm::log2(far)));
-            let rim = (far / half) as f32;
-            self.shadow.aim(dir, eye, half, rim, eye_world.map(|v| -v));
+            let half_width = libm::exp2(libm::ceil(libm::log2(far)));
+            let shadow_max_dist_ndc = (far / half_width) as f32;
+            self.shadow.aim(
+                dir,
+                eye,
+                half_width,
+                shadow_max_dist_ndc,
+                eye_world.map(|v| -v),
+            );
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
             u[SHADOW_TEXEL] = self.shadow.texel as f32;
-            u[SHADOW_RIM] = rim;
+            u[SHADOW_MAX_DIST_NDC] = shadow_max_dist_ndc;
         }
 
         self.atmosphere.lay_out(g, env, reach);
@@ -945,11 +951,11 @@ impl Renderer {
         !r.end()
     }
 
-    /// The world image's opaque models: the decor grown over the world. The
+    /// The world image's opaque models: the decor generated over the world. The
     /// impostors are the lit pass's alone.
     fn draw_opaque(&mut self, pass: &mut TrackedRenderPass, b: &mut Uploads, stage: Stage) {
         self.decor
-            .draw_grown(pass, self.screen.grown(), b, stage, self.models.frame);
+            .draw_generated(pass, self.screen.generated(), b, stage, self.models.frame);
     }
 
     /// A frame in two stages, each standing while what it reads stands:
@@ -1171,13 +1177,17 @@ impl Renderer {
             cast,
             &meshes,
             (world.rays_view, [world.width, world.height]),
-            (self.shadow.world, self.shadow.frame, self.shadow.starts()),
+            (
+                self.shadow.world,
+                self.shadow.generation,
+                self.shadow.starts(),
+            ),
             partial,
         );
-        // The frame draws the decor grown, so it reads whether that is on:
-        // decor turned off grows nothing and casts no ray again, yet the
+        // The frame draws the decor generated, so it reads whether that is on:
+        // decor turned off generates nothing and casts no ray again, yet the
         // frame stands without it.
-        read.read(&[u32::from(self.screen.grown().is_some())]);
+        read.read(&[u32::from(self.screen.generated().is_some())]);
         self.prepare_cases(g, &draws, uniforms, input.cases, lists_moved);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
@@ -1211,8 +1221,10 @@ impl Renderer {
         // The world as it stood: all the frame draws from read as last time
         // but its lists and its jitter, over rays cast again at most at
         // their pixels.
-        let stands =
-            read.end() && self.screen.kind != FrameKind::cast && !self.screen.grows() && !gridded;
+        let stands = read.end()
+            && self.screen.kind != FrameKind::cast
+            && !self.screen.generates()
+            && !gridded;
         // Nothing moved but the jitter.
         let quiet = stands && listed_same && !clouds_drawn;
         // Only what the kernel bounds moved: the claimed tiles alone are
@@ -1289,7 +1301,7 @@ impl Renderer {
             let mut pass = self.shadow.begin(&mut ctx, cast, &self.light_tiles, number);
             let light = self.shadow.light_group;
             self.decor
-                .draw_grown(&mut pass, self.screen.grown(), b, Stage::Depth, light);
+                .draw_generated(&mut pass, self.screen.generated(), b, Stage::Depth, light);
             self.decor.draw(&mut pass, &draws, b, Stage::Depth, light);
             self.skinned.draw(
                 &mut pass,
@@ -1308,15 +1320,15 @@ impl Renderer {
             world.width,
             world.height,
             u32::from(self.screen_ao),
-            u32::from(self.screen.grown().is_some()),
+            u32::from(self.screen.generated().is_some()),
         ]);
         // The world's depth is the rays', so a cast that laid them again
         // lays the occlusion again.
-        a.mark(ao_remade || self.screen.grows() || self.screen.casts_px());
+        a.mark(ao_remade || self.screen.generates() || self.screen.casts_px());
         let ao_moved = !a.end();
         // A gated frame moves no depth the occlusion reads: its prepass
-        // draws the rays and the grown decor, never what the kernel animates
-        // (gpu/pass/model.rs, drawn over it), so it stands.
+        // draws the rays and the generated decor, never what the kernel
+        // animates (gpu/pass/model.rs, drawn over it), so it stands.
         if self.screen_ao && ao_moved && !gated {
             let mut pass = self.ao.begin_prepass(&mut ctx);
             self.screen.draw_depth(&mut pass);
@@ -1370,8 +1382,12 @@ impl Renderer {
         self.draw_opaque(&mut pass, b, Stage::Lit);
         self.screen.draw(&mut pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
-        self.impostor
-            .draw_grown(&mut pass, self.screen.grown(), GROUPS, self.models.frame);
+        self.impostor.draw_generated(
+            &mut pass,
+            self.screen.generated(),
+            GROUPS,
+            self.models.frame,
+        );
         // At the far plane after the opaque world, so only empty pixels run the sky shader.
         pass.set_pipeline(self.sky_built.pipeline);
         pass.set_bind_group(0, self.sky_group, &[]);
@@ -1469,7 +1485,7 @@ impl Renderer {
             if self.resolve.gathering() && (quiet || !animated) {
                 REDRAW.set(true);
             }
-            if self.screen.grows() {
+            if self.screen.generates() {
                 self.screen.on_drawn();
             }
         }

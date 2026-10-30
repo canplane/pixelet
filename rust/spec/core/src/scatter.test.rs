@@ -3,11 +3,11 @@
 use super::*;
 use crate::cast::Spacing;
 
-/// A patch's contest drawn once for all its candidates (`beaten`) answers
-/// each as `stands` does, over every decor of the catalog and the patches of
+/// A patch's thinning drawn once for all its candidates (`deleted`) answers
+/// each as `retained` does, over every decor of the catalog and the patches of
 /// bricks at the leaves and coarser.
 #[test]
-fn patch_contest() {
+fn patch_thinning() {
     let (mut compared, mut lost) = (0, 0);
     for decor in &DECORS {
         for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, TOP_ZOOM + 1] {
@@ -29,16 +29,16 @@ fn patch_contest() {
                     for i in 0..n as usize {
                         mark(&mut asked, i);
                     }
-                    let beaten = beaten(decor, zoom, &cs, n, &asked);
+                    let deleted = deleted(decor, zoom, &cs, n, &asked);
                     for (i, c) in cs.iter().enumerate().take(n as usize) {
                         assert_eq!(
-                            !is_marked(&beaten, i),
-                            stands(decor, zoom, c),
+                            !is_marked(&deleted, i),
+                            retained(decor, zoom, c),
                             "decor {} at {zoom}, patch {p}, candidate {i}",
                             decor.val
                         );
                         compared += 1;
-                        lost += usize::from(is_marked(&beaten, i));
+                        lost += usize::from(is_marked(&deleted, i));
                     }
                     p += 1;
                 }
@@ -48,7 +48,7 @@ fn patch_contest() {
     assert!(compared > 1000, "only {compared} candidates compared");
     assert!(
         lost > 0,
-        "no candidate was beaten, so the contest was not tried"
+        "no candidate was deleted, so the thinning was not tried"
     );
 }
 

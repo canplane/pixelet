@@ -17,12 +17,12 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_SCREEN_MARK => "screen_mark_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHT => "height_cs",
-        SHADER_GROWN_MARK => "decor_mark_cs",
-        SHADER_GROWN_STAND => "decor_stand_cs",
-        SHADER_GROWN => "decor_cs",
-        SHADER_GROWN_CNT => "decor_cnt_cs",
-        SHADER_GROWN_ARGS => "decor_args_cs",
-        SHADER_GROWN_PLACE => "decor_place_cs",
+        SHADER_GENERATED_MARK => "decor_mark_cs",
+        SHADER_GENERATED_THIN => "decor_thin_cs",
+        SHADER_GENERATED => "decor_cs",
+        SHADER_GENERATED_CNT => "decor_cnt_cs",
+        SHADER_GENERATED_ARGS => "decor_args_cs",
+        SHADER_GENERATED_COMPACT => "decor_compact_cs",
         SHADER_WAY => "way_cs",
         SHADER_WAY_FREE => "way_free_cs",
         SHADER_WAY_TREE => "way_tree_cs",
@@ -410,7 +410,7 @@ const BOX_GROUP: [[u32; 2]; 19] = and(
 );
 /// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
 /// and its upload: one layout each wherever a draw binds them, so a group
-/// one owner makes binds in every pipeline that names them (gpu/grown.rs,
+/// one owner makes binds in every pipeline that names them (gpu/generated.rs,
 /// gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
 const UPLOAD: [[u32; 2]; 1] = [[0, STORAGE]];

@@ -730,11 +730,11 @@ fn device_loss_drops_bounds() {
     assert_eq!(over(), [UNBOUNDED; 2], "over cells gone");
 }
 
-/// What the ground grows stands where it grew whatever is put over it or in
-/// place of the cell under it, air or a cube: it grows on the world
-/// unplaced (pxl-spec-core `scatter::grown`).
+/// What the ground generates stands where it was generated whatever is put
+/// over it or in place of the cell under it, air or a cube: it generates on
+/// the world unplaced (pxl-spec-core `scatter::generated`).
 #[test]
-fn grown_decor_stays() {
+fn generated_decor_stays() {
     use crate::domain::layer::object::store::AIR;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
@@ -744,11 +744,11 @@ fn grown_decor_stays() {
             min: [x - 8.0, y - 8.0, world::REACH.min[2]],
             max: [x + 8.0, y + 8.0, world::REACH.max[2]],
         };
-        world.grown_over(&space)
+        world.generated_over(&space)
     };
     let bare = near(&Store::default());
-    let tree = *bare.first().expect("a decor grows about the eye");
-    let [cx, cy, cz] = tree.grown_in().unwrap();
+    let tree = *bare.first().expect("a decor generates about the eye");
+    let [cx, cy, cz] = tree.generated_in().unwrap();
     let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
 
     let mut store = Store::default();
@@ -763,11 +763,11 @@ fn grown_decor_stays() {
     }
 }
 
-/// Only an edit in its own box takes what the ground grows away, air or a
-/// cube; one under it or over it leaves it growing (pxl-spec-core
-/// `scatter::Grounds::is_edited`).
+/// Only an edit in its own box takes what the ground generates away, air or a
+/// cube; one under it or over it leaves it generated (pxl-spec-core
+/// `scatter::DecorQuery::is_edited`).
 #[test]
-fn grown_decor_edit_removes() {
+fn generated_decor_edit_removes() {
     use crate::domain::layer::object::store::AIR;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
@@ -778,20 +778,20 @@ fn grown_decor_edit_removes() {
         max: [x + 8.0, y + 8.0, world::REACH.max[2]],
     };
     let tree = *world
-        .grown_over(&space)
+        .generated_over(&space)
         .first()
-        .expect("a decor grows about the eye");
-    let [cx, cy, cz] = tree.grown_in().unwrap();
+        .expect("a decor generates about the eye");
+    let [cx, cy, cz] = tree.generated_in().unwrap();
     let decor = Decor::of(DecorId::of(tree.id).unwrap());
-    let grows = |store: &Store| {
+    let generates = |store: &Store| {
         let world = World::new(&tile_cache, store);
-        scatter::grown_at(&mut scatter::Asked::new(&world), decor, [cx, cy], true)
-            .map(|(_, grows)| grows)
+        scatter::generated_at(&mut scatter::Asked::new(&world), decor, [cx, cy], true)
+            .map(|(_, generates)| generates)
     };
     assert_eq!(
-        grows(&Store::default()),
+        generates(&Store::default()),
         Some(true),
-        "it grows on bare ground"
+        "it generates on bare ground"
     );
     let red = cube_id(Cube::Object(cube::Object::red));
     for (dz, val, what, kept) in [
@@ -804,6 +804,6 @@ fn grown_decor_edit_removes() {
         let mut store = Store::default();
         let at = [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
         write(&mut store, at, OBJECT_COARSEST, val);
-        assert_eq!(grows(&store), Some(kept), "{what}");
+        assert_eq!(generates(&store), Some(kept), "{what}");
     }
 }

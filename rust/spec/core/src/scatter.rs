@@ -1,6 +1,6 @@
 // pxl-spec-core/scatter.rs
 
-//! gpu-portable: decor the ground grows on its own, never stored. A Poisson
+//! gpu-portable: decor the ground generates on its own, never stored. A Poisson
 //! process on the leaf cell lattice, never a grid: a patch at zoom m bears a
 //! count of candidates born there, each at a uniform leaf cell, and a
 //! candidate born at m stands at every zoom from m finer, so a cell at any
@@ -9,8 +9,8 @@
 //! (`node_seed`), so every reader of a cell, either side, draws the same.
 //!
 //! Where a candidate stands, which way it faces and whether its footing
-//! holds are functions of the world as either side holds it (`grown`, over
-//! `Grounds`), and so is what placed decor claims (`is_claimed`).
+//! holds are functions of the world as either side holds it (`generated`,
+//! over `DecorQuery`), and so is what placed decor claims (`overlaps_placed`).
 
 use xpute_kit::math::rng::{derive_seed_u32, SplitMix32};
 
@@ -175,13 +175,13 @@ pub const BRICK_PATCHES: u32 = {
     sum
 };
 
-/// The most decor one brick grows, every decor's together: a patch bears no more
-/// than its counts' thresholds (`Decor::room`), and no more patches than
+/// The most decor one brick generates, every decor's together: a patch bears no more
+/// than its counts' thresholds (`Decor::cap`), and no more patches than
 /// `BRICK_PATCHES` meet a brick.
-pub const BRICK_GROWN: u32 = {
+pub const BRICK_RECORDS: u32 = {
     let (mut sum, mut k) = (0, 0);
     while k < DECORS.len() {
-        sum += DECORS[k].room();
+        sum += DECORS[k].cap();
         k += 1;
     }
     sum * BRICK_PATCHES
@@ -194,45 +194,47 @@ const _: () = assert!(
 
 /// A record of decor the GPU draws: its first word (`record_word`), then
 /// its box's min corner in leaf cells, then how far its base sinks under
-/// it (`Grown::sink`).
-pub const GROWN_WORDS: u32 = 5;
+/// it (`Generated::sink`).
+pub const RECORD_WORDS: u32 = 5;
 
-/// The eye's windows' bricks, an entry each: what the GPU grows decor in,
+/// The eye's windows' bricks, an entry each: what the GPU generates decor in,
 /// entry `s` the brick the windows' table holds at `s`.
 pub const EYE_ENTRIES: u32 = EYE_WINDOWS * ENTRIES;
 
-/// A record no decor stands at: its candidate stands or grows not where it
-/// is, so it is drawn as nothing (`drawn::NONE` its region).
-pub const UNGROWN: u32 = u32::MAX;
-const _: () = assert!(UNGROWN >> drawn::REGION_SHIFT == drawn::NONE);
-/// A record stood and still to grow: `decor_stand_cs` lays it, its
-/// candidate's cell, seed and born zoom after it, and `decor_cs` grows it
-/// in its place the same frame, so no other pass reads one.
-pub const STOOD: u32 = UNGROWN - 1;
+/// A record no decor stands at: its candidate is deleted by the thinning or
+/// generates nothing where it is, so it is drawn as nothing (`drawn::NONE`
+/// its region).
+pub const UNGENERATED: u32 = u32::MAX;
+const _: () = assert!(UNGENERATED >> drawn::REGION_SHIFT == drawn::NONE);
+/// A record retained by the thinning and still to generate: `decor_thin_cs`
+/// lays it, its candidate's cell, seed and born zoom after it, and
+/// `decor_cs` generates it in its place the same frame, so no other pass
+/// reads one.
+pub const RETAINED: u32 = UNGENERATED - 1;
 const _: () = assert!(
     crate::FINEST_ZOOM < (1 << crate::ZOOM_BITS) - 1,
-    "no record's first word is `STOOD` or `UNGROWN`: its zoom's bits are never all set"
+    "no record's first word is `RETAINED` or `UNGENERATED`: its zoom's bits are never all set"
 );
 
 /// The GPU's decor in one buffer of words: a head per eye entry, then each
-/// entry's `BRICK_GROWN` records, then placed decor's head and its records.
+/// entry's `BRICK_RECORDS` records, then placed decor's head and its records.
 /// An entry's records are its candidates', each at its own place
-/// (`entry_record`), so one grown again rewrites its own alone. A head is
-/// the brick they were grown for, X and Y, and 1 once they were — an entry
+/// (`entry_record`), so one generated again rewrites its own alone. A head is
+/// the brick they were generated for, X and Y, and 1 once they were — an entry
 /// whose brick the windows no longer hold there is skipped by it
-/// (`grown_for`) — then how many candidates each patch of each decor bears,
-/// as many of its records as are read (`bears_at`). Placed decor's head is
+/// (`generated_for`) — then how many candidates each patch of each decor bears,
+/// as many of its records as are read (`cnt_at`). Placed decor's head is
 /// its count.
-pub const BEARS_AT: u32 = 3;
-pub const HEAD_WORDS: u32 = BEARS_AT + RUNS;
+pub const PATCH_CNT_AT: u32 = 3;
+pub const HEAD_WORDS: u32 = PATCH_CNT_AT + RUNS;
 const SLOTS_AT: u32 = EYE_ENTRIES * HEAD_WORDS;
 /// Records the entries hold, every one, ahead of placed decor's.
-pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_GROWN;
-pub const PLACED_HEAD: u32 = SLOTS_AT + SLOT_RECORDS * GROWN_WORDS;
+pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORDS;
+pub const PLACED_HEAD: u32 = SLOTS_AT + SLOT_RECORDS * RECORD_WORDS;
 pub const PLACED_HEAD_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (pxl-shader decor.rs
-/// `records`): an entry's, each decor's patches in turn; placed decor's, a
+/// `run_of`): an entry's, each decor's patches in turn; placed decor's, a
 /// record each.
 pub const RUNS: u32 = DECORS.len() as u32 * BRICK_PATCHES;
 
@@ -243,38 +245,38 @@ pub const fn head_at(s: u32) -> u32 {
 
 /// The word of entry `s`'s head counting what the `p`-th patch of decor `k`
 /// bears.
-pub const fn bears_at(s: u32, k: u32, p: u32) -> u32 {
-    head_at(s) + BEARS_AT + k * BRICK_PATCHES + p
+pub const fn cnt_at(s: u32, k: u32, p: u32) -> u32 {
+    head_at(s) + PATCH_CNT_AT + k * BRICK_PATCHES + p
 }
 
 /// Entry `s`'s record of candidate `i` of the `p`-th patch of `rows`' decor
-/// `k`, as a record number (`record_at`): the decors' rooms laid in the
-/// catalog's order, a patch's room each (`Decor::room`).
+/// `k`, as a record number (`record_at`): the decors' capacities laid in the
+/// catalog's order, a patch's capacity each (`Decor::cap`).
 pub fn entry_record(rows: &[Decor], s: u32, k: u32, p: u32, i: u32) -> u32 {
     let (mut first, mut j) = (0, 0);
     while j < k {
-        first += rows[j as usize].room();
+        first += rows[j as usize].cap();
         j += 1;
     }
-    s * BRICK_GROWN + first * BRICK_PATCHES + p * rows[k as usize].room() + i
+    s * BRICK_RECORDS + first * BRICK_PATCHES + p * rows[k as usize].cap() + i
 }
 
 /// Record `n`'s first word, the entries' first, entry by entry, then placed
 /// decor's.
 pub const fn record_at(n: u32) -> u32 {
     if n < SLOT_RECORDS {
-        SLOTS_AT + n * GROWN_WORDS
+        SLOTS_AT + n * RECORD_WORDS
     } else {
-        PLACED_HEAD + PLACED_HEAD_WORDS + (n - SLOT_RECORDS) * GROWN_WORDS
+        PLACED_HEAD + PLACED_HEAD_WORDS + (n - SLOT_RECORDS) * RECORD_WORDS
     }
 }
 
-/// Whether an entry's head says its records were grown for the brick `q`.
-pub const fn grown_for(head: [u32; 3], q: [i32; 2]) -> bool {
+/// Whether an entry's head says its records were generated for the brick `q`.
+pub const fn generated_for(head: [u32; 3], q: [i32; 2]) -> bool {
     head[2] == 1 && head[0] as i32 == q[0] && head[1] as i32 == q[1]
 }
 
-/// The boxes a frame's growth is asked over at most: the edits and cuts
+/// The boxes a frame's generation is asked over at most: the edits and cuts
 /// held (`overwrite::BOXES`), and each brick handed this frame, which
 /// reaches its window's zoom alone.
 pub const MARKED: u32 = overwrite::BOXES + window::HANDED;
@@ -284,26 +286,26 @@ pub const BOX_WORDS: u32 = 5;
 pub const EVERY: u32 = 0;
 const _: () = assert!(window::FIRST_CELL > EVERY);
 
-/// What `decor_mark_cs` reads and lists and `decor_stand_cs` and `decor_cs`
+/// What `decor_mark_cs` reads and lists and `decor_thin_cs` and `decor_cs`
 /// are dispatched by, in words: each one's workgroups across, up and the
-/// entry-decor pairs listed, a pad (`STAND_ARGS`, `GROW_ARGS`); whether every
-/// entry grows whole, decor having been off (`GROWS_EVERY`), and how many
-/// boxes (`GROWS_BOXES`), two pads; the boxes, `BOX_WORDS` each; then the
-/// list, an entry, its decor (`<< 16`) and whether it grows whole (`WHOLE`)
-/// each, in no order.
-pub const STAND_ARGS: u32 = 0;
-pub const GROW_ARGS: u32 = 4;
-pub const GROWS_EVERY: u32 = 8;
-pub const GROWS_BOXES: u32 = 9;
+/// entry-decor pairs listed, a pad (`THIN_ARGS`, `GENERATE_ARGS`); whether
+/// every entry generates whole, decor having been off (`LIST_EVERY`), and how
+/// many boxes (`LIST_BOXES`), two pads; the boxes, `BOX_WORDS` each; then the
+/// list, an entry, its decor (`<< 16`) and whether it generates whole
+/// (`WHOLE`) each, in no order.
+pub const THIN_ARGS: u32 = 0;
+pub const GENERATE_ARGS: u32 = 4;
+pub const LIST_EVERY: u32 = 8;
+pub const LIST_BOXES: u32 = 9;
 pub const BOXES_AT: u32 = 12;
-pub const GROWS_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
+pub const LIST_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
 pub const WHOLE: u32 = 1 << 31;
 
 /// The words of what `decor_mark_cs` lists.
-pub const GROWS_WORDS: u32 = GROWS_AT + EYE_ENTRIES * DECORS.len() as u32;
+pub const LIST_WORDS: u32 = LIST_AT + EYE_ENTRIES * DECORS.len() as u32;
 
-/// How far about its own, in its window's cells, a candidate's growth reads
-/// the world (`grown`): the cells its pose votes on, its box, and the placed
+/// How far about its own, in its window's cells, a candidate's generation
+/// reads the world (`generated`): the cells its pose votes on, its box, and the placed
 /// decor that may claim it, none wider than the widest decor.
 const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
 
@@ -313,7 +315,7 @@ pub const fn brick_box(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
     [q[0] << k, q[1] << k, (q[0] + 1) << k, (q[1] + 1) << k]
 }
 
-/// The leaf cells a candidate at leaf cell `c` reads where it grows at
+/// The leaf cells a candidate at leaf cell `c` reads where it generates at
 /// `cell`: its window's cells within `READ_REACH` of its own.
 pub const fn reads(cell: Zoom, c: [i32; 2]) -> [i32; 4] {
     let s = LEAF_CELL - cell;
@@ -347,13 +349,13 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
     across && b[1] < reads[3] && b[3] > reads[1]
 }
 
-/// The zoom a record names for placed decor, which no window grows. No
+/// The zoom a record names for placed decor, which no window generates. No
 /// window's cells are at it (`FIRST_CELL`).
 pub const PLACED_AT: Zoom = 0;
 const _: () = assert!(window::FIRST_CELL > PLACED_AT);
 
 /// A record's first word: its decor and variant, a byte each, its turn in
-/// quarters, and the window zoom it was grown at, `PLACED_AT` for placed
+/// quarters, and the window zoom it was generated at, `PLACED_AT` for placed
 /// decor; past them, once sized, its region (`drawn::REGION_SHIFT`).
 pub const fn record_word(decor: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
     decor | variant << 8 | turn << TURN_SHIFT | cell << CELL_SHIFT
@@ -396,9 +398,9 @@ pub fn first_group(rows: &[Decor], decor: u32) -> u32 {
     first
 }
 
-/// How the GPU draws what it grows: each record sized for the screen, a
-/// model or a sprite, into its group's region, models at `2·group` and
-/// sprites past it; the regions laid end to end in the decor's instances, in the
+/// How the GPU draws what it generates: each record sized for the screen, a
+/// model or an impostor, into its group's region, models at `2·group` and
+/// impostors past it; the regions laid end to end in the decor's instances, in the
 /// layout the decor and impostor shaders read (lanes x, y, z, spin, scale,
 /// `drawn::LANES` a slot, then the index list), each region's draw a set of
 /// indirect args.
@@ -413,7 +415,7 @@ pub mod drawn {
     pub const REGION_SHIFT: u32 = super::CELL_SHIFT + crate::ZOOM_BITS;
     pub const LANES: u32 = 5;
     /// Each region's indirect args, `ARGS_WORDS` a region: a model's
-    /// indexed, a sprite's a strip of four corners an instance; its first
+    /// indexed, an impostor's a strip of four corners an instance; its first
     /// instance 0, which a device without `indirect-first-instance` holds
     /// every indirect draw to.
     pub const ARGS_WORDS: u32 = 5;
@@ -427,41 +429,42 @@ pub mod drawn {
     const OFF_BYTES: u32 = 256;
     pub const UNIFORM_IDX: u32 = 7;
     /// The drawing words, what a frame's decor is drawn by: the model's and
-    /// the sprite's floors, each an angle about the eye in radians, the
+    /// the impostor's floors, each an angle about the eye in radians, the
     /// anchor the lanes' positions are about (unit cells, X wrapping), the
     /// left-out decor's corner and whether there is one, then each group's
     /// extent.
     pub const MODEL_ANGLE: u32 = 0;
-    pub const SPRITE_ANGLE: u32 = 1;
+    pub const IMPOSTOR_ANGLE: u32 = 1;
     pub const ANCHOR: u32 = 4;
     pub const HIDE: u32 = 8;
     pub const EXTENTS: u32 = 12;
     pub const DRAWING_WORDS: u32 = EXTENTS + GROUPS;
 
     /// What a thing spanning `across` radians about the eye is drawn as: a
-    /// model at `model` or more, else a sprite at `sprite` or more, else
-    /// nothing, each an angle, so no screen decides it. A group's region is
-    /// `2·group` past its tier where drawn.
+    /// model at `model` or more, else an impostor at `impostor` or more, else
+    /// culled, nothing drawn, each an angle, so no screen decides it. A
+    /// group's region is `2·group` past its tier where drawn.
     pub const MODEL: u32 = 0;
-    pub const SPRITE: u32 = 1;
-    pub const GONE: u32 = 2;
+    pub const IMPOSTOR: u32 = 1;
+    pub const CULLED: u32 = 2;
 
     /// The tier of what spans `across` radians, against the model's and the
-    /// sprite's floors: the one rule decor's count and the CPU's clouds
+    /// impostor's floors: the one rule decor's count and the CPU's clouds
     /// both size by.
-    pub fn tier(across: f32, model: f32, sprite: f32) -> u32 {
+    pub fn tier(across: f32, model: f32, impostor: f32) -> u32 {
         if across >= model {
             MODEL
-        } else if across >= sprite {
-            SPRITE
+        } else if across >= impostor {
+            IMPOSTOR
         } else {
-            GONE
+            CULLED
         }
     }
 }
 
-/// Whether `a` stands before `b` where both would claim a cell: the one born
-/// coarser, so a zoom keeps what it had, then the lower seed.
+/// Whether `a`'s mark is earlier than `b`'s in the thinning (`deletes`): the
+/// mark is the zoom a candidate was born at, then its seed: the one born
+/// coarser first, so a zoom keeps what it had, then the lower seed.
 pub fn before(a: &Candidate, b: &Candidate) -> bool {
     a.born < b.born || (a.born == b.born && a.seed < b.seed)
 }
@@ -495,17 +498,22 @@ pub fn side_of(decor: &Decor, c: &Candidate) -> i32 {
     x.max(y) as i32
 }
 
-/// Whether `d`, its brick `sd` a side, keeps `c`, its `sc`, from standing:
-/// it stands before it and claims a cell of its brick. The one rule of the
-/// contest (`stands`).
-pub fn beats(d: &Candidate, sd: i32, c: &Candidate, sc: i32) -> bool {
+/// Whether `d`, its brick `sd` a side, deletes `c`, its `sc`: the one rule
+/// of the thinning (`retained`). It is like Matérn's type II thinning: a
+/// candidate is deleted where a conflicting one has an earlier mark
+/// (`before`: born coarser, then the lower seed), whether or not that one is
+/// itself deleted, and is retained otherwise. Its conflict is no fixed
+/// hard-core distance: two conflict where the square boxes they claim, from
+/// their cells up, each its variant's widest side a side (`side_of`), share a
+/// cell (`meet`).
+pub fn deletes(d: &Candidate, sd: i32, c: &Candidate, sc: i32) -> bool {
     before(d, c) && meet(d, sd, c, sc)
 }
 
-/// The leaf cells a candidate of `decor` beating `c`, its brick `side` a
-/// side, stands in (`beats`): as far before it as the widest decor's
+/// The leaf cells a candidate of `decor` deleting `c`, its brick `side` a
+/// side, may lie in (`deletes`): as far before it as the widest decor's
 /// brick reaches, to the end of its own.
-pub fn rivals(decor: &Decor, c: &Candidate, side: i32) -> [[i32; 2]; 2] {
+pub fn deleter_cells(decor: &Decor, c: &Candidate, side: i32) -> [[i32; 2]; 2] {
     let reach = decor.widest() as i32 - 1;
     [
         [c.cell[0] - reach, c.cell[1] - reach],
@@ -527,10 +535,10 @@ pub fn mark(m: &mut [u32; MARKS], i: usize) {
 }
 
 /// Which of the first `n` candidates of a patch, `cs`, set in `asked`,
-/// are beaten at `zoom` (`beats`): each its own answer of `stands`, their
-/// rivals drawn once for them all, over the cells every asked one's rivals
-/// stand in (`rivals`), not once each.
-pub fn beaten(
+/// are deleted at `zoom` (`deletes`): each its own answer of `retained`, the
+/// candidates that may delete them drawn once for them all, over the cells
+/// every asked one's may lie in (`deleter_cells`), not once each.
+pub fn deleted(
     decor: &Decor,
     zoom: Zoom,
     cs: &[Candidate; COUNTS],
@@ -542,40 +550,41 @@ pub fn beaten(
     while i < n as usize {
         if is_marked(asked, i) {
             sides[i] = side_of(decor, &cs[i]);
-            let [l, h] = rivals(decor, &cs[i], sides[i]);
+            let [l, h] = deleter_cells(decor, &cs[i], sides[i]);
             lo = [lo[0].min(l[0]), lo[1].min(l[1])];
             hi = [hi[0].max(h[0]), hi[1].max(h[1])];
         }
         i += 1;
     }
-    let mut beaten = [0u32; MARKS];
+    let mut deleted = [0u32; MARKS];
     if lo[0] > hi[0] {
-        return beaten;
+        return deleted;
     }
     each_candidate(decor, zoom, [lo, hi], |d| {
         let sd = side_of(decor, &d);
         let mut i = 0;
         while i < n as usize {
-            if is_marked(asked, i) && beats(&d, sd, &cs[i], sides[i]) {
-                mark(&mut beaten, i);
+            if is_marked(asked, i) && deletes(&d, sd, &cs[i], sides[i]) {
+                mark(&mut deleted, i);
             }
             i += 1;
         }
     });
-    beaten
+    deleted
 }
 
-/// Whether `c` stands at `zoom`: no candidate born there or coarser beats
-/// it, a patch's contest of one (`beaten`).
-pub fn stands(decor: &Decor, zoom: Zoom, c: &Candidate) -> bool {
+/// Whether `c` is retained at `zoom` by the thinning: no candidate born
+/// there or coarser deletes it (`deletes`), a patch's thinning of one
+/// (`deleted`).
+pub fn retained(decor: &Decor, zoom: Zoom, c: &Candidate) -> bool {
     let (mut cs, mut asked) = ([Candidate::NONE; COUNTS], [0u32; MARKS]);
     cs[0] = *c;
     mark(&mut asked, 0);
-    !is_marked(&beaten(decor, zoom, &cs, 1, &asked), 0)
+    !is_marked(&deleted(decor, zoom, &cs, 1, &asked), 0)
 }
 
-/// What stands in one leaf cell on the leaves: its candidate before the rest
-/// there, where it stands (`stands`); any other there it beats.
+/// What is retained in one leaf cell on the leaves: its candidate before the
+/// rest there, where it is retained (`retained`); any other there it deletes.
 pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
     let mut best: Option<Candidate> = None;
     each_candidate(decor, LEAF_ZOOM, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
@@ -583,15 +592,15 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
             best = Some(c);
         }
     });
-    best.filter(|b| stands(decor, LEAF_ZOOM, b))
+    best.filter(|b| retained(decor, LEAF_ZOOM, b))
 }
 
-/// What growing decor asks of the world, as either side holds it: of the
+/// What generating decor asks of the world, as either side holds it: of the
 /// world unplaced (`world::Handed::unplaced`), the ground's alone, its column's
 /// footing and the assets about it; of the world as edited, whether an edit holds a
 /// cell and what is placed in a box; and the catalog's rows where it reads
 /// them.
-pub trait Grounds {
+pub trait DecorQuery {
     /// A footing as this side keeps it: what its assets are asked off.
     type Footing;
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
@@ -613,21 +622,21 @@ pub trait Grounds {
     fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool);
 }
 
-/// Decor the ground grows, where it stands: its variant, its heading in
+/// Decor the ground generates, where it stands: its variant, its heading in
 /// quarter turns, its box's min corner, in leaf cells, the cell over its
 /// footing's, and how far its base lies under that corner, in Q3 steps: the
 /// footing's top kept short of its cube (`cast::top`), so it stands on the
 /// top as drawn, not its cube's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Grown {
+pub struct Generated {
     pub variant: u32,
     pub turn: u32,
     pub at: [i32; 3],
     pub sink: u32,
 }
 
-impl Grown {
-    pub const NONE: Grown = Grown {
+impl Generated {
+    pub const NONE: Generated = Generated {
         variant: 0,
         turn: 0,
         at: [0; 3],
@@ -639,55 +648,55 @@ impl Grown {
 /// in the world unplaced, the ground's alone, so no edit moves
 /// it or takes it from under it; facing as the cells beside it at the
 /// footing's level vote there (`asks`); then, where `boxed`, whether it
-/// grows there: every cell of its box void and every one under its base a
-/// look it grows on, as the ground holds them; no edit in its box, air
-/// included (`Grounds::is_edited`); and no placed decor claims its room
-/// (`is_claimed`). Every cell both ask is asked at one place about one footing
-/// (`asks`). Where it stands, whether it does, and whether it grows there,
-/// true where not `boxed`.
-pub fn grown(
-    q: &mut impl Grounds,
+/// generates there: every cell of its box void and every one under its base
+/// a look it generates on, as the ground holds them; no edit in its box, air
+/// included (`DecorQuery::is_edited`); and no placed decor's box overlaps
+/// its own (`overlaps_placed`). Every cell both ask is asked at one place
+/// about one footing (`asks`). Where it stands, whether its footing is
+/// found, and whether it generates there, true where not `boxed`.
+pub fn generated(
+    q: &mut impl DecorQuery,
     decor: &Decor,
     cell: Zoom,
     c: &Candidate,
     boxed: bool,
-) -> (Grown, bool, bool) {
+) -> (Generated, bool, bool) {
     let s = LEAF_CELL - cell;
     let at = [c.cell[0] >> s, c.cell[1] >> s];
     let (f, (floor, rise), here) = q.footing(cell, at);
     if !here {
-        return (Grown::NONE, false, false);
+        return (Generated::NONE, false, false);
     }
-    let g = Grown {
+    let g = Generated {
         variant: 0,
         turn: 0,
         at: [c.cell[0], c.cell[1], (floor + 1) * (1 << s)],
         sink: ((1.0 - rise) * (1u32 << (s + FRAC_W)) as f32 + 0.5) as u32,
     };
-    let (g, grows) = asks(q, &f, decor, cell, c.seed, g, boxed);
-    (g, true, grows)
+    let (g, generates) = asks(q, &f, decor, cell, c.seed, g, boxed);
+    (g, true, generates)
 }
 
-/// Every cell growing decor asks of the world, at one place, as a GPU
+/// Every cell generating decor asks of the world, at one place, as a GPU
 /// inlines a call once a place it is called from: a candidate posed by its
 /// `seed`, the cells about its footing its pose votes on, then, where
-/// `boxed`, the box of `g` as that pose turned it (`grown`'s rule).
+/// `boxed`, the box of `g` as that pose turned it (`generated`'s rule).
 /// The pose is the candidate's variant and its heading in quarter turns,
 /// its seed's draws in order: along transport, a plurality vote of the
 /// cells a way runs on, by their offset from the candidate's, along each
 /// axis — a quarter turn if horizontal wins, else none (a tie or isolated
 /// cell has no real answer), and a half more on a draw, as two-way traffic
 /// faces both ways — the four at a distance in turn, before, after, under,
-/// over. What stands, and whether it grows there.
-fn asks<Q: Grounds>(
+/// over. What stands, and whether it generates there.
+fn asks<Q: DecorQuery>(
     q: &mut Q,
     f: &Q::Footing,
     decor: &Decor,
     cell: Zoom,
     seed: u32,
-    mut g: Grown,
+    mut g: Generated,
     boxed: bool,
-) -> (Grown, bool) {
+) -> (Generated, bool) {
     let s = LEAF_CELL - cell;
     let (mut flip, mut voting) = (0, 0);
     let mut draws = SplitMix32::new(seed);
@@ -766,7 +775,7 @@ fn asks<Q: Grounds>(
     let [w, d, h] = decor.cells(g.variant, g.turn);
     (
         g,
-        !boxed || !is_claimed(q, g.at, [w as i32, d as i32, h as i32]),
+        !boxed || !overlaps_placed(q, g.at, [w as i32, d as i32, h as i32]),
     )
 }
 
@@ -788,7 +797,7 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 
 /// Whether decor `d2` from the eye, its distance squared (`distance2`), is
 /// drawn: where the rays ask the leaf cell's zoom or finer at its distance
-/// (`Detail::at`), and not where they ask coarser. Decor, grown or placed,
+/// (`Detail::at`), and not where they ask coarser. Decor, generated or placed,
 /// is one set at the leaf cell's window alone (pxl-kernel
 /// domain/scene/decor/drawn.rs `shown`), never thinned or posed again at a
 /// coarser one.
@@ -829,7 +838,7 @@ const CLAIM_REACH: [i32; 3] = {
         let d = &DECORS[k];
         assert!(
             d.scale_steps == 0,
-            "decor is grown and claimed in unit cells"
+            "decor is generated and claimed in unit cells"
         );
         wide = if d.widest() > wide { d.widest() } else { wide };
         let mut v = 0;
@@ -847,16 +856,16 @@ const CLAIM_REACH: [i32; 3] = {
 };
 
 /// The tallest decor and the widest, in unit cells: as high over what it
-/// stands on as anything grown reaches, and as far across (pxl-spec-core
+/// stands on as anything generated reaches, and as far across (pxl-spec-core
 /// light.rs `Light::up`, `Light::ring`).
 pub const TALLEST: i32 = CLAIM_REACH[2] + 1;
 pub const WIDEST: i32 = CLAIM_REACH[0] + 1;
 
-/// Whether placed decor claims a cell of the box from `at` (unit cells),
+/// Whether a placed decor's box overlaps the box from `at` (unit cells),
 /// `cells` a side: one whose corner, posed as placed (`placed_pose`), holds
 /// a box meeting it, each placed leaf near enough asked of the world's
-/// (`Grounds::next_placed`).
-pub fn is_claimed(q: &impl Grounds, at: [i32; 3], cells: [i32; 3]) -> bool {
+/// (`DecorQuery::next_placed`).
+pub fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]) -> bool {
     let lo = [
         at[0] - CLAIM_REACH[0],
         at[1] - CLAIM_REACH[1],
@@ -908,8 +917,8 @@ impl Decor {
     }
 
     /// The most candidates a patch of it bears, its counts' longest: a
-    /// patch's room among an entry's records (`entry_record`).
-    pub const fn room(&self) -> u32 {
+    /// patch's capacity among an entry's records (`entry_record`).
+    pub const fn cap(&self) -> u32 {
         let [top, finer] = self.counts;
         if top.len > finer.len {
             top.len
@@ -929,7 +938,7 @@ impl Decor {
         }
     }
 
-    /// Whether the ground grows it on a cell of `value`: a look it stands on.
+    /// Whether the ground generates it on a cell of `value`: a look it stands on.
     pub const fn allows(&self, val: u32) -> bool {
         val < 256 && self.on[(val >> 5) as usize] >> (val & 31) & 1 == 1
     }

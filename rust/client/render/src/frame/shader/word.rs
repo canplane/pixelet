@@ -102,7 +102,7 @@ uniform! {
         LIGHT_VIEW_PROJ: Mat4 = 32,
         SHADOW_STRENGTH: F32 = 48,
         SHADOW_TEXEL: F32 = 49,
-        SHADOW_RIM: F32 = 50,
+        SHADOW_MAX_DIST_NDC: F32 = 50,
         /// Whether the camera gizmo is drawn, its tint on the rays' cells
         /// with it (screen_lit.wgsl `cell_share`).
         GIZMO: F32 = 51,

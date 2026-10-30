@@ -6,7 +6,7 @@
 //! their cells' starts, the samples and their boxes, which the raster
 //! draws, each the entry the eye's takes too (beam.rs `beam_cs`,
 //! `cell_cs`, `sample_cs`; raster.rs `sample_box_cs`) handed the light's head
-//! (`Moved`); every slot taking its visible sample or the sky (`light_cs`) and
+//! (`Head`); every slot taking its visible sample or the sky (`light_cs`) and
 //! the rest walked (`light_miss_cs`).
 
 use pxl_spec_core::cast::{self, Detail};
@@ -40,48 +40,48 @@ type LightWords = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 type Visibility = Image!(2D, type = u32, sampled = true, arrayed = true);
 
 /// What the light's cast is handed beside the eye's words, a uniform
-/// (pxl-spec-core `light::MOVED_HEAD`): its number, whether it is counted,
+/// (pxl-spec-core `light::HEAD_VEC4S`): its number, whether it is counted,
 /// its epoch and the map's side, where the rays start (`light::Starts`) and
 /// the actors drawn. The eye's head, all zero, names no map (`size`).
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Moved {
-    v: [IVec4; pxl_spec_core::light::MOVED_HEAD],
+pub struct Head {
+    v: [IVec4; pxl_spec_core::light::HEAD_VEC4S],
 }
 
 const _: () = assert!(
-    pxl_spec_core::light::MOVED_CAST == 0
-        && pxl_spec_core::light::MOVED_COUNTED == 1
-        && pxl_spec_core::light::MOVED_EPOCH == 2
-        && pxl_spec_core::light::MOVED_SIZE == 3,
+    pxl_spec_core::light::HEAD_CAST == 0
+        && pxl_spec_core::light::HEAD_COUNTED == 1
+        && pxl_spec_core::light::HEAD_EPOCH == 2
+        && pxl_spec_core::light::HEAD_SIZE == 3,
     "the head's first vec4 is read by its words"
 );
 
 /// Where the rays start (`light::Starts`), off the head.
-fn starts(m: &Moved) -> Starts {
+fn starts(m: &Head) -> Starts {
     Starts::of_words(|k| {
         let v = m.v[pxl_spec_core::light::STARTS_AT + k];
         [v.x, v.y, v.z, v.w]
     })
 }
 
-fn counts(m: &Moved) -> bool {
+fn counts(m: &Head) -> bool {
     m.v[0].y != 0
 }
 
-/// The cast's number (`light::MOVED_CAST`).
-fn cast_number(m: &Moved) -> u32 {
+/// The cast's number (`light::HEAD_CAST`).
+fn cast_number(m: &Head) -> u32 {
     m.v[0].x as u32
 }
 
 /// The number of the cast since which only the eye's look moved
-/// (`light::MOVED_EPOCH`).
-fn epoch(m: &Moved) -> u32 {
+/// (`light::HEAD_EPOCH`).
+fn epoch(m: &Head) -> u32 {
     m.v[0].z as u32
 }
 
-/// The map's side (`light::MOVED_SIZE`), none in the eye's head.
-pub(crate) fn size(m: &Moved) -> u32 {
+/// The map's side (`light::HEAD_SIZE`), none in the eye's head.
+pub(crate) fn size(m: &Head) -> u32 {
     m.v[0].w as u32
 }
 
@@ -151,13 +151,13 @@ fn light_of(eye: &Eye) -> Light {
     let i = |v: Vec4| v.w.to_bits() as i32;
     Light {
         first: v3(eye.light[0]),
-        reach: eye.light[0].w,
+        t_max: eye.light[0].w,
         across: v3(eye.light[1]),
         down: v3(eye.light[2]),
         dir: v3(eye.light[3]),
         bias: v3(eye.light[4]),
         corner: [i(eye.light[1]), i(eye.light[2])],
-        rim: eye.light[3].w,
+        shadow_max_dist_ndc: eye.light[3].w,
     }
 }
 
@@ -174,26 +174,26 @@ pub(crate) struct Map {
     size: u32,
     eye: [i32; 3],
     detail: Detail,
-    /// The cast's number (`light::MOVED_CAST`), which names the tiles it
+    /// The cast's number (`light::HEAD_CAST`), which names the tiles it
     /// casts (`Observer::needs`).
     cast: u32,
 }
 
 impl Map {
-    pub(crate) fn of(eye: &Eye, moved: &Moved) -> Map {
+    pub(crate) fn of(eye: &Eye, head: &Head) -> Map {
         let light = light_of(eye);
         let (origin, detail) = eye_origin(eye);
         Map {
             light,
-            starts: starts(moved),
-            size: size(moved),
+            starts: starts(head),
+            size: size(head),
             eye: origin,
             detail: light.detail(detail),
-            cast: cast_number(moved),
+            cast: cast_number(head),
         }
     }
 
-    /// Its side (`light::MOVED_SIZE`), which its slots and its list are laid
+    /// Its side (`light::HEAD_SIZE`), which its slots and its list are laid
     /// by.
     pub(crate) fn side(&self) -> u32 {
         self.size
@@ -263,7 +263,7 @@ impl Observer for Map {
         ];
         Aim {
             origin: o,
-            ray: cast::Ray::new(self.light.dir, self.light.reach),
+            ray: cast::Ray::new(self.light.dir, self.light.t_max),
             detail,
         }
     }
@@ -366,7 +366,7 @@ impl Observer for Map {
     /// texels' rays off it (pxl-render raster.wgsl), in the frame the slots'
     /// rays start in; none about its eye, as every ray starts on the near
     /// plane.
-    fn laid(&self) -> ([i32; 3], (bool, [f32; 2])) {
+    fn raster_layout(&self) -> ([i32; 3], (bool, [f32; 2])) {
         (self.starts.start(self.light.corner), (false, [0.0; 2]))
     }
 
@@ -414,8 +414,8 @@ const _: () = assert!(
 );
 
 const _: () = assert!(
-    pxl_spec_core::light::RIM == 15,
-    "`light_of` reads the rim off the rays' direction's fourth word"
+    pxl_spec_core::light::SHADOW_MAX_DIST_NDC == 15,
+    "`light_of` reads the shadow's max distance off the rays' direction's fourth word"
 );
 
 const _: () = assert!(
@@ -436,13 +436,13 @@ pub fn light_cs(
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 10)] light: &LightWords,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
     #[spirv(descriptor_set = 0, binding = 15)] visibility: &Visibility,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 17)] misses: &mut [u32],
 ) {
     let t = pxl_spec_core::light::TILE;
-    let m = Map::of(eye, moved);
+    let m = Map::of(eye, head);
     let n = m.side();
     let slot = UVec3::new(group.x * t + lane.x, group.y * t + lane.y, 0);
     if slot.x >= n || slot.y >= n {
@@ -465,7 +465,7 @@ pub fn light_cs(
             stop,
             visits: 0,
         };
-        add_cnt(misses, counts(moved), tally::TOOK, 1);
+        add_cnt(misses, counts(head), tally::TOOK, 1);
         // SAFETY: within the map, bounded by its size above.
         unsafe { light.write(slot, m.word(&aim, &met)) };
         return;
@@ -477,7 +477,7 @@ pub fn light_cs(
     }
     // Listed for its walk again as the eye's pixels are (cast.rs `enlist`):
     // the list holds every slot, so none finds it full.
-    add_cnt(misses, counts(moved), tally::WALKED, 1);
+    add_cnt(misses, counts(head), tally::WALKED, 1);
     let at = enlist(misses, n * n, [0; 2]);
     put(
         list,
@@ -504,12 +504,12 @@ pub fn light_miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(descriptor_set = 0, binding = 10)] light: &LightWords,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let window: &[IVec4] = window;
-    let m = Map::of(eye, moved);
+    let m = Map::of(eye, head);
     let n = m.side();
     let i = (group.y * pxl_spec_core::ray::MISS_ACROSS + group.x) * pxl_spec_core::ray::MISS_LANES
         + lane.x;
@@ -539,7 +539,7 @@ pub fn light_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
 ) {
     let drawn: UVec3 = rays.query_size();
@@ -547,8 +547,8 @@ pub fn light_mark_cs(
     if id.x * m >= drawn.x || id.y * m >= drawn.y {
         return;
     }
-    let (s, n) = (light_of(eye), size(moved));
-    let cast = cast_number(moved);
+    let (s, n) = (light_of(eye), size(head));
+    let cast = cast_number(head);
     // The tile last marked, so a run of pixels on one marks it once.
     let mut last = [i32::MIN; 2];
     let mut y = 0;
@@ -648,8 +648,8 @@ fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
 
 /// The drawn receivers of the shadow map, each the eye sees standing as the
 /// world's do (`light_mark_cs`): the actors the host draws, a thread each
-/// (`light::ACTORS_AT`); then the decor grown, a thread a slot of its
-/// instances (pxl-render gpu/grown.rs), as many as are placed, where each
+/// (`light::ACTORS_AT`); then the decor generated, a thread a slot of its
+/// instances (pxl-render gpu/generated.rs), as many as are placed, where each
 /// stands, as decor tells (decor.rs `Instances`). Seen where a
 /// ball about its middle as wide as decor is tall and wide meets the view
 /// (`eye::sees`); the tiles about its own stood on too, as many as half
@@ -661,20 +661,20 @@ fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
 pub fn light_mark_drawn_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 18)] drawing: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 19)] regions: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 20)] instances: &[u32],
 ) {
     use pxl_spec_core::scatter::{TALLEST, WIDEST};
-    let head = pxl_spec_core::light::ACTORS_AT;
+    let at = pxl_spec_core::light::ACTORS_AT;
     let k = id.x as usize;
     let v = if k < pxl_spec_core::light::ACTORS {
-        if k >= moved.v[head].x as usize {
+        if k >= head.v[at].x as usize {
             return;
         }
-        let p = moved.v[head + 1 + k];
+        let p = head.v[at + 1 + k];
         [
             f32::from_bits(p.x as u32),
             f32::from_bits(p.y as u32),
@@ -691,7 +691,7 @@ pub fn light_mark_drawn_cs(
             return;
         }
         let o = [eye.origin.x, eye.origin.y, eye.origin.z];
-        placed.stands(k, o)
+        placed.pos(k, o)
     };
     let v3 = |v: Vec4| [v.x, v.y, v.z];
     let middle = [v[0], v[1], v[2] + TALLEST as f32 / 2.0];
@@ -704,8 +704,8 @@ pub fn light_mark_drawn_cs(
     ) {
         return;
     }
-    let (s, n) = (light_of(eye), size(moved));
-    let ([i, j], cast, r) = (s.tile_of(v), cast_number(moved), s.ring());
+    let (s, n) = (light_of(eye), size(head));
+    let ([i, j], cast, r) = (s.tile_of(v), cast_number(head), s.ring());
     let mut b = -r;
     while b <= r {
         let mut a = -r;
@@ -732,11 +732,11 @@ pub fn light_mark_drawn_cs(
 pub fn light_reach_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 21)] args: &mut [u32],
 ) {
-    let side = size(moved);
+    let side = size(head);
     let n = pxl_spec_core::light::tiles(side);
     if id.x >= n || id.y >= n {
         return;
@@ -752,7 +752,7 @@ pub fn light_reach_cs(
     ) {
         return;
     }
-    let (cast, epoch) = (cast_number(moved), epoch(moved));
+    let (cast, epoch) = (cast_number(head), epoch(head));
     let up = s.up();
     let t = [id.x as i32, id.y as i32];
     let mut read = false;

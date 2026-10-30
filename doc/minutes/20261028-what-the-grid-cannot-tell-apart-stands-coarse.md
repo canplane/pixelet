@@ -95,7 +95,7 @@ for the loss. The second was the rows' cause: with it off the rows went
 code reading, not confirmed on the screen:
 
 1. **The zoom is the distance's alone, while the samples are sparse.**
-   - `cast::Detail` takes `grid::cell_at(d²)`, isotropic, so a cell's
+   - `cast::Detail` takes `grid::cell_zoom_at(d²)`, isotropic, so a cell's
      extent across the screen along a slant shrinks with the slant's sine.
    - 4 × 4 samples a cell walk (`param::beam::SAMPLE`). A pixel takes the
      nearest box a sample stopped at that its ray enters, and walks only where

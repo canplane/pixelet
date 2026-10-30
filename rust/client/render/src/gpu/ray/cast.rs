@@ -1,8 +1,8 @@
 // pxl-render/gpu/ray/cast.rs
 
 //! The GPU's cast of the eye's rays into the world surface's rays, the
-//! world's depth from the light cast with them, and the decor grown over the
-//! world (gpu/grown.rs): what each reads, made once, and their dispatches.
+//! world's depth from the light cast with them, and the decor generated over the
+//! world (gpu/generated.rs): what each reads, made once, and their dispatches.
 
 use pxl_spec_core::scatter::{self, GROUPS};
 use pxl_spec_core::window::{self, FRESH_CELL, FRESH_FIRST};
@@ -24,7 +24,7 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
     RenderContext,
 };
-use crate::gpu::grown::{cut_boxes, hold, Drawn, Grown, Growth};
+use crate::gpu::generated::{cut_boxes, hold, Drawn, Generated, Generation};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::renderer::{Cast, Overwrites};
@@ -48,7 +48,7 @@ pub(super) struct CastBuffers {
     sample_built: Built,
     beams: u32,
     /// The eye's head, all zero: a head naming no map (pxl-spec-core
-    /// `light::MOVED_SIZE`), which tells a pass both take the eye's.
+    /// `light::HEAD_SIZE`), which tells a pass both take the eye's.
     eye_head: u32,
     grid: beam::Grid,
     beam_room: u32,
@@ -64,7 +64,7 @@ pub(super) struct CastBuffers {
     /// (`forget`), or the nodes over the eye's windows' entries that moved
     /// (`moved`, a bit an entry, against the entries as `entries` last held them)
     /// and over the boxes of what is placed or cut that changed (`boxes`,
-    /// `holding` of them, as decor's growth holds them, gpu/grown.rs
+    /// `holding` of them, as decor's generation holds them, gpu/generated.rs
     /// `hold`), and those handed a slot of a family of what is placed that
     /// was written (`written`, `writes` of them); as this frame's cast does
     /// (`forgets`, pxl-spec-core `observed::FORGETS`), and what it sent, put
@@ -112,11 +112,11 @@ pub(super) struct CastBuffers {
     /// reads none (`light_mark_drawn_cs`).
     light_none: u32,
     /// The light's casts so far, the number its marks are made with
-    /// (pxl-spec-core `light::MOVED_CAST`), never zero, which no tile holds
+    /// (pxl-spec-core `light::HEAD_CAST`), never zero, which no tile holds
     /// marked.
     light_number: u32,
     /// The number of the cast since which only the eye's look moved
-    /// (pxl-spec-core `light::MOVED_EPOCH`): a tile cast in it or after
+    /// (pxl-spec-core `light::HEAD_EPOCH`): a tile cast in it or after
     /// stands.
     light_epoch: u32,
     /// Whether all the light's cast is made (`light_made`): its list and its
@@ -133,7 +133,7 @@ pub(super) struct CastBuffers {
     /// `light::ARGS_WORDS`): none, or each whole where a tile is claimed.
     light_args: u32,
     /// What a tile of the shadow map holds follows, as the light's cast last
-    /// read it (`Read`): the light's frame (`Shadow::frame`), whether
+    /// read it (`Read`): the light's frame (`Shadow::generation`), whether
     /// shadows are cast, the light box, the eye's place and zooms,
     /// and whether the world under it moved; one moving begins an epoch
     /// (`light_epoch`).
@@ -143,7 +143,7 @@ pub(super) struct CastBuffers {
     /// the tiles read anew.
     light_receivers: Read,
     /// What it is handed beside the eye's words (pxl-spec-core
-    /// `light::MOVED_WORDS`).
+    /// `light::HEAD_WORDS`).
     light_moved: u32,
     light_cast: bool,
     /// Whether the next cast marks where the eye's rays met the world
@@ -166,9 +166,9 @@ pub(super) struct CastBuffers {
     overwrites: u32,
     overwrite_room: usize,
     overwrite_revision: Option<u32>,
-    grown: Grown,
+    generated: Generated,
     /// What the last cast read (`Read`) but the jitter, and whether this
-    /// frame's is the same: the samples and the decor grown over them
+    /// frame's is the same: the samples and the decor generated over them
     /// stand, and only the pixels are cast again where the jitter moved.
     read: Read,
     /// Where each pixel's ray went through it last (pxl-spec-core
@@ -220,7 +220,7 @@ fn note(written: &mut [u32], writes: &mut usize, first: u32) -> bool {
     true
 }
 
-/// The binding of a pass's head (pxl-shader light.rs `Moved`): the light's
+/// The binding of a pass's head (pxl-shader light.rs `Head`): the light's
 /// map's, or the eye's, which names none.
 pub(super) const HEAD_BINDING: u32 = 11;
 
@@ -293,7 +293,7 @@ impl RaysPass {
             sample_built,
             beams: 0,
             // Never written: a buffer is made zeroed.
-            eye_head: buf(word_bytes(light::MOVED_WORDS), buffer_usage::UNIFORM),
+            eye_head: buf(word_bytes(light::HEAD_WORDS), buffer_usage::UNIFORM),
             grid: beam::Grid::of_words([0.0; 2], [0; eye::GRID_WORDS]),
             beam_room: 0,
             miss_built,
@@ -343,7 +343,7 @@ impl RaysPass {
             light_content: Read::default(),
             light_receivers: Read::default(),
             light_moved: buf(
-                word_bytes(light::MOVED_WORDS),
+                word_bytes(light::HEAD_WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             light_cast: false,
@@ -365,7 +365,7 @@ impl RaysPass {
             overwrites: 0,
             overwrite_room: 0,
             overwrite_revision: None,
-            grown: Grown::new(g, pipelines),
+            generated: Generated::new(g, pipelines),
             read: Read::default(),
             jitter: [0; 2],
             gated: false,
@@ -391,7 +391,7 @@ impl RaysPass {
         light_map: (u32, u32, light::Starts),
         gated: bool,
     ) {
-        // No cast, no world: no ray cast, none drawn and no decor grown.
+        // No cast, no world: no ray cast, none drawn and no decor generated.
         // What the cast reads stands for the next: the ground it binds is
         // made once.
         let (Some(cast), Some((ground, looks, pool))) = (
@@ -402,7 +402,7 @@ impl RaysPass {
         ) else {
             self.kind = FrameKind::plain;
             if let Some(c) = self.cast.as_mut() {
-                c.grown.off();
+                c.generated.off();
                 c.read.forget();
                 c.light_content.forget();
                 c.light_cast = false;
@@ -412,8 +412,8 @@ impl RaysPass {
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
         // The cast reads exactly this, all of it here: a field the frame hands
         // the cast fails to destructure until it is read. The overwrites'
-        // contents are their revision's. The decor it grows reads its own
-        // (`Grown::prepare`), so a change to decor alone casts no ray again.
+        // contents are their revision's. The decor it generates reads its own
+        // (`Generated::prepare`), so a change to decor alone casts no ray again.
         let Cast {
             eye,
             window,
@@ -574,7 +574,7 @@ impl RaysPass {
             || overwrites_moved
             || cuts != c.cuts;
         // What is placed and a preview's cuts forget the nodes over the boxes
-        // they changed, as decor's growth is asked over them (gpu/grown.rs):
+        // they changed, as decor's generation is asked over them (gpu/generated.rs):
         // every write of what is placed names its box (`DecorFrame::edits`);
         // one that names none, or the lanes made again, forgets all.
         let edits = decor.edits;
@@ -618,10 +618,10 @@ impl RaysPass {
                 }
             }
         }
-        // Decor grown first: where it stands is what the light's cast reads
+        // Decor generated first: where it stands is what the light's cast reads
         // of it, and its buffers what the light's groups bind.
         let world = [c.eye, c.window, ground, c.shards, c.overwrites, pool];
-        let growth = Growth {
+        let generation = Generation {
             window: cast.window,
             cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
                 .try_into()
@@ -632,7 +632,8 @@ impl RaysPass {
                 .map_or(&[][..], |gb| &gb.handed[..fresh as usize]),
             eye: &cast.eye,
         };
-        c.grown.prepare(g, cast.decor, growth, meshes, world);
+        c.generated
+            .prepare(g, cast.decor, generation, meshes, world);
         // The shadow map is cast, every slot a receiver reads, as the eye's
         // rays are (pxl-spec-core `light`), where what it reads moved: the
         // light's frame or box, the eye's place or zooms, which the
@@ -641,7 +642,7 @@ impl RaysPass {
         // decor placed again (`light_mark_cs`, `light_mark_drawn_cs`). A
         // standing frame casts none. Where only the latter moved, a tile
         // cast since anything else last did stands, and only the tiles read
-        // anew are cast (`light::MOVED_EPOCH`). None where no shadow is cast,
+        // anew are cast (`light::HEAD_EPOCH`). None where no shadow is cast,
         // nor before all its cast is made (`light_made`), its read let go
         // until then.
         let shadows = cast.eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
@@ -656,14 +657,14 @@ impl RaysPass {
         r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
         r.mark(world_moved);
         let held = r.end();
-        // The look, where the actors stand and decor placed again: which
+        // The look, where the actors stand and decor compacted again: which
         // tiles are read, not what a tile holds. Not the jitter: a pixel's
         // marks hold its footprint (`light_mark_cs`).
         let l = &mut c.light_receivers;
         l.begin();
         l.read(&cast.eye[eye::FORWARD..eye::TAN + 2]);
         l.read(cast.actors);
-        l.mark(c.grown.counts());
+        l.mark(c.generated.counts());
         let light_moved = !held || !l.end();
         if !c.light_ready {
             c.light_content.forget();
@@ -677,16 +678,16 @@ impl RaysPass {
         // footprint, marked already.
         c.light_world |= kind == FrameKind::cast || !held;
         if c.light_cast {
-            // The head (pxl-spec-core `light::MOVED_WORDS`).
-            let mut head = [0u32; light::MOVED_WORDS];
+            // The head (pxl-spec-core `light::HEAD_WORDS`).
+            let mut head = [0u32; light::HEAD_WORDS];
             c.light_number = c.light_number.wrapping_add(1).max(1);
             if !held {
                 c.light_epoch = c.light_number;
             }
-            head[light::MOVED_CAST] = c.light_number;
-            head[light::MOVED_EPOCH] = c.light_epoch;
-            head[light::MOVED_COUNTED] = u32::from(ray_counts);
-            head[light::MOVED_SIZE] = shadow::SIZE;
+            head[light::HEAD_CAST] = c.light_number;
+            head[light::HEAD_EPOCH] = c.light_epoch;
+            head[light::HEAD_COUNTED] = u32::from(ray_counts);
+            head[light::HEAD_SIZE] = shadow::SIZE;
             let at = 4 * light::STARTS_AT;
             head[at..at + 4 * light::STARTS_VEC4S].copy_from_slice(&light_map.2.words());
             // The actors drawn, receivers as decor is (`light_mark_drawn_cs`).
@@ -811,8 +812,8 @@ impl RaysPass {
             }
         }
         let [drawing, regions, instances] = c
-            .grown
-            .placed()
+            .generated
+            .compacted()
             .map_or([c.light_none; 3], |p| [p.drawing, p.regions, p.instances]);
         let light_bound = [
             c.eye,
@@ -902,14 +903,14 @@ impl RaysPass {
     }
 
     /// The cast where the frame casts, the world's depth from the light with
-    /// it where `light`, then the decor grown over the world where it moves:
+    /// it where `light`, then the decor generated over the world where it moves:
     /// each a pass of its own over the cast's group, timed in its own span,
     /// so what each costs is read apart; the light's in the shadow's, with
     /// the map's pass, which is not drawn at the world's pixels
     /// (`PER_PX`).
     pub fn dispatch(&mut self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let (grows, casts, kind) = (self.grows(), self.casts_px(), self.kind);
+        let (generates, casts, kind) = (self.generates(), self.casts_px(), self.kind);
         let claimed = (self.claimed, self.tiles.1);
         let Some(c) = self.cast.as_mut() else { return };
         if casts {
@@ -993,11 +994,11 @@ impl RaysPass {
             g.dispatch_indirect(pass, c.marks, word_bytes(ray::MISS_ARGS_WHOLE as usize));
             g.end(pass);
         }
-        // The decor grown over the rays, before the light's cast, which marks
-        // where it stands (`light_mark_drawn_cs`).
-        if grows {
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::grow).pass());
-            c.grown.dispatch(g, pass);
+        // The decor generated over the rays, before the light's cast, which
+        // marks where it stands (`light_mark_drawn_cs`).
+        if generates {
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::generate).pass());
+            c.generated.dispatch(g, pass);
             g.end(pass);
         }
         if c.light_cast {
@@ -1023,9 +1024,9 @@ impl RaysPass {
             }
             g.set_bind_group(pass, 0, c.light_groups[5], &[]);
             g.set_pipeline(pass, c.light_mark_drawn_built.pipeline);
-            let room = c.grown.placed().map_or(0, |p| p.room);
+            let cap = c.generated.compacted().map_or(0, |p| p.cap);
             let w = compute::LIGHT_MARK_DRAWN_WORKGROUP;
-            g.dispatch(pass, (room + light::ACTORS as u32).div_ceil(w[0]), 1, 1);
+            g.dispatch(pass, (cap + light::ACTORS as u32).div_ceil(w[0]), 1, 1);
             g.set_bind_group(pass, 0, c.light_groups[6], &[]);
             g.set_pipeline(pass, c.light_reach_built.pipeline);
             let w = compute::LIGHT_REACH_WORKGROUP;
@@ -1118,12 +1119,12 @@ impl RaysPass {
         self.cast.as_ref().is_some_and(|c| c.light_cast)
     }
 
-    pub fn grows(&self) -> bool {
-        self.cast.as_ref().is_some_and(|c| c.grown.works())
+    pub fn generates(&self) -> bool {
+        self.cast.as_ref().is_some_and(|c| c.generated.works())
     }
 
-    pub fn grown(&self) -> Option<Drawn> {
-        self.cast.as_ref().and_then(|c| c.grown.drawn())
+    pub fn generated(&self) -> Option<Drawn> {
+        self.cast.as_ref().and_then(|c| c.generated.drawn())
     }
 
     /// The frame was dropped with its cast and its image: the rays and the
@@ -1131,7 +1132,7 @@ impl RaysPass {
     pub fn on_dropped(&mut self) {
         if let Some(c) = self.cast.as_mut() {
             // What it was to forget, it did not: the next cast forgets it
-            // too, every box and family as sent, as decor's growth holds
+            // too, every box and family as sent, as decor's generation holds
             // its edits again (`carry_edits`).
             if let Some(f) = c.sent.take() {
                 c.forget |= f.all;
@@ -1147,7 +1148,7 @@ impl RaysPass {
             }
             c.read.forget();
             c.light_content.forget();
-            c.grown.on_dropped();
+            c.generated.on_dropped();
             c.tally.on_dropped();
         }
     }
@@ -1155,7 +1156,7 @@ impl RaysPass {
     /// The frame was drawn: what its decor marked by is done with.
     pub fn on_drawn(&mut self) {
         if let Some(c) = self.cast.as_mut() {
-            c.grown.drawn_frame();
+            c.generated.drawn_frame();
         }
     }
 
@@ -1166,7 +1167,7 @@ impl RaysPass {
             for &b in edits {
                 hold(&mut c.boxes, &mut c.holding, b);
             }
-            c.grown.carry_edits(edits);
+            c.generated.carry_edits(edits);
         }
     }
 }
@@ -1270,7 +1271,7 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
 /// tiles' frames, the bricks' looks, the service area's index, the
 /// overwrites and the ways' pool, the cast's alone; the observed pyramid,
 /// which the light's walks read and write as the eye's do; the clipmap; its
-/// head (`moved`), the beam's lines, the samples and the misses (`list`),
+/// head, the beam's lines, the samples and the misses (`list`),
 /// the raster's boxes, visibility buffer and args, the misses' dispatch and
 /// the casting passes' workgroups (`light::ARGS_WORDS`), which the reach
 /// writes; the eye's rays, which the mark reads, and the decor's drawing
@@ -1283,7 +1284,7 @@ fn light_groups(
     g: &Gpu,
     [walk, world, boxes_built, miss, mark, mark_drawn, reach]: [&Built; 7],
     bound: [u32; 12],
-    [seen, moved, list, boxes, visibility, args, misses, light_args]: [u32; 8],
+    [seen, head, list, boxes, visibility, args, misses, light_args]: [u32; 8],
 ) -> [u32; 7] {
     let [eye, window, ground, looks, shards, overwrites, pool, light, rays, drawing, regions, instances] =
         bound;
@@ -1298,7 +1299,7 @@ fn light_groups(
         (7, buf_entry(7, pool)),
         (9, buf_entry(9, seen)),
         (10, view_entry(10, light)),
-        (HEAD_BINDING, buf_entry(HEAD_BINDING, moved)),
+        (HEAD_BINDING, buf_entry(HEAD_BINDING, head)),
         (12, buf_entry(12, list)),
         (14, buf_entry(14, boxes)),
         (15, view_entry(15, visibility)),
@@ -1323,7 +1324,7 @@ fn light_groups(
             g,
             world,
             [
-                eye, window, ground, rays, looks, shards, overwrites, pool, list, seen, moved,
+                eye, window, ground, rays, looks, shards, overwrites, pool, list, seen, head,
             ],
         ),
         // The raster's once its buffers are made.
@@ -1335,7 +1336,7 @@ fn light_groups(
                 &[
                     buf_entry(0, eye),
                     buf_entry(8, list),
-                    buf_entry(HEAD_BINDING, moved),
+                    buf_entry(HEAD_BINDING, head),
                     buf_entry(14, boxes),
                     buf_entry(16, args),
                 ],

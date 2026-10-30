@@ -16,8 +16,8 @@ follows one rule: **the eye decides.** The view is a grid of cells of equal
 angle about the eye, so a cell grows with distance. Space is cut into cubes at
 every zoom; one cube of space at one zoom is a **node**, an address the world is
 asked about, never something stored. Wherever it stands, the world is drawn at
-the zoom whose nodes span a cell there (`pxl-spec-core grid.rs` `cell_at`). A
-city, a mountain range or a tower behind a ridge costs the cells it covers on
+the zoom whose nodes span a cell there (`pxl-spec-core grid.rs` `cell_zoom_at`).
+A city, a mountain range or a tower behind a ridge costs the cells it covers on
 the screen, not what it holds.
 
 Every pixel's ray, every step a walker takes, the pointer and every edit ask the
@@ -43,7 +43,7 @@ Real geography is baked ahead: [Overture Maps](https://overturemaps.org/)'
 geometry, OpenStreetMap's coastline and
 [GEDTM30](https://doi.org/10.5281/zenodo.18887460)'s elevation are painted into
 tiles, fetched only when the view lacks one. What players build is kept as they
-place it, and the trees and cars the ground grows are worked out where they
+place it, and the trees and cars the ground generates are worked out where they
 stand, never stored. The same world runs in a browser and on a device, through
 one Rust kernel drawing with WebGPU.
 

@@ -25,11 +25,11 @@ rule each change is held to.
   Each source gives its own box and the query joins them; a source keeps its
   own measure inside (the ground's span along z), and only the box leaves.
 - **The ray is a cone.** It widens with distance, and at each distance it
-  steps in the grid of the zoom whose cell is that width (`grid::cell_at`), one
-  rule shared with what is fetched and held (`window::RADIUS`) and with the
-  beams' spacing (`grid::CELL`). The container a step lands in is the
-  cone's; the box inside it is what is drawn there, in eighths, floating as the
-  LOD always has. The two are independent.
+  steps in the grid of the zoom whose cell is that width (`grid::cell_zoom_at`),
+  one rule shared with what is fetched and held (`window::RADIUS`) and with the
+  beams' spacing (`grid::CELL`). The container a step lands in is the cone's;
+  the box inside it is what is drawn there, in eighths, floating as the LOD
+  always has. The two are independent.
 - **Nothing the ray meets is passed.** A ray enters every split whose box it
   meets and stops at the first block that is not transparent, the eye's and
   the shadow map's alike. Its cone is read only by a beam, as how far apart its
@@ -54,7 +54,7 @@ rule each change is held to.
 ## What follows
 
 - **The work a ray does is closed.** At each distance a ray steps in the
-  cells asked there (`grid::cell_at`), each at least the view's cell wide,
+  cells asked there (`grid::cell_zoom_at`), each at least the view's cell wide,
   1/`CELLS_A_RAD` radians (`grid::CELL`), so per octave of distance it
   crosses at most about `CELLS_A_RAD` (96) of them, and a ray crosses at
   most about `CELLS_A_RAD · log₂(reach / d_near)` cells, and enters about

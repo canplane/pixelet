@@ -243,7 +243,7 @@ pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
 /// A decor draw's uniform as instance.wgsl's `Draw` reads it, for the
 /// model tier and the impostors both: translation, first lane word,
 /// stride, opacity, `third`, index list's first word. `third` is decor's
-/// padding or the impostor's sprite layer.
+/// padding or the impostor's atlas layer.
 pub fn put_instances(buf: &mut [u8], u: &[f32], third: u32) {
     put_f32(buf, 0, u[0]);
     put_f32(buf, 4, u[1]);

@@ -21,7 +21,7 @@ use crate::domain::query::model::asset::{model_of, ModelHandle};
 use crate::domain::query::model::draw_list;
 use crate::domain::query::model::registry::Models;
 use crate::domain::query::World;
-use crate::domain::query::{cell_at, over, under, walks};
+use crate::domain::query::{cell_zoom_at, over, under, walks};
 use crate::domain::scene::actor::{Actor, Stance};
 use crate::domain::scene::character::param::{
     CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
@@ -450,7 +450,7 @@ pub fn line_hangs(eye: V3) -> Option<Q3> {
         feet[1],
         feet[2] + person.variant.height_u + HEAD_CLEARANCE_U,
     ];
-    marker_shows(cell_at(eye, feet)).then(|| world_to_canonical(&over))
+    marker_shows(cell_zoom_at(eye, feet)).then(|| world_to_canonical(&over))
 }
 
 /// (model, image handle) for the shell's skinned pass: the image as the

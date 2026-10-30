@@ -3,7 +3,7 @@
 
 @group(0) @binding(7) var ao_map: texture_2d<f32>;
 
-fn screen_open(frag: vec2f) -> f32 {
+fn screen_ao(frag: vec2f) -> f32 {
   if (frame_screen_ao() < 0.5) {
     return 1.0;
   }

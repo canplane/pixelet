@@ -18,9 +18,9 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 pub const CELLS_A_RAD: f32 = 96.0;
 
 /// How many times finer than the view's a grid the bands and windows are
-/// sized for (`SPLIT`, `window::RADIUS`): a window holds its zoom's cells
-/// out to `WINDOW_MARGIN` times where the view stops drawing them. Whether
-/// a margin of 1 keeps up with a moving eye is unmeasured.
+/// sized for (`WINDOW_CELLS_A_RAD`, `window::RADIUS`): a window holds its
+/// zoom's cells out to `WINDOW_MARGIN` times where the view stops drawing them.
+/// Whether a margin of 1 keeps up with a moving eye is unmeasured.
 pub const WINDOW_MARGIN: f32 = 2.0;
 
 // ---- the split's rule ----
@@ -35,10 +35,10 @@ pub const SPANS: f32 = 2.0;
 
 /// The grid the bands and windows are sized for, cells a radian: the view's
 /// `WINDOW_MARGIN` times finer.
-pub const SPLIT: f32 = CELLS_A_RAD * WINDOW_MARGIN;
+pub const WINDOW_CELLS_A_RAD: f32 = CELLS_A_RAD * WINDOW_MARGIN;
 
 /// The view's cell, an angle in radians: what a beam's rays lie apart by
-/// (`beam::Grid`), and the angle every eye's ray is asked at (`cell_at`).
+/// (`beam::Grid`), and the angle every eye's ray is asked at (`cell_zoom_at`).
 pub const CELL: f32 = 1.0 / CELLS_A_RAD;
 
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared, in
@@ -52,7 +52,7 @@ pub const CELL: f32 = 1.0 / CELLS_A_RAD;
 /// 2⁻²¹` and a bit, which rounds down to it. Every asker passes a square
 /// (pxl-spec space/camera/grid.rs, `scatter::drawn_at`), so a distance on a
 /// power of two falls the same side everywhere.
-pub fn cell_at(r2: f32) -> Zoom {
+pub fn cell_zoom_at(r2: f32) -> Zoom {
     let split = CELLS_A_RAD / SPANS;
     let x2 = r2 / (split * split);
     let e = (((x2.to_bits() >> 23) & 0xff) as i32 - 127) >> 1;

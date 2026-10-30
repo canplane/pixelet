@@ -10,11 +10,11 @@ use crate::space::layer::tile::*;
 /// The ground tile a distance folds from, past the pyramid's ends too, as
 /// the rule reads it: squared.
 fn zoom_at(r: f64) -> i32 {
-    GROUND.tile_zoom_of_grid(cell_at(r * r))
+    GROUND.tile_zoom_of_grid(cell_zoom_at(r * r))
 }
 
 /// The distance just short of `r` as the rule reads a distance: the f32
-/// before it (pxl-spec-core `grid::cell_at`).
+/// before it (pxl-spec-core `grid::cell_zoom_at`).
 fn short_of(r: f64) -> f64 {
     f64::from(f32::from_bits((r as f32).to_bits() - 1))
 }

@@ -9,7 +9,7 @@ struct Draw {
   off: u32,
   stride: u32,
   opacity: f32,
-  // The impostor's sprite layer; the model tier's padding.
+  // The impostor's atlas layer; the model tier's padding.
   layer: u32,
   idx: u32,
 };

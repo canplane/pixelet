@@ -35,14 +35,14 @@ fn srgb_to_linear(c: vec3f) -> vec3f {
 // caller knows them), and the air between it and the eye.
 struct Surface {
   rgb: vec3f,
-  taps: vec4f,
+  layers: vec4f,
   normal: vec3f,
   edge: f32,
   world_pos: vec3f,
   box_uv: vec2f,
   ddx: vec2f,
   ddy: vec2f,
-  open: f32,
+  ao: f32,
   seen: Seen,
 };
 
@@ -95,16 +95,16 @@ fn line_at(d: f32, px: f32) -> f32 {
 fn paint(s: Surface) -> vec3f {
   // Only leaf cells carry layers; the taps are skipped, not taken and
   // discarded.
-  let textured = s.taps.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
+  let textured = s.layers.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
   var albedo = s.rgb;
   if (textured) {
     let image = face_image(s.normal);
-    albedo = (sample_tap(s.taps.x, image, s.box_uv, s.ddx, s.ddy, s.rgb)
-      + sample_tap(s.taps.y, image, s.box_uv, s.ddx, s.ddy, s.rgb)
-      + sample_tap(s.taps.z, image, s.box_uv, s.ddx, s.ddy, s.rgb)
-      + sample_tap(s.taps.w, image, s.box_uv, s.ddx, s.ddy, s.rgb)) * 0.25;
+    albedo = (sample_tap(s.layers.x, image, s.box_uv, s.ddx, s.ddy, s.rgb)
+      + sample_tap(s.layers.y, image, s.box_uv, s.ddx, s.ddy, s.rgb)
+      + sample_tap(s.layers.z, image, s.box_uv, s.ddx, s.ddy, s.rgb)
+      + sample_tap(s.layers.w, image, s.box_uv, s.ddx, s.ddy, s.rgb)) * 0.25;
   }
   let base = albedo * mix(1.0, 1.0 - frame_edge_strength(), s.edge);
   let n = normalize(s.normal);
-  return shade(base, n, s.world_pos, light_lit(s.world_pos, n), s.open, s.seen);
+  return shade(base, n, s.world_pos, shadow_visibility(s.world_pos, n), s.ao, s.seen);
 }

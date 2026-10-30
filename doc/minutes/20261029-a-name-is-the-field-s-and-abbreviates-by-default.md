@@ -34,8 +34,15 @@ A name is the field's word (graphics, GIS, game cameras, WAI-ARIA, a language's
 idiom) or the checkpoint's, and a proposal names which. A thing with no
 precedent is named with the user. The camera's names were settled this way:
 `eye` and `pivot`, the `orbit` and `first_person` modes, a `pointer`, the
-visibility buffer a pixel `take`s its sample from, and `at` and `to` for where
-a thing is and where it is going.
+visibility buffer, and `at` and `to` for where a thing is and where it is
+going.
+
+> **Correction, 2026-10-30.** This record first listed the verb `take` (a
+> pixel `take`s its sample) among these, and the `naming` skill's table
+> followed it. The user did not choose `take`: it came in with the
+> visibility-buffer rename (`8e937c31a`) and was attributed to the user in
+> error. It was never the user's decision, so nothing of theirs was withdrawn;
+> `take` and `Take` are judged as any name of unconfirmed source is.
 
 ### The abbreviations
 

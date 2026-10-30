@@ -25,7 +25,7 @@ How finely the world is drawn is one rule too: a node is drawn at the zoom at
 which it spans one angular cell of the camera grid, and what a zoom folds away
 is not there, to draw, to walk on or to miss (The camera grid). Each kind of
 thing is drawn wholly on one side: the GPU's rays find the world and the GPU
-grows its decor, and everything else the kernel draws, it lists for the renderer
+generates its decor, and everything else the kernel draws, it lists for the renderer
 (Drawing).
 
 pixelet is an application over [xpute](./xpute/ARCHITECTURE.md): a Rust kernel
@@ -151,22 +151,22 @@ axes:
 - Its **kind** is how it is drawn: a cube, a decor model, or a marker facing the
   viewer. An id is its kind over its shape (`spec/spec/asset/id.json`
   `SHAPE_BITS`).
-- Its **source** is which side holds it: the base, whose ground grows it, or the
+- Its **source** is which side holds it: the base, whose ground generates it, or the
   object layer.
 
-So decor is no layer. A grown tree and a placed tree are one kind from two
+So decor is no layer. A generated tree and a placed tree are one kind from two
 sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
 `Instance`).
 
 | Kind   | Base                                | Object          |
 | ------ | ----------------------------------- | --------------- |
 | cube   | the ground's look, a cell's surface | a placed cube   |
-| decor  | what the ground grows               | a placed decor  |
+| decor  | what the ground generates           | a placed decor  |
 | marker | a place, Carto's icon and its name  | a placed marker |
 
-The ground grows decor by evaluating, never storing: what stands in a leaf cell
+The ground generates decor by evaluating, never storing: what stands in a leaf cell
 is a function of the cell, a seed and the ground's face, one rule on both sides
-(`pxl-spec-core scatter.rs`). Two grown decors never share a cell.
+(`pxl-spec-core scatter.rs`). Two generated decors never share a cell.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its look the majority of those it folds, and its
@@ -227,7 +227,7 @@ is 1/`CELLS_A_RAD` radians on every view (`CELL`), so what is observed at a
 distance is the same on every screen; a display only draws it.
 
 That sets the rule of detail. A node is drawn at the zoom at which it spans one
-to two angular cells at its distance (`cell_at`): each zoom is drawn over a
+to two angular cells at its distance (`cell_zoom_at`): each zoom is drawn over a
 band of distance, and the bands double going out, as an angular cell widens with
 distance.
 
@@ -383,13 +383,13 @@ and a place the camera is traveling to one, at the leaves
 Decor and the markers stand beside the ground, and both are gathered over the
 eye's windows' bricks.
 
-Decor is grown on the GPU from the same windows the rays read (`pxl-render
-gpu/grown.rs`). The candidates of a patch, the cells a decor may stand in, are
-decided a thread a patch, each candidate that stands is grown on a thread of its
-own, and a candidate is grown again only where what it reads changed. Every
-frame each grown record is taken where the rays ask the zoom it was grown at and
-placed as an instance, a model down to its own size on screen and an impostor
-sprite below it. Placed decor is handed in as records the GPU draws beside it
+Decor is generated on the GPU from the same windows the rays read (`pxl-render
+gpu/generated.rs`). The candidates of a patch, the cells a decor may stand in, are
+thinned a thread a patch, each candidate the thinning retains is generated on a
+thread of its own, and a candidate is generated again only where what it reads
+changed. Every frame each generated record is taken where the rays ask the zoom
+it was generated at and compacted into the instances, a model down to its own
+size on screen, an impostor below it and culled below that. Placed decor is handed in as records the GPU draws beside it
 (`domain/scene/decor/drawn.rs`).
 
 A **marker** is drawn flat to the camera: a place, a pin someone put up, or the
@@ -502,8 +502,8 @@ It casts only what a receiver reads:
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and
 casters are pushed by the same formula, so a plane does not shadow itself
-(`shadow.wgsl` `light_lit`). Beside the shadows, the lighting settings outline an
-edge that meets the air, lift a rim, and shade corners or run N8AO
+(`shadow.wgsl` `shadow_visibility`). Beside the shadows, the lighting settings
+outline an edge that meets the air, lift a rim, and shade corners or run N8AO
 (`spec/client/kernel/domain/view/setting/schema.json`, section `lighting`).
 
 ## The frame
@@ -513,7 +513,7 @@ by the pipeline that draws them, each with its mesh and uniform, for what the
 kernel decides to draw beside the world — the cumulus clouds, the actors, the
 location puck that shows where the device is, an edit's ghost box, the markers
 and the debug lines. An actor's draw also records where it stands
-(`DrawList::stand`), for the shadow map. The rays and the grown decor are not in
+(`DrawList::stand`), for the shadow map. The rays and the generated decor are not in
 it.
 
 The kernel stages the frame (`domain/scene/stage.rs`) and calls the renderer
@@ -525,9 +525,9 @@ whether it wants another turn. Its passes are modules by what they draw
 ```text
 ahead       impostor atlases, fresh bricks filled, the atmosphere's
             tables, the air's volume
-cast        the screen's rays; decor grown; the shadow map; the
+cast        the screen's rays; decor generated; the shadow map; the
             occlusion prepass
-world pass  grown decor → rays at their depth → grown impostors
+world pass  generated decor → rays at their depth → generated impostors
             → sky and stars at the far plane → listed actors,
             cumulus, impostors → high cloud planes → puck, ghosts,
             each toned into the world's color, linear

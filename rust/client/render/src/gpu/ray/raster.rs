@@ -129,7 +129,7 @@ impl Raster {
     /// rays' `size`; the raster's view off the `eye`'s words; the args
     /// cleared where the samples are cast again (`samples_cast`), else the
     /// boxes they left kept; its groups over the cast's `eye`, `beams` and
-    /// the eye's `head` (pxl-spec-core `light::MOVED_SIZE`), and, for the
+    /// the eye's `head` (pxl-spec-core `light::HEAD_SIZE`), and, for the
     /// faces' asking, the world's query's buffers (the window, the tiles'
     /// frames, the service area's index, the overwrites, the ways' pool).
     pub(super) fn prepare(
@@ -405,9 +405,9 @@ impl Raster {
             GROWN * length(v.across),
             n,
             n,
-            v.reach,
+            v.t_max,
             // The boxes are laid from box texel (0, 0)'s start (pxl-shader
-            // light.rs `Map::laid`).
+            // light.rs `Map::raster_layout`).
             0.0,
             0.0,
             0.0,

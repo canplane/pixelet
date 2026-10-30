@@ -69,8 +69,8 @@ impl<'a> World<'a> {
     }
 
     /// As it is unplaced: nothing placed and no preview's cuts asked of it,
-    /// the ground's alone, which decor grows on (pxl-spec-core
-    /// `scatter::Grounds::footing`).
+    /// the ground's alone, which decor generates on (pxl-spec-core
+    /// `scatter::DecorQuery::footing`).
     pub(super) fn unplaced(self) -> World<'a> {
         World {
             unplaced: true,

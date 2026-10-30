@@ -21,10 +21,10 @@ pub mod beam {
 pub mod cave {
     use crate::Zoom;
 
-    /// The chance a drawing cube turns one of its eight children over, as the
+    /// The chance a drawing cube flips one of its eight children, as the
     /// hash's share under it: a quarter. With each child drawing again at even
     /// odds (one hash bit), some 6% of the ground is hollow.
-    pub const TURN: u32 = 1 << 30;
+    pub const FLIP: u32 = 1 << 30;
 
     /// The coarsest cube a cave takes, in zoom steps over the leaf cell: 32
     /// units a side; nothing coarser is hollow, so every coarser fold of the
@@ -100,9 +100,9 @@ pub mod light {
     pub const SAMPLE: u32 = 4;
 
     /// The receiver's taps apart in the shadow map, in texels, a 3×3 grid
-    /// (pxl-render shadow.wgsl `light_lit`): the filtered edge spans about
-    /// four texels, half a unit where a texel is 1/8 u, where taps a texel
-    /// apart cut each cell's shadow out as a hard square.
+    /// (pxl-render shadow.wgsl `shadow_visibility`): the filtered edge spans
+    /// about four texels, half a unit where a texel is 1/8 u, where taps a
+    /// texel apart cut each cell's shadow out as a hard square.
     pub const SPREAD: f32 = 1.5;
 }
 

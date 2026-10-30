@@ -8,8 +8,8 @@
 // decor: an object value is a u16.
 //
 // Each decor is said here once: its number, its models, and how the ground
-// grows it on its own. A decor's `seed` names its scatter, so changing it
-// reshuffles every one the ground grows; `density` is its mean candidates per
+// generates it on its own. A decor's `seed` names its scatter, so changing it
+// reshuffles every one the ground generates; `density` is its mean candidates per
 // cell at the cell's zoom, the intensity of the Poisson process that scatters
 // it (pxl-spec-core scatter.rs); `on` the looks it may stand on; `orientation`
 // a random heading, or along the road or rail its cell lies on. A variant's
@@ -23,7 +23,7 @@
 // decor's cell is a unit, a z24 cell, `scale_steps` zooms coarser (finer
 // where negative, as a marker's, marker.json), one for every variant,
 // since a placement lands on the cell before its variant is drawn. The
-// ground grows a decor only on its own looks, and no two decors share one, so
+// ground generates a decor only on its own looks, and no two decors share one, so
 // two decors' boxes never meet.
 //
 // A decor thing carries `meta`, the fields its id gives it beside where it

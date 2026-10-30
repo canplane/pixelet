@@ -15,7 +15,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::cell_at;
+use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
@@ -190,7 +190,7 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
 /// The goal, as the markers' bricks cut the ground
 /// (domain/view/observation.rs `bricks`): each eye window's bricks,
 /// finest first, a brick where the zoom its nearest point asks (pxl-spec
-/// space/camera/grid.rs `cell_at`, about the eye's height, as a ray's
+/// space/camera/grid.rs `cell_zoom_at`, about the eye's height, as a ray's
 /// descent asks) is its window's or finer, within the reach, and not wholly under the finer
 /// window's bricks, which are read there instead; none coarser than the
 /// source's top, which nothing asks for. A piece is drawn where its brick is present, or where a coarser
@@ -241,7 +241,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
                 .map(|c| (c, [p[0] >> (cell - c), p[1] >> (cell - c)]))
                 .find(|&(c, at)| present(c, at));
             let r2 = near(rect((pz, p)));
-            if r2 > o.reach * o.reach || cell_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
+            if r2 > o.reach * o.reach || cell_zoom_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
                 continue;
             }
             read.insert((pz, p));

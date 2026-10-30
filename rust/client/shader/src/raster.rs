@@ -16,7 +16,7 @@ use crate::either::Either;
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::observed::{seen_at, seen_put};
 use crate::observer::{self, Observer};
-use crate::light::Moved;
+use crate::light::Head;
 use crate::world::{Unlooked, World};
 use crate::{add, most};
 
@@ -131,11 +131,11 @@ pub fn sample_box_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &Beams,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] moved: &Moved,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] boxes: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &mut [u32],
 ) {
-    let o = Either::of(eye, moved);
+    let o = Either::of(eye, head);
     let [across, down] = o.samples();
     if id.x >= across || id.y >= down {
         return;

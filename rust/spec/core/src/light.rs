@@ -34,21 +34,22 @@ use core::f32::consts::SQRT_2;
 /// on a face across each axis is pushed back in depth. Their fourth words
 /// hold the clipmap's: the world texel index of the box's texel (0, 0),
 /// `corner`, X then Y, Y counted down the rows; and the share of the box's
-/// half-width a receiver reads the map within, `rim` (`Light::read`).
+/// half-width a receiver reads the map within, `shadow_max_dist_ndc`
+/// (`Light::read`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
     pub first: [f32; 3],
-    pub reach: f32,
+    pub t_max: f32,
     pub across: [f32; 3],
     pub down: [f32; 3],
     pub dir: [f32; 3],
     pub bias: [f32; 3],
     pub corner: [i32; 2],
-    pub rim: f32,
+    pub shadow_max_dist_ndc: f32,
 }
 
-/// The word of `eye::LIGHT` the rim lies in.
-pub const RIM: usize = 15;
+/// The word of `eye::LIGHT` the shadow's max distance lies in.
+pub const SHADOW_MAX_DIST_NDC: usize = 15;
 
 /// The words of `eye::LIGHT` the corner lies in, X then Y, which the map is
 /// laid in off.
@@ -97,13 +98,19 @@ impl Light {
     /// at the top, as the lit passes read it. A stop's push is a raster
     /// caster's polygon offset (`param::light::SLOPE_BIAS`): the face's greatest
     /// change in depth a texel across the map (`slope`), times it.
-    /// `corner` is the world texel index of the box's first texel; `rim`
-    /// the share of its half-width a receiver reads within.
-    pub fn of([x, y, z, w]: [[f32; 3]; 4], size: u32, corner: [i32; 2], rim: f32) -> Light {
+    /// `corner` is the world texel index of the box's first texel;
+    /// `shadow_max_dist_ndc` the share of its half-width a receiver reads
+    /// within.
+    pub fn of(
+        [x, y, z, w]: [[f32; 3]; 4],
+        size: u32,
+        corner: [i32; 2],
+        shadow_max_dist_ndc: f32,
+    ) -> Light {
         let texel = 2.0 / size as f32;
         let (ax, ay) = (1.0 - texel / 2.0, texel / 2.0 - 1.0);
-        let reach = length(z);
-        let dir = [z[0] / reach, z[1] / reach, z[2] / reach];
+        let t_max = length(z);
+        let dir = [z[0] / t_max, z[1] / t_max, z[2] / t_max];
         let across = [x[0] * texel, x[1] * texel, x[2] * texel];
         let down = [-y[0] * texel, -y[1] * texel, -y[2] * texel];
         // A face's normal is its axis.
@@ -120,13 +127,13 @@ impl Light {
                 w[1] - ax * x[1] - ay * y[1],
                 w[2] - ax * x[2] - ay * y[2],
             ],
-            reach,
+            t_max,
             across,
             down,
             dir,
             bias: [bias(0), bias(1), bias(2)],
             corner,
-            rim,
+            shadow_max_dist_ndc,
         }
     }
 
@@ -199,13 +206,14 @@ impl Light {
     }
 
     /// Whether box texel `p` of the map `size` a side lies where a receiver
-    /// may read it, grown by `pad` texels: within `rim` of the box's
-    /// half-width about its middle, where the eye stands, as past it a
-    /// shadow has faded to nothing (pxl-render shadow.wgsl `light_lit`).
+    /// may read it, grown by `pad` texels: within `shadow_max_dist_ndc` of the
+    /// box's half-width about its middle, where the eye stands, as past it a
+    /// shadow has faded to nothing (pxl-render shadow.wgsl
+    /// `shadow_visibility`).
     pub fn read(&self, size: u32, p: [i32; 2], pad: f32) -> bool {
         let half = size as f32 / 2.0;
         let (x, y) = (p[0] as f32 + 0.5 - half, p[1] as f32 + 0.5 - half);
-        let r = self.rim * half + pad;
+        let r = self.shadow_max_dist_ndc * half + pad;
         x * x + y * y <= r * r
     }
 
@@ -237,7 +245,7 @@ impl Light {
         if q >= DEPTH_ONE {
             return NO_ZOOM;
         }
-        let t = q as f32 / DEPTH_ONE as f32 * self.reach;
+        let t = q as f32 / DEPTH_ONE as f32 * self.t_max;
         let e = detail.eye;
         let v = [
             e[0] - self.dir[0] * t,
@@ -266,13 +274,13 @@ impl Light {
         };
         Light {
             first: v(0),
-            reach: f32::from_bits(w[3]),
+            t_max: f32::from_bits(w[3]),
             across: v(4),
             down: v(8),
             dir: v(12),
             bias: v(16),
             corner: CORNER.map(|k| w[k] as i32),
-            rim: f32::from_bits(w[RIM]),
+            shadow_max_dist_ndc: f32::from_bits(w[SHADOW_MAX_DIST_NDC]),
         }
     }
 
@@ -280,10 +288,10 @@ impl Light {
     pub fn words(&self) -> [u32; eye::LIGHT_WORDS] {
         let v = |a: [f32; 3], w: u32| [a[0].to_bits(), a[1].to_bits(), a[2].to_bits(), w];
         let c = [
-            v(self.first, self.reach.to_bits()),
+            v(self.first, self.t_max.to_bits()),
             v(self.across, self.corner[0] as u32),
             v(self.down, self.corner[1] as u32),
-            v(self.dir, self.rim.to_bits()),
+            v(self.dir, self.shadow_max_dist_ndc.to_bits()),
             v(self.bias, 0),
         ];
         let mut out = [0; eye::LIGHT_WORDS];
@@ -297,24 +305,24 @@ impl Light {
 }
 
 /// What the light's cast is handed beside the eye's words, a uniform: a head
-/// of `MOVED_HEAD` vec4s, the cast's number, whether it is counted, its
-/// epoch and the map's side (`MOVED_CAST` to `MOVED_SIZE`), then the rays'
+/// of `HEAD_VEC4S` vec4s, the cast's number, whether it is counted, its
+/// epoch and the map's side (`HEAD_CAST` to `HEAD_SIZE`), then the rays'
 /// starts (`Starts`, from `STARTS_AT`), then the actors (`ACTORS_AT`).
-pub const MOVED_HEAD: usize = ACTORS_AT + 1 + ACTORS;
-pub const MOVED_WORDS: usize = 4 * MOVED_HEAD;
+pub const HEAD_VEC4S: usize = ACTORS_AT + 1 + ACTORS;
+pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
 /// The cast's number, counted up from one each cast, which a tile stood on
 /// and read in it is marked with (`stands_at`, `reads_at`).
-pub const MOVED_CAST: usize = 0;
-pub const MOVED_COUNTED: usize = 1;
+pub const HEAD_CAST: usize = 0;
+pub const HEAD_COUNTED: usize = 1;
 /// The number of the cast since which only what says which tiles are read
 /// moved: what a cast in it or after left in a tile stands, as the eye's
 /// place, the light and the world it was cast for still do (`reads_at`).
-pub const MOVED_EPOCH: usize = 2;
+pub const HEAD_EPOCH: usize = 2;
 /// The map's side, which the slots' lattice is laid by. A pass the eye's
 /// rays and the shadow map share is handed the eye's own head, all zero, in
 /// its place (pxl-shader either.rs `Either`): a head naming no map is the
 /// eye's.
-pub const MOVED_SIZE: usize = 3;
+pub const HEAD_SIZE: usize = 3;
 
 /// Where a texel's ray starts, the same point of the world in every frame
 /// cast in one light frame (pxl-render gpu/shadow.rs `aim`): off anchors
@@ -338,7 +346,7 @@ pub struct Starts {
 
 pub const ANCHOR: i32 = 2048;
 
-/// The starts' words in the moved nodes' buffer's head (`MOVED_HEAD`), a
+/// The starts' words in the cast's head (`HEAD_VEC4S`), a
 /// vec4 each from `STARTS_AT`: the base, the steps across and down, the
 /// anchors, their remainders.
 pub const STARTS_AT: usize = 2;
@@ -466,12 +474,12 @@ const _: () = assert!(
 pub const LINE_ORIGIN: u32 = beam::LINE_WORDS;
 
 /// How far past the disk a receiver reads the map reaches, in texels, at
-/// worst (pxl-render shadow.wgsl `light_lit`): its corner tap `SPREAD` each
-/// way, and past it the neighbor its linear compare filters in, a texel
-/// each way, so both along a diagonal. The rim is measured at the
-/// receiver's offset point, so its normal offset adds none; and the fade
-/// and `Light::read` both measure from the snapped box's middle, its one
-/// matrix (pxl-render gpu/shadow.rs `aim`), so its snap adds none.
+/// worst (pxl-render shadow.wgsl `shadow_visibility`): its corner tap `SPREAD`
+/// each way, and past it the neighbor its linear compare filters in, a texel
+/// each way, so both along a diagonal. The distance is measured at the
+/// receiver's offset point, so its normal offset adds none; and the fade and
+/// `Light::read` both measure from the snapped box's middle, its one matrix
+/// (pxl-render gpu/shadow.rs `aim`), so its snap adds none.
 pub const READ_PAD: f32 = (SPREAD + FILTER) * SQRT_2;
 const FILTER: f32 = 1.0;
 
@@ -573,7 +581,7 @@ pub const fn misses_at(size: u32) -> u32 {
 
 /// The tiles of the box a receiver stands on in a cast, past the misses: a
 /// word a tile (`TILE` texels a side), `tiles` a row, the number of the
-/// last cast a receiver stood on it in (`MOVED_CAST`; pxl-shader light.rs
+/// last cast a receiver stood on it in (`HEAD_CAST`; pxl-shader light.rs
 /// `light_mark_cs`, `light_mark_drawn_cs`): where the eye's pixels meet the
 /// world, and where the decor and the actors drawn stand.
 pub const fn stands_at(size: u32) -> u32 {
@@ -581,7 +589,7 @@ pub const fn stands_at(size: u32) -> u32 {
 }
 
 /// The tiles a receiver reads, past the stands, as many: the number of the
-/// cast that first read one in its epoch (`MOVED_EPOCH`), read where it lies
+/// cast that first read one in its epoch (`HEAD_EPOCH`), read where it lies
 /// within its taps of the way up from a tile one stands on (`Light::up`;
 /// pxl-shader light.rs `light_reach_cs`). A tile this cast's number names is
 /// the cast's to cast; one an earlier cast of its epoch names holds what
@@ -658,7 +666,7 @@ pub fn ray(eye: [i32; 3], s: &Light, starts: &Starts, p: [u32; 2]) -> ([i32; 3],
     let step = (1u32 << FRAC_W) as f32;
     // The eye from the start, X the short way round as an i32 wraps.
     let from = |k: usize| eye[k].wrapping_sub(o[k]) as f32 / step;
-    (o, Ray::new(s.dir, s.reach), [from(0), from(1), from(2)])
+    (o, Ray::new(s.dir, s.t_max), [from(0), from(1), from(2)])
 }
 /// The depth a texel's walk `met` leaves in the map: where it stopped
 /// along its ray, as a share of the box's depth, pushed back as its face's
@@ -667,7 +675,7 @@ pub fn depth<A>(s: &Light, met: &Met<A>) -> f32 {
     if met.ends != End::Stop {
         return 1.0;
     }
-    let d = met.stop.t / s.reach + axis(s.bias, met.stop.axis);
+    let d = met.stop.t / s.t_max + axis(s.bias, met.stop.axis);
     if d < 1.0 {
         d
     } else {
@@ -763,7 +771,7 @@ mod tests {
         // The top-left texel's middle: half the box across to the left, up.
         assert_eq!(o, [100 - 256, 200 + 256, 300 + 4 * 256]);
         assert_eq!(ray.dir, [0.0, 0.0, -1.0]);
-        assert_eq!(ray.reach, 8.0);
+        assert_eq!(ray.t_max, 8.0);
         assert_eq!(from, [1.0, -1.0, -4.0]);
         // The next across and the next down, a texel's side on.
         assert_eq!(
@@ -834,13 +842,16 @@ mod tests {
     fn words_are_fields() {
         let s = Light {
             corner: [-7, 9],
-            rim: 0.75,
+            shadow_max_dist_ndc: 0.75,
             ..down()
         };
         let w = s.words();
         assert_eq!(CORNER.map(|k| w[k] as i32), s.corner);
-        assert_eq!(f32::from_bits(w[RIM]), s.rim);
-        assert_eq!(f32::from_bits(w[3]), s.reach);
+        assert_eq!(
+            f32::from_bits(w[SHADOW_MAX_DIST_NDC]),
+            s.shadow_max_dist_ndc
+        );
+        assert_eq!(f32::from_bits(w[3]), s.t_max);
         assert_eq!(f32::from_bits(w[4]), s.across[0]);
         assert_eq!(f32::from_bits(w[18]), s.bias[2]);
         assert_eq!(Light::of_words(&w), s);
@@ -972,11 +983,14 @@ mod tests {
         }
     }
 
-    /// A receiver reads the disk of `rim` about the box's middle, and a
-    /// pass past it its pad.
+    /// A receiver reads the disk of `shadow_max_dist_ndc` about the box's
+    /// middle, and a pass past it its pad.
     #[test]
     fn receiver_reads_disk() {
-        let s = Light { rim: 0.5, ..down() };
+        let s = Light {
+            shadow_max_dist_ndc: 0.5,
+            ..down()
+        };
         // A box 16 texels a side: its middle is 8, the disk 4 texels out.
         assert!(s.read(16, [8, 8], 0.0));
         assert!(s.read(16, [11, 7], 0.0));

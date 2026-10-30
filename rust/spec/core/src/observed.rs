@@ -51,8 +51,8 @@ use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 /// holds moved or was handed since the last cast; and the boxes of leaf
 /// cells whose columns what is placed or a preview's cuts changed since the
 /// last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
-/// growth is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
-/// pxl-render gpu/grown.rs); and the families of what is placed written
+/// generation is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
+/// pxl-render gpu/generated.rs); and the families of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
 /// `WRITTEN` at most, past which all is forgotten (`reads_written`); and
 /// whether its walks count what they ask, and what they counted

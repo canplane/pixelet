@@ -177,7 +177,7 @@ fn main() {
 fn debug_looks() -> String {
     use debug_look::{share, steps};
     // A world's cell spans (1, `SPANS`] of the view's cells where the rays
-    // stop on it (pxl-spec-core grid.rs `cell_at`), so its share of a cell
+    // stop on it (pxl-spec-core grid.rs `cell_zoom_at`), so its share of a cell
     // squared is within (1, `SPANS`²]: the tints' bounds are those.
     let spans = grid::SPANS;
     assert!(

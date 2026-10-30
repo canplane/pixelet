@@ -93,8 +93,8 @@ pub struct Shadow {
     /// The light's frame the clipmap's texels are cast in, numbered: moved
     /// where the light the map is cast from, the reach or the depth step
     /// (`DEPTH_STEP`) moved, the rays' starts with it (`starts`).
-    pub frame: u32,
-    held: Option<(V3, f64, i64)>,
+    pub generation: u32,
+    key: Option<(V3, f64, i64)>,
     /// What the rays' starts are worked out off (`starts`): the box's
     /// corner, the light's inverse and the eye's world position, as last
     /// aimed; and the anchors worked out in the light frame numbered first.
@@ -185,8 +185,8 @@ impl Shadow {
             light_words: [0; eye::LIGHT_WORDS],
             texel: 0.0,
             cast_from: None,
-            frame: 0,
-            held: None,
+            generation: 0,
+            key: None,
             box_corner: [0; 2],
             inverse: mat4::new(),
             eye_world: [0.0; 3],
@@ -210,30 +210,43 @@ impl Shadow {
         ]
     }
 
-    /// `reach` is the map's half width about `target`, `rim` the share of
-    /// it a receiver reads within; `fixed` is a point that stays put in the
-    /// world as the eye moves, in the eye's frame.
-    pub fn aim(&mut self, sun_dir: &[f32], target: V3, reach: f64, rim: f32, fixed: V3) {
-        self.texel = reach * 2.0 / f64::from(SIZE);
+    /// `half_width` is the map's half width about `target`,
+    /// `shadow_max_dist_ndc` the share of it a receiver reads within; `fixed`
+    /// is a point that stays put in the world as the eye moves, in the eye's
+    /// frame.
+    pub fn aim(
+        &mut self,
+        sun_dir: &[f32],
+        target: V3,
+        half_width: f64,
+        shadow_max_dist_ndc: f32,
+        fixed: V3,
+    ) {
+        self.texel = half_width * 2.0 / f64::from(SIZE);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
         // the light goes, on purpose: the light read as moving. Turned on every
         // frame instead, the grid below snapped another way each time and a
         // wall's shadow flickered as fast as the frames came.
         let light = v3::norm(&[sun_dir[0] as f64, sun_dir[1] as f64, sun_dir[2] as f64]);
-        let step = self.texel / reach;
+        let step = self.texel / half_width;
         let from = match self.cast_from {
             Some(from) if v3::dot(&from, &light) > libm::cos(step) => from,
             _ => light,
         };
         self.cast_from = Some(from);
-        // Two reaches up the light, so the sphere of `reach` about the target lies
-        // between the planes a reach either side of it, whatever the light's
-        // angle, and a share past them each side (`DEPTH_STEP`).
-        let eye: V3 = core::array::from_fn(|k| target[k] + from[k] * 2.0 * reach);
+        // Two reaches up the light, so the sphere of `half_width` about the
+        // target lies between the planes a reach either side of it, whatever
+        // the light's angle, and a share past them each side (`DEPTH_STEP`).
+        let eye: V3 = core::array::from_fn(|k| target[k] + from[k] * 2.0 * half_width);
         let (mut view, mut proj) = (mat4::new(), mat4::new());
         mat4::look_at(&mut view, eye, target, [0.0, 0.0, 1.0]);
-        let margin = reach * DEPTH_STEP / (1.0 - DEPTH_STEP);
-        ortho(&mut proj, reach, reach - margin, 3.0 * reach + margin);
+        let margin = half_width * DEPTH_STEP / (1.0 - DEPTH_STEP);
+        ortho(
+            &mut proj,
+            half_width,
+            half_width - margin,
+            3.0 * half_width + margin,
+        );
         mat4::mul(&mut self.light_view_proj, &proj, &view);
         // The map follows the eye, so its texels are slid onto a grid fixed in the
         // world: off it, every edge fell on other texels each frame as the view
@@ -251,9 +264,9 @@ impl Shadow {
             cell[k] = n as i64;
         }
         let corner = [cell[0].wrapping_neg() as i32, cell[1] as i32];
-        let held = Some((from, reach, cell[2]));
-        if held != self.held {
-            (self.frame, self.held) = (self.frame.wrapping_add(1), held);
+        let key = Some((from, half_width, cell[2]));
+        if key != self.key {
+            (self.generation, self.key) = (self.generation.wrapping_add(1), key);
         }
         put_mat(&mut self.light, VIEW_PROJ, &self.light_view_proj);
         // The world's cast reads the box off the eye's words: the light's
@@ -271,7 +284,7 @@ impl Shadow {
             [column(0), column(1), column(2), column(3)],
             SIZE,
             corner,
-            rim,
+            shadow_max_dist_ndc,
         )
         .words();
         (self.box_corner, self.inverse) = (corner, inverse);
@@ -285,8 +298,8 @@ impl Shadow {
     /// holds (`anchors`), so a texel's start is the same in every frame
     /// cast in it; and a texel's steps, in Q3 steps.
     pub fn starts(&mut self) -> Starts {
-        if self.anchors.0 != self.frame {
-            self.anchors = (self.frame, Vec::new());
+        if self.anchors.0 != self.generation {
+            self.anchors = (self.generation, Vec::new());
         }
         let corner = self.box_corner;
         let base = [

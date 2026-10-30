@@ -29,7 +29,7 @@ export const GPU_SPAN_NAMES = [
   "light_raster",
   "light_slot",
   "light_walk",
-  "grow",
+  "generate",
   "shadow",
   "face",
   "mark",

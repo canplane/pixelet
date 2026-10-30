@@ -212,7 +212,7 @@ impl Observer for Eye {
     }
 
     /// From the eye, its boxes about it marked at the screen's tangents.
-    fn laid(&self) -> ([i32; 3], (bool, [f32; 2])) {
+    fn raster_layout(&self) -> ([i32; 3], (bool, [f32; 2])) {
         (eye_origin(self).0, (true, [self.tan.x, self.tan.y]))
     }
 

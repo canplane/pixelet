@@ -102,7 +102,7 @@ pub(crate) trait Observer {
     /// From where its boxes are laid for the raster, and whether a box
     /// about the eye is marked and at the screen's tangents (raster.rs
     /// `boxed`).
-    fn laid(&self) -> ([i32; 3], (bool, [f32; 2]));
+    fn raster_layout(&self) -> ([i32; 3], (bool, [f32; 2]));
     /// Whether the cast needs what `level` at `at` of its lattice gives,
     /// off its words `w`: the one place a pass is told it may pass a thread
     /// by.
@@ -278,7 +278,7 @@ pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
             NONE
         },
     ];
-    let (origin, eyed) = o.laid();
+    let (origin, eyed) = o.raster_layout();
     boxed(
         w,
         o.sample_at(s),
@@ -320,7 +320,7 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
         }
     }
     let none = cast::Stop {
-        t: aim.ray.reach,
+        t: aim.ray.t_max,
         axis: 0,
         node: cast::Node::ROOT,
         at: 0u32,

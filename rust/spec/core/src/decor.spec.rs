@@ -4,7 +4,7 @@
 //
 // The decors, the cube catalog's sibling: drawn as a model, not a cell the rays meet.
 //
-// The decors as the GPU reads them too: how the ground grows each one, the
+// The decors as the GPU reads them too: how the ground generates each one, the
 // looks it stands on and the boxes its variants claim, in the catalog's
 // order. pxl-spec asset/decor.spec.rs adds their models over each row.
 #![allow(non_camel_case_types, reason = "generated from the spec")]
@@ -19,7 +19,7 @@ pub const VARIANTS: usize = 9;
 /// The most thresholds a decor's counts hold.
 pub const COUNTS: usize = 36;
 
-/// How a decor the ground grows faces: any way, or along the road or rail its
+/// How a decor the ground generates faces: any way, or along the road or rail its
 /// cell lies on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -38,14 +38,14 @@ pub struct Counts {
     pub at: [u32; COUNTS],
 }
 
-/// A decor as the ground grows it, in 32-bit words alone, laid out as a
+/// A decor as the ground generates it, in 32-bit words alone, laid out as a
 /// GPU reads the table from a buffer of these words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Decor {
     /// What a placed one is stored as.
     pub val: u32,
-    /// Its scatter: changing it reshuffles every one the ground grows.
+    /// Its scatter: changing it reshuffles every one the ground generates.
     pub seed: u32,
     /// A patch's counts, born at the top zoom and born finer.
     pub counts: [Counts; 2],

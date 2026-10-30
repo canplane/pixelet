@@ -15,6 +15,6 @@ fn zoom_cell_dist() {
     for z in [0, UNIT_ZOOM, UNIT_ZOOM + 5] {
         assert_eq!(units(z) / split_dist(z), grid::SPANS as f64 * CELL, "z{z}");
         let d = split_dist(z);
-        assert_eq!(cell_at(d * d), z, "z{z} begins at its split distance");
+        assert_eq!(cell_zoom_at(d * d), z, "z{z} begins at its split distance");
     }
 }

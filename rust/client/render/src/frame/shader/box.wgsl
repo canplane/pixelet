@@ -62,7 +62,7 @@ struct VertexOut {
   @location(5) @interpolate(flat) normal: vec3f,
   @location(6) world_pos: vec3f,
   @location(7) @interpolate(flat) opacity: f32,
-  @location(8) through: f32,
+  @location(8) transmittance: f32,
   @location(9) scattered: vec3f,
   @location(10) @interpolate(flat) fill: vec3f,
   @location(11) @interpolate(flat) sun: vec3f,
@@ -111,7 +111,7 @@ fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
   o.opacity = d.measure.x;
   o.world_pos = c.world;
   let seen = seen_from_eye(c.world);
-  o.through = seen.through;
+  o.transmittance = seen.transmittance;
   o.scattered = seen.scattered;
   o.sun = seen.light.sun;
   o.other = seen.light.other;
@@ -157,8 +157,8 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     i.box_uv,
     dpdx(i.box_uv),
     dpdy(i.box_uv),
-    screen_open(i.clip.xy),
-    Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)),
+    screen_ao(i.clip.xy),
+    Seen(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill)),
   );
   return vec4f(tone(paint(s)), i.opacity);
 }

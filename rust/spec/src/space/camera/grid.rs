@@ -31,8 +31,8 @@ pub const CELLS_A_RAD: f64 = grid::CELLS_A_RAD as f64;
 pub const WINDOW_MARGIN: f64 = grid::WINDOW_MARGIN as f64;
 
 /// The grid the bands and windows are sized for, the view's
-/// `WINDOW_MARGIN` times finer (pxl-spec-core `grid::SPLIT`).
-pub const SPLIT: f64 = grid::SPLIT as f64;
+/// `WINDOW_MARGIN` times finer (pxl-spec-core `grid::WINDOW_CELLS_A_RAD`).
+pub const WINDOW_CELLS_A_RAD: f64 = grid::WINDOW_CELLS_A_RAD as f64;
 
 /// The view's camera grid cell, an angle in radians, 1/`CELLS_A_RAD`
 /// (pxl-spec-core `grid::CELL`).
@@ -52,8 +52,8 @@ pub const fn split_dist(cell_zoom: Zoom) -> f64 {
 /// direction, so the face a ray meets does not enter. Finer than the
 /// ground's near the eye, held to what a zoom can name: pxl-spec-core's, the
 /// one rule the CPU and a GPU's cast size by, of the one input, a square.
-pub fn cell_at(r2: f64) -> Zoom {
-    grid::cell_at(r2 as f32)
+pub fn cell_zoom_at(r2: f64) -> Zoom {
+    grid::cell_zoom_at(r2 as f32)
 }
 
 #[cfg(test)]

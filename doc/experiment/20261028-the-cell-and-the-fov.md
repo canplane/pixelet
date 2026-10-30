@@ -10,7 +10,7 @@ The vertical FOV is 50°, and the camera grid's cell is 1/96 rad at the view's
 τ of 2, about 12 CSS px at the reference view (1080 CSS px high).
 
 At 53.13°, tan(half) is 1/2, so one CSS px is exactly 1/1080 rad at the
-reference view. A 16 px cell would be `SPLIT` 135 at the same τ.
+reference view. A 16 px cell would be `WINDOW_CELLS_A_RAD` 135 at the same τ.
 
 The question was whether either reads better: block size and chunkiness at
 the same place and pose, out to the horizon, and where decor turns to
@@ -20,17 +20,18 @@ sprites.
 
 Three exports of `9f4c51cbe` (`c9e157b79` and a record):
 
-- **:5176 A:** as it is: 50°, `SPLIT` 192.
+- **:5176 A:** as it is: 50°, `WINDOW_CELLS_A_RAD` 192.
 - **:5177 B:** 53.13010235415598° in pxl-kernel view/param.rs `FOV` and
-  pxl-spec camera/grid.rs `REFERENCE_FOV_DEG`, and `SPLIT` = 67.5 ·
-  `RATIO_MAX` = 135 in pxl-spec-core grid.rs. Its shaders were made again.
-- **:5178 C:** the same FOV, `SPLIT` kept at 192.
+  pxl-spec camera/grid.rs `REFERENCE_FOV_DEG`, and `WINDOW_CELLS_A_RAD` =
+  67.5 · `RATIO_MAX` = 135 in pxl-spec-core grid.rs. Its shaders were made
+  again.
+- **:5178 C:** the same FOV, `WINDOW_CELLS_A_RAD` kept at 192.
 
-What `SPLIT` sizes followed it in the export:
+What `WINDOW_CELLS_A_RAD` sizes followed it in the export:
 
 - `window::RADIUS` and `ACROSS`. `ACROSS` rounds up to a power of two by
-  itself, so nothing assumes one of `SPLIT`.
-- `cell_at`, `beam::spacing`, decor's sprite edge and the clouds' thinning.
+  itself, so nothing assumes one of `WINDOW_CELLS_A_RAD`.
+- `cell_zoom_at`, `beam::spacing`, decor's sprite edge and the clouds' thinning.
 - pxl-spec `split_dist` and `target_cell_px`.
 
 pxl-spec-core's tests passed on B. The kernel decor test
@@ -42,7 +43,7 @@ literal.
 
 The camera grid's cells, from `beam::Grid::of`'s spans:
 
-| | FOV | `SPLIT` | cell at the reference view | cells at 2056×1113 | cells at 1920×1080 |
+| | FOV | `WINDOW_CELLS_A_RAD` | cell at the reference view | cells at 2056×1113 | cells at 1920×1080 |
 |---|---|---|---|---|---|
 | A | 50° | 192 | 12.06 CSS px | 166 × 90 = 14,940 | 14,400 |
 | B | 53.13° | 135 | 16.0 CSS px | 125 × 68 = 8,500 (0.569×) | 8,160 |
@@ -60,10 +61,10 @@ better.
 ## What it says
 
 The cell stays near 12 CSS px. The FOV's value, 50° against 53.13° with
-`SPLIT` at 192, is held until the knobs the view is made of are gathered in
-one place. Today they sit apart:
+`WINDOW_CELLS_A_RAD` at 192, is held until the knobs the view is made of are
+gathered in one place. Today they sit apart:
 
-- the cell size is hidden in `SPLIT`'s 96;
+- the cell size is hidden in `WINDOW_CELLS_A_RAD`'s 96;
 - the FOV is written twice (kernel `FOV` and pxl-spec `REFERENCE_FOV_DEG`);
 - a test writes the 12 px cell as a literal.
 

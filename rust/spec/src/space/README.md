@@ -126,9 +126,10 @@ together (`Tile`, `layer/tile.rs`); the tile at a zoom over a leaf is
 `Tile::over`, and a tile's first leaf, which 512u square it begins at, is
 `first_leaf`.
 
-The distance chooses a cell zoom (`camera/grid.rs` `cell_at`), and terrain's
-tile zoom is the one whose cells those are (pxl-spec-core `Lattice::tile_zoom`);
-the cast measures its own step against the same cell zoom.
+The distance chooses a cell zoom (`camera/grid.rs` `cell_zoom_at`), and
+terrain's tile zoom is the one whose cells those are (pxl-spec-core
+`Lattice::tile_zoom`); the cast measures its own step against the same cell
+zoom.
 
 ## The trees share their geometry and nothing else
 

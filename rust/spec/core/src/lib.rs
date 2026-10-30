@@ -5,7 +5,7 @@
 //! What pixelet's spec computes the same on the CPU and on the GPU, in
 //! `core` alone: the zooms and the lattices of cells on them, a node's seed
 //! and the caves, the ground and the service area it ends at, the decor the
-//! ground grows, the clouds' field, the ray's descent, and the samples'
+//! ground generates, the clouds' field, the ray's descent, and the samples'
 //! stops as the boxes a raster draws. pxl-spec takes it as its own, and a
 //! shader crate depends on it as it is.
 

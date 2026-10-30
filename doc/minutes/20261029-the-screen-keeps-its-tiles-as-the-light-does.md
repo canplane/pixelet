@@ -160,7 +160,7 @@ gpu/ray/cast.rs), not as the first draft took it:
   Bounds that cover, not exact: a tile too many costs, one missing is a
   failure.
 - **Claim by epoch.** A tile read and not yet cast in the epoch is the cast's
-  (`light::reads_at`, `light::MOVED_EPOCH`).
+  (`light::reads_at`, `light::HEAD_EPOCH`).
 - **Dispatch whole, pass a tile by.** Once one tile is claimed, the passes'
   args go whole (`light::ARGS_WHOLE`), and each pass returns early on a tile
   not claimed (`Map::needs`). There is no list of tiles, and no count of

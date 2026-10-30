@@ -211,7 +211,7 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
     ),
     (
         "decor.rs",
-        "decor_stand_cs",
+        "decor_thin_cs",
         "client/shader/src/decor.rs",
         "PATCH_LANES",
         1,
@@ -225,7 +225,7 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
     ),
     (
         "decor.rs",
-        "decor_place_cs",
+        "decor_compact_cs",
         "client/shader/src/decor.rs",
         "RECORD_LANES",
         1,

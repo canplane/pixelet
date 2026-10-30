@@ -749,7 +749,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     row.extend(head);
     row.extend(
         [
-            "// The decors as the GPU reads them too: how the ground grows each one, the",
+            "// The decors as the GPU reads them too: how the ground generates each one, the",
             "// looks it stands on and the boxes its variants claim, in the catalog's",
             "// order. pxl-spec asset/decor.spec.rs adds their models over each row.",
             "#![allow(non_camel_case_types, reason = \"generated from the spec\")]",
@@ -779,7 +779,7 @@ fn ground_looks() -> Result<Vec<(String, u32)>, String> {
 
 /// The decors' table, in the catalog's order, which is the order their
 /// variants are numbered in: in pxl-spec-core every number the GPU reads too
-/// (how the ground grows each one, its looks, its boxes), in pxl-spec its
+/// (how the ground generates each one, its looks, its boxes), in pxl-spec its
 /// models over that row.
 fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec<String>), String> {
     const SLOT: &str = "crate::asset::catalog::Slot";
@@ -934,7 +934,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
     portable.extend(
         [
             "",
-            "/// How a decor the ground grows faces: any way, or along the road or rail its",
+            "/// How a decor the ground generates faces: any way, or along the road or rail its",
             "/// cell lies on.",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
             "#[repr(u32)]",
@@ -953,14 +953,14 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    pub at: [u32; COUNTS],",
             "}",
             "",
-            "/// A decor as the ground grows it, in 32-bit words alone, laid out as a",
+            "/// A decor as the ground generates it, in 32-bit words alone, laid out as a",
             "/// GPU reads the table from a buffer of these words.",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
             "#[repr(C)]",
             "pub struct Decor {",
             "    /// What a placed one is stored as.",
             "    pub val: u32,",
-            "    /// Its scatter: changing it reshuffles every one the ground grows.",
+            "    /// Its scatter: changing it reshuffles every one the ground generates.",
             "    pub seed: u32,",
             "    /// A patch's counts, born at the top zoom and born finer.",
             "    pub counts: [Counts; 2],",
@@ -1011,7 +1011,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
 
     let mut rs: Vec<String> = [
         "",
-        "/// How it grows, one row with the GPU's.",
+        "/// How it faces, one row with the GPU's.",
         "pub use pxl_spec_core::decor::Orientation;",
         "",
         "/// A model and its pack's colormap, each a slot the catalog fills.",
@@ -1021,7 +1021,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         "    pub skin: crate::asset::catalog::Slot,",
         "}",
         "",
-        "/// A decor: its id, its row (how the ground grows it and the boxes its",
+        "/// A decor: its id, its row (how the ground generates it and the boxes its",
         "/// variants claim, pxl-spec-core decor.spec.rs) and its variants' models, in",
         "/// the row's order.",
         "#[derive(Clone, Copy, Debug, PartialEq)]",

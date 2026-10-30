@@ -6,7 +6,7 @@ use crate::gpu::api::bytes;
 
 /// A stage's whole input as it last read it, byte for byte: what the stage
 /// makes is one function of it, so a frame that reads the same stands on
-/// what it made — the cast's rays and the decor grown over them (stage 1),
+/// what it made — the cast's rays and the decor generated over them (stage 1),
 /// the frame (stage 2). Each lane is read with its length, so no two
 /// sets read alike; what changed without words to read is marked so.
 #[derive(Default)]

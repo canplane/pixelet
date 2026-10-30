@@ -7,7 +7,7 @@ pub mod api;
 pub mod atmosphere;
 pub mod cloud;
 pub mod finish;
-pub mod grown;
+pub mod generated;
 pub mod image_map;
 pub mod mip;
 pub mod pack;

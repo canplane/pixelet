@@ -40,7 +40,7 @@ fn fs(v: VertexOut) -> FragOut {
   let crease = creases(h, faces, steps);
   let s = Surface(
     painted.rgb,
-    painted.taps,
+    painted.layers,
     h.normal,
     crease.edge,
     h.at,
@@ -48,7 +48,7 @@ fn fs(v: VertexOut) -> FragOut {
     ddx,
     ddy,
     // The darker of the two, so a corner both see is not darkened twice.
-    min(screen_open(v.clip.xy), crease.open),
+    min(screen_ao(v.clip.xy), crease.ao),
     seen_from_eye(h.at),
   );
   // The depth `behind` the face along the ray, so what is laid on it wins.
@@ -67,7 +67,7 @@ fn fs(v: VertexOut) -> FragOut {
 // finer than its threshold.
 //
 // A world's cell spans (1, 2] of the view's cells at its distance
-// (pxl-spec-core grid.rs `cell_at`, `CELLS_A_RAD` / 2 sides its
+// (pxl-spec-core grid.rs `cell_zoom_at`, `CELLS_A_RAD` / 2 sides its
 // split distance), so its share of a cell squared is within (1, 4]: green there,
 // finer blue, coarser red (debug_look.json `share`).
 fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
