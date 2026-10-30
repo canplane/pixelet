@@ -74,15 +74,29 @@ ts/host                                     the host end in TypeScript, mounted 
 rust/host                                   the host end in Rust: a guest's memory by offset, and a guest linked in
 rust/gpu  ·  ts/gpu  ·  cpp/xpute/gpu       WebGPU's calls, which a guest writes and a host runs
 rust/conformance  ·  cpp/conformance        a guest in each, which the contract's traces drive
+rust/example  ·  ts/example                 the smallest guest, and the host that drives it
 script                                      the repository's own scripts; never shipped
 spec                                        the numbers every language's are generated from
 ```
 
 ## Embedding a guest
 
+The smallest program shows the whole of it: a guest that answers one command
+(`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
+`make test` runs. The guest lays out its own range, a page for the directory,
+then the two rings and their slots and the system calls' stream, and answers
+the directory's offset from a boot call; each turn it applies what waits, and
+asks the host by hostcall for a number the host holds. The host opens the module
+over a memory of its own (`@xpute/host/module.ts` `open_module`) and mounts on
+it in one call (`@xpute/host/host.ts` `mount`), given that offset, its answers
+to the guest's calls (`SysHost`, each part optional) and the scheduling policy
+that says when a turn runs and how much it gets (`sched/policy.ts`: a fixed
+quota where there is no display, frame pacing on a page); then it sends the
+command and reads the reply.
+
 A guest built as a **WebAssembly module** takes its form from
 `xpute_guest::wasm`: a call in its `build.rs`, and one `wasm_abi!`, which
-installs its allocator and exports `run` (`rust/conformance` is one):
+installs its allocator and exports `run`, the entry it calls:
 
 ```rust
 // build.rs, with xpute-guest as a build dependency
@@ -93,7 +107,7 @@ fn main() {
 // lib.rs
 xpute_guest::wasm_abi!(
     xpute_guest::wasm::Config { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
-    my_guest::run // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
+    my_guest::entry // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
 );
 ```
 
@@ -107,12 +121,6 @@ includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with
 `-ffp-contract=off`, the flags `cpp/Makefile` builds with. They are at
 `cpp/amalgamation/` in xpute's own repository; in this tree
 `make -C cpp amalgamation` writes them to `cpp/target/amalgamation/`.
-
-On the host's side, a TypeScript program mounts the host on the guest its
-platform opened in one call (`@xpute/host/host.ts` `mount`), given the offset of
-the guest's directory, where the guest says what lies where; the program's
-answers to the system calls (`SysHost`); what it submits on each turn the host
-grants; and how it waits for an animation frame.
 
 ## What it leaves to whoever uses it
 

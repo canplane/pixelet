@@ -607,54 +607,21 @@ since a turn that draws through wgpu outgrows React Native's JavaScript stack
 test`.
 
 The kernel records its calls during a turn, and the host runs them after it
-returns, so each is done before the next turn begins (`sys/io/host.rs`). What
-the host answers from what it holds, a text's lines and its pixels, the kernel
-asks by xpute's hostcall instead, answered before the call returns
-(`sys/io/text.rs`): a page's host through the module's import, a device's on the
-JavaScript thread that waits on the turn. Beside those, only what the bracket
-hands over is called directly. An answer comes back as a
-number, read once by `answered` into a count or one of xpute's `Errno` members;
-a code no member names is the host breaking the protocol.
-
-The **client** (`ts/client`) is the TypeScript both apps share. Its **pixelet's
-host** is `ts/client/src/host/`, over the app's bracket: the TypeScript one each
-app hands the client once, of what its platform gives
-(`ts/client/src/bracket.tsx` `Bracket`), apart from the kernel's. The host
-mounts `@xpute/host` on the guest the bracket opened (`host/mount.ts`
-`open_host`) and names none of pixelet's numbers: what a `WORLD_FRAME` carries,
-what an open or a write means and what the stop report says are handed it by the
-client's boot (`ts/client/src/abi/boot.ts`). The kernel's two ABIs stand apart
-in the client, as a display stack's do: what the shell holds, the commands for
-the UI's intents and its input, the snapshot, the surfaces it lends and the
-profiler, is `ts/client/src/port/`; what answers the kernel's devices, its opens
-and writes (`driver/namespace/`), its text, sensors and GPU, is
-`ts/client/src/driver/`; the numbers both read, generated from `spec/` or, for
-the states a driver reports and the shell shows, written beside it
-(`abi/state.ts`), are `ts/client/src/abi/`.
-
-The host and the kernel share xpute's two rings, one for what the host submits
-and one for what the kernel completes. The **commands** are
-`spec/client/kernel/domain/control/cmd.json`'s, from which both sides' readers
-and writers are generated, each packet an XTP tree, xpute's relocatable binary
-tree. The kernel also posts **events** nobody asked for, such as a sensor to
-watch or a new snapshot.
-
-The **shell** (`ts/client/src/shell/`) is the UI: React over the kernel's
-**snapshot**, where every control is a command. The snapshot is replaced whole
-after a turn only when what it is made of moved (`shell.rs` `Shown`), and
-carries only what the kernel owns; what is rounded or timed for presentation is
-the shell's. The shell hands the kernel the surfaces to draw into and computes
-no coordinate, tile or draw; what it needs of the model is generated from the
-same JSON as the Rust. The host, `port/`, `driver/`, `abi/` and the shell are
-one package, `ts/client`, and the shell reaches the kernel and the drivers
-through `port/` alone.
+returns, so each is done before the next turn begins (`sys/io/host.rs`); what
+the host answers from what it already holds, a text's lines and its pixels, the
+kernel asks by hostcall, answered before the call returns (`sys/io/text.rs`).
+Beside those, only what the bracket hands over is called directly. An answer
+comes back as a number, read once by `answered` into a count or one of xpute's
+`Errno` members; a code no member names is the host breaking the protocol.
 
 The kernel stands between two stacks that run opposite ways. By role, the
-shell is above it, the kernel's user, and the devices below; by substrate, the
-kernel is xpute's guest and the host is below it. The kernel's edge to the
-shell is its **upper ABI**, and its edge to the devices its **lower ABI**. Both
-ride xpute's carriers, and the host gives neither a meaning; the shell and the
-host share one process only because a page and an app hold both.
+**shell**, the UI, is above it as its user, and the devices below; by substrate,
+the kernel is xpute's guest and the host is below it. The kernel's edge to the
+shell is its **upper ABI**, its edge to the devices its **lower ABI**, as a
+display stack's are read: the shell a compositor lending the kernel a surface,
+the devices what a kernel's drivers answer. Both ride xpute's carriers, and the
+host gives neither a meaning; the shell and the host share one process only
+because a page and an app hold both.
 
 ```text
  pixelet, by role                          xpute, by substrate
@@ -669,6 +636,33 @@ host share one process only because a page and an app hold both.
    devices   the place's files, text,
              sensors, GPU, visibility
 ```
+
+The **client** (`ts/client`) is the TypeScript both apps share, and holds both
+edges and the host between them. Its **pixelet's host**, `ts/client/src/host/`,
+works over the app's bracket, the TypeScript one each app hands the client once
+of what its platform gives (`ts/client/src/bracket.tsx` `Bracket`), apart from
+the kernel's: it mounts `@xpute/host` on the guest the bracket opened
+(`host/mount.ts` `open_host`) and names none of pixelet's numbers, which the
+client's boot hands it (`ts/client/src/abi/boot.ts`). The upper ABI is
+`ts/client/src/port/`; the lower is `ts/client/src/driver/`, the kernel's opens
+and writes answered in `driver/namespace/`; the numbers both read are
+`ts/client/src/abi/`, generated from `spec/` or, for a driver's states the shell
+shows, written beside it (`abi/state.ts`).
+
+The host and the kernel share xpute's two rings, one for what the host submits
+and one for what the kernel completes. The **commands** are
+`spec/client/kernel/domain/control/cmd.json`'s, from which both sides' readers
+and writers are generated, each packet an XTP tree, xpute's relocatable binary
+tree. The kernel also posts **events** nobody asked for, such as a sensor to
+watch or a new snapshot.
+
+The shell is React over the kernel's **snapshot** (`ts/client/src/shell/`),
+where every control is a command. The snapshot is replaced whole after a turn
+only when what it is made of moved (`shell.rs` `Shown`), and carries only what
+the kernel owns; what is rounded or timed for presentation is the shell's. The
+shell hands the kernel the surfaces to draw into and computes no coordinate,
+tile or draw; what it needs of the model is generated from the same JSON as the
+Rust. It reaches the kernel and the drivers through `port/` alone.
 
 What crosses each edge:
 

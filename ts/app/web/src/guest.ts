@@ -1,15 +1,16 @@
 // @pxl/web/guest.ts
 
 /**
- * The kernel as a page runs it: the guest's module instantiated over a
- * reserved memory. One instance per memory, since instantiating overwrites
- * the data segments. Instantiated from bytes, not streamed: streaming needs
- * an `application/wasm` response, which a `file:` URL lacks.
+ * The kernel as a page runs it: the guest's module opened over a reserved
+ * memory (@xpute/host module.ts). One instance per memory, since
+ * instantiating overwrites the data segments. Compiled from bytes, not
+ * streamed: streaming needs an `application/wasm` response, which a `file:`
+ * URL lacks.
  */
 
-import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { reserve_mem } from "@xpute/host/mem/reserve.ts";
+import { open_module } from "@xpute/host/module.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";
 import type { Config, Guest } from "@pxl/client/bracket.tsx";
 import * as webgpu from "./webgpu.ts";
@@ -24,32 +25,18 @@ export async function open(cfg: Config): Promise<Guest> {
   const bytes = await (
     await fetch(GUEST_WASM_URL, DEV_BUNDLE ? { cache: "no-store" } : undefined)
   ).arrayBuffer();
-  // A hostcall is answered by whatever the host mounted on it says.
-  let answer = (_at: u32): i32 => Errno.ENOSYS;
-  const { instance } = await WebAssembly.instantiate(bytes, {
-    env: {
-      memory,
-      now: () => performance.now(),
-      hostcall: (at: u32) => answer(at),
-    },
-  });
-  const turn = instance.exports.run as Guest["run"];
+  const guest = open_module(await WebAssembly.compile(bytes), memory);
   // The first turn lays the memory out and writes the directory.
-  turn(0);
-  // The maximum is the initial size, so the buffer is never replaced.
-  const mem = memory.buffer as ArrayBuffer;
-  const gpu = new Directory(mem, cfg.directory_at).get(cfg.gpu_stream);
-  webgpu.take(mem);
-  const run = (quota_ms: f64) => {
-    const wake = turn(quota_ms);
-    webgpu.run(gpu, cfg.gpu_head);
-    return wake;
-  };
+  guest.run(0);
+  const gpu = new Directory(guest.mem, cfg.directory_at).get(cfg.gpu_stream);
+  webgpu.take(guest.mem);
   return {
-    mem,
-    run,
-    answer_with: (a) => {
-      answer = a;
+    mem: guest.mem,
+    run: (quota_ms: f64) => {
+      const wake = guest.run(quota_ms);
+      webgpu.run(gpu, cfg.gpu_head);
+      return wake;
     },
+    answer_with: guest.answer_with,
   };
 }

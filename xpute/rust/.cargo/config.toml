@@ -4,5 +4,5 @@
 [alias]
 lint = ["clippy", "--all-targets", "--", "-D", "warnings"]
 guest = ["build", "-p", "xpute-conformance"]
-guest-wasm = ["build", "-p", "xpute-conformance", "--target", "wasm32-unknown-unknown"]
+guest-wasm = ["build", "-p", "xpute-conformance", "-p", "xpute-example", "--target", "wasm32-unknown-unknown"]
 test-gpu = ["test", "-p", "xpute-gpu", "--features", "host"]

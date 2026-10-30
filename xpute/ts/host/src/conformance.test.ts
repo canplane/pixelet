@@ -2,8 +2,9 @@
 
 /**
  * Runs the traces under spec/conformance/ against every guest, Rust or
- * C++, native or WebAssembly, through this runtime's host. Build the guests
- * first (`make build` at xpute's root): Cargo for Rust, cpp/Makefile for C++.
+ * C++, native or WebAssembly, through this runtime's host, under each of the
+ * layouts a guest draws from its seed (LAYOUTS). Build the guests first
+ * (`make build` at xpute's root): Cargo for Rust, cpp/Makefile for C++.
  */
 
 import { test } from "vitest";
@@ -24,7 +25,14 @@ import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
 import { Sys } from "@xpute/host/ipc/sys.ts";
-import { cmd, hostcall, key, MEM_BYTES } from "@xpute/host/conformance.spec.ts";
+import { open_module } from "@xpute/host/module.ts";
+import {
+  cmd,
+  hostcall,
+  key,
+  LAYOUTS,
+  MEM_BYTES,
+} from "@xpute/host/conformance.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -59,7 +67,8 @@ interface Opened extends Guest {
 }
 
 interface Opener {
-  open(): Opened;
+  /** A guest booted under the layout `seed` draws. */
+  open(seed: number): Opened;
   close(): void;
 }
 
@@ -71,7 +80,7 @@ function unanswered(): number {
 function native(path: string): Opener {
   const lib = koffi.load(path);
   const boot = lib.func(
-    "uint32_t xpute_conformance_boot(void *mem, xpute_now *now, xpute_hostcall *hostcall)",
+    "uint32_t xpute_conformance_boot(void *mem, xpute_now *now, xpute_hostcall *hostcall, uint32_t seed)",
   );
   const guest_run = lib.func(
     "double xpute_conformance_run(void *mem, double quota)",
@@ -87,11 +96,11 @@ function native(path: string): Opener {
   // 8-aligned, as a guest asks.
   const regions: unknown[] = [];
   return {
-    open() {
+    open(seed) {
       const at = koffi.alloc("double", MEM_BYTES / 8);
       regions.push(at);
       answer = unanswered;
-      const directory_at = boot(at, now, host);
+      const directory_at = boot(at, now, host, seed);
       return {
         mem: koffi.view(at, MEM_BYTES),
         directory_at,
@@ -119,28 +128,14 @@ function module(path: string): Opener {
     `${path}: what the module reaches its host through`,
   );
   return {
-    open() {
+    open(seed) {
       const pages = MODULE_BYTES >> 16;
       const memory = new WebAssembly.Memory({ initial: pages, maximum: pages });
-      let answer: (at: number) => number = unanswered;
-      const instance = new WebAssembly.Instance(compiled, {
-        env: {
-          memory,
-          now: () => clock_ms,
-          hostcall: (at: number) => answer(at),
-        },
-      });
-      const exports = instance.exports as {
-        xpute_conformance_boot(): number;
-        run(quota_ms: number): number;
-      };
-      const directory_at = exports.xpute_conformance_boot() >>> 0;
-      return {
-        mem: memory.buffer as ArrayBuffer,
-        directory_at,
-        run: (quota) => exports.run(quota),
-        answer_with: (a) => (answer = a),
-      };
+      const guest = open_module(compiled, memory, () => clock_ms);
+      const boot = guest.instance.exports.xpute_conformance_boot as (
+        seed: number,
+      ) => number;
+      return { ...guest, directory_at: boot(seed) >>> 0 };
     },
     close() {},
   };
@@ -195,13 +190,6 @@ class Host {
     // program's host mounts it.
     const sys = new Sys(
       {
-        fs: {
-          open: () => {
-            throw new Error("the traces open nothing a host runs");
-          },
-          commit: () => {},
-        },
-        abort: () => {},
         program: (code, w, a) => {
           if (code !== hostcall.ANSWER) return Errno.ENOSYS;
           const [n, word] = [w[a], w[a + 1]];
@@ -391,10 +379,16 @@ function wake_name(wake: number): string {
   return wake === 0 ? "next" : wake > 0 ? "later" : "none";
 }
 
-function run(g: Golden, guest: string, opener: Opener, trace: string): void {
-  const name = `${guest}: ${trace}`;
+function run(
+  g: Golden,
+  guest: string,
+  opener: Opener,
+  trace: string,
+  seed: number,
+): void {
+  const name = `${guest}, layout ${seed}: ${trace}`;
   clock_ms = 0;
-  const host = new Host(opener.open());
+  const host = new Host(opener.open(seed));
   const turns: Turn[] = [];
   const vars = new Map<string, number>();
   for (let i = 0; g.has(`${trace}.step.${i}`); i++) {
@@ -527,8 +521,10 @@ for (const trace of [
       const g = await Golden.load(`conformance/${trace}.tsv`);
       const opener = open();
       try {
-        for (const scenario of g.s("scenarios").split(" ")) {
-          run(g, guest, opener, scenario);
+        for (let seed = 0; seed < LAYOUTS; seed++) {
+          for (const scenario of g.s("scenarios").split(" ")) {
+            run(g, guest, opener, scenario, seed);
+          }
         }
       } finally {
         opener.close();

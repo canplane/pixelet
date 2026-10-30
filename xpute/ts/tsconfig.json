@@ -24,6 +24,7 @@
     "kit",
     "host",
     "gpu",
+    "example",
     "script",
     "vitest.config.ts",
     "vitest.setup.ts"

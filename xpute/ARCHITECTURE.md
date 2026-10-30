@@ -237,21 +237,28 @@ program's, since a process holds one guest, with one reservation
 well (`BootInfo`): the memory it was given, where its own ranges may begin, the
 host's clock, its hostcall and its heap's reading.
 
+On the host side, something has to decide when to ring at all. That is the
+**strobe** (`@xpute/host/sched/strobe.ts` `Strobe`), named for a circuit's
+strobe, the pulse that tells a receiver when to act. It rings only when the host
+or the guest's last falling edge asked for a turn, at the moment the scheduling
+policy below gives; a positive `wake_ms` sets a timer that asks for a turn when
+it fires. A guest that asks for nothing is rung for nothing. The doorbell rings
+too, with no quota: to make room in a full submission ring, to wait for a call's
+reply and to send a `cmd`; and whatever holds the doorbell may ring it.
+
 How long a turn may take, and how that time is spent, are settled at three
 levels, from the outside in.
 
 1. **The scheduling policy** (`@xpute/host/sched/policy.ts`
-   `SchedulingPolicy`) is the host's, and the program injects it when the host
-   boots; xpute keeps none of its own. It says when a turn the host was asked
-   for may run, sets the quota, a cooperative slice ended by the guest's return,
-   and is handed what each turn took. A page's is **frame pacing**
-   (`sched/frame_pacing.ts`), named for Android's Frame Pacing library: it
-   measures the display's refresh from the gaps between the animation frames it
-   is handed, runs turns a whole number of refreshes apart, leaves a share of
-   each frame unspent, gives a turn one frame after input or a falling edge of 0
-   and more otherwise, and takes a turn's overrun off the next quota. Its
-   numbers are the program's, injected with it. A host with no display may run
-   a turn as soon as it is asked, or on a timer of its own.
+   `SchedulingPolicy`) is the host's, and the program injects it, with its
+   numbers, when the host boots; xpute keeps none of its own. It is what the
+   strobe asks: it gives and admits the moment a turn may run, sets the quota, a
+   cooperative slice ended by the guest's return, and is handed what each turn
+   took; the doorbell's turns are outside it. A page's is **frame pacing**
+   (`sched/frame_pacing.ts`), named for Android's Frame Pacing library: turns a
+   whole number of the display's refreshes apart, each given what its frame
+   leaves. A host with no display gives each turn a fixed quota as soon as it is
+   asked (`sched/fixed_quota.ts`).
 2. **Tick** (`sched/tick`) is the guest's. It runs the program's phases, by
    their place in its order, against one budget, the quota counted from the
    rising edge. The program's policy gives each phase the share of the budget
@@ -272,20 +279,6 @@ to wait for the next turn; the guest may move the deadline past the quota
 (`extend_to`). A parked task makes the falling edge 0. Whatever assembles the
 guest installs an executor (`sched/task`), marks the edges with `rise` and
 `fall`, and polls it between them.
-
-On the host side, the **strobe** (`@xpute/host/sched/strobe.ts` `Strobe`)
-rings a turn. It is named for a circuit's strobe, the pulse that tells a
-receiver when to act, and it is the mechanism the policy steers. It rings only
-when the host or the guest's last falling edge asked for a turn, at a moment the
-policy gives and admits; a moment it does not admit passes to the next. A
-positive `wake_ms` sets a timer that asks for a turn when it fires. A guest that
-asks for nothing is rung for nothing, and no turn runs on a timer of the host's
-own.
-
-The strobe is not all that rings the guest. The doorbell rings with no quota to
-make room in a full submission ring, to wait for a call's reply and to send a
-`cmd`, and whatever holds the doorbell may ring it too. Those turns are outside
-what the policy observes.
 
 ```text
 host · TypeScript                          guest
@@ -504,7 +497,8 @@ Each rule is one the other end could catch being broken.
    learns outside. A key appears at most once, an unknown key is passed over,
    and an unknown magic or version is refused.
 1. **The core memory.** It never moves or grows while the guest lives, and every
-   address that crosses is an offset into it.
+   address that crosses is an offset into it. Offset 0 names nothing, as a
+   frame with no packet says, so nothing that crosses lies there.
 2. **The turn.** The guest runs only inside `run`, and the two sides never run
    at once: the host touches nothing a turn writes until it has returned, but
    what a hostcall names while it runs (rule 8). The quota is advice, not a
@@ -566,11 +560,11 @@ decides what must match.
   (`cpp/xpute/guest`) are the same end, either plugged into any host, so what
   one gives a program the other gives too.
 - **Host ends hold what their platform needs.** TypeScript's (`ts/host`)
-  reserves a module's memory, and mounts the doorbell, the system calls' end and
-  the strobe on any guest its platform opened, in one call
-  (`@xpute/host/host.ts` `mount`), which runs the system-call stream as each
-  turn returns. `mount` reads the directory as it is called, so the turn or the
-  boot call that writes it has run by then. Rust's (`rust/host`) reads a guest's
+  reserves a module's memory and opens the module over it (`module.ts`), and
+  mounts the doorbell, the system calls' end and the strobe on any guest its
+  platform opened, in one call (`@xpute/host/host.ts` `mount`), which runs the
+  system-call stream as each turn returns. `mount` reads the directory as it is
+  called, so the turn or the boot call that writes it has run by then. Rust's (`rust/host`) reads a guest's
   memory by offset on every platform (`mem`), and on a unix one hosts a guest
   linked into the host's own native process (`native`). There it reserves the
   memory, and runs every call into the guest on the guest's own thread, since
@@ -639,11 +633,15 @@ end, and `spec/conformance/file.tsv` every guest.
 One host runs them against every guest through the boundary alone
 (`@xpute/host/conformance.test.ts`): the Rust guest
 (`xpute-conformance/guest.rs`) and the C++ one (`cpp/conformance/guest.cpp`),
-each over the commands `spec/conformance/guest.json` numbers. Each guest is
-built both as a native library and as a WebAssembly module that imports nothing
-but its memory, the clock and the hostcall; the C++ one from the library's
-amalgamation (`cpp/amalgamation.awk`), the two files a C++ program takes, so
-what the traces hold is what ships.
+each over the commands `spec/conformance/guest.json` numbers. A host could pass
+a guest by assuming where its rings lie, so each guest's boot takes a seed and
+lays what it shares, the directory among them, in the order and with the gaps
+the seed draws (`LAYOUTS`), and the host runs every trace under each: only a
+host that finds them all through the directory, as rule 0 asks, passes. Each
+guest is built both as a native library and as a WebAssembly module that imports
+nothing but its memory, the clock and the hostcall; the C++ one from the
+library's amalgamation (`cpp/amalgamation.awk`), the two files a C++ program
+takes, so what the traces hold is what ships.
 
 ## Prior art
 
@@ -659,6 +657,7 @@ where the tree records the source.
 | A circuit's strobe, the pulse that says when to act         | `sched/strobe`                   | Its name                                                                       |
 | "core" for main memory, as in a core dump                   | the core memory                  | Its name                                                                       |
 | A linker script's output sections                           | `mem/section`                    | Ranges placed end to end without knowing what they hold                        |
+| Address space layout randomization                          | the traces' layouts (`LAYOUTS`)  | A layout drawn on each run, so a host that assumes one fails                   |
 | [evanw/buddy-malloc](https://github.com/evanw/buddy-malloc) | `alloc/buddy_tree`               | The page allocator, ported line for line                                       |
 | SLUB                                                        | `alloc/slab`                     | A slab keeps its free list inside its free slots                               |
 | virtio's descriptor table, AF_XDP's UMEM                    | the rings (`spec/ipc/ring.json`) | Descriptors kept apart from the payload's slots                                |

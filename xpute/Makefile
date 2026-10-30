@@ -18,7 +18,7 @@
 .PHONY: install install-ts \
 	check check-ts check-cpp check-rust \
 	build build-cpp build-rust \
-	test test-ts test-cpp test-rust test-conformance \
+	test test-ts test-cpp test-rust test-conformance test-example \
 	test-gpu test-gpu-web test-gpu-native \
 	fmt fmt-ts fmt-rust \
 	lint lint-ts
@@ -36,15 +36,16 @@ check-cpp:
 check-rust:
 	+cd rust && cargo fmt --all --check && cargo lint
 
-# The one thing xpute builds: the guest the contract's traces drive, in Rust
-# and in C++, each a native library and a WebAssembly module.
+# What xpute builds: the guest the contract's traces drive, in Rust and in C++,
+# each a native library and a WebAssembly module; and the example's guest, a
+# module (rust/example).
 build: build-cpp build-rust
 build-cpp:
 	$(MAKE) -C cpp guest wasm
 build-rust:
 	+cd rust && cargo guest && cargo guest-wasm
 
-test: test-ts test-cpp test-rust test-conformance
+test: test-ts test-cpp test-rust test-conformance test-example
 test-ts:
 	pnpm --dir ts test
 test-cpp: build-cpp
@@ -53,6 +54,8 @@ test-rust:
 	+cd rust && cargo test --all
 test-conformance: build
 	pnpm --dir ts test:conformance
+test-example: build
+	pnpm --dir ts test:example
 
 # What needs a GPU: the web host in Chrome (ts/gpu/script/browser.ts), and the
 # native one on wgpu.

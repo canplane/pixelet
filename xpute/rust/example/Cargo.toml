@@ -1,0 +1,19 @@
+[package]
+name = "xpute-example"
+edition.workspace = true
+version.workspace = true
+# How a guest is written, read beside the host that drives it
+# (ts/example/sum.test.ts); never published.
+publish = false
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+xpute-kit.workspace = true
+xpute-guest.workspace = true
+
+# Its link flags as a module (build.rs, xpute_guest::wasm `link`).
+[build-dependencies]
+xpute-guest.workspace = true

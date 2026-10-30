@@ -47,13 +47,22 @@ export interface Fs {
   commit(root: u32, path: string, bytes: U8Array): void;
 }
 
+/** What answers a program's system calls. Each part a program leaves out is
+ * refused: an open with ENOENT (a write's with EROFS), a call of its own with
+ * ENOSYS; a report it does not take is logged. */
 export interface SysHost {
-  fs: Fs;
-  abort(report: Abort): void;
+  fs?: Fs;
+  abort?(report: Abort): void;
   /** A call of the program's own: its number, the record's words, and where
    * its arguments begin in them. A hostcall's answer is what it returns, 0
    * for none. */
-  program(code: u32, w: U32Array, a: u32): i32 | void;
+  program?(code: u32, w: U32Array, a: u32): i32 | void;
+}
+
+function logged(r: Abort): void {
+  console.error(
+    `[xpute] stopped: ${strerror(r.errnum)} at ${r.file}:${r.line}:${r.column} (${r.a}, ${r.b})`,
+  );
 }
 
 interface File {
@@ -89,6 +98,7 @@ export class Sys {
   hostcall(mem: ArrayBuffer, at: u32): i32 {
     const [code, n] = new Uint32Array(mem, at, 2);
     if ((code & op.PROGRAM) === 0) return Errno.ENOSYS;
+    if (!this.host.program) return Errno.ENOSYS;
     const w = new Uint32Array(mem, at, 2 + n) as U32Array;
     return this.host.program(code, w, 2) ?? 0;
   }
@@ -126,14 +136,14 @@ export class Sys {
             whole.set(b, off);
             off += b.byteLength;
           }
-          this.host.fs.commit(file.root, file.path, whole);
+          this.host.fs?.commit(file.root, file.path, whole);
         }
         break;
       }
       case op.ABORT: {
         const num = (i: u32) =>
           BigInt(w[a + i]) | (BigInt(w[a + i + 1]) << 32n);
-        this.host.abort({
+        (this.host.abort ?? logged)({
           errnum: w[a] | 0,
           line: w[a + 1],
           column: w[a + 2],
@@ -144,7 +154,9 @@ export class Sys {
         break;
       }
       default:
-        if ((code & op.PROGRAM) === 0) throw new InvariantError(Errno.ENOSYS);
+        if ((code & op.PROGRAM) === 0 || !this.host.program) {
+          throw new InvariantError(Errno.ENOSYS);
+        }
         this.host.program(code, w, a);
     }
   };
@@ -185,13 +197,18 @@ export class Sys {
     if (!walks_down(path)) {
       return queueMicrotask(() => failed(new FileError(Errno.EACCES)));
     }
+    const fs = this.host.fs;
+    if (!fs) {
+      const errnum = flags === flag.O_WRONLY ? Errno.EROFS : Errno.ENOENT;
+      return queueMicrotask(() => failed(new FileError(errnum)));
+    }
     if (flags === flag.O_WRONLY) {
       file.written = [];
       return queueMicrotask(() => answer(0, 0));
     }
     let got: U8Array | Promise<U8Array>;
     try {
-      got = this.host.fs.open(root, path, file.controller.signal);
+      got = fs.open(root, path, file.controller.signal);
     } catch (err) {
       return queueMicrotask(() => failed(err));
     }

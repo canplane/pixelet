@@ -13,11 +13,21 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
-/** The room a guest's shared range asks for: the directory, both rings, a stream and its
- * own state, with room to spare. Where the range begins, and so where the directory is,
- * the guest's boot answers (the contract's rule 0); what else a memory holds — a module's
- * stack and data — is the build's, and no number here. */
+/** The room a guest's shared range asks for: the directory, both rings, the two streams
+ * and the gaps LAYOUTS draws between them, then its own state and heap. Where the range
+ * begins, and so where the directory is, the guest's boot answers (the contract's rule 0);
+ * what else a memory holds — a module's stack and data — is the build's, and no number here. */
 export const MEM_BYTES: u32 = 262144 as number;
+
+/** The layouts a host runs every trace against, one for each seed below this. The guest's
+ * boot takes the seed and draws from it (kit's SplitMix32) the order of what it shares
+ * with its host, the directory among them, and the pages left before each, every guest by
+ * the same draw; so nothing it shares lies where it lay under another seed, and only a
+ * host that finds it all through the directory passes every layout (the contract's rule 0). */
+export const LAYOUTS: u32 = 8 as number;
+
+/** The most pages a layout leaves before each part it lays. */
+export const GAP_PAGES: u32 = 3 as number;
 
 /** Frames the submission ring holds. */
 export const SQ_CAP: u32 = 16 as number;

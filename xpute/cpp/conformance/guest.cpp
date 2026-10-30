@@ -9,8 +9,10 @@
 #include <optional>
 #include <variant>
 #include <span>
+#include <utility>
 
 #include "xpute/kit/alloc/slab.hpp"
+#include "xpute/kit/math/rng.hpp"
 #include "xpute/kit/math/scalar.hpp"
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/kit/status/errno.spec.hpp"
@@ -37,16 +39,47 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
     return align_up(bytes, PAGE_BYTES);
 }
 
-// Deliberately not where another guest puts them, so a host that finds them
-// at all has found them through the directory.
-constexpr std::uint32_t DIRECTORY_AT = 0;
-constexpr std::uint32_t STREAM_AT = PAGE_BYTES;
-constexpr std::uint32_t CQ_DESC_AT = STREAM_AT + page_up(STREAM_WORDS * 4);
-constexpr std::uint32_t SQ_DESC_AT = CQ_DESC_AT + page_up(ring_bytes(CQ_CAP));
-constexpr std::uint32_t CQ_SLOT_AT = SQ_DESC_AT + page_up(ring_bytes(SQ_CAP));
-constexpr std::uint32_t SQ_SLOT_AT = CQ_SLOT_AT + CQ_CAP * SLOT_BYTES;
-constexpr std::uint32_t SYS_AT = SQ_SLOT_AT + SQ_CAP * SLOT_BYTES;
-constexpr std::uint32_t STATE_AT = page_up(SYS_AT + SYS_WORDS * 4);
+// What the guest shares with its host, each on pages of its own, in the order
+// a layout draws (`layout`).
+enum Part : std::size_t { DIRECTORY, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, SYS, PARTS };
+
+constexpr std::array<std::uint32_t, PARTS> PART_BYTES{
+    directory_words(4) * 4,
+    ring_bytes(SQ_CAP),
+    ring_bytes(CQ_CAP),
+    slots_bytes(SQ_CAP, SLOT_BYTES),
+    slots_bytes(CQ_CAP, SLOT_BYTES),
+    STREAM_WORDS * 4,
+    SYS_WORDS * 4,
+};
+
+// The most a layout spans: the page it starts past, every part, and the most
+// pages before each. The guest's own state follows, where no layout moves it,
+// since no host reads it.
+constexpr std::uint32_t STATE_AT = [] {
+    std::uint32_t end = PAGE_BYTES + PARTS * GAP_PAGES * PAGE_BYTES;
+    for (std::uint32_t bytes : PART_BYTES) end += page_up(bytes);
+    return end;
+}();
+
+// Where each part lies under `seed`, from the range's start: the parts in the
+// order the seed draws, each past the pages it draws to leave before it. The
+// first page is left out, since a range may start at the memory's offset 0,
+// which names nothing (the contract's rule 1).
+std::array<std::uint32_t, PARTS> layout(std::uint32_t seed) {
+    SplitMix32 rng(seed);
+    std::array<std::size_t, PARTS> order{};
+    for (std::size_t p = 0; p < PARTS; p++) order[p] = p;
+    for (std::size_t i = PARTS - 1; i >= 1; i--) std::swap(order[i], order[rng.next_u32() % (i + 1)]);
+    std::array<std::uint32_t, PARTS> at{};
+    std::uint32_t end = PAGE_BYTES;
+    for (std::size_t p : order) {
+        end += rng.next_u32() % (GAP_PAGES + 1) * PAGE_BYTES;
+        at[p] = end;
+        end += page_up(PART_BYTES[p]);
+    }
+    return at;
+}
 
 struct State {
     Door door;
@@ -66,7 +99,6 @@ constexpr std::uint32_t HEAP_AT = page_up(STATE_AT + sizeof(State));
 
 static_assert(HEAP_AT + HEAP_BYTES <= MEM_BYTES, "the ranges run past the memory");
 static_assert(STATE_AT % alignof(State) == 0, "the state lies on its own alignment");
-static_assert(DIRECTORY_AT + directory_words(4) * 4 <= STREAM_AT, "the directory runs into the stream");
 
 State &state_of(Memory m, std::uint32_t range) {
     return *std::launder(reinterpret_cast<State *>(m.at(range + STATE_AT)));
@@ -144,19 +176,20 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
 }
 
 // Every offset written is the memory's, so the range's start is added to each.
-std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
-    Door door(Ring::init(m, range + SQ_DESC_AT, SQ_CAP, range + SQ_SLOT_AT, SLOT_BYTES),
-              Ring::init(m, range + CQ_DESC_AT, CQ_CAP, range + CQ_SLOT_AT, SLOT_BYTES), MOST_RAISE);
+std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std::uint32_t seed) {
+    std::array<std::uint32_t, PARTS> at = layout(seed);
+    for (std::uint32_t &off : at) off += range;
+    Door door(Ring::init(m, at[SQ_DESC], SQ_CAP, at[SQ_SLOT], SLOT_BYTES), Ring::init(m, at[CQ_DESC], CQ_CAP, at[CQ_SLOT], SLOT_BYTES), MOST_RAISE);
     new (m.at(range + STATE_AT)) State{
-        .door = door, .stream = Stream(m, range + STREAM_AT, STREAM_WORDS), .sys = Sys(m, range + SYS_AT, SYS_WORDS), .files = {}, .handles = {}, .now = now};
+        .door = door, .stream = Stream(m, at[STREAM], STREAM_WORDS), .sys = Sys(m, at[SYS], SYS_WORDS), .files = {}, .handles = {}, .now = now};
     const std::array<Entry, 4> entries{{
-        {directory::key::SQ, range + SQ_DESC_AT},
-        {directory::key::CQ, range + CQ_DESC_AT},
-        {key::STREAM, range + STREAM_AT},
-        {directory::key::SYS, range + SYS_AT},
+        {directory::key::SQ, at[SQ_DESC]},
+        {directory::key::CQ, at[CQ_DESC]},
+        {key::STREAM, at[STREAM]},
+        {directory::key::SYS, at[SYS]},
     }};
-    write_directory(m, range + DIRECTORY_AT, directory_words(entries.size()), entries);
-    return range + DIRECTORY_AT;
+    write_directory(m, at[DIRECTORY], directory_words(entries.size()), entries);
+    return at[DIRECTORY];
 }
 
 double turn(Memory m, std::uint32_t range) {
@@ -235,14 +268,14 @@ void operator delete(void *p, std::align_val_t) noexcept {
     if (p != nullptr) bug(Errno::enotrecoverable);
 }
 
-extern "C" std::uint32_t xpute_conformance_boot(void) {
+extern "C" std::uint32_t xpute_conformance_boot(std::uint32_t seed) {
     // The stack the module was linked with is the one the guest declares.
     ensure(wasm::stack_high() == STACK_BYTES, Errno::enotrecoverable, wasm::stack_high());
     std::uint32_t range = range_at();
     // A range past the memory's end is a host that sized it for another guest.
     ensure(std::uint64_t{range} + MEM_BYTES <= wasm::given(), Errno::enomem, range);
     set_hostcall(host_hostcall);
-    return boot(mem::core(), range, host_now);
+    return boot(mem::core(), range, host_now, seed);
 }
 
 extern "C" double run(double) {
@@ -255,9 +288,9 @@ extern "C" double run(double) {
 // allocates from the process, so nothing reads the ambient one.
 Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEM_BYTES); }
 
-extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_hostcall hostcall) {
+extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_hostcall hostcall, std::uint32_t seed) {
     set_hostcall(hostcall);
-    return boot(given(mem), 0, now);
+    return boot(given(mem), 0, now, seed);
 }
 
 extern "C" double xpute_conformance_run(std::uint8_t *mem, double) { return turn(given(mem), 0); }
