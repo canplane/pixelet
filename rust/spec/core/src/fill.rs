@@ -268,7 +268,7 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
             [(place[0] * BRICK + x) as i32, (place[1] * BRICK + y) as i32],
         )
     };
-    put(ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
+    put(ground, base + COLUMNS_AT + i, window::column_word(top));
     if x % 2 == 1 {
         return;
     }

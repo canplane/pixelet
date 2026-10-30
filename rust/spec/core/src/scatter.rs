@@ -14,6 +14,7 @@
 
 use xpute_kit::math::rng::{derive_seed_u32, SplitMix32};
 
+use crate::answer;
 use crate::answer::val;
 use crate::cast::Detail;
 use crate::cave::node_seed;
@@ -220,9 +221,10 @@ const _: () = assert!(
 /// entry's `BRICK_RECORDS` records, then placed decor's head and its records.
 /// An entry's records are its candidates', each at its own place
 /// (`entry_record`), so one generated again rewrites its own alone. A head is
-/// the brick they were generated for, X and Y, and 1 once they were — an entry
-/// whose brick the windows no longer hold there is skipped by it
-/// (`generated_for`) — then how many candidates each patch of each decor bears,
+/// the brick they were generated for, X and Y, and the slot holding its cells
+/// plus one once they were, the slot its folded decor was added in
+/// (`window::column_fold`) — an entry whose brick the windows no longer hold
+/// there, or hold in another slot, is skipped by it (`generated_for`) — then how many candidates each patch of each decor bears,
 /// as many of its records as are read (`cnt_at`). Placed decor's head is
 /// its count.
 pub const PATCH_CNT_AT: u32 = 3;
@@ -271,9 +273,10 @@ pub const fn record_at(n: u32) -> u32 {
     }
 }
 
-/// Whether an entry's head says its records were generated for the brick `q`.
-pub const fn generated_for(head: [u32; 3], q: [i32; 2]) -> bool {
-    head[2] == 1 && head[0] as i32 == q[0] && head[1] as i32 == q[1]
+/// Whether an entry's head says its records were generated for the brick `q`
+/// whose cells are held at `present`, the slot plus one (`window::Entry`).
+pub const fn generated_for(head: [u32; 3], q: [i32; 2], present: i32) -> bool {
+    present != 0 && head[2] == present as u32 && head[0] as i32 == q[0] && head[1] as i32 == q[1]
 }
 
 /// The boxes a frame's generation is asked over at most: the edits and cuts
@@ -291,8 +294,9 @@ const _: () = assert!(window::FIRST_CELL > EVERY);
 /// entry-decor pairs listed, a pad (`THIN_ARGS`, `GENERATE_ARGS`); whether
 /// every entry generates whole, decor having been off (`LIST_EVERY`), and how
 /// many boxes (`LIST_BOXES`), two pads; the boxes, `BOX_WORDS` each; then the
-/// list, an entry, its decor (`<< 16`) and whether it generates whole
-/// (`WHOLE`) each, in no order.
+/// list, an entry, its decor (`<< 16`), whether it generates whole
+/// (`WHOLE`) and whether it is shown at the entry's window (`SHOWN`), else
+/// listed only to be folded there (`folds_at`), each, in no order.
 pub const THIN_ARGS: u32 = 0;
 pub const GENERATE_ARGS: u32 = 4;
 pub const LIST_EVERY: u32 = 8;
@@ -300,6 +304,7 @@ pub const LIST_BOXES: u32 = 9;
 pub const BOXES_AT: u32 = 12;
 pub const LIST_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
 pub const WHOLE: u32 = 1 << 31;
+pub const SHOWN: u32 = 1 << 30;
 
 /// The words of what `decor_mark_cs` lists.
 pub const LIST_WORDS: u32 = LIST_AT + EYE_ENTRIES * DECORS.len() as u32;
@@ -492,9 +497,14 @@ pub fn variant_of(decor: &Decor, draws: &mut SplitMix32) -> u32 {
     mul_hi(draws.next_u32(), decor.variants)
 }
 
+/// The variant candidate `c` draws (`variant_of`).
+pub fn variant(decor: &Decor, c: &Candidate) -> u32 {
+    variant_of(decor, &mut SplitMix32::new(c.seed))
+}
+
 /// The brick a candidate claims, which holds its box however it turns.
 pub fn side_of(decor: &Decor, c: &Candidate) -> i32 {
-    let [x, y, _] = decor.sizes[variant_of(decor, &mut SplitMix32::new(c.seed)) as usize];
+    let [x, y, _] = decor.sizes[variant(decor, c) as usize];
     x.max(y) as i32
 }
 
@@ -688,6 +698,55 @@ pub const fn stands_at(decor: &Decor, variant: u32, cell: Zoom) -> bool {
     let side = if x > y { x } else { y };
     let own = decor.cell_zoom();
     cell >= LEAF_CELL || own <= cell || (own - cell < u32::BITS && side >= 1 << (own - cell))
+}
+
+/// The share of a window's cell at `cell` that `variant` of `decor` claims,
+/// in `window::FOLD_UNIT`s, rounded: its box's room over the cell's cube.
+/// None at its own cell or finer, where it is a cell or more.
+pub const fn fold_share(decor: &Decor, variant: u32, cell: Zoom) -> u32 {
+    let own = decor.cell_zoom();
+    if cell >= own {
+        return 0;
+    }
+    let [x, y, z] = decor.sizes[variant as usize];
+    // Each axis `own - cell` halvings narrower than the cell, the room
+    // 8 times less a halving.
+    let shift = 3 * (own - cell);
+    let units = answer::FULL / window::FOLD_UNIT;
+    if shift >= u32::BITS - 2 * units.trailing_zeros() {
+        return 0;
+    }
+    (x * y * z * units + (1 << shift >> 1)) >> shift
+}
+
+/// Where a kind's shown word (pxl-shader decor.rs `shown_at`) has its folded
+/// window zooms: the zooms it is shown at a bit each from the first window's,
+/// low, and those it is folded at (`any_folds_at`) as many bits higher.
+pub const FOLD_BITS: u32 = 16;
+const _: () = assert!(
+    EYE_WINDOWS <= FOLD_BITS,
+    "a shown word holds the eye's windows twice"
+);
+
+/// Whether `variant` of `decor` is folded into a window's cell at `cell`:
+/// where it does not stand as itself (`stands_at`), smaller than the cell,
+/// the room it claims added to the cell's, as a cube's is to its parent's
+/// (`ground::Cell::folded`), where that room is a unit of the share or more
+/// (`fold_share`).
+pub const fn folds_at(decor: &Decor, variant: u32, cell: Zoom) -> bool {
+    !stands_at(decor, variant, cell) && fold_share(decor, variant, cell) > 0
+}
+
+/// Whether any variant of `decor` is folded at `cell` (`folds_at`).
+pub const fn any_folds_at(decor: &Decor, cell: Zoom) -> bool {
+    let mut v = 0;
+    while v < decor.variants {
+        if folds_at(decor, v, cell) {
+            return true;
+        }
+        v += 1;
+    }
+    false
 }
 
 /// Every cell generating decor asks of the world, at one place, as a GPU

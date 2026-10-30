@@ -15,7 +15,7 @@ use pxl_spec_core::lattice::GROUND;
 use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::scatter::{self, drawn, is_marked, mark, DecorQuery, BRICK_PATCHES, MARKS};
 use pxl_spec_core::support;
-use pxl_spec_core::window::{self, ENTRIES, FIRST_CELL};
+use pxl_spec_core::window::{self, BRICK_CELLS, ENTRIES, FIRST_CELL};
 use pxl_spec_core::world::{self, Handed};
 use pxl_spec_core::{at, way, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3};
@@ -23,7 +23,7 @@ use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
 use crate::eye::{eye_origin, Eye};
-use crate::world::{Unlooked, World};
+use crate::world::{brick_at, Unlooked, World};
 
 /// The world as decor's generation asks it on the GPU (pxl-spec-core `scatter`):
 /// the cast's, and the catalog's rows as handed.
@@ -102,9 +102,17 @@ impl DecorQuery for Generating<'_> {
 }
 
 /// Whether decor `j` is shown at the window zoom `cell`: bit `cell −
-/// FIRST_CELL` of its `shown` word, at a leaf's cells or coarser.
+/// FIRST_CELL` of its `shown` word, at a leaf's cells or coarser
+/// (pxl-kernel domain/scene/decor/drawn.rs `shown`).
 fn shown_at(shown: &[u32], j: u32, cell: u32) -> bool {
     cell <= LEAF_CELL && at(shown, j) >> (cell - FIRST_CELL) & 1 != 0
+}
+
+/// Whether decor `j` is folded at the window zoom `cell`: bit `cell −
+/// FIRST_CELL` of its `shown` word's folded zooms (pxl-spec-core
+/// `scatter::FOLD_BITS`).
+fn folded_at(shown: &[u32], j: u32, cell: u32) -> bool {
+    cell <= LEAF_CELL && at(shown, j) >> (scatter::FOLD_BITS + cell - FIRST_CELL) & 1 != 0
 }
 
 /// Whether a box of the frame's (pxl-spec-core `scatter::BOXES_AT`) meets
@@ -134,9 +142,12 @@ fn is_changed(list: &[u32], cell: u32, reads: [i32; 4]) -> bool {
 /// `decor_cs` (pxl-spec-core `scatter::LIST_AT`), the decors the catalog's
 /// rows as handed (`rows`), its count the dispatch's. An entry generates whole
 /// where every one does, decor having been off, or its records were not
-/// generated for its brick (`scatter::generated_for`), its head then laid anew and
-/// no patch bearing; else, where a box of the frame's meets what it reads
-/// (`is_changed`), only its candidates that read what the box holds.
+/// generated for its brick in its slot (`scatter::generated_for`), its head
+/// then laid anew, no patch bearing and nothing folded into its columns
+/// (`window::column_fold`), and each decor folded at its zoom listed too
+/// (`folded_at`); else, where a box of the frame's meets what it
+/// reads (`is_changed`), only its candidates that read what the box holds,
+/// the folded left as they were, which no box changes.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_mark_cs"))]
 pub fn decor_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -145,6 +156,7 @@ pub fn decor_mark_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] list: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] shown: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] ground: &mut [u32],
 ) {
     let s = id.x;
     if s >= scatter::EYE_ENTRIES {
@@ -160,24 +172,33 @@ pub fn decor_mark_cs(
         scatter::head_at(s),
     );
     let head = [at(records, h), at(records, h + 1), at(records, h + 2)];
-    let whole = at(list, scatter::LIST_EVERY) != 0 || !scatter::generated_for(head, q);
+    let whole =
+        at(list, scatter::LIST_EVERY) != 0 || !scatter::generated_for(head, q, held.z);
     if !whole && !is_changed(list, cell, scatter::brick_reads(cell, q)) {
         return;
     }
     if whole {
         put(records, h, q[0] as u32);
         put(records, h + 1, q[1] as u32);
-        put(records, h + 2, 1);
+        put(records, h + 2, held.z as u32);
         let mut k = 0;
         while k < scatter::RUNS {
             put(records, h + scatter::PATCH_CNT_AT + k, 0);
             k += 1;
         }
+        let base = brick_at(held.z as u32 - 1) + window::COLUMNS_AT;
+        let mut i = 0;
+        while i < BRICK_CELLS {
+            let w = at(ground, base + i);
+            put(ground, base + i, window::column_word(window::column_top(w)));
+            i += 1;
+        }
     }
     let decors = rows.len() as u32;
     let mut j = 0;
     while j < decors {
-        if shown_at(shown, j, cell) {
+        let is_shown = shown_at(shown, j, cell);
+        if is_shown || whole && folded_at(shown, j, cell) {
             // SAFETY: atomic adds on the list's count, each dispatch's z.
             let n = unsafe {
                 spirv_std::arch::atomic_i_add::<
@@ -195,7 +216,8 @@ pub fn decor_mark_cs(
                 >(&mut list[(scatter::GENERATE_ARGS + 2) as usize], 1)
             };
             let whole = if whole { scatter::WHOLE } else { 0 };
-            put(list, scatter::LIST_AT + n, s | j << 16 | whole);
+            let is_shown = if is_shown { scatter::SHOWN } else { 0 };
+            put(list, scatter::LIST_AT + n, s | j << 16 | whole | is_shown);
         }
         j += 1;
     }
@@ -225,7 +247,7 @@ pub fn decor_thin_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] list: &[u32],
 ) {
-    let (brick, j, whole) = listed(list, id.z);
+    let (brick, j, whole, _) = listed(list, id.z);
     let (p, cell) = (id.x, window::eye_cell(brick / ENTRIES));
     if p >= BRICK_PATCHES {
         return;
@@ -288,8 +310,13 @@ pub fn decor_thin_cs(
 /// thread a record: `x` its candidate's index in its patch, `y` the patch,
 /// `z` the entry and decor listed, as `decor_thin_cs` laid them. Each record
 /// `RETAINED` is generated on its cell (`scatter::generated`), naming the
-/// entry's window zoom; else it is `UNGENERATED`. Only a decor shown at that
-/// zoom is listed (`decor_mark_cs`). What it generates on is the windows' bricks and the ways
+/// entry's window zoom; else it is `UNGENERATED`. A decor is listed where it is
+/// shown at that zoom or folded there (`decor_mark_cs`): a candidate whose
+/// variant is folded there (`scatter::folds_at`) generates nothing, and where
+/// its entry generates whole, and its column's own look is one it stands on,
+/// adds the share of the column's cell it claims and the look it is folded to
+/// to the column's word (`window::column_fold`); one that is not, only where its decor
+/// is shown. What it generates on is the windows' bricks and the ways
 /// over them alone, what is placed left out (`Unplaced`); what is placed
 /// and the eye's cuts only take it away where they hold its box
 /// (`DecorQuery::is_edited`).
@@ -298,7 +325,7 @@ pub fn decor_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] out: &mut [u32],
@@ -306,7 +333,7 @@ pub fn decor_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] list: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
 ) {
-    let (brick, j, _) = listed(list, id.z);
+    let (brick, j, whole, is_shown) = listed(list, id.z);
     // A patch's records are its decor's capacity, the next patch's past it.
     if id.x >= rows[j as usize].cap() || id.y >= BRICK_PATCHES {
         return;
@@ -321,6 +348,16 @@ pub fn decor_cs(
         born: out[r + 4],
     };
     let cell = window::eye_cell(brick / ENTRIES);
+    let decor = &rows[j as usize];
+    let variant = scatter::variant(decor, &c);
+    if scatter::folds_at(decor, variant, cell) || !is_shown {
+        out[r] = scatter::UNGENERATED;
+        if whole && scatter::folds_at(decor, variant, cell) {
+            fold(window, ground, decor, brick, cell, &c, variant);
+        }
+        return;
+    }
+    let ground: &[u32] = ground;
     let mut world = Generating {
         world: World {
             window,
@@ -346,11 +383,71 @@ pub fn decor_cs(
     }
 }
 
-/// The `z`-th entry and decor `decor_mark_cs` listed, and whether the entry
-/// generates whole (pxl-spec-core `scatter::LIST_AT`).
-fn listed(list: &[u32], z: u32) -> (u32, u32, bool) {
+/// The `z`-th entry and decor `decor_mark_cs` listed, whether the entry
+/// generates whole, and whether the decor is shown at its window (pxl-spec-core
+/// `scatter::LIST_AT`).
+fn listed(list: &[u32], z: u32) -> (u32, u32, bool, bool) {
     let w = at(list, scatter::LIST_AT + z);
-    (w & 0xffff, w >> 16 & 0xff, w & scatter::WHOLE != 0)
+    (
+        w & 0xffff,
+        w >> 16 & 0xff,
+        w & scatter::WHOLE != 0,
+        w & scatter::SHOWN != 0,
+    )
+}
+
+/// Candidate `c` of `decor`, its `variant` folded at the window `cell` of
+/// entry `brick` (`decor_cs`), added to its column's word in the slot holding
+/// the entry's brick (`window::fold_into`): the share of the column's cell it
+/// claims (`scatter::fold_share`) and the look it is folded to, where the
+/// column's own look is one it stands on (`Decor::allows`). Swapped in whole,
+/// so what is folded is the same in whatever order the candidates come.
+fn fold(
+    window: &[IVec4],
+    ground: &mut [u32],
+    decor: &Decor,
+    brick: u32,
+    cell: u32,
+    c: &scatter::Candidate,
+    variant: u32,
+) {
+    let held = at(window, brick);
+    if held.z == 0 {
+        return;
+    }
+    let s = LEAF_CELL - cell;
+    let (_, [x, y]) = window::brick_of([c.cell[0] >> s, c.cell[1] >> s]);
+    let i = window::idx_of([x, y]);
+    let base = brick_at(held.z as u32 - 1);
+    let look = window::laid_at(at(ground, base + window::LAID_AT + i / 2), i) & 0xff;
+    if !decor.allows(look) {
+        return;
+    }
+    let share = scatter::fold_share(decor, variant, cell);
+    let w = (base + window::COLUMNS_AT + i) as usize;
+    // SAFETY: atomic loads and swaps of the column's word, each candidate's
+    // own fold, in no order.
+    let mut was = unsafe {
+        spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(
+            &ground[w],
+        )
+    };
+    loop {
+        let is = window::fold_into(was, share, decor.fold);
+        // SAFETY: as above.
+        let found = unsafe {
+            spirv_std::arch::atomic_compare_exchange::<
+                u32,
+                { Scope::QueueFamily as u32 },
+                { Semantics::NONE.bits() },
+                { Semantics::NONE.bits() },
+            >(&mut ground[w], is, was)
+        };
+        if found == was {
+            break;
+        }
+        was = found;
+    }
 }
 
 /// The first word of entry `s`'s record of candidate `i` of the `p`-th patch
@@ -371,7 +468,7 @@ fn is_held(records: &[u32], window: &[IVec4], g: u32) -> bool {
     }
     let (h, q) = (scatter::head_at(g), at(window, g));
     let head = [at(records, h), at(records, h + 1), at(records, h + 2)];
-    q.z != 0 && scatter::generated_for(head, [q.x, q.y])
+    scatter::generated_for(head, [q.x, q.y], q.z)
 }
 
 /// The `k`-th run of records workgroup `g` of a decor pass reads, as record

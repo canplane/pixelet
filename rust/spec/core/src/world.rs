@@ -125,7 +125,8 @@ impl Handed {
 /// placed in it where that fills it whole, air included, else the ground's
 /// asset with what the ways and what is placed write over it (their tree's
 /// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
-/// `way::tree::read`), one value whichever source holds it, keeping the
+/// `way::tree::read`), and beside the ground the decor folded into its top
+/// cell (`ground::Cell::folded`), one value whichever source holds it, keeping the
 /// eighths of its cube they fill together over it (`answer::cover`,
 /// `answer::eighths`, `answer::KEPT_SHIFT`), air where that is none;
 /// `PLACED_ASSET` over a placed value, the source control tells an edit by,
@@ -246,6 +247,16 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         } else {
             0
         };
+        // The decor folded into its top cell, smaller than the cell, beside
+        // the ground it stands on (`ground::Cell::folded`).
+        let (share, look) = cell.folded(c[2]);
+        if share > 0 && fills(val) {
+            let (f, theirs) = cover(fill, look, share);
+            if theirs {
+                (val, four) = (look, ground::word([look; 4]));
+            }
+            fill = f;
+        }
         if way != VOID {
             // A way's look four times where one wrote it, whatever its value.
             let w = tree::read(way);

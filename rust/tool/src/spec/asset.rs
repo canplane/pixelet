@@ -813,6 +813,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         counts: [Vec<u32>; 2],
         orient: String,
         on: [u32; 8],
+        fold: u32,
         scale_steps: i32,
         sizes: Vec<String>,
         models: Vec<String>,
@@ -846,6 +847,15 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
                 .ok_or(format!("{}: {l:?} is no ground look", at("on")))?;
             on[(v >> 5) as usize] |= 1 << (v & 31);
         }
+        let fold = match k.get("fold") {
+            None => 0,
+            Some(l) => l
+                .str()
+                .and_then(|l| looks.iter().find(|(g, _)| g == l))
+                .map(|(_, v)| *v)
+                .filter(|v| *v < 256)
+                .ok_or(format!("{}: {l:?} is no ground look", at("fold")))?,
+        };
         let scale_steps = match k.get("scale_steps") {
             None => 0.0,
             Some(n) => n
@@ -905,6 +915,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
                 .map(|share| poisson_thresholds(density * f64::from(patch * patch) * share)),
             orient: orient.to_string(),
             on,
+            fold,
             scale_steps: scale_steps as i32,
             sizes,
             models,
@@ -967,6 +978,10 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    pub orientation: Orientation,",
             "    /// The looks it may stand on, a bit each.",
             "    pub on: [u32; 8],",
+            "    /// The ground look it is folded to in a cell coarser than it stands",
+            "    /// in, 0 where it takes the look of the ground it stands on",
+            "    /// (pxl-spec-core scatter.rs `folds_at`).",
+            "    pub fold: u32,",
             "    /// Its cell: a unit's zoom, this many coarser.",
             "    pub scale_steps: i32,",
             "    pub variants: u32,",
@@ -1001,6 +1016,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
                 "        on: [{}],",
                 r.on.map(|w| format!("{w:#010x}")).join(", ")
             ),
+            format!("        fold: {},", r.fold),
             format!("        scale_steps: {},", r.scale_steps),
             format!("        variants: {},", r.models.len()),
             format!("        sizes: [{}],", sizes.join(", ")),

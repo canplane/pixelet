@@ -23,15 +23,24 @@ fn decor_edges_cell_shares() {
 /// A kind is generated at the leaves' window and at each coarser one where a
 /// variant stands as itself (`scatter::stands_at`): its windows run from the
 /// leaves' up, unbroken, never at one coarser than its widest claim covers.
+/// It is folded at each window one of its variants is, whatever it shows.
 #[test]
 fn decor_windows_by_size() {
     let leaf = 1 << (LEAF_CELL - FIRST_CELL);
     // From a tuft to a ship, as it shows.
     for extent in [0.5, 2.0, 8.0, 40.0, 400.0] {
-        for (k, &bits) in shown_by(|_| extent).iter().enumerate() {
-            let (d, at) = (&DECORS[k], |cell: Zoom| {
-                bits >> (cell - FIRST_CELL) & 1 == 1
-            });
+        for (k, &word) in shown_by(|_| extent).iter().enumerate() {
+            let d = &DECORS[k];
+            for cell in FIRST_CELL..=LEAF_CELL {
+                assert_eq!(
+                    word >> (scatter::FOLD_BITS + cell - FIRST_CELL) & 1 == 1,
+                    scatter::any_folds_at(d.row, cell),
+                    "{:?} at z{cell}",
+                    d.id
+                );
+            }
+            let bits = word & ((1 << scatter::FOLD_BITS) - 1);
+            let at = |cell: Zoom| bits >> (cell - FIRST_CELL) & 1 == 1;
             if bits == 0 {
                 continue;
             }

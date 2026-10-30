@@ -122,6 +122,30 @@ they share is the descent, not a hash interface:
    > of the windows that now generate is not measured.
 2. Decor joins the node's descent as a handed state, and its fold into the
    cell's kept eighths and look where it is smaller than the cell.
+
+   > Built 2026-10-31, with the user, folded once a window generates rather
+   > than handed down: a candidate list fits no word a descent hands, and
+   > asking decor again at every node a ray meets is its whole generation
+   > again. Where an entry generates whole, a candidate whose variant is
+   > smaller than the window's cell (pxl-spec-core `scatter::folds_at`)
+   > generates nothing and adds the room it claims (`fold_share`) and the
+   > look it is folded to into its column's word, over the ground's top, the
+   > same in any order (`window::fold_into`, pxl-shader decor.rs `decor_cs`);
+   > the node reads
+   > it beside the ground in the column's top cell (`ground::Cell::folded`,
+   > `world::node`), its share added as a cube's, its look the decor's
+   > `fold` (decor.json; the tree's `forest`) or the ground's under it. A
+   > kind's folded windows are handed with its shown ones, none with the
+   > decor setting off (pxl-kernel domain/scene/decor/drawn.rs `shown`); an
+   > entry's head names its slot, since the fold lies in the slot's columns;
+   > the cast forgets the entries folded into the frame after, decor being
+   > generated after it (pxl-render gpu/ray/cast.rs `folding`). What is
+   > folded is what is retained at the window's zoom, a subset, as said
+   > above; a share under a unit (`window::FOLD_UNIT`) is none, and a top
+   > cell kept whole takes none it can show. The CPU reads a brick back once
+   > its fill lands, before decor generates on it, so its node holds no
+   > folded decor: the one answer the GPU and the CPU give apart, where only
+   > a coarse cell differs, which no walker or pick asks. Not measured yet.
 3. The puck's zone hides where the ground is drawn coarser than a leaf; the
    actor takes rule 2.
 

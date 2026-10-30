@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::cast::Spacing;
+use crate::ground::{Cell, VOID};
 
 /// A patch's thinning drawn once for all its candidates (`deleted`) answers
 /// each as `retained` does, over every decor of the catalog and the patches of
@@ -98,6 +99,81 @@ fn stands_finer() {
             }
         }
     }
+}
+
+/// A variant folds exactly where it does not stand and still claims a unit
+/// of the cell: none at the leaves', its share falling eightfold a zoom
+/// coarser, and a tree claiming three eighths of a cell twice its side.
+#[test]
+fn folds_where_it_stands_not() {
+    for decor in &DECORS {
+        for v in 0..decor.variants {
+            assert!(!folds_at(decor, v, LEAF_CELL));
+            for cell in window::FIRST_CELL..LEAF_CELL {
+                if stands_at(decor, v, cell) {
+                    assert!(!folds_at(decor, v, cell), "{v} at z{cell}");
+                }
+                if cell + 1 < decor.cell_zoom() {
+                    let (here, finer) =
+                        (fold_share(decor, v, cell), fold_share(decor, v, cell + 1));
+                    assert!(
+                        here <= finer.div_ceil(8),
+                        "{v} at z{cell}: {here} of {finer}"
+                    );
+                }
+            }
+        }
+    }
+    let tree = &DECORS[0];
+    assert_eq!(tree.sizes[0], [1, 1, 3]);
+    assert_eq!(
+        fold_share(tree, 0, LEAF_CELL - 1) * window::FOLD_UNIT,
+        3 * answer::FULL / 8
+    );
+    assert!(folds_at(tree, 0, LEAF_CELL - 1));
+}
+
+/// A column word keeps its ground's top under what is folded over it, its
+/// share held to a byte and its look the greatest folded, whatever the order;
+/// and a column's folded decor lies in its top cell alone, in the look its
+/// decors name or the ground's.
+#[test]
+fn folded_over_the_top() {
+    let tree = &DECORS[0];
+    let share = fold_share(tree, 0, LEAF_CELL - 1);
+    let top = window::column_word(-37);
+    let w = window::fold_into(window::fold_into(top, share, 0), share, tree.fold);
+    assert_eq!(
+        w,
+        window::fold_into(window::fold_into(top, share, tree.fold), share, 0)
+    );
+    assert_eq!(window::column_top(w), -37);
+    assert_eq!(
+        window::column_fold(w),
+        (2 * share * window::FOLD_UNIT, tree.fold)
+    );
+    let full = window::fold_into(window::column_word(5), 200, 0);
+    assert_eq!(window::column_top(window::fold_into(full, 200, 3)), 5);
+    assert_eq!(
+        window::column_fold(window::fold_into(full, 200, 3)),
+        (answer::FULL, 3)
+    );
+    let cell = Cell {
+        look: 7,
+        top: 3,
+        part: answer::FULL / 2,
+        fold: [7; 4],
+        decor: answer::FULL / 4,
+        decor_look: 0,
+    };
+    assert_eq!(cell.folded(2), (answer::FULL / 4, 7));
+    assert_eq!(cell.folded(1), (0, VOID));
+    assert_eq!(cell.folded(3), (0, VOID));
+    let named = Cell {
+        decor_look: tree.fold,
+        ..cell
+    };
+    assert_eq!(named.folded(2), (answer::FULL / 4, tree.fold));
 }
 
 /// A window's brick at any zoom meets no more patches than `BRICK_PATCHES`,

@@ -413,7 +413,14 @@ impl Generated {
         self.groups = [
             group(
                 &self.mark,
-                &[window, self.records, self.list, self.rows, self.shown],
+                &[
+                    window,
+                    self.records,
+                    self.list,
+                    self.rows,
+                    self.shown,
+                    ground,
+                ],
             ),
             group(&self.thin, &[window, self.records, self.rows, self.list]),
             group(
@@ -487,6 +494,13 @@ impl Generated {
         self.placed.forget();
         self.shown_read.forget();
         self.counted.forget();
+    }
+
+    /// Whether this frame generates every entry whole, decor having been off
+    /// or shown at other zooms: what is folded into the windows' columns made
+    /// again in every one (pxl-shader decor.rs `decor_mark_cs`).
+    pub fn folds_every(&self) -> bool {
+        self.on && self.marking && self.stale
     }
 
     /// Whether it marks or counts this frame: its passes run, and the frame

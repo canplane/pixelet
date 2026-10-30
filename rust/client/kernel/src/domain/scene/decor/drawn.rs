@@ -67,7 +67,9 @@ fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
 /// its own size no narrower than the window's cell (pxl-spec-core
 /// `scatter::stands_at`), the decor of the coarser windows a subset of the
 /// finer's, its candidates born coarser and retained at the coarser zoom.
-/// A finer window lies within the leaves'.
+/// A finer window lies within the leaves'. Then, `scatter::FOLD_BITS` higher,
+/// those where one is folded into the window's cells, smaller than them
+/// (`scatter::any_folds_at`), however far.
 fn shown() -> [u32; DECORS.len()] {
     shown_by(|d| d.extent(catalog()))
 }
@@ -76,12 +78,12 @@ fn shown() -> [u32; DECORS.len()] {
 fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {
         let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
-        (FIRST_CELL..=LEAF_CELL)
-            .filter(|&cell| {
-                let stands = (0..d.row.variants).any(|v| scatter::stands_at(d.row, v, cell));
-                stands && is_decor_shown(extent, cell)
-            })
-            .fold(0, |bits, cell| bits | 1 << (cell - FIRST_CELL))
+        (FIRST_CELL..=LEAF_CELL).fold(0, |bits, cell| {
+            let stands = (0..d.row.variants).any(|v| scatter::stands_at(d.row, v, cell));
+            let shown = u32::from(stands && is_decor_shown(extent, cell));
+            let folded = u32::from(scatter::any_folds_at(d.row, cell));
+            bits | (shown | folded << scatter::FOLD_BITS) << (cell - FIRST_CELL)
+        })
     })
 }
 

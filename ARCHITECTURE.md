@@ -172,7 +172,11 @@ A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its look the majority of those it folds, and its
 top cell is filled to the share its height reaches (`pxl-spec-core ground.rs`
 `top`). What is placed and the ways fold to the kind most of their fill is
-(`overwrite.rs` `fold`).
+(`overwrite.rs` `fold`). Decor smaller than a window's cell is folded into the
+top cell of the column it stands in, the room it claims beside the ground's,
+its look the one its kind names (`scatter.rs` `folds_at`, `ground.rs`
+`Cell::folded`): the GPU adds it as it generates the window's decor, so the
+CPU's coarse cells hold none.
 
 A coarse cell keeps how much of its cube the ground and what is written over it
 fill (`answer.rs` `cover`), in eighths, floored: its **kept eighths**. It is
