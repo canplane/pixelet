@@ -1,4 +1,4 @@
-// @pxl/client/abi/surface.ts
+// @pxl/client/port/surface.ts
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import type { SurfaceDriver } from "@/bracket.tsx";

@@ -1,4 +1,4 @@
-// @pxl/client/namespace/namespace.ts
+// @pxl/client/driver/namespace/namespace.ts
 
 /**
  * The kernel's namespace: each number it opens a file under (host.json
@@ -15,10 +15,10 @@ import { FileError } from "@xpute/host/ipc/sys.ts";
 
 import { root } from "@/abi/host.spec.ts";
 import { BASE_LAYERS } from "./published.spec.ts";
-import { read_asset } from "@/namespace/asset.ts";
-import { source_declared } from "@/namespace/source.ts";
-import { commit_storage, open_storage } from "@/namespace/storage.ts";
-import { read_object } from "@/namespace/tile.ts";
+import { read_asset } from "@/driver/namespace/asset.ts";
+import { source_declared } from "@/driver/namespace/source.ts";
+import { commit_storage, open_storage } from "@/driver/namespace/storage.ts";
+import { read_object } from "@/driver/namespace/tile.ts";
 
 /** What answers below one number, by an object's number; one with no `commit` is read-only. */
 interface Backend {

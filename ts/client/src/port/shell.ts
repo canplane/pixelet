@@ -1,7 +1,8 @@
-// @pxl/client/abi/shell.ts
+// @pxl/client/port/shell.ts
 
-/** The kernel as the shell reaches it. The shell names no host (AGENTS.md),
- * so a function here that only forwards to it is that boundary, not a rename. */
+/** The kernel as the shell reaches it, and what the drivers below it show the
+ * UI. The shell names no host and no driver (AGENTS.md), so a function here
+ * that only forwards to one is that boundary, not a rename. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { Doorbell } from "@xpute/host/ipc/doorbell.ts";
@@ -16,8 +17,21 @@ import { HOST } from "@/host/mount.ts";
 import { bracket } from "@/bracket.tsx";
 import { send_input } from "./input.ts";
 
-export { kernel_snapshot } from "@/abi/snapshot.ts";
+export { kernel_snapshot } from "@/port/snapshot.ts";
 export { kernel_hold, kernel_keys } from "./input.ts";
+
+// What the drivers show the UI: the GPU's state, the network's, the world's
+// source, and where the origin serves what the shell fetches itself.
+export { gpu, watch_gpu } from "@/driver/gpu.ts";
+export { online, watch_online } from "@/driver/namespace/online.ts";
+export {
+  source_state,
+  source_versions,
+  watch_source,
+} from "@/driver/namespace/source.ts";
+export { asset_url } from "@/driver/namespace/route.ts";
+export { SEARCH_URL } from "@/driver/namespace/route.spec.ts";
+export { INGESTED, PACK } from "@/driver/namespace/ingested.spec.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */
 export async function kernel_tracking(tracking: Tracking): Promise<void> {

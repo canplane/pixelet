@@ -1,4 +1,4 @@
-// @pxl/client/namespace/source.ts
+// @pxl/client/driver/namespace/source.ts
 
 /**
  * The tile source's declaration (the bucket's, which script/publish.py writes,
@@ -9,13 +9,14 @@
  */
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
-import { TILE_SOURCE_ROUTE } from "@/namespace/route.ts";
-import { online, when_online } from "@/namespace/online.ts";
+import { TILE_SOURCE_ROUTE } from "@/driver/namespace/route.ts";
+import { online, when_online } from "@/driver/namespace/online.ts";
 import {
   BASE_LAYERS,
   type BaseLayer,
   VERSION_BYTES,
 } from "./published.spec.ts";
+import { Source } from "@/abi/state.ts";
 import { bracket } from "@/bracket.tsx";
 
 /** What of a declaration this side reads: the top zoom and each kind's
@@ -83,14 +84,6 @@ export function declaration(text: string): Declaration | null {
       return null;
   }
   return d as Declaration;
-}
-
-/** Where the declaration stands: asked, failing (refused or unanswered, and asked again), refused for good (one this client cannot read), or declared. */
-export const enum Source {
-  Asking = 0,
-  Failing = 1,
-  Refused = 2,
-  Declared = 3,
 }
 
 let state = Source.Asking;

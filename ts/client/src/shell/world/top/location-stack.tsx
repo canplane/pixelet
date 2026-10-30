@@ -6,7 +6,7 @@ import { type GlyphName, Spinner } from "@/shell/ui/icon.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { Command, SensorStatus, Tracking } from "@/abi/cmd.spec.ts";
-import { kernel_command, kernel_tracking } from "@/abi/shell.ts";
+import { kernel_command, kernel_tracking } from "@/port/shell.ts";
 import { CompassFace } from "./compass.tsx";
 import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";

@@ -20,7 +20,7 @@ pub const FORMAT: Format = Format {
 };
 
 /// The longest version a declaration names: one segment of a tile's URL,
-/// before its name (ts/client/src/namespace/route.spec.ts `tileObject`).
+/// before its name (ts/client/src/driver/namespace/route.spec.ts `tileObject`).
 pub const VERSION_BYTES: usize = 32;
 
 /// The base layers a version is published for: the kinds of `FORMAT`,

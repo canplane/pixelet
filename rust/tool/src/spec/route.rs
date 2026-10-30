@@ -187,7 +187,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
     ]);
 
-    let mut ts = head("@pxl/client/namespace/route.spec.ts");
+    let mut ts = head("@pxl/client/driver/namespace/route.spec.ts");
     for (name, val) in &all {
         ts.extend(ts_doc(&doc(name).unwrap_or_default(), ""));
         ts.extend([
@@ -249,7 +249,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     Ok(vec![
         Output::new("rust/spec/src/route.spec.rs", rs.join("\n")),
-        Output::new("ts/client/src/namespace/route.spec.ts", ts.join("\n")),
+        Output::new(
+            "ts/client/src/driver/namespace/route.spec.ts",
+            ts.join("\n"),
+        ),
         Output::new("ts/server/edge/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),
     ])

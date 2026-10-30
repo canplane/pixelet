@@ -1,4 +1,4 @@
-// @pxl/client/abi/sensor.ts
+// @pxl/client/driver/sensor.ts
 
 /** The device's sensors as the kernel's commands: what each platform's driver
  * heard, in its words (bracket.tsx `SensorHeard`), sent as the kernel numbers it. */

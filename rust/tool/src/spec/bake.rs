@@ -37,7 +37,7 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
             .join(", ")
     };
 
-    let mut ts = vec!["// @pxl/client/namespace/published.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/driver/namespace/published.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.push("/** The base layers by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */".into());
     ts.push(format!(
@@ -132,7 +132,10 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     );
     rs.extend(["        }", "    }", "}"].map(String::from));
     Ok(vec![
-        Output::new("ts/client/src/namespace/published.spec.ts", file(&ts)),
+        Output::new(
+            "ts/client/src/driver/namespace/published.spec.ts",
+            file(&ts),
+        ),
         Output::new("ts/server/edge/published.spec.ts", file(&edge)),
         Output::new("rust/spec/src/bake/published.spec.rs", file(&rs)),
     ])

@@ -11,7 +11,7 @@ use crate::profiler::frame::{FrameSample, EFFECTS, GPU_SPANS};
 use crate::profiler::spec::{FRAME, LIMIT, NOW, SPREAD, STAT, STEP_STAT, STREAM_STAT, WAKES};
 use crate::profiler::word::{words, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
-use crate::turn::phase_spec::PHASES;
+use crate::sys::sched::phase_spec::PHASES;
 use pxl_render::gpu::span_spec::FRAME_KINDS;
 
 const REASONS: usize = LIMIT::REASONS as usize;

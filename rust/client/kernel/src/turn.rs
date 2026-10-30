@@ -7,9 +7,6 @@
 #[path = "turn/step.spec.rs"]
 pub mod spec;
 
-#[path = "turn/phase.spec.rs"]
-pub mod phase_spec;
-
 use crate::domain::layer::Base as _;
 use crate::sys::mem::section;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -76,7 +73,7 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::sched::tick::TickReport;
 
-use crate::turn::phase_spec::Phase;
+use crate::sys::sched::phase_spec::Phase;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {

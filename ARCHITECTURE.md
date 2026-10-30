@@ -623,8 +623,14 @@ app hands the client once, of what its platform gives
 mounts `@xpute/host` on the guest the bracket opened (`host/mount.ts`
 `open_host`) and names none of pixelet's numbers: what a `WORLD_FRAME` carries,
 what an open or a write means and what the stop report says are handed it by the
-client's boot (`ts/client/src/abi/boot.ts`), and what answers the kernel's opens
-and writes is `ts/client/src/namespace/`.
+client's boot (`ts/client/src/abi/boot.ts`). The kernel's two ABIs stand apart
+in the client, as a display stack's do: what the shell holds, the commands for
+the UI's intents and its input, the snapshot, the surfaces it lends and the
+profiler, is `ts/client/src/port/`; what answers the kernel's devices, its opens
+and writes (`driver/namespace/`), its text, sensors and GPU, is
+`ts/client/src/driver/`; the numbers both read, generated from `spec/` or, for
+the states a driver reports and the shell shows, written beside it
+(`abi/state.ts`), are `ts/client/src/abi/`.
 
 The host and the kernel share xpute's two rings, one for what the host submits
 and one for what the kernel completes. The **commands** are
@@ -639,8 +645,9 @@ after a turn only when what it is made of moved (`shell.rs` `Shown`), and
 carries only what the kernel owns; what is rounded or timed for presentation is
 the shell's. The shell hands the kernel the surfaces to draw into and computes
 no coordinate, tile or draw; what it needs of the model is generated from the
-same JSON as the Rust. The host, `abi/`, `namespace/` and the shell are one
-package, `ts/client`.
+same JSON as the Rust. The host, `port/`, `driver/`, `abi/` and the shell are
+one package, `ts/client`, and the shell reaches the kernel and the drivers
+through `port/` alone.
 
 What crosses each edge, from the shell down to the kernel:
 
@@ -652,8 +659,8 @@ What crosses each edge, from the shell down to the kernel:
      │ each control        │ whole when it moved
      ▼                     │
   ┌────────────────────────────────────┐
-  │ client    abi/ numbers, namespace/ │
-  │           answers opens and writes │
+  │ client    port/ the shell's,       │
+  │           driver/ the devices'     │
   └────────────────────────────────────┘
      │ WORLD_FRAME and the ▲ completions and events;
      │ commands, through   │ the opens and writes
@@ -680,7 +687,7 @@ A read is a file in xpute's sense
 ([xpute's system calls and files](./xpute/ARCHITECTURE.md#system-calls-and-files)):
 the kernel names a root by its number and an object below it by its number,
 and the client binds each root to what answers it, once at boot
-(`ts/client/src/namespace/namespace.ts` `namespace`). The roots are
+(`ts/client/src/driver/namespace/namespace.ts` `namespace`). The roots are
 `spec/client/kernel/sys/io/host.json` `root`'s, the third holding the kernel's
 own files, each a **kept slot** on the device:
 
@@ -767,13 +774,13 @@ turn.
 
 Before each turn the client submits one `WORLD_FRAME` through the host's
 doorbell, with what the turn may spend and draw into
-(`ts/client/src/abi/input.ts` `submit_frame`); a turn rung for a command alone
+(`ts/client/src/port/input.ts` `submit_frame`); a turn rung for a command alone
 carries none and draws nothing. The host's turns are paced to the display by
 the frame pacing the client boots it with (`ts/client/src/abi/boot.ts`,
 `@xpute/host/sched/frame_pacing.ts`), its numbers the kernel's
 (`spec/client/kernel/sys/sched/pacing.json`); an input makes the turns after it
-interactive (`ts/client/src/abi/input.ts` `send_input`). The tick's phases are
-the kernel's (`spec/client/kernel/turn/phase.json`), and `visible` holds back
+interactive (`ts/client/src/port/input.ts` `send_input`). The tick's phases are
+the kernel's (`spec/client/kernel/sys/sched/phase.json`), and `visible` holds back
 the content's share (`sys/sched/tick.rs` `POLICY`). What moves the eye runs in
 `interaction`, and after it what the pointer is over where the eye now stands,
 the edit it would make and its ghost; what the eye then sees, demand and the
@@ -988,7 +995,7 @@ The asset ingest takes every file under `asset/content/` into the bucket's form,
 keyed by the SHA-256 of its bytes, so moving a file changes no key, and writes
 the table that numbers each (`spec/spec/asset/ingested.json`, `pxl-tool
 bin/ingest_asset.rs`). The client binds a number to its key
-(`ts/client/src/namespace/asset.ts`).
+(`ts/client/src/driver/namespace/asset.ts`).
 
 The texture pack is one WebP image of every cube's tiles, the file the cube
 kind's definition names (`spec/spec/asset/cube.json` `pack`), and one table of

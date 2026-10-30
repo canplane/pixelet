@@ -25,7 +25,7 @@ import {
   kernel_fits,
   kernel_room,
   kernel_snapshot,
-} from "@/abi/shell.ts";
+} from "@/port/shell.ts";
 import { MARKER_TEXT_CHARS } from "@/shell/catalog/asset/marker.spec.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 import { appendChatLine, DockMode, setDockMode } from "./store.ts";

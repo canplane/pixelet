@@ -10,3 +10,6 @@ pub mod tick;
 
 #[path = "sched/pacing.spec.rs"]
 pub mod pacing_spec;
+
+#[path = "sched/phase.spec.rs"]
+pub mod phase_spec;

@@ -8,7 +8,7 @@
  * `trace()`, the window saved for ui.perfetto.dev.
  */
 
-import { kernel_doorbell } from "@/abi/shell.ts";
+import { kernel_doorbell } from "@/port/shell.ts";
 import { profilerReportText } from "./profiler/report.ts";
 import { profilerTraceSave } from "./profiler/trace.ts";
 import { profilerReportRead } from "./profiler/view.ts";

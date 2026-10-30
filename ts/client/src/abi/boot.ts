@@ -23,9 +23,9 @@ import {
   read_world_snapshot,
   Sensor,
 } from "@/abi/cmd.spec.ts";
-import { declare_source } from "@/namespace/source.ts";
-import { namespace } from "@/namespace/namespace.ts";
-import { follow_refused, migrate } from "@/namespace/storage.ts";
+import { declare_source } from "@/driver/namespace/source.ts";
+import { namespace } from "@/driver/namespace/namespace.ts";
+import { follow_refused, migrate } from "@/driver/namespace/storage.ts";
 import { HOST, open_host } from "@/host/mount.ts";
 import { BATCH_FRAMES, MARGIN_SHARE, SETTLE_MS } from "@/abi/pacing.spec.ts";
 import {
@@ -36,14 +36,14 @@ import {
 } from "./mem.spec.ts";
 import { key } from "@/abi/directory.spec.ts";
 import { stream } from "./gpu.spec.ts";
-import { SENSOR_HEARD } from "./sensor.ts";
-import { submit_frame } from "./input.ts";
-import { text_call } from "@/abi/text.ts";
+import { SENSOR_HEARD } from "@/driver/sensor.ts";
+import { submit_frame } from "@/port/input.ts";
+import { text_call } from "@/driver/text.ts";
 import { BUILD_NUMBER } from "@/deploy.ts";
 import { bracket, type Config } from "@/bracket.tsx";
-import { GPU_STATE, set_gpu } from "./gpu.ts";
-import { set_online } from "@/namespace/online.ts";
-import { kernel_snapshot, set_snapshot } from "@/abi/snapshot.ts";
+import { GPU_STATE, set_gpu } from "@/driver/gpu.ts";
+import { set_online } from "@/driver/namespace/online.ts";
+import { kernel_snapshot, set_snapshot } from "@/port/snapshot.ts";
 
 let code: string | null = null;
 

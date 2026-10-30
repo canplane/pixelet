@@ -14,7 +14,7 @@ import {
   kernel_hold,
   kernel_room,
   kernel_snapshot,
-} from "@/abi/shell.ts";
+} from "@/port/shell.ts";
 import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/watch.ts";

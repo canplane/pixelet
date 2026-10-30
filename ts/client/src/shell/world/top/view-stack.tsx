@@ -2,7 +2,7 @@
 
 import { useTranslation } from "react-i18next";
 
-import { kernel_setting } from "@/abi/shell.ts";
+import { kernel_setting } from "@/port/shell.ts";
 import { SETTING } from "@/shell/setting/schema.ts";
 import { ButtonStack } from "./button-stack.tsx";
 import { useKernel } from "@/shell/store/watch.ts";

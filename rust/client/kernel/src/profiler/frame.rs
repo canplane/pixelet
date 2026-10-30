@@ -4,7 +4,7 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::turn::phase_spec::PHASES;
+use crate::sys::sched::phase_spec::PHASES;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec_core::tally;
 

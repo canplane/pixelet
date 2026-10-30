@@ -253,7 +253,7 @@ export const enum Command {
    * orient_silence_is_loss). */
   SENSOR_FAILED = 0x120b,
 
-  // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
+  // ---- the host tells the process: its start, its turn, its window and its devices ----
 
   /** The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root. */
   WORLD_BOOT = 0x1001,
@@ -266,7 +266,7 @@ export const enum Command {
   WORLD_VISIBILITY = 0x1003,
   /** What the tile source declares of itself, once the client has it: the tile root's
    * `source`, the published one out of the bucket or the dev tile server's, read by the
-   * client (ts/client/src/namespace/source.ts) and handed over as numbers and names.
+   * client (ts/client/src/driver/namespace/source.ts) and handed over as numbers and names.
    * Until it comes nothing is observed: the floor is held at the zoom it names, and no
    * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
   WORLD_SOURCE = 0x1005,
@@ -275,6 +275,11 @@ export const enum Command {
   WORLD_KEPT_EMPTIED = 0x1006,
   /** A permission as the shell's prompt or the browser's change reported it. */
   SENSOR_PERMISSION = 0x1206,
+  /** A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge. */
+  GPU_READY = 0x1401,
+
+  // ---- the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI ----
+
   /** The canvas's client rect. */
   INPUT_RECT = 0x1101,
   /** A pointer event on the canvas, in client pixels. */
@@ -290,11 +295,6 @@ export const enum Command {
   INPUT_WHEEL = 0x1103,
   /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
   INPUT_KEYS = 0x1106,
-  /** A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge. */
-  GPU_READY = 0x1401,
-
-  // ---- the shell and the process: what the UI asks of it, and what it shows the UI ----
-
   /** A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. */
   SURFACE_OPEN = 0x1501,
   /** The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's. */

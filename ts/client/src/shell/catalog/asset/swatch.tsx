@@ -12,7 +12,7 @@ import {
 } from "@/shell/catalog/asset/mod.ts";
 import { shippedTopTextureKey } from "@/shell/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
-import { asset_url } from "@/namespace/route.ts";
+import { asset_url } from "@/port/shell.ts";
 import { SETTING } from "@/shell/setting/schema.ts";
 import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/watch.ts";

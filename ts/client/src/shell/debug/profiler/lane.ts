@@ -12,7 +12,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@/abi/phase.spec.ts";
 import { CENSUS_TAGS, FRAME_GROUP, LIMIT, WAKES } from "@/abi/profiler.spec.ts";
-import type { Frame, ListLane } from "@/abi/profiler.ts";
+import type { Frame, ListLane } from "@/port/profiler.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { op } from "@xpute/gpu/api.spec.ts";

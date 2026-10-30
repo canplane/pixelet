@@ -5,8 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/shell/locale/message-key.ts";
 import { GroundStatus, Message, SensorStatus } from "@/abi/cmd.spec.ts";
-import { Gpu } from "@/abi/gpu.ts";
-import { Source } from "@/namespace/source.ts";
+import { Gpu, Source } from "@/abi/state.ts";
 
 import { dismissToast, showToast, ToastTone } from "./store.ts";
 import {

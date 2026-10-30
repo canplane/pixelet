@@ -10,7 +10,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { profiler_view } from "@/abi/profiler.ts";
+import { profiler_view } from "@/port/profiler.ts";
 import { type Gauge, profilerGaugeRead } from "./view.ts";
 
 const POLL_MS = 500;

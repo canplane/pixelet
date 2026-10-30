@@ -23,7 +23,7 @@ import {
   ASSET_PREFIX,
   GEO_PREFIX,
   TILE_PREFIX,
-} from "@pxl/client/namespace/route.spec.ts";
+} from "@pxl/client/driver/namespace/route.spec.ts";
 import {
   DECL,
   enumAt,
@@ -355,7 +355,7 @@ const corePathIncludes = [
   "/xpute/ts/host/",
   "/ts/client/src/host/",
   "/ts/client/src/abi/",
-  "/ts/client/src/namespace/",
+  "/ts/client/src/driver/namespace/",
   "/ts/client/src/shell/catalog/",
   "/ts/app/web/src/guest.",
 ];

@@ -11,7 +11,7 @@ import {
   settingsIn,
 } from "@/shell/setting/schema.ts";
 import { Section, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
-import { kernel_setting } from "@/abi/shell.ts";
+import { kernel_setting } from "@/port/shell.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {

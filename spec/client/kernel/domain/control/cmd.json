@@ -767,7 +767,7 @@
           ]
         },
         {
-          "section": "the host tells the process: its start, its turn, its window, its devices and its input"
+          "section": "the host tells the process: its start, its turn, its window and its devices"
         },
         {
           "name": "WORLD_BOOT",
@@ -880,7 +880,7 @@
           "$doc": [
             "What the tile source declares of itself, once the client has it: the tile root's",
             "`source`, the published one out of the bucket or the dev tile server's, read by the",
-            "client (ts/client/src/namespace/source.ts) and handed over as numbers and names.",
+            "client (ts/client/src/driver/namespace/source.ts) and handed over as numbers and names.",
             "Until it comes nothing is observed: the floor is held at the zoom it names, and no",
             "tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs)."
           ],
@@ -945,6 +945,16 @@
               "type": "PermissionAnswer"
             }
           ]
+        },
+        {
+          "name": "GPU_READY",
+          "val": 5121,
+          "$doc": [
+            "A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge."
+          ]
+        },
+        {
+          "section": "the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI"
         },
         {
           "name": "INPUT_RECT",
@@ -1084,16 +1094,6 @@
               "type": "i32"
             }
           ]
-        },
-        {
-          "name": "GPU_READY",
-          "val": 5121,
-          "$doc": [
-            "A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge."
-          ]
-        },
-        {
-          "section": "the shell and the process: what the UI asks of it, and what it shows the UI"
         },
         {
           "name": "SURFACE_OPEN",

@@ -1,4 +1,4 @@
-// @pxl/client/abi/input.ts
+// @pxl/client/port/input.ts
 
 /** Input as the kernel's commands, from the place's words (`POINTER_PHASE`,
  * `POINTER_KIND`), and what each frame the strobe grants submits with the viewport. */

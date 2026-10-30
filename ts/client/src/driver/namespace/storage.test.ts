@@ -1,4 +1,4 @@
-// @pxl/client/namespace/storage.test.ts
+// @pxl/client/driver/namespace/storage.test.ts
 
 import { test } from "vitest";
 import { assertEquals } from "@std/assert";

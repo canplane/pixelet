@@ -64,8 +64,9 @@ on the browser's WebGPU; on a device, `pxl-native` links it into the app
 the same **client** (`ts/client`), and each hands it, once, its own **client's
 bracket**: the guest and what its platform gives, storage, text, the network,
 the sensors and the surfaces (`ts/client/src/bracket.tsx`). The client is the
-host (`src/host/`), the kernel's commands, snapshot and boot (`src/abi/`), what
-answers its opens and writes (`src/namespace/`), and the **shell**
+host (`src/host/`), what the shell holds of the kernel (`src/port/`), what
+answers the kernel's devices, its opens and writes among them (`src/driver/`),
+the numbers both read and the boot (`src/abi/`), and the **shell**
 (`src/shell/`), the UI, which changes the world only by commands the kernel
 applies.
 
@@ -205,8 +206,9 @@ language by where a thing runs.
 │   ├── client/          #   the client both apps bundle
 │   │   └── src/
 │   │       ├── host/    #     xpute's host, mounted
-│   │       ├── abi/     #     the kernel's commands, snapshot and boot
-│   │       ├── namespace/ #   what answers the kernel's opens and writes
+│   │       ├── port/    #     what the shell holds of the kernel
+│   │       ├── driver/  #     what answers the kernel's devices
+│   │       ├── abi/     #     the numbers both read, and the boot
 │   │       └── shell/   #     the UI
 │   ├── app/web/         #   the page's app and its bracket
 │   ├── app/native/      #   the device's app, its native module and bracket

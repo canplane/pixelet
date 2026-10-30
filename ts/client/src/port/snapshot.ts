@@ -1,4 +1,4 @@
-// @pxl/client/abi/snapshot.ts
+// @pxl/client/port/snapshot.ts
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Listeners } from "@xpute/kit/lang/listeners.ts";

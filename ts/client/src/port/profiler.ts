@@ -1,4 +1,4 @@
-// @pxl/client/abi/profiler.ts
+// @pxl/client/port/profiler.ts
 
 /**
  * The kernel's profiler, read in place through views over its memory, so

@@ -10,7 +10,7 @@
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
-import { kernel_pointer } from "@/abi/input.ts";
+import { kernel_pointer } from "@/port/input.ts";
 import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
 import {
   DockMode,

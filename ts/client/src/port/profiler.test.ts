@@ -1,4 +1,4 @@
-// @pxl/client/abi/profiler.test.ts
+// @pxl/client/port/profiler.test.ts
 
 import { test } from "vitest";
 import { assertEquals } from "@std/assert";

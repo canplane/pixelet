@@ -1,6 +1,6 @@
-// @pxl/client/namespace/route.ts
+// @pxl/client/driver/namespace/route.ts
 
-import type { BaseLayer } from "@/namespace/published.spec.ts";
+import type { BaseLayer } from "@/driver/namespace/published.spec.ts";
 import { TILE_ROOT } from "./route.spec.ts";
 
 /** `<tile>/<layer>/<version>/<name>`: the object a bake's number is, under

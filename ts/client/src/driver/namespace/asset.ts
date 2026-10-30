@@ -1,4 +1,4 @@
-// @pxl/client/namespace/asset.ts
+// @pxl/client/driver/namespace/asset.ts
 
 /**
  * ASSET's backend: the kernel names a file by its load number, and this reads
@@ -12,10 +12,10 @@ import { hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { CATALOG } from "@/abi/host.spec.ts";
-import { CATALOG_HEX } from "@/namespace/catalog.spec.ts";
-import { INGESTED } from "@/namespace/ingested.spec.ts";
-import { asset_url } from "@/namespace/route.ts";
-import { get } from "@/namespace/read.ts";
+import { CATALOG_HEX } from "@/driver/namespace/catalog.spec.ts";
+import { INGESTED } from "@/driver/namespace/ingested.spec.ts";
+import { asset_url } from "@/driver/namespace/route.ts";
+import { get } from "@/driver/namespace/read.ts";
 
 const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
 

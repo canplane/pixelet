@@ -1,4 +1,4 @@
-// @pxl/client/namespace/tile.ts
+// @pxl/client/driver/namespace/tile.ts
 
 /**
  * The bakes' backend: a number the kernel names (host.json `root`) made the
@@ -15,10 +15,10 @@ import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { BASE_LAYERS, type BaseLayer } from "./published.spec.ts";
 import { TILE_SPHERE, tileObject } from "./route.spec.ts";
-import { tile_url } from "@/namespace/route.ts";
+import { tile_url } from "@/driver/namespace/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
-import { get } from "@/namespace/read.ts";
-import type { Declaration } from "@/namespace/source.ts";
+import { get } from "@/driver/namespace/read.ts";
+import type { Declaration } from "@/driver/namespace/source.ts";
 
 /** A tile's name by its subject, a digit a zoom (pxl-spec space/hierarchy/morton.rs
  * `write_name`, two axes, each a digit from z1): the subject is its key's high

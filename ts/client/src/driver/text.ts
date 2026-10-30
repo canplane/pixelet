@@ -1,4 +1,4 @@
-// @pxl/client/abi/text.ts
+// @pxl/client/driver/text.ts
 
 /**
  * The kernel's own system calls, TEXT_LAYOUT and TEXT_RASTER, answered from

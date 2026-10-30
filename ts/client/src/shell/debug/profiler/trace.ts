@@ -17,7 +17,7 @@ import {
   LANES,
   profiler_frames,
   profiler_tasks,
-} from "@/abi/profiler.ts";
+} from "@/port/profiler.ts";
 import { LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";
 import { longFramesSince } from "./long-frame.ts";

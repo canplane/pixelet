@@ -324,10 +324,10 @@ const DATA_SPECS: [DataSpec; 28] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/client/kernel/turn/phase.json",
+        json: "spec/client/kernel/sys/sched/phase.json",
         uses: &[],
         ts: Some("ts/client/src/abi/phase.spec.ts"),
-        rs: Some("rust/client/kernel/src/turn/phase.spec.rs"),
+        rs: Some("rust/client/kernel/src/sys/sched/phase.spec.rs"),
         rs_also: &[],
         module: Some("phase_spec"),
         enums: Enums::Named(&["PHASES"]),
@@ -359,7 +359,7 @@ const DATA_SPECS: [DataSpec; 28] = [
     DataSpec {
         json: "spec/client/kernel/profiler/profiler.json",
         uses: &[
-            "spec/client/kernel/turn/phase.json",
+            "spec/client/kernel/sys/sched/phase.json",
             "spec/client/kernel/sys/io/demand.json",
             "spec/client/kernel/turn/step.json",
             "spec/client/render/gpu/span.json",

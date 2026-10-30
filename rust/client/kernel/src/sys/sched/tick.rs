@@ -1,13 +1,13 @@
 // pxl-kernel/sys/sched/tick.rs
 
 //! The world's tick: xpute's tick mechanism with the kernel's phases
-//! (turn/phase.spec.rs), what each holds back, and its step table.
+//! (sys/sched/phase.spec.rs), what each holds back, and its step table.
 
 use xpute_guest::sched::tick::{StepStat, Tick, TickPolicy, TickReport};
 pub use xpute_guest::sched::tick::{TickContext, TickStep};
 
 use crate::sys::sched::param;
-use crate::turn::phase_spec::Phase;
+use crate::sys::sched::phase_spec::Phase;
 use xpute_guest::global::Global;
 
 /// Each phase's share held back for the phases after it: the visible phase

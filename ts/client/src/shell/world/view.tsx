@@ -13,9 +13,9 @@ import {
   kernel_wheel,
   POINTER_KIND,
   POINTER_PHASE,
-} from "@/abi/input.ts";
+} from "@/port/input.ts";
 import { surface_role } from "@/abi/gpu.spec.ts";
-import { surface_driver } from "@/abi/surface.ts";
+import { surface_driver } from "@/port/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
 import { releasePointers, worldPointer } from "./pointer.ts";
 import { Corner } from "./corner.tsx";

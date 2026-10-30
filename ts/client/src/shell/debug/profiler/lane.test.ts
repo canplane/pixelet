@@ -4,7 +4,7 @@ import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 
 import { FRAME_GROUP } from "@/abi/profiler.spec.ts";
-import { is_list, LANES } from "@/abi/profiler.ts";
+import { is_list, LANES } from "@/port/profiler.ts";
 import { GROUPS, LIST_NAMES } from "./lane.ts";
 
 test("FRAME_GROUP - every lane is printed, in one group", () => {

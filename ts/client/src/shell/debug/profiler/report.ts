@@ -4,7 +4,12 @@ import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 
-import type { Frame, Spread, TaskRecord, TaskSummary } from "@/abi/profiler.ts";
+import type {
+  Frame,
+  Spread,
+  TaskRecord,
+  TaskSummary,
+} from "@/port/profiler.ts";
 import { drawn, gpuMs, n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { fps, type ProfilerReport } from "./view.ts";
 import { fixed } from "@/shell/fixed.ts";

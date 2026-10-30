@@ -1,4 +1,4 @@
-// @pxl/client/namespace/read.ts
+// @pxl/client/driver/namespace/read.ts
 
 /**
  * The bus under the backends' reads (tile.ts, asset.ts): an object
@@ -9,7 +9,7 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
-import { online } from "@/namespace/online.ts";
+import { online } from "@/driver/namespace/online.ts";
 import { bracket } from "@/bracket.tsx";
 
 /** The object at `url`, whole; `name` is what a warning calls it. */

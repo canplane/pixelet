@@ -483,5 +483,5 @@ steered by a policy pixelet injects at boot, its numbers in pixelet's
 `spec/client/kernel/sys/sched/pacing.json`, the directory's quantum keys retired;
 and the tick's phases the program's, xpute's tick holding back what each
 phase's policy says (`held_back`), the kernel's five phases in
-`spec/client/kernel/turn/phase.json`. The pacing's numbers are no longer declared
+`spec/client/kernel/sys/sched/phase.json`. The pacing's numbers are no longer declared
 in the guest's directory. Steps 2 to 5 wait.

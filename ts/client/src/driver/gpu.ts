@@ -1,15 +1,8 @@
-// @pxl/client/abi/gpu.ts
+// @pxl/client/driver/gpu.ts
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
+import { Gpu } from "@/abi/state.ts";
 import type { GpuHeard } from "@/bracket.tsx";
-
-/** What the host has of a GPU, which the guest, given none, cannot say: one, none yet while it asks again, none it will ask for again, or none again after one it drew with. */
-export const enum Gpu {
-  Present = 0,
-  Waiting = 1,
-  Missing = 2,
-  Lost = 3,
-}
 
 /** A place's word for its GPU, as the host keeps it. */
 export const GPU_STATE: Readonly<

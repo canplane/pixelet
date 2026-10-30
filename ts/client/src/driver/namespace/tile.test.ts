@@ -1,10 +1,10 @@
-// @pxl/client/namespace/tile.test.ts
+// @pxl/client/driver/namespace/tile.test.ts
 
 import { test } from "vitest";
 import { assertEquals } from "@std/assert";
 
 import type { BaseLayer } from "./published.spec.ts";
-import { tile_url } from "@/namespace/route.ts";
+import { tile_url } from "@/driver/namespace/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { declaration } from "./source.ts";
 import { tile_name, tile_object } from "./tile.ts";

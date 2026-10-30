@@ -14,7 +14,7 @@ import {
 } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPreview } from "./preview.tsx";
-import { kernel_setting } from "@/abi/shell.ts";
+import { kernel_setting } from "@/port/shell.ts";
 import { SETTING } from "@/shell/setting/schema.ts";
 import {
   type CharacterVariant,

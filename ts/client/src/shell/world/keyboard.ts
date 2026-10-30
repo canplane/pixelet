@@ -12,7 +12,7 @@
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
-import { kernel_keys } from "@/abi/shell.ts";
+import { kernel_keys } from "@/port/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
 import {
   DockMode,
