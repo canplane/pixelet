@@ -499,6 +499,11 @@ kernel waking some 280 frames a minute):
 - The two time different frames: the baseline's reads time some 62 % of
   its frames, main's all of them.
 
+*Read with what came after:* the GPU figures are the spans' sum, which
+overstates a frame where render passes overlap (`gpu_busy_ms`, below); and
+step 2 already holds step 4's gain, so the plan's start is the line to
+measure against (the plan's steps in one window, below).
+
 **The map drawn in its claimed tiles alone** (21:40–21:47): the map's
 gate and lay draw the actors' spheres' rectangles a tile each, the
 unclaimed collapsed (screen_tiles.wgsl `mark_clip`, `Tiles::beside`), in
@@ -526,6 +531,10 @@ gated frame at noon runs (a probe, reverted), noon, 3728×2226:
 The timestamps step by some 0.066 ms here. Within the reach, by probes:
 returning once the square's bound is read leaves nothing of it; dropping
 the per-pixel fallback alone takes some 0.26 ms off.
+
+*Read with what came after:* the actors' marks are render passes, whose
+spans take in what they overlap (the finish's probes, below); the reach's,
+a compute pass, stands.
 
 **The reach skips what lies off the marks' box**: the host hands the box
 of the map's tiles the frame's marks cover (`Tiles::marks_box`), where no
@@ -562,6 +571,11 @@ GPU free, noon, 3728×2226:
   all of them: which frames go untimed there is not known, so the
   baseline's numbers may leave some out.
 
+*Read with what came after:* the GPU figures are the spans' sum, which
+overstates a frame where render passes overlap (`gpu_busy_ms`, below); and
+against the plan's start rather than step 2, see the plan's steps in one
+window, below.
+
 **The actors' marks' passes** (23:02), a probe (reverted): the eye's pass
 with its attachment and no draw takes one step of the timestamps (0.066
 ms) at the p50, against 0.13 with its draws; the light's, with its draws,
@@ -596,6 +610,11 @@ start view, noon; every frame drawn whole (`cast`). One window:
   `fill` 2.8, `mark` 1.7 ms (the first pass of a loaded frame, which may
   hold the wait before it).
 
+*Read with what came after:* the GPU figures are the spans' sum, which
+overstates a frame where render passes overlap (`gpu_busy_ms`, below), and
+the render passes' own spans (`finish`, `world`) take in what they
+overlap: the finish's probes and the busy time, below.
+
 **The camera orbiting** (23:31), main (`26b828e73`): a pointer held at the
 canvas's middle and swung 300 px each way on a sine, an event every 16 ms,
 for some 70 s, noon, 3728×2338; frames drawn whole (`cast`) but a few:
@@ -611,6 +630,11 @@ for some 70 s, noon, 3728×2338; frames drawn whole (`cast`) but a few:
   counted (the tally, the `ray_counts` setting, counts its slots).
 - `finish` costs some 6 ms in a frame drawn whole, against 1.3 at the p95
   through the gate.
+
+*Read with what came after:* the GPU figures are the spans' sum, which
+overstates a frame where render passes overlap (`gpu_busy_ms`, below); the
+busy time read some 24 ms where this sum read 34. The finish's 6 ms is the
+passes it overlaps, its copy 0.3 ms at most (the show's cost, below).
 
 **What the light casts while the camera orbits** (23:50), the `ray_counts`
 setting on, the same orbit for 30 s, main: of 213 counted frames the light
@@ -642,6 +666,10 @@ noon, 3728×2338:
 - Stopped after an orbit at 7 o'clock, and drawn again from a fresh epoch
   (the shadows off and on): no difference seen.
 
+*Read with what came after:* the GPU figures are the spans' sum, which
+overstates a frame where render passes overlap (`gpu_busy_ms`, below); the
+A/B in one window holds the change's direction, not its size in ms.
+
 **The receivers' marks read each pixel once** (00:40–00:50),
 `light_mark_cs`: a thread's square of pixels, `light::MARK` a side, read
 its pixels and its neighbors' tiles once into an array, 30 a thread (a
@@ -657,6 +685,10 @@ window:
 - Some 3.2 ms off `light_beam`, 2.8 ms off the frame, as predicted (the
   marks some 7 ms of it, the reads cut to 3/8).
 - At 7 o'clock, shadows as before, no error.
+
+*Read with what came after:* the GPU figures are the spans' sum, which
+overstates a frame where render passes overlap (`gpu_busy_ms`, below); the
+A/B in one window holds the change's direction, not its size in ms.
 
 **What is left of the light's marks** (00:52–01:00), two probes on
 `6f84e6fb8`, reverted, the orbit, noon, 3728×2338: `light_beam` 5.24 / 6.09
@@ -753,6 +785,12 @@ vsyncs missed); its GPU figures may still stand.
   from the spheres' tightening on cost some 4 ms a moving frame (29), and
   the light's work of this session took it back. A frame drawn whole is
   no faster than at the plan's start.
+
+*Read with what came after:* each commit was run once, and a later run of
+`5553036df` read the orbit's interval at 21 ms, not 25: runs alone differ
+by some 4 ms, so the rows tell the steps apart by more than that alone.
+The moving frame's 4 ms from `e6b740ab8` was the footprints, now taken
+only where the eye stands (the footprints where the eye stands, below).
 
 **The footprints where the eye stands** (2026-10-31, 03:00–03:45, worktree
 `moving-frame`): the light's marks take each pixel's footprint
