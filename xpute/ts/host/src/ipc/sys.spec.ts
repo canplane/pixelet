@@ -17,6 +17,12 @@
 //
 // A program's own calls go in the same stream, numbered with the PROGRAM bit, and a host
 // that is not the program's refuses them.
+//
+// A program's call the host answers from what it already holds may be made as a hostcall
+// instead: the same record, laid past the last the turn has recorded and never published,
+// its offset handed to the host's `hostcall`, which runs it before it returns and answers
+// with a value or -errno. It writes only what the record names, and ENOSYS where the call
+// is not the program's or no program answers. xpute's own calls go in the stream alone.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 

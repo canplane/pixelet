@@ -3,7 +3,8 @@
 //! A guest's system calls, recorded in a stream the host runs after the turn
 //! returns; anything a call names must live until the next rise. The guest
 //! issues its own descriptors as handles, so a late answer to a closed one
-//! names nothing. `openat` is answered by SYS_OPENED on a later turn.
+//! names nothing. `openat` is answered by SYS_OPENED on a later turn; a
+//! program's call made as a `hostcall`, before it returns.
 
 use core::panic::Location;
 
@@ -96,6 +97,19 @@ impl Sys {
     pub fn call(&mut self, op: u32, args: &[u32], bytes: &[u8]) {
         xpute_kit::ensure!(op & spec::op::PROGRAM != 0, EINVAL, op);
         self.stream.record(op, args, &[], Some(bytes));
+    }
+
+    /// `call` run by the host before this returns, from what it already
+    /// holds: its value or its errno, ENOSPC where the record does not fit
+    /// past the turn's. What `args` name it writes during the call.
+    pub fn hostcall(&mut self, op: u32, args: &[u32], bytes: &[u8]) -> Result<u32, Errno> {
+        xpute_kit::ensure!(op & spec::op::PROGRAM != 0, EINVAL, op);
+        let at = self
+            .stream
+            .past(op, args, Some(bytes))
+            .ok_or(Errno::ENOSPC)?;
+        let res = crate::hostcall::hostcall(at as u32);
+        u32::try_from(res).map_err(|_| Errno::of(res).unwrap_or(Errno::EPROTO))
     }
 
     /// `call` where it fits with `reserve` bytes left after it; false, and

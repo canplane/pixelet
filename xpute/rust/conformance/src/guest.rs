@@ -2,8 +2,12 @@
 
 //! The Rust conformance guest, exporting the C++ guest's two calls so one
 //! host drives both; `boot` answers the directory's offset. Natively the host
-//! hands it a region and a clock; as wasm it imports both, its range starts
-//! past the linker's data, and its turn is the module's `intr`.
+//! hands it a region, a clock and its hostcall; as wasm it imports all three,
+//! its range starts past the linker's data, and its turn is the module's
+//! `intr`.
+
+#[cfg(not(target_arch = "wasm32"))]
+use core::cell::Cell;
 
 use xpute_guest::abi::cmd::{Command, SysOpened};
 use xpute_guest::abi::handle::Table;
@@ -54,6 +58,20 @@ const _: () = assert!(
 );
 
 pub type Now = extern "C" fn() -> f64;
+pub type Hostcall = extern "C" fn(u32) -> i32;
+
+#[cfg(not(target_arch = "wasm32"))]
+thread_local! {
+    /// The native host's hostcall, which `boot` installs as the guest's.
+    static HOSTCALL: Cell<Option<Hostcall>> = const { Cell::new(None) };
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn hostcall(at: u32) -> i32 {
+    HOSTCALL
+        .with(Cell::get)
+        .map_or(Errno::ENOSYS as i32, |f| f(at))
+}
 
 struct Guest {
     door: Door,
@@ -68,6 +86,8 @@ struct State {
     now: Now,
     /// The clock at the last MARK.
     mark: f64,
+    /// What HOSTCALL's host writes.
+    word: u32,
 }
 
 /// Every offset written is the memory's, so `range` is added to each.
@@ -122,6 +142,7 @@ unsafe fn boot(mem: Memory, range: u32, now: Now) -> u32 {
             handles: Table::new(),
             now,
             mark: 0.0,
+            word: 0,
         },
     };
     // SAFETY: the state's range is the layout's, inside the memory and on
@@ -136,7 +157,7 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
     let Guest { door, state } = unsafe { &mut *mem.at::<Guest>((range + STATE_AT) as usize) };
     state.sys.rise();
-    door.drain(|cmd, pkt| apply(door, state, cmd, pkt));
+    door.drain(|cmd, pkt| apply(mem, door, state, cmd, pkt));
     state.stream.publish();
     state.sys.fall();
     if door.pending() {
@@ -151,7 +172,9 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
 /// else writes it while a call runs.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
-pub unsafe extern "C" fn xpute_conformance_boot(mem: *mut u8, now: Now) -> u32 {
+pub unsafe extern "C" fn xpute_conformance_boot(mem: *mut u8, now: Now, host: Hostcall) -> u32 {
+    HOSTCALL.with(|h| h.set(Some(host)));
+    xpute_guest::hostcall::set(hostcall);
     // SAFETY: the caller's memory, the range from its start.
     unsafe { boot(given(mem), 0, now) }
 }
@@ -221,7 +244,7 @@ mod wasm {
     }
 }
 
-fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Applied {
+fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Applied {
     let State {
         stream,
         sys,
@@ -229,6 +252,7 @@ fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Appli
         handles,
         now,
         mark,
+        word,
     } = state;
     let bad_handle = || MarshalError::new(Errno::EBADF);
     match cmd {
@@ -271,6 +295,15 @@ fn apply(door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Appli
             .close(sys, arg(pkt)?)
             .map(|_| Some(0))
             .ok_or_else(bad_handle),
+        spec::cmd::HOSTCALL => {
+            let n = arg(pkt)?;
+            *word = 0;
+            let at = mem.off_of(&raw const *word) as u32;
+            sys.hostcall(spec::hostcall::ANSWER, &[n, at], &[])
+                .map_err(MarshalError::new)?;
+            // SAFETY: the word the host wrote before the hostcall returned.
+            Ok(Some(unsafe { (&raw const *word).read_volatile() } as i32))
+        }
         c if c == Command::SYS_OPENED as u32 => {
             let answer = SysOpened::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?;
             if let Some(&owner) = files.owner(answer.fd) {

@@ -59,6 +59,14 @@ namespace key {
 inline constexpr std::uint32_t STREAM = 2147483649u;
 } // namespace key
 
+// The guest's own hostcall, past xpute's PROGRAM bit.
+namespace hostcall {
+
+// A number and an offset: the host writes the number plus one at the offset and answers 0,
+// before the hostcall returns; a number of 0 it refuses with EINVAL, writing nothing.
+inline constexpr std::uint32_t ANSWER = 2147483649u;
+} // namespace hostcall
+
 // The commands, `major << 8 | minor`, on the majors a program numbers its own from
 // (xpute's PROGRAM_MAJOR and up), so none is one of xpute's — SYS_OPENED among them. A
 // packet, where one is taken, is a branch whose first child is a number.
@@ -96,6 +104,9 @@ inline constexpr std::uint32_t OPEN = 4106u;
 
 // Closes the packet's descriptor, answered or not; fails with EBADF for one not open.
 inline constexpr std::uint32_t CLOSE = 4107u;
+
+// Zeroes a word of its own, makes the hostcall ANSWER of the packet's number and the word's offset, and replies with the word as it then reads it; fails with the host's errno where the host refused.
+inline constexpr std::uint32_t HOSTCALL = 4108u;
 
 // What RAISE raises.
 inline constexpr std::uint32_t SIGNAL = 4353u;

@@ -26,6 +26,7 @@ what that program computes.
 │                        │                        │                          │
 │                        │  ◀═══ wake_ms ═══════  │                          │
 │                        │  ◀──── now() ────────  │                          │
+│                        │  ◀── hostcall(at) ───  │                          │
 └───────────┬────────────┘                        └────────────┬─────────────┘
             │                                                  │
             └──────────────────────────┬───────────────────────┘
@@ -35,10 +36,13 @@ what that program computes.
            └─────────────────────────────────────────────────────┘
 ```
 
-Three edges, and one call the other way: the guest reads the host's clock
-(`now`), because it spends its quota against that clock in the middle of a turn,
-when the host cannot run. There is no second entry point, no other callback, and
-nothing either side holds a pointer to on the other.
+Three edges, and two calls the other way, each answered before it returns: the
+guest reads the host's clock (`now`), because it spends its quota against that
+clock in the middle of a turn, when the host cannot run; and it makes a
+**hostcall**, a call of its program's that the host answers from what it already
+holds, where an answer a turn later would cost it that turn. There is no second
+entry point, no other callback, and nothing either side holds a pointer to on
+the other.
 
 `intr` is the whole of the guest's life. xpute names it, as a C runtime names
 `main`, and the guest implements it. It runs when the host rings, for as long as
@@ -95,8 +99,8 @@ xpute_guest::wasm_abi!(
 
 A guest **linked into a native program**, on a unix platform, is booted by one
 `xpute_host::native_abi!`, beside `native::Alloc` as the program's allocator,
-and exports `xpute_intr` and `xpute_mem` (`rust/host/examples/native.rs` is one,
-and `make test` runs it).
+and exports `xpute_intr`, `xpute_mem` and `xpute_hostcall_on`
+(`rust/host/examples/native.rs` is one, and `make test` runs it).
 
 A **C++ program** takes the library in two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with

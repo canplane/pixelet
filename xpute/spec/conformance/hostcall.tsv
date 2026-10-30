@@ -1,0 +1,17 @@
+# The hostcall's trace (ARCHITECTURE.md, the contract's rule 8). HOSTCALL makes the fixture's hostcall
+# (guest.json `hostcall`) and replies with the word the host wrote, so a reply says the host ran the record
+# and wrote what it named before the hostcall returned, inside the turn. Two in one turn each reach the host.
+scenarios	C8.answered C8.refused C8.twice
+
+C8.answered.step.0	submit 1 HOSTCALL ack 41
+C8.answered.step.1	ring 0
+C8.answered.turn.0.completions	1:HOSTCALL=42
+
+C8.refused.step.0	submit 1 HOSTCALL ack 0
+C8.refused.step.1	ring 0
+C8.refused.turn.0.completions	1:HOSTCALL=-22
+
+C8.twice.step.0	submit 1 HOSTCALL ack 1
+C8.twice.step.1	submit 2 HOSTCALL ack 2
+C8.twice.step.2	ring 0
+C8.twice.turn.0.completions	1:HOSTCALL=2 2:HOSTCALL=3

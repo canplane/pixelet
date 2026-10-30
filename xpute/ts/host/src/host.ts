@@ -4,10 +4,11 @@
  * A host mounted on a guest its platform opened: the directory, a doorbell
  * whose every turn runs the guest's host stream as it ends (a trapped turn's
  * too, so its report is read before the doorbell hears it stop), the system
- * calls answered through the program's `SysHost`, and the strobe.
+ * calls and hostcalls answered through the program's `SysHost`, and the
+ * strobe.
  */
 
-import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, encode_sys_opened } from "@xpute/host/abi/cmd.spec.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";
@@ -18,11 +19,15 @@ import type { Grant } from "@xpute/host/sched/quantum.ts";
 import { Strobe } from "@xpute/host/sched/strobe.ts";
 
 /** The guest as its platform opened it: its memory, which never moves or
- * grows, and its entry, `intr`, a turn that returns when it wants the next,
- * in ms. The floor names the entry, as a C runtime names `main`. */
+ * grows; its entry, `intr`, a turn that returns when it wants the next, in
+ * ms; and where its hostcalls are answered. The floor names the entry, as a C
+ * runtime names `main`. */
 export interface Guest {
   mem: ArrayBuffer;
   intr(quota_ms: f64): f64;
+  /** `answer` answers each hostcall from here on: a record at an offset of
+   * `mem`, run before the hostcall returns. ENOSYS until it is set. */
+  answer_with(answer: (at: u32) => i32): void;
 }
 
 /** What the program mounts its guest with. */
@@ -77,6 +82,7 @@ export function mount(guest: Guest, cfg: Config): Host {
   const sys = new Sys(cfg.sys, (fd, res, detail) =>
     send(Command.SYS_OPENED, encode_sys_opened(doorbell, fd, res, detail)),
   );
+  guest.answer_with((at) => sys.hostcall(guest.mem, at));
   return {
     guest,
     directory,

@@ -63,6 +63,14 @@ pub mod key {
     pub const KEYS: &[&str] = &["STREAM"];
 }
 
+/// The guest's own hostcall, past xpute's PROGRAM bit.
+pub mod hostcall {
+    /// A number and an offset: the host writes the number plus one at the offset and answers 0,
+    /// before the hostcall returns; a number of 0 it refuses with EINVAL, writing nothing.
+    pub const ANSWER: u32 = 2147483649;
+    pub const KEYS: &[&str] = &["ANSWER"];
+}
+
 /// The commands, `major << 8 | minor`, on the majors a program numbers its own from
 /// (xpute's PROGRAM_MAJOR and up), so none is one of xpute's — SYS_OPENED among them. A
 /// packet, where one is taken, is a branch whose first child is a number.
@@ -89,12 +97,14 @@ pub mod cmd {
     pub const OPEN: u32 = 4106;
     /// Closes the packet's descriptor, answered or not; fails with EBADF for one not open.
     pub const CLOSE: u32 = 4107;
+    /// Zeroes a word of its own, makes the hostcall ANSWER of the packet's number and the word's offset, and replies with the word as it then reads it; fails with the host's errno where the host refused.
+    pub const HOSTCALL: u32 = 4108;
     /// What RAISE raises.
     pub const SIGNAL: u32 = 4353;
     /// An open answered: tagged with its owner, its result the host's.
     pub const OPENED: u32 = 4354;
     pub const KEYS: &[&str] = &[
         "OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN",
-        "CLOSE", "SIGNAL", "OPENED",
+        "CLOSE", "HOSTCALL", "SIGNAL", "OPENED",
     ];
 }

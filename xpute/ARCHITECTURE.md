@@ -21,14 +21,16 @@ format, an errno table, scalar math — that any program can link and call.
 `kit`, which knows nothing of them. Neither layer knows what a guest computes.
 
 Three things cross between the ends and nothing else does: one memory they
-share, one call in, one number out. The sections follow from that:
+share, one call in, one number out. Two calls go the other way, each answered
+before it returns: the host's clock, and a **hostcall**, a question the host
+answers from what it already holds (both below). The sections follow from that:
 
 1. the memory;
 2. what is written into it — one shape for every message, its data, and the
    queues that carry it each way;
 3. the call that makes it run, the turn;
 4. handles, which name objects across the boundary;
-5. I/O and a GPU's calls, which a guest asks of its host;
+5. I/O, hostcalls and a GPU's calls, which a guest asks of its host;
 6. the contract all of it comes down to;
 7. the languages, and the records that hold them to each other.
 
@@ -232,7 +234,7 @@ built as a module exports `intr`; a guest linked into a native program exports
 program's, since a process holds one guest, with one reservation
 (`xpute-host/native.rs`). What the guest's form hands it there is xpute's as
 well (`BootInfo`): the memory it was given, where its own ranges may begin, the
-host's clock and its heap's reading.
+host's clock, its hostcall and its heap's reading.
 
 How long a turn may take, and how that time is spent, are settled at three
 levels, from the outside in.
@@ -406,6 +408,33 @@ names, `ENOENT` below a root nothing is bound to, `EROFS` for a write below one
 that cannot be written. What a file is, where it lies and how it is fetched are
 the binding's; xpute only carries the call.
 
+### Hostcalls
+
+A system call is answered after the turn returns, so a guest that needs its
+answer to go on waits a turn for it, and a chain of such calls a turn each.
+Some need nothing from outside: the host holds the answer already, as a page's
+text engine holds a line's width. For those a program's call crosses as a
+**hostcall**, the name Wasmtime and Lucet give a guest's call into its host.
+The guest lays the call's record, the system call's shape, past the last its
+turn has recorded, where nothing publishes it, and hands the host its offset
+(`ipc/sys` `hostcall`). The host runs it before the call returns, reading that
+record and writing only what it names, and answers with a value or `-errno`.
+It hands the call to the program as it hands a recorded one
+(`@xpute/host/ipc/sys.ts` `Sys.hostcall`), so the program numbers its calls
+once and may answer either way.
+
+A hostcall never waits on anything outside: an open, a buffer read back and
+every call of xpute's own stay records. It crosses the boundary once a call
+where the rest of it crosses once a turn, so it is for the few calls a turn
+cannot answer late.
+
+A module imports it as `env.hostcall`, beside `env.now`; a guest linked into a
+native program is handed it with its clock (`BootInfo`). There the guest runs
+on its own thread while the caller of `intr` waits, so the native host hands
+each hostcall back to that caller, which answers it on its own thread and waits
+again (`xpute-host/native/thread.rs`); the program says what answers through
+`xpute_hostcall_on` (`answer_with`), under xpute's name as the entry is.
+
 ### A GPU's calls, in WebGPU's words
 
 A renderer's calls are what streams were made for, and most of what they say is
@@ -473,14 +502,15 @@ Each rule is one the other end could catch being broken.
 1. **The core memory.** It never moves or grows while the guest lives, and every
    address that crosses is an offset into it.
 2. **The turn.** The guest runs only inside `intr`, and the two sides never run
-   at once: the host touches nothing a turn writes until it has returned. The
-   quota is advice, not a deadline: a guest can spend a whole quota inside one
-   function, and the host cannot take the turn back until it returns. `wake_ms`
-   is 0 for the next turn, a positive number for that many milliseconds from
-   now, and negative (`NO_WAKE`) for none. A turn of no quota is still a turn,
-   and a question the host needs answered at once is asked in one, of a command
-   the guest answers from what it already holds; one that waits on anything
-   outside is answered on a later turn.
+   at once: the host touches nothing a turn writes until it has returned, but
+   what a hostcall names while it runs (rule 8). The quota is advice, not a
+   deadline: a guest can spend a whole quota inside one function, and the host
+   cannot take the turn back until it returns. `wake_ms` is 0 for the next turn,
+   a positive number for that many milliseconds from now, and negative
+   (`NO_WAKE`) for none. A turn of no quota is still a turn, and a question the
+   host needs answered at once is asked in one, of a command the guest answers
+   from what it already holds; one that waits on anything outside is answered on
+   a later turn.
 3. **The frame.** Four words: `tag`, `cmd` with its flags, `result`, and the
    packet. With `ACKREQ` a submission gets exactly one reply; without it, a
    reply only when it failed. A reply carries its submission's `tag` and `cmd`,
@@ -497,6 +527,12 @@ Each rule is one the other end could catch being broken.
    issuing side checks the generation.
 7. **The clock.** During a turn the guest reads the host's clock (`now`) in
    milliseconds. It never runs backward, and only differences mean anything.
+8. **The hostcall.** During a turn the guest may hand the host the offset of a
+   record in the system call's shape. The host runs it before the call
+   returns, reads that record and writes only what it names, and answers with a
+   value or `-errno`, `ENOSYS` for a call that is not the program's. It answers
+   from what it already holds and waits on nothing outside, and the guest runs
+   nothing until it has, so the two sides still never run at once.
 
 Everything else is one end's own. The guest's: where its ranges lie, its heap,
 its tick, passes, tasks and files. The host's: the size of a quota, when to
@@ -535,8 +571,9 @@ decides what must match.
   linked into the host's own native process (`native`). There it reserves the
   memory, and runs every call into the guest on the guest's own thread, since
   the guest keeps its module-wide values in `Global`s (`xpute-guest/global.rs`),
-  statics sound on one thread alone. It also provides the allocator that keeps
-  the guest's blocks in its memory and every other thread's out of it.
+  statics sound on one thread alone, handing each hostcall back to the caller
+  that waits. It also provides the allocator that keeps the guest's blocks in
+  its memory and every other thread's out of it.
 - **The GPU's calls follow the same split.** Each guest language writes them
   (`rust/gpu`, `cpp/xpute/gpu`). The GPU hosts run them in TypeScript on WebGPU
   (`ts/gpu`), and in Rust on wgpu behind the `host` feature.
@@ -600,9 +637,9 @@ One host runs them against every guest through the boundary alone
 (`xpute-conformance/guest.rs`) and the C++ one (`cpp/conformance/guest.cpp`),
 each over the commands `spec/conformance/guest.json` numbers. Each guest is
 built both as a native library and as a WebAssembly module that imports nothing
-but its memory and the clock; the C++ one from the library's amalgamation
-(`cpp/amalgamation.awk`), the two files a C++ program takes, so what the traces
-hold is what ships.
+but its memory, the clock and the hostcall; the C++ one from the library's
+amalgamation (`cpp/amalgamation.awk`), the two files a C++ program takes, so
+what the traces hold is what ships.
 
 ## Prior art
 
@@ -624,6 +661,7 @@ where the tree records the source.
 | NVMe's queues and their doorbell registers                  | the doorbell                     | Its name, and that ringing it carries no message                               |
 | Plan 9's file access, in POSIX's words                      | `ipc/sys`, `ipc/ns`              | Descriptors the guest issues; a root and a path; the host binds the roots      |
 | The ELF auxiliary vector                                    | `ipc/directory`                  | Entries a reader skips when it does not know them                              |
+| Wasmtime's and Lucet's hostcalls                            | `ipc/sys` `hostcall`             | The name of a guest's call into its host, answered before it returns           |
 | POSIX and Linux errno                                       | `spec/status/errno.json`         | Negative errno numbers                                                         |
 | The host's `JSON.parse`                                     | `codec/json`                     | The grammar, judged as the host's parser judges it                             |
 | IEEE 754's round half to even, as WGSL rounds               | `math/scalar`                    | One rounding in every language                                                 |

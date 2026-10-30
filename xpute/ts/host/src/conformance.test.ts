@@ -23,7 +23,8 @@ import { key as directory_key } from "@xpute/host/ipc/directory.spec.ts";
 import * as frame from "@xpute/host/ipc/frame.ts";
 import { Ring } from "@xpute/host/ipc/ring.ts";
 import { each_record } from "@xpute/host/ipc/stream.ts";
-import { cmd, key, MEM_BYTES } from "@xpute/host/conformance.spec.ts";
+import { Sys } from "@xpute/host/ipc/sys.ts";
+import { cmd, hostcall, key, MEM_BYTES } from "@xpute/host/conformance.spec.ts";
 import type { Guest } from "@xpute/host/host.ts";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -45,11 +46,12 @@ function library(dir: string, name: string): string {
 }
 
 const NOW = koffi.proto("double xpute_now(void)");
+const HOSTCALL = koffi.proto("int32_t xpute_hostcall(uint32_t at)");
 
 /** Room past the guest's range for the module's own stack and data, which the build decides. */
 const MODULE_BYTES = 4 << 20;
 
-const MODULE_IMPORTS = ["env.memory", "env.now"];
+const MODULE_IMPORTS = ["env.hostcall", "env.memory", "env.now"];
 
 /** A guest as the host holds it, and the offset its boot answered. */
 interface Opened extends Guest {
@@ -61,15 +63,25 @@ interface Opener {
   close(): void;
 }
 
+/** What answers a guest's hostcalls until its host says. */
+function unanswered(): number {
+  return Errno.ENOSYS;
+}
+
 function native(path: string): Opener {
   const lib = koffi.load(path);
   const boot = lib.func(
-    "uint32_t xpute_conformance_boot(void *mem, xpute_now *now)",
+    "uint32_t xpute_conformance_boot(void *mem, xpute_now *now, xpute_hostcall *hostcall)",
   );
   const intr = lib.func(
     "double xpute_conformance_intr(void *mem, double quota)",
   );
   const now = koffi.register(() => clock_ms, koffi.pointer(NOW));
+  let answer: (at: number) => number = unanswered;
+  const host = koffi.register(
+    (at: number) => answer(at),
+    koffi.pointer(HOSTCALL),
+  );
   // The guest keeps the region between calls, so it is memory that does not
   // move, seen from here without a copy. Words of eight bytes, so it is
   // 8-aligned, as a guest asks.
@@ -78,15 +90,18 @@ function native(path: string): Opener {
     open() {
       const at = koffi.alloc("double", MEM_BYTES / 8);
       regions.push(at);
-      const directory_at = boot(at, now);
+      answer = unanswered;
+      const directory_at = boot(at, now, host);
       return {
         mem: koffi.view(at, MEM_BYTES),
         directory_at,
         intr: (quota) => intr(at, quota),
+        answer_with: (a) => (answer = a),
       };
     },
     close() {
       koffi.unregister(now);
+      koffi.unregister(host);
       lib.unload();
       for (const at of regions) koffi.free(at);
     },
@@ -107,8 +122,13 @@ function module(path: string): Opener {
     open() {
       const pages = MODULE_BYTES >> 16;
       const memory = new WebAssembly.Memory({ initial: pages, maximum: pages });
+      let answer: (at: number) => number = unanswered;
       const instance = new WebAssembly.Instance(compiled, {
-        env: { memory, now: () => clock_ms },
+        env: {
+          memory,
+          now: () => clock_ms,
+          hostcall: (at: number) => answer(at),
+        },
       });
       const exports = instance.exports as {
         xpute_conformance_boot(): number;
@@ -119,6 +139,7 @@ function module(path: string): Opener {
         mem: memory.buffer as ArrayBuffer,
         directory_at,
         intr: (quota) => exports.intr(quota),
+        answer_with: (a) => (answer = a),
       };
     },
     close() {},
@@ -170,6 +191,28 @@ class Host {
     this.sq = new Ring(mem, this.directory.get(directory_key.SQ));
     this.cq = new Ring(mem, this.directory.get(directory_key.CQ));
     this.stream_at = this.directory.get(key.STREAM);
+    // The fixture's one call, answered through this runtime's own end, as a
+    // program's host mounts it.
+    const sys = new Sys(
+      {
+        fs: {
+          open: () => {
+            throw new Error("the traces open nothing a host runs");
+          },
+          commit: () => {},
+        },
+        abort: () => {},
+        program: (code, w, a) => {
+          if (code !== hostcall.ANSWER) return Errno.ENOSYS;
+          const [n, word] = [w[a], w[a + 1]];
+          if (n === 0) return Errno.EINVAL;
+          new Uint32Array(mem, word, 1)[0] = n + 1;
+          return 0;
+        },
+      },
+      () => {},
+    );
+    guest.answer_with((at) => sys.hostcall(mem, at));
   }
 
   submit(tag: number, command: number, ack: boolean, args: number[]): void {
@@ -471,7 +514,14 @@ function run(g: Golden, guest: string, opener: Opener, trace: string): void {
   }
 }
 
-for (const trace of ["directory", "door", "handle", "clock", "file"]) {
+for (const trace of [
+  "directory",
+  "door",
+  "handle",
+  "clock",
+  "file",
+  "hostcall",
+]) {
   for (const [guest, open] of Object.entries(GUESTS)) {
     test(`trace ${trace} - the ${guest} guest`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);

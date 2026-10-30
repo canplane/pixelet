@@ -2,8 +2,9 @@
 //
 // What the kernel asks of the host, as xpute system calls recorded during a
 // turn and run by the host after it returns, so they are done before the
-// next turn rises. Only the clock is called directly, since a turn measures
-// its budget mid-turn.
+// next turn rises; and what the host answers from what it holds, as
+// hostcalls answered before they return. The clock too is called directly,
+// since a turn measures its budget mid-turn.
 
 use core::panic::Location;
 
@@ -20,7 +21,7 @@ use crate::sys::io::param::MAX_CREDITS;
 static SYS: Global<Option<Sys>> = Global::new();
 
 /// Only the file table records through it beside this module, and `RESERVE`
-/// counts both.
+/// counts what it records.
 pub(crate) fn sys() -> Option<&'static mut Sys> {
     SYS.get(|| None).as_mut()
 }
@@ -45,20 +46,21 @@ pub fn rise() {
 /// The most one file records in a turn: its descriptor's.
 const FILE_TURN_BYTES: usize = fd_turn_bytes(PATH_BYTES);
 
-/// What the calls that cannot wait may record in one turn, all of them files:
-/// each credit's file answered and a new one opened on it, and each kept file
-/// read and written. Requests that can wait take the stream only past it.
+/// What the files may record in one turn: each credit's file answered and a
+/// new one opened on it, and each kept file read and written. A hostcall's
+/// record lies past what the turn has recorded, in the room left.
 pub const RESERVE: usize = FILE_TURN_BYTES * (2 * MAX_CREDITS as usize + 2 * Kept::ALL.len());
 
 const _: () = assert!(
     RESERVE < stream::BYTES as usize,
-    "the calls that cannot wait would not fit the host stream"
+    "the files' calls would not fit the host stream"
 );
 
-/// A request that can wait a turn: None where there is no host, false where
-/// the turn's stream has no room for it past `RESERVE`.
-pub fn offer(op: u32, args: &[u32], bytes: &[u8]) -> Option<bool> {
-    Some(sys()?.try_call(op, args, bytes, RESERVE))
+/// A call the host answers before it returns: None where there is no host,
+/// else its value or its errno, ENOSPC where the record does not fit past
+/// the turn's.
+pub fn hostcall(op: u32, args: &[u32], bytes: &[u8]) -> Option<Result<u32, Errno>> {
+    Some(sys()?.hostcall(op, args, bytes))
 }
 
 static TURN: Global<u64> = Global::new();

@@ -17,6 +17,7 @@ pub struct BootInfo {
     /// stopped; in a native library, the end of its config's front.
     pub data_end: u32,
     pub clock: fn() -> f64,
+    pub hostcall: crate::hostcall::Hostcall,
     pub heap_stat: fn() -> HeapStat,
 }
 
@@ -24,11 +25,13 @@ pub struct BootInfo {
 /// (`sched::quantum`: 0 for the next frame, `NO_WAKE` for none).
 pub type Entry = fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64;
 
-/// What a form's export runs: `entry`'s turn, the clock installed from
-/// `boot` on the first.
+/// What a form's export runs: `entry`'s turn, the clock and the hostcall
+/// installed from `boot` on the first.
 pub fn intr(quota_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
     if !crate::clock::is_set() {
-        crate::clock::set(boot().clock);
+        let b = boot();
+        crate::clock::set(b.clock);
+        crate::hostcall::set(b.hostcall);
     }
     entry(quota_ms, boot)
 }

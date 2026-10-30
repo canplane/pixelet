@@ -8,6 +8,8 @@ use xpute_gpu::admit::Admit;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
 use xpute_guest::mem::heap::HeapStat;
+#[cfg(test)]
+use xpute_kit::status::errno::Errno;
 
 static BOOT: Global<Option<BootInfo>> = Global::new();
 
@@ -22,6 +24,7 @@ pub fn set_heap_stat(heap_stat: fn() -> HeapStat) {
         given: 0,
         data_end: 0,
         clock: || 0.0,
+        hostcall: |_| Errno::ENOSYS as i32,
         heap_stat,
     });
 }

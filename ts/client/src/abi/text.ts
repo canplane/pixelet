@@ -3,8 +3,8 @@
 /**
  * The kernel's own system calls, TEXT_LAYOUT and TEXT_RASTER, answered from
  * the platform's text. They name no root: the program numbers them past
- * xpute's PROGRAM bit, and they run between turns with xpute's, so what they
- * write is in place by the time the kernel reads it.
+ * xpute's PROGRAM bit, and the kernel makes them as hostcalls, so what they
+ * write is in place when the hostcall returns.
  */
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";

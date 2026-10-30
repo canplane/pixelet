@@ -22,6 +22,12 @@ double xpute_intr(double quota_ms);
 // may be null) — what the shell reads the directory and the rings through.
 uint8_t *xpute_mem(uint32_t *bytes);
 
+// `answer`, or none for null, answers the kernel's hostcalls: each a record
+// at an offset of the memory, handed back to the thread waiting in
+// `xpute_intr` and answered there before the turn goes on, with a value or
+// -errno. It must not call into the guest.
+void xpute_hostcall_on(int32_t (*answer)(uint32_t at));
+
 // Opens the device: 0 when it is open, -1 when the system has none. What it
 // is, the kernel reads from the block its first call asks the host for.
 int32_t xpute_gpu_open(void);

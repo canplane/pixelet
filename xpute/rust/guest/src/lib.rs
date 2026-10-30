@@ -7,6 +7,7 @@ pub mod abi;
 pub mod clock;
 pub mod entry;
 pub mod global;
+pub mod hostcall;
 pub mod ipc;
 pub mod mem;
 pub mod sched;

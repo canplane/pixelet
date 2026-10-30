@@ -54,6 +54,13 @@ export const key = {
   STREAM: 2147483649 as number,
 } as const;
 
+/** The guest's own hostcall, past xpute's PROGRAM bit. */
+export const hostcall = {
+  /** A number and an offset: the host writes the number plus one at the offset and answers 0,
+   * before the hostcall returns; a number of 0 it refuses with EINVAL, writing nothing. */
+  ANSWER: 2147483649 as number,
+} as const;
+
 /** The commands, `major << 8 | minor`, on the majors a program numbers its own from
  * (xpute's PROGRAM_MAJOR and up), so none is one of xpute's — SYS_OPENED among them. A
  * packet, where one is taken, is a branch whose first child is a number. */
@@ -80,6 +87,8 @@ export const cmd = {
   OPEN: 4106 as number,
   /** Closes the packet's descriptor, answered or not; fails with EBADF for one not open. */
   CLOSE: 4107 as number,
+  /** Zeroes a word of its own, makes the hostcall ANSWER of the packet's number and the word's offset, and replies with the word as it then reads it; fails with the host's errno where the host refused. */
+  HOSTCALL: 4108 as number,
   /** What RAISE raises. */
   SIGNAL: 4353 as number,
   /** An open answered: tagged with its owner, its result the host's. */

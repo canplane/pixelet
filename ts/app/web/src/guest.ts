@@ -7,7 +7,8 @@
  * an `application/wasm` response, which a `file:` URL lacks.
  */
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { reserve_mem } from "@xpute/host/mem/reserve.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";
 import type { Config, Guest } from "@pxl/client/bracket.tsx";
@@ -23,8 +24,14 @@ export async function open(cfg: Config): Promise<Guest> {
   const bytes = await (
     await fetch(GUEST_WASM_URL, DEV_BUNDLE ? { cache: "no-store" } : undefined)
   ).arrayBuffer();
+  // A hostcall is answered by whatever the host mounted on it says.
+  let answer = (_at: u32): i32 => Errno.ENOSYS;
   const { instance } = await WebAssembly.instantiate(bytes, {
-    env: { memory, now: () => performance.now() },
+    env: {
+      memory,
+      now: () => performance.now(),
+      hostcall: (at: u32) => answer(at),
+    },
   });
   const turn = instance.exports.intr as Guest["intr"];
   // The first turn lays the memory out and writes the directory.
@@ -38,5 +45,11 @@ export async function open(cfg: Config): Promise<Guest> {
     webgpu.run(gpu, cfg.gpu_head);
     return wake;
   };
-  return { mem, intr };
+  return {
+    mem,
+    intr,
+    answer_with: (a) => {
+      answer = a;
+    },
+  };
 }

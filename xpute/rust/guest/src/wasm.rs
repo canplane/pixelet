@@ -2,8 +2,9 @@
 
 //! The guest built as one WebAssembly module: how its build script links it
 //! (`link`), what it reads of the module (`data_end`, `stack_high`, `given`,
-//! `now`), and `wasm_abi!`, which defines its allocator and exports `intr`
-//! (xpute-host `native_abi!` is the native form's).
+//! `now`) and asks of its host (`hostcall`), and `wasm_abi!`, which defines
+//! its allocator and exports `intr` (xpute-host `native_abi!` is the native
+//! form's).
 //!
 //! Only the module's reads are wasm32's: a build script runs on the build
 //! machine. Nothing here is a global allocator or an export until a program
@@ -26,7 +27,7 @@ mod module;
 
 pub use link::{link, LinkConfig, WASM_PAGE_BYTES};
 #[cfg(target_arch = "wasm32")]
-pub use module::{data_end, given, now, stack_high};
+pub use module::{data_end, given, hostcall, now, stack_high};
 
 /// What xpute must not assume of a module guest.
 pub struct Config {
@@ -50,6 +51,7 @@ pub fn boot_info(
         given: u32::try_from(given()).unwrap_or(u32::MAX),
         data_end: data_end(),
         clock: now,
+        hostcall,
         heap_stat,
     }
 }

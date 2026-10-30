@@ -108,8 +108,8 @@ pub fn coming(design: &Design) -> bool {
         .is_none_or(|b| b.slot != NO_SLOT && !sheet().is_painted(b.slot as u32))
 }
 
-/// Its width, height and where it stands down from its top; none until its
-/// words are laid out, which a later turn has.
+/// Its width, height and where it stands down from its top; none where its
+/// words could not be laid out this turn.
 pub fn size(design: &Design) -> Option<[f64; 3]> {
     if let Some(b) = stickers().get(design) {
         return Some(b.size);

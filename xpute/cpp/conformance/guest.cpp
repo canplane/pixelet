@@ -17,6 +17,7 @@
 #include "xpute/kit/wire/xtp/cursor.hpp"
 #include "xpute/guest/abi/cmd.spec.hpp"
 #include "xpute/guest/abi/handle.hpp"
+#include "xpute/guest/hostcall.hpp"
 #include "xpute/guest/ipc/directory.hpp"
 #include "xpute/guest/ipc/door.hpp"
 #include "xpute/guest/ipc/file.hpp"
@@ -56,6 +57,8 @@ struct State {
     abi::Table<std::monostate, HANDLES> handles;
     xpute_conformance_now now;
     double mark = 0;
+    // What HOSTCALL's host writes.
+    std::uint32_t word = 0;
 };
 
 // The memory never grows, so a module's allocator sits over a fixed range.
@@ -90,7 +93,7 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         if (const std::uint32_t *owner = s.files.owner(answer->fd)) s.door.post(*owner, cmd::OPENED, 0, answer->res);
         return {};
     }
-    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE) {
+    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE || cmd == cmd::HOSTCALL) {
         std::optional<std::uint32_t> n = first_u32(pkt);
         if (!n) return {.err = Errno::ebadmsg};
         arg = *n;
@@ -126,6 +129,14 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     case cmd::SINCE: {
         double since = s.now() - s.mark;
         return {.val = static_cast<std::int32_t>(round(since))};
+    }
+    case cmd::HOSTCALL: {
+        s.word = 0;
+        const std::array<std::uint32_t, 2> args{arg, s.stream.mem().off_of(&s.word)};
+        Result<std::uint32_t> res = s.sys.hostcall(hostcall::ANSWER, args, {});
+        if (!res) return {.err = res.error().errnum};
+        // The word the host wrote before the hostcall returned.
+        return {.val = static_cast<std::int32_t>(*static_cast<volatile std::uint32_t *>(&s.word))};
     }
     default:
         return {.err = Errno::enosys};
@@ -167,6 +178,10 @@ std::uint32_t range_at() {
 
 double host_now() {
     return wasm::now();
+}
+
+std::int32_t host_hostcall(std::uint32_t at) {
+    return wasm::hostcall(at);
 }
 
 #endif
@@ -226,6 +241,7 @@ extern "C" std::uint32_t xpute_conformance_boot(void) {
     std::uint32_t range = range_at();
     // A range past the memory's end is a host that sized it for another guest.
     ensure(std::uint64_t{range} + MEM_BYTES <= wasm::given(), Errno::enomem, range);
+    set_hostcall(host_hostcall);
     return boot(mem::core(), range, host_now);
 }
 
@@ -239,7 +255,10 @@ extern "C" double intr(double) {
 // allocates from the process, so nothing reads the ambient one.
 Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEM_BYTES); }
 
-extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now) { return boot(given(mem), 0, now); }
+extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_hostcall hostcall) {
+    set_hostcall(hostcall);
+    return boot(given(mem), 0, now);
+}
 
 extern "C" double xpute_conformance_intr(std::uint8_t *mem, double) { return turn(given(mem), 0); }
 

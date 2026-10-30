@@ -2,8 +2,9 @@
 
 //! The host for a guest linked into its own process: it reserves the core
 //! memory (`reserve`), runs every call into the guest on the guest's thread,
-//! where its `Global`s are sound (`thread`), and keeps the guest's blocks in
-//! its memory (`Alloc`). One guest a process, since its base is one, so the
+//! where its `Global`s are sound (`thread`), hands each hostcall the guest
+//! makes meanwhile back to the waiting caller (`answer_with`), and keeps the
+//! guest's blocks in its memory (`Alloc`). One guest a process, since its base is one, so the
 //! C ABI is xpute's own names with no program's prefix (`native_abi!`).
 
 mod alloc;
@@ -18,6 +19,7 @@ use xpute_guest::mem::heap::HeapStat;
 use xpute_guest::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
+pub use thread::{answer_with, Answer};
 pub use xpute_guest::entry::{intr, BootInfo, Entry};
 
 pub struct Config {
@@ -67,8 +69,10 @@ pub fn boot(cfg: &Config) -> Guest {
 }
 
 impl Guest {
-    /// `f` on the guest's thread, the caller waiting. Refused on the guest's
-    /// thread and inside `while_idle`, where it would wait for itself.
+    /// `f` on the guest's thread, the caller waiting, and answering on its
+    /// own thread each hostcall `f` makes (`answer_with`). Refused on the
+    /// guest's thread, inside `while_idle` and inside an answer, where it
+    /// would wait for itself.
     pub fn run<R: Send>(self, f: impl FnOnce() -> R + Send) -> R {
         thread::run(f)
     }
@@ -98,6 +102,7 @@ impl Guest {
             given: u32::try_from(self.mem().1).expect("the memory is at most 4 GiB"),
             data_end: cfg.data_end,
             clock: cfg.clock,
+            hostcall: thread::hostcall,
             heap_stat: alloc::stat,
         }
     }
@@ -111,9 +116,11 @@ pub fn now() -> f64 {
 
 /// Boots the guest with `cfg` on the first call and exports its entry and
 /// memory under xpute's names: `xpute_intr(double quota_ms) -> double`, which
-/// runs `entry` (`Entry`) on the guest's thread, and
+/// runs `entry` (`Entry`) on the guest's thread;
 /// `xpute_mem(uint32_t *bytes) -> uint8_t *`, `bytes` null or written with
-/// the memory's size. `guest()` is the program's for its own calls.
+/// the memory's size; and `xpute_hostcall_on(int32_t (*answer)(uint32_t))`,
+/// whose `answer`, or none for null, answers the guest's hostcalls
+/// (`answer_with`). `guest()` is the program's for its own calls.
 #[macro_export]
 macro_rules! native_abi {
     ($cfg:expr, $entry:expr $(,)?) => {
@@ -157,6 +164,11 @@ macro_rules! native_abi {
         #[no_mangle]
         pub extern "C" fn xpute_intr(quota_ms: f64) -> f64 {
             xpute_native::intr(quota_ms)
+        }
+
+        #[no_mangle]
+        pub extern "C" fn xpute_hostcall_on(answer: Option<$crate::native::Answer>) {
+            $crate::native::answer_with(answer);
         }
 
         /// # Safety

@@ -2,7 +2,7 @@
 
 /** The app's one native module (PlatformModule.swift, PlatformModule.kt under modules/platform/). */
 
-import type { f32, f64, u32 } from "@xpute/kit/abi/word.ts";
+import type { f32, f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import { requireNativeModule } from "expo";
 
 interface PxlPlatform {
@@ -11,6 +11,9 @@ interface PxlPlatform {
   addListener(event: "onWake", listener: () => void): { remove(): void };
   mem(): ArrayBuffer;
   intr(quotaMs: f64): f64;
+  /** `answer` answers the guest's hostcalls from here on, called on the
+   * JavaScript thread while `intr` waits on the turn making them. */
+  hostcallOn(answer: (at: u32) => i32): void;
   /** Whether the device opened; what it is, the kernel reads from the host. */
   gpuOpen(): boolean;
   /** A body sent zstd, decoded off the JavaScript thread (origin.ts). */

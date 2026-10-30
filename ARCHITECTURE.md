@@ -607,8 +607,12 @@ since a turn that draws through wgpu outgrows React Native's JavaScript stack
 test`.
 
 The kernel records its calls during a turn, and the host runs them after it
-returns, so each is done before the next turn begins (`sys/io/host.rs`). Only
-what the bracket hands over is called directly. An answer comes back as a
+returns, so each is done before the next turn begins (`sys/io/host.rs`). What
+the host answers from what it holds, a text's lines and its pixels, the kernel
+asks by xpute's hostcall instead, answered before the call returns
+(`sys/io/text.rs`): a page's host through the module's import, a device's on the
+JavaScript thread that waits on the turn. Beside those, only what the bracket
+hands over is called directly. An answer comes back as a
 number, read once by `answered` into a count or one of xpute's `Errno` members;
 a code no member names is the host breaking the protocol.
 

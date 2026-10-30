@@ -3692,6 +3692,7 @@ version = "0.0.0"
 dependencies = [
  "libc",
  "xpute-guest",
+ "xpute-kit",
 ]
 
 [[package]]

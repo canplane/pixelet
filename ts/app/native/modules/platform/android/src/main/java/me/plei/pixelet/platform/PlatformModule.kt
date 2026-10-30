@@ -10,6 +10,7 @@ import android.hardware.SensorManager
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import expo.modules.kotlin.exception.CodedException
+import expo.modules.kotlin.jni.JavaScriptFunction
 import expo.modules.kotlin.jni.NativeArrayBuffer
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -42,6 +43,8 @@ class PlatformModule : Module() {
 
     Function("intr") { quotaMs: Double -> PxlNative.intr(quotaMs) }
 
+    Function("hostcallOn") { answer: JavaScriptFunction<Int> -> PxlNative.answer = answer }
+
     /** Whether the device opened; what it is, the kernel reads from the host. */
     Function("gpuOpen") { PxlNative.gpuOpen() }
 
@@ -55,7 +58,10 @@ class PlatformModule : Module() {
 
     OnCreate { PxlNative.woken = { sendEvent("onWake") } }
 
-    OnDestroy { PxlNative.woken = null }
+    OnDestroy {
+      PxlNative.woken = null
+      PxlNative.answer = null
+    }
 
     // ---- the transport (src/origin.ts) ----
 

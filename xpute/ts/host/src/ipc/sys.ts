@@ -3,7 +3,9 @@
 /**
  * The host's end of a guest's system calls (rust/guest/src/ipc/sys.rs):
  * the records a turn left, run after it returns and before the next begins, so
- * whatever they name in guest memory is written before the guest reads it.
+ * whatever they name in guest memory is written before the guest reads it; and
+ * a program's call made as a hostcall, one record run before the hostcall
+ * returns.
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
@@ -49,8 +51,9 @@ export interface SysHost {
   fs: Fs;
   abort(report: Abort): void;
   /** A call of the program's own: its number, the record's words, and where
-   * its arguments begin in them. */
-  program(code: u32, w: U32Array, a: u32): void;
+   * its arguments begin in them. A hostcall's answer is what it returns, 0
+   * for none. */
+  program(code: u32, w: U32Array, a: u32): i32 | void;
 }
 
 interface File {
@@ -79,6 +82,15 @@ export class Sys {
 
   run(mem: ArrayBuffer, at: u32): void {
     each_record(mem, at, HEAD, this.record);
+  }
+
+  /** The hostcall's record at `at`, run now: the program's answer, or ENOSYS
+   * for a call that is not the program's. */
+  hostcall(mem: ArrayBuffer, at: u32): i32 {
+    const [code, n] = new Uint32Array(mem, at, 2);
+    if ((code & op.PROGRAM) === 0) return Errno.ENOSYS;
+    const w = new Uint32Array(mem, at, 2 + n) as U32Array;
+    return this.host.program(code, w, 2) ?? 0;
   }
 
   private readonly record = (code: u32, w: U32Array, a: u32): void => {

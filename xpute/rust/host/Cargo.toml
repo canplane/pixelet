@@ -9,6 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 xpute-guest.workspace = true
+xpute-kit.workspace = true
 
 # The core memory a native host reserves, mapped from the system
 # (src/native/reserve.rs). `native` is unix's alone.
