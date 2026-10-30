@@ -54,7 +54,8 @@ const _: () = assert!(
         && pxl_spec_core::light::HEAD_COUNTED == 1
         && pxl_spec_core::light::HEAD_EPOCH == 2
         && pxl_spec_core::light::HEAD_SIZE == 3
-        && pxl_spec_core::light::HEAD_CORNER_WAS == 4,
+        && pxl_spec_core::light::HEAD_CORNER_WAS == 4
+        && pxl_spec_core::light::HEAD_FOOTPRINT == 6,
     "the head's first two vec4s are read by their words"
 );
 
@@ -79,6 +80,12 @@ fn cast_number(m: &Head) -> u32 {
 /// (`light::HEAD_EPOCH`).
 fn epoch(m: &Head) -> u32 {
     m.v[0].z as u32
+}
+
+/// Whether the cast's marks take each pixel's footprint
+/// (`light::HEAD_FOOTPRINT`).
+fn footprint(m: &Head) -> bool {
+    m.v[1].z != 0
 }
 
 /// The map's side (`light::HEAD_SIZE`), none in the eye's head.
@@ -531,7 +538,8 @@ pub fn light_miss_cs(
 /// (`light::stands_at`), a run on one tile once, and the tiles between it
 /// and where each pixel beside it met it, across, down and either diagonal,
 /// each pair of neighbors once, its footprint (`light::FOOTPRINT_TILES`), so
-/// a jittered ray stands on a tile marked whichever way it moves; nothing
+/// a jittered ray stands on a tile marked whichever way it moves, where the
+/// head asks it (`light::HEAD_FOOTPRINT`), else its own tile alone; nothing
 /// where it met nothing. A word written alike by every thread it is marked
 /// by, so none needs an atomic. Run after the eye's rays, before the reach
 /// (`light_reach_cs`); the drawn receivers stand apart (`light_mark_drawn_cs`).
@@ -549,17 +557,19 @@ pub fn light_mark_cs(
         return;
     }
     let (s, n) = (light_of(eye), size(head));
-    let cast = cast_number(head);
-    // Each pixel's tile read once: the square's, a column past it across and
-    // a row past it down and one before it, which its neighbors take
-    // (`MARK_READ`), none where a pixel met nothing or lies past the drawn.
+    let (cast, footprint) = (cast_number(head), footprint(head));
+    // Each pixel's tile read once: the square's, and where the footprint is
+    // taken, a column past it across and a row past it down and one before
+    // it, which its neighbors take (`MARK_READ`); none where a pixel met
+    // nothing or lies past the drawn.
     let (cols, rows) = (m + 1, m + 2);
     let mut met = [0u32; MARK_READ];
     let mut tiles = [[0i32; 2]; MARK_READ];
     let mut k = 0;
     while k < cols * rows {
         let (x, y) = ((id.x * m + k % cols) as i32, (id.y * m + k / cols) as i32 - 1);
-        if y >= 0 {
+        let own = k % cols < m && k / cols >= 1 && k / cols <= m;
+        if y >= 0 && (footprint || own) {
             let (got, tile) = met_tile(eye, rays, &s, UVec3::new(x as u32, y as u32, 0), drawn);
             met[k as usize] = u32::from(got);
             tiles[k as usize] = tile;
@@ -584,7 +594,7 @@ pub fn light_mark_cs(
                 // The neighbors after it, so every pair of neighbors is taken
                 // once: across, down, and the two diagonals.
                 let mut j = 0;
-                while j < 4 {
+                while j < 4 && footprint {
                     let (dx, dy) = ([1, 0, 1, 1][j], [0, 1, 1, -1][j]);
                     let q = ((y as i32 + 1 + dy) as u32 * cols + x + dx) as usize;
                     if met[q] != 0 {

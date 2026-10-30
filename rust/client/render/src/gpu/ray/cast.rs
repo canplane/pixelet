@@ -163,8 +163,11 @@ pub(super) struct CastBuffers {
     light_moved: u32,
     light_cast: bool,
     /// Whether the next cast marks where the eye's rays met the world
-    /// (`light_mark_cs`): held until one does.
+    /// (`light_mark_cs`): held until one does; and whether the marks of the
+    /// frame the eye stands in, its pixels' footprints, are owed, as the
+    /// marks while it moved took none (`light::HEAD_FOOTPRINT`).
     light_world: bool,
+    light_footprint_owed: bool,
     refold: bool,
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
@@ -375,6 +378,7 @@ impl RaysPass {
             ),
             light_cast: false,
             light_world: false,
+            light_footprint_owed: false,
             refold: false,
             group: 0,
             bound: [0; 11],
@@ -698,7 +702,10 @@ impl RaysPass {
         l.read(&cast.eye[eye::FORWARD..eye::TAN + 2]);
         l.read(cast.actors);
         l.mark(c.generated.counts());
-        let light_moved = !held || !detail_held || !l.end();
+        // The first frame the eye stands in after it moved marks again, with
+        // the footprints the jitter's frames after it stand on.
+        let footprint_owed = c.light_footprint_owed && kind != FrameKind::cast;
+        let light_moved = !held || !detail_held || !l.end() || footprint_owed;
         c.light_detail_moved = held && !detail_held;
         if !c.light_ready {
             c.light_content.forget();
@@ -709,8 +716,8 @@ impl RaysPass {
         // epoch begins. Else what they stood on stands, marked in the epoch
         // already, so none of it is the cast's to cast anew
         // (`light_reach_cs`); the jitter's casts move a ray within its
-        // footprint, marked already.
-        c.light_world |= kind == FrameKind::cast || !held;
+        // footprint, marked already where the eye stood when they were.
+        c.light_world |= kind == FrameKind::cast || !held || footprint_owed;
         if c.light_cast {
             // The head (pxl-spec-core `light::HEAD_WORDS`).
             let mut head = [0u32; light::HEAD_WORDS];
@@ -726,6 +733,14 @@ impl RaysPass {
             c.light_corner_was = core::mem::replace(&mut c.light_corner, corner);
             head[light::HEAD_CORNER_WAS] = c.light_corner_was[0] as u32;
             head[light::HEAD_CORNER_WAS + 1] = c.light_corner_was[1] as u32;
+            // The footprints taken where the eye stands; while it moves, the
+            // next frame's rays mark again, and the frame it stands in owes
+            // them.
+            let footprint = kind != FrameKind::cast;
+            head[light::HEAD_FOOTPRINT] = u32::from(footprint);
+            if c.light_world {
+                c.light_footprint_owed = !footprint;
+            }
             let at = 4 * light::STARTS_AT;
             head[at..at + 4 * light::STARTS_VEC4S].copy_from_slice(&light_map.2.words());
             // The actors drawn, receivers as decor is (`light_mark_drawn_cs`).

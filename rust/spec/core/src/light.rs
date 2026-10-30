@@ -314,7 +314,8 @@ impl Light {
 /// What the light's cast is handed beside the eye's words, a uniform: a head
 /// of `HEAD_VEC4S` vec4s, the cast's number, whether it is counted, its
 /// epoch and the map's side (`HEAD_CAST` to `HEAD_SIZE`), the corner of the
-/// cast before (`HEAD_CORNER_WAS`), then the rays' starts (`Starts`, from
+/// cast before (`HEAD_CORNER_WAS`), whether its marks take each pixel's
+/// footprint (`HEAD_FOOTPRINT`), then the rays' starts (`Starts`, from
 /// `STARTS_AT`), then the actors (`ACTORS_AT`).
 pub const HEAD_VEC4S: usize = ACTORS_AT + 1 + ACTORS;
 pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
@@ -336,6 +337,11 @@ pub const HEAD_SIZE: usize = 3;
 /// corners `TILE`-aligned, which the reads move by (pxl-shader light.rs
 /// `light_detail_cs`).
 pub const HEAD_CORNER_WAS: usize = 4;
+/// Whether the cast's marks take each pixel's footprint (`FOOTPRINT_TILES`),
+/// 1 or 0, the second vec4's third word: not while the eye moves, as the next
+/// frame's rays mark again, and in the first frame it stands, which the
+/// jitter's frames after it stand on (pxl-shader light.rs `light_mark_cs`).
+pub const HEAD_FOOTPRINT: usize = 6;
 
 /// Where a texel's ray starts, the same point of the world in every frame
 /// cast in one light frame (pxl-render gpu/shadow.rs `aim`): off anchors
@@ -624,7 +630,8 @@ pub const MARK: u32 = 4;
 /// whole (pxl-shader light.rs `light_mark_cs`): between where its ray met
 /// the world and where its neighbor's did, which a jitter of under half a
 /// pixel either way keeps its ray within, so the marks hold whatever the
-/// jitter. Past it the two met apart, an edge, and each marks its own.
+/// jitter. Past it the two met apart, an edge, and each marks its own. Taken
+/// where the eye stands (`HEAD_FOOTPRINT`).
 pub const FOOTPRINT_TILES: i32 = 3;
 
 /// The reads by the square of `COARSE` tiles a side, past them, `coarse`

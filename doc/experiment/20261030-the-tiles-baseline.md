@@ -753,3 +753,28 @@ vsyncs missed); its GPU figures may still stand.
   from the spheres' tightening on cost some 4 ms a moving frame (29), and
   the light's work of this session took it back. A frame drawn whole is
   no faster than at the plan's start.
+
+**The footprints where the eye stands** (2026-10-31, 03:00–03:45, worktree
+`moving-frame`): the light's marks take each pixel's footprint
+(`FOOTPRINT_TILES`, from `e6b740ab8`) only in the first frame the eye
+stands in after it moved (`light::HEAD_FOOTPRINT`), its own tile alone
+while it moves, as the next frame's rays mark again. `pxl.profiler.drive
+('orbit', 40)`, noon, 3728×2338, the same window, cast frames:
+
+| build | busy p50 | p95 | interval p50 |
+|---|---|---|---|
+| a probe, no footprint at all | 22.7 | 26.0 | 22 |
+| main (`706b6b435`) | 24.6 | 28.0 | 24 |
+| the change | 22.1 | 24.8 | 22 |
+| main | 24.0 | 26.3 | 24 |
+
+- Some 2 ms off a moving frame, as the footprints cost. Stopped after a
+  short orbit, the light cast in the frames about the stop and in none of
+  the 6 s after; shadows as before, no error.
+- Runs after these read the GPU at half its speed across every span
+  (busy 34–40 ms, every span about doubled), as did one of `e6b740ab8`'s
+  above: a state of the machine no thermal or power record shows. Such
+  runs are left out; a comparison is taken as A/B in one sitting.
+- Of the 4 ms `e6b740ab8` put on a moving frame, the footprints were it:
+  about 2 ms of it taken back by the marks reading each pixel once
+  (`6f84e6fb8`), the rest by this.
