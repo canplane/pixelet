@@ -140,10 +140,10 @@ const ELEMENTS_PER_PAUSE: usize = 1 << 12;
 
 pub async fn parse_gltf<P: Future<Output = ()>>(
     bytes: &[u8],
-    external_bufs: &[&[u8]],
+    external_buffers: &[&[u8]],
     pause: impl Fn() -> P,
 ) -> Result<Gltf, MarshalError> {
-    let budget = external_bufs
+    let budget = external_buffers
         .iter()
         .fold(bytes.len(), |n, b| n.saturating_add(b.len()))
         .saturating_mul(COMPS_PER_BYTE);
@@ -169,13 +169,13 @@ pub async fn parse_gltf<P: Future<Output = ()>>(
         }
         let text = text.ok_or_else(malformed)?;
         let json = read_json(text).ok_or_else(malformed)?;
-        let mut bufs: Vec<&[u8]> = bin.into_iter().collect();
-        bufs.extend_from_slice(external_bufs);
-        read_document(json, &bufs, &pause, budget).await
+        let mut buffers: Vec<&[u8]> = bin.into_iter().collect();
+        buffers.extend_from_slice(external_buffers);
+        read_document(json, &buffers, &pause, budget).await
     } else {
         let text = core::str::from_utf8(bytes).map_err(|_| malformed())?;
         let json = read_json(text).ok_or_else(malformed)?;
-        read_document(json, external_bufs, &pause, budget).await
+        read_document(json, external_buffers, &pause, budget).await
     }
 }
 
@@ -300,7 +300,7 @@ impl<'a> SamplerFields<'a> {
 struct Reader<'a, F> {
     accessors: Vec<AccessorFields<'a>>,
     views: Vec<ViewFields<'a>>,
-    bufs: &'a [&'a [u8]],
+    buffers: &'a [&'a [u8]],
     pause: &'a F,
     /// Components the file may still decode.
     budget: Cell<usize>,
@@ -342,7 +342,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
             return Ok(out);
         };
         let bv = self.views[bv_idx];
-        let buf = self.bufs[idx_in(bv.buf, self.bufs.len())?];
+        let buf = self.buffers[idx_in(bv.buf, self.buffers.len())?];
         let view_off = size(bv.off, 0)?;
         let view_length = idx_in(bv.length, usize::MAX)?;
         let view = view_off
@@ -442,7 +442,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
 
 async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     json: JsonValue<'_>,
-    bufs: &[&[u8]],
+    buffers: &[&[u8]],
     pause: &F,
     budget: usize,
 ) -> Result<Gltf, MarshalError> {
@@ -452,7 +452,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     let r = Reader {
         accessors: arr(json.get("accessors")).map(AccessorFields::of).collect(),
         views: arr(json.get("bufferViews")).map(ViewFields::of).collect(),
-        bufs,
+        buffers,
         pause,
         budget: Cell::new(budget),
     };

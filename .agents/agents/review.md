@@ -10,12 +10,14 @@ meant to do and where it is, not why its author thinks it is right.
 ## Rules
 
 - Read only: no edit, `git add`, commit, stash or checkout, no
-  `cargo shader-wgsl`, no dev server. `git diff` and `git show HEAD:<path>` are
-  fine.
-- Run cargo from `rust/` into your own target:
+  `cargo shader-wgsl` that writes (`--check` is fine), no dev server.
+  `git diff` and `git show HEAD:<path>` are fine.
+- Run cargo from `rust/` into your own target: choose `review-<id>` once, a
+  unique id (`date +%s`-$RANDOM), and write the same path into every cargo
+  call, as a shell variable does not outlive the call:
 
   ```bash
-  cd rust && CARGO_TARGET_DIR="$PWD/target/session/review-$$" cargo test -p <crate>
+  cd rust && CARGO_TARGET_DIR="$PWD/target/session/review-<id>" cargo test -p <crate>
   ```
 - Review only the scope you were given.
 - Read code through the LSP tool: definitions, references, callers, callees.
