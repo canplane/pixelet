@@ -102,6 +102,12 @@ SCREAMING rules (`"val"`, `"pkt"`, `"err"`, `SENSOR_POS`, `XR_POSE`,
 Abbreviate the binding, keep the type: `let idx: Index`, `let cfg: Config`,
 `SensorState { status: SensorStatus, err: Option<Message> }`.
 
+## Tests
+
+A test is named by the one fact it holds, its subject first, in a few words
+and no article: `removed_handle_stale`, `spent_quota_parks`,
+`door_answers_nop`. Two facts are two tests.
+
 ## Plurals
 
 A plural names a collection only. One value is singular (`End`, `Take`,

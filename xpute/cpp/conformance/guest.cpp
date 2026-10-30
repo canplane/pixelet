@@ -117,12 +117,6 @@ std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> pkt) {
 Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     // A command that takes a number fails with EBADMSG when its packet does not read.
     std::uint32_t arg = 0;
-    if (cmd == static_cast<std::uint32_t>(abi::Command::SYS_OPENED)) {
-        Result<abi::SysOpened> answer = abi::SysOpened::read(pkt);
-        if (!answer) return {.err = answer.error().errnum};
-        if (const std::uint32_t *owner = s.files.owner(answer->fd)) s.door.post(*owner, cmd::OPENED, 0, answer->res);
-        return {};
-    }
     if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE || cmd == cmd::HOSTCALL) {
         std::optional<std::uint32_t> n = first_u32(pkt);
         if (!n) return {.err = Errno::ebadmsg};
@@ -193,7 +187,12 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std
 double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
     s.sys.rise();
-    s.door.drain([&s](std::uint32_t cmd, std::span<const std::uint8_t> pkt) { return apply(s, cmd, pkt); });
+    s.door.drain(
+        [&s](const abi::SysOpened &opened) {
+            if (std::optional<std::uint32_t> owner = s.files.opened(s.sys, opened)) s.door.post(*owner, cmd::OPENED, 0, opened.res);
+            return Applied{};
+        },
+        [&s](std::uint32_t cmd, std::span<const std::uint8_t> pkt) { return apply(s, cmd, pkt); });
     s.stream.publish();
     s.sys.fall();
     return s.door.pending() ? 0.0 : NO_WAKE;

@@ -34,7 +34,7 @@ fn command_needs_reply_room() {
         d.post(0, 2, 0, 0);
     }
     assert_eq!(d.sq().push(0, 1, frame::ACKREQ, 0, None), Errno::OK);
-    d.drain(|_, _| {
+    d.drain(|_| {
         for _ in 0..MOST_EVENTS {
             d.post(0, 2, 0, 0);
         }
@@ -56,7 +56,7 @@ fn ring_peaks() {
     for _ in 0..SQ {
         assert_eq!(d.sq().push(0, 1, frame::ACKREQ, 0, None), Errno::OK);
     }
-    assert_eq!(d.drain(|_, _| Ok(Some(0))), 3);
+    assert_eq!(d.drain(|_| Ok(Some(0))), 3);
     assert_eq!(
         d.take_stat(),
         DoorStat {
@@ -74,7 +74,7 @@ fn ring_peaks() {
     while d.cq().peek().is_some() {
         d.cq().advance();
     }
-    assert_eq!(d.drain(|_, _| Ok(Some(0))), SQ - 3);
+    assert_eq!(d.drain(|_| Ok(Some(0))), SQ - 3);
     assert_eq!(
         d.take_stat(),
         DoorStat {
@@ -83,4 +83,48 @@ fn ring_peaks() {
             left_peak: 0
         }
     );
+}
+
+/// SYS_OPENED's packet: the descriptor, its result and no detail.
+fn sys_opened(fd: u32, res: i32) -> Vec<u8> {
+    let mut buf = vec![0u8; SLOT as usize];
+    let mut w = PacketWriter::new(&mut buf, 3);
+    w.u32(Some(fd)).i32(Some(res)).u32(Some(0));
+    let len = w.fitted().expect("a packet that fits a slot") as usize;
+    buf.truncate(len);
+    buf
+}
+
+#[test]
+fn door_answers_nop() {
+    let (d, _buf) = door();
+    assert_eq!(
+        d.sq().push(4, Command::NOP as u32, frame::ACKREQ, 0, None),
+        Errno::OK
+    );
+    d.drain(|_| unreachable!("the program is handed no NOP"));
+    let f = d.cq().peek().expect("a reply");
+    assert_eq!(
+        (f.tag, f.cmd, f.flags & frame::RES, f.result),
+        (4, Command::NOP as u32, frame::RES, 0)
+    );
+}
+
+#[test]
+fn open_completion_handed_over() {
+    let (d, _buf) = door();
+    let pkt = sys_opened(3, 9);
+    assert_eq!(
+        d.sq().push(0, Command::SYS_OPENED as u32, 0, 0, Some(&pkt)),
+        Errno::OK
+    );
+    let mut got = None;
+    d.drain(|submission| match submission {
+        Submission::Opened(opened) => {
+            got = Some((opened.fd, opened.res));
+            Ok(Some(0))
+        }
+        Submission::Program(..) => unreachable!("an open's completion is not the program's frame"),
+    });
+    assert_eq!(got, Some((3, 9)));
 }

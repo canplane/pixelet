@@ -210,7 +210,11 @@ class Host {
         this.sq.write(this.writer, args.length),
         "a full ring takes no packet",
       );
-      for (const a of args) this.writer.u32(a);
+      // A negative number, such as an open's -errno, as the i32 it is.
+      for (const a of args) {
+        if (a < 0) this.writer.i32(a);
+        else this.writer.u32(a);
+      }
       pkt = this.writer;
     }
     assert.deepStrictEqual(

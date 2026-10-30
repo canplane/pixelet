@@ -21,6 +21,8 @@ pub use xpute_tool::spec::{
     pascal, pretty, rgb_literal, rs_doc, rs_ident, snake, ts_doc, Node, Output,
 };
 
+use xpute_tool::spec as xpute_spec;
+
 use crate::root;
 
 /// xpute-tool reads and writes under this repository's root.
@@ -30,12 +32,12 @@ pub fn repo() {
 
 pub fn read(path: &str) -> Result<Node, String> {
     repo();
-    xpute_tool::spec::read(path)
+    xpute_spec::read(path)
 }
 
 pub fn read_as<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     repo();
-    xpute_tool::spec::read_as(path)
+    xpute_spec::read_as(path)
 }
 
 pub fn outputs() -> Result<Vec<Output>, String> {
@@ -59,5 +61,5 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 /// not `write`, fails where one does.
 pub fn generate(write: bool) -> Result<(), String> {
     repo();
-    xpute_tool::spec::apply(outputs()?, write)
+    xpute_spec::apply(outputs()?, write)
 }

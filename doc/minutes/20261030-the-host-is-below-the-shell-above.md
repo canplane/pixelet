@@ -78,7 +78,7 @@ out answered before they return.
 | Crossing                | Direction    | What                                               |
 | ----------------------- | ------------ | -------------------------------------------------- |
 | the core memory         | both         | granted once at boot; everything else lies in it   |
-| `intr(quota)`/`wake_ms` | host → guest | the turn                                           |
+| `run(quota)`/`wake_ms`  | host → guest | the turn                                           |
 | `now`                   | guest → host | the clock, answered at once                        |
 | `hostcall(at)`          | guest → host | a program's call, answered at once (contract rule 8) |
 
@@ -86,8 +86,8 @@ Laid in the memory over those:
 
 | Channel                                     | Direction    | Kind               | When it is seen          |
 | ------------------------------------------- | ------------ | ------------------ | ------------------------ |
-| submission ring                             | host → guest | queue of commands  | applied the next turn    |
-| completion ring                             | guest → host | replies, signals   | read as the turn returns |
+| submission ring                             | host → guest | queue of frames    | applied the next turn    |
+| completion ring                             | guest → host | replies, events    | read as the turn returns |
 | streams (system calls, GPU)                 | guest → host | records, no reply  | run as the turn returns  |
 | in place (directory, snapshot, profiler)    | guest → host | the latest state   | between turns            |
 | answers at guest-named addresses (`READ`, `MAP_ASYNC`, `QUEUE_DONE`, `DEVICE`) | host → guest | a future | the next turn |
@@ -109,7 +109,7 @@ has one user, the GPU, whose gain is not measured.
 | xpute                                   | A paravirtualized VM            |
 | --------------------------------------- | ------------------------------- |
 | the core memory                         | guest physical memory           |
-| `intr(quota)`, `wake_ms`                | a vCPU's entry; HLT with a timer's deadline |
+| `run(quota)`, `wake_ms`                 | a vCPU's entry; HLT with a timer's deadline |
 | streams run as the turn returns         | a virtqueue kicked once at exit |
 | the completion ring                     | virtio's used ring              |
 | `hostcall(at)`                          | a hypercall, its arguments at a guest address |
@@ -187,23 +187,23 @@ one part:
 
 | Part                         | What                                                        | Does the guest see it | In a VM                                   |
 | ---------------------------- | ----------------------------------------------------------- | --------------------- | ----------------------------------------- |
-| the contract                 | the core memory, the turn (`intr`, the quota, `wake_ms`), the rings, the streams, `hostcall`, `now`, the directory, handles | yes | the paravirtual interface: hypercalls, virtqueues, shared pages |
+| the contract                 | the core memory, the turn (`run`, the quota, `wake_ms`), the rings, the streams, `hostcall`, `now`, the directory, handles | yes | the paravirtual interface: hypercalls, virtqueues, shared pages |
 | the host's machinery         | the doorbell, the strobe, `Sys`, `GpuHost`, the native host's thread handed back | no; it keeps the contract | the hypervisor's own: its vCPU scheduler, its device models |
 | the guest's library          | the door, the tick, the pass, tasks, the allocators         | the guest picks what it links | a guest kernel's paravirtual drivers, a library OS |
 | `kit`                        | collections, codecs, wire formats                           | anyone links it       | —                                         |
 
-Policy enters at two places: the host's machinery takes a pacer, the guest's
+Policy enters at two places: the host's machinery takes a scheduling policy, the guest's
 library takes the tick's phase names and meaning. "Hypercall", strictly, is the
 synchronous trap, xpute's `hostcall`; the rings are virtqueues. Xen names the
 hypercalls and its shared memory (grant tables, event channels) together as the
 guest's interface, and xpute's documents already name that whole "the
 contract", so it needs no new name.
 
-### `intr` and the quota
+### `run` and the quota
 
-`intr` is xpute's alone: the host handing the guest the CPU.
+`run` is xpute's alone: the host handing the guest the CPU.
 
-The quota fuses two owners today (`@xpute/host/sched/quantum.ts` `grant`):
+The quota fused two owners (`@xpute/host/sched/quantum.ts` `grant`, before the split):
 
 | What goes into it                                   | What it is                          | Whose         |
 | --------------------------------------------------- | ----------------------------------- | ------------- |
@@ -214,12 +214,12 @@ The quota fuses two owners today (`@xpute/host/sched/quantum.ts` `grant`):
 | `Grant`'s `refresh_ms` and `paced_ms`, carried back into `WORLD_FRAME` and the profiler's frame record | the frame's clock | pixelet's |
 
 None of the right column is xpute's mechanism. The mechanism is the turn
-itself: `intr` with a quota, `wake_ms` obeyed, a turn rung only when one was
+itself: `run` with a quota, `wake_ms` obeyed, a turn rung only when one was
 asked for, an overrun taken off the next quota. When to ring and how much to
 grant are policy, and the policy is injected when xpute boots:
 
-- **A pacer** says when a requested turn is rung. On the web it is the
-  display's: the refresh measured from animation frames, turns a whole number
+- **A scheduling policy** says when a requested turn is rung. On the web it is
+  frame pacing, the display's: the refresh measured from animation frames, turns a whole number
   of refreshes apart (Android Swappy), since the host gives the main thread
   back to the compositor between them. On a command line it is a timer on
   `wake_ms` and the host's clock.
@@ -230,7 +230,7 @@ grant are policy, and the policy is injected when xpute boots:
   with the rest; `Host.input` and `Strobe.input` become that policy's input,
   not xpute's API.
 
-A display-paced pacer may still ship beside xpute's host, as the GPU's calls
+Frame pacing may still ship beside xpute's host, as the GPU's calls
 stand beside its two ends: any program on a page needs one, and nothing in it is
 pixelet's. What xpute's core must not do is assume it. The tick's phases follow
 the same line on the guest's side: the ordered phases and their budgets are
@@ -238,7 +238,7 @@ xpute's mechanism; their names (`xpute/spec/sched/tick.json`: `interaction`,
 `visible`, `content`, `cosmetic`, `report`) and meaning are the program's.
 
 The frame's clock pixelet reads (`Grant`'s `refresh_ms` and `paced_ms`, in
-`WORLD_FRAME` and the profiler's record) comes from the pacer pixelet injected,
+`WORLD_FRAME` and the profiler's record) comes from the frame pacing pixelet injected,
 not from xpute, as Chromium hands a renderer `BeginFrameArgs` (a frame time, a
 deadline, an interval).
 
@@ -252,7 +252,7 @@ Swappy among xpute's precedents. Those passages become one host's policy.
 This keeps the line
 [20260914-mechanism-and-policy-and-what-xpute-is.md](./20260914-mechanism-and-policy-and-what-xpute-is.md)
 drew, mechanism in xpute and policy above, and moves two things it placed: the
-central scheduler no longer sizes the quantum from the display's frame interval
+central scheduler no longer sizes the quota from the display's frame interval
 as its own mechanism, and the policy's numbers are injected at the host's boot
 rather than declared in the guest's directory. Where it lands it is named as a
 contract change.
@@ -385,8 +385,8 @@ The fusion keeps preemption and asynchrony at the host, at the turn's edge:
                                        └────────────────────────────────────┘
 ```
 
-- No signal plane inside the guest: the host folds an arrival into a completion
-  and asks a turn, as a posted interrupt waits for the next entry.
+- No signal plane inside the guest: the host puts an arrival on the submission
+  ring as a frame and asks a turn, and the guest reads it in that turn.
 - The shape exists: the GPU's host does exactly this (a record asks, a ticket
   completes, `wake_on` asks the turn), and so does a file's open (`SYS_OPENED`).
   A worker is a device whose DMA buffer is a slab.

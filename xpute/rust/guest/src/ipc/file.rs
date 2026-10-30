@@ -7,6 +7,7 @@
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::abi::cmd::SysOpened;
 use crate::abi::handle::Table;
 use crate::ipc::sys::spec::flag;
 use crate::ipc::sys::{Fd, Sys};
@@ -44,6 +45,16 @@ impl<O: Copy, const N: usize> Files<O, N> {
         sys.openat(fd, root, flag::O_WRONLY, path.as_bytes());
         sys.write(fd, bytes);
         self.close(sys, fd);
+    }
+
+    /// The owner of the open `opened` completes, or none where its descriptor
+    /// was closed since; a descriptor whose open failed is closed here.
+    pub fn opened(&mut self, sys: &mut Sys, opened: &SysOpened) -> Option<O> {
+        let owner = self.owner(opened.fd).copied()?;
+        if opened.res < 0 {
+            self.close(sys, opened.fd);
+        }
+        Some(owner)
     }
 
     pub fn owner(&self, fd: Fd) -> Option<&O> {

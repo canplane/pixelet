@@ -3,7 +3,7 @@
 //! pixelet's data specs, written by xpute-tool's (xpute_tool::spec::data): its Rust
 //! carries no names, and a `file` is a slot of the catalog (catalog.rs).
 
-use xpute_tool::spec::data::{DataSpec, Enums, FileRefs, Layout};
+use xpute_tool::spec::data::{self as xpute_data, DataSpec, Enums, FileRefs, Layout};
 
 pub use xpute_tool::spec::data::ts_literal;
 
@@ -292,5 +292,5 @@ const LAYOUT: Layout = Layout {
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     repo();
-    xpute_tool::spec::data::outputs(&DATA_SPECS, &LAYOUT)
+    xpute_data::outputs(&DATA_SPECS, &LAYOUT)
 }

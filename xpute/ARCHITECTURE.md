@@ -208,10 +208,13 @@ sent and rung. A guest that traps is gone, and the doorbell rings it no more.
 
 The guest's end is the **door** (`ipc/door` `Door`). It applies the submissions
 in order, answers each, and posts what the guest raises into the completion
-ring, which holds a whole turn's output. Before each submission the door checks
-that the ring has room for the most one command may leave — its events, a bound
-the program gives (`most_events`), and its reply — and where it has not, it
-applies no more and leaves the rest for the next turn, in order.
+ring, which holds a whole turn's output. xpute's own frames it applies itself,
+and hands the program the rest and each open the host completed (`Submission`);
+a drain runs before any phase's budget, so the program records what it is handed
+and returns. Before each submission the door checks that the ring has room for
+the most one command may leave — its events, a bound the program gives
+(`most_events`), and its reply — and where it has not, it applies no more and
+leaves the rest for the next turn, in order.
 
 ---
 
@@ -381,7 +384,9 @@ Files borrow Plan 9's file namespace:
   so a root is the whole of what it grants.
 
 An open is the one call that waits: the host answers it with `SYS_OPENED` on a
-later turn, once the file can be read whole. A read, a write and a close are
+later turn, once the file can be read whole, and the door hands it to the
+program, which finds the open's owner in its file table (`ipc/file`
+`Files::opened`), a failed open closed there. A read, a write and a close are
 done before the next turn, and a file opened for writing is replaced at its
 close by what was written.
 

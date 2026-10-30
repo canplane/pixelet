@@ -3,7 +3,7 @@
 //! pixelet's command table, on xpute's (its `base`), written by xpute-tool's
 //! (xpute_tool::spec::cmd).
 
-use xpute_tool::spec::cmd::{Target, TsEnums};
+use xpute_tool::spec::cmd::{self as xpute_cmd, Target, TsEnums};
 
 use super::{repo, Output};
 
@@ -20,5 +20,5 @@ const TARGETS: [Target; 1] = [Target {
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     repo();
-    xpute_tool::spec::cmd::outputs(&TARGETS)
+    xpute_cmd::outputs(&TARGETS)
 }

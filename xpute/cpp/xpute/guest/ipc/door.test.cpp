@@ -16,6 +16,9 @@ constexpr std::uint32_t CQ = 256;
 constexpr std::uint32_t SLOT = 64;
 constexpr std::uint32_t MOST_EVENTS = 64;
 
+// These tests submit no open.
+constexpr auto no_open = [](const abi::SysOpened &) { return Applied{}; };
+
 struct Fixture {
     std::vector<std::uint64_t> buf;
     Door door;
@@ -36,7 +39,7 @@ XPUTE_TEST(door_command_needs_reply_room) {
     const Door &d = f.door;
     for (std::uint32_t k = 0; k < CQ - MOST_EVENTS; k++) d.post(0, 2, 0, 0);
     XPUTE_CHECK(d.sq().push(0, 1, frame::ACKREQ, 0) == Errno::ok);
-    d.drain([&](std::uint32_t, std::span<const std::uint8_t>) {
+    d.drain(no_open, [&](std::uint32_t, std::span<const std::uint8_t>) {
         for (std::uint32_t k = 0; k < MOST_EVENTS; k++) d.post(0, 2, 0, 0);
         return Applied{.val = 7};
     });
@@ -58,7 +61,7 @@ XPUTE_TEST(door_event_pkt_errno) {
     Memory mem(reinterpret_cast<std::uintptr_t>(f.buf.data()), f.buf.size() * 8);
     mem.set_word(entry + 4 * frame::PKT, 4);
     bool applied = false;
-    d.drain([&](std::uint32_t, std::span<const std::uint8_t>) { return applied = true, Applied{}; });
+    d.drain(no_open, [&](std::uint32_t, std::span<const std::uint8_t>) { return applied = true, Applied{}; });
     XPUTE_CHECK(!applied);
     got = d.cq().peek();
     XPUTE_CHECK(got && got->tag == 5 && got->result == static_cast<std::int32_t>(Errno::ebadmsg));
@@ -70,11 +73,11 @@ XPUTE_TEST(door_ring_peaks) {
     // Three commands start before the reserve runs out, so five of eight wait.
     for (std::uint32_t k = 0; k < CQ - (MOST_EVENTS + 1) - 2; k++) d.post(0, 2, 0, 0);
     for (std::uint32_t k = 0; k < SQ; k++) XPUTE_CHECK(d.sq().push(0, 1, frame::ACKREQ, 0) == Errno::ok);
-    XPUTE_CHECK(d.drain([](std::uint32_t, std::span<const std::uint8_t>) { return Applied{}; }) == 3);
+    XPUTE_CHECK(d.drain(no_open, [](std::uint32_t, std::span<const std::uint8_t>) { return Applied{}; }) == 3);
     XPUTE_CHECK((d.take_stat() == DoorStat{.cq_peak = CQ - MOST_EVENTS, .sq_peak = SQ, .left_peak = SQ - 3}));
     XPUTE_CHECK_EQ(d.take_stat() == DoorStat{}, true, "taking it starts the next from zero");
 
     while (d.cq().peek()) d.cq().advance();
-    XPUTE_CHECK(d.drain([](std::uint32_t, std::span<const std::uint8_t>) { return Applied{}; }) == SQ - 3);
+    XPUTE_CHECK(d.drain(no_open, [](std::uint32_t, std::span<const std::uint8_t>) { return Applied{}; }) == SQ - 3);
     XPUTE_CHECK((d.take_stat() == DoorStat{.cq_peak = SQ - 3, .sq_peak = SQ - 3, .left_peak = 0}));
 }

@@ -23,6 +23,7 @@ use crate::shell;
 use crate::shell::Sent;
 use crate::sys::boot;
 use crate::sys::io::dispatch;
+use crate::sys::io::file;
 use crate::sys::io::host;
 use crate::sys::io::loader;
 use crate::sys::io::request;
@@ -41,7 +42,7 @@ use xpute_guest::clock::now;
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory, Entry};
-use xpute_guest::ipc::door::{Door, DoorStat};
+use xpute_guest::ipc::door::{Door, DoorStat, Submission};
 use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_guest::mem::{self, off_of_slice};
 use xpute_guest::sched::task;
@@ -179,7 +180,13 @@ pub fn run(
         renderer::on_gpu_lost();
         loader::on_images_lost();
     }
-    door().drain(|number, pkt| apply::apply(s, number, pkt));
+    door().drain(|submission| match submission {
+        Submission::Opened(opened) => {
+            file::on_opened(&opened);
+            Ok(Some(0))
+        }
+        Submission::Program(number, pkt) => apply::apply(s, number, &pkt),
+    });
     let drained = now();
     if quota_ms > 0.0 || world_frame_waiting() {
         task::poll();

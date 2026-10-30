@@ -16,7 +16,6 @@ use crate::domain::view::setting::store;
 use crate::pointer;
 use crate::profiler::read;
 use crate::profiler::record;
-use crate::sys::io::file;
 use crate::sys::io::source;
 use crate::sys::sched::clock;
 use crate::sys::sched::edge;
@@ -25,7 +24,6 @@ use crate::turn::HostFrame;
 use crate::turn::Platform;
 use pxl_render::gpu::api;
 use pxl_render::gpu::surface;
-use xpute_guest::abi::cmd as xpute_cmd;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::mem::{off_of, off_of_slice};
@@ -85,9 +83,6 @@ pub(super) fn apply(
     use crate::sys::sched::edge::request_world_tick;
     use crate::turn::world_platform;
 
-    if let Some(cmd) = xpute_cmd::Command::of(number) {
-        return apply_xpute(cmd, pkt);
-    }
     let Some(cmd) = Command::of(number) else {
         return Ok(None);
     };
@@ -429,23 +424,6 @@ pub(super) fn apply(
         }
         Command::PROFILER_RINGS => Ok(Some(read_timed(profiler_rings) as i32)),
         Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP => Ok(None),
-    }
-}
-
-fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
-    match cmd {
-        xpute_cmd::Command::NOP => {
-            let val = match pkt {
-                Some(pkt) => xpute_cmd::Nop::read(pkt)?.val,
-                None => 0,
-            };
-            Ok(Some(val as i32))
-        }
-        xpute_cmd::Command::SYS_OPENED => {
-            let p = xpute_cmd::SysOpened::read(given(pkt)?)?;
-            file::on_opened(p.fd, p.res, p.detail);
-            Ok(Some(0))
-        }
     }
 }
 

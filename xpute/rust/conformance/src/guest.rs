@@ -9,10 +9,9 @@
 #[cfg(not(target_arch = "wasm32"))]
 use core::cell::Cell;
 
-use xpute_guest::abi::cmd::{Command, SysOpened};
 use xpute_guest::abi::handle::Table;
 use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory};
-use xpute_guest::ipc::door::{Applied, Door};
+use xpute_guest::ipc::door::{Applied, Door, Submission};
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::stream::Stream;
@@ -197,7 +196,15 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
     let Guest { door, state } = unsafe { &mut *mem.at::<Guest>((range + STATE_AT) as usize) };
     state.sys.rise();
-    door.drain(|cmd, pkt| apply(mem, door, state, cmd, pkt));
+    door.drain(|submission| match submission {
+        Submission::Opened(opened) => {
+            if let Some(owner) = state.files.opened(&mut state.sys, &opened) {
+                door.post(owner, spec::cmd::OPENED, 0, opened.res);
+            }
+            Ok(Some(0))
+        }
+        Submission::Program(cmd, pkt) => apply(mem, door, state, cmd, &pkt),
+    });
     state.stream.publish();
     state.sys.fall();
     if door.pending() {
@@ -348,13 +355,6 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
                 .map_err(MarshalError::new)?;
             // SAFETY: the word the host wrote before the hostcall returned.
             Ok(Some(unsafe { (&raw const *word).read_volatile() } as i32))
-        }
-        c if c == Command::SYS_OPENED as u32 => {
-            let answer = SysOpened::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?;
-            if let Some(&owner) = files.owner(answer.fd) {
-                door.post(owner, spec::cmd::OPENED, 0, answer.res);
-            }
-            Ok(Some(0))
         }
         _ => Ok(None),
     }

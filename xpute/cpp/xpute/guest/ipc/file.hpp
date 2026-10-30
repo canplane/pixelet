@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "xpute/guest/abi/cmd.spec.hpp"
 #include "xpute/guest/abi/handle.hpp"
 #include "xpute/kit/status/bug.hpp"
 #include "sys.hpp"
@@ -41,6 +42,16 @@ template <class O, std::size_t N> class Files {
     }
 
     // None for a descriptor already closed.
+    // The owner of the open `opened` completes, or none where its descriptor was
+    // closed since; a descriptor whose open failed is closed here.
+    std::optional<O> opened(Sys &sys, const abi::SysOpened &opened) {
+        const O *held = held_.get(opened.fd);
+        if (held == nullptr) return std::nullopt;
+        O owner = *held;
+        if (opened.res < 0) close(sys, opened.fd);
+        return owner;
+    }
+
     const O *owner(Fd fd) const noexcept { return held_.get(fd); }
 
     template <class Which> std::optional<Fd> held_for(Which &&which) {

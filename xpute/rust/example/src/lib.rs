@@ -14,7 +14,7 @@
 use xpute_guest::entry::BootInfo;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory};
-use xpute_guest::ipc::door::{Applied, Door};
+use xpute_guest::ipc::door::{Applied, Door, Submission};
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_guest::ipc::sys::{spec::op, Sys};
 use xpute_guest::mem::section::PAGE_BYTES;
@@ -108,7 +108,11 @@ fn entry(_quota_ms: f64, _boot: fn() -> BootInfo) -> f64 {
         return NO_WAKE;
     };
     sys.rise();
-    door.drain(|cmd, pkt| apply(sys, cmd, pkt));
+    door.drain(|submission| match submission {
+        // It opens no file.
+        Submission::Opened(_) => Ok(None),
+        Submission::Program(cmd, pkt) => apply(sys, cmd, &pkt),
+    });
     sys.fall();
     if door.pending() {
         0.0

@@ -2,7 +2,9 @@
 
 //! The guest's end of its rings: submissions applied in order, completions
 //! posted in place. The host reads the completion ring dry before it rings
-//! again, so overrunning it is a sizing bug, not a state to wait out.
+//! again, so overrunning it is a sizing bug, not a state to wait out. xpute's
+//! own frames are applied here; the program is handed the rest, and an open the
+//! host completed.
 
 use core::cell::Cell;
 
@@ -10,11 +12,20 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::PacketWriter;
 
+use crate::abi::cmd::{Command, Nop, SysOpened};
 use crate::ipc::frame;
 use crate::ipc::ring::Ring;
 
 /// None for an unknown command, which replies ENOSYS.
 pub type Applied = Result<Option<i32>, MarshalError>;
+
+/// What the door hands the program: an open the host completed, or a frame
+/// of the program's own, its number and its packet. A drain runs before any
+/// phase's budget, so the program records what it is handed and returns.
+pub enum Submission<'a> {
+    Opened(SysOpened),
+    Program(u32, Option<&'a [u8]>),
+}
 
 /// How full the rings ran since the stat was last taken (`Door::take_stat`):
 /// each figure the most it reached.
@@ -108,7 +119,7 @@ impl Door {
     /// Applies submissions in order while there is room; the rest waits for
     /// the next turn. Replies only to `ACKREQ` and to failures. Returns how
     /// many completions it made.
-    pub fn drain(&self, mut apply: impl FnMut(u32, &Option<&[u8]>) -> Applied) -> u32 {
+    pub fn drain(&self, mut handle: impl FnMut(Submission) -> Applied) -> u32 {
         let tail = self.cq.tail();
         self.keep(|s| s.sq_peak = s.sq_peak.max(self.sq.len()));
         while self.has_room() {
@@ -116,7 +127,7 @@ impl Door {
                 break;
             };
             let result = match self.sq.pkt(&f) {
-                Ok(pkt) => match apply(f.cmd, &pkt) {
+                Ok(pkt) => match applied(f.cmd, pkt, &mut handle) {
                     Ok(Some(val)) => Ok(val),
                     Ok(None) => Err(Errno::ENOSYS as i32),
                     Err(e) => Err(e.errnum as i32),
@@ -135,6 +146,23 @@ impl Door {
         }
         self.keep(|s| s.left_peak = s.left_peak.max(self.sq.len()));
         self.cq.tail().wrapping_sub(tail)
+    }
+}
+
+/// xpute's own frames applied, NOP answering its value; the rest handed over.
+fn applied(
+    cmd: u32,
+    pkt: Option<&[u8]>,
+    handle: &mut impl FnMut(Submission) -> Applied,
+) -> Applied {
+    let given = || pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG));
+    match Command::of(cmd) {
+        Some(Command::NOP) => Ok(Some(match pkt {
+            Some(pkt) => Nop::read(pkt)?.val as i32,
+            None => 0,
+        })),
+        Some(Command::SYS_OPENED) => handle(Submission::Opened(SysOpened::read(given()?)?)),
+        None => handle(Submission::Program(cmd, pkt)),
     }
 }
 
