@@ -1,5 +1,5 @@
 // The world's depth from the light, as its cast left it a word a slot of the
-// clipmap (pxl-shader `light_cs`, pxl-spec-core `light::Light::word`; its depth
+// clipmap (pxl-shader `light_cs`, pxl-spec-core `light::word`; its depth
 // read as `light_depth`, which build.rs makes off its layout), laid into
 // the light's shadow map in the light box's own order before the decor and
 // the actors are drawn into it (gpu/shadow.rs): box texel p's slot is its

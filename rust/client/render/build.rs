@@ -135,12 +135,10 @@ fn main() {
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
     // A light slot's word read as its depth, a share of the light box's, as
-    // pxl-spec-core light.rs `Light::word` lays it: its top bits over the zoom
-    // asked: the one place a word's depth is read.
-    use pxl_spec_core::light::{DEPTH_ONE, ZOOM_BITS as LIGHT_ZOOM_BITS};
-    let light = format!(
-        "fn light_depth(w: u32) -> f32 {{ return f32(w >> {LIGHT_ZOOM_BITS}u) / {DEPTH_ONE}.0; }}\n"
-    );
+    // pxl-spec-core light.rs `word` lays it: the one place a word's depth is
+    // read.
+    use pxl_spec_core::light::DEPTH_ONE;
+    let light = format!("fn light_depth(w: u32) -> f32 {{ return f32(w) / {DEPTH_ONE}.0; }}\n");
     std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
     // The cloud field's lattice unit and the hash its cells draw from, the
     // cumulus's own on the CPU (pxl-spec-core cloud.rs `lattice_hash`): its

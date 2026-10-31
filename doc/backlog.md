@@ -14,11 +14,29 @@ Nothing now.
 
 ## P1
 
-Nothing now.
+- **The eye's samples and what they miss.** Orbiting, 1.6 % of the pixels
+  find no sample's cell and walk alone, some 16 nodes each, some 5 ms
+  (`miss`), the eye's cast some 13 ms of a moving frame's 24; samples
+  closer where they miss cost what they save. Both observers share the
+  passes (pxl-shader observer.rs), so a change holds for the light alike —
+  [20261029-the-screen-keeps-its-tiles-as-the-light-does.md](./minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md),
+  "Proposed after the steps".
+- **The screen reprojected while the eye moves.** The light holds its tiles
+  across the eye's motion, fixed in the world; the screen, fixed to the
+  view, draws whole each frame. Last frame's rays moved to the new view,
+  what they uncover cast anew, an approximation the picture must be held
+  to — same minutes.
+- **The light's marks only where the eye cast anew.** Orbiting, the marks
+  are some 4 ms (`light_beam` less the beam and the cells), every drawn
+  pixel's each moving frame; marked only where the screen's tiles changed,
+  they follow the eye's own change — same minutes.
 
 ## P2
 
-Nothing now.
+- **The stencil and the raster's gate on the devices.** Whether the iPhone,
+  the Quest and Android offer `depth32float-stencil8`, and whether the
+  raster's gate of depth rejects the boxes' fragments early there; taken
+  with the device builds — same minutes, "Open".
 
 ## Parked, with the reason on file
 

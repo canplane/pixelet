@@ -75,50 +75,50 @@ pub mod FRAME {
     pub const wake_in_ms: u32 = 29;
     pub const gpu_read: u32 = 30;
     pub const gpu_spans: u32 = 31;
-    pub const gpu_busy_ms: u32 = 57;
-    pub const gpu_px: u32 = 58;
-    pub const scale: u32 = 59;
-    pub const census: u32 = 60;
-    pub const gpu_frame: u32 = 80;
-    pub const uploads: u32 = 81;
-    pub const uploads_bytes: u32 = 82;
-    pub const depth_bytes: u32 = 83;
-    pub const pack_bytes: u32 = 84;
-    pub const gpu_objects: u32 = 85;
-    pub const zoom_tiles: u32 = 96;
-    pub const tiles_place: u32 = 120;
-    pub const heap_used_bytes: u32 = 121;
-    pub const heap_live_bytes: u32 = 122;
-    pub const heap_run_bytes: u32 = 123;
-    pub const heap_slot_bytes: u32 = 124;
-    pub const heap_range_bytes: u32 = 125;
-    pub const heap_largest_free_bytes: u32 = 126;
-    pub const heap_refusals: u32 = 127;
-    pub const ring_cq_peak: u32 = 128;
-    pub const ring_sq_peak: u32 = 129;
-    pub const ring_held_peak: u32 = 130;
-    pub const body_slots_peak: u32 = 131;
-    pub const waiting: u32 = 132;
-    pub const out: u32 = 137;
-    pub const cap_terrain_refused: u32 = 142;
-    pub const rays_frames: u32 = 143;
-    pub const eye_casts: u32 = 144;
-    pub const eye_rays: u32 = 145;
-    pub const eye_beam: u32 = 146;
-    pub const eye_sample: u32 = 147;
-    pub const eye_miss: u32 = 148;
-    pub const eye_took: u32 = 149;
-    pub const eye_walked: u32 = 150;
-    pub const eye_boxes: u32 = 151;
-    pub const light_casts: u32 = 152;
-    pub const light_rays: u32 = 153;
-    pub const light_beam: u32 = 154;
-    pub const light_sample: u32 = 155;
-    pub const light_miss: u32 = 156;
-    pub const light_took: u32 = 157;
-    pub const light_walked: u32 = 158;
-    pub const light_boxes: u32 = 159;
-    pub const WORDS: u32 = 160;
+    pub const gpu_busy_ms: u32 = 56;
+    pub const gpu_px: u32 = 57;
+    pub const scale: u32 = 58;
+    pub const census: u32 = 59;
+    pub const gpu_frame: u32 = 79;
+    pub const uploads: u32 = 80;
+    pub const uploads_bytes: u32 = 81;
+    pub const depth_bytes: u32 = 82;
+    pub const pack_bytes: u32 = 83;
+    pub const gpu_objects: u32 = 84;
+    pub const zoom_tiles: u32 = 95;
+    pub const tiles_place: u32 = 119;
+    pub const heap_used_bytes: u32 = 120;
+    pub const heap_live_bytes: u32 = 121;
+    pub const heap_run_bytes: u32 = 122;
+    pub const heap_slot_bytes: u32 = 123;
+    pub const heap_range_bytes: u32 = 124;
+    pub const heap_largest_free_bytes: u32 = 125;
+    pub const heap_refusals: u32 = 126;
+    pub const ring_cq_peak: u32 = 127;
+    pub const ring_sq_peak: u32 = 128;
+    pub const ring_held_peak: u32 = 129;
+    pub const body_slots_peak: u32 = 130;
+    pub const waiting: u32 = 131;
+    pub const out: u32 = 136;
+    pub const cap_terrain_refused: u32 = 141;
+    pub const rays_frames: u32 = 142;
+    pub const eye_casts: u32 = 143;
+    pub const eye_rays: u32 = 144;
+    pub const eye_beam: u32 = 145;
+    pub const eye_sample: u32 = 146;
+    pub const eye_miss: u32 = 147;
+    pub const eye_took: u32 = 148;
+    pub const eye_walked: u32 = 149;
+    pub const eye_boxes: u32 = 150;
+    pub const light_casts: u32 = 151;
+    pub const light_rays: u32 = 152;
+    pub const light_beam: u32 = 153;
+    pub const light_sample: u32 = 154;
+    pub const light_miss: u32 = 155;
+    pub const light_took: u32 = 156;
+    pub const light_walked: u32 = 157;
+    pub const light_boxes: u32 = 158;
+    pub const WORDS: u32 = 159;
 }
 
 /// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it.
@@ -162,9 +162,9 @@ pub mod TASK {
 /// One of the worst moving frames since the recording started, by its interval, and the frame before it, which is zero where `has_prev` is 0: a still interval is long on purpose and is never among them.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 160;
-    pub const prev: u32 = 161;
-    pub const WORDS: u32 = 321;
+    pub const has_prev: u32 = 159;
+    pub const prev: u32 = 160;
+    pub const WORDS: u32 = 319;
 }
 
 pub mod SPREAD {
@@ -227,25 +227,25 @@ pub mod STAT {
         pub const gpu_busy_kinds: u32 = 49;
         pub const phases_p95: u32 = 69;
         pub const gpu_spans_p95: u32 = 74;
-        pub const kinds: u32 = 100;
-        pub const wakes: u32 = 110;
-        pub const heap_used_delta_bytes: u32 = 113;
-        pub const first: u32 = 114;
-        pub const last: u32 = 274;
-        pub const WORDS: u32 = 434;
+        pub const kinds: u32 = 99;
+        pub const wakes: u32 = 109;
+        pub const heap_used_delta_bytes: u32 = 112;
+        pub const first: u32 = 113;
+        pub const last: u32 = 272;
+        pub const WORDS: u32 = 431;
     }
     pub mod tasks {
-        pub const AT: u32 = 434;
+        pub const AT: u32 = 431;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 120;
     }
     pub mod steps {
-        pub const AT: u32 = 554;
+        pub const AT: u32 = 551;
         pub const cnt: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
     }
-    pub const WORDS: u32 = 715;
+    pub const WORDS: u32 = 712;
 }
 
 /// What PROFILER_READ finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.
