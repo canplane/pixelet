@@ -9,5 +9,4 @@ gen.digest linguist-generated=true
 *.test.rs linguist-detectable=false
 *.test.ts linguist-detectable=false
 *.test.cpp linguist-detectable=false
-spec/golden/** linguist-generated=true
 rust/spec/golden/** linguist-generated=true

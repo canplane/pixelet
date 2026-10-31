@@ -70,7 +70,13 @@ pub const WRITTEN: u32 = 32;
 pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN;
 pub const TALLY_AT: u32 = TALLY_ON + 1;
 pub const TALLY_WORDS: u32 = tally::OBSERVERS * tally::WALKS;
-pub const HEAD_WORDS: u32 = TALLY_AT + TALLY_WORDS;
+/// The missed pixels' stops kept for their faces (pxl-spec-core
+/// `beam::STOP_WORDS`): the dispatch over them, as the walks again raise
+/// it, and their count (`STOPS_ARGS`, `STOPS_CNT`), set each frame the cast
+/// runs with the head; read, not written, by the passes it dispatches.
+pub const STOPS_ARGS: u32 = TALLY_AT + TALLY_WORDS;
+pub const STOPS_CNT: u32 = STOPS_ARGS + 3;
+pub const HEAD_WORDS: u32 = STOPS_CNT + 1;
 
 /// Where `observer`'s walks count lane `lane` (pxl-spec-core `tally::BEAM`
 /// to `tally::MISS`) in the head.

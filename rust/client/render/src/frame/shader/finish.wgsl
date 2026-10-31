@@ -46,6 +46,17 @@ fn encoded(color: vec3f, by: f32) -> vec3f {
   return displayed(tone(color), by);
 }
 
+// What the canvas writes of a linear color, in its levels (`encoded`), where
+// the vignette leaves it whole.
+fn levels(c: vec3f) -> vec3f {
+  return encoded(c, 1.0) * 255.0;
+}
+
+// The most of a color's channels.
+fn most(c: vec3f) -> f32 {
+  return max(max(c.r, c.g), c.b);
+}
+
 // The toned color the world's passes left at `frag`, encoded, half a step of
 // noise added (screen_finish.wgsl): the screen keeps 8 bits, and a gentle
 // gradient left whole, the sea's toward its horizon, broke into steps one

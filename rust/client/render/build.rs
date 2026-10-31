@@ -352,6 +352,15 @@ fn words() -> String {
         vec4s("STAR_RECORD", STAR_RECORD_FLOATS),
         format!("const MARKER_INSTANCE_FLOATS: u32 = {MARKER_INSTANCE_FLOATS}u;\nconst PUCK_ZONE_INSTANCE_FLOATS: u32 = {PUCK_ZONE_INSTANCE_FLOATS}u;\n"),
         format!("const AO_DOWNSCALE: u32 = {AO_DOWNSCALE}u;\nconst AO_NOISE_SIDE: u32 = {AO_NOISE_SIDE}u;\nconst DECOR_GROUPS: u32 = {DECOR_GROUPS}u;\n"),
+        // The depth's bound's square and a screen tile's squares a side, the
+        // workgroup its passes take a tile by (screen_bound.wgsl,
+        // screen_reach.wgsl); the frames the jitter's sequence covers a pixel
+        // in, each still frame's even share of it (pxl-spec-core
+        // `screen::JITTERS`, screen_resolve.wgsl).
+        format!(
+            "const BOUND_STEP: u32 = {BOUND_STEP}u;\nconst BOUND_SQUARES: u32 = {BOUND_SQUARES}u;\nconst TILE_JITTERS: u32 = {}u;\n",
+            pxl_spec_core::screen::JITTERS
+        ),
         [
             ("TRANSMITTANCE_SIZE", TRANSMITTANCE_SIZE),
             ("MULTISCATTER_SIZE", MULTISCATTER_SIZE),
@@ -368,6 +377,7 @@ fn words() -> String {
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
+        format!("const LIGHT_SLOPES: u32 = {LIGHT_SLOPES}u;\nconst GROUND_SLOPES: u32 = {GROUND_SLOPES}u;\nconst SLOPE_WORDS: u32 = {SLOPE_WORDS}u;\n"),
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // Q3's Z, the world's height about sea level (pxl-spec-core).
         format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_spec_core::HEIGHT_BITS),

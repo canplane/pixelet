@@ -44,6 +44,8 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_LIGHT_DETAIL => "light_detail_cs",
         SHADER_LIGHT_BEAM => "light_beam_cs",
         SHADER_LIGHT_SAMPLE => "light_sample_cs",
+        SHADER_STOP_LEAD => "stop_lead_cs",
+        SHADER_STOP_FACES => "stop_faces_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -583,10 +585,12 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&SCREEN_GROUP],
         ),
         // Its map's texel a pixel multiplied into the world's color, as the
-        // tiles' quads: black blended over by the occlusion's darkening.
+        // tiles' quads: black blended over by the occlusion's darkening, a
+        // draw of the world's pass, its depth not tested or written.
         PIPELINE_AO_APPLY => Descriptor::new(
             Head {
                 blend: ALPHA,
+                depth_compare: ALWAYS,
                 ..screen(SHADER_AO_APPLY)
             },
             &[],
@@ -835,7 +839,8 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[&[AIR[0], AIR[1], AIR[3], [12, TEXTURE]]],
         ),
-        // The light on the land under the eye: the air's words and the tables it is lit by.
+        // The light on the land under the eye: the air's words and the tables
+        // it is lit by; its own words, and what it measures, beside the views'.
         PIPELINE_ATMOS_EXPOSURE => Descriptor::new(
             screen(SHADER_ATMOS_EXPOSURE),
             &[],
@@ -850,6 +855,8 @@ const fn desc_of(id: u32) -> Descriptor {
                 AIR[7],
                 AIR[8],
                 AIR[9],
+                [14, UNIFORM],
+                [20, STORAGE_RW],
             ]],
         ),
         PIPELINE_STAR => Descriptor::new(

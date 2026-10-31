@@ -12,13 +12,13 @@
 
 use pxl_spec_core::cast::{self, Detail, End, Met, Query, Until};
 use pxl_spec_core::world::Handed;
-use pxl_spec_core::{beam, observed, way};
+use pxl_spec_core::{beam, observed, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
 use crate::either::Either;
 use crate::eye::Eye;
-use crate::observed::{seen_at, seen_least, seen_put, Seen, Writ};
+use crate::observed::{seen_add, seen_at, seen_least, seen_most, seen_put, Seen};
 use crate::observer::{self, Observer};
 use crate::light::Head;
 use crate::world::World;
@@ -77,12 +77,45 @@ impl<W: Words + ?Sized> cast::Over<u32> for Beamed<'_, W> {
     }
 }
 
-impl<W: Words + ?Sized> cast::Over<Writ> for Beamed<'_, W> {
-    fn over(&self, zoom: u32) -> Writ {
-        Writ {
-            entry: observed::NONE,
-            at: self.at(zoom),
+impl<W: Words + ?Sized> cast::Over<Handed> for Beamed<'_, W> {
+    fn over(&self, zoom: u32) -> Handed {
+        self.at(zoom)
+    }
+}
+
+/// A beam ray's line as a reader of the assets about a node near it reads
+/// it, in place (pxl-spec-core `support::Lineage`): the node it stopped at,
+/// by its index from the eye's origin, and what was handed each node of it
+/// (`Beamed`), none of it copied. The eye's: its lines' nodes are held from
+/// the one origin its rays start at.
+pub(crate) struct Laid<'a, W: ?Sized> {
+    line: Beamed<'a, W>,
+    at: [i32; 3],
+    zoom: u32,
+}
+
+impl<'a, W: Words + ?Sized> Laid<'a, W> {
+    pub(crate) fn of(line: Beamed<'a, W>, origin: [i32; 3]) -> Laid<'a, W> {
+        let n = line.node();
+        Laid {
+            line,
+            at: n.idx(origin),
+            zoom: n.zoom,
         }
+    }
+}
+
+impl<W: Words + ?Sized> support::Lineage<Handed> for Laid<'_, W> {
+    fn at(&self) -> [i32; 3] {
+        self.at
+    }
+
+    fn zoom(&self) -> u32 {
+        self.zoom
+    }
+
+    fn handed(&self, z: u32) -> Handed {
+        self.line.at(z)
     }
 }
 
@@ -96,6 +129,10 @@ pub(crate) trait Words {
     /// Word `k` lowered to `v` where it is more, whoever else lowers it
     /// (pxl-spec-core `light::held_at`).
     fn least(&mut self, k: u32, v: u32);
+    /// `v` added to word `k`, whoever else adds to it: what it held.
+    fn add(&mut self, k: u32, v: u32) -> u32;
+    /// Word `k` raised to `v` where it is less, whoever else raises it.
+    fn most(&mut self, k: u32, v: u32);
 }
 
 impl Words for Beams {
@@ -110,6 +147,14 @@ impl Words for Beams {
     fn least(&mut self, k: u32, v: u32) {
         seen_least(self, k, v)
     }
+
+    fn add(&mut self, k: u32, v: u32) -> u32 {
+        seen_add(self, k, v)
+    }
+
+    fn most(&mut self, k: u32, v: u32) {
+        seen_most(self, k, v)
+    }
 }
 
 impl Words for [u32] {
@@ -123,6 +168,14 @@ impl Words for [u32] {
 
     fn least(&mut self, k: u32, v: u32) {
         crate::least(self, k, v)
+    }
+
+    fn add(&mut self, k: u32, v: u32) -> u32 {
+        crate::add(self, k, v)
+    }
+
+    fn most(&mut self, k: u32, v: u32) {
+        crate::most(self, k, v)
     }
 }
 
@@ -250,8 +303,8 @@ pub fn beam_cs(
 /// eye's beam rays' and the light's.
 pub(crate) struct Leaving<'a, W: ?Sized>(pub(crate) &'a mut W, pub(crate) u32);
 
-impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
-    fn keep(&mut self, met: &Met<Writ>, stack: &[Writ; cast::DEPTH]) {
+impl<W: Words + ?Sized> cast::Keep<Handed> for Leaving<'_, W> {
+    fn keep(&mut self, met: &Met<Handed>, stack: &[Handed; cast::DEPTH]) {
         let (n, live) = (&met.stop.node, met.stop.at);
         let base = self.1;
         let w = &mut *self.0;
@@ -259,7 +312,7 @@ impl<W: Words + ?Sized> cast::Keep<Writ> for Leaving<'_, W> {
         let mut z = 0;
         while z <= n.zoom {
             let held = if z == n.zoom { live } else { stack[z as usize] };
-            let a = held.at.words();
+            let a = held.words();
             let k = base + beam::LINE_HANDED + beam::LINE_STEP * z;
             w.set(k, a[0]);
             w.set(k + 1, a[1]);

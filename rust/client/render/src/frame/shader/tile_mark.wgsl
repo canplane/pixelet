@@ -1,7 +1,10 @@
 // pxl-render/frame/shader/tile_mark.wgsl
 
 // A changed draw's mark, its own fragments (gpu/pass/mark.rs `Marks`): drawn
-// where it was and where it is, its vertices as its depth pass lays them,
+// where it was and where it is, each by the frame's words (group 0's
+// `frame_words`) it was or is drawn with, its jitter among them, so its
+// fragments are the pixels it covered then and covers now; its vertices as
+// its depth pass lays them,
 // each fragment sets its tile's word to this frame's number, as a mark the
 // host hands sets it (screen_mark.wgsl), and widens the box of the tiles the
 // frame's marks cover to hold it, the first fragment to set a tile alone. No

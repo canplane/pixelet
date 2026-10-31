@@ -13,10 +13,11 @@
 //! (either.rs `Either`), so a pass is one module whichever casts it.
 
 use pxl_spec_core::cast::{self, Detail, Met, Query, Until};
+use pxl_spec_core::world::Handed;
 use pxl_spec_core::{beam, observed, raster, tally};
 
 use crate::beam::{resumed, sample_put, Beamed, Leaving, Words};
-use crate::observed::{add_tally, seen_at, Seen, Writ, Writing};
+use crate::observed::{add_tally, seen_at, Seen, Writing};
 use crate::raster::{boxed, taken, NONE};
 use crate::world::{Looks, World};
 
@@ -385,9 +386,9 @@ pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: Looks>(
     seen: &mut Seen,
     w: &W,
     at: O::At,
-    keep: &mut impl cast::Keep<Writ>,
+    keep: &mut impl cast::Keep<Handed>,
     told: &mut impl cast::Asked,
-) -> (Aim, Met<Writ>, u32) {
+) -> (Aim, Met<Handed>, u32) {
     let aim = o.aim(at);
     let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[2]);
     let (met, before) = resume(

@@ -20,10 +20,14 @@
 /// `ARGS_VERTICES`, `ARGS_INSTANCES`, then two words the draw reads as 0;
 /// then the dispatch over the boxes that asks what lies about each one's
 /// face (pxl-shader `face_cs`), `FACES_LANES` boxes a workgroup
-/// (`ARGS_FACES`), its workgroups raised as boxes are written, the other
-/// two 1. One dispatch's 65535 workgroups hold 4.2M boxes, a box a sample
-/// at most; the samples are `param::beam::SAMPLE` a camera grid cell a side,
-/// about 270 thousand on a 16:9 view whatever its pixels.
+/// (`ARGS_FACES`), its workgroups raised by the box that opens each, the
+/// other two 1; then the first word of the boxes' asks among the beam rays'
+/// words (`ARGS_ASKS`, `beam::ASK_WORDS` a box, `beam::Grid::asks_at`).
+/// One dispatch's 65535 workgroups hold 4.2M boxes, a box a sample at most;
+/// the samples are `param::beam::SAMPLE` a camera grid cell a side, about
+/// 270 thousand on a 16:9 view whatever its pixels. The missed pixels'
+/// stops' faces are asked by args laid alike, their count where the boxes'
+/// is (`ray::MISS_ARGS_ASKED`).
 /// Then the boxes' buffer, `BOX_WORDS` a box: its planes in units from the
 /// eye's origin, lowest then highest, f32 bits, its sample's number
 /// (`id_of`), and the axis its sample entered across, with `EYED` where the
@@ -31,7 +35,8 @@
 pub const ARGS_VERTICES: u32 = 0;
 pub const ARGS_INSTANCES: u32 = 1;
 pub const ARGS_FACES: u32 = 4;
-pub const ARGS_WORDS: u32 = 7;
+pub const ARGS_ASKS: u32 = 7;
+pub const ARGS_WORDS: u32 = 8;
 pub const FACES_LANES: u32 = 64;
 pub const BOX_LO: u32 = 0;
 pub const BOX_HI: u32 = 3;

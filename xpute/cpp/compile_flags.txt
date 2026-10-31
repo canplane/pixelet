@@ -3,4 +3,7 @@
 -fno-exceptions
 -fno-rtti
 -ffp-contract=off
+-Wall
+-Wextra
+-Wno-missing-field-initializers
 -I.

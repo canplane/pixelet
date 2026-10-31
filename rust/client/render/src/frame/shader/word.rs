@@ -135,8 +135,8 @@ uniform! {
 pub const SKY_FLOATS: usize = floats(sky::FIELDS);
 
 uniform! {
-    /// The air's (atmos_medium.wgsl, gpu/atmosphere.rs). Floats 8 to 10 are
-    /// free.
+    /// The air's (atmos_medium.wgsl, gpu/atmosphere.rs). Floats 8 to 10
+    /// are free.
     atmos {
         RAYLEIGH_SCATTERING: Vec3 = 0,
         BOTTOM_RADIUS: F32 = 3,
@@ -177,6 +177,17 @@ uniform! {
         /// row, zero for the global picture.
         EARTH_WINDOW: Vec4i = 44,
         EARTH_TILES: Vec4u = 48,
+        /// Each light's sky view and share of the air's volume as laid
+        /// (gpu/atmosphere.rs `lay_out`): how far under the level the
+        /// horizon dips from the eye's radius they were drawn at, in
+        /// radians, and the near and far ends of the air's depth law there,
+        /// in km (atmos_medium.wgsl `laid`); and 1 where the light reaches
+        /// the air by half a display level, its view and air drawn and read
+        /// (`reaches`). The sun's, then the moon's.
+        SUN_LAID: Vec3 = 52,
+        SUN_REACHES: F32 = 55,
+        MOON_LAID: Vec3 = 56,
+        MOON_REACHES: F32 = 59,
     }
 }
 pub const ATMOS_FLOATS: usize = floats(atmos::FIELDS);
@@ -259,6 +270,18 @@ pub const AO_DOWNSCALE: u32 = 2;
 /// N8AO's blue noise a side (gpu/ao.rs), which a pixel reads tiled.
 pub const AO_NOISE_SIDE: u32 = 128;
 
+/// A square of the depth's bound the reach reads, its pixels a side
+/// (gpu/reach.rs, screen_bound.wgsl, screen_reach.wgsl).
+pub const BOUND_STEP: u32 = 4;
+/// A screen tile's squares a side (pxl-spec-core `screen::TILE`), a thread
+/// each of the workgroup a tile both passes take: every square of a tile is
+/// set and read whatever its side.
+pub const BOUND_SQUARES: u32 = pxl_spec_core::screen::TILE / BOUND_STEP;
+const _: () = assert!(
+    pxl_spec_core::screen::TILE.is_multiple_of(BOUND_STEP),
+    "a screen tile is whole squares of the depth's bound"
+);
+
 /// The air's tables' sizes (gpu/atmosphere.rs `SIZES`, atmos_medium.wgsl).
 pub const TRANSMITTANCE_SIZE: (u32, u32) = (256, 64);
 pub const MULTISCATTER_SIZE: (u32, u32) = (32, 32);
@@ -318,10 +341,17 @@ pub const MOON_ALBEDO: f32 = 0.12;
 /// by `MOON_ALBEDO` over it.
 pub const MOON_MAP_MEAN: f32 = 0.2459;
 
-/// The air's froxels a side and deep (gpu/atmosphere.rs `froxel`):
-/// Hillaire 2020's aerial-perspective volume, 32³, as Unreal's
-/// SkyAtmosphere sizes it.
+/// The air's froxels a side and deep for each light (gpu/atmosphere.rs
+/// `froxel`): Hillaire 2020's aerial-perspective volume, 32³, as Unreal's
+/// SkyAtmosphere sizes it, laid about its light as its sky view is.
 pub const AIR_FROXELS: u32 = 32;
+
+/// What the sky views and the exposure measure, in words (gpu/atmosphere.rs
+/// `plan`, atmos_skyview.wgsl `slopes`): `LIGHT_SLOPES` a light, the sun's
+/// first, then the ground's two from `GROUND_SLOPES`.
+pub const LIGHT_SLOPES: u32 = 5;
+pub const GROUND_SLOPES: u32 = 2 * LIGHT_SLOPES;
+pub const SLOPE_WORDS: u32 = GROUND_SLOPES + 2;
 
 /// Half an 8-bit step of an opacity: a cloud sheet's under it moves no
 /// pixel by a step, so it is not drawn.

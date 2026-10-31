@@ -66,8 +66,8 @@ pub const SHADER_GENERATED_MARK: u32 = 34;
 /// The eye's windows folded over their bricks, generated with the cast
 /// from pxl-spec-core's `window::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 35;
-/// The air's volume, a column of froxels a workgroup (atmos_froxel.wgsl):
-/// its one compute entry.
+/// A light's share of the air's volume, a column of froxels a workgroup
+/// (atmos_froxel.wgsl): its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 36;
 /// Each handed brick's ways as a tree of cells in one pool (pxl-spec-core
 /// `way::tree`), generated with the cast: a re-filled brick's old families
@@ -172,7 +172,12 @@ pub const SHADER_PUCK_BEACON_MARK: u32 = 73;
 /// `cast::Margin`): compute entries.
 pub const SHADER_LIGHT_BEAM: u32 = 74;
 pub const SHADER_LIGHT_SAMPLE: u32 = 75;
-pub const SHADERS: u32 = 76;
+/// The missed pixels' stops whose faces are asked once a run of them, the
+/// one of each run that asks listed (pxl-spec-core `beam::STOP_WORDS`), and
+/// the faces asked put at their pixels: compute entries.
+pub const SHADER_STOP_LEAD: u32 = 76;
+pub const SHADER_STOP_FACES: u32 = 77;
+pub const SHADERS: u32 = 78;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -255,6 +260,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "frame",
         "encode",
+        "finish",
         "atmos_medium",
         "atmos_bind",
         "atmos_lut",
@@ -338,16 +344,10 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["joined.gen"],
     // SHADER_ATMOS_FROXEL
     &[
-        "frame",
         "atmos_medium",
         "atmos_bind",
         "atmos_lut",
-        "atmos_eye",
         "atmos_march",
-        "atmos_light",
-        "atmos_ground",
-        "atmos_view",
-        "sky_word",
         "atmos_froxel",
     ],
     // SHADER_WAY_FREE
@@ -428,4 +428,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["light_beam.gen"],
     // SHADER_LIGHT_SAMPLE
     &["light_sample.gen"],
+    // SHADER_STOP_LEAD
+    &["stop_lead.gen"],
+    // SHADER_STOP_FACES
+    &["stop_faces.gen"],
 ];

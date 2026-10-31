@@ -865,3 +865,39 @@ milliseconds.
   begun again about it stores and loads the world's color, depth and
   stencil whole on a tiled GPU, and the occlusion reads the depth with its
   stencil aspect beside it. AO `corner`, the default, does not run it.
+
+**The backlog's round, each change against the tip** (2026-10-31,
+evening, `2ce9c8e90` and five worktrees from it, ports 5191 to 5193). The
+scenario above (S1) and the same without W held (S2, turning only), a
+2056×1169 canvas at a device pixel ratio of 2, the display at 120 Hz, AO
+`corner` unless named. Two to four runs a build, tip runs between.
+
+| build | scenario | busy p50 / p95 | spans p95 that moved |
+|---|---|---|---|
+| tip | S1, AO `screen` | 31.2–31.7 / 46.7–48.2 | `ao` 7.1–7.3 |
+| the occlusion inside the world pass | S1, AO `screen` | 31.3–31.5 / 46.4–47.4 | `ao` 7.0–7.1 |
+| tip | S1 | 28.3 / 43.8 | `miss` 12.2, `sample` 3.5 |
+| the eye's misses asking faces once a stop, the TAA's marks at their own jitter and the occlusion above, merged | S1 | 28.4 / 40.4 | `miss` 8.6, `sample` 4.7 |
+| the screen's rays moved to the new view | S1 | 31.3–31.5 / 55.4–56.8 | `beam` 4.9 → 11.5, `px` 2.1 → 7.0 |
+| tip | S1 | 28.0 / 43.1 | `air` on every frame, 1.6 s a run |
+| the air laid about each light, drawn where it reaches | S1 | 22.2 / 42.6 | `air` on 31 % of frames, 0.5 s a run |
+| tip | S2 | 9.0 / 33.5 | `air` on 30 % of frames |
+| the same | S2 | 8.7 / 33.0 | `air` on 11 % of frames |
+
+- At this canvas the tip's occlusion reads 7.1 ms, not the 9.9 of the
+  run above at 2400×2250; found inside the world pass it costs the same.
+  The regression against the prepass (4.4 ms) stands.
+- Faces asked once a stop: `miss` 3.6 ms less, `sample` 1.2 more (the
+  boxes' asks written there), the busy time's p95 3.4 ms less, its p50
+  the same.
+- The screen's rays moved: dearer, and the picture wrong (a low view lost
+  its near wall, trees and stone to a smooth plane). Read in the code, not
+  confirmed: the samples, the only witness of what is nearer, are missing
+  exactly at the pixels the move answers, and no ray's word names its
+  node, so a moved ray is proven only by the walk it was to save.
+- The air: the busy time's p50 5.8 ms less while walking; turning only,
+  `air` still found on 11 % of frames, supposed the turn's pitch moving
+  the eye's altitude. Noon, 07:00 and 00:30 looked the same on both
+  builds; at 00:30 the clock ran on. The `exposure` span reads `air`'s
+  time and 0.46 ms more on the frames both run, so its stamps are to be
+  checked before it is read alone.

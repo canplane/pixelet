@@ -4,7 +4,8 @@
 //! world: found from the world's own depth once the static opaque draws laid it (downsample,
 //! sample, denoise twice, upsample to a one-byte map), only where what it reads moved, and
 //! held; laid over the world's color in the claimed tiles each drawn frame (`apply`), as the
-//! tiles' quads. About 7 bytes a pixel.
+//! tiles' quads, a draw of the world's pass, which ends about it only where the map is found
+//! again. About 7 bytes a pixel.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
@@ -18,11 +19,11 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry,
     texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, RenderContext,
+    TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::surface::WORLD_COLOR;
 
 /// N8AO's blue noise, `AO_NOISE_SIDE` a side; its four channels are the
 /// hemisphere spin, the ray push and the two denoise spins.
@@ -99,7 +100,7 @@ impl ScreenAo {
             sample: pipelines.build(g, PIPELINE_AO_SAMPLE, g.canvas()),
             blur: pipelines.build(g, PIPELINE_AO_BLUR, g.canvas()),
             upsample: pipelines.build(g, PIPELINE_AO_UPSAMPLE, Format::r8unorm),
-            apply: pipelines.build(g, PIPELINE_AO_APPLY, WORLD_COLOR),
+            apply: pipelines.build_world(g, PIPELINE_AO_APPLY),
             width: 0,
             height: 0,
             depth_view: 0,
@@ -273,18 +274,12 @@ impl ScreenAo {
         }
     }
 
-    /// The map multiplied into the world's color `color_view`, in the tiles
+    /// The map multiplied into the world's color, a draw of the world's
+    /// pass `pass` once the static opaque draws laid it, in the tiles
     /// `tiles` (their words and uniform) claim of `count`, a quad each
     /// (ao_apply.wgsl): every drawn frame, as the world's color is drawn
     /// again there, whether or not the map was found again.
-    pub fn apply(
-        &mut self,
-        ctx: &mut RenderContext,
-        color_view: u32,
-        tiles: (u32, u32),
-        count: u32,
-    ) {
-        let (g, encoder) = (ctx.g, ctx.encoder);
+    pub fn apply(&mut self, g: &Gpu, pass: &mut TrackedRenderPass, tiles: (u32, u32), count: u32) {
         let bound = [self.map_view, tiles.0, tiles.1];
         if bound != self.apply_bound {
             release(self.apply_group);
@@ -298,14 +293,8 @@ impl ScreenAo {
             );
             self.apply_bound = bound;
         }
-        let stamp = ctx.stamp(GpuSpanName::ao);
-        let pass = g.pass(
-            encoder,
-            &pass_desc(color_view, Load::Load, 0, Load::Clear, 0.0, stamp.pass()),
-        );
-        g.set_pipeline(pass, self.apply.pipeline);
-        g.set_bind_group(pass, 0, self.apply_group, &[]);
-        g.draw(pass, 6, count, 0, 0);
-        g.end(pass);
+        pass.set_pipeline(self.apply.pipeline);
+        pass.set_bind_group(0, self.apply_group, &[]);
+        pass.draw(6, count, 0, 0);
     }
 }

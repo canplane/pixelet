@@ -96,6 +96,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ts/.tool-versions
+
       # wrangler, Cloudflare's CLI, a program the steps call as any other.
       - name: Install wrangler
         run: npm install --global "wrangler@${WRANGLER_VERSION}"
@@ -194,12 +198,11 @@ jobs:
           node-version-file: ts/.tool-versions
       - run: corepack enable
 
-
-      # Its own cargo cache: the module and what builds it.
       # wrangler, Cloudflare's CLI, a program the steps call as any other.
       - name: Install wrangler
         run: npm install --global "wrangler@${WRANGLER_VERSION}"
 
+      # Its own cargo cache: the module and what builds it.
       - uses: ./.github/actions/toolchain
         with:
           cache: rust-publish
@@ -279,6 +282,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ts/.tool-versions
 
       # wrangler, Cloudflare's CLI, a program the steps call as any other.
       - name: Install wrangler

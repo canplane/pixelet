@@ -548,12 +548,13 @@ ahead       impostor atlases, fresh bricks filled, the atmosphere's
             tables, the air's volume
 cast        the screen's rays; decor generated; the shadow map
 world pass  generated decor → rays at their depth → generated impostors,
-            each toned into the world's color, linear
-occlusion   N8AO found off that depth where what it reads moved, held
-            where not (`gpu/ao.rs`); its map multiplied into the color,
-            as the claimed tiles' quads
-world pass  sky and stars at the far plane → listed actors, cumulus,
+            each toned into the world's color, linear → the occlusion's
+            map multiplied into the color, as the claimed tiles' quads →
+            sky and stars at the far plane → listed actors, cumulus,
             impostors → high cloud planes → puck, ghosts
+occlusion   N8AO found off the depth the world pass laid before its map,
+            where what it reads moved: the pass ends there and begins
+            again; held where not, the pass drawn as one (`gpu/ao.rs`)
 finish      the world's color encoded onto the canvas once
 over        markers → debug lines → display cases
 ```
@@ -584,14 +585,23 @@ The sky is drawn at the far plane, so only pixels no ray met run it
 land shaded from the earth layer and lit as the terrain is (`atmos_air.wgsl`
 `beyond`). The air between the eye and what is drawn is Hillaire's
 aerial-perspective volume (`gpu/atmosphere.rs` `froxel`), read by each drawn
-point at its depth (`atmos_air.wgsl` `air_before`). It is made again only
-where what it reads moves: the eye's turn and projection, its altitude and
-scale, the lights. It holds the eye's stops it was exposed at, and a reader
-takes it to the stops now, so the exposure moving alone, as with the land
-under the eye, leaves it standing. The sun's and the moon's sky views are
-drawn again where their light moves half its step, the height over which the
-sky moves a display level, or the eye's altitude a share of itself; the
-exposure where the words it reads move.
+point along its direction from the eye and at its depth (`atmos_air.wgsl`
+`air_before`). Each light has its share of it, laid as its sky view is: about
+the world's up and the light's azimuth, in Hillaire's directions, finer
+toward the light and the horizon, and in km deep by one law for every
+direction. Neither reads the view, so a turn of the eye keeps both, and both
+hold the light per unit of it, unexposed, so the exposure moving keeps both;
+a reader shows each as its light's sky is shown. A light's view and its air
+are drawn and read only where the light reaches the air, its sky showing
+half a display level along its vertical at the exposure, which the exposure
+pass measures; the sun and the moon by the one rule. They are drawn again
+together where the light's height has moved half its step, the height over
+which its sky moves a display level, or the eye's altitude half its own step,
+and laid with words a reader takes as they are: the horizon and the depth
+law where they were drawn. The exposure is drawn where the words it reads
+move, or the ground under the eye half its step. Every step comes from a
+slope its table measures as it is drawn, each measured again apart, only
+where its own quantity has left the sample it was taken over.
 
 The **clouds** are three layers on one wind (`pxl-spec-core cloud.rs`): the
 cumulus, models drawn like decor but claiming no cell

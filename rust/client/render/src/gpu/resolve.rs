@@ -10,10 +10,12 @@
 //! encodes. Each tile of the screen keeps its age, the frames since it last
 //! changed: where only the jitter moved there since, nothing the
 //! frames before left is stale, and each frame takes its even share of the
-//! sequence; where it changed this frame, what the frames before left is
-//! moved to where this frame's eye sees it and held within what this
-//! frame's pixels about it hold. A tile is claimed, drawn again, until it
-//! has run through the sequence (screen_tiles.wgsl); once every one has,
+//! sequence from the first still frame; where it changed this frame, what
+//! the frames before left is moved to where this frame's eye sees it and
+//! held within what this frame's pixels about it hold, for that frame's
+//! picture alone. A tile is claimed, drawn again, the frame it changed and
+//! until its still frames have run through the sequence (pxl-spec-core
+//! `screen::CLAIMED_FOR`, screen_tiles.wgsl); once every one has,
 //! the jitter holds, and the frame stands. The tiles' words are the GPU's,
 //! as the light's are (gpu/tiles.rs): each the number of the frame it last
 //! changed in, which the frame's marks set; the host hands the marks, and
@@ -34,7 +36,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::{Surface, WORLD_COLOR};
 use crate::gpu::tiles::{Tiles, SIDE};
-use pxl_spec_core::screen::JITTERS;
+use pxl_spec_core::screen::{CLAIMED_FOR, JITTERS};
 
 /// The least share a frame takes where what the frames before left is
 /// held to it: how long a trail what moved leaves, and how still an edge
@@ -43,11 +45,6 @@ const BLEND_LEAST: f32 = 0.1;
 
 /// Its uniform's floats (screen_resolve.wgsl `Resolve`).
 const UNIFORM_FLOATS: usize = 20;
-
-const _: () = assert!(
-    JITTERS == 8,
-    "screen_tiles.wgsl's `TILE_JITTERS` is pxl-spec-core `screen`'s"
-);
 
 pub struct Resolve {
     built: Built,
@@ -109,7 +106,7 @@ impl Resolve {
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
             jitter: [0.0; 2],
-            tiles: Tiles::new(g, pipelines, SIDE, JITTERS),
+            tiles: Tiles::new(g, pipelines, SIDE, CLAIMED_FOR),
         }
     }
 
@@ -121,8 +118,8 @@ impl Resolve {
 
     /// This frame's jitter, in drawn pixels, X right and Y down: the
     /// sequence's next, or where it holds once it ran through with nothing
-    /// else moving: the last frame anything else moved in and the
-    /// `JITTERS - 1` after it, each at its own place of the sequence.
+    /// else moving: the last frame anything else moved in and the `JITTERS`
+    /// after it, each of those at its own place of the sequence.
     pub fn jitter(&mut self) -> [f32; 2] {
         if self.gathering() {
             let k = self.phase + 1;
@@ -146,7 +143,8 @@ impl Resolve {
         let (k, was) = (self.turn, 1 - self.turn);
         // A square that changed this frame takes its share held no less than
         // `BLEND_LEAST`; one where only the jitter moved since, its even share
-        // of the sequence's, off its age (screen_resolve.wgsl).
+        // of the sequence's from the first still frame, off its age
+        // (screen_resolve.wgsl).
         let blend = match self.gathered {
             0 => 1.0,
             n => (1.0 / (n + 1) as f32).max(BLEND_LEAST),

@@ -19,11 +19,14 @@ Nothing now.
   the gated frames 4 ms cheaper; supposed, the world pass split about it on
   a tiled GPU. Taken back, or found again without splitting the pass —
   [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md), "The
-  occlusion's screen mode after the round".
+  occlusion's screen mode after the round". Found inside the world pass
+  (2026-10-31, evening) it cost the same: 7.1 ms at a 2056×1169 canvas.
 - **The eye's samples and what they miss.** Orbiting, 1.6 % of the pixels
-  find no sample's cell and walk alone, some 16 nodes each, some 5 ms
-  (`miss`), the eye's cast some 13 ms of a moving frame's 24; samples
-  closer where they miss cost what they save. Both observers share the
+  find no sample's cell and walk alone, some 16 nodes each; faces asked
+  once a stop took `miss` from 12.2 ms to 8.6 at the p95 and `sample` from
+  3.5 to 4.7 (2026-10-31, evening). What the walks still cost, and the
+  boxes' asks in `sample`; samples closer where they miss cost what they
+  save. Both observers share the
   passes (pxl-shader observer.rs), so a change holds for the light alike —
   [20261029-the-screen-keeps-its-tiles-as-the-light-does.md](./minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md),
   "Proposed after the steps".
@@ -34,15 +37,6 @@ Nothing now.
   observed pyramid keeps of it; the passes are both observers', so a change
   holds for the light alike — [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md),
   "Decor put back, and the round after the steps".
-- **The screen reprojected while the eye moves.** The light holds its tiles
-  across the eye's motion, fixed in the world; the screen, fixed to the
-  view, draws whole each frame. Last frame's rays moved to the new view,
-  what they uncover cast anew, an approximation the picture must be held
-  to — same minutes.
-- **The light's marks only where the eye cast anew.** Orbiting, the marks
-  are some 4 ms (`light_beam` less the beam and the cells), every drawn
-  pixel's each moving frame; marked only where the screen's tiles changed,
-  they follow the eye's own change — same minutes.
 
 ## P2
 
@@ -65,17 +59,23 @@ put back, and the round after the steps"), A and B by turns.
   part 4's 1.2 ms, unexplained —
   [20261029](./minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md),
   "Open".
-- **The air's volume found again while the camera turns or the light
-  eases**, held only where its reads stand: a volume laid about the light
-  as the sky view is would keep it across turns; far out, a pan north or
-  south trips the altitude's share; the sky view's second march, for its
-  slope, doubles each redraw.
+- **The air found again while only the eye turns**: on 11 % of frames,
+  supposed the turn's pitch moving the eye's altitude past half its step;
+  and the `exposure` span's stamps, which read `air`'s time with its own.
 - **The stencil and the raster's gate on the devices.** Whether the iPhone,
   the Quest and Android offer `depth32float-stencil8`, and whether the
   raster's gate of depth rejects the boxes' fragments early there; taken
   with the device builds — same minutes, "Open".
 
 ## Parked, with the reason on file
+
+- **The screen reprojected while the eye moves**, and with it **the
+  light's marks only where the eye cast anew**, which needed it. Built and
+  measured (2026-10-31, evening): dearer, and the picture wrong. A moved
+  ray is proven only by the walk it was to save: the samples, the only
+  witness of what is nearer, are missing at the pixels it answers, and no
+  ray's word names its node. Parked by the user (2026-11-01) — [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md),
+  "The backlog's round".
 
 - **What each reuse buys over a pure ray a pixel.** Each switched off alone at
   the tip, against the tip and against all of them off; why rays at all is on

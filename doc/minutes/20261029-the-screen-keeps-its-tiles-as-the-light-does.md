@@ -583,3 +583,19 @@ record (the round after the steps):
 - **The air's volume and exposure each found again only where what it reads
   moved.**
 
+
+## Taken in the backlog's round (2026-10-31, evening)
+
+Chosen by this session on the user's word to judge them whole, taken by
+the user (2026-11-01); measured in the tiles' baseline's record (the backlog's round):
+
+- **A screen tile is claimed `JITTERS + 1` frames, not `JITTERS`**
+  (`screen::CLAIMED_FOR`): the frame it changed in no longer counts in what
+  stands, a still tile taking `1/min(age, JITTERS)`, so the picture that
+  stands is the view's own jitters alone. Step 5 part 1 and the cost above
+  read `JITTERS`; this replaces them.
+- **A draw marks the tiles it covered at the frame it was drawn in**, the
+  "as it was" marks drawn with that frame's own words (`frame_was`), its
+  jitter among them.
+- **The screen's rays are not moved to the new view**: parked, the reasons
+  in the backlog.

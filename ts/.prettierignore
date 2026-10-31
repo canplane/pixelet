@@ -1,2 +1,9 @@
 pnpm-lock.yaml
 dist/
+.vite/
+.wrangler/
+.expo/
+app/native/ios/
+app/native/android/
+app/native/modules/platform/android/build/
+app/web/public/brand/

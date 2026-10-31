@@ -145,10 +145,11 @@ impl ImpostorPass {
             .prepare(g, draws, uniforms, touched, uploads, kept)
     }
 
-    /// The marks `prepare_marks` made drawn into `pass`, `frame` their group
-    /// 0 (tile_mark.wgsl); a group whose layer is not drawn yet is not.
-    pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frame: u32) {
-        self.marks.draw(pass, frame, |pass, d, upload| {
+    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// 0 as they are and as they were (tile_mark.wgsl, `Marks::draw`); a
+    /// group whose layer is not drawn yet is not.
+    pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
+        self.marks.draw(pass, frames, |pass, d, upload| {
             if self.baked.get(d[1] as usize).copied().flatten().is_none() {
                 return;
             }

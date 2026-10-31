@@ -64,10 +64,12 @@ fn shown(time: SkyTime, unix_ms: f64, lon: f64) -> (f64, bool) {
     (today + hour * HOUR_MS - ahead, true)
 }
 
-/// Each light's height a display level of the sky moves over (pxl-render
-/// `sky_steps`), none before its first slope lands.
+/// Each light's height a display level of the sky moves over, or, out of
+/// reach of the air, the height before it comes into reach (pxl-render
+/// `sky_steps`); 0 before its first slope lands, so every observation steps
+/// until one has.
 fn steps() -> [f64; 2] {
-    sky_steps().map(|s| s.map_or(f64::INFINITY, f64::from))
+    sky_steps().map(f64::from)
 }
 
 pub struct EnvironmentDraw {
@@ -158,9 +160,10 @@ impl EnvironmentDraw {
     /// reached, that time taken where it last stepped: one quantum at the rate
     /// it moved there. The sky's quantum is its step, the height over which
     /// the sky as drawn moves one display level (pxl-render `sky_steps`, its
-    /// views' own slopes), at the rate the sun's or the moon's height moves;
-    /// a light with no step landed yet asks none, its view's first slope
-    /// landing waking the turn. The clouds' is the wind carrying them the
+    /// views' own slopes), or, for a light out of reach of the air, the height
+    /// before it comes into reach, at the rate the sun's or the moon's height
+    /// moves; a light with no step landed yet asks the least, so every
+    /// observation steps until one lands. The clouds' is the wind carrying them the
     /// seen step at the nearest (`cloud::drift_step_s`). Between steps their
     /// words stand (`lens::Stepped`); before the sky starts, every
     /// observation steps them. A clock set back before where a light last
@@ -173,13 +176,17 @@ impl EnvironmentDraw {
         let (sky_ms, held) = shown(settings_store().sky_time, unix_ms, at[0]);
         let heights = |days: f64| heights(days, at);
         let step = steps();
-        // As fast as each height moves over the minute from `at`, when it will have moved a step.
+        // As fast as each height moves over the minute from `at`, when it will
+        // have moved a step; a 0 step at once, whether its height moves or not.
         const MINUTE_MS: f64 = 60_000.0;
         let sky_next = |at: f64| {
             let days = j2000_days(at);
             let (now, then) = (heights(days), heights(days + MINUTE_MS / 86_400_000.0));
             at + (0..2)
-                .map(|k| step[k] * MINUTE_MS / (then[k] - now[k]).abs())
+                .map(|k| match step[k] {
+                    0.0 => 0.0,
+                    s => s * MINUTE_MS / (then[k] - now[k]).abs(),
+                })
                 .fold(f64::INFINITY, f64::min)
         };
         let clouds_next = |at: f64| at + cloud::drift_step_s() * 1000.0;

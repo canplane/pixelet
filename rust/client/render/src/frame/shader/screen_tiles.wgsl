@@ -5,7 +5,8 @@
 // pass touches the claimed tiles alone; or a thread each, an unclaimed one
 // returning at once. A tile is claimed where it changed
 // this frame or has not yet run through the jitter's sequence since, or every
-// one where the frame is drawn whole.
+// one where the frame is drawn whole. The frames the sequence covers a pixel
+// in, `TILE_JITTERS`, are constant.wgsl's (pxl-spec-core `screen::JITTERS`).
 
 struct Tiles {
   // The tiles across and down, the frames a tile stays claimed once it
@@ -24,10 +25,6 @@ struct Tiles {
 // The frame's marks, each its tiles from the first across and down to past
 // the last, one of every tile where the target is drawn whole (`Tiles::marks`).
 @group(0) @binding(32) var<storage, read> marks: array<vec4u>;
-
-// The frames the jitter's sequence covers a pixel in (pxl-spec-core
-// `screen::JITTERS`).
-const TILE_JITTERS: u32 = 8u;
 
 // A tile's pixels a side.
 fn tile_side() -> u32 {

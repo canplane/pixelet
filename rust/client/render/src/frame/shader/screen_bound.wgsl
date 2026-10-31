@@ -11,11 +11,10 @@
 @group(0) @binding(0) var depth: texture_depth_2d;
 @group(0) @binding(1) var<storage, read_write> bounds: array<vec2f>;
 
-// A square's pixels a side: a thread's of a tile's eight a side (pxl-spec-core
-// `screen::TILE`, 32), the reach's (`REACH_STEP`).
-const BOUND_STEP: u32 = 4u;
-
-@compute @workgroup_size(8, 8, 1)
+// A square's pixels a side, `BOUND_STEP`, a thread's of a tile's
+// `BOUND_SQUARES` a side (constant.wgsl, pxl-spec-core `screen::TILE`), the
+// reach's.
+@compute @workgroup_size(BOUND_SQUARES, BOUND_SQUARES, 1)
 fn screen_bound_cs(
   @builtin(workgroup_id) wg: vec3u,
   @builtin(local_invocation_id) l: vec3u,

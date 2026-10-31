@@ -182,7 +182,21 @@ fn rays_bound(text: &str) -> Vec<(usize, String)> {
 /// rust-gpu's `threads` takes only literals, so each entry's is held here to
 /// its constant: the entry's file under `SHADER`, the entry, the constant's
 /// file under rust/ and its name, and how many of the size's sides it gives.
-const WORKGROUPS: [(&str, &str, &str, &str, usize); 9] = [
+const WORKGROUPS: [(&str, &str, &str, &str, usize); 11] = [
+    (
+        "cast.rs",
+        "stop_lead_cs",
+        "spec/core/src/beam.rs",
+        "STOP_LANES",
+        1,
+    ),
+    (
+        "cast.rs",
+        "stop_faces_cs",
+        "spec/core/src/beam.rs",
+        "STOP_LANES",
+        1,
+    ),
     (
         "raster.rs",
         "face_cs",

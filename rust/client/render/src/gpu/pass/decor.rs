@@ -98,13 +98,14 @@ impl DecorPass {
         (casts || blended, casts)
     }
 
-    /// The marks `prepare_marks` made drawn into `pass`, `frame` their group
-    /// 0 (tile_mark.wgsl): the opaque's alone where `casters`, as the light's
-    /// map draws them, else the blended's too.
+    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// 0 as they are and as they were (tile_mark.wgsl, `Marks::draw`): the
+    /// opaque's alone where `casters`, as the light's map draws them, else
+    /// the blended's too.
     pub fn draw_marks(
         &self,
         pass: &mut TrackedRenderPass,
-        frame: u32,
+        frames: [u32; 2],
         uploads: &Uploads,
         casters: bool,
     ) {
@@ -114,7 +115,7 @@ impl DecorPass {
             &[&self.marks, &self.ghost_marks][..]
         };
         for m in marks {
-            m.draw(pass, frame, |pass, d, upload| {
+            m.draw(pass, frames, |pass, d, upload| {
                 let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(d[1], uploads)
                 else {
                     return;

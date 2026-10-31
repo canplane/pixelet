@@ -8,6 +8,7 @@
 
 export const GPU_SPAN_NAMES = [
   "air",
+  "exposure",
   "ao",
   "world",
   "resolve",

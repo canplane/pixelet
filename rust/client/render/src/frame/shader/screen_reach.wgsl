@@ -38,17 +38,14 @@ struct Reach {
 @group(0) @binding(5) var<uniform> tiles: Tiles;
 // The number of the last frame the reach marked a tile in.
 @group(0) @binding(6) var<storage, read_write> reached: atomic<u32>;
-// Each square's least and most depth drawn, `REACH_STEP` pixels a side, as
+// Each square's least and most depth drawn, `BOUND_STEP` pixels a side, a
+// thread's of a screen tile's `BOUND_SQUARES` a side (constant.wgsl), as
 // the last frame's world's pass left them (screen_bound.wgsl).
 @group(0) @binding(7) var<storage, read> bounds: array<vec2f>;
 // The map's tiles the frame's marks cover, from the first across and down to
 // past the last, as the host handed them and the drawn marks widened them
 // (gpu/tiles.rs `Tiles::marks_box`, tile_mark.wgsl): none changed off them.
 @group(0) @binding(8) var<storage, read> marks_box: vec4u;
-
-// The pixels a side of a thread's square of a screen tile, eight threads a
-// side (pxl-spec-core `screen::TILE`, 32).
-const REACH_STEP: u32 = 4u;
 
 // Whether tile `t` of the map changed this frame: claimed by its words.
 fn reach_changed(t: vec2i) -> bool {
@@ -138,7 +135,7 @@ fn reach_box(lo: vec2f, hi: vec2f) -> bool {
 // The tiles a square's box asks at most before each pixel is asked alone.
 const REACH_BOX_MOST: i32 = 16;
 
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(BOUND_SQUARES, BOUND_SQUARES, 1)
 fn screen_reach_cs(
   @builtin(workgroup_id) wg: vec3u,
   @builtin(local_invocation_id) l: vec3u,
@@ -151,7 +148,7 @@ fn screen_reach_cs(
   let ti = tile.y * tiles.count.x + tile.x;
   let size = vec2u(textureDimensions(depth));
   let side = u32(tiles.size.w);
-  let at = tile * side + l.xy * REACH_STEP;
+  let at = tile * side + l.xy * BOUND_STEP;
   if (li == 0u) {
     atomicStore(&slab_far, bitcast<u32>(2.0));
     atomicStore(&slab_near, 0u);
@@ -161,7 +158,7 @@ fn screen_reach_cs(
   // falls on, left out (a square of sky alone holds 2 and 0).
   var b = vec2f(2.0, 0.0);
   if (all(at < size)) {
-    b = bounds[(at.y / REACH_STEP) * ((size.x + REACH_STEP - 1u) / REACH_STEP) + at.x / REACH_STEP];
+    b = bounds[(at.y / BOUND_STEP) * ((size.x + BOUND_STEP - 1u) / BOUND_STEP) + at.x / BOUND_STEP];
   }
   if (b.y > 0.0) {
     atomicMin(&slab_far, bitcast<u32>(b.x));
@@ -186,7 +183,7 @@ fn screen_reach_cs(
     return;
   }
   // The square's slab: what its pixels read lies within its box.
-  let box = reach_slab(at, REACH_STEP, far, near, size);
+  let box = reach_slab(at, BOUND_STEP, far, near, size);
   let lo = box[0];
   let hi = box[1];
   if (!reach_in_marks_box(lo, hi)) {
@@ -198,8 +195,8 @@ fn screen_reach_cs(
   } else {
     // A box past a few tiles (an edge between near and far): each pixel
     // its own, as tight as before.
-    for (var k = 0u; k < REACH_STEP * REACH_STEP; k++) {
-      let p = at + vec2u(k % REACH_STEP, k / REACH_STEP);
+    for (var k = 0u; k < BOUND_STEP * BOUND_STEP; k++) {
+      let p = at + vec2u(k % BOUND_STEP, k / BOUND_STEP);
       let v = reach_depth(p, size);
       if (hit || !(v > 0.0)) {
         continue;

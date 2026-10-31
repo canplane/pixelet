@@ -8,3 +8,4 @@
 !rust
 !xpute/rust
 **/target
+**/.env

@@ -106,7 +106,6 @@ out
 dist
 
 # Gatsby files
-.cache/
 # Comment in the public line in if your project uses Gatsby and not Next.js
 # https://nextjs.org/blog/next-9-1#public-directory-support
 # public
@@ -116,7 +115,6 @@ dist
 
 # vuepress v2.x temp and cache directory
 .temp
-.cache
 
 # Sveltekit cache directory
 .svelte-kit/
@@ -180,7 +178,6 @@ vite.config.ts.timestamp-*
 .agents/**/*.local.md
 
 # Rust workspace build output
-/target
 /rust/target
 
 # Scratch: notes, diffs and logs a session keeps while it works.
