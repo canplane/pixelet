@@ -140,10 +140,10 @@ pub const fn generated_for(head: [u32; 3], q: [i32; 2]) -> bool {
 
 /// The boxes a frame's generation is asked over at most: the edits and cuts
 /// held (`overwrite::BOXES`), and each brick handed this frame, which
-/// reaches its window's zoom alone.
+/// reaches its window's zoom and every coarser one (`asks`'s vote).
 pub const MARKED: u32 = overwrite::BOXES + window::HANDED;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
-/// window zoom whose candidates it reaches, `EVERY` for all.
+/// finest window zoom whose candidates it reaches, `EVERY` for all.
 pub const BOX_WORDS: u32 = 5;
 pub const EVERY: u32 = 0;
 const _: () = assert!(FIRST_CELL > EVERY);
@@ -165,8 +165,9 @@ pub const LIST_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
 pub const LIST_WORDS: u32 = LIST_AT + EYE_ENTRIES * DECORS.len() as u32;
 
 /// How far about its own, in its window's cells, a candidate's generation
-/// reads the world (`generated`): the cells its pose votes on, its box, and
-/// the placed decor that may claim it, none wider than the widest decor.
+/// reads the world (`generated`): the leaf cells its pose votes on, no
+/// farther than as many of its window's, its box, and the placed decor that
+/// may claim it, none wider than the widest decor.
 const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
 
 /// The leaf cells, `[x0, y0, x1, y1)`, of brick `q` of the window at `cell`.
@@ -312,7 +313,7 @@ pub mod drawn {
 /// where it reads them.
 pub trait DecorQuery {
     /// A footing as this side keeps it: what its assets are asked off.
-    type Footing;
+    type Footing: Copy;
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer, never a table it copies.
     fn rows(&self) -> &[Decor];
@@ -356,8 +357,9 @@ impl Generated {
 
 /// Where candidate `c` of `decor` stands at `cell`: on its column's footing
 /// in the world unplaced, the ground's alone, so no edit moves
-/// it or takes it from under it; facing as the cells beside it at the
-/// footing's level vote there (`asks`); then, where `boxed`, whether it
+/// it or takes it from under it; facing as the leaf cells beside it at its
+/// leaf column's footing vote, whatever window it is generated at (`asks`);
+/// then, where `boxed`, whether it
 /// generates there: every cell of its box void and every one under its base
 /// a look it generates on, as the ground holds them; no edit in its box, air
 /// included (`DecorQuery::is_edited`); and no placed decor's box overlaps
@@ -398,7 +400,10 @@ pub fn generated(
 /// axis — a quarter turn if horizontal wins, else none (a tie or isolated
 /// cell has no real answer), and a half more on a draw, as two-way traffic
 /// faces both ways — the four at a distance in turn, before, after, under,
-/// over. What stands, and whether it generates there.
+/// over. The vote reads the leaves' cells about the leaf column's footing,
+/// each answered off the finest window holding it (`window::step`), so a
+/// candidate faces one way at every window it is generated at. What stands,
+/// and whether it generates there.
 fn asks<Q: DecorQuery>(
     q: &mut Q,
     f: &Q::Footing,
@@ -418,7 +423,14 @@ fn asks<Q: DecorQuery>(
     } else {
         g.turn = draws.next_u32() >> (u32::BITS - TURN_BITS);
     }
-    let foot = [g.at[0] >> s, g.at[1] >> s, (g.at[2] >> s) - 1];
+    // What the asks read about, and at which zoom: the leaves' for the vote,
+    // then the window's for the box.
+    let (mut about, mut zoom) = (*f, cell);
+    let mut foot = [0; 3];
+    if voting > 0 {
+        let (leaf, (floor, _), _) = q.footing(LEAF_CELL, [g.at[0], g.at[1]]);
+        (about, zoom, foot) = (leaf, LEAF_CELL, [g.at[0], g.at[1], floor]);
+    }
     let (mut horizontal, mut vertical) = (0, 0);
     // The box, laid out once the vote is in: its cells, from the one under
     // its base up, a column at a time.
@@ -431,6 +443,7 @@ fn asks<Q: DecorQuery>(
             // The vote is in: the turn it gives, then the box it turns.
             if voting > 0 {
                 g.turn = u32::from(horizontal > vertical) + 2 * flip;
+                (about, zoom) = (*f, cell);
             }
             if !boxed {
                 break;
@@ -463,7 +476,7 @@ fn asks<Q: DecorQuery>(
                 [foot[0], foot[1] + along, foot[2]]
             }
         };
-        let v = q.asset(f, cell, b);
+        let v = q.asset(&about, zoom, b);
         if voted {
             let holds = if b[2] == lo[2] {
                 decor.allows(val(v))

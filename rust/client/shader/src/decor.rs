@@ -110,7 +110,8 @@ fn shown_at(shown: &[u32], j: u32, cell: u32) -> bool {
 
 /// Whether a box of the frame's (pxl-spec-core `generated::BOXES_AT`) meets
 /// the leaf cells `reads` of the window at `cell` (`generated::meets`): one
-/// at every zoom, or at `cell`'s.
+/// at every zoom, or at `cell`'s or finer, whose cells a vote at the leaves'
+/// reads where they are the finest held (`generated::asks`).
 fn is_changed(list: &[u32], cell: u32, reads: [i32; 4]) -> bool {
     let mut k = 0;
     while k < at(list, generated::LIST_BOXES) {
@@ -122,7 +123,7 @@ fn is_changed(list: &[u32], cell: u32, reads: [i32; 4]) -> bool {
             at(list, b + 2) as i32,
             at(list, b + 3) as i32,
         ];
-        if (zoom == generated::EVERY || zoom == cell) && generated::meets(reads, edit) {
+        if (zoom == generated::EVERY || zoom >= cell) && generated::meets(reads, edit) {
             return true;
         }
         k += 1;

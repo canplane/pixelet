@@ -254,6 +254,22 @@ pub const ROOTS: [Zoom; DECORS.len()] = {
     }
     roots
 };
+const _: () = {
+    let mut k = 0;
+    while k < DECORS.len() {
+        let shift = 2 * (LEAF_CELL - ROOTS[k]);
+        assert!(
+            shift < u32::BITS,
+            "a decor's root column's leaf cells, a shift, fit a u32 (`count`)"
+        );
+        let mean = ((CHANCES[k] >> 16) as u64) << shift;
+        assert!(
+            mean + 0xffff <= u32::MAX as u64,
+            "a decor's mean a root column, in 16.16, fits a u32 (`count`)"
+        );
+        k += 1;
+    }
+};
 
 /// Whether any variant of `decor` stands at `cell` (`stands_at`).
 pub const fn any_stands_at(decor: &Decor, cell: Zoom) -> bool {
