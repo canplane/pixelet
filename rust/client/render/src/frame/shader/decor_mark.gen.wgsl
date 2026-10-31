@@ -220,7 +220,7 @@ fn function_() {
                                 if (_e144 == 0u) {
                                     phi_356_ = true;
                                 } else {
-                                    phi_356_ = (_e144 == _e60);
+                                    phi_356_ = (_e144 >= _e60);
                                 }
                                 let _e179 = phi_356_;
                                 if _e179 {

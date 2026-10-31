@@ -52,13 +52,13 @@ pub struct DecorFrame<'a> {
 /// eye's place: the windows' table, a preview's cuts, and the bricks filled
 /// this frame. A slot generates whole where its brick is another; else it
 /// generates again only where a box meets what its brick reads
-/// (`generated::brick_reads`): an edit, a cut as it was or is, or a brick filled at
-/// its window's zoom. The overwrites' every write names its box (the
-/// frame's `edits`), and the service area's index is made once, before any
-/// brick is held, so neither generates a slot by itself. A brick filled
-/// reaches its own window's zoom alone: a finer candidate reading it where
-/// its own window lacks a brick generates again when that brick is filled, at
-/// its own zoom, and is drawn off the coarser one until then.
+/// (`generated::brick_reads`): an edit, a cut as it was or is, or a brick
+/// filled at its window's zoom or finer. The overwrites' every write names its
+/// box (the frame's `edits`), and the service area's index is made once,
+/// before any brick is held, so neither generates a slot by itself. A brick
+/// filled reaches its own window's zoom and every coarser one: a coarser
+/// window's decor faces as the leaf cells vote, each read off the finest
+/// window holding it (pxl-spec-core `generated::asks`).
 pub struct Generation<'a> {
     pub window: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
@@ -283,15 +283,12 @@ impl Generated {
         w.read(generation.window);
         let moved = !w.end();
         self.marked = self.holding;
-        // A brick filled at a coarser window than the leaves' generates no decor.
-        let fresh = generation
-            .fresh
-            .iter()
-            .any(|f| f[window::FRESH_CELL as usize] == pxl_spec_core::LEAF_CELL);
+        // A brick filled at any window generates decor there and coarser.
+        let fresh = !generation.fresh.is_empty();
         self.marking = self.stale || moved || fresh || self.marked != 0;
         if self.marking {
             // The boxes held, at every zoom, then each brick handed, at
-            // its window's alone.
+            // its window's and coarser.
             let mut boxes = [0u32; (generated::MARKED * generated::BOX_WORDS) as usize];
             let fresh = generation.fresh.iter().map(|f| {
                 let cell = f[window::FRESH_CELL as usize];
