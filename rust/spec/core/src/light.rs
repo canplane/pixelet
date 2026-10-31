@@ -263,11 +263,14 @@ impl Light {
         q << ZOOM_BITS | self.asked(detail, q)
     }
 
-    /// Whether slot word `w` (`word`) holds the zoom `detail` asks at its
-    /// depth: a slot cast from another eye, where it asks the same of it,
-    /// holds (pxl-shader light.rs `light_detail_cs`).
-    pub fn asks(&self, detail: Detail, w: u32) -> bool {
-        w & NO_ZOOM == self.asked(detail, w >> ZOOM_BITS)
+    /// The first of the held words (`held_at`) of box tile `tile` of the map
+    /// `size` texels a side: its slots' tile's, fixed in the world as the
+    /// slots are, so the words hold where the box slides, its corner a whole
+    /// number of tiles (pxl-render gpu/shadow.rs `aim`).
+    pub fn held(&self, size: u32, tile: [u32; 2]) -> u32 {
+        let (t, n) = (TILE, tiles(size));
+        let at = |k: usize| ((tile[k] * t) as i32).wrapping_add(self.corner[k]) as u32 & (size - 1);
+        held_at(size) + ((at(1) / t) * n + at(0) / t) * HELD_WORDS
     }
 
     /// The light its words lay (`words`).
@@ -654,10 +657,40 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
     coarse_at(size) + (j / COARSE) * coarse(size) + i / COARSE
 }
 
-/// The list's buffer's words: the beam's, the samples, the misses, the
-/// stands, the reads, their squares.
-pub const fn list_words(size: u32) -> u32 {
+/// What a tile cast in its epoch holds by, past the squares, `HELD_WORDS` a
+/// tile of slots (`Light::held`): the least margin of every node the walks
+/// that fed it asked (`cast::Margin`), f32 bits, lowered by each of them as
+/// it ends (pxl-shader light.rs `light_beam_cs`, `light_sample_cs`,
+/// `light_miss_cs`); then where the eye stood, Q3, X, Y and Z, when the cast
+/// that cast it claimed it, its margin set to none then (`light_reach_cs`).
+/// While the eye stands nearer than the margin to where it stood, every zoom
+/// those walks asked is asked again, so the tile holds what it would be cast
+/// anew to (`holds`; `light_detail_cs`). In the list, as the walks that
+/// lower it bind the world's storage buffers, the pyramid and the list, as
+/// many as every device binds.
+pub const fn held_at(size: u32) -> u32 {
     coarse_at(size) + coarse(size) * coarse(size)
+}
+
+pub const HELD_MARGIN: u32 = 0;
+pub const HELD_EYE: u32 = 1;
+pub const HELD_WORDS: u32 = 4;
+
+/// The list's buffer's words: the beam's, the samples, the misses, the
+/// stands, the reads, their squares, the held words.
+pub const fn list_words(size: u32) -> u32 {
+    held_at(size) + tiles(size) * tiles(size) * HELD_WORDS
+}
+
+/// Whether a tile whose walks' least margin is `margin` units, cast with the
+/// eye at Q3 `was`, holds with the eye at Q3 `eye`: the eye moved less than
+/// the margin, its step in units on every axis alike, X the short way round
+/// as an i32 wraps.
+pub fn holds(margin: f32, was: [i32; 3], eye: [i32; 3]) -> bool {
+    let q3 = (1u32 << FRAC_W) as f32;
+    let d = |k: usize| eye[k].wrapping_sub(was[k]) as f32 / q3;
+    let (x, y, z) = (d(0), d(1), d(2));
+    libm::sqrtf(x * x + y * y + z * z) < margin
 }
 
 /// The workgroups of the passes that cast tiles, a buffer of their own: each
@@ -1033,5 +1066,58 @@ mod tests {
         // The box moved a texel on across: the slot holds the next texel.
         s.corner[0] += 1;
         assert_eq!(s.texel(8, [0, 5]), [2, 0]);
+    }
+
+    /// A tile held while the eye moves breaks where a node its walk asked
+    /// is asked at another zoom, though the zoom at the stop is the same: a
+    /// node [0, 8]³ units from the ray's origin, the stop on its top face,
+    /// the eye on X past it stepping a unit nearer across the band edge at
+    /// 96 units (`grid::cell_zoom_from`) at the node's nearest point, while
+    /// the stop stays within its band. The check by the stop's zoom (the
+    /// slot's word's, `Light::word`) holds it; the margin breaks it
+    /// (`holds`).
+    #[test]
+    fn held_breaks_where_a_node_changes_zoom() {
+        use crate::cast::{Asked, Margin};
+        use crate::grid::cell_zoom_from;
+        use crate::{FINEST_ZOOM, UNIT_ZOOM};
+        let (hi, stop) = (8.0f32, [0.0f32, 0.0, 8.0]);
+        let detail = |x: f32| Detail {
+            range: [0, FINEST_ZOOM],
+            eye: [x, 0.0, 0.0],
+            spacing: Spacing::NONE,
+        };
+        let sq = |v: [f32; 3]| v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+        // The node's farthest corner and nearest point from the eye, squared,
+        // as the walk takes them (pxl-spec-core cast.rs `reach`), the eye
+        // past X's far face.
+        let reach = |d: Detail| {
+            let e = d.eye;
+            [sq([e[0], hi, hi]), sq([e[0] - hi, 0.0, 0.0])]
+        };
+        let pair = |d: Detail| {
+            let [far, near] = reach(d);
+            [d.at(far), d.at(near)]
+        };
+        let at_stop = |d: Detail| {
+            let e = d.eye;
+            d.at(sq([stop[0] - e[0], stop[1] - e[1], stop[2] - e[2]]))
+        };
+        let (was, now) = (detail(104.5), detail(103.5));
+        assert_eq!(cell_zoom_from(UNIT_ZOOM as i32 - 1), 96.0);
+        // The old check: the stop's zoom alike, so the tile held.
+        assert_eq!(at_stop(was), at_stop(now));
+        // What the walk asked moved: the node's nearest zoom is finer.
+        assert_ne!(pair(was), pair(now));
+        // The new: the eye moved a unit, past the margin the walk told.
+        let mut told = Margin::NONE;
+        told.asked(was, reach(was));
+        assert!(told.0 < 1.0, "{}", told.0);
+        let q3 = |x: f32| [(x * (1 << FRAC_W) as f32) as i32, 0, 0];
+        assert!(!holds(told.0, q3(was.eye[0]), q3(now.eye[0])));
+        // Within it, the tile holds, and the node is asked as it was.
+        let near = detail(104.5 - told.0 / 2.0);
+        assert!(holds(told.0, q3(was.eye[0]), q3(near.eye[0])));
+        assert_eq!(pair(was), pair(near));
     }
 }

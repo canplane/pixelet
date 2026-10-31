@@ -453,6 +453,10 @@ directly, step 4 being done.
    2. **The kernel hands the draws that changed**, not their spheres
       (pxl-kernel region.rs); the spheres, `unbounded` and the host's marks
       from them removed. Taken after the screen's side has its numbers.
+      Done (2026-10-31): every bounded draw, decor, an impostor and the
+      puck's zone and beacon beside the actors, marks by its drawn self;
+      the kernel hands the keys of the draws it bounds and the renderer
+      tells which changed against what it kept, as the actors' did.
    3. **The changed draws drawn as they were and as they are**, their
       vertices as their depth pipelines lay them, through a fragment that
       sets the screen tile's word to the frame's number and keeps the
@@ -560,3 +564,22 @@ To measure any of them: `pxl.profiler.drive` and the busy time by frame
 kind (`gpu_busy_kinds`), A and B by turns in one sitting; a run alone has
 read the same commit 4 ms apart, and some runs the GPU at half its speed
 across every span, with no thermal or power record of it.
+
+## Taken after the steps (2026-10-31)
+
+The user's word, each in its scope; measured in the tiles' baseline's
+record (the round after the steps):
+
+- **A held light tile is cast again exactly where what its walks asked
+  moved**: each pass tells the least margin the eye may move before a node
+  it asked changes its zooms, a tile keeps the least and the eye it was
+  claimed at, and `light_detail_cs` takes it back where the eye moved past
+  it (`cast::Margin`, `light::holds`), in place of a slot's stop's zoom,
+  which let a coarse cell's changed look stand as a shadow with no caster.
+- **The occlusion takes the shadows' shape**: found from the world's own
+  depth between the world pass's two halves, held where what it reads
+  stands, laid over the claimed tiles; its prepass and depth gone, a change
+  in how it looks accepted.
+- **The air's volume and exposure each found again only where what it reads
+  moved.**
+

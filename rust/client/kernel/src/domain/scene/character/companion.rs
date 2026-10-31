@@ -296,6 +296,9 @@ struct Companion {
     beside: Asked<([f64; 2], f64, [f64; 2], bool), f64>,
     /// The floor the pivot is drawn on, of the pivot (`pivot_floor`).
     floor: Asked<Q3, Option<f64>>,
+    /// Whether the character is the one looking, the eye at the pivot: no
+    /// figure is drawn, so none is loading.
+    looking: bool,
 }
 
 static COMPANION: Global<Companion> = Global::new();
@@ -306,6 +309,7 @@ fn companion() -> &'static mut Companion {
         pet: None,
         beside: Asked::NONE,
         floor: Asked::NONE,
+        looking: false,
     })
 }
 
@@ -361,6 +365,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     for f in [&mut c.person, &mut c.pet].into_iter().flatten() {
         f.drawn.forget_touched();
     }
+    c.looking = props.is_none();
     let Some(p) = props else {
         for slot in [&mut c.person, &mut c.pet] {
             if let Some(mut w) = slot.take() {
@@ -506,8 +511,10 @@ fn drawn_floor(
 
 /// Whether the person, then the pet, has loaded, for the loading toast: a
 /// figure holds its actor once its model and skin have arrived, and a fresh
-/// one holds none.
+/// one holds none; while the character is the one looking none is drawn,
+/// so none is loading.
 pub fn companion_ready() -> [bool; 2] {
     let c = companion();
-    [&c.person, &c.pet].map(|f| f.as_ref().is_some_and(|f| f.held.is_some()))
+    let looking = c.looking;
+    [&c.person, &c.pet].map(|f| looking || f.as_ref().is_some_and(|f| f.held.is_some()))
 }

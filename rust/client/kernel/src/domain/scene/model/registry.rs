@@ -430,9 +430,8 @@ impl Model {
     }
 
     /// How far any vertex lies from the origin as `palette`, a mat4 a joint,
-    /// skins it, unscaled (`reach_at`): the pose a palette holds, which an
-    /// actor holds as drawn.
-    pub fn reach_of(&self, palette: &[f32]) -> f32 {
+    /// skins it, unscaled (`reach_at`).
+    fn reach_of(&self, palette: &[f32]) -> f32 {
         if self.joints() == 0 {
             return self.radius;
         }

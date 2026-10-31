@@ -816,3 +816,37 @@ while it moves, as the next frame's rays mark again. `pxl.profiler.drive
 - Of the 4 ms `e6b740ab8` put on a moving frame, the footprints were it:
   about 2 ms of it taken back by the marks reading each pixel once
   (`6f84e6fb8`), the rest by this.
+
+**Decor put back, and the round after the steps** (2026-10-31, 07:45–09:45,
+port 5187 and 5188, worktrees from main). One scenario, both builds alike:
+the view zoomed out to its farthest and back in two thirds of the way,
+tilted until the horizon shows, then 30 s of turning (the right button
+round the middle, one and a half turns) and walking (W held) at once, noon,
+AO `corner`, `pxl.profiler.drive('still', 30)` taking the window while a
+script moves the camera. One run each, so a row tells a direction, not
+milliseconds.
+
+| build | interval p50 / p95 | busy p50 / p95 | gated busy p50 / p95 | `generate` p95 | `air` p95 |
+|---|---|---|---|---|---|
+| the Poisson decor (`3b5623fed`) | 22 / 37 | 28.4 / 41.6 | 3.9 / 20.6 | 1.6 | 9.5 |
+| decor a hash a cell again (`8e8743c9f`) | 21 / 40 | 29.5 / 42.1 | 3.6 / 20.6 | 1.8 | 8.9 |
+| the round below, on `24e19a4ed` | 20 / 37 | 25.8 / 42.6 | 2.6 / 12.9 | 2.1 | 7.0 |
+
+- Decor put back as a hash a cell costs what the Poisson process did: no
+  span apart by more than a run's noise. The 4.5 ms of `generate` reported
+  before was taken under load; orbiting quietly, both builds read 1.1 to
+  1.8 ms.
+- The round: every bounded draw marks the tiles by its drawn self, the
+  kernel's spheres gone (step 6 part 2); a held light tile cast again
+  where the eye moved past the margin of the zooms its walks asked
+  (`cast::Margin`, `light::holds`), in place of the slot's stop's zoom; the
+  occlusion found from the world's own depth between the world pass's two
+  halves, its prepass gone, laid over the claimed tiles; the air's volume
+  and exposure keyed by what each reads. Some 3.7 ms off the busy time's
+  p50, the gated frames' p95 from 20.6 ms to 12.9.
+- The shadows left where a coarse cell's look changed (a pan held W then S
+  a second each, high and oblique) were the held light tiles' check: the
+  stop's zoom stood while the node's pair moved. A build casting every
+  tile again on any move of the eye showed none; the round's build shows
+  none (the user, by eye). AO `screen` and the air, changed in look, were
+  seen right by the user; not timed here, the run being AO `corner`.

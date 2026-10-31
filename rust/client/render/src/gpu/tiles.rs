@@ -8,7 +8,8 @@
 //! what changed, a mark each (`mark_of`), and a pass sets the words of the
 //! tiles they cover, a thread a tile of each mark's, one mark of every tile
 //! where the frame is drawn whole (screen_mark.wgsl), before anything reads
-//! them. A tile is claimed while it
+//! them; the draws that changed set theirs drawn (gpu/pass/mark.rs). A tile
+//! is claimed while it
 //! changed fewer than `claimed_for` frames ago, each by its role: the screen
 //! until its history has gathered the jitter's sequence, the map the frame
 //! it changed alone; every one where the frame is drawn whole. What draws
@@ -98,8 +99,10 @@ pub struct Tiles {
     set_cnt: u32,
     mark_most: u32,
     beside_tiles: Vec<u32>,
-    /// The tiles all of them cover, from the first to past the last.
-    marks_box: [u32; 4],
+    /// The tiles the frame's marks cover, from the first to past the last,
+    /// four words the GPU's: those handed, widened by the draws that mark
+    /// (tile_mark.wgsl).
+    marks_box: u32,
     /// Whether a pass beside may have set tiles the host has not seen yet
     /// (gpu/reach.rs).
     unseen: bool,
@@ -141,7 +144,10 @@ impl Tiles {
             set_cnt: 0,
             mark_most: 0,
             beside_tiles: Vec::new(),
-            marks_box: [0; 4],
+            marks_box: g.buf(
+                word_bytes(4),
+                buffer_usage::STORAGE | buffer_usage::COPY_DST,
+            ),
             unseen: false,
         }
     }
@@ -154,6 +160,7 @@ impl Tiles {
             self.mark_group,
             self.mark_head,
             self.marks,
+            self.marks_box,
         ] {
             release(id);
         }
@@ -223,13 +230,10 @@ impl Tiles {
             .map(|t| (t[2] - t[0]) * (t[3] - t[1]))
             .max()
             .unwrap_or(0);
-        let beside = if whole { Vec::new() } else { tiles_of(beside) };
-        self.beside_tiles.clear();
-        self.beside_tiles
-            .extend(beside.iter().map(|t| (t[2] - t[0]) * (t[3] - t[1])));
-        tiles.extend(beside);
-        self.mark_cnt = tiles.len() as u32;
-        self.marks_box = tiles.iter().fold([u32::MAX, u32::MAX, 0, 0], |b, t| {
+        // Those handed, which the draws that mark widen; none an i32's
+        // greatest, as the reach reads it (screen_reach.wgsl).
+        let none = i32::MAX as u32;
+        let marks_box = tiles.iter().fold([none, none, 0, 0], |b, t| {
             [
                 b[0].min(t[0]),
                 b[1].min(t[1]),
@@ -237,6 +241,13 @@ impl Tiles {
                 b[3].max(t[3]),
             ]
         });
+        g.write_buf(self.marks_box, 0, bytes(&marks_box));
+        let beside = if whole { Vec::new() } else { tiles_of(beside) };
+        self.beside_tiles.clear();
+        self.beside_tiles
+            .extend(beside.iter().map(|t| (t[2] - t[0]) * (t[3] - t[1])));
+        tiles.extend(beside);
+        self.mark_cnt = tiles.len() as u32;
         if self.marking {
             self.marked_at = self.now;
         }
@@ -321,8 +332,9 @@ impl Tiles {
     }
 
     /// The tiles this frame's marks cover, from the first across and down to
-    /// past the last; none changed off them (empty where it handed none).
-    pub fn marks_box(&self) -> [u32; 4] {
+    /// past the last, four words on the GPU: those handed, widened by the
+    /// draws that mark (tile_mark.wgsl), none changed off them.
+    pub fn marks_box(&self) -> u32 {
         self.marks_box
     }
 

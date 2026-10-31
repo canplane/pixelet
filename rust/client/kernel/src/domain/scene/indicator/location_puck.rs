@@ -367,35 +367,10 @@ impl LocationPuck {
             return;
         }
         let shown = p.shown.unwrap_or(p.target);
-        // The zone about its center, and the beacon over where it is shown,
-        // each as drawn (`region`): the beacon's bob and slide move it alone,
-        // as the zone reads no time.
-        let night = f64::from(u8::from(p.night));
-        let handle = f64::from(self.held.handle);
-        if p.zone_drawn {
-            region::drawn(
-                u32::MAX,
-                p.center,
-                libm::hypot(ZONE_RADIUS, BEACON_Z_BIAS + BEACON_BOB),
-                false,
-                region::digest(&[p.center[0], p.center[1], p.center[2], night, handle]),
-            );
-        }
-        let beacon_at = v3::add(&p.center, &[shown[0], shown[1], BEACON_Z_BIAS]);
-        region::drawn(
-            u32::MAX - 1,
-            beacon_at,
-            f64::from(beacon::RADIUS) + BEACON_BOB,
-            false,
-            region::digest(&[
-                beacon_at[0],
-                beacon_at[1],
-                beacon_at[2],
-                p.time,
-                night,
-                handle,
-            ]),
-        );
+        // The zone about its center, and the beacon over where it is shown:
+        // the beacon's bob and slide move it alone, as the zone reads no
+        // time; each, its draw changed, marks where it was and where it is
+        // (pxl-render gpu/pass/mark.rs).
         let center = DrawList::translation(p.center, eye);
         if p.zone_drawn {
             let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;

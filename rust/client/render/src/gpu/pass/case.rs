@@ -8,10 +8,9 @@ use pxl_spec::space::coord::v3::V3;
 
 use crate::frame::draw::{uniform_of, DRAW_WORDS};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, JITTER, SCREEN, SCREEN_AO, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, JITTER, SCREEN, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::FRAME_FLOATS;
-use crate::gpu::ao::{ScreenAo, MAP_BINDING};
 use crate::gpu::api::{
     buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Image, Load, RenderContext,
     TrackedRenderPass,
@@ -50,7 +49,6 @@ impl Case {
         g: &Gpu,
         pipelines: &mut Pipelines,
         shadow: &Shadow,
-        ao: &ScreenAo,
         air: [Entry; AIR_ENTRIES],
         align: u32,
     ) -> Case {
@@ -61,14 +59,7 @@ impl Case {
         let layout = frame_layout(g, pipelines);
         Case {
             frame_buf,
-            frames: FrameGroups::new(
-                g,
-                layout,
-                frame_buf,
-                shadow.blank_entries(1),
-                [ao.blank_entry(MAP_BINDING); 2],
-                air,
-            ),
+            frames: FrameGroups::new(g, layout, frame_buf, shadow.blank_entries(1), air),
             skinned: SkinnedPass::new(g, pipelines, align),
             finish: Finish::new(g, pipelines),
             read: Read::default(),
@@ -131,7 +122,6 @@ impl Case {
         u[SCREEN] = s.screen.0 as f32;
         u[SCREEN + 1] = s.screen.1 as f32;
         u[VIGNETTE] = 0.0;
-        u[SCREEN_AO] = 0.0;
         u[SHADOW_STRENGTH] = 0.0;
         // Drawn at one sample a pixel, its frames gathered by none.
         u[JITTER] = 0.0;

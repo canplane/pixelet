@@ -53,9 +53,12 @@ fn air_held_at(uv: vec2f, k: f32) -> vec3f {
 // ground at the latest. What it scatters is that ray's 1 - e^-τ(d) times the
 // light per share taken (atmos_view.wgsl `air_held`), read off the volume
 // smooth (`air_held_at`). Only that slow factor is read off the grid; the
-// fast one is the pixel's own.
+// fast one is the pixel's own. The volume was exposed at the stops it holds
+// beside every froxel; it is taken to the eye's stops now, exactly itself
+// where they stand.
 fn air_before(uv: vec2f, dir: vec3f, d: f32) -> vec4f {
-  let held = air_held_at(uv, air_slice(d));
+  let made = textureLoad(air_volume, vec3i(0), 0).a;
+  let held = air_held_at(uv, air_slice(d)) * exp2(exposure_stops() - made);
   let km = atmos_km_per_u();
   let r = camera_r();
   let mu = dot(frame_up(), dir);

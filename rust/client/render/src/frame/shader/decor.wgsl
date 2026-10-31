@@ -1,15 +1,7 @@
-// Decor: instanced variant models, each instance read from the decor's
-// instances (instance.wgsl).
+// Decor: instanced variant models, placed as decor_place.wgsl lays them.
 
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;
-
-struct VertexIn {
-  @builtin(instance_index) i: u32,
-  @location(0) pos: vec3f,
-  @location(1) normal: vec3f,
-  @location(2) uv: vec2f,
-};
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -22,22 +14,6 @@ struct VertexOut {
   @location(6) @interpolate(flat) sun: vec3f,
   @location(7) @interpolate(flat) other: vec3f,
 };
-
-// One function, so the depth passes place a vertex where the lit pass does.
-struct Placed {
-  world: vec3f,
-  spin: f32,
-};
-
-fn placed(v: VertexIn) -> Placed {
-  let i = instances[draw_idx() + v.i];
-  let at = vec3f(lane(0u, i), lane(1u, i), lane(2u, i));
-  var p: Placed;
-  p.spin = lane(3u, i);
-  let scale = lane(4u, i);
-  p.world = place_up(v.pos * scale, p.spin) + at + draw_translation();
-  return p;
-}
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
@@ -56,15 +32,10 @@ fn vs(v: VertexIn) -> VertexOut {
   return o;
 }
 
-@vertex
-fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
-  return jittered(frame_view_proj() * vec4f(placed(v).world, 1.0));
-}
-
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
-  let color = shade(albedo, n, i.world_pos, shadow_visibility(i.world_pos, n), screen_ao(i.clip.xy), Seen(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill)));
+  let color = shade(albedo, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, Seen(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill)));
   return vec4f(tone(color), draw_opacity());
 }

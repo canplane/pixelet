@@ -1,10 +1,14 @@
 // pxl-render/gpu/pass/puck.rs
 
 //! The location puck: an instanced zone of unit boxes and an octahedron beacon.
+//! Each, its draw changed, marks the screen's tiles it covers where it was and
+//! where it is (gpu/pass/mark.rs), the zone its boxes the upload it reads.
 
 use crate::frame::draw::{uniform_of, DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
+use crate::frame::shader::record::{PIPELINE_PUCK_BEACON_MARK, PIPELINE_PUCK_ZONE_MARK};
 use crate::frame::shader::word::BOX_VERTICES;
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, Gpu, TrackedRenderPass};
+use crate::gpu::pass::mark::{self, Marks, UploadCopies};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::{buf_size, Draws, Uploads};
@@ -85,6 +89,15 @@ pub struct PuckPass {
     oct_normal: u32,
     /// The UI's action color, in linear light.
     color: [f32; 3],
+    zone_marks: Marks,
+    beacon_marks: Marks,
+}
+
+/// A mark's uniform: the draw's place and turn, as the lit pass's first
+/// words (puck.wgsl `Draw`).
+fn put_mark(buf: &mut [u8], (_, u): &mark::Drawn) {
+    buf[..DRAW_BYTES as usize]
+        .copy_from_slice(bytes(&[u[0], u[1], u[2], u[3], 0.0, 0.0, 0.0, 0.0]));
 }
 
 fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
@@ -117,7 +130,73 @@ impl PuckPass {
             oct_pos: put(g, bytes(&oct_p), buffer_usage::VERTEX),
             oct_normal: put(g, bytes(&oct_n), buffer_usage::VERTEX),
             color: [r as f32, gr as f32, b as f32],
+            zone_marks: Marks::new(
+                g,
+                pipelines,
+                PIPELINE_PUCK_ZONE_MARK,
+                align,
+                (|d| d[0], put_mark),
+            ),
+            beacon_marks: Marks::new(
+                g,
+                pipelines,
+                PIPELINE_PUCK_BEACON_MARK,
+                align,
+                (|_| 0, put_mark),
+            ),
         }
+    }
+
+    /// The marks this frame of the zones and the beacons (gpu/pass/mark.rs
+    /// `Marks::prepare`). Whether any.
+    pub fn prepare_marks(
+        &mut self,
+        g: &Gpu,
+        draws: &Draws,
+        uniforms: &[f32],
+        touched: &[u32],
+        uploads: &mut Uploads,
+        kept: &UploadCopies,
+    ) -> bool {
+        let zones = self
+            .zone_marks
+            .prepare(g, zones(draws), uniforms, touched, uploads, kept);
+        let beacons = draws.of(PIPELINE_PUCK_BEACON);
+        let beacon = self
+            .beacon_marks
+            .prepare(g, beacons, uniforms, touched, uploads, kept);
+        zones || beacon
+    }
+
+    /// The marks `prepare_marks` made drawn into `pass`, `frame` their group
+    /// 0 (tile_mark.wgsl).
+    pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frame: u32) {
+        self.zone_marks.draw(pass, frame, |pass, d, upload| {
+            pass.set_vertex_buf(0, self.box_pos, 0, 0);
+            pass.set_vertex_buf(1, self.box_uv, 0, 0);
+            pass.set_idx_buf(self.box_idx, 0, 0);
+            pass.set_bind_group(2, upload, &[]);
+            pass.draw_indexed(BOX_VERTICES, d[1], 0, 0);
+        });
+        self.beacon_marks.draw(pass, frame, |pass, _, _| {
+            pass.set_vertex_buf(0, self.oct_pos, 0, 0);
+            pass.set_vertex_buf(1, self.oct_normal, 0, 0);
+            pass.draw(BEACON_VERTICES, 1, 0, 0);
+        });
+    }
+
+    /// The uploads the zones and the beacons read, into `out`
+    /// (`Marks::reads`).
+    pub fn marks_read(&self, draws: &Draws, out: &mut Vec<u32>) {
+        self.zone_marks.reads(zones(draws), out);
+        self.beacon_marks.reads(draws.of(PIPELINE_PUCK_BEACON), out);
+    }
+
+    /// What this frame listed kept for the next's marks where it was.
+    pub fn keep(&mut self, draws: &Draws, uniforms: &[f32]) {
+        self.zone_marks.keep(zones(draws), uniforms);
+        self.beacon_marks
+            .keep(draws.of(PIPELINE_PUCK_BEACON), uniforms);
     }
 
     /// Each draw's uniform in a slot of its own, written once before the

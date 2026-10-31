@@ -2,8 +2,12 @@
 
 //! The atmosphere's uniform and its tables: transmittance, multiple scattering
 //! and the sky's irradiance once per device; the sun's and moon's sky views
-//! redrawn only when the light's height or the camera's altitude moves (the
-//! table is kept relative to the light's azimuth); and every frame the exposure.
+//! redrawn only when the light's height moves half its step or the camera's
+//! altitude its share (the table is kept relative to the light's azimuth); the
+//! exposure where the words it reads move; and the air's volume where the
+//! eye's ray or the words it reads move.
+
+use core::ops::Range;
 
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
@@ -110,6 +114,19 @@ const MOON_VIEW: usize = 5;
 /// A share of the altitude, and at least a meter.
 const ALT_SHARE: f32 = 0.005;
 const ALT_FLOOR_KM: f32 = 0.001;
+/// The share of its light's step, the height over which its sky moves a
+/// display level, that a light moves before its view is drawn again.
+const STEP_SHARE: f32 = 0.5;
+
+/// The words the exposure texel is a function of (atmos_light.wgsl
+/// `eye_stops`): all but the eye's altitude and scale, where the rays end,
+/// the city lights and the Earth's window.
+const EXPOSURE_READS: [Range<usize>; 3] =
+    [0..CAMERA_ALT, MIE_EXTINCTION..DRAWN, NIGHT_SKY..CITY_LIGHT];
+/// The words the air's volume is a function of (atmos_froxel.wgsl): the
+/// medium, the lights' directions, the moon's light, and the eye's altitude
+/// and scale.
+const VOLUME_READS: Range<usize> = 0..MOON_COLOR;
 
 pub struct Atmosphere {
     uniform: u32,
@@ -136,18 +153,23 @@ pub struct Atmosphere {
     steps: [Option<f32>; 2],
     sun_mu: f32,
     moon_mu: f32,
-    /// The words as last laid out, and whether this frame's
-    /// moved: what the uniform and the exposure texel stand on, read here
+    /// The words as last laid out: what the uniform stands on, read here
     /// alone.
     read: Read,
-    moved: bool,
+    /// The words the exposure texel was last drawn of (`EXPOSURE_READS`).
+    exposure: Read,
+    /// Whether the tables baked once were drawn this frame.
+    fresh: bool,
     /// This month's Earth: the kernel draws nothing before its image has
     /// come (`ImageMap::step`).
     pub earth: ImageMap,
     earth_tiles: (u32, u32),
     /// The air before each point of the view (atmos_froxel.wgsl), its maker
-    /// and its maker's group; and what it was last made of: the frame's and
-    /// the sky's words, the air's, and the eye's texel as it was drawn.
+    /// and its maker's group; and what it was last made of: the sky's ray,
+    /// the air's words it reads (`VOLUME_READS`), and the tables baked once.
+    /// It is exposed as the eye's texel stood when it was made, and holds
+    /// those stops, so a reader takes it to the eye's now
+    /// (atmos_air.wgsl `air_before`).
     volume: u32,
     froxel: Built,
     froxel_group: u32,
@@ -258,7 +280,8 @@ impl Atmosphere {
             landed_word: 0,
             steps: [None; 2],
             read: Read::default(),
-            moved: false,
+            exposure: Read::default(),
+            fresh: false,
             sun_mu: 1.0,
             moon_mu: 1.0,
             earth: ImageMap::new(g, earth::PICTURE.0, earth::PICTURE.1),
@@ -358,22 +381,17 @@ impl Atmosphere {
     }
 
     /// The air before each point of the view made again where what it is
-    /// made of moved (`air`): the frame's words, the sky's, the air's, or the
-    /// eye's texel drawn this frame (`exposed`); whether it was.
-    pub fn froxel(
-        &mut self,
-        ctx: &mut RenderContext,
-        [frame, sky]: [&[f32]; 2],
-        exposed: bool,
-    ) -> bool {
+    /// made of moved (`air`): the sky's ray (`ray`, the eye's turn and
+    /// projection), the air's words it reads, or the tables baked once drawn
+    /// this frame; whether it was. The eye's exposure alone moving keeps it.
+    pub fn froxel(&mut self, ctx: &mut RenderContext, ray: &[f32]) -> bool {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::air);
         let r = &mut self.air;
         r.begin();
-        r.read(frame);
-        r.read(sky);
-        r.read(&self.words);
-        r.mark(exposed);
+        r.read(ray);
+        r.read(&self.words[VOLUME_READS]);
+        r.mark(self.fresh);
         if r.end() {
             return false;
         }
@@ -443,21 +461,21 @@ impl Atmosphere {
         let r = &mut self.read;
         r.begin();
         r.read(&self.words);
-        self.moved = !r.end();
-        if self.moved {
+        if !r.end() {
             g.write_buf(self.uniform, 0, bytes(&self.words));
         }
     }
 
     /// Whether a table the world reads was drawn again, and whether it
-    /// recorded anything. A light's view is drawn again when its height or
-    /// the eye's altitude has moved (`has_moved`), and only while no slopes are on
-    /// their way, which it writes; it takes its light's slope as it is drawn.
-    /// The exposure texel is a function of the words it reads and the
-    /// tables, so it is drawn where `lay_out` found the words moved, or a
-    /// table was drawn.
+    /// recorded anything. A light's view is drawn again when its height has
+    /// moved half its step or the eye's altitude its share (`has_moved`), and
+    /// only while no slopes are on their way, which it writes; it takes its
+    /// light's slope as it is drawn. The exposure texel is a function of the
+    /// words it reads (`EXPOSURE_READS`) and the tables baked once, so it is
+    /// drawn where those words moved or those tables were drawn.
     pub fn draw(&mut self, ctx: &mut RenderContext) -> (bool, bool) {
         let (g, encoder) = (ctx.g, ctx.encoder);
+        self.fresh = !self.baked;
         let mut drew = !self.baked;
         if !self.baked {
             self.table(ctx, TRANSMITTANCE);
@@ -474,7 +492,7 @@ impl Atmosphere {
             (MOON_VIEW, (self.moon_mu, alt), self.words[MOON_LIGHT] > 0.0),
         ];
         for (k, (table, now, lit)) in views.into_iter().enumerate() {
-            if !(free && lit && has_moved(self.drawn_for[k], now)) {
+            if !(free && lit && has_moved(self.drawn_for[k], now, self.steps[k])) {
                 continue;
             }
             g.write_buf(self.slopes.0, 4 * k as u32, bytes(&[0u32]));
@@ -486,7 +504,13 @@ impl Atmosphere {
         if self.slopes_of.contains(&true) && free {
             g.copy_buf(encoder, (self.slopes.0, 0), (self.slopes.1, 0), 8);
         }
-        let exposed = drew || self.moved;
+        let e = &mut self.exposure;
+        e.begin();
+        for at in EXPOSURE_READS {
+            e.read(&self.words[at]);
+        }
+        e.mark(self.fresh);
+        let exposed = !e.end();
         if exposed {
             self.table(ctx, EXPOSURE_TEXEL);
         }
@@ -552,12 +576,17 @@ fn pass_of(table: usize) -> usize {
     }
 }
 
-/// A view is drawn again for any new height of its light, which the sky's
-/// clock moves only a step at a time (pxl-kernel domain/scene/environment.rs, by
-/// `steps`), or for the eye's altitude moved its share.
-fn has_moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
+/// A view is drawn again where its light's height has moved `STEP_SHARE` of
+/// its step since, which the sky's clock moves a step at a time and an eased
+/// light by less each frame (pxl-kernel domain/scene/environment.rs, by
+/// `steps`); for any new height before a step has landed; or for the eye's
+/// altitude moved its share.
+fn has_moved(drawn: Option<(f32, f32)>, now: (f32, f32), step: Option<f32>) -> bool {
     match drawn {
         None => true,
-        Some((mu, h)) => mu != now.0 || (now.1 - h).abs() > (h.abs() * ALT_SHARE).max(ALT_FLOOR_KM),
+        Some((mu, h)) => {
+            let light = step.map_or(mu != now.0, |s| (now.0 - mu).abs() >= s * STEP_SHARE);
+            light || (now.1 - h).abs() > (h.abs() * ALT_SHARE).max(ALT_FLOOR_KM)
+        }
     }
 }

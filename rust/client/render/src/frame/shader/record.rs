@@ -42,6 +42,8 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_LIGHT_MARK_DRAWN => "light_mark_drawn_cs",
         SHADER_LIGHT_REACH => "light_reach_cs",
         SHADER_LIGHT_DETAIL => "light_detail_cs",
+        SHADER_LIGHT_BEAM => "light_beam_cs",
+        SHADER_LIGHT_SAMPLE => "light_sample_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -51,7 +53,9 @@ include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 10;
 pub const PIPELINE_MIP: u32 = 11;
-pub const PIPELINE_DECOR_PREPASS: u32 = 12;
+/// The occlusion's map laid over the world's color in the claimed tiles
+/// (gpu/ao.rs `apply`).
+pub const PIPELINE_AO_APPLY: u32 = 12;
 pub const PIPELINE_AO_DOWNSAMPLE: u32 = 13;
 pub const PIPELINE_AO_SAMPLE: u32 = 14;
 pub const PIPELINE_AO_BLUR: u32 = 15;
@@ -77,36 +81,41 @@ pub const PIPELINE_SCREEN_RAY: u32 = 29;
 pub const PIPELINE_DECOR_DEPTH: u32 = 30;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 31;
 pub const PIPELINE_LIGHT_MAP: u32 = 32;
-pub const PIPELINE_SCREEN_PREPASS: u32 = 33;
 /// The samples' boxes, the nearest face a pixel's ray enters kept with its
 /// sample (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER: u32 = 34;
+pub const PIPELINE_RASTER: u32 = 33;
 /// The world's color onto the canvas, encoded once, and its depth carried to
 /// the canvas's size (gpu/finish.rs).
-pub const PIPELINE_SCREEN_FINISH: u32 = 35;
+pub const PIPELINE_SCREEN_FINISH: u32 = 34;
 /// The world's color gathered over frames (gpu/resolve.rs).
-pub const PIPELINE_SCREEN_RESOLVE: u32 = 36;
+pub const PIPELINE_SCREEN_RESOLVE: u32 = 35;
 /// The gate a frame not drawn whole is drawn through: the claimed tiles
 /// cleared, their stencil raised (gpu/renderer.rs `frame`).
-pub const PIPELINE_SCREEN_GATE: u32 = 37;
+pub const PIPELINE_SCREEN_GATE: u32 = 36;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (gpu/finish.rs).
-pub const PIPELINE_SCREEN_SHOW: u32 = 38;
+pub const PIPELINE_SCREEN_SHOW: u32 = 37;
 /// The claimed tiles of the history the resolve wrote copied back into the
 /// last (gpu/resolve.rs).
-pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 39;
+pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 38;
 /// The gate the samples' raster is drawn through in a frame not drawn whole:
 /// the claimed tiles cleared to the far plane, the rest left at the nearest
 /// (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER_GATE: u32 = 40;
-/// The gate the light's map is drawn through where only the casters the
-/// kernel bounds moved: the claimed tiles set back to the far plane, their
+pub const PIPELINE_RASTER_GATE: u32 = 39;
+/// The gate the light's map is drawn through where only the listed
+/// casters that changed moved: the claimed tiles set back to the far plane, their
 /// stencil raised (gpu/shadow.rs).
-pub const PIPELINE_LIGHT_GATE: u32 = 41;
+pub const PIPELINE_LIGHT_GATE: u32 = 40;
 /// An actor drawn where it was and where it is, its fragments setting their
 /// screen tiles' words (gpu/pass/skinned.rs `draw_marks`).
-pub const PIPELINE_SKINNED_MARK: u32 = 42;
-pub const PIPELINES: u32 = 43;
+pub const PIPELINE_SKINNED_MARK: u32 = 41;
+/// The same of decor, an impostor, the location puck's zone and its beacon
+/// (gpu/pass/mark.rs `Marks`).
+pub const PIPELINE_DECOR_MARK: u32 = 42;
+pub const PIPELINE_IMPOSTOR_MARK: u32 = 43;
+pub const PIPELINE_PUCK_ZONE_MARK: u32 = 44;
+pub const PIPELINE_PUCK_BEACON_MARK: u32 = 45;
+pub const PIPELINES: u32 = 46;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -240,11 +249,14 @@ const fn depth_only(shader: u32) -> Head {
     }
 }
 
-/// Depth from the eye for the screen-space occlusion, culled as the lit pass is.
-const fn prepass(shader: u32, cull: u32) -> Head {
+/// A changed draw's mark (tile_mark.wgsl): its vertices as its depth pass
+/// lays them, both sides, its fragments writing no color and testing no
+/// depth.
+const fn mark(shader: u32) -> Head {
     Head {
-        cull,
-        depth_compare: GREATER,
+        fragment: true,
+        depth_write: false,
+        depth_compare: ALWAYS,
         depth_bias_slope: 0,
         ..depth_only(shader)
     }
@@ -277,7 +289,7 @@ const AIR: [[u32; 2]; 11] = [
 /// The light's shadow map and its comparing sampler (shadow.wgsl), read where
 /// a lit fragment is shaded.
 const SHADOW: [[u32; 2]; 2] = [[1, DEPTH], [2, SAMPLER_COMPARISON]];
-const LIT_FRAME: [[u32; 2]; 15] = {
+const LIT_FRAME: [[u32; 2]; 14] = {
     // The air in the vertex stage, where each point's lights and veil are
     // worked out; a fragment reads its words and the eye's texel, whose white
     // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
@@ -286,7 +298,6 @@ const LIT_FRAME: [[u32; 2]; 15] = {
         [0, UNIFORM],
         SHADOW[0],
         SHADOW[1],
-        [7, TEXTURE],
         AIR[0],
         AIR[1],
         AIR[2],
@@ -309,10 +320,10 @@ const CLOUD_GROUP: [[u32; 2]; 15] = and(
 );
 const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 
-/// The lit pass's frame, shadow, occlusion, air and layers, all read where
+/// The lit pass's frame, shadow, air and layers, all read where
 /// a pixel is painted; then the rays, the looks and the eye's words: the
 /// most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 23] = and(
+const SCREEN_GROUP: [[u32; 2]; 22] = and(
     LIT_FRAME,
     [
         [3, TEXTURE_UINT_ARRAY],
@@ -409,7 +420,7 @@ const fn and<const N: usize, const M: usize, const R: usize>(
 
 type Group = &'static [[u32; 2]];
 const FRAME: Group = &[[0, UNIFORM]];
-const BOX_GROUP: [[u32; 2]; 19] = and(
+const BOX_GROUP: [[u32; 2]; 18] = and(
     LIT_FRAME,
     [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]],
 );
@@ -427,9 +438,15 @@ const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the light: the light's frame alone in group 0, where
 /// its place is read; the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
-/// A model's mark (tile_mark.wgsl): the eye's frame, the screen tiles' words
-/// and their uniform in group 0; the rest as its depth reads them.
-const MARK_FRAME: Group = &[[0, UNIFORM], [30, STORAGE_RW], [31, UNIFORM]];
+/// A draw's mark (tile_mark.wgsl): the eye's frame or the light's, the
+/// tiles' words, their uniform and the box of the tiles the frame's marks
+/// cover in group 0; the rest as its depth reads them.
+const MARK_FRAME: Group = &[
+    [0, UNIFORM],
+    [30, STORAGE_RW],
+    [31, UNIFORM],
+    [32, STORAGE_RW],
+];
 const MARK_GROUPS: [Group; 4] = [
     MARK_FRAME,
     MODEL_GROUPS[1],
@@ -565,10 +582,15 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[&SCREEN_GROUP],
         ),
-        PIPELINE_DECOR_PREPASS => Descriptor::new(
-            prepass(SHADER_DECOR, CULL_NONE),
-            &MODEL_LANES,
-            &MODEL_GROUPS,
+        // Its map's texel a pixel multiplied into the world's color, as the
+        // tiles' quads: black blended over by the occlusion's darkening.
+        PIPELINE_AO_APPLY => Descriptor::new(
+            Head {
+                blend: ALPHA,
+                ..screen(SHADER_AO_APPLY)
+            },
+            &[],
+            &[&[[1, TEXTURE_UNFILTERED], [30, STORAGE], [31, UNIFORM]]],
         ),
         PIPELINE_DECOR_DEPTH => {
             Descriptor::new(depth_only(SHADER_DECOR), &MODEL_LANES, &DEPTH_GROUPS)
@@ -578,16 +600,32 @@ const fn desc_of(id: u32) -> Descriptor {
         }
         // Its vertices as the depth pass lays them, its fragments writing
         // no color and testing no depth: they mark their tiles.
-        PIPELINE_SKINNED_MARK => Descriptor::new(
+        PIPELINE_SKINNED_MARK => {
+            Descriptor::new(mark(SHADER_SKINNED_MARK), &SKINNED_LANES, &MARK_GROUPS)
+        }
+        PIPELINE_DECOR_MARK => Descriptor::new(mark(SHADER_DECOR_MARK), &MODEL_LANES, &MARK_GROUPS),
+        PIPELINE_IMPOSTOR_MARK => Descriptor::new(
             Head {
-                fragment: true,
-                depth_write: false,
-                depth_compare: ALWAYS,
-                depth_bias_slope: 0,
-                ..depth_only(SHADER_SKINNED_MARK)
+                topology: STRIP,
+                ..mark(SHADER_IMPOSTOR_MARK)
             },
-            &SKINNED_LANES,
-            &MARK_GROUPS,
+            &[],
+            &[
+                MARK_FRAME,
+                &DRAW,
+                &[[0, TEXTURE_ARRAY], [1, SAMPLER], [2, UNIFORM]],
+                &UPLOAD,
+            ],
+        ),
+        PIPELINE_PUCK_ZONE_MARK => Descriptor::new(
+            mark(SHADER_PUCK_ZONE_MARK),
+            &PUCK_ZONE_LANES,
+            &[MARK_FRAME, &DRAW, &UPLOAD],
+        ),
+        PIPELINE_PUCK_BEACON_MARK => Descriptor::new(
+            mark(SHADER_PUCK_BEACON_MARK),
+            &PUCK_BEACON_LANES,
+            &[MARK_FRAME, &DRAW],
         ),
         // Every texel of the box the world's cast holds, whatever lies
         // there, in the map's claimed tiles: its clipmap's words and the
@@ -619,17 +657,6 @@ const fn desc_of(id: u32) -> Descriptor {
             },
             &[],
             &[&[[30, STORAGE], [31, UNIFORM], [32, STORAGE]]],
-        ),
-        // The screen's depth alone into the occlusion's prepass (gpu/ao.rs),
-        // the group the lit screen pass binds.
-        PIPELINE_SCREEN_PREPASS => Descriptor::new(
-            Head {
-                fragment: true,
-                vertex: VS,
-                ..prepass(SHADER_SCREEN_DEPTH, CULL_NONE)
-            },
-            &[],
-            &[&SCREEN_GROUP],
         ),
         // Every box's faces turned to the eye, the nearest a pixel's ray
         // enters kept, reversed: its sample's number into a target of its

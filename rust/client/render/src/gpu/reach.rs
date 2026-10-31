@@ -3,7 +3,7 @@
 //! The light's map's tiles that changed reached across to the screen's
 //! (screen_reach.wgsl), as the light's reach takes the screen's receivers to
 //! the light's tiles (pxl-shader light.rs `light_reach_cs`): in a frame
-//! where casters the kernel bounds marked tiles of the map (gpu/tiles.rs),
+//! where the casters that changed marked tiles of the map (gpu/tiles.rs),
 //! each screen tile whose pixels' shadow's taps read one of them is set to
 //! have changed this frame, on the GPU, after the marks and before anything
 //! reads the screen's words, timed with them in the span `mark`. It reads
@@ -16,7 +16,9 @@
 //! bound, each square of 4 pixels a side its least and most depth, kept on
 //! the GPU and set after each world's pass in the tiles it drew
 //! (screen_bound.wgsl, `set_bounds`), so a frame it runs in reads no pixel's
-//! depth but where a square's bound spans past a few of the map's tiles.
+//! depth but where a square's bound spans past a few of the map's tiles; and
+//! it passes by what lies off the map's tiles the frame's marks cover, which
+//! the GPU keeps (`Tiles::marks_box`).
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec_core::param::light;
@@ -33,10 +35,11 @@ use crate::gpu::tiles::Tiles;
 
 /// What its pass binds (screen_reach.wgsl): the world's depth, its uniform,
 /// the map's words and uniform, the screen's words and uniform, the number
-/// it keeps, the depth's bound.
-const GROUP: [u32; 24] = [
+/// it keeps, the depth's bound, the map's tiles the frame's marks cover.
+const GROUP: [u32; 27] = [
     0, COMPUTE, DEPTH, 1, COMPUTE, UNIFORM, 2, COMPUTE, STORAGE, 3, COMPUTE, UNIFORM, 4, COMPUTE,
-    STORAGE_RW, 5, COMPUTE, UNIFORM, 6, COMPUTE, STORAGE_RW, 7, COMPUTE, STORAGE,
+    STORAGE_RW, 5, COMPUTE, UNIFORM, 6, COMPUTE, STORAGE_RW, 7, COMPUTE, STORAGE, 8, COMPUTE,
+    STORAGE,
 ];
 
 /// What the bound's pass binds (screen_bound.wgsl): the world's depth, the
@@ -50,14 +53,14 @@ const BOUNDS_GROUP: [u32; 12] = [
 const BOUND_STEP: u32 = 4;
 
 /// Its uniform's floats (screen_reach.wgsl `Reach`).
-const UNIFORM_FLOATS: usize = 40;
+const UNIFORM_FLOATS: usize = 36;
 
 pub struct Reach {
     built: Built,
     uniform: u32,
     /// Its group and what it was made over, made again where one is another.
     group: u32,
-    bound: [u32; 6],
+    bound: [u32; 7],
     /// The depth's bound (screen_bound.wgsl `bounds`), two floats a square,
     /// the squares across and down it was made for, and its pass and group,
     /// made again where what it binds is another.
@@ -92,7 +95,7 @@ impl Reach {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             group: 0,
-            bound: [0; 6],
+            bound: [0; 7],
             bounds: 0,
             bounds_size: [0; 2],
             bounds_built: pipelines.build_compute(g, SHADER_SCREEN_BOUND, &BOUNDS_GROUP),
@@ -131,8 +134,7 @@ impl Reach {
 
     /// This frame's views: the eye's view-projection `view_proj` and the
     /// light's `light_view_proj`, both off units from the eye; a receiver's
-    /// taps `spread` texels each way of a map `side` texels a side; the map's
-    /// tiles the frame's marks cover (`Tiles::marks_box`).
+    /// taps `spread` texels each way of a map `side` texels a side.
     pub fn lay_out(
         &self,
         g: &Gpu,
@@ -140,7 +142,6 @@ impl Reach {
         light_view_proj: &Mat4,
         spread: f32,
         side: u32,
-        marks_box: [u32; 4],
     ) {
         let mut inv = mat4::new();
         mat4::invert(&mut inv, view_proj);
@@ -153,9 +154,6 @@ impl Reach {
         }
         u[32] = spread;
         u[33] = side as f32;
-        for (to, from) in u[36..].iter_mut().zip(marks_box) {
-            *to = from as f32;
-        }
         g.write_buf(self.uniform, 0, bytes(&u));
     }
 
@@ -206,11 +204,12 @@ impl Reach {
     /// The map's `light` tiles that changed this frame reached across to the
     /// `screen`'s, over the depth's bound and, where a square's spans past a
     /// few tiles, the world's depth `depth`, both as the last frame left
-    /// them; what it keeps copied where no map of it is out.
+    /// them, off the tiles the frame's marks cover (`Tiles::marks_box`);
+    /// what it keeps copied where no map of it is out.
     pub fn dispatch(&mut self, ctx: &mut RenderContext, depth: u32, light: &Tiles, screen: &Tiles) {
         let g = ctx.g;
         let (l, s) = (light.bound(), screen.bound());
-        let bound = [depth, l.0, l.1, s.0, s.1, self.bounds];
+        let bound = [depth, l.0, l.1, s.0, s.1, self.bounds, light.marks_box()];
         if bound != self.bound {
             release(self.group);
             self.group = g.bind_group(
@@ -224,6 +223,7 @@ impl Reach {
                     buf_entry(5, s.1),
                     buf_entry(6, self.reached),
                     buf_entry(7, self.bounds),
+                    buf_entry(8, light.marks_box()),
                 ],
             );
             self.bound = bound;

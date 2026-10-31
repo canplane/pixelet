@@ -112,10 +112,12 @@ fn air_stretch(dir: vec3f, t0: f32, t1: f32) -> Veil {
 // The air's thickness cancels from it, so it turns slowly across columns and
 // slices however fast the air thickens, and a pixel scales it by its own
 // ray's 1 - T (atmos_air.wgsl `air_before`). Before the air takes anything
-// it holds none.
+// it holds none. Beside it, the eye's stops it was exposed at, the exposure
+// texel's own half float, so a reader takes it to the eye's stops now and the
+// eye's exposure moving alone leaves the volume standing.
 fn air_held(v: Veil) -> vec4f {
   let taken = vec3f(1.0) - v.transmittance;
-  return vec4f(select(vec3f(0.0), v.scattered / taken, taken > vec3f(1e-6)), 1.0);
+  return vec4f(select(vec3f(0.0), v.scattered / taken, taken > vec3f(1e-6)), exposure_stops());
 }
 
 

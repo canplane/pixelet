@@ -83,7 +83,6 @@ uniform! {
         CAMERA_POS: Vec3 = 16,
         EDGE_STRENGTH: F32 = 19,
         VIEWPORT: Vec2 = 20,
-        SCREEN_AO: F32 = 22,
         VIGNETTE: F32 = 23,
         /// The eye's place on the map, Mercator's longitude and ordinate,
         /// and the map's radius in units.

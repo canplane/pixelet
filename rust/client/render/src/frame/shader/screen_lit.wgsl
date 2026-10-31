@@ -47,8 +47,9 @@ fn fs(v: VertexOut) -> FragOut {
     uv,
     ddx,
     ddy,
-    // The darker of the two, so a corner both see is not darkened twice.
-    min(screen_ao(v.clip.xy), crease.ao),
+    // The corners' occlusion; the screen's is laid over the color after
+    // (ao_apply.wgsl).
+    crease.ao,
     seen_from_eye(h.at),
   );
   // The depth `behind` the face along the ray, so what is laid on it wins.

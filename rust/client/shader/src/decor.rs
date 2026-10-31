@@ -88,6 +88,16 @@ impl DecorQuery for Generating<'_> {
         (f, top, met)
     }
 
+    /// The finest window holding the leaf column present (`window::step`).
+    fn finest(&mut self, cell: u32, g: [i32; 2]) -> u32 {
+        let (f, _) = window::step(&self.world, window::Found::NONE, LEAF_CELL, g);
+        if f.here() && f.from() > cell {
+            f.from()
+        } else {
+            cell
+        }
+    }
+
     fn asset(&mut self, f: &Self::Footing, zoom: u32, c: [i32; 3]) -> u32 {
         support::asset(&mut Unplaced(&mut self.world), &f.line, zoom, c)
     }

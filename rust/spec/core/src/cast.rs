@@ -23,7 +23,7 @@
 //! it leaves by, so no frame holds its siblings.
 
 use crate::answer::{box_of, kept, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
-use crate::grid::cell_zoom_at;
+use crate::grid::{cell_zoom_at, cell_zoom_from};
 use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
@@ -83,6 +83,79 @@ impl Detail {
     /// At `d2`, a distance squared.
     pub fn at(self, d2: f32) -> Zoom {
         cell_zoom_at(d2).clamp(self.range[0], self.range[1])
+    }
+
+    /// How far the eye may move before the zoom `at` names at `d2`, a
+    /// distance from it squared, is another: the distance's to the edges of
+    /// its band (`cell_zoom_from`), none nearer at the finest `range` holds
+    /// and none farther at the coarsest. A point's distance and a box's
+    /// nearest and farthest from the eye each move no more than the eye
+    /// does, on every axis alike, and a box's nearest is none with the eye
+    /// in it, so within it each names the same zoom. Less a share of the
+    /// distances for the f32 rounding of both askers (`MARGIN_SLACK`).
+    pub fn margin(self, d2: f32) -> f32 {
+        let z = self.at(d2) as i32;
+        // [rust-gpu] Each by itself, not an array's `map`.
+        let (coarsest, finest) = (
+            (0 as Zoom).clamp(self.range[0], self.range[1]),
+            FINEST_ZOOM.clamp(self.range[0], self.range[1]),
+        );
+        let d = libm::sqrtf(d2);
+        // None either way is `Margin::NONE`'s.
+        let below = if z == finest as i32 {
+            UNBOUNDED
+        } else {
+            d - cell_zoom_from(z)
+        };
+        let above = if z == coarsest as i32 {
+            UNBOUNDED
+        } else {
+            cell_zoom_from(z - 1) - d
+        };
+        let e = self.eye;
+        let slack = (d + libm::sqrtf(squared(e))) * MARGIN_SLACK;
+        greater(lesser(below, above) - slack, 0.0)
+    }
+}
+
+/// A margin no edge bounds: 2^64 units, past any distance the world holds,
+/// exact in f32 and in its WGSL literal, where `f32::MAX` is written rounded
+/// past what an f32 holds and refused.
+const UNBOUNDED: f32 = 18_446_744_073_709_551_616.0;
+
+/// The share of the distances a margin is taken in by (`Detail::margin`):
+/// the f32 rounding of a box's planes from the eye and of their squares,
+/// a few of its last places, many times over.
+const MARGIN_SLACK: f32 = 1.0 / 65536.0;
+
+/// What a walk tells of each node it asks (`walk`): the detail it asks it
+/// under and the node's farthest and nearest distances from the eye,
+/// squared (`reach`), which the zooms it is asked at follow from alone. A
+/// walk nothing reads it of tells nothing (`()`), so it costs nothing.
+pub trait Asked {
+    fn asked(&mut self, detail: Detail, reach: [f32; 2]);
+}
+
+impl Asked for () {
+    fn asked(&mut self, _: Detail, _: [f32; 2]) {}
+}
+
+/// The least margin of the nodes a walk asked (`Detail::margin`), units:
+/// while the eye moves less from where they were asked, every one is asked
+/// at the zooms it was, so the walk, from the same start in the same world,
+/// meets what it met. `UNBOUNDED` where it asked none: a number WGSL names,
+/// as it names no infinity.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Margin(pub f32);
+
+impl Margin {
+    pub const NONE: Margin = Margin(UNBOUNDED);
+}
+
+impl Asked for Margin {
+    fn asked(&mut self, detail: Detail, [far, near]: [f32; 2]) {
+        let m = lesser(detail.margin(far), detail.margin(near));
+        self.0 = lesser(self.0, m);
     }
 }
 
@@ -615,11 +688,11 @@ pub fn first<Q: Query>(
     detail: Detail,
     until: Until,
 ) -> Met<Q::At> {
-    rooted(q, o, ray, detail, until, &mut ())
+    rooted(q, o, ray, detail, until, &mut (), &mut ())
 }
 
 /// `walk` from the world's root holding the origin, at 0, leaving its line
-/// to `keep`.
+/// to `keep` and telling each node it asks to `told`.
 pub fn rooted<Q: Query>(
     q: &mut Q,
     o: [i32; 3],
@@ -627,6 +700,7 @@ pub fn rooted<Q: Query>(
     detail: Detail,
     until: Until,
     keep: &mut impl Keep<Q::At>,
+    told: &mut impl Asked,
 ) -> Met<Q::At> {
     let at = q.root(Node::ROOT.idx(o));
     walk(
@@ -638,6 +712,7 @@ pub fn rooted<Q: Query>(
         (Node::ROOT, at, 0.0),
         &Rooted(at),
         keep,
+        told,
     )
 }
 
@@ -681,8 +756,9 @@ impl<A: Copy> Keep<A> for () {
 
 /// The first cell `ray` meets within its reach that `until` stops at, at
 /// the zoom `detail` asks where it meets it, its line left where it ended
-/// to `keep`: down the pyramid from `from`, a node holding where the ray
-/// is at its `t`, what was handed it, and that `t` — the world's root holding
+/// to `keep` and each node it asks told to `told` (`Asked`): down the
+/// pyramid from `from`, a node holding where the ray is at its `t`, what was
+/// handed it, and that `t` — the world's root holding
 /// the origin at 0 (`first`), or a node of the line a beam ray handed on —
 /// what was handed each node over it read off `over` where the walk climbs
 /// past it, and through the roots the ray crosses. What the ray starts inside
@@ -705,7 +781,7 @@ impl<A: Copy> Keep<A> for () {
 /// (POP), or past a root, in the next root, from its top. One loop.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the walk's query, origin, ray, detail, stop and start, and the two visitors it hands each node, each its own (Laine & Karras 2010)"
+    reason = "the walk's query, origin, ray, detail, stop and start, and the three visitors it hands each node, each its own (Laine & Karras 2010)"
 )]
 pub fn walk<Q: Query>(
     q: &mut Q,
@@ -716,6 +792,7 @@ pub fn walk<Q: Query>(
     from: (Node, Q::At, f32),
     over: &impl Over<Q::At>,
     keep: &mut impl Keep<Q::At>,
+    told: &mut impl Asked,
 ) -> Met<Q::At> {
     let og = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
@@ -743,6 +820,7 @@ pub fn walk<Q: Query>(
                 [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
                 [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
             );
+            told.asked(detail, reach);
             let i = q.node(&mut at, n.zoom, n.idx(o), asked(detail, reach), t0);
             visits += 1;
             let inside = lo[0] <= 0.0
@@ -1236,5 +1314,31 @@ mod tests {
         assert_eq!(met.ends, End::On);
         // The whole cube stops it there.
         assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Stop);
+    }
+
+    /// A walk tells each node it asks (`Asked`): its least margin is a
+    /// number once it asked any; one told to `()` costs nothing.
+    #[test]
+    fn walk_tells_its_margin() {
+        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
+        let o = [steps(5.0), steps(0.1), steps(0.5)];
+        let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
+        let detail = Detail {
+            range: [0, FINEST_ZOOM],
+            eye: [-5.0, 0.0, 0.0],
+            spacing: Spacing::NONE,
+        };
+        let mut told = Margin::NONE;
+        let met = rooted(
+            &mut One { kept: EIGHTHS },
+            o,
+            &ray,
+            detail,
+            Until::Opaque,
+            &mut (),
+            &mut told,
+        );
+        assert_eq!(met.ends, End::Stop);
+        assert!(told.0 < Margin::NONE.0);
     }
 }

@@ -53,15 +53,8 @@ pub struct Actor {
     /// The fade's source pose, its room kept.
     from: Vec<[f32; 10]>,
     /// Its palette shows its clips at their clocks: posed again only where
-    /// it moves where it is seen, or where it does not show them; how many
-    /// times it was, and whether it was seen at the last tick.
+    /// it moves where it is seen, or where it does not show them.
     posed: bool,
-    poses: u32,
-    /// How far its mesh reaches about where it stands as its palette holds
-    /// it, unscaled (`Model::reach_of`): its region's sphere, the pose it
-    /// is drawn in, not as far as its clips may move it.
-    pose_reach: f32,
-    seen: bool,
     /// Whether it spans the impostor's edge at the last tick: drawn at all.
     drawn: bool,
     /// How long its clip has run while it moves it where it is seen, in
@@ -109,9 +102,6 @@ impl Actor {
             global: vec![[0.0; 16]; joints],
             from: Vec::new(),
             posed: false,
-            poses: 0,
-            pose_reach: 0.0,
-            seen: false,
             drawn: false,
             run: 0.0,
             last: 0.0,
@@ -178,7 +168,6 @@ impl Actor {
         let dist = v3::len(&v3::sub(&about, &frame.camera));
         let cell_there = cell_there(dist);
         let seen = frame.frustum.sees(about, r) && 2.0 * r >= decor_model_angle() * dist;
-        self.seen = seen;
         self.drawn = 2.0 * r >= decor_impostor_angle() * dist;
         // A clip of some length plays, or one fades into the next.
         let playing = self.cur.filter(|p| length(p).is_some());
@@ -246,7 +235,6 @@ impl Actor {
             return asks;
         }
         self.posed = true;
-        self.poses = self.poses.wrapping_add(1);
         m.pose(self.cur.map(|p| (p.clip, p.time)), &mut self.local);
         if let Some(prev) = self.previous {
             self.from.resize(joints, [0.0; 10]);
@@ -265,7 +253,6 @@ impl Actor {
             core::slice::from_raw_parts_mut(mem::at::<f32>(self.palette_at), joints * 16)
         };
         m.palette(&self.local, &mut self.global, palette);
-        self.pose_reach = m.reach_of(palette);
         draw.rewrite(
             self.palette_handle,
             self.palette_at as u32,
@@ -284,28 +271,6 @@ impl Actor {
         };
         if m.handle() == 0 {
             return;
-        }
-        // Seen, what it covers and shades as drawn (`region`): as far as its
-        // mesh reaches in the pose it is drawn in, about where it stands;
-        // as far as its clips reach before it was first posed.
-        if self.seen {
-            let reach = if self.posed {
-                self.pose_reach
-            } else {
-                m.reach(self.cur.map(|p| p.clip))
-                    .max(self.previous.map_or(0.0, |p| m.reach(Some(p.clip))))
-            };
-            let r = f64::from(reach * stance.scale);
-            let at = stance.at;
-            let state = region::digest(&[
-                at[0],
-                at[1],
-                at[2],
-                f64::from(stance.rot_z),
-                f64::from(stance.scale),
-                f64::from(self.poses),
-            ]);
-            region::drawn(self.palette_handle, at, r, true, state);
         }
         let t = DrawList::translation(stance.at, eye);
         draw.draw_scaled(

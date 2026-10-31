@@ -10,9 +10,9 @@
 //! each frame in the box's own order
 //! (`PIPELINE_LIGHT_MAP`), and decor and the actors, which move every frame,
 //! drawn over it depth only, from the light's frame. The lit passes read
-//! the map as a plain light box. 16 MB each at 2048. Where only the casters
-//! the kernel bounds moved over the world its cast left as it was, the map
-//! is drawn again in the tiles they cover alone (gpu/tiles.rs), through a
+//! the map as a plain light box. 16 MB each at 2048. Where only the listed
+//! casters that changed moved over the world its cast left as it was, the
+//! map is drawn again in the tiles they set alone (gpu/tiles.rs), through a
 //! gate of its own (light_gate.wgsl), as the world's pass is.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};

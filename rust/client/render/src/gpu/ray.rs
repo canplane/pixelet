@@ -11,10 +11,9 @@ mod ground;
 mod raster;
 mod tally;
 
-use crate::frame::shader::record::{PIPELINE_SCREEN_PREPASS, PIPELINE_SCREEN_RAY};
+use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Format, Gpu,
-    TrackedRenderPass,
+    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Gpu, TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::FrameKind;
@@ -32,8 +31,6 @@ fn casts_px(kind: FrameKind) -> bool {
 
 pub struct RaysPass {
     built: Built,
-    /// The same pixels' depth alone, into the occlusion's prepass.
-    depth: Built,
     /// Its group 0 over the lit pass's entries and what it binds besides
     /// (`bound`, the surface's rays, the cast's eye, and the tiles' words and
     /// uniform): made again exactly when one of them is another.
@@ -63,7 +60,6 @@ pub struct RaysPass {
 impl RaysPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> RaysPass {
         let built = pipelines.build_world(g, PIPELINE_SCREEN_RAY);
-        let depth = pipelines.build(g, PIPELINE_SCREEN_PREPASS, Format::depth32float);
         let words = look_words();
         let looks = g.buf(
             word_bytes(4 * words.len()),
@@ -72,7 +68,6 @@ impl RaysPass {
         g.write_buf(looks, 0, bytes(&words));
         RaysPass {
             built,
-            depth,
             group: 0,
             bound: [0; 4],
             handed: [0; 2],
@@ -128,19 +123,10 @@ impl RaysPass {
     }
 
     pub fn draw(&self, pass: &mut TrackedRenderPass) {
-        self.draw_by(pass, &self.built);
-    }
-
-    /// Its depth alone, the occlusion's prepass's (gpu/ao.rs).
-    pub fn draw_depth(&self, pass: &mut TrackedRenderPass) {
-        self.draw_by(pass, &self.depth);
-    }
-
-    fn draw_by(&self, pass: &mut TrackedRenderPass, built: &Built) {
         if self.kind == FrameKind::plain || self.group == 0 {
             return;
         }
-        pass.set_pipeline(built.pipeline);
+        pass.set_pipeline(self.built.pipeline);
         pass.set_bind_group(0, self.group, &[]);
         pass.draw(6, self.tiles.1, 0, 0);
     }
