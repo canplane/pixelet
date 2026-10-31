@@ -212,10 +212,9 @@ impl Map {
         self.size / pxl_spec_core::param::light::SAMPLE
     }
 
-    /// The word a slot leaves for the walk `met` of its ray aimed `aim`.
-    fn word<A>(&self, aim: &Aim, met: &cast::Met<A>) -> u32 {
-        self.light
-            .word(aim.detail, pxl_spec_core::light::depth(&self.light, met))
+    /// The word a slot leaves for the walk `met` of its ray.
+    fn word<A>(&self, met: &cast::Met<A>) -> u32 {
+        pxl_spec_core::light::word(pxl_spec_core::light::depth(&self.light, met))
     }
 }
 
@@ -516,12 +515,12 @@ pub fn light_cs(
         };
         add_cnt(misses, counts(head), tally::TOOK, 1);
         // SAFETY: within the map, bounded by its size above.
-        unsafe { light.write(slot, m.word(&aim, &met)) };
+        unsafe { light.write(slot, m.word(&met)) };
         return;
     }
     if took == Take::Sky {
         // SAFETY: within the map, bounded by its size above.
-        unsafe { light.write(slot, m.light.word(aim.detail, 1.0)) };
+        unsafe { light.write(slot, pxl_spec_core::light::word(1.0)) };
         return;
     }
     // Listed for its walk again as the eye's pixels are (cast.rs `enlist`):
@@ -571,9 +570,9 @@ pub fn light_miss_cs(
     let world = world(eye, window, ground, looks, shards, overwrites, pool);
     let mut told = Margin::NONE;
     let at = [slot.x, slot.y];
-    let (aim, met, _) = observer::walked(&m, world, seen, &*list, at, &mut (), &mut told);
+    let (_, met, _) = observer::walked(&m, world, seen, &*list, at, &mut (), &mut told);
     // SAFETY: a slot `light_cs` listed, within the map.
-    unsafe { light.write(slot, m.word(&aim, &met)) };
+    unsafe { light.write(slot, m.word(&met)) };
     m.told(list, Level::Ray, at, told);
 }
 

@@ -10,10 +10,11 @@
 //!
 //! The world's depth is a clipmap: the light box's texels lie on a grid
 //! fixed in the world (`aim`'s snap), and each world texel is held in the
-//! slot its index names modulo the map's side. A slot holds its depth and
-//! the zoom its stop was asked at (`Light::word`). Every slot is cast again
-//! each frame the map is, as the eye's rays are (`SAMPLE`): nothing a cast
-//! established is kept for the next, so no policy says what still stands.
+//! slot its index names modulo the map's side. A slot holds its depth
+//! (`word`). A tile of slots cast in an epoch holds while the eye stays
+//! nearer where it was claimed than the least margin of the zooms its
+//! walks asked (`holds`, pxl-shader light.rs `light_detail_cs`), and is
+//! cast again once read past it, or once the box slid onto it.
 
 use crate::beam;
 use crate::cast;
@@ -56,11 +57,18 @@ pub const SHADOW_RADIUS_NDC: usize = 15;
 pub const CORNER: [usize; 2] = [7, 11];
 
 /// A slot's word: its depth, a 24-bit share of the box's depth as a
-/// depth24 map holds it, over the zoom its stop was asked at.
+/// depth24 map holds it (`word`).
 pub const DEPTH_ONE: u32 = (1 << 24) - 1;
-pub const ZOOM_BITS: u32 = 8;
-/// A slot whose walk stopped at nothing: no zoom asked.
-const NO_ZOOM: u32 = (1 << ZOOM_BITS) - 1;
+
+/// A slot's word for depth `d` (`depth`), a share of the box's.
+pub fn word(d: f32) -> u32 {
+    let q = (d * DEPTH_ONE as f32 + 0.5) as u32;
+    if q < DEPTH_ONE {
+        q
+    } else {
+        DEPTH_ONE
+    }
+}
 
 fn length(v: [f32; 3]) -> f32 {
     libm::sqrtf(dot(v, v))
@@ -236,31 +244,6 @@ impl Light {
     pub fn texel(&self, size: u32, slot: [u32; 2]) -> [u32; 2] {
         let at = |k: usize| (slot[k] as i32).wrapping_sub(self.corner[k]) as u32 & (size - 1);
         [at(0), at(1)]
-    }
-
-    /// The zoom the eye asks at a stop `q` of the box's depth along a
-    /// texel's ray, `detail.eye` where the eye stands from its start
-    /// (`ray`); none where it stopped at nothing.
-    fn asked(&self, detail: Detail, q: u32) -> u32 {
-        if q >= DEPTH_ONE {
-            return NO_ZOOM;
-        }
-        let t = q as f32 / DEPTH_ONE as f32 * self.t_max;
-        let e = detail.eye;
-        let v = [
-            e[0] - self.dir[0] * t,
-            e[1] - self.dir[1] * t,
-            e[2] - self.dir[2] * t,
-        ];
-        detail.at(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-    }
-
-    /// A slot's word for depth `d` (`depth`), the zoom asked at it under
-    /// `detail`.
-    pub fn word(&self, detail: Detail, d: f32) -> u32 {
-        let q = (d * DEPTH_ONE as f32 + 0.5) as u32;
-        let q = if q < DEPTH_ONE { q } else { DEPTH_ONE };
-        q << ZOOM_BITS | self.asked(detail, q)
     }
 
     /// The first of the held words (`held_at`) of box tile `tile` of the map
@@ -1073,8 +1056,8 @@ mod tests {
     /// node [0, 8]³ units from the ray's origin, the stop on its top face,
     /// the eye on X past it stepping a unit nearer across the band edge at
     /// 96 units (`grid::cell_zoom_from`) at the node's nearest point, while
-    /// the stop stays within its band. The check by the stop's zoom (the
-    /// slot's word's, `Light::word`) holds it; the margin breaks it
+    /// the stop stays within its band. The check by the stop's zoom, which the
+    /// slot's word held before the margin, holds it; the margin breaks it
     /// (`holds`).
     #[test]
     fn held_breaks_where_a_node_changes_zoom() {

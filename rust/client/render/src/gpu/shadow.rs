@@ -65,7 +65,7 @@ pub struct Shadow {
     blank_view: u32,
     blank_sampler: u32,
     /// The world's depth from the light as its cast leaves it, a word a slot
-    /// of the clipmap (pxl-spec-core `light::Light::word`): `light_cs` writes it,
+    /// of the clipmap (pxl-spec-core `light::word`): `light_cs` writes it,
     /// `PIPELINE_LIGHT_MAP` lays it into the map off the box's corner,
     /// `corner`'s words.
     pub world: u32,
