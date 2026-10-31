@@ -850,3 +850,18 @@ milliseconds.
   tile again on any move of the eye showed none; the round's build shows
   none (the user, by eye). AO `screen` and the air, changed in look, were
   seen right by the user; not timed here, the run being AO `corner`.
+
+**The occlusion's screen mode after the round** (2026-10-31, 10:15, port
+5187 and 5188): the same scenario as above, AO `screen`, one run each.
+
+| build | interval p50 / p95 | busy p50 / p95 | gated busy p50 | occlusion p95 | `world` / `finish` p95 |
+|---|---|---|---|---|---|
+| before the round (`24e19a4ed`) | 23 / 41 | 30.7 / 46.3 | 12.3 | `prepass` 1.1 + `ao` 3.3 | 7.8 / 9.1 |
+| after it (`0e0c9f987`) | 27 / 45 | 35.8 / 49.3 | 8.1 | `ao` 9.9 | 10.6 / 11.5 |
+
+- A moving frame some 5 ms dearer, the occlusion's own span more than
+  doubled, past a run's noise; the gated frames, which no longer find it
+  again, 4 ms cheaper. Supposed, not confirmed: the world pass ended and
+  begun again about it stores and loads the world's color, depth and
+  stencil whole on a tiled GPU, and the occlusion reads the depth with its
+  stencil aspect beside it. AO `corner`, the default, does not run it.

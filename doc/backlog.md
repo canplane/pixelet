@@ -10,15 +10,16 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **The screen keeps its tiles as the light does.** After the other
-  session's line (the light rename, ages by square, the kept finish) lands,
-  the steps in order, 1 to 5 whatever the picture without them, 6 only where
-  the numbers ask; steps 3 and 5 are for the symmetry the user asked (the
-  user, 2026-10-30) —
-  [20261029-the-screen-keeps-its-tiles-as-the-light-does.md](./minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md).
+Nothing now.
 
 ## P1
 
+- **The occlusion's screen mode dearer since the round.** A moving frame
+  some 5 ms dearer with AO `screen` (its span 4.4 ms to 9.9 at the p95),
+  the gated frames 4 ms cheaper; supposed, the world pass split about it on
+  a tiled GPU. Taken back, or found again without splitting the pass —
+  [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md), "The
+  occlusion's screen mode after the round".
 - **The eye's samples and what they miss.** Orbiting, 1.6 % of the pixels
   find no sample's cell and walk alone, some 16 nodes each, some 5 ms
   (`miss`), the eye's cast some 13 ms of a moving frame's 24; samples
@@ -26,6 +27,13 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   passes (pxl-shader observer.rs), so a change holds for the light alike —
   [20261029-the-screen-keeps-its-tiles-as-the-light-does.md](./minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md),
   "Proposed after the steps".
+- **The eye's beams and samples.** The cast's passes before the misses:
+  in the scenario, `beam` p95 some 5 ms and `sample` 4 to 5 ms, together a
+  quarter of a moving frame's busy time (13 % and 12 %). What each walks
+  again that a neighbor or the frame before already walked, and what the
+  observed pyramid keeps of it; the passes are both observers', so a change
+  holds for the light alike — [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md),
+  "Decor put back, and the round after the steps".
 - **The screen reprojected while the eye moves.** The light holds its tiles
   across the eye's motion, fixed in the world; the screen, fixed to the
   view, draws whole each frame. Last frame's rays moved to the new view,
@@ -38,6 +46,30 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P2
 
+Measured, not yet: each against the tip before it, the scenario of
+[the tiles' baseline](./experiment/20261030-the-tiles-baseline.md) ("Decor
+put back, and the round after the steps"), A and B by turns.
+
+- **How much the light holds with exact margins**, the slots cast a moving
+  frame, and what the light passes' list read as atomics costs them
+  (`light_beam`, `light_sample`, `light_miss`).
+- **The light map's gate over every tile in a gated frame** (65,536
+  instances where the casters' rectangles were) and the marks' atomics
+  (`tile_mark.wgsl`), step 6 part 2's cost.
+- **Decor generated again where a brick lands**: `generate` p95 3.5 ms on
+  frames a brick arrived in against 1.6 on the rest; against `1db9b6b8d` at
+  the same place (a trace of the tip alone,
+  `~/Downloads/profiler-2026-10-31T00-50-20-348Z.json`).
+- **The conditions the tiles' plan left unmeasured**: 7:00, night, the
+  clouds moving, render scales other than 1, the quiet view; and step 3
+  part 4's 1.2 ms, unexplained —
+  [20261029](./minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md),
+  "Open".
+- **The air's volume found again while the camera turns or the light
+  eases**, held only where its reads stand: a volume laid about the light
+  as the sky view is would keep it across turns; far out, a pan north or
+  south trips the altitude's share; the sky view's second march, for its
+  slope, doubles each redraw.
 - **The stencil and the raster's gate on the devices.** Whether the iPhone,
   the Quest and Android offer `depth32float-stencil8`, and whether the
   raster's gate of depth rejects the boxes' fragments early there; taken

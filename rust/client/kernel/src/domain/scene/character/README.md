@@ -4,7 +4,9 @@ An **actor** is a model that plays its own clips: each tick advances its clips
 and writes its joint palette into its block (`../actor.rs` `Actor`). That is
 what sets this tier apart from decor, whose population is instances of static
 models, and from the indicators, which have no clips. Actors are few and each is
-distinct.
+distinct. An actor is drawn by decor's tiers, by how much of a camera cell it
+spans: posed down to the model's edge, its pose held down to the impostor's,
+and none below (`../actor.rs` `Actor::tick`).
 
 An actor's instance is held by its holder, which stands it where it is (its
 `Stance`) and declares how many it holds. This directory holds every holder:

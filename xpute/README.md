@@ -85,16 +85,16 @@ spec                                        the numbers every language's are gen
 
 The smallest program shows the whole of it: a guest that answers one command
 (`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
-`make test` runs. The guest lays out its own range, a page for the toc,
-then the two rings and their slots and the hostcalls' stream, and answers the
-toc's offset from a boot call; each turn it applies what waits, and asks
-the host for a number it holds by a hostcall run now. The host opens the module
-over a memory of its own (`@xpute/host/module.ts` `open_module`) and mounts on
-it in one call (`@xpute/host/host.ts` `mount`), given that offset, its answers
-to the guest's calls (`SysHost`, each part optional) and the scheduling policy
-that says when a turn runs and how much it gets (`sched/policy.ts`: a fixed
-quota where there is no display, frame pacing on a page); then it sends the
-command and reads the reply.
+`make test` runs. The guest lays out its own range, a page for the toc, then the
+two rings and their slots and the hostcalls' stream, and answers the toc's
+offset from a boot call; each turn it applies what waits, and asks the host for
+a number it holds by a hostcall run now. The host opens the module over a memory
+of its own (`@xpute/host/module.ts` `open_module`) and mounts on it in one call
+(`@xpute/host/host.ts` `mount`), given that offset, its answers to the guest's
+calls (`SysHost`, each part optional) and the scheduling policy that says when a
+turn runs and how much it gets (`sched/policy.ts`: a fixed quota where there is
+no display, frame pacing on a page); then it sends the command and reads the
+reply.
 
 A guest built as a **WebAssembly module** takes its form from
 `xpute_guest::wasm`: a call in its `build.rs`, and one `wasm_abi!`, which
