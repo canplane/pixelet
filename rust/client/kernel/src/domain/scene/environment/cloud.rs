@@ -588,15 +588,9 @@ fn present_patch(
     if changed {
         draw.rewrite_part(b.handle, b.at, b.idx, at as u32 * 4);
     }
-    // The patch as a region stands for it: its box's sphere, casting, in a
-    // state of where the wind has it, how opaque, and what it lists.
-    let listed = list[..at].iter().fold(0u64, |h, &w| {
-        (h ^ u64::from(w)).wrapping_mul(0x0100_0000_01b3)
-    });
-    let middle = [x0 + b.side / 2.0, y0 + b.side / 2.0, (zlo + zhi) / 2.0];
-    let r = v3::len(&[b.side / 2.0, b.side / 2.0, (zhi - zlo) / 2.0]);
-    let state = region::digest(&[x0, y0, zlo, zhi, f64::from(opacity), f64::from_bits(listed)]);
-    region::drawn(b.handle, middle, r, true, state);
+    // The patch's draws the scene bounds: the wind moves them, and each
+    // that changed marks where it was and where it is.
+    region::drawn(b.handle);
 }
 
 #[cfg(test)]

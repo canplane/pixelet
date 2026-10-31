@@ -28,10 +28,6 @@ struct Reach {
   light: mat4x4f,
   // The texels a receiver's taps reach each way, and the map's side.
   spread: vec4f,
-  // The map's tiles the frame's marks cover, from the first across and down
-  // to past the last (gpu/tiles.rs `Tiles::marks_box`): none changed off
-  // them.
-  marks_box: vec4f,
 };
 
 @group(0) @binding(0) var depth: texture_depth_2d;
@@ -45,6 +41,10 @@ struct Reach {
 // Each square's least and most depth drawn, `REACH_STEP` pixels a side, as
 // the last frame's world's pass left them (screen_bound.wgsl).
 @group(0) @binding(7) var<storage, read> bounds: array<vec2f>;
+// The map's tiles the frame's marks cover, from the first across and down to
+// past the last, as the host handed them and the drawn marks widened them
+// (gpu/tiles.rs `Tiles::marks_box`, tile_mark.wgsl): none changed off them.
+@group(0) @binding(8) var<storage, read> marks_box: vec4u;
 
 // The pixels a side of a thread's square of a screen tile, eight threads a
 // side (pxl-spec-core `screen::TILE`, 32).
@@ -91,7 +91,7 @@ fn reach_range(lo: vec2f, hi: vec2f) -> vec4i {
 // Whether any tile `reach_range` holds lies among those the marks cover.
 fn reach_in_marks_box(lo: vec2f, hi: vec2f) -> bool {
   let r = reach_range(lo, hi);
-  let m = vec4i(reach.marks_box);
+  let m = vec4i(marks_box);
   return r.x < m.z && r.z >= m.x && r.y < m.w && r.w >= m.y;
 }
 

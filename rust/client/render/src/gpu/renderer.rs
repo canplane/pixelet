@@ -6,7 +6,7 @@
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
-use pxl_spec::space::coord::v3::{self, V3};
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec_core::eye;
 use pxl_spec_core::generated::GROUPS;
@@ -30,14 +30,14 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, JITTER, LIGHT_VIEW_PROJ,
-    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SCREEN_AO, SHADOW_MOON, SHADOW_RADIUS_NDC,
-    SHADOW_STRENGTH, SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_RADIUS_NDC, SHADOW_STRENGTH,
+    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
 };
 use crate::frame::stage::{stage_lane, STAGE_AT};
-use crate::gpu::ao::{ScreenAo, MAP_BINDING};
+use crate::gpu::ao::ScreenAo;
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
@@ -55,6 +55,7 @@ use crate::gpu::pass::case::Case;
 use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
+use crate::gpu::pass::mark::UploadCopies;
 use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::puck::{PuckPass, BEACON_VERTICES};
@@ -117,18 +118,11 @@ pub struct FrameInput<'a> {
     /// Whether its draws are counted (`FrameStat::census`): the profiler's
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
-    /// The actors and the puck as drawn that changed since the last turn,
-    /// where they were and where they are: a sphere each, units from the
-    /// eye `[x, y, z]`, its radius, and 1 where it casts a shadow that moves
-    /// with it. Where nothing else moved, the frame draws again alone the
-    /// tiles of the world they cover and shade, and the part of the sun's
-    /// map (`marks`).
-    pub moved: &'a [[f32; 5]],
-    /// Each moved sphere's key, its draw's own (pxl-kernel region.rs
-    /// `drawn`): an actor's its joint palette's handle, which its draw names.
-    pub moved_keys: &'a [u32],
-    /// The draws the spheres bound, by their handles: theirs moving draws
-    /// the frame whole no more (`BESIDE`).
+    /// The draws among `BESIDE`'s the kernel bounds, by their handles
+    /// (pxl-kernel region.rs `drawn`): theirs moving draws the frame whole no
+    /// more, each that changed marking the tiles it covers and shades where
+    /// it was and where it is, as every listed draw outside `BESIDE` does
+    /// (gpu/pass/mark.rs).
     pub bounded: &'a [u32],
     /// Whether what the kernel animates stepped this turn: it wakes the turn
     /// at its own steps, so the resolve asks no frame after it.
@@ -182,38 +176,14 @@ fn least_height(alt_km: f64) -> f64 {
     -libm::sin(libm::acos(r / (r + alt_km.max(0.0))) + SUN_ANGULAR_RADIUS)
 }
 
-/// Where spheres in the eye's frame, `[x, y, z]` and a radius, fall
-/// through `m`: the clip `[x0, y0, x1, y1]` their boxes cover; none where
-/// one stands about or behind the eye.
-fn clip_of(m: &Mat4, spheres: impl Iterator<Item = (V3, f64)>) -> Option<[f32; 4]> {
-    let mut clip: Option<[f64; 4]> = None;
-    for (p, r) in spheres {
-        if v3::len(&p) <= r {
-            return None;
-        }
-        for k in 0..8 {
-            let c: V3 = core::array::from_fn(|a| p[a] + if k >> a & 1 == 1 { r } else { -r });
-            let w = m[3] * c[0] + m[7] * c[1] + m[11] * c[2] + m[15];
-            if w.is_nan() || w <= 0.0 {
-                return None;
-            }
-            let x = (m[0] * c[0] + m[4] * c[1] + m[8] * c[2] + m[12]) / w;
-            let y = (m[1] * c[0] + m[5] * c[1] + m[9] * c[2] + m[13]) / w;
-            let b = clip.get_or_insert([x, y, x, y]);
-            *b = [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)];
-        }
-    }
-    clip.map(|b| b.map(|v| v.clamp(-1.0, 1.0) as f32))
-}
-
 /// The numbers a gated frame writes into its claimed tiles' stencil, 1 on,
 /// the stencil's eight bits but 0, which a frame drawn whole leaves: one
 /// coming round clears it first, so no tile holds this frame's number but
 /// those it claims (`Stencil`).
 const GATE_NUMBERS: u32 = 255;
 
-/// The world's draws the spheres do not bound (`FrameInput::moved`): any of
-/// theirs that moved draws the frame whole.
+/// The world's draws that mark no tiles: any of theirs the kernel does not
+/// bound (`FrameInput::bounded`) that moved draws the frame whole.
 const BESIDE: [u32; 5] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
@@ -405,12 +375,11 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
 }
 
 /// The passes drawn at the world's own pixels, whose cost goes with them:
-/// its depth prepass, its occlusion, its drawing, its gathering over frames
-/// and its cast. The air's
+/// its occlusion, its drawing, its gathering over frames and its cast. The
+/// air's
 /// tables, the fill and the decor's generation, the thumbnails, markers and debug
 /// cost what they cost at any resolution.
-const PER_PX: [GpuSpanName; 11] = [
-    GpuSpanName::prepass,
+const PER_PX: [GpuSpanName; 10] = [
     GpuSpanName::ao,
     GpuSpanName::world,
     GpuSpanName::resolve,
@@ -546,7 +515,7 @@ pub struct Renderer {
     jitter_written: [f32; 2],
     /// The lists as the last frame drew them, apart from the rest of its
     /// input: their records, uniforms and uploads (`listed`), and the
-    /// records and uniforms of the draws the spheres do not bound, with
+    /// records and uniforms of the draws the kernel does not bound, with
     /// whether an upload they read moved (`beside`, `BESIDE`).
     listed: Read,
     beside: Read,
@@ -567,19 +536,23 @@ pub struct Renderer {
     /// `gate_number`.
     light_tiles: Tiles,
     light_gate_number: u32,
-    /// The actors' marks' group 0 over the frame's words and the screen
-    /// tiles' (`SkinnedPass::draw_marks`), and what it was made over.
+    /// The uploads the draws that mark read, as the last frame drew them
+    /// (gpu/pass/mark.rs).
+    kept: UploadCopies,
+    /// The marks' group 0 over the frame's words and the screen tiles'
+    /// (tile_mark.wgsl), and what it was made over.
     mark_frame_group: u32,
-    mark_frame_bound: [u32; 3],
+    mark_frame_bound: [u32; 4],
     /// The same from the light, over the light's frame and the map's tiles.
     light_mark_group: u32,
-    light_mark_bound: [u32; 3],
-    /// The eye's view-projection as `lay_out` took it, which the moved
-    /// spheres are seen through (`marks`).
+    light_mark_bound: [u32; 4],
+    /// The eye's view-projection as `lay_out` took it, which the sheets are
+    /// seen through (`sheets_mark`) and the reach reads.
     view_proj: Mat4,
-    /// What the occlusion was last made from: the frame's words, its own,
-    /// the surface and the decor its prepass draws. The frame is drawn
-    /// again for more than these, and the occlusion only where they moved.
+    /// What the occlusion was last found from: the frame's words, its own,
+    /// the surface and whether decor is generated, the world's depth the
+    /// static opaque draws lay. The frame is drawn again for more than
+    /// these, and the occlusion found again only where they moved.
     ao_read: Read,
     cases: [Option<Case>; SURFACES],
     order: Vec<u32>,
@@ -623,7 +596,6 @@ impl Renderer {
             frame_layout(g, &mut pipelines),
             frame_buf,
             shadow.entries(1),
-            [ao.blank_entry(MAP_BINDING); 2],
             air,
         );
         let query_set = if device.timestamps { g.spans() } else { 0 };
@@ -654,10 +626,11 @@ impl Renderer {
             gate_number: 0,
             light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1),
             light_gate_number: 0,
+            kept: UploadCopies::default(),
             mark_frame_group: 0,
-            mark_frame_bound: [0; 3],
+            mark_frame_bound: [0; 4],
             light_mark_group: 0,
-            light_mark_bound: [0; 3],
+            light_mark_bound: [0; 4],
             view_proj: mat4::new(),
             ao_read: Read::default(),
             pipelines,
@@ -701,7 +674,6 @@ impl Renderer {
             view_entry(4, self.pack.view),
             buf_entry(5, self.pack.table),
             sampler_entry(6, self.pack.sampler),
-            self.ao.entry(MAP_BINDING),
         ];
         e.extend(self.atmosphere.entries());
         e
@@ -715,16 +687,6 @@ impl Renderer {
         self.bind_group = g.bind_group(self.ghost.layouts[0], &e);
         let lit = self.lit_entries(self.frame_buf);
         self.screen.set_lit(lit);
-    }
-
-    /// The occlusion map is a new object, so every lit pass's group 0 is remade.
-    fn rebind(&mut self, g: &Gpu) {
-        self.box_groups(g);
-        self.models.rebind(
-            g,
-            self.frame_buf,
-            [self.ao.entry(MAP_BINDING), self.ao.blank_entry(MAP_BINDING)],
-        );
     }
 
     /// `reach` how far the eye draws, in units; none without an eye.
@@ -786,7 +748,6 @@ impl Renderer {
         u[SCREEN + 1] = screen.1 as f32;
         u[VIGNETTE] = 1.0;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
-        u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
         if self.screen_ao {
             self.ao.lay_out(&proj, width, height);
         }
@@ -858,59 +819,6 @@ impl Renderer {
         }
     }
 
-    /// Where the `moved` spheres fall, each apart, as this frame's eye and
-    /// light see them: on the screen, the drawn pixels of a world `width` by
-    /// `height` each covers but an actor's, `actors` their `keys`, which mark
-    /// their own (gpu/pass/skinned.rs), which mark the screen's tiles
-    /// (`Tiles::mark`);
-    /// and the texels of the light's map each caster covers, all of it that
-    /// moves while only they do, which mark the map's tiles, and through
-    /// them, reached on the GPU, the screen's that read them (gpu/reach.rs),
-    /// where a caster's shadow falls: an actor's apart, which marks no tile's
-    /// word, its drawn self marking them, the map drawn in those of its
-    /// tiles they claim (`Tiles::beside`). None at all where nothing moved or a
-    /// sphere stands about or behind the eye.
-    fn marks(
-        &mut self,
-        moved: &[[f32; 5]],
-        keys: &[u32],
-        actors: &[u32],
-        width: u32,
-        height: u32,
-    ) -> Option<(Vec<Mark>, Vec<Mark>, Vec<Mark>)> {
-        if moved.is_empty() {
-            return None;
-        }
-        let light = self.shadow.cast_from.filter(|_| self.shadows);
-        let casts = |s: &[f32; 5]| s[4] != 0.0 && light.is_some();
-        let sphere = |s: &[f32; 5]| ([s[0], s[1], s[2]].map(f64::from), f64::from(s[3]));
-        let in_map = |actor: bool| -> Vec<Mark> {
-            moved
-                .iter()
-                .zip(keys)
-                .filter(|&(s, k)| casts(s) && actors.contains(k) == actor)
-                .filter_map(|(s, _)| {
-                    let clip = clip_of(&self.shadow.light_view_proj, core::iter::once(sphere(s)))?;
-                    let n = shadow::SIZE;
-                    tiles::mark_of(clip, n, n, SHADOW_MARGIN as f32)
-                })
-                .collect()
-        };
-        let (in_map, actors_in_map) = (in_map(false), in_map(true));
-        // Bounded only where every sphere is before the eye.
-        clip_of(&self.view_proj, moved.iter().map(sphere))?;
-        let marks: Vec<Mark> = moved
-            .iter()
-            .zip(keys)
-            .filter(|(_, k)| !actors.contains(k))
-            .filter_map(|(s, _)| {
-                let clip = clip_of(&self.view_proj, core::iter::once(sphere(s)))?;
-                tiles::mark_of(clip, width, height, tiles::MARK_MARGIN)
-            })
-            .collect();
-        Some((marks, in_map, actors_in_map))
-    }
-
     /// Where the cloud sheets are seen, as cloud.wgsl `vs` lays them: a
     /// square each at its height over the eye, as wide as the eye draws
     /// clouds, cut at the eye's plane: the drawn pixels they cover, which
@@ -951,7 +859,31 @@ impl Renderer {
         clip.and_then(|c| tiles::mark_of(c, width, height, tiles::MARK_MARGIN))
     }
 
-    /// Whether a draw the spheres do not bound moved since the last
+    /// The uploads the listed draws that mark read, each once
+    /// (gpu/pass/mark.rs `UploadCopies`).
+    fn marks_read(&self, draws: &Draws) -> Vec<u32> {
+        let mut out = Vec::new();
+        self.skinned
+            .marks_read(draws.of(PIPELINE_SKINNED), &mut out);
+        self.decor.marks_read(draws, &mut out);
+        self.impostor
+            .marks_read(draws.of(PIPELINE_IMPOSTOR), &mut out);
+        self.puck.marks_read(draws, &mut out);
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
+    /// A turn whose lists were taken and no frame drawn: the uploads they
+    /// moved the next frame does not see, so it draws whole, and what the
+    /// marks read is copied again (`UploadCopies::forget`).
+    fn put_off(&mut self) {
+        self.frame_read.forget();
+        self.beside.forget();
+        self.kept.forget();
+    }
+
+    /// Whether a draw the kernel does not bound moved since the last
     /// frame (`BESIDE`): its record or uniform, or an upload it reads
     /// (`touched`, the handles this frame's lists upload, rewrite or free).
     fn beside_moved(
@@ -1088,9 +1020,9 @@ impl Renderer {
         }
         self.frame[JITTER] = 2.0 * j[0] / world.width as f32;
         self.frame[JITTER + 1] = -2.0 * j[1] / world.height as f32;
-        // Where what the kernel animates moved, on the screen and in the
-        // sun's map, laid out as this frame's eye and light see it; and
-        // where the sheets the wind carries are seen, where it moved them.
+        // Where the sheets the wind carries are seen, where it moved them:
+        // the screen's tiles they mark, as the draws that changed mark
+        // theirs drawn (`prepare_marks`).
         let clouds_moved = {
             let r = &mut self.clouds_read;
             r.begin();
@@ -1099,32 +1031,14 @@ impl Renderer {
         };
         let sheets =
             clouds_moved.then(|| self.sheets_mark(input.environment, world.width, world.height));
-        // The actors mark their own tiles, drawn where they were and are
-        // (gpu/pass/skinned.rs `draw_marks`): their spheres mark none.
-        let actors: Vec<u32> = records
-            .as_chunks::<DRAW_WORDS>()
-            .0
-            .iter()
-            .filter(|d| d[4] == PIPELINE_SKINNED)
-            .map(|d| d[1])
-            .chain(self.skinned.drawn_keys())
-            .collect();
-        let bound = self.marks(
-            input.moved,
-            input.moved_keys,
-            &actors,
-            world.width,
-            world.height,
-        );
-        let unbounded = !input.moved.is_empty() && bound.is_none();
-        // What marks the tiles, and the light's map's part.
-        let (mut marks, light_marks, actors_light_marks) = bound.unwrap_or_default();
-        marks.extend(sheets.flatten());
+        let marks: Vec<Mark> = sheets.flatten().into_iter().collect();
         // The sheets seen moving draw a frame however still the rest.
         let clouds_drawn = sheets.flatten().is_some();
-        let ao_remade = self.screen_ao && self.ao.ensure(g, world.width, world.height);
+        let ao_remade = self.screen_ao
+            && self
+                .ao
+                .ensure(g, world.width, world.height, world.depth_only_view);
         if ao_remade {
-            self.rebind(g);
             read.mark(true);
         }
         let uniform_bytes = word_bytes(uniforms.len());
@@ -1191,11 +1105,11 @@ impl Renderer {
         self.debug.prepare(g, &draws, uniforms, lists_moved);
         let meshes: [u32; GROUPS as usize] =
             core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
-        // Drawn through the gate where nothing but what the kernel bounds
-        // moved so far: what moved marks the tiles (`Resolve::age`), and
-        // those still gathering since they last changed stay claimed; the
-        // cast takes them, its pixels cast there alone.
-        let partial = read.same() && !beside_moved && !unbounded;
+        // Drawn through the gate where nothing but the listed draws that mark
+        // moved so far: what moved marks the tiles, and those still
+        // gathering since they last changed stay claimed; the cast takes
+        // them, its pixels cast there alone.
+        let partial = read.same() && !beside_moved;
         let marks: &[Mark] = if partial { &marks } else { &[] };
         // The tiles of this size, before anything binds them: the claimed
         // the pixels' cast casts and its samples' raster draws, and those the
@@ -1242,7 +1156,7 @@ impl Renderer {
         read.mark(tables);
         let aired = self
             .atmosphere
-            .froxel(&mut ctx, [&self.frame[..JITTER], &self.sky], exposed);
+            .froxel(&mut ctx, &self.sky[sky::RAY..sky::RAY + 12]);
         read.mark(aired);
         if baked || gridded || folded || exposed || aired {
             g.submit(ahead);
@@ -1265,7 +1179,7 @@ impl Renderer {
             && !gridded;
         // Nothing moved but the jitter.
         let quiet = stands && listed_same && !clouds_drawn;
-        // Only what the kernel bounds moved: the claimed tiles alone are
+        // Only the listed draws that mark moved: the claimed tiles alone are
         // drawn again. Else the frame is drawn whole, its pixels cast whole.
         let gated = partial && stands;
         if !gated {
@@ -1283,28 +1197,46 @@ impl Renderer {
             return (FrameKind::stood, stat);
         }
 
+        // The listed draws that changed, where the frame is gated: each
+        // marks the screen's tiles drawn where it was and where it is, and a
+        // caster the map's (gpu/pass/mark.rs), a mark the host counts as
+        // handed. What they read kept as the last frame drew it, made before
+        // the frame's commands.
+        let (screen_marking, casters_marking) = if gated {
+            let k = &self.kept;
+            let t = &touched;
+            let actors =
+                self.skinned
+                    .prepare_marks(g, draws.of(PIPELINE_SKINNED), uniforms, t, b, k);
+            let (decor, decor_casts) = self.decor.prepare_marks(g, &draws, uniforms, t, b, k);
+            let impostors =
+                self.impostor
+                    .prepare_marks(g, draws.of(PIPELINE_IMPOSTOR), uniforms, t, b, k);
+            let puck = self.puck.prepare_marks(g, &draws, uniforms, t, b, k);
+            (actors || decor || impostors || puck, actors || decor_casts)
+        } else {
+            (false, false)
+        };
+        let read_uploads = self.marks_read(&draws);
+        self.kept.prepare(g, &read_uploads, b);
         // The sun's map: whole where it moved, but where the frame is gated
         // over the world the sun's cast left as it was, through its gate,
-        // the tiles the casters that moved cover, or none of it; whole where
-        // the device has no stencil.
+        // the tiles the casters that changed set, or none of it; whole where
+        // the device has no stencil. Which tiles they set the GPU alone
+        // knows, so the map draws its claimed tiles among all of them, as
+        // the screen does (`Tiles::beside`).
         let cast = self.screen.kind != FrameKind::plain;
         let map_gated = gated && cast && !self.screen.light_casts() && g.gates();
-        let none: &[Mark] = &[];
-        let (light_marks, actors_light_marks) = if map_gated {
-            (&light_marks[..], &actors_light_marks[..])
+        let every: &[Mark] = &[[0, 0, shadow::SIZE, shadow::SIZE]];
+        let beside = if map_gated && casters_marking {
+            every
         } else {
-            (none, none)
+            &[]
         };
         self.light_tiles.size(g, [shadow::SIZE; 2]);
-        self.light_tiles.mark(
-            g,
-            [shadow::SIZE; 2],
-            (map_gated, false),
-            light_marks,
-            actors_light_marks,
-        );
-        let map_drawn = self.shadows
-            && (!map_gated || !light_marks.is_empty() || !actors_light_marks.is_empty());
+        self.light_tiles
+            .mark(g, [shadow::SIZE; 2], (map_gated, false), &[], beside);
+        let map_drawn = self.shadows && (!map_gated || casters_marking);
         // Where the map's tiles changed through its gate, the screen's tiles
         // whose pixels read them are reached on the GPU (gpu/reach.rs), what
         // it marked read back.
@@ -1312,28 +1244,17 @@ impl Renderer {
         if reaching {
             let spread = reach::spread(SHADOW_MARGIN as f32);
             let light = &self.shadow.light_view_proj;
-            let marks_box = self.light_tiles.marks_box();
             self.reach
-                .lay_out(g, &self.view_proj, light, spread, shadow::SIZE, marks_box);
+                .lay_out(g, &self.view_proj, light, spread, shadow::SIZE);
         }
-        // The tiles marked by what moved where only what the kernel bounds
-        // did, however much of the screen they and the tiles still gathering
-        // cover; every one where anything else did. What the gate, the
-        // resolve and the finish draw.
+        // The tiles marked by what moved where only the listed draws that
+        // mark did, however much of the screen they and the tiles still
+        // gathering cover; every one where anything else did. What the gate,
+        // the resolve and the finish draw.
         self.resolve
             .tiles
             .mark(g, [world.width, world.height], (gated, quiet), marks, &[]);
-        // The actors whose draws changed, marking where they were and are on
-        // the GPU, a mark the host counts as handed.
-        let actors_marking = gated
-            && self.skinned.prepare_marks(
-                g,
-                draws.of(PIPELINE_SKINNED),
-                uniforms,
-                &touched,
-                uploads(),
-            );
-        if actors_marking {
+        if screen_marking {
             let now = self.resolve.tiles.now();
             self.resolve.tiles.marked_in(now);
         }
@@ -1349,17 +1270,19 @@ impl Renderer {
         if map_drawn {
             self.light_tiles.dispatch_marks(&mut ctx);
         }
-        if actors_marking {
-            let tiles = self.resolve.tiles.bound();
-            let bound = [self.frame_buf, tiles.0, tiles.1];
+        if screen_marking {
+            let tiles = &self.resolve.tiles;
+            let (words, uniform) = tiles.bound();
+            let bound = [self.frame_buf, words, uniform, tiles.marks_box()];
             if bound != self.mark_frame_bound {
                 release(self.mark_frame_group);
                 self.mark_frame_group = g.bind_group(
                     self.skinned.mark_layout(),
                     &[
-                        buf_entry(0, self.frame_buf),
-                        buf_entry(30, tiles.0),
-                        buf_entry(31, tiles.1),
+                        buf_entry(0, bound[0]),
+                        buf_entry(30, bound[1]),
+                        buf_entry(31, bound[2]),
+                        buf_entry(32, bound[3]),
                     ],
                 );
                 self.mark_frame_bound = bound;
@@ -1377,25 +1300,30 @@ impl Renderer {
             .kept();
             let pass = g.pass(ctx.encoder, &desc);
             let mut pass = TrackedRenderPass::new(g, pass);
-            self.skinned
-                .draw_marks(&mut pass, self.mark_frame_group, uploads());
+            let frame = self.mark_frame_group;
+            self.skinned.draw_marks(&mut pass, frame, b);
+            self.decor.draw_marks(&mut pass, frame, b, false);
+            self.impostor.draw_marks(&mut pass, frame);
+            self.puck.draw_marks(&mut pass, frame);
             pass.end();
         }
         // The same from the light, where the map is drawn through its gate:
-        // the map's tiles the actors' shadows change, their words set by
+        // the map's tiles the casters' shadows change, their words set by
         // their drawn selves, which the reach reads.
-        if actors_marking && map_drawn && map_gated {
+        if reaching {
             let (light_frame, map) = self.shadow.frame_and_map();
-            let tiles = self.light_tiles.bound();
-            let bound = [light_frame, tiles.0, tiles.1];
+            let tiles = &self.light_tiles;
+            let (words, uniform) = tiles.bound();
+            let bound = [light_frame, words, uniform, tiles.marks_box()];
             if bound != self.light_mark_bound {
                 release(self.light_mark_group);
                 self.light_mark_group = g.bind_group(
                     self.skinned.mark_layout(),
                     &[
-                        buf_entry(0, light_frame),
-                        buf_entry(30, tiles.0),
-                        buf_entry(31, tiles.1),
+                        buf_entry(0, bound[0]),
+                        buf_entry(30, bound[1]),
+                        buf_entry(31, bound[2]),
+                        buf_entry(32, bound[3]),
                     ],
                 );
                 self.light_mark_bound = bound;
@@ -1411,8 +1339,9 @@ impl Renderer {
             .kept();
             let pass = g.pass(ctx.encoder, &desc);
             let mut pass = TrackedRenderPass::new(g, pass);
-            self.skinned
-                .draw_marks(&mut pass, self.light_mark_group, uploads());
+            let frame = self.light_mark_group;
+            self.skinned.draw_marks(&mut pass, frame, b);
+            self.decor.draw_marks(&mut pass, frame, b, true);
             pass.end();
         }
         if reaching {
@@ -1441,30 +1370,6 @@ impl Renderer {
                 light,
             );
             pass.end();
-        }
-        let a = &mut self.ao_read;
-        a.begin();
-        a.read(&self.frame);
-        a.read(self.ao.words());
-        a.read(&[
-            world.width,
-            world.height,
-            u32::from(self.screen_ao),
-            u32::from(self.screen.generated().is_some()),
-        ]);
-        // The world's depth is the rays', so a cast that laid them again
-        // lays the occlusion again.
-        a.mark(ao_remade || self.screen.generates() || self.screen.casts_px());
-        let ao_moved = !a.end();
-        // A gated frame moves no depth the occlusion reads: its prepass
-        // draws the rays and the generated decor, never what the kernel
-        // animates (gpu/pass/model.rs, drawn over it), so it stands.
-        if self.screen_ao && ao_moved && !gated {
-            let mut pass = self.ao.begin_prepass(&mut ctx);
-            self.screen.draw_depth(&mut pass);
-            self.draw_opaque(&mut pass, b, Stage::Prepass);
-            pass.end();
-            self.ao.run(&mut ctx);
         }
         let canvas_view = g.cur(world.handle);
         // A frame not drawn whole keeps the rest as the last frame left it:
@@ -1509,6 +1414,7 @@ impl Renderer {
             pass.set_bind_group(0, self.gate_group, &[]);
             pass.draw(6, across * down, 0, 0);
         }
+        // The world that stands while the eye does: what the occlusion reads.
         self.draw_opaque(&mut pass, b, Stage::Lit);
         self.screen.draw(&mut pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
@@ -1518,6 +1424,53 @@ impl Renderer {
             GROUPS,
             self.models.frame,
         );
+        pass.end();
+        // The occlusion, a field over the screen as the light's map is over
+        // the world: found from the depth just laid where what it reads
+        // moved, held where nothing did, and laid over the color in the
+        // tiles drawn again, as the tiles' quads (gpu/ao.rs). A gated frame
+        // moves nothing it reads: what the kernel animates is drawn after.
+        if self.screen_ao {
+            let a = &mut self.ao_read;
+            a.begin();
+            a.read(&self.frame);
+            a.read(self.ao.words());
+            a.read(&[
+                world.width,
+                world.height,
+                u32::from(self.screen.generated().is_some()),
+            ]);
+            // The world's depth is the rays', so a cast that laid them again
+            // lays the occlusion again.
+            a.mark(ao_remade || self.screen.generates() || self.screen.casts_px());
+            let ao_moved = !a.end();
+            if ao_moved && !gated {
+                self.ao.run(&mut ctx);
+            }
+            let drawn = if g.gates() {
+                self.resolve.tiles.bound()
+            } else {
+                self.resolve.tiles.every()
+            };
+            let [across, down] = self.resolve.tiles.squares();
+            self.ao
+                .apply(&mut ctx, world.color_view, drawn, across * down);
+        }
+        // The rest over it, its depth and stencil as the gate left them.
+        let desc = pass_desc(
+            world.color_view,
+            Load::Load,
+            world.depth_view,
+            Load::Load,
+            0.0,
+            ctx.stamp(GpuSpanName::world).pass(),
+        )
+        .kept();
+        let pass = g.pass(ctx.encoder, &desc);
+        let mut pass = TrackedRenderPass::new(g, pass);
+        if gating {
+            pass.set_stencil_reference(number);
+        }
         // At the far plane after the opaque world, so only empty pixels run the sky shader.
         pass.set_pipeline(self.sky_built.pipeline);
         pass.set_bind_group(0, self.sky_group, &[]);
@@ -1525,15 +1478,21 @@ impl Renderer {
         self.stars.draw(&mut pass);
         // The actors, whose clips play, and the clouds the kernel lists, the
         // cumulus, which the wind carries: drawn over the world against its
-        // depth, their occlusion open.
-        let over = self.models.over;
-        self.skinned
-            .draw(&mut pass, draws.of(PIPELINE_SKINNED), b, Stage::Lit, over);
-        self.decor.draw(&mut pass, &draws, b, Stage::Lit, over);
+        // depth, the occlusion not laid over them.
+        let frame_group = self.models.frame;
+        self.skinned.draw(
+            &mut pass,
+            draws.of(PIPELINE_SKINNED),
+            b,
+            Stage::Lit,
+            frame_group,
+        );
+        self.decor
+            .draw(&mut pass, &draws, b, Stage::Lit, frame_group);
         self.impostor
-            .draw(&mut pass, draws.of(PIPELINE_IMPOSTOR), b, over);
+            .draw(&mut pass, draws.of(PIPELINE_IMPOSTOR), b, frame_group);
         self.clouds.draw(&mut pass);
-        self.puck.draw_beacon(&mut pass, &draws, over);
+        self.puck.draw_beacon(&mut pass, &draws, frame_group);
         self.puck.draw_zone(&mut pass, &draws, b);
         self.draw_boxes(&mut pass, &draws);
         self.decor
@@ -1548,15 +1507,13 @@ impl Renderer {
         };
         let size = [world.width, world.height];
         let squares = self.resolve.tiles.squares();
-        // What the actors were drawn with this frame, kept for the next's
-        // marks where they were.
-        self.skinned.keep(
-            g,
-            ctx.encoder,
-            draws.of(PIPELINE_SKINNED),
-            uniforms,
-            uploads(),
-        );
+        // What the listed draws were drawn with this frame, kept for the
+        // next's marks where they were.
+        self.skinned.keep(draws.of(PIPELINE_SKINNED), uniforms);
+        self.decor.keep(&draws, uniforms);
+        self.impostor.keep(draws.of(PIPELINE_IMPOSTOR), uniforms);
+        self.puck.keep(&draws, uniforms);
+        self.kept.keep(g, ctx.encoder, &read_uploads, &touched, b);
         self.reach
             .set_bounds(&mut ctx, world.depth_only_view, size, drawn, squares);
         let gathered = self.resolve.draw(&mut ctx, self.frame_buf, world, gated);
@@ -1625,6 +1582,7 @@ impl Renderer {
             self.gate_number = GATE_NUMBERS;
             self.light_gate_number = GATE_NUMBERS;
             self.reach.on_dropped(self.resolve.tiles.now());
+            self.kept.forget();
         } else {
             self.resolve.on_drawn(gated);
             // The jitter's sequence run through once anything moved, as
@@ -1691,7 +1649,6 @@ impl Renderer {
                     g,
                     &mut self.pipelines,
                     &self.shadow,
-                    &self.ao,
                     self.atmosphere.entries(),
                     self.align,
                 ));
@@ -1761,10 +1718,9 @@ impl Renderer {
             uploads: b.cnt as f64,
             upload_bytes: b.bytes as f64,
             // The depth targets: the world's own and the canvas's, one f32 a
-            // pixel, AO's and the markers' regions'.
+            // pixel, and the markers' regions'.
             depth_bytes: px * 4.0
                 + f64::from(world.screen.0) * f64::from(world.screen.1) * 4.0
-                + self.ao.depth_bytes()
                 + self.marker.depth_bytes(),
             pack_bytes: self.pack.bytes as f64,
             census,
@@ -1851,19 +1807,21 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
         carry_edits(&input.cast);
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
+        if let Some(r) = RENDERER.get(|| None).as_mut() {
+            r.put_off();
+        }
         return FrameOutput {
             kind: FrameKind::unready,
             redraw: false,
             stat: None,
         };
     };
-    // The surfaces would block: skip rather than wait. The uploads it
-    // takes the next frame does not see, so it draws whole.
+    // The surfaces would block: skip rather than wait (`Renderer::put_off`).
     if !(input.admit)() {
         carry_edits(&input.cast);
         take_lists(Some(g), input.lists);
         if let Some(r) = RENDERER.get(|| None).as_mut() {
-            r.beside.forget();
+            r.put_off();
         }
         return FrameOutput {
             kind: FrameKind::held,

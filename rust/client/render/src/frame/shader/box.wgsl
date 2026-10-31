@@ -157,7 +157,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     i.box_uv,
     dpdx(i.box_uv),
     dpdy(i.box_uv),
-    screen_ao(i.clip.xy),
+    1.0,
     Seen(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill)),
   );
   return vec4f(tone(paint(s)), i.opacity);

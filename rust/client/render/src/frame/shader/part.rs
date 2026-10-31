@@ -98,7 +98,9 @@ pub const SHADER_SAMPLE: u32 = 44;
 pub const SHADER_LIGHT: u32 = 45;
 pub const SHADER_LIGHT_MAP: u32 = 46;
 pub const SHADER_LIGHT_MISS: u32 = 47;
-pub const SHADER_SCREEN_DEPTH: u32 = 48;
+/// The occlusion's map multiplied into the world's color, as the tiles'
+/// quads (ao_apply.wgsl).
+pub const SHADER_AO_APPLY: u32 = 48;
 /// The camera grid's cells over the screen (camera_grid.wgsl).
 pub const SHADER_CAMERA_GRID: u32 = 49;
 /// The samples' stops handed to the rasterizer (pxl-spec-core `raster`):
@@ -155,10 +157,22 @@ pub const SHADER_SCREEN_BOUND: u32 = 67;
 /// An actor where it was and where it is, its fragments marking their screen
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
 pub const SHADER_SKINNED_MARK: u32 = 68;
-/// The tiles of the light's box whose slots' zooms the eye's place moved
-/// (pxl-spec-core `light::Light::asks`): a compute entry.
+/// The tiles of the light's box the box slid onto, or whose eye moved past
+/// the margin of what their walks asked (pxl-spec-core `light::holds`): a
+/// compute entry.
 pub const SHADER_LIGHT_DETAIL: u32 = 69;
-pub const SHADERS: u32 = 70;
+/// Decor, an impostor, the location puck's zone and its beacon where each
+/// was and where it is, their fragments marking their tiles (tile_mark.wgsl).
+pub const SHADER_DECOR_MARK: u32 = 70;
+pub const SHADER_IMPOSTOR_MARK: u32 = 71;
+pub const SHADER_PUCK_ZONE_MARK: u32 = 72;
+pub const SHADER_PUCK_BEACON_MARK: u32 = 73;
+/// The shadow map's beam rays and samples, the eye's passes in entries of
+/// their own, which tell what their walks ask of (pxl-spec-core
+/// `cast::Margin`): compute entries.
+pub const SHADER_LIGHT_BEAM: u32 = 74;
+pub const SHADER_LIGHT_SAMPLE: u32 = 75;
+pub const SHADERS: u32 = 76;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -171,10 +185,10 @@ macro_rules! air {
 
 /// What a lit draw reads before its own parts: the frame, the air and the
 /// volume before each point, the ground's light, the shading, the light's
-/// shadow, the finish and the screen's occlusion.
+/// shadow and the finish.
 macro_rules! lit {
     [$($own:literal),*] => {
-        air!["frame", "encode"; "atmos_air", "atmos_ground", "shade", "shadow", "finish", "ao_map", $($own),*]
+        air!["frame", "encode"; "atmos_air", "atmos_ground", "shade", "shadow", "finish", $($own),*]
     };
 }
 
@@ -182,13 +196,20 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_BOX
     lit!["paint", "box"],
     // SHADER_DECOR
-    lit!["place", "instance", "decor"],
+    lit!["place", "instance", "decor_place", "decor"],
     // SHADER_SKINNED
     lit!["place", "skinned_place", "skinned"],
     // SHADER_PUCK_ZONE
-    &["frame", "encode", "finish", "puck", "puck_zone"],
+    &[
+        "frame",
+        "encode",
+        "finish",
+        "puck",
+        "puck_zone_place",
+        "puck_zone",
+    ],
     // SHADER_PUCK_BEACON
-    lit!["place", "puck", "puck_beacon"],
+    lit!["place", "puck", "puck_beacon_place", "puck_beacon"],
     // SHADER_MARKER
     &["frame", "encode", "marker", "marker_sprite"],
     // SHADER_SKY
@@ -268,7 +289,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_SHEET
     &["sheet"],
     // SHADER_IMPOSTOR
-    lit!["instance", "impostor"],
+    lit!["instance", "impostor_place", "impostor"],
     // SHADER_IMPOSTOR_BAKE
     &["impostor_bake"],
     // SHADER_ATMOS_IRRADIANCE
@@ -351,17 +372,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["light_word", "screen_tiles", "light_map"],
     // SHADER_LIGHT_MISS
     &["light_miss.gen"],
-    // SHADER_SCREEN_DEPTH
-    lit![
-        "lattice",
-        "ray",
-        "eye",
-        "paint",
-        "px",
-        "screen_tiles",
-        "screen_ray",
-        "screen_depth"
-    ],
+    // SHADER_AO_APPLY
+    &["screen_tiles", "ao_apply"],
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "debug_look", "camera_grid"],
     // SHADER_SAMPLE_BOX
@@ -404,4 +416,16 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["frame", "place", "skinned_place", "tile_mark"],
     // SHADER_LIGHT_DETAIL
     &["light_detail.gen"],
+    // SHADER_DECOR_MARK
+    &["frame", "place", "instance", "decor_place", "tile_mark"],
+    // SHADER_IMPOSTOR_MARK
+    &["frame", "instance", "impostor_place", "tile_mark"],
+    // SHADER_PUCK_ZONE_MARK
+    &["frame", "puck", "puck_zone_place", "tile_mark"],
+    // SHADER_PUCK_BEACON_MARK
+    &["frame", "place", "puck", "puck_beacon_place", "tile_mark"],
+    // SHADER_LIGHT_BEAM
+    &["light_beam.gen"],
+    // SHADER_LIGHT_SAMPLE
+    &["light_sample.gen"],
 ];

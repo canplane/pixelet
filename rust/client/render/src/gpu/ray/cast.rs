@@ -16,8 +16,9 @@ use super::{casts_px, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FORGET, SHADER_JOINED,
-    SHADER_LIGHT, SHADER_LIGHT_DETAIL, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWN,
-    SHADER_LIGHT_MISS, SHADER_LIGHT_REACH, SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, UNIFORM,
+    SHADER_LIGHT, SHADER_LIGHT_BEAM, SHADER_LIGHT_DETAIL, SHADER_LIGHT_MARK,
+    SHADER_LIGHT_MARK_DRAWN, SHADER_LIGHT_MISS, SHADER_LIGHT_REACH, SHADER_LIGHT_SAMPLE,
+    SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, UNIFORM,
 };
 use crate::gpu::api;
 use crate::gpu::api::{
@@ -104,12 +105,18 @@ pub(super) struct CastBuffers {
     light_mark_built: Built,
     light_mark_drawn_built: Built,
     light_reach_built: Built,
-    /// The tiles whose slots' zooms the eye's place moved, set back to be
-    /// read anew (`light_detail_cs`), before the reach.
+    /// The tiles the box slid onto, or whose eye moved past the margin of
+    /// what their walks asked, set back to be read anew (`light_detail_cs`),
+    /// before the reach.
     light_detail_built: Built,
+    /// The light's beam rays and samples, the eye's passes in entries of
+    /// their own, which tell the margin of what their walks ask
+    /// (`light_beam_cs`, `light_sample_cs`); its misses' walk tells its own.
+    light_beam_built: Built,
+    light_sample_built: Built,
     /// The light's cast's groups (`light_groups`), and the buffers they bind:
     /// made again exactly when one of them is another.
-    light_groups: [u32; 8],
+    light_groups: [u32; 10],
     light_bound: [u32; 12],
     /// A word bound where decor is off, the decor's buffers the drawn mark
     /// reads none (`light_mark_drawn_cs`).
@@ -141,12 +148,13 @@ pub(super) struct CastBuffers {
     /// moved; one moving begins an epoch (`light_epoch`).
     light_content: Read,
     /// The eye's place and the light box, which follows it, as it last read
-    /// them: the zoom each slot's ray asks follows the one, and what each
-    /// tile of the box holds moves with the other's corner. One moving alone
-    /// moves the reads with the box and casts the tiles whose slots' zooms
-    /// it moved (`light_detail_cs`), and those read anew; whether this
-    /// frame's cast asks which first, and the corner the cast before was
-    /// cast under (`light::HEAD_CORNER_WAS`).
+    /// them: the zooms the walks ask follow the one, and what each tile of
+    /// the box holds moves with the other's corner. One moving alone moves
+    /// the reads with the box and casts the tiles the box slid onto or whose
+    /// eye moved past the margin of what their walks asked
+    /// (`light_detail_cs`, pxl-spec-core `light::holds`), and those read
+    /// anew; whether this frame's cast asks which first, and the corner the
+    /// cast before was cast under (`light::HEAD_CORNER_WAS`).
     light_detail: Read,
     light_detail_moved: bool,
     light_corner: [i32; 2],
@@ -303,6 +311,10 @@ impl RaysPass {
             pipelines.build_compute(g, SHADER_LIGHT_REACH, &compute::LIGHT_REACH_GROUP);
         let light_detail_built =
             pipelines.build_compute(g, SHADER_LIGHT_DETAIL, &compute::LIGHT_DETAIL_GROUP);
+        let light_beam_built =
+            pipelines.build_compute(g, SHADER_LIGHT_BEAM, &compute::LIGHT_BEAM_GROUP);
+        let light_sample_built =
+            pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, &compute::LIGHT_SAMPLE_GROUP);
         let raster = Raster::new(g, pipelines);
         let tally = Tally::new(g);
         let buf = |size: u32, usage: u32| g.buf(size, usage);
@@ -346,7 +358,9 @@ impl RaysPass {
             light_mark_drawn_built,
             light_reach_built,
             light_detail_built,
-            light_groups: [0; 8],
+            light_beam_built,
+            light_sample_built,
+            light_groups: [0; 10],
             light_bound: [0; 12],
             light_none: buf(word_bytes(2 * generated::drawn::REGIONS as usize), storage),
             light_number: 0,
@@ -686,9 +700,10 @@ impl RaysPass {
         r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
         r.mark(world_moved);
         let held = r.end();
-        // The eye's place, the zooms its slots' rays ask, and the box, off
-        // the eye: a tile cast in the epoch holds while the one asks the same
-        // and the other slid off none of its slots (`light_detail_cs`).
+        // The eye's place, which the zooms the walks ask follow, and the box,
+        // off the eye: a tile cast in the epoch holds while the one moved
+        // less than the margin of what its walks asked and the other slid
+        // off none of its slots (`light_detail_cs`).
         let d = &mut c.light_detail;
         d.begin();
         d.read(&cast.eye[eye::ORIGIN..eye::STEPS]);
@@ -903,6 +918,8 @@ impl RaysPass {
                     &c.light_mark_drawn_built,
                     &c.light_reach_built,
                     &c.light_detail_built,
+                    &c.light_beam_built,
+                    &c.light_sample_built,
                 ],
                 light_bound,
                 [
@@ -1088,14 +1105,15 @@ impl RaysPass {
             // missed pixels are: each a pass timed in its own span.
             let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
             let pass = g.compute_pass(encoder, stamp);
-            // The tiles whose slots' zooms the eye's place moved, and those
-            // the box slid onto, set back to be read anew first, a workgroup
-            // a tile (`light_detail_cs`).
+            // The tiles the box slid onto, and those whose eye moved past the
+            // margin of what their walks asked, set back to be read anew
+            // first, a thread a tile (`light_detail_cs`).
             if c.light_detail_moved {
                 let n = light::tiles(shadow::SIZE);
+                let w = compute::LIGHT_DETAIL_WORKGROUP;
                 g.set_bind_group(pass, 0, c.light_groups[7], &[]);
                 g.set_pipeline(pass, c.light_detail_built.pipeline);
-                g.dispatch(pass, n, n, 1);
+                g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             }
             // The tiles its receivers read marked, timed with the beam:
             // where the eye's rays meet the world, a thread a brick of pixels
@@ -1120,21 +1138,23 @@ impl RaysPass {
             let w = compute::LIGHT_REACH_WORKGROUP;
             let n = light::tiles(shadow::SIZE);
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
-            // The beam and the cells' starts by the eye's passes over the
-            // light's world's group, which hands them the light's head.
-            g.set_bind_group(pass, 0, c.light_groups[1], &[]);
-            g.set_pipeline(pass, c.beam_built.pipeline);
-            // Each as many workgroups as the reach left it
+            // The beam by its entry of its own, which tells the margin of
+            // what its walks ask (`light_beam_cs`), then the cells' starts by
+            // the eye's pass over the light's world's group, which hands it
+            // the light's head. Each as many workgroups as the reach left it
             // (`light::ARGS_WORDS`).
             let args = |w: u32| word_bytes(w as usize);
+            g.set_bind_group(pass, 0, c.light_groups[8], &[]);
+            g.set_pipeline(pass, c.light_beam_built.pipeline);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_BEAM));
+            g.set_bind_group(pass, 0, c.light_groups[1], &[]);
             g.set_pipeline(pass, c.cells_built.pipeline);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_CELLS));
             g.end(pass);
             let stamp = ctx.stamp(GpuSpanName::light_sample).pass();
             let pass = g.compute_pass(encoder, stamp);
-            g.set_bind_group(pass, 0, c.light_groups[1], &[]);
-            g.set_pipeline(pass, c.sample_built.pipeline);
+            g.set_bind_group(pass, 0, c.light_groups[9], &[]);
+            g.set_pipeline(pass, c.light_sample_built.pipeline);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SAMPLE));
             g.end(pass);
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_raster).pass());
@@ -1366,17 +1386,18 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
 /// the raster's boxes, visibility buffer and args, the misses' dispatch and
 /// the casting passes' workgroups (`light::ARGS_WORDS`), which the reach
 /// writes; the eye's rays, which the mark reads, and the decor's drawing
-/// words, regions and instances, which the drawn mark reads. The slots', its world's (the
-/// passes the eye's rays take too, over `WORLD_GROUP`, its list where the
-/// eye's beam rays' buffer lies and its head where the eye's), its boxes'
-/// (the eye's raster's pass), the misses' walk's, the two marks' and the
-/// reach's; the boxes' none before its raster's buffers are made.
+/// words, regions and instances, which the drawn mark reads. The slots',
+/// its world's (the cells' starts, the eye's pass, over `WORLD_GROUP`, its
+/// list where the eye's beam rays' buffer lies and its head where the
+/// eye's), its boxes' (the eye's raster's pass), the misses' walk's, the two
+/// marks', the reach's, the detail's, the beam's and the samples'; the
+/// boxes' none before its raster's buffers are made.
 fn light_groups(
     g: &Gpu,
-    [walk, world, boxes_built, miss, mark, mark_drawn, reach, detail]: [&Built; 8],
+    [walk, world, boxes_built, miss, mark, mark_drawn, reach, detail, beam, sample]: [&Built; 10],
     bound: [u32; 12],
     [seen, head, list, boxes, visibility, args, misses, light_args]: [u32; 8],
-) -> [u32; 8] {
+) -> [u32; 10] {
     let [eye, window, ground, looks, shards, overwrites, pool, light, rays, drawing, regions, instances] =
         bound;
     let entries = [
@@ -1438,5 +1459,7 @@ fn light_groups(
         g.bind_group(mark_drawn.layouts[0], &of(&compute::LIGHT_MARK_DRAWN_GROUP)),
         g.bind_group(reach.layouts[0], &of(&compute::LIGHT_REACH_GROUP)),
         g.bind_group(detail.layouts[0], &of(&compute::LIGHT_DETAIL_GROUP)),
+        g.bind_group(beam.layouts[0], &of(&compute::LIGHT_BEAM_GROUP)),
+        g.bind_group(sample.layouts[0], &of(&compute::LIGHT_SAMPLE_GROUP)),
     ]
 }

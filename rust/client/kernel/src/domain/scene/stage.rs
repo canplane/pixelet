@@ -185,12 +185,8 @@ pub fn stage_render(pace: Pace) {
         landed.set(true);
         window::on_landed(b, ticket, landing);
     };
-    // What the scene animates changed, about the eye.
-    let (moved, moved_keys, bounded, animated) = {
-        let s = stage_lane();
-        let eye = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
-        region::take(eye)
-    };
+    // The draws the scene bounds, and whether what it animates stepped.
+    let (bounded, animated) = region::take();
     let out = render_frame(FrameInput {
         lists,
         environment: &scene().environment.out,
@@ -226,8 +222,6 @@ pub fn stage_render(pace: Pace) {
         admit: boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().profiler,
-        moved,
-        moved_keys,
         bounded,
         animated,
     });

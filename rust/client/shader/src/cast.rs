@@ -265,7 +265,7 @@ fn missed(
     };
     let mut lined = Lined::before();
     let (aim, met, before) =
-        observer::walked(eye, world, seen, beams, px_tan(eye, id, size), &mut lined);
+        observer::walked(eye, world, seen, beams, px_tan(eye, id, size), &mut lined, &mut ());
     let faces = world.faced(aim.origin, &aim.ray, &met, |_, _, _| {
         support::Line::kept(aim.origin, &met.stop.node, lined.live, &lined.stack)
     });

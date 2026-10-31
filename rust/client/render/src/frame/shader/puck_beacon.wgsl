@@ -1,4 +1,5 @@
-// The beacon lit as an actor is (shade.wgsl), a metal that glows its color.
+// The beacon lit as an actor is (shade.wgsl), a metal that glows its color,
+// placed as puck_beacon_place.wgsl lays it.
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -14,7 +15,7 @@ struct VertexOut {
 @vertex
 fn vs(@location(0) pos: vec3f, @location(1) normal: vec3f) -> VertexOut {
   var o: VertexOut;
-  let world = spin_z(pos, draw_fourth()) + draw_translation();
+  let world = beacon_world(pos);
   o.clip = jittered(frame_view_proj() * vec4f(world, 1.0));
   o.normal = spin_z(normal, draw_fourth());
   o.world_pos = world;
@@ -33,6 +34,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let glow = select(PUCK_BEACON_DAY_GLOW, PUCK_BEACON_NIGHT_GLOW, draw_night() > 0.5);
   let n = normalize(i.normal);
   let seen = Seen(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill));
-  let lit = shade_metal(color, PUCK_BEACON_METALNESS, PUCK_BEACON_ROUGHNESS, n, i.world_pos, shadow_visibility(i.world_pos, n), screen_ao(i.clip.xy), seen);
+  let lit = shade_metal(color, PUCK_BEACON_METALNESS, PUCK_BEACON_ROUGHNESS, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, seen);
   return vec4f(tone(lit + color * glow * seen.transmittance), 1.0);
 }

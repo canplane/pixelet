@@ -2,8 +2,12 @@
 
 @group(0) @binding(13) var exposure_texel: texture_2d<f32>;
 
+fn exposure_stops() -> f32 {
+  return textureLoad(exposure_texel, vec2i(0, 0), 0).r;
+}
+
 fn exposure() -> f32 {
-  return exp2(textureLoad(exposure_texel, vec2i(0, 0), 0).r);
+  return exp2(exposure_stops());
 }
 
 // The table's white, as the exposure pass wrote it beside the stops.

@@ -66,6 +66,12 @@ impl DecorQuery for Asked<'_, '_> {
         }
     }
 
+    /// The leaves', which the CPU generates at alone (`generated_at`), its
+    /// world answering each cell off its own tiles.
+    fn finest(&mut self, _: Zoom, _: [i32; 2]) -> Zoom {
+        GROUND.cell()
+    }
+
     /// Void where the world holds nothing there.
     fn asset(&mut self, f: &Footing<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
         self.unplaced

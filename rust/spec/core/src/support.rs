@@ -75,7 +75,7 @@ pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
         },
         origin: o,
     };
-    let met = cast::rooted(q, o, &ray, detail, Until::Opaque, &mut f);
+    let met = cast::rooted(q, o, &ray, detail, Until::Opaque, &mut f, &mut ());
     f.ends = met.ends;
     f.top = cast::top(o, &met.stop.node, met.stop.asset[0]);
     f
@@ -291,7 +291,15 @@ mod tests {
         };
         let beam = Ray::new([-0.45, 0.05, -1.0], 64.0);
         let mut first = Kept(None, o);
-        let met = cast::rooted(&mut Step, o, &beam, detail, Until::Opaque, &mut first);
+        let met = cast::rooted(
+            &mut Step,
+            o,
+            &beam,
+            detail,
+            Until::Opaque,
+            &mut first,
+            &mut (),
+        );
         assert_eq!(met.ends, End::Stop);
         let first = first.0.unwrap();
         same(&first, &line(&mut Step, first.zoom, first.at));
@@ -325,6 +333,7 @@ mod tests {
                     from,
                     &Along(&first),
                     &mut kept,
+                    &mut (),
                 );
                 assert_eq!(resumed.ends, End::Stop, "{d:?} {share}");
                 let kept = kept.0.unwrap();

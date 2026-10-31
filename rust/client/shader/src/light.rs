@@ -9,14 +9,14 @@
 //! (`Head`); every slot taking its visible sample or the sky (`light_cs`) and
 //! the rest walked (`light_miss_cs`).
 
-use pxl_spec_core::cast::{self, Detail};
+use pxl_spec_core::cast::{self, Detail, Margin};
 use pxl_spec_core::fill::put;
 use pxl_spec_core::light::{Light, Starts};
 use pxl_spec_core::{at, beam, observed, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::{spirv, Image};
 
-use crate::beam::Words;
+use crate::beam::{Beams, Words};
 use crate::cast::{add_cnt, enlist, px_tan, Rays};
 use crate::decor::Instances;
 use crate::eye::{eye_origin, eye_ray, Eye};
@@ -378,12 +378,22 @@ impl Observer for Map {
         (self.starts.start(self.light.corner), (false, [0.0; 2]))
     }
 
-    /// What feeds a tile this cast casts (`light::reads_at`): a ray its own
-    /// slot's tile; a sample the slots that may take its box, a tile
-    /// either way, beyond the four it lies about (`sample_before`), as a box
-    /// fewer is a slot walked more; a cell, a tile, as a sample does; a beam
-    /// ray the cells whose window holds it (`window`), each as a cell does.
+    /// What feeds a tile this cast casts (`light::reads_at`): one of the
+    /// tiles it feeds (`feeds`).
     fn needs<W: Words + ?Sized>(&self, w: &W, level: Level, at: [u32; 2]) -> bool {
+        let (lo, hi) = self.feeds(level, at);
+        casts_in(w, self.size, self.cast, lo, hi)
+    }
+}
+
+impl Map {
+    /// The tiles of the box what `level` at `at` feeds, from the first to
+    /// the last across and down: a ray its own slot's tile; a sample the
+    /// slots that may take its box, a tile either way, beyond the four it
+    /// lies about (`sample_before`), as a box fewer is a slot walked more; a
+    /// cell, a tile, as a sample does; a beam ray the cells whose window
+    /// holds it (`window`), each as a cell does.
+    fn feeds(&self, level: Level, at: [u32; 2]) -> ([i32; 2], [i32; 2]) {
         const _: () = assert!(
             pxl_spec_core::light::BEAM == pxl_spec_core::light::TILE
                 && pxl_spec_core::param::light::SAMPLE <= pxl_spec_core::light::TILE,
@@ -411,7 +421,38 @@ impl Observer for Map {
                 ([tile[0] - 1, tile[1] - 1], [tile[0] + 1, tile[1] + 1])
             }
         };
-        casts_in(w, self.size, self.cast, lo, hi)
+        (lo, hi)
+    }
+
+    /// The least margin `told` of the walk that gave what `level` at `at`
+    /// gives (`cast::Margin`), lowered into the held words of each tile it
+    /// feeds that this cast casts (`feeds`, `light::held_at`), in the list
+    /// `w`: the tile holds while the eye stays nearer than every margin told
+    /// it to where it stood (`light_detail_cs`). None where the walk asked
+    /// nothing.
+    fn told<W: Words + ?Sized>(&self, w: &mut W, level: Level, at: [u32; 2], told: Margin) {
+        if told.0 >= Margin::NONE.0 {
+            return;
+        }
+        let n = pxl_spec_core::light::tiles(self.size) as i32;
+        let (lo, hi) = self.feeds(level, at);
+        let (lo, hi) = (
+            [lo[0].max(0), lo[1].max(0)],
+            [hi[0].min(n - 1), hi[1].min(n - 1)],
+        );
+        let reads = pxl_spec_core::light::reads_at(self.size);
+        let mut j = lo[1];
+        while j <= hi[1] {
+            let mut i = lo[0];
+            while i <= hi[0] {
+                if w.word(reads + (j * n + i) as u32) == self.cast {
+                    let h = self.light.held(self.size, [i as u32, j as u32]);
+                    w.least(h + pxl_spec_core::light::HELD_MARGIN, told.0.to_bits());
+                }
+                i += 1;
+            }
+            j += 1;
+        }
     }
 }
 
@@ -498,7 +539,8 @@ pub fn light_cs(
 /// a slot, `ray::MISS_LANES` a workgroup and `ray::MISS_ACROSS` workgroups
 /// a row, each past the count returning at once, as the eye's listed pixels
 /// are (cast.rs `miss_list_cs`), its ray walked again (observer.rs
-/// `walked`), and the word it leaves there.
+/// `walked`), and the word it leaves there; the least margin of the nodes
+/// it asked lowered into its tile's held words (`Map::told`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "light_miss_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn light_miss_cs(
@@ -513,7 +555,7 @@ pub fn light_miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(descriptor_set = 0, binding = 10)] light: &LightWords,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
     let window: &[IVec4] = window;
@@ -521,15 +563,82 @@ pub fn light_miss_cs(
     let n = m.side();
     let i = (group.y * pxl_spec_core::ray::MISS_ACROSS + group.x) * pxl_spec_core::ray::MISS_LANES
         + lane.x;
-    if i >= at(list, pxl_spec_core::light::misses_cnt(n)) {
+    if i >= list.word(pxl_spec_core::light::misses_cnt(n)) {
         return;
     }
-    let w = at(list, pxl_spec_core::light::misses_at(n) + i);
+    let w = list.word(pxl_spec_core::light::misses_at(n) + i);
     let slot = UVec3::new(w & 0xffff, w >> 16, 0);
     let world = world(eye, window, ground, looks, shards, overwrites, pool);
-    let (aim, met, _) = observer::walked(&m, world, seen, list, [slot.x, slot.y], &mut ());
+    let mut told = Margin::NONE;
+    let at = [slot.x, slot.y];
+    let (aim, met, _) = observer::walked(&m, world, seen, &*list, at, &mut (), &mut told);
     // SAFETY: a slot `light_cs` listed, within the map.
     unsafe { light.write(slot, m.word(&aim, &met)) };
+    m.told(list, Level::Ray, at, told);
+}
+
+/// Each beam ray of the shadow map's lattice (`light::BEAM`), a thread a
+/// corner, as the eye's are (beam.rs `beam_cs`; observer.rs `beam`), its
+/// line left in the list; the least margin of the nodes it asked lowered
+/// into the held words of the tiles it feeds (`Map::told`). An entry of its
+/// own, so the eye's beam rays tell nothing and pay nothing for it.
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "light_beam_cs"))]
+#[allow(clippy::too_many_arguments)]
+pub fn light_beam_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
+) {
+    let window: &[IVec4] = window;
+    let m = Map::of(eye, head);
+    let [across, down] = m.corners();
+    if id.x >= across || id.y >= down {
+        return;
+    }
+    let world = world(eye, window, ground, looks, shards, overwrites, pool);
+    let (c, mut told) = ([id.x, id.y], Margin::NONE);
+    observer::beam(&m, world, seen, list, c, &mut told);
+    m.told(list, Level::Corner, c, told);
+}
+
+/// Each sample of the shadow map's lattice (`param::light::SAMPLE`), a
+/// thread each, as the eye's are (beam.rs `sample_cs`; observer.rs
+/// `sample`), its stop left in the list for the raster; the least margin
+/// of the nodes it asked lowered into the held words of the tiles it feeds
+/// (`Map::told`).
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "light_sample_cs"))]
+#[allow(clippy::too_many_arguments)]
+pub fn light_sample_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
+) {
+    let window: &[IVec4] = window;
+    let m = Map::of(eye, head);
+    let [across, down] = m.samples();
+    if id.x >= across || id.y >= down {
+        return;
+    }
+    let world = world(eye, window, ground, looks, shards, overwrites, pool);
+    let (at, mut told) = ([id.x, id.y], Margin::NONE);
+    observer::sample(&m, world, seen, list, at, &mut told);
+    m.told(list, Level::Sample, at, told);
 }
 
 /// The world's receivers of the shadow map: the drawn pixels' rays (cast.rs
@@ -753,9 +862,10 @@ pub fn light_mark_drawn_cs(
 /// its taps a tile either side), as decor and the actors stand on what the
 /// eye meets and are no taller. One read that no cast of the epoch read is
 /// the cast's to cast: its word names the cast (`light::reads_at`), and its
-/// square's (`light::coarse_at`). A tile's word its own thread's alone. One
-/// claimed, the passes that cast tiles go whole (`light::ARGS_WORDS`), each
-/// claim writing the same words.
+/// square's (`light::coarse_at`), and its held words where the eye stands
+/// and no margin yet (`light::HELD_WORDS`). A tile's words its own thread's
+/// alone. One claimed, the passes that cast tiles go whole
+/// (`light::ARGS_WORDS`), each claim writing the same words.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_reach_cs"))]
 pub fn light_reach_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -803,6 +913,18 @@ pub fn light_reach_cs(
     let w = pxl_spec_core::light::reads_at(side) + id.y * n + id.x;
     if read && at(list, w) < epoch {
         put(list, w, cast);
+        // Where the eye stands as it is cast, and no margin yet: the walks
+        // that feed it lower it (`Map::told`).
+        let h = s.held(side, [id.x, id.y]);
+        let e = pxl_spec_core::light::HELD_EYE;
+        put(
+            list,
+            h + pxl_spec_core::light::HELD_MARGIN,
+            Margin::NONE.0.to_bits(),
+        );
+        put(list, h + e, eye.origin.x as u32);
+        put(list, h + e + 1, eye.origin.y as u32);
+        put(list, h + e + 2, eye.origin.z as u32);
         put(
             list,
             pxl_spec_core::light::coarse_square(side, [id.x, id.y]),
@@ -818,41 +940,37 @@ pub fn light_reach_cs(
 
 /// The tiles of the box an earlier cast of the epoch cast, where only the
 /// eye's place moved since and the box with it, a `TILE`-aligned corner at a
-/// time (pxl-render gpu/shadow.rs `aim`): a workgroup a tile, a thread a
-/// slot, after the host moved the reads with the box, each tile's word the
-/// word of the tile that held its world texels under the corner before
-/// (`light::HEAD_CORNER_WAS`; pxl-render gpu/ray/cast.rs `prepare`). A tile
-/// the box slid onto, and one where a slot's word's zoom is other than the
-/// zoom the eye now asks at its depth (`Light::asks`), is set to none, so
-/// the reach takes it, read, as read anew (`light_reach_cs`); the rest hold
-/// what their cast left. Each writes none alone, so none waits on another.
-/// What the eye's place moves before a slot's stop, the zooms its ray
-/// passed through, is not asked: an approximation, held until the epoch
-/// moves.
+/// time (pxl-render gpu/shadow.rs `aim`): a thread a tile, after the host
+/// moved the reads with the box, each tile's word the word of the tile that
+/// held its world texels under the corner before (`light::HEAD_CORNER_WAS`;
+/// pxl-render gpu/ray/cast.rs `prepare`). A tile the box slid onto, and one
+/// whose eye moved as far from where it stood when it was cast as the least
+/// margin of every node the walks that fed it asked (`light::holds`,
+/// `light::HELD_WORDS`), is set to none, so the reach takes it, read, as
+/// read anew (`light_reach_cs`); the rest hold what their cast left, every
+/// zoom their walks asked asked again, so cast anew they would meet what
+/// they met. Each writes none alone, so none waits on another.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_detail_cs"))]
 pub fn light_detail_cs(
-    #[spirv(workgroup_id)] group: UVec3,
-    #[spirv(local_invocation_id)] lane: UVec3,
+    #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(descriptor_set = 0, binding = 10)] light: &LightWords,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
 ) {
     let t = pxl_spec_core::light::TILE;
-    let m = Map::of(eye, head);
-    let n = m.side();
+    let (s, n) = (light_of(eye), size(head));
     let tiles = pxl_spec_core::light::tiles(n);
-    if group.x >= tiles || group.y >= tiles {
+    if id.x >= tiles || id.y >= tiles {
         return;
     }
-    let w = pxl_spec_core::light::reads_at(n) + group.y * tiles + group.x;
+    let w = pxl_spec_core::light::reads_at(n) + id.y * tiles + id.x;
     // Where the tile lay under the corner before: one the box slid onto
     // holds none of what it read.
     let was = head.v[1];
-    let c = m.light.corner;
+    let c = s.corner;
     let from = [
-        group.x as i32 + (c[0] - was.x) / t as i32,
-        group.y as i32 + (c[1] - was.y) / t as i32,
+        id.x as i32 + (c[0] - was.x) / t as i32,
+        id.y as i32 + (c[1] - was.y) / t as i32,
     ];
     if from[0] < 0 || from[1] < 0 || from[0] >= tiles as i32 || from[1] >= tiles as i32 {
         put(list, w, 0);
@@ -861,14 +979,16 @@ pub fn light_detail_cs(
     if at(list, w) < epoch(head) {
         return;
     }
-    let p = [group.x * t + lane.x, group.y * t + lane.y];
-    let slot = [
-        (p[0] as i32).wrapping_add(c[0]) as u32 & (n - 1),
-        (p[1] as i32).wrapping_add(c[1]) as u32 & (n - 1),
+    let h = s.held(n, [id.x, id.y]);
+    let margin = f32::from_bits(at(list, h + pxl_spec_core::light::HELD_MARGIN));
+    let e = pxl_spec_core::light::HELD_EYE;
+    let stood = [
+        at(list, h + e) as i32,
+        at(list, h + e + 1) as i32,
+        at(list, h + e + 2) as i32,
     ];
-    let aim = m.aim(slot);
-    let word: u32 = light.read(UVec3::new(slot[0], slot[1], 0));
-    if !m.light.asks(aim.detail, word) {
+    let stands = [eye.origin.x, eye.origin.y, eye.origin.z];
+    if !pxl_spec_core::light::holds(margin, stood, stands) {
         put(list, w, 0);
     }
 }

@@ -1,13 +1,16 @@
 // pxl-render/gpu/ao.rs
 
-//! Screen-space occlusion (N8AO): a depth prepass, then downsample, sample, denoise twice and
-//! upsample to a one-byte map every lit pass reads at group 0 binding 7.
-//! About 11 bytes a pixel and one extra geometry pass.
+//! Screen-space occlusion (N8AO), a field over the screen as the light's map is over the
+//! world: found from the world's own depth once the static opaque draws laid it (downsample,
+//! sample, denoise twice, upsample to a one-byte map), only where what it reads moved, and
+//! held; laid over the world's color in the claimed tiles each drawn frame (`apply`), as the
+//! tiles' quads. About 7 bytes a pixel.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use crate::frame::shader::record::{
-    PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE,
+    PIPELINE_AO_APPLY, PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE,
+    PIPELINE_AO_UPSAMPLE,
 };
 use crate::frame::shader::word::{ao, AO_DOWNSCALE, AO_FLOATS, AO_NOISE_SIDE};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
@@ -15,22 +18,17 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry,
     texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, RenderContext,
-    TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
+use crate::gpu::surface::WORLD_COLOR;
 
 /// N8AO's blue noise, `AO_NOISE_SIDE` a side; its four channels are the
 /// hemisphere spin, the ray push and the two denoise spins.
 const NOISE: &[u8] = include_bytes!("../frame/shader/blue-noise.bin");
 
-/// Where a lit pass binds the occlusion's map (ao_map.wgsl `ao_map`).
-pub const MAP_BINDING: u32 = 7;
-
 pub struct ScreenAo {
-    /// Bound until the frame's map exists at this size.
-    pub blank_view: u32,
     noise_view: u32,
     uniform: u32,
     uniform_words: [f32; AO_FLOATS],
@@ -42,10 +40,11 @@ pub struct ScreenAo {
     sample: Built,
     blur: Built,
     upsample: Built,
+    apply: Built,
     width: u32,
     height: u32,
-    depth: u32,
-    pub depth_view: u32,
+    /// The world's depth, read only, its view as last bound.
+    depth_view: u32,
     half: u32,
     half_view: u32,
     ping: [u32; 2],
@@ -54,25 +53,14 @@ pub struct ScreenAo {
     map_view: u32,
     /// Downsample, sample, denoise ping[0]->ping[1], denoise back, upsample.
     groups: [u32; 5],
+    /// The map and the tiles' words and uniform `apply` reads, made again
+    /// exactly when one of them is another.
+    apply_group: u32,
+    apply_bound: [u32; 3],
 }
 
 impl ScreenAo {
-    /// Its full-size depth's bytes, one f32 a pixel.
-    pub fn depth_bytes(&self) -> f64 {
-        self.width as f64 * self.height as f64 * 4.0
-    }
-
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32, frame_buf: u32) -> ScreenAo {
-        let blank = g.texture(
-            1,
-            1,
-            1,
-            Format::r8unorm,
-            1,
-            texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
-        );
-        g.write_texture(blank, 0, 1, 1, &[255]);
-        let blank_view = g.view(blank, false, 0, 1, 0, 1);
         let noise = g.texture(
             AO_NOISE_SIDE,
             AO_NOISE_SIDE,
@@ -100,7 +88,6 @@ impl ScreenAo {
             1,
         );
         ScreenAo {
-            blank_view,
             noise_view,
             uniform,
             uniform_words: [0.0; AO_FLOATS],
@@ -112,9 +99,9 @@ impl ScreenAo {
             sample: pipelines.build(g, PIPELINE_AO_SAMPLE, g.canvas()),
             blur: pipelines.build(g, PIPELINE_AO_BLUR, g.canvas()),
             upsample: pipelines.build(g, PIPELINE_AO_UPSAMPLE, Format::r8unorm),
+            apply: pipelines.build(g, PIPELINE_AO_APPLY, WORLD_COLOR),
             width: 0,
             height: 0,
-            depth: 0,
             depth_view: 0,
             half: 0,
             half_view: 0,
@@ -123,22 +110,9 @@ impl ScreenAo {
             map: 0,
             map_view: 0,
             groups: [0; 5],
+            apply_group: 0,
+            apply_bound: [0; 3],
         }
-    }
-
-    pub fn entry(&self, binding: u32) -> Entry {
-        view_entry(
-            binding,
-            if self.map_view != 0 {
-                self.map_view
-            } else {
-                self.blank_view
-            },
-        )
-    }
-
-    pub fn blank_entry(&self, binding: u32) -> Entry {
-        view_entry(binding, self.blank_view)
     }
 
     pub fn lay_out(&mut self, proj: &Mat4, width: u32, height: u32) {
@@ -161,9 +135,15 @@ impl ScreenAo {
         g.write_buf(self.uniform, 0, bytes(&self.uniform_words));
     }
 
-    /// True when the images were remade, so the groups that bind them must be too.
-    pub fn ensure(&mut self, g: &Gpu, width: u32, height: u32) -> bool {
-        if self.map != 0 && self.width == width && self.height == height {
+    /// Its images at the world's size, its groups over the world's depth
+    /// `depth_view`, read only: true when they were made again, so the map
+    /// holds nothing yet.
+    pub fn ensure(&mut self, g: &Gpu, width: u32, height: u32, depth_view: u32) -> bool {
+        if self.map != 0
+            && self.width == width
+            && self.height == height
+            && self.depth_view == depth_view
+        {
             return false;
         }
         self.release_images();
@@ -172,8 +152,7 @@ impl ScreenAo {
             (height / AO_DOWNSCALE).max(1),
         );
         let attach = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-        self.depth = g.texture(width, height, 1, Format::depth32float, 1, attach);
-        self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
+        self.depth_view = depth_view;
         self.half = g.texture(hw, hh, 1, Format::rgba32float, 1, attach);
         self.half_view = g.view(self.half, false, 0, 1, 0, 1);
         for k in 0..2 {
@@ -252,31 +231,15 @@ impl ScreenAo {
             self.ping[1],
             self.half_view,
             self.half,
-            self.depth_view,
-            self.depth,
+            self.apply_group,
         ] {
             release(id);
         }
         self.groups = [0; 5];
         self.map = 0;
         self.map_view = 0;
-    }
-
-    pub fn begin_prepass<'a>(&self, ctx: &mut RenderContext<'a>) -> TrackedRenderPass<'a> {
-        let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::prepass);
-        let pass = g.pass(
-            encoder,
-            &pass_desc(
-                0,
-                Load::Clear,
-                self.depth_view,
-                Load::Clear,
-                0.0,
-                stamp.pass(),
-            ),
-        );
-        TrackedRenderPass::new(g, pass)
+        self.apply_group = 0;
+        self.apply_bound = [0; 3];
     }
 
     pub fn run(&self, ctx: &mut RenderContext) {
@@ -308,5 +271,41 @@ impl ScreenAo {
             g.draw(pass, 3, 1, 0, 0);
             g.end(pass);
         }
+    }
+
+    /// The map multiplied into the world's color `color_view`, in the tiles
+    /// `tiles` (their words and uniform) claim of `count`, a quad each
+    /// (ao_apply.wgsl): every drawn frame, as the world's color is drawn
+    /// again there, whether or not the map was found again.
+    pub fn apply(
+        &mut self,
+        ctx: &mut RenderContext,
+        color_view: u32,
+        tiles: (u32, u32),
+        count: u32,
+    ) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let bound = [self.map_view, tiles.0, tiles.1];
+        if bound != self.apply_bound {
+            release(self.apply_group);
+            self.apply_group = g.bind_group(
+                self.apply.layouts[0],
+                &[
+                    view_entry(1, self.map_view),
+                    buf_entry(30, tiles.0),
+                    buf_entry(31, tiles.1),
+                ],
+            );
+            self.apply_bound = bound;
+        }
+        let stamp = ctx.stamp(GpuSpanName::ao);
+        let pass = g.pass(
+            encoder,
+            &pass_desc(color_view, Load::Load, 0, Load::Clear, 0.0, stamp.pass()),
+        );
+        g.set_pipeline(pass, self.apply.pipeline);
+        g.set_bind_group(pass, 0, self.apply_group, &[]);
+        g.draw(pass, 6, count, 0, 0);
+        g.end(pass);
     }
 }

@@ -58,3 +58,13 @@ pub fn cell_zoom_at(r2: f32) -> Zoom {
     let e = (((x2.to_bits() >> 23) & 0xff) as i32 - 127) >> 1;
     (UNIT_ZOOM as i32 - e).clamp(0, FINEST_ZOOM as i32) as Zoom
 }
+
+/// The least distance from the eye, in units, `cell_zoom_at` names `zoom`
+/// at, or a coarser one: its split distance, `CELLS_A_RAD / SPANS` of its
+/// cell's sides, `2^(UNIT_ZOOM − zoom)` units each, a power of two times the
+/// split exactly, as `cell_zoom_at` takes its bands. `zoom` from `UNIT_ZOOM
+/// + 1 − 127` to `FINEST_ZOOM`, so the power is an f32's own.
+pub fn cell_zoom_from(zoom: i32) -> f32 {
+    let e = UNIT_ZOOM as i32 - zoom;
+    CELLS_A_RAD / SPANS * f32::from_bits(((127 + e) as u32) << 23)
+}

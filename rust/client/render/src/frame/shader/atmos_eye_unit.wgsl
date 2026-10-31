@@ -1,5 +1,9 @@
 // The eye at one, for the exposure pass, which measures before it.
 
+fn exposure_stops() -> f32 {
+  return 0.0;
+}
+
 fn exposure() -> f32 {
   return 1.0;
 }

@@ -512,9 +512,13 @@ It casts only what a receiver reads:
 What a tile holds moves with the light, the zooms the eye asks of it, and the
 world under it. The eye moving alone keeps it: the box follows the eye a tile at
 a time, and what the cast read moves with it, so a tile the box slid onto is
-read anew, and a tile is cast again where a slot's zoom is other than the one
-the eye now asks at its depth (`light_detail_cs`, `Light::asks`). A zoom changed
-before a slot's stop, along its ray, waits until the light or the world moves.
+read anew. Every node a walk feeding a tile asks tells how far the eye may move
+before the zooms it is asked at change, its nearest and farthest distances to
+their bands' edges (`pxl-spec-core cast.rs` `Asked`, `Detail::margin`); the
+tile keeps the least of them and where the eye stood, and is cast again once
+the eye has moved that far (`light_detail_cs`, `light.rs` `holds`). The light's
+beam rays and samples take entries of their own for it (`light_beam_cs`,
+`light_sample_cs`), so the eye's walks tell nothing.
 
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and
@@ -542,12 +546,14 @@ whether it wants another turn. Its passes are modules by what they draw
 ```text
 ahead       impostor atlases, fresh bricks filled, the atmosphere's
             tables, the air's volume
-cast        the screen's rays; decor generated; the shadow map; the
-            occlusion prepass
-world pass  generated decor → rays at their depth → generated impostors
-            → sky and stars at the far plane → listed actors,
-            cumulus, impostors → high cloud planes → puck, ghosts,
+cast        the screen's rays; decor generated; the shadow map
+world pass  generated decor → rays at their depth → generated impostors,
             each toned into the world's color, linear
+occlusion   N8AO found off that depth where what it reads moved, held
+            where not (`gpu/ao.rs`); its map multiplied into the color,
+            as the claimed tiles' quads
+world pass  sky and stars at the far plane → listed actors, cumulus,
+            impostors → high cloud planes → puck, ghosts
 finish      the world's color encoded onto the canvas once
 over        markers → debug lines → display cases
 ```
@@ -578,7 +584,14 @@ The sky is drawn at the far plane, so only pixels no ray met run it
 land shaded from the earth layer and lit as the terrain is (`atmos_air.wgsl`
 `beyond`). The air between the eye and what is drawn is Hillaire's
 aerial-perspective volume (`gpu/atmosphere.rs` `froxel`), read by each drawn
-point at its depth (`atmos_air.wgsl` `air_before`).
+point at its depth (`atmos_air.wgsl` `air_before`). It is made again only
+where what it reads moves: the eye's turn and projection, its altitude and
+scale, the lights. It holds the eye's stops it was exposed at, and a reader
+takes it to the stops now, so the exposure moving alone, as with the land
+under the eye, leaves it standing. The sun's and the moon's sky views are
+drawn again where their light moves half its step, the height over which the
+sky moves a display level, or the eye's altitude a share of itself; the
+exposure where the words it reads move.
 
 The **clouds** are three layers on one wind (`pxl-spec-core cloud.rs`): the
 cumulus, models drawn like decor but claiming no cell
