@@ -16,7 +16,7 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::heap::Block;
 
 use crate::domain::layer::tile_cache::TileCache;
-use crate::domain::layer::upload::{Offered, Uploads};
+use crate::domain::layer::upload::{Uploads, Uptake};
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
@@ -86,8 +86,8 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     uploads.send(
         on,
         &mut |record, pkt| match earth::decode(pkt).map(|texels| write(record, texels)) {
-            Err(_) | Ok(true) => Offered::Taken,
-            Ok(false) => Offered::Full,
+            Err(_) | Ok(true) => Uptake::Taken,
+            Ok(false) => Uptake::Full,
         },
         &|_| true,
     );

@@ -16,7 +16,7 @@ use crate::domain::layer::object::preview;
 use crate::domain::layer::object::store::object;
 use crate::domain::layer::terrain::clipmap::{self, TileContent};
 use crate::domain::layer::terrain::tile::uploads;
-use crate::domain::layer::upload::Offered;
+use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base as _;
 use crate::domain::view::lens;
 use crate::domain::view::setting::store::settings_store;
@@ -99,10 +99,10 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         api::device_generation(),
         &mut |slot, pkt| {
             let Some(t) = terrain.in_slot(slot) else {
-                return Offered::Taken;
+                return Uptake::Taken;
             };
             let Some(held) = terrain.get(t) else {
-                return Offered::Taken;
+                return Uptake::Taken;
             };
             clipmap::fill(t, TileContent::Packet(pkt, held), write)
         },
@@ -110,7 +110,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
     );
     // The due bricks' void tiles, not every tile held.
     for p in clipmap::voids() {
-        if clipmap::fill(p, TileContent::Void, write) == Offered::Full {
+        if clipmap::fill(p, TileContent::Void, write) == Uptake::Full {
             return;
         }
     }

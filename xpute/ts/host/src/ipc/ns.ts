@@ -13,15 +13,15 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError, type Fs } from "./sys.ts";
 
 /** What answers below one root; one with no `commit` is read-only. */
-export interface Bound {
+export interface Binding {
   open(path: string, signal: AbortSignal): U8Array | Promise<U8Array>;
   commit?(path: string, bytes: U8Array): void;
 }
 
 export class Namespace implements Fs {
-  private readonly bound: ReadonlyMap<u32, Bound>;
+  private readonly bound: ReadonlyMap<u32, Binding>;
 
-  constructor(bound: Iterable<readonly [u32, Bound]>) {
+  constructor(bound: Iterable<readonly [u32, Binding]>) {
     this.bound = new Map(bound);
   }
 

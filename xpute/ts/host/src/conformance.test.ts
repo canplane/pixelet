@@ -63,13 +63,13 @@ const MODULE_BYTES = 4 << 20;
 const MODULE_IMPORTS = ["env.hostcall", "env.memory", "env.now"];
 
 /** A guest as the host holds it, and the offset its boot answered. */
-interface Opened extends Guest {
+interface OpenedGuest extends Guest {
   toc_at: number;
 }
 
 interface Opener {
   /** A guest booted under the layout `seed` draws. */
-  open(seed: number): Opened;
+  open(seed: number): OpenedGuest;
   close(): void;
 }
 
@@ -182,9 +182,9 @@ class Host {
   private readonly stream_at: number;
   private readonly writer = new PacketWriter();
 
-  private readonly guest: Opened;
+  private readonly guest: OpenedGuest;
 
-  constructor(guest: Opened) {
+  constructor(guest: OpenedGuest) {
     this.guest = guest;
     const mem = guest.mem;
     this.toc = new Toc(mem, guest.toc_at);

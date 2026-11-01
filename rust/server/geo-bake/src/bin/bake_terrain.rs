@@ -28,7 +28,7 @@ use pxl_geo_bake::terrain::absent::Absence;
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::tile::shard::Run;
-use pxl_geo_bake::tile::walk::{self, Done};
+use pxl_geo_bake::tile::walk::{self, Outcome};
 use pxl_geo_bake::util::{pack, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
@@ -112,7 +112,7 @@ fn run() -> Result<(), String> {
                             .map_err(|e| format!("{}: {e}", at.name()))?;
                         let packed = pack(&pkt, Level::Stored).map_err(|e| e.to_string())?;
                         set.write_stored(at, &packed, fit.as_deref())?;
-                        Ok(Done::Wrote {
+                        Ok(Outcome::Wrote {
                             bytes: packed.len() as u64,
                             items: 0,
                         })

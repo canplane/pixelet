@@ -59,7 +59,7 @@ pub fn body<'a>((at, bytes): Block) -> &'a [u8] {
     unsafe { core::slice::from_raw_parts(mem::at::<u8>(at), bytes as usize) }
 }
 
-enum Got {
+enum Receipt {
     /// None for an empty file.
     Read(Option<Block>),
     Absent,
@@ -70,7 +70,7 @@ enum Got {
 
 struct Arrival {
     key: u64,
-    got: Got,
+    got: Receipt,
     net_ms: f64,
 }
 
@@ -128,16 +128,16 @@ fn arrivals() -> &'static mut Notify {
 pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     let stream = attempt_of(key).map(|(stream, _)| stream);
     let got = match opened {
-        Opened::Absent => Got::Absent,
-        failed @ Opened::Failed { .. } => Got::Failed(failed.failure()),
+        Opened::Absent => Receipt::Absent,
+        failed @ Opened::Failed { .. } => Receipt::Failed(failed.failure()),
         Opened::Bytes(0) => {
             file::close(fd);
-            Got::Read(None)
+            Receipt::Read(None)
         }
         // Longer than its kind's packet can be: what the heap budgets a body at.
         Opened::Bytes(n) if stream.and_then(Stream::max_body).is_some_and(|max| n > max) => {
             file::close(fd);
-            Got::Failed(Failure::from(Errno::EFBIG))
+            Receipt::Failed(Failure::from(Errno::EFBIG))
         }
         Opened::Bytes(n) => {
             let got = match body::take(stream, n) {
@@ -150,9 +150,9 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
                             core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize),
                         );
                     };
-                    Got::Read(Some(block))
+                    Receipt::Read(Some(block))
                 }
-                Err(refused) => Got::Refused(refused),
+                Err(refused) => Receipt::Refused(refused),
             };
             file::close(fd);
             got
@@ -185,7 +185,7 @@ pub async fn fetch_task() {
 
 fn on_fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     let block = match got {
-        Got::Read(block) => block,
+        Receipt::Read(block) => block,
         _ => None,
     };
     // A key the request scheduler does not hold is one a reset forgot.
@@ -200,7 +200,7 @@ fn on_fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     }
     let fail = match got {
         // Taken by its owner, which settles it; and a turn asked, so one takes it.
-        Got::Absent | Got::Read(Some(_)) => {
+        Receipt::Absent | Receipt::Read(Some(_)) => {
             // An asset loads through the loader (sys/io/loader.rs), never a fetch: nothing would take its answer.
             xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
             ANSWERED.get(List::new).push(Answer {
@@ -214,9 +214,9 @@ fn on_fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
             return;
         }
         // Only an absence says there is none; an empty read is not an object.
-        Got::Read(None) => Failure::from(Errno::EBADMSG),
-        Got::Failed(fail) => fail,
-        Got::Refused(refused) => return settle(key, Ended::Refused(refused), Some(phases)),
+        Receipt::Read(None) => Failure::from(Errno::EBADMSG),
+        Receipt::Failed(fail) => fail,
+        Receipt::Refused(refused) => return settle(key, Ended::Refused(refused), Some(phases)),
     };
     settle(key, Ended::Failed(fail), Some(phases));
 }

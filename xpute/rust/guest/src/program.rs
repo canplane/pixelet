@@ -284,7 +284,7 @@ pub struct Read {
     fd: Option<Fd>,
 }
 
-enum Got {
+enum Stage {
     Opening,
     /// Filled by the host after the turn `asked` ends.
     Reading {
@@ -296,7 +296,7 @@ enum Got {
 
 struct Reading {
     fd: Fd,
-    got: Got,
+    got: Stage,
     waker: Option<Waker>,
     /// Its `Read` was dropped: kept only while the host may still fill it.
     gone: bool,
@@ -304,7 +304,7 @@ struct Reading {
 
 impl Reading {
     fn ready(&mut self, res: Result<Vec<u8>, Errno>) {
-        self.got = Got::Done(res);
+        self.got = Stage::Done(res);
         if let Some(w) = self.waker.take() {
             w.wake();
         }
@@ -326,7 +326,7 @@ impl Future for Read {
             this.fd = Some(fd);
             p.reads.push(Reading {
                 fd,
-                got: Got::Opening,
+                got: Stage::Opening,
                 waker: Some(cx.waker().clone()),
                 gone: false,
             });
@@ -335,9 +335,9 @@ impl Future for Read {
         let Some(i) = p.reads.iter().position(|r| r.fd == fd && !r.gone) else {
             return Poll::Ready(Err(Errno::EBADF));
         };
-        if let Got::Done(_) = p.reads[i].got {
+        if let Stage::Done(_) = p.reads[i].got {
             this.fd = None;
-            let Got::Done(res) = p.reads.swap_remove(i).got else {
+            let Stage::Done(res) = p.reads.swap_remove(i).got else {
                 unreachable!()
             };
             return Poll::Ready(res);
@@ -356,12 +356,12 @@ impl Drop for Read {
             return;
         };
         match p.reads[i].got {
-            Got::Opening => {
+            Stage::Opening => {
                 p.files.close(&mut p.sys, fd);
                 p.reads.swap_remove(i);
             }
-            Got::Reading { .. } => p.reads[i].gone = true,
-            Got::Done(_) => {
+            Stage::Reading { .. } => p.reads[i].gone = true,
+            Stage::Done(_) => {
                 p.reads.swap_remove(i);
             }
         }
@@ -393,7 +393,7 @@ impl Program {
         // turn's rise; nothing reads it before then.
         unsafe { self.sys.read(opened.fd, &mut bytes) };
         self.files.close(&mut self.sys, opened.fd);
-        r.got = Got::Reading {
+        r.got = Stage::Reading {
             bytes,
             asked: self.turn,
         };
@@ -408,7 +408,7 @@ impl Program {
             .retain(|r| !(r.gone && turn > asked_of(&r.got).unwrap_or(0)));
         for r in &mut self.reads {
             if asked_of(&r.got).is_some_and(|asked| turn > asked) {
-                let Got::Reading { bytes, .. } = core::mem::replace(&mut r.got, Got::Opening)
+                let Stage::Reading { bytes, .. } = core::mem::replace(&mut r.got, Stage::Opening)
                 else {
                     unreachable!()
                 };
@@ -421,13 +421,13 @@ impl Program {
     fn waiting(&self) -> bool {
         self.reads
             .iter()
-            .any(|r| matches!(r.got, Got::Reading { .. }))
+            .any(|r| matches!(r.got, Stage::Reading { .. }))
     }
 }
 
-fn asked_of(got: &Got) -> Option<u32> {
+fn asked_of(got: &Stage) -> Option<u32> {
     match got {
-        Got::Reading { asked, .. } => Some(*asked),
+        Stage::Reading { asked, .. } => Some(*asked),
         _ => None,
     }
 }

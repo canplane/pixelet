@@ -19,7 +19,7 @@ use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::division::{leaf, READS};
 use pxl_geo_bake::pyramid::Base;
 use pxl_geo_bake::tile::shard::Run;
-use pxl_geo_bake::tile::walk::{over, Done};
+use pxl_geo_bake::tile::walk::{over, Outcome};
 use pxl_geo_bake::util::{pack, Level};
 use pxl_spec::bake::tile::division::{DivisionTile, DIVISION_LEAF};
 use pxl_spec::space::layer::tile::Tile;
@@ -41,13 +41,13 @@ fn run() -> Result<(), String> {
                     |[x, y]| format!("{x}:{y}"),
                     || src.connect(),
                     |client, tile| match leaf(client, tile)? {
-                        None => Ok(Done::Empty),
+                        None => Ok(Outcome::Empty),
                         Some(divisions) => {
                             let at = Tile::new(DIVISION_LEAF, tile);
                             let packed = pack(&divisions.encode(at)?, Level::Stored)
                                 .map_err(|e| e.to_string())?;
                             set.write(at, &packed)?;
-                            Ok(Done::Wrote {
+                            Ok(Outcome::Wrote {
                                 bytes: packed.len() as u64,
                                 items: 0,
                             })

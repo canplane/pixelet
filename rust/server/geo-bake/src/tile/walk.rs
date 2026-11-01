@@ -20,7 +20,7 @@ pub struct Tally {
 }
 
 /// What one item of a walk came to.
-pub enum Done {
+pub enum Outcome {
     Wrote { bytes: u64, items: u64 },
     Empty,
     Skipped,
@@ -35,7 +35,7 @@ pub fn over<T: Copy + Sync, W>(
     every: u64,
     show: impl Fn(T) -> String + Sync,
     open: impl Fn() -> Result<W, String> + Sync,
-    one: impl Fn(&mut W, T) -> Result<Done, String> + Sync,
+    one: impl Fn(&mut W, T) -> Result<Outcome, String> + Sync,
 ) -> Result<Tally, String> {
     let all: u64 = bands.iter().map(|b| b.len() as u64).sum();
     let next = AtomicUsize::new(0);
@@ -54,9 +54,9 @@ pub fn over<T: Copy + Sync, W>(
                         let outcome = one(&mut w, item);
                         let mut t = totals.lock().expect("totals");
                         match outcome {
-                            Ok(Done::Wrote { bytes, items }) => (t.baked, t.bytes, t.items) = (t.baked + 1, t.bytes + bytes, t.items + items),
-                            Ok(Done::Empty) => t.empty += 1,
-                            Ok(Done::Skipped) => t.skipped += 1,
+                            Ok(Outcome::Wrote { bytes, items }) => (t.baked, t.bytes, t.items) = (t.baked + 1, t.bytes + bytes, t.items + items),
+                            Ok(Outcome::Empty) => t.empty += 1,
+                            Ok(Outcome::Skipped) => t.skipped += 1,
                             Err(err) => {
                                 t.failed += 1;
                                 eprintln!("[bake/{tag}/{}] failed: {err}", show(item));

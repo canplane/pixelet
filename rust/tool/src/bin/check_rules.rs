@@ -299,10 +299,14 @@ fn constant(text: &str, name: &str) -> Option<u32> {
 
 /// A type's name has a head noun saying what it holds; a bare past participle
 /// names only an enum variant for a state or an event type (the naming
-/// skill, "A type's head noun"). A struct, a type alias or a trait in Rust
-/// and a struct in WGSL, under these roots, is held to it, its generated
-/// WGSL by its source; an enum's variants are not.
+/// skill, "A type's head noun"). A struct, an enum, a type alias or a trait
+/// in Rust and a struct in WGSL, under these roots, is held to it, its
+/// generated WGSL by its source; and a type alias, an interface, a class or
+/// an enum in the engine's TypeScript, the shell's UI left out. An enum's
+/// variants are not.
 const PARTICIPLE_ROOTS: [&str; 2] = ["rust/", "xpute/"];
+const TS_PARTICIPLE_ROOTS: [&str; 2] = ["xpute/ts/", "ts/client/src/"];
+const TS_UNCHECKED: &str = "ts/client/src/shell/";
 /// The irregular past participles a type's name may not be alone. A word
 /// that is also a noun (`Hit`, `Set`, `Read`, `Run`, `Cut`, `Split`) is not
 /// among them.
@@ -398,8 +402,13 @@ const NOT_PARTICIPLES: [&str; 14] = [
     "Shed", "Speed", "Weed",
 ];
 /// The event types, each something that happened, which a bare participle
-/// may name.
-const EVENTS: [&str; 0] = [];
+/// names: the file and the type.
+const EVENTS: [(&str, &str); 2] = [
+    // The host's answer to an open.
+    ("rust/client/kernel/src/sys/io/file.rs", "Opened"),
+    // How a stream's run ended.
+    ("rust/client/kernel/src/sys/io/failure.rs", "Ended"),
+];
 
 /// Whether `name`, one capitalized word, is a past participle: ending in
 /// -ed, or an irregular one.
@@ -408,16 +417,20 @@ fn participle(name: &str) -> bool {
         || IRREGULAR_PARTICIPLES.contains(&name)
 }
 
-/// Every struct, type alias and trait `text`, a Rust or WGSL source, names
-/// by a bare past participle and not as an event, each with its line.
-fn participle_types(text: &str) -> Vec<(usize, String)> {
-    let decl = Regex::new(
-        r"(?m)^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?(?:struct|type|trait)\s+([A-Z][a-z]*)(?:[^A-Za-z0-9_]|$)",
-    )
+/// Every type `text` names by a bare past participle, each with its line:
+/// a Rust or WGSL source's structs, enums, type aliases and traits, or
+/// where `ts`, a TypeScript source's type aliases, interfaces, classes and
+/// enums.
+fn participle_types(text: &str, ts: bool) -> Vec<(usize, String)> {
+    let decl = Regex::new(if ts {
+        r"(?m)^[ \t]*(?:export\s+)?(?:declare\s+)?(?:abstract\s+)?(?:const\s+)?(?:type|interface|class|enum)\s+([A-Z][a-z]*)(?:[^A-Za-z0-9_]|$)"
+    } else {
+        r"(?m)^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?(?:struct|enum|type|trait)\s+([A-Z][a-z]*)(?:[^A-Za-z0-9_]|$)"
+    })
     .expect("a type's pattern");
     decl.captures_iter(text)
         .filter_map(|c| c.get(1))
-        .filter(|m| participle(m.as_str()) && !EVENTS.contains(&m.as_str()))
+        .filter(|m| participle(m.as_str()))
         .map(|m| {
             (
                 text[..m.start()].matches('\n').count() + 1,
@@ -696,11 +709,19 @@ fn run() -> Result<Vec<String>, String> {
             ));
         }
     }
-    for f in files.iter().filter(|f| {
-        PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
-            && (f.ends_with(".rs") || (f.ends_with(".wgsl") && !f.ends_with(".gen.wgsl")))
-    }) {
-        for (line, name) in participle_types(&read(f).unwrap_or_default()) {
+    for f in files.iter() {
+        let ts = TS_PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
+            && !f.starts_with(TS_UNCHECKED)
+            && (f.ends_with(".ts") || f.ends_with(".tsx"));
+        let rs = PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
+            && (f.ends_with(".rs") || (f.ends_with(".wgsl") && !f.ends_with(".gen.wgsl")));
+        if !ts && !rs {
+            continue;
+        }
+        for (line, name) in participle_types(&read(f).unwrap_or_default(), ts) {
+            if EVENTS.contains(&(*f, name.as_str())) {
+                continue;
+            }
             problems.push(format!(
                 "{f}:{line}: `{name}` is a bare past participle; a type's name has a head noun saying what it holds, and a bare participle names only a state's variant or an event type in EVENTS (the naming skill, \"A type's head noun\"; check_rules.rs)"
             ));
@@ -798,8 +819,9 @@ mod tests {
             "pub trait Observed: Base {",
             "    struct Kept(u32);",
             "struct Asked<'a> {",
+            "pub enum Offered {",
         ] {
-            assert_eq!(participle_types(text).len(), 1, "{text}");
+            assert_eq!(participle_types(text, false).len(), 1, "{text}");
         }
         for text in [
             "struct ResidentTile {",
@@ -809,8 +831,17 @@ mod tests {
             "// struct Seen",
             "let built = Built;",
         ] {
-            assert!(participle_types(text).is_empty(), "{text}");
+            assert!(participle_types(text, false).is_empty(), "{text}");
         }
+        for text in [
+            "export interface Bound {",
+            "interface Opened extends Guest {",
+            "export type Stored = number;",
+            "export abstract class Named {",
+        ] {
+            assert_eq!(participle_types(text, true).len(), 1, "{text}");
+        }
+        assert!(participle_types("export interface Binding {", true).is_empty());
     }
 
     #[test]

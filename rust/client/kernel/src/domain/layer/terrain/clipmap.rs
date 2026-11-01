@@ -35,7 +35,7 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::terrain::fixed::{cells_off, fill_off, CELLS_ARR_BYTES, RANGE};
 use crate::domain::layer::terrain::mirror::{mirror, Mirror, Unlaid};
 use crate::domain::layer::terrain::tile;
-use crate::domain::layer::upload::Offered;
+use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
@@ -717,17 +717,13 @@ pub fn is_tile_wanted(tile: Tile) -> bool {
 /// samples to the GPU. Taken where no clip level wants another of its bricks;
 /// kept where one still does, for a later turn; full where the stream ran
 /// out first.
-pub fn fill(
-    tile: Tile,
-    from: TileContent,
-    write: &mut dyn FnMut(BrickFill<'_>) -> bool,
-) -> Offered {
+pub fn fill(tile: Tile, from: TileContent, write: &mut dyn FnMut(BrickFill<'_>) -> bool) -> Uptake {
     let cell = GROUND.cell_zoom(tile.zoom);
     let w = clipmap();
     let wants = |w: &Clipmap, b: u32| slot_wants(w, tile, b);
     let rest = |w: &Clipmap| match (0..SLOTS).any(|i| wants(w, i)) {
-        true => Offered::Uploads,
-        false => Offered::Taken,
+        true => Uptake::Uploads,
+        false => Uptake::Taken,
     };
     if !w.due.iter().any(|&i| wants(w, i)) {
         return rest(w);
@@ -755,7 +751,7 @@ pub fn fill(
             Ok(h) => h,
             Err(_) => {
                 w.filled = true;
-                return Offered::Taken;
+                return Uptake::Taken;
             }
         },
         TileContent::Void => {
@@ -805,7 +801,7 @@ pub fn fill(
             back,
         });
         if !taken {
-            return Offered::Full;
+            return Uptake::Full;
         }
         w.slots[b as usize].ticket = back.ticket;
         for i in of_entry(b % ENTRIES) {

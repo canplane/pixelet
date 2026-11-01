@@ -107,7 +107,7 @@ const _: () = assert!(
 /// or far below its worst most of the time, is the heap's
 /// (`HEAP_FLOWS_BYTES`).
 #[derive(Clone, Copy)]
-pub enum Fixed {
+pub enum FixedRange {
     Terrain,
     Division,
     Uploads,
@@ -206,7 +206,7 @@ pub fn heap_at(data_end: u32) -> u32 {
 }
 
 /// Asking before boot lays out memory is a bug.
-pub fn range(f: Fixed) -> Section {
+pub fn range(f: FixedRange) -> Section {
     use xpute_kit::status::bug::OrBug;
     map()
         .or_bug(Errno::ENOTRECOVERABLE)
@@ -219,14 +219,14 @@ pub fn range(f: Fixed) -> Section {
 /// makes them itself.
 pub fn install(b: &BootInfo) -> u32 {
     section::set_map(section::lay_out(b.given, b.data_end, FIXED_BYTES));
-    fixed::RANGE.set(range(Fixed::Terrain));
-    division::RANGE.set(range(Fixed::Division));
+    fixed::RANGE.set(range(FixedRange::Terrain));
+    division::RANGE.set(range(FixedRange::Division));
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
-        host::set_stream(range(Fixed::Host).off);
-        upload::set_uploads(range(Fixed::Uploads).off, MAX_LIVE_UPLOADS);
-        api::install(range(Fixed::Gpu).off)
+        host::set_stream(range(FixedRange::Host).off);
+        upload::set_uploads(range(FixedRange::Uploads).off, MAX_LIVE_UPLOADS);
+        api::install(range(FixedRange::Gpu).off)
     }
 }
 
