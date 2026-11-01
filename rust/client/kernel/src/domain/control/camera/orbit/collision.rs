@@ -16,11 +16,11 @@ use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST};
 use crate::domain::query::changes::Memo;
-use crate::domain::query::{finest, over, Hit, Ray, World};
+use crate::domain::query::{finest, Hit, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
-use pxl_spec::space::coord::zoom::{idx_of, units};
+use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The pivot is part of the pose: the eye is `pivot + offset`, and a gate
@@ -49,31 +49,15 @@ fn ground_under(at: &ViewPose, access: &World) -> Option<f64> {
     access.floor_under(&eye(at).1, LEAF_ZOOM).val().flatten()
 }
 
-/// Rise to the ground under the eye, reached by a step-slide at the eye's
-/// height that climbs and does not fall; none where it is slid short, or
-/// where the eye may stand as it is (`embedded`), as the gate lets it.
-fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
-    let (_, eye) = eye(at);
-    if embedded(&eye, access) {
+/// Rise to the floor under the eye, a cell over it (`EYE_CLEARANCE_U`), as
+/// `ground_under` reads it from the eye's own cell: ground and what is
+/// placed alike, at any distance. None where, `cramped`, the eye may stand
+/// as it is (`embedded`), or nothing is known under it.
+fn climb_rise(at: &ViewPose, access: &World, cramped: bool) -> Option<f64> {
+    if cramped && embedded(&eye(at).1, access) {
         return None;
     }
-    let pivot = world_to_canonical(&at.pivot);
-    let floor = idx_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
-    let from = world::at(
-        i64::from(pivot[0]),
-        i64::from(pivot[1]),
-        q3::from_real(over(floor)),
-    );
-    // Near, the eye's way walks the leaves; far, it is a map and goes through.
-    // Where the leaf under the pivot, or a map's under the eye, is not held, the ground under the eye.
-    let walked = access
-        .step_slide(&from, &eye, &eye, false, false)
-        .unwrap_or(eye);
-    if i64::from(walked[0]) != i64::from(eye[0]) || i64::from(walked[1]) != i64::from(eye[1]) {
-        return None;
-    }
-    let ground = access.floor_under(&walked, LEAF_ZOOM).val().flatten()?;
-    Some(ground + EYE_CLEARANCE_U - at.pivot[2])
+    Some(ground_under(at, access)? + EYE_CLEARANCE_U - at.pivot[2])
 }
 
 /// Positive inside the terrain, off the ground under its eye
@@ -289,24 +273,44 @@ struct Climb {
 static CLIMB_PITCH: Global<Memo<Climb, f64>> = Global::new();
 
 /// `at` climbed, and whether the climb failed: steepened, the eye is still in
-/// something solid it may not stand in (`embedded`). Over ground alone,
-/// straight down clears it; what does not is a roof over the pivot, a
-/// tunnel's or a cave's, and there the pitch is the one asked, for a zoom
-/// in to go under it on that line (`dive`).
+/// something solid it may not stand in. It may stand in the first cell of a
+/// wall or a roof (`embedded`) only where it is `cramped`, with no room even
+/// at the orbit's nearest; with room there, at any distance it climbs out of
+/// a wall rather than into it. Over ground alone, straight down clears it;
+/// what does not is a roof over the pivot, a tunnel's or a cave's, and there
+/// the pitch is the one asked, for a zoom in to go under it on that line
+/// (`dive`).
 fn climb_pose(at: ViewPose, access: &World) -> (ViewPose, bool) {
-    let mut climbed = at;
-    for _ in 0..CLIMB_PASSES {
-        let Some(rise) = climb_rise(&climbed, access).filter(|r| *r > 0.0) else {
-            break;
-        };
-        // Only ever steepens.
-        let solved = libm::acos((rise / climbed.dist).min(1.0));
-        climbed.polar = climbed.polar.min(solved);
-    }
-    match in_solid(&climbed, access) && !embedded(&eye(&climbed).1, access) {
+    let cramped = cramped(&at, access);
+    let climbed = steepened(at, access, cramped);
+    match in_solid(&climbed, access) && !(cramped && embedded(&eye(&climbed).1, access)) {
         true => (at, true),
         false => (climbed, false),
     }
+}
+
+/// `at` steepened by the rise to the floor under its eye (`climb_rise`), only
+/// ever steepened.
+fn steepened(at: ViewPose, access: &World, cramped: bool) -> ViewPose {
+    let mut climbed = at;
+    for _ in 0..CLIMB_PASSES {
+        let Some(rise) = climb_rise(&climbed, access, cramped).filter(|r| *r > 0.0) else {
+            break;
+        };
+        let solved = libm::acos((rise / climbed.dist).min(1.0));
+        climbed.polar = climbed.polar.min(solved);
+    }
+    climbed
+}
+
+/// Whether the eye has no room even at the orbit's nearest: at `MIN_DIST`
+/// on `at`'s line, steepened as far as it goes, still in something solid.
+fn cramped(at: &ViewPose, access: &World) -> bool {
+    let nearest = ViewPose {
+        dist: MIN_DIST,
+        ..*at
+    };
+    in_solid(&steepened(nearest, access, false), access)
 }
 
 #[cfg(test)]

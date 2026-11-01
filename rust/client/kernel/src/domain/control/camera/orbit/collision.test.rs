@@ -7,6 +7,7 @@
 use super::*;
 use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
+use crate::domain::query::over;
 use crate::domain::query::test::{flat_at_five, write};
 use crate::sys::serial;
 use pxl_spec::asset::cube::{self, cube_id, Cube};
@@ -254,4 +255,65 @@ fn climb_clears_block() {
     assert!(!failed);
     assert!(climbed.polar < at.polar, "{climbed:?}");
     assert!(!in_solid(&climbed, &access), "{climbed:?}");
+}
+
+/// With room at the orbit's nearest, the eye does not stand in a wall's
+/// first cell farther out: level with the pivot, the eye asked into a wall
+/// a cell thick three cells east climbs over it, not into it.
+#[test]
+fn climbs_out_of_wall_with_room() {
+    let _g = serial();
+    let (tile_cache, mut store, pivot) = roofed(None);
+    let red = cube_id(Cube::Object(cube::Object::red));
+    for dy in [-1.5, -0.5, 0.5, 1.5] {
+        write(
+            &mut store,
+            [pivot[0] + 3.0, pivot[1] + dy, 5.0],
+            OBJECT_COARSEST,
+            red,
+        );
+    }
+    let access = World::new(&tile_cache, &store);
+    let at = ViewPose {
+        pivot,
+        dist: 3.0,
+        polar: core::f64::consts::FRAC_PI_2,
+        azimuth: -core::f64::consts::FRAC_PI_2,
+    };
+    assert!(in_solid(&at, &access));
+    assert!(embedded(&eye(&at).1, &access));
+    assert!(!cramped(&at, &access));
+    let (climbed, failed) = climb_pose(at, &access);
+    assert!(!failed);
+    assert!(climbed.polar < at.polar, "{climbed:?}");
+    assert!(!in_solid(&climbed, &access), "{climbed:?}");
+}
+
+/// The rise is read under the eye itself, however far it is: under a slab,
+/// the eye in a wall that meets the slab rises by the floor under it.
+#[test]
+fn climb_rises_under_eye() {
+    let _g = serial();
+    let (tile_cache, mut store, pivot) = tunnel(3.0, 1);
+    let red = cube_id(Cube::Object(cube::Object::red));
+    for dy in [-1.5, -0.5, 0.5, 1.5] {
+        for z in [5.0, 6.0, 7.0] {
+            write(
+                &mut store,
+                [pivot[0] + 3.0, pivot[1] + dy, z],
+                OBJECT_COARSEST,
+                red,
+            );
+        }
+    }
+    let access = World::new(&tile_cache, &store);
+    let at = ViewPose {
+        pivot,
+        dist: 3.0,
+        polar: core::f64::consts::FRAC_PI_2,
+        azimuth: -core::f64::consts::FRAC_PI_2,
+    };
+    assert!(in_solid(&at, &access));
+    let rise = climb_rise(&at, &access, false).expect("a rise under the eye");
+    assert!(rise > 0.0, "{rise}");
 }
