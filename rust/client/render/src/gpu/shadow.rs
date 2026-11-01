@@ -155,7 +155,8 @@ pub const fn stands_at(l: u32) -> u32 {
 
 /// The levels the map casts where the eye draws `far` units out: the
 /// finest whose reach holds it and every one finer, a receiver no farther
-/// than the eye's distance to it across the light's rays.
+/// out for the levels than it lies from the eye (pxl-spec-core
+/// `Light::level_dist`).
 pub fn levels_for(far: f64) -> u32 {
     (light::level_of(far as f32, reach(0) as f32) + 1).min(light::LEVELS)
 }

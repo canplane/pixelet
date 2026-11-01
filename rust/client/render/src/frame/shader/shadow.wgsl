@@ -38,10 +38,25 @@ fn shadow_light() -> vec3f {
   return select(atmos_sun_dir(), atmos_moon_dir(), frame_shadow_moon() > 0.0);
 }
 
-// The level a receiver `q` from the eye across the light's rays reads, in
-// the first level's half-widths: the finest whose reach holds it, each
-// twice the last's, the power of two the float's own exponent, as
-// pxl-spec-core `light::level_of` splits them, which the marks read.
+// How far out from the eye `p`, from it, lies for the levels, in the first
+// level's half-widths: across the light's rays, or along them times the
+// share of a half-width a receiver reads across, whichever is more, as
+// pxl-spec-core `Light::level_dist` measures it, which the marks read. Along
+// the rays off the light box's rows: its depth's over its across's, a unit
+// each, the box orthographic.
+fn shadow_dist(p: vec3f) -> f32 {
+  let m = frame_light_view_proj();
+  let turned = (m * vec4f(p, 0.0)).xyz;
+  let across = vec3f(m[0].x, m[1].x, m[2].x);
+  let deep = vec3f(m[0].z, m[1].z, m[2].z);
+  let along = abs(turned.z) * length(across) / length(deep);
+  return max(length(turned.xy), along * frame_shadow_radius_ndc());
+}
+
+// The level a receiver `q` out from the eye reads (`shadow_dist`), in the
+// first level's half-widths: the finest whose reach holds it, each twice
+// the last's, the power of two the float's own exponent, as pxl-spec-core
+// `light::level_of` splits them, which the marks read.
 fn shadow_level(q: f32) -> u32 {
   let x = q / frame_shadow_radius_ndc();
   if (x <= 1.0) {
@@ -77,7 +92,7 @@ fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
   if (frame_shadow_strength() <= 0.0) {
     return 1.0;
   }
-  let q = length((frame_light_view_proj() * vec4f(world_pos, 0.0)).xy);
+  let q = shadow_dist(world_pos);
   let l = shadow_level(q);
   let levels = u32(frame_shadow_levels());
   if (l >= levels) {

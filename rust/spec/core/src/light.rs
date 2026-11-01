@@ -79,7 +79,7 @@ pub const fn read_share(size: u32) -> f32 {
     1.0 - 2.0 * (TILE as f32 + READ_PAD) / size as f32
 }
 
-/// The level a receiver `q` units from the eye across the light's rays
+/// The level a receiver `q` units out from the eye (`Light::level_dist`)
 /// reads, `reach` the first level's reach in units (`Light::reach`): the
 /// finest whose reach holds it, each twice the one before; `LEVELS` past
 /// the last. The power of two is the float's own exponent, as
@@ -100,9 +100,10 @@ pub fn level_of(q: f32, reach: f32) -> u32 {
     }
 }
 
-/// How far across the light's rays a point of a drawn receiver may lie from
-/// where it stands, in units: half the widest decor and the tallest's
-/// height (pxl-shader light.rs `light_mark_draws_cs`).
+/// How far a point of a drawn receiver may lie from where it stands, in
+/// units, and so how far out from the eye it may lie past it
+/// (`Light::level_dist`): half the widest decor and the tallest's height
+/// (pxl-shader light.rs `light_mark_draws_cs`).
 pub fn draw_reach() -> f32 {
     let (w, h) = (generation::WIDEST as f32 / 2.0, generation::TALLEST as f32);
     libm::sqrtf(w * w + h * h)
@@ -113,7 +114,7 @@ pub fn draw_reach() -> f32 {
 /// two sides of the split take apart.
 pub const LEVEL_SLACK: f32 = 1.0 / 64.0;
 
-/// The levels a receiver `q` units from the eye across the light's rays
+/// The levels a receiver `q` units out from the eye (`Light::level_dist`)
 /// may be read at, `reach` the first level's (`level_of`): the first and
 /// the last, the same but within `LEVEL_SLACK` of a split.
 pub fn level_range(q: f32, reach: f32) -> [u32; 2] {
@@ -303,6 +304,20 @@ impl Light {
     pub fn across_rays(&self, v: [f32; 3]) -> f32 {
         let (a, d) = (dot(v, self.across), dot(v, self.down));
         libm::sqrtf(a * a / dot(self.across, self.across) + d * d / dot(self.down, self.down))
+    }
+
+    /// How far out from the eye `v`, units from it, lies for the levels
+    /// (`level_of`), in units of their reach: across the light's rays, or
+    /// along them times the share of the half-width a receiver reads across
+    /// (`shadow_radius_ndc`), whichever is more. A level's box holds a
+    /// receiver across within its reach and along within its half-width,
+    /// its planes that and a share more either side of the eye (pxl-render
+    /// gpu/shadow.rs `aim`); past them it reads the far plane, lit. Across
+    /// alone, a low light's receiver far along the rays read the first
+    /// level and lay past its planes.
+    pub fn level_dist(&self, v: [f32; 3]) -> f32 {
+        let along = libm::fabsf(dot(v, self.dir));
+        self.across_rays(v).max(along * self.shadow_radius_ndc)
     }
 
     /// `detail`, the eye's zooms at every point as the eye asks them

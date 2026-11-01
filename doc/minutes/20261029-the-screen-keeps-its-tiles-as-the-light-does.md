@@ -710,3 +710,12 @@ no shadow coarser anywhere than it was.
   lines show on the coarse folds; no tree's shadow showed near the eye at
   07:00, which was not set beside main's before the GPU was given back.
   Open. No timing runs, on the user's word.
+- **The 07:00 look, read in the code (2026-11-02).** The level was chosen
+  by the distance across the light's rays alone, and a level's box holds a
+  receiver along them within its half-width. Under a low sun a receiver far
+  along the rays lies close across them: it read the first level, past its
+  planes (128 units and a share either side of the eye), and was lit. The
+  level is now the finest that holds it both ways (`Light::level_dist`,
+  shadow.wgsl `shadow_dist`), the marks alike; a receiver within the first
+  level's half-width along the rays reads it as before. Open: a receiver near a level's sunward plane keeps only what
+  stands between it and that plane.

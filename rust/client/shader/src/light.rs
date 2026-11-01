@@ -91,9 +91,9 @@ pub(crate) struct LevelMark {
 }
 
 /// The levels as the marks read them (`Heads`): the first level's light and
-/// side, which every level's reach and a receiver's distance across the
-/// rays are read off (`light::level_range`), and the levels the map has
-/// (`light::HEAD_LEVELS`).
+/// side, which every level's reach and a receiver's distance out from the
+/// eye are read off (`light::level_range`, `Light::level_dist`), and the
+/// levels the map has (`light::HEAD_LEVELS`).
 pub(crate) struct Levels<'a> {
     heads: &'a Heads,
     first: Light,
@@ -121,7 +121,7 @@ impl<'a> Levels<'a> {
     /// The levels a receiver `v` units from the eye is read at, the first
     /// and past the last (`light::level_range`), none past the map's.
     pub(crate) fn of_receiver(&self, v: [f32; 3], grown: f32) -> [u32; 2] {
-        let q = self.first.across_rays(v);
+        let q = self.first.level_dist(v);
         let reach = self.first.reach(self.first_size);
         let lo = pxl_spec_core::light::level_range((q - grown).max(0.0), reach)[0];
         let hi = pxl_spec_core::light::level_range(q + grown, reach)[1];
