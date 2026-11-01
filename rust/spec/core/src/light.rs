@@ -697,10 +697,70 @@ pub const HELD_MARGIN: u32 = 0;
 pub const HELD_EYE: u32 = 1;
 pub const HELD_WORDS: u32 = 4;
 
+/// What a cast within its epoch casts, listed as its tiles are claimed
+/// (pxl-shader light.rs `light_propagate_cs`): what feeds a claimed tile
+/// at each level of the lattice, by the reach it feeds within (pxl-shader
+/// light.rs `Map::reach`), each the box tile it lies on: the beam rays'
+/// corners (`LISTED_CORNERS`), the tiles whose cells and samples feed one
+/// (`LISTED_FED`), and the tiles claimed, whose slots it casts
+/// (`LISTED_CLAIMED`). Each list's count, then its entries, a tile's `i |
+/// j << 16` each; before the lists, a word for every place of each, the
+/// last cast that listed it, so each is listed once a cast. The passes
+/// that cast tiles take their threads off these (pxl-shader observer.rs
+/// `Observer::take`): `LIST_ACROSS` workgroups of `LISTED_LANES` a row, an
+/// entry `listed_per` of them. A cast that begins an epoch casts every
+/// tile a receiver reads, and its passes go whole over the map instead
+/// (`ARGS_WHOLE`).
+pub const LISTED_CORNERS: u32 = 0;
+pub const LISTED_FED: u32 = 1;
+pub const LISTED_CLAIMED: u32 = 2;
+pub const LISTS: u32 = 3;
+pub const LIST_ACROSS: u32 = 64;
+pub const LISTED_LANES: u32 = 64;
+
+/// The places of list `which` on the map `size` texels a side: every beam
+/// ray's corner, or every tile.
+pub const fn listed_room(size: u32, which: u32) -> u32 {
+    if which == LISTED_CORNERS {
+        beam_across(size) * beam_across(size)
+    } else {
+        tiles(size) * tiles(size)
+    }
+}
+
+/// The first of list `which`'s marks, a word a place (`LISTED_CORNERS`).
+pub const fn listed_marks_at(size: u32, which: u32) -> u32 {
+    let mut at = held_at(size) + tiles(size) * tiles(size) * HELD_WORDS;
+    let mut k = 0;
+    while k < which {
+        at += listed_room(size, k);
+        k += 1;
+    }
+    at
+}
+
+/// List `which`'s count, its entries after it (`LISTED_CORNERS`).
+pub const fn listed_at(size: u32, which: u32) -> u32 {
+    let mut at = listed_marks_at(size, LISTS);
+    let mut k = 0;
+    while k < which {
+        at += 1 + listed_room(size, k);
+        k += 1;
+    }
+    at
+}
+
+/// The threads an entry of a list takes in a pass whose thread takes one
+/// of `side` a side of the tile's: a corner or a cell one, a sample
+/// `TILE / SAMPLE` a side, a slot `TILE`.
+pub const fn listed_per(side: u32) -> u32 {
+    side * side
+}
+
 /// The list's buffer's words: the beam's, the samples, their margins, the
-/// misses, the stands, the reads, their squares, the held words.
+/// misses, the stands, the reads, their squares, the held words, the lists.
 pub const fn list_words(size: u32) -> u32 {
-    held_at(size) + tiles(size) * tiles(size) * HELD_WORDS
+    listed_at(size, LISTS)
 }
 
 /// Whether a tile whose walks' least margin is `margin` units, cast with the
@@ -716,10 +776,12 @@ pub fn holds(margin: f32, was: [i32; 3], eye: [i32; 3]) -> bool {
 
 /// The workgroups of the passes that cast tiles, a buffer of their own: each
 /// pass's three words (x, y, z) from its `ARGS_*` word, then each whole from
-/// `ARGS_WHOLE`. A cast starts with none, and a tile claimed as the cast's to
-/// cast (pxl-shader light.rs `light_propagate_cs`) copies the whole in; a cast that
-/// claims none, as where the receivers moved only within the tiles cast,
-/// casts none.
+/// `ARGS_WHOLE`. A cast starts with none, `LIST_ACROSS` workgroups a row
+/// and no row; a tile claimed as the cast's to cast (pxl-shader light.rs
+/// `light_propagate_cs`) copies the whole in where the cast begins its
+/// epoch, else opens the rows what it lists takes (`listed_at`); a cast
+/// that claims none, as where the receivers moved only within the tiles
+/// cast, casts none.
 pub const ARGS_BEAM: u32 = 0;
 pub const ARGS_CELLS: u32 = 3;
 pub const ARGS_SAMPLE: u32 = 6;
@@ -1099,7 +1161,7 @@ mod tests {
     /// (`holds`).
     #[test]
     fn held_breaks_where_a_node_changes_zoom() {
-        use crate::cast::{Margin, Visitor};
+        use crate::cast::Margin;
         use crate::grid::cell_zoom_from;
         use crate::{FINEST_ZOOM, UNIT_ZOOM};
         let (hi, hit) = (8.0f32, [0.0f32, 0.0, 8.0]);
@@ -1130,9 +1192,9 @@ mod tests {
         assert_eq!(at_hit(was), at_hit(now));
         // What the walk asked moved: the node's nearest zoom is finer.
         assert_ne!(pair(was), pair(now));
-        // The new: the eye moved a unit, past the margin the walk told.
-        let mut told = Margin::NONE;
-        told.visit(was, dist_sq(was));
+        // The new: the eye moved a unit, past the margin the walk told of
+        // the node as a cell at its nearest zoom (cast.rs `Margin::visit`).
+        let told = Margin(was.nearer(dist_sq(was)[1], pair(was)[1]));
         assert!(told.0 < 1.0, "{}", told.0);
         let q3 = |x: f32| [(x * (1 << FRAC_W) as f32) as i32, 0, 0];
         assert!(!holds(told.0, q3(was.eye[0]), q3(now.eye[0])));

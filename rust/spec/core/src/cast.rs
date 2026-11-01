@@ -87,36 +87,48 @@ impl Detail {
         cell_zoom_at(d2).clamp(self.range[0], self.range[1])
     }
 
-    /// How far the eye may move before the zoom `at` names at `d2`, a
-    /// distance from it squared, is another: the distance's to the edges of
-    /// its band (`cell_zoom_from`), none nearer at the finest `range` holds
-    /// and none farther at the coarsest. A point's distance and a box's
-    /// nearest and farthest from the eye each move no more than the eye
-    /// does, on every axis alike, and a box's nearest is none with the eye
-    /// in it, so within it each names the same zoom. Less a share of the
-    /// distances for the f32 rounding of both askers (`MARGIN_SLACK`).
-    pub fn margin(self, d2: f32) -> f32 {
-        let z = self.at(d2) as i32;
+    /// The zooms `range` holds, coarsest and finest: past them no distance
+    /// asks another.
+    fn held(self) -> [Zoom; 2] {
         // [rust-gpu] Each by itself, not an array's `map`.
-        let (coarsest, finest) = (
+        [
             (0 as Zoom).clamp(self.range[0], self.range[1]),
             FINEST_ZOOM.clamp(self.range[0], self.range[1]),
-        );
+        ]
+    }
+
+    /// How far the eye may move nearer a point `d2` from it, squared, before
+    /// the zoom `at` names there is finer than `z`, which it is not yet: to
+    /// its band's near edge (`cell_zoom_from`), none where `range` holds
+    /// nothing finer. A point's distance and a box's nearest and farthest
+    /// from the eye each move no more than the eye does, on every axis
+    /// alike, and a box's nearest is none with the eye in it. Less a share
+    /// of the distances for the f32 rounding of both askers (`MARGIN_SLACK`).
+    pub fn nearer(self, d2: f32, z: Zoom) -> f32 {
+        if z >= self.held()[1] {
+            return UNBOUNDED;
+        }
         let d = libm::sqrtf(d2);
-        // None either way is `Margin::NONE`'s.
-        let below = if z == finest as i32 {
-            UNBOUNDED
-        } else {
-            d - cell_zoom_from(z)
-        };
-        let above = if z == coarsest as i32 {
-            UNBOUNDED
-        } else {
-            cell_zoom_from(z - 1) - d
-        };
+        self.slack(d, d - cell_zoom_from(z as i32))
+    }
+
+    /// How far the eye may move away from a point `d2` from it, squared,
+    /// before the zoom `at` names there is coarser than `z`, which it is not
+    /// yet: to the far edge of `z`'s band, none where `range` holds nothing
+    /// coarser (`nearer`).
+    pub fn farther(self, d2: f32, z: Zoom) -> f32 {
+        if z <= self.held()[0] {
+            return UNBOUNDED;
+        }
+        let d = libm::sqrtf(d2);
+        self.slack(d, cell_zoom_from(z as i32 - 1) - d)
+    }
+
+    /// `m` less the share of `d` and the eye's distance from the origin
+    /// the f32 rounding takes (`MARGIN_SLACK`), none under none.
+    fn slack(self, d: f32, m: f32) -> f32 {
         let e = self.eye;
-        let slack = (d + libm::sqrtf(squared(e))) * MARGIN_SLACK;
-        greater(lesser(below, above) - slack, 0.0)
+        greater(m - (d + libm::sqrtf(squared(e))) * MARGIN_SLACK, 0.0)
     }
 }
 
@@ -125,40 +137,54 @@ impl Detail {
 /// past what an f32 holds and refused.
 const UNBOUNDED: f32 = 18_446_744_073_709_551_616.0;
 
-/// The share of the distances a margin is taken in by (`Detail::margin`):
+/// The share of the distances a margin is taken in by (`Detail::nearer`):
 /// the f32 rounding of a box's planes from the eye and of their squares,
 /// a few of its last places, many times over.
 const MARGIN_SLACK: f32 = 1.0 / 65536.0;
 
-/// What a walk tells of each node it asks (`walk`): the detail it asks it
-/// under and the node's farthest and nearest distances from the eye,
-/// squared (`node_dist_sq`), which the zooms it is asked at follow from alone. A
-/// walk nothing reads it of tells nothing (`()`), so it costs nothing.
+/// How a walk asks each node it enters (`walk`): what `q` answers of the
+/// node `node` at `zoom`, `at` what was handed it and the ray in it from
+/// `t0`, its farthest and nearest distances from the eye squared
+/// (`node_dist_sq`), and what the visitor keeps of it. A walk nothing reads
+/// it of (`()`) asks it at the zooms its rays ask (`asked`) and keeps
+/// nothing, so it costs nothing.
 pub trait Visitor {
-    fn visit(&mut self, detail: Detail, dist_sq: [f32; 2]);
+    fn visit<Q: Query>(
+        &mut self,
+        q: &mut Q,
+        at: &mut Q::At,
+        node: (Zoom, [i32; 3]),
+        detail: Detail,
+        dist_sq: [f32; 2],
+        t0: f32,
+    ) -> In<[u32; 2]>;
 }
 
 impl Visitor for () {
-    fn visit(&mut self, _: Detail, _: [f32; 2]) {}
+    fn visit<Q: Query>(
+        &mut self,
+        q: &mut Q,
+        at: &mut Q::At,
+        (zoom, node): (Zoom, [i32; 3]),
+        detail: Detail,
+        dist_sq: [f32; 2],
+        t0: f32,
+    ) -> In<[u32; 2]> {
+        q.node(at, zoom, node, asked(detail, dist_sq), t0)
+    }
 }
 
-/// The least margin of the nodes a walk asked (`Detail::margin`), units:
-/// while the eye moves less from where they were asked, every one is asked
-/// at the zooms it was, so the walk, from the same start in the same world,
-/// meets what it met. `UNBOUNDED` where it asked none: a number WGSL names,
-/// as it names no infinity.
+/// The least margin of the nodes a walk asked (`Margin::visit`), units:
+/// while the eye moves less from where they were asked, every node the walk
+/// asks again is a cell or not as it was, and what lies under it at the
+/// zooms its rays then ask is within what it said, so the walk, from the
+/// same start in the same world, meets what it met. `UNBOUNDED` where none
+/// told one: a number WGSL names, as it names no infinity.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Margin(pub f32);
 
 impl Margin {
     pub const NONE: Margin = Margin(UNBOUNDED);
-}
-
-impl Visitor for Margin {
-    fn visit(&mut self, detail: Detail, [far, near]: [f32; 2]) {
-        let m = lesser(detail.margin(far), detail.margin(near));
-        self.0 = lesser(self.0, m);
-    }
 }
 
 /// Whether a node `side` wide, squared, is too narrow for a beam ray to
@@ -675,6 +701,109 @@ fn asked(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
 }
 
+/// A node a walk asks tells its margin through what its answer reads of
+/// the zooms asked, and no more (pxl-spec-core `world::node`). A node is a cell where `near` is its zoom
+/// or coarser, and that cell reads none of them; coarser, it says what lies
+/// under it at the zooms from `ground::coarsest(zoom, far)` to `near`, a
+/// claim that holds at any zooms within those, as a bound over fewer zooms
+/// lies within one over more.
+///
+/// So a cell tells how far the eye may come nearer before its `near` is
+/// finer than its zoom, and a coarser node how far before its `near` is its
+/// zoom, or past the zooms it was asked at. A coarser node is asked a zoom
+/// wider each way than its rays ask (which only splits more and stops on
+/// the same cell, as `asked`'s coarser zooms do), so its claim holds while the eye moves a band; and where the walk
+/// passes it as air (`Kind::Cell`, transparent) one band off the zoom its
+/// cell is decided at, it is asked as it would be past that band too, and
+/// where it is air there as well that band's edge tells nothing: a node
+/// air at every zoom it may be asked at tells only the far edges of the
+/// bands it was asked over.
+impl Visitor for Margin {
+    fn visit<Q: Query>(
+        &mut self,
+        q: &mut Q,
+        at: &mut Q::At,
+        (zoom, node): (Zoom, [i32; 3]),
+        detail: Detail,
+        dist_sq: [f32; 2],
+        t0: f32,
+    ) -> In<[u32; 2]> {
+        let [far, near] = asked(detail, dist_sq);
+        let [coarsest, finest] = detail.held();
+        let cell = zoom >= near;
+        // Coarser than asked, asked a zoom wider each way.
+        let wide = [
+            if far > coarsest { far - 1 } else { far },
+            if near < finest { near + 1 } else { near },
+        ];
+        // What was handed it, for the ask past the band, which hands nothing on.
+        let handed = *at;
+        let passes = |i: In<[u32; 2]>| i.kind == Kind::Cell && transparent(i.asset[0]);
+        // Air one band past the zoom its cell is decided at, and air there too:
+        // a cell asked a zoom finer, a coarser node asked as its cell. Both asks
+        // from the one call, so the query is written once.
+        let beyond = if cell {
+            near == zoom && zoom < finest
+        } else {
+            near == zoom + 1
+        };
+        let probe = if cell {
+            [far, zoom + 1]
+        } else {
+            [if far < zoom { far } else { zoom }, zoom]
+        };
+        let (mut i, mut past, mut k) = (
+            In {
+                kind: Kind::Lacks,
+                asset: [0; 2],
+            },
+            false,
+            0,
+        );
+        while k < 2 {
+            let mut a = handed;
+            let zooms = if k == 1 {
+                probe
+            } else if cell {
+                [far, near]
+            } else {
+                wide
+            };
+            let r = q.node(&mut a, zoom, node, zooms, t0);
+            if k == 1 {
+                past = passes(r);
+                k = 2;
+            } else {
+                *at = a;
+                i = r;
+                k = if beyond && passes(r) { 1 } else { 2 };
+            }
+        }
+        let m = if cell {
+            // A cell until its `near` is finer than its zoom, or than the zoom
+            // past it where it is air there too.
+            detail.nearer(dist_sq[1], if past { zoom + 1 } else { zoom })
+        } else {
+            // Its claim, while the coarsest zoom it reads, never finer than its
+            // children's, is no coarser and its finest no finer; and coarser
+            // than asked until its `near` is its zoom, where it is air past it.
+            let by_far = if wide[0] > zoom + 1 {
+                detail.farther(dist_sq[0], wide[0])
+            } else {
+                UNBOUNDED
+            };
+            let by_cell = if past {
+                UNBOUNDED
+            } else {
+                detail.farther(dist_sq[1], zoom + 1)
+            };
+            lesser(lesser(by_far, detail.nearer(dist_sq[1], wide[1])), by_cell)
+        };
+        self.0 = lesser(self.0, m);
+        i
+    }
+}
+
 /// A vector's length squared.
 fn squared(v: [f32; 3]) -> f32 {
     v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
@@ -822,8 +951,7 @@ pub fn walk<Q: Query>(
                 [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
                 [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
             );
-            told.visit(detail, dist_sq);
-            let i = q.node(&mut at, n.zoom, n.idx(o), asked(detail, dist_sq), t0);
+            let i = told.visit(q, &mut at, (n.zoom, n.idx(o)), detail, dist_sq, t0);
             visits += 1;
             let inside = lo[0] <= 0.0
                 && 0.0 < hi[0]

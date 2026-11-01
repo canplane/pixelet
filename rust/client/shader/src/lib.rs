@@ -96,6 +96,23 @@ fn opens<W: beam::Words + ?Sized>(w: &mut W, i: u32, at: u32, per: u32) {
     }
 }
 
+/// Word `i` of `s` raised to `v` where it is less, none past `s`; what it
+/// was, `v` past `s`.
+fn raise(s: &mut [u32], i: u32, v: u32) -> u32 {
+    if (i as usize) < s.len() {
+        // SAFETY: just bounded by the slice's own length.
+        unsafe {
+            spirv_std::arch::atomic_u_max::<
+                u32,
+                { Scope::QueueFamily as u32 },
+                { Semantics::NONE.bits() },
+            >(s.get_unchecked_mut(i as usize), v)
+        }
+    } else {
+        v
+    }
+}
+
 /// Word `i` of `s` raised to `v` where it is less, none past `s`.
 fn most(s: &mut [u32], i: u32, v: u32) {
     if (i as usize) < s.len() {

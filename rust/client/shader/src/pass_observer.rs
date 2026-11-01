@@ -239,4 +239,12 @@ impl Observer for PassObserver<'_> {
             self.eye.needs(w, level, at)
         }
     }
+
+    fn take<W: Words + ?Sized>(&self, w: &W, level: Level, id: [u32; 2]) -> [u32; 2] {
+        if self.light {
+            self.map.take(w, level, id)
+        } else {
+            self.eye.take(w, level, id)
+        }
+    }
 }

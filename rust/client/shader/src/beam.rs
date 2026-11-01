@@ -19,7 +19,7 @@ use spirv_std::spirv;
 use crate::pass_observer::PassObserver;
 use crate::eye::Eye;
 use crate::observed::{pyramid_add, pyramid_at, pyramid_most, pyramid_put, Pyramid};
-use crate::observer::{self, Observer};
+use crate::observer::{self, Level, Observer};
 use crate::light::Head;
 use crate::world::World;
 
@@ -326,10 +326,11 @@ pub fn cell_cs(
 ) {
     let o = PassObserver::of(eye, head);
     let [across, down] = o.cells();
-    if id.x >= across || id.y >= down {
+    let c = o.take(&*beams, Level::Cell, [id.x, id.y]);
+    if c[0] >= across || c[1] >= down {
         return;
     }
-    observer::cell(&o, beams, [id.x, id.y]);
+    observer::cell(&o, beams, c);
 }
 
 /// Each sample of the camera grid, a thread each (observer.rs `sample`;

@@ -224,4 +224,9 @@ impl Observer for Eye {
     fn needs<W: Words + ?Sized>(&self, _: &W, _: Level, _: [u32; 2]) -> bool {
         true
     }
+
+    /// Each at its own place: it casts its lattice whole.
+    fn take<W: Words + ?Sized>(&self, _: &W, _: Level, id: [u32; 2]) -> [u32; 2] {
+        id
+    }
 }

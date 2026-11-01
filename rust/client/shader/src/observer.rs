@@ -110,6 +110,10 @@ pub(crate) trait Observer {
     /// off its words `w`: the one place a pass is told it may pass a thread
     /// by.
     fn needs<W: Words + ?Sized>(&self, w: &W, level: Level, at: [u32; 2]) -> bool;
+    /// What of `level` of its lattice the thread at `id` of its pass takes,
+    /// off its words `w`: none past the lattice's end. The one place a pass
+    /// is told which thread takes which.
+    fn take<W: Words + ?Sized>(&self, w: &W, level: Level, id: [u32; 2]) -> [u32; 2];
 }
 
 /// The number of `c` on a lattice `across` a row, a corner's or a sample's.
@@ -267,8 +271,9 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
 }
 
 /// Sample `s`'s hit written as a box for the raster's draw (raster.rs
-/// `boxed`), the one across and up before it: its place among the boxes,
-/// `NONE` where it wrote none.
+/// `boxed`), the one across and up before it, each where the cast needs
+/// it, so it was sampled this cast: its place among the boxes, `NONE` where
+/// it wrote none.
 pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
     o: &O,
     w: &W,
@@ -277,12 +282,12 @@ pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
     args: &mut [u32],
 ) -> u32 {
     let before = [
-        if s[0] > 0 {
+        if s[0] > 0 && o.needs(w, Level::Sample, [s[0] - 1, s[1]]) {
             o.sample_at([s[0] - 1, s[1]])
         } else {
             NONE
         },
-        if s[1] > 0 {
+        if s[1] > 0 && o.needs(w, Level::Sample, [s[0], s[1] - 1]) {
             o.sample_at([s[0], s[1] - 1])
         } else {
             NONE

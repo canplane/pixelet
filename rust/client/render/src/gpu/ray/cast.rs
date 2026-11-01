@@ -645,19 +645,9 @@ impl RaysPass {
             }
             c.overwrite_revision = Some(o.revision);
         }
-        // What the world's query reads moved: the clip levels, the bricks the
-        // turn handed (their cells, palette indices and ways), the service area, what
-        // is placed, a preview's cuts. What the observed pyramid kept is
-        // forgotten; so it is once its frames would outrun a key's tag.
         let cuts: [u32; eye::CUTS] = cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
             .try_into()
             .or_bug(Errno::ENOTRECOVERABLE);
-        let world_moved = clipmap_moved
-            || fresh != 0
-            || shards_moved
-            || shards_grow
-            || overwrites_moved
-            || cuts != c.cuts;
         // What is placed and a preview's cuts forget the nodes over the boxes
         // they changed, as decor's generation is asked over them (gpu/generated.rs):
         // every write of what is placed names its box (`DecorFrame::edits`);
@@ -667,26 +657,59 @@ impl RaysPass {
             hold(&mut c.boxes, &mut c.holding, b);
         }
         cut_boxes(&c.cuts, &cuts, |b| hold(&mut c.boxes, &mut c.holding, b));
+        // What the observed pyramid kept is forgotten where the service area
+        // or what is placed moved past the boxes; so it is once its frames
+        // would outrun a key's tag.
         c.forget |= shards_moved
             || shards_grow
             || overwrites_grow
             || (overwrites_moved && edits.is_empty())
             || c.frame >= observed::FRAMES;
+        let cuts_moved = cuts != c.cuts;
+        c.cuts = cuts;
         // The eye's clip levels' entries that hold another brick, or whose
         // brick the turn handed: what is over them is asked again.
-        c.cuts = cuts;
         let eye_rows = (clipmap::EYE_CLIP_LEVELS * clipmap::ENTRIES) as usize;
+        // Of the clip levels, a walk's hit reads the cells of the bricks
+        // they hold present, each at its own place, every other read a
+        // bound over them that holds whichever of them are: so they moved
+        // where an entry holds a brick present it did not, or no longer
+        // holds present the brick it holds. A clip level following its
+        // center a brick moves none of it: the brick it lets go and the one
+        // it takes, not present yet, each lie past what its zoom observes
+        // about the eye (pxl-spec-core `clipmap`), and are read off the
+        // coarser one alike.
+        let mut present_moved = false;
         if clipmap_moved {
             let rows = &cast.clipmap[..4 * eye_rows];
             for k in 0..eye_rows {
                 let row = &rows[4 * k..4 * k + 4];
-                if c.entries.get(4 * k..4 * k + 4) != Some(row) {
+                let was = c.entries.get(4 * k..4 * k + 4);
+                if was != Some(row) {
                     c.moved[k / 32] |= 1 << (k % 32);
                 }
+                let held = |r: &[i32]| clipmap::Entry::of([r[0], r[1], r[2], r[3]]).brick();
+                let (now, was) = (held(row), was.map(held));
+                present_moved |= match was {
+                    Some((brick, present)) => {
+                        now.1 && (!present || brick != now.0) || present && !now.1 && brick == now.0
+                    }
+                    None => now.1,
+                };
             }
             c.entries.clear();
             c.entries.extend_from_slice(rows);
         }
+        // What the world's query reads moved: the bricks the clip levels
+        // hold present, the bricks the turn handed (their cells, palette
+        // indices and ways), the service area, what is placed, a preview's
+        // cuts.
+        let world_moved = present_moved
+            || fresh != 0
+            || shards_moved
+            || shards_grow
+            || overwrites_moved
+            || cuts_moved;
         // A brick handed moves the eye's entry that wants it, whichever
         // clip level's slot it is filled into.
         if let Some(gb) = self.ground.as_ref() {
@@ -819,6 +842,12 @@ impl RaysPass {
             g.write_buf(c.light_head, 0, bytes(&head));
             g.write_buf(c.light_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
             g.write_buf(c.light_args, 0, bytes(&light_args()));
+            // The lists of what feeds the tiles it claims empty
+            // (`light::listed_at`).
+            for which in 0..light::LISTS {
+                let at = light::listed_at(shadow::SIZE, which);
+                g.write_buf(c.light_list, word_bytes(at as usize), bytes(&[0u32]));
+            }
             c.raster.light_prepare(g, &cast.eye, shadow::SIZE);
         }
         if eye_moved || jittered || c.light_cast {
@@ -1471,12 +1500,22 @@ const _: () = assert!(
 );
 
 /// The workgroups of the passes that cast the light's tiles as a cast starts:
-/// none, then each whole (`light::ARGS_WORDS`).
+/// none, a list's row across and no row, then each whole
+/// (`light::ARGS_WORDS`).
 fn light_args() -> [u32; light::ARGS_WORDS as usize] {
     let across = |n: u32, w: [u32; 3]| [n.div_ceil(w[0]), n.div_ceil(w[1]), 1];
     let samples = shadow::SIZE / SAMPLE;
     let tiles = shadow::SIZE / light::TILE;
     let mut args = [0; light::ARGS_WORDS as usize];
+    for w in [
+        light::ARGS_BEAM,
+        light::ARGS_CELLS,
+        light::ARGS_SAMPLE,
+        light::ARGS_SAMPLE_BOX,
+        light::ARGS_SLOT,
+    ] {
+        args[w as usize..w as usize + 3].copy_from_slice(&[light::LIST_ACROSS, 0, 1]);
+    }
     for (w, whole) in [
         (
             light::ARGS_BEAM,

@@ -16,7 +16,7 @@ use crate::beam::{node_at, BeamLine, Beams, BeamAncestors, Words};
 use crate::pass_observer::PassObserver;
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::light::Head;
-use crate::observer::{self, Observer};
+use crate::observer::{self, Level, Observer};
 use crate::world::{face_of, unasked, NoPalette, World};
 use crate::{add, opens};
 
@@ -137,12 +137,13 @@ pub fn sample_box_cs(
 ) {
     let o = PassObserver::of(eye, head);
     let [across, down] = o.samples();
-    if id.x >= across || id.y >= down {
+    let s = o.take(&*beams, Level::Sample, [id.x, id.y]);
+    if s[0] >= across || s[1] >= down {
         return;
     }
-    let box_at = observer::sample_box(&o, &*beams, [id.x, id.y], boxes, args);
+    let box_at = observer::sample_box(&o, &*beams, s, boxes, args);
     if !o.light() && box_at != NONE {
-        ask(eye, beams, [id.x, id.y], box_at);
+        ask(eye, beams, s, box_at);
         opens(args, raster::ARGS_FACES, box_at, raster::FACES_LANES);
     }
 }

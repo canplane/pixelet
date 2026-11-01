@@ -189,6 +189,9 @@ pub(crate) struct Map {
     /// The cast's number (`light::HEAD_CAST`), which names the tiles it
     /// casts (`Observer::needs`).
     cast: u32,
+    /// Its epoch's (`light::HEAD_EPOCH`): where it is the cast's, the cast
+    /// casts every tile read, its passes whole (`Observer::take`).
+    epoch: u32,
 }
 
 impl Map {
@@ -202,6 +205,7 @@ impl Map {
             eye: origin,
             detail: light.detail(detail),
             cast: cast_number(head),
+            epoch: epoch(head),
         }
     }
 
@@ -391,9 +395,132 @@ impl Observer for Map {
         let (lo, hi) = self.feeds(level, at);
         casts_in(w, self.size, self.cast, lo, hi)
     }
+
+    /// Each at its own place where the cast begins its epoch, its passes
+    /// whole; else off the lists of what feeds the tiles it claimed
+    /// (`light::listed_at`): the thread's place in its pass, `LISTED_LANES`
+    /// a workgroup of 8 × 8 and `LIST_ACROSS` workgroups a row, an entry's
+    /// `listed_per` of its tile's; a corner or a cell the tile's own number,
+    /// a sample or a slot of the slots the tile holds (`Map::slot`).
+    fn take<W: Words + ?Sized>(&self, w: &W, level: Level, id: [u32; 2]) -> [u32; 2] {
+        use pxl_spec_core::light::{self as l, TILE};
+        if self.epoch == self.cast {
+            return id;
+        }
+        let place = ((id[1] / 8) * l::LIST_ACROSS + id[0] / 8) * l::LISTED_LANES
+            + (id[1] % 8) * 8
+            + id[0] % 8;
+        let side = match level {
+            Level::Corner | Level::Cell => 1,
+            Level::Sample => TILE / pxl_spec_core::param::light::SAMPLE,
+            Level::Ray => TILE,
+        };
+        let per = l::listed_per(side);
+        let (e, k) = (place / per, place % per);
+        let at = l::listed_at(self.size, listed(level));
+        if e >= w.word(at) {
+            return [u32::MAX; 2];
+        }
+        let t = w.word(at + 1 + e);
+        let t = [t & 0xffff, t >> 16];
+        let within = [k % side, k / side];
+        match level {
+            Level::Corner | Level::Cell => t,
+            Level::Sample => {
+                let d = pxl_spec_core::param::light::SAMPLE;
+                let p = self.slot([t[0] * TILE, t[1] * TILE]);
+                [p[0] / d + within[0], p[1] / d + within[1]]
+            }
+            Level::Ray => {
+                let p = self.slot([t[0] * TILE, t[1] * TILE]);
+                [p[0] + within[0], p[1] + within[1]]
+            }
+        }
+    }
+}
+
+/// Pass `w`'s rows (`light::ARGS_WORDS`) raised to hold entry `e` of the
+/// list it takes, its threads one of `side` a side of the entry's tile
+/// each (`light::listed_per`).
+fn opened(args: &mut [u32], w: u32, e: u32, side: u32) {
+    use pxl_spec_core::light as l;
+    let rows = ((e + 1) * l::listed_per(side)).div_ceil(l::LIST_ACROSS * l::LISTED_LANES);
+    crate::most(args, w + 1, rows);
+}
+
+/// The list what feeds a claimed tile at `level` is listed in
+/// (`light::listed_at`).
+fn listed(level: Level) -> u32 {
+    match level {
+        Level::Corner => pxl_spec_core::light::LISTED_CORNERS,
+        Level::Cell | Level::Sample => pxl_spec_core::light::LISTED_FED,
+        Level::Ray => pxl_spec_core::light::LISTED_CLAIMED,
+    }
 }
 
 impl Map {
+    /// The slot box texel `p` lies in: `Light::texel` the other way.
+    fn slot(&self, p: [u32; 2]) -> [u32; 2] {
+        let at = |k: usize| (p[k] as i32).wrapping_add(self.light.corner[k]) as u32 & (self.size - 1);
+        [at(0), at(1)]
+    }
+
+    /// What feeds claimed tile `t` listed, each where no claim of the cast
+    /// listed it yet (`light::listed_marks_at`): at each level, every place
+    /// whose reach about it holds `t` (`reach`), as it lies within the
+    /// lattice; and the rows of the passes that take it opened
+    /// (`light::ARGS_WORDS`).
+    fn enlist(&self, list: &mut [u32], args: &mut [u32], t: [u32; 2]) {
+        use pxl_spec_core::light::{self as l, TILE};
+        let s = TILE / pxl_spec_core::param::light::SAMPLE;
+        let mut v = 0;
+        while v < 3 {
+            let level = match v {
+                0 => Level::Ray,
+                1 => Level::Cell,
+                _ => Level::Corner,
+            };
+            let which = listed(level);
+            let across = if which == l::LISTED_CORNERS {
+                l::beam_across(self.size)
+            } else {
+                l::tiles(self.size)
+            } as i32;
+            let (lo, hi) = self.reach(level);
+            let marks = l::listed_marks_at(self.size, which);
+            let at = l::listed_at(self.size, which);
+            let mut j = t[1] as i32 - hi[1];
+            while j <= t[1] as i32 - lo[1] {
+                let mut i = t[0] as i32 - hi[0];
+                while i <= t[0] as i32 - lo[0] {
+                    if i >= 0
+                        && j >= 0
+                        && i < across
+                        && j < across
+                        && crate::raise(list, marks + (j * across + i) as u32, self.cast) != self.cast
+                    {
+                        let e = crate::add(list, at, 1);
+                        put(list, at + 1 + e, (j as u32) << 16 | i as u32);
+                        // Each pass the list feeds, its rows to hold the
+                        // entry's threads.
+                        if which == l::LISTED_CLAIMED {
+                            opened(args, l::ARGS_SLOT, e, TILE);
+                        } else if which == l::LISTED_FED {
+                            opened(args, l::ARGS_CELLS, e, 1);
+                            opened(args, l::ARGS_SAMPLE, e, s);
+                            opened(args, l::ARGS_SAMPLE_BOX, e, s);
+                        } else {
+                            opened(args, l::ARGS_BEAM, e, 1);
+                        }
+                    }
+                    i += 1;
+                }
+                j += 1;
+            }
+            v += 1;
+        }
+    }
+
     /// The tiles of the box what `level` at `at` feeds, from the first to
     /// the last across and down: the tile it lies on (`on`) and its reach
     /// about it (`reach`).
@@ -474,11 +601,11 @@ pub fn light_cs(
     let t = pxl_spec_core::light::TILE;
     let m = Map::of(eye, head);
     let n = m.side();
-    let slot = UVec3::new(group.x * t + lane.x, group.y * t + lane.y, 0);
-    if slot.x >= n || slot.y >= n {
+    let at = m.take(&*list, Level::Ray, [group.x * t + lane.x, group.y * t + lane.y]);
+    if at[0] >= n || at[1] >= n {
         return;
     }
-    let at = [slot.x, slot.y];
+    let slot = UVec3::new(at[0], at[1], 0);
     // A slot no receiver reads, or one an earlier cast of the epoch cast,
     // left as it was.
     if !m.needs(&*list, Level::Ray, at) {
@@ -612,11 +739,12 @@ pub fn light_beam_cs(
     let clipmap: &[IVec4] = clipmap;
     let m = Map::of(eye, head);
     let [across, down] = m.corners();
-    if id.x >= across || id.y >= down {
+    let c = m.take(&*list, Level::Corner, [id.x, id.y]);
+    if c[0] >= across || c[1] >= down {
         return;
     }
     let world = world(eye, clipmap, ground, palette_indices, shards, overwrites, pool);
-    let (c, mut told) = ([id.x, id.y], Margin::NONE);
+    let mut told = Margin::NONE;
     observer::beam(&m, world, seen, list, c, &mut told);
     list.set(
         m.line(c[1] * across + c[0]) + pxl_spec_core::light::LINE_MARGIN,
@@ -647,14 +775,15 @@ pub fn light_sample_cs(
     let clipmap: &[IVec4] = clipmap;
     let m = Map::of(eye, head);
     let [across, down] = m.samples();
-    if id.x >= across || id.y >= down {
+    let at = m.take(&*list, Level::Sample, [id.x, id.y]);
+    if at[0] >= across || at[1] >= down {
         return;
     }
     let world = world(eye, clipmap, ground, palette_indices, shards, overwrites, pool);
-    let (at, mut told) = ([id.x, id.y], Margin::NONE);
+    let mut told = Margin::NONE;
     observer::sample(&m, world, seen, list, at, &mut told);
     list.set(
-        pxl_spec_core::light::sample_margin(m.side(), id.y * across + id.x),
+        pxl_spec_core::light::sample_margin(m.side(), at[1] * across + at[0]),
         told.0.to_bits(),
     );
 }
@@ -857,8 +986,9 @@ pub fn light_mark_drawn_cs(
 /// the cast's to cast: its word names the cast (`light::reads_at`), and its
 /// square's (`light::coarse_at`), and its held words where the eye stands
 /// (`light::HELD_WORDS`). A tile's words its own thread's
-/// alone. One claimed, the passes that cast tiles go whole
-/// (`light::ARGS_WORDS`), each claim writing the same words.
+/// alone. One claimed where the cast begins its epoch, the passes that cast
+/// tiles go whole (`light::ARGS_WORDS`), each claim writing the same words;
+/// else what feeds it is listed for them (`Map::enlist`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_propagate_cs"))]
 pub fn light_propagate_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -918,10 +1048,14 @@ pub fn light_propagate_cs(
             pxl_spec_core::light::coarse_square(side, [id.x, id.y]),
             cast,
         );
-        let mut k = 0;
-        while k < pxl_spec_core::light::ARGS_WHOLE {
-            put(args, k, at(args, pxl_spec_core::light::ARGS_WHOLE + k));
-            k += 1;
+        if cast == epoch {
+            let mut k = 0;
+            while k < pxl_spec_core::light::ARGS_WHOLE {
+                put(args, k, at(args, pxl_spec_core::light::ARGS_WHOLE + k));
+                k += 1;
+            }
+        } else {
+            Map::of(eye, head).enlist(list, args, [id.x, id.y]);
         }
     }
 }

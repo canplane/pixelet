@@ -540,8 +540,12 @@ What a tile holds moves with the light, the zooms the eye asks of it, and the
 world under it. The eye moving alone keeps it: the box follows the eye a tile at
 a time, and what the cast read moves with it, so a tile the box slid onto is
 read anew. Every node a walk feeding a tile asks tells how far the eye may move
-before the zooms it is asked at change, its nearest and farthest distances to
-their bands' edges (`pxl-spec-core cast.rs` `Visitor`, `Detail::margin`); the
+before its answer, at the zooms the eye then asks, turns the walk elsewhere,
+only through the band edges that answer reads: where its nearest zoom crosses
+its own, whether it is a cell, and past the zooms it says what lies under it
+at, which it is asked a band wider each way; a node passed as air that is
+air past the band its cell is decided at too tells none of that band
+(`pxl-spec-core cast.rs` `Margin::visit`, `Detail::nearer`, `Detail::farther`); the
 tile keeps the least of them and where the eye stood, and is cast again once
 the eye has moved that far (`light_detail_cs`, `light.rs` `holds`). The light's
 beam rays and samples take entries of their own for it (`light_beam_cs`,
