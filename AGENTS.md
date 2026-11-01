@@ -48,3 +48,10 @@
   document and an unfinished transition apart by the records and the history,
   and copy no unresolved pattern as precedent. Ask only when the doubt changes
   what the task should do; go on with what it does not touch.
+
+## Committing
+
+- A change is committed as soon as it is made, without tests, `make check`,
+  fmt, or shader or digest regeneration; those run only when the user asks. A
+  commit left out of step with a generated file or a test is fixed by a later
+  one.
