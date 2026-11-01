@@ -164,8 +164,12 @@ fn wall_not_crossed() {
         azimuth: -core::f64::consts::FRAC_PI_2,
     };
     assert!(in_solid(&east(1.0), &access));
-    assert!(crossed(&east(1.0), &east(2.0), &access));
-    assert!(!crossed(&east(1.0), &east(0.4), &access));
+    let crossed_to = |at: &ViewPose| {
+        let solid = |p: &ViewPose| in_solid(p, &access);
+        crossed(solid(&east(1.0)), solid(at), at, &access)
+    };
+    assert!(crossed_to(&east(2.0)));
+    assert!(!crossed_to(&east(0.4)));
 }
 
 /// The ground at five and a tunnel's roof over the pivot: a slab seven cells

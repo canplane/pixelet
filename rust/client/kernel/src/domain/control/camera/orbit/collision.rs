@@ -42,12 +42,11 @@ fn pose(view: Intent) -> Option<ViewPose> {
     })
 }
 
-/// None where no tile is resident. Asked from the eye's own cell, so a cave's
-/// floor counts where the eye is in the cave.
-fn required_rise(at: &ViewPose) -> Option<f64> {
-    let (_, eye) = eye(at);
-    let ground = World::now().floor_under(&eye, LEAF_ZOOM).val().flatten()?;
-    Some(ground + EYE_CLEARANCE_U - at.pivot[2])
+/// The top of the ground under `at`'s eye, the one floor the gate reads of
+/// a pose: none where no tile is resident. Asked from the eye's own cell, so
+/// a cave's floor counts where the eye is in the cave.
+fn ground_under(at: &ViewPose, access: &World) -> Option<f64> {
+    access.floor_under(&eye(at).1, LEAF_ZOOM).val().flatten()
 }
 
 /// Rise to the ground under the eye, reached by a step-slide at the eye's
@@ -77,9 +76,11 @@ fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
     Some(ground + EYE_CLEARANCE_U - at.pivot[2])
 }
 
-/// Positive inside the terrain.
-fn penetration(at: &ViewPose) -> Option<f64> {
-    Some(required_rise(at)? - (eye(at).0[2] - at.pivot[2]))
+/// Positive inside the terrain, off the ground under its eye
+/// (`ground_under`).
+fn penetration(at: &ViewPose, ground: Option<f64>) -> Option<f64> {
+    let rise = ground? + EYE_CLEARANCE_U - at.pivot[2];
+    Some(rise - (eye(at).0[2] - at.pivot[2]))
 }
 
 /// The eye, local and canonical.
@@ -119,22 +120,27 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     let access = World::now();
     // An embedded start is where the eye may stand, not a start to climb
     // out of: from it, the ground is as deep as from the air.
+    let from_ground = ground_under(from, &access);
     let limit = match embedded(&eye(from).1, &access) {
         true => 0.0,
-        false => penetration(from).map_or(0.0, |start| start.max(0.0)),
+        false => penetration(from, from_ground).map_or(0.0, |start| start.max(0.0)),
     };
 
-    let mut last = *from;
+    // Each sample's ground asked once, whether it is deep and in something
+    // solid both read off it, and the last's kept for the next.
+    let (mut last, mut last_solid) = (*from, solid(from, from_ground));
     for i in 1..=COLLISION_STEP_SAMPLES {
         let at = between(from, to, i as f64 / COLLISION_STEP_SAMPLES as f64);
-        let deep =
-            penetration(&at).is_some_and(|deep| deep > limit) && !embedded(&eye(&at).1, &access);
+        let ground = ground_under(&at, &access);
+        let deep = penetration(&at, ground).is_some_and(|deep| deep > limit)
+            && !embedded(&eye(&at).1, &access);
+        let at_solid = solid(&at, ground);
         // The last clear sample, not the crossing: on the boundary, the next frame's
         // rounding would decide which side the eye is on.
-        if deep || crossed(&last, &at, &access) {
+        if deep || crossed(last_solid, at_solid, &at, &access) {
             return last;
         }
-        last = at;
+        (last, last_solid) = (at, at_solid);
     }
     // So an unobstructed step is exactly what the control asked for.
     *to
@@ -156,12 +162,12 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
 }
 
 fn in_solid(at: &ViewPose, access: &World) -> bool {
-    let (world, eye) = eye(at);
-    access
-        .floor_under(&eye, LEAF_ZOOM)
-        .val()
-        .flatten()
-        .is_some_and(|top| top > world[2])
+    solid(at, ground_under(at, access))
+}
+
+/// Whether `at`'s eye is under the top of the ground under it (`ground_under`).
+fn solid(at: &ViewPose, ground: Option<f64>) -> bool {
+    ground.is_some_and(|top| top > eye(at).0[2])
 }
 
 /// Whether the eye at `eye` stands in a solid cell with air beside it or
@@ -192,9 +198,10 @@ fn embedded(eye: &Q3, access: &World) -> bool {
 /// Whether the eye comes out of something solid at `at`, from `last`,
 /// where it does not see the pivot: through a wall it stood in the first cell
 /// of (`embedded`) to the wall's far side, which a wall one or two cells
-/// thick would otherwise let it reach.
-fn crossed(last: &ViewPose, at: &ViewPose, access: &World) -> bool {
-    in_solid(last, access) && !in_solid(at, access) && toward_eye(at, at.dist, access).is_some()
+/// thick would otherwise let it reach; `last_solid` and `at_solid` whether
+/// each is in something solid (`in_solid`), as the sampling loop holds them.
+fn crossed(last_solid: bool, at_solid: bool, at: &ViewPose, access: &World) -> bool {
+    last_solid && !at_solid && toward_eye(at, at.dist, access).is_some()
 }
 
 /// What lies between the eye and the pivot is not asked: that hides the
@@ -203,12 +210,13 @@ fn crossed(last: &ViewPose, at: &ViewPose, access: &World) -> bool {
 /// or a roof is no obstacle (`embedded`).
 fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
     let access = World::now();
-    let mut last = *from;
+    let mut last_solid = in_solid(from, &access);
     (1..=COLLISION_STEP_SAMPLES).all(|i| {
         let at = between(from, to, i as f64 / COLLISION_STEP_SAMPLES as f64);
-        let clear = (!in_solid(&at, &access) || embedded(&eye(&at).1, &access))
-            && !crossed(&last, &at, &access);
-        last = at;
+        let at_solid = in_solid(&at, &access);
+        let clear = (!at_solid || embedded(&eye(&at).1, &access))
+            && !crossed(last_solid, at_solid, &at, &access);
+        last_solid = at_solid;
         clear
     })
 }
