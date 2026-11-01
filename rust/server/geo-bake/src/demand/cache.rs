@@ -20,12 +20,12 @@ struct Flight {
 
 /// What a job runs under: when it must be done by, and whether a client is
 /// waiting on it, which turns true when one joins a job a fold started.
-pub struct Lease {
+pub(super) struct Lease {
     pub deadline: Instant,
     pub asked: Arc<AtomicBool>,
 }
 
-pub struct Cache {
+pub(super) struct Cache {
     pub root: PathBuf,
     flights: Arc<Mutex<FnvHashMap<String, Arc<Flight>>>>,
     admission: Arc<Semaphore>,
@@ -33,7 +33,7 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn new(
+    pub(super) fn new(
         root: PathBuf,
         admission: Arc<Semaphore>,
         deadline: std::time::Duration,
@@ -51,7 +51,7 @@ impl Cache {
     /// while the server runs; resource refusals leave nothing. Do not time out this
     /// future: it would release the key before the work stopped. `asked` is
     /// whether a client waits on it, rather than only a fold over it.
-    pub async fn once<F>(
+    pub(super) async fn once<F>(
         &self,
         key: String,
         asked: bool,
@@ -116,7 +116,7 @@ impl Cache {
         path.exists() || path.with_extension("empty").is_file()
     }
 
-    pub fn publish(&self, name: &str, raw: Option<&[u8]>) -> Result<(), String> {
+    pub(super) fn publish(&self, name: &str, raw: Option<&[u8]>) -> Result<(), String> {
         let packed = raw
             .map(|r| pack(r, Level::Live).map_err(|e| e.to_string()))
             .transpose()?;
@@ -129,7 +129,7 @@ impl Cache {
         .map_err(|e| e.to_string())
     }
 
-    pub async fn read(&self, name: &str) -> Result<Option<Vec<u8>>, String> {
+    pub(super) async fn read(&self, name: &str) -> Result<Option<Vec<u8>>, String> {
         let path = self.root.join(name);
         match fs::read(&path).await {
             Ok(bytes) => Ok(Some(bytes)),

@@ -31,6 +31,10 @@ path = "src/native.test.rs"
 name = "native-alloc"
 path = "src/native/alloc.test.rs"
 
+# What the crate's root does not reach is `pub(crate)` or narrower.
+[lints.rust]
+unreachable_pub = "warn"
+
 [lints.clippy]
 ptr_as_ptr = "warn"
 ptr_cast_constness = "warn"

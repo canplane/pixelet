@@ -21,7 +21,7 @@ struct Params {
     limit: Option<String>,
 }
 
-pub struct Near {
+pub(crate) struct Near {
     pub lon: f64,
     pub lat: f64,
 }
@@ -44,7 +44,7 @@ fn parse_limit(raw: Option<&str>) -> u32 {
         .clamp(1, MAX_LIMIT)
 }
 
-pub fn routes(pool: Pool) -> Router {
+pub(crate) fn routes(pool: Pool) -> Router {
     Router::new()
         .route(route::SEARCH_URL, get(search))
         .with_state(pool)

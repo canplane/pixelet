@@ -21,3 +21,7 @@ path = "src/bin/cmd.rs"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
+
+# What the crate's root does not reach is `pub(crate)` or narrower.
+[lints.rust]
+unreachable_pub = "warn"

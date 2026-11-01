@@ -201,7 +201,7 @@ fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<
 }
 
 /// The table's module, and beside it a module of each enum's constants.
-pub fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
+pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     let mut out = vec![
         format!("// {}", t.ts_logical),
         "//".into(),

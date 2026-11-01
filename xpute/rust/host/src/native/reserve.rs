@@ -9,14 +9,14 @@ use xpute_guest::mem::section::PAGE_BYTES;
 
 /// Where the memory lies, its bytes, and the heap's offset in it.
 #[derive(Clone, Copy)]
-pub struct Core {
+pub(super) struct Core {
     pub at: usize,
     pub bytes: usize,
     pub heap_at: usize,
 }
 
 impl Core {
-    pub fn holds(self, p: *const u8) -> bool {
+    pub(super) fn holds(self, p: *const u8) -> bool {
         (self.at..self.at + self.bytes).contains(&p.addr())
     }
 }
@@ -25,7 +25,7 @@ static CORE: OnceLock<Core> = OnceLock::new();
 
 /// Once a process. A mapping lies on the system's page, which is all the
 /// heap aligns to.
-pub fn map(bytes: usize, heap_at: usize) -> Core {
+pub(super) fn map(bytes: usize, heap_at: usize) -> Core {
     // SAFETY: an anonymous private mapping, which touches nothing that exists.
     let p = unsafe {
         libc::mmap(
@@ -52,6 +52,6 @@ pub fn map(bytes: usize, heap_at: usize) -> Core {
 }
 
 /// The memory, none before it is reserved.
-pub fn core() -> Option<Core> {
+pub(super) fn core() -> Option<Core> {
     CORE.get().copied()
 }

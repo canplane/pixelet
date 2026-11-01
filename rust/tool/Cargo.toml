@@ -27,7 +27,6 @@ toml = "0.8"
 webp = "0.3"
 # Carto's symbols are SVG; rasterized once, at ingest, into the masks the atlas draws.
 resvg = { version = "0.45", default-features = false }
-flate2 = "1"
 ureq = "2"
 # Half the size of `image`'s JPEG encoder for the link preview.
 mozjpeg = "0.10"

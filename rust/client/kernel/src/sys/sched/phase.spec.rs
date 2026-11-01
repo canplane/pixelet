@@ -9,13 +9,14 @@
 // number is its place here, and a report of per-phase time is indexed by it.
 
 // Names as the spec spells them, so one record has one name on every side.
-// A table is generated whole, whether or not this crate calls an entry.
+// A table is generated whole, whether or not this crate calls or exports an entry.
 #![allow(
     non_upper_case_globals,
     non_snake_case,
     clippy::absolute_paths,
     non_camel_case_types,
     dead_code,
+    unreachable_pub,
     reason = "generated from the spec"
 )]
 

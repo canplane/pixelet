@@ -96,7 +96,7 @@ LIMIT $2"
 /// Its kind and category by number (spec/spec/search.json): a name of
 /// Overture's taxonomy is never on the wire.
 #[derive(Serialize)]
-pub struct SearchResult {
+pub(crate) struct SearchResult {
     pub gers_id: String,
     /// `SEARCH_KIND`.
     pub kind: u8,
@@ -163,7 +163,7 @@ impl DivisionRow {
     }
 }
 
-pub async fn search(
+pub(crate) async fn search(
     pool: &Pool,
     query: &str,
     near: Option<&Near>,

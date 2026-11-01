@@ -67,7 +67,7 @@ xpute_gpu::native_abi!(crate::guest, ASK, CFG, target);
 
 /// The turn's edge, on the kernel's thread: what the device has answered
 /// since, written into `memory` before the turn reads it.
-pub fn before_turn(mem: &mut Memory<'_>) {
+pub(crate) fn before_turn(mem: &mut Memory<'_>) {
     if let Some(h) = native::host() {
         h.poll(mem);
     }
@@ -78,12 +78,12 @@ pub fn before_turn(mem: &mut Memory<'_>) {
 /// taking a layer's drawable never blocks the JavaScript thread, which waits
 /// for the turn (xpute-host native `Guest::run`); every frame before the
 /// device opens.
-pub fn admit() -> bool {
+pub(crate) fn admit() -> bool {
     native::host().is_none_or(|h| h.admit())
 }
 
 /// The turn's calls run on the device, and its frames shown.
-pub fn after_turn(mem: &mut Memory<'_>) {
+pub(crate) fn after_turn(mem: &mut Memory<'_>) {
     if let (Some(h), Some(at)) = (native::host(), api::stream_at()) {
         h.run(mem, at, stream::HEAD);
         h.present();

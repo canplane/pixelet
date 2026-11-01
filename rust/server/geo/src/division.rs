@@ -30,7 +30,7 @@ async fn lineage(client: &Client, ids: &[String]) -> Result<FnvHashMap<String, D
 }
 
 /// What a division lies in, broad to narrow: its name less itself.
-pub async fn ancestors(pool: &Pool, id: &str) -> Result<Vec<DivisionPart>, DbError> {
+pub(crate) async fn ancestors(pool: &Pool, id: &str) -> Result<Vec<DivisionPart>, DbError> {
     let client = pool.get().await?;
     let held = lineage(&client, &[id.to_string()]).await?;
     let mut parts = division::name(id, false, &held);
@@ -39,7 +39,7 @@ pub async fn ancestors(pool: &Pool, id: &str) -> Result<Vec<DivisionPart>, DbErr
 }
 
 /// Each point's name; `xs`/`ys` are EPSG:3857 meters.
-pub async fn name_points(
+pub(crate) async fn name_points(
     pool: &Pool,
     xs: &[f64],
     ys: &[f64],

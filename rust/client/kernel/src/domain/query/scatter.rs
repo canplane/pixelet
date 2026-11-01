@@ -112,7 +112,7 @@ pub(super) fn generated_at(
 
 /// Decor standing as `g`, as an instance: its box's min corner a leaf
 /// cell's, a unit, its base sunk under it as the GPU draws it (`GeneratedDecor::sink`).
-pub fn instance(decor: &Decor, g: &GeneratedDecor) -> Instance {
+pub(super) fn instance(decor: &Decor, g: &GeneratedDecor) -> Instance {
     let [x, y, z] = g.at;
     let base = f64::from(z) - f64::from(g.sink) / f64::from(1u32 << FRAC_W);
     let (at, meta) = decor.stand([f64::from(x), f64::from(y), base], g.variant, g.turn, 1.0);

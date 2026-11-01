@@ -17,7 +17,6 @@ doctest = false
 [dependencies]
 fnv.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
-xpute-guest.workspace = true
 # The kernel's memory, its thread and the allocator over both (src/lib.rs).
 xpute-host.workspace = true
 pxl-kernel.workspace = true

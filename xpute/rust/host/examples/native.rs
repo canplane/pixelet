@@ -35,7 +35,7 @@ mod program {
         -1.0
     }
 
-    pub fn main() {
+    pub(crate) fn main() {
         let mut bytes = 0;
         // SAFETY: a word of our own.
         let at = unsafe { xpute_mem(&raw mut bytes) };

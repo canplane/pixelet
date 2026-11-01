@@ -2107,7 +2107,6 @@ dependencies = [
  "parquet",
  "postgres",
  "pxl-geo-spec",
- "pxl-server",
  "pxl-spec",
  "pxl-spec-core",
  "serde",
@@ -2155,7 +2154,6 @@ dependencies = [
  "pxl-render",
  "wgpu",
  "xpute-gpu",
- "xpute-guest",
  "xpute-host",
  "xpute-kit",
  "zstd 0.13.3",
@@ -2165,7 +2163,6 @@ dependencies = [
 name = "pxl-render"
 version = "0.0.0"
 dependencies = [
- "fnv",
  "image",
  "libm",
  "naga",
@@ -2212,7 +2209,6 @@ dependencies = [
 name = "pxl-tool"
 version = "0.0.0"
 dependencies = [
- "flate2",
  "fnv",
  "image",
  "libm",
@@ -2236,7 +2232,6 @@ dependencies = [
  "pxl-kernel",
  "xpute-gpu",
  "xpute-guest",
- "xpute-kit",
 ]
 
 [[package]]
@@ -3683,7 +3678,6 @@ dependencies = [
 name = "xpute-guest"
 version = "0.0.0"
 dependencies = [
- "indexmap",
  "xpute-kit",
 ]
 

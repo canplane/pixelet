@@ -278,7 +278,7 @@ mod wasm {
     }
 
     #[no_mangle]
-    pub extern "C" fn xpute_conformance_boot(seed: u32) -> u32 {
+    extern "C" fn xpute_conformance_boot(seed: u32) -> u32 {
         let range = range_at(xpute_guest::wasm::data_end());
         // A host that sized the memory for another guest.
         xpute_kit::ensure!(

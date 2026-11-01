@@ -168,7 +168,7 @@ fn cpp_event(
     Ok(())
 }
 
-pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
+pub(super) fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
     let mut out = vec![
         format!("// {path}"),
         "//".into(),

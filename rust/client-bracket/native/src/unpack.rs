@@ -14,7 +14,7 @@
 /// where one does not decode, or ends before its frame does.
 use zstd::stream;
 
-pub fn decode(body: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn decode(body: &[u8]) -> Option<Vec<u8>> {
     // libzstd reads no frame as one cut short; no frame is nothing.
     if body.is_empty() {
         return Some(Vec::new());
@@ -29,7 +29,7 @@ pub fn decode(body: &[u8]) -> Option<Vec<u8>> {
 /// # Safety
 /// `src` points at `len` readable bytes, `out` and `out_len` at writable words.
 #[no_mangle]
-pub unsafe extern "C" fn pxl_unpack(
+unsafe extern "C" fn pxl_unpack(
     src: *const u8,
     len: usize,
     out: *mut *mut u8,
@@ -50,7 +50,7 @@ pub unsafe extern "C" fn pxl_unpack(
 /// # Safety
 /// `out` and `len` are what one `pxl_unpack` wrote, let go once.
 #[no_mangle]
-pub unsafe extern "C" fn pxl_unpacked_free(out: *mut u8, len: usize) {
+unsafe extern "C" fn pxl_unpacked_free(out: *mut u8, len: usize) {
     // SAFETY: the boxed slice `pxl_unpack` made, as it made it.
     drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(out, len)) });
 }

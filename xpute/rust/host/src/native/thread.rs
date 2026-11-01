@@ -89,7 +89,7 @@ fn handoff() -> Guard {
 }
 
 /// Starts the guest's thread and runs `first` there before anything else.
-pub fn start(name: &'static str, stack_bytes: usize, first: impl FnOnce() + Send) {
+pub(super) fn start(name: &'static str, stack_bytes: usize, first: impl FnOnce() + Send) {
     let (jobs, next) = sync_channel::<Job>(1);
     let (sent, back) = sync_channel::<Back>(1);
     let (answers, answered) = sync_channel::<i32>(1);
@@ -121,7 +121,7 @@ pub fn start(name: &'static str, stack_bytes: usize, first: impl FnOnce() + Send
 
 /// The guest's hostcall, on its own thread inside a call: handed to the
 /// caller waiting on it, which runs the program's answer.
-pub fn hostcall(at: u32) -> i32 {
+pub(super) fn hostcall(at: u32) -> i32 {
     GUEST_END.with(|e| {
         let e = e.borrow();
         let (sent, answered) = e
@@ -134,7 +134,7 @@ pub fn hostcall(at: u32) -> i32 {
 
 /// `f` on the guest's thread, the caller waiting; each hostcall it makes
 /// meanwhile answered on the caller's.
-pub fn run<R: Send>(f: impl FnOnce() -> R + Send) -> R {
+pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> R {
     let h = handoff();
     let mut f = Some(f);
     let mut out = None;
@@ -154,7 +154,7 @@ pub fn run<R: Send>(f: impl FnOnce() -> R + Send) -> R {
 }
 
 /// `f` on this thread, the handoff held so the guest's runs nothing meanwhile.
-pub fn while_idle<R>(f: impl FnOnce() -> R) -> R {
+pub(super) fn while_idle<R>(f: impl FnOnce() -> R) -> R {
     let _h = handoff();
     f()
 }

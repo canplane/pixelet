@@ -21,3 +21,7 @@ golden = ["std"]
 
 [dev-dependencies]
 hex.workspace = true
+
+# What the crate's root does not reach is `pub(crate)` or narrower.
+[lints.rust]
+unreachable_pub = "warn"

@@ -12,14 +12,14 @@ use crate::encode::*;
 use crate::enums::*;
 use crate::spec::{BUFFER_USAGE as B, COLOR_WRITE, SHADER_STAGE as S, TEXTURE_USAGE as T};
 
-pub type Encoder = Gpu<64>;
+pub(crate) type Encoder = Gpu<64>;
 
 /// What ends a turn: the stream published, and whatever runs it.
-pub type Turn<'a> = dyn FnMut(&mut Stream) + 'a;
+pub(crate) type Turn<'a> = dyn FnMut(&mut Stream) + 'a;
 
 /// Where the record puts what a program reads and writes, in the region
 /// that starts at `base`.
-pub struct At {
+pub(crate) struct At {
     pub base: *mut u8,
     pub input: usize,
     pub input_len: usize,
@@ -60,12 +60,12 @@ impl At {
     }
 }
 
-pub struct Program {
+pub(crate) struct Program {
     pub name: &'static str,
     pub encode: fn(&mut Encoder, &mut Stream, &At, &mut Turn),
 }
 
-pub const PROGRAMS: [Program; 6] = [
+pub(crate) const PROGRAMS: [Program; 6] = [
     Program {
         name: "add_arrays",
         encode: add_arrays,
@@ -93,7 +93,7 @@ pub const PROGRAMS: [Program; 6] = [
 ];
 
 /// A target's side in pixels, its rows read back 256 bytes apart.
-pub const SIDE: u32 = 16;
+pub(crate) const SIDE: u32 = 16;
 
 fn le(words: &[u32]) -> Vec<u8> {
     words.iter().flat_map(|w| w.to_le_bytes()).collect()

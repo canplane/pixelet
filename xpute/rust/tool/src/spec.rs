@@ -9,6 +9,11 @@ pub mod cmd;
 pub mod data;
 pub mod errno;
 
+use std::collections::BTreeSet;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+use std::process::Command;
 use std::thread;
 
 use serde::de::{Deserializer, MapAccess, SeqAccess, Visitor};
@@ -38,10 +43,66 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     Ok(out)
 }
 
-/// Writes every generated file that differs from what its JSON writes, or,
-/// not `write`, fails where one does.
+/// Writes every generated file that differs from what its JSON writes and
+/// deletes every one nothing writes any more, or, not `write`, fails where
+/// one is either.
 pub fn generate(write: bool) -> Result<(), String> {
-    apply(outputs()?, write)
+    let outputs = outputs()?;
+    let orphans = orphans(&outputs)?;
+    let root = root();
+    for o in &orphans {
+        if write {
+            std::fs::remove_file(root.join(o)).map_err(|e| format!("{o}: {e}"))?;
+            println!("deleted {o}");
+        } else {
+            eprintln!("spec: {o} says it is generated, but nothing writes it — run `make spec`");
+        }
+    }
+    let applied = apply(outputs, write);
+    if write || orphans.is_empty() {
+        return applied;
+    }
+    let orphaned = format!("{} orphaned", orphans.len());
+    Err(applied
+        .err()
+        .map_or(orphaned.clone(), |e| format!("{e}, {orphaned}")))
+}
+
+/// What a file the generators write says on one of its first lines, behind
+/// its comment's mark (`generated`).
+const MARK: &str = "GENERATED from ";
+
+/// The tracked files under the root that carry `MARK` and that no output
+/// writes.
+fn orphans(outputs: &[Output]) -> Result<Vec<String>, String> {
+    let root = root();
+    let listed = Command::new("git")
+        .args(["ls-files", "-z"])
+        .current_dir(&root)
+        .output()
+        .map_err(|e| format!("git ls-files: {e}"))?;
+    if !listed.status.success() {
+        return Err("git ls-files: not in a checkout".into());
+    }
+    let listed = String::from_utf8(listed.stdout).map_err(|e| format!("git ls-files: {e}"))?;
+    let written: BTreeSet<&str> = outputs.iter().map(|o| o.path.as_str()).collect();
+    Ok(listed
+        .split('\0')
+        .filter(|p| !p.is_empty() && !written.contains(p))
+        .filter(|p| marked(&root.join(p)))
+        .map(str::to_string)
+        .collect())
+}
+
+/// Whether one of the file's first lines is `MARK`'s, behind a comment's mark.
+fn marked(path: &Path) -> bool {
+    let mut head = Vec::new();
+    let read = File::open(path).and_then(|f| f.take(1024).read_to_end(&mut head));
+    read.is_ok()
+        && String::from_utf8_lossy(&head)
+            .lines()
+            .take(5)
+            .any(|l| l.trim_start_matches(['/', '#', '*', ' ']).starts_with(MARK))
 }
 
 /// Writes every output that differs from the file on disk, or, not `write`,

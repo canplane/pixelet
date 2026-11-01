@@ -17,7 +17,7 @@ use crate::domain::view::frame::screen::{ndc_to_px, size};
 const ANCHOR_RADIUS: f64 = 0.08;
 
 /// Indices into `candidates`, in the root frame.
-pub fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
+pub(super) fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
     let v = view();
     let eye = v.at().eye;
     let [width, height] = size();

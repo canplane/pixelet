@@ -83,6 +83,8 @@ pxl-geo-spec = { path = "server/geo-spec" }
 [workspace.lints.rust]
 # A path no longer than what is already in scope.
 unused_qualifications = "warn"
+# What a crate's root does not reach is `pub(crate)` or narrower.
+unreachable_pub = "warn"
 
 [workspace.lints.clippy]
 # A path past a crate and one module is brought in by a `use` at the top of

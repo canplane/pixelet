@@ -3,7 +3,7 @@
 //! One frame's marker candidates, as lanes.
 
 #[derive(Clone, Debug, Default)]
-pub struct Candidates {
+pub(super) struct Candidates {
     pub cnt: u32,
 
     /// Relative to the local world frame's origin.
@@ -32,15 +32,15 @@ pub struct Candidates {
 
 impl Candidates {
     /// A high-water mark, not a limit.
-    pub fn cap(&self) -> usize {
+    pub(super) fn cap(&self) -> usize {
         self.local_x.len()
     }
 
-    pub fn reset(&mut self) {
+    pub(super) fn reset(&mut self) {
         self.cnt = 0;
     }
 
-    pub fn push(
+    pub(super) fn push(
         &mut self,
         local_x: f64,
         local_y: f64,

@@ -50,7 +50,7 @@ thread_local! {
 /// A turn of `quota_ms`: the entry, xpute_run (xpute-host native `native_abi!`, lib.rs),
 /// its hostcalls answered on this thread by `hostcall`. `this` is `PxlNative`.
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_run(
+extern "system" fn Java_me_plei_pixelet_platform_PxlNative_run(
     env: *mut JNIEnv,
     this: jobject,
     quota_ms: jdouble,
@@ -104,7 +104,7 @@ extern "C" fn hostcall(at: u32) -> i32 {
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_mem(
+unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_mem(
     env: *mut JNIEnv,
     _class: jclass,
 ) -> jobject {
@@ -154,7 +154,7 @@ unsafe fn with_bytes<R>(
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_unpack(
+unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_unpack(
     env: *mut JNIEnv,
     _class: jclass,
     packed: jbyteArray,
@@ -234,7 +234,7 @@ static WAKE: OnceLock<Wake> = OnceLock::new();
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_gpuOpen(
+unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_gpuOpen(
     env: *mut JNIEnv,
     this: jobject,
 ) -> jboolean {
@@ -300,7 +300,7 @@ extern "C" fn wake() {
 /// Called by JNI, with a live `android.view.Surface`, which its view keeps
 /// until it has unbound it.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceBind(
+unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceBind(
     env: *mut JNIEnv,
     _class: jclass,
     handle: jint,
@@ -336,7 +336,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceBin
 /// Lets `handle`'s surface go, and the window it drew through
 /// (`xpute_gpu_surface_unbind`).
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceUnbind(
+extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceUnbind(
     _env: *mut JNIEnv,
     _class: jclass,
     handle: jint,
@@ -358,7 +358,7 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlNative_surfaceUnbind(
 
 /// What a view's native window is made for wgpu to draw through
 /// (xpute-gpu host native `bind`).
-pub fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
+pub(crate) fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
     wgpu::SurfaceTargetUnsafe::RawHandle {
         raw_display_handle: Some(RawDisplayHandle::Android(AndroidDisplayHandle::new())),
         raw_window_handle: RawWindowHandle::AndroidNdk(AndroidNdkWindowHandle::new(window)),
@@ -367,7 +367,7 @@ pub fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
 
 /// A line to the system's log, where an Android app's error stream goes
 /// nowhere anyone reads.
-pub fn say(line: &str) {
+pub(crate) fn say(line: &str) {
     let line = std::ffi::CString::new(line.replace('\0', " ")).unwrap_or_default();
     // SAFETY: two strings, ours for the call.
     unsafe {

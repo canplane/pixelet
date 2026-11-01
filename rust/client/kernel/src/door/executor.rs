@@ -68,6 +68,6 @@ impl Executor for Embassy {
 static EMBASSY: Embassy = Embassy;
 
 /// Before the kernel spawns anything.
-pub fn install() {
+pub(super) fn install() {
     task::set(&EMBASSY);
 }

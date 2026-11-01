@@ -20,7 +20,7 @@ use pxl_spec::asset::cube::sentinel;
 
 /// The ground's top in a cell, in units, and the asset its face is.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Surface {
+pub(super) struct Surface {
     pub top: f64,
     pub asset: GroundId,
 }

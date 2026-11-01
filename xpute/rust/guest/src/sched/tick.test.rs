@@ -40,11 +40,11 @@ fn saw() -> Trace {
 #[allow(non_upper_case_globals, reason = "named as a program's phases are")]
 mod phase {
     use super::Phase;
-    pub const interaction: Phase = 0;
-    pub const visible: Phase = 1;
-    pub const content: Phase = 2;
-    pub const cosmetic: Phase = 3;
-    pub const report: Phase = 4;
+    pub(super) const interaction: Phase = 0;
+    pub(super) const visible: Phase = 1;
+    pub(super) const content: Phase = 2;
+    pub(super) const cosmetic: Phase = 3;
+    pub(super) const report: Phase = 4;
 }
 
 const PHASES: [&str; 5] = ["interaction", "visible", "content", "cosmetic", "report"];

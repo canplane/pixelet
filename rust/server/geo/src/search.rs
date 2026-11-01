@@ -1,4 +1,4 @@
 // pxl-geo/search.rs
 
-pub mod endpoint;
-pub mod overture;
+pub(crate) mod endpoint;
+pub(crate) mod overture;

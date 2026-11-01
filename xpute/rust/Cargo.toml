@@ -18,10 +18,6 @@ members = ["kit", "guest", "host", "gpu", "conformance", "example", "tool"]
 xpute-kit = { path = "kit" }
 xpute-guest = { path = "guest" }
 xpute-host = { path = "host" }
-# A set whose position is the value: insert appends, swap_remove moves the
-# last entry into the hole, and a caller keeps its own lanes at the same
-# positions.
-indexmap = "2"
 # What a test reads a golden packet's bytes back as.
 hex = "0.4"
 

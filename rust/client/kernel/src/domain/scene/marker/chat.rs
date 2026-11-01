@@ -45,7 +45,7 @@ pub fn append_chat_line(text: &str) {
 
 /// The line to show, in its bubble, none once shown its while; the turn is
 /// woken then.
-pub fn shown_line() -> Option<Design> {
+pub(super) fn shown_line() -> Option<Design> {
     let line = chat().line.as_ref()?;
     if line.said + SHOWN_MS <= now() {
         return None;
