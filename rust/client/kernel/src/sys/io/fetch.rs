@@ -1,9 +1,10 @@
 // pxl-kernel/sys/io/fetch.rs
 
 //! The world's reads. The kernel opens a tile as its bake's object by its
-//! subject (sys/io/file.rs); its version, address and protocol are the
-//! client's (ts/client/src/driver/namespace/tile.ts). What an absent object means
-//! is decided here per stream.
+//! subject, and a shard's objects below OBJECT by the shard's (sys/io/file.rs);
+//! a version, an address, a protocol or a storage key is the client's
+//! (ts/client/src/driver/namespace/tile.ts, object.ts). What an absent object
+//! means is decided here per stream.
 //! Every body is a block (`sys/io/body.rs`) released in the command that
 //! decodes it, unless a store keeps it.
 
@@ -27,12 +28,12 @@ use xpute_guest::global::Global;
 
 /// Assets are opened below the assets' root (sys/io/loader.rs), never here.
 pub fn start(credit: Credit, stream: Stream, subject: u64) {
-    let Some(bake) = stream.bake() else { return };
+    let Some(root) = stream.root() else { return };
     let owner = Owner::Fetch {
         key: credit.key(),
         at_ms: now(),
     };
-    file::open(credit, bake as u32, subject, owner);
+    file::open(credit, root, subject, owner);
 }
 
 /// Settled as stopped at once: nothing is reported for a closed descriptor.

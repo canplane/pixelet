@@ -69,14 +69,17 @@ pub enum Fault {
 }
 
 /// How many of a stream's wants are held at once. A layer's tiles: at most
-/// its tile cache's slots, since it asks only for what it can hold, which the
+/// its tile cache's slots, since it asks only for what it can hold; the
+/// objects' shards, at most those the view asks for at once; each as the
 /// layer says (`open`). An asset: one a slot, the catalog and the sphere.
 pub type Bounds = [usize; Stream::ALL.len()];
 
 fn bounds_of(frames: impl Fn(Stream) -> u32) -> Bounds {
     Stream::ALL.map(|c| match c {
         Stream::asset => LOAD_FILES,
-        Stream::terrain | Stream::place | Stream::earth | Stream::division => frames(c) as usize,
+        Stream::terrain | Stream::place | Stream::earth | Stream::division | Stream::object => {
+            frames(c) as usize
+        }
     })
 }
 

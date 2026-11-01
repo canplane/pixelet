@@ -1,21 +1,17 @@
 // @pxl/client/driver/namespace/storage.ts
 
 /**
- * STORAGE's backend: the kernel's storage files (host.json `storage`) in the
- * platform's storage. The kernel refuses a file not of its slot's format and
- * writes nothing over it; here is decided each slot's key, what becomes of a
- * refused file, and what carries over from before the slots. Nothing kept is
- * dropped: a refused file is set aside, and read back, before its slot empties.
+ * STORAGE's backend: the kernel's storage files (host.json `storage`), the
+ * settings, in the platform's storage. The kernel refuses a file not of its
+ * slot's format and writes nothing over it; here is decided each slot's key,
+ * what becomes of a refused file, and what carries over from before the
+ * slots. Nothing kept is dropped: a refused file is set aside, and read back,
+ * before its slot empties.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import {
-  b64url_to_bytes,
-  bytes_to_b64url,
-  td,
-  te,
-} from "@xpute/kit/codec/encoding.ts";
+import { td, te } from "@xpute/kit/codec/encoding.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
@@ -32,14 +28,13 @@ export interface Storage {
 }
 
 /** The bracket's, read at each call: the bracket is set after this loads. */
-const STORAGE: Storage = {
+export const STORAGE: Storage = {
   get: (key) => bracket.storage.get(key),
   set: (key, value) => bracket.storage.set(key, value),
 };
 
 const KEYS: ReadonlyMap<u32, string> = new Map([
   [storage.SETTINGS, "pxl:kept:settings"],
-  [storage.OBJECTS, "pxl:kept:objects"],
 ]);
 
 /** A slot's storage key; none for a number the kernel does not keep. */
@@ -47,51 +42,22 @@ export function storage_key(slot: u32): string | undefined {
   return KEYS.get(slot);
 }
 
-/** Where each was kept before the slots, under a key naming it: the settings
- * by name as JSON, then for a day as their slot holds them; the objects as
- * their packet's base64 alone, the format theirs by the key. */
+/** Where the settings were kept before their slot, by name as JSON, then for
+ * a day as their slot holds them. */
 const SETTINGS_BEFORE = "pxl:settings";
-const OBJECTS_BEFORE_FORMAT = 15;
-const OBJECTS_BEFORE = `pxl:object:v${OBJECTS_BEFORE_FORMAT}`;
 
 /** Before the kernel reads a slot: an empty slot is filled from what was kept
  * before it, once, and that is left where it was. The settings carry over as
- * they are, so the kernel refuses the JSON and they reset once; the objects
- * with their format put before them. */
+ * they are, so the kernel refuses the JSON and they reset once. */
 export function migrate(s: Storage = STORAGE): void {
-  carry(s, storage.SETTINGS, SETTINGS_BEFORE, (text) => text);
-  carry(s, storage.OBJECTS, OBJECTS_BEFORE, (text) =>
-    formatted(OBJECTS_BEFORE_FORMAT, text),
-  );
+  carry(s, storage.SETTINGS, SETTINGS_BEFORE);
 }
 
-function carry(
-  s: Storage,
-  slot: u32,
-  before: string,
-  as: (text: string) => string,
-): void {
+function carry(s: Storage, slot: u32, before: string): void {
   const key = KEYS.get(slot)!;
   const text = s.get(before);
   if (text === null || s.get(key) !== null) return;
-  s.set(key, as(text));
-}
-
-/** `text`, the base64url of a file with no format byte, with `format`
- * before its bytes; as it is where it is not base64url, for the kernel to
- * refuse and `set_aside` to keep. */
-export function formatted(format: number, text: string): string {
-  if (text === "") return text;
-  let bytes: Uint8Array;
-  try {
-    bytes = b64url_to_bytes(text);
-  } catch {
-    return text;
-  }
-  const out = new Uint8Array(bytes.length + 1);
-  out[0] = format;
-  out.set(bytes, 1);
-  return bytes_to_b64url(out);
+  s.set(key, text);
 }
 
 /** Sets a refused slot's file aside under `<key>:aside:<ms>` and empties

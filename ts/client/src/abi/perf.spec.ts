@@ -145,17 +145,17 @@ export const STAT = {
   tasks: {
     AT: 343 as number,
     slots: 0 as number,
-    WORDS: 120 as number,
+    WORDS: 144 as number,
   },
   steps: {
-    AT: 463 as number,
+    AT: 487 as number,
     cnt: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   /** What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame turn's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frame turns folded; the heap's figures by their allocator's names (xpute-guest mem/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the door's rings' peaks and the body slots' (xpute-guest ipc/door.rs `DoorStat`, sys/io/body.rs `take_peak`), `ring_held_peak` its `left_peak`; and `cap_terrain_refused` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded. */
   recording: {
-    AT: 624 as number,
+    AT: 648 as number,
     frames: 0 as number,
     heap_live_max_bytes: 1 as number,
     heap_run_max_bytes: 2 as number,
@@ -170,7 +170,7 @@ export const STAT = {
     cap_terrain_refused: 11 as number,
     WORDS: 12 as number,
   },
-  WORDS: 636 as number,
+  WORDS: 660 as number,
 } as const;
 
 /** What PERF_STATS finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64. */

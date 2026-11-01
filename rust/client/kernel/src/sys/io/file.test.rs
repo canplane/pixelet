@@ -28,26 +28,26 @@ fn storage_file_format() {
     }
 }
 
-/// Another format, a file not base64, or the objects' blob as it was kept
-/// before it carried its format, is refused until the slot is emptied.
+/// Another format, a file not base64, or a packet kept with no format
+/// before it, is refused until the slot is emptied.
 #[test]
 fn foreign_format_refused() {
     let _g = sys::serial();
     let foreign = BASE64
-        .encode([format::OBJECTS.wrapping_add(1), 1, 2])
+        .encode([format::SETTINGS.wrapping_add(1), 1, 2])
         .into_bytes();
-    // An XTP packet begins "XTP\0": what the objects kept, alone, before.
+    // An XTP packet begins "XTP\0".
     let unformatted = BASE64.encode(b"XTP\0\0\0\0\0").into_bytes();
     for text in [foreign, unformatted, br#"{"ao":"screen"}"#.to_vec()] {
-        on_emptied(StorageFile::Objects);
+        on_emptied(StorageFile::Settings);
         assert!(matches!(
-            storage_of(StorageFile::Objects, &text),
+            storage_of(StorageFile::Settings, &text),
             StorageRead::Unreadable
         ));
-        assert!(is_refused(StorageFile::Objects) && !is_refused(StorageFile::Settings));
+        assert!(is_refused(StorageFile::Settings));
     }
-    on_emptied(StorageFile::Objects);
-    assert!(!is_refused(StorageFile::Objects));
+    on_emptied(StorageFile::Settings);
+    assert!(!is_refused(StorageFile::Settings));
 }
 
 #[test]

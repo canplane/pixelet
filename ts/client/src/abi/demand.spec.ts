@@ -14,6 +14,7 @@ export const STREAM_NAMES = [
   "division",
   "asset",
   "earth",
+  "object",
 ] as const;
 
 export const OUTCOME_NAMES = ["ok", "aborted", "err"] as const;

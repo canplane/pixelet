@@ -5,7 +5,8 @@
 //! native test has no host and opens nothing.
 //!
 //! Every file is a root's object by number (host.json `root`): a tile by its
-//! subject, an asset by its load, a storage file by its slot. The number is the
+//! subject, an asset by its load, a storage file by its slot, a shard's
+//! objects by the shard's subject. The number is the
 //! path's one name, in decimal; what it is and where, a version, a URL or a
 //! storage key, is what the host (ts/client/src/driver/namespace/) binds the root to,
 //! `@xpute/host` carrying the open there.
@@ -22,7 +23,7 @@ use crate::sys::io::fetch;
 use crate::sys::io::host::{answered, sys, turn};
 use crate::sys::io::host_spec::{format, root, storage};
 use crate::sys::io::loader;
-use crate::sys::io::param::MAX_CREDITS;
+use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::request::Credit;
 use crate::sys::io::room::Refused;
 use crate::sys::mem::spec::MIN_HEAP_BYTES;
@@ -44,25 +45,22 @@ use xpute_kit::status::errno::Errno;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StorageFile {
     Settings,
-    Objects,
 }
 
 impl StorageFile {
     /// In declaration order, as `READS` is indexed by `kept as usize`.
-    pub const ALL: [StorageFile; 2] = [StorageFile::Settings, StorageFile::Objects];
+    pub const ALL: [StorageFile; 1] = [StorageFile::Settings];
 
     /// Its path below STORAGE is this in decimal.
     pub const fn slot(self) -> u32 {
         match self {
             StorageFile::Settings => storage::SETTINGS,
-            StorageFile::Objects => storage::OBJECTS,
         }
     }
 
     pub const fn format(self) -> u8 {
         match self {
             StorageFile::Settings => format::SETTINGS,
-            StorageFile::Objects => format::OBJECTS,
         }
     }
 
@@ -338,6 +336,27 @@ impl Path {
 
 pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
     files().held_for(owner)
+}
+
+/// The turn `write` last wrote in, and how many files it wrote there.
+static WRITTEN: Global<(u64, u32)> = Global::new();
+
+/// Writes `bytes` whole as `root`'s object `number`, where the turn has a
+/// write left (`WRITES_A_TURN`); false where it has none, nothing written,
+/// for its owner to write on a later turn. Nothing is written, and none
+/// counted, where there is no host.
+pub fn write(root: u32, number: u64, bytes: Vec<u8>) -> bool {
+    let Some(sys) = sys() else { return true };
+    let written = WRITTEN.get(|| (0, 0));
+    if written.0 != turn() {
+        *written = (turn(), 0);
+    }
+    if written.1 >= WRITES_A_TURN {
+        return false;
+    }
+    written.1 += 1;
+    files().write_whole(sys, root, Path::of(number).as_str(), bytes, Owner::Write);
+    true
 }
 
 /// Writes `bytes` whole as what `file` holds; a refused slot is not written.

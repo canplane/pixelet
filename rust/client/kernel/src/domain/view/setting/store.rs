@@ -100,8 +100,8 @@ static SETTINGS_STORE: Global<Settings> = Global::new();
 /// of changes costs the host stream one file, whatever their number.
 static UNKEPT: Global<bool> = Global::new();
 
-/// The store against its storage file, opened on the storage root as the
-/// objects' is (domain/layer/object/repository.rs). Until the slot is read
+/// The store against its storage file, opened on the storage root
+/// (sys/io/file.rs `StorageFile`). Until the slot is read
 /// the store holds the defaults and nothing is written over it.
 #[derive(Clone, Copy, PartialEq)]
 enum Load {

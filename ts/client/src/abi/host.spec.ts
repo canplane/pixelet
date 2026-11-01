@@ -62,9 +62,10 @@ export const CATALOG: u32 = 0 as number;
  * owner's, written whole, its slot's `format` first (pxl-kernel sys/io/file.rs). */
 export { storage };
 
-/** Each slot's format, the first byte of what it holds. The kernel reads a file of its
- * slot's format and refuses any other, reading none of it and never writing over it, as
- * a driver refuses a volume whose superblock it does not know; what to do with the file
- * is the host's. Bump one whenever a change makes an older file mean something other
- * than it meant when it was written. */
+/** Each kept file's format, the first byte of what it holds: a storage slot's by its
+ * name, a shard's file below OBJECT as OBJECT. The kernel reads a file of its format and
+ * refuses any other, reading none of it and never writing over it, as a driver refuses
+ * a volume whose superblock it does not know; what to do with the file is the host's.
+ * Bump one whenever a change makes an older file mean something other than it meant
+ * when it was written. */
 export { format };

@@ -15,6 +15,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::earth::Earth;
+use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch::{answered, body, on_answer_settled, release, take_answered, Answered};
@@ -40,8 +41,10 @@ use crate::sys::io::failure::Failure;
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
 use crate::sys::sched::edge;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
+use pxl_spec::space::layer::demand::tiles_within;
+use pxl_spec::space::layer::lattice::GROUND;
 
 /// A layer as the view asks of it: its demand, held beside its records.
 pub trait Observed: Base {
@@ -90,7 +93,8 @@ impl Observed for Earth {
 /// A layer's own, by the stream its tiles come in (`Base::STREAM`).
 pub struct Layer {
     pub stream: Stream,
-    /// The most tiles it asks for at once, its tile cache's slots.
+    /// The most tiles it asks for at once: a base layer's tile cache's
+    /// slots, the objects' shards about the eye.
     pub slots: u32,
     arrived: fn(Tile, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
@@ -103,12 +107,18 @@ const fn layer<L: Observed>() -> Layer {
     }
 }
 
-/// Every layer on the ground: the one place a stream names its layer.
-const LAYERS: [Layer; 4] = [
+/// Every layer read a tile at a time, the object layer's tile its shard
+/// (domain/layer/object/repository.rs): the one place a stream names its layer.
+const LAYERS: [Layer; 5] = [
     layer::<TerrainTile>(),
     layer::<PlaceTile>(),
     layer::<Earth>(),
     layer::<DivisionTile>(),
+    Layer {
+        stream: Stream::object,
+        slots: repository::WANTS,
+        arrived: repository::on_arrived,
+    },
 ];
 
 /// The layer whose tiles `stream` carries; none for an asset's.
@@ -426,7 +436,30 @@ impl<L: Observed> Demand<L> {
     }
 }
 
-/// The pyramid tiles arrived, admitted against the view as a pass of the
+/// The object layer's tiles, its shards, from the live eye: every shard
+/// within the demand the view makes of the ground at the shard's zoom
+/// (`observation::demand_radius`), as many as `repository::WANTS` at most,
+/// seen and nearer first. The repository reads those it has not.
+pub fn object_step() {
+    let o = observation();
+    let r = o.zip(source::top()).and_then(|(o, top)| {
+        observation::demand_radius(&o, GROUND, top, SHARD_ZOOM).map(|r| (o, r))
+    });
+    repository::want(r.into_iter().flat_map(|(o, r)| {
+        tiles_within(SHARD_ZOOM, [o.eye[0], o.eye[1]], r).map(move |shard| {
+            (
+                shard,
+                Ask {
+                    priority: Priority::Demand,
+                    order: Order::of(&o, &shard.region()),
+                },
+            )
+        })
+    }));
+}
+
+/// The tiles arrived, the pyramid's and the objects' shards (`LAYERS`),
+/// admitted against the view as a pass of the
 /// tick's budget, so the visible phase's hold on the content share binds it,
 /// and at least one; each fetch settles here. What the pass leaves stays
 /// queued, and a turn is asked for it.

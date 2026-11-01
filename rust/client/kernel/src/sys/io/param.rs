@@ -1,6 +1,6 @@
 // pxl-kernel/sys/io/param.rs
 
-//! How records are fetched and retried.
+//! How records are fetched, retried and written.
 
 // ---- the pump ----
 
@@ -18,6 +18,14 @@ pub const RETRY_ATTEMPTS: u32 = 6;
 
 /// Most fetches out at once, whatever the host grants.
 pub const MAX_CREDITS: u32 = 16;
+
+// ---- writes ----
+
+/// Most files written in one turn by number (sys/io/file.rs `write`), a
+/// shard's objects each (domain/layer/object/repository.rs); one past them
+/// waits for a later turn. Counted in the host stream's reserve
+/// (sys/io/host.rs `RESERVE`).
+pub const WRITES_A_TURN: u32 = 8;
 
 // ---- bodies ----
 

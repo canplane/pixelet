@@ -5,7 +5,6 @@
 use super::State;
 use super::{given, or_refuse, refuse_unless};
 use crate::domain::control::cmd::{self as abi, Command};
-use crate::domain::layer::object::repository;
 use crate::domain::view::setting::store;
 use crate::sys::io::source;
 use xpute_kit::status::errno::Errno;
@@ -33,11 +32,9 @@ pub(super) fn apply(
                 Errno::EINVAL,
             )?;
             file::on_emptied(file);
-            // The settings write what they hold from the next keep on; the
-            // objects are read again, empty, and saved from then on.
+            // The settings write what they hold from the next keep on.
             match file {
                 StorageFile::Settings => store::on_settings_emptied(),
-                StorageFile::Objects => repository::open(),
             }
             Ok(Some(0))
         }

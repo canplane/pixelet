@@ -150,6 +150,7 @@ fn demand_tick(ctx: &mut TickContext) {
     }
     Earth::demand().step(None, &[]);
     DivisionTile::demand().step(division::line(controller::pivot()), &[]);
+    demand::object_step();
 }
 
 /// The scene's turn, handed the camera's pivot and, third person, its

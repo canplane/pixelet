@@ -4,4 +4,4 @@
 
 export const SETTINGS = 1 as number;
 
-export const OBJECTS = 15 as number;
+export const OBJECT = 16 as number;

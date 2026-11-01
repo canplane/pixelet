@@ -47,24 +47,37 @@ use crate::sys::io::demand_spec;
 /// A stream of demands (spec `STREAM_NAMES`). An asset shares the
 /// tiles' credits but is never withdrawn: it is wanted until it arrives.
 pub use crate::sys::io::demand_spec::StreamName as Stream;
+use crate::sys::io::host_spec::root;
 use pxl_spec::bake::tile;
 
 impl Stream {
-    /// An asset belongs to no bake and is asked for by its own command.
+    /// An asset belongs to no bake and is asked for by its own command; a
+    /// shard's objects are the object layer's, which no bake makes.
     pub const fn bake(self) -> Option<BaseLayer> {
         match self {
             Stream::terrain => Some(BaseLayer::terrain),
             Stream::place => Some(BaseLayer::place),
             Stream::earth => Some(BaseLayer::earth),
             Stream::division => Some(BaseLayer::division),
-            Stream::asset => None,
+            Stream::asset | Stream::object => None,
+        }
+    }
+
+    /// The root a want's file is opened below (host.json `root`), its
+    /// subject the path: a bake's, by its kind, or the objects' OBJECT. None
+    /// for an asset, which the loader opens below ASSET (sys/io/loader.rs).
+    pub const fn root(self) -> Option<u32> {
+        match (self, self.bake()) {
+            (Stream::object, _) => Some(root::OBJECT),
+            (_, Some(layer)) => Some(layer as u32),
+            (_, None) => None,
         }
     }
 
     /// The most bytes a body of its takes, its kind's packet at its longest
     /// (pxl-spec `bake::tile::max_pkt_bytes`): one past it is refused
-    /// before the heap is asked (sys/io/fetch.rs `on_opened`). None for an asset,
-    /// which the heap alone bounds.
+    /// before the heap is asked (sys/io/fetch.rs `on_opened`). None for an
+    /// asset or a shard's objects, which the heap alone bounds.
     pub const fn max_body(self) -> Option<u32> {
         match self.bake() {
             Some(layer) => Some(tile::max_pkt_bytes(layer) as u32),

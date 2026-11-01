@@ -87,6 +87,11 @@ pub mod root {
     pub const STORAGE: u32 = 256;
     /// The shipped assets; a path is a load's number in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).
     pub const ASSET: u32 = 257;
+    /// The placed objects, a file a shard; a path is the shard's subject in decimal, as a bake's
+    /// tile is named (pxl-spec space/layer/tile.rs), the file its `format.OBJECT` first
+    /// (domain/layer/object/repository.rs). A shard with none has no file. What keeps the files,
+    /// the platform's storage or a server, is the host's.
+    pub const OBJECT: u32 = 258;
 }
 
 /// Below the earth's root, the Earth's picture whole (pxl-spec route.json's `TILE_SPHERE`),
@@ -105,16 +110,15 @@ pub const CATALOG: u32 = 0;
 pub mod storage {
     /// The settings' overrides (domain/view/setting/store.rs).
     pub const SETTINGS: u32 = 0;
-    /// The placed objects (domain/layer/object/repository.rs).
-    pub const OBJECTS: u32 = 1;
 }
 
-/// Each slot's format, the first byte of what it holds. The kernel reads a file of its
-/// slot's format and refuses any other, reading none of it and never writing over it, as
-/// a driver refuses a volume whose superblock it does not know; what to do with the file
-/// is the host's. Bump one whenever a change makes an older file mean something other
-/// than it meant when it was written.
+/// Each kept file's format, the first byte of what it holds: a storage slot's by its
+/// name, a shard's file below OBJECT as OBJECT. The kernel reads a file of its format and
+/// refuses any other, reading none of it and never writing over it, as a driver refuses
+/// a volume whose superblock it does not know; what to do with the file is the host's.
+/// Bump one whenever a change makes an older file mean something other than it meant
+/// when it was written.
 pub mod format {
     pub const SETTINGS: u8 = 1;
-    pub const OBJECTS: u8 = 15;
+    pub const OBJECT: u8 = 16;
 }

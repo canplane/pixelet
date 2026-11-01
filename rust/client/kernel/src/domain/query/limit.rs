@@ -3,7 +3,8 @@
 //! Where the world ends for what moves in it: the service area, the shards
 //! its source serves (sys/io/source.rs), which a walker does not leave, and where
 //! an asset may be placed or taken out, over ground the world knows
-//! between its bedrock and its ceiling. Every walker's walk and every edit
+//! between its bedrock and its ceiling, in shards whose objects are read.
+//! Every walker's walk and every edit
 //! asks these, and nothing else decides them; the camera is no walker and
 //! asks none (query/support.rs `step_slide`).
 
@@ -17,6 +18,7 @@ use pxl_spec_core::area::{gone_ring, Area, Shard};
 use pxl_spec_core::wrap_idx;
 
 use super::World;
+use crate::domain::layer::object::repository;
 use crate::domain::layer::Query;
 use crate::sys::io::source;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -34,11 +36,12 @@ impl World<'_> {
         within_in(&source::Declared, at)
     }
 
-    /// Whether `space` may hold an edit: no leaf tile past the service area
-    /// within a leaf cell of it, so none of its columns is the wall or past
-    /// it, as `within` holds, and there `space` over the bedrock and under
-    /// the ceiling of ground the world knows exactly, no tile not yet held
-    /// (`pxl-spec limit.rs`).
+    /// Whether `space` may hold an edit: every shard under it read, so a
+    /// write stands over what its file held (domain/layer/object/repository.rs
+    /// `holds`); no leaf tile past the service area within a leaf cell of it,
+    /// so none of its columns is the wall or past it, as `within` holds, and
+    /// there `space` over the bedrock and under the ceiling of ground the world
+    /// knows exactly, no tile not yet held (`pxl-spec limit.rs`).
     /// The bedrock and the ceiling rise with the face, so every column's
     /// hold where the lowest ceiling and the highest bedrock do: the
     /// ground's bound over the nodes holding `space` at its leaf cells, the
@@ -47,10 +50,10 @@ impl World<'_> {
     /// a box that is not is bounded by the nodes about it, which only
     /// refuses more.
     pub fn editable(&self, space: &Aabb) -> bool {
-        self.editable_in(&source::Declared, space)
+        repository::holds(space) && self.editable_in(&source::Declared, space)
     }
 
-    /// `editable` against the service area `area`.
+    /// `editable` against the service area `area`, the shards aside.
     pub(super) fn editable_in(&self, area: &impl Area, space: &Aabb) -> bool {
         let (cell, unit) = (GROUND.cell(), units(GROUND.cell()));
         let first = |k: usize| (space.min[k] / unit).floor() as i32;

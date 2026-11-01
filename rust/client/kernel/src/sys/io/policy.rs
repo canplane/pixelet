@@ -6,7 +6,7 @@
 //!
 //! 1. By layer, the order a view builds up (the user's order,
 //!    2026-09-26): terrain, then the catalog assets decor draws with, then
-//!    places.
+//!    places. The objects' shards come after terrain, before the assets.
 //! 2. Within a layer, seen before unseen and nearer first;
 //!    of tiles as near, the finer first, so the leaf under the eye is not
 //!    asked after the coarse tiles over it, which cost a fold where baked on demand.
@@ -28,7 +28,8 @@ use xpute_kit::status::errno::Errno;
 /// A layer's classes: seen or unseen.
 const SHELLS: u8 = 2;
 const TERRAIN: u8 = 0;
-const ASSET: u8 = TERRAIN + SHELLS;
+const OBJECT: u8 = TERRAIN + SHELLS;
+const ASSET: u8 = OBJECT + SHELLS;
 const PLACE: u8 = ASSET + 1;
 const ASIDE: u8 = PLACE + SHELLS;
 
@@ -52,10 +53,10 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
             detail: 0,
         };
     }
-    let base = if layer == Stream::terrain {
-        TERRAIN
-    } else {
-        PLACE
+    let base = match layer {
+        Stream::terrain => TERRAIN,
+        Stream::object => OBJECT,
+        _ => PLACE,
     };
     Rank {
         class: base + !ask.order.seen as u8,
@@ -68,7 +69,9 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
 impl Serve for Policy {
     fn rank(&self, stream: Stream, subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         match stream {
-            Stream::terrain | Stream::place | Stream::earth => tile(stream, subject, ask),
+            Stream::terrain | Stream::object | Stream::place | Stream::earth => {
+                tile(stream, subject, ask)
+            }
             Stream::asset => Rank {
                 class: ASSET,
                 dist: 0.0,

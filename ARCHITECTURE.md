@@ -135,6 +135,13 @@ what a lower layer would show. A leaf may carry an **extension**, such as a
 marker's words, kept in a pool for its **class** of ids (`pxl-spec
 object/ext.rs` `class_of`), placed and erased with its leaf.
 
+Objects are kept and loaded a shard at a time, a file a shard below the `OBJECT`
+root, and a shard with none has no file (`pxl-kernel
+domain/layer/object/repository.rs`). A shard is read as a bake's tile is, the
+shards about the eye as the view asks the ground at the shard's zoom (Reads, and
+the one scheduler), and its leaves go into the one tree; a shard read stays. A
+write marks its shard, and each shard marked is written back whole.
+
 **Places** are tiles named like the ground tiles under them, each holding what
 Carto draws there at that web map zoom (`pxl-spec bake/tile/place.rs`), by one
 table taken from Carto's rules (`spec/spec/bake/place_theme.json`). A cell one
@@ -320,8 +327,8 @@ What the bucket serves is said in its **declaration**: the coarsest zoom
 supplied whole, each kind's format and version, and the shards served
 (`pxl-geo-bake source.rs` `declaration`; Publishing a version). The world ends
 in bedrock at the edge of the **service area**, those shards: a walker and an
-edit stay inside it, and an edit goes only over known ground
-(`domain/query/limit.rs`).
+edit stay inside it, and an edit goes only over known ground, in shards whose
+objects are read (`domain/query/limit.rs`).
 
 ## What the view holds
 
@@ -759,14 +766,16 @@ A read is a file in xpute's sense
 the kernel names a root by its number and an object below it by its number,
 and the client binds each root to what answers it, once at boot
 (`ts/client/src/driver/namespace/namespace.ts` `namespace`). The roots are
-`spec/client/kernel/sys/io/host.json` `root`'s, the third holding the kernel's
-own files, each a **storage file** on the device:
+`spec/client/kernel/sys/io/host.json` `root`'s: the bakes and the assets
+read-only, `STORAGE` holding the kernel's own files, each a **storage file** on
+the device, and `OBJECT` the placed objects, a file a shard:
 
 | Root               | The kernel's path                                              | What the client binds it to                                                                                  |
 | ------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`namespace/tile.ts`) |
 | `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash (`namespace/asset.ts`)                                         |
 | `STORAGE`          | a storage file's number, in decimal (`storage`)                | the platform's storage, under a key it picks (`namespace/storage.ts`)                                        |
+| `OBJECT`           | a shard's number, its subject, in decimal                      | for now the platform's storage, under a key a shard (`namespace/object.ts`)                                  |
 
 So the kernel names no URL, version, storage key or platform: a path is a
 number, and where it leads is the client's. The client reads the declaration
@@ -796,12 +805,15 @@ however much old work is still draining. That follows from its shape:
 A **serve policy** ranks the wants (`sys/io/policy.rs`): by layer in the order a
 view builds up, then seen before unseen, nearer before farther, and of tiles as
 near the finer first. It changes how soon the view is right, never what it is.
-Models and textures spend the same credits (`sys/io/loader.rs`).
+Models and textures spend the same credits (`sys/io/loader.rs`), and so do the
+objects' shards, wanted as a layer's tiles are.
 
-The settings and the placed objects are the storage files, each opened by its
-number (`sys/io/file.rs` `StorageFile`). A storage file begins with its slot's format byte
-(`host.json` `format`); the kernel refuses one of another format, as a driver
-refuses a superblock it does not know, and never writes over it.
+`STORAGE` holds the settings, the one storage file, opened by its number
+(`sys/io/file.rs` `StorageFile`). A storage file begins with its slot's format
+byte, and a shard's file below `OBJECT` with `OBJECT`'s (`host.json` `format`);
+the kernel refuses one of another format, as a driver refuses a superblock it
+does not know, and never writes over it. A shard whose file is refused stays
+unread, and no edit stands in it.
 
 ## When something goes wrong
 

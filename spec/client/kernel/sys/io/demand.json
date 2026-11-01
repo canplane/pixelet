@@ -9,7 +9,8 @@
     "place",
     "division",
     "asset",
-    "earth"
+    "earth",
+    "object"
   ],
   "OUTCOME_NAMES": [
     "ok",

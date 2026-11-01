@@ -33,10 +33,11 @@ pub(super) fn apply(
                     silence_is_loss: p.orient_silence_is_loss,
                 },
             });
-            // Both kept slots, read from a turn on: what waits on the settings,
-            // the profiler and the snapshot's, starts once they are in (turn.rs).
+            // The settings' slot, read from a turn on: what waits on the
+            // settings, the profiler and the snapshot's, starts once they are
+            // in (turn.rs). The objects are read a shard at a time as the view
+            // asks for them (domain/layer/object/repository.rs).
             settings_open();
-            repository::open();
             // The shell holds the kernel's state from its first render on.
             ask_turn(s)
         }
