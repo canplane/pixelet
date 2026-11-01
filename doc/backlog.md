@@ -14,11 +14,57 @@ Nothing now.
 
 ## P1
 
-Nothing now.
+- **The bucket's switch, after the next deploy.** That deploy is the first
+  to serve `pixelet-bucket` and to read `_meta` with its own key
+  (`4d2a58fcf`). If the Worker's upload is refused for R2, the new
+  `pixelet-worker-ci` takes Workers R2 Storage: Read. Once it is out and the
+  smoke passes: `pixelet-tiles` taken off `pixelet-bucket-publish`, and
+  `pixelet-tiles` emptied and deleted.
+- **The light cast again on every walking frame.** Built and measured in
+  the closing round: the frames a brick lands in cost the light what the
+  rest do, the map cast whatever landed. Supposed, by the agent that
+  changed the light's list: a tile's held margin, the least over some 196
+  beam walks and 36 samples, so small the eye passes it on nearly every
+  move. Which input trips it is now recorded a frame (`light_moved`'s four
+  bits, the profiler) — [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md),
+  "The closing round"; [20261029](./minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md),
+  "Taken in the closing round", the recast not taken.
 
 ## P2
 
-Nothing now.
+- **What the occlusion's screen mode costs.** Busy with AO `screen` over
+  AO `corner` some 2 to 4 ms on both builds of the closing round; the
+  regression against the prepass was the `ao` span's, which reads the world
+  pass's first half with its own — [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md),
+  "The closing round".
+- **Samples closer only where they disagree.** The misses' walks left (some
+  7 ms at the p95) are pixels no sample's cell answers; denser samples
+  everywhere cost four times the samples for at most the walks' time, so
+  only a refine where a cell's samples disagree could pay. Not built.
+- **The spans whose stamps take in another's time.** `air` is stamped over
+  its tables' render passes, whose begin lands before the passes they wait
+  on, and `mark` spans compute and render passes and what runs between;
+  `exposure` was made a compute pass for this, `air` and `mark` not —
+  [20261026-the-air-waits.md](./experiment/20261026-the-air-waits.md).
+- **How much of the light's map a frame casts again.** The ray counts give
+  the whole map's slots; a count of the tiles cast again, under
+  `ray_counts`, would size the P1 item above.
+- **More frames timed on the GPU.** One mapped read-back buffer times about
+  a third of the frames (530 of 1,473 in one run); a ring of three would
+  give the per-kind and brick-frame figures their n.
+- **The stencil and the early depth test on the devices.** Answered from
+  the code and the vendors' records (the minutes' "Open"); left to a device
+  in hand: the iPhone's hidden-surface removal for the boxes and the
+  impostors, which discard and write depth, and what a given Android
+  driver offers (`Device.depth32float_stencil8`), taken with the device
+  builds.
+
+## P3
+
+- **The claim rule in four places.** Whether a tile is claimed, from its
+  word, `now` and `claimed_for`: pxl-shader cast.rs `screen::claimed`,
+  screen_tiles.wgsl `tile_claimed`, screen_reach.wgsl inline, and tiles.rs's
+  `claiming`; one owner, the rest derived from it (the facts skill).
 
 ## Parked, with the reason on file
 
