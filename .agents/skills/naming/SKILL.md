@@ -59,7 +59,7 @@ address `addr`, capacity `cap`, dimension `dim`, memory `mem`, component `comp`,
 channel `ch`, elevation `ele`, feature `feat`, latitude `lat`, longitude `lon`,
 radian `rad`, degree `deg`, orientation `orient`, rotation `rot`, altitude
 `alt`, error `err`, packet `pkt`, initial `init`, matrix `mat`, configuration
-`cfg`, descriptor `desc`, context `ctx`.
+`cfg`, descriptor `desc`, context `ctx`, array `arr`.
 
 `pkt` is only a wire packet (an XTP packet: a command's arguments, a baked
 tile's bytes).
@@ -114,7 +114,9 @@ SCREAMING rules (`"val"`, `"pkt"`, `"err"`, `SENSOR_POS`, `XR_POSE`,
 ## Bindings and types
 
 Abbreviate the binding, keep the type: `let idx: Index`, `let cfg: Config`,
-`SensorState { status: SensorStatus, err: Option<Message> }`.
+`SensorState { status: SensorStatus, err: Option<Message> }`. A name that
+follows a type's keeps its word: XTP's `u32_array` after `U32Array`. A field's
+term stays whole too: a GPU texture array, `texture_2d_array`.
 
 ## Tests
 
