@@ -26,24 +26,21 @@ Every identifier the change adds or renames: types, variants, fields,
 functions, constants, statics, modules, files, parameters, bindings, spec keys
 and stored strings. Generated files follow their source; review the source.
 
-For each, in turn:
+A name is read where it stands: its module, its file and the lines about it
+say which thing it is. How exact it must be follows how far it is read.
 
-1. What it is, read from the code: what it holds or does, its value and
-   unit, how long it lives, who reads it.
-2. Whether the name says that. A name that says what happened to the thing
-   (`kept`, `held`, `handed`, `asked`, `told`, `landed`, `taken`, `fixed`)
-   instead of what it is, is a finding where its uses alone don't make plain
-   what it holds.
-3. Not a finding: a boolean for a state (`loaded`, `visited`, `found`); a
-   local whose line above makes it plain (`sorted = sort(xs)`, a `stored`,
-   `cached` or `seen` temporary); a short binding (`tmp`, `val`, `x`, `kept`,
-   `held`) whose surrounding lines say what it holds; an enum variant naming a
-   state or an event; a word someone else owns (WebGPU's in xpute's `gpu/`).
-4. Also a finding: a name that reads as another concept in the same scope,
-   a type with no head noun, and a module or file named by a participle.
-   A name is read where it stands: its module, its file and the lines about
-   it say which thing it is. The same name elsewhere is no finding, a name
-   its context makes plain is no finding, and no name is lengthened.
+- Inside one module (a temporary, a binding, an internal type) a name may be
+  loose, short, or the same as a name elsewhere. No finding.
+- Across modules (a pub item, a spec field, a shared constant, a document's
+  term) a name says what the thing is. A name for what happened to the thing
+  (`kept`, `held`, `handed`, `asked`, `told`) is a finding there, and so is a
+  type with no head noun and a module or file named by a participle.
+- One loose word spread over many modules for different things, as `kept`
+  and `held` were, is the finding that matters most. Count where a word
+  stands before judging any one use.
+- A rename that lengthens a name its context made plain, or qualifies it
+  against a name in another module or enum, is a finding: the name goes back.
+- A name that is fine stays. Nothing is renamed for its own sake.
 
 ## Report
 
