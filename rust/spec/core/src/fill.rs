@@ -17,8 +17,8 @@ use crate::answer;
 use crate::area;
 use crate::area::Shard;
 use crate::clipmap::{
-    self, column_top, handed_at, Bricks, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT,
-    FRESH_BRICK, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_WORDS, LAID_AT,
+    self, column_top, handed_at, Bricks, Presence, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT,
+    ELE_AT, FRESH_BRICK, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_WORDS, LAID_AT,
     LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT, PALETTE_AT, ROOT_AT, SPANS_ACROSS, SPANS_AT,
     SPANS_COLUMNS, SPANS_COLUMN_WORDS,
 };
@@ -95,10 +95,13 @@ pub struct Fresh<'a> {
     pub base: u32,
 }
 
-impl Bricks for Fresh<'_> {
+impl Presence for Fresh<'_> {
     fn present(&self, _: u32, _: [i32; 2]) -> (u32, bool) {
         (0, true)
     }
+}
+
+impl Bricks for Fresh<'_> {
     /// A brick on its own is no clip level's.
     fn brick(&self, _: u32, _: u32) -> ([i32; 2], bool) {
         ([0; 2], false)

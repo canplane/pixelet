@@ -269,7 +269,7 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 12] = [
     ),
     (
         "light.rs",
-        "light_told_cs",
+        "light_miss_held_cs",
         "spec/core/src/ray.rs",
         "MISS_LANES",
         1,

@@ -40,7 +40,7 @@ pub use observed::forget_cs;
 pub use raster::{face_cs, sample_box_cs};
 pub use light::{
     light_beam_cs, light_cs, light_detail_cs, light_held_cs, light_mark_cs, light_mark_drawn_cs,
-    light_miss_cs, light_propagate_cs, light_sample_cs, light_told_cs, Head,
+    light_miss_cs, light_miss_held_cs, light_propagate_cs, light_sample_cs, Head,
 };
 pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
 pub use world::{PaletteWords, NoPalette, World};

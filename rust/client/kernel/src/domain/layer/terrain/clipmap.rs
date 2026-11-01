@@ -19,8 +19,8 @@ use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use pxl_spec_core::area::{Area, Shard};
 use pxl_spec_core::clipmap::{
-    self, Bricks, Entry, BRICK, BRICK_CELLS, BRICK_SHIFT, CLIP_LEVELS, ENTRIES, EYE_CLIP_LEVELS,
-    FIRST_CELL, HANDED, LEVELS, SLOTS,
+    self, Bricks, Entry, Presence, BRICK, BRICK_CELLS, BRICK_SHIFT, CLIP_LEVELS, ENTRIES,
+    EYE_CLIP_LEVELS, FIRST_CELL, HANDED, LEVELS, SLOTS,
 };
 use pxl_spec_core::fill;
 use pxl_spec_core::ground::word;
@@ -838,7 +838,7 @@ impl Area for HeldClipmap {
 /// kernel's (`fold`, which runs while its writer holds them).
 struct Holding<'a>(&'a Clipmap);
 
-impl Bricks for Holding<'_> {
+impl Presence for Holding<'_> {
     /// Present as the GPU holds it: its cells back, in the slot holding
     /// it, whichever clip levels want it.
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
@@ -846,7 +846,9 @@ impl Bricks for Holding<'_> {
         let held = slot_of(w, cell, q).filter(|&b| w.slots[b as usize].present);
         (held.unwrap_or(0), held.is_some())
     }
+}
 
+impl Bricks for Holding<'_> {
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.0.entries[((cell - FIRST_CELL) * ENTRIES + entry) as usize].held()
     }
@@ -885,10 +887,13 @@ impl Bricks for Holding<'_> {
 }
 
 /// The kernel's clip levels as they are held (`Holding`).
-impl Bricks for HeldClipmap {
+impl Presence for HeldClipmap {
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
         Holding(clipmap()).present(cell, q)
     }
+}
+
+impl Bricks for HeldClipmap {
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
         Holding(clipmap()).brick(cell, entry)
     }

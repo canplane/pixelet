@@ -101,7 +101,7 @@ pub struct Tiles {
     mark_group: u32,
     mark_bound: u32,
     mark_uniform: u32,
-    mark_tiles: u32,
+    mark_cnt: u32,
     /// The tiles the frame's marks cover, from the first to past the last,
     /// four words the GPU's: the one handed, widened by the draws that mark
     /// (tile_mark.wgsl), which bind it whatever reads it.
@@ -158,7 +158,7 @@ impl Tiles {
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            mark_tiles: 0,
+            mark_cnt: 0,
             marks_box,
             box_args,
             gate_number: 0,
@@ -238,7 +238,7 @@ impl Tiles {
             self.marked_at = self.now;
         }
         let stamped = tiles.filter(|_| gated || self.claimed_for > 1);
-        self.mark_tiles = stamped.map_or(0, |t| (t[2] - t[0]) * (t[3] - t[1]));
+        self.mark_cnt = stamped.map_or(0, |t| (t[2] - t[0]) * (t[3] - t[1]));
         if let Some(t) = stamped {
             let words = [t[0], t[1], t[2], t[3], self.now, squares[0], 0, 0];
             g.write_buf(self.mark_uniform, 0, bytes(&words));
@@ -259,7 +259,7 @@ impl Tiles {
     /// its tiles, first in the frame, timed in the span `mark`; none where it
     /// handed none.
     pub fn dispatch_marks(&mut self, ctx: &mut RenderContext) {
-        if self.mark_tiles == 0 {
+        if self.mark_cnt == 0 {
             return;
         }
         let g = ctx.g;
@@ -277,7 +277,7 @@ impl Tiles {
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
         g.set_bind_group(pass, 0, self.mark_group, &[]);
         g.set_pipeline(pass, self.mark.pipeline);
-        g.dispatch(pass, self.mark_tiles.div_ceil(64), 1, 1);
+        g.dispatch(pass, self.mark_cnt.div_ceil(64), 1, 1);
         g.end(pass);
     }
 

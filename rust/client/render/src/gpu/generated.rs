@@ -314,25 +314,24 @@ impl Generated {
                 n += 1;
             }
             self.boxes = n as u32;
+            // The list's head (pxl-spec-core `generated::THIN_ARGS`): each
+            // pass's workgroups across and up, the pairs listed 0 until
+            // `decor_mark_cs` lists them; whether every entry generates
+            // whole, the boxes, and no pair yet in part.
             let (s, w) = (compute::DECOR_THIN_WORKGROUP, compute::DECOR_WORKGROUP);
-            g.write_buf(
-                self.list,
-                0,
-                bytes(&[
-                    clipmap::BRICK_CELLS.div_ceil(s[0]),
-                    1,
-                    0,
-                    0,
-                    generated::KIND_RECORDS.div_ceil(w[0]),
-                    1,
-                    0,
-                    0,
-                    u32::from(self.stale),
-                    n as u32,
-                    0,
-                    0,
-                ]),
+            let mut head = [0u32; generated::BOXES_AT as usize];
+            let mut put = |at: u32, val: u32| head[at as usize] = val;
+            put(generated::THIN_ARGS, clipmap::BRICK_CELLS.div_ceil(s[0]));
+            put(generated::THIN_ARGS + 1, 1);
+            put(
+                generated::GENERATE_ARGS,
+                generated::KIND_RECORDS.div_ceil(w[0]),
             );
+            put(generated::GENERATE_ARGS + 1, 1);
+            put(generated::LIST_EVERY, u32::from(self.stale));
+            put(generated::LIST_BOXES, n as u32);
+            put(generated::LIST_PARTS, 0);
+            g.write_buf(self.list, 0, bytes(&head));
             g.write_buf(
                 self.list,
                 generated::BOXES_AT * 4,

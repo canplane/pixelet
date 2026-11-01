@@ -42,7 +42,7 @@ const _: () = assert!(
 );
 const _: () = assert!(
     light::tiles(SIZE) * light::tiles(SIZE) <= light::MISSED_TILES,
-    "a listed slot's walk names its tile in 16 bits (`light::missed`)"
+    "a listed slot's walk names its tile in the bits over `light::MISS_TILE_SHIFT` (`light::miss_word`)"
 );
 
 /// An anchor of the rays' starts (`Shadow::starts`): its world texel, its

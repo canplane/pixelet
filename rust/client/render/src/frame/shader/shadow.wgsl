@@ -28,7 +28,7 @@ fn light_slope(n: vec3f, texel: f32) -> vec2f {
   return -vec2f(dot(n, across / dot(across, across)), -dot(n, up / dot(up, up))) * texel / d;
 }
 
-// Where the map is cast from: the sun, or the moon (renderer.rs `lay_out`).
+// Where the map is cast from: the sun, or the moon (renderer.rs `prepare`).
 fn shadow_light() -> vec3f {
   return select(atmos_sun_dir(), atmos_moon_dir(), frame_shadow_moon() > 0.0);
 }

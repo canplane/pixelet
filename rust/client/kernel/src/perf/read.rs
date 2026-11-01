@@ -111,7 +111,7 @@ pub fn perf_stats(window_ms: Option<f64>) -> &'static [f64] {
 pub fn perf_now() -> &'static [f64] {
     let out = &mut read().now[..];
     out.fill(0.0);
-    put(out, NOW::rec::AT, &perf_recording_state());
+    put(out, NOW::recording_state::AT, &perf_recording_state());
     put(out, NOW::view::AT, &view());
     out
 }
@@ -123,8 +123,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     let sum = |pick: &dyn Fn(&FrameSample) -> f64| frames.iter().map(pick).sum::<f64>();
     let seconds = ((last.t - first.t) / 1000.0).max(1e-3);
     let moving = || frames.iter().filter(|f| f.settled == 0.0);
-    let n = frames.len() as f64;
-
     let cnt = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
     // A span the frame did not run reads 0 and is left out.
     // The GPU's figures over the frames a read timed, each read once.
@@ -136,7 +134,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     });
     FramesSection {
         present: 1.0,
-        n,
+        cnt: frames.len() as f64,
         seconds,
         moving: moving().count() as f64,
         moving_ms: moving().map(|f| f.interval_ms).sum(),
@@ -170,7 +168,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
             percentiles(scratch, frames.iter().map(|f| f.phases[k])).p95
         }),
         gpu_spans_p95: spans.map(|(p95, _)| p95),
-        gpu_spans_n: spans.map(|(_, n)| n),
+        gpu_spans_cnt: spans.map(|(_, n)| n),
         kinds: core::array::from_fn(|k| cnt(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| cnt(&|f| f.wake == k as f64)),
         gpu_px: read().next_back().map_or(0.0, |f| f.gpu.px),
@@ -236,7 +234,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
                 .map(|r| r.end_ms - r.enqueue_ms),
         );
         *slot = StreamStats {
-            n: n as f64,
+            cnt: n as f64,
             ok: mine().filter(|r| r.outcome == ok).count() as f64,
             aborted: mine().filter(|r| r.outcome == aborted).count() as f64,
             err: mine().filter(|r| r.outcome == err).count() as f64,

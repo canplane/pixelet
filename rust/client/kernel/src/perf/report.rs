@@ -129,7 +129,7 @@ pub fn perf_frame(t: FrameTurn) {
     // Taken whether or not recording, so a recording starts from now.
     let heap = boot::heap_stat();
     let held = held_now(&heap);
-    let tiles_landed = f64::from(TerrainTile::tile_cache().take_landed());
+    let terrain_landed = f64::from(TerrainTile::tile_cache().take_landed());
     let host = core::mem::take(HOST.get(HostFrame::default));
     if !perf_recording() {
         return;
@@ -155,7 +155,7 @@ pub fn perf_frame(t: FrameTurn) {
         effects: turn::effect_times(),
         kind: f64::from(host.kind as u8),
         gpu: host.gpu,
-        tiles_landed,
+        terrain_landed,
         device: host.device,
         heap_used_bytes: heap.used as f64,
         // The interval's: its turns' as they end, and its length as the next frame closes it.

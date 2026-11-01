@@ -214,7 +214,7 @@ export interface Worst {
 /** What PERF_STATS sums over its window, section by section: `recording` is since
  * the recording started, as the steps are, by STAT.recording's names. */
 export interface Summary {
-  rec: { recording: boolean; elapsed_ms: f64; truncated: boolean };
+  recording_state: { recording: boolean; elapsed_ms: f64; truncated: boolean };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
   steps: Step[];
@@ -242,7 +242,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
   const first = frame_at(s, a + F.first);
   const last = frame_at(s, a + F.last);
   return {
-    n: s[a + F.n],
+    n: s[a + F.cnt],
     seconds: s[a + F.seconds],
     moving: s[a + F.moving],
     moving_ms: s[a + F.moving_ms],
@@ -274,7 +274,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({
       name,
       p95: s[a + F.gpu_spans_p95 + k],
-      n: s[a + F.gpu_spans_n + k],
+      n: s[a + F.gpu_spans_cnt + k],
     })),
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
@@ -292,7 +292,7 @@ function task_summaries(s: F64Array): TaskSummary[] {
   const out: TaskSummary[] = [];
   STREAM_NAMES.forEach((stream, c) => {
     const a = STAT.tasks.AT + STAT.tasks.slots + c * STREAM_STAT.WORDS;
-    const n = s[a + STREAM_STAT.n];
+    const n = s[a + STREAM_STAT.cnt];
     if (n === 0) return;
     const reasons = Array.from(
       { length: s[a + STREAM_STAT.reason_cnt] },
@@ -358,9 +358,9 @@ function read(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
 /** The summary over the last `window_ms`, or the whole recording at null. */
 export function perf_summary(window_ms: f64 | null): Summary {
   const { stats: s, now: n } = read(window_ms);
-  const R = NOW.rec;
+  const R = NOW.recording_state;
   return {
-    rec: {
+    recording_state: {
       recording: n[R.AT + R.recording] !== 0,
       elapsed_ms: n[R.AT + R.elapsed_ms],
       truncated: n[R.AT + R.truncated] !== 0,

@@ -357,7 +357,7 @@ pub struct FrameStat {
     pub draws: DrawStats,
     pub gpu_spans: [f64; GPU_SPAN_NAMES],
     /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
-    /// order (gpu/ray/cast.rs `light_why`), and the boxes decor's slots were
+    /// order (gpu/ray/cast.rs `light_moved`), and the boxes decor's slots were
     /// marked by to generate again (gpu/generated.rs `marked_boxes`): 0
     /// where it cast none or marked none.
     pub light_moved: f64,
@@ -483,7 +483,7 @@ pub struct Renderer {
     models: FrameGroups,
     shadow: Shadow,
     /// Whether the shadow map is cast and drawn this frame: the setting on
-    /// (`STAGE_AT::SHADOWS`) and the sun or the moon up (`lay_out`).
+    /// (`STAGE_AT::SHADOWS`) and the sun or the moon up (`prepare`).
     shadows: bool,
     /// Whether the debug pass drew into the screen's depth last frame, so
     /// the finish carries it whole again (gpu/finish.rs).
@@ -549,7 +549,7 @@ pub struct Renderer {
     /// The same from the light, over the light's frame and the map's tiles.
     light_mark_group: u32,
     light_mark_bound: [u32; 4],
-    /// The eye's view-projection as `lay_out` took it, which the sheets are
+    /// The eye's view-projection as `prepare` took it, which the sheets are
     /// seen through (`sheets_mark`) and the propagation reads.
     view_proj: Mat4,
     /// What the occlusion was last found from: the frame's words, its own,
@@ -696,7 +696,7 @@ impl Renderer {
     }
 
     /// `eye_far` how far the eye draws, in units; none without an eye.
-    fn lay_out(
+    fn prepare(
         &mut self,
         g: &Gpu,
         width: u32,
@@ -727,16 +727,16 @@ impl Renderer {
         // Everything is drawn in the eye's frame; positions are taken against the eye
         // in f64 before they are narrowed.
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
-        self.resolve.lay_out(&m, eye_world);
+        self.resolve.prepare(&m, eye_world);
         let eye = [0.0; 3];
         put_ray(&mut self.sky, sky::RAY, &m);
-        self.clouds.lay_out(
+        self.clouds.prepare(
             [eye_world[0], eye_world[1]],
             env,
             s[STAGE_AT::CLOUDS],
             eye_far * env[ENV_AIR + 1],
         );
-        self.stars.lay_out(&m, env, width);
+        self.stars.prepare(&m, env, width);
         self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_POLE..ENV_POLE + 3]);
         self.sky[sky::MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
@@ -755,7 +755,7 @@ impl Renderer {
         u[VIGNETTE] = 1.0;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         if self.screen_ao {
-            self.ao.lay_out(&proj, width, height);
+            self.ao.prepare(&proj, width, height);
         }
         // The eye's own place on the map, Mercator's longitude and ordinate
         // (its units over the map's radius in them), and that radius.
@@ -801,7 +801,7 @@ impl Renderer {
             u[SHADOW_RADIUS_NDC] = shadow_radius_ndc;
         }
 
-        self.atmosphere.lay_out(g, env, eye_far);
+        self.atmosphere.prepare(g, env, eye_far);
     }
 
     /// A box is one instance shared by `BOX_VERTICES`; a draw's first box is its first
@@ -997,7 +997,7 @@ impl Renderer {
         let far = cast
             .as_ref()
             .map_or(0.0, |c| f32::from_bits(c.eye[eye::FAR]));
-        self.lay_out(
+        self.prepare(
             g,
             world.width,
             world.height,
@@ -1244,7 +1244,7 @@ impl Renderer {
             let spread = propagate::spread(SHADOW_MARGIN as f32);
             let light = &self.shadow.light_view_proj;
             self.propagate
-                .lay_out(g, &self.view_proj, light, spread, shadow::SIZE);
+                .prepare(g, &self.view_proj, light, spread, shadow::SIZE);
         }
         // The tiles marked by what moved where only the listed draws that
         // mark did, however much of the screen they and the tiles still
@@ -1727,7 +1727,7 @@ impl Renderer {
             pack_bytes: self.pack.bytes as f64,
             draws: stats,
             gpu_spans,
-            light_moved: f64::from(self.screen.light_why()),
+            light_moved: f64::from(self.screen.light_moved()),
             decor_boxes: f64::from(self.screen.decor_boxes()),
             rays: None,
         }

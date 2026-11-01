@@ -401,8 +401,10 @@ there; elsewhere its candidates, its hash's alone, stand, and a record is
 generated again only where what its own candidate reads changed: an edit, a
 cut, or a brick filled at its level's zoom or finer within reach of it. Every
 frame each generated record is taken where the rays ask the zoom it was
-generated at and compacted into the instances, a model down to its own size on
-screen, an impostor below it and culled below that. Placed decor is handed in
+generated at, held to the finest level holding its column (the coarser level's
+ground drawn where a finer one holds no brick, over open sea), and compacted
+into the instances, a model down to its own size on screen, an impostor below
+it and culled below that. Placed decor is handed in
 as records the GPU draws beside it, taken where the rays ask the coarsest zoom
 it stands at or finer (`domain/scene/decor/drawn.rs`,
 `pxl-spec-core generated.rs` `drawn_at`).
@@ -527,7 +529,7 @@ beam rays and samples take entries of their own for it (`light_beam_cs`,
 margin, and each tile cast gathers once those of the beam rays and samples that
 feed it (`light_held_cs`); a slot walked apart writes its own over its place in
 the list, and those alone are lowered into their tiles' with an atomic
-(`light_told_cs`), so the passes that walk read the list plainly.
+(`light_miss_held_cs`), so the passes that walk read the list plainly.
 
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and

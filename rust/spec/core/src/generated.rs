@@ -9,7 +9,6 @@
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::answer::val;
-use crate::cast::Detail;
 use crate::cave::node_seed;
 use crate::clipmap;
 use crate::clipmap::{BRICK, BRICK_SHIFT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
@@ -560,22 +559,42 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
     dx * dx + dy * dy + dz * dz
 }
 
-/// Whether decor `d2` from the eye, its distance squared (`distance2`), is
-/// drawn, its record's zoom `cell` (`record_of`): one generated at a coarser
-/// clip level where the rays ask that clip level's zoom at its distance
-/// (`Detail::at`), so each distance draws one clip level's, and one at the
-/// leaves' where they ask the leaf cell's zoom or finer; one `placed` where
-/// they ask the coarsest it stands at or finer, so it stands where one the
-/// ground generates of its size would. Each clip level generates what stands as
-/// itself at it (pxl-kernel domain/scene/decor/drawn.rs `shown`, `stands_at`).
-pub fn drawn_at(detail: Detail, d2: f32, cell: Zoom, placed: bool) -> bool {
-    let at = detail.at(d2);
+/// Whether decor is drawn where the rays ask zoom `at` (`Detail::at` at its
+/// distance, `distance2`), its record's zoom `cell` (`record_of`): one
+/// generated at a coarser clip level where `at` is that clip level's, so
+/// each distance draws one clip level's, and one at the leaves' where `at`
+/// is the leaf cell's or finer; one `placed` where `at` is the coarsest it
+/// stands at or finer, so it stands where one the ground generates of its
+/// size would. A generated one is asked at the zoom held where it stands
+/// (`held_at`), as a ray there draws. Each clip level generates what stands
+/// as itself at it (pxl-kernel domain/scene/decor/drawn.rs `shown`,
+/// `stands_at`).
+pub fn drawn_at(at: Zoom, cell: Zoom, placed: bool) -> bool {
     if placed {
         at >= cell
     } else if cell >= LEAF_CELL {
         at >= LEAF_CELL
     } else {
         at == cell
+    }
+}
+
+/// The zoom asked at `at` that the clip levels hold at leaf cell `c`: `at`,
+/// held to the clip levels (`clipmap::held_to`), or the finest clip level
+/// coarser that holds the column present, as a ray reads it
+/// (`clipmap::step`); the first where none does. Where a finer clip level
+/// holds no brick, the bake having left an empty page out (open sea), a
+/// coarser clip level's ground is what is drawn there, and its decor with
+/// it.
+pub fn held_at(w: &impl clipmap::Presence, at: Zoom, c: [i32; 2]) -> Zoom {
+    let z = clipmap::held_to(at);
+    let s = LEAF_CELL - z;
+    let g = [wrap_idx(z, c[0] >> s), c[1] >> s];
+    let (f, _) = clipmap::step(w, clipmap::Found::NONE, z, g);
+    if at < f.from() {
+        at
+    } else {
+        f.from()
     }
 }
 

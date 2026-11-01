@@ -102,7 +102,7 @@ impl CloudPass {
     /// place on the map in the world's doubles; `draw_dist_km` how far it
     /// draws: past it no sheet is drawn. The field moves with the wind,
     /// so its words are the clouds' own.
-    pub fn lay_out(&mut self, over: [f64; 2], env: &[f32], shown: f64, draw_dist_km: f32) {
+    pub fn prepare(&mut self, over: [f64; 2], env: &[f32], shown: f64, draw_dist_km: f32) {
         self.words[SHOWN] = shown as f32;
         self.words[DRAW_DIST] = draw_dist_km;
         field(&mut self.words, over, env);
@@ -114,7 +114,7 @@ impl CloudPass {
     }
 
     /// The sheets, over the world's pass.
-    /// The words its pass reads, as `lay_out` wrote them.
+    /// The words its pass reads, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.words
     }

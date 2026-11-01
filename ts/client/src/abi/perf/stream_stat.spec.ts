@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/client/kernel/perf/perf.json
 
-export const n = 0 as number;
+export const cnt = 0 as number;
 
 export const ok = 1 as number;
 

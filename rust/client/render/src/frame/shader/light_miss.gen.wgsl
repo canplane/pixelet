@@ -9444,7 +9444,7 @@ fn function_() {
                 let _e8232 = ((_e8230 * 16777215f) + 0.5f);
                 let _e8237 = select(select(u32(_e8232), 0u, (_e8232 < 0f)), 4294967295u, (_e8232 > 4294967000f));
                 textureStore(global_13, vec2<u32>(_e553.x, _e553.y), i32(_e553.z), vec4(select(16777215u, _e8237, (_e8237 < 16777215u))));
-                global_12.member[((_e540 + 1u) + _e528)] = (((((_e552 / 8u) * _e531) + (_e550 / 8u)) << bitcast<u32>(16i)) | (bitcast<u32>(select(_e8122, _e8130, _e8193)) >> bitcast<u32>(16i)));
+                global_12.member[((_e540 + 1u) + _e528)] = (((((_e552 / 8u) * _e531) + (_e550 / 8u)) << bitcast<u32>(16u)) | (bitcast<u32>(select(_e8122, _e8130, _e8193)) >> bitcast<u32>(16u)));
             }
             break;
         }

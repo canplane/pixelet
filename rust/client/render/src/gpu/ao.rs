@@ -110,7 +110,7 @@ impl ScreenAo {
         }
     }
 
-    pub fn lay_out(&mut self, proj: &Mat4, width: u32, height: u32) {
+    pub fn prepare(&mut self, proj: &Mat4, width: u32, height: u32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
         mat4::invert(&mut inv, proj);
@@ -120,7 +120,7 @@ impl ScreenAo {
         u[ao::HALF + 1] = (height / AO_DOWNSCALE) as f32;
     }
 
-    /// The words its passes read, as `lay_out` wrote them.
+    /// The words its passes read, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.uniform_words
     }

@@ -101,7 +101,7 @@ impl Propagate {
     /// This frame's views: the eye's view-projection `view_proj` and the
     /// light's `light_view_proj`, both off units from the eye; a receiver's
     /// taps `spread` texels each way of a map `side` texels a side.
-    pub fn lay_out(
+    pub fn prepare(
         &self,
         g: &Gpu,
         view_proj: &Mat4,
@@ -202,7 +202,7 @@ impl Propagate {
 
 /// The texels a receiver's taps read each way of its own, the filter's and
 /// the normal's offset, with `margin` texels of room (shadow.wgsl
-/// `light_lit`).
+/// `shadow_visibility`).
 pub fn spread(margin: f32) -> f32 {
     light::SPREAD + margin
 }

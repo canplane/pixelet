@@ -76,11 +76,11 @@ export function perfGaugeRead(windowMs: f64): Gauge {
   const held = perf_counts();
   return {
     rec: {
-      recording: s.rec.recording,
-      elapsed_ms: s.rec.elapsed_ms,
+      recording: s.recording_state.recording,
+      elapsed_ms: s.recording_state.elapsed_ms,
       tasks: held.tasks,
       frames: held.frames,
-      truncated: s.rec.truncated,
+      truncated: s.recording_state.truncated,
     },
     frames: s.frames,
     recent: perf_summary(RECENT_MS).frames,

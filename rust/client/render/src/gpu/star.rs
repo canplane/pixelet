@@ -70,13 +70,13 @@ impl StarPass {
         }
     }
 
-    /// The words they are drawn by, as `lay_out` wrote them.
+    /// The words they are drawn by, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.words
     }
 
     /// Nothing is laid out past the intensity while the stars are faded out.
-    pub fn lay_out(&mut self, view_proj: &Mat4, env: &[f32], width: u32) {
+    pub fn prepare(&mut self, view_proj: &Mat4, env: &[f32], width: u32) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
         if u[INTENSITY] <= DRAWN_ABOVE {

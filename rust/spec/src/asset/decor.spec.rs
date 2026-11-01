@@ -138,9 +138,14 @@ pub const DECORS: [Decor; 4] = [
             },
         ],
     },
-    // Boats on open river and lake water; wetland is too shallow. Rivers are a
-    // few cells wide, so the per-cell rate reads far denser than on land: cut to
-    // a quarter of 0.015 after boats covered the water.
+    // Boats on open water: rivers, lakes and the sea near a coast; wetland is
+    // too shallow. The sea is the same `water` ground, and boats stand on it
+    // near a coast alone: a tile of open sea is left out of the bake and drawn
+    // from a coarser one, at whose cells no boat stands (pxl-spec-core
+    // `scatter::stands_at`), so the clip levels a boat stands at hold sea only in
+    // the tiles a coast crosses. Rivers are a few cells wide, so the per-cell
+    // rate reads far denser than on land: cut to a quarter of 0.015 after
+    // boats covered the water.
     Decor {
         id: DecorId::boat,
         row: &pxl_spec_core::decor::DECORS[1],

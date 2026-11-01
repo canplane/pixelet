@@ -62,8 +62,8 @@ fn function_() {
         }
         let _e62 = phi_212_;
         let _e67 = (_e38 / 8u);
-        let _e73 = (((((_e55 + (_e28 * _e28)) + _e42) + _e42) + (_e67 * _e67)) + ((_e62 >> bitcast<u32>(16i)) * 4u));
-        let _e76 = ((_e62 & 65535u) << bitcast<u32>(16i));
+        let _e73 = (((((_e55 + (_e28 * _e28)) + _e42) + _e42) + (_e67 * _e67)) + ((_e62 >> bitcast<u32>(16u)) * 4u));
+        let _e76 = ((_e62 & 65535u) << bitcast<u32>(16u));
         if (_e76 < 1602224128u) {
             if (_e73 < _e22) {
                 let _e81 = atomicMin((&global_3.member[_e73]), _e76);
@@ -74,7 +74,7 @@ fn function_() {
 }
 
 @compute @workgroup_size(64, 1, 1)
-fn light_told_cs(@builtin(workgroup_id) param: vec3<u32>, @builtin(local_invocation_id) param_1: vec3<u32>) {
+fn light_miss_held_cs(@builtin(workgroup_id) param: vec3<u32>, @builtin(local_invocation_id) param_1: vec3<u32>) {
     global = param;
     global_1 = param_1;
     function_();

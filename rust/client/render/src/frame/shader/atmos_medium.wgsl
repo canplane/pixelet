@@ -108,7 +108,7 @@ fn land_radius() -> f32 {
 /* each light's tables */
 
 // A light's sky view and its share of the air's volume as laid
-// (gpu/atmosphere.rs `lay_out`), the sun `k` 0 and the moon 1: how far
+// (gpu/atmosphere.rs `prepare`), the sun `k` 0 and the moon 1: how far
 // under the level the horizon dips from the eye's radius they were drawn at,
 // in radians, and the near and far ends of the air's depth law laid there,
 // in km (`air_dist`).

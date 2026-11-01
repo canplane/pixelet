@@ -76,7 +76,7 @@ pub mod device {
 /// gpu/atmosphere.rs); STORAGE_TEXTURE_3D an rgba16float volume a compute
 /// pass writes, STORAGE_TEXTURE_2D an rgba16float texture one writes (the
 /// exposure's texel, gpu/atmosphere.rs); SAMPLER_COMPARISON a sampler that
-/// compares a depth texture's texels against a reference (the sun's shadow
+/// compares a depth texture's texels against a reference (the light's shadow
 /// map, gpu/shadow.rs).
 pub mod record {
     pub const HEAD: u32 = 10;

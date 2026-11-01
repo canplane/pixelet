@@ -7,7 +7,7 @@ use crate::area::Area;
 use crate::cast::{End, Query};
 use crate::clipmap::{
     self, bound_over, column_top, entry, fold, join, joined_idx, laid_half, level_idx, of_idx,
-    Entry, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE,
+    Entry, Presence, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE,
     COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS,
     LAID_AT, LEVELS, LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT,
 };
@@ -48,11 +48,14 @@ struct Clipmap<'a> {
     ground: &'a [u32],
 }
 
-impl Bricks for Clipmap<'_> {
+impl Presence for Clipmap<'_> {
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
         let row = self.rows[((cell - FIRST_CELL) * ENTRIES + entry(q)) as usize];
         (row.slot(), row.holds(q))
     }
+}
+
+impl Bricks for Clipmap<'_> {
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.rows[((cell - FIRST_CELL) * ENTRIES + entry) as usize].held()
     }

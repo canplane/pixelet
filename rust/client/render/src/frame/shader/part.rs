@@ -183,9 +183,9 @@ pub const SHADER_HIT_FACES: u32 = 76;
 pub const SHADER_BOX_ARGS: u32 = 77;
 /// What each tile the light's cast casts holds by, gathered off its beam
 /// rays and samples, and lowered by its listed slots' walks (pxl-spec-core
-/// `light::HELD_MARGIN`, `light::missed`): compute entries.
+/// `light::HELD_MARGIN`, `light::miss_word`): compute entries.
 pub const SHADER_LIGHT_HELD: u32 = 78;
-pub const SHADER_LIGHT_TOLD: u32 = 79;
+pub const SHADER_LIGHT_MISS_HELD: u32 = 79;
 pub const SHADERS: u32 = 80;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
@@ -453,6 +453,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["box_args"],
     // SHADER_LIGHT_HELD
     &["light_held.gen"],
-    // SHADER_LIGHT_TOLD
-    &["light_told.gen"],
+    // SHADER_LIGHT_MISS_HELD
+    &["light_miss_held.gen"],
 ];

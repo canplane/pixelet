@@ -32,14 +32,14 @@ words!(Percentiles, PERCENTILES::WORDS, p50 => PERCENTILES::p50, p95 => PERCENTI
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RecSection {
+pub struct RecordingStateSection {
     pub recording: f64,
     pub elapsed_ms: f64,
     pub truncated: f64,
 }
 
-words!(RecSection, NOW::rec::WORDS,
-    recording => NOW::rec::recording, elapsed_ms => NOW::rec::elapsed_ms, truncated => NOW::rec::truncated,
+words!(RecordingStateSection, NOW::recording_state::WORDS,
+    recording => NOW::recording_state::recording, elapsed_ms => NOW::recording_state::elapsed_ms, truncated => NOW::recording_state::truncated,
 );
 
 #[repr(C)]
@@ -47,7 +47,7 @@ words!(RecSection, NOW::rec::WORDS,
 pub struct FramesSection {
     /// 0 for a window with no frames, where every other word is 0 too.
     pub present: f64,
-    pub n: f64,
+    pub cnt: f64,
     pub seconds: f64,
     pub moving: f64,
     /// The moving frames' intervals summed: a second over their mean
@@ -79,10 +79,10 @@ pub struct FramesSection {
     /// for a kind none was.
     pub gpu_busy_kinds: [f64; 3 * FRAME_KINDS],
     /// The p95 alone of each phase and each span: what is read of them; a
-    /// span's over the frames a read timed that ran it, as many as its n.
+    /// span's over the frames a read timed that ran it, `gpu_spans_cnt` of them.
     pub phases_p95: [f64; PHASES],
     pub gpu_spans_p95: [f64; GPU_SPANS],
-    pub gpu_spans_n: [f64; GPU_SPANS],
+    pub gpu_spans_cnt: [f64; GPU_SPANS],
     /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
     pub kinds: [f64; FRAME_KINDS],
     pub wakes: [f64; WAKES],
@@ -101,7 +101,7 @@ const _: () = assert!(
 );
 
 words!(FramesSection, STAT::frames::WORDS,
-    present => STAT::frames::present, n => STAT::frames::n, seconds => STAT::frames::seconds,
+    present => STAT::frames::present, cnt => STAT::frames::cnt, seconds => STAT::frames::seconds,
     moving => STAT::frames::moving, moving_ms => STAT::frames::moving_ms,
     missed => STAT::frames::missed, overran => STAT::frames::overran,
     long => STAT::frames::long, turns => STAT::frames::turns, gpu_read => STAT::frames::gpu_read,
@@ -112,7 +112,7 @@ words!(FramesSection, STAT::frames::WORDS,
     effects_p95 => STAT::frames::effects_p95, gpu_busy => STAT::frames::gpu_busy,
     gpu_busy_kinds => STAT::frames::gpu_busy_kinds,
     phases_p95 => STAT::frames::phases_p95, gpu_spans_p95 => STAT::frames::gpu_spans_p95,
-    gpu_spans_n => STAT::frames::gpu_spans_n,
+    gpu_spans_cnt => STAT::frames::gpu_spans_cnt,
     kinds => STAT::frames::kinds, wakes => STAT::frames::wakes,
     gpu_px => STAT::frames::gpu_px, rays => STAT::frames::rays,
     first => STAT::frames::first, last => STAT::frames::last,
@@ -121,7 +121,7 @@ words!(FramesSection, STAT::frames::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StreamStats {
-    pub n: f64,
+    pub cnt: f64,
     pub ok: f64,
     pub aborted: f64,
     pub err: f64,
@@ -136,7 +136,7 @@ pub struct StreamStats {
 }
 
 words!(StreamStats, STREAM_STAT::WORDS,
-    n => STREAM_STAT::n, ok => STREAM_STAT::ok, aborted => STREAM_STAT::aborted, err => STREAM_STAT::err,
+    cnt => STREAM_STAT::cnt, ok => STREAM_STAT::ok, aborted => STREAM_STAT::aborted, err => STREAM_STAT::err,
     lat_p50 => STREAM_STAT::lat_p50, lat_p95 => STREAM_STAT::lat_p95, reason_cnt => STREAM_STAT::reason_cnt, reasons => STREAM_STAT::reasons,
     phase_n => STREAM_STAT::phase_n, phase_mean => STREAM_STAT::phase_mean,
 );

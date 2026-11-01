@@ -268,7 +268,7 @@ impl Lit {
     }
 }
 
-/// What a frame draws of the tables, as `lay_out` decides it.
+/// What a frame draws of the tables, as `prepare` decides it.
 #[derive(Clone, Copy, Default)]
 struct Plan {
     lights: [bool; 2],
@@ -280,10 +280,10 @@ pub struct Atmosphere {
     words: [f32; ATMOS_FLOATS],
     sampler: u32,
     views: [u32; TABLES],
-    /// The tables' render pipelines (`pass_of`), and the exposure's maker,
-    /// a compute pass so its span is its own time.
+    /// The tables' render pipelines (`pass_of`), and the exposure's, a
+    /// compute pass so its span is its own time.
     passes: [Built; 4],
-    exposure_maker: Built,
+    exposure: Built,
     groups: [u32; TABLES],
     baked: bool,
     /// Each light's own words (atmos_skyview.wgsl `light`): which light, and
@@ -313,7 +313,7 @@ pub struct Atmosphere {
     /// alone.
     read: Read,
     /// The words the exposure texel was last drawn of (`EXPOSURE_READS`).
-    exposure: Read,
+    exposure_read: Read,
     /// This month's Earth: the kernel draws nothing before its image has
     /// come (`ImageMap::step`).
     pub earth: ImageMap,
@@ -421,7 +421,7 @@ impl Atmosphere {
             sampler,
             views,
             passes,
-            exposure_maker: pipelines.build_compute(g, SHADER_ATMOS_EXPOSURE, &EXPOSURE_GROUP),
+            exposure: pipelines.build_compute(g, SHADER_ATMOS_EXPOSURE, &EXPOSURE_GROUP),
             groups: [0; TABLES],
             baked: false,
             lights: [0.0f32, 1.0].map(|which| {
@@ -452,7 +452,7 @@ impl Atmosphere {
             landed_word: 0,
             plan: Plan::default(),
             read: Read::default(),
-            exposure: Read::default(),
+            exposure_read: Read::default(),
             sun_mu: 1.0,
             moon_mu: 1.0,
             earth: ImageMap::new(g, earth::PICTURE.0, earth::PICTURE.1),
@@ -533,7 +533,7 @@ impl Atmosphere {
         ];
         for (k, entries) in reads {
             let layout = if k == EXPOSURE_TEXEL {
-                atmosphere.exposure_maker.layouts[0]
+                atmosphere.exposure.layouts[0]
             } else {
                 atmosphere.passes[pass_of(k)].layouts[0]
             };
@@ -580,11 +580,11 @@ impl Atmosphere {
     /// thread (atmos_exposure.wgsl): a compute pass, as a render pass's
     /// begin is stamped before the passes it waits on have finished, so its
     /// span would take theirs in.
-    fn exposure(&self, ctx: &mut RenderContext) {
+    fn dispatch_exposure(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::exposure);
         let pass = g.compute_pass(encoder, stamp.pass());
-        g.set_pipeline(pass, self.exposure_maker.pipeline);
+        g.set_pipeline(pass, self.exposure.pipeline);
         g.set_bind_group(pass, 0, self.groups[EXPOSURE_TEXEL], &[]);
         g.dispatch(pass, 1, 1, 1);
         g.end(pass);
@@ -592,7 +592,7 @@ impl Atmosphere {
 
     /// The earth layer's tiles: what has come goes into its layer as the
     /// stream has room, and the window says which layer each tile reads.
-    /// Written by `lay_out`, which the renderer calls after this; whether a
+    /// Written by `prepare`, which the renderer calls after this; whether a
     /// tile came this frame.
     pub fn set_earth_tiles(
         &mut self,
@@ -624,14 +624,14 @@ impl Atmosphere {
         came
     }
 
-    /// The words the sky and the world read, as `lay_out` wrote them.
+    /// The words the sky and the world read, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.words
     }
 
     /// Every light's and ray's height is measured up the world's z, straight
     /// up where the eye stands.
-    pub fn lay_out(&mut self, g: &Gpu, env: &[f32], far: f32) {
+    pub fn prepare(&mut self, g: &Gpu, env: &[f32], far: f32) {
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
         let alt_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
@@ -716,7 +716,7 @@ impl Atmosphere {
             self.words[LAID[k]..LAID[k] + 3].copy_from_slice(&laid(alt));
         }
         let ground = self.words[LAND_ALT_KM];
-        let e = &mut self.exposure;
+        let e = &mut self.exposure_read;
         e.begin();
         for at in EXPOSURE_READS {
             e.read(&self.words[at]);
@@ -758,7 +758,7 @@ impl Atmosphere {
         }
         let exposed = self.plan.exposure;
         if exposed {
-            self.exposure(ctx);
+            self.dispatch_exposure(ctx);
         }
         let copied = self.pending != 0 && self.flying == 0 && self.landed_word == 0;
         if copied {

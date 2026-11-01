@@ -586,7 +586,7 @@ pub const fn sample_margin(size: u32, idx: u32) -> u32 {
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
 /// (`observed::MARKS_CNT`), then a slot each, its X and its Y over 16 bits,
-/// which its walk writes over with what it tells its tile (`missed`).
+/// which its walk writes over with what it tells its tile (`miss_word`).
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_margin(size, (size / SAMPLE) * (size / SAMPLE))
 }
@@ -596,24 +596,31 @@ pub const fn misses_at(size: u32) -> u32 {
 }
 
 /// What a listed slot's walk tells its tile (pxl-shader light.rs
-/// `light_miss_cs`, `light_told_cs`), in its place in the list: the slot's
-/// tile, `j · tiles + i` (`Light::held`'s order, fixed in the world), over
-/// the high 16 bits of the least margin of the nodes it asked
-/// (`cast::Margin`), its low bits dropped, which only lowers it. A map's
-/// tiles no more than 16 bits number (`MISSED_TILES`).
-pub fn missed(size: u32, slot: [u32; 2], margin: f32) -> u32 {
+/// `light_miss_cs`, `light_miss_held_cs`), in its place in the list: the
+/// slot's tile, `j · tiles + i` (`Light::held`'s order, fixed in the world),
+/// over the high bits of the least margin of the nodes it asked
+/// (`cast::Margin`) under `MISS_TILE_SHIFT`, its low bits dropped, which
+/// only lowers it. A map's tiles fit over them (`MISSED_TILES`).
+pub fn miss_word(size: u32, slot: [u32; 2], margin: f32) -> u32 {
     let tile = (slot[1] / TILE) * tiles(size) + slot[0] / TILE;
-    tile << 16 | margin.to_bits() >> 16
+    tile << MISS_TILE_SHIFT | margin.to_bits() >> (u32::BITS - MISS_TILE_SHIFT)
 }
 
 /// The held words (`held_at`) of the tile a listed slot's walk told
-/// (`missed`), and the margin it told, f32 bits.
-pub const fn missed_told(size: u32, w: u32) -> (u32, u32) {
-    (held_at(size) + (w >> 16) * HELD_WORDS, (w & 0xffff) << 16)
+/// (`miss_word`), and the margin it told, f32 bits.
+pub const fn miss_held(size: u32, w: u32) -> (u32, u32) {
+    (
+        held_at(size) + (w >> MISS_TILE_SHIFT) * HELD_WORDS,
+        (w & ((1 << MISS_TILE_SHIFT) - 1)) << (u32::BITS - MISS_TILE_SHIFT),
+    )
 }
 
-/// The tiles a map's told words number at most (`missed`).
-pub const MISSED_TILES: u32 = 1 << 16;
+/// Where a miss word (`miss_word`) splits: its tile above, its margin's high
+/// bits below.
+pub const MISS_TILE_SHIFT: u32 = 16;
+
+/// The tiles a map's miss words number at most (`miss_word`).
+pub const MISSED_TILES: u32 = 1 << (u32::BITS - MISS_TILE_SHIFT);
 
 /// The tiles of the box a receiver stands on in a cast, past the misses: a
 /// word a tile (`TILE` texels a side), `tiles` a row, the number of the
@@ -676,7 +683,7 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
 /// that fed it asked (`cast::Margin`), f32 bits, gathered once off the beam
 /// rays and the samples that feed it, each of which keeps its own
 /// (`LINE_MARGIN`, `sample_margin`; pxl-shader light.rs `light_held_cs`),
-/// then lowered by each listed slot's walk (`missed`, `light_told_cs`);
+/// then lowered by each listed slot's walk (`miss_word`, `light_miss_held_cs`);
 /// then where the eye stood, Q3, X, Y and Z, when the cast that cast it
 /// claimed it (`light_propagate_cs`).
 /// While the eye stands nearer than the margin to where it stood, every zoom

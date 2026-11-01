@@ -97,7 +97,7 @@ pub struct FrameSample {
     /// (record.rs `perf_record_rays`).
     pub rays: RaySample,
     /// The terrain tiles the tile cache took in during the frame turn.
-    pub tiles_landed: f64,
+    pub terrain_landed: f64,
     pub device: DeviceSample,
     /// The heap's high-water mark (xpute-guest mem/heap.rs `HeapStat`).
     pub heap_used_bytes: f64,
@@ -205,7 +205,7 @@ words!(FrameSample, FRAME::WORDS,
     gpu.draws => FRAME::draws, gpu.triangles => FRAME::triangles, gpu.frame => FRAME::gpu_frame,
     gpu.light_moved => FRAME::light_moved, gpu.decor_boxes => FRAME::decor_boxes,
     rays => FRAME::eye_cast,
-    tiles_landed => FRAME::tiles_landed,
+    terrain_landed => FRAME::terrain_landed,
     device.uploads => FRAME::uploads, device.uploads_bytes => FRAME::uploads_bytes, device.pack_bytes => FRAME::pack_bytes,
     heap_used_bytes => FRAME::heap_used_bytes,
 );

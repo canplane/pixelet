@@ -11,7 +11,7 @@
 // `slopes`).
 
 // 1 where the ground's slope is measured with this drawing
-// (gpu/atmosphere.rs `lay_out`).
+// (gpu/atmosphere.rs `prepare`).
 @group(0) @binding(14) var<uniform> own: vec4f;
 @group(0) @binding(1) var exposure_out: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(20) var<storage, read_write> slopes: array<atomic<u32>, SLOPE_WORDS>;

@@ -65,7 +65,7 @@ pub struct Resolve {
     histories: [u32; 2],
     gathered: u32,
     /// This frame's view, its view-projection about the eye and the eye's
-    /// place (`lay_out`), and the last drawn frame's.
+    /// place (`prepare`), and the last drawn frame's.
     view: (Mat4, [f64; 3]),
     last: (Mat4, [f64; 3]),
     /// Where the jitter is in its sequence, and this frame's, in drawn
@@ -112,7 +112,7 @@ impl Resolve {
 
     /// This frame's view: its view-projection about the eye, and the eye's
     /// place.
-    pub fn lay_out(&mut self, view_proj: &Mat4, eye: [f64; 3]) {
+    pub fn prepare(&mut self, view_proj: &Mat4, eye: [f64; 3]) {
         self.view = (*view_proj, eye);
     }
 

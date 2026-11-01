@@ -180,7 +180,7 @@ uniform! {
         EARTH_WINDOW: Vec4i = 44,
         EARTH_TILES: Vec4u = 48,
         /// Each light's sky view and share of the air's volume as laid
-        /// (gpu/atmosphere.rs `lay_out`): how far under the level the
+        /// (gpu/atmosphere.rs `prepare`): how far under the level the
         /// horizon dips from the eye's radius they were drawn at, in
         /// radians, and the near and far ends of the air's depth law there,
         /// in km (atmos_medium.wgsl `laid`); and 1 where the light reaches

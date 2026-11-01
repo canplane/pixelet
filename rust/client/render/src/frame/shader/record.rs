@@ -50,7 +50,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_HIT_FACES => "hit_faces_cs",
         SHADER_BOX_ARGS => "box_args_cs",
         SHADER_LIGHT_HELD => "light_held_cs",
-        SHADER_LIGHT_TOLD => "light_told_cs",
+        SHADER_LIGHT_MISS_HELD => "light_miss_held_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }

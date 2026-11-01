@@ -8,7 +8,9 @@ use pxl_spec_core::area::Area;
 use pxl_spec_core::cast::{self, End, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Columns};
-use pxl_spec_core::clipmap::{self, Bricks, Found, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL};
+use pxl_spec_core::clipmap::{
+    self, Bricks, Found, Presence, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL,
+};
 use pxl_spec_core::world::{self, Inherited};
 use pxl_spec_core::{at, face, ground, support, way};
 use spirv_std::glam::IVec4;
@@ -117,23 +119,44 @@ impl<L: PaletteWords> Area for World<'_, L> {
     }
 }
 
-impl<L> World<'_, L> {
+/// The clip levels' table alone (`World::clipmap`), which bricks they hold
+/// present: what a pass binding no brick asks of them (`clipmap::step`).
+#[derive(Clone, Copy)]
+pub struct Clipmap<'a>(pub(crate) &'a [IVec4]);
+
+impl Clipmap<'_> {
     /// Row `r` of the clip levels' table (`clipmap::Entry`).
     fn row(&self, r: u32) -> clipmap::Entry {
-        let h = at(self.clipmap, r);
+        let h = at(self.0, r);
         clipmap::Entry::of([h.x, h.y, h.z, h.w])
     }
 }
 
-/// The eye's clip levels, as the GPU holds them: a brick in the slot its
-/// entry's row names, whichever clip level filled it.
-impl<L: PaletteWords> Bricks for World<'_, L> {
+impl Presence for Clipmap<'_> {
     /// The slot brick `q` is held in, while the eye's clip level holds it
     /// present.
     fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
         let row = self.row((cell - FIRST_CELL) * ENTRIES + clipmap::entry(q));
         (row.slot(), row.holds(q))
     }
+}
+
+impl<L> World<'_, L> {
+    /// Row `r` of the clip levels' table (`Clipmap`).
+    fn row(&self, r: u32) -> clipmap::Entry {
+        Clipmap(self.clipmap).row(r)
+    }
+}
+
+impl<L: PaletteWords> Presence for World<'_, L> {
+    fn present(&self, cell: u32, q: [i32; 2]) -> (u32, bool) {
+        Clipmap(self.clipmap).present(cell, q)
+    }
+}
+
+/// The eye's clip levels, as the GPU holds them: a brick in the slot its
+/// entry's row names, whichever clip level filled it.
+impl<L: PaletteWords> Bricks for World<'_, L> {
     fn brick(&self, cell: u32, entry: u32) -> ([i32; 2], bool) {
         self.row((cell - FIRST_CELL) * ENTRIES + entry).held()
     }

@@ -15,7 +15,7 @@ use xpute_guest::global::Global;
 
 use crate::perf::frame::{FrameSample, WorstFrame};
 use crate::perf::report::{GpuRead, RayRead};
-use crate::perf::section::{RecSection, RecordingSection};
+use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::spec::LIMIT;
 use crate::perf::task::TaskRow;
 
@@ -159,10 +159,10 @@ pub fn perf_recording() -> bool {
     perf().recording
 }
 
-/// The recording as NOW's rec section holds it, each flag 0 or 1.
-pub fn perf_recording_state() -> RecSection {
+/// The recording as NOW's recording_state section holds it, each flag 0 or 1.
+pub fn perf_recording_state() -> RecordingStateSection {
     let l = perf();
-    RecSection {
+    RecordingStateSection {
         recording: l.recording as u8 as f64,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
         truncated: l.truncated as u8 as f64,

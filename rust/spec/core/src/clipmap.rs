@@ -319,13 +319,18 @@ pub const fn handed_at(k: u32) -> u32 {
     k * HANDED_WORDS
 }
 
-/// The clip levels as one side holds them: per clip level, a zoom's cells about
-/// its center, which brick each entry holds once present, and the slots
-/// their cells are held in.
-pub trait Bricks {
+/// Which bricks the clip levels hold present, all `step` reads: the clip
+/// levels' table alone.
+pub trait Presence {
     /// The slot brick `q` at `cell` is held present in, which the reads
-    /// below take (`Entry::slot`); false where no clip level holds it.
+    /// of `Bricks` take (`Entry::slot`); false where no clip level holds it.
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool);
+}
+
+/// The clip levels as one side holds them: per clip level, a zoom's cells
+/// about its center, which brick each entry holds once present
+/// (`Presence`), and the slots their cells are held in.
+pub trait Bricks: Presence {
     /// The brick the eye's clip level at `cell` wants in `entry`, and whether
     /// present: `present` the other way.
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool);
@@ -568,7 +573,7 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// the step. With nothing above, or coarser than `above`'s clip level, every
 /// clip level from `cell`'s to the first (`FIRST_CELL`) is looked at, and none
 /// holding it is a lack.
-pub fn step(w: &impl Bricks, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, [u32; 2]) {
+pub fn step(w: &impl Presence, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, [u32; 2]) {
     // The zooms `above` leaves unknown, finest first, down to the one it
     // answers, or to the first clip level where it answers none.
     let known = above != Found::NONE && cell >= above.from();

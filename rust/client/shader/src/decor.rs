@@ -24,7 +24,7 @@ use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
 use crate::eye::{eye_origin, Eye};
-use crate::world::{NoPalette, World};
+use crate::world::{Clipmap, NoPalette, World};
 
 /// The world as decor's generation asks it on the GPU (pxl-spec-core `scatter`):
 /// the cast's, and the catalog's rows as handed.
@@ -450,8 +450,9 @@ fn run_of(records: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
 
 /// Each record for the eye this frame, a workgroup an entry's or a run of
 /// placed decor's (`run_of`), its region written into its first word and
-/// counted: nothing where the rays ask another zoom at its distance than the
-/// one its record's clip level draws at (`generated::drawn_at`), or where it is
+/// counted: nothing where the rays ask another zoom at its distance, held to
+/// the clip levels holding its column (`generated::held_at`), than the one
+/// its record's clip level draws at (`generated::drawn_at`), or where it is
 /// the decor left out; else sized for the screen (pxl-spec-core
 /// `generated::drawn`), a model where its group's extent spans `MODEL_ANGLE`
 /// at its distance, an impostor down to `IMPOSTOR_ANGLE`, else culled.
@@ -480,6 +481,7 @@ pub fn decor_cnt_cs(
                 rows,
                 records,
                 regions,
+                clipmap,
                 generated::record_at(first + n) as usize,
             );
             n += 1;
@@ -495,6 +497,7 @@ fn cnt_one(
     rows: &[Decor],
     records: &mut [u32],
     regions: &mut [u32],
+    clipmap: &[IVec4],
     i: usize,
 ) {
     if i + 3 >= records.len() || records[i] == generated::UNGENERATED {
@@ -510,10 +513,17 @@ fn cnt_one(
     let (origin, detail) = eye_origin(eye);
     // Its distance once, for the zoom it is drawn at and its size.
     let d2 = generated::distance2(origin, corner);
-    // Drawn only where the rays ask its clip level's zoom at its distance, or,
-    // placed, past the entries' records, the coarsest it stands at or finer.
+    // Drawn only where the rays ask its clip level's zoom at its distance,
+    // held to the clip levels holding its column, or, placed, past the
+    // entries' records, the coarsest it stands at or finer.
     let placed = i >= generated::record_at(generated::SLOT_RECORDS) as usize;
-    let here = generated::drawn_at(detail, d2, cell, placed);
+    let at = detail.at(d2);
+    let at = if placed {
+        at
+    } else {
+        generated::held_at(&Clipmap(clipmap), at, [corner[0], corner[1]])
+    };
+    let here = generated::drawn_at(at, cell, placed);
     let group = generated::first_group(rows, decor) + variant;
     let hide = drawn::HIDE as usize;
     let hidden = drawing[hide + 3] != 0

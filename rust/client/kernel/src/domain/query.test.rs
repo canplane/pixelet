@@ -33,6 +33,7 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::tile;
+use pxl_spec_core::area::{self, Area};
 use pxl_spec_core::world::placed_in;
 
 const CELLS: usize = GROUND_COLUMN;
@@ -814,4 +815,65 @@ fn generated_decor_edit_removes() {
         write(&mut store, at, OBJECT_COARSEST, val);
         assert_eq!(generates(&store), Some(kept), "{what}");
     }
+}
+
+/// The service area of the shards at `SHARD_ZOOM` in its column and east
+/// of it, every row: their nines as a declaration lays them (`area::nine`).
+struct EastOf(i32);
+
+impl Area for EastOf {
+    fn ends(&self) -> bool {
+        true
+    }
+    fn nine(&self, key: u32) -> u32 {
+        use pxl_spec_core::SHARD_ZOOM;
+        // `area::shard_key` undone: X's and Y's bits interleaved from the top.
+        let mut c = [0i32; 2];
+        for b in 0..SHARD_ZOOM {
+            c[0] |= ((key >> (2 * b) & 1) as i32) << b;
+            c[1] |= ((key >> (2 * b + 1) & 1) as i32) << b;
+        }
+        area::nine(|n| n[0] >= self.0, c)
+    }
+}
+
+/// The service area's edge is the wall's columns, a leaf cell thick: a
+/// leaf cell one in from the wall is the area's and editable, the wall's
+/// column and a cell past it neither (`World::within`, `World::editable`).
+#[test]
+fn area_edge_leaf_cell_thick() {
+    use pxl_spec_core::SHARD_ZOOM;
+    let _g = serial();
+    let s = LEAF_ZOOM - SHARD_ZOOM;
+    // A served shard's westmost leaf, the shard west of it unserved.
+    let leaf = Tile::new(LEAF_ZOOM, [5 << s, 3 << s]);
+    let area = EastOf(5);
+    let flat = drawn(
+        vec![5; CELLS],
+        Ground {
+            cells: vec![ground::land; SPAN * SPAN].into(),
+        },
+        Default::default(),
+    );
+    let (x0, y0, _) = leaf.rect();
+    let tile_cache = resident([x0 + 10.0, y0 + 10.0], &[(leaf, flat)]);
+    let store = Store::default();
+    let world = World::new(&tile_cache, &store);
+    let cell = units(GROUND.cell());
+    // The leaf cell `i` east of the leaf's west edge: whether it is the
+    // area's, and a cube of it on the ground editable.
+    let column = |i: f64| {
+        let (x, y) = (x0 + i * cell, y0 + 10.0 * cell);
+        let space = Aabb {
+            min: [x, y, 5.0],
+            max: [x + cell, y + cell, 5.0 + cell],
+        };
+        (
+            limit::within_in(&area, &point(x + 0.5 * cell, y + 0.5 * cell)),
+            world.editable_in(&area, &space),
+        )
+    };
+    assert_eq!(column(1.0), (true, true), "one in from the wall");
+    assert_eq!(column(0.0), (false, false), "the wall's column");
+    assert_eq!(column(-1.0), (false, false), "past the wall");
 }

@@ -11,14 +11,8 @@
 //! it from inside: a leaf column with ground beside one past the area is
 //! bedrock up to its own face, a cell of the leaves as any is, so the wall's
 //! outer face stands on the area's edge at every zoom (pxl-spec-core
-//! area.rs `laid`).
+//! area.rs `laid`). A walker keeps off the wall's columns and an edit off
+//! them, by the rule the wall is laid by (pxl-kernel domain/query/limit.rs
+//! `within`, `editable`).
 
 pub use pxl_spec_core::ground::{bedrock, ceiling};
-
-/// Whether a leaf column is the area's edge or past it: it or one of the eight
-/// about it is past, `past` asked of each by its offset in leaf columns. The
-/// wall is laid on the edge's ground, and a walker keeps off the edge, so it
-/// neither leaves the area nor stands on the wall.
-pub fn at_edge(past: impl Fn(i64, i64) -> bool) -> bool {
-    (-1..=1).any(|dy| (-1..=1).any(|dx| past(dx, dy)))
-}

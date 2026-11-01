@@ -7,13 +7,13 @@
 //! asks these, and nothing else decides them; the camera is no walker and
 //! asks none (query/support.rs `step_slide`).
 
-use pxl_spec::limit::{at_edge, bedrock, ceiling};
+use pxl_spec::limit::{bedrock, ceiling};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{Cells, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use pxl_spec_core::area::Shard;
+use pxl_spec_core::area::{gone_ring, Area, Shard};
 use pxl_spec_core::wrap_idx;
 
 use super::World;
@@ -24,33 +24,42 @@ use pxl_spec_core::clipmap::Found;
 
 impl World<'_> {
     /// Whether the leaf cell under `at` is the service area's and off its
-    /// edge (`pxl-spec limit.rs` `at_edge`), where the wall stands:
-    /// known before any of its ground arrives, off its shard's nine as the
-    /// fill lays the wall (pxl-spec-core `area::gone_ring`), the area's index
-    /// asked once (`Shard::at`).
+    /// edge, the wall's columns: its leaf tile not past the area, nor any of
+    /// the eight leaf cells about it, the rule the fill lays the wall by
+    /// (pxl-spec-core `area::gone_ring`), known before any of its ground
+    /// arrives, off its shard's nine, the area's index asked once
+    /// (`Shard::at`). A walker comes to the wall's face and stands on none
+    /// of it.
     pub fn within(&self, at: &Q3) -> bool {
-        let [x, y] = [i64::from(at[0]), i64::from(at[1])].map(q3::to_real);
-        within_tile(GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0)).tile().at)
+        within_in(&source::Declared, at)
     }
 
-    /// Whether `space` may hold an edit: every leaf tile under it within
-    /// the service area and off its edge (`within`), and there `space` over
-    /// the bedrock and under the ceiling of ground the world knows exactly,
-    /// no tile not yet held (`pxl-spec limit.rs`). The bedrock and
-    /// the ceiling rise with the face, so every column's hold where the
-    /// lowest ceiling and the highest bedrock do: the ground's bound over
-    /// the nodes holding `space` at its leaf cells, the fewest at the zoom
-    /// of its widest side, two a side at most (`TileCache::relief`). An
-    /// aligned cube is one node, its own columns; a box that is not is
-    /// bounded by the nodes about it, which only refuses more.
+    /// Whether `space` may hold an edit: no leaf tile past the service area
+    /// within a leaf cell of it, so none of its columns is the wall or past
+    /// it, as `within` holds, and there `space` over the bedrock and under
+    /// the ceiling of ground the world knows exactly, no tile not yet held
+    /// (`pxl-spec limit.rs`).
+    /// The bedrock and the ceiling rise with the face, so every column's
+    /// hold where the lowest ceiling and the highest bedrock do: the
+    /// ground's bound over the nodes holding `space` at its leaf cells, the
+    /// fewest at the zoom of its widest side, two a side at most
+    /// (`TileCache::relief`). An aligned cube is one node, its own columns;
+    /// a box that is not is bounded by the nodes about it, which only
+    /// refuses more.
     pub fn editable(&self, space: &Aabb) -> bool {
+        self.editable_in(&source::Declared, space)
+    }
+
+    /// `editable` against the service area `area`.
+    pub(super) fn editable_in(&self, area: &impl Area, space: &Aabb) -> bool {
         let (cell, unit) = (GROUND.cell(), units(GROUND.cell()));
         let first = |k: usize| (space.min[k] / unit).floor() as i32;
         let cnt = |k: usize| ((space.max[k] / unit).ceil() as i32 - first(k)).max(1);
-        // The leaf tiles under it, the area a fact of each.
+        // The leaf tiles its leaf cells and a cell about them touch, the
+        // area a fact of each: a leaf cell beside one past is the wall.
         let t = GROUND.tile_cell_shamt();
-        let tiles = |k: usize| first(k) >> t..=(first(k) + cnt(k) - 1) >> t;
-        if !tiles(1).all(|y| tiles(0).all(|x| within_tile([wrap_idx(LEAF_ZOOM, x), y]))) {
+        let tiles = |k: usize| (first(k) - 1) >> t..=(first(k) + cnt(k)) >> t;
+        if tiles(1).any(|y| tiles(0).any(|x| past(area, [wrap_idx(LEAF_ZOOM, x), y]))) {
             return false;
         }
         let s = (cnt(0).max(cnt(1)) as u64)
@@ -75,18 +84,18 @@ impl World<'_> {
     }
 }
 
-/// Whether the leaf tile `leaf` and the eight about it are the service
-/// area's (`within`).
-fn within_tile(leaf: [i32; 2]) -> bool {
-    let node = (LEAF_ZOOM, leaf);
-    let shard = Shard::UNKNOWN.at(&source::Declared, node);
-    !at_edge(|dx, dy| {
-        shard.past_leaf(
-            node,
-            [
-                wrap_idx(LEAF_ZOOM, leaf[0] + dx as i32),
-                leaf[1] + dy as i32,
-            ],
-        )
-    })
+/// `World::within` against the service area `area`.
+pub(super) fn within_in(area: &impl Area, at: &Q3) -> bool {
+    let [x, y] = [i64::from(at[0]), i64::from(at[1])].map(q3::to_real);
+    let leaf = GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0));
+    let (tile, cell) = (leaf.tile().at, leaf.node().1);
+    let node = (LEAF_ZOOM, tile);
+    let shard = Shard::UNKNOWN.at(area, node);
+    !shard.past_leaf(node, tile) && gone_ring(shard, node, cell) == 0
+}
+
+/// Whether the leaf tile `tile` is past `area`, off its shard's nine.
+fn past(area: &impl Area, tile: [i32; 2]) -> bool {
+    let node = (LEAF_ZOOM, tile);
+    Shard::UNKNOWN.at(area, node).past_leaf(node, tile)
 }

@@ -86,7 +86,7 @@ export const light_walked = 78 as number;
 
 export const light_boxes = 79 as number;
 
-export const tiles_landed = 80 as number;
+export const terrain_landed = 80 as number;
 
 export const uploads = 81 as number;
 

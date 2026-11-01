@@ -10,7 +10,7 @@
 //! the rest walked (`light_miss_cs`); and what each tile cast holds by, the
 //! least margin its walks asked, gathered once off the beam rays and the
 //! samples (`light_held_cs`) and lowered by its slots' walks
-//! (`light_told_cs`).
+//! (`light_miss_held_cs`).
 
 use pxl_spec_core::cast::{self, Detail, Margin};
 use pxl_spec_core::fill::put;
@@ -390,40 +390,45 @@ impl Observer for Map {
 
 impl Map {
     /// The tiles of the box what `level` at `at` feeds, from the first to
-    /// the last across and down: a ray its own slot's tile; a sample the
-    /// slots that may take its box, a tile either way, beyond the four it
-    /// lies about (`sample_before`), as a box fewer is a slot walked more; a
-    /// cell, a tile, as a sample does; a beam ray the cells whose window
-    /// holds it (`window`), each as a cell does.
+    /// the last across and down: the tile it lies on (`on`) and its reach
+    /// about it (`reach`).
     fn feeds(&self, level: Level, at: [u32; 2]) -> ([i32; 2], [i32; 2]) {
+        let (on, (lo, hi)) = (self.on(level, at), self.reach(level));
+        ([on[0] + lo[0], on[1] + lo[1]], [on[0] + hi[0], on[1] + hi[1]])
+    }
+
+    /// The tile what `level` at `at` lies on: a ray's or a sample's, its
+    /// texel's tile; a cell's or a beam ray's, its own number, a cell a tile.
+    fn on(&self, level: Level, at: [u32; 2]) -> [i32; 2] {
+        let t = pxl_spec_core::light::TILE;
+        let p = match level {
+            Level::Ray => self.light.texel(self.size, at),
+            Level::Sample => self.light.texel(self.size, self.point(at)),
+            Level::Cell | Level::Corner => return [at[0] as i32, at[1] as i32],
+        };
+        [(p[0] / t) as i32, (p[1] / t) as i32]
+    }
+
+    /// The tiles about its own (`on`) what `level` feeds, the first and the
+    /// last across and down, the same wherever it lies: a ray its own slot's
+    /// tile; a sample the slots that may take its box, a tile either way,
+    /// beyond the four it lies about (`sample_before`), as a box fewer is a
+    /// slot walked more; a cell, a tile, as a sample does; a beam ray the
+    /// cells whose window holds it (`window`), each as a cell does.
+    fn reach(&self, level: Level) -> ([i32; 2], [i32; 2]) {
         const _: () = assert!(
             pxl_spec_core::light::BEAM == pxl_spec_core::light::TILE
                 && pxl_spec_core::param::light::SAMPLE <= pxl_spec_core::light::TILE,
             "a cell is a tile, and a sample's slots lie within a tile of it"
         );
-        let t = pxl_spec_core::light::TILE as i32;
-        let (lo, hi) = match level {
-            Level::Ray => {
-                let p = self.light.texel(self.size, at);
-                let tile = [p[0] as i32 / t, p[1] as i32 / t];
-                (tile, tile)
-            }
-            Level::Cell => {
-                let c = [at[0] as i32, at[1] as i32];
-                ([c[0] - 1, c[1] - 1], [c[0] + 1, c[1] + 1])
-            }
+        match level {
+            Level::Ray => ([0, 0], [0, 0]),
+            Level::Cell | Level::Sample => ([-1, -1], [1, 1]),
             Level::Corner => {
                 let side = self.window([0, 0]).1 as i32;
-                let c = [at[0] as i32, at[1] as i32];
-                ([c[0] - side, c[1] - side], [c[0] + 1, c[1] + 1])
+                ([-side, -side], [1, 1])
             }
-            Level::Sample => {
-                let p = self.light.texel(self.size, self.point(at));
-                let tile = [p[0] as i32 / t, p[1] as i32 / t];
-                ([tile[0] - 1, tile[1] - 1], [tile[0] + 1, tile[1] + 1])
-            }
-        };
-        (lo, hi)
+        }
     }
 }
 
@@ -512,8 +517,8 @@ pub fn light_cs(
 /// are (cast.rs `miss_list_cs`), its ray walked again (observer.rs
 /// `walked`), and the word it leaves there; what it tells its tile, the
 /// least margin of the nodes it asked, written over its place in the list
-/// (`light::missed`), which `light_told_cs` lowers the tile's held words by.
-/// The list read and written plainly.
+/// (`light::miss_word`), which `light_miss_held_cs` lowers the tile's held
+/// words by. The list read and written plainly.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "light_miss_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn light_miss_cs(
@@ -549,16 +554,16 @@ pub fn light_miss_cs(
     unsafe { light.write(slot, m.word(&met)) };
     list.set(
         pxl_spec_core::light::misses_at(n) + i,
-        pxl_spec_core::light::missed(n, at, told.0),
+        pxl_spec_core::light::miss_word(n, at, told.0),
     );
 }
 
-/// Each listed slot's walk's margin (`light::missed`) lowered into its
+/// Each listed slot's walk's margin (`light::miss_word`) lowered into its
 /// tile's held words, a thread a slot as `light_miss_cs` lays them, after
 /// it: the one word a walk shares with others, so the one pass of the cast
 /// whose list is atomic. None where its walk asked nothing.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "light_told_cs"))]
-pub fn light_told_cs(
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "light_miss_held_cs"))]
+pub fn light_miss_held_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
@@ -571,7 +576,7 @@ pub fn light_told_cs(
         return;
     }
     let w = at(list, pxl_spec_core::light::misses_at(n) + i);
-    let (h, told) = pxl_spec_core::light::missed_told(n, w);
+    let (h, told) = pxl_spec_core::light::miss_held(n, w);
     if told < Margin::NONE.0.to_bits() {
         crate::least(list, h + pxl_spec_core::light::HELD_MARGIN, told);
     }
@@ -651,10 +656,11 @@ pub fn light_sample_cs(
 /// What each tile this cast casts holds by, gathered once, a thread a tile,
 /// after the beam rays and the samples: the least margin each beam ray and
 /// sample that feeds it kept (`light::LINE_MARGIN`, `light::sample_margin`),
-/// the tiles fed the inverse of `Map::feeds`, set in its held words
-/// (`light::HELD_MARGIN`), which its listed slots' walks then lower
-/// (`light_told_cs`). A beam ray or a sample feeding a tile the cast casts
-/// is one the cast needs, so it ran and kept its margin this cast.
+/// those whose reach about their own tile holds it (`Map::reach`,
+/// `Map::on`), set in its held words (`light::HELD_MARGIN`), which its
+/// listed slots' walks then lower (`light_miss_held_cs`). A beam ray or a
+/// sample feeding a tile the cast casts is one the cast needs, so it ran and
+/// kept its margin this cast.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_held_cs"))]
 pub fn light_held_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -671,45 +677,38 @@ pub fn light_held_cs(
     if at(list, l::reads_at(n) + id.y * tiles + id.x) != cast_number(head) {
         return;
     }
-    let s = light_of(eye);
+    let m = Map::of(eye, head);
     let t = [id.x as i32, id.y as i32];
     let mut least = Margin::NONE.0.to_bits();
-    // The beam rays whose window's cells, or a tile beside one, it is: from
-    // a tile before it to the window's side past it (`Map::feeds`,
-    // `Level::Corner`).
+    // The beam rays whose reach holds it (`Map::reach`, `Level::Corner`), a
+    // beam ray's own tile its number.
     let corners = l::beam_across(n) as i32;
-    let side = (2 + 2 * l::BEAM_WINDOW) as i32;
-    let (lo, hi) = (
-        [(t[0] - 1).max(0), (t[1] - 1).max(0)],
-        [
-            (t[0] + side).min(corners - 1),
-            (t[1] + side).min(corners - 1),
-        ],
-    );
-    let mut j = lo[1];
-    while j <= hi[1] {
-        let mut i = lo[0];
-        while i <= hi[0] {
+    let (lo, hi) = m.reach(Level::Corner);
+    let mut j = (t[1] - hi[1]).max(0);
+    while j <= (t[1] - lo[1]).min(corners - 1) {
+        let mut i = (t[0] - hi[0]).max(0);
+        while i <= (t[0] - lo[0]).min(corners - 1) {
             let k = l::line(n, (j * corners + i) as u32) + l::LINE_MARGIN;
             least = least.min(at(list, k));
             i += 1;
         }
         j += 1;
     }
-    // The samples of the tiles beside it and its own, by their slots
-    // (`Map::feeds`, `Level::Sample`).
+    // The samples whose reach holds it (`Map::reach`, `Level::Sample`), by
+    // the tiles they lie on (`Map::on`): each such tile's slots' samples.
     let (per, across) = (
         TILE / pxl_spec_core::param::light::SAMPLE,
         n / pxl_spec_core::param::light::SAMPLE,
     );
+    let (lo, hi) = m.reach(Level::Sample);
     let last = tiles as i32 - 1;
-    let mut b = (t[1] - 1).max(0);
-    while b <= (t[1] + 1).min(last) {
-        let mut a = (t[0] - 1).max(0);
-        while a <= (t[0] + 1).min(last) {
-            let slot = |k: usize, v: i32| {
-                ((v * TILE as i32).wrapping_add(s.corner[k]) as u32 & (n - 1)) / TILE
-            };
+    let corner = m.light.corner;
+    let mut b = (t[1] - hi[1]).max(0);
+    while b <= (t[1] - lo[1]).min(last) {
+        let mut a = (t[0] - hi[0]).max(0);
+        while a <= (t[0] - lo[0]).min(last) {
+            let slot =
+                |k: usize, v: i32| ((v * TILE as i32).wrapping_add(corner[k]) as u32 & (n - 1)) / TILE;
             let (x, y) = (slot(0, a) * per, slot(1, b) * per);
             let mut q = 0;
             while q < per * per {
@@ -721,7 +720,7 @@ pub fn light_held_cs(
         }
         b += 1;
     }
-    put(list, s.held(n, [id.x, id.y]) + l::HELD_MARGIN, least);
+    put(list, m.light.held(n, [id.x, id.y]) + l::HELD_MARGIN, least);
 }
 
 /// The world's receivers of the shadow map: the drawn pixels' rays (cast.rs
@@ -998,7 +997,7 @@ pub fn light_propagate_cs(
     if read && at(list, w) < epoch {
         put(list, w, cast);
         // Where the eye stands as it is cast; its margin the walks that
-        // feed it set (`light_held_cs`, `light_told_cs`).
+        // feed it set (`light_held_cs`, `light_miss_held_cs`).
         let h = s.held(side, [id.x, id.y]);
         let e = pxl_spec_core::light::HELD_EYE;
         put(list, h + e, eye.origin.x as u32);

@@ -90,7 +90,7 @@ pub struct Device {
     pub align: u32,
     pub timestamps: bool,
     /// Whether a depth target may carry a stencil beside a 32-bit float
-    /// depth, which the world's does where it can (`Gpu::world_depth`).
+    /// depth, which the world's does where it can (`Gpu::gated_depth`).
     pub depth32float_stencil8: bool,
     /// What a surface shows best, and so what the canvas's pipelines target.
     pub canvas: Format,

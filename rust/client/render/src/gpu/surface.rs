@@ -43,7 +43,7 @@ pub struct Surface {
     pub waited: u32,
     /// The frame's depth, the world's and over it what moves on its own
     /// (gpu/renderer.rs, stage 2), with a stencil where the device carries
-    /// one (`Gpu::world_depth`): `depth_view` as a pass draws into it,
+    /// one (`Gpu::gated_depth`): `depth_view` as a pass draws into it,
     /// `depth_only_view` as a binding reads it.
     pub depth: u32,
     pub depth_view: u32,

@@ -30,7 +30,7 @@ pub const ENTRIES: [(&str, &str); 34] = [
     ("light_beam_cs", "light_beam.gen.wgsl"),
     ("light_sample_cs", "light_sample.gen.wgsl"),
     ("light_held_cs", "light_held.gen.wgsl"),
-    ("light_told_cs", "light_told.gen.wgsl"),
+    ("light_miss_held_cs", "light_miss_held.gen.wgsl"),
     ("miss_cs", "miss.gen.wgsl"),
     ("miss_list_cs", "miss_list.gen.wgsl"),
     ("sample_box_cs", "sample_box.gen.wgsl"),

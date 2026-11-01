@@ -90,7 +90,7 @@ ownership and lifetime.
   body slots' extremes since the recording started. A p95 is the nearest
   rank (perf.json `PERCENTILES`). `pxl.perf.trace()` saves the window for
   ui.perfetto.dev, a download, with every lane of every frame: which frames
-  took terrain tiles in (`tiles_landed`), why the light's map cast
+  took terrain tiles in (`terrain_landed`), why the light's map cast
   (`light_moved`), and the ray counts of the frame they were counted in.
 - An A/B is one change apart, the baseline built from the same tree with that
   change undone, the dev server rebuilding the guest: the same place, zoom,
