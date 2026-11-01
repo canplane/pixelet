@@ -1124,13 +1124,13 @@ fn function_() {
                     let _e320 = phi_9238_;
                     let _e322 = bitcast<i32>((_e314 + _e320));
                     let _e326 = global_6.member[(_e211 + 2u)];
-                    let _e331 = global_6.member[(_e326 + 3u)];
-                    let _e335 = global_6.member[(_e326 + 4u)];
-                    let _e339 = global_6.member[(_e326 + 5u)];
-                    let _e342 = global_6.member[(_e326 + 2u)];
-                    let _e346 = global_6.member[(_e326 + 6u)];
-                    let _e351 = global_6.member[(_e326 + 7u)];
-                    let _e356 = global_6.member[(_e326 + 8u)];
+                    let _e331 = global_6.member[(_e326 + 2u)];
+                    let _e335 = global_6.member[(_e326 + 3u)];
+                    let _e339 = global_6.member[(_e326 + 4u)];
+                    let _e342 = global_6.member[(_e326 + 1u)];
+                    let _e346 = global_6.member[(_e326 + 5u)];
+                    let _e351 = global_6.member[(_e326 + 6u)];
+                    let _e356 = global_6.member[(_e326 + 7u)];
                     let _e359 = (_e342 >= 32u);
                     if _e359 {
                         phi_9259_ = 0u;
@@ -1248,7 +1248,7 @@ fn function_() {
                     let _e484 = select(_e481, false, _e483);
                     if _e484 {
                         let _e530 = local_34;
-                        let _e532 = ((_e326 + 9u) + (5u * _e530));
+                        let _e532 = ((_e326 + 8u) + (5u * _e530));
                         let _e534 = global_6.member[_e532];
                         let _e537 = global_6.member[(_e532 + 1u)];
                         let _e540 = global_6.member[(_e532 + 2u)];
@@ -1673,7 +1673,7 @@ fn function_() {
                                     let _e1088 = local_38;
                                     if (_e1088 < _e557) {
                                         let _e1113 = local_42;
-                                        let _e1115 = ((_e326 + 9u) + (5u * _e1113));
+                                        let _e1115 = ((_e326 + 8u) + (5u * _e1113));
                                         let _e1117 = global_6.member[_e1115];
                                         let _e1120 = global_6.member[(_e1115 + 1u)];
                                         let _e1123 = global_6.member[(_e1115 + 2u)];

@@ -472,8 +472,7 @@ const _: () = assert!(
 );
 
 /// What a beam ray leaves, in words: the eye's beam rays' line
-/// (`beam::LINE_T`, `beam::LINE_NODE`, `beam::LINE_HANDED`), how far a cell's
-/// texels may start from it in its first word, then its origin
+/// (`beam::LINE_NODE`, `beam::LINE_HANDED`), then its origin
 /// (`LINE_ORIGIN`), which its nodes are held from (`cast::Node::moved`), as
 /// every light ray starts apart; then the least margin of the nodes its walk
 /// asked (`LINE_MARGIN`, `cast::Margin`), f32 bits, which the tiles it feeds
@@ -513,7 +512,9 @@ pub const fn cells_across(size: u32) -> u32 {
 }
 
 /// Where the beam's words lie in the list's buffer, its first: the lines,
-/// a beam ray each, then the cells' starts; and all its words.
+/// a beam ray each, then how far a cell's texels may start from each, a word
+/// a beam ray in their order (`hand_at`), as the eye's (`beam::Grid::hand_at`),
+/// then the cells' starts; and all its words.
 pub const fn lines_at(_size: u32) -> u32 {
     0
 }
@@ -522,8 +523,12 @@ pub const fn line(size: u32, ray: u32) -> u32 {
     lines_at(size) + ray * LINE_WORDS
 }
 
+pub const fn hand_at(size: u32, ray: u32) -> u32 {
+    lines_at(size) + beam_across(size) * beam_across(size) * LINE_WORDS + ray
+}
+
 pub const fn cells_at(size: u32) -> u32 {
-    lines_at(size) + beam_across(size) * beam_across(size) * LINE_WORDS
+    lines_at(size) + beam_across(size) * beam_across(size) * (LINE_WORDS + 1)
 }
 
 pub const fn cell(size: u32, [i, j]: [u32; 2]) -> u32 {

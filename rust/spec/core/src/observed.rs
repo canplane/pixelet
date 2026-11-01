@@ -245,14 +245,6 @@ pub const fn kind_of(w: u32) -> Kind {
     }
 }
 
-/// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,
-/// `moved` the moved entries' words (`MOVED_AT`), as a walk holds them, never
-/// a closure over the buffer, which rust-gpu reads wrongly: a node's answer reads
-/// the bricks under it alone — its cells' and their clip levels' over them
-/// (`clipmap::step`), a wider node's the block of bricks its own size
-/// (`clipmap::bounded`) — and what was handed it found its cells there, so a
-/// node no moved brick lies under answers as it did. A node a clip level's
-/// whole side wide or wider reads every entry of the clip level.
 /// Whether the node of `zoom` at column `[x, y]` stands over the box `b` of
 /// leaf cells `[x0, y0, x1, y1)`, X round the world: its own columns as a
 /// box of leaf cells (`overwrite::cut_box`) meet it. A node's answer, and what
@@ -284,6 +276,14 @@ pub fn reads_written(placed: u32, first: u32) -> bool {
     held.holds() && held.slot().wrapping_sub(first) < overwrite::CHILDREN
 }
 
+/// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,
+/// `moved` the moved entries' words (`MOVED_AT`), as a walk holds them, never
+/// a closure over the buffer, which rust-gpu reads wrongly: a node's answer reads
+/// the bricks under it alone — its cells' and their clip levels' over them
+/// (`clipmap::step`), a wider node's the block of bricks its own size
+/// (`clipmap::bounded`) — and what was handed it found its cells there, so a
+/// node no moved brick lies under answers as it did. A node a clip level's
+/// whole side wide or wider reads every entry of the clip level.
 pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]) -> bool {
     let mut w = 0;
     while w < EYE_CLIP_LEVELS {
@@ -301,32 +301,54 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
             [lo[0] >> BRICK_SHIFT, lo[1] >> BRICK_SHIFT],
             [hi[0] >> BRICK_SHIFT, hi[1] >> BRICK_SHIFT],
         );
-        // As wide as the clip level or wider, every entry; else each brick.
-        let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
-        if wide {
-            let mut k = 0;
-            while k < clipmap::ENTRIES {
-                if moved_in(moved, w, k) {
-                    return true;
-                }
-                k += 1;
+        // Its entries' bits against the clip level's moved words at once.
+        let mask = entries_of(q0, q1);
+        let at = (w * LEVEL_WORDS) as usize;
+        let mut k = 0;
+        while k < LEVEL_WORDS as usize {
+            if moved[at + k] & mask[k] != 0 {
+                return true;
             }
-        } else {
-            let mut qy = q0[1];
-            while qy <= q1[1] {
-                let mut qx = q0[0];
-                while qx <= q1[0] {
-                    if moved_in(moved, w, clipmap::entry([qx, qy])) {
-                        return true;
-                    }
-                    qx += 1;
-                }
-                qy += 1;
-            }
+            k += 1;
         }
         w += 1;
     }
     false
+}
+
+/// A clip level's moved words (`moved_in`): its entries, a bit each, a row
+/// of `clipmap::ACROSS` bits after another.
+const LEVEL_WORDS: u32 = clipmap::ENTRIES / 32;
+const ROWS_A_WORD: u32 = 32 / ACROSS;
+const _: () = assert!(
+    clipmap::ENTRIES.is_multiple_of(32)
+        && 32u32.is_multiple_of(ACROSS)
+        && ACROSS < 32
+        && clipmap::ENTRIES == ACROSS * ACROSS,
+    "a clip level's entries fill whole words, whole rows a word"
+);
+
+/// The entries of a clip level that hold the bricks from `q0` to `q1`, X then
+/// Y, a bit each as its moved words lay them (`clipmap::entry`, `moved_in`):
+/// every one where they span the level's side either way, as the clip level
+/// wraps.
+fn entries_of(q0: [i32; 2], q1: [i32; 2]) -> [u32; LEVEL_WORDS as usize] {
+    let n = [q1[0] - q0[0] + 1, q1[1] - q0[1] + 1];
+    if n[0] >= ACROSS as i32 || n[1] >= ACROSS as i32 {
+        return [u32::MAX; LEVEL_WORDS as usize];
+    }
+    let m = (ACROSS - 1) as i32;
+    // The row's columns, from the first round the clip level.
+    let (run, s) = ((1u32 << n[0]) - 1, (q0[0] & m) as u32);
+    let row = ((run << s) | (run >> (ACROSS - s))) & (u32::MAX >> (32 - ACROSS));
+    let mut mask = [0u32; LEVEL_WORDS as usize];
+    let mut j = 0;
+    while j < n[1] {
+        let r = ((q0[1] + j) & m) as u32;
+        mask[(r / ROWS_A_WORD) as usize] |= row << (ACROSS * (r % ROWS_A_WORD));
+        j += 1;
+    }
+    mask
 }
 
 /// Whether entry `entry` of the eye's clip level `w` moved, among the moved
@@ -378,5 +400,46 @@ mod tests {
         assert!(!reads_written(held(40 + CHILDREN), 40));
         assert!(!reads_written(held(39), 40));
         assert!(!reads_written(NodeSlot::NOTHING.word(), 0));
+    }
+
+    /// A node forgets where a brick it reads moved, entry by entry as its
+    /// clip levels hold them, round each level: the words tested at once
+    /// answer as each entry tested alone.
+    #[test]
+    fn node_forgets_entries() {
+        let by_entry = |moved: &[u32; MOVED_WORDS as usize], q0: [i32; 2], q1: [i32; 2], w: u32| {
+            let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
+            if wide {
+                return (0..clipmap::ENTRIES).any(|k| moved_in(moved, w, k));
+            }
+            (q0[1]..=q1[1])
+                .any(|qy| (q0[0]..=q1[0]).any(|qx| moved_in(moved, w, clipmap::entry([qx, qy]))))
+        };
+        let mut h = 0x9E37_79B9u32;
+        let mut next = || {
+            h ^= h << 13;
+            h ^= h >> 17;
+            h ^= h << 5;
+            h
+        };
+        for _ in 0..4000 {
+            let mut moved = [0u32; MOVED_WORDS as usize];
+            for _ in 0..next() % 48 {
+                let k = next() % (EYE_CLIP_LEVELS * clipmap::ENTRIES);
+                moved[(k / 32) as usize] |= 1 << (k % 32);
+            }
+            let q0 = [(next() % 64) as i32 - 32, (next() % 64) as i32 - 32];
+            let q1 = [q0[0] + (next() % 10) as i32, q0[1] + (next() % 10) as i32];
+            for w in 0..EYE_CLIP_LEVELS {
+                let mask = entries_of(q0, q1);
+                let at = (w * LEVEL_WORDS) as usize;
+                let words = (0..LEVEL_WORDS as usize).any(|k| moved[at + k] & mask[k] != 0);
+                assert_eq!(
+                    words,
+                    by_entry(&moved, q0, q1, w),
+                    "{q0:?} {q1:?} level {w}"
+                );
+            }
+        }
     }
 }

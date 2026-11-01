@@ -293,6 +293,10 @@ impl Observer for Map {
         pxl_spec_core::light::line(self.size, idx)
     }
 
+    fn hand_at(&self, idx: u32) -> u32 {
+        pxl_spec_core::light::hand_at(self.size, idx)
+    }
+
     /// Every ray of the light's starts apart, its line's start kept after it
     /// (`light::LINE_ORIGIN`).
     fn origin_of<W: Words + ?Sized>(&self, w: &W, base: u32) -> [i32; 3] {

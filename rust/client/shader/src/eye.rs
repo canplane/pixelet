@@ -152,6 +152,10 @@ impl Observer for Eye {
         beam::Grid::line(idx)
     }
 
+    fn hand_at(&self, idx: u32) -> u32 {
+        grid(self).hand_at(idx)
+    }
+
     /// Every ray of the eye's starts at the eye.
     fn origin_of<W: Words + ?Sized>(&self, _: &W, _: u32) -> [i32; 3] {
         eye_origin(self).0

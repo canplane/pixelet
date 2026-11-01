@@ -73,8 +73,10 @@ pub(crate) trait Observer {
     /// it.
     fn handed(&self, aim: &Aim, t: f32) -> f32;
     /// The first word of the line of the corner numbered `index`, `across` a
-    /// row (`index`).
+    /// row (`index`), and the word of how far the rays about it start
+    /// (`handed`), a word a corner in their order apart from the lines.
     fn line(&self, idx: u32) -> u32;
+    fn hand_at(&self, idx: u32) -> u32;
     /// Where the ray of the line at `base` of `w` started, which its nodes
     /// are held from (`cast::Node::moved`); and that kept there.
     fn origin_of<W: Words + ?Sized>(&self, w: &W, base: u32) -> [i32; 3];
@@ -133,7 +135,8 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         return;
     }
     let aim = o.corner(c);
-    let base = o.line(idx(o.corners()[0], c));
+    let k = idx(o.corners()[0], c);
+    let base = o.line(k);
     o.keep_origin(w, base, aim.origin);
     let tag = observed::tag(pyramid_at(seen, observed::FRAME), o.passes()[0]);
     let met = cast::rooted(
@@ -151,13 +154,13 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         told,
     );
     add_tally(seen, o.tally(), tally::BEAM, met.visits);
-    w.set(base + beam::LINE_T, o.handed(&aim, met.hit.t).to_bits());
+    w.set(o.hand_at(k), o.handed(&aim, met.hit.t).to_bits());
     w.set(base + beam::LINE_VISITS, met.visits);
 }
 
 /// How far the rays of the line of corner `k` start.
 fn t_of<O: Observer, W: Words + ?Sized>(o: &O, w: &W, k: u32) -> f32 {
-    f32::from_bits(w.word(o.line(k) + beam::LINE_T))
+    f32::from_bits(w.word(o.hand_at(k)))
 }
 
 /// Where cell `c`'s rays start: the least of the beam rays within its

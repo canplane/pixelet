@@ -640,7 +640,7 @@ fn function_() {
                                     let _e1048 = global_2.member[((_e911 + (((select(_e1037, _e1038, (_e1038 < _e1037)) * _e896) + select(_e1030, _e1031, (_e1031 < _e1030))) * 2u)) + 1u)];
                                     global_2.member[_e936] = _e934;
                                     global_2.member[(_e936 + 1u)] = ((2u * _e1017) + select(0u, 1u, (_e1023 > 0f)));
-                                    global_2.member[(_e936 + 2u)] = (_e1048 * 174u);
+                                    global_2.member[(_e936 + 2u)] = (_e1048 * 173u);
                                     global_2.member[(_e936 + 3u)] = (_e934 + 11u);
                                 }
                                 phi_2745_ = _e953.member_1;

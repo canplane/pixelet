@@ -114,6 +114,14 @@ impl Observer for PassObserver<'_> {
         }
     }
 
+    fn hand_at(&self, idx: u32) -> u32 {
+        if self.light {
+            self.map.hand_at(idx)
+        } else {
+            self.eye.hand_at(idx)
+        }
+    }
+
     fn origin_of<W: Words + ?Sized>(&self, w: &W, base: u32) -> [i32; 3] {
         if self.light {
             self.map.origin_of(w, base)

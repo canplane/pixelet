@@ -55,7 +55,8 @@ pub struct Grid {
     pub corners: [u32; 2],
     pub samples: [u32; 2],
     /// Where the cells' starts and the samples' hits start among the beam
-    /// rays' words, past the lines; then the boxes' asks, a sample's room
+    /// rays' words, past the lines and how far each hands on (`hand_at`);
+    /// then the boxes' asks, a sample's room
     /// each (`asks_at`), the missed pixels' hits (`hits_at`) and their
     /// asks (`hit_asks_at`), `HITS` each.
     cells_at: u32,
@@ -104,7 +105,7 @@ impl Grid {
         };
         g.past = g.cell_window([span[0] - 1, span[1] - 1]);
         g.corners = [span[0] + 1 + 2 * g.past, span[1] + 1 + 2 * g.past];
-        g.cells_at = g.corners[0] * g.corners[1] * LINE_WORDS;
+        g.cells_at = g.corners[0] * g.corners[1] * (LINE_WORDS + 1);
         g.samples_at = g.cells_at + span[0] * span[1] * CELL_WORDS;
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
@@ -246,6 +247,14 @@ impl Grid {
         c * LINE_WORDS
     }
 
+    /// The word of how far corner `c`'s beam ray hands on (`handed`), f32
+    /// bits, by its index: a word a corner past the lines, in their order,
+    /// so a cell's window reads its corners' row by row off a run of words
+    /// apiece, not a line apiece.
+    pub fn hand_at(&self, c: u32) -> u32 {
+        self.corners[0] * self.corners[1] * LINE_WORDS + c
+    }
+
     /// The first word of the screen's cell `[x, y]`'s start.
     pub fn cell_at(&self, [x, y]: [u32; 2]) -> u32 {
         self.cells_at + (y * self.span[0] + x) * CELL_WORDS
@@ -288,18 +297,20 @@ pub const NODE_CORNER: u32 = 1;
 pub const NODE_ROOTS: u32 = 4;
 pub const NODE_WORDS: u32 = 7;
 
-/// What a beam ray leaves for the pixels about it, in words: how far it
-/// hands on (`Grid::handed`), f32 bits, the nodes its walk visited, which
-/// the steps view counts into every walk resumed from it, then the node it
-/// stopped at
+/// What a beam ray leaves for the pixels about it, in words: the nodes its
+/// walk visited, which the steps view counts into every walk resumed from
+/// it, then the node it stopped at
 /// (`NODE_WORDS`), then, for every node from the root to it, what was
 /// handed it (`world::Inheritance::words`), `LINE_STEP` words a zoom, its own at its
 /// zoom. A node's entry in the observed pyramid is its key's
-/// (`observed::entry_of`), so a line holds none. The light's beam rays leave
-/// the same, their origin after it (pxl-spec-core `light::LINE_ORIGIN`).
-pub const LINE_T: u32 = 0;
-pub const LINE_VISITS: u32 = 1;
-pub const LINE_NODE: u32 = 2;
+/// (`observed::entry_of`), so a line holds none. How far it hands on
+/// (`Grid::handed`) lies apart from its line, a word a corner past the
+/// lines (`Grid::hand_at`), which the cells' windows read alone. The light's
+/// beam rays leave the same, their origin after it (pxl-spec-core
+/// `light::LINE_ORIGIN`), and how far they hand on apart as well
+/// (`light::hand_at`).
+pub const LINE_VISITS: u32 = 0;
+pub const LINE_NODE: u32 = 1;
 pub const LINE_HANDED: u32 = LINE_NODE + NODE_WORDS;
 pub const LINE_STEP: u32 = world::INHERITANCE_WORDS;
 pub const LINE_WORDS: u32 = LINE_HANDED + LINE_STEP * cast::DEPTH as u32;
