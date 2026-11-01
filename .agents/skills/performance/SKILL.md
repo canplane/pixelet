@@ -77,9 +77,10 @@ ownership and lifetime.
 
 - Serve the client from your own checkout or worktree on a port of its own,
   so no other session's dev server or tab reloads: `make install`, then
-  `CARGO_TARGET_DIR=rust/target/session/<id> pnpm --dir ts/app/web dev
-  --port <port> --strictPort`. Tiles and assets come from the published
-  deployment, so the server needs the network (outside the sandbox).
+  `CARGO_TARGET_DIR="$(git rev-parse --show-toplevel)/rust/target/session/<id>"
+  pnpm --dir ts/app/web dev --port <port> --strictPort`. Tiles and assets
+  come from the published deployment, so the server needs the network
+  (outside the sandbox).
 - A new origin has no location permission: place the view by the search.
 - Turn the profiler on (Settings, debug, profiler); it records only while on.
   In the page's console, `pxl.perf.report()` is its window as text: frames

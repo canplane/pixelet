@@ -9,10 +9,11 @@ The session's own target, `rust/target/session/<id>`, set in the same command
 as cargo. `<id>` is the session's, `$CLAUDE_CODE_SESSION_ID` where it is set;
 where none is, choose one unique id once (`date +%s`-$RANDOM) and write it
 into every later command as it is: a shell variable does not outlive the
-call.
+call. `<root>` is the checkout's root, written out: a subagent isolated in a
+worktree is refused a command that runs git inside `$(...)`.
 
 ```bash
-export CARGO_TARGET_DIR="$(git rev-parse --show-toplevel)/rust/target/session/<id>"
+export CARGO_TARGET_DIR="<root>/rust/target/session/<id>"
 ```
 
 `cargo lint-android` (in `make check`) needs the NDK's compiler at the app's
