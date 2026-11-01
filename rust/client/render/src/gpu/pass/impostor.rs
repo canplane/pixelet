@@ -16,13 +16,13 @@ use crate::gpu::api::{
     buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
     view_entry, Format, Gpu, Load, TrackedRenderPass,
 };
-use crate::gpu::generated::Drawn;
+use crate::gpu::generated::IndirectDraw;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::mark::{self, Marks, UploadCopies};
 use crate::gpu::pass::model::{
     draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
 
 /// Impostors span less than the model tier's floor, a camera grid cell
@@ -38,8 +38,8 @@ pub type Extent = [f32; 3];
 type Baked = (u32, Option<u32>, Extent);
 
 pub struct ImpostorPass {
-    draw: Built,
-    bake: Built,
+    draw: Pipeline,
+    bake: Pipeline,
     uniforms: DrawUniforms,
     fit_uniforms: DrawUniforms,
     atlas: u32,
@@ -55,7 +55,7 @@ pub struct ImpostorPass {
 
 /// A mark's uniform, as the draw's (`put_instances`), its atlas layer its
 /// group's.
-fn put_mark(buf: &mut [u8], (d, u): &mark::Drawn) {
+fn put_mark(buf: &mut [u8], (d, u): &mark::Draw) {
     put_instances(buf, u, d[1]);
 }
 
@@ -298,7 +298,7 @@ impl ImpostorPass {
     pub fn draw_generated(
         &self,
         pass: &mut TrackedRenderPass,
-        generated: Option<Drawn>,
+        generated: Option<IndirectDraw>,
         groups: u32,
         frame: u32,
     ) {

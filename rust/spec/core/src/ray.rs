@@ -73,8 +73,8 @@ pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1,
 /// lie), at a storage binding's alignment, 256 bytes on every device, so
 /// the faces' pass binds them alone as it binds the boxes'. Set each frame
 /// the cast runs, as the words before them are.
-pub const MISS_ARGS_ASKED: u32 = 64;
-const _: () = assert!(MISS_ARGS_WORDS as u32 <= MISS_ARGS_ASKED);
+pub const MISS_ARGS_ROOM: u32 = 64;
+const _: () = assert!(MISS_ARGS_WORDS as u32 <= MISS_ARGS_ROOM);
 
 /// The first word of a hit at `asset`, an asset's word (`answer`): its
 /// value and the share it keeps, the face and the zoom.

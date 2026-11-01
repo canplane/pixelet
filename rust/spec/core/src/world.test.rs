@@ -12,7 +12,7 @@ use crate::clipmap::{
     LAID_AT, LEVELS, LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT,
 };
 use crate::cube::ground::stone;
-use crate::fill::{column_of, laid_of, level_of, put, root_of, Fresh};
+use crate::fill::{column_of, laid_of, level_of, put, root_of, LoneBrick};
 use crate::ground::Bounds;
 use crate::support::{asset, column_surface};
 use std::{vec, vec::Vec};
@@ -57,7 +57,7 @@ impl Presence for Clipmap<'_> {
 
 impl Bricks for Clipmap<'_> {
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
-        self.rows[((cell - FIRST_CELL) * ENTRIES + entry) as usize].held()
+        self.rows[((cell - FIRST_CELL) * ENTRIES + entry) as usize].brick()
     }
     fn palette_word(&self, _: Zoom, _: u32, _: u32) -> u32 {
         ground::word([stone as u32; 4])
@@ -75,7 +75,7 @@ impl Bricks for Clipmap<'_> {
         self.joined[((cell - FIRST_CELL) * JOINED_ENTRIES + e) as usize]
     }
     fn origin(&self, cell: Zoom) -> ([i32; 2], bool) {
-        self.rows[(ORIGIN_AT + cell - FIRST_CELL) as usize].held()
+        self.rows[(ORIGIN_AT + cell - FIRST_CELL) as usize].brick()
     }
     fn root(&self, _: Zoom, slot: u32) -> u32 {
         root_of(self.ground, slot * BRICK_WORDS)
@@ -95,14 +95,14 @@ impl Area for Clipmap<'_> {
 impl ground::Resident for Clipmap<'_> {
     fn relief(
         &mut self,
-        place: &mut Found,
+        place: &mut Lookup,
         cells: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
     ) -> (Bounds, bool) {
         let (r, _, here) = bound_over(self, place, cells, (zoom, [c[0], c[1]]));
         (r, here)
     }
-    fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> ground::Cell {
+    fn cell(&mut self, place: Lookup, zoom: Zoom, c: [i32; 3]) -> ground::Cell {
         clipmap::ground(self, place, zoom, [c[0], c[1]]).0
     }
 }
@@ -208,7 +208,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                 for k in 0..side * side {
                     let at = [k % side, k / side];
                     let b = join(
-                        &Fresh {
+                        &LoneBrick {
                             ground: &ground,
                             base,
                         },
@@ -289,7 +289,7 @@ fn partial_block_bounded() {
             continue;
         }
         unheld += 1;
-        let mut place = Found::NONE;
+        let mut place = Lookup::NONE;
         let (b, _, here) = bound_over(&w, &mut place, [CELL, CELL], (zoom, c));
         assert!(
             here && b[0][0] > ground::UNBOUNDED[0],
@@ -297,7 +297,7 @@ fn partial_block_bounded() {
         );
         for i in 0..side * side {
             let g = [c[0] * side + i % side, c[1] * side + i / side];
-            let (_, column, _, f) = clipmap::cell(&w, Found::NONE, CELL, g);
+            let (_, column, _, f) = clipmap::cell(&w, Lookup::NONE, CELL, g);
             assert!(f.here(), "{g:?} held");
             let top = column_top(column);
             assert!(

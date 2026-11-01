@@ -32,7 +32,7 @@ use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Gpu, RenderContext,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::tiles::Tiles;
 
@@ -59,7 +59,7 @@ const _: () = assert!(
 const UNIFORM_FLOATS: usize = 36;
 
 pub struct Propagate {
-    built: Built,
+    built: Pipeline,
     uniform: u32,
     /// Its group and what it was made over, made again where one is another.
     group: u32,
@@ -69,7 +69,7 @@ pub struct Propagate {
     /// made again where what it binds is another.
     bounds: u32,
     bounds_size: [u32; 2],
-    bounds_built: Built,
+    bounds_built: Pipeline,
     bounds_group: u32,
     bounds_bound: [u32; 4],
 }

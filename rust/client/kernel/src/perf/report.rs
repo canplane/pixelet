@@ -99,7 +99,7 @@ fn held_now(h: &HeapStat) -> RecordingSection {
         heap_refusals: f64::from(h.refusals),
         ring_cq_peak: f64::from(rings.cq_peak),
         ring_sq_peak: f64::from(rings.sq_peak),
-        ring_held_peak: f64::from(rings.left_peak),
+        ring_left_peak: f64::from(rings.left_peak),
         body_slots_peak: f64::from(body::take_peak()),
         cap_terrain_refused: TerrainTile::tile_cache().take_refusals() as f64,
     }

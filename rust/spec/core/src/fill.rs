@@ -18,7 +18,7 @@ use crate::area;
 use crate::area::Shard;
 use crate::clipmap::{
     self, column_top, handed_at, Bricks, Presence, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT,
-    ELE_AT, FRESH_BRICK, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_WORDS, LAID_AT,
+    ELE_AT, FILL_BRICK, FILL_CELL, FILL_FIRST, FILL_PLACE, FILL_SHARD, FILL_WORDS, LAID_AT,
     LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT, PALETTE_AT, ROOT_AT, SPANS_ACROSS, SPANS_AT,
     SPANS_COLUMNS, SPANS_COLUMN_WORDS,
 };
@@ -70,15 +70,15 @@ fn handed(fresh: &[u32], k: u32) -> (u32, u32, [u32; 2], Zoom) {
     let rec = handed_at(k);
     (
         rec,
-        at(fresh, rec + FRESH_BRICK) * BRICK_WORDS,
-        clipmap::place_of(at(fresh, rec + FRESH_PLACE)),
-        at(fresh, rec + FRESH_CELL),
+        at(fresh, rec + FILL_BRICK) * BRICK_WORDS,
+        clipmap::place_of(at(fresh, rec + FILL_PLACE)),
+        at(fresh, rec + FILL_CELL),
     )
 }
 
 /// The cells' zoom of the brick a frame hands `k`-th in `fresh`.
 pub fn cell_of(fresh: &[u32], k: u32) -> Zoom {
-    at(fresh, handed_at(k) + FRESH_CELL)
+    at(fresh, handed_at(k) + FILL_CELL)
 }
 
 /// The brick at `base`'s own nodes along z its ways meet, its cells at
@@ -90,18 +90,18 @@ pub fn root_span(ground: &[u32], base: u32, cell: Zoom) -> (i32, u32) {
 }
 
 /// A brick being filled, on its own: what `level` folds.
-pub struct Fresh<'a> {
+pub struct LoneBrick<'a> {
     pub ground: &'a [u32],
     pub base: u32,
 }
 
-impl Presence for Fresh<'_> {
+impl Presence for LoneBrick<'_> {
     fn present(&self, _: u32, _: [i32; 2]) -> (u32, bool) {
         (0, true)
     }
 }
 
-impl Bricks for Fresh<'_> {
+impl Bricks for LoneBrick<'_> {
     /// A brick on its own is no clip level's.
     fn brick(&self, _: u32, _: u32) -> ([i32; 2], bool) {
         ([0; 2], false)
@@ -147,7 +147,7 @@ impl Scratch<'_> {
     }
 }
 
-impl way::Kept for Scratch<'_> {
+impl way::ColumnSpans for Scratch<'_> {
     fn head(&self, c: [i32; 2]) -> (i32, u32) {
         let w = at(self.words, self.column(c));
         let face = w as i32 >> 16;
@@ -196,7 +196,7 @@ pub fn scratch_at(scratch: &[u32], k: u32) -> u32 {
 
 /// A brick being filled, as the ways' rule reads it (`clipmap::Brick`):
 /// its laid cells in its lane, its lines and samples in its record, and
-/// where it is as handed (`clipmap::FRESH_WORDS`).
+/// where it is as handed (`clipmap::FILL_WORDS`).
 struct Filling<'a> {
     ground: &'a [u32],
     base: u32,
@@ -256,10 +256,10 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
     let (rec, base, place, cell) = handed(fresh, k);
     let (first, shard) = (
         [
-            at(fresh, rec + FRESH_FIRST) as i32,
-            at(fresh, rec + FRESH_FIRST + 1) as i32,
+            at(fresh, rec + FILL_FIRST) as i32,
+            at(fresh, rec + FILL_FIRST + 1) as i32,
         ],
-        Shard::of_word(at(fresh, rec + FRESH_SHARD)),
+        Shard::of_word(at(fresh, rec + FILL_SHARD)),
     );
     let i = clipmap::idx_of([x, y]);
     let own = ground::own(at(fresh, rec + PALETTE_AT + i), cell);
@@ -308,7 +308,7 @@ pub fn put_palette_word(palette_indices: &mut [u32], fresh: &[u32], k: u32, [x, 
     let i = clipmap::idx_of([x, y]);
     put(
         palette_indices,
-        at(fresh, rec + FRESH_BRICK) * BRICK_CELLS + i,
+        at(fresh, rec + FILL_BRICK) * BRICK_CELLS + i,
         at(fresh, rec + PALETTE_AT + i),
     );
 }
@@ -378,7 +378,7 @@ pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], mine: u32, i: u32) ->
 pub fn level(
     ground: &mut [u32],
     base: u32,
-    kept: &impl way::Kept,
+    kept: &impl way::ColumnSpans,
     cell: Zoom,
     j: u32,
     at: [u32; 2],
@@ -390,7 +390,7 @@ pub fn level(
     } else {
         let under: &[u32] = ground;
         clipmap::join(
-            &Fresh {
+            &LoneBrick {
                 ground: under,
                 base,
             },
@@ -422,7 +422,7 @@ pub fn brick(
     cell: Zoom,
     first: [i32; 2],
 ) -> u32 {
-    fresh[..FRESH_WORDS as usize].copy_from_slice(&clipmap::fresh(
+    fresh[..FILL_WORDS as usize].copy_from_slice(&clipmap::fill_words(
         0,
         clipmap::place_word(place),
         cell,
@@ -466,7 +466,7 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
     use crate::overwrite::CHILDREN;
     use way::tree::{self as t, Column};
     let (brick, kept) = (
-        Fresh {
+        LoneBrick {
             ground: lane,
             base: 0,
         },

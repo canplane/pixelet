@@ -17,7 +17,7 @@ use crate::decor::{Decor, Orientation, DECORS};
 use crate::overwrite;
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
 use crate::scatter::{mul_hi, root, stands_at, variant_of, Candidate};
-use crate::world::{placed_in, Placed};
+use crate::world::{placed_in, PlacedCursor};
 use crate::{wrap_idx, Zoom, FRAC_W, LEAF_CELL, UNIT_ZOOM};
 
 /// The records a run of a decor pass reads (pxl-shader decor.rs `run_of`),
@@ -367,8 +367,8 @@ pub trait DecorQuery {
     /// something placed or air (`answer::is_placed`).
     fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
     /// The next leaf placed in `p`'s box, its cell and its word, false past
-    /// the last (`world::Placed::next`).
-    fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool);
+    /// the last (`world::PlacedCursor::next`).
+    fn next_placed(&self, p: &mut PlacedCursor) -> ([i32; 3], u32, bool);
 }
 
 /// Decor the ground generates, where it stands: its variant, its heading in
@@ -590,7 +590,7 @@ pub fn held_at(w: &impl clipmap::Presence, at: Zoom, c: [i32; 2]) -> Zoom {
     let z = clipmap::held_to(at);
     let s = LEAF_CELL - z;
     let g = [wrap_idx(z, c[0] >> s), c[1] >> s];
-    let (f, _) = clipmap::step(w, clipmap::Found::NONE, z, g);
+    let (f, _) = clipmap::step(w, clipmap::Lookup::NONE, z, g);
     if at < f.from() {
         at
     } else {

@@ -416,7 +416,7 @@ fn half_cube_met() {
     let access = World::new(&tile_cache, &store);
     let at = [x + half / 2.0, y + half / 2.0];
     let hit = access
-        .first_hit(&down(at), held())
+        .first_hit(&down(at), finest())
         .exact()
         .flatten()
         .unwrap();
@@ -637,9 +637,9 @@ fn box_placed_matches_store() {
 /// read over it at any zoom over a brick.
 #[test]
 fn late_brick_spike() {
-    use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, HeldClipmap};
+    use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, CpuClipmap};
     use pxl_render::gpu::renderer::Resident;
-    use pxl_spec_core::clipmap::{self as cells, Bricks, Found, BRICK, CLIP_SIZE, LEVELS};
+    use pxl_spec_core::clipmap::{self as cells, Bricks, Lookup, BRICK, CLIP_SIZE, LEVELS};
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let leaf = top().children()[0];
@@ -656,9 +656,9 @@ fn late_brick_spike() {
     let tile_cache = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
     let store = Store::default();
     // The spike's column in the eye's leaves' clip level.
-    let (first, _) = HeldClipmap.origin(LEAF_CELL);
+    let (first, _) = CpuClipmap.origin(LEAF_CELL);
     let top =
-        |g: [i32; 2]| cells::column_top(cells::cell(&HeldClipmap, Found::NONE, LEAF_CELL, g).1);
+        |g: [i32; 2]| cells::column_top(cells::cell(&CpuClipmap, Lookup::NONE, LEAF_CELL, g).1);
     let spike = (0..CLIP_SIZE as i32 * CLIP_SIZE as i32)
         .map(|k| {
             let w = CLIP_SIZE as i32;
@@ -699,8 +699,8 @@ fn late_brick_spike() {
         for zoom in TOP_ZOOM..LEAF_CELL - LEVELS {
             let s = LEAF_CELL - zoom;
             let (b, _, _) = cells::bound_over(
-                &HeldClipmap,
-                &mut Found::NONE.clone(),
+                &CpuClipmap,
+                &mut Lookup::NONE.clone(),
                 [LEAF_CELL, LEAF_CELL],
                 (zoom, [g[0] >> s, g[1] >> s]),
             );
@@ -716,13 +716,13 @@ fn late_brick_spike() {
 /// the eye's leaves keeps a bound of cells gone.
 #[test]
 fn device_loss_drops_bounds() {
-    use crate::domain::layer::terrain::clipmap::{test::lose, HeldClipmap};
-    use pxl_spec_core::clipmap::{self as cells, Bricks, Found, BRICK, LEVELS};
+    use crate::domain::layer::terrain::clipmap::{test::lose, CpuClipmap};
+    use pxl_spec_core::clipmap::{self as cells, Bricks, Lookup, BRICK, LEVELS};
     use pxl_spec_core::ground::UNBOUNDED;
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let _held = flat_at_five();
-    let (first, _) = HeldClipmap.origin(LEAF_CELL);
+    let (first, _) = CpuClipmap.origin(LEAF_CELL);
     let zoom = LEAF_CELL - LEVELS - 1;
     let over = || {
         let s = LEAF_CELL - zoom;
@@ -730,8 +730,8 @@ fn device_loss_drops_bounds() {
             (first[0] * BRICK as i32) >> s,
             (first[1] * BRICK as i32) >> s,
         ];
-        let mut place = Found::NONE;
-        cells::bound_over(&HeldClipmap, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
+        let mut place = Lookup::NONE;
+        cells::bound_over(&CpuClipmap, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
     };
     assert_ne!(over(), [UNBOUNDED; 2], "held");
     lose();
@@ -791,7 +791,7 @@ fn generated_decor_edit_removes() {
     };
     let generates_on = |store: &Store, decor: &Decor, [cx, cy, _]: [i32; 3]| {
         let world = World::new(&tile_cache, store);
-        scatter::generated_at(&mut scatter::Asked::new(&world), decor, [cx, cy], true)
+        scatter::generated_at(&mut scatter::DecorWorld::new(&world), decor, [cx, cy], true)
             .map(|(_, generates)| generates)
     };
     // One that generates on bare ground, its box whole.

@@ -27,7 +27,7 @@
 /// the samples are `param::beam::SAMPLE` a camera grid cell a side, about
 /// 270 thousand on a 16:9 view whatever its pixels. The missed pixels'
 /// hits' faces are asked by args laid alike, their count where the boxes'
-/// is (`ray::MISS_ARGS_ASKED`).
+/// is (`ray::MISS_ARGS_ROOM`).
 /// Then the boxes' buffer, `BOX_WORDS` a box: its planes in units from the
 /// eye's origin, lowest then highest, f32 bits, its sample's number
 /// (`id_of`), and the axis its sample entered across, with `EYED` where the

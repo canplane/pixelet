@@ -168,14 +168,14 @@ fn cell_struck(hit: &Hit) -> Aabb {
 
 impl Picked {
     /// The zoom of the cell struck.
-    pub fn held(&self) -> Zoom {
+    pub fn zoom(&self) -> Zoom {
         of_side(cell_struck(&self.hit).extent()[0])
     }
 
     /// Whether the rays draw coarser there than the cell struck: a summary,
     /// not what is held, so nothing in it is struck.
     pub fn is_folded(&self) -> bool {
-        self.drawn.is_some_and(|z| z < self.held())
+        self.drawn.is_some_and(|z| z < self.zoom())
     }
 }
 

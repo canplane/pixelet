@@ -90,7 +90,7 @@ impl DecorQuery for Generating<'_> {
 
     /// The finest clip level holding the leaf column present (`clipmap::step`).
     fn finest(&mut self, cell: u32, g: [i32; 2]) -> u32 {
-        let (f, _) = clipmap::step(&self.world, clipmap::Found::NONE, LEAF_CELL, g);
+        let (f, _) = clipmap::step(&self.world, clipmap::Lookup::NONE, LEAF_CELL, g);
         if f.here() && f.from() > cell {
             f.from()
         } else {
@@ -107,7 +107,7 @@ impl DecorQuery for Generating<'_> {
         answer::is_placed(support::asset(&mut self.world, &line, zoom, c))
     }
 
-    fn next_placed(&self, p: &mut pxl_spec_core::world::Placed) -> ([i32; 3], u32, bool) {
+    fn next_placed(&self, p: &mut pxl_spec_core::world::PlacedCursor) -> ([i32; 3], u32, bool) {
         p.next(&self.world)
     }
 }

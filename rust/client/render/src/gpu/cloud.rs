@@ -16,7 +16,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, MipPass};
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::look::environment::ENV_SKY;
 use pxl_spec::space::coord::world::EXTENT;
 use pxl_spec_core::cloud::{drift, LATTICE_CNT};
@@ -33,7 +33,7 @@ const _: () = assert!(
 );
 
 pub struct CloudPass {
-    built: Built,
+    built: Pipeline,
     uniform: u32,
     group: u32,
     words: [f32; CLOUDS_FLOATS],

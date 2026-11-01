@@ -25,7 +25,7 @@ use crate::frame::shader::record::{
 };
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 
 /// What the CPU hands the GPU's decor this frame.
@@ -63,20 +63,20 @@ pub struct DecorFrame<'a> {
 pub struct Generation<'a> {
     pub clipmap: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
-    /// The bricks handed this frame (pxl-spec-core `clipmap::FRESH_WORDS`).
-    pub fresh: &'a [[u32; clipmap::FRESH_WORDS as usize]],
+    /// The bricks handed this frame (pxl-spec-core `clipmap::FILL_WORDS`).
+    pub fresh: &'a [[u32; clipmap::FILL_WORDS as usize]],
     /// The eye as the cast's (pxl-spec-core `eye`), of which the count pass
     /// reads its place and the zooms it asks (`ORIGIN`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
 }
 
 pub struct Generated {
-    mark: Built,
-    thin: Built,
-    generate: Built,
-    cnt: Built,
-    args_built: Built,
-    compact: Built,
+    mark: Pipeline,
+    thin: Pipeline,
+    generate: Pipeline,
+    cnt: Pipeline,
+    args_built: Pipeline,
+    compact: Pipeline,
     groups: [u32; 6],
     /// What `decor_mark_cs` reads and lists for `decor_cs`'s dispatch
     /// (`generated::LIST_AT`).
@@ -296,10 +296,10 @@ impl Generated {
             // its clip level's and coarser.
             let mut boxes = [0u32; (generated::MARKED * generated::BOX_WORDS) as usize];
             let fresh = generation.fresh.iter().map(|f| {
-                let cell = f[clipmap::FRESH_CELL as usize];
-                let q = clipmap::fresh_brick([
-                    f[clipmap::FRESH_FIRST as usize],
-                    f[clipmap::FRESH_FIRST as usize + 1],
+                let cell = f[clipmap::FILL_CELL as usize];
+                let q = clipmap::brick_of_first([
+                    f[clipmap::FILL_FIRST as usize],
+                    f[clipmap::FILL_FIRST as usize + 1],
                 ]);
                 (generated::brick_box(cell, q), cell)
             });
@@ -400,7 +400,7 @@ impl Generated {
     }
 
     fn regroup(&mut self, g: &Gpu, world: World) {
-        let group = |built: &Built, ids: &[u32]| {
+        let group = |built: &Pipeline, ids: &[u32]| {
             let mut entries = [buf_entry(0, 0); 9];
             for (k, &b) in ids.iter().enumerate() {
                 entries[k] = buf_entry(k as u32, b);
@@ -575,8 +575,8 @@ impl Generated {
 
     /// What the draws read, while decor is on: the decor's instances, their slots,
     /// the regions' indirect args, and where they are drawn.
-    pub fn drawn(&self) -> Option<Drawn> {
-        (self.on && self.instances != 0).then_some(Drawn {
+    pub fn drawn(&self) -> Option<IndirectDraw> {
+        (self.on && self.instances != 0).then_some(IndirectDraw {
             instances_group: self.instances_group,
             args: self.args,
             uniform_group: self.uniform_group,
@@ -598,13 +598,13 @@ pub struct Instances {
 /// The decor's instances as the draws read them (`Generated::drawn`): their
 /// group, the regions' indirect args and their draw uniforms' group.
 #[derive(Clone, Copy)]
-pub struct Drawn {
+pub struct IndirectDraw {
     pub instances_group: u32,
     pub args: u32,
     pub uniform_group: u32,
 }
 
-impl Drawn {
+impl IndirectDraw {
     /// Where region `region`'s indirect args lie, in bytes.
     pub fn args_at(&self, region: u32) -> u32 {
         drawn::ARGS_WORDS * 4 * region

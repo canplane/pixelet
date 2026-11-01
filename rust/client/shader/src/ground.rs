@@ -103,7 +103,7 @@ pub fn bound_cs(
         return;
     }
     let rec = clipmap::handed_at(id.z);
-    let base = brick_at(at(fresh, rec + clipmap::FRESH_BRICK));
+    let base = brick_at(at(fresh, rec + clipmap::FILL_BRICK));
     let kept = fill::Scratch {
         words: scratch,
         at: fill::scratch_at(scratch, id.z),
@@ -112,7 +112,7 @@ pub fn bound_cs(
         ground,
         base,
         &kept,
-        at(fresh, rec + clipmap::FRESH_CELL),
+        at(fresh, rec + clipmap::FILL_CELL),
         j,
         [id.x, id.y],
     );

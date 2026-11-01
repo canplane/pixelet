@@ -41,7 +41,7 @@ use crate::sys::io::room::Refused;
 use crate::sys::io::source::Declared;
 use crate::sys::mem::fixed::arr;
 use pxl_render::gpu::api::DONE;
-use pxl_render::gpu::renderer::{CellsBack, FreshBrick, Resident};
+use pxl_render::gpu::renderer::{BrickFill, CellsBack, Resident};
 
 /// Who a clip level is about.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -176,7 +176,7 @@ fn clipmap() -> &'static mut Clipmap {
 
 /// Clip level `clip_level`'s first brick, none while its center is not.
 fn first_of(w: &Clipmap, clip_level: u32) -> Option<[i32; 2]> {
-    let (first, laid) = w.entries[(SLOTS + clip_level) as usize].held();
+    let (first, laid) = w.entries[(SLOTS + clip_level) as usize].brick();
     laid.then_some(first)
 }
 
@@ -262,7 +262,7 @@ fn planes() -> &'static mut Planes {
 /// a clip level wants or its presence are `assign_slots`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
 /// (`on_resident`), folded once after all of them (`refold`): no read of a
-/// bound (`HeldClipmap`) comes between a write and its fold, so none finds one
+/// bound (`CpuClipmap`) comes between a write and its fold, so none finds one
 /// of other bricks than its read of the cells does. Read through the clip
 /// levels it is handed (`Holding`), which its writer holds while it runs.
 fn fold(w: &mut Clipmap) {
@@ -720,7 +720,7 @@ pub fn is_tile_wanted(tile: Tile) -> bool {
 pub fn fill(
     tile: Tile,
     from: TileContent,
-    write: &mut dyn FnMut(FreshBrick<'_>) -> bool,
+    write: &mut dyn FnMut(BrickFill<'_>) -> bool,
 ) -> Offered {
     let cell = GROUND.cell_zoom(tile.zoom);
     let w = clipmap();
@@ -791,8 +791,8 @@ pub fn fill(
             ticket: w.ticket,
         };
         let shard = Shard::UNKNOWN.at(&Declared, (clipmap::bricks_zoom(cell), key));
-        let taken = write(FreshBrick {
-            fresh: clipmap::fresh(
+        let taken = write(BrickFill {
+            words: clipmap::fill_words(
                 b,
                 clipmap::place_word(place),
                 cell,
@@ -823,9 +823,9 @@ pub fn fill(
 /// them folded here (`fold`); and the service area they end at (pxl-spec-core
 /// `area::Area`).
 #[derive(Clone, Copy)]
-pub struct HeldClipmap;
+pub struct CpuClipmap;
 
-impl Area for HeldClipmap {
+impl Area for CpuClipmap {
     fn ends(&self) -> bool {
         Declared.ends()
     }
@@ -834,7 +834,7 @@ impl Area for HeldClipmap {
     }
 }
 
-/// The clip levels as a caller holds them, read as `HeldClipmap` reads the
+/// The clip levels as a caller holds them, read as `CpuClipmap` reads the
 /// kernel's (`fold`, which runs while its writer holds them).
 struct Holding<'a>(&'a Clipmap);
 
@@ -850,7 +850,7 @@ impl Presence for Holding<'_> {
 
 impl Bricks for Holding<'_> {
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
-        self.0.entries[((cell - FIRST_CELL) * ENTRIES + entry) as usize].held()
+        self.0.entries[((cell - FIRST_CELL) * ENTRIES + entry) as usize].brick()
     }
 
     /// The CPU reads a cell's own palette index alone, as laid: its four are it four
@@ -887,13 +887,13 @@ impl Bricks for Holding<'_> {
 }
 
 /// The kernel's clip levels as they are held (`Holding`).
-impl Presence for HeldClipmap {
+impl Presence for CpuClipmap {
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
         Holding(clipmap()).present(cell, q)
     }
 }
 
-impl Bricks for HeldClipmap {
+impl Bricks for CpuClipmap {
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
         Holding(clipmap()).brick(cell, entry)
     }

@@ -8,7 +8,7 @@ use crate::clock;
 // A clock the test moves, and what the steps saw, per thread.
 thread_local! {
     static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };
-    static SEEN: RefCell<Seen> = RefCell::new(Seen::default());
+    static SEEN: RefCell<Trace> = RefCell::new(Trace::default());
 }
 
 fn clock() -> f64 {
@@ -20,7 +20,7 @@ fn burn(ms: f64) {
 }
 
 #[derive(Clone, Default)]
-struct Seen {
+struct Trace {
     order: Vec<&'static str>,
     a: f64,
     b: f64,
@@ -28,11 +28,11 @@ struct Seen {
     id: u32,
 }
 
-fn seen<R>(f: impl FnOnce(&mut Seen) -> R) -> R {
+fn seen<R>(f: impl FnOnce(&mut Trace) -> R) -> R {
     SEEN.with(|s| f(&mut s.borrow_mut()))
 }
 
-fn saw() -> Seen {
+fn saw() -> Trace {
     seen(|s| s.clone())
 }
 
@@ -59,7 +59,7 @@ const POLICY: TickPolicy = TickPolicy {
 
 const QUOTA_MS: f64 = 6.0;
 
-fn tick(start: Seen) -> Tick<8> {
+fn tick(start: Trace) -> Tick<8> {
     clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));
     seen(|s| *s = start);
@@ -68,7 +68,7 @@ fn tick(start: Seen) -> Tick<8> {
 
 #[test]
 fn phase_order() {
-    let mut t = tick(Seen::default());
+    let mut t = tick(Trace::default());
     t.on_tick(phase::report, |_| seen(|s| s.order.push("report")), 0);
     t.on_tick(phase::cosmetic, |_| seen(|s| s.order.push("cosmetic")), 0);
     t.on_tick(phase::content, |_| seen(|s| s.order.push("content")), 0);
@@ -84,7 +84,7 @@ fn phase_order() {
 
 #[test]
 fn step_order() {
-    let mut t = tick(Seen::default());
+    let mut t = tick(Trace::default());
     t.on_tick(phase::visible, |_| seen(|s| s.order.push("1")), 0);
     t.on_tick(phase::visible, |_| seen(|s| s.order.push("2")), 0);
     t.on_tick(phase::visible, |_| seen(|s| s.order.push("3")), 0);
@@ -94,7 +94,7 @@ fn step_order() {
 
 #[test]
 fn shared_budget() {
-    let mut t = tick(Seen {
+    let mut t = tick(Trace {
         a: -1.0,
         ..Default::default()
     });
@@ -113,7 +113,7 @@ fn shared_budget() {
 
 #[test]
 fn held_back_kept_for_later_phases() {
-    let mut t = tick(Seen::default());
+    let mut t = tick(Trace::default());
     t.on_tick(
         phase::visible,
         |c| {
@@ -148,7 +148,7 @@ fn held_back_kept_for_later_phases() {
 
 #[test]
 fn self_unregister() {
-    let mut t = tick(Seen::default());
+    let mut t = tick(Trace::default());
     let id = t.on_tick(
         phase::cosmetic,
         |c| {
@@ -168,7 +168,7 @@ fn self_unregister() {
 
 #[test]
 fn unregister_earlier_no_skip() {
-    let mut t = tick(Seen::default());
+    let mut t = tick(Trace::default());
     let first = t.on_tick(phase::visible, |_| seen(|s| s.order.push("first")), 0);
     t.on_tick(
         phase::visible,
@@ -189,7 +189,7 @@ fn unregister_earlier_no_skip() {
 
 #[test]
 fn report_sees_all() {
-    let mut t = tick(Seen {
+    let mut t = tick(Trace {
         a: -1.0,
         ..Default::default()
     });
@@ -214,7 +214,7 @@ const COST: f64 = 0.3;
 
 #[test]
 fn silent_storm_capped() {
-    let mut t = tick(Seen::default());
+    let mut t = tick(Trace::default());
     t.on_tick(
         phase::visible,
         |c| {
@@ -240,7 +240,7 @@ fn silent_storm_capped() {
 
 #[test]
 fn prior_spend_deducted() {
-    let mut t = tick(Seen::default());
+    let mut t = tick(Trace::default());
     t.on_tick(phase::visible, |c| seen(|s| s.a = c.pass.remaining()), 0);
     let edge = now();
     burn(2.0);
@@ -251,7 +251,7 @@ fn prior_spend_deducted() {
 
 #[test]
 fn interaction_spend_deducted() {
-    let mut t = tick(Seen::default());
+    let mut t = tick(Trace::default());
     t.on_tick(phase::interaction, |_| burn(1.5), 0);
     t.on_tick(
         phase::visible,

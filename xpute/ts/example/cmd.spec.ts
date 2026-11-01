@@ -13,7 +13,7 @@ import type {
   PacketWriter,
 } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { Raised, Sent } from "@xpute/host/port.ts";
+import type * as port from "@xpute/host/port.ts";
 import * as Hostcall from "./cmd/hostcall.spec.ts";
 import * as Root from "./cmd/root.spec.ts";
 import * as Command from "./cmd/command.spec.ts";
@@ -36,7 +36,7 @@ export function encode_sum(to: PacketRoom, a: u32, b: u32): PacketWriter {
 }
 
 /** Command.SUM, as a port sends it or hears it. */
-export const SUM: Sent<[a: u32, b: u32]> = {
+export const SUM: port.Command<[a: u32, b: u32]> = {
   number: Command.SUM,
   write: encode_sum,
 };
@@ -55,7 +55,7 @@ export function read_summed_tuple(b: BranchCursor): [total: u32] {
 }
 
 /** Command.SUMMED, as a port sends it or hears it. */
-export const SUMMED: Raised<[total: u32]> = {
+export const SUMMED: port.Event<[total: u32]> = {
   number: Command.SUMMED,
   read: read_summed_tuple,
 };
@@ -66,7 +66,7 @@ export function encode_count(to: PacketRoom, path: string): PacketWriter {
 }
 
 /** Command.COUNT, as a port sends it or hears it. */
-export const COUNT: Sent<[path: string]> = {
+export const COUNT: port.Command<[path: string]> = {
   number: Command.COUNT,
   write: encode_count,
 };
@@ -85,7 +85,7 @@ export function read_counted_tuple(b: BranchCursor): [res: i32] {
 }
 
 /** Command.COUNTED, as a port sends it or hears it. */
-export const COUNTED: Raised<[res: i32]> = {
+export const COUNTED: port.Event<[res: i32]> = {
   number: Command.COUNTED,
   read: read_counted_tuple,
 };

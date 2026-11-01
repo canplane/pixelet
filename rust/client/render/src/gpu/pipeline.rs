@@ -13,7 +13,7 @@ pub const GROUPS: usize = 4;
 pub const LANES: usize = 8;
 
 #[derive(Clone, Copy, Default)]
-pub struct Built {
+pub struct Pipeline {
     pub pipeline: u32,
     pub layouts: [u32; GROUPS],
     pub strides: [u32; LANES],
@@ -29,7 +29,7 @@ pub struct Pipelines {
     modules: [u32; SHADERS as usize],
     layouts: [(u64, u32); LAYOUTS],
     layout_len: usize,
-    built: [(u64, Built); BUILT],
+    built: [(u64, Pipeline); BUILT],
     built_len: usize,
 }
 
@@ -49,7 +49,7 @@ impl Pipelines {
             modules: [0; SHADERS as usize],
             layouts: [(0, 0); LAYOUTS],
             layout_len: 0,
-            built: [(0, Built::default()); BUILT],
+            built: [(0, Pipeline::default()); BUILT],
             built_len: 0,
         }
     }
@@ -78,26 +78,26 @@ impl Pipelines {
     }
 
     /// Pipeline `id` drawing into `format`, depth32 its depth.
-    pub fn build(&mut self, g: &Gpu, id: u32, format: Format) -> Built {
+    pub fn build(&mut self, g: &Gpu, id: u32, format: Format) -> Pipeline {
         self.build_onto(g, id, format, (Format::depth32float, Stencil::Unused))
     }
 
     /// Pipeline `id` drawing into a world surface's color and depth
     /// (`WORLD_COLOR`, `Gpu::gated_depth`), through the gate where the depth
     /// carries one (`Stencil::Gated`).
-    pub fn build_world(&mut self, g: &Gpu, id: u32) -> Built {
+    pub fn build_world(&mut self, g: &Gpu, id: u32) -> Pipeline {
         self.build_gated(g, id, WORLD_COLOR, Stencil::Gated)
     }
 
     /// The gate itself, onto a world surface (`Stencil::Gate`).
-    pub fn build_gate(&mut self, g: &Gpu, id: u32) -> Built {
+    pub fn build_gate(&mut self, g: &Gpu, id: u32) -> Pipeline {
         self.build_gated(g, id, WORLD_COLOR, Stencil::Gate)
     }
 
     /// Pipeline `id` drawing into `format` and a gated depth
     /// (`Gpu::gated_depth`), as `stencil` asks where the depth carries one:
     /// into the depth alone where `format` is depth32's (`build`).
-    pub fn build_gated(&mut self, g: &Gpu, id: u32, format: Format, stencil: Stencil) -> Built {
+    pub fn build_gated(&mut self, g: &Gpu, id: u32, format: Format, stencil: Stencil) -> Pipeline {
         let stencil = if g.gates() { stencil } else { Stencil::Unused };
         self.build_onto(g, id, format, (g.gated_depth(), stencil))
     }
@@ -108,7 +108,7 @@ impl Pipelines {
         id: u32,
         format: Format,
         (depth, stencil): (Format, Stencil),
-    ) -> Built {
+    ) -> Pipeline {
         let key = fold(
             fold(
                 fold(fold(0xcbf29ce484222325, id), format as u32),
@@ -121,7 +121,7 @@ impl Pipelines {
         }
         let words = record_of(id);
         let module = self.module(g, words[0]);
-        let mut b = Built::default();
+        let mut b = Pipeline::default();
         let mut at = HEAD as usize;
         b.lanes = words[at] as usize;
         at += 1;
@@ -152,9 +152,9 @@ impl Pipelines {
     /// A compute pipeline over shader `kind`'s one compute entry and `group`,
     /// group 0's (binding, stages, kind) words: made each call, as its one
     /// owner makes it once.
-    pub fn build_compute(&mut self, g: &Gpu, kind: u32, group: &[u32]) -> Built {
+    pub fn build_compute(&mut self, g: &Gpu, kind: u32, group: &[u32]) -> Pipeline {
         let module = self.module(g, kind);
-        let mut b = Built::default();
+        let mut b = Pipeline::default();
         b.layouts[0] = self.layout(g, group);
         b.pipeline = g.compute_pipeline(module, compute_entry(kind), &b.layouts[..1]);
         b

@@ -34,7 +34,7 @@ use xpute_kit::math::scalar::round;
 use crate::segment::{End, PartId};
 use crate::separation::elevation::sample_cells;
 use crate::separation::way::{Polyline, Way};
-use crate::separation::{Drawn, Line};
+use crate::separation::{Line, WayRange};
 use crate::terrain::pipeline::overture::policy::waterway_width;
 
 use super::*;
@@ -696,7 +696,7 @@ fn road_decks(
     stretches: &[Stretch],
     obstacles: &Obstacles,
     scale: Scale,
-    lines: &mut Vec<(Line, Drawn)>,
+    lines: &mut Vec<(Line, WayRange)>,
 ) -> Decks {
     let road: Vec<usize> = (0..stretches.len())
         .filter(|&q| stretches[q].piece.form == Form::Bridge && !stretches[q].rail())
@@ -1269,7 +1269,7 @@ pub(super) fn decks(
     stretches: &[Stretch],
     ring: [[f64; 2]; 2],
     scale: Scale,
-    lines: &mut Vec<(Line, Drawn)>,
+    lines: &mut Vec<(Line, WayRange)>,
 ) -> Decks {
     // what a deck must clear, only where there is a deck
     let obstacles = if stretches.iter().any(|r| r.piece.form == Form::Bridge) {

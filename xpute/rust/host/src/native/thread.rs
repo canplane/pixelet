@@ -58,9 +58,9 @@ thread_local! {
 }
 
 /// The handoff, held, this thread its holder until it is let go.
-struct Held(MutexGuard<'static, Handoff>);
+struct Guard(MutexGuard<'static, Handoff>);
 
-impl Drop for Held {
+impl Drop for Guard {
     fn drop(&mut self) {
         HOLDING.with(|h| h.set(false));
     }
@@ -68,7 +68,7 @@ impl Drop for Held {
 
 /// The handoff, refused where taking it would wait for itself: on the guest's
 /// thread, or on one that holds it. A poisoned lock is still whole.
-fn handoff() -> Held {
+fn handoff() -> Guard {
     assert!(
         !on_marked_thread(),
         "a call into the guest from its own thread would wait for itself"
@@ -77,7 +77,7 @@ fn handoff() -> Held {
         !HOLDING.with(Cell::get),
         "a call into the guest inside another on the same thread would wait for itself"
     );
-    let held = Held(
+    let held = Guard(
         HANDOFF
             .get()
             .expect("the guest is booted")

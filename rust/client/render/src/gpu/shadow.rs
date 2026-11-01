@@ -28,7 +28,7 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
     word_bytes, Entry, Format, Gpu, Load, RenderContext, Stencil, TrackedRenderPass,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::tiles::Tiles;
@@ -77,9 +77,9 @@ pub struct Shadow {
     /// map's gate, which lays it in the claimed tiles alone, its group over
     /// the same, the map's tiles' words and uniform and the marks' box
     /// (`Tiles::marks_box`), made again where those are others.
-    lay: Built,
+    lay: Pipeline,
     lay_group: u32,
-    gate: Built,
+    gate: Pipeline,
     gate_group: u32,
     gate_bound: (u32, u32, u32),
     corner: u32,

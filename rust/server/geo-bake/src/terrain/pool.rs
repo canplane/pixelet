@@ -28,7 +28,7 @@ const SIDE: u32 = TILE_CELLS / BRICK;
 /// A zoom's bricks, each the child groups its tree holds, by its index at its
 /// cells; and the most a brick takes before its fold.
 #[derive(Default)]
-struct Held {
+struct Tally {
     bricks: BTreeMap<Zoom, FnvHashMap<[i32; 2], u64>>,
     taken: u64,
     /// Each tile's that takes anything, as the set will keep it.
@@ -43,7 +43,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, Str
     let base = set.base.fits()?;
     let base = base.as_ref();
     let chunk = tiles.len().div_ceil(workers.max(1)).max(1);
-    let parts: Vec<Result<Held, String>> = std::thread::scope(|s| {
+    let parts: Vec<Result<Tally, String>> = std::thread::scope(|s| {
         let runs: Vec<_> = tiles
             .chunks(chunk)
             .map(|part| s.spawn(move || held(set, base, part)))
@@ -52,7 +52,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, Str
             .map(|r| r.join().unwrap_or_else(|_| Err("a worker panicked".into())))
             .collect()
     });
-    let mut all = Held::default();
+    let mut all = Tally::default();
     for part in parts {
         let part = part?;
         all.taken = all.taken.max(part.taken);
@@ -107,8 +107,8 @@ fn held(
     set: &Staged<'_>,
     base: Option<&FnvHashMap<Tile, String>>,
     tiles: &[Tile],
-) -> Result<Held, String> {
-    let mut out = Held::default();
+) -> Result<Tally, String> {
+    let mut out = Tally::default();
     for &p in tiles {
         let fit = match set.kept(p, base)? {
             Some(None) => continue,

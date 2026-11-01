@@ -45,7 +45,7 @@ use crate::gpu::api::{
     word_bytes, write_texture_bytes, Entry, Format, Gpu, Load, RenderContext, DONE,
 };
 use crate::gpu::image_map::ImageMap;
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::span_spec::GpuSpanName;
 use crate::look::atmosphere as model;
@@ -210,7 +210,7 @@ const REACHES: [usize; 2] = [SUN_REACHES, MOON_REACHES];
 /// A quantity a table is held at by a measured step: a light's height, the
 /// eye's altitude, the ground's height under the eye.
 #[derive(Clone, Copy, Default)]
-struct Held {
+struct TableInput {
     /// What the table was last held at.
     at: Option<f32>,
     /// How far it moves before what the table shows moves a display level,
@@ -221,7 +221,7 @@ struct Held {
     sample: f32,
 }
 
-impl Held {
+impl TableInput {
     /// Moved `STEP_SHARE` of its step since it was held; any move before a
     /// step has landed.
     fn moved(&self, now: f32) -> bool {
@@ -244,8 +244,8 @@ impl Held {
 /// air, and whether they hold it as last held.
 #[derive(Clone, Copy, Default)]
 struct Lit {
-    height: Held,
-    alt: Held,
+    height: TableInput,
+    alt: TableInput,
     /// Whether it reaches the air by `REACH`, as the exposure last measured;
     /// none before. Out of it, the height it moves before it comes into it
     /// at the slope its reach moves at (atmos_exposure.wgsl `reach`).
@@ -282,8 +282,8 @@ pub struct Atmosphere {
     views: [u32; TABLES],
     /// The tables' render pipelines (`pass_of`), and the exposure's, a
     /// compute pass so its span is its own time.
-    passes: [Built; 4],
-    exposure: Built,
+    passes: [Pipeline; 4],
+    exposure: Pipeline,
     groups: [u32; TABLES],
     baked: bool,
     /// Each light's own words (atmos_skyview.wgsl `light`): which light, and
@@ -295,7 +295,7 @@ pub struct Atmosphere {
     /// Each light's view and air, the sun's first, and the ground the
     /// exposure is held at.
     lit: [Lit; 2],
-    ground: Held,
+    ground: TableInput,
     /// What the views and the exposure measured (`SLOPES`), and the buffer
     /// it is mapped back through.
     slopes: (u32, u32),
@@ -323,7 +323,7 @@ pub struct Atmosphere {
     /// per unit of its light, unexposed; its maker, and its maker's group
     /// for each light.
     volume: u32,
-    froxel: Built,
+    froxel: Pipeline,
     froxel_groups: [u32; 2],
 }
 
@@ -435,7 +435,7 @@ impl Atmosphere {
                 own
             },
             lit: [Lit::default(); 2],
-            ground: Held::default(),
+            ground: TableInput::default(),
             slopes: (
                 g.buf(
                     SLOPES_BYTES,
@@ -656,7 +656,7 @@ impl Atmosphere {
     /// What this frame draws of the tables and what each measures, before
     /// the uniform is written, so it holds each light's words as laid. A
     /// light's view and air are drawn where its height or the eye's altitude
-    /// has moved half its step (`Held::moved`), or where it has come to reach
+    /// has moved half its step (`TableInput::moved`), or where it has come to reach
     /// the air since they were last held, and only where it reaches the air
     /// by `REACH`; the reader reads them only then (atmos_medium.wgsl
     /// `reaches`). The exposure is drawn where the words it reads moved
@@ -664,12 +664,12 @@ impl Atmosphere {
     /// light's view or air was due, or the tables baked once are drawn; each
     /// time it measures how far each light reaches. Each slope is measured
     /// with its table's drawing where its own quantity has left the sample it
-    /// was taken over (`Held::left`), and is not already on its way.
+    /// was taken over (`TableInput::left`), and is not already on its way.
     fn plan(&mut self, g: &Gpu) {
         self.take_slopes();
         let fresh = !self.baked;
         if fresh {
-            (self.lit, self.ground) = ([Lit::default(); 2], Held::default());
+            (self.lit, self.ground) = ([Lit::default(); 2], TableInput::default());
         }
         let busy = self.pending | self.flying;
         let alt = self.words[CAMERA_ALT];
@@ -677,7 +677,7 @@ impl Atmosphere {
         for k in 0..2 {
             let mu = [self.sun_mu, self.moon_mu][k];
             let l = &mut self.lit[k];
-            let height = Held {
+            let height = TableInput {
                 step: l.step(),
                 ..l.height
             };

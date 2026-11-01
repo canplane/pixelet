@@ -63,6 +63,10 @@ export function decorGlyph(kind: u8): GlyphName {
   return DECOR_GLYPH[kind];
 }
 
-export function heldRing(ground: string, ink: string, width: number): string {
+export function selectionRing(
+  ground: string,
+  ink: string,
+  width: number,
+): string {
   return `0 0 0 1px ${ground}, 0 0 0 ${1 + width}px ${ink}`;
 }

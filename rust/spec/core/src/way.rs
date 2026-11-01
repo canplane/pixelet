@@ -664,7 +664,7 @@ pub const SPANS: usize = 10;
 /// beside it lines it (`lined`), `i32::MIN` where the area's edge walls it
 /// or it is past the area, where nothing does. What its cells are read
 /// off, its visits found once: a brick's fill keeps them (pxl-spec-core
-/// fill.rs `spans`, read through `Kept`).
+/// fill.rs `spans`, read through `ColumnSpans`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spans {
     pub run: [[i32; 2]; SPANS],
@@ -725,7 +725,7 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
 /// them (pxl-spec-core fill.rs `spans`), read in place: column `c`'s face
 /// cell and how many spans it has (`Spans`), and its `j`-th span and its
 /// value.
-pub trait Kept {
+pub trait ColumnSpans {
     fn head(&self, c: [i32; 2]) -> (i32, u32);
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32);
 }
@@ -734,7 +734,7 @@ pub trait Kept {
 /// kept in `k`: a deck's slab or its pier, the highest of those over it
 /// keeping what two share, a slab before its pier; else the first air over
 /// it (`AIR_OF` over its way's palette index); else `NOTHING`.
-fn at(k: &impl Kept, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
+fn at(k: &impl ColumnSpans, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
     let (mut best, mut palette_idx, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
     let mut j = 0;
     while j < n {
@@ -823,7 +823,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 /// the first in `near`'s order — so a cave never opens into a way, whatever
 /// carves the ground; else `NOTHING`. Read off the spans in place, the
 /// column's own first: a cell it writes reads none beside it.
-pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
+pub fn lined(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
     let (face, n) = k.head(c);
     let v = at(k, c, n, cell, z);
     if v != NOTHING {
@@ -850,7 +850,7 @@ pub fn lined(k: &impl Kept, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
 /// column fills the cell read (`bare`). A lined cell is under the face's
 /// cell, so under the top: the hull of the cells `lined` reads something
 /// in, exactly, off the spans, never a cell at a time.
-pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
+pub fn bound(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL - cell);
     let (face, n) = k.head(c);
     let [mut lo, mut hi] = ground::EMPTY;
@@ -898,7 +898,14 @@ pub fn bound(k: &impl Kept, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
 /// slab or pier of column `b`'s `n` spans fills, where its air is read as
 /// air (`at`); past `to` where they fill every one. Each step past one
 /// of them, so no more than one a span.
-fn bare(k: &impl Kept, b: [i32; 2], n: u32, cell: Zoom, [from, to]: [i32; 2], step: i32) -> i32 {
+fn bare(
+    k: &impl ColumnSpans,
+    b: [i32; 2],
+    n: u32,
+    cell: Zoom,
+    [from, to]: [i32; 2],
+    step: i32,
+) -> i32 {
     let (mut z, mut moved) = (from, true);
     while moved && (z - to) * step <= 0 {
         moved = false;
@@ -939,7 +946,7 @@ mod tests {
         }
     }
 
-    impl Kept for Five {
+    impl ColumnSpans for Five {
         fn head(&self, c: [i32; 2]) -> (i32, u32) {
             let (face, _, n) = self.of(c);
             (*face, *n)

@@ -68,7 +68,7 @@ pub struct Raster {
     raster_tiles: Vec<RasterTileAt>,
     by_key: FnvHashMap<(i64, i64), usize>,
     side: i64,
-    held: Mutex<Held>,
+    held: Mutex<Cache>,
 }
 
 #[derive(Clone)]
@@ -90,7 +90,7 @@ struct RasterTile {
 type Slot = Mutex<Option<Arc<RasterTile>>>;
 
 #[derive(Default)]
-struct Held {
+struct Cache {
     slots: FnvHashMap<usize, (u64, Arc<Slot>)>,
     tick: u64,
 }
@@ -156,7 +156,7 @@ impl Raster {
             raster_tiles,
             by_key,
             side,
-            held: Mutex::new(Held::default()),
+            held: Mutex::new(Cache::default()),
         })
     }
 

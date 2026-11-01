@@ -26,7 +26,7 @@ Nothing now.
   detail-and-receivers frame casts as many rays as a new epoch. Confirmed by
   a probe (the margin test in `holds` made never true): samples 81,917 to
   2,653 and walks 30,457 to 294 a frame, 37 of 424 such frames casting at
-  all. The cause: `cast::Margin::asked` takes `Detail::margin` of every node
+  all. The cause: `cast::Margin::visit` takes `Detail::margin` of every node
   a walk asks, the distance to the nearest band edge whether or not crossing
   it changes that node's answer, so a tile's least sits under one frame's
   step. The fix: a node counts toward the margin only through the band edges

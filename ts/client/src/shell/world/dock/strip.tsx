@@ -40,7 +40,7 @@ import { PIN_LABEL } from "@/shell/catalog/asset/marker.spec.ts";
 import {
   CubeSwatch,
   decorGlyph,
-  heldRing,
+  selectionRing,
 } from "@/shell/catalog/asset/swatch.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 
@@ -389,5 +389,5 @@ const styles = StyleSheet.create({
     backgroundColor: STRIP.held,
   },
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.swatchLine}` },
-  swatchSelected: { boxShadow: heldRing(STRIP.ground, STRIP.mark, 1) },
+  swatchSelected: { boxShadow: selectionRing(STRIP.ground, STRIP.mark, 1) },
 });

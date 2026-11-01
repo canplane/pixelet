@@ -9,7 +9,7 @@ use pxl_spec_core::cast::{self, End, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Columns};
 use pxl_spec_core::clipmap::{
-    self, Bricks, Found, Presence, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL,
+    self, Bricks, Lookup, Presence, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL,
 };
 use pxl_spec_core::world::{self, Inherited};
 use pxl_spec_core::{at, face, ground, support, way};
@@ -158,7 +158,7 @@ impl<L: PaletteWords> Presence for World<'_, L> {
 /// entry's row names, whichever clip level filled it.
 impl<L: PaletteWords> Bricks for World<'_, L> {
     fn brick(&self, cell: u32, entry: u32) -> ([i32; 2], bool) {
-        self.row((cell - FIRST_CELL) * ENTRIES + entry).held()
+        self.row((cell - FIRST_CELL) * ENTRIES + entry).brick()
     }
     /// Off the clip levels' rows past their table (`joined_cs`).
     fn joined(&self, cell: u32, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
@@ -171,7 +171,7 @@ impl<L: PaletteWords> Bricks for World<'_, L> {
     /// The clip level's row past every clip level's entries
     /// (`clipmap::ORIGIN_AT`).
     fn origin(&self, cell: u32) -> ([i32; 2], bool) {
-        self.row(clipmap::ORIGIN_AT + (cell - FIRST_CELL)).held()
+        self.row(clipmap::ORIGIN_AT + (cell - FIRST_CELL)).brick()
     }
     fn palette_word(&self, _: u32, slot: u32, i: u32) -> u32 {
         self.palette_indices.palette_word(slot * BRICK_CELLS + i)
@@ -197,7 +197,7 @@ impl<L: PaletteWords> ground::Resident for World<'_, L> {
     /// it (pxl-spec-core `ground::Resident::relief`).
     fn relief(
         &mut self,
-        place: &mut Found,
+        place: &mut Lookup,
         cells: [u32; 2],
         (zoom, c): (u32, [i32; 3]),
     ) -> (ground::Bounds, bool) {
@@ -208,7 +208,7 @@ impl<L: PaletteWords> ground::Resident for World<'_, L> {
     /// The cell's column off the clip levels, the area's edge laid on it
     /// (pxl-spec-core `clipmap::ground`), as the CPU reads it (pxl-kernel
     /// domain/query/node.rs `Reading::cell`).
-    fn cell(&mut self, place: Found, zoom: u32, c: [i32; 3]) -> ground::Cell {
+    fn cell(&mut self, place: Lookup, zoom: u32, c: [i32; 3]) -> ground::Cell {
         clipmap::ground(self, place, zoom, [c[0], c[1]]).0
     }
 }

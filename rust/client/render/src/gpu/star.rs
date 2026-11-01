@@ -14,7 +14,7 @@ use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
 use crate::param::sky::star::DRAWN_ABOVE;
@@ -22,7 +22,7 @@ use crate::param::sky::star::DRAWN_ABOVE;
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-star.bin");
 
 pub struct StarPass {
-    built: Built,
+    built: Pipeline,
     frame_group: u32,
     uniform: u32,
     group: u32,

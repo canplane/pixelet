@@ -18,7 +18,7 @@ use spirv_std::spirv;
 
 use crate::pass_observer::PassObserver;
 use crate::eye::Eye;
-use crate::observed::{seen_add, seen_at, seen_most, seen_put, Seen};
+use crate::observed::{pyramid_add, pyramid_at, pyramid_most, pyramid_put, Pyramid};
 use crate::observer::{self, Observer};
 use crate::light::Head;
 use crate::world::World;
@@ -27,7 +27,7 @@ use crate::world::World;
 /// `beam`): the lines, a corner each, the cells' starts and the samples'
 /// hits, as the frame's `Grid` lays them (`Grid::size`), or as the light's
 /// list does (`light::list_words`) where the pass casts for the map; a
-/// runtime array as `Seen` is. A pixel's own ray words say whether it
+/// runtime array as `Pyramid` is. A pixel's own ray words say whether it
 /// missed (`ray::MISS`), so nothing here is a pixel's.
 pub(crate) type Beams = spirv_std::RuntimeArray<u32>;
 
@@ -88,16 +88,16 @@ impl<W: Words + ?Sized> cast::Over<Inherited> for Beamed<'_, W> {
 /// by its index from the eye's origin, and what was handed each node of it
 /// (`Beamed`), none of it copied. The eye's: its lines' nodes are held from
 /// the one origin its rays start at.
-pub(crate) struct Laid<'a, W: ?Sized> {
+pub(crate) struct BeamAncestors<'a, W: ?Sized> {
     line: Beamed<'a, W>,
     at: [i32; 3],
     zoom: u32,
 }
 
-impl<'a, W: Words + ?Sized> Laid<'a, W> {
-    pub(crate) fn of(line: Beamed<'a, W>, origin: [i32; 3]) -> Laid<'a, W> {
+impl<'a, W: Words + ?Sized> BeamAncestors<'a, W> {
+    pub(crate) fn of(line: Beamed<'a, W>, origin: [i32; 3]) -> BeamAncestors<'a, W> {
         let n = line.node();
-        Laid {
+        BeamAncestors {
             line,
             at: n.idx(origin),
             zoom: n.zoom,
@@ -105,7 +105,7 @@ impl<'a, W: Words + ?Sized> Laid<'a, W> {
     }
 }
 
-impl<W: Words + ?Sized> support::Ancestors<Inherited> for Laid<'_, W> {
+impl<W: Words + ?Sized> support::Ancestors<Inherited> for BeamAncestors<'_, W> {
     fn at(&self) -> [i32; 3] {
         self.at
     }
@@ -134,19 +134,19 @@ pub(crate) trait Words {
 
 impl Words for Beams {
     fn word(&self, k: u32) -> u32 {
-        seen_at(self, k)
+        pyramid_at(self, k)
     }
 
     fn set(&mut self, k: u32, v: u32) {
-        seen_put(self, k, v)
+        pyramid_put(self, k, v)
     }
 
     fn add(&mut self, k: u32, v: u32) -> u32 {
-        seen_add(self, k, v)
+        pyramid_add(self, k, v)
     }
 
     fn most(&mut self, k: u32, v: u32) {
-        seen_most(self, k, v)
+        pyramid_most(self, k, v)
     }
 }
 
@@ -232,7 +232,7 @@ pub(crate) fn resumed<'a, Q: Query, W: Words + ?Sized>(
     line: &Beamed<'a, W>,
     node: cast::Node,
     keep: &mut impl cast::Keep<Q::At>,
-    told: &mut impl cast::Asked,
+    told: &mut impl cast::Visitor,
 ) -> Trace<Q::At>
 where
     Beamed<'a, W>: cast::Over<Q::At>,
@@ -266,7 +266,7 @@ pub fn beam_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
     let clipmap: &[IVec4] = clipmap;
@@ -351,7 +351,7 @@ pub fn sample_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
     let clipmap: &[IVec4] = clipmap;

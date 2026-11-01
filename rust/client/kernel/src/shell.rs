@@ -67,7 +67,7 @@ fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&
 /// read (`division::naming`) rather than the names, and the waiting
 /// marker's text aside (`Sent`).
 #[derive(Clone, Copy, PartialEq)]
-pub struct Shown {
+pub struct SnapshotInputs {
     status: GroundStatus,
     is_off_center: bool,
     pivot: Option<Q3>,
@@ -94,7 +94,7 @@ pub struct Shown {
     storage_refused: ([u32; StorageFile::ALL.len()], usize),
 }
 
-fn shown() -> Shown {
+fn snapshot_inputs() -> SnapshotInputs {
     let (location, settings) = (device_location_store(), settings_store());
     let pivot = controller::pivot();
     let mut previews = ([0u32; PREVIEWS_MAX], 0);
@@ -102,7 +102,7 @@ fn shown() -> Shown {
         *slot = surface;
         previews.1 += 1;
     }
-    Shown {
+    SnapshotInputs {
         // Shown once a frame went to the screen over a view whose tiles all
         // show, if coarser: a finer tile asked for as the eye moves is not
         // the area loading, and would flash its toast each time.
@@ -153,15 +153,15 @@ fn shown() -> Shown {
 /// from: its makings and the marker draft's text.
 #[derive(Default)]
 pub struct Sent {
-    shown: Option<Shown>,
+    shown: Option<SnapshotInputs>,
     text: String,
 }
 
 impl Sent {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
-    pub fn take_moved(&mut self) -> Option<Shown> {
-        let (now, text) = (shown(), write::marker_draft().unwrap_or_default());
+    pub fn take_moved(&mut self) -> Option<SnapshotInputs> {
+        let (now, text) = (snapshot_inputs(), write::marker_draft().unwrap_or_default());
         if self.shown == Some(now) && self.text == text {
             return None;
         }
@@ -173,7 +173,7 @@ impl Sent {
 }
 
 /// The snapshot made of `shown` into `out`; none where it does not fit.
-pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
+pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
     let tool = shown.tool;
     let snapshot = Snapshot {
         pivot: PivotState {

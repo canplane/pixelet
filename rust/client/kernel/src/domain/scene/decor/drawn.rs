@@ -87,7 +87,7 @@ fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
 
 /// The frame's hand-over, kept so a settled frame asks the heap for nothing,
 /// and made again only where what it is made of changed.
-struct Handed {
+struct Frame {
     /// Made with the drawing words, from the variants' extents.
     shown: [u32; DECORS.len()],
     drawing: [u32; drawn::DRAWING_WORDS as usize],
@@ -98,7 +98,7 @@ struct Handed {
     edited: usize,
     translation: [f32; 3],
     /// What the drawing words were last made of, by value.
-    seen: Option<Seen>,
+    seen: Option<Key>,
     /// The cell the placed decor was last walked about, and what it left out.
     walked: Option<Walked>,
 }
@@ -109,7 +109,7 @@ struct Handed {
 /// drawing words never see it change. The eye within its unit moves only
 /// the translation.
 #[derive(Clone, Copy, PartialEq)]
-struct Seen {
+struct Key {
     anchor: V3,
     scattered: Option<[i32; 3]>,
     read: bool,
@@ -127,10 +127,10 @@ struct Walked {
     hide: Option<EntryAt>,
 }
 
-static HANDED: Global<Handed> = Global::new();
+static HANDED: Global<Frame> = Global::new();
 
-fn handed() -> &'static mut Handed {
-    HANDED.get(|| Handed {
+fn handed() -> &'static mut Frame {
+    HANDED.get(|| Frame {
         shown: [0; DECORS.len()],
         drawing: [0; drawn::DRAWING_WORDS as usize],
         placed: Vec::new(),
@@ -156,7 +156,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
     let h = handed();
     let anchor = eye.map(libm::floor);
     h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
-    let seen = Seen {
+    let seen = Key {
         anchor,
         scattered,
         read: catalog().is_some(),
@@ -241,7 +241,7 @@ fn meets(e: &[i32; 4], around: &Aabb) -> bool {
 }
 
 /// The drawing words of a hand-over `seen` makes.
-fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Seen) {
+fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
     let anchor = seen.anchor;
     p.fill(0);
     p[drawn::MODEL_ANGLE as usize] = (decor_model_angle() as f32).to_bits();

@@ -176,7 +176,7 @@ pub fn brick_lines(
 /// them, cell `i` as laid off its four palette indices (`palette_indices`, its own palette index, none
 /// about it gone), and column `c`'s height,
 /// counted from its first cell, its ring included (`height`).
-pub struct Laid<'a, L, H> {
+pub struct TileBrick<'a, L, H> {
     pub cell: Zoom,
     pub place: [u32; 2],
     pub lines: &'a [u32],
@@ -184,7 +184,7 @@ pub struct Laid<'a, L, H> {
     pub height: H,
 }
 
-impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for Laid<'_, L, H> {
+impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for TileBrick<'_, L, H> {
     fn cell(&self) -> Zoom {
         self.cell
     }
@@ -221,7 +221,7 @@ fn laid<'a>(
     ele: &'a [i16],
     place: [u32; 2],
     lines: &'a [u32],
-) -> Laid<'a, impl Fn(u32) -> u32 + 'a, impl Fn([i32; 2]) -> i32 + 'a> {
+) -> TileBrick<'a, impl Fn(u32) -> u32 + 'a, impl Fn([i32; 2]) -> i32 + 'a> {
     let palette_indices = move |i: u32| {
         let at = brick_cell(place, i);
         let c = (at[1] * TILE_CELLS + at[0]) as usize;
@@ -232,7 +232,7 @@ fn laid<'a>(
             [0, 1].map(|a| (place[a] * clipmap::BRICK) as f32 + c[a] as f32 + lattice::CELL_CENTER);
         ground::bicubic(|j| i32::from(ele[j]), at[0], at[1])
     };
-    Laid {
+    TileBrick {
         cell: GROUND.cell_zoom(tile.zoom),
         place,
         lines,
@@ -392,7 +392,7 @@ pub enum Unfit {
 /// spans (pxl-spec-core `fill::brick`), its cells' zoom, and its ways' tree
 /// in a pool of its own, its root word (`way::tree::root_word`) and the
 /// child groups its build took and holds.
-pub struct Built<'a> {
+pub struct FilledBrick<'a> {
     pub column: &'a [u32],
     pub kept: &'a [u32],
     pub cell: Zoom,
@@ -411,7 +411,7 @@ pub struct Built<'a> {
 pub fn fill_fit(
     tile: Tile,
     held: &TerrainTile,
-    mut each: impl FnMut(u32, &Built<'_>),
+    mut each: impl FnMut(u32, &FilledBrick<'_>),
 ) -> Result<Fit, ([u32; 2], Unfit)> {
     use pxl_spec_core::clipmap::{BRICK, BRICK_WORDS, HANDED_WORDS};
     use pxl_spec_core::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES, SCRATCH_WORDS};
@@ -452,7 +452,7 @@ pub fn fill_fit(
         }
         each(
             k,
-            &Built {
+            &FilledBrick {
                 column: &column,
                 kept: &kept,
                 cell,

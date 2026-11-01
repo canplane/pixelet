@@ -20,7 +20,7 @@ use crate::domain::control::edit::{hover, tool, ActiveTool};
 use crate::domain::layer::object::meta::user_decor_pick;
 pub use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::layer::object::store::Asset;
-use crate::domain::query::changed::Asked;
+use crate::domain::query::changed::Memo;
 use crate::domain::query::World;
 use crate::domain::view::frame::coord;
 use pxl_spec_core::answer;
@@ -28,7 +28,7 @@ use xpute_guest::global::Global;
 
 /// The palette entry of the ground the eraser would carve, of the hovered point:
 /// asked again only where the hover moved or a change touched its column.
-static CARVED: Global<Asked<Q3, Option<Cube>>> = Global::new();
+static CARVED: Global<Memo<Q3, Option<Cube>>> = Global::new();
 
 pub fn ghost() -> Ghost {
     let hover = hover();
@@ -53,7 +53,7 @@ pub fn ghost() -> Ghost {
         GROUND.cell()
     });
 
-    let carved = CARVED.get(|| Asked::NONE);
+    let carved = CARVED.get(|| Memo::NONE);
     // Looked at each frame turn, a hover not asked of this one too.
     carved.forget_touched();
     // The cell being carved as the world answers it, whichever source fills

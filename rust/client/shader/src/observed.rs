@@ -17,22 +17,22 @@ use crate::world::{PaletteWords, World};
 /// The observed pyramid's buffer (pxl-spec-core `observed`), bound as a
 /// runtime array, whose pointer a walk holds whole: a slice's would be a
 /// pointer and a length, which naga traces no atomic through.
-pub(crate) type Seen = spirv_std::RuntimeArray<u32>;
+pub(crate) type Pyramid = spirv_std::RuntimeArray<u32>;
 
 /// Word `i` of the observed pyramid's buffer.
-pub(crate) fn seen_at(w: &Seen, i: u32) -> u32 {
+pub(crate) fn pyramid_at(w: &Pyramid, i: u32) -> u32 {
     // SAFETY: an entry's or the head's word, within the buffer.
     unsafe { *w.index(i as usize) }
 }
 
-pub(crate) fn seen_put(w: &mut Seen, i: u32, v: u32) {
-    // SAFETY: as `seen_at`.
+pub(crate) fn pyramid_put(w: &mut Pyramid, i: u32, v: u32) {
+    // SAFETY: as `pyramid_at`.
     unsafe { *w.index_mut(i as usize) = v }
 }
 
 /// `v` added to word `i`, whoever else adds to it: what it held.
-pub(crate) fn seen_add(w: &mut Seen, i: u32, v: u32) -> u32 {
-    // SAFETY: as `seen_at`.
+pub(crate) fn pyramid_add(w: &mut Pyramid, i: u32, v: u32) -> u32 {
+    // SAFETY: as `pyramid_at`.
     unsafe {
         spirv_std::arch::atomic_i_add::<
             u32,
@@ -43,8 +43,8 @@ pub(crate) fn seen_add(w: &mut Seen, i: u32, v: u32) -> u32 {
 }
 
 /// Word `i` raised to `v` where it is less, whoever else raises it.
-pub(crate) fn seen_most(w: &mut Seen, i: u32, v: u32) {
-    // SAFETY: as `seen_at`.
+pub(crate) fn pyramid_most(w: &mut Pyramid, i: u32, v: u32) {
+    // SAFETY: as `pyramid_at`.
     unsafe {
         spirv_std::arch::atomic_u_max::<
             u32,
@@ -55,8 +55,8 @@ pub(crate) fn seen_most(w: &mut Seen, i: u32, v: u32) {
 }
 
 /// Word `i` read and written whole, where a walk may race another on it.
-fn seen_load(w: &mut Seen, i: u32) -> u32 {
-    // SAFETY: as `seen_at`.
+fn pyramid_load(w: &mut Pyramid, i: u32) -> u32 {
+    // SAFETY: as `pyramid_at`.
     unsafe {
         spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(
             w.index_mut(i as usize),
@@ -64,8 +64,8 @@ fn seen_load(w: &mut Seen, i: u32) -> u32 {
     }
 }
 
-fn seen_store(w: &mut Seen, i: u32, v: u32) {
-    // SAFETY: as `seen_at`.
+fn pyramid_store(w: &mut Pyramid, i: u32, v: u32) {
+    // SAFETY: as `pyramid_at`.
     unsafe {
         spirv_std::arch::atomic_store::<
             u32,
@@ -78,9 +78,9 @@ fn seen_store(w: &mut Seen, i: u32, v: u32) {
 /// `visits`, the nodes a walk of `observer`'s asked, added to its lane
 /// `lane` of the head where the walks count (pxl-spec-core
 /// `observed::TALLY_ON`, `tally`).
-pub(crate) fn add_tally(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
-    if seen_load(w, observed::TALLY_ON) != 0 {
-        // SAFETY: as `seen_at`.
+pub(crate) fn add_tally(w: &mut Pyramid, observer: u32, lane: u32, visits: u32) {
+    if pyramid_load(w, observed::TALLY_ON) != 0 {
+        // SAFETY: as `pyramid_at`.
         unsafe {
             spirv_std::arch::atomic_i_add::<
                 u32,
@@ -95,8 +95,8 @@ pub(crate) fn add_tally(w: &mut Seen, observer: u32, lane: u32, visits: u32) {
 }
 
 /// Word `i` set to `v` where it holds `was`; what it held.
-fn seen_swap(w: &mut Seen, i: u32, was: u32, v: u32) -> u32 {
-    // SAFETY: as `seen_at`.
+fn pyramid_swap(w: &mut Pyramid, i: u32, was: u32, v: u32) -> u32 {
+    // SAFETY: as `pyramid_at`.
     unsafe {
         spirv_std::arch::atomic_compare_exchange::<
             u32,
@@ -118,12 +118,12 @@ fn bucket_of(zoom: u32, c: [i32; 3]) -> u32 {
 }
 
 /// Whether entry word `w` is node `c` of `zoom`, as its node words say.
-fn is_node(seen: &Seen, w: u32, zoom: u32, c: [i32; 3]) -> bool {
+fn is_node(seen: &Pyramid, w: u32, zoom: u32, c: [i32; 3]) -> bool {
     let n = w + observed::W_NODE;
-    seen_at(seen, n) == zoom
-        && seen_at(seen, n + 1) == c[0] as u32
-        && seen_at(seen, n + 2) == c[1] as u32
-        && seen_at(seen, n + 3) == c[2] as u32
+    pyramid_at(seen, n) == zoom
+        && pyramid_at(seen, n + 1) == c[0] as u32
+        && pyramid_at(seen, n + 2) == c[1] as u32
+        && pyramid_at(seen, n + 3) == c[2] as u32
 }
 
 /// The observed pyramid as a beam ray's walk, a sample's, or a pixel's that
@@ -136,7 +136,7 @@ fn is_node(seen: &Seen, w: u32, zoom: u32, c: [i32; 3]) -> bool {
 /// found again wherever the node is asked.
 pub(crate) struct Writing<'a, L> {
     pub(crate) world: World<'a, L>,
-    pub(crate) seen: &'a mut Seen,
+    pub(crate) seen: &'a mut Pyramid,
     pub(crate) tag: u32,
     /// Whether it writes a cell a ray sees, which another walk may then
     /// read (observer.rs `Observer::assets`); splits, what is transparent
@@ -173,7 +173,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
             let mut k = 0;
             while k < observed::BUCKET {
                 let w = observed::entry_at(first + k);
-                let held = seen_load(self.seen, w);
+                let held = pyramid_load(self.seen, w);
                 if held != observed::CLAIMED && held != 0 && is_node(self.seen, w, zoom, c) {
                     if observed::holds(held, asked) {
                         if observed::tag_of(held) == self.tag {
@@ -186,18 +186,18 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                         }
                         let a = w + observed::W_INHERITED;
                         let at = Inherited::of_words([
-                            seen_at(self.seen, a),
-                            seen_at(self.seen, a + 1),
-                            seen_at(self.seen, a + 2),
-                            seen_at(self.seen, a + 3),
-                            seen_at(self.seen, a + 4),
+                            pyramid_at(self.seen, a),
+                            pyramid_at(self.seen, a + 1),
+                            pyramid_at(self.seen, a + 2),
+                            pyramid_at(self.seen, a + 3),
+                            pyramid_at(self.seen, a + 4),
                         ]);
-                        let kind = observed::kind_of(seen_at(self.seen, w + observed::W_KIND));
+                        let kind = observed::kind_of(pyramid_at(self.seen, w + observed::W_KIND));
                         let asset = [
-                            seen_at(self.seen, w + observed::W_ASSET),
-                            seen_at(self.seen, w + observed::W_ASSET + 1),
+                            pyramid_at(self.seen, w + observed::W_ASSET),
+                            pyramid_at(self.seen, w + observed::W_ASSET + 1),
                         ];
-                        if seen_load(self.seen, w) == held {
+                        if pyramid_load(self.seen, w) == held {
                             *n = at;
                             return In { kind, asset };
                         }
@@ -221,7 +221,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                 (to, key) = (free, 0);
             } else if to == observed::NONE && k == observed::BUCKET {
                 let v = first + observed::victim(zoom, c);
-                (to, key) = (v, seen_load(self.seen, observed::entry_at(v)));
+                (to, key) = (v, pyramid_load(self.seen, observed::entry_at(v)));
             }
         }
         let answer = Query::node(&mut self.world, n, zoom, c, asked, t0);
@@ -231,28 +231,28 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                 || answer.kind != pxl_spec_core::answer::Kind::Cell
                 || pxl_spec_core::answer::transparent(answer.asset[0]))
             && key != observed::CLAIMED
-            && seen_swap(self.seen, w, key, observed::CLAIMED) == key
+            && pyramid_swap(self.seen, w, key, observed::CLAIMED) == key
         {
-            seen_put(
+            pyramid_put(
                 self.seen,
                 w + observed::W_KIND,
                 observed::kind_word(answer.kind),
             );
-            seen_put(self.seen, w + observed::W_ASSET, answer.asset[0]);
-            seen_put(self.seen, w + observed::W_ASSET + 1, answer.asset[1]);
+            pyramid_put(self.seen, w + observed::W_ASSET, answer.asset[0]);
+            pyramid_put(self.seen, w + observed::W_ASSET + 1, answer.asset[1]);
             let words = n.words();
             let a = w + observed::W_INHERITED;
-            seen_put(self.seen, a, words[0]);
-            seen_put(self.seen, a + 1, words[1]);
-            seen_put(self.seen, a + 2, words[2]);
-            seen_put(self.seen, a + 3, words[3]);
-            seen_put(self.seen, a + 4, words[4]);
+            pyramid_put(self.seen, a, words[0]);
+            pyramid_put(self.seen, a + 1, words[1]);
+            pyramid_put(self.seen, a + 2, words[2]);
+            pyramid_put(self.seen, a + 3, words[3]);
+            pyramid_put(self.seen, a + 4, words[4]);
             let k = w + observed::W_NODE;
-            seen_put(self.seen, k, zoom);
-            seen_put(self.seen, k + 1, c[0] as u32);
-            seen_put(self.seen, k + 2, c[1] as u32);
-            seen_put(self.seen, k + 3, c[2] as u32);
-            seen_store(self.seen, w, observed::key(self.tag, asked));
+            pyramid_put(self.seen, k, zoom);
+            pyramid_put(self.seen, k + 1, c[0] as u32);
+            pyramid_put(self.seen, k + 2, c[1] as u32);
+            pyramid_put(self.seen, k + 3, c[2] as u32);
+            pyramid_store(self.seen, w, observed::key(self.tag, asked));
         }
         answer
     }
@@ -267,56 +267,56 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "forget_cs"))]
 pub fn forget_cs(
     #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
 ) {
     if id.x >= observed::ENTRIES {
         return;
     }
     let w = observed::entry_at(id.x);
-    if seen_at(seen, observed::FORGETS) == observed::FORGETS_ALL {
-        seen_put(seen, w + observed::W_KEY, 0);
+    if pyramid_at(seen, observed::FORGETS) == observed::FORGETS_ALL {
+        pyramid_put(seen, w + observed::W_KEY, 0);
         return;
     }
-    if seen_at(seen, w + observed::W_KEY) == 0 {
+    if pyramid_at(seen, w + observed::W_KEY) == 0 {
         return;
     }
     let (zoom, x, y) = (
-        seen_at(seen, w + observed::W_NODE),
-        seen_at(seen, w + observed::W_NODE + 1) as i32,
-        seen_at(seen, w + observed::W_NODE + 2) as i32,
+        pyramid_at(seen, w + observed::W_NODE),
+        pyramid_at(seen, w + observed::W_NODE + 1) as i32,
+        pyramid_at(seen, w + observed::W_NODE + 2) as i32,
     );
     let mut moved = [0; observed::MOVED_WORDS as usize];
     let mut k = 0;
     while k < observed::MOVED_WORDS {
-        moved[k as usize] = seen_at(seen, observed::MOVED_AT + k);
+        moved[k as usize] = pyramid_at(seen, observed::MOVED_AT + k);
         k += 1;
     }
     if observed::forgets(&moved, zoom, [x, y]) {
-        seen_put(seen, w + observed::W_KEY, 0);
+        pyramid_put(seen, w + observed::W_KEY, 0);
         return;
     }
     // Or handed a slot of a child group of what is placed that was written.
-    let placed = seen_at(seen, w + observed::W_PLACED);
+    let placed = pyramid_at(seen, w + observed::W_PLACED);
     let mut f = 0;
-    while f < seen_at(seen, observed::WRITTEN_AT) {
-        if observed::reads_written(placed, seen_at(seen, observed::WRITTEN_AT + 1 + f)) {
-            seen_put(seen, w + observed::W_KEY, 0);
+    while f < pyramid_at(seen, observed::WRITTEN_AT) {
+        if observed::reads_written(placed, pyramid_at(seen, observed::WRITTEN_AT + 1 + f)) {
+            pyramid_put(seen, w + observed::W_KEY, 0);
             return;
         }
         f += 1;
     }
     // Or over a box of what is placed or cut that changed.
     let mut b = 0;
-    while b < seen_at(seen, observed::BOXES_AT) {
+    while b < pyramid_at(seen, observed::BOXES_AT) {
         let at = observed::BOXES_AT + 1 + 4 * b;
         let changed = [
-            seen_at(seen, at) as i32,
-            seen_at(seen, at + 1) as i32,
-            seen_at(seen, at + 2) as i32,
-            seen_at(seen, at + 3) as i32,
+            pyramid_at(seen, at) as i32,
+            pyramid_at(seen, at + 1) as i32,
+            pyramid_at(seen, at + 2) as i32,
+            pyramid_at(seen, at + 3) as i32,
         ];
         if observed::over_box(zoom, [x, y], changed) {
-            seen_put(seen, w + observed::W_KEY, 0);
+            pyramid_put(seen, w + observed::W_KEY, 0);
             return;
         }
         b += 1;

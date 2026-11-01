@@ -20,7 +20,7 @@ use crate::gpu::atlas::shelf::{Atlas, Paint, SlotSet};
 use crate::gpu::atlas::{AtlasPainter, DisplayList, ATLAS_SCALE};
 use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pass::model::DrawUniforms;
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{Draws, Uploads};
@@ -142,8 +142,8 @@ struct Set {
 }
 
 pub struct MarkerPass {
-    built: Built,
-    region_built: Built,
+    built: Pipeline,
+    region_built: Pipeline,
     /// The regions' numbers and their depth, the canvas's size.
     numbers: u32,
     numbers_view: u32,

@@ -27,7 +27,7 @@ pub use solve::solve_tile;
 #[derive(Default)]
 pub struct Solved {
     pub lines: Vec<Line>,
-    pub drawn: Vec<Drawn>,
+    pub drawn: Vec<WayRange>,
 }
 
 /// A solved line: XY in DB coordinates, height in leaf cells, width in u.
@@ -136,7 +136,7 @@ impl Ord for Area {
 
 /// A range of a way, as fractions of it, that a line draws.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Drawn {
+pub struct WayRange {
     pub gers_id: String,
     pub range: [f64; 2],
 }

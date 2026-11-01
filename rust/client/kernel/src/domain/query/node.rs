@@ -50,14 +50,14 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
 use pxl_spec_core::answer::{In, Kind};
 use pxl_spec_core::area::Area;
-use pxl_spec_core::clipmap::{self, Found};
+use pxl_spec_core::clipmap::{self, Lookup};
 use pxl_spec_core::ground::VOID;
 use pxl_spec_core::ground::{self, Cell};
 use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::world;
 
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::{pool, HeldClipmap};
+use crate::domain::layer::terrain::clipmap::{pool, CpuClipmap};
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::Answer;
 use crate::sys::io::source;
@@ -139,7 +139,7 @@ impl World<'_> {
     /// What is in `at`'s node, asked from `far` to `near`, the zooms a reader
     /// asks within it: the world's one query (pxl-spec-core `world::node`),
     /// the ground read as the GPU reads it, off what it drew and read back
-    /// (`HeldClipmap`), down the node's line through the tile cache
+    /// (`CpuClipmap`), down the node's line through the tile cache
     /// (`Reading`). Its answer (pxl-spec-core `answer`): a split and its
     /// box in its own steps; the asset of a cell at the zoom asked, void for air; or,
     /// coarser than asked and nothing under it filling, air its size, which
@@ -159,7 +159,7 @@ impl World<'_> {
         let mut reading = Reading::new(self, lines);
         let i = world::node(
             &mut reading,
-            &HeldClipmap,
+            &CpuClipmap,
             &lanes,
             pool(),
             &mut at.inherited,
@@ -233,7 +233,7 @@ impl ground::Resident for Reading<'_, '_> {
     /// and false.
     fn relief(
         &mut self,
-        place: &mut Found,
+        place: &mut Lookup,
         cells: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
     ) -> (ground::Bounds, bool) {
@@ -254,7 +254,7 @@ impl ground::Resident for Reading<'_, '_> {
     /// The cell's column off the clip levels, the area's edge laid on it, as
     /// the GPU reads it (pxl-spec-core `clipmap::ground`), stepped from where
     /// its relief found its cells.
-    fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
-        clipmap::ground(&HeldClipmap, place, zoom, [c[0], c[1]]).0
+    fn cell(&mut self, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell {
+        clipmap::ground(&CpuClipmap, place, zoom, [c[0], c[1]]).0
     }
 }

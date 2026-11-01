@@ -26,7 +26,7 @@ use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::ray::Ray;
-use super::scatter::{generated_at, Asked};
+use super::scatter::{generated_at, DecorWorld};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::meta::placed;
@@ -36,7 +36,7 @@ use crate::domain::layer::tile_cache::Line;
 use crate::domain::query::decor::intersect::{box_extent, intersect};
 use pxl_spec_core::area::{self, Shard};
 use pxl_spec_core::cast;
-use pxl_spec_core::clipmap::Found;
+use pxl_spec_core::clipmap::Lookup;
 use pxl_spec_core::overwrite::{self, NodeSlot};
 
 /// One ray's decor tests, carried along its ground walk.
@@ -106,7 +106,7 @@ pub(super) struct Around {
 #[derive(Clone, Copy)]
 struct Column {
     line: Line,
-    found: Found,
+    found: Lookup,
     hi: Option<i32>,
 }
 
@@ -186,7 +186,7 @@ impl Around {
             let line = world
                 .terrain
                 .line_under(over.as_ref().map(|o| &o.line), (zoom, n), cell);
-            let mut found = over.map_or(Found::NONE, |o| o.found);
+            let mut found = over.map_or(Lookup::NONE, |o| o.found);
             let hi = world
                 .terrain
                 .relief(&line, &mut found, (zoom, n), [cell, cell])
@@ -264,7 +264,7 @@ impl<'a> World<'a> {
         mut each: impl FnMut(&Decor, Instance, bool) -> bool,
     ) -> bool {
         DECORS.iter().any(|decor| {
-            generated_at(&mut Asked::new(self), decor, cell, boxed)
+            generated_at(&mut DecorWorld::new(self), decor, cell, boxed)
                 .is_some_and(|(i, generates)| each(decor, i, generates))
         })
     }

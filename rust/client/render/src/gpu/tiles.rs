@@ -26,7 +26,7 @@ use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, PassDesc, RenderContext,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 /// The screen's tiles' pixels a side (pxl-spec-core `screen::TILE`).
 pub use pxl_spec_core::screen::TILE as SIDE;
@@ -97,7 +97,7 @@ pub struct Tiles {
     /// The marks' pass, its group over its uniform and the words, made
     /// again where the words are others; the uniform, the mark's tiles and
     /// its head; and the tiles this frame's mark sets, 0 where it sets none.
-    mark: Built,
+    mark: Pipeline,
     mark_group: u32,
     mark_bound: u32,
     mark_uniform: u32,
@@ -110,7 +110,7 @@ pub struct Tiles {
     /// GPU once the marks are made, by a pass over its group (`box_args`);
     /// made where a tile is claimed the frame it changed alone, so the box
     /// holds every tile claimed.
-    box_args: Option<(u32, Built, u32)>,
+    box_args: Option<(u32, Pipeline, u32)>,
     /// The number the last frame through the gate wrote into the claimed
     /// tiles' stencil, 0 where the target was drawn whole (`gate`).
     gate_number: u32,
@@ -341,7 +341,7 @@ impl Tiles {
         let number = gating.then(|| self.gate_number % GATE_NUMBERS + 1);
         self.gate_number = number.unwrap_or(0);
         let desc = if number.is_some_and(|n| n > 1) {
-            desc.kept()
+            desc.load_stencil()
         } else {
             desc
         };

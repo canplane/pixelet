@@ -268,7 +268,7 @@ impl Grid {
     }
 
     /// The first word of the ask at `place` among the missed pixels' hits'
-    /// (`ray::MISS_ARGS_ASKED`).
+    /// (`ray::MISS_ARGS_ROOM`).
     pub fn hit_ask_at(&self, place: u32) -> u32 {
         self.hit_asks_at + place * ASK_WORDS
     }

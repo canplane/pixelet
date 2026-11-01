@@ -91,7 +91,7 @@ function recordingText(r: Record<string, f64>): string {
     r.heap_largest_free_min_bytes,
   )}   refusals ${r.heap_refusals}   ring peak cq ${r.ring_cq_peak} sq ${
     r.ring_sq_peak
-  } held ${r.ring_held_peak}   body slots peak ${
+  } left ${r.ring_left_peak}   body slots peak ${
     r.body_slots_peak
   }   terrain refused ${r.cap_terrain_refused}   (over the ${
     r.frames

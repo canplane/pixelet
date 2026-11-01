@@ -296,7 +296,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                     .min(v3::len(&gap.map(|g| g.max(0.0))).max(param::NEAR));
             }
         }
-        let patch = Shown {
+        let patch = PatchDraw {
             handle: b.handle,
             at: b.at,
             idx: b.idx,
@@ -465,7 +465,7 @@ fn build(
 
 /// A patch of the clouds' columns as `present_patch` reads it: its square's corner
 /// about the eye's lap, its side, and the heights its instances stand between.
-struct Shown {
+struct PatchDraw {
     handle: u32,
     at: u32,
     idx: u32,
@@ -482,7 +482,7 @@ struct Shown {
 /// which cannot be, is left out.
 fn present_patch(
     draw: &mut DrawList,
-    b: &Shown,
+    b: &PatchDraw,
     translation: [f32; 3],
     eye: V3,
     groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>,

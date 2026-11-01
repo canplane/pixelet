@@ -23,7 +23,7 @@ mod support;
 mod surface;
 mod world;
 
-pub use ray::{asked, at_zoom, by_dist, cell_zoom_at, held, Hit, HitKind, Ray};
+pub use ray::{at_zoom, by_dist, cell_zoom_at, finest, zoom_range, Hit, HitKind, Ray};
 pub use support::{over, under, walks};
 pub use world::{Walked, World};
 

@@ -31,15 +31,15 @@ use pxl_spec_core::support::{ColumnSurface, Line};
 
 /// The zooms a cell is asked at: no coarser than a tile draws and no finer
 /// than what is placed is held.
-pub fn asked() -> [Zoom; 2] {
+pub fn zoom_range() -> [Zoom; 2] {
     [coarsest(), OBJECT_FINEST]
 }
 
 /// The cells of tiles at the zoom `tile` wherever they are, as the descent
 /// reads a level of detail (pxl-spec-core `cast::Detail`): a range of that
-/// zoom's cells alone, held to the zooms a cell is asked at (`asked`).
+/// zoom's cells alone, held to the zooms a cell is asked at (`zoom_range`).
 pub fn at_zoom(tile: Zoom) -> Detail {
-    let [lo, hi] = asked();
+    let [lo, hi] = zoom_range();
     let z = GROUND.cell_zoom(tile).clamp(lo, hi);
     Detail {
         range: [z, z],
@@ -52,8 +52,8 @@ pub fn at_zoom(tile: Zoom) -> Detail {
 /// answer alike asked finer, and what is placed at its own. Where the eye
 /// draws it coarser is the asker's to judge by `by_dist`
 /// (domain/control/edit.rs `Picked`).
-pub fn held() -> Detail {
-    let [_, finest] = asked();
+pub fn finest() -> Detail {
+    let [_, finest] = zoom_range();
     Detail {
         range: [finest, finest],
         eye: [0.0; 3],
@@ -67,7 +67,7 @@ pub fn held() -> Detail {
 /// every drawn cell.
 pub fn by_dist() -> Detail {
     Detail {
-        range: asked(),
+        range: zoom_range(),
         eye: [0.0; 3],
         spacing: Spacing::NONE,
     }

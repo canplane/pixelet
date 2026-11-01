@@ -11,7 +11,7 @@ use pxl_spec_core::{beam, cast, raster, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
-use crate::beam::{node_at, Beamed, Beams, Laid, Words};
+use crate::beam::{node_at, Beamed, Beams, BeamAncestors, Words};
 use crate::pass_observer::PassObserver;
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::light::Head;
@@ -183,12 +183,12 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
 /// about the face its ray entered (`World::faced`), asked of the world's
 /// query once a hit rather than once a ray, off the line down to it from
 /// the deepest node of its cell's beam ray's line over it, that line read
-/// in place (`support::sub_line`, beam.rs `Laid`), and left in the word its ask
+/// in place (`support::sub_line`, beam.rs `BeamAncestors`), and left in the word its ask
 /// names (`beam::ASK_TO`). The boxes' asks (`beam::Grid::ask_at`), their
 /// faces left in their samples' words, which the pixels read (cast.rs
 /// `cast_cs`); and the missed pixels' hits' (`beam::Grid::hit_ask_at`;
 /// cast.rs `hit_lead_cs`), their args laid alike (pxl-spec-core
-/// `ray::MISS_ARGS_ASKED`), their faces left in the hits, which their pixels
+/// `ray::MISS_ARGS_ROOM`), their faces left in the hits, which their pixels
 /// take (cast.rs `hit_faces_cs`). One pass for both, over the args it is
 /// bound to: where its asks lie (`raster::ARGS_ASKS`) and how many.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "face_cs"))]
@@ -217,7 +217,7 @@ pub fn face_cs(
         let (origin, _) = eye_origin(eye);
         let node = node_at(w, w.word(a + beam::ASK_NODE));
         let (zoom, c) = (node.zoom, node.idx(origin));
-        let base = Laid::of(Beamed(w, w.word(a + beam::ASK_LINE)), origin);
+        let base = BeamAncestors::of(Beamed(w, w.word(a + beam::ASK_LINE)), origin);
         let mut world = World {
             clipmap,
             ground,

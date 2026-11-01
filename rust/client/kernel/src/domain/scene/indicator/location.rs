@@ -14,7 +14,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::query::changed::Asked;
+use crate::domain::query::changed::Memo;
 use crate::domain::query::World;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::indicator::param::{
@@ -87,7 +87,7 @@ fn zone_samples() -> impl Iterator<Item = ZoneSample> {
 /// What grounding the zone is made of, by value: the fix, and where it is
 /// in the eye's frame. With the ground its queries read (`Columns`), it is all.
 #[derive(Clone, Copy, PartialEq)]
-struct Seen {
+struct Key {
     device: Q3,
     pos: V3,
 }
@@ -210,8 +210,8 @@ pub struct LocationIndicator {
     last_known_center_z: Option<f64>,
     /// The center the zone was last grounded at, none where it found no
     /// height, kept while the fix stands and no change touched what
-    /// grounding it read (`Asked`).
-    grounded: Asked<Seen, Option<V3>>,
+    /// grounding it read (`Memo`).
+    grounded: Memo<Key, Option<V3>>,
     /// The zone grounded this step, kept so a step allocates nothing.
     instances: Vec<f32>,
     /// Each cell's ground over the zone's center, of the zone and the ring
@@ -235,7 +235,7 @@ impl LocationIndicator {
             return self.clear(draw);
         };
 
-        let seen = Seen {
+        let seen = Key {
             device,
             pos: coord::to_world(&device),
         };
@@ -259,7 +259,7 @@ impl LocationIndicator {
 
     /// The zone grounded at the fix and drawn where it changed: its center, none
     /// where the fix has no height yet.
-    fn ground(&mut self, world: World, draw: &mut DrawList, seen: Seen) -> Option<V3> {
+    fn ground(&mut self, world: World, draw: &mut DrawList, seen: Key) -> Option<V3> {
         let (device, pos) = (seen.device, seen.pos);
         // The fix names a place and not how high.
         if let Some(z) = world.surface_support(&device).val().flatten() {

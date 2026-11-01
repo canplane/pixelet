@@ -13,10 +13,10 @@ use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile, TOP_ZOOM};
 use pxl_spec_core::area::Shard;
-use pxl_spec_core::clipmap::{self as cells, Found};
+use pxl_spec_core::clipmap::{self as cells, Lookup};
 use pxl_spec_core::ground::{Bounds, Cell};
 
-use crate::domain::layer::terrain::clipmap::HeldClipmap;
+use crate::domain::layer::terrain::clipmap::CpuClipmap;
 use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
 use crate::sys::io::source;
 
@@ -33,18 +33,18 @@ impl TileCache<TerrainTile> {
     /// it, the lack, never nothing. Past the service area no clip level holds
     /// anything: a reader asks that first, the descent of its shard
     /// (pxl-spec-core `area::Shard`). `place` is where a node over it found its
-    /// cells, or `Found::NONE`, and becomes where its own are (pxl-spec-core
+    /// cells, or `Lookup::NONE`, and becomes where its own are (pxl-spec-core
     /// `clipmap::step`). Its cells are read at `cell` as the GPU reads them
     /// (pxl-spec-core `clipmap::bound_over`); `line` names the tile and says
     /// whether the clip level read is its ground's own.
     pub fn relief(
         &self,
         line: &Line,
-        place: &mut Found,
+        place: &mut Lookup,
         node: Node<2>,
         zooms: [Zoom; 2],
     ) -> Answer<Bounds> {
-        let (r, from, here) = cells::bound_over(&HeldClipmap, place, zooms, node);
+        let (r, from, here) = cells::bound_over(&CpuClipmap, place, zooms, node);
         held(line, from, here, r)
     }
 
@@ -54,8 +54,8 @@ impl TileCache<TerrainTile> {
     /// says the ground at the clip level it was read off or coarser, else
     /// coarser, naming its tile (`held`); where no clip level holds it, the
     /// lack.
-    pub fn column(&self, line: &Line, place: Found, (zoom, c): Node<2>) -> Answer<Cell> {
-        let (cell, f) = cells::ground(&HeldClipmap, place, zoom, c);
+    pub fn column(&self, line: &Line, place: Lookup, (zoom, c): Node<2>) -> Answer<Cell> {
+        let (cell, f) = cells::ground(&CpuClipmap, place, zoom, c);
         held(line, f.from(), f.here(), cell)
     }
 
@@ -85,7 +85,7 @@ impl TileCache<TerrainTile> {
     pub fn relief_walked(
         &self,
         lines: &mut Lines,
-        place: &mut Found,
+        place: &mut Lookup,
         node: Node<2>,
         cell: Zoom,
     ) -> Answer<Bounds> {
@@ -177,7 +177,7 @@ impl Query for TileCache<TerrainTile> {
             return Answer::Exact(None);
         }
         let whole = region((zoom, at));
-        let mut place = Found::NONE;
+        let mut place = Lookup::NONE;
         self.relief(line, &mut place, node, [cell, cell])
             .map(|[ground, ways]| {
                 let [lo, hi] = [ground[0].min(ways[0]), ground[1].max(ways[1])];

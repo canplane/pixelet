@@ -14,7 +14,7 @@ use crate::answer::{
 };
 use crate::area::Shard;
 use crate::cave::Cave;
-use crate::clipmap::{Bricks, Found};
+use crate::clipmap::{Bricks, Lookup};
 use crate::ground::{self, VOID};
 use crate::overwrite::{self, Columns, Cut, AIR, CELL, PLACED, SPLIT};
 use crate::way;
@@ -26,7 +26,7 @@ use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 /// its caves (`Cave`), what is placed (`overwrite::NodeSlot`, its cursor in the
 /// objects' tree), what is known of the service area at its shard
 /// (`area::Shard`), where the clip levels held the ground's cells of a node
-/// over it (`clipmap::Found`, `clipmap::step`), and the ways' cursor in the
+/// over it (`clipmap::Lookup`, `clipmap::step`), and the ways' cursor in the
 /// tree of the brick `ground` names (`way::tree`). The CPU's and a GPU's
 /// alike.
 #[derive(Clone, Copy)]
@@ -34,7 +34,7 @@ pub struct Inherited {
     pub cave: Cave,
     pub placed: overwrite::NodeSlot,
     pub shard: Shard,
-    pub ground: Found,
+    pub ground: Lookup,
     pub ways: overwrite::NodeSlot,
 }
 
@@ -60,7 +60,7 @@ impl Inherited {
             cave: Cave::of_word(w[0]),
             placed: overwrite::NodeSlot::of_word(w[1]),
             shard: Shard::of_word(w[2]),
-            ground: Found::of_word(w[3]),
+            ground: Lookup::of_word(w[3]),
             ways: overwrite::NodeSlot::of_word(w[4]),
         }
     }
@@ -73,7 +73,7 @@ impl Inherited {
             cave: Cave::of(zoom, c),
             placed: overwrite::cursor(columns, PLACED, zoom, c),
             shard: Shard::UNKNOWN,
-            ground: Found::NONE,
+            ground: Lookup::NONE,
             ways: overwrite::NodeSlot::NOTHING,
         }
     }
@@ -86,7 +86,7 @@ impl Inherited {
             cave: Cave::of(zoom, c),
             placed: overwrite::NodeSlot::NOTHING,
             shard: Shard::UNKNOWN,
-            ground: Found::NONE,
+            ground: Lookup::NONE,
             ways: overwrite::NodeSlot::NOTHING,
         }
     }
@@ -330,12 +330,12 @@ const PLACED_FIRST: Zoom = UNIT_ZOOM - 3;
 const PLACED_LEVELS: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
 
 /// What is placed at the unit cells of a box, one leaf at a time
-/// (`Placed::next`), each with its cell and its stored word, as the
+/// (`PlacedCursor::next`), each with its cell and its stored word, as the
 /// objects' tree holds it (`overwrite`): asked of the query, never by
 /// walking the tree beside it. A cursor rather than a callback, so a GPU,
 /// which takes no closure over a binding's slice, walks it alike.
 #[derive(Clone, Copy)]
-pub struct Placed {
+pub struct PlacedCursor {
     lo: [i32; 3],
     hi: [i32; 3],
     /// The node at `PLACED_FIRST` asked next.
@@ -349,9 +349,9 @@ pub struct Placed {
 }
 
 /// The placed leaves at the unit cells of `[lo, hi]`, both ends held.
-pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> Placed {
+pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> PlacedCursor {
     let s = UNIT_ZOOM - PLACED_FIRST;
-    Placed {
+    PlacedCursor {
         lo,
         hi,
         first: [lo[0] >> s, lo[1] >> s, lo[2] >> s],
@@ -362,7 +362,7 @@ pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> Placed {
     }
 }
 
-impl Placed {
+impl PlacedCursor {
     /// The next leaf placed at a unit cell of the box, its cell and its
     /// word (`Columns::data`); false past the last. One descent of the tree's
     /// branches meeting the box, each child stepped once from its parent.

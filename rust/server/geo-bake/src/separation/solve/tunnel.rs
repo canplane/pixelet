@@ -31,7 +31,7 @@ use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};
 use crate::separation::elevation::{sample_cells, tile_of};
-use crate::separation::{Drawn, Line};
+use crate::separation::{Line, WayRange};
 
 use super::bridge::Decks;
 use super::*;
@@ -68,7 +68,7 @@ pub(super) fn bores(
     stretches: &[Stretch],
     decks: &Decks,
     scale: Scale,
-    lines: &mut Vec<(Line, Drawn)>,
+    lines: &mut Vec<(Line, WayRange)>,
 ) {
     let ceiling = (scale.c(TUNNEL_CEIL_OFF_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
     for (q, ys, covered) in road_bores(src, stretches, decks, scale, lines) {
@@ -138,7 +138,7 @@ fn road_bores(
     stretches: &[Stretch],
     decks: &Decks,
     scale: Scale,
-    lines: &mut Vec<(Line, Drawn)>,
+    lines: &mut Vec<(Line, WayRange)>,
 ) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
     let ramp_ways = &decks.ramp_ways;
     let tunnels: Vec<usize> = (0..stretches.len())

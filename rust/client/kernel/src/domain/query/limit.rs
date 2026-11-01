@@ -22,7 +22,7 @@ use crate::domain::layer::object::repository;
 use crate::domain::layer::Query;
 use crate::sys::io::source;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec_core::clipmap::Found;
+use pxl_spec_core::clipmap::Lookup;
 
 impl World<'_> {
     /// Whether the leaf cell under `at` is the service area's and off its
@@ -73,7 +73,7 @@ impl World<'_> {
         nodes(1).all(|y| {
             nodes(0).all(|x| {
                 let node = (zoom, [wrap_idx(zoom, x), y]);
-                let (line, mut place) = (self.terrain.cursor(node, cell), Found::NONE);
+                let (line, mut place) = (self.terrain.cursor(node, cell), Lookup::NONE);
                 // The ground's faces, in leaf cells.
                 self.terrain
                     .relief(&line, &mut place, node, [cell, cell])

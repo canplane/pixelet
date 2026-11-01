@@ -17,7 +17,7 @@ use crate::gpu::api::{
     view_entry, write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
 };
 use crate::gpu::atlas::shelf::PAD;
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::text::{Font, Raster, TextOf};
 use pxl_spec::asset::symbol;
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
@@ -196,7 +196,7 @@ impl DisplayList {
 }
 
 pub struct AtlasPainter {
-    built: Built,
+    built: Pipeline,
     sampler: u32,
 }
 

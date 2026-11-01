@@ -180,7 +180,7 @@ pub fn stage_render(pace: Pace) {
     let eye = o.as_ref().and_then(cast::eye);
     let mut terrain_upload = cast::upload;
     let landed = core::cell::Cell::new(false);
-    let mut terrain_landed = |b: u32, ticket: u32, resident: Resident<'_>| {
+    let mut on_resident = |b: u32, ticket: u32, resident: Resident<'_>| {
         landed.set(true);
         clipmap::on_resident(b, ticket, resident);
     };
@@ -202,7 +202,7 @@ pub fn stage_render(pace: Pace) {
         },
         ground: GroundBricks {
             upload: &mut terrain_upload,
-            landed: &mut terrain_landed,
+            on_resident: &mut on_resident,
             pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
             scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HANDED)),
             records: param::WAYS_RECORDS_FIRST_BYTES,

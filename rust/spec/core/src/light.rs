@@ -1099,7 +1099,7 @@ mod tests {
     /// (`holds`).
     #[test]
     fn held_breaks_where_a_node_changes_zoom() {
-        use crate::cast::{Asked, Margin};
+        use crate::cast::{Margin, Visitor};
         use crate::grid::cell_zoom_from;
         use crate::{FINEST_ZOOM, UNIT_ZOOM};
         let (hi, hit) = (8.0f32, [0.0f32, 0.0, 8.0]);
@@ -1132,7 +1132,7 @@ mod tests {
         assert_ne!(pair(was), pair(now));
         // The new: the eye moved a unit, past the margin the walk told.
         let mut told = Margin::NONE;
-        told.asked(was, dist_sq(was));
+        told.visit(was, dist_sq(was));
         assert!(told.0 < 1.0, "{}", told.0);
         let q3 = |x: f32| [(x * (1 << FRAC_W) as f32) as i32, 0, 0];
         assert!(!holds(told.0, q3(was.eye[0]), q3(now.eye[0])));

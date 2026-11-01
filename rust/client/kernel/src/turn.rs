@@ -93,7 +93,7 @@ fn companion_props() -> Option<CompanionProps> {
     let at = coord::to_world(&goal);
     Some(CompanionProps {
         pivot: [at[0], at[1]],
-        floor: companion::pivot_floor(goal, |w| support::floor_seen(w, &goal)),
+        floor: companion::pivot_floor(goal, |w| support::drawn_floor(w, &goal)),
         azimuth: controller::azimuth(),
         dragging: input::dragging(),
         steered: input::steering(),

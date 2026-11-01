@@ -29,14 +29,14 @@ const OBSERVERS: u32 = 1;
 
 /// No slot for an empty tile, whose body is its own. One asked for again
 /// (`again`) is read meanwhile and fetched once more.
-struct Held<L> {
+struct Resident<L> {
     body: L,
     slot: Option<u32>,
     again: bool,
 }
 
 struct Entry<L> {
-    held: Option<Held<L>>,
+    held: Option<Resident<L>>,
     ask: Option<Ask>,
     /// The bucket has no object for it, so the tile over it says its ground.
     answered: bool,
@@ -61,7 +61,7 @@ impl<L> Entry<L> {
 
 pub struct TileCache<L: Base> {
     tiles: FnvHashMap<Tile, Entry<L>>,
-    /// The tile each slot holds: the slots' side of `Held::slot`, one
+    /// The tile each slot holds: the slots' side of `Resident::slot`, one
     /// association read both ways — a tile's slot by every reader of a
     /// tile (`slot`, `is_slotted`; domain/layer/earth.rs `earth_window`,
     /// domain/layer/terrain/tile.rs `pending_for`, domain/layer/terrain/clipmap.rs `voids`),
@@ -229,7 +229,7 @@ impl<L: Base> TileCache<L> {
     }
 
     /// Held and asked for: what a reader may read.
-    fn readable(&self, p: Tile) -> Option<&Held<L>> {
+    fn readable(&self, p: Tile) -> Option<&Resident<L>> {
         self.entry(p).filter(|e| e.ask.is_some())?.held.as_ref()
     }
 
@@ -485,7 +485,7 @@ impl<L: Base> TileCache<L> {
         if let Some(was) = self
             .entry_mut(p)
             .held
-            .replace(Held {
+            .replace(Resident {
                 body,
                 slot,
                 again: false,

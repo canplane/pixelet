@@ -8,7 +8,7 @@ use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec_core::clipmap::{FRESH_WORDS, HANDED};
+use pxl_spec_core::clipmap::{FILL_WORDS, HANDED};
 use pxl_spec_core::eye;
 use pxl_spec_core::generated::GROUPS;
 use pxl_spec_core::light::TILE as LIGHT_TILE;
@@ -61,7 +61,7 @@ use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::preview::Preview;
 use crate::gpu::pass::skinned::SkinnedPass;
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::propagate::{self, Propagate};
 use crate::gpu::put::put_mat;
 use crate::gpu::ray::{RayCounts, RaysPass};
@@ -203,7 +203,7 @@ pub struct GroundBricks<'a> {
     pub upload: &'a mut TerrainUpload,
     /// Told each brick whose cells came back, and the fill they are of
     /// (`CellsBack::ticket`).
-    pub landed: &'a mut CellsLanded<'a>,
+    pub on_resident: &'a mut OnResident<'a>,
     /// The ways' pool's child groups at first (pxl-kernel domain/scene/param.rs
     /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
     /// to `way::tree::POOL_CHILD_GROUPS` (`GroundBuffers::grow`).
@@ -249,7 +249,7 @@ pub const RECORD_ROOMS_BYTES: u64 =
 /// A brick whose cells came back, the fill they are of
 /// (`CellsBack::ticket`), and how its ways' tree landed; what is told may
 /// borrow its caller's for the frame.
-pub type CellsLanded<'a> = dyn FnMut(u32, u32, Resident<'_>) + 'a;
+pub type OnResident<'a> = dyn FnMut(u32, u32, Resident<'_>) + 'a;
 
 /// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
@@ -307,11 +307,11 @@ pub struct CellsBack {
 
 /// A brick handed to the GPU's fill, the record the ground's clip levels hand
 /// on (pxl-kernel domain/layer/terrain/clipmap.rs `fill`): its words
-/// (pxl-spec-core `clipmap::fresh`), its four palette indices a cell, its tile's
+/// (pxl-spec-core `clipmap::fill_words`), its four palette indices a cell, its tile's
 /// padded samples, its lines as far as they are written
 /// (`clipmap::LINES_AT`), and where its cells come back to.
-pub struct FreshBrick<'a> {
-    pub fresh: [u32; FRESH_WORDS as usize],
+pub struct BrickFill<'a> {
+    pub words: [u32; FILL_WORDS as usize],
     pub palette_indices: &'a [u8],
     pub samples: &'a [i16],
     pub lines: &'a [u32],
@@ -319,7 +319,7 @@ pub struct FreshBrick<'a> {
 }
 
 /// Takes a brick while the turn's stream has room for it.
-pub type TerrainWrite<'a> = dyn FnMut(FreshBrick<'_>) -> bool + 'a;
+pub type TerrainWrite<'a> = dyn FnMut(BrickFill<'_>) -> bool + 'a;
 
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
@@ -474,9 +474,9 @@ pub struct Renderer {
     frame: Frame,
     sky_buf: u32,
     sky: [f32; SKY_FLOATS],
-    sky_built: Built,
+    sky_built: Pipeline,
     sky_group: u32,
-    ghost: Built,
+    ghost: Pipeline,
     draws_buf: u32,
     draws_bytes: u32,
     bind_group: u32,
@@ -525,7 +525,7 @@ pub struct Renderer {
     clouds_read: Read,
     /// The gate a frame not drawn whole is drawn through, and its group
     /// over the tiles' words and uniform (`Resolve::tiles`).
-    gate: Built,
+    gate: Pipeline,
     gate_group: u32,
     gate_bound: (u32, u32),
     /// The light's map's tiles, the light's cast's tiles' side (pxl-spec-core
@@ -1307,7 +1307,7 @@ impl Renderer {
                 0.0,
                 ctx.stamp(GpuSpanName::mark).pass(),
             )
-            .kept();
+            .load_stencil();
             let pass = g.pass(ctx.encoder, &desc);
             let mut pass = TrackedRenderPass::new(g, pass);
             let frames = self.mark_frame_groups;
@@ -1346,7 +1346,7 @@ impl Renderer {
                 1.0,
                 ctx.stamp(GpuSpanName::mark).pass(),
             )
-            .kept();
+            .load_stencil();
             let pass = g.pass(ctx.encoder, &desc);
             let mut pass = TrackedRenderPass::new(g, pass);
             // The light's frame has no jitter, and stands in a frame whose

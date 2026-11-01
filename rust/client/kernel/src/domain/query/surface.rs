@@ -11,10 +11,10 @@
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec_core::area::Shard;
-use pxl_spec_core::clipmap::Found;
+use pxl_spec_core::clipmap::Lookup;
 
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::HeldClipmap;
+use crate::domain::layer::terrain::clipmap::CpuClipmap;
 use crate::domain::layer::{Answer, Query};
 use pxl_spec::asset::cube::sentinel;
 
@@ -30,7 +30,7 @@ impl World<'_> {
     /// and its face; past the service area the Earth's, at sea level; none
     /// where it has no ground.
     pub(super) fn surface_of(&self, cell: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
-        let shard = Shard::UNKNOWN.at(&HeldClipmap, (cell, c));
+        let shard = Shard::UNKNOWN.at(&CpuClipmap, (cell, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(pxl_spec_core::SEA_LEVEL),
@@ -42,7 +42,7 @@ impl World<'_> {
         self.read(middle, middle, cell);
         let line = self.terrain.cursor((cell, c), cell);
         self.terrain
-            .column(&line, Found::NONE, (cell, c))
+            .column(&line, Lookup::NONE, (cell, c))
             .map(|col| {
                 col.is_grounded().then(|| Surface {
                     top: f64::from(col.top) * units(cell),

@@ -325,8 +325,8 @@ fn view() -> ViewSection {
         hover_z,
         cell: zoom(cell),
         hit_kind,
-        held: zoom(picked.as_ref().map(|p| p.held())),
-        drawn: zoom(picked.as_ref().and_then(|p| p.drawn)),
+        struck_zoom: zoom(picked.as_ref().map(|p| p.zoom())),
+        drawn_zoom: zoom(picked.as_ref().and_then(|p| p.drawn)),
         folded: picked
             .as_ref()
             .map_or(f64::NAN, |p| f64::from(u8::from(p.is_folded()))),

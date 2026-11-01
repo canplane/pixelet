@@ -62,7 +62,7 @@ use crate::separation::elevation::{sample_cells, tile_of};
 use crate::separation::piece::{piece_of, Piece};
 use crate::separation::source::{portals_in, ring, Store};
 use crate::separation::way::{Polyline, Way};
-use crate::separation::{Drawn, Line, Reader, Solved};
+use crate::separation::{Line, Reader, Solved, WayRange};
 use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
 
@@ -141,7 +141,7 @@ impl Stretch {
 /// A way at grade made to stand off it, a bridge's ramp or a tunnel's
 /// approach: a grade line at `points`, which ends where the way does at
 /// either end `ends` says (`coarsest`), drawing `range` of its segment.
-fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2], range: [f64; 2]) -> (Line, Drawn) {
+fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2], range: [f64; 2]) -> (Line, WayRange) {
     (
         Line {
             subtype: way.row.subtype.clone(),
@@ -152,7 +152,7 @@ fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2], range: [f64; 2]) ->
             points,
             clear: 0,
         },
-        Drawn {
+        WayRange {
             gers_id: way.row.gers_id.clone(),
             range,
         },
@@ -303,7 +303,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         queue.extend(reached.into_iter().filter(|q| !scope.contains(q)));
     }
     let stretches = stretches_of(&src, &scope, lo);
-    let mut lines: Vec<(Line, Drawn)> = Vec::new();
+    let mut lines: Vec<(Line, WayRange)> = Vec::new();
 
     // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
     let decks = bridge::decks(&src, &stretches, [lo, hi], scale, &mut lines);
@@ -543,7 +543,7 @@ fn absolute(p: [f64; 2]) -> [f64; 2] {
 
 /// Cells `a..=b` of a stretch as a line of `form` at heights `ys`: the piece's
 /// vertices and where the slope bends, no more.
-fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> (Line, Drawn) {
+fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> (Line, WayRange) {
     let step = merc_from_u(CELL_U);
     let along = |k: usize| ((r.k0 + k) as f64 * step).min(r.piece.way.length());
     let mut keep: Vec<(f64, [f64; 2], f64)> = Vec::new();
@@ -591,7 +591,7 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
             points,
             clear,
         },
-        Drawn {
+        WayRange {
             gers_id: r.piece.way.gers_id.clone(),
             range: [fraction(along(a)), fraction(along(b))],
         },

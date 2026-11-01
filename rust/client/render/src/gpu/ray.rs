@@ -15,7 +15,7 @@ use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Gpu, TrackedRenderPass,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
@@ -30,7 +30,7 @@ fn casts_px(kind: FrameKind) -> bool {
 }
 
 pub struct RaysPass {
-    built: Built,
+    built: Pipeline,
     /// Its group 0 over the lit pass's entries and what it binds besides
     /// (`bound`, the surface's rays, the cast's eye, and the tiles' words and
     /// uniform): made again exactly when one of them is another.

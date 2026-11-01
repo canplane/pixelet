@@ -167,7 +167,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             vec![0; clipmap::LINES_WORDS as usize],
         );
         let n = brick_lines(t, separation, place, &mut segments, &mut lines);
-        let laid = terrain::Laid {
+        let laid = terrain::TileBrick {
             cell,
             place,
             lines: &lines[..n],
@@ -361,7 +361,7 @@ fn left_brick_kept() {
     for s in 0..ENTRIES {
         let q = want(w, pivot, s);
         assert!(
-            HeldClipmap.present(LEAF_CELL, q).1,
+            CpuClipmap.present(LEAF_CELL, q).1,
             "the pivot's bricks stay present"
         );
         assert!(w.entries[(pivot * ENTRIES + s) as usize].holds(q));

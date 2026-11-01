@@ -334,7 +334,7 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
 /// they write none. A bore's air is placed air in the tree, filling what it
 /// holds (`overwrite::voxel`), and the ground's void where a reader reads
 /// it, as the ways write it (`way::AIR`).
-pub fn leaf(pool: &mut impl Pool, kept: &impl super::Kept, cell: Zoom, slot: u32) {
+pub fn leaf(pool: &mut impl Pool, kept: &impl super::ColumnSpans, cell: Zoom, slot: u32) {
     let at = unpack(pool.data(slot));
     let val = super::lined(kept, [at[0], at[1]], cell, at[2]);
     let word = if val == super::NOTHING {

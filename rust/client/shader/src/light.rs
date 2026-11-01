@@ -23,7 +23,7 @@ use crate::beam::{Beams, Words};
 use crate::cast::{add_cnt, enlist, px_tan, Rays};
 use crate::decor::Instances;
 use crate::eye::{eye_origin, eye_ray, Eye};
-use crate::observed::Seen;
+use crate::observed::Pyramid;
 use crate::observer::{self, Aim, Level, Observer, Take};
 use crate::world::World;
 
@@ -535,7 +535,7 @@ pub fn light_miss_cs(
     #[spirv(descriptor_set = 0, binding = 10)] light: &LightWords,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
 ) {
     let clipmap: &[IVec4] = clipmap;
     let m = Map::of(eye, head);
@@ -600,7 +600,7 @@ pub fn light_beam_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
 ) {
@@ -635,7 +635,7 @@ pub fn light_sample_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
 ) {

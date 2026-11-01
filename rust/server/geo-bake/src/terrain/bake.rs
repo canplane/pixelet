@@ -9,7 +9,7 @@ use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::separation::Drawn;
+use crate::separation::WayRange;
 use crate::terrain::pipeline::feature::{local, Feature};
 use crate::terrain::pipeline::ground::{bake_ground, Coast};
 use crate::terrain::pipeline::overture::policy::{bases, buildings, ways};
@@ -40,7 +40,7 @@ pub fn assemble(tile: [i32; 2], surface: Surface, lines: Separation) -> TerrainT
 }
 
 /// `drawn`: the ranges of the tile's ways its lines draw.
-pub fn bake_surface(tile_idx: [i32; 2], src: TileSource, drawn: &[Drawn]) -> Surface {
+pub fn bake_surface(tile_idx: [i32; 2], src: TileSource, drawn: &[WayRange]) -> Surface {
     let tile_min = epsg3857::get_tile_bbox(LEAF_ZOOM, tile_idx)[0];
     let mut feats: Vec<Feature> = Vec::new();
     feats.extend(

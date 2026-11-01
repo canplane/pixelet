@@ -15,8 +15,8 @@ use crate::domain::control::camera::orbit::orbit_eye_off;
 use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST};
-use crate::domain::query::changed::Asked;
-use crate::domain::query::{held, over, Hit, Ray, World};
+use crate::domain::query::changed::Memo;
+use crate::domain::query::{finest, over, Hit, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
@@ -257,7 +257,7 @@ fn toward_eye(at: &ViewPose, t_max: f64, access: &World) -> Option<Hit> {
         dir: orbit_eye_off(1.0, at.polar, at.azimuth),
         t_max,
     };
-    access.first_hit(&ray, held()).exact().flatten()
+    access.first_hit(&ray, finest()).exact().flatten()
 }
 
 /// Whether the eye `dist` from `at`'s pivot is under `roof`: short of it, or
@@ -300,7 +300,7 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
         at,
         pivot: world_to_canonical(&at.pivot),
     };
-    let last = CLIMBED.get(|| Asked::NONE);
+    let last = CLIMBED.get(|| Memo::NONE);
     last.forget_touched();
     last.of(World::now(), climb, |w| climbed(at, &w).0.polar)
 }
@@ -313,8 +313,8 @@ struct Climb {
 }
 
 /// The last climb's pitch, kept while what it is made of stands and no
-/// change touched what it read (`Asked`).
-static CLIMBED: Global<Asked<Climb, f64>> = Global::new();
+/// change touched what it read (`Memo`).
+static CLIMBED: Global<Memo<Climb, f64>> = Global::new();
 
 /// `at` climbed, and whether the climb failed: steepened, the eye is still in
 /// something solid it may not stand in (`embedded`). Over ground alone,

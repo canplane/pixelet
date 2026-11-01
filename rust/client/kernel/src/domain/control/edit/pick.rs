@@ -11,7 +11,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 
 use crate::domain::layer::object::store::Entry;
-use crate::domain::query::{held, Hit, HitKind, Ray, World};
+use crate::domain::query::{finest, Hit, HitKind, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::aabb::Aabb;
 
@@ -104,7 +104,7 @@ pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     // A coarser tile's answer is a summary, not what is held.
     World::now()
         .striking_decor()
-        .first_hit(&ray, held())
+        .first_hit(&ray, finest())
         .exact()
         .flatten()
 }

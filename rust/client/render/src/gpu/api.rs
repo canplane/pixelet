@@ -333,7 +333,7 @@ pub enum Load {
 
 /// A pass's targets: color cleared to transparent or loaded, depth cleared
 /// to `depth_clear`, loaded or read only, and its stencil, where it has one,
-/// cleared to 0 or loaded where it is `kept`; 0 for one absent.
+/// cleared to 0 or loaded (`load_stencil`); 0 for one absent.
 pub struct PassDesc {
     color: Id,
     color_load: Load,
@@ -347,7 +347,7 @@ pub struct PassDesc {
 impl PassDesc {
     /// Its stencil loaded as the last pass left it, the numbers of the gated
     /// frames that claimed each tile (`Stencil`).
-    pub fn kept(self) -> PassDesc {
+    pub fn load_stencil(self) -> PassDesc {
         PassDesc {
             stencil_kept: true,
             ..self

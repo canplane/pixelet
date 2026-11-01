@@ -14,7 +14,7 @@
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::domain::param;
-use crate::domain::query::changed::Asked;
+use crate::domain::query::changed::Memo;
 use crate::domain::query::World;
 use crate::domain::query::{cell_zoom_at, over, under, walks};
 use crate::domain::scene::actor::{Actor, Transform};
@@ -63,7 +63,7 @@ fn back_to_camera(azimuth: f64) -> f64 {
     FOLLOW_FACING - azimuth
 }
 
-struct Held {
+struct ActorModel {
     actor: Actor,
     model: ModelHandle,
 }
@@ -72,7 +72,7 @@ struct Held {
 /// instance once its model and skin have landed.
 struct Figure {
     character: Character,
-    held: Option<Held>,
+    held: Option<ActorModel>,
     /// Where its actor stands, once held and placed.
     transform: Option<Transform>,
     at: [f64; 2],
@@ -88,7 +88,7 @@ struct Figure {
     stands_z: Option<f64>,
     /// The floor it is drawn on (`drawn_floor`), of where it stands, its
     /// floor there and the zoom the eye draws it at.
-    drawn: Asked<([f64; 2], f64, Zoom), f64>,
+    drawn: Memo<([f64; 2], f64, Zoom), f64>,
 }
 
 impl Figure {
@@ -107,7 +107,7 @@ impl Figure {
             init_facing_done: false,
             follow_walk_until: 0.0,
             stands_z: None,
-            drawn: Asked::NONE,
+            drawn: Memo::NONE,
         }
     }
 
@@ -129,7 +129,7 @@ impl Figure {
         else {
             return;
         };
-        self.held = Some(Held { actor, model });
+        self.held = Some(ActorModel { actor, model });
         self.at = target;
     }
 
@@ -293,9 +293,9 @@ struct Companion {
     /// The pet's floor beside the person, walked to from the person's: of
     /// the person's place and floor, the pet's target and whether the eye
     /// sees a walk there (`walks`).
-    beside: Asked<([f64; 2], f64, [f64; 2], bool), f64>,
+    beside: Memo<([f64; 2], f64, [f64; 2], bool), f64>,
     /// The floor the pivot is drawn on, of the pivot (`pivot_floor`).
-    floor: Asked<Q3, Option<f64>>,
+    floor: Memo<Q3, Option<f64>>,
     /// Whether the character is the one looking, the eye at the pivot: no
     /// figure is drawn, so none is loading.
     looking: bool,
@@ -307,8 +307,8 @@ fn companion() -> &'static mut Companion {
     COMPANION.get(|| Companion {
         person: None,
         pet: None,
-        beside: Asked::NONE,
-        floor: Asked::NONE,
+        beside: Memo::NONE,
+        floor: Memo::NONE,
         looking: false,
     })
 }
@@ -333,7 +333,7 @@ pub struct CompanionProps {
 }
 
 /// The floor the pivot `goal` is drawn on: `ask`'s of the world, kept while
-/// the pivot stands and no change touched what it read (`Asked`), as the
+/// the pivot stands and no change touched what it read (`Memo`), as the
 /// figures' own floors are.
 pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
     let c = companion();
@@ -490,7 +490,7 @@ fn walk_to(
 /// `asked` while none of it moves. A coarser answer is taken where that zoom
 /// is not held, as a ray draws the ground it has.
 fn drawn_floor(
-    asked: &mut Asked<([f64; 2], f64, Zoom), f64>,
+    asked: &mut Memo<([f64; 2], f64, Zoom), f64>,
     at: [f64; 2],
     stands: f64,
     p: &CompanionProps,

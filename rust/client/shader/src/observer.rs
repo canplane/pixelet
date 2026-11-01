@@ -17,7 +17,7 @@ use pxl_spec_core::world::Inherited;
 use pxl_spec_core::{beam, observed, raster, tally};
 
 use crate::beam::{resumed, sample_put, Beamed, Leaving, Words};
-use crate::observed::{add_tally, seen_at, Seen, Writing};
+use crate::observed::{add_tally, pyramid_at, Pyramid, Writing};
 use crate::raster::{boxed, taken, NONE};
 use crate::world::{PaletteWords, World};
 
@@ -120,14 +120,14 @@ fn idx(across: u32, c: [u32; 2]) -> u32 {
 /// (`cast::Until::Beam`), through the observed pyramid writing what it asks,
 /// its line left in `w` for the rays about it (`Leaving`), how far they
 /// start from it and the nodes it visited; each node it asks told to `told`
-/// (`cast::Asked`), none where the cast needs it not.
+/// (`cast::Visitor`), none where the cast needs it not.
 pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
-    seen: &mut Seen,
+    seen: &mut Pyramid,
     w: &mut W,
     c: [u32; 2],
-    told: &mut impl cast::Asked,
+    told: &mut impl cast::Visitor,
 ) {
     if !o.needs(&*w, Level::Corner, c) {
         return;
@@ -135,7 +135,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     let aim = o.corner(c);
     let base = o.line(idx(o.corners()[0], c));
     o.keep_origin(w, base, aim.origin);
-    let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[0]);
+    let tag = observed::tag(pyramid_at(seen, observed::FRAME), o.passes()[0]);
     let met = cast::rooted(
         &mut Writing {
             world,
@@ -202,7 +202,7 @@ pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
     aim: &Aim,
     cell: [u32; 2],
     keep: &mut impl cast::Keep<Q::At>,
-    told: &mut impl cast::Asked,
+    told: &mut impl cast::Visitor,
 ) -> (Trace<Q::At>, u32)
 where
     Beamed<'a, W>: cast::Over<Q::At>,
@@ -226,10 +226,10 @@ where
 pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
-    seen: &mut Seen,
+    seen: &mut Pyramid,
     w: &mut W,
     s: [u32; 2],
-    told: &mut impl cast::Asked,
+    told: &mut impl cast::Visitor,
 ) {
     // One not needed meets nothing, so draws no box (`sample_box`).
     if !o.needs(&*w, Level::Sample, s) {
@@ -240,7 +240,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         return;
     }
     let aim = o.aim(o.point(s));
-    let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[1]);
+    let tag = observed::tag(pyramid_at(seen, observed::FRAME), o.passes()[1]);
     let (met, before) = resume(
         o,
         &mut Writing {
@@ -383,14 +383,14 @@ fn went_on<O: Observer, W: Words + ?Sized>(o: &O, w: &W, s: [u32; 2]) -> bool {
 pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
-    seen: &mut Seen,
+    seen: &mut Pyramid,
     w: &W,
     at: O::At,
     keep: &mut impl cast::Keep<Inherited>,
-    told: &mut impl cast::Asked,
+    told: &mut impl cast::Visitor,
 ) -> (Aim, Trace<Inherited>, u32) {
     let aim = o.aim(at);
-    let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[2]);
+    let tag = observed::tag(pyramid_at(seen, observed::FRAME), o.passes()[2]);
     let (met, before) = resume(
         o,
         &mut Writing {

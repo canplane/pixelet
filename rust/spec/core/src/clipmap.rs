@@ -80,31 +80,31 @@ pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
 /// then Y, two words; and what is known of the service area at it
 /// (`area::Shard`, its word), which the ways' fill lays the area's edge by
 /// (`way::Columns::is_walled`).
-pub const FRESH_BRICK: u32 = 0;
-pub const FRESH_PLACE: u32 = FRESH_BRICK + 1;
-pub const FRESH_CELL: u32 = FRESH_PLACE + 1;
-pub const FRESH_FIRST: u32 = FRESH_CELL + 1;
-pub const FRESH_SHARD: u32 = FRESH_FIRST + 2;
-pub const FRESH_WORDS: u32 = FRESH_SHARD + 1;
+pub const FILL_BRICK: u32 = 0;
+pub const FILL_PLACE: u32 = FILL_BRICK + 1;
+pub const FILL_CELL: u32 = FILL_PLACE + 1;
+pub const FILL_FIRST: u32 = FILL_CELL + 1;
+pub const FILL_SHARD: u32 = FILL_FIRST + 2;
+pub const FILL_WORDS: u32 = FILL_SHARD + 1;
 
-/// A fresh brick's words (`FRESH_WORDS`), `place` its `place_word`.
-pub const fn fresh(
+/// A brick fill's words (`FILL_WORDS`), `place` its `place_word`.
+pub const fn fill_words(
     brick: u32,
     place: u32,
     cell: Zoom,
     first: [i32; 2],
     shard: Shard,
-) -> [u32; FRESH_WORDS as usize] {
-    let mut w = [0; FRESH_WORDS as usize];
+) -> [u32; FILL_WORDS as usize] {
+    let mut w = [0; FILL_WORDS as usize];
     (
-        w[FRESH_BRICK as usize],
-        w[FRESH_PLACE as usize],
-        w[FRESH_CELL as usize],
+        w[FILL_BRICK as usize],
+        w[FILL_PLACE as usize],
+        w[FILL_CELL as usize],
     ) = (brick, place, cell);
     (
-        w[FRESH_FIRST as usize],
-        w[FRESH_FIRST as usize + 1],
-        w[FRESH_SHARD as usize],
+        w[FILL_FIRST as usize],
+        w[FILL_FIRST as usize + 1],
+        w[FILL_SHARD as usize],
     ) = (first[0] as u32, first[1] as u32, shard.word());
     w
 }
@@ -119,9 +119,9 @@ pub const fn place_of(w: u32) -> [u32; 2] {
     [w & 0xffff, w >> 16]
 }
 
-/// The brick a fresh brick's first cell (`FRESH_FIRST`) lies in, at its
+/// The brick a brick fill's first cell (`FILL_FIRST`) lies in, at its
 /// cells' zoom: what a reader of the handed records finds its entry by.
-pub const fn fresh_brick(first: [u32; 2]) -> [i32; 2] {
+pub const fn brick_of_first(first: [u32; 2]) -> [i32; 2] {
     [
         first[0] as i32 >> BRICK_SHIFT,
         first[1] as i32 >> BRICK_SHIFT,
@@ -306,10 +306,10 @@ pub const BRICK_WORDS: u32 = ROOT_AT + 1;
 pub const BACK_WORDS: u32 = BRICK_WORDS;
 
 /// A brick handed to the fill as a frame's fresh list holds it, a record
-/// each, `HANDED` at most: its words (`fresh`), then what only its fill
+/// each, `HANDED` at most: its words (`fill_words`), then what only its fill
 /// reads, gone with the frame — its four palette indices a cell, its tile's padded
 /// samples, two a word, and its lines.
-pub const PALETTE_AT: u32 = FRESH_WORDS;
+pub const PALETTE_AT: u32 = FILL_WORDS;
 pub const ELE_AT: u32 = PALETTE_AT + BRICK_CELLS;
 pub const LINES_AT: u32 = ELE_AT + ELE_WORDS;
 pub const HANDED_WORDS: u32 = LINES_AT + LINES_WORDS;
@@ -503,52 +503,52 @@ impl<Q: Brick> Columns for Q {
 /// descent hands it from a node to the nodes under it (`step`). `NONE` was
 /// asked at no zoom.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Found(u32);
+pub struct Lookup(u32);
 
 /// A slot, which a GPU and the CPU name alike (`SLOTS`).
-const FOUND_SLOT_BITS: u32 = SLOTS.next_power_of_two().trailing_zeros();
-const FOUND_HERE: u32 = 1 << FOUND_SLOT_BITS;
-const FOUND_FROM_SHIFT: u32 = FOUND_SLOT_BITS + 1;
-const FOUND_CELL_SHIFT: u32 = FOUND_FROM_SHIFT + crate::ZOOM_BITS;
-const FOUND_ZOOM_MASK: u32 = (1 << crate::ZOOM_BITS) - 1;
-/// A `Found`'s word's bits: its slot, here, and its two zooms.
-const FOUND_BITS: u32 = FOUND_CELL_SHIFT + crate::ZOOM_BITS;
-const _: () = assert!(FOUND_BITS <= 32);
+const LOOKUP_SLOT_BITS: u32 = SLOTS.next_power_of_two().trailing_zeros();
+const LOOKUP_HERE: u32 = 1 << LOOKUP_SLOT_BITS;
+const LOOKUP_FROM_SHIFT: u32 = LOOKUP_SLOT_BITS + 1;
+const LOOKUP_CELL_SHIFT: u32 = LOOKUP_FROM_SHIFT + crate::ZOOM_BITS;
+const LOOKUP_ZOOM_MASK: u32 = (1 << crate::ZOOM_BITS) - 1;
+/// A `Lookup`'s word's bits: its slot, here, and its two zooms.
+const LOOKUP_BITS: u32 = LOOKUP_CELL_SHIFT + crate::ZOOM_BITS;
+const _: () = assert!(LOOKUP_BITS <= 32);
 const _: () = assert!(
     FIRST_CELL >= 2,
     "a zoom asked is never NONE's, nor one finer"
 );
 
-impl Found {
-    pub const NONE: Found = Found(0);
+impl Lookup {
+    pub const NONE: Lookup = Lookup(0);
 
-    const fn of(cell: Zoom, from: Zoom, slot: u32, here: bool) -> Found {
-        Found(
-            cell << FOUND_CELL_SHIFT
-                | from << FOUND_FROM_SHIFT
-                | (here as u32) << FOUND_SLOT_BITS
+    const fn of(cell: Zoom, from: Zoom, slot: u32, here: bool) -> Lookup {
+        Lookup(
+            cell << LOOKUP_CELL_SHIFT
+                | from << LOOKUP_FROM_SHIFT
+                | (here as u32) << LOOKUP_SLOT_BITS
                 | slot,
         )
     }
     /// The zoom its cells were asked at.
     pub const fn cell(self) -> Zoom {
-        self.0 >> FOUND_CELL_SHIFT
+        self.0 >> LOOKUP_CELL_SHIFT
     }
     /// The clip level's zoom.
     pub const fn from(self) -> Zoom {
-        (self.0 >> FOUND_FROM_SHIFT) & FOUND_ZOOM_MASK
+        (self.0 >> LOOKUP_FROM_SHIFT) & LOOKUP_ZOOM_MASK
     }
     pub const fn slot(self) -> u32 {
-        self.0 & (FOUND_HERE - 1)
+        self.0 & (LOOKUP_HERE - 1)
     }
     pub const fn here(self) -> bool {
-        self.0 & FOUND_HERE != 0
+        self.0 & LOOKUP_HERE != 0
     }
     pub const fn word(self) -> u32 {
         self.0
     }
-    pub const fn of_word(w: u32) -> Found {
-        Found(w)
+    pub const fn of_word(w: u32) -> Lookup {
+        Lookup(w)
     }
 }
 
@@ -573,23 +573,23 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// the step. With nothing above, or coarser than `above`'s clip level, every
 /// clip level from `cell`'s to the first (`FIRST_CELL`) is looked at, and none
 /// holding it is a lack.
-pub fn step(w: &impl Presence, above: Found, cell: Zoom, g: [i32; 2]) -> (Found, [u32; 2]) {
+pub fn step(w: &impl Presence, above: Lookup, cell: Zoom, g: [i32; 2]) -> (Lookup, [u32; 2]) {
     // The zooms `above` leaves unknown, finest first, down to the one it
     // answers, or to the first clip level where it answers none.
-    let known = above != Found::NONE && cell >= above.from();
+    let known = above != Lookup::NONE && cell >= above.from();
     let (floor, mut f) = if known {
         (
             above.cell(),
-            Found::of(cell, above.from(), above.slot(), above.here()),
+            Lookup::of(cell, above.from(), above.slot(), above.here()),
         )
     } else {
-        (FIRST_CELL - 1, Found::of(cell, FIRST_CELL, 0, false))
+        (FIRST_CELL - 1, Lookup::of(cell, FIRST_CELL, 0, false))
     };
     let mut c = cell;
     while c > floor {
         let (slot, here) = w.present(c, brick_of(cell_at(cell, c, g)).0);
         if here {
-            f = Found::of(cell, c, slot, true);
+            f = Lookup::of(cell, c, slot, true);
             break;
         }
         c -= 1;
@@ -614,7 +614,7 @@ pub const fn held_to(cell: Zoom) -> Zoom {
 /// present, stepped from `place` (`step`): its four palette indices, its column's
 /// word (its height), it as laid, and where it is held; `void` at sea level
 /// where none holds it.
-pub fn cell(w: &impl Bricks, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u32, u32, Found) {
+pub fn cell(w: &impl Bricks, place: Lookup, cell: Zoom, g: [i32; 2]) -> (u32, u32, u32, Lookup) {
     let (f, at) = step(w, place, cell, g);
     if !f.here() {
         return (VOID, 0, laid_half(VOID, 0), f);
@@ -632,7 +632,7 @@ pub fn cell(w: &impl Bricks, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u32
 /// the leaves a leaf's, stepped from `place`, where the column's own cells
 /// were found (`step`), with the area's edge laid on it off the cell as its
 /// fill laid it (`area::laid`); and where it is held.
-pub fn ground(w: &(impl Bricks + Area), place: Found, zoom: Zoom, b: [i32; 2]) -> (Cell, Found) {
+pub fn ground(w: &(impl Bricks + Area), place: Lookup, zoom: Zoom, b: [i32; 2]) -> (Cell, Lookup) {
     let read = held_to(zoom);
     let (word, column, laid, f) = cell(w, place, read, cell_at(zoom, read, b));
     let (top, part) = ground::top(zoom, column_top(column) as f32);
@@ -715,7 +715,7 @@ impl Entry {
     }
 
     /// Its brick, and whether present (`Bricks::brick`).
-    pub fn held(&self) -> ([i32; 2], bool) {
+    pub fn brick(&self) -> ([i32; 2], bool) {
         (self.brick, self.present != 0)
     }
 
@@ -813,7 +813,7 @@ pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS a
 /// bricks' own levels are read, never another clip level's entries, so the
 /// clip levels fold in any order.
 fn held_brick(w: &impl Bricks, cell: Zoom, q: [i32; 2]) -> Bounds {
-    let mut place = Found::NONE;
+    let mut place = Lookup::NONE;
     let (b, _, here, _) = bounded(w, &mut place, cell, (cell - LEVELS, q));
     if here {
         b
@@ -893,7 +893,7 @@ fn held_of(w: &impl Bricks, cell: Zoom, g: [i32; 2], l: u32) -> (Bounds, bool) {
 /// lack. The one way a bound over a node is read.
 pub fn bound_over(
     w: &impl Bricks,
-    place: &mut Found,
+    place: &mut Lookup,
     [coarsest, finest]: [Zoom; 2],
     (zoom, c): (Zoom, [i32; 2]),
 ) -> (Bounds, Zoom, bool) {
@@ -938,7 +938,7 @@ pub fn bound_over(
 /// it, a lack.
 fn bounded(
     w: &impl Bricks,
-    place: &mut Found,
+    place: &mut Lookup,
     cell: Zoom,
     (zoom, c): (Zoom, [i32; 2]),
 ) -> (Bounds, Zoom, bool, bool) {

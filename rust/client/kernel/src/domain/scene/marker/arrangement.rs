@@ -84,9 +84,9 @@ struct Arrangement {
     /// The drawn bricks `pins` and `places` were read from: a brick drawn
     /// still keeps what was read from it, so an eye move casts rays only in
     /// the bricks it enters.
-    found_for: Option<Found>,
+    found_for: Option<Read>,
     /// The same, read this turn.
-    now: Found,
+    now: Read,
     /// Places, ground or objects moved since they were read.
     moved: bool,
     /// The place tiles whose answer moved, beside the ground's
@@ -111,18 +111,18 @@ struct Arrangement {
     spare_instances: Vec<f32>,
     /// What the last run read, compared by value: equal, with nothing moved
     /// and nothing left waiting, the designs it laid out stand.
-    last: Option<Seen>,
+    last: Option<Inputs>,
     /// The last run left a design not laid out or not painted, which a later
     /// turn has, or a brick not read yet: the next runs again.
     waiting: bool,
 }
 
-/// Everything `step` reads, by value, as the demand's `Seen` is: the eye and
+/// Everything `step` reads, by value, as the demand's `Key` is: the eye and
 /// its view (the observation holds its frustum), the places
 /// setting, the pin being written and the chat's line and where it hangs. A
 /// new input goes here or the step never sees it change.
 #[derive(Clone, PartialEq)]
-struct Seen {
+struct Inputs {
     o: Observation,
     places: bool,
     drafted: Option<(EntryAt, u64)>,
@@ -159,7 +159,7 @@ static ARRANGEMENT: Global<Arrangement> = Global::new();
 /// it stands while no change touches them, whatever heights the world
 /// stands between in it.
 #[derive(Default, PartialEq)]
-struct Found {
+struct Read {
     drawn: Vec<Brick>,
     places: bool,
 }
@@ -222,7 +222,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         p.moved_places.clear();
         return;
     };
-    let seen = Seen {
+    let seen = Inputs {
         o,
         places: settings_store().place,
         drafted: pin::drafted(),

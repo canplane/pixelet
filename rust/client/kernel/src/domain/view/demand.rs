@@ -129,7 +129,7 @@ pub fn of_stream(stream: Stream) -> Option<&'static Layer> {
 /// Everything the asks depend on, as read; two turns agreeing on all of it
 /// ask for the same tiles, so the second decides nothing.
 #[derive(Clone, Copy, PartialEq)]
-struct Seen {
+struct Key {
     o: Option<Observation>,
     dst: Option<Tile>,
 }
@@ -138,7 +138,7 @@ pub struct Demand<L: Observed> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     wants: Vec<(u64, Ask)>,
-    last: Option<Seen>,
+    last: Option<Key>,
     /// The floor's tiles as last observed.
     floor: Vec<Tile>,
     /// The asks found absent in an observation, written once all are found
@@ -373,7 +373,7 @@ impl<L: Observed> Demand<L> {
 
     /// The layer's turn, from the live eye: the eye that is coming, which
     /// every cast reads as it arrives. Observes again whenever anything in
-    /// `Seen` changed.
+    /// `Key` changed.
     ///
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground; and `pinned`, the
@@ -393,7 +393,7 @@ impl<L: Observed> Demand<L> {
             return;
         }
         self.idled = None;
-        let now = Seen { o, dst };
+        let now = Key { o, dst };
         if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
             let line = dst
                 .into_iter()

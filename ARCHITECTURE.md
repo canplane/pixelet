@@ -528,7 +528,7 @@ world under it. The eye moving alone keeps it: the box follows the eye a tile at
 a time, and what the cast read moves with it, so a tile the box slid onto is
 read anew. Every node a walk feeding a tile asks tells how far the eye may move
 before the zooms it is asked at change, its nearest and farthest distances to
-their bands' edges (`pxl-spec-core cast.rs` `Asked`, `Detail::margin`); the
+their bands' edges (`pxl-spec-core cast.rs` `Visitor`, `Detail::margin`); the
 tile keeps the least of them and where the eye stood, and is cast again once
 the eye has moved that far (`light_detail_cs`, `light.rs` `holds`). The light's
 beam rays and samples take entries of their own for it (`light_beam_cs`,
@@ -722,7 +722,7 @@ snapshot, each for the port that hears it.
 
 The **shell** (`ts/client/src/shell/`) is the UI: React over the kernel's
 **snapshot**, where every control is a command. The snapshot is replaced whole
-after a turn only when what it is made of moved (`shell.rs` `Shown`), and
+after a turn only when what it is made of moved (`shell.rs` `SnapshotInputs`), and
 carries only what the kernel owns; what is rounded or timed for presentation is
 the shell's. The shell hands the kernel the surfaces to draw into and computes
 no coordinate, tile or draw; what it needs of the model is generated from the

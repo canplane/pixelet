@@ -134,12 +134,12 @@ const MARGIN_SLACK: f32 = 1.0 / 65536.0;
 /// under and the node's farthest and nearest distances from the eye,
 /// squared (`node_dist_sq`), which the zooms it is asked at follow from alone. A
 /// walk nothing reads it of tells nothing (`()`), so it costs nothing.
-pub trait Asked {
-    fn asked(&mut self, detail: Detail, dist_sq: [f32; 2]);
+pub trait Visitor {
+    fn visit(&mut self, detail: Detail, dist_sq: [f32; 2]);
 }
 
-impl Asked for () {
-    fn asked(&mut self, _: Detail, _: [f32; 2]) {}
+impl Visitor for () {
+    fn visit(&mut self, _: Detail, _: [f32; 2]) {}
 }
 
 /// The least margin of the nodes a walk asked (`Detail::margin`), units:
@@ -154,8 +154,8 @@ impl Margin {
     pub const NONE: Margin = Margin(UNBOUNDED);
 }
 
-impl Asked for Margin {
-    fn asked(&mut self, detail: Detail, [far, near]: [f32; 2]) {
+impl Visitor for Margin {
+    fn visit(&mut self, detail: Detail, [far, near]: [f32; 2]) {
         let m = lesser(detail.margin(far), detail.margin(near));
         self.0 = lesser(self.0, m);
     }
@@ -702,7 +702,7 @@ pub fn rooted<Q: Query>(
     detail: Detail,
     until: Until,
     keep: &mut impl Keep<Q::At>,
-    told: &mut impl Asked,
+    told: &mut impl Visitor,
 ) -> Trace<Q::At> {
     let at = q.root(Node::ROOT.idx(o));
     walk(
@@ -758,7 +758,7 @@ impl<A: Copy> Keep<A> for () {
 
 /// The first cell `ray` meets within its interval that `until` stops at, at
 /// the zoom `detail` asks where it meets it, its line left where it ended
-/// to `keep` and each node it asks told to `told` (`Asked`): down the
+/// to `keep` and each node it asks told to `told` (`Visitor`): down the
 /// pyramid from `from`, a node holding where the ray is at its `t`, what was
 /// handed it, and that `t` — the world's root holding
 /// the origin at 0 (`first`), or a node of the line a beam ray handed on —
@@ -794,7 +794,7 @@ pub fn walk<Q: Query>(
     from: (Node, Q::At, f32),
     over: &impl Over<Q::At>,
     keep: &mut impl Keep<Q::At>,
-    told: &mut impl Asked,
+    told: &mut impl Visitor,
 ) -> Trace<Q::At> {
     let og = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
@@ -822,7 +822,7 @@ pub fn walk<Q: Query>(
                 [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
                 [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
             );
-            told.asked(detail, dist_sq);
+            told.visit(detail, dist_sq);
             let i = q.node(&mut at, n.zoom, n.idx(o), asked(detail, dist_sq), t0);
             visits += 1;
             let inside = lo[0] <= 0.0
@@ -1323,7 +1323,7 @@ mod tests {
         assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Hit);
     }
 
-    /// A walk tells each node it asks (`Asked`): its least margin is a
+    /// A walk tells each node it asks (`Visitor`): its least margin is a
     /// number once it asked any; one told to `()` costs nothing.
     #[test]
     fn walk_tells_its_margin() {

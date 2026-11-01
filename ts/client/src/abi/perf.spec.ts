@@ -153,7 +153,7 @@ export const STAT = {
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  /** What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame turn's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frame turns folded; the heap's figures by their allocator's names (xpute-guest mem/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the door's rings' peaks and the body slots' (xpute-guest ipc/door.rs `DoorStat`, sys/io/body.rs `take_peak`), `ring_held_peak` its `left_peak`; and `cap_terrain_refused` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded. */
+  /** What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame turn's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frame turns folded; the heap's figures by their allocator's names (xpute-guest mem/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the door's rings' peaks and the body slots' (xpute-guest ipc/door.rs `DoorStat`, sys/io/body.rs `take_peak`), `ring_left_peak` its `left_peak`; and `cap_terrain_refused` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded. */
   recording: {
     AT: 648 as number,
     frames: 0 as number,
@@ -165,7 +165,7 @@ export const STAT = {
     heap_refusals: 6 as number,
     ring_cq_peak: 7 as number,
     ring_sq_peak: 8 as number,
-    ring_held_peak: 9 as number,
+    ring_left_peak: 9 as number,
     body_slots_peak: 10 as number,
     cap_terrain_refused: 11 as number,
     WORDS: 12 as number,
@@ -185,7 +185,7 @@ export const NOW = {
   /** Where the camera, its pivot and the pointer are as the read finds them, recording or not: `eye_x`..`eye_z`, `dist`, `pivot_x`..`pivot_z`, `hover_x`..`hover_z` and `place_x`..`place_z` in units, angles in radians, `pivot_lon` and `pivot_lat` in degrees and `pivot_alt` in meters, a zoom as its number, and NaN where there is none.
    * The eye is where the camera looks from and the pivot the point it turns about, the eye itself in the first-person camera, where the character stands (pxl-kernel domain/control/camera/controller.rs `eye_world`, `pivot`).
    * The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell` the zoom the eye's rays draw there (pxl-kernel domain/query/ray.rs `by_dist`).
-   * The pick is what the tool held strikes there (pxl-kernel domain/control/edit.rs `pick_at`): `hit_kind` what it met, an index into HIT_KINDS; `held` the zoom of the box struck and `drawn` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/edit.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/edit/collision.rs `is_placement_blocked`). */
+   * The pick is what the tool held strikes there (pxl-kernel domain/control/edit.rs `pick_at`): `hit_kind` what it met, an index into HIT_KINDS; `struck_zoom` the zoom of the box struck and `drawn_zoom` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-kernel domain/control/edit.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/edit/collision.rs `is_placement_blocked`). */
   view: {
     AT: 3 as number,
     eye_x: 0 as number,
@@ -205,8 +205,8 @@ export const NOW = {
     hover_z: 14 as number,
     cell: 15 as number,
     hit_kind: 16 as number,
-    held: 17 as number,
-    drawn: 18 as number,
+    struck_zoom: 17 as number,
+    drawn_zoom: 18 as number,
     folded: 19 as number,
     place_x: 20 as number,
     place_y: 21 as number,

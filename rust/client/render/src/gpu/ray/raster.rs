@@ -27,7 +27,7 @@ use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, texture_usage, word_bytes,
     Format, Gpu, Load, RenderContext,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use pxl_spec_core::param::light::SAMPLE;
 use pxl_spec_core::param::raster::GROWN;
@@ -43,12 +43,12 @@ use pxl_spec_core::param::raster::GROWN;
 pub(super) struct Raster {
     /// The boxes' writing, the eye's and the shadow map's (pxl-shader
     /// raster.rs `sample_box_cs`), each over its own group.
-    pub(super) boxes_built: Built,
-    faces_built: Built,
-    draw_built: Built,
+    pub(super) boxes_built: Pipeline,
+    faces_built: Pipeline,
+    draw_built: Pipeline,
     /// The gate the boxes are drawn through in a frame not drawn whole, and
     /// its group over the claimed tiles (`Resolve::tiles`).
-    gate: Built,
+    gate: Pipeline,
     gate_group: u32,
     gate_bound: (u32, u32),
     pub(super) args: u32,
@@ -259,7 +259,7 @@ impl Raster {
                     &[buf_entry(0, self.uniform), buf_entry(1, self.boxes)],
                 ),
                 faces(self.args, 0),
-                faces(marks, word_bytes(ray::MISS_ARGS_ASKED as usize)),
+                faces(marks, word_bytes(ray::MISS_ARGS_ROOM as usize)),
             ];
             self.bound = bound;
         }
@@ -268,11 +268,11 @@ impl Raster {
     /// What lies about each missed pixel's hit's face asked once a square of
     /// them, in the cast's pass `pass` (ray/cast.rs): the faces' pass over
     /// the hits' asks, its args among the walk again's words (`marks`,
-    /// pxl-spec-core `ray::MISS_ARGS_ASKED`) as the boxes' are in its own.
+    /// pxl-spec-core `ray::MISS_ARGS_ROOM`) as the boxes' are in its own.
     pub(super) fn ask_hits(&self, g: &Gpu, pass: u32, marks: u32) {
         g.set_pipeline(pass, self.faces_built.pipeline);
         g.set_bind_group(pass, 0, self.groups[3], &[]);
-        let at = ray::MISS_ARGS_ASKED + raster::ARGS_FACES;
+        let at = ray::MISS_ARGS_ROOM + raster::ARGS_FACES;
         g.dispatch_indirect(pass, marks, word_bytes(at as usize));
     }
 

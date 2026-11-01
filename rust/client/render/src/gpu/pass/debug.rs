@@ -9,7 +9,7 @@ use crate::frame::shader::record::{
 };
 use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
 use crate::gpu::pass::model::DrawUniforms;
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::upload::{Draws, Uploads};
 
@@ -18,11 +18,11 @@ use crate::gpu::upload::{Draws, Uploads};
 /// hides gizmos and nothing of the world hides one. Each set takes its own
 /// translation, a draw's uniform a set.
 pub struct DebugPass {
-    built: Built,
-    faces: Built,
+    built: Pipeline,
+    faces: Pipeline,
     frame_group: u32,
     uniforms: DrawUniforms,
-    grid: Built,
+    grid: Pipeline,
     grid_group: u32,
 }
 

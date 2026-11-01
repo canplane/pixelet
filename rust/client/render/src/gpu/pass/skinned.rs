@@ -10,16 +10,16 @@ use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_MARK};
 
 use crate::gpu::api::{bytes, Format, Gpu, Image, Stencil, TrackedRenderPass};
-use crate::gpu::pass::mark::{Drawn, Marks, UploadCopies};
+use crate::gpu::pass::mark::{Draw, Marks, UploadCopies};
 use crate::gpu::pass::model::{
     draw_model, draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
 
 pub struct SkinnedPass {
-    lit: Built,
-    depth: Built,
+    lit: Pipeline,
+    depth: Pipeline,
     uniforms: DrawUniforms,
     /// Each model's skin image, as the frame hands them.
     skins: Vec<(u32, Image)>,
@@ -28,7 +28,7 @@ pub struct SkinnedPass {
 
 /// A mark's uniform: its place, the uniform's first words (skinned.wgsl
 /// `Draw`).
-fn put_mark(buf: &mut [u8], (_, u): &Drawn) {
+fn put_mark(buf: &mut [u8], (_, u): &Draw) {
     buf[..24].copy_from_slice(bytes(&u[..6]));
     buf[24..DRAW_BYTES as usize].fill(0);
 }

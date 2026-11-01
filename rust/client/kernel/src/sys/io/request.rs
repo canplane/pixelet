@@ -134,14 +134,14 @@ struct Attempt {
 }
 
 #[derive(Clone, Copy)]
-struct Placed {
+struct Ready {
     rank: Rank,
     stream: Stream,
     subject: u64,
 }
 
-impl Placed {
-    fn cmp(&self, other: &Placed) -> Ordering {
+impl Ready {
+    fn cmp(&self, other: &Ready) -> Ordering {
         self.rank
             .class
             .cmp(&other.rank.class)
@@ -172,7 +172,7 @@ pub struct RequestScheduler<S> {
     most_credits: u32,
     started: Vec<(u64, Stream, u64)>,
     stops: Vec<u64>,
-    ready: Vec<(Placed, usize)>,
+    ready: Vec<(Ready, usize)>,
     /// Why reads fail, since the last that came to an answer.
     failing: Option<Errno>,
     /// The server's failures since the last answer, one an outage's wait:
@@ -324,8 +324,8 @@ impl<S: Serve> RequestScheduler<S> {
         (waiting, out)
     }
 
-    fn placed(&self, stream: Stream, w: &Wanted) -> Placed {
-        Placed {
+    fn ready_of(&self, stream: Stream, w: &Wanted) -> Ready {
+        Ready {
             rank: self.serve.rank(stream, w.subject, w.ask, w.enqueue_ms),
             stream,
             subject: w.subject,
@@ -359,19 +359,19 @@ impl<S: Serve> RequestScheduler<S> {
             let first = self.first(s);
             for (k, w) in self.run(s).iter().enumerate() {
                 if w.wait.ready() && !self.attempting(s, w.subject) {
-                    ready.push((self.placed(s, w), first + k));
+                    ready.push((self.ready_of(s, w), first + k));
                 }
             }
         }
         ready.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
         let intake = self.serve.intake().max(1) as usize;
-        for &(placed, i) in ready.iter().take(intake) {
+        for &(r, i) in ready.iter().take(intake) {
             if self.attempt.iter().flatten().count() >= room {
                 break;
             }
             let Some(slot) = self.free_slot() else { break };
-            self.start(slot, placed.stream, self.desired[i], placed.rank, at);
+            self.start(slot, r.stream, self.desired[i], r.rank, at);
         }
         self.ready = ready;
     }

@@ -20,7 +20,7 @@ use crate::gpu::api::{
     texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, RenderContext,
     TrackedRenderPass,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
 
@@ -36,10 +36,10 @@ pub struct ScreenAo {
     run: u32,
     stride: u32,
     sampler: u32,
-    downsample: Built,
-    sample: Built,
-    blur: Built,
-    apply: Built,
+    downsample: Pipeline,
+    sample: Pipeline,
+    blur: Pipeline,
+    apply: Pipeline,
     width: u32,
     height: u32,
     /// The world's depth, read only, its view as last bound.

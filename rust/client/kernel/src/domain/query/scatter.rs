@@ -15,7 +15,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec_core::generated::{self, DecorQuery, Generated};
 use pxl_spec_core::support::ColumnSurface;
-use pxl_spec_core::world::Placed;
+use pxl_spec_core::world::PlacedCursor;
 use pxl_spec_core::FRAC_W;
 
 use super::node::At;
@@ -29,15 +29,15 @@ use pxl_spec_core::decor;
 /// The world as decor's generation asks it on the CPU (pxl-spec-core
 /// `DecorQuery`): the world's one query and its ray, unplaced (`unplaced`,
 /// the ground's alone) and as edited, and what is placed.
-pub(super) struct Asked<'a, 'w> {
+pub(super) struct DecorWorld<'a, 'w> {
     world: &'a World<'w>,
     unplaced: World<'w>,
     lanes: store::Columns<'a>,
 }
 
-impl<'a, 'w> Asked<'a, 'w> {
-    pub(super) fn new(world: &'a World<'w>) -> Asked<'a, 'w> {
-        Asked {
+impl<'a, 'w> DecorWorld<'a, 'w> {
+    pub(super) fn new(world: &'a World<'w>) -> DecorWorld<'a, 'w> {
+        DecorWorld {
             world,
             unplaced: world.unplaced(),
             lanes: world.object.columns(),
@@ -49,7 +49,7 @@ impl<'a, 'w> Asked<'a, 'w> {
 /// lacked: a column's surface with its line (`World::column_surface`) and each cell
 /// about it asked off that line (`World::asset_about`), of the world
 /// unplaced; a cell's edit asked of the world as edited (`World::asset`).
-impl DecorQuery for Asked<'_, '_> {
+impl DecorQuery for DecorWorld<'_, '_> {
     type ColumnSurface = ColumnSurface<At>;
 
     fn rows(&self) -> &[decor::Decor] {
@@ -88,7 +88,7 @@ impl DecorQuery for Asked<'_, '_> {
             .is_some_and(answer::is_placed)
     }
 
-    fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {
+    fn next_placed(&self, p: &mut PlacedCursor) -> ([i32; 3], u32, bool) {
         p.next(&self.lanes)
     }
 }
@@ -99,7 +99,7 @@ impl DecorQuery for Asked<'_, '_> {
 /// `boxed`, whether it generates there, its box asked about the same column surface
 /// (pxl-spec-core `generated::generated`), true where not.
 pub(super) fn generated_at(
-    asked: &mut Asked,
+    asked: &mut DecorWorld,
     decor: &Decor,
     cell: [i32; 2],
     boxed: bool,

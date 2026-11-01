@@ -12,14 +12,14 @@ use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
 use crate::frame::shader::word::DECOR_GROUPS;
 
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
-use crate::gpu::generated::Drawn;
+use crate::gpu::generated::IndirectDraw;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::mark::{self, Marks, UploadCopies};
 use crate::gpu::pass::model::{
     bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, DrawUniforms,
     ModelDraw, Stage, DRAW_BYTES,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::{Draws, Uploads};
 use pxl_spec_core::generated;
 
@@ -29,9 +29,9 @@ const _: () = assert!(
 );
 
 pub struct DecorPass {
-    lit: Built,
-    ghost: Built,
-    depth: Built,
+    lit: Pipeline,
+    ghost: Pipeline,
+    depth: Pipeline,
     uniforms: DrawUniforms,
     /// Each group's mesh, 0 for a model not yet registered, and its skin's image.
     groups: [(u32, Option<Image>); DECOR_GROUPS],
@@ -41,7 +41,7 @@ pub struct DecorPass {
 }
 
 /// A mark's uniform, as the draw's (`put_instances`).
-fn put_mark(buf: &mut [u8], (_, u): &mark::Drawn) {
+fn put_mark(buf: &mut [u8], (_, u): &mark::Draw) {
     put_instances(buf, u, 0);
 }
 
@@ -293,7 +293,7 @@ impl DecorPass {
     pub fn draw_generated(
         &mut self,
         pass: &mut TrackedRenderPass,
-        generated: Option<Drawn>,
+        generated: Option<IndirectDraw>,
         uploads: &Uploads,
         stage: Stage,
         frame: u32,

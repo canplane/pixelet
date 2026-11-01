@@ -32,7 +32,7 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, view_entry, Gpu, Load,
     RenderContext,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::{Surface, WORLD_COLOR};
 use crate::gpu::tiles::{Tiles, SIDE};
@@ -47,7 +47,7 @@ const BLEND_LEAST: f32 = 0.1;
 const UNIFORM_FLOATS: usize = 20;
 
 pub struct Resolve {
-    built: Built,
+    built: Pipeline,
     sampler: u32,
     uniform: u32,
     /// A group a history written, reading the other, and what each was
@@ -55,7 +55,7 @@ pub struct Resolve {
     groups: [u32; 2],
     bound: [[u32; 5]; 2],
     /// The write-back, and its group a history read, as `groups`.
-    back: Built,
+    back: Pipeline,
     back_groups: [u32; 2],
     back_bound: [[u32; 2]; 2],
     /// The history this frame writes, the other the last frame's.

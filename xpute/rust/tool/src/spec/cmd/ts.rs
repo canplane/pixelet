@@ -313,14 +313,14 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
             let mut props = vec![format!("number: Command.{}", c.name)];
             match &c.pkt {
                 Some(pkt) => {
-                    types.push(format!("Sent<{}>", ts_tuple(spec, pkt)?));
+                    types.push(format!("port.Command<{}>", ts_tuple(spec, pkt)?));
                     props.push(format!("write: encode_{lower}"));
                 }
-                None if c.event.is_none() => types.push("Sent<[]>".to_string()),
+                None if c.event.is_none() => types.push("port.Command<[]>".to_string()),
                 None => {}
             }
             if let Some(event) = &c.event {
-                types.push(format!("Raised<{}>", ts_tuple(spec, event)?));
+                types.push(format!("port.Event<{}>", ts_tuple(spec, event)?));
                 props.push(format!("read: read_{lower}_tuple"));
             }
             tail.extend([
@@ -381,16 +381,10 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
             ));
         }
     }
+    // The port's types read through its module, beside the table's own `Command`.
     if let Some(port) = t.port {
-        let kinds: Vec<&str> = ["Raised", "Sent"]
-            .into_iter()
-            .filter(|k| reads(&tail, &format!("{k}<")))
-            .collect();
-        if !kinds.is_empty() {
-            out.push(format!(
-                "import type {{ {} }} from \"{port}\";",
-                kinds.join(", ")
-            ));
+        if reads(&tail, "port.Command<") || reads(&tail, "port.Event<") {
+            out.push(format!("import type * as port from \"{port}\";"));
         }
     }
     // A packed list is written by its sequence type, a value rather than a type.

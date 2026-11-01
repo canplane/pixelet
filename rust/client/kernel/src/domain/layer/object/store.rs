@@ -580,12 +580,12 @@ impl Query for Store {
 /// columns part. Good while the store is unchanged.
 #[derive(Default)]
 pub struct Walk {
-    at: Vec<Stood>,
+    at: Vec<Step>,
     held: Vec<([i32; 3], NodeSlot)>,
 }
 
 #[derive(Clone, Copy)]
-struct Stood {
+struct Step {
     column: [i32; 2],
     end: usize,
     leaves: Option<[f64; 2]>,
@@ -655,7 +655,7 @@ impl Store {
                     }
                 }
             }
-            walk.at.push(Stood {
+            walk.at.push(Step {
                 column: c,
                 end: walk.held.len(),
                 leaves,

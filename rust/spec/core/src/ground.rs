@@ -21,7 +21,7 @@ use crate::answer::{
 };
 use crate::area::{earth, is_walled, Area, Shard};
 use crate::cave::Cave;
-use crate::clipmap::Found;
+use crate::clipmap::Lookup;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
@@ -141,7 +141,7 @@ pub fn window(t: f32) -> (i32, f32) {
 }
 
 /// A sample index on the padded grid: past its edge, the edge sample stands.
-pub fn held(i: i32) -> u32 {
+pub fn clamp_idx(i: i32) -> u32 {
     i.clamp(0, ELE_PADDED_SPAN as i32 - 1) as u32
 }
 
@@ -166,11 +166,11 @@ pub fn bicubic(ele: impl Fn(usize) -> i32, tx: f32, ty: f32) -> i32 {
     let (mut out, mut lo, mut hi) = (0.0f32, i32::MAX, i32::MIN);
     let mut j = 0;
     while j < 4 {
-        let py = held(y0 + j);
+        let py = clamp_idx(y0 + j);
         let mut row = 0.0f32;
         let mut i = 0;
         while i < 4 {
-            let v = ele(ele_idx(held(x0 + i), py));
+            let v = ele(ele_idx(clamp_idx(x0 + i), py));
             lo = lo.min(v);
             hi = hi.max(v);
             row += v as f32 * wx[i as usize];
@@ -415,12 +415,12 @@ pub trait Resident: Area {
     /// it reads is held, which only splits more; false where no tile over
     /// it is held.
     /// `place` is where the cells at `cells`' finest of a node over it were
-    /// found, or `Found::NONE`, and becomes where its own are
+    /// found, or `Lookup::NONE`, and becomes where its own are
     /// (`clipmap::step`). Read over every zoom from `cells`' coarsest to its
     /// finest (`clipmap::bound_over`).
     fn relief(
         &mut self,
-        place: &mut Found,
+        place: &mut Lookup,
         cells: [Zoom; 2],
         node: (Zoom, [i32; 3]),
     ) -> (Bounds, bool);
@@ -428,7 +428,7 @@ pub trait Resident: Area {
     /// (`clipmap::ground`), the service area's edge laid on it as its fill
     /// laid it (`Cell`); its cell where `place` found it, the zoom's cells'
     /// (`relief`'s), or found anew where `place` is `NONE`.
-    fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell;
+    fn cell(&mut self, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell;
 }
 
 /// What the ground answers of a node (`node`): its kind, and a cell's
@@ -456,7 +456,7 @@ pub fn node<H: Resident>(
     held: &mut H,
     cave: Cave,
     shard: Shard,
-    place: &mut Found,
+    place: &mut Lookup,
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
     is_cell: bool,
@@ -488,7 +488,7 @@ pub fn node<H: Resident>(
         } else {
             split
         };
-        *place = Found::NONE;
+        *place = Lookup::NONE;
         return (answer, Cell::NONE, EMPTY);
     }
     // Coarser than any tile, no one index holds it.

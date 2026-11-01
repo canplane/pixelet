@@ -213,8 +213,8 @@ struct Target {
     /// For a program's own table: the guest's `program` module, which each
     /// packet is read for (`FromPacket`) and each event raised by (`Event`).
     program: Option<&'static str>,
-    /// For a program's own table: the host's port module, whose `Sent` and
-    /// `Raised` each command's descriptor is, its fields by place.
+    /// For a program's own table: the host's port module, whose `Command` and
+    /// `Event` each command's descriptor is, its fields by place.
     port: Option<&'static str>,
     cpp: Option<(&'static str, &'static str)>,
 }

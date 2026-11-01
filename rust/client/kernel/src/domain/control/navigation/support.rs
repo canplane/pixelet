@@ -6,7 +6,7 @@
 //! that floor; a pivot put over coarser ground keeps its Z unknown and
 //! stands on the finest ground known there until the leaves' is.
 
-use crate::domain::query::changed::Asked;
+use crate::domain::query::changed::Memo;
 use crate::domain::query::{over, under};
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::v3::V3;
@@ -58,14 +58,14 @@ pub fn stand_over(at: &Q3, top: f64) -> Q3 {
 /// What `standing` found under an unknown Z, of that point and its cell's
 /// columns and one about: a camera's `to` and a destination ask it every
 /// tick until a leaf gives the Z, and a `to` twice in one (`resolve_to`).
-static STOOD: Global<Asked<Q3, Answer<Option<Q3>>>> = Global::new();
+static STOOD: Global<Memo<Q3, Answer<Option<Q3>>>> = Global::new();
 
-fn stood() -> &'static mut Asked<Q3, Answer<Option<Q3>>> {
-    STOOD.get(|| Asked::NONE)
+fn stood() -> &'static mut Memo<Q3, Answer<Option<Q3>>> {
+    STOOD.get(|| Memo::NONE)
 }
 
 /// The turn's look at what `standing` kept, a change under it letting it go
-/// (`changed::Asked::forget_touched`): every frame turn, so each change is seen once.
+/// (`changed::Memo::forget_touched`): every frame turn, so each change is seen once.
 pub fn support_step() {
     stood().forget_touched();
 }
@@ -85,7 +85,7 @@ fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
 
 /// The floor `at` is drawn on in `world`: its own, or where its height is
 /// not known the finest ground's there; none where nothing is known.
-pub fn floor_seen(world: World<'_>, at: &Q3) -> Option<f64> {
+pub fn drawn_floor(world: World<'_>, at: &Q3) -> Option<f64> {
     match standing(world, at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => Some(floor_of(&p)),
         _ => None,

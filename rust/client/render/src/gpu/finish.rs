@@ -15,13 +15,13 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, view_entry, word_bytes, Gpu, Load,
     RenderContext,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
 use crate::gpu::tiles::{Tiles, SIDE};
 
 pub struct Finish {
-    built: Built,
+    built: Pipeline,
     /// Its group over `bound`, the frame's words, the color and depth it
     /// reads and the tiles' words: made again exactly when one is another.
     group: u32,
@@ -31,7 +31,7 @@ pub struct Finish {
     tiles: u32,
     every: u32,
     /// The kept picture shown on the canvas, its group over the picture.
-    show: Built,
+    show: Pipeline,
     show_group: u32,
     shown: u32,
 }

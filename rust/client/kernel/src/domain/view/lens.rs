@@ -11,7 +11,7 @@ use pxl_spec::space::camera::grid::CELL;
 use pxl_spec::space::coord::world::origin;
 use pxl_spec_core::{beam, eye};
 
-use crate::domain::query::asked;
+use crate::domain::query::zoom_range;
 use crate::domain::view::observation;
 use crate::domain::view::param;
 
@@ -76,7 +76,7 @@ pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> 
     put(eye::RIGHT, &lens.right.map(w));
     put(eye::UP, &lens.up.map(w));
     put(eye::TAN, &lens.tan.map(w));
-    put(eye::RANGE, &asked());
+    put(eye::RANGE, &zoom_range());
     // The grid off the very f32s the words above hold, so every reader's is
     // this one (pxl-spec-core `beam::Grid`).
     put(

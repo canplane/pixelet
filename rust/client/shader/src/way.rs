@@ -223,7 +223,7 @@ pub fn way_free_cs(
 ) {
     let root = at(
         ground,
-        brick_at(at(fresh, clipmap::handed_at(group.z) + clipmap::FRESH_BRICK)) + clipmap::ROOT_AT,
+        brick_at(at(fresh, clipmap::handed_at(group.z) + clipmap::FILL_BRICK)) + clipmap::ROOT_AT,
     );
     if lane.x != 0 || root == 0 {
         return;
@@ -285,7 +285,7 @@ pub fn way_tree_cs(
     #[spirv(workgroup)] levels: &mut Shared,
 ) {
     let (k, t, lanes) = (group.z, lane.x, LANES);
-    let base = brick_at(at(fresh, clipmap::handed_at(k) + clipmap::FRESH_BRICK));
+    let base = brick_at(at(fresh, clipmap::handed_at(k) + clipmap::FILL_BRICK));
     let mine = fill::scratch_at(scratch, k);
     // The child groups a brick's scratch holds, every brick's alike, and where
     // its records begin (`tree::scratch_words`).
@@ -337,7 +337,7 @@ pub fn way_tree_cs(
     while ok && zoom < cell {
         settle();
         let (from, n) = (load_shared(levels, 2 * j), load_shared(levels, 2 * j + 1));
-        let brick = fill::Fresh { ground, base };
+        let brick = fill::LoneBrick { ground, base };
         // The flagged, counted, then given their child groups together.
         let (mut flagged, mut c) = (0, 0);
         while c < n {

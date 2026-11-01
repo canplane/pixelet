@@ -5,7 +5,7 @@
 
 use postgres::Client;
 
-use crate::separation::Drawn;
+use crate::separation::WayRange;
 use crate::terrain::bake::bake_surface;
 use crate::terrain::bake::Surface;
 use crate::terrain::repository::TerrainRepository;
@@ -15,7 +15,7 @@ pub fn fetch_surface(
     repo: &TerrainRepository,
     client: &mut Client,
     tile_idx: [i32; 2],
-    drawn: &[Drawn],
+    drawn: &[WayRange],
 ) -> Result<Surface, String> {
     let src = repo
         .fetch_tile_src(client, tile_idx)
