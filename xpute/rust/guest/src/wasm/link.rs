@@ -31,6 +31,16 @@ pub struct LinkConfig {
     pub init_bytes: Option<u32>,
 }
 
+impl LinkConfig {
+    /// A 1 MiB stack and the linker's own placing: what `program!` assumes
+    /// unless told otherwise.
+    pub const DEFAULT: LinkConfig = LinkConfig {
+        stack_bytes: 1 << 20,
+        global_base: None,
+        init_bytes: None,
+    };
+}
+
 /// Prints `cfg`'s link arguments, and nothing when the target is not
 /// wasm32, where a guest is linked as the platform links any library.
 pub fn link(cfg: &LinkConfig) {

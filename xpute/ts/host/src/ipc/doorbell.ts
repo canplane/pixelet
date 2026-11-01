@@ -94,14 +94,21 @@ export class Doorbell implements PacketRoom {
    * in turn, each lowered as XTP lowers a value (wire/xtp `TreeView.set`): a
    * command from outside the host's own code, a console's. */
   cmd(src: u32, cmd: u32, ...args: NodeValue<NodeView>[]): void {
-    const pkt = args.length === 0 ? null : this.writer(args.length);
+    this.send(src, cmd, this.lowered(args));
+    this.ring(0);
+  }
+
+  /** The next submission's packet, `args` its fields in turn, each lowered as
+   * XTP lowers a value (wire/xtp `TreeView.set`); none for no arguments. */
+  lowered(args: NodeValue<NodeView>[]): PacketWriter | null {
+    if (args.length === 0) return null;
+    const pkt = this.writer(args.length);
     // Each is grafted into the slot, so a slot is its most.
     const cap = { init_cap: this.sq.slot_bytes, max_cap: this.sq.slot_bytes };
     for (const a of args) {
-      pkt?.graft(encoder.encode(new TreeView().set(a), cap));
+      pkt.graft(encoder.encode(new TreeView().set(a), cap));
     }
-    this.send(src, cmd, pkt);
-    this.ring(0);
+    return pkt;
   }
 
   ring(quota_ms: f64): f64 {

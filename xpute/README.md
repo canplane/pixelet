@@ -85,28 +85,46 @@ spec                                        the numbers every language's are gen
 
 The smallest program shows the whole of it: a guest that answers one command
 (`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
-`make test` runs. The guest lays out its own range, a page for the toc, then the
-two rings and their slots and the hostcalls' stream, and answers the toc's
-offset from a boot call; each turn it applies what waits, and asks the host for
-a number it holds by a hostcall run now. The host opens the module over a memory
-of its own (`@xpute/host/module.ts` `open_module`) and mounts on it in one call
-(`@xpute/host/host.ts` `mount`), given that offset, its answers to the guest's
-calls (`SysHost`, each part optional) and the scheduling policy that says when a
-turn runs and how much it gets (`sched/policy.ts`: a fixed quota where there is
-no display, frame pacing on a page); then it sends the command and reads the
-reply.
-
-A guest built as a **WebAssembly module** takes its form from
-`xpute_guest::wasm`: a call in its `build.rs`, and one `wasm_abi!`, which
-installs its allocator and exports `run`, the entry it calls:
+`make test` runs. Each end is one declaration. The guest names a function for
+each command it answers in `xpute_guest::program!`, which lays its range out (a
+page for the toc, then the two rings and their slots and the hostcalls' stream,
+then the heap), runs its turns and hands each command to its function: the
+function's result is the reply, and its errno the failure. The host opens it in
+one call (`@xpute/host/port.ts` `open`) and talks to it through a **port**, the
+number the guest sees as a command's sender. `send` puts a command on the rings
+for the next turn, `on` hears what the guest raises after the turn that raised
+it, and `call` rings the guest at once and returns its answer. A hostcall of the
+program's own is answered by the function `open` was given for its number.
 
 ```rust
 // build.rs, with xpute-guest as a build dependency
 fn main() {
-    xpute_guest::wasm::link(&xpute_guest::wasm::LinkConfig { stack_bytes: 1 << 20, global_base: None, init_bytes: None });
+    xpute_guest::wasm::link(&xpute_guest::wasm::LinkConfig::DEFAULT);
 }
 
 // lib.rs
+xpute_guest::program! {
+    on SUM => sum, // fn(&mut Turn, Packet) -> Result<i32, Errno>
+}
+```
+
+```ts
+const guest = open(module, { answer: { [ASK]: () => HELD } });
+guest.call(SUM, 2, 3); // 2 + 3 + HELD
+```
+
+Under the two declarations lie the parts they compose, which a program that lays
+its memory out itself uses as they are. A guest built as a **WebAssembly
+module** takes its form from `xpute_guest::wasm`: a call in its `build.rs`, and
+one `wasm_abi!`, which installs its allocator and exports `run`, the entry it
+calls. Its host opens the module over a memory of its own
+(`@xpute/host/module.ts` `open_module`) and mounts on it (`@xpute/host/host.ts`
+`mount`), given where the toc lies, its answers to the guest's calls (`SysHost`,
+each part optional) and the scheduling policy that says when a turn runs and how
+much it gets (`sched/policy.ts`: a fixed quota where there is no display, frame
+pacing on a page, and the fixed quota where `open` is given none).
+
+```rust
 xpute_guest::wasm_abi!(
     xpute_guest::wasm::Config { heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES), stack_bytes: 1 << 20 },
     my_guest::entry // fn(quota_ms: f64, boot: fn() -> BootInfo) -> f64
