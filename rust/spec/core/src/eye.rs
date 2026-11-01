@@ -55,7 +55,7 @@ pub const LIGHT_WORDS: usize = 20;
 /// What the beams, cells and samples cast is the camera grid's and reads none
 /// of it.
 pub const JITTER: usize = LIGHT + LIGHT_WORDS;
-pub const JITTER_WORDS: usize = 4;
+pub(crate) const JITTER_WORDS: usize = 4;
 /// Every word, the jitter last.
 pub const WORDS: usize = JITTER + JITTER_WORDS;
 const _: () = assert!(

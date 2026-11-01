@@ -155,7 +155,7 @@ impl Separation {
     /// about `origin + (i + ½, j + ½) · step` in the tile's cells, a segment
     /// over it where the column's center is within its way's half width of its
     /// box. Row by row, each segment's in turn, in the points' order.
-    pub fn segments_over(
+    pub(crate) fn segments_over(
         &self,
         origin: [f64; 2],
         step: f64,
@@ -193,7 +193,7 @@ impl Separation {
     /// The segment that starts at point `p` in its words (pxl-spec-core
     /// way.rs `Segment::words`), and whether the one stored before it is its
     /// line's one before it: a line ends square at its first and last.
-    pub fn segment_words(&self, p: usize, continues: bool) -> [u32; way::SEGMENT_WORDS] {
+    pub(crate) fn segment_words(&self, p: usize, continues: bool) -> [u32; way::SEGMENT_WORDS] {
         let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
         let (first, last) = (
             p == self.starts[d] as usize,
@@ -209,7 +209,7 @@ impl Separation {
 
     /// Every line over each column of a grid (`segments_over`), each segment
     /// its own crossing, piers at the stations of the tile at `frame`.
-    pub fn crossing_grid(
+    pub(crate) fn crossing_grid(
         &self,
         frame: Frame,
         origin: [f64; 2],
@@ -270,7 +270,7 @@ impl Line<'_> {
         self.points[i].map(|v| f64::from(v) / POINT_SCALE)
     }
 
-    pub fn width_cells(&self) -> f64 {
+    pub(crate) fn width_cells(&self) -> f64 {
         f64::from(self.width) / POINT_SCALE
     }
 
@@ -565,7 +565,7 @@ impl Builder {
 }
 
 // separation = [starts, points (flattened), tops, width, kind, form, clear, coarsest]
-pub fn write_branch<'a>(separation: &'a Separation, b: &mut BranchViewImpl<'a>) {
+pub(crate) fn write_branch<'a>(separation: &'a Separation, b: &mut BranchViewImpl<'a>) {
     b.branch(Some(&mut |d| {
         d.u32_array(Some(&separation.starts))
             .i16_array(Some(separation.points.as_flattened()))
@@ -624,7 +624,7 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Columns<'_>, MarshalError> {
 }
 
 impl Columns<'_> {
-    pub fn to_separation(&self) -> Separation {
+    pub(crate) fn to_separation(&self) -> Separation {
         Separation {
             starts: self.starts.to_vec().into(),
             points: self.points.to_vec().into(),

@@ -10,14 +10,13 @@
 // A transaction (ipc/stream) that does not commit drops its records and gives back the handles they took, so the host never hears of the objects: the encoder's begin and commit open and close both.
 
 // Names as the spec spells them, so one record has one name on every side.
-// A table is generated whole, whether or not this crate calls or exports an entry.
+// A table is generated whole, whether or not this crate calls an entry.
 #![allow(
     non_upper_case_globals,
     non_snake_case,
     clippy::absolute_paths,
     non_camel_case_types,
     dead_code,
-    unreachable_pub,
     reason = "generated from the spec"
 )]
 

@@ -45,7 +45,7 @@ pub struct TileFace {
     pub group: String,
     pub ty: String,
     pub face: Face,
-    pub tile: u32,
+    pub(crate) tile: u32,
 }
 
 /// Each slot and the tile it wears; one tile may be several slots'. A slot

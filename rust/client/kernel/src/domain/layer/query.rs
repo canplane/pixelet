@@ -52,6 +52,7 @@ pub trait Query {
         cell: Zoom,
     ) -> Answer<Option<Aabb>>;
 
+    #[cfg(test)]
     fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Aabb>> {
         self.bound(&self.cursor(node, cell), node, cell)
     }

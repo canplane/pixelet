@@ -64,10 +64,10 @@ pub const SLOTS: u32 = CLIP_LEVELS * ENTRIES;
 /// What the GPU's fill costs a frame, measured at dpr 2 on an M-series Mac
 /// (2026-10-17, the `fill` span): its passes whatever it is handed, and each
 /// brick more; handed one brick a frame it took 2.2 ms, sixteen 5.5 ms.
-pub const FILL_MS: f32 = 2.0;
-pub const FILL_BRICK_MS: f32 = 0.22;
+pub(crate) const FILL_MS: f32 = 2.0;
+pub(crate) const FILL_BRICK_MS: f32 = 0.22;
 /// The share of a frame the fill may take.
-pub const FILL_SHARE_MS: f32 = 4.0;
+pub(crate) const FILL_SHARE_MS: f32 = 4.0;
 /// The bricks a frame hands the fill at most, nearest first (pxl-kernel
 /// domain/layer/terrain/clipmap.rs `due`): its share less its passes, over a brick.
 pub const HAND_CAP: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
@@ -81,10 +81,10 @@ pub const HAND_CAP: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
 /// (`area::Shard`, its word), which the ways' fill lays the area's edge by
 /// (`way::Columns::is_walled`).
 pub const FILL_BRICK: u32 = 0;
-pub const FILL_PLACE: u32 = FILL_BRICK + 1;
+pub(crate) const FILL_PLACE: u32 = FILL_BRICK + 1;
 pub const FILL_CELL: u32 = FILL_PLACE + 1;
 pub const FILL_FIRST: u32 = FILL_CELL + 1;
-pub const FILL_SHARD: u32 = FILL_FIRST + 2;
+pub(crate) const FILL_SHARD: u32 = FILL_FIRST + 2;
 pub const FILL_WORDS: u32 = FILL_SHARD + 1;
 
 /// A brick fill's words (`FILL_WORDS`), `place` its `place_word`.
@@ -115,7 +115,7 @@ pub const fn place_word([x, y]: [u32; 2]) -> u32 {
 }
 
 /// `place_word`'s place.
-pub const fn place_of(w: u32) -> [u32; 2] {
+pub(crate) const fn place_of(w: u32) -> [u32; 2] {
     [w & 0xffff, w >> 16]
 }
 
@@ -174,7 +174,7 @@ pub const fn level_at(j: u32) -> u32 {
 
 /// Entry `[x, y]` of level `j` among a brick's levels, each level laid as
 /// its cells are (`idx_of`).
-pub const fn level_idx(j: u32, at: [u32; 2]) -> u32 {
+pub(crate) const fn level_idx(j: u32, at: [u32; 2]) -> u32 {
     level_at(j) + idx_of(at)
 }
 
@@ -212,7 +212,7 @@ const fn gather(v: u32) -> u32 {
 const _: () = assert!(BRICK <= 1 << 16, "a brick's side spreads in sixteen bits");
 pub const LEVELS: u32 = BRICK_SHIFT;
 /// A level entry's words: its bounds' (`ground::Bounds`), each a bound word.
-pub const LEVEL_ENTRY_WORDS: u32 = 2;
+pub(crate) const LEVEL_ENTRY_WORDS: u32 = 2;
 pub const LEVEL_WORDS: u32 = LEVEL_ENTRY_WORDS * level_at(LEVELS + 1);
 
 /// A tile's ways are cut into bins `WAYS_ACROSS` a side, each
@@ -248,23 +248,23 @@ pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_BRICK_SEGMENTS * way::SEGM
 /// `spans`); then its tree's (`way::tree::FREED_AT`). Its levels' ways'
 /// bound and its ways' tree are made off the spans (fill.rs `level`,
 /// `way::tree::leaf`), and they go with the frame.
-pub const SPANS_AT: u32 = 0;
+pub(crate) const SPANS_AT: u32 = 0;
 /// The columns whose spans a brick's cells read: the brick's and a ring
 /// of one about it, `SPANS_ACROSS` a side, row by row from the ring's
 /// first.
-pub const SPANS_ACROSS: u32 = BRICK + 2;
+pub(crate) const SPANS_ACROSS: u32 = BRICK + 2;
 pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// A column's spans in words (`way::Spans`): a head word, its count, the
 /// count's high bit set where they did not fit `way::SPANS`, and its face
 /// cell over them, an `i16`, `i16::MIN` for none (fill.rs `head_word`);
 /// then each span's lowest and past its highest, an `i16` each as the
 /// world's z is, held to it (`answer::bound_word`), and its value.
-pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
+pub(crate) const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
 pub const TREE_AT: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
 
 /// A brick's columns, a word a cell, row by row: a cell's ground's top in
 /// leaf cells, an `i16`, low (`column_top`).
-pub const COLUMN_WORDS: u32 = BRICK_CELLS;
+pub(crate) const COLUMN_WORDS: u32 = BRICK_CELLS;
 
 /// A column word's ground top.
 pub const fn column_top(w: u32) -> i32 {
@@ -280,7 +280,7 @@ pub const fn column_top(w: u32) -> i32 {
 pub const LAID_WORDS: u32 = BRICK_CELLS / 2;
 
 /// Cell `i`'s half of a laid word `w`.
-pub const fn laid_at(w: u32, i: u32) -> u32 {
+pub(crate) const fn laid_at(w: u32, i: u32) -> u32 {
     (w >> (16 * (i % 2))) & 0xffff
 }
 
@@ -547,7 +547,7 @@ impl Lookup {
     pub const fn word(self) -> u32 {
         self.0
     }
-    pub const fn of_word(w: u32) -> Lookup {
+    pub(crate) const fn of_word(w: u32) -> Lookup {
         Lookup(w)
     }
 }
@@ -600,7 +600,7 @@ pub fn step(w: &impl Presence, above: Lookup, cell: Zoom, g: [i32; 2]) -> (Looku
 /// The zoom a cell at `cell` is read at, the eye's clip levels' (`FIRST_CELL`
 /// to `LEAF_CELL`): past the leaves a leaf's, coarser than the coarsest
 /// clip level that clip level's.
-pub const fn held_to(cell: Zoom) -> Zoom {
+pub(crate) const fn held_to(cell: Zoom) -> Zoom {
     if cell > LEAF_CELL {
         LEAF_CELL
     } else if cell < FIRST_CELL {
@@ -662,7 +662,7 @@ pub fn join(w: &impl Bricks, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) ->
 
 /// Levels a clip level bounds a node over, its bricks' own and then theirs
 /// joined, to the clip level whole.
-pub const BOUND_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
+pub(crate) const BOUND_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
 
 /// The levels over a clip level's bricks, from one over a brick
 /// (`LEVELS + 1`) to the clip level whole: a node wider than a brick bounded

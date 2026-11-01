@@ -57,7 +57,7 @@ impl Tile {
     }
 
     /// `key`'s inverse; `None` for a zoom the pyramid does not hold.
-    pub fn of_key(key: u128) -> Option<Tile> {
+    pub(crate) fn of_key(key: u128) -> Option<Tile> {
         let (zoom, at) = node_of::<2>(key);
         (TOP_ZOOM..=LEAF_ZOOM)
             .contains(&zoom)
@@ -85,11 +85,6 @@ impl Tile {
 
     pub fn node(self) -> Node<2> {
         (self.zoom, self.at)
-    }
-
-    /// Its first leaf.
-    pub fn first_leaf(self) -> [i32; 2] {
-        first_descendant_of(self.at, LEAF_ZOOM - self.zoom)
     }
 
     /// South-west corner and side, in units.
@@ -138,7 +133,7 @@ pub fn neighborhood(p: Tile) -> [Tile; 16] {
 
 /// Where the tile (qx, qy) from a parent's first child, each −1 to 2, lies in
 /// its `neighborhood`.
-pub const fn neighbor_idx(qx: i32, qy: i32) -> usize {
+pub(crate) const fn neighbor_idx(qx: i32, qy: i32) -> usize {
     ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
@@ -227,7 +222,7 @@ impl Cell {
 
     /// The cell at `zoom` of `lattice` that lies `offset` of its sides into
     /// this one, no coarser.
-    pub fn inner_at(self, lattice: Lattice, zoom: Zoom, off: [u32; 2]) -> Cell {
+    pub(crate) fn inner_at(self, lattice: Lattice, zoom: Zoom, off: [u32; 2]) -> Cell {
         let zoom = lattice.cell_zoom(zoom);
         let [x, y] = first_descendant_of(self.at, zoom - self.zoom);
         Cell {

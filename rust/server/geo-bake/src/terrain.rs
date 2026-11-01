@@ -6,7 +6,7 @@ pub mod leaf;
 pub mod pipeline;
 pub mod pool;
 pub mod repository;
-pub mod source;
+pub(crate) mod source;
 
 use crate::pyramid::Base;
 use crate::pyramid::StagedSet;
@@ -24,7 +24,7 @@ use pxl_spec_core::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
 use pxl_spec_core::way::SPANS;
 
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
-pub const CELL_U: f64 = units(GROUND.cell());
+pub(crate) const CELL_U: f64 = units(GROUND.cell());
 
 impl Base for TerrainTile {
     const LAYER: BaseLayer = BaseLayer::terrain;
@@ -79,7 +79,7 @@ impl Base for TerrainTile {
 }
 
 /// Why brick `at` of a tile does not fit (`terrain::fill_fit`), said.
-pub fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
+pub(crate) fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
     match why {
         Unfit::Spans(spans) => format!("its brick ({qx}, {qy}) makes a column of {spans} of the ways' spans, past SPANS ({SPANS})"),
         Unfit::Nodes(nodes) => format!("its brick ({qx}, {qy}) has its ways meet {nodes} of its nodes along z, past ROOT_NODES ({ROOT_NODES})"),

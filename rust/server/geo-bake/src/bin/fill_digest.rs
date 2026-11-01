@@ -55,7 +55,7 @@ fn root() -> PathBuf {
 }
 
 /// Where the machine keeps the lines, a file a digest.
-fn kept_home() -> Result<PathBuf, String> {
+fn lines_dir() -> Result<PathBuf, String> {
     directory::cache_dir("fill")
 }
 
@@ -210,13 +210,13 @@ fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
 /// The lines of `set`, made where the machine keeps none of this digest:
 /// their path.
 fn lines_path(set: &Path, workers: usize) -> Result<PathBuf, String> {
-    let home = kept_home()?;
-    let path = home.join(key(&root(), set)?);
+    let dir = lines_dir()?;
+    let path = dir.join(key(&root(), set)?);
     if path.is_file() {
         return Ok(path);
     }
     let text = lines(&TileSet::new(set), workers)?.join("\n") + "\n";
-    std::fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let part = path.with_extension(format!("{}.part", std::process::id()));
     std::fs::write(&part, text)
         .and_then(|()| std::fs::rename(&part, &path))

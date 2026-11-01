@@ -26,7 +26,7 @@ const GONE: &[&str] = &["is_under_construction", "is_abandoned", "is_disused"];
 
 /// What a part's rules say, the one value of each along it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Tags {
+pub(crate) struct Tags {
     pub bridge: bool,
     pub tunnel: bool,
     pub indoor: bool,
@@ -38,7 +38,7 @@ pub struct Tags {
 }
 
 /// A part by identity: its segment and where on it it begins.
-pub type PartId = (String, u64);
+pub(crate) type PartId = (String, u64);
 
 /// A part of a segment over which every rule it carries holds one value.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -47,10 +47,10 @@ pub struct Part {
     /// Where it lies on its segment, as fractions of the segment's length.
     pub span: [f64; 2],
     /// Its segment's whole length, in DB coordinates.
-    pub segment_length: f64,
+    pub(crate) segment_length: f64,
     pub subtype: String,
     pub class: Option<String>,
-    pub tags: Tags,
+    pub(crate) tags: Tags,
     pub ends: [End; 2],
     pub points: Vec<G3857>,
 }
@@ -178,7 +178,7 @@ impl Part {
         (self.gers_id.clone(), self.span[0].to_bits())
     }
 
-    pub fn is_subway(&self) -> bool {
+    pub(crate) fn is_subway(&self) -> bool {
         self.subtype == "rail" && self.class.as_deref() == Some("subway")
     }
 

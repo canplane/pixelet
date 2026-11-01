@@ -3,8 +3,8 @@
 use super::*;
 use crate::sys;
 
-fn read(kept: StorageFile, bytes: &[u8]) -> Option<Vec<u8>> {
-    match storage_of(kept, bytes.to_vec()) {
+fn read(file: StorageFile, bytes: &[u8]) -> Option<Vec<u8>> {
+    match storage_of(file, bytes.to_vec()) {
         StorageRead::Bytes(bytes) => Some(bytes),
         StorageRead::None | StorageRead::Unreadable => None,
     }
@@ -14,14 +14,14 @@ fn read(kept: StorageFile, bytes: &[u8]) -> Option<Vec<u8>> {
 #[test]
 fn storage_file_format() {
     let _g = sys::serial();
-    for kept in StorageFile::ALL {
-        on_emptied(kept);
-        let bytes = seal(kept, &[7, 0, 255]);
-        assert_eq!(bytes.first(), Some(&kept.format()));
-        assert_eq!(read(kept, &bytes), Some(vec![7, 0, 255]));
-        assert_eq!(read(kept, &seal(kept, &[])), Some(vec![]));
-        assert!(matches!(storage_of(kept, Vec::new()), StorageRead::None));
-        assert!(!is_refused(kept));
+    for file in StorageFile::ALL {
+        on_emptied(file);
+        let bytes = seal(file, &[7, 0, 255]);
+        assert_eq!(bytes.first(), Some(&file.format()));
+        assert_eq!(read(file, &bytes), Some(vec![7, 0, 255]));
+        assert_eq!(read(file, &seal(file, &[])), Some(vec![]));
+        assert!(matches!(storage_of(file, Vec::new()), StorageRead::None));
+        assert!(!is_refused(file));
     }
 }
 
@@ -71,8 +71,8 @@ fn object_path_decimal() {
     for n in [0, 1, 9, 10, 702561541869797376, u64::MAX] {
         assert_eq!(Path::of(n).as_str(), n.to_string());
     }
-    for kept in StorageFile::ALL {
-        assert_eq!(kept.path().as_str(), kept.slot().to_string());
-        assert_eq!(StorageFile::of_slot(kept.slot()), Some(kept));
+    for file in StorageFile::ALL {
+        assert_eq!(file.path().as_str(), file.slot().to_string());
+        assert_eq!(StorageFile::of_slot(file.slot()), Some(file));
     }
 }

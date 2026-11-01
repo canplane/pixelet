@@ -32,7 +32,7 @@ pub const EPS: f64 = units(GROUND.cell());
 /// divisions leaf looks this far for the point of a division with no area,
 /// past the gap between such points nearly everywhere (99% of Korea's
 /// neighborhoods, most of its villages, measured 2026-10-08).
-pub const BAKE_READ_DIST: f64 = units(LEAF_ZOOM - 2);
+pub(crate) const BAKE_READ_DIST: f64 = units(LEAF_ZOOM - 2);
 
 const _: () = assert!(
     2.0 * units(LEAF_ZOOM) <= BAKE_READ_DIST,
@@ -119,7 +119,7 @@ impl Coverage {
     }
 
     /// These shards, each a tile at `SHARD_ZOOM`.
-    pub fn of_shards(shards: impl IntoIterator<Item = Tile>) -> Coverage {
+    pub(crate) fn of_shards(shards: impl IntoIterator<Item = Tile>) -> Coverage {
         Coverage {
             shards: shards.into_iter().map(|t| t.at).collect(),
         }
@@ -185,7 +185,7 @@ impl Coverage {
 
 /// The `overture_*` tables a set of statements names, outside string
 /// literals and `--` comments, without the catalog; sorted, each once.
-pub fn tables_of<'a>(reads: &[&[&'a str]]) -> Vec<&'a str> {
+pub(crate) fn tables_of<'a>(reads: &[&[&'a str]]) -> Vec<&'a str> {
     let mut out: Vec<&str> = Vec::new();
     for sql in reads.iter().flat_map(|r| r.iter()) {
         let b = sql.as_bytes();
@@ -260,7 +260,7 @@ impl Overture {
 /// What the geo DB holds for `reads`, which a set's manifest says it was
 /// made from: each source by the `version` and `accessed_at` the DB records
 /// for it, each Overture table with its counts.
-pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
+pub(crate) fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let tables = tables_of(reads);
     let text = |client: &mut Client,
                 sql: &str,
@@ -299,7 +299,7 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
 }
 
 /// `holdings`, for a set's manifest.
-pub fn src_of(reads: &[&[&str]]) -> Result<serde_json::Value, String> {
+pub(crate) fn src_of(reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let (_, mut client) = Overture::reading(reads, &BTreeSet::new())?;
     holdings(&mut client, reads)
 }

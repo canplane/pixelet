@@ -128,7 +128,7 @@ const _: () = assert!(FINEST_ZOOM < 1 << ZOOM_BITS);
 
 /// Index `v` along an axis at `zoom` as an index at `to`: the first of the
 /// finer that lie in it, or the coarser it lies in, the floor.
-pub const fn idx_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
+pub(crate) const fn idx_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
     if to >= zoom {
         v << (to - zoom)
     } else {

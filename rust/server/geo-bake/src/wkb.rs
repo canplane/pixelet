@@ -7,8 +7,8 @@ use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
 pub struct WkbGeometry {
     pub points: Vec<G3857>,
-    pub holes: Vec<Vec<G3857>>,
-    pub is_polygon_src: bool,
+    pub(crate) holes: Vec<Vec<G3857>>,
+    pub(crate) is_polygon_src: bool,
 }
 
 /// A short buffer ends the decode rather than panicking.
@@ -50,7 +50,7 @@ impl<'a> Reader<'a> {
     }
 }
 
-pub fn wkb_to_geometries(wkb: &[u8]) -> Vec<WkbGeometry> {
+pub(crate) fn wkb_to_geometries(wkb: &[u8]) -> Vec<WkbGeometry> {
     if wkb.is_empty() {
         return Vec::new();
     }

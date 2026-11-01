@@ -84,7 +84,7 @@ impl Cave {
         self.hollow as u32 | (self.branch as u32) << 1
     }
 
-    pub const fn of_word(w: u32) -> Cave {
+    pub(crate) const fn of_word(w: u32) -> Cave {
         Cave {
             hollow: w & 1 != 0,
             branch: w & 2 != 0,

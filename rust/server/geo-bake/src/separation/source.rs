@@ -20,7 +20,7 @@ use crate::util::{pack, unpack, write_atomic, Level};
 /// A road tunnel's end: where a portal may open, and the tunnel's level, which
 /// sets how far its approaches can sink (`portals_in`).
 #[derive(Clone, Copy)]
-pub struct Portal {
+pub(crate) struct Portal {
     pub at: [f64; 2],
     pub level: i64,
 }
@@ -58,12 +58,12 @@ impl TileRows {
         &self.water
     }
 
-    pub fn ele(&self) -> &[i16] {
+    pub(crate) fn ele(&self) -> &[i16] {
         &self.ele
     }
 
     /// Both ends of every road tunnel among its ways (`piece_of`).
-    pub fn portals(&self) -> Vec<Portal> {
+    pub(crate) fn portals(&self) -> Vec<Portal> {
         self.ways
             .iter()
             .filter_map(piece_of)
@@ -171,7 +171,7 @@ const TUNNELS_SQL: &str = concat!(
 /// The portals of the road tunnels in `[lo, hi]`, DB coordinates: a narrow
 /// read of the tunnels alone, so a solve learns whether a neighbor's tunnel
 /// opens near its tile before it reads the neighbor.
-pub fn portals_in(client: &mut Client, [lo, hi]: [[f64; 2]; 2]) -> Result<Vec<Portal>, String> {
+pub(crate) fn portals_in(client: &mut Client, [lo, hi]: [[f64; 2]; 2]) -> Result<Vec<Portal>, String> {
     let env: [&(dyn ToSql + Sync); 4] = [&lo[0], &lo[1], &hi[0], &hi[1]];
     let rows = client.query(TUNNELS_SQL, &env).map_err(|e| e.to_string())?;
     Ok(TileRows {

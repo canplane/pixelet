@@ -54,7 +54,7 @@ fn cube_entries<'l, 'a>(
 }
 
 /// A cube's number by its group (`sentinel`, `ground`, `object`) and name.
-pub fn cube_number(group: &str, name: &str) -> Result<u32, String> {
+pub(crate) fn cube_number(group: &str, name: &str) -> Result<u32, String> {
     let spec = read(CUBE_JSON)?;
     let list = entries(
         spec.get(group).ok_or(format!("{CUBE_JSON}: no {group}"))?,
@@ -143,7 +143,7 @@ pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String
         .collect()
 }
 
-pub fn color_outputs() -> Result<Vec<Output>, String> {
+pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     let spec = read(COLOR_JSON)?;
     let head: Vec<String> = [
         "//",
@@ -245,7 +245,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-pub fn cube_outputs() -> Result<Vec<Output>, String> {
+pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     let spec = read(CUBE_JSON)?;
     let sentinel = entries(spec.get("sentinel").ok_or("no sentinel")?, "sentinel")?;
     let ground_node = spec.get("ground").ok_or("no ground")?;
@@ -724,7 +724,7 @@ fn runs(vals: impl Iterator<Item = u32>) -> Vec<String> {
         .collect()
 }
 
-pub fn decor_outputs() -> Result<Vec<Output>, String> {
+pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let spec = read(DECOR_JSON)?;
     let doc = spec.lines_at("$doc").unwrap_or_default();
     let head: Vec<String> = [

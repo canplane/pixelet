@@ -62,7 +62,7 @@ pub struct Grid {
     cells_at: u32,
     samples_at: u32,
     pub asks_at: u32,
-    pub hits_at: u32,
+    pub(crate) hits_at: u32,
     pub hit_asks_at: u32,
 }
 

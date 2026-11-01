@@ -34,7 +34,7 @@ pub fn band(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<
 /// The most of a lattice's tiles a zoom's demand spans along an axis:
 /// ⌊d / tile⌋ + 2, the same at every zoom. A tile of fewer grid cells is
 /// asked for more of.
-pub const fn demand_across(lattice: Lattice) -> u32 {
+pub(crate) const fn demand_across(lattice: Lattice) -> u32 {
     (2.0 * demand_dist(lattice, LEAF_ZOOM) / units(LEAF_ZOOM)) as u32 + 2
 }
 

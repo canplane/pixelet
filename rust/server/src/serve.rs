@@ -18,7 +18,7 @@ pub struct Server<'a> {
     pub internal: &'static str,
 }
 
-pub fn shell(cfg: &config::Config, internal: &'static str, routes: Router) -> Router {
+pub(crate) fn shell(cfg: &config::Config, internal: &'static str, routes: Router) -> Router {
     // The gate covers the whole prefix. The explicit fallback is required: a
     // layer over a router with no routes never runs, and the request falls
     // through to the outer 404 ungated.

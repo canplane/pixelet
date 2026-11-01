@@ -26,7 +26,7 @@ pub const RUN: u32 = 16;
 
 /// The most decor one brick generates, every decor's together: each decor's
 /// capacity (`Decor::cap`) laid in the catalog's order.
-pub const BRICK_RECORDS: u32 = {
+pub(crate) const BRICK_RECORDS: u32 = {
     let (mut sum, mut k) = (0, 0);
     while k < DECORS.len() {
         sum += DECORS[k].cap();
@@ -83,13 +83,13 @@ const _: () = assert!(
 /// entry whose brick the clip levels no longer hold there is skipped by it
 /// (`generated_for`) — then how many records each decor laid (`cnt_at`).
 /// Placed decor's head is its count.
-pub const CNT_AT: u32 = 3;
+pub(crate) const CNT_AT: u32 = 3;
 pub const HEAD_WORDS: u32 = CNT_AT + DECORS.len() as u32;
 const SLOTS_AT: u32 = EYE_ENTRIES * HEAD_WORDS;
 /// Records the entries hold, every one, ahead of placed decor's.
 pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORDS;
 pub const PLACED_HEAD: u32 = SLOTS_AT + SLOT_RECORDS * RECORD_WORDS;
-pub const PLACED_HEAD_WORDS: u32 = 4;
+pub(crate) const PLACED_HEAD_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (pxl-shader decor.rs
 /// `run_of`): an entry's, `RUN` records each; placed decor's, a record each.
@@ -107,7 +107,7 @@ pub const fn cnt_at(s: u32, k: u32) -> u32 {
 
 /// Where `rows`' decor `k`'s records start among an entry's: the decors'
 /// capacities laid in the catalog's order (`Decor::cap`).
-pub fn first_record(rows: &[Decor], k: u32) -> u32 {
+pub(crate) fn first_record(rows: &[Decor], k: u32) -> u32 {
     let (mut first, mut j) = (0, 0);
     while j < k {
         first += rows[j as usize].cap();
@@ -658,7 +658,7 @@ pub const WIDEST: i32 = CLAIM_EXTENT[0] + 1;
 /// `cells` a side: one whose corner, posed as placed (`placed_pose`), holds
 /// a box meeting it, each placed leaf near enough asked of the world's
 /// (`DecorQuery::next_placed`).
-pub fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]) -> bool {
+pub(crate) fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]) -> bool {
     let lo = [
         at[0] - CLAIM_EXTENT[0],
         at[1] - CLAIM_EXTENT[1],

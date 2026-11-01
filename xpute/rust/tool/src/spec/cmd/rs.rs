@@ -245,7 +245,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             "// type is long to spell and is spelled once, here, for each. A table",
             "// with no event or no enum read off the wire leaves a writer or a",
             "// number's check unused.",
-            "#![allow(non_camel_case_types, clippy::upper_case_acronyms, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, unreachable_pub, reason = \"generated from the spec\")]",
+            "#![allow(non_camel_case_types, clippy::upper_case_acronyms, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, reason = \"generated from the spec\")]",
             "",
             "use core::fmt::Display;",
             "",

@@ -252,14 +252,6 @@ impl<L: Base> TileCache<L> {
         self.readable(p).map(|h| &h.body)
     }
 
-    /// Every readable tile.
-    pub fn residents(&self) -> impl Iterator<Item = (Tile, &L)> {
-        self.tiles
-            .iter()
-            .filter(|(_, e)| e.ask.is_some())
-            .filter_map(|(&p, e)| Some((p, &e.resident.as_ref()?.body)))
-    }
-
     /// What `p`'s line says of it, stepped down from the top a tile at a time.
     pub fn line(&self, p: Tile) -> Line {
         self.seek(&mut Lines::default(), p)

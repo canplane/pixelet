@@ -38,7 +38,7 @@ struct Tally {
 /// The set's ways' trees fit the pool, and what it will keep of each tile
 /// that takes anything; where they do not, the window that holds the most
 /// at the zoom that needs it, its first brick and its tiles named.
-pub fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, String)>, String> {
+pub(crate) fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, String)>, String> {
     let tiles: Vec<Tile> = set.tiles()?.into_values().flatten().collect();
     let base = set.base.fits()?;
     let base = base.as_ref();

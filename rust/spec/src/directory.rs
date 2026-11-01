@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 
 /// The folder every one of them is under.
-pub const APP: &str = "pixelet";
+pub(crate) const APP: &str = "pixelet";
 
 /// `of` in the project's folder of the user's caches: macOS's
 /// `~/Library/Caches`, else `$XDG_CACHE_HOME`, or `~/.cache` where it is

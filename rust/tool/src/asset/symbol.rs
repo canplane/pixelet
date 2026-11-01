@@ -15,7 +15,7 @@ use resvg::usvg::Tree;
 use std::path::Path;
 
 /// Carto's symbols, drawn at the atlas's device pixels a pixel.
-pub const SYMBOL_PX: u32 = CARTO_PX * SYMBOL_RATIO;
+pub(crate) const SYMBOL_PX: u32 = CARTO_PX * SYMBOL_RATIO;
 
 /// Carto's symbols' side, in pixels.
 const CARTO_PX: u32 = 14;
@@ -32,7 +32,7 @@ pub struct Symbol {
     /// Its own box, and each shape in it as SVG path data and whether it
     /// fills even-odd.
     pub size: [f32; 2],
-    pub shapes: Vec<(String, bool)>,
+    pub(crate) shapes: Vec<(String, bool)>,
 }
 
 /// Each symbol, sorted by path.

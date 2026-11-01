@@ -42,7 +42,7 @@ pub const POINT_SCALE: f32 = 8.0;
 const LOWER_DECK_GAP_M: f32 = STACKED_DECK_HEADROOM_M - 1.0;
 
 /// What a pier is drawn as.
-pub const PIER: u32 = Ground::building as u32;
+pub(crate) const PIER: u32 = Ground::building as u32;
 
 /// A line's form, as its byte on the wire.
 pub const BRIDGE: u32 = 0;
@@ -105,7 +105,7 @@ pub fn footprint(width: f32) -> f32 {
 }
 
 /// A deck's slab in leaf cells, at least one, `per_m` leaf cells a meter.
-pub fn slab_depth(per_m: f32) -> i32 {
+pub(crate) fn slab_depth(per_m: f32) -> i32 {
     cells_of_m(DECK_THICKNESS_M, per_m).max(1)
 }
 
@@ -222,7 +222,7 @@ pub fn header(per_m: f32, st: &Stations) -> [u32; HEADER_WORDS as usize] {
     ]
 }
 
-pub fn of_header(w: [u32; HEADER_WORDS as usize]) -> (f32, Stations) {
+pub(crate) fn of_header(w: [u32; HEADER_WORDS as usize]) -> (f32, Stations) {
     let st = Stations {
         step: [f32::from_bits(w[1]), f32::from_bits(w[2])],
         phase: [
@@ -250,7 +250,7 @@ fn bent(half: i32) -> ([i32; 3], u32) {
 /// laid out in leaf cells: a column more than two leaf cells wide holds none,
 /// as it is under half of it; one of two holds it where one of its four leaf
 /// cells does.
-pub fn pier_covers(
+pub(crate) fn pier_covers(
     st: &Stations,
     width: f32,
     a: [f32; 2],

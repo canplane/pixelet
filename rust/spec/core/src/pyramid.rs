@@ -68,8 +68,8 @@ pub const WRITTEN_CAP: u32 = 32;
 /// asks, and the words they count into, each observer's walks' lanes
 /// (`tally_at`).
 pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
-pub const TALLY_AT: u32 = TALLY_ON + 1;
-pub const TALLY_WORDS: u32 = tally::OBSERVERS * tally::WALKS;
+pub(crate) const TALLY_AT: u32 = TALLY_ON + 1;
+pub(crate) const TALLY_WORDS: u32 = tally::OBSERVERS * tally::WALKS;
 /// The missed pixels' hits kept for their faces (pxl-spec-core
 /// `beam::HIT_WORDS`): the dispatch over them, as the walks again raise
 /// it, and their count (`HITS_ARGS`, `HITS_CNT`), set each frame the cast
@@ -103,14 +103,14 @@ pub const W_NODE: u32 = W_INHERITANCE + INHERITANCE_WORDS;
 /// What was handed it of what is placed, its `Inheritance`'s second word
 /// (`world::Inheritance::words`).
 pub const W_OBJECT: u32 = W_INHERITANCE + 1;
-pub const ENTRY_WORDS: u32 = W_NODE + 4;
+pub(crate) const ENTRY_WORDS: u32 = W_NODE + 4;
 
 /// The slots: no more than the tiles' entries were (8 roots and 2^16 tiles
 /// of eight), room for many frames of the about 80 thousand nodes a frame
 /// at E120 asks (a probe's count, not kept); a power of two, so a key's
 /// hash masks to one.
 pub const ENTRIES: u32 = 1 << 19;
-pub const ENTRIES_AT: u32 = HEAD_WORDS;
+pub(crate) const ENTRIES_AT: u32 = HEAD_WORDS;
 /// The marked pixels listed (`MARKS_AT`), a word each, its row over its
 /// column, as many as `MARKS`; and their count, copied in from the walk's
 /// dispatch (`ray::MISS_ARGS_CNT`) once the reading walk is done
@@ -353,7 +353,8 @@ fn entries_of(q0: [i32; 2], q1: [i32; 2]) -> [u32; LEVEL_WORDS as usize] {
 
 /// Whether entry `entry` of the eye's clip level `w` moved, among the moved
 /// entries' words.
-pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, entry: u32) -> bool {
+#[cfg(test)]
+const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, entry: u32) -> bool {
     let k = w * clipmap::ENTRIES + entry;
     moved[(k / 32) as usize] & 1 << (k % 32) != 0
 }

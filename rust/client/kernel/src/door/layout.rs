@@ -40,7 +40,7 @@ use xpute_kit::status::errno::Errno;
 
 /// A packet is at most a page; anything larger crosses by address. A page
 /// is also the buddy's smallest block.
-pub const RING_SLOT_BYTES: u32 = PAGE_BYTES;
+pub(crate) const RING_SLOT_BYTES: u32 = PAGE_BYTES;
 
 const SQ_DESC_AT: u32 = RING_DESC_AT;
 const CQ_DESC_AT: u32 = SQ_DESC_AT + page_up(ring_bytes(SQ_CAP));
@@ -56,7 +56,7 @@ const SLOT_END: u32 = CQ_SLOT_AT + slots_bytes(CQ_CAP, RING_SLOT_BYTES);
 /// # Safety
 /// Once: the ranges are the rings' alone, in memory that never moves and
 /// outlives them.
-pub unsafe fn rings() -> (Ring, Ring) {
+pub(crate) unsafe fn rings() -> (Ring, Ring) {
     let mem = mem::core();
     // SAFETY: the caller's.
     unsafe {
@@ -107,7 +107,7 @@ const _: () = assert!(
 /// or far below its worst most of the time, is the heap's
 /// (`HEAP_FLOWS_BYTES`).
 #[derive(Clone, Copy)]
-pub enum FixedRange {
+pub(crate) enum FixedRange {
     Terrain,
     Division,
     Uploads,
@@ -132,7 +132,7 @@ const ACTOR_UPLOADS: usize = companion::FIGURES + preview::PREVIEWS_MAX;
 /// renderer's table is a bug, not a load.
 /// The renderer frees a list's uploads before taking its new ones, so it
 /// never holds more.
-pub const MAX_LIVE_UPLOADS: usize =
+pub(crate) const MAX_LIVE_UPLOADS: usize =
     MODELS_MAX + cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
 
 const FIXED: [u32; 5] = [
@@ -143,7 +143,7 @@ const FIXED: [u32; 5] = [
     BYTES,
 ];
 
-pub const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
+pub(crate) const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
 
 const _: () = assert!(
     REGION_BYTES.is_multiple_of(PAGE_BYTES)
@@ -206,7 +206,7 @@ pub fn heap_at(data_end: u32) -> u32 {
 }
 
 /// Asking before boot lays out memory is a bug.
-pub fn range(f: FixedRange) -> Section {
+pub(crate) fn range(f: FixedRange) -> Section {
     use xpute_kit::status::bug::OrBug;
     map()
         .or_bug(Errno::ENOTRECOVERABLE)
@@ -217,7 +217,7 @@ pub fn range(f: FixedRange) -> Section {
 /// Lays the memory map and hands each range of `.fixed` to its owner.
 /// Returns where GPU calls are recorded for the host, 0 where the kernel
 /// makes them itself.
-pub fn install(b: &BootInfo) -> u32 {
+pub(crate) fn install(b: &BootInfo) -> u32 {
     section::set_map(section::lay_out(b.given, b.data_end, FIXED_BYTES));
     room::RANGE.set(range(FixedRange::Terrain));
     division::RANGE.set(range(FixedRange::Division));

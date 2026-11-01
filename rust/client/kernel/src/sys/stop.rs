@@ -34,7 +34,7 @@ static STOPPED: Global<bool> = Global::new();
 /// `PanicHook` where it has one, else by the std hook this one replaced,
 /// never by both; a bug there is not reported, and is told as the panic it
 /// then is (xpute_guest::global `off_marked_thread`).
-pub fn install(panic_hook: Option<PanicHook>) {
+pub(crate) fn install(panic_hook: Option<PanicHook>) {
     PANIC_HOOK.set(panic_hook);
     bug::set_report(|errnum, at, a, b| {
         if !off_marked_thread() {

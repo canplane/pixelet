@@ -123,7 +123,7 @@ const _: () = assert!(LEAF_ZOOM >= SHARD_ZOOM);
 impl Shard {
     pub const UNKNOWN: Shard = Shard(0);
     /// Known, every one of its nine served: nothing about it is past.
-    pub const INSIDE: Shard = Shard(SHARD_KNOWN | SHARD_ALL << SHARD_SERVED_SHIFT);
+    pub(crate) const INSIDE: Shard = Shard(SHARD_KNOWN | SHARD_ALL << SHARD_SERVED_SHIFT);
 
     /// The node `(zoom, c)`'s, as `self` knows it, else found: its shard's
     /// nine off its entry in the area's index (`nine_at`). Unknown coarser
@@ -177,7 +177,7 @@ impl Shard {
     pub const fn word(self) -> u32 {
         self.0
     }
-    pub const fn of_word(w: u32) -> Shard {
+    pub(crate) const fn of_word(w: u32) -> Shard {
         Shard(w)
     }
 }

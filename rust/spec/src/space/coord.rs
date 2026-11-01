@@ -8,7 +8,7 @@ pub mod adapter;
 #[path = "coord/earth.spec.rs"]
 pub mod earth;
 #[path = "coord/geoid.spec.rs"]
-pub mod geoid;
+pub(crate) mod geoid;
 pub mod globe;
 pub mod mat4;
 pub mod q3;

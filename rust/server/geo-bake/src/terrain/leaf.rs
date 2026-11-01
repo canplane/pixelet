@@ -33,7 +33,7 @@ const HAS_GROUND_SQL: &str = "
 ";
 
 /// What classifying reads; with a tile's reads, all a terrain bake reads.
-pub const GROUND_READS: [&str; 1] = [HAS_GROUND_SQL];
+pub(crate) const GROUND_READS: [&str; 1] = [HAS_GROUND_SQL];
 pub const READS: [&[&str]; 3] = [
     &GROUND_READS,
     &repository::READS,

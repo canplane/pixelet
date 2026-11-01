@@ -30,7 +30,7 @@ macro_rules! division_names {
 
 /// How far a point looks for the nearest division where no area of it
 /// covers the point.
-pub const NEAREST_RADIUS_M: f64 = 2048.0;
+pub(crate) const NEAREST_RADIUS_M: f64 = 2048.0;
 
 /// [`NEAREST_RADIUS_M`] at the DB's `y`, in the DB's coordinates.
 pub fn radius_at(y: f64) -> f64 {

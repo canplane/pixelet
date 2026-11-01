@@ -12,7 +12,7 @@
 //! its default.
 
 pub use crate::domain::view::setting::schema_spec::{
-    AoMode, CameraMode, OrbitObstacleMode, ResMode, SettingKey, SettingKind, Settings,
+    AoMode, CameraMode, OrbitObstacleMode, ResMode, SettingKey, Settings,
 };
 use crate::sys::io::file::{self, StorageFile, StorageRead};
 use xpute_guest::global::Global;

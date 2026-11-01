@@ -19,7 +19,7 @@
 use crate::{wrap_idx, Zoom};
 
 /// A face's edges, and its corners.
-pub const EDGES: u32 = 4;
+pub(crate) const EDGES: u32 = 4;
 /// Bit `k` of each field is edge `k`'s or corner `k`'s, the fields in the
 /// order they are asked, each deciding what the next asks. A cell hides
 /// what is in front of the face across the edge: the face meets a wall there, and

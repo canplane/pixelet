@@ -1,6 +1,7 @@
 // pxl-kernel/domain/view/setting/store.test.rs
 
 use super::*;
+use crate::domain::view::setting::schema_spec::SettingKind;
 use crate::sys;
 use crate::sys::io::host;
 use xpute_kit::status::errno::Errno;

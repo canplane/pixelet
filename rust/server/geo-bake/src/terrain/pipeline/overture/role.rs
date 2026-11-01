@@ -6,7 +6,7 @@
 use crate::terrain::pipeline::overture::between::Rules;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum Role {
+pub(crate) enum Role {
     #[default]
     Way,
     Sidewalk,

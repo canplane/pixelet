@@ -55,12 +55,7 @@ struct Clip {
 
 #[derive(Clone, Copy)]
 pub struct MeshRef {
-    pub at: usize,
     pub handle: u32,
-    pub vertex_cnt: u32,
-    pub idx_cnt: u32,
-    pub radius: f32,
-    pub scale: f32,
 }
 
 pub struct Model {
@@ -240,14 +235,7 @@ impl Models {
 
     pub fn mesh(&self, model: u32) -> Option<MeshRef> {
         let m = self.models.get(model as usize)?;
-        Some(MeshRef {
-            at: m.at,
-            handle: m.handle,
-            vertex_cnt: m.vertex_cnt,
-            idx_cnt: m.idx_cnt,
-            radius: m.radius,
-            scale: m.scale,
-        })
+        Some(MeshRef { handle: m.handle })
     }
 
     pub fn get(&self, model: u32) -> Option<&Model> {
@@ -409,15 +397,6 @@ impl Model {
 
     pub fn handle(&self) -> u32 {
         self.handle
-    }
-
-    pub fn scale(&self) -> f32 {
-        self.scale
-    }
-
-    /// Its bounding sphere about its origin, unscaled.
-    pub fn radius(&self) -> f32 {
-        self.radius
     }
 
     /// A clip's length, where it has one.

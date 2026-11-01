@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 use super::asset::cube_number;
 use super::{file, read, Node, Output};
 
-pub const INGEST_JSON: &str = "spec/spec/asset/ingest.json";
+pub(crate) const INGEST_JSON: &str = "spec/spec/asset/ingest.json";
 
 pub struct File {
     pub path: String,
@@ -53,7 +53,7 @@ pub fn files() -> Result<Vec<File>, String> {
 }
 
 /// `path`'s number below the asset root, from 1.
-pub fn file_number(path: &str) -> Result<u32, String> {
+pub(crate) fn file_number(path: &str) -> Result<u32, String> {
     static PATHS: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
     let paths = PATHS
         .get_or_init(|| Ok(files()?.into_iter().map(|f| f.path).collect()))
@@ -70,7 +70,7 @@ pub fn file_number(path: &str) -> Result<u32, String> {
 
 /// The symbol at `path` (as Carto gives it), by its place among those the
 /// ingest rasterized, from 1.
-pub fn symbol_number(path: &str) -> Result<u16, String> {
+pub(crate) fn symbol_number(path: &str) -> Result<u16, String> {
     static PATHS: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
     let paths = PATHS
         .get_or_init(|| {

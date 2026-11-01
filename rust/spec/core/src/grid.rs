@@ -64,7 +64,7 @@ pub fn cell_zoom_at(r2: f32) -> Zoom {
 /// cell's sides, `2^(UNIT_ZOOM − zoom)` units each, a power of two times the
 /// split exactly, as `cell_zoom_at` takes its bands. `zoom` from `UNIT_ZOOM
 /// + 1 − 127` to `FINEST_ZOOM`, so the power is an f32's own.
-pub fn cell_zoom_from(zoom: i32) -> f32 {
+pub(crate) fn cell_zoom_from(zoom: i32) -> f32 {
     let e = UNIT_ZOOM as i32 - zoom;
     CELLS_A_RAD / SPANS * f32::from_bits(((127 + e) as u32) << 23)
 }

@@ -406,7 +406,7 @@ pub fn under(pool: &impl Pool, slot: u32) -> u32 {
 /// A brick's records at their most as the read-back carries them: its
 /// scratch from `records_at` on, their count, then a child group its tree holds
 /// each.
-pub const RECORDS_WORDS: u32 = 1 + BRICK_CHILD_GROUPS * RECORD_WORDS;
+pub(crate) const RECORDS_WORDS: u32 = 1 + BRICK_CHILD_GROUPS * RECORD_WORDS;
 const _: () = assert!(
     RECORDS_WORDS == SCRATCH_WORDS - records_at(BRICK_CHILD_GROUPS),
     "the records end the scratch"

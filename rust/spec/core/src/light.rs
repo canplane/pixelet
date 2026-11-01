@@ -150,7 +150,7 @@ impl Light {
     /// along each of the box's axes, over that axis's texel. The light box
     /// is orthographic, its axes square to the light's rays, so depth along
     /// them counts for nothing.
-    pub fn texel_at(&self, v: [f32; 3]) -> [f32; 2] {
+    pub(crate) fn texel_at(&self, v: [f32; 3]) -> [f32; 2] {
         let d = [
             v[0] - self.first[0],
             v[1] - self.first[1],
@@ -515,7 +515,7 @@ pub const fn cells_across(size: u32) -> u32 {
 /// a beam ray each, then how far a cell's texels may start from each, a word
 /// a beam ray in their order (`hand_at`), as the eye's (`beam::Grid::hand_at`),
 /// then the cells' starts; and all its words.
-pub const fn lines_at(_size: u32) -> u32 {
+pub(crate) const fn lines_at(_size: u32) -> u32 {
     0
 }
 
@@ -527,7 +527,7 @@ pub const fn hand_at(size: u32, ray: u32) -> u32 {
     lines_at(size) + beam_across(size) * beam_across(size) * LINE_WORDS + ray
 }
 
-pub const fn cells_at(size: u32) -> u32 {
+pub(crate) const fn cells_at(size: u32) -> u32 {
     lines_at(size) + beam_across(size) * beam_across(size) * (LINE_WORDS + 1)
 }
 
@@ -535,7 +535,7 @@ pub const fn cell(size: u32, [i, j]: [u32; 2]) -> u32 {
     cells_at(size) + (j * cells_across(size) + i) * CELL_WORDS
 }
 
-pub const fn beam_words(size: u32) -> u32 {
+pub(crate) const fn beam_words(size: u32) -> u32 {
     cells_at(size) + cells_across(size) * cells_across(size) * CELL_WORDS
 }
 
@@ -564,7 +564,7 @@ pub fn margin(width: f32) -> f32 {
 /// the beam's in the list's buffer, a sample `size / SAMPLE` across and
 /// down, by its index `j · across + i`, which its box is drawn with
 /// (`raster::id_of`).
-pub const fn samples_at(size: u32) -> u32 {
+pub(crate) const fn samples_at(size: u32) -> u32 {
     beam_words(size)
 }
 
@@ -572,7 +572,7 @@ pub const fn sample(size: u32, idx: u32) -> u32 {
     samples_at(size) + idx * beam::SAMPLE_WORDS
 }
 
-pub const fn sample_words(size: u32) -> u32 {
+pub(crate) const fn sample_words(size: u32) -> u32 {
     sample(size, (size / SAMPLE) * (size / SAMPLE))
 }
 

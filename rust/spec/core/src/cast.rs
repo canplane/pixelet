@@ -197,7 +197,7 @@ pub fn narrow(side2: f32, width2: f32) -> bool {
 
 /// The spacings a node is narrow under (`narrow`): twice the width that
 /// holds one ray for certain, `2√2`; and its brick, exact.
-pub const NARROW: f32 = 2.0 * core::f32::consts::SQRT_2;
+pub(crate) const NARROW: f32 = 2.0 * core::f32::consts::SQRT_2;
 const NARROW_SQUARED: f32 = 8.0;
 const _: () = assert!(
     NARROW * NARROW - NARROW_SQUARED < 1e-6 && NARROW_SQUARED - NARROW * NARROW < 1e-6,
@@ -206,7 +206,7 @@ const _: () = assert!(
 
 /// √6, as an f32 rounds it: a cube `NARROW` spacings wide spans `√3 ·
 /// NARROW`, `2√6` of them, corner to corner.
-pub const SQRT_6: f32 = 2.449_489_8;
+pub(crate) const SQRT_6: f32 = 2.449_489_8;
 
 /// Which cell a ray stops at: the first it cannot see through
 /// (`answer::transparent`), as an eye sees; or the first it can, as what is
@@ -857,7 +857,7 @@ pub trait Over<A: Copy> {
 /// Over a walk from the roots, nothing: no node is over a root, so it is
 /// never read.
 #[derive(Clone, Copy)]
-pub struct Root<A>(pub A);
+pub(crate) struct Root<A>(pub A);
 
 impl<A: Copy> Over<A> for Root<A> {
     fn over(&self, _: Zoom) -> A {

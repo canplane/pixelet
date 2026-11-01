@@ -418,7 +418,7 @@ fn constants(
     file(&out)
 }
 
-pub fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
+pub(crate) fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
     if n.is_wrapper() {
         return ts_literal(n.value(), type_of(n, ty), indent);
     }
@@ -923,10 +923,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             rs.push(String::new());
             rs.extend(casing_note());
             rs.extend([
-                "// A table is generated whole, whether or not this crate calls or exports an entry."
+                "// A table is generated whole, whether or not this crate calls an entry."
                     .to_string(),
                 format!(
-                    "#![allow(non_upper_case_globals, non_snake_case, clippy::absolute_paths, {}dead_code, unreachable_pub, reason = \"generated from the spec\")]",
+                    "#![allow(non_upper_case_globals, non_snake_case, clippy::absolute_paths, {}dead_code, reason = \"generated from the spec\")]",
                     if matches!(d.enums, Enums::None) {
                         ""
                     } else {

@@ -36,7 +36,7 @@ use pxl_spec_core::way;
 /// The most a packet takes: every column at its longest, a palette index a cell four
 /// and the separation at a record's room (`separation::MAX_LINES`,
 /// `MAX_POINTS`), as `encode` lays them.
-pub const MAX_PKT_BYTES: usize = {
+pub(crate) const MAX_PKT_BYTES: usize = {
     use super::pkt::{branch, seq, HEADER, SCALAR};
     use crate::bake::separation::{MAX_LINES, MAX_POINTS};
     let separation = branch(8)
@@ -278,7 +278,7 @@ fn record(
 /// `handed` (`record`) and filled into `column`, its spans into `kept`, its
 /// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-spec-core
 /// `fill::brick`): the most spans a column makes.
-pub fn brick_spans(
+pub(crate) fn brick_spans(
     tile: Tile,
     held: &TerrainTile,
     place: [u32; 2],

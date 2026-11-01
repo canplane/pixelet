@@ -34,11 +34,4 @@ impl World<'static> {
             }
         }
     }
-
-    /// The place `place` of `tile`, as `places_in` named it; none once that
-    /// tile has gone, where another tile's index names another place.
-    pub fn place(self, tile: Tile, place: u32) -> Option<PlaceEntry<'static>> {
-        let placed: &'static PlaceTile = PlaceTile::tile_cache().get(tile)?;
-        (place < placed.len()).then(|| placed.get(place))
-    }
 }

@@ -11,10 +11,10 @@ mod executor;
 pub mod layout;
 /// The ports at the kernel's far side, generated from port.json.
 #[path = "door/port.spec.rs"]
-pub mod port;
+pub(crate) mod port;
 /// The toc's keys, generated from toc.json.
 #[path = "door/toc.spec.rs"]
-pub mod toc;
+pub(crate) mod toc;
 
 use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, ShellSnapshotEvent};
 use crate::domain::control::sensor;

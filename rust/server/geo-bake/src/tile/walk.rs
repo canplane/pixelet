@@ -13,7 +13,7 @@ use crate::util::{fmt_bytes, fmt_dur};
 pub struct Tally {
     pub baked: u64,
     pub empty: u64,
-    pub skipped: u64,
+    pub(crate) skipped: u64,
     pub failed: u64,
     pub items: u64,
     pub bytes: u64,

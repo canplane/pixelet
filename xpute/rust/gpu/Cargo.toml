@@ -37,7 +37,3 @@ host = ["dep:xpute-host", "dep:wgpu", "dep:serde", "dep:png", "dep:image-webp", 
 # The golden records' reader, and a device asked for without a runtime.
 xpute-kit = { workspace = true, features = ["golden"] }
 pollster = "1"
-
-# What the crate's root does not reach is `pub(crate)` or narrower.
-[lints.rust]
-unreachable_pub = "warn"

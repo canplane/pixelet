@@ -67,9 +67,9 @@ fn go_to_asks_after() {
     let _g = sys::serial();
     let pi = core::f64::consts::PI;
 
-    let kept = go_to(100.0, None, None, None);
+    let unasked = go_to(100.0, None, None, None);
     assert_eq!(
-        (kept.dist, kept.azimuth, kept.polar),
+        (unasked.dist, unasked.azimuth, unasked.polar),
         (DEFAULT_DIST, 0.5, 1.0)
     );
 

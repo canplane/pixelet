@@ -4,10 +4,10 @@
 //! knows of WebAssembly, a browser or threads (the brackets do), so the same
 //! code runs under `cargo test` and in either bracket.
 
-pub mod domain;
+pub(crate) mod domain;
 pub mod door;
-pub mod perf;
-pub mod pointer;
-pub mod shell;
+pub(crate) mod perf;
+pub(crate) mod pointer;
+pub(crate) mod shell;
 pub mod sys;
-pub mod turn;
+pub(crate) mod turn;

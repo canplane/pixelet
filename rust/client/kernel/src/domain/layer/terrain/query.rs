@@ -81,22 +81,6 @@ impl TileCache<TerrainTile> {
         }
     }
 
-    /// `relief` over `node`'s cells at `cell`, its line walked (`walk_line`).
-    pub fn relief_walked(
-        &self,
-        lines: &mut Lines,
-        place: &mut Lookup,
-        node: Node<2>,
-        cell: Zoom,
-    ) -> Answer<Bounds> {
-        self.relief(
-            &self.walk_line(lines, node, cell),
-            place,
-            node,
-            [cell, cell],
-        )
-    }
-
     /// `bound`, its line walked (`walk_line`): a walk in key order pays one
     /// look-up a node.
     pub fn bound_walked(

@@ -103,7 +103,7 @@ pub fn dist(a: &G4326, b: &G4326) -> f64 {
     2.0 * EARTH_RADIUS_M * libm::atan2(h.sqrt(), (1.0 - h).sqrt())
 }
 
-pub type BBox4326 = [G4326; 2];
+pub(crate) type BBox4326 = [G4326; 2];
 
 pub fn get_tile_bbox(zoom: Zoom, tile: [i32; 2]) -> BBox4326 {
     let [min_merc, max_merc] = epsg3857::get_tile_bbox(zoom, tile);

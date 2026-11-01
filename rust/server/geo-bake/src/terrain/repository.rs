@@ -34,7 +34,7 @@ WHERE t.geom && env.e"
 );
 
 /// How far past a tile what is drawn on it can come from: half the widest line.
-pub const HALF_WIDEST_U: f64 = carto_u(WIDEST_LINE) / 2.0;
+pub(crate) const HALF_WIDEST_U: f64 = carto_u(WIDEST_LINE) / 2.0;
 const _: () = assert!(
     HALF_WIDEST_U <= coverage::BAKE_READ_DIST,
     "a tile's rows come from past the bakes' read distance"
@@ -42,7 +42,7 @@ const _: () = assert!(
 
 /// A tile's bbox grown by `HALF_WIDEST_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
-pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
+pub(crate) fn drawn_from([min, max]: BBox3857) -> BBox3857 {
     let r = merc_from_u(HALF_WIDEST_U);
     [
         [min[0] - r, min[1] - r, min[2]],
@@ -94,7 +94,7 @@ pub const READS: [&str; 4] = [
     COAST_SQL,
 ];
 
-pub struct BuildingRow {
+pub(crate) struct BuildingRow {
     pub gers_id: String,
     /// The whole source's, before a tile clips it or its parts are split.
     pub way_area: f64,
@@ -103,7 +103,7 @@ pub struct BuildingRow {
     pub geom_wkb: Box<[u8]>,
 }
 
-pub struct BaseRow {
+pub(crate) struct BaseRow {
     /// Which table: "land_use", "water", "land" or "infrastructure".
     pub src: String,
     pub gers_id: String,
@@ -114,17 +114,17 @@ pub struct BaseRow {
     pub geom_wkb: Box<[u8]>,
 }
 
-pub struct CoastRow {
+pub(crate) struct CoastRow {
     pub geom_wkb: Box<[u8]>,
     pub covers_tile: bool,
 }
 
 pub struct TileSource {
-    pub ele: Vec<i16>,
-    pub building_rows: Vec<BuildingRow>,
+    pub(crate) ele: Vec<i16>,
+    pub(crate) building_rows: Vec<BuildingRow>,
     pub parts: Vec<Part>,
-    pub base_rows: Vec<BaseRow>,
-    pub coast_rows: Vec<CoastRow>,
+    pub(crate) base_rows: Vec<BaseRow>,
+    pub(crate) coast_rows: Vec<CoastRow>,
 }
 
 /// Prepared once per connection: re-planning spent ~34 ms of a ~44 ms
@@ -158,11 +158,11 @@ impl TerrainRepository {
     }
 
     /// A leaf tile's elevation grid.
-    pub fn ele(&self, client: &mut Client, tile: [i32; 2]) -> Result<Vec<i16>, postgres::Error> {
+    pub(crate) fn ele(&self, client: &mut Client, tile: [i32; 2]) -> Result<Vec<i16>, postgres::Error> {
         self.raster.tile_grid(client, tile)
     }
 
-    pub fn fetch_tile_src(
+    pub(crate) fn fetch_tile_src(
         &self,
         client: &mut Client,
         tile: [i32; 2],

@@ -34,7 +34,6 @@
     clippy::absolute_paths,
     unused_imports,
     dead_code,
-    unreachable_pub,
     reason = "generated from the spec"
 )]
 

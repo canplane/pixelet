@@ -171,7 +171,7 @@ impl NodeSlot {
         self.0
     }
 
-    pub const fn of_word(w: u32) -> NodeSlot {
+    pub(crate) const fn of_word(w: u32) -> NodeSlot {
         NodeSlot(w)
     }
 
@@ -403,7 +403,7 @@ pub fn palette_indices(
 /// The node is for the layers under what is placed to answer.
 pub const UNDER: u32 = 0;
 /// Something placed under the node may fill it: split it.
-pub const SPLIT: u32 = 1;
+pub(crate) const SPLIT: u32 = 1;
 /// What is placed is the cell's asset (`Over::asset`), filling `Over::fill` of
 /// its cube.
 pub const CELL: u32 = 2;

@@ -56,12 +56,12 @@ pub const fn val(asset: u32) -> u32 {
 
 /// A bound as a word, its lowest in the low half and its highest in the
 /// high, each an i16: the ground's, a level's entry (`ground::Bounds`).
-pub fn bound_word([lo, hi]: [i32; 2]) -> i32 {
+pub(crate) fn bound_word([lo, hi]: [i32; 2]) -> i32 {
     lo & 0xffff | hi << 16
 }
 
 /// `bound_word`'s lowest and highest.
-pub fn bound_of(w: i32) -> [i32; 2] {
+pub(crate) fn bound_of(w: i32) -> [i32; 2] {
     [w << 16 >> 16, w >> 16]
 }
 
@@ -72,19 +72,19 @@ pub fn bound_of(w: i32) -> [i32; 2] {
 /// and z's two in the second. Conservative: what the node holds lies in it,
 /// a box wider only splits more. A ray through the node outside it meets
 /// nothing there (pxl-spec-core cast). The world asks no axis apart.
-pub type BoxWords = [u32; 2];
-pub const BOX_BITS: u32 = 10;
+pub(crate) type BoxWords = [u32; 2];
+pub(crate) const BOX_BITS: u32 = 10;
 /// The steps of a box's axis: its node's side over them, `2^BOX_BITS`.
-pub const BOX_STEPS: u32 = 1 << BOX_BITS;
+pub(crate) const BOX_STEPS: u32 = 1 << BOX_BITS;
 pub const BOX_WHOLE: BoxWords = box_word([0; 3], [BOX_STEPS; 3]);
 /// No box: nothing lies in the node, as a join of boxes starts. No
 /// `box_word` sets a bit past `3 · BOX_BITS` of a word.
-pub const BOX_NONE: BoxWords = [u32::MAX; 2];
+pub(crate) const BOX_NONE: BoxWords = [u32::MAX; 2];
 
 /// The box from step `lo` to past step `hi` on each axis, each held to the
 /// node: `lo` in `0..BOX_STEPS`, `hi` in `1..=BOX_STEPS`, at least one past
 /// `lo`.
-pub const fn box_word(lo: [u32; 3], hi: [u32; 3]) -> BoxWords {
+pub(crate) const fn box_word(lo: [u32; 3], hi: [u32; 3]) -> BoxWords {
     let m = BOX_STEPS - 1;
     let mut f = [0u32; 6];
     let mut a = 0;
@@ -108,7 +108,7 @@ pub const fn box_word(lo: [u32; 3], hi: [u32; 3]) -> BoxWords {
 }
 
 /// The least box holding boxes `a` and `b`, each a `box_word` or none.
-pub const fn box_join(a: BoxWords, b: BoxWords) -> BoxWords {
+pub(crate) const fn box_join(a: BoxWords, b: BoxWords) -> BoxWords {
     if a[0] == BOX_NONE[0] && a[1] == BOX_NONE[1] {
         return b;
     }
@@ -129,12 +129,12 @@ pub const fn box_join(a: BoxWords, b: BoxWords) -> BoxWords {
 }
 
 /// Whether `b` is no box (`BOX_NONE`).
-pub const fn box_none(b: BoxWords) -> bool {
+pub(crate) const fn box_none(b: BoxWords) -> bool {
     b[0] == BOX_NONE[0] && b[1] == BOX_NONE[1]
 }
 
 /// `box_word`'s first step and past its last on each axis.
-pub const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
+pub(crate) const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
     let m = BOX_STEPS - 1;
     let f = [
         w[0] & m,
@@ -214,7 +214,7 @@ pub fn cover(ground: u32, kind: u32, over: u32) -> (u32, bool) {
 }
 
 /// `asset` keeping `k` eighths of its cube (`FILL_SHIFT`).
-pub const fn fill_word(asset: u32, k: u32) -> u32 {
+pub(crate) const fn fill_word(asset: u32, k: u32) -> u32 {
     asset & !(((1 << FILL_BITS) - 1) << FILL_SHIFT) | (k % EIGHTHS) << FILL_SHIFT
 }
 

@@ -78,7 +78,7 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
 }
 
 /// A tile's padded samples as a GPU holds them, 2 a word.
-pub const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
+pub(crate) const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
 
 /// What the clip levels bound under a node, each source its own: the ground's
 /// faces, the lowest and highest, and the leaf cells the ways fill, the
@@ -86,7 +86,7 @@ pub const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
 pub type Bounds = [[i32; 2]; 2];
 
 /// Bounds as their two bound words.
-pub fn bounds_word(b: Bounds) -> [i32; 2] {
+pub(crate) fn bounds_word(b: Bounds) -> [i32; 2] {
     [bound_word(b[0]), bound_word(b[1])]
 }
 
@@ -141,7 +141,7 @@ pub fn window(t: f32) -> (i32, f32) {
 }
 
 /// A sample index on the padded grid: past its edge, the edge sample stands.
-pub fn clamp_idx(i: i32) -> u32 {
+pub(crate) fn clamp_idx(i: i32) -> u32 {
     i.clamp(0, ELE_PADDED_SPAN as i32 - 1) as u32
 }
 
@@ -245,14 +245,14 @@ pub fn top(cell: Zoom, h: f32) -> (i32, u32) {
 }
 
 /// Cells of `cell` a leaf cell is tall: one where a cell folds the leaves.
-pub fn leaf_cells(cell: Zoom) -> i32 {
+pub(crate) fn leaf_cells(cell: Zoom) -> i32 {
     1 << (cell as i32 - LEAF_CELL as i32).max(0)
 }
 
 /// The face of a top of `top` cells of `cell`, in leaf cells, as the grid
 /// draws it: past the leaves a leaf height shifted, under them the mean as
 /// its cells round it.
-pub fn face_height(cell: Zoom, top: i32) -> i32 {
+pub(crate) fn face_height(cell: Zoom, top: i32) -> i32 {
     let d = cell as i32 - LEAF_CELL as i32;
     if d >= 0 {
         // Divided by 2^d toward zero, as the grid draws a face under sea
@@ -271,12 +271,12 @@ pub fn face_height(cell: Zoom, top: i32) -> i32 {
 /// cell in cells of `cell`: under it, the ground under its face, which a
 /// cave may take (`Cell::opens`) and a way's bore is lined in
 /// (pxl-spec-core `way::way_cell`).
-pub fn face_cell(cell: Zoom, face: i32) -> i32 {
+pub(crate) fn face_cell(cell: Zoom, face: i32) -> i32 {
     cells(cell, face as f32) - leaf_cells(cell)
 }
 
 /// The bedrock's top under a face at `face` leaf cells, in cells of `cell`.
-pub fn rock(cell: Zoom, face: i32) -> i32 {
+pub(crate) fn rock(cell: Zoom, face: i32) -> i32 {
     cells(cell, bedrock(face) as f32)
 }
 
@@ -284,7 +284,7 @@ pub fn rock(cell: Zoom, face: i32) -> i32 {
 /// and whose top is `top` cells: by depth under its top, `void` over it. A
 /// column coarser than the leaves' is a summary of the faces under it, its
 /// ground its face whole; the wall (`unknown`) is itself all through.
-pub fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
+pub(crate) fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
     if z >= top {
         return VOID;
     }
@@ -632,7 +632,7 @@ const _: () = assert!(
 /// its steps along z they meet, rounded out, and the node whole across.
 /// A node finer than a leaf cell holds it whole; nothing, or a span the node
 /// does not meet, none (`BOX_NONE`).
-pub fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> BoxWords {
+pub(crate) fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> BoxWords {
     if lo >= hi {
         return BOX_NONE;
     }

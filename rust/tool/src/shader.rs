@@ -55,7 +55,7 @@ pub const ENTRIES: [(&str, &str); 34] = [
 
 /// rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as
 /// rust/client/shader/rust-toolchain.toml holds it.
-pub const NIGHTLY: &str = "nightly-2026-04-11";
+pub(crate) const NIGHTLY: &str = "nightly-2026-04-11";
 
 /// The one record of what the entries in `DIR` were made from: the digest
 /// of their sources (`inputs_digest`), beside them. One file for all, since

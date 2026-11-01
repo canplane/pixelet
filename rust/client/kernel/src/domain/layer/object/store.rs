@@ -316,6 +316,7 @@ impl Store {
         }
     }
 
+    #[cfg(test)]
     /// Every leaf, as the columns name it.
     pub fn each(&self, visit: &mut dyn FnMut(&Entry)) {
         self.descend(f64::NAN, &mut |zoom, at, _, leaf| {
@@ -528,6 +529,7 @@ impl Store {
         (held.holds() && held.zoom() == SHARD_ZOOM).then(|| self.tree.data()[held.slot() as usize])
     }
 
+    #[cfg(test)]
     /// Empties the store; the cubes that held anything.
     pub fn clear(&mut self) -> Vec<Aabb> {
         let mut held = Vec::new();
@@ -564,6 +566,7 @@ pub struct Cells<'a> {
 }
 
 impl Cells<'_> {
+    #[cfg(test)]
     /// Every leaf inside the node, or the one over it.
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
         let (zoom, at) = self.node;

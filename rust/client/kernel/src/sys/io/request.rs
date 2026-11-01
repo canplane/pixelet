@@ -307,6 +307,7 @@ impl<S: Serve> RequestScheduler<S> {
         self.most_credits = self.most_credits.max(self.credits);
     }
 
+    #[cfg(test)]
     /// `stream`'s requests waiting for a credit and out on one. For a
     /// report only, never for deciding what to want.
     pub fn stream_counts(&self, stream: Stream) -> (u32, u32) {

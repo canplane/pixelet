@@ -240,7 +240,7 @@ const QUALITY: f32 = 92.0;
 /// How far a top's mean may stay from its palette entry's Carto color, in CIE76 ΔE:
 /// the painted palette entry kept up close, the map still Carto's from afar, where a
 /// textured palette entry is drawn as its tile's mean (pxl-render mesh/paint/palette.rs).
-pub const TOWARD_CARTO: f64 = 20.0;
+pub(crate) const TOWARD_CARTO: f64 = 20.0;
 
 /// sRGB bytes to CIE L*a*b* (D65), through linear light.
 fn lab_of(rgb: [u8; 3]) -> [f64; 3] {

@@ -25,7 +25,8 @@
 // crosses as itself.
 
 // Names as the spec spells them, so one record has one name on every side.
-#![allow(non_camel_case_types, reason = "generated from the spec")]
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(non_camel_case_types, dead_code, reason = "generated from the spec")]
 
 /// Which controller makes the camera's pose.
 ///

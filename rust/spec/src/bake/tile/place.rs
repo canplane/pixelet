@@ -25,7 +25,7 @@ use crate::bake::malformed;
 use crate::param::place::SPREAD_STEPS;
 
 /// Carto's last zoom, openstreetmap.org's: the leaf places through it.
-pub const PLACE_LAST: Zoom = 19;
+pub(crate) const PLACE_LAST: Zoom = 19;
 
 /// An icon's cell: a mark's, which a power of two makes nest.
 const ICON_STEPS: Zoom = MARK_STEPS;
@@ -68,12 +68,12 @@ const _: () = assert!(
 
 /// The most a packet takes, a tile past it failing its bake (`encode`): the
 /// set baked 2026-10-17 holds at most 107 KiB.
-pub const MAX_PKT_BYTES: usize = 1 << 20;
+pub(crate) const MAX_PKT_BYTES: usize = 1 << 20;
 
 /// The longest name a tile holds, in code points; a longer one is cut to end
 /// in an ellipsis. At 32, 99% of the places Overture names in Korea are whole
 /// (their names' 99th percentile, measured 2026-09-25).
-pub const NAME_CHARS: usize = 32;
+pub(crate) const NAME_CHARS: usize = 32;
 
 /// The zoom a category is first drawn from, as a dot or its icon; none for a category
 /// Carto draws no point for.
@@ -110,7 +110,7 @@ pub fn category_of(category: &str) -> u16 {
 
 /// Strings end to end in one buffer, read by index.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Strings {
+pub(crate) struct Strings {
     bytes: String,
     ends: Vec<u32>,
 }

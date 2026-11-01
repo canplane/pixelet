@@ -52,10 +52,6 @@ pub fn on_tick(phase: Phase, step: TickStep, name: u32) -> u32 {
     tick().on_tick(phase as u8, step, name)
 }
 
-pub fn off_tick(id: u32) {
-    tick().off_tick(id);
-}
-
 pub fn run_tick(delta: f64, quota_ms: f64, edge_at: f64) -> TickReport {
     tick().run(delta, quota_ms, edge_at)
 }

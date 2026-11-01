@@ -31,7 +31,7 @@ pub const DIVISION_LEAF: Zoom = 12;
 /// The most a packet takes, a tile past it failing its bake (`encode`): the
 /// set baked 2026-10-17 holds at most 3.28 MiB, z5's, its names' strings
 /// the most of it past the cells' 1 MiB.
-pub const MAX_PKT_BYTES: usize = 4 << 20;
+pub(crate) const MAX_PKT_BYTES: usize = 4 << 20;
 
 /// A cell in no division, and a division with no parent.
 pub const NONE: u32 = u32::MAX;

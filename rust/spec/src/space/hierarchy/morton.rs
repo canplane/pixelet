@@ -117,7 +117,7 @@ pub fn node_of<const D: usize>(key: u128) -> Node<D> {
 /// A key written a character a zoom, coarsest first: the digits that zoom
 /// adds as one octal digit, so a coarser node's name prefixes a finer one's
 /// and the length is the zoom. Written, not built, so a read allocates nothing.
-pub fn write_name<const D: usize>(out: &mut impl fmt::Write, key: u128) -> fmt::Result {
+pub(crate) fn write_name<const D: usize>(out: &mut impl fmt::Write, key: u128) -> fmt::Result {
     let n = 126 - key.trailing_zeros();
     let (mut zoom, mut read) = (0, 0);
     while read < n {

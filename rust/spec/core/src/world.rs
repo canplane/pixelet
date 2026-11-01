@@ -39,7 +39,7 @@ pub struct Inheritance {
 }
 
 /// An `Inheritance`'s words, as a GPU holds one in storage (`Inheritance::words`).
-pub const INHERITANCE_WORDS: u32 = 5;
+pub(crate) const INHERITANCE_WORDS: u32 = 5;
 
 impl Inheritance {
     /// Its words: its caves, what is placed, its shard, where its ground's

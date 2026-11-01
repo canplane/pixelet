@@ -7,7 +7,7 @@ use crate::terrain::CELL_U;
 use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, G3857};
 use serde_json::Value;
 
-pub type Range = [f64; 2];
+pub(crate) type Range = [f64; 2];
 
 fn range_of(rule: &Value) -> Option<Range> {
     let between = rule["between"].as_array().map(|b| {
@@ -25,12 +25,12 @@ fn range_of(rule: &Value) -> Option<Range> {
 
 /// What a ground cell spans of a way `length` long in DB coordinates: a gap
 /// in a flag shorter than that shows on no cell, so the ranges either side are one.
-pub fn cell_of(length: f64) -> f64 {
+pub(crate) fn cell_of(length: f64) -> f64 {
     merc_from_u(CELL_U) / length.max(f64::EPSILON)
 }
 
 /// A column's rules, parsed once: each the range it holds over, and itself.
-pub struct Rules(Vec<(Range, Value)>);
+pub(crate) struct Rules(Vec<(Range, Value)>);
 
 impl Rules {
     /// An unparseable column says nothing.
@@ -78,7 +78,7 @@ impl Rules {
     }
 }
 
-pub fn merged(mut ranges: Vec<Range>, gap: f64) -> Vec<Range> {
+pub(crate) fn merged(mut ranges: Vec<Range>, gap: f64) -> Vec<Range> {
     ranges.sort_by(|x, y| x[0].total_cmp(&y[0]));
     let mut merged: Vec<Range> = Vec::with_capacity(ranges.len());
     for r in ranges {
@@ -91,7 +91,7 @@ pub fn merged(mut ranges: Vec<Range>, gap: f64) -> Vec<Range> {
 }
 
 /// What of `[0, 1]` no range in `less` covers.
-pub fn uncovered(less: &[Range]) -> Vec<Range> {
+pub(crate) fn uncovered(less: &[Range]) -> Vec<Range> {
     let mut out = Vec::new();
     let mut from = 0.0;
     for &[a, b] in less {
@@ -109,7 +109,7 @@ pub fn uncovered(less: &[Range]) -> Vec<Range> {
 /// A line by its length so far at each point. Fractions are of the planar
 /// 3857 length where Overture's are geodesic; over one segment the
 /// difference is far under a cell.
-pub struct Line<'a> {
+pub(crate) struct Line<'a> {
     points: &'a [G3857],
     cum: Vec<f64>,
 }

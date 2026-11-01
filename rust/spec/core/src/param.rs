@@ -15,10 +15,10 @@ pub mod beam {
     pub const NEAR: u32 = 2;
 
     /// The margin a beam ray's radius takes over a cube's, `√6 · s`.
-    pub const RADIUS_SLACK: f32 = 1.01;
+    pub(crate) const RADIUS_SLACK: f32 = 1.01;
 }
 
-pub mod cave {
+pub(crate) mod cave {
     use crate::Zoom;
 
     /// The chance a drawing cube flips one of its eight children, as the
@@ -49,10 +49,10 @@ pub mod cloud {
 
 pub mod ground {
     /// A layer of ground cells under a face, in leaf cells, before the stone.
-    pub const FILLER_DEPTH: i32 = 3;
+    pub(crate) const FILLER_DEPTH: i32 = 3;
 
     /// Sandstone under a sand or beach face's filler, in leaf cells.
-    pub const SANDSTONE_DEPTH: i32 = 2;
+    pub(crate) const SANDSTONE_DEPTH: i32 = 2;
 
     /// The bedrock's top under a face, this far under it or under sea level,
     /// whichever is lower, in leaf cells (ground.rs `bedrock`).
@@ -74,7 +74,7 @@ pub mod raster {
     pub const GROWTH: f32 = 0.25;
 }
 
-pub mod scatter {
+pub(crate) mod scatter {
     /// How far about a cell its turn is voted: a fixed radius (O(1) reads, no
     /// flood fill), enough to outvote a one-cell stairstep jog in a straight run;
     /// it does not resolve curves.
@@ -114,23 +114,23 @@ pub mod way {
     // (`pier_interval`, `place_pier_bent`), of one-cell columns.
 
     /// The farthest past half its width a line is drawn, in its tile's cells.
-    pub const LINE_PAST: f32 = 1.0;
+    pub(crate) const LINE_PAST: f32 = 1.0;
 
     /// A deck's slab under its surface, in ground meters: Arnis's
     /// `DECK_STRUCTURE_DEPTH`.
-    pub const DECK_THICKNESS_M: f32 = 2.0;
+    pub(crate) const DECK_THICKNESS_M: f32 = 2.0;
 
     /// Clear height a deck keeps over a deck under it, in ground meters: Arnis's
     /// `STACKED_DECK_HEADROOM`.
     pub const STACKED_DECK_HEADROOM_M: f32 = 6.0;
 
     /// A beam bridge's bents apart, in ground meters: Arnis's `pier_interval`.
-    pub const BEAM_PILLAR_INTERVAL_M: f32 = 8.0;
+    pub(crate) const BEAM_PILLAR_INTERVAL_M: f32 = 8.0;
 
     /// A beam bridge's bents apart once its half width passes two cells, in
     /// ground meters: Arnis's `pier_interval`.
-    pub const WIDE_BEAM_PIER_INTERVAL_M: f32 = 12.0;
+    pub(crate) const WIDE_BEAM_PIER_INTERVAL_M: f32 = 12.0;
 
     /// Arnis's `place_pillar`: a deck this near the ground rests on it.
-    pub const PIER_MIN_RISE_M: f32 = 2.0;
+    pub(crate) const PIER_MIN_RISE_M: f32 = 2.0;
 }

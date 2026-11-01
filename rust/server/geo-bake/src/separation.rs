@@ -4,9 +4,9 @@
 //! source, and the lines the bake stores for them, solved as Arnis solves
 //! them (`separation/solve.rs`).
 
-pub mod elevation;
+pub(crate) mod elevation;
 pub mod piece;
-pub mod solve;
+pub(crate) mod solve;
 pub mod source;
 pub mod way;
 
@@ -34,13 +34,13 @@ pub struct Solution {
 pub struct Line {
     pub subtype: String,
     pub class: Option<String>,
-    pub width_u: f64,
-    pub form: Form,
+    pub(crate) width_u: f64,
+    pub(crate) form: Form,
     pub points: Vec<G3857>,
     /// The coarsest zoom each point is held at (`coarsest`).
-    pub coarsest: Vec<u8>,
+    pub(crate) coarsest: Vec<u8>,
     /// A bore's clear space over its surface, in leaf cells; none for another form.
-    pub clear: u8,
+    pub(crate) clear: u8,
 }
 
 /// Each point's coarsest zoom (pxl-spec-core `way::coarsest`) on the line
@@ -57,7 +57,7 @@ pub struct Line {
     clippy::absolute_paths,
     reason = "this module's own `way` and `coarsest` take the core's names"
 )]
-pub fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
+pub(crate) fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
     let n = points.len();
@@ -138,7 +138,7 @@ impl Ord for Area {
 #[derive(Clone, Debug, PartialEq)]
 pub struct WayRange {
     pub gers_id: String,
-    pub range: [f64; 2],
+    pub(crate) range: [f64; 2],
 }
 
 /// What a solve reads through: the DB, and each tile's rows.

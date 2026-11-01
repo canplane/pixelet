@@ -19,7 +19,7 @@ pub const MARKER: AssetId = asset_id(Kind::marker, 0);
 
 /// A mark's cell: 16 pixels of the web map's 256-pixel tile, four zooms
 /// finer than the tile, the cell Carto keeps its 14-pixel icons apart in.
-pub const MARK_STEPS: Zoom = 4;
+pub(crate) const MARK_STEPS: Zoom = 4;
 
 /// A marker's cell where the camera grid's cell is at `cell`: its scale on
 /// the grid (`asset/marker.json`).

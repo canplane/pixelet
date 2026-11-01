@@ -47,7 +47,7 @@ impl Frame {
     /// `Stations`): each beam's lattice of stations, at its spacing in
     /// ground meters where the tile lies, and where its corner falls in it;
     /// and the leaf cells its cell spans.
-    pub fn stations(self) -> Stations {
+    pub(crate) fn stations(self) -> Stations {
         let corner = self.corner.map(|v| v / self.cell);
         let step = INTERVAL_M.map(|m| f64::from(m) * u_per_m(self.corner[1]) / self.cell);
         Stations {

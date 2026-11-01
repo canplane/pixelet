@@ -14,10 +14,6 @@ path = "src/lib.rs"
 [dependencies]
 xpute-kit.workspace = true
 
-# What the crate's root does not reach is `pub(crate)` or narrower.
-[lints.rust]
-unreachable_pub = "warn"
-
 # An `as` cast to a pointer is an offset made a pointer; mem.rs (`at`,
 # `Memory::at`) is the one way to do that.
 [lints.clippy]

@@ -16,19 +16,16 @@ mod debug_look;
 #[path = "src/param.rs"]
 #[expect(
     dead_code,
-    unreachable_pub,
-    reason = "the build reads part of what the crate shares with it, public as the crate has it"
+    reason = "the build reads part of what the crate shares with it"
 )]
 mod param;
 #[path = "src/frame/shader/part.rs"]
 #[expect(
     dead_code,
-    unreachable_pub,
-    reason = "the build reads part of what the crate shares with it, public as the crate has it"
+    reason = "the build reads part of what the crate shares with it"
 )]
 mod part;
 #[path = "src/frame/shader/word.rs"]
-#[expect(unreachable_pub, reason = "public as the crate has it")]
 mod word;
 
 fn main() {

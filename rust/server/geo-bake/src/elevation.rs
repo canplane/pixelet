@@ -50,7 +50,7 @@ fn grid_of([min, max]: BBox3857) -> ([f64; 2], f64) {
 
 /// What a tile's grid reads of the raster, `[minx, miny, maxx, maxy]` in
 /// EPSG:3857: its padded samples and the resample's reach past them.
-pub fn tile_reads(tile_bbox: BBox3857) -> [f64; 4] {
+pub(crate) fn tile_reads(tile_bbox: BBox3857) -> [f64; 4] {
     let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
     let (side, margin) = (f64::from(ELE_PADDED_SPAN) * stride, stride * 2.0);
     [
@@ -202,7 +202,7 @@ impl Raster {
 
     /// Leaf `tile`'s padded grid of heights, in leaf cells at its scale
     /// (pxl-spec-core `cells_of_m`, pxl-spec `Frame::per_m`).
-    pub fn tile_grid(
+    pub(crate) fn tile_grid(
         &self,
         client: &mut Client,
         tile: [i32; 2],

@@ -12,7 +12,7 @@ pub struct Probe<'a> {
     pub name: &'a str,
 }
 
-pub async fn connect(url: &str, pool_size: usize, probe: &Probe<'_>) -> Result<Pool, DbError> {
+pub(crate) async fn connect(url: &str, pool_size: usize, probe: &Probe<'_>) -> Result<Pool, DbError> {
     let pg_cfg: tokio_postgres::Config = url.parse()?;
     let mgr = Manager::from_config(
         pg_cfg,

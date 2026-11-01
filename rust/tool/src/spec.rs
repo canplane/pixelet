@@ -6,7 +6,7 @@
 //! their generated code is broken.
 
 pub mod asset;
-pub mod bake;
+pub(crate) mod bake;
 pub mod catalog;
 pub mod cmd;
 pub mod data;
@@ -126,7 +126,7 @@ fn marked(path: &Path) -> bool {
 
 /// Writes every output that differs from the file on disk, or, not `write`,
 /// fails where one does.
-pub fn apply(outputs: Vec<Output>, write: bool) -> Result<(), String> {
+pub(crate) fn apply(outputs: Vec<Output>, write: bool) -> Result<(), String> {
     let outputs = thread::scope(|scope| {
         let handles: Vec<_> = outputs
             .into_iter()
@@ -261,7 +261,7 @@ impl Node {
             .map(|(k, v)| (k.as_str(), v))
     }
 
-    pub fn is_obj(&self) -> bool {
+    pub(crate) fn is_obj(&self) -> bool {
         matches!(self, Node::Obj(_))
     }
 
@@ -272,33 +272,33 @@ impl Node {
         }
     }
 
-    pub fn num(&self) -> Option<f64> {
+    pub(crate) fn num(&self) -> Option<f64> {
         match self {
             Node::Num(n) => Some(*n),
             _ => None,
         }
     }
 
-    pub fn arr(&self) -> Option<&[Node]> {
+    pub(crate) fn arr(&self) -> Option<&[Node]> {
         match self {
             Node::Arr(a) => Some(a),
             _ => None,
         }
     }
 
-    pub fn is_wrapper(&self) -> bool {
+    pub(crate) fn is_wrapper(&self) -> bool {
         self.get("$val").is_some()
     }
 
-    pub fn value(&self) -> &Node {
+    pub(crate) fn value(&self) -> &Node {
         self.get("$val").unwrap_or(self)
     }
 
-    pub fn str_at(&self, key: &str) -> Option<&str> {
+    pub(crate) fn str_at(&self, key: &str) -> Option<&str> {
         self.get(key).and_then(Node::str)
     }
 
-    pub fn lines_at(&self, key: &str) -> Option<Vec<String>> {
+    pub(crate) fn lines_at(&self, key: &str) -> Option<Vec<String>> {
         self.get(key)?.arr().map(|a| {
             a.iter()
                 .filter_map(|l| l.str().map(str::to_string))
@@ -314,7 +314,7 @@ impl Node {
 /// term a number, a list or a packed table above it in the file (its length,
 /// its `WORDS`) or a number in one (`LIMIT.ZOOMS`, `op.DESTROY`), else one
 /// in a file it uses (`used`). So a lane grown moves everything after it.
-pub fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
+pub(crate) fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
     let Node::Obj(entries) = node else {
         return Ok(node);
     };
@@ -428,12 +428,12 @@ pub fn read(path: &str) -> Result<Node, String> {
     read_as(path)
 }
 
-pub fn read_as<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
+pub(crate) fn read_as<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     let text = std::fs::read_to_string(root().join(path)).map_err(|e| format!("{path}: {e}"))?;
     serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
 }
 
-pub fn js_num(n: f64) -> String {
+pub(crate) fn js_num(n: f64) -> String {
     if n == 0.0 {
         return "0".to_string();
     }
@@ -448,46 +448,11 @@ pub fn js_num(n: f64) -> String {
     }
 }
 
-pub fn json_str(s: &str) -> String {
+pub(crate) fn json_str(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
 }
 
-pub fn pretty(n: &Node, indent: &str, out: &mut String) {
-    match n {
-        Node::Null => out.push_str("null"),
-        Node::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-        Node::Num(v) => out.push_str(&js_num(*v)),
-        Node::Str(s) => out.push_str(&json_str(s)),
-        Node::Arr(a) if a.is_empty() => out.push_str("[]"),
-        Node::Obj(o) if o.is_empty() => out.push_str("{}"),
-        Node::Arr(a) => {
-            let inner = format!("{indent}  ");
-            out.push_str("[\n");
-            for (i, v) in a.iter().enumerate() {
-                out.push_str(&inner);
-                pretty(v, &inner, out);
-                out.push_str(if i + 1 < a.len() { ",\n" } else { "\n" });
-            }
-            out.push_str(indent);
-            out.push(']');
-        }
-        Node::Obj(o) => {
-            let inner = format!("{indent}  ");
-            out.push_str("{\n");
-            for (i, (k, v)) in o.iter().enumerate() {
-                out.push_str(&inner);
-                out.push_str(&json_str(k));
-                out.push_str(": ");
-                pretty(v, &inner, out);
-                out.push_str(if i + 1 < o.len() { ",\n" } else { "\n" });
-            }
-            out.push_str(indent);
-            out.push('}');
-        }
-    }
-}
-
-pub fn ts_doc(doc: &[String], indent: &str) -> Vec<String> {
+pub(crate) fn ts_doc(doc: &[String], indent: &str) -> Vec<String> {
     if doc.len() == 1 {
         return vec![format!("{indent}/** {} */", doc[0])];
     }
@@ -510,7 +475,7 @@ pub fn ts_doc(doc: &[String], indent: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn rs_doc(doc: &[String], indent: &str, mark: &str) -> Vec<String> {
+pub(crate) fn rs_doc(doc: &[String], indent: &str, mark: &str) -> Vec<String> {
     doc.iter()
         .map(|l| {
             if l.is_empty() {
@@ -522,7 +487,7 @@ pub fn rs_doc(doc: &[String], indent: &str, mark: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn line_comments(doc: &[String], indent: &str) -> Vec<String> {
+pub(crate) fn line_comments(doc: &[String], indent: &str) -> Vec<String> {
     doc.iter()
         .map(|l| {
             if l.is_empty() {
@@ -534,14 +499,14 @@ pub fn line_comments(doc: &[String], indent: &str) -> Vec<String> {
         .collect()
 }
 
-pub const RS_CASING_NOTE: [&str; 1] =
+pub(crate) const RS_CASING_NOTE: [&str; 1] =
     ["// Names as the spec spells them, so one record has one name on every side."];
 
-pub fn casing_note() -> Vec<String> {
+pub(crate) fn casing_note() -> Vec<String> {
     RS_CASING_NOTE.iter().map(|l| l.to_string()).collect()
 }
 
-pub fn snake(name: &str) -> String {
+pub(crate) fn snake(name: &str) -> String {
     let mut out = String::new();
     let mut prev: Option<char> = None;
     for c in name.chars() {
@@ -556,7 +521,7 @@ pub fn snake(name: &str) -> String {
     out.to_lowercase()
 }
 
-pub fn pascal(name: &str) -> String {
+pub(crate) fn pascal(name: &str) -> String {
     name.to_lowercase()
         .split('_')
         .map(|w| {
@@ -568,7 +533,7 @@ pub fn pascal(name: &str) -> String {
         .collect()
 }
 
-pub fn enum_name(name: &str) -> String {
+pub(crate) fn enum_name(name: &str) -> String {
     let e = pascal(name);
     if let Some(stem) = e.strip_suffix("ies") {
         format!("{stem}y")
@@ -587,7 +552,7 @@ const RS_KEYWORDS: [&str; 50] = [
     "become", "do", "final", "override", "typeof", "unsized",
 ];
 
-pub fn rs_ident(k: &str) -> String {
+pub(crate) fn rs_ident(k: &str) -> String {
     let id: String = k
         .chars()
         .map(|c| {
@@ -607,7 +572,7 @@ pub fn rs_ident(k: &str) -> String {
     }
 }
 
-pub fn packed(hex: &str) -> Result<u32, String> {
+pub(crate) fn packed(hex: &str) -> Result<u32, String> {
     let digits = hex
         .strip_prefix('#')
         .filter(|d| d.len() == 6 && d.chars().all(|c| c.is_ascii_hexdigit()));
@@ -616,11 +581,11 @@ pub fn packed(hex: &str) -> Result<u32, String> {
         .ok_or(format!("color JSON: \"{hex}\" is not #RRGGBB"))
 }
 
-pub fn rgb_literal(hex: &str) -> Result<String, String> {
+pub(crate) fn rgb_literal(hex: &str) -> Result<String, String> {
     Ok(format!("0x{:06x}", packed(hex)?))
 }
 
-pub fn align_star(line: String, indent: &str) -> String {
+pub(crate) fn align_star(line: String, indent: &str) -> String {
     match line
         .strip_prefix(indent)
         .and_then(|rest| rest.strip_prefix('*'))

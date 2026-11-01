@@ -30,7 +30,7 @@ pub struct Kind {
     pub shard: Option<BTreeSet<Tile>>,
 }
 
-pub type Kinds = [Kind; BaseLayer::ALL.len()];
+pub(crate) type Kinds = [Kind; BaseLayer::ALL.len()];
 
 /// Each kind's, in `BaseLayer`'s order.
 pub fn try_kinds(kind: impl FnMut(BaseLayer) -> Result<Kind, String>) -> Result<Kinds, String> {

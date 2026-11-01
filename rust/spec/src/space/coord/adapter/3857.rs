@@ -24,10 +24,10 @@ pub const fn cell_zoom_of(web_zoom: i32) -> Zoom {
 }
 
 /// EPSG:3857 spans 2πR once round.
-pub const U_PER_MERC: f64 = ROUND / (TAU * EARTH_RADIUS_M);
+pub(crate) const U_PER_MERC: f64 = ROUND / (TAU * EARTH_RADIUS_M);
 
 /// sec φ = cosh(y / R). One value for a whole tile is its base's.
-pub fn scale_factor(y_u: f64) -> f64 {
+pub(crate) fn scale_factor(y_u: f64) -> f64 {
     libm::cosh(y_u * TAU / ROUND)
 }
 

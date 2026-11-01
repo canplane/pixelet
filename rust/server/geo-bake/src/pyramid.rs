@@ -92,7 +92,7 @@ pub const MANIFEST: &str = "manifest.json";
 /// hold of these, never of the tiles read and made again. Not published.
 /// A stage keeps each staged tile's beside it, `<name>.fit`. No tile is
 /// named so.
-pub const FITS: &str = "fits";
+pub(crate) const FITS: &str = "fits";
 
 pub struct TileSet {
     pub root: PathBuf,
@@ -150,7 +150,7 @@ impl TileSet {
 
     /// What the set keeps of its tiles (`FITS`), by tile; none for a set
     /// that keeps nothing, one baked before it kept them.
-    pub fn fits(&self) -> Result<Option<FnvHashMap<Tile, String>>, String> {
+    pub(crate) fn fits(&self) -> Result<Option<FnvHashMap<Tile, String>>, String> {
         let path = self.root.join(FITS);
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
@@ -216,7 +216,7 @@ fn remove_file(path: &Path) -> Result<(), String> {
 }
 
 /// None where it has no child: a parent exists exactly where a child does.
-pub fn fold_parent<'a, L: Base>(
+pub(crate) fn fold_parent<'a, L: Base>(
     parent: Tile,
     read: impl Fn(Tile) -> Option<&'a L>,
     absent: &impl Absent<L>,
@@ -234,7 +234,7 @@ pub fn fold_parent<'a, L: Base>(
     })
 }
 
-pub fn fold_stored<L: Base>(
+pub(crate) fn fold_stored<L: Base>(
     set: &TileSet,
     parent: Tile,
     absent: &impl Absent<L>,
@@ -256,7 +256,7 @@ pub struct StagedSet<'a> {
     pub stage: &'a TileSet,
     pub leaf: Zoom,
     pub whole: &'a FnvHashSet<Tile>,
-    pub gone: FnvHashSet<Tile>,
+    pub(crate) gone: FnvHashSet<Tile>,
 }
 
 impl StagedSet<'_> {
@@ -359,7 +359,7 @@ pub fn fold<L: Base>(
 
 /// Every tile its parent marks as no tile (`Base::occupancy`), under
 /// `top`: what a reader never asks for.
-pub fn unasked_tiles<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, String> {
+pub(crate) fn unasked_tiles<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, String> {
     let mut out = FnvHashSet::default();
     let listed = set.by_zoom()?;
     for zoom in top + 1..=L::LEAF {

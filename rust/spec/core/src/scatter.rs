@@ -150,7 +150,7 @@ pub fn meet(a: &Candidate, sa: i32, b: &Candidate, sb: i32) -> bool {
 }
 
 /// The high word of `a × b`, in u32 alone.
-pub const fn mul_hi(a: u32, b: u32) -> u32 {
+pub(crate) const fn mul_hi(a: u32, b: u32) -> u32 {
     let (a0, a1, b0, b1) = (a & 0xffff, a >> 16, b & 0xffff, b >> 16);
     let (low, cross0, cross1) = (a0 * b0, a1 * b0, a0 * b1);
     let carry = (low >> 16) + (cross0 & 0xffff) + (cross1 & 0xffff);
@@ -159,7 +159,7 @@ pub const fn mul_hi(a: u32, b: u32) -> u32 {
 
 /// The variant a candidate draws, its seed's first draw: uniform over the
 /// decor's.
-pub fn variant_of(decor: &Decor, draws: &mut SplitMix32) -> u32 {
+pub(crate) fn variant_of(decor: &Decor, draws: &mut SplitMix32) -> u32 {
     mul_hi(draws.next_u32(), decor.variants)
 }
 
@@ -245,7 +245,7 @@ pub const fn root(decor: &Decor) -> Zoom {
 
 /// Each decor's counts' root (`count`, `root`): where a clip level first reads
 /// its columns.
-pub const ROOTS: [Zoom; DECORS.len()] = {
+pub(crate) const ROOTS: [Zoom; DECORS.len()] = {
     let mut roots = [LEAF_CELL; DECORS.len()];
     let mut k = 0;
     while k < DECORS.len() {
