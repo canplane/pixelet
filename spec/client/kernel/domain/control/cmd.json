@@ -189,7 +189,7 @@
     {
       "name": "FsMinor",
       "$doc": [
-        "The kernel's files: a root mounted, a kept slot truncated."
+        "The kernel's files: a root mounted, a storage file truncated."
       ],
       "format": "hex2",
       "entries": [
@@ -799,7 +799,7 @@
           "name": "SYS_BOOT",
           "val": 4097,
           "$doc": [
-            "The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root."
+            "The kernel's start: what the platform is. Its storage files it opens itself, on the storage root."
           ],
           "pkt": [
             {
@@ -934,7 +934,7 @@
           "name": "FS_TRUNCATED",
           "val": 4866,
           "$doc": [
-            "A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held",
+            "A storage file the kernel refused (the snapshot's `storage_refused`) is empty now, what it held",
             "set aside by the host: the kernel reads it again, and writes it from then on."
           ],
           "pkt": [
@@ -942,7 +942,7 @@
               "name": "slot",
               "type": "u32",
               "$doc": [
-                "host.json's `kept`."
+                "host.json's `storage`."
               ]
             }
           ]
@@ -1448,7 +1448,7 @@
           "list": true,
           "$doc": [
             "Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel",
-            "has read its kept slot, a few turns from boot."
+            "has read its storage file, a few turns from boot."
           ]
         },
         {
@@ -1476,11 +1476,11 @@
           ]
         },
         {
-          "name": "kept_refused",
+          "name": "storage_refused",
           "type": "u32",
           "list": true,
           "$doc": [
-            "The kept slots (host.json's `kept`) whose file is not of the slot's format, or too large for",
+            "The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for",
             "any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says",
             "the slot is empty."
           ]

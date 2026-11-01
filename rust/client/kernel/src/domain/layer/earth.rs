@@ -15,8 +15,8 @@ use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 use xpute_guest::mem::heap::Block;
 
-use crate::domain::layer::kept::{Kept, Offered};
 use crate::domain::layer::tile_cache::TileCache;
+use crate::domain::layer::upload::{Offered, Uploads};
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
@@ -54,17 +54,17 @@ impl Base for Earth {
     }
 
     /// The texels are kept until the GPU has them: every frame's, whose
-    /// slots terrain's bound leaves them (domain/layer/terrain/tile.rs `most_kept`).
+    /// slots terrain's bound leaves them (domain/layer/terrain/tile.rs `most_held`).
     fn keep(record: Option<u32>, block: Block) {
-        kept().keep(record, block, EARTH_SLOTS);
+        uploads().keep(record, block, EARTH_SLOTS);
     }
 }
 
 /// The texels the GPU does not hold yet, off their packets.
-static KEPT: Global<Kept> = Global::new();
+static UPLOADS: Global<Uploads> = Global::new();
 
-fn kept() -> &'static mut Kept {
-    KEPT.get(|| Kept::new(TileCache::<Earth>::SLOTS))
+fn uploads() -> &'static mut Uploads {
+    UPLOADS.get(|| Uploads::new(TileCache::<Earth>::SLOTS))
 }
 
 /// Each waiting packet's texels to `write`, into its frame's layer, while it
@@ -72,9 +72,9 @@ fn kept() -> &'static mut Kept {
 /// to a device since gone is fetched again, as its packet was freed once
 /// sent.
 pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
-    let kept = kept();
+    let uploads = uploads();
     for record in 0..EARTH_SLOTS {
-        if kept.sent_on(record).is_some_and(|s| s != on) {
+        if uploads.sent_on(record).is_some_and(|s| s != on) {
             if let Some(p) = Earth::tile_cache().in_slot(record) {
                 Earth::tile_cache().again(p);
             }
@@ -83,7 +83,7 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     // A packet `receive` read reads again.
     // An Earth packet is wanted until its texels are written, at most a
     // frame's four of them kept.
-    kept.send(
+    uploads.send(
         on,
         &mut |record, pkt| match earth::decode(pkt).map(|texels| write(record, texels)) {
             Err(_) | Ok(true) => Offered::Taken,
@@ -114,7 +114,7 @@ pub fn earth_window(
         let Some(record) = Earth::tile_cache().slot(p) else {
             continue;
         };
-        if kept().sent_on(record) == Some(on) {
+        if uploads().sent_on(record) == Some(on) {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
             layers[(dy * REACH_ACROSS + dx) as usize] = record + 1;

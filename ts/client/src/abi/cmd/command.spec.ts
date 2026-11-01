@@ -22,7 +22,7 @@ export const SENSOR_ERR = 0x120b;
 
 // ---- the host tells the process: its start, its turn, its window and its devices ----
 
-/** The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root. */
+/** The kernel's start: what the platform is. Its storage files it opens itself, on the storage root. */
 export const SYS_BOOT = 0x1001;
 /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
  * phases on what is left of the quota, the fetches within the credits. The turn leaves
@@ -40,7 +40,7 @@ export const SYS_SLEEP = 0x1002;
  * Until it comes nothing is observed: the floor is held at the zoom it names, and no
  * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
 export const FS_MOUNT = 0x1301;
-/** A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
+/** A storage file the kernel refused (the snapshot's `storage_refused`) is empty now, what it held
  * set aside by the host: the kernel reads it again, and writes it from then on. */
 export const FS_TRUNCATED = 0x1302;
 /** A permission as the shell's prompt or the browser's change reported it. */

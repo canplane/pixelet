@@ -12,7 +12,7 @@
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTING_SHIPPED,
-// the table without them, in SETTING's place. A setting whose `kept` is
+// the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
 //
@@ -332,9 +332,9 @@ impl SettingKey {
         }
     }
 
-    /// Written to the settings' kept slot and read from it; one schema.json
-    /// marks `kept` false is held for the session alone.
-    pub fn is_kept(self) -> bool {
+    /// Written to the settings' storage file and read from it; one schema.json
+    /// marks `stored` false is held for the session alone.
+    pub fn is_stored(self) -> bool {
         !matches!(
             self,
             SettingKey::place

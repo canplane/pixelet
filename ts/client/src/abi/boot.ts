@@ -64,7 +64,7 @@ export const watch_boot = listeners.watch;
 const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.SHELL_SNAPSHOT]: (f) => {
     snapshot_posted(f);
-    follow_refused(kernel_snapshot().kept_refused);
+    follow_refused(kernel_snapshot().storage_refused);
   },
   [Command.SENSOR_START]: sensor_start,
   [Command.SENSOR_STOP]: sensor_stop,
@@ -133,7 +133,7 @@ async function open(): Promise<void> {
   });
   bracket.online.watch(set_online);
   bracket.visibility.watch(world_visible);
-  // Before the kernel opens its kept slots, which it does from SYS_BOOT on.
+  // Before the kernel opens its storage files, which it does from SYS_BOOT on.
   migrate();
   const pkt = encode_sys_boot(
     HOST.doorbell,

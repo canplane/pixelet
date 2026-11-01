@@ -12,11 +12,11 @@ use pxl_spec::space::camera::eye::Observation;
 use pxl_spec_core::eye;
 use xpute_guest::global::Global;
 
-use crate::domain::layer::kept::Offered;
 use crate::domain::layer::object::preview;
 use crate::domain::layer::object::store::object;
-use crate::domain::layer::terrain::tile::kept;
+use crate::domain::layer::terrain::tile::uploads;
 use crate::domain::layer::terrain::window::{self, Handed};
+use crate::domain::layer::upload::Offered;
 use crate::domain::layer::Base as _;
 use crate::domain::view::lens;
 use crate::domain::view::setting::store::settings_store;
@@ -95,7 +95,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
             .in_slot(slot)
             .is_some_and(|t| terrain.get(t).is_some() && window::is_tile_wanted(t))
     };
-    kept().send(
+    uploads().send(
         api::device_generation(),
         &mut |slot, pkt| {
             let Some(t) = terrain.in_slot(slot) else {

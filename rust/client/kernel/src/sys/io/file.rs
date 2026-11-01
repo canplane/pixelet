@@ -5,7 +5,7 @@
 //! native test has no host and opens nothing.
 //!
 //! Every file is a root's object by number (host.json `root`): a tile by its
-//! subject, an asset by its load, a kept file by its slot. The number is the
+//! subject, an asset by its load, a storage file by its slot. The number is the
 //! path's one name, in decimal; what it is and where, a version, a URL or a
 //! storage key, is what the host (ts/client/src/driver/namespace/) binds the root to,
 //! `@xpute/host` carrying the open there.
@@ -20,7 +20,7 @@ use base64::Engine;
 use crate::sys::io::failure::Failure;
 use crate::sys::io::fetch;
 use crate::sys::io::host::{answered, sys, turn};
-use crate::sys::io::host_spec::{format, kept, root};
+use crate::sys::io::host_spec::{format, root, storage};
 use crate::sys::io::loader;
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::Credit;
@@ -30,11 +30,11 @@ use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
-/// A file the kernel keeps in storage, by its slot (host.json `kept`).
+/// A file the kernel keeps in storage, by its slot (host.json `storage`).
 /// Storage is opened and written only by one of these, so what a turn can
 /// record there follows from how many.
 ///
-/// A kept file is its slot's format byte (host.json `format`), then what its
+/// A storage file is its slot's format byte (host.json `format`), then what its
 /// owner keeps, the whole in base64 as storage keeps text. One of another
 /// format, not base64, or larger than any heap a device is given (no build
 /// reads it) is refused: read as nothing and never written over,
@@ -42,32 +42,32 @@ use xpute_kit::status::errno::Errno;
 /// empty the slot (`on_emptied`). Which storage a slot is, and what an older
 /// file becomes, the kernel never says.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Kept {
+pub enum StorageFile {
     Settings,
     Objects,
 }
 
-impl Kept {
-    /// In declaration order, as `KEPT` is indexed by `kept as usize`.
-    pub const ALL: [Kept; 2] = [Kept::Settings, Kept::Objects];
+impl StorageFile {
+    /// In declaration order, as `READS` is indexed by `kept as usize`.
+    pub const ALL: [StorageFile; 2] = [StorageFile::Settings, StorageFile::Objects];
 
     /// Its path below STORAGE is this in decimal.
     pub const fn slot(self) -> u32 {
         match self {
-            Kept::Settings => kept::SETTINGS,
-            Kept::Objects => kept::OBJECTS,
+            StorageFile::Settings => storage::SETTINGS,
+            StorageFile::Objects => storage::OBJECTS,
         }
     }
 
     pub const fn format(self) -> u8 {
         match self {
-            Kept::Settings => format::SETTINGS,
-            Kept::Objects => format::OBJECTS,
+            StorageFile::Settings => format::SETTINGS,
+            StorageFile::Objects => format::OBJECTS,
         }
     }
 
-    pub fn of_slot(slot: u32) -> Option<Kept> {
-        Kept::ALL.into_iter().find(|k| k.slot() == slot)
+    pub fn of_slot(slot: u32) -> Option<StorageFile> {
+        StorageFile::ALL.into_iter().find(|k| k.slot() == slot)
     }
 
     fn path(self) -> Path {
@@ -87,13 +87,13 @@ const _: () = assert!(u64::MAX.ilog10() as usize + 1 == PATH_BYTES);
 pub enum Owner {
     Fetch { key: u64, at_ms: f64 },
     Load { key: u64 },
-    Kept(Kept),
+    StorageFile(StorageFile),
     Write,
 }
 
 /// The most files open at once, and slot 0: a credit's each (`open` takes
-/// one), each kept file's read, and a write, opened and closed in one call.
-const OPEN: usize = MAX_CREDITS as usize + Kept::ALL.len() + 2;
+/// one), each storage file's read, and a write, opened and closed in one call.
+const OPEN: usize = MAX_CREDITS as usize + StorageFile::ALL.len() + 2;
 
 static FILES: Global<Files<Owner, OPEN>> = Global::new();
 
@@ -106,18 +106,18 @@ pub fn open(_: Credit, root: u32, number: u64, owner: Owner) -> Option<Fd> {
     Some(files().open(sys()?, root, Path::of(number).as_str(), owner))
 }
 
-/// Opens a kept file to be read whole; what it held is taken with `take_kept`.
-pub fn open_kept(kept: Kept) -> Option<Fd> {
+/// Opens a storage file to be read whole; what it held is taken with `take_storage`.
+pub fn open_storage(file: StorageFile) -> Option<Fd> {
     Some(files().open(
         sys()?,
         root::STORAGE,
-        kept.path().as_str(),
-        Owner::Kept(kept),
+        file.path().as_str(),
+        Owner::StorageFile(file),
     ))
 }
 
-/// What a kept file held.
-pub enum KeptFile {
+/// What a storage file held.
+pub enum StorageRead {
     /// None was kept, or it was empty.
     None,
     /// What its owner kept, past the format byte.
@@ -127,56 +127,56 @@ pub enum KeptFile {
     Unreadable,
 }
 
-/// The slots refused since they were last emptied, by `Kept`.
-static REFUSED: Global<[bool; Kept::ALL.len()]> = Global::new();
+/// The slots refused since they were last emptied, by `StorageFile`.
+static REFUSED: Global<[bool; StorageFile::ALL.len()]> = Global::new();
 
-fn refusals() -> &'static mut [bool; Kept::ALL.len()] {
-    REFUSED.get(|| [false; Kept::ALL.len()])
+fn refusals() -> &'static mut [bool; StorageFile::ALL.len()] {
+    REFUSED.get(|| [false; StorageFile::ALL.len()])
 }
 
 /// Its file is not of its slot's format, or too large for any heap: none of
 /// it was read, and nothing is written over it until the host empties the slot.
-pub fn is_refused(kept: Kept) -> bool {
-    refusals()[kept as usize]
+pub fn is_refused(file: StorageFile) -> bool {
+    refusals()[file as usize]
 }
 
 /// The host set a refused slot's file aside and emptied it: its owner may
 /// open it again and write it.
-pub fn on_emptied(kept: Kept) {
-    refusals()[kept as usize] = false;
+pub fn on_emptied(file: StorageFile) {
+    refusals()[file as usize] = false;
 }
 
-/// A kept file as storage held it, `text`: its owner's bytes where it is of
+/// A storage file as storage held it, `text`: its owner's bytes where it is of
 /// its slot's format, refused where it is anything else.
-pub fn kept_of(kept: Kept, text: &[u8]) -> KeptFile {
+pub fn storage_of(file: StorageFile, text: &[u8]) -> StorageRead {
     if text.is_empty() {
-        return KeptFile::None;
+        return StorageRead::None;
     }
     match BASE64.decode(text) {
-        Ok(mut bytes) if bytes.first() == Some(&kept.format()) => {
+        Ok(mut bytes) if bytes.first() == Some(&file.format()) => {
             bytes.remove(0);
-            KeptFile::Bytes(bytes)
+            StorageRead::Bytes(bytes)
         }
-        _ => refuse(kept),
+        _ => refuse(file),
     }
 }
 
 /// Named to the host in the next snapshot, for it to set aside.
-fn refuse(kept: Kept) -> KeptFile {
-    refusals()[kept as usize] = true;
+fn refuse(file: StorageFile) -> StorageRead {
+    refusals()[file as usize] = true;
     request_world_tick();
-    KeptFile::Unreadable
+    StorageRead::Unreadable
 }
 
-/// The file `kept` holds `bytes`, sealed with its slot's format.
-fn sealed(kept: Kept, bytes: &[u8]) -> Vec<u8> {
+/// The file `file` holds `bytes`, sealed with its slot's format.
+fn sealed(file: StorageFile, bytes: &[u8]) -> Vec<u8> {
     let mut whole = Vec::with_capacity(1 + bytes.len());
-    whole.push(kept.format());
+    whole.push(file.format());
     whole.extend_from_slice(bytes);
     BASE64.encode(whole).into_bytes()
 }
 
-enum KeptRead {
+enum ReadState {
     /// The heap refused its room: opened again after the heap gives some
     /// back, never taken for a file that held nothing. No descriptor is kept.
     Refused(Refused),
@@ -185,87 +185,87 @@ enum KeptRead {
         bytes: Vec<u8>,
         asked: u64,
     },
-    Read(KeptFile),
+    Read(StorageRead),
 }
 
 const _: () = {
     let mut i = 0;
-    while i < Kept::ALL.len() {
-        assert!(Kept::ALL[i] as usize == i);
+    while i < StorageFile::ALL.len() {
+        assert!(StorageFile::ALL[i] as usize == i);
         i += 1;
     }
 };
 
-/// Each kept file's read, at its `Kept`; none where none is waiting.
-static KEPT: Global<[Option<KeptRead>; Kept::ALL.len()]> = Global::new();
+/// Each storage file's read, at its `StorageFile`; none where none is waiting.
+static READS: Global<[Option<ReadState>; StorageFile::ALL.len()]> = Global::new();
 
-fn kept_slot(kept: Kept) -> &'static mut Option<KeptRead> {
-    &mut KEPT.get(|| [const { None }; Kept::ALL.len()])[kept as usize]
+fn read_state(file: StorageFile) -> &'static mut Option<ReadState> {
+    &mut READS.get(|| [const { None }; StorageFile::ALL.len()])[file as usize]
 }
 
-fn kept_read(kept: Kept, read: KeptRead) {
-    *kept_slot(kept) = Some(read);
+fn set_read_state(file: StorageFile, read: ReadState) {
+    *read_state(file) = Some(read);
     request_world_tick();
 }
 
-fn on_kept_opened(kept: Kept, fd: Fd, opened: Opened) {
+fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
     let read = match opened {
         Opened::Bytes(0) => {
             close(fd);
-            KeptRead::Read(KeptFile::None)
+            ReadState::Read(StorageRead::None)
         }
-        // SAFETY: the bytes move into KEPT, their heap buffer with them, and
+        // SAFETY: the bytes move into READS, their heap buffer with them, and
         // are taken no sooner than the turn after this one.
         Opened::Bytes(n) => match unsafe { read_whole(fd, n) } {
-            Ok(bytes) => KeptRead::Reading {
+            Ok(bytes) => ReadState::Reading {
                 bytes,
                 asked: turn(),
             },
-            Err(refused) => KeptRead::Refused(refused),
+            Err(refused) => ReadState::Refused(refused),
         },
         // Only its absence says nothing was kept.
-        Opened::Absent => KeptRead::Read(KeptFile::None),
+        Opened::Absent => ReadState::Read(StorageRead::None),
         Opened::Failed {
             errnum: Errno::EFBIG,
             ..
-        } => KeptRead::Read(refuse(kept)),
-        Opened::Failed { .. } => KeptRead::Read(KeptFile::Unreadable),
+        } => ReadState::Read(refuse(file)),
+        Opened::Failed { .. } => ReadState::Read(StorageRead::Unreadable),
     };
-    kept_read(kept, read);
+    set_read_state(file, read);
 }
 
-/// The host's answer to `open_kept`, for a test with none: `text`, read
+/// The host's answer to `open_storage`, for a test with none: `text`, read
 /// whole and taken from the next turn on, or an open that came to no bytes.
 #[cfg(test)]
-pub fn on_kept_answered(kept: Kept, answer: Result<&[u8], Opened>) {
+pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
     match answer {
-        Ok(text) => kept_read(
-            kept,
-            KeptRead::Reading {
+        Ok(text) => set_read_state(
+            file,
+            ReadState::Reading {
                 bytes: text.to_vec(),
                 asked: turn(),
             },
         ),
-        Err(opened) => on_kept_opened(kept, 0, opened),
+        Err(opened) => on_storage_opened(file, 0, opened),
     }
 }
 
-/// What a kept file held, once it is read whole; None until then.
-pub fn take_kept(kept: Kept) -> Option<KeptFile> {
-    let slot = kept_slot(kept);
+/// What a storage file held, once it is read whole; None until then.
+pub fn take_storage(file: StorageFile) -> Option<StorageRead> {
+    let slot = read_state(file);
     match slot.as_ref()? {
-        &KeptRead::Refused(refused) => {
+        &ReadState::Refused(refused) => {
             if refused.over() {
                 *slot = None;
-                open_kept(kept);
+                open_storage(file);
             }
             None
         }
-        KeptRead::Reading { asked, .. } if turn() <= *asked => None,
+        ReadState::Reading { asked, .. } if turn() <= *asked => None,
         _ => match slot.take()? {
-            KeptRead::Reading { bytes, .. } => Some(kept_of(kept, &bytes)),
-            KeptRead::Read(file) => Some(file),
-            KeptRead::Refused(_) => None,
+            ReadState::Reading { bytes, .. } => Some(storage_of(file, &bytes)),
+            ReadState::Read(file) => Some(file),
+            ReadState::Refused(_) => None,
         },
     }
 }
@@ -340,17 +340,17 @@ pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
     files().held_for(owner)
 }
 
-/// Writes `bytes` whole as what `kept` holds; a refused slot is not written.
-pub fn write_kept(kept: Kept, bytes: &[u8]) {
-    if is_refused(kept) {
+/// Writes `bytes` whole as what `file` holds; a refused slot is not written.
+pub fn write_storage(file: StorageFile, bytes: &[u8]) {
+    if is_refused(file) {
         return;
     }
     if let Some(sys) = sys() {
         files().write_whole(
             sys,
             root::STORAGE,
-            kept.path().as_str(),
-            sealed(kept, bytes),
+            file.path().as_str(),
+            sealed(file, bytes),
             Owner::Write,
         );
     }
@@ -408,7 +408,7 @@ pub fn on_opened(completed: &SysOpened) {
     match owner {
         Owner::Fetch { key, at_ms } => fetch::on_opened(fd, key, at_ms, opened),
         Owner::Load { key } => loader::on_opened(fd, key, opened),
-        Owner::Kept(kept) => on_kept_opened(kept, fd, opened),
+        Owner::StorageFile(file) => on_storage_opened(file, fd, opened),
         Owner::Write => {}
     }
 }

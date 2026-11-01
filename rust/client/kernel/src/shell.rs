@@ -34,7 +34,7 @@ use crate::domain::view::frame::screen::units_per_px_at;
 use crate::domain::view::observation;
 use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
 use crate::pointer;
-use crate::sys::io::file::{self, Kept};
+use crate::sys::io::file::{self, StorageFile};
 use crate::sys::io::request;
 use crate::sys::io::source;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -90,8 +90,8 @@ pub struct Shown {
     previews: ([u32; PREVIEWS_MAX], usize),
     stall: Option<Message>,
     declared: bool,
-    /// The refused kept slots, the first `.1` of them.
-    kept_refused: ([u32; Kept::ALL.len()], usize),
+    /// The refused storage files, the first `.1` of them.
+    storage_refused: ([u32; StorageFile::ALL.len()], usize),
 }
 
 fn shown() -> Shown {
@@ -135,10 +135,13 @@ fn shown() -> Shown {
         previews,
         stall: stall(),
         declared: source::top().is_some(),
-        kept_refused: {
-            let mut refused = ([0; Kept::ALL.len()], 0);
-            for kept in Kept::ALL.into_iter().filter(|&k| file::is_refused(k)) {
-                refused.0[refused.1] = kept.slot();
+        storage_refused: {
+            let mut refused = ([0; StorageFile::ALL.len()], 0);
+            for file in StorageFile::ALL
+                .into_iter()
+                .filter(|&k| file::is_refused(k))
+            {
+                refused.0[refused.1] = file.slot();
                 refused.1 += 1;
             }
             refused
@@ -216,7 +219,7 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         m_per_px: m_per_px(shown.u_per_px, shown.pivot),
         division: &|each| division_parts(shown.division, shown.u_per_px, each),
         previews: &shown.previews.0[..shown.previews.1],
-        kept_refused: &shown.kept_refused.0[..shown.kept_refused.1],
+        storage_refused: &shown.storage_refused.0[..shown.storage_refused.1],
         stall: shown.stall,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);

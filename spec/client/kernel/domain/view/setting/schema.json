@@ -10,7 +10,7 @@
     "differs from its neighbors'; an empty string is no badge. A `dev` setting",
     "is in the kernel's table in every build and offered only under a",
     "development one; the shell's production bundle carries SETTING_SHIPPED,",
-    "the table without them, in SETTING's place. A setting whose `kept` is",
+    "the table without them, in SETTING's place. A setting whose `stored` is",
     "false is the session's alone: the store neither writes it to its kept",
     "slot nor reads it from there, so every session starts it at its default.",
     "",
@@ -162,7 +162,7 @@
       "default": false,
       "section": "world",
       "cost": "low",
-      "kept": false
+      "stored": false
     },
     "tilt_lock": {
       "number": 4,
@@ -187,7 +187,7 @@
       "default": "orbit",
       "options": "CAMERA_MODES",
       "section": "world",
-      "kept": false
+      "stored": false
     },
     "surface_follow": {
       "number": 6,
@@ -207,7 +207,7 @@
       "options": "ORBIT_OBSTACLE_MODES",
       "section": "camera",
       "dev": true,
-      "kept": false
+      "stored": false
     },
     "edge_shade": {
       "number": 8,
@@ -329,7 +329,7 @@
       "options": "SKY_TIMES",
       "section": "debug",
       "dev": true,
-      "kept": false
+      "stored": false
     }
   }
 }

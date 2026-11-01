@@ -32,10 +32,10 @@ use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::domain::layer::kept::Offered;
 use crate::domain::layer::terrain::fixed::{cells_off, fill_off, CELLS_LANE_BYTES, RANGE};
 use crate::domain::layer::terrain::mirror::{mirror, Mirror, Unlaid};
 use crate::domain::layer::terrain::tile;
+use crate::domain::layer::upload::Offered;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refused;
 use crate::sys::io::source::Declared;
@@ -314,7 +314,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     }
     // Per window, whether its zoom moved, and whether it moved at all.
     let (mut moved, mut changed) = ([false; WINDOWS as usize], [lost; WINDOWS as usize]);
-    let kept = tile::kept().cnt();
+    let kept = tile::uploads().cnt();
     let released = wake(w);
     let mut stale = lost
         || released
@@ -379,7 +379,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         let held = w.slots[b as usize];
         if held.is_absent() {
             let t = tile_of(held.cell, held.brick).0;
-            if room > 0 && !tile::kept_for(t) && !terrain.is_again_held(t) {
+            if room > 0 && !tile::held_for(t) && !terrain.is_again_held(t) {
                 terrain.again(t);
                 room -= u32::from(terrain.is_again_held(t));
             }
@@ -574,7 +574,7 @@ pub fn refold() {
 fn due(w: &mut Windows) {
     let terrain = TerrainTile::tile_cache();
     let handable =
-        |t: Tile| tile::kept_for(t) || terrain.get(t).is_some() && terrain.slot(t).is_none();
+        |t: Tile| tile::held_for(t) || terrain.get(t).is_some() && terrain.slot(t).is_none();
     w.due.clear();
     for win in 0..WINDOWS {
         let (cell, Some(first)) = (w.windows[win as usize].cell, first_of(w, win)) else {
@@ -712,7 +712,7 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> b
     let w = windows();
     let wants = |w: &Windows, b: u32| slot_wants(w, tile, b);
     let rest = |w: &Windows| match (0..SLOTS).any(|i| wants(w, i)) {
-        true => Offered::Kept,
+        true => Offered::Uploads,
         false => Offered::Taken,
     };
     if !w.due.iter().any(|&i| wants(w, i)) {

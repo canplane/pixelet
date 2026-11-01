@@ -12,7 +12,7 @@
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTING_SHIPPED,
-// the table without them, in SETTING's place. A setting whose `kept` is
+// the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
 //
@@ -71,7 +71,7 @@ export const SETTING = {
     default: false,
     section: "world",
     cost: "low",
-    kept: false,
+    stored: false,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a view from above is expected to
@@ -95,7 +95,7 @@ export const SETTING = {
       first_person: 1 as number,
     },
     section: "world",
-    kept: false,
+    stored: false,
   },
   /** The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck. */
   surface_follow: {
@@ -117,7 +117,7 @@ export const SETTING = {
     },
     section: "camera",
     dev: true,
-    kept: false,
+    stored: false,
   },
   /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
@@ -248,7 +248,7 @@ export const SETTING = {
     },
     section: "debug",
     dev: true,
-    kept: false,
+    stored: false,
   },
 } as const;
 
@@ -300,7 +300,7 @@ export const SETTING_SHIPPED = {
     default: false,
     section: "world",
     cost: "low",
-    kept: false,
+    stored: false,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a view from above is expected to
@@ -324,7 +324,7 @@ export const SETTING_SHIPPED = {
       first_person: 1 as number,
     },
     section: "world",
-    kept: false,
+    stored: false,
   },
   /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */

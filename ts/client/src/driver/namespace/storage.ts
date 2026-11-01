@@ -1,7 +1,7 @@
 // @pxl/client/driver/namespace/storage.ts
 
 /**
- * STORAGE's backend: the kernel's kept slots (host.json `kept`) in the
+ * STORAGE's backend: the kernel's storage files (host.json `storage`) in the
  * platform's storage. The kernel refuses a file not of its slot's format and
  * writes nothing over it; here is decided each slot's key, what becomes of a
  * refused file, and what carries over from before the slots. Nothing kept is
@@ -20,7 +20,7 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
 import { Command, encode_fs_truncated } from "@/abi/cmd.spec.ts";
-import { kept } from "@/abi/host.spec.ts";
+import { storage } from "@/abi/host.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
@@ -38,12 +38,12 @@ const STORAGE: Storage = {
 };
 
 const KEYS: ReadonlyMap<u32, string> = new Map([
-  [kept.SETTINGS, "pxl:kept:settings"],
-  [kept.OBJECTS, "pxl:kept:objects"],
+  [storage.SETTINGS, "pxl:kept:settings"],
+  [storage.OBJECTS, "pxl:kept:objects"],
 ]);
 
 /** A slot's storage key; none for a number the kernel does not keep. */
-export function kept_key(slot: u32): string | undefined {
+export function storage_key(slot: u32): string | undefined {
   return KEYS.get(slot);
 }
 
@@ -59,8 +59,8 @@ const OBJECTS_BEFORE = `pxl:object:v${OBJECTS_BEFORE_FORMAT}`;
  * they are, so the kernel refuses the JSON and they reset once; the objects
  * with their format put before them. */
 export function migrate(s: Storage = STORAGE): void {
-  carry(s, kept.SETTINGS, SETTINGS_BEFORE, (text) => text);
-  carry(s, kept.OBJECTS, OBJECTS_BEFORE, (text) =>
+  carry(s, storage.SETTINGS, SETTINGS_BEFORE, (text) => text);
+  carry(s, storage.OBJECTS, OBJECTS_BEFORE, (text) =>
     formatted(OBJECTS_BEFORE_FORMAT, text),
   );
 }
@@ -121,7 +121,7 @@ const emptying = new Set<u32>();
 
 /** The kernel told a slot is empty (FS_TRUNCATED), after the completion
  * ring is read: the doorbell refuses a write while it reads. */
-function kept_emptied(slot: u32): void {
+function storage_emptied(slot: u32): void {
   queueMicrotask(() =>
     HOST.send(
       port.SHELL,
@@ -131,11 +131,11 @@ function kept_emptied(slot: u32): void {
   );
 }
 
-/** The snapshot's `kept_refused`: each slot set aside once, and the kernel
+/** The snapshot's `storage_refused`: each slot set aside once, and the kernel
  * told it is empty (`emptied`). */
 export function follow_refused(
   refused: readonly u32[],
-  emptied: (slot: u32) => void = kept_emptied,
+  emptied: (slot: u32) => void = storage_emptied,
   s: Storage = STORAGE,
 ): void {
   for (const slot of emptying) {
@@ -148,21 +148,21 @@ export function follow_refused(
   }
 }
 
-/** STORAGE's object `number` is a kept slot, under the key `kept_key` gives it. */
-function storage_key(number: bigint): string {
-  const key = number <= 0xffff_ffffn ? kept_key(Number(number)) : undefined;
+/** STORAGE's object `number` is a storage file, under the key `storage_key` gives it. */
+function key_of(number: bigint): string {
+  const key = number <= 0xffff_ffffn ? storage_key(Number(number)) : undefined;
   if (key === undefined) throw new FileError(Errno.ENOENT);
   return key;
 }
 
 /** STORAGE's object `number`, whole; ENOENT where nothing is kept. */
 export function open_storage(number: bigint): U8Array {
-  const value = STORAGE.get(storage_key(number));
+  const value = STORAGE.get(key_of(number));
   if (value === null) throw new FileError(Errno.ENOENT);
   return te.encode(value);
 }
 
 /** What the kernel wrote to STORAGE's object `number`, kept whole. */
 export function commit_storage(number: bigint, bytes: U8Array): void {
-  STORAGE.set(storage_key(number), td.decode(bytes));
+  STORAGE.set(key_of(number), td.decode(bytes));
 }

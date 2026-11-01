@@ -184,7 +184,7 @@ export interface Snapshot {
   /** The pointer is over a scene marker a tap would act on with the tool held: a place to go to, or a pin to erase or draft. */
   over_marker: boolean;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
-   * has read its kept slot, a few turns from boot. */
+   * has read its storage file, a few turns from boot. */
   settings: u32[];
   /** The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`). */
   m_per_px: f64;
@@ -193,10 +193,10 @@ export interface Snapshot {
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
-  /** The kept slots (host.json's `kept`) whose file is not of the slot's format, or too large for
+  /** The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for
    * any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says
    * the slot is empty. */
-  kept_refused: u32[];
+  storage_refused: u32[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
   stall: Message | null;
 }
@@ -217,7 +217,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     m_per_px: b.at(11).get<f64>(),
     division: list(b.at_branch(12), read_division_part),
     previews: Array.from(b.at(13).get<U32Array>()),
-    kept_refused: Array.from(b.at(14).get<U32Array>()),
+    storage_refused: Array.from(b.at(14).get<U32Array>()),
     stall: b.at(15).get<Message | null>(),
   };
 }
@@ -469,7 +469,7 @@ export function encode_fs_mount(
 
 /** Command.FS_TRUNCATED's packet, written in place into `to`.
  *
- * @param slot host.json's `kept`. */
+ * @param slot host.json's `storage`. */
 export function encode_fs_truncated(to: PacketRoom, slot: u32): PacketWriter {
   return to.writer(1).u32(slot);
 }

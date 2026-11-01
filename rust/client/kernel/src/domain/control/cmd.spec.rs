@@ -156,7 +156,7 @@ impl SensorMinor {
     }
 }
 
-/// The kernel's files: a root mounted, a kept slot truncated.
+/// The kernel's files: a root mounted, a storage file truncated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum FsMinor {
@@ -624,7 +624,7 @@ pub enum Command {
     SENSOR_ERR = 0x120b,
 
     // ---- the host tells the process: its start, its turn, its window and its devices ----
-    /// The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root.
+    /// The kernel's start: what the platform is. Its storage files it opens itself, on the storage root.
     SYS_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
@@ -642,7 +642,7 @@ pub enum Command {
     /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
     FS_MOUNT = 0x1301,
-    /// A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
+    /// A storage file the kernel refused (the snapshot's `storage_refused`) is empty now, what it held
     /// set aside by the host: the kernel reads it again, and writes it from then on.
     FS_TRUNCATED = 0x1302,
     /// A permission as the shell's prompt or the browser's change reported it.
@@ -777,7 +777,7 @@ pub struct Snapshot<'a> {
     /// The pointer is over a scene marker a tap would act on with the tool held: a place to go to, or a pin to erase or draft.
     pub over_marker: bool,
     /// Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
-    /// has read its kept slot, a few turns from boot.
+    /// has read its storage file, a few turns from boot.
     pub settings: &'a [u32],
     /// The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
     pub m_per_px: f64,
@@ -786,10 +786,10 @@ pub struct Snapshot<'a> {
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
-    /// The kept slots (host.json's `kept`) whose file is not of the slot's format, or too large for
+    /// The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for
     /// any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says
     /// the slot is empty.
-    pub kept_refused: &'a [u32],
+    pub storage_refused: &'a [u32],
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say.
     pub stall: Option<Message>,
 }
@@ -819,7 +819,7 @@ impl Snapshot<'_> {
             });
         });
         w.u32_array(Some(self.previews));
-        w.u32_array(Some(self.kept_refused));
+        w.u32_array(Some(self.storage_refused));
         w.u32(self.stall.map(|m| m as u32));
     }
 }
@@ -1200,7 +1200,7 @@ impl<'a> FsMount<'a> {
 /// Command::FS_TRUNCATED's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct FsTruncated {
-    /// host.json's `kept`.
+    /// host.json's `storage`.
     pub slot: u32,
 }
 

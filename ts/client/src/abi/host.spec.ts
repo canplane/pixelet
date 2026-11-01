@@ -15,7 +15,7 @@ import * as LAYOUT_ANSWER from "./host/layout_answer.spec.ts";
 import * as LINE from "./host/line.spec.ts";
 import * as RASTER from "./host/raster.spec.ts";
 import * as root from "./host/root.spec.ts";
-import * as kept from "./host/kept.spec.ts";
+import * as storage from "./host/storage.spec.ts";
 import * as format from "./host/format.spec.ts";
 
 /** The stream's range, laid out by the kernel's map. */
@@ -60,7 +60,7 @@ export const CATALOG: u32 = 0 as number;
 
 /** The files the kernel keeps below STORAGE, by slot. What a slot holds is its
  * owner's, written whole, its slot's `format` first (pxl-kernel sys/io/file.rs). */
-export { kept };
+export { storage };
 
 /** Each slot's format, the first byte of what it holds. The kernel reads a file of its
  * slot's format and refuses any other, reading none of it and never writing over it, as

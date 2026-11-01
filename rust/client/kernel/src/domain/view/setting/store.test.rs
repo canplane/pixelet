@@ -6,7 +6,7 @@ use crate::sys::io::host;
 use base64::engine::general_purpose;
 use xpute_kit::status::errno::Errno;
 
-fn kept_of(pairs: &[(u32, u32)]) -> Vec<u8> {
+fn storage_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     let mut bytes = Vec::new();
     for &(number, val) in pairs {
         leb(&mut bytes, number);
@@ -17,7 +17,7 @@ fn kept_of(pairs: &[(u32, u32)]) -> Vec<u8> {
 
 /// The stored form is a contract with storage, which outlives a build.
 #[test]
-fn kept_round_trip() {
+fn stored_round_trip() {
     let mut s = Settings::DEFAULT;
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
     let ao = AoMode::ALL
@@ -32,40 +32,43 @@ fn kept_round_trip() {
             && s.set(SettingKey::ao, ao)
             && s.set(SettingKey::person, person)
     );
-    let kept = s.kept();
-    let back = read_kept(&kept);
+    let kept = s.stored();
+    let back = read_stored(&kept);
     for key in SettingKey::ALL {
         assert_eq!(back.get(key), s.get(key), "{key:?} read back from {kept:?}");
     }
     assert!(
-        Settings::DEFAULT.kept().is_empty(),
+        Settings::DEFAULT.stored().is_empty(),
         "the defaults keep nothing"
     );
 }
 
 #[test]
-fn kept_pair_format() {
+fn stored_pair_format() {
     let ao = AoMode::ALL
         .into_iter()
         .find(|&o| o as u32 != Settings::DEFAULT.get(SettingKey::ao))
         .expect("a second option");
     let mut s = Settings::DEFAULT;
     assert!(s.set(SettingKey::ao, ao as u32));
-    assert_eq!(s.kept(), kept_of(&[(SettingKey::ao as u32, ao as u32)]));
+    assert_eq!(
+        s.stored(),
+        storage_of(&[(SettingKey::ao as u32, ao as u32)])
+    );
 }
 
 #[test]
 fn unknown_stays_default() {
     let unknown = SettingKey::SLOTS as u32 + 1000;
     for kept in [
-        kept_of(&[(SettingKey::ao as u32, 99)]),
-        kept_of(&[(SettingKey::tilt_lock as u32, 2)]),
-        kept_of(&[(unknown, 1)]),
+        storage_of(&[(SettingKey::ao as u32, 99)]),
+        storage_of(&[(SettingKey::tilt_lock as u32, 2)]),
+        storage_of(&[(unknown, 1)]),
         // A pair cut short.
         vec![SettingKey::tilt_lock as u8],
         vec![0x80],
     ] {
-        let back = read_kept(&kept);
+        let back = read_stored(&kept);
         for key in SettingKey::ALL {
             assert_eq!(back.get(key), Settings::DEFAULT.get(key), "{kept:?}");
         }
@@ -75,7 +78,7 @@ fn unknown_stays_default() {
 #[test]
 fn reads_past_unknown_pair() {
     let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
-    let back = read_kept(&kept_of(&[
+    let back = read_stored(&storage_of(&[
         (SettingKey::SLOTS as u32 + 1000, 1),
         (SettingKey::ao as u32, 99),
         (SettingKey::tilt_lock as u32, tilt),
@@ -87,16 +90,16 @@ fn reads_past_unknown_pair() {
     );
 }
 
-/// A setting schema.json marks `kept` false is the session's: it is not in
+/// A setting schema.json marks `stored` false is the session's: it is not in
 /// what is kept, a change to it alone asks for no write, and one found in
 /// the slot reads as its default. A dev one this build does not offer
 /// takes no change at all (`is_offered`), so only the offered are changed.
 #[test]
-fn session_setting_not_kept() {
+fn session_setting_not_stored() {
     let _g = sys::serial();
     let session: Vec<SettingKey> = SettingKey::ALL
         .into_iter()
-        .filter(|k| !k.is_kept())
+        .filter(|k| !k.is_stored())
         .collect();
     assert!(
         session.contains(&SettingKey::place) && session.contains(&SettingKey::camera_mode),
@@ -112,8 +115,8 @@ fn session_setting_not_kept() {
     for &key in &session {
         assert!(s.set(key, other(key)));
     }
-    assert!(s.kept().is_empty(), "nothing of {session:?} is kept");
-    let back = read_kept(&kept_of(
+    assert!(s.stored().is_empty(), "nothing of {session:?} is kept");
+    let back = read_stored(&storage_of(
         &session
             .iter()
             .map(|&key| (key as u32, other(key)))
@@ -121,7 +124,7 @@ fn session_setting_not_kept() {
     ));
     assert_eq!(back, Settings::DEFAULT, "nothing of {session:?} is read");
     open_slot();
-    file::on_kept_answered(Kept::Settings, Err(file::Opened::Absent));
+    file::on_storage_answered(StorageFile::Settings, Err(file::Opened::Absent));
     assert!(settings_load_step());
     for &key in session.iter().filter(|&&k| is_offered(k, other(k))) {
         assert_eq!(settings_store().set_setting(key, other(key)), Some(true));
@@ -135,15 +138,15 @@ fn session_setting_not_kept() {
 /// What storage holds of the slot, as the host hands it over.
 fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     use base64::Engine;
-    let mut bytes = vec![Kept::Settings.format()];
-    bytes.extend(kept_of(pairs));
+    let mut bytes = vec![StorageFile::Settings.format()];
+    bytes.extend(storage_of(pairs));
     general_purpose::URL_SAFE_NO_PAD.encode(bytes).into_bytes()
 }
 
 /// The slot opened at boot, with nothing waiting and nothing to keep.
 fn open_slot() {
-    file::on_emptied(Kept::Settings);
-    while file::take_kept(Kept::Settings).is_some() {}
+    file::on_emptied(StorageFile::Settings);
+    while file::take_storage(StorageFile::Settings).is_some() {}
     settings_open();
     UNKEPT.set(false);
 }
@@ -174,8 +177,8 @@ fn read_before_write() {
         held_after_a_change(),
         "nothing is written before the slot is read"
     );
-    file::on_kept_answered(
-        Kept::Settings,
+    file::on_storage_answered(
+        StorageFile::Settings,
         Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])),
     );
     assert!(!settings_load_step(), "taken from the next turn on");
@@ -192,7 +195,7 @@ fn read_before_write() {
 fn empty_slot_defaults() {
     let _g = sys::serial();
     open_slot();
-    file::on_kept_answered(Kept::Settings, Err(file::Opened::Absent));
+    file::on_storage_answered(StorageFile::Settings, Err(file::Opened::Absent));
     assert!(settings_load_step());
     assert_eq!(*settings_store(), Settings::DEFAULT);
     assert!(!held_after_a_change());
@@ -212,19 +215,19 @@ fn bad_slot_refused() {
         Ok(&br#"{"ao":"screen"}"#[..]),
     ] {
         open_slot();
-        file::on_kept_answered(Kept::Settings, answer);
+        file::on_storage_answered(StorageFile::Settings, answer);
         host::rise();
         assert!(
             settings_load_step() && are_settings_loaded(),
             "the world need not wait on it"
         );
         assert_eq!(*settings_store(), Settings::DEFAULT);
-        assert!(file::is_refused(Kept::Settings));
+        assert!(file::is_refused(StorageFile::Settings));
         assert!(
             held_after_a_change(),
             "a refused slot's change waits for it to be emptied"
         );
-        file::on_emptied(Kept::Settings);
+        file::on_emptied(StorageFile::Settings);
         on_settings_emptied();
         settings_keep_step();
         assert!(!*UNKEPT.get(|| false));
@@ -234,18 +237,18 @@ fn bad_slot_refused() {
 /// One that fails to open otherwise is not the host's to set aside: the
 /// defaults, never written over this session.
 #[test]
-fn unreadable_slot_kept() {
+fn unreadable_slot_stored() {
     let _g = sys::serial();
     open_slot();
-    file::on_kept_answered(
-        Kept::Settings,
+    file::on_storage_answered(
+        StorageFile::Settings,
         Err(file::Opened::Failed {
             errnum: Errno::EIO,
             detail: 0,
         }),
     );
     assert!(settings_load_step());
-    assert!(!file::is_refused(Kept::Settings));
+    assert!(!file::is_refused(StorageFile::Settings));
     assert!(held_after_a_change());
     on_settings_emptied();
     assert!(held_after_a_change());

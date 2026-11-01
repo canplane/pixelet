@@ -1,4 +1,4 @@
-// pxl-kernel/domain/layer/kept.rs
+// pxl-kernel/domain/layer/upload.rs
 
 //! What of a layer's tiles goes to the GPU off the packet it came in: per
 //! frame, the packet the GPU does not hold yet, kept until the turn's stream
@@ -24,20 +24,20 @@ pub enum Offered {
     /// Taken whole: freed.
     Taken,
     /// Taken in part, the rest a later turn's: kept, and the next offered.
-    Kept,
+    Uploads,
     /// The stream ran out: kept, and nothing more offered this turn.
     Full,
 }
 
-pub struct Kept {
+pub struct Uploads {
     frames: Vec<Frame>,
     /// The frames `Waiting`.
     waiting: u32,
 }
 
-impl Kept {
-    pub fn new(frames: u32) -> Kept {
-        Kept {
+impl Uploads {
+    pub fn new(frames: u32) -> Uploads {
+        Uploads {
             frames: vec![Frame::Empty; frames as usize],
             waiting: 0,
         }
@@ -115,7 +115,7 @@ impl Kept {
             }
             match send(record as u32, body(block)) {
                 Offered::Full => full = true,
-                Offered::Kept => {}
+                Offered::Uploads => {}
                 Offered::Taken => {
                     release(Some(block));
                     *frame = Frame::Sent(on);
@@ -127,5 +127,5 @@ impl Kept {
 }
 
 #[cfg(test)]
-#[path = "kept.test.rs"]
+#[path = "upload.test.rs"]
 mod test;

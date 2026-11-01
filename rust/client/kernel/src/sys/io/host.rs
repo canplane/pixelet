@@ -14,7 +14,7 @@ use xpute_guest::ipc::sys::{fd_turn_bytes, Sys};
 use xpute_guest::mem;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::io::file::{Kept, PATH_BYTES};
+use crate::sys::io::file::{StorageFile, PATH_BYTES};
 use crate::sys::io::host_spec::stream;
 use crate::sys::io::param::MAX_CREDITS;
 
@@ -47,9 +47,10 @@ pub fn rise() {
 const FILE_TURN_BYTES: usize = fd_turn_bytes(PATH_BYTES);
 
 /// What the files may record in one turn: each credit's file answered and a
-/// new one opened on it, and each kept file read and written. A hostcall's
+/// new one opened on it, and each storage file read and written. A hostcall's
 /// record lies past what the turn has recorded, in the room left.
-pub const RESERVE: usize = FILE_TURN_BYTES * (2 * MAX_CREDITS as usize + 2 * Kept::ALL.len());
+pub const RESERVE: usize =
+    FILE_TURN_BYTES * (2 * MAX_CREDITS as usize + 2 * StorageFile::ALL.len());
 
 const _: () = assert!(
     RESERVE < stream::BYTES as usize,

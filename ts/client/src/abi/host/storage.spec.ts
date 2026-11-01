@@ -1,4 +1,4 @@
-// @pxl/client/abi/host/kept.spec.ts
+// @pxl/client/abi/host/storage.spec.ts
 //
 // GENERATED from spec/client/kernel/sys/io/host.json
 

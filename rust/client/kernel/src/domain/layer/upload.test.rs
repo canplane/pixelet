@@ -1,4 +1,4 @@
-// pxl-kernel/domain/layer/kept.test.rs
+// pxl-kernel/domain/layer/upload.test.rs
 
 use super::*;
 use xpute_guest::mem::heap::alloc;
@@ -9,7 +9,7 @@ fn block() -> Block {
 
 #[test]
 fn keeps_at_most() {
-    let mut k = Kept::new(4);
+    let mut k = Uploads::new(4);
     for record in 0..3 {
         k.keep(Some(record), block(), 2);
     }
@@ -27,7 +27,7 @@ fn keeps_at_most() {
             if record == 0 {
                 Offered::Taken
             } else {
-                Offered::Kept
+                Offered::Uploads
             }
         },
         &|_| true,
@@ -45,7 +45,7 @@ fn keeps_at_most() {
 
 #[test]
 fn full_stream_frees_unwanted() {
-    let mut k = Kept::new(4);
+    let mut k = Uploads::new(4);
     for record in 0..4 {
         k.keep(Some(record), block(), 4);
     }
@@ -72,7 +72,7 @@ fn full_stream_frees_unwanted() {
 
 #[test]
 fn forgotten_frame_empty() {
-    let mut k = Kept::new(2);
+    let mut k = Uploads::new(2);
     k.keep(Some(0), block(), 2);
     k.forget(0);
     k.forget(1);

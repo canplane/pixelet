@@ -1,6 +1,6 @@
 // pxl-kernel/door/apply/fs.rs
 
-//! FS: the kernel's files: a root mounted, a kept slot truncated.
+//! FS: the kernel's files: a root mounted, a storage file truncated.
 
 use super::State;
 use super::{given, or_refuse, refuse_unless};
@@ -26,18 +26,18 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::FS_TRUNCATED => {
-            use crate::sys::io::file::{self, Kept};
+            use crate::sys::io::file::{self, StorageFile};
             let p = abi::FsTruncated::read(given(pkt)?)?;
-            let kept = or_refuse(
-                Kept::of_slot(p.slot).filter(|&k| file::is_refused(k)),
+            let file = or_refuse(
+                StorageFile::of_slot(p.slot).filter(|&k| file::is_refused(k)),
                 Errno::EINVAL,
             )?;
-            file::on_emptied(kept);
+            file::on_emptied(file);
             // The settings write what they hold from the next keep on; the
             // objects are read again, empty, and saved from then on.
-            match kept {
-                Kept::Settings => store::on_settings_emptied(),
-                Kept::Objects => repository::open(),
+            match file {
+                StorageFile::Settings => store::on_settings_emptied(),
+                StorageFile::Objects => repository::open(),
             }
             Ok(Some(0))
         }

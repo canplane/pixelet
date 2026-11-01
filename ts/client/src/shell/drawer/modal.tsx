@@ -63,7 +63,6 @@ function CubeItem({
   cell: f64;
   onPick: (cube: Cube) => void;
 }) {
-  const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Object, cube });
 
   return (
@@ -92,7 +91,6 @@ function DecorItem({
   cell: f64;
   onPick: (kind: u8) => void;
 }) {
-  const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
@@ -121,7 +119,6 @@ function DecorItem({
 
 /** A temporary way in: one marker, its words not kept yet. */
 function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
-  const { t } = useTranslation();
   const active = useKernel(({ tool: h }) => h.active === ActiveTool.Marker);
 
   return (

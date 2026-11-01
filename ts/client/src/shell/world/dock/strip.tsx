@@ -139,7 +139,6 @@ function SwatchButton({
   cube: Cube;
   gesture: Omit<SizeGesture, "press">;
 }) {
-  const { t } = useTranslation();
   const selected = useInHand({ tool: ActiveTool.Object, cube });
   const ref = useRef<View | null>(null);
   const swatchFlash = useSwatchFlash();
@@ -179,7 +178,6 @@ function SwatchButton({
 }
 
 function DecorIconButton({ kind }: { kind: u8 }) {
-  const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
@@ -208,7 +206,6 @@ function DecorIconButton({ kind }: { kind: u8 }) {
 }
 
 function MarkerButton() {
-  const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Marker });
 
   return (

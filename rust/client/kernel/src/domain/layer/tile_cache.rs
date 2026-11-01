@@ -64,13 +64,13 @@ pub struct TileCache<L: Base> {
     /// The tile each slot holds: the slots' side of `Held::slot`, one
     /// association read both ways — a tile's slot by every reader of a
     /// tile (`slot`, `is_slotted`; domain/layer/earth.rs `earth_window`,
-    /// domain/layer/terrain/tile.rs `kept_for`, domain/layer/terrain/window.rs `voids`),
+    /// domain/layer/terrain/tile.rs `held_for`, domain/layer/terrain/window.rs `voids`),
     /// a slot's tile by the GPU's hand-offs, which walk the slots
     /// (domain/scene/cast.rs `upload`, domain/layer/earth.rs `earth_upload`). Written only
     /// where a slot is taken or given up (`put`, `remove`).
     in_slot: Vec<Option<Tile>>,
     free: Vec<u32>,
-    /// Kept so `ask` allocates nothing.
+    /// Uploads so `ask` allocates nothing.
     going: Vec<Tile>,
     /// Tiles whose answer moved since `take_moved`: held or let go, answered
     /// from above or no longer. A tile's content is fixed by its identity, so

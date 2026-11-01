@@ -17,11 +17,11 @@
 //!
 //! The slots never stop the reads, drawn or not. A body on a credit needs
 //! no other to be decoded (domain/view/demand.rs `admit_arrived`, one a pass at
-//! least), and is then freed or kept. Kept packets are given back only by
+//! least), and is then freed or kept. Uploads packets are given back only by
 //! a drawn frame (domain/scene/cast.rs `upload`, domain/layer/earth.rs `earth_upload`),
 //! so they are bounded apart from it: the Earth's by its frames, terrain's
 //! by the slots less one for the most credits granted and every Earth
-//! frame (domain/layer/terrain/tile.rs `most_kept`), a packet past it, or one no
+//! frame (domain/layer/terrain/tile.rs `most_held`), a packet past it, or one no
 //! window wants a brick of, freed once decoded. The kept thus leave a
 //! slot for every credit, and a body on one finds one: the tile cache,
 //! which the query and the controls read, fills with no frame drawn.

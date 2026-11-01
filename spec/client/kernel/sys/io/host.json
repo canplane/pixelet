@@ -92,7 +92,7 @@
     ],
     "STORAGE": {
       "$val": 256,
-      "$doc": ["The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice."]
+      "$doc": ["The platform's storage; a path is a storage file's number in decimal (`storage`); where the platform holds a slot is the host's choice."]
     },
     "ASSET": {
       "$val": 257,
@@ -118,7 +118,7 @@
       "its row in the asset ingest's table counted from 1 (spec/spec/asset/ingested.json)."
     ]
   },
-  "kept": {
+  "storage": {
     "$type": "u32",
     "$doc": [
       "The files the kernel keeps below STORAGE, by slot. What a slot holds is its",
