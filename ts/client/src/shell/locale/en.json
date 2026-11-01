@@ -340,10 +340,6 @@
       "gpu": {
         "title": "WebGPU couldn’t start.",
         "body": "Check the settings of your browser or device."
-      },
-      "encoding": {
-        "title": "This browser can’t read the map’s compression.",
-        "body": "Update your browser to the latest version or open this in another browser."
       }
     },
     "boot": {

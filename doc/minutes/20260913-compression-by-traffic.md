@@ -317,24 +317,16 @@ a gzip closes it everywhere — zopfli's 5.6 KB is a gzip stream and every stack
 reads one — and that is 30% more bytes than zstd -22, paid by the reader, since
 the bill does not count them. zstd stays.
 
-## 2026-11-01: a browser that does not offer zstd is refused
+## 2026-11-01: zstd stays, and a browser that cannot read it is left as it is
 
-The user's word: the web serves only a browser that reads zstd, as the
-09-22 section said ("pointed at another browser rather than served a second
-copy"); the app decodes its own. The 09-24 section found the second copy made
-and cached all the same, and the Worker unable to refuse, its
-`accept-encoding` the edge's. The refusal runs where the client's own header
-is intact: a WAF custom rule on the zone, ahead of the Worker, blocking
-
-```text
-starts_with(http.request.uri.path, "/tile/")
-and not any(lower(http.request.headers["accept-encoding"][*])[*] contains "zstd")
-```
-
-so no decoded copy is made or cached. The page asks once before anything
-starts, beside WebGPU, as `2b64cec57` settled a browser's checks to be: a
-refused declaration (`/tile/source`) is the browser's answer, and the halt is
-`halt.web.encoding`, the notice that commit took out when the edge still
-served a decoded copy (`ts/app/web/src/encoding.ts`). The app asks with
-`accept-encoding: zstd` and unpacks the body itself
-(`ts/app/native/src/origin.ts`), so the rule never meets it.
+The user's word. zstd stays the baked objects' one encoding: the 09-22 sizes
+put it level with Brotli, it unpacks in half the time, and the app unpacks it
+itself (`ts/app/native/src/origin.ts`), so the 09-24 reason against Brotli,
+OkHttp, no longer decides and none other does. A browser that does not offer
+zstd is not refused: the edge serves it the copy it decodes, as the 09-24
+section found, and that copy's transfer and cache room are accepted. This
+replaces the 09-22 line that such a browser is pointed at another. Refusing
+it would take a WAF rule on the zone, ahead of the Worker, where the client's
+own `accept-encoding` is still intact: a setting outside the tree, which
+would also refuse a capable browser behind a proxy that rewrites the header,
+for a saving the bill does not count.
