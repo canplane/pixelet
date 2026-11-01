@@ -148,6 +148,7 @@ pub fn cast_cs(
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
     if took == Take::Sky {
+        add_cnt(marks, on, tally::SKY, 1);
         write_ray(
             rays,
             id,

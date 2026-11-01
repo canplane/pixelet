@@ -28,11 +28,11 @@ pub mod surface_role {
 /// has returned.
 ///
 /// Its head is HEAD words, past the stream's END what the host writes for the
-/// kernel: the device's block (xpute DEVICE) and the timed spans' read: its
-/// word, then each span's begin and end ticks (gpu/api.rs lays them out and
-/// holds this number to it).
+/// kernel: the device's block (xpute DEVICE) and the timed spans' reads, three
+/// of them (gpu/api.rs `READS`), each its word, then each span's begin and end
+/// ticks (gpu/api.rs lays them out and holds this number to it).
 pub mod stream {
-    pub const HEAD: u32 = 145;
+    pub const HEAD: u32 = 363;
     /// The range's size: the stream, what one turn may send the device, then at
     /// its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
     /// empty one of. A product number, said rather than derived: a turn's uploads

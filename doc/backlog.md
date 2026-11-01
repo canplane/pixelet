@@ -41,17 +41,6 @@ Nothing now.
   7 ms at the p95) are pixels no sample's cell answers; denser samples
   everywhere cost four times the samples for at most the walks' time, so
   only a refine where a cell's samples disagree could pay. Not built.
-- **The spans whose stamps take in another's time.** `air` is stamped over
-  its tables' render passes, whose begin lands before the passes they wait
-  on, and `mark` spans compute and render passes and what runs between;
-  `exposure` was made a compute pass for this, `air` and `mark` not —
-  [20261026-the-air-waits.md](./experiment/20261026-the-air-waits.md).
-- **How much of the light's map a frame casts again.** The ray counts give
-  the whole map's slots; a count of the tiles cast again, under
-  `ray_counts`, would size the P1 item above.
-- **More frames timed on the GPU.** One mapped read-back buffer times about
-  a third of the frames (530 of 1,473 in one run); a ring of three would
-  give the per-kind and brick-frame figures their n.
 - **The stencil and the early depth test on the devices.** Answered from
   the code and the vendors' records (the minutes' "Open"); left to a device
   in hand: the iPhone's hidden-surface removal for the boxes and the

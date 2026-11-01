@@ -73,12 +73,22 @@ const FEAT_WORDS: usize = FEATURE_NAME.len().div_ceil(32);
 const PERIOD_AT: usize = LIMIT_NAME.len() + FEAT_WORDS;
 const DEVICE_WORDS: usize = PERIOD_AT + 3;
 
-/// The head's words past the stream's own: the device's block, the spans'
-/// read's word, then their begin and end ticks, two words a tick.
+/// The head's words past the stream's own: the device's block, then the
+/// spans' reads, `READS` of them, each its word, then the begin and end ticks
+/// of the frame it timed, two words a tick (`read_at`).
 const DEVICE_AT: usize = 1;
-const STAMPS_WORD_AT: usize = DEVICE_AT + DEVICE_WORDS;
-const STAMPS_AT: usize = STAMPS_WORD_AT + 1;
-const HEAD: usize = STAMPS_AT + 2 * 2 * SPANS;
+const READS_AT: usize = DEVICE_AT + DEVICE_WORDS;
+/// The spans' reads on their way at once, each its own mapped buffer: a
+/// frame's read lands a frame or two after it, so with three none waits on
+/// the one before it to be taken.
+pub const READS: usize = 3;
+const READ_WORDS: usize = 1 + 2 * 2 * SPANS;
+const HEAD: usize = READS_AT + READS * READ_WORDS;
+
+/// Read `k`'s word in the head; its ticks follow it.
+const fn read_at(k: usize) -> usize {
+    READS_AT + k * READ_WORDS
+}
 const _: () = assert!(
     HEAD == stream::HEAD as usize,
     "spec/client/render/gpu/api.json's stream HEAD is the head laid out here"
@@ -427,25 +437,29 @@ struct State {
     /// The device's block asked for; read once it is READY.
     asked: bool,
     device: Option<Device>,
-    /// The spans' query set, its resolve buffer and the buffer it is copied
-    /// into and mapped back through, which spans the read in flight timed,
-    /// and their times from the last read in, in ms; past the last span, the
-    /// whole frame's.
-    stamps: Option<(Id, Id, Id)>,
-    stamps_written: u32,
-    /// Whether this frame asked the read: its mapping's ticket is written
-    /// as it is encoded, so a frame dropped whole takes it back
-    /// (`frame_commit`), or no read would be asked again.
-    stamps_asked: bool,
+    /// The spans' query set, its resolve buffer and the buffers it is copied
+    /// into and mapped back through, a read's each; which spans each read
+    /// timed, and the order it was asked in, 0 where none is out, so the
+    /// reads are taken in as they were asked; and their times from the last
+    /// read in, in ms.
+    stamps: Option<(Id, Id, [Id; READS])>,
+    stamps_written: [u32; READS],
+    stamps_out: [u32; READS],
+    stamps_asked_cnt: u32,
+    /// The read this frame asked: its mapping's ticket is written as it is
+    /// encoded, so a frame dropped whole takes it back (`frame_commit`), or
+    /// it would never land.
+    stamps_asked: Option<usize>,
     gpu_ms: [f64; SPANS],
     /// The time the last read's spans ran, ms, those that overlap counted
     /// once: the frame's GPU time, as the spans' sum is not where its passes
     /// overlap; a span whose ticks a pass left unwritten (a pass with no work
     /// may be dropped) adds its own length, not the time since.
     gpu_busy_ms: f64,
-    /// Whether the last frame submitted took a read in: its figures are then
-    /// that read's, and else the read before it, not measured again.
-    gpu_landed: bool,
+    /// The read the last frame submitted took in, where it took one: its
+    /// figures are then that read's, and else the read before it, not
+    /// measured again.
+    gpu_landed: Option<usize>,
     /// The images on their way into textures (`Gpu::image`).
     images: Vec<Arriving>,
     /// The images taken since `take_landed` last ran, on this device.
@@ -505,11 +519,13 @@ pub unsafe fn install(at: u32) -> u32 {
         asked: false,
         device: None,
         stamps: None,
-        stamps_written: 0,
-        stamps_asked: false,
+        stamps_written: [0; READS],
+        stamps_out: [0; READS],
+        stamps_asked_cnt: 0,
+        stamps_asked: None,
         gpu_ms: [0.0; SPANS],
         gpu_busy_ms: 0.0,
-        gpu_landed: false,
+        gpu_landed: None,
         images: Vec::new(),
         landed: Vec::new(),
         generation: 0,
@@ -597,34 +613,56 @@ pub fn device_generation() -> u32 {
     STATE.get(|| None).as_ref().map_or(0, |s| s.generation)
 }
 
-/// The last read's ticks, where its word says they landed: each span's ms, and
-/// the word let go for the next read; whether one landed.
-fn take_stamps(s: &mut State) -> bool {
-    let word = head(STAMPS_WORD_AT);
+/// The ticks of the read asked first of those out, where its word says they
+/// landed: each span's own ms, and the read let go for another frame to
+/// ask; which read landed. One a frame is taken, as one a frame is asked.
+fn take_stamps(s: &mut State) -> Option<usize> {
+    let r = (0..READS)
+        .filter(|&r| s.stamps_out[r] != 0)
+        .min_by_key(|&r| s.stamps_out[r])?;
+    let word = head(read_at(r));
     if *word & DONE == 0 {
-        return false;
+        return None;
     }
-    *word = 0;
+    (*word, s.stamps_out[r]) = (0, 0);
+    let written = s.stamps_written[r];
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
-    let tick = |k: usize| {
-        u64::from(*head(STAMPS_AT + 2 * k)) | u64::from(*head(STAMPS_AT + 2 * k + 1)) << 32
-    };
+    let ticks = read_at(r) + 1;
+    let tick =
+        |k: usize| u64::from(*head(ticks + 2 * k)) | u64::from(*head(ticks + 2 * k + 1)) << 32;
     let mut ran = [(0u64, 0u64); SPANS];
+    for (k, r) in ran.iter_mut().enumerate() {
+        let (b, e) = (tick(2 * k), tick(2 * k + 1));
+        if written & 1 << k != 0 && e >= b {
+            *r = (b, e);
+        }
+    }
+    // A span's own time is its end less the later of its begin and the
+    // latest end before it: a render pass's begin is stamped before the
+    // passes it waits on have finished (a tiled GPU starts its vertex work
+    // early), while its end and a compute pass's begin are not, so the end
+    // before it bounds what it took of their time.
+    let ends = ran;
+    for (k, r) in ran.iter_mut().enumerate() {
+        let (b, e) = *r;
+        let before = ends
+            .iter()
+            .enumerate()
+            .filter(|&(j, &(_, ej))| j != k && ej != 0 && ej < e)
+            .map(|(_, &(_, ej))| ej)
+            .max();
+        r.0 = before.map_or(b, |p| p.clamp(b, e));
+        s.gpu_ms[k] = (r.1 - r.0) as f64 * period_ms;
+    }
+    // The spans' own times by their starts, each run of overlapping ones
+    // counted once.
     let mut cnt = 0;
     for k in 0..SPANS {
-        let (b, e) = (tick(2 * k), tick(2 * k + 1));
-        let written = s.stamps_written & 1 << k != 0 && e >= b;
-        s.gpu_ms[k] = if written {
-            (e - b) as f64 * period_ms
-        } else {
-            0.0
-        };
-        if written {
-            ran[cnt] = (b, e);
+        if ran[k].1 != 0 {
+            ran[cnt] = ran[k];
             cnt += 1;
         }
     }
-    // The spans by their starts, each run of overlapping ones counted once.
     let ran = &mut ran[..cnt];
     ran.sort_unstable();
     let mut busy = 0;
@@ -643,7 +681,7 @@ fn take_stamps(s: &mut State) -> bool {
         busy += re - rb;
     }
     s.gpu_busy_ms = busy as f64 * period_ms;
-    true
+    Some(r)
 }
 
 /// The device went, and every object on it: the handles start over.
@@ -655,7 +693,10 @@ pub fn on_device_lost() {
         s.images.clear();
         s.landed.clear();
         s.generation = s.generation.wrapping_add(1);
-        *head(STAMPS_WORD_AT) = 0;
+        for r in 0..READS {
+            *head(read_at(r)) = 0;
+        }
+        s.stamps_out = [0; READS];
     }
 }
 
@@ -689,7 +730,7 @@ pub fn frame_begin() {
     let s = state();
     s.encoder.begin(&mut s.stream);
     s.in_frame = true;
-    s.stamps_asked = false;
+    s.stamps_asked = None;
 }
 
 /// False where the frame did not fit and nothing of it was recorded: the
@@ -698,8 +739,8 @@ pub fn frame_commit() -> bool {
     let s = state();
     s.in_frame = false;
     let committed = s.encoder.commit(&mut s.stream);
-    if !committed && core::mem::take(&mut s.stamps_asked) {
-        *head(STAMPS_WORD_AT) = 0;
+    if let Some(r) = s.stamps_asked.take().filter(|_| !committed) {
+        (*head(read_at(r)), s.stamps_out[r]) = (0, 0);
     }
     committed
 }
@@ -1431,37 +1472,36 @@ impl Gpu {
     }
 
     /// The frame's encoder, its spans resolved, copied out and mapped back
-    /// where it wrote any and no mapping is still on its way, submitted. One
-    /// mapping at most is on its way, so its ticket need not tell them apart.
-    /// A mapping that landed is taken in first: asking for the next writes its
-    /// ticket over the word that says so. Whether this frame's spans are on
-    /// their way back.
-    pub fn submit_frame(&self, encoder: Id, written: u32) -> bool {
+    /// through a read none is out on, where it wrote any, submitted. The
+    /// read asked first of those out is taken in first, where it landed:
+    /// asking for that one again writes its ticket over the word that says
+    /// so. Which read this frame's spans are on their way back in.
+    pub fn submit_frame(&self, encoder: Id, written: u32) -> Option<usize> {
         let s = self.s();
         s.gpu_landed = take_stamps(s);
-        let stamps_free = *head(STAMPS_WORD_AT) == 0;
-        let asked = stamps_free && written != 0;
-        if let (Some((set, resolve, mapped)), true) = (s.stamps, asked) {
-            let bytes = 2 * SPANS as u32 * 8;
-            call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
-            call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped, 0), bytes);
+        let free = (0..READS).find(|&r| s.stamps_out[r] == 0);
+        let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, written != 0) else {
             s.encoder.submit(&mut s.stream, &[encoder]);
-            s.stamps_written = written;
-            let at = s.at as usize + STAMPS_AT * WORD;
-            // SAFETY: the head's ticks and their word, the host's to write.
-            let (ticks, word) = unsafe {
-                (
-                    core::slice::from_raw_parts_mut(mem::at::<u8>(at), 2 * SPANS * 8),
-                    &mut *mem::at::<u32>(s.at as usize + STAMPS_WORD_AT * WORD),
-                )
-            };
-            call::map_async(&mut s.stream, mapped, 0, ticks, word, 1);
-            s.stamps_asked = true;
-            true
-        } else {
-            s.encoder.submit(&mut s.stream, &[encoder]);
-            false
-        }
+            return None;
+        };
+        let bytes = 2 * SPANS as u32 * 8;
+        call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
+        call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped[r], 0), bytes);
+        s.encoder.submit(&mut s.stream, &[encoder]);
+        s.stamps_written[r] = written;
+        s.stamps_asked_cnt = s.stamps_asked_cnt.wrapping_add(1).max(1);
+        s.stamps_out[r] = s.stamps_asked_cnt;
+        let at = s.at as usize + read_at(r) * WORD;
+        // SAFETY: the head's read: its word and its ticks, the host's to write.
+        let (word, ticks) = unsafe {
+            (
+                &mut *mem::at::<u32>(at),
+                core::slice::from_raw_parts_mut(mem::at::<u8>(at + WORD), 2 * SPANS * 8),
+            )
+        };
+        call::map_async(&mut s.stream, mapped[r], 0, ticks, word, 1);
+        s.stamps_asked = Some(r);
+        Some(r)
     }
 
     /// Configured in the format the device prefers, its alpha premultiplied.
@@ -1486,7 +1526,7 @@ impl Gpu {
     }
 
     /// The spans' query set, two queries a span, the buffer they resolve into
-    /// and the one that is mapped back.
+    /// and those mapped back, a read's each.
     pub fn spans(&self) -> Id {
         let s = self.s();
         let set = made(
@@ -1501,14 +1541,16 @@ impl Gpu {
                 mapped_at_creation: false,
             },
         ));
-        let mapped = made(s.encoder.buffer(
-            &mut s.stream,
-            &encode::BufferDescriptor {
-                size: (2 * SPANS * 8) as u32,
-                usage: BUFFER_USAGE::MAP_READ | BUFFER_USAGE::COPY_DST,
-                mapped_at_creation: false,
-            },
-        ));
+        let mapped = core::array::from_fn(|_| {
+            made(s.encoder.buffer(
+                &mut s.stream,
+                &encode::BufferDescriptor {
+                    size: (2 * SPANS * 8) as u32,
+                    usage: BUFFER_USAGE::MAP_READ | BUFFER_USAGE::COPY_DST,
+                    mapped_at_creation: false,
+                },
+            ))
+        });
         s.stamps = Some((set, resolve, mapped));
         set
     }
@@ -1529,9 +1571,9 @@ impl Gpu {
         self.s().gpu_busy_ms
     }
 
-    /// Whether the frame just submitted took a read in, so its figures were
-    /// measured with it.
-    pub fn has_gpu_landed(&self) -> bool {
+    /// The read the frame just submitted took in, where it took one: its
+    /// figures were measured with it.
+    pub fn gpu_landed(&self) -> Option<usize> {
         self.s().gpu_landed
     }
 

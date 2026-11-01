@@ -496,6 +496,7 @@ pub fn light_cs(
         return;
     }
     if took == Take::Sky {
+        add_cnt(misses, counts(head), tally::SKY, 1);
         // SAFETY: within the map, bounded by its size above.
         unsafe { light.write(slot, pxl_spec_core::light::word(1.0)) };
         return;

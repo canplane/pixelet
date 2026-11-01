@@ -64,7 +64,7 @@ pub const MISS_ARGS_WHOLE: u32 = 3;
 pub const MISS_ARGS_CNT: u32 = 6;
 pub const MISS_ARGS_TALLY: u32 = 7;
 pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + tally::RAYS) as usize;
-pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0];
+pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0, 0];
 
 /// The eye's walk again's words past those: the args what lies about the
 /// faces its hits met is asked by, once a square of them (pxl-shader cast.rs

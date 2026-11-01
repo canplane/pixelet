@@ -749,10 +749,14 @@ impl Atmosphere {
             self.table(ctx, IRRADIANCE, GpuSpanName::air);
             self.baked = true;
         }
+        // Each light's froxels before its table, which reads none of them:
+        // `air` then begins on a compute pass, whose begin waits on what
+        // runs before it, as a render pass's does not (gpu/api.rs
+        // `take_stamps`).
         for (k, table) in [SKY_VIEW, MOON_VIEW].into_iter().enumerate() {
             if self.plan.lights[k] {
-                self.table(ctx, table, GpuSpanName::air);
                 self.froxel(ctx, k);
+                self.table(ctx, table, GpuSpanName::air);
                 drew = true;
             }
         }

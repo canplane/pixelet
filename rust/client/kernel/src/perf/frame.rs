@@ -106,9 +106,9 @@ pub struct FrameSample {
 /// The `ray_counts` setting's counts of one frame, as the renderer hands
 /// them (pxl-render gpu/ray/tally.rs `RayCounts`), in perf.json FRAME's
 /// `rays` group's order: whether the eye cast in full, its pixels and its
-/// lanes; whether the light's map cast, and its lanes (pxl-spec-core
-/// `tally`). The light's slots are its map's, the same every cast, and
-/// left out.
+/// lanes; whether the light's map cast, its slots and its lanes
+/// (pxl-spec-core `tally`). What an observer took, walked and took the sky
+/// for is what it cast again, of its pixels or slots.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RaySample {
@@ -119,13 +119,16 @@ pub struct RaySample {
     pub eye_miss: f64,
     pub eye_took: f64,
     pub eye_walked: f64,
+    pub eye_sky: f64,
     pub eye_boxes: f64,
     pub light_cast: f64,
+    pub light_rays: f64,
     pub light_beam: f64,
     pub light_sample: f64,
     pub light_miss: f64,
     pub light_took: f64,
     pub light_walked: f64,
+    pub light_sky: f64,
     pub light_boxes: f64,
 }
 
@@ -143,13 +146,16 @@ impl RaySample {
             eye_miss: lane(eye, tally::MISS),
             eye_took: lane(eye, tally::TOOK),
             eye_walked: lane(eye, tally::WALKED),
+            eye_sky: lane(eye, tally::SKY),
             eye_boxes: lane(eye, tally::BOXES),
             light_cast: at(light, ray::CAST),
+            light_rays: at(light, ray::RAYS),
             light_beam: lane(light, tally::BEAM),
             light_sample: lane(light, tally::SAMPLE),
             light_miss: lane(light, tally::MISS),
             light_took: lane(light, tally::TOOK),
             light_walked: lane(light, tally::WALKED),
+            light_sky: lane(light, tally::SKY),
             light_boxes: lane(light, tally::BOXES),
         }
     }
@@ -215,11 +221,13 @@ words!(RaySample, FRAME_GROUP::rays,
     eye_cast => 0, eye_rays => FRAME::eye_rays - FRAME::eye_cast,
     eye_beam => FRAME::eye_beam - FRAME::eye_cast, eye_sample => FRAME::eye_sample - FRAME::eye_cast,
     eye_miss => FRAME::eye_miss - FRAME::eye_cast, eye_took => FRAME::eye_took - FRAME::eye_cast,
-    eye_walked => FRAME::eye_walked - FRAME::eye_cast, eye_boxes => FRAME::eye_boxes - FRAME::eye_cast,
-    light_cast => FRAME::light_cast - FRAME::eye_cast, light_beam => FRAME::light_beam - FRAME::eye_cast,
+    eye_walked => FRAME::eye_walked - FRAME::eye_cast, eye_sky => FRAME::eye_sky - FRAME::eye_cast,
+    eye_boxes => FRAME::eye_boxes - FRAME::eye_cast,
+    light_cast => FRAME::light_cast - FRAME::eye_cast, light_rays => FRAME::light_rays - FRAME::eye_cast,
+    light_beam => FRAME::light_beam - FRAME::eye_cast,
     light_sample => FRAME::light_sample - FRAME::eye_cast, light_miss => FRAME::light_miss - FRAME::eye_cast,
     light_took => FRAME::light_took - FRAME::eye_cast, light_walked => FRAME::light_walked - FRAME::eye_cast,
-    light_boxes => FRAME::light_boxes - FRAME::eye_cast,
+    light_sky => FRAME::light_sky - FRAME::eye_cast, light_boxes => FRAME::light_boxes - FRAME::eye_cast,
 );
 
 words!(WorstFrame, WORST::WORDS,

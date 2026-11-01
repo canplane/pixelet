@@ -465,10 +465,10 @@ pub struct Renderer {
     /// The spans' queries (`Gpu::spans`); 0 where the device keeps no
     /// timestamps, and no frame is timed.
     query_set: u32,
-    /// The world's pixels and the number of the frame whose spans' read is
-    /// on its way: one read at most is (`Gpu::submit_frame`).
-    read_px: f64,
-    read_frame: f64,
+    /// The world's pixels and the number of the frame whose spans each read
+    /// on its way timed (`Gpu::submit_frame`).
+    read_px: [f64; api::READS],
+    read_frame: [f64; api::READS],
     pipelines: Pipelines,
     frame_buf: u32,
     frame: Frame,
@@ -605,8 +605,8 @@ impl Renderer {
         let mut r = Renderer {
             align: device.align,
             query_set,
-            read_px: 0.0,
-            read_frame: 0.0,
+            read_px: [0.0; api::READS],
+            read_frame: [0.0; api::READS],
             ghost: pipelines.build_world(g, PIPELINE_GHOST_BOX),
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
@@ -1555,24 +1555,24 @@ impl Renderer {
             .fold(0, |m, (k, _)| m | 1 << k);
         let asked = g.submit_frame(encoder, written);
         release(canvas_view);
-        // The read that landed is the one that was on its way; this frame's
-        // takes its place where one was asked.
-        let gpu_read = q != 0 && g.has_gpu_landed();
-        let (gpu_spans, gpu_busy_ms, gpu_px, gpu_frame) = if gpu_read {
-            (
+        // The read that landed is one that was on its way, of the frame it
+        // timed; this frame's is kept in the read it was asked in.
+        let landed = g.gpu_landed().filter(|_| q != 0);
+        let gpu_read = landed.is_some();
+        let (gpu_spans, gpu_busy_ms, gpu_px, gpu_frame) = match landed {
+            Some(r) => (
                 core::array::from_fn(|k| g.gpu_ms(k as u32)),
                 g.gpu_busy_ms(),
-                self.read_px,
-                self.read_frame,
-            )
-        } else {
-            ([0.0; GPU_SPAN_NAMES], 0.0, 0.0, 0.0)
+                self.read_px[r],
+                self.read_frame[r],
+            ),
+            None => ([0.0; GPU_SPAN_NAMES], 0.0, 0.0, 0.0),
         };
         let frame = DRAWN_FRAMES.get(|| 0.0);
         *frame += 1.0;
-        if asked {
-            self.read_px = f64::from(world.width) * f64::from(world.height);
-            self.read_frame = *frame;
+        if let Some(r) = asked {
+            self.read_px[r] = f64::from(world.width) * f64::from(world.height);
+            self.read_frame[r] = *frame;
         }
         let skipped = !frame_commit();
         if skipped {
