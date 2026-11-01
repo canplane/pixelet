@@ -2,7 +2,7 @@
 
 //! The ground's surface: a cell's top and the asset its face is, read off
 //! the clip levels by the one reading of a column the GPU reads too
-//! (pxl-spec-core `clipmap::ground`), the area's edge laid on it. The
+//! (pxl-spec-core `clipmap::ground`), the wall where it is the wall. The
 //! ground's alone, so a part of the support (`support.rs`), where a walker
 //! starts looking for what it stands on, and read inside the query only:
 //! what a cell holds, a cave, a way, a bridge or what is placed included,

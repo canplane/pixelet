@@ -14,13 +14,12 @@
 //! keeps.
 
 use crate::answer;
-use crate::area;
 use crate::area::Shard;
 use crate::clipmap::{
     self, column_top, handed_at, Bricks, Presence, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT,
     ELE_AT, FILL_BRICK, FILL_CELL, FILL_FIRST, FILL_PLACE, FILL_SHARD, FILL_WORDS, LAID_AT,
-    LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT, PALETTE_AT, ROOT_AT, SPANS_ACROSS, SPANS_AT,
-    SPANS_COLUMNS, SPANS_COLUMN_WORDS,
+    LAID_CELLS, LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT, PALETTE_AT, ROOT_AT, SPANS_ACROSS,
+    SPANS_AT, SPANS_COLUMNS, SPANS_COLUMN_WORDS,
 };
 use crate::{at, ground, way, Zoom};
 
@@ -45,9 +44,10 @@ pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2]
     [at(ground, e) as i32, at(ground, e + 1) as i32]
 }
 
-/// Cell `i` as laid off the brick at `base` (`clipmap::LAID_WORDS`).
+/// Cell `i`'s own palette index as laid off the brick at `base`
+/// (`clipmap::LAID_WORDS`).
 pub fn laid_of(ground: &[u32], base: u32, i: u32) -> u32 {
-    clipmap::laid_at(at(ground, base + LAID_AT + i / 2), i)
+    clipmap::laid_at(at(ground, base + LAID_AT + i / LAID_CELLS), i)
 }
 
 /// The root of the ways' tree off the brick at `base` (`clipmap::ROOT_AT`).
@@ -114,7 +114,7 @@ impl Bricks for LoneBrick<'_> {
     }
     /// Its own palette index four times: what `level` folds reads no palette index.
     fn palette_word(&self, _: u32, _: u32, i: u32) -> u32 {
-        ground::word([laid_of(self.ground, self.base, i) & 0xff; 4])
+        ground::word([laid_of(self.ground, self.base, i); 4])
     }
     fn column(&self, _: u32, _: u32, i: u32) -> u32 {
         column_of(self.ground, self.base, i)
@@ -206,12 +206,25 @@ struct Filling<'a> {
     place: [u32; 2],
 }
 
+impl Filling<'_> {
+    /// Its first cell's word `k` as handed (`FILL_FIRST`).
+    fn first_at(&self, k: u32) -> i32 {
+        at(self.fresh, self.rec + FILL_FIRST + k) as i32
+    }
+}
+
 impl clipmap::Brick for Filling<'_> {
     fn cell(&self) -> u32 {
         self.cell
     }
     fn place(&self) -> [u32; 2] {
         self.place
+    }
+    fn first(&self) -> [i32; 2] {
+        [self.first_at(0), self.first_at(1)]
+    }
+    fn shard(&self) -> Shard {
+        Shard::of_word(at(self.fresh, self.rec + FILL_SHARD))
     }
     fn line(&self, k: u32) -> u32 {
         at(self.fresh, self.rec + LINES_AT + k)
@@ -245,25 +258,15 @@ impl clipmap::Brick for Filling<'_> {
 
 /// Column `[x, y]` of the brick a frame hands `k`-th in `fresh`: its
 /// ground's top (`ground::height`) off its tile's samples, a gone cell's
-/// (its own palette index `UNKNOWN`, past the area) the Earth's at sea level, so it
-/// reads as the Earth (`area::laid`); and, a column of an even `x`, its
-/// cell and the next as laid, the word they share (`clipmap::LAID_WORDS`),
-/// so each word has one writer: its own palette index off its four at the brick's
-/// zoom (`ground::own`), and at a leaf's cells or finer, which of the leaf
-/// cells about its own are past the area (`area::gone_ring`), off the
-/// brick's shard.
+/// (its own palette index `UNKNOWN`, past the area) the Earth's at sea
+/// level; and, a column of an even `x` and `y`, the own palette indices
+/// (`ground::own` of its four at the brick's zoom) of the 2×2 square of
+/// cells from it, the word they share (`clipmap::LAID_WORDS`), so each
+/// word has one writer.
 pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
     let (rec, base, place, cell) = fresh_brick(fresh, k);
-    let (first, shard) = (
-        [
-            at(fresh, rec + FILL_FIRST) as i32,
-            at(fresh, rec + FILL_FIRST + 1) as i32,
-        ],
-        Shard::of_word(at(fresh, rec + FILL_SHARD)),
-    );
     let i = clipmap::idx_of([x, y]);
-    let own = ground::own(at(fresh, rec + PALETTE_AT + i), cell);
-    let top = if own == ground::UNKNOWN {
+    let top = if own_of(fresh, rec, cell, i) == ground::UNKNOWN {
         crate::SEA_LEVEL
     } else {
         ground::height(
@@ -272,31 +275,22 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
         )
     };
     put(ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
-    if x % 2 == 1 {
+    if x % 2 == 1 || y % 2 == 1 {
         return;
     }
-    // The leaf cells gone about each: finer than the leaves, the pair lies
-    // in one leaf cell, whose ring is both's.
-    let gone = |k: u32| {
-        let b = [
-            crate::wrap_idx(cell, first[0] + (x + k) as i32),
-            first[1] + y as i32,
-        ];
-        let s = cell - crate::LEAF_CELL;
-        area::gone_ring(shard, (cell, b), [b[0] >> s, b[1] >> s])
-    };
-    let gone0 = if cell >= crate::LEAF_CELL { gone(0) } else { 0 };
-    let gone1 = if cell == crate::LEAF_CELL {
-        gone(1)
-    } else {
-        gone0
-    };
-    let next = ground::own(at(fresh, rec + PALETTE_AT + i + 1), cell);
-    put(
-        ground,
-        base + LAID_AT + i / 2,
-        clipmap::laid_half(own, gone0) | clipmap::laid_half(next, gone1) << 16,
-    );
+    let mut word = 0;
+    let mut j = 0;
+    while j < LAID_CELLS {
+        word |= own_of(fresh, rec, cell, i + j) << (8 * j);
+        j += 1;
+    }
+    put(ground, base + LAID_AT + i / LAID_CELLS, word);
+}
+
+/// Cell `i`'s own palette index at `cell` (`ground::own`) off its four as
+/// handed in the record at `rec` of a fresh list (`PALETTE_AT`).
+fn own_of(fresh: &[u32], rec: u32, cell: Zoom, i: u32) -> u32 {
+    ground::own(at(fresh, rec + PALETTE_AT + i), cell)
 }
 
 /// Cell `[x, y]`'s four palette indices of the brick a frame hands `k`-th in

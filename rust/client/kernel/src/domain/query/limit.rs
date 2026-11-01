@@ -14,7 +14,7 @@ use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{Cells, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use pxl_spec_core::area::{gone_ring, Area, Shard};
+use pxl_spec_core::area::{is_wall, walls_in, Area, Shard};
 use pxl_spec_core::wrap_idx;
 
 use super::World;
@@ -25,10 +25,8 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec_core::clipmap::Lookup;
 
 impl World<'_> {
-    /// Whether the leaf cell under `at` is the service area's and off its
-    /// edge, the wall's columns: its leaf tile not past the area, nor any of
-    /// the eight leaf cells about it, the rule the fill lays the wall by
-    /// (pxl-spec-core `area::gone_ring`), known before any of its ground
+    /// Whether the leaf column under `at` is the service area's and not the
+    /// wall (pxl-spec-core `area::is_wall`), known before any of its ground
     /// arrives, off its shard's nine, the area's index asked once
     /// (`Shard::at`). A walker comes to the wall's face and stands on none
     /// of it.
@@ -38,10 +36,10 @@ impl World<'_> {
 
     /// Whether `space` may hold an edit: every shard under it read, so a
     /// write stands over what its file held (domain/layer/object/repository.rs
-    /// `holds`); no leaf tile past the service area within a leaf cell of it,
-    /// so none of its columns is the wall or past it, as `within` holds, and
-    /// there `space` over the bedrock and under the ceiling of ground the world
-    /// knows exactly, no tile not yet held (`pxl-spec limit.rs`).
+    /// `holds`); none of its leaf columns the wall (pxl-spec-core
+    /// `area::walls_in`), as `within` holds; and there `space` over the
+    /// bedrock and under the ceiling of ground the world knows exactly, no
+    /// tile not yet held (`pxl-spec limit.rs`).
     /// The bedrock and the ceiling rise with the face, so every column's
     /// hold where the lowest ceiling and the highest bedrock do: the
     /// ground's bound over the nodes holding `space` at its leaf cells, the
@@ -58,11 +56,8 @@ impl World<'_> {
         let (cell, unit) = (GROUND.cell(), units(GROUND.cell()));
         let first = |k: usize| (space.min[k] / unit).floor() as i32;
         let cnt = |k: usize| ((space.max[k] / unit).ceil() as i32 - first(k)).max(1);
-        // The leaf tiles its leaf cells and a cell about them touch, the
-        // area a fact of each: a leaf cell beside one past is the wall.
-        let t = GROUND.tile_cell_shamt();
-        let tiles = |k: usize| (first(k) - 1) >> t..=(first(k) + cnt(k)) >> t;
-        if tiles(1).any(|y| tiles(0).any(|x| past(area, [wrap_idx(LEAF_ZOOM, x), y]))) {
+        let last = |k: usize| first(k) + cnt(k) - 1;
+        if walls_in(area, [[first(0), first(1)], [last(0), last(1)]]) {
             return false;
         }
         let s = (cnt(0).max(cnt(1)) as u64)
@@ -90,15 +85,6 @@ impl World<'_> {
 /// `World::within` against the service area `area`.
 pub(super) fn within_in(area: &impl Area, at: &Q3) -> bool {
     let [x, y] = [i64::from(at[0]), i64::from(at[1])].map(q3::to_real);
-    let leaf = GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0));
-    let (tile, cell) = (leaf.tile().at, leaf.node().1);
-    let node = (LEAF_ZOOM, tile);
-    let shard = Shard::UNKNOWN.at(area, node);
-    !shard.past_leaf(node, tile) && gone_ring(shard, node, cell) == 0
-}
-
-/// Whether the leaf tile `tile` is past `area`, off its shard's nine.
-fn past(area: &impl Area, tile: [i32; 2]) -> bool {
-    let node = (LEAF_ZOOM, tile);
-    Shard::UNKNOWN.at(area, node).past_leaf(node, tile)
+    let (cell, b) = GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0)).node();
+    !is_wall(Shard::UNKNOWN.at(area, (cell, b)), cell, b)
 }

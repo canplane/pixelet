@@ -3,10 +3,10 @@
 //! gpu-portable: where the world's data ends, the service area — the shards
 //! a source serves — and the ground's own rule at its edge (pxl-spec
 //! limit.rs): past it, the Earth's ground, solid to sea level; inside
-//! it, a leaf column with ground beside one past the area is bedrock up to
-//! its own face, so the wall's outer face stands on the area's edge at every
-//! zoom. The area runs on shards' edges, which no node a shard or finer
-//! straddles.
+//! it, a leaf column beside one past the area is the wall (`is_wall`),
+//! bedrock up to its own face, so the wall's outer face stands on the area's
+//! edge at every zoom. The area runs on shards' edges, which no node a
+//! shard or finer straddles.
 
 use crate::{idx_at, wrap_idx as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
 
@@ -100,8 +100,8 @@ pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
 /// no node a shard or finer straddles the area's edge, so it holds for every
 /// node in the shard. Whether the shard is past the area, and whether it and
 /// the eight shards about it are all served, `inside`: then no node in it
-/// is past, nor walled (`is_walled`), nor has a leaf cell gone beside it
-/// (`gone_ring`), which a leaf cell's reach out of the shard ends in the eight.
+/// is past, nor the wall (`is_wall`), whose reach a leaf cell out of the
+/// shard ends in the eight.
 /// `UNKNOWN` coarser than a shard, or before it is asked.
 /// One word: known, then which of the nine shards are served, bit `(dy +
 /// 1)·3 + (dx + 1)` for the shard `dx, dy` from its own; past where its own
@@ -122,7 +122,7 @@ const _: () = assert!(LEAF_ZOOM >= SHARD_ZOOM);
 impl Shard {
     pub const UNKNOWN: Shard = Shard(0);
     /// Known, every one of its nine served: nothing about it is past.
-    pub(crate) const INSIDE: Shard = Shard(SHARD_KNOWN | SHARD_ALL << SHARD_SERVED_SHIFT);
+    pub const INSIDE: Shard = Shard(SHARD_KNOWN | SHARD_ALL << SHARD_SERVED_SHIFT);
 
     /// The node `(zoom, c)`'s, as `self` knows it, else found: its shard's
     /// nine off its entry in the area's index (`nine_at`). Unknown coarser
@@ -173,6 +173,27 @@ impl Shard {
         );
         self.served_bits() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0
     }
+    /// Whether a leaf column among the leaf cells `lo` to `hi`, both held,
+    /// is the wall (`is_wall`), off the nine bits of what `self`, the node
+    /// `(zoom, c)`'s, knows: none in a shard known `inside`. Asked only where
+    /// they and the leaf cells about them lie in the node's shard's nine,
+    /// as every asker's are, the node no wider than a shard and the leaf
+    /// cells in it.
+    pub fn walls(self, (zoom, c): (Zoom, [i32; 2]), lo_hi: [[i32; 2]; 2]) -> bool {
+        if self.inside() {
+            return false;
+        }
+        let s = zoom - SHARD_ZOOM;
+        let own = [c[0] >> s, c[1] >> s];
+        past_about(lo_hi, |q| {
+            let d = [wrap(SHARD_ZOOM, q[0] - own[0]), q[1] - own[1]];
+            debug_assert!(
+                self.is_known() && d[0].abs() <= 1 && d[1].abs() <= 1,
+                "a leaf cell in the node's shard's nine"
+            );
+            self.served_bits() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0
+        })
+    }
     pub const fn word(self) -> u32 {
         self.0
     }
@@ -195,11 +216,30 @@ pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
     }
 }
 
-/// Whether the service area's wall may stand in the node `(zoom, c)` asked
-/// at `cell`: only a leaf's cells or finer are walled, a leaf cell with
-/// ground beside one past the area. A node wider than a shard may hold the
-/// area's edge; one no wider in a shard known `inside` cannot, and else is
-/// asked at its corners a leaf cell out.
+/// The service area's wall, its one rule, which every reader asks on the
+/// CPU and a GPU alike: the column `b` at `cell` is the wall exactly where it
+/// is a leaf's or finer and the leaf cell holding it has a leaf cell beside
+/// it past the area, so the wall is a leaf column thick at every zoom past
+/// the leaves, bedrock (`UNKNOWN`) up to its own face, its outer face on the
+/// area's edge. The area alone says it, off `shard`, the node `(cell, b)`'s
+/// (`Shard::at`): never the brick the column is read off, nor none, nor its
+/// palette index. What a column is read as (`clipmap::ground`), what the
+/// ways' fill writes no way in (`way::Columns::is_walled`), and what
+/// `World::within` and `World::editable` refuse (pxl-kernel
+/// domain/query/limit.rs).
+pub fn is_wall(shard: Shard, cell: Zoom, b: [i32; 2]) -> bool {
+    if cell < LEAF_CELL {
+        return false;
+    }
+    let s = cell - LEAF_CELL;
+    let l = [b[0] >> s, b[1] >> s];
+    shard.walls((cell, b), [l, l])
+}
+
+/// Whether the wall (`is_wall`) may stand in the node `(zoom, c)` asked at
+/// `cell`: one of its columns is the wall, a leaf cell in it or beside it
+/// past the area (`Shard::walls`). A node wider than a shard may hold the
+/// area's edge anywhere.
 pub fn is_walled(shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool {
     if cell < LEAF_CELL {
         return false;
@@ -207,92 +247,43 @@ pub fn is_walled(shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool 
     if zoom < SHARD_ZOOM {
         return true;
     }
-    if shard.inside() {
-        return false;
-    }
-    let leaf = |v: i32| idx_at(zoom, v, LEAF_CELL);
-    let lo = [leaf(c[0]) - 1, leaf(c[1]) - 1];
-    let hi = [leaf(c[0] + 1) + 1, leaf(c[1] + 1) + 1];
-    let past = |l: [i32; 2]| shard.past_leaf((zoom, c), tile_at(LEAF_CELL, l));
-    past(lo) || past([hi[0], lo[1]]) || past([lo[0], hi[1]]) || past(hi)
+    let first = |v: i32| idx_at(zoom, v, LEAF_CELL);
+    let last = |v: i32| (idx_at(zoom, v + 1, LEAF_CELL) - 1).max(first(v));
+    shard.walls(
+        (zoom, c),
+        [[first(c[0]), first(c[1])], [last(c[0]), last(c[1])]],
+    )
 }
 
-/// The eight leaf cells about one, the order a mask of them is in
-/// (`ring`, `gone_ring`): bit `k` the cell `beside(k)` from its own, row by
-/// row, its own never.
-pub const fn beside(k: u32) -> [i32; 2] {
-    let j = if k < 4 { k } else { k + 1 };
-    [(j % 3) as i32 - 1, (j / 3) as i32 - 1]
+/// Whether a leaf column among the leaf cells `lo` to `hi`, both held, is
+/// the wall (`is_wall`), off `area` itself a shard at a time: the leaf
+/// columns of a box any wide.
+pub fn walls_in(area: &impl Area, lo_hi: [[i32; 2]; 2]) -> bool {
+    area.ends() && past_about(lo_hi, |q| nine_at(area, q) & OWN == 0)
 }
 
-/// Which of the eight leaf cells about the leaf cell `l` are past the area
-/// (`beside`'s bits), off the nine bits of `shard`, the shard of `node`,
-/// none past in a shard known `inside`: what the fill lays a cell's edge by
-/// once (pxl-spec-core `fill::heights`), for every read of it after.
-///
-/// Gone is past, one fact two ways: a cell whose palette index is `UNKNOWN`
-/// (nothing known) is exactly one past the area. The bake writes `unknown`
-/// only for tiles its coverage does not meet (pxl-geo-bake
-/// terrain/absent.rs `Absence::at`), its coverage is the served shards, and
-/// no clip level's cell is coarser than a shard, so none straddles the area's
-/// edge. So the leaf cells about one are never read to know them gone:
-/// each is past or not off the shard's bits (`Shard::past_leaf`), and a
-/// cell's own palette index answers its own. They lie a leaf cell past `l`, inside
-/// its shard's nine wherever `node`'s shard is `l`'s, as a leaf clip level's
-/// brick is, a node far narrower than a shard.
-pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
-    if shard.inside() {
-        return 0;
+/// Whether a leaf cell among `lo` to `hi`, both held, X counted on across
+/// the world's seam, or beside one lies in a shard `past` says is past the
+/// area, `past` asked of each shard's cell at `SHARD_ZOOM` once, X as the
+/// world names it. A leaf cell past the area has one beside it past too,
+/// its shard many leaf cells a side, so its own is asked with the eight
+/// about it: the wall's rule (`is_wall`) over every leaf column in the box.
+fn past_about([lo, hi]: [[i32; 2]; 2], past: impl Fn([i32; 2]) -> bool) -> bool {
+    let t = LEAF_CELL - SHARD_ZOOM;
+    let mut y = (lo[1] - 1) >> t;
+    while y <= (hi[1] + 1) >> t {
+        let mut x = (lo[0] - 1) >> t;
+        while x <= (hi[0] + 1) >> t {
+            if past([wrap(SHARD_ZOOM, x), y]) {
+                return true;
+            }
+            x += 1;
+        }
+        y += 1;
     }
-    let mut gone = 0;
-    let mut k = 0;
-    while k < 8 {
-        let d = beside(k);
-        gone |= (shard.past_leaf(
-            node,
-            tile_at(LEAF_CELL, [wrap(LEAF_CELL, l[0] + d[0]), l[1] + d[1]]),
-        ) as u32)
-            << k;
-        k += 1;
-    }
-    gone
+    false
 }
-
-/// The leaf cells gone about the leaf cell holding the column `b` at `cell`,
-/// a leaf's or finer, off the area alone (`gone_ring`): what a column no
-/// brick holds is walled by, as `World::within` knows the wall before any
-/// ground arrives (pxl-kernel domain/query/limit.rs).
-pub fn gone_about(area: &impl Area, cell: Zoom, b: [i32; 2]) -> u32 {
-    let s = cell - LEAF_CELL;
-    let l = [b[0] >> s, b[1] >> s];
-    let node = (LEAF_ZOOM, tile_at(LEAF_CELL, l));
-    gone_ring(Shard::UNKNOWN.at(area, node), node, l)
-}
-
-/// A column at `cell` of a cell laid as the fill lays it (`laid` low
-/// byte its own palette index, high the leaf cells about it gone, `gone_ring`), with
-/// the area's edge laid, the one rule a column is read by (pxl-spec-core
-/// `clipmap::ground`) and the ways' fill walls one by
-/// (`way::Columns::is_walled`), on the CPU and a GPU alike: at a leaf's cells
-/// or finer, a column in a leaf cell beside a gone one is the wall, bedrock
-/// (`UNKNOWN`) up to its own face, open sea's void to sea level, the whole
-/// leaf column at every zoom, the
-/// columns `World::within` and `World::editable` refuse (pxl-kernel
-/// domain/query/limit.rs). A gone
-/// cell is bedrock already, its palette index `UNKNOWN` (gone is past), and its top
-/// the Earth's at sea level as its fill lays it (pxl-spec-core
-/// `fill::heights`): the wall at sea level, so a cell of it is the Earth's
-/// (`earth`). A leaf's column or finer read off a stand-in, a brick coarser
-/// than a leaf's cells, or off none, is walled off the area (`gone_about`,
-/// `clipmap::ground`), as the open sea is, where no leaf's brick is baked.
-pub fn laid(laid: u32, cell: Zoom) -> u32 {
-    let palette_idx = laid & 0xff;
-    if cell >= LEAF_CELL && laid >> 8 != 0 {
-        UNKNOWN
-    } else {
-        palette_idx
-    }
-}
+const _: () = assert!(LEAF_CELL > SHARD_ZOOM);
 
 /// Cell `z` past the service area: the Earth's ground, bedrock under sea
 /// level, air over it.

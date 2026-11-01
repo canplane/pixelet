@@ -78,8 +78,8 @@ pub const FILL_CAP: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
 /// `ClipLevel::cell`; a destination's moves with its line), never derived from the
 /// index; its first cell at that zoom as the world names it, X wrapped there,
 /// then Y, two words; and what is known of the service area at it
-/// (`area::Shard`, its word), which the ways' fill lays the area's edge by
-/// (`way::Columns::is_walled`).
+/// (`area::Shard`, its word), which the ways' fill asks the wall by
+/// (`area::is_wall`).
 pub const FILL_BRICK: u32 = 0;
 pub(crate) const FILL_PLACE: u32 = FILL_BRICK + 1;
 pub const FILL_CELL: u32 = FILL_PLACE + 1;
@@ -271,22 +271,18 @@ pub const fn column_top(w: u32) -> i32 {
     (w << 16) as i32 >> 16
 }
 
-/// A brick's cells as its fill lays them, two a word, cell `i` in the
-/// `i % 2`-th half (`laid_at`): its own palette index, low (`ground::own` of its four
-/// at the brick's zoom), and which of the eight leaf cells about it are
-/// past the area, high (`area::gone_ring`, none at a brick coarser than a
-/// leaf's): what a read of it lays the area's edge by (`area::laid`),
-/// never working out its majority or its ring again.
-pub const LAID_WORDS: u32 = BRICK_CELLS / 2;
+/// A brick's cells as its fill lays them, four a word, cell `i` in the
+/// `i % 4`-th byte (`laid_at`): its own palette index (`ground::own` of its
+/// four at the brick's zoom), so a read never works out its majority again.
+pub const LAID_WORDS: u32 = BRICK_CELLS / LAID_CELLS;
+/// The cells a laid word holds, a byte each: in the cells' order
+/// (`idx_of`), a 2×2 square.
+pub const LAID_CELLS: u32 = 4;
+const _: () = assert!(BRICK_CELLS.is_multiple_of(LAID_CELLS));
 
-/// Cell `i`'s half of a laid word `w`.
+/// Cell `i`'s palette index in a laid word `w`.
 pub(crate) const fn laid_at(w: u32, i: u32) -> u32 {
-    (w >> (16 * (i % 2))) & 0xffff
-}
-
-/// A cell's laid half: its own palette index and the leaf cells about it gone.
-pub const fn laid_half(palette_idx: u32, gone: u32) -> u32 {
-    palette_idx & 0xff | gone << 8
+    (w >> (8 * (i % LAID_CELLS))) & 0xff
 }
 
 /// A brick's words on a GPU, what outlives its fill, its lanes in order:
@@ -343,7 +339,8 @@ pub trait Bricks: Presence {
     /// (`ground::Bounds`) as bound words (`answer::bound_word`): its
     /// columns' joined (`join`), level 0 one.
     fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
-    /// Cell `i` as its fill laid it (`LAID_WORDS`, `laid_at`).
+    /// Cell `i`'s own palette index as its fill laid it (`LAID_WORDS`,
+    /// `laid_at`).
     fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `e` of the eye's clip level at `cell`'s levels over its bricks
     /// (`JOINED_WORDS`, `fold`), as this side folded them over the bricks
@@ -359,8 +356,10 @@ pub trait Bricks: Presence {
 
 /// One brick as its fill reads it, for the ways' one rule
 /// (`way::Columns`): its cells' zoom, where it lies in its tile (in
-/// bricks), word `k` of its lines (`LINES_AT`), cell `i` as `heights` laid
-/// it (`LAID_WORDS`), its own palette index and the area's edge it is walled by, and
+/// bricks), its first cell as the world names it and what is known of the
+/// area at it (`FILL_FIRST`, `FILL_SHARD`), which its columns are asked
+/// the wall by (`area::is_wall`), word `k` of its lines (`LINES_AT`), cell
+/// `i`'s own palette index as `heights` laid it (`LAID_WORDS`), and
 /// column `c`'s height off its tile's samples, `c`
 /// counted from its first cell, the ring of columns about it included.
 /// Its columns are its cells and that ring, a ring column read off the
@@ -369,9 +368,10 @@ pub trait Bricks: Presence {
 pub trait Brick {
     fn cell(&self) -> Zoom;
     fn place(&self) -> [u32; 2];
+    fn first(&self) -> [i32; 2];
+    fn shard(&self) -> Shard;
     fn line(&self, k: u32) -> u32;
-    /// Cell `i` as its fill laid it (`LAID_WORDS`), before its ways: what
-    /// they wall it by.
+    /// Cell `i`'s own palette index as its fill laid it (`LAID_WORDS`).
     fn laid(&self, i: u32) -> u32;
     fn height(&self, c: [i32; 2]) -> i32;
 }
@@ -453,24 +453,23 @@ impl<Q: Brick> Columns for Q {
             (p[1] * BRICK) as f32 + c[1] as f32 + center,
         ]
     }
-    /// Off its cell as laid (`area::laid`), as a read of it walls it. A
-    /// ring column is none of the brick's, never walled.
+    /// The wall's one rule (`area::is_wall`), the ring's columns too.
     fn is_walled(&self, c: [i32; 2]) -> bool {
-        let i = cell_idx(c);
-        i != BRICK_CELLS && area::laid(self.laid(i), Brick::cell(self)) == UNKNOWN
+        let (cell, first) = (Brick::cell(self), self.first());
+        let b = [wrap_idx(cell, first[0] + c[0]), first[1] + c[1]];
+        area::is_wall(self.shard(), cell, b)
     }
     fn stations(&self) -> Stations {
         header_of(self).1
     }
-    /// Its own palette index, before the service area's wall is laid, as its fill
-    /// laid it (`LAID_WORDS`): the wall is the descent's to lay (`ground`'s
-    /// reader).
+    /// Its own palette index as its fill laid it (`LAID_WORDS`), the wall
+    /// apart (`is_walled`).
     fn palette_idx(&self, c: [i32; 2]) -> u32 {
         let i = cell_idx(c);
         if i == BRICK_CELLS {
             VOID
         } else {
-            self.laid(i) & 0xff
+            self.laid(i)
         }
     }
     fn face(&self, c: [i32; 2]) -> i32 {
@@ -610,12 +609,12 @@ pub(crate) const fn held_to(cell: Zoom) -> Zoom {
 
 /// The ground's cell `g` at `cell`, off the finest clip level holding it
 /// present, stepped from `place` (`step`): its four palette indices, its column's
-/// word (its height), it as laid, and where it is held; `void` at sea level
-/// where none holds it.
+/// word (its height), its own palette index as laid, and where it is held;
+/// `void` at sea level where none holds it.
 pub fn cell(w: &impl Bricks, place: Lookup, cell: Zoom, g: [i32; 2]) -> (u32, u32, u32, Lookup) {
     let (f, at) = step(w, place, cell, g);
     if !f.here() {
-        return (VOID, 0, laid_half(VOID, 0), f);
+        return (VOID, 0, VOID, f);
     }
     let (from, slot, i) = (f.from(), f.slot(), idx_of(at));
     (
@@ -628,20 +627,27 @@ pub fn cell(w: &impl Bricks, place: Lookup, cell: Zoom, g: [i32; 2]) -> (u32, u3
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
 /// the leaves a leaf's, stepped from `place`, where the column's own cells
-/// were found (`step`), with the area's edge laid on it off the cell as its
-/// fill laid it (`area::laid`), or off the area where no leaf's brick holds
-/// it (`area::gone_about`); and where it is held.
-pub fn ground(w: &(impl Bricks + Area), place: Lookup, zoom: Zoom, b: [i32; 2]) -> (Cell, Lookup) {
+/// were found (`step`), its palette index its own as laid, or the wall's
+/// (`UNKNOWN`) where it is the wall (`area::is_wall`), off `shard`, what
+/// is known of the area at it, else asked of `w` (`Shard::at`); and where
+/// it is held.
+pub fn ground(
+    w: &(impl Bricks + Area),
+    shard: Shard,
+    place: Lookup,
+    zoom: Zoom,
+    b: [i32; 2],
+) -> (Cell, Lookup) {
     let read = held_to(zoom);
-    let (word, column, mut laid, f) = cell(w, place, read, cell_at(zoom, read, b));
-    // A leaf's column or finer that no leaf's brick holds, read off a
-    // stand-in or none: its wall off the area alone, as the leaves' would be.
-    if zoom >= LEAF_CELL && (!f.here() || f.from() < LEAF_CELL) {
-        laid = laid_half(laid & 0xff, area::gone_about(w, zoom, b));
-    }
+    let (word, column, own, f) = cell(w, place, read, cell_at(zoom, read, b));
+    let palette_idx = if area::is_wall(shard.at(w, (zoom, b)), zoom, b) {
+        UNKNOWN
+    } else {
+        own
+    };
     let (top, part) = ground::top(zoom, column_top(column) as f32);
     let cell = Cell {
-        palette_idx: area::laid(laid, zoom),
+        palette_idx,
         top,
         part,
         fold: ground::palette_indices(word),

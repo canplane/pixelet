@@ -425,10 +425,11 @@ pub trait Resident: Area {
         node: (Zoom, [i32; 3]),
     ) -> (Bounds, bool);
     /// The column of the cell `c` at `zoom` off the clip levels
-    /// (`clipmap::ground`), the service area's edge laid on it as its fill
-    /// laid it (`Cell`); its cell where `place` found it, the zoom's cells'
-    /// (`relief`'s), or found anew where `place` is `NONE`.
-    fn cell(&mut self, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell;
+    /// (`clipmap::ground`), the wall where it is the wall (`area::is_wall`,
+    /// off `shard`, what is known of the area at it) (`Cell`); its cell where
+    /// `place` found it, the zoom's cells' (`relief`'s), or found anew where
+    /// `place` is `NONE`.
+    fn cell(&mut self, shard: Shard, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell;
 }
 
 /// What the ground answers of a node (`node`): its kind, and a cell's
@@ -514,7 +515,7 @@ pub fn node<H: Resident>(
         return (if is_cell { lacks } else { split }, Cell::NONE, EMPTY);
     }
     if is_cell {
-        let column = held.cell(*place, zoom, c);
+        let column = held.cell(shard, *place, zoom, c);
         let asset = column.asset(zoom, c[2], || cave.hollow());
         return (
             In {

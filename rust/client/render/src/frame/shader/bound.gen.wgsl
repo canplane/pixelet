@@ -269,7 +269,7 @@ fn function_9() {
                 phi_432_ = 0u;
             }
             let _e75 = phi_432_;
-            let _e76 = (_e75 * 17067u);
+            let _e76 = (_e75 * 16043u);
             let _e78 = (_e49.z * (_e57 / 9u));
             let _e79 = (_e69 + 2u);
             if (_e79 < _e51) {

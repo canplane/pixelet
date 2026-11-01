@@ -23,6 +23,7 @@ pub const PALETTE_COLUMN: usize = 4 * GROUND_COLUMN;
 pub const ELE_COLUMN: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 use crate::asset::cube::sentinel;
 use crate::space::layer::lattice::GROUND;
+use pxl_spec_core::area::Shard;
 use pxl_spec_core::clipmap;
 use pxl_spec_core::clipmap::Brick;
 /// Bins a side a tile's ways are cut into, each `1 << WAYS_SHIFT` cells a
@@ -172,13 +173,14 @@ pub fn brick_lines(
 }
 
 /// A clip level's brick as its fill reads it (pxl-spec-core `clipmap::Brick`):
-/// its cells' zoom and place in its tile, its lines as `brick_lines` lays
-/// them, cell `i` as laid off its four palette indices (`palette_indices`, its own palette index, none
-/// about it gone), and column `c`'s height,
+/// its cells' zoom, place in its tile and first cell (`first_cell`), inside
+/// the area, its lines as `brick_lines` lays them, cell `i`'s own palette
+/// index off its four (`palette_indices`), and column `c`'s height,
 /// counted from its first cell, its ring included (`height`).
 pub struct TileBrick<'a, L, H> {
     pub cell: Zoom,
     pub place: [u32; 2],
+    pub first: [i32; 2],
     pub lines: &'a [u32],
     pub palette_indices: L,
     pub height: H,
@@ -191,13 +193,19 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for TileBrick<'_, L, H> {
     fn place(&self) -> [u32; 2] {
         self.place
     }
-    fn line(&self, k: u32) -> u32 {
-        self.lines[k as usize]
+    fn first(&self) -> [i32; 2] {
+        self.first
     }
     /// Inside the area, none about it past: a bake sizes the most runs a
     /// client's fill writes, and no wall cuts its ways.
+    fn shard(&self) -> Shard {
+        Shard::INSIDE
+    }
+    fn line(&self, k: u32) -> u32 {
+        self.lines[k as usize]
+    }
     fn laid(&self, i: u32) -> u32 {
-        clipmap::laid_half(ground::own((self.palette_indices)(i), self.cell), 0)
+        ground::own((self.palette_indices)(i), self.cell)
     }
     fn height(&self, c: [i32; 2]) -> i32 {
         (self.height)(c)
@@ -232,9 +240,11 @@ fn laid<'a>(
             [0, 1].map(|a| (place[a] * clipmap::BRICK) as f32 + c[a] as f32 + lattice::CELL_CENTER);
         ground::bicubic(|j| i32::from(ele[j]), at[0], at[1])
     };
+    let cell = GROUND.cell_zoom(tile.zoom);
     TileBrick {
-        cell: GROUND.cell_zoom(tile.zoom),
+        cell,
         place,
+        first: first_cell(tile, cell, place),
         lines,
         palette_indices,
         height,
@@ -285,12 +295,24 @@ pub(crate) fn brick_spans(
     scratch: &mut [(u32, u32)],
     [handed, column, kept]: [&mut [u32]; 3],
 ) -> u32 {
-    use pxl_spec_core::clipmap::BRICK;
     record(tile, held, place, scratch, handed);
     let cell = GROUND.cell_zoom(tile.zoom);
+    fill::brick(
+        handed,
+        column,
+        kept,
+        place,
+        cell,
+        first_cell(tile, cell, place),
+    )
+}
+
+/// The first cell at `cell`, its cells' zoom, of the clip level's brick at
+/// `place` (in bricks) of `tile`, as the world names it.
+pub fn first_cell(tile: Tile, cell: Zoom, place: [u32; 2]) -> [i32; 2] {
+    use pxl_spec_core::clipmap::BRICK;
     let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * BRICK) as i32);
-    let first = [pxl_spec_core::wrap_idx(cell, first[0]), first[1]];
-    fill::brick(handed, column, kept, place, cell, first)
+    [pxl_spec_core::wrap_idx(cell, first[0]), first[1]]
 }
 
 /// The child groups the clip levels' trees take wherever the eye is, of the

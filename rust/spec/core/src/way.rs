@@ -471,9 +471,8 @@ pub trait Columns {
     fn center(&self, c: [i32; 2]) -> [f32; 2];
     fn stations(&self) -> Stations;
     fn palette_idx(&self, c: [i32; 2]) -> u32;
-    /// Whether the area's edge walls the column: ground beside cells past
-    /// the area (pxl-spec-core `area::laid`), where no way writes, as none
-    /// does past it.
+    /// Whether the column is the service area's wall (pxl-spec-core
+    /// `area::is_wall`), where no way writes, as none does past it.
     fn is_walled(&self, c: [i32; 2]) -> bool;
     fn face(&self, c: [i32; 2]) -> i32;
     /// Whether the `k`-th segment over column `c` is the next of its line

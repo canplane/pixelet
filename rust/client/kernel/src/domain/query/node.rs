@@ -9,7 +9,7 @@
 //! handed down (`At`; `World::asset` for an asker with none):
 //!
 //! - the ground: its column off the clip levels, as the GPU drew it and the CPU
-//!   read it back, and the area's edge laid on it; the ways off the tree the
+//!   read it back, the wall where it is the wall; the ways off the tree the
 //!   GPU built of its brick, its child groups read back into the pool's mirror,
 //!   read as the GPU reads them (pxl-spec-core `clipmap::ground`,
 //!   `way::tree`);
@@ -49,7 +49,7 @@ use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
 use pxl_spec_core::answer::{In, Kind};
-use pxl_spec_core::area::Area;
+use pxl_spec_core::area::{Area, Shard};
 use pxl_spec_core::clipmap::{self, Lookup};
 use pxl_spec_core::ground::VOID;
 use pxl_spec_core::ground::{self, Cell};
@@ -251,10 +251,10 @@ impl ground::Resident for Reading<'_, '_> {
         }
     }
 
-    /// The cell's column off the clip levels, the area's edge laid on it, as
-    /// the GPU reads it (pxl-spec-core `clipmap::ground`), stepped from where
-    /// its relief found its cells.
-    fn cell(&mut self, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell {
-        clipmap::ground(&CpuClipmap, place, zoom, [c[0], c[1]]).0
+    /// The cell's column off the clip levels, the wall where it is the
+    /// wall, as the GPU reads it (pxl-spec-core `clipmap::ground`), stepped
+    /// from where its relief found its cells.
+    fn cell(&mut self, shard: Shard, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell {
+        clipmap::ground(&CpuClipmap, shard, place, zoom, [c[0], c[1]]).0
     }
 }

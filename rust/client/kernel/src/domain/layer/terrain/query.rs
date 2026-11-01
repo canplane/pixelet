@@ -48,14 +48,14 @@ impl TileCache<TerrainTile> {
         answer_at(line, from, here, r)
     }
 
-    /// The column `c` at `zoom` off the clip levels, the area's edge laid on
-    /// it, as the GPU reads it (pxl-spec-core `clipmap::ground`), stepped from
-    /// `place`: exact where `line`
+    /// The column `c` at `zoom` off the clip levels, the wall where it is
+    /// the wall, as the GPU reads it (pxl-spec-core `clipmap::ground`), stepped
+    /// from `place`: exact where `line`
     /// says the ground at the clip level it was read off or coarser, else
     /// coarser, naming its tile (`answer_at`); where no clip level holds it, the
     /// lack.
     pub fn column(&self, line: &Line, place: Lookup, (zoom, c): Node<2>) -> Answer<Cell> {
-        let (cell, f) = cells::ground(&CpuClipmap, place, zoom, c);
+        let (cell, f) = cells::ground(&CpuClipmap, Shard::UNKNOWN, place, zoom, c);
         answer_at(line, f.from(), f.here(), cell)
     }
 

@@ -170,6 +170,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         let laid = terrain::TileBrick {
             cell,
             place,
+            first: terrain::first_cell(t, cell, place),
             lines: &lines[..n],
             palette_indices: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
             height: |c: [i32; 2]| {
@@ -191,9 +192,11 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             &mut back,
             &mut scratch,
         );
+        let n = clipmap::LAID_CELLS;
         for k in 0..clipmap::LAID_WORDS {
-            let half = |j: u32| clipmap::laid_half(u32::from(palette_of[at(2 * k + j)]), 0);
-            back[(clipmap::LAID_AT + k) as usize] = half(0) | half(1) << 16;
+            back[(clipmap::LAID_AT + k) as usize] = (0..n)
+                .map(|j| u32::from(palette_of[at(n * k + j)]) << (8 * j))
+                .sum();
         }
         for j in 0..=LEVELS {
             for y in 0..BRICK >> j {

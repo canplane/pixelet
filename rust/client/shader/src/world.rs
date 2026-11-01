@@ -4,7 +4,7 @@
 //! (`world::node`) by every entry that walks or generates over it.
 
 use pxl_spec_core::answer::{self, In};
-use pxl_spec_core::area::Area;
+use pxl_spec_core::area::{Area, Shard};
 use pxl_spec_core::cast::{self, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Columns};
@@ -205,11 +205,11 @@ impl<L: PaletteWords> ground::Resident for World<'_, L> {
         (r, here)
     }
 
-    /// The cell's column off the clip levels, the area's edge laid on it
-    /// (pxl-spec-core `clipmap::ground`), as the CPU reads it (pxl-kernel
+    /// The cell's column off the clip levels, the wall where it is the
+    /// wall (pxl-spec-core `clipmap::ground`), as the CPU reads it (pxl-kernel
     /// domain/query/node.rs `Reading::cell`).
-    fn cell(&mut self, place: Lookup, zoom: u32, c: [i32; 3]) -> ground::Cell {
-        clipmap::ground(self, place, zoom, [c[0], c[1]]).0
+    fn cell(&mut self, shard: Shard, place: Lookup, zoom: u32, c: [i32; 3]) -> ground::Cell {
+        clipmap::ground(self, shard, place, zoom, [c[0], c[1]]).0
     }
 }
 

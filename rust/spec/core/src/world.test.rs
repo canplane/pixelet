@@ -3,18 +3,19 @@
 extern crate std;
 
 use super::*;
-use crate::area::Area;
+use crate::area::{self, Area, Shard};
 use crate::cast::{End, Query};
 use crate::clipmap::{
-    self, bound_over, column_top, entry, fold, join, joined_idx, laid_half, level_idx, of_idx,
-    Entry, Presence, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE,
+    self, bound_over, column_top, entry, fold, join, joined_idx, level_idx, of_idx, Entry,
+    Presence, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE,
     COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS,
-    LAID_AT, LEVELS, LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT,
+    LAID_AT, LAID_CELLS, LEVELS, LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT,
 };
 use crate::cube::ground::stone;
 use crate::fill::{column_of, laid_of, level_of, put, root_of, LoneBrick};
 use crate::ground::Bounds;
 use crate::support::{asset, column_surface};
+use crate::SHARD_ZOOM;
 use std::{vec, vec::Vec};
 
 /// The clip level whose bricks are half held, its east half not yet, the clip
@@ -102,8 +103,8 @@ impl ground::Resident for Clipmap<'_> {
         let (r, _, here) = bound_over(self, place, cells, (zoom, [c[0], c[1]]));
         (r, here)
     }
-    fn cell(&mut self, place: Lookup, zoom: Zoom, c: [i32; 3]) -> ground::Cell {
-        clipmap::ground(self, place, zoom, [c[0], c[1]]).0
+    fn cell(&mut self, shard: Shard, place: Lookup, zoom: Zoom, c: [i32; 3]) -> ground::Cell {
+        clipmap::ground(self, shard, place, zoom, [c[0], c[1]]).0
     }
 }
 
@@ -196,8 +197,8 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                 ];
                 let top = height(leaf);
                 put(&mut ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
-                let w = &mut ground[(base + LAID_AT + i / 2) as usize];
-                *w |= laid_half(stone as u32, 0) << (16 * (i % 2));
+                let w = &mut ground[(base + LAID_AT + i / LAID_CELLS) as usize];
+                *w |= (stone as u32) << (8 * (i % LAID_CELLS));
                 let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_idx(0, [x, y]);
                 let b = ground::bounds_word([[top, top], ground::EMPTY]);
                 put(&mut ground, e, b[0] as u32);
@@ -361,4 +362,99 @@ fn footing_without_bound() {
         is.nodes,
         was.nodes
     );
+}
+
+/// The clip levels `0` with the service area the shards at `SHARD_ZOOM`
+/// west of the `1`th, every row: their nines as a declaration lays them
+/// (`area::nine`).
+struct WestOf<'a>(Clipmap<'a>, i32);
+
+impl Presence for WestOf<'_> {
+    fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
+        self.0.present(cell, q)
+    }
+}
+
+impl Bricks for WestOf<'_> {
+    fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
+        self.0.brick(cell, entry)
+    }
+    fn palette_word(&self, cell: Zoom, slot: u32, i: u32) -> u32 {
+        self.0.palette_word(cell, slot, i)
+    }
+    fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32 {
+        self.0.column(cell, slot, i)
+    }
+    fn level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        self.0.level(cell, slot, j, at)
+    }
+    fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32 {
+        self.0.laid(cell, slot, i)
+    }
+    fn joined(&self, cell: Zoom, e: u32) -> [u32; JOINED_WORDS as usize] {
+        self.0.joined(cell, e)
+    }
+    fn origin(&self, cell: Zoom) -> ([i32; 2], bool) {
+        self.0.origin(cell)
+    }
+    fn root(&self, cell: Zoom, slot: u32) -> u32 {
+        self.0.root(cell, slot)
+    }
+}
+
+impl Area for WestOf<'_> {
+    fn ends(&self) -> bool {
+        true
+    }
+    fn nine(&self, key: u32) -> u32 {
+        // `area::shard_key` undone: X's and Y's bits interleaved from the top.
+        let mut c = [0i32; 2];
+        for b in 0..SHARD_ZOOM {
+            c[0] |= ((key >> (2 * b) & 1) as i32) << b;
+            c[1] |= ((key >> (2 * b + 1) & 1) as i32) << b;
+        }
+        area::nine(|n| n[0] < self.1, c)
+    }
+}
+
+/// The wall is the area's alone (`area::is_wall`): a leaf column beside a
+/// leaf cell past the area is the wall, bedrock, read off a stand-in brick,
+/// a coarser clip level's, or off none, and at a zoom finer than the
+/// leaves; one a leaf cell further in is its own ground.
+#[test]
+fn wall_off_any_brick() {
+    let (rows, ground) = clipmap();
+    let none = vec![Entry::absent([0, 0]); rows.len()];
+    let shard = (EYE[0] >> (LEAF_CELL - SHARD_ZOOM)) + 1;
+    // The first leaf cell past the area.
+    let past = shard << (LEAF_CELL - SHARD_ZOOM);
+    let read = |rows: &[Entry], zoom: Zoom, b: [i32; 2]| {
+        let w = WestOf(
+            Clipmap {
+                rows,
+                joined: &[],
+                ground: &ground,
+            },
+            shard,
+        );
+        clipmap::ground(&w, Shard::UNKNOWN, Lookup::NONE, zoom, b)
+    };
+    let y = EYE[1];
+    for (x, palette_idx) in [(past - 1, ground::UNKNOWN), (past - 2, stone as u32)] {
+        let (cell, f) = read(&rows, LEAF_CELL, [x, y]);
+        assert!(f.here() && f.from() < LEAF_CELL, "{x} off a stand-in");
+        assert_eq!(cell.palette_idx, palette_idx, "{x} off a stand-in");
+        let (cell, f) = read(&none, LEAF_CELL, [x, y]);
+        assert!(!f.here(), "{x} off none");
+        let none_idx = if palette_idx == ground::UNKNOWN {
+            ground::UNKNOWN
+        } else {
+            VOID
+        };
+        assert_eq!(cell.palette_idx, none_idx, "{x} off none");
+        for d in 0..4 {
+            let (cell, _) = read(&rows, LEAF_CELL + 2, [(x << 2) + d, (y << 2) + d]);
+            assert_eq!(cell.palette_idx, palette_idx, "{x}'s quarter {d}");
+        }
+    }
 }

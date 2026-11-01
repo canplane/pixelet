@@ -25,8 +25,8 @@ use crate::world::brick_at;
 /// brick's lines into the brick's scratch (`fill::spans`), which its
 /// levels and its ways' tree read its cells and its neighbors' off. Over
 /// `height_cs`'s tops: a way is told from their faces. Each brick's
-/// entry as handed whole: where it lies and its shard lay the area's edge
-/// (pxl-spec-core `way::Columns::is_walled`).
+/// entry as handed whole: where it lies and its shard say the wall
+/// (pxl-spec-core `area::is_wall`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "way_cs"))]
 pub fn way_cs(
     #[spirv(global_invocation_id)] id: UVec3,

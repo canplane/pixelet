@@ -910,7 +910,7 @@ impl Bricks for Holding<'_> {
     /// The CPU reads a cell's own palette index alone, as laid: its four are it four
     /// times.
     fn palette_word(&self, cell: Zoom, b: u32, i: u32) -> u32 {
-        word([self.laid(cell, b, i) & 0xff; 4])
+        word([self.laid(cell, b, i); 4])
     }
 
     /// As this side folded it over its bricks (`fold`).
