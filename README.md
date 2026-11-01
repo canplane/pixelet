@@ -252,7 +252,10 @@ field or a catalog entry, keeps the kernel's.
 `xpute/` is xpute's repository root, developed here and copied out byte for
 byte by `xpute/script/export.py`; [xpute/README.md](./xpute/README.md) and
 [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) describe the system under the
-application. Nothing under it names pixelet.
+application. Nothing under it names pixelet. pixelet takes it through its
+packages, as any program would: `ts/pnpm-workspace.yaml` lists xpute's, which
+the client and the apps depend on as `workspace:*`, and `rust/Cargo.toml` names
+the crates by path.
 
 ---
 

@@ -29,6 +29,10 @@ hex = "0.4"
 edition = "2021"
 version = "0.0.0"
 publish = false
+# What the library crates (kit, guest, host, gpu) carry for a registry.
+license = "MIT"
+repository = "https://github.com/canplane/xpute"
+readme = "../README.md"
 
 # A guest is a module someone downloads, so its size is what it is built for;
 # a trap ends a guest, so nothing unwinds.

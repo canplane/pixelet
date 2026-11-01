@@ -7,6 +7,8 @@
   },
   "dependencies": {
     "@expo/ui": "~57.0.20",
+    "@xpute/host": "workspace:*",
+    "@xpute/kit": "workspace:*",
     "expo": "57.0.25",
     "expo-glass-effect": "~57.0.4",
     "expo-symbols": "~57.0.3",

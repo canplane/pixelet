@@ -1,5 +1,6 @@
-// tsc checks and emits nothing. Every alias is here, and vitest reads it from
-// here.
+// tsc checks and emits nothing. `@xpute/kit`, `@xpute/host` and `@xpute/gpu`
+// resolve as the packages they are (pnpm-workspace.yaml), as vitest resolves
+// them.
 {
   "compilerOptions": {
     "target": "esnext",
@@ -13,13 +14,7 @@
     "erasableSyntaxOnly": true,
     "noImplicitOverride": true,
     "skipLibCheck": true,
-    "types": ["node", "@webgpu/types"],
-
-    "paths": {
-      "@xpute/kit/*": ["./kit/src/*"],
-      "@xpute/host/*": ["./host/src/*"],
-      "@xpute/gpu/*": ["./gpu/src/*"]
-    }
+    "types": ["node", "@webgpu/types"]
   },
   "include": [
     "kit",

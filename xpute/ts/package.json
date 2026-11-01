@@ -18,6 +18,9 @@
     "lint": "oxlint"
   },
   "devDependencies": {
+    "@xpute/gpu": "workspace:*",
+    "@xpute/host": "workspace:*",
+    "@xpute/kit": "workspace:*",
     "@types/node": "^24",
     "@webgpu/types": "~0.1.74",
     "koffi": "^3.3.5",

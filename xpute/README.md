@@ -89,6 +89,16 @@ script                                      the repository's own scripts (Python
 spec                                        the numbers every language's are generated from
 ```
 
+A program takes these as packages, by name. In TypeScript they are
+`@xpute/kit`, `@xpute/host` and `@xpute/gpu` (`ts/kit`, `ts/host`, `ts/gpu`),
+each its own source: its `package.json` maps a path under its name to the file
+under `src/` (`@xpute/host/port.ts` is `ts/host/src/port.ts`), and the files
+strip to JavaScript as they are, so a bundler or Node's type stripping takes
+them with no build. In Rust they are the crates `xpute-kit`, `xpute-guest`,
+`xpute-host` and `xpute-gpu`. None is published yet: a program beside this tree
+lists the packages in its pnpm workspace and depends on them as `workspace:*`,
+and names the crates by `path`.
+
 ## Embedding a guest
 
 The smallest program shows the whole of it: a guest that answers one command, in

@@ -1,8 +1,12 @@
 [package]
 name = "xpute-host"
+description = "xpute's host end in Rust: a guest's memory by offset, and a guest linked into the host's own native process"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 
 [lib]
 path = "src/lib.rs"

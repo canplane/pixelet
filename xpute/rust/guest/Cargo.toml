@@ -1,8 +1,12 @@
 [package]
 name = "xpute-guest"
+description = "xpute's guest end: a program its host runs in turns over one memory they share, as a WebAssembly module or linked into the host"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 
 [lib]
 path = "src/lib.rs"
