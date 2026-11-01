@@ -141,6 +141,7 @@ fn main() {
     use pxl_spec_core::light::DEPTH_ONE;
     let light = format!("fn light_depth(w: u32) -> f32 {{ return f32(w) / {DEPTH_ONE}.0; }}\n");
     std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
+    std::fs::write(out.join("tile_word.wgsl"), tile_word()).expect("the tile word's shader");
     // The cloud field's lattice unit and the hash its cells draw from, the
     // cumulus's own on the CPU (pxl-spec-core cloud.rs `lattice_hash`): its
     // multipliers, its rounds and its kept bits as the Rust takes them.
@@ -308,6 +309,28 @@ fn compute(dir: &Path) -> String {
         out += &format!("const _: () = assert!(floor::holds(&[&{upper}_GROUP]), \"{stem}'s group binds past WebGPU's floor\");\n");
     }
     out
+}
+
+/// The tiles' uniform as every pass reads it (pxl-spec-core
+/// `screen::TILES_WORDS`, gpu/tiles.rs `Tiles::words`), and a tile's word
+/// read by it as pxl-spec-core's `screen::age` and `screen::claimed` read it:
+/// the frames since it changed, wrapping, and claimed while fewer than the
+/// uniform's `claimed_for`. The one rule the screen's and the light's passes
+/// claim by (screen_tiles.wgsl, screen_propagate.wgsl); pxl-shader's cast calls
+/// the Rust itself.
+fn tile_word() -> String {
+    // The Rust's rule, as the WGSL below spells it: a u32's difference that
+    // wraps, a claim that ends at `claimed_for`.
+    assert_eq!(screen::age(0, u32::MAX), 1);
+    assert_eq!(screen::age(5, 5), 0);
+    assert!(screen::claimed(0, 1) && !screen::claimed(1, 1));
+    assert!(screen::claimed(u32::MAX - 1, u32::MAX) && !screen::claimed(u32::MAX, u32::MAX));
+    concat!(
+        "struct Tiles { count: vec4u, size: vec4f, };\n",
+        "fn tiles_age(t: Tiles, changed_at: u32) -> u32 { return t.count.w - changed_at; }\n",
+        "fn tiles_claimed(t: Tiles, changed_at: u32) -> bool { return tiles_age(t, changed_at) < t.count.z; }\n",
+    )
+    .to_string()
 }
 
 /// Every setting (src/param.rs), named by its path under `param` (`sky::sun`'s

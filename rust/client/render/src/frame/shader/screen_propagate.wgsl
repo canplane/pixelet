@@ -16,10 +16,8 @@
 // the frame it runs in is one whose drawn marks it counts. Bounds that
 // cover: a tile too many costs, one missing is a failure.
 
-struct Tiles {
-  count: vec4u,
-  size: vec4f,
-};
+// `Tiles`, `tiles_age` and `tiles_claimed` are tile_word.wgsl's (build.rs,
+// pxl-spec-core `screen`).
 
 struct Propagate {
   // From the screen's clip, its depth reversed, to units from the eye; and
@@ -52,7 +50,7 @@ fn propagate_changed(t: vec2i) -> bool {
     return false;
   }
   let ii = u32(t.y * n.x + t.x);
-  return light_tiles.count.w - light_changed_at[ii] < light_tiles.count.z;
+  return tiles_claimed(light_tiles, light_changed_at[ii]);
 }
 
 // The depth the world's pass left at pixel `p` of a target `size`, 0 past
@@ -169,7 +167,7 @@ fn screen_propagate_cs(
   if (li == 0u) {
     let near = bitcast<f32>(atomicLoad(&slab_near));
     let box = propagate_slab(tile * side, side, bitcast<f32>(atomicLoad(&slab_far)), near, size);
-    let changed = tiles.count.w - changed_at[ti] == 0u;
+    let changed = tiles_age(tiles, changed_at[ti]) == 0u;
     slab_in_marks_box = !changed && near > 0.0 && propagate_in_marks_box(box[0], box[1]);
   }
   if (!workgroupUniformLoad(&slab_in_marks_box)) {

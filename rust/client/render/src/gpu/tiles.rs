@@ -362,7 +362,7 @@ impl Tiles {
     /// The uniform's words (pxl-spec-core `screen::TILES_WORDS`) for a
     /// target `size` pixels across and down, a quad grown by `grow` of them,
     /// in this frame, a tile claimed for `claimed_for` frames once changed,
-    /// and a tile's side.
+    /// and a tile's side, as build.rs's `Tiles` reads them (tile_word.wgsl).
     pub fn words(&self, size: [u32; 2], grow: f32, claimed_for: u32) -> [u32; TILES_WORDS] {
         let mut t = [0u32; TILES_WORDS];
         t[..4].copy_from_slice(&[self.squares[0], self.squares[1], claimed_for, self.now]);
@@ -380,10 +380,11 @@ impl Tiles {
     }
 
     /// Whether a tile changed so lately it has frames left of its claim but
-    /// this one: a mark was handed, or drawn (`marked_in`), fewer than
-    /// `claimed_for - 1` frames ago.
+    /// this one: a mark was handed, or drawn (`marked_in`), so lately its
+    /// tile is claimed under a claim a frame shorter (`screen::claimed`).
     pub fn claiming(&self) -> bool {
-        screen::age(self.now, self.marked_at) < self.claimed_for.saturating_sub(1)
+        let age = screen::age(self.now, self.marked_at);
+        screen::claimed(age, self.claimed_for.saturating_sub(1))
     }
 
     /// This frame's number.

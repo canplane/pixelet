@@ -29,7 +29,9 @@ pub const CLAIMED_FOR: u32 = JITTERS + 1;
 pub const TILES_WORDS: usize = 8;
 
 /// The frames since a tile last changed, by its word `changed_at`, in the
-/// frame numbered `now`.
+/// frame numbered `now`. With `claimed`, the one rule a tile is claimed by:
+/// pxl-shader's cast calls it, and pxl-render's build.rs writes it as the
+/// hand-written passes' `tiles_age` and `tiles_claimed` (tile_word.wgsl).
 pub const fn age(now: u32, changed_at: u32) -> u32 {
     now.wrapping_sub(changed_at)
 }

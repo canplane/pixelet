@@ -329,6 +329,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "paint",
         "debug_look",
         "px",
+        "tile_word",
         "screen_tiles",
         "screen_ray",
         "screen_lit"
@@ -384,7 +385,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_MISS
     &["light_miss.gen"],
     // SHADER_AO_APPLY
-    &["screen_tiles", "ao_view", "ao_apply"],
+    &["tile_word", "screen_tiles", "ao_view", "ao_apply"],
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "debug_look", "camera_grid"],
     // SHADER_SAMPLE_BOX
@@ -404,25 +405,38 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_GENERATED_THIN
     &["decor_thin.gen"],
     // SHADER_SCREEN_FINISH
-    &["frame", "encode", "finish", "screen_tiles", "screen_finish"],
+    &[
+        "frame",
+        "encode",
+        "finish",
+        "tile_word",
+        "screen_tiles",
+        "screen_finish",
+    ],
     // SHADER_SCREEN_RESOLVE
-    &["frame", "screen_tiles", "screen_resolve"],
+    &["frame", "tile_word", "screen_tiles", "screen_resolve"],
     // SHADER_SCREEN_GATE
-    &["screen_tiles", "screen_gate"],
+    &["tile_word", "screen_tiles", "screen_gate"],
     // SHADER_SCREEN_SHOW
     &["screen_show"],
     // SHADER_SCREEN_PROPAGATE
-    &["screen_propagate"],
+    &["tile_word", "screen_propagate"],
     // SHADER_SCREEN_WRITE_BACK
-    &["screen_tiles", "screen_write_back"],
+    &["tile_word", "screen_tiles", "screen_write_back"],
     // SHADER_RASTER_GATE
-    &["screen_tiles", "raster_gate"],
+    &["tile_word", "screen_tiles", "raster_gate"],
     // SHADER_SCREEN_MARK
     &["screen_mark"],
     // SHADER_LIGHT_GATE
-    &["light_word", "screen_tiles", "light_lay", "light_gate"],
+    &[
+        "light_word",
+        "tile_word",
+        "screen_tiles",
+        "light_lay",
+        "light_gate",
+    ],
     // SHADER_SCREEN_BOUND
-    &["screen_tiles", "screen_bound"],
+    &["tile_word", "screen_tiles", "screen_bound"],
     // SHADER_SKINNED_MARK
     &["frame", "place", "skinned_place", "tile_mark"],
     // SHADER_LIGHT_DETAIL
