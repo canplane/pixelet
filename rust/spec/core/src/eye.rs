@@ -13,9 +13,9 @@ use crate::overwrite::Cut;
 pub const ORIGIN: usize = 0;
 /// Whether each ray reports the nodes its descent asked, not what it met.
 pub const STEPS: usize = 3;
-/// The unit forward, X, Y and Z, then the reach, f32 bits.
+/// The unit forward, X, Y and Z, then how far every ray goes (`FAR`), f32 bits.
 pub const FORWARD: usize = 4;
-pub const REACH: usize = 7;
+pub const FAR: usize = 7;
 /// The unit right, then the unit up, f32 bits, each then a word no reader
 /// reads, so the next starts a vec4.
 pub const RIGHT: usize = 8;
@@ -41,7 +41,7 @@ pub const GRID_WORDS: usize = beam::GRID_WORDS;
 /// The light's cast into the shadow map, its frame's constants off the light
 /// box (pxl-spec-core `light::Light`, its `words`): texel (0, 0)'s ray's start
 /// and every ray's reach, the step to the next texel across and down, the
-/// rays' direction, and a stop's push in depth by its face's axis, a vec4
+/// rays' direction, and a hit's push in depth by its face's axis, a vec4
 /// each, f32 bits, the last four's fourth words the clipmap's corners
 /// (`light::CORNER`, `light::KEPT`). All zero where no shadow is cast. The renderer writes
 /// them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the kernel
@@ -60,7 +60,7 @@ pub const JITTER_WORDS: usize = 4;
 pub const WORDS: usize = JITTER + JITTER_WORDS;
 const _: () = assert!(
     STEPS == ORIGIN + 3
-        && REACH == FORWARD + 3
+        && FAR == FORWARD + 3
         && UP == RIGHT + 4
         && TAN == UP + 4
         && RANGE == TAN + 2

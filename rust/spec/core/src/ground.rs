@@ -2,7 +2,7 @@
 
 //! gpu-portable: the ground's column at a cell, the one rule a node's ground
 //! is answered by (`node`) before what overwrites it: a cell's palette index and
-//! height off the window drawing it (`clipmap::ground`), and its cells by
+//! height off the clip level drawing it (`clipmap::ground`), and its cells by
 //! depth with a cave's air where a cave may take them. What overwrites it
 //! is not here: the ways by their own rule (`way.rs`), and what is placed
 //! by its own (`placed.rs`).
@@ -80,7 +80,7 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
 /// A tile's padded samples as a GPU holds them, 2 a word.
 pub const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
 
-/// What the windows bound under a node, each source its own: the ground's
+/// What the clip levels bound under a node, each source its own: the ground's
 /// faces, the lowest and highest, and the leaf cells the ways fill, the
 /// lowest and past the highest (`clipmap::LEVEL_WORDS`, `fill::level`).
 pub type Bounds = [[i32; 2]; 2];
@@ -404,7 +404,7 @@ pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 /// The bound of no ground, lowest over highest: what joins as nothing.
 pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 
-/// How the ground is held where a node reads it: the windows, as the CPU
+/// How the ground is held where a node reads it: the clip levels, as the CPU
 /// read them back or a GPU filled them, read the one way (`clipmap::ground`,
 /// `clipmap::bound_over`).
 pub trait Held: Area {
@@ -424,7 +424,7 @@ pub trait Held: Area {
         cells: [Zoom; 2],
         node: (Zoom, [i32; 3]),
     ) -> (Bounds, bool);
-    /// The column of the cell `c` at `zoom` off the windows
+    /// The column of the cell `c` at `zoom` off the clip levels
     /// (`clipmap::ground`), the service area's edge laid on it as its fill
     /// laid it (`Cell`); its cell where `place` found it, the zoom's cells'
     /// (`relief`'s), or found anew where `place` is `NONE`.
@@ -499,7 +499,7 @@ pub fn node<H: Held>(
     // asked within it, from the coarsest to `near`: each zoom's cells are
     // its own tile's, whose face, its own samples' bicubic, no other zoom's
     // bounds, above or below, so the bound is every one's joined, read once
-    // a window (`Held::relief`).
+    // a clip level (`Held::relief`).
     let first = coarsest(zoom, far);
     let cells = if is_cell {
         [zoom, zoom]

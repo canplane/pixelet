@@ -74,10 +74,10 @@ var<private> global: vec3<u32>;
 var<uniform> global_1: type_23;
 @group(0) @binding(9)
 var<storage, read_write> global_2: type_4;
-@group(0) @binding(3)
-var global_3: texture_storage_2d_array<r32uint,read_write>;
 @group(0) @binding(14)
-var<storage, read_write> global_4: type_44;
+var<storage, read_write> global_3: type_44;
+@group(0) @binding(3)
+var global_4: texture_storage_2d_array<r32uint,read_write>;
 @group(0) @binding(8)
 var<storage> global_5: type_4;
 @group(0) @binding(30)
@@ -157,8 +157,8 @@ fn function_() {
     switch bitcast<i32>(0u) {
         default: {
             let _e68 = global;
-            let _e70 = arrayLength((&global_4.member));
-            let _e73 = textureDimensions(global_3);
+            let _e70 = arrayLength((&global_3.member));
+            let _e73 = textureDimensions(global_4);
             if (_e68.x >= _e73.x) {
             } else {
                 if (_e68.y >= _e73.y) {
@@ -632,7 +632,7 @@ fn function_() {
                                         break;
                                     }
                                     let _e879 = local_1[_e875];
-                                    textureStore(global_3, vec2<u32>(_e877.x, _e877.y), i32(_e877.z), vec4(_e879));
+                                    textureStore(global_4, vec2<u32>(_e877.x, _e877.y), i32(_e877.z), vec4(_e879));
                                     phi_1855_ = (_e875 + 1u);
                                 } else {
                                     phi_1855_ = u32();
@@ -655,7 +655,7 @@ fn function_() {
                                 let _e773 = global_5.member[(_e699.member_2 + 12u)];
                                 if _e711 {
                                     if (7u < _e70) {
-                                        let _e777 = atomicAdd((&global_4.member[7u]), 1u);
+                                        let _e777 = atomicAdd((&global_3.member[7u]), 1u);
                                     }
                                 }
                                 if (_e699.member_1.member_2 == 0u) {
@@ -677,7 +677,7 @@ fn function_() {
                                             break;
                                         }
                                         let _e815 = local[_e811];
-                                        textureStore(global_3, vec2<u32>(_e813.x, _e813.y), i32(_e813.z), vec4(_e815));
+                                        textureStore(global_4, vec2<u32>(_e813.x, _e813.y), i32(_e813.z), vec4(_e815));
                                         phi_1906_ = (_e811 + 1u);
                                     } else {
                                         phi_1906_ = u32();
@@ -697,10 +697,10 @@ fn function_() {
                             } else {
                                 if _e711 {
                                     if (8u < _e70) {
-                                        let _e717 = atomicAdd((&global_4.member[8u]), 1u);
+                                        let _e717 = atomicAdd((&global_3.member[8u]), 1u);
                                     }
                                 }
-                                textureStore(global_3, vec2<u32>(_e231.x, _e231.y), i32(_e231.z), vec4(4294967295u));
+                                textureStore(global_4, vec2<u32>(_e231.x, _e231.y), i32(_e231.z), vec4(4294967295u));
                                 let _e724 = (_e73.x / 8u);
                                 if ((_e73.x % 8u) > 0u) {
                                     phi_1958_ = (_e724 + 1u);
@@ -716,7 +716,7 @@ fn function_() {
                                 }
                                 let _e735 = phi_1975_;
                                 if (6u < _e70) {
-                                    let _e739 = atomicAdd((&global_4.member[6u]), 1u);
+                                    let _e739 = atomicAdd((&global_3.member[6u]), 1u);
                                     phi_1983_ = _e739;
                                 } else {
                                     phi_1983_ = 0u;
@@ -726,16 +726,16 @@ fn function_() {
                                 if _e742 {
                                     if ((_e741 % 4096u) == 0u) {
                                         if (1u < _e70) {
-                                            let _e759 = atomicMax((&global_4.member[1u]), ((_e741 / 4096u) + 1u));
+                                            let _e759 = atomicMax((&global_3.member[1u]), ((_e741 / 4096u) + 1u));
                                         }
                                     }
                                 } else {
                                     if (_e741 == 1048576u) {
                                         if (3u < _e70) {
-                                            let _e747 = atomicMax((&global_4.member[3u]), _e729);
+                                            let _e747 = atomicMax((&global_3.member[3u]), _e729);
                                         }
                                         if (4u < _e70) {
-                                            let _e751 = atomicMax((&global_4.member[4u]), _e735);
+                                            let _e751 = atomicMax((&global_3.member[4u]), _e735);
                                         }
                                     }
                                 }

@@ -224,8 +224,8 @@ pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
     let m = (1 << (cell - LEAF_CELL)) - 1;
     // Per axis, the leaf offsets its neighbors reach: 0 always, -1 at the
     // leaf cell's low edge, +1 at its high one.
-    let reach = |v: i32| 0b010 | ((v & m == 0) as u32) | ((v & m == m) as u32) << 2;
-    let (x, y) = (reach(b[0]), reach(b[1]));
+    let offsets = |v: i32| 0b010 | ((v & m == 0) as u32) | ((v & m == m) as u32) << 2;
+    let (x, y) = (offsets(b[0]), offsets(b[1]));
     // Bit `k` where it reaches `beside(k)` along both axes.
     let mut r = 0;
     let mut k = 0;
@@ -246,11 +246,11 @@ pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
 /// (nothing known) is exactly one past the area. The bake writes `unknown`
 /// only for tiles its coverage does not meet (pxl-geo-bake
 /// terrain/absent.rs `Absence::at`), its coverage is the served shards, and
-/// no window's cell is coarser than a shard, so none straddles the area's
+/// no clip level's cell is coarser than a shard, so none straddles the area's
 /// edge. So the leaf cells about one are never read to know them gone:
 /// each is past or not off the shard's bits (`Shard::past_leaf`), and a
 /// cell's own palette index answers its own. They lie a leaf cell past `l`, inside
-/// its shard's nine wherever `node`'s shard is `l`'s, as a leaf window's
+/// its shard's nine wherever `node`'s shard is `l`'s, as a leaf clip level's
 /// brick is, a node far narrower than a shard.
 pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
     if shard.inside() {

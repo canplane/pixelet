@@ -11,12 +11,12 @@ use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 use crate::space::camera::eye::Observation;
 use crate::space::camera::grid::split_dist;
 use crate::space::coord::zoom::{units, Zoom};
-use crate::space::layer::lattice::{demand_reach, draw_reach};
+use crate::space::layer::lattice::{demand_dist, draw_dist};
 
 /// The distances a layer's `zoom` is required over: from where the grid's
 /// cell its tiles fold into begins (0 for the leaves) to where the next
-/// coarser one's does, or the reach of the source's `top` at `zoom` alone,
-/// as far as a window holds it (`demand_reach`). None past the far edge.
+/// coarser one's does, or the distance of the source's `top` at `zoom` alone,
+/// as far as a clip level holds it (`demand_dist`). None past the far edge.
 pub fn band(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<(f64, f64)> {
     let from = if zoom == LEAF_ZOOM {
         0.0
@@ -24,28 +24,28 @@ pub fn band(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<
         split_dist(lattice.grid_zoom(zoom))
     };
     let to = if zoom == top {
-        demand_reach(lattice, zoom)
+        demand_dist(lattice, zoom)
     } else {
-        draw_reach(lattice, zoom)
+        draw_dist(lattice, zoom)
     };
-    (from <= o.reach).then_some((from, to))
+    (from <= o.demand_dist).then_some((from, to))
 }
 
 /// The most of a lattice's tiles a zoom's demand spans along an axis:
 /// ⌊d / tile⌋ + 2, the same at every zoom. A tile of fewer grid cells is
 /// asked for more of.
-pub const fn reach_across(lattice: Lattice) -> u32 {
-    (2.0 * demand_reach(lattice, LEAF_ZOOM) / units(LEAF_ZOOM)) as u32 + 2
+pub const fn demand_across(lattice: Lattice) -> u32 {
+    (2.0 * demand_dist(lattice, LEAF_ZOOM) / units(LEAF_ZOOM)) as u32 + 2
 }
 
 /// The most of a lattice's tiles a zoom's demand names about one observer.
-pub const fn reach_tiles(lattice: Lattice) -> u32 {
-    reach_across(lattice) * reach_across(lattice)
+pub const fn demand_tiles(lattice: Lattice) -> u32 {
+    demand_across(lattice) * demand_across(lattice)
 }
 
 /// The ground's, which the floor and the Earth's window are cut to.
-pub const REACH_ACROSS: u32 = reach_across(GROUND);
-pub const REACH_TILES: u32 = reach_tiles(GROUND);
+pub const GROUND_DEMAND_ACROSS: u32 = demand_across(GROUND);
+pub const GROUND_DEMAND_TILES: u32 = demand_tiles(GROUND);
 
 /// Every tile at `z` with ground within `radius` of `at`.
 pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Tile> {

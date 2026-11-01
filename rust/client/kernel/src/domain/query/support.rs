@@ -11,7 +11,7 @@
 
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::world::{REACH, ROUND};
+use pxl_spec::space::coord::world::{BOUNDS, ROUND};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -69,8 +69,8 @@ impl<'w, 'a> Upright<'w, 'a> {
         let side = units(cell);
         let corner = xy.map(|v| libm::floor(v / side) * side);
         let column = Aabb {
-            min: [corner[0], corner[1], REACH.min[2]],
-            max: [corner[0] + side, corner[1] + side, REACH.max[2]],
+            min: [corner[0], corner[1], BOUNDS.min[2]],
+            max: [corner[0] + side, corner[1] + side, BOUNDS.max[2]],
         };
         let finer = world
             .finest_in(&column)
@@ -109,7 +109,7 @@ impl<'w, 'a> Upright<'w, 'a> {
                 z,
             ],
             dir: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
-            reach: (to - z).abs(),
+            t_max: (to - z).abs(),
         };
         let (answer, _) = self.world.along(&ray, self.detail, until, None);
         if let Some(l) = answer.lack() {
@@ -127,11 +127,13 @@ impl<'w, 'a> Upright<'w, 'a> {
     fn lift(&mut self, mut z: f64) -> f64 {
         loop {
             let top = (0..self.across * self.across)
-                .map(|k| match self.met(k, z, REACH.max[2], Until::Transparent) {
-                    Answer::Exact(None) => REACH.max[2],
-                    Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => b.min[2].max(z),
-                    Answer::Coarser(None, _) | Answer::Nothing(_) => z,
-                })
+                .map(
+                    |k| match self.met(k, z, BOUNDS.max[2], Until::Transparent) {
+                        Answer::Exact(None) => BOUNDS.max[2],
+                        Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => b.min[2].max(z),
+                        Answer::Coarser(None, _) | Answer::Nothing(_) => z,
+                    },
+                )
                 .fold(z, f64::max);
             if top == z {
                 return z;
@@ -144,9 +146,9 @@ impl<'w, 'a> Upright<'w, 'a> {
     /// reach's floor: the rays down from `z`, which start in the cell over
     /// it.
     fn below(&mut self, z: f64) -> Option<f64> {
-        self.rays(z, REACH.min[2], Until::Opaque)
+        self.rays(z, BOUNDS.min[2], Until::Opaque)
             .map(|b| b.max[2])
-            .filter(|&t| t > REACH.min[2])
+            .filter(|&t| t > BOUNDS.min[2])
             .reduce(f64::max)
     }
 
@@ -179,7 +181,7 @@ impl<'w, 'a> Upright<'w, 'a> {
                 self.lack.get_or_insert(l);
             }
             if let Some(Some((at, rise))) = answer.val() {
-                let top = ((f64::from(at) + f64::from(rise)) * unit).min(REACH.max[2]);
+                let top = ((f64::from(at) + f64::from(rise)) * unit).min(BOUNDS.max[2]);
                 most = Some(most.map_or(top, |m| m.max(top)));
             }
         }
@@ -225,7 +227,7 @@ impl<'a> World<'a> {
     /// surface and nothing placed.
     pub fn surface_support(&self, at: &Q3) -> Answer<Option<f64>> {
         let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
-        let [lo, hi] = [REACH.min[2], REACH.max[2]];
+        let [lo, hi] = [BOUNDS.min[2], BOUNDS.max[2]];
         let surface = c.surface();
         // With no surface, the search starts at the highest solid, or at the reach's floor.
         let start = surface.or_else(|| c.highest()).unwrap_or(lo).max(lo);
@@ -243,7 +245,7 @@ impl<'a> World<'a> {
         let start = q3::to_real(i64::from(at[2]));
         let mut c = Upright::new(self, xy(at), zoom);
         let stands = match c.lift(start) {
-            z if z > start => Some(z.min(REACH.max[2])),
+            z if z > start => Some(z.min(BOUNDS.max[2])),
             z => c.below(z),
         };
         c.done(stands)
@@ -256,10 +258,10 @@ impl<'a> World<'a> {
         let z = q3::to_real(i64::from(at[2]));
         let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
         let down = match c.lift(z) {
-            t if t > z => Some(t.min(REACH.max[2])),
+            t if t > z => Some(t.min(BOUNDS.max[2])),
             t => c.below(t),
         };
-        let up = c.above(z, REACH.max[2]).map(|a| c.lift(a));
+        let up = c.above(z, BOUNDS.max[2]).map(|a| c.lift(a));
         let nearest = [down, up, c.surface()]
             .into_iter()
             .flatten()

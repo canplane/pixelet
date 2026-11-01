@@ -161,8 +161,8 @@ const RAYS_ENTRIES: [&str; 6] = [
     "cast_cs",
     "miss_cs",
     "miss_list_cs",
-    "stop_lead_cs",
-    "stop_faces_cs",
+    "hit_lead_cs",
+    "hit_faces_cs",
     "light_mark_cs",
 ];
 
@@ -192,16 +192,16 @@ fn rays_bound(text: &str) -> Vec<(usize, String)> {
 const WORKGROUPS: [(&str, &str, &str, &str, usize); 12] = [
     (
         "cast.rs",
-        "stop_lead_cs",
+        "hit_lead_cs",
         "spec/core/src/beam.rs",
-        "STOP_LANES",
+        "HIT_LANES",
         1,
     ),
     (
         "cast.rs",
-        "stop_faces_cs",
+        "hit_faces_cs",
         "spec/core/src/beam.rs",
-        "STOP_LANES",
+        "HIT_LANES",
         1,
     ),
     (

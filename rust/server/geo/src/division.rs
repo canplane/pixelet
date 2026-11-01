@@ -48,8 +48,8 @@ pub async fn name_points(
         return Ok(Vec::new());
     }
     let client = pool.get().await?;
-    let reach: Vec<f64> = ys.iter().map(|&y| division::reach_at(y)).collect();
-    let rows = client.query(FINEST_SQL, &[&xs, &ys, &reach]).await?;
+    let radius: Vec<f64> = ys.iter().map(|&y| division::radius_at(y)).collect();
+    let rows = client.query(FINEST_SQL, &[&xs, &ys, &radius]).await?;
     let finest = division::by_point(
         xs.len(),
         rows.iter()

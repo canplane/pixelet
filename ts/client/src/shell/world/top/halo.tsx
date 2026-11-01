@@ -34,7 +34,7 @@ function Halo({
   draw: (ink?: string) => ReactNode;
 }) {
   return (
-    <View style={[style, styles.reach]}>
+    <View style={[style, styles.rings]}>
       {haloRings.map((px) => (
         <View
           key={px}
@@ -67,7 +67,7 @@ function Halo({
 }
 
 export function haloGap(gap: f64): f64 {
-  return gap - 2 * halo.reach;
+  return gap - 2 * halo.width;
 }
 
 export function HaloIcon({
@@ -77,8 +77,8 @@ export function HaloIcon({
   return (
     <Halo
       style={{
-        width: icon.size + 2 * halo.reach,
-        height: icon.size + 2 * halo.reach,
+        width: icon.size + 2 * halo.width,
+        height: icon.size + 2 * halo.width,
       }}
       draw={(ink) => (
         <Glyph {...icon} color={ink ?? icon.color} struck={struck} />
@@ -120,12 +120,12 @@ function around(px: f64): [f64, f64][] {
 
 const styles = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
-  reach: { padding: halo.reach },
+  rings: { padding: halo.width },
   copy: {
     position: "absolute",
-    top: halo.reach,
-    right: halo.reach,
-    bottom: halo.reach,
-    left: halo.reach,
+    top: halo.width,
+    right: halo.width,
+    bottom: halo.width,
+    left: halo.width,
   },
 });

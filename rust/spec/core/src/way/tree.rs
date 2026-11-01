@@ -7,7 +7,7 @@
 //! differ, each branch its eight folded (`overwrite::fold`), its leaves what
 //! the ways write at its cells (`way::lined`, read off the brick's spans). A
 //! reader asks a brick's ways only of a node the brick's or under it, a
-//! wider one the windows' bound over its bricks (`clipmap::bound_over`), so
+//! wider one the clip levels' bound over its bricks (`clipmap::bound_over`), so
 //! the tree holds nothing over the brick. Its child groups are taken from one
 //! pool every brick's tree shares, off a free stack, and a brick's root
 //! word names the child group of its nodes along z (`root_word`,
@@ -161,7 +161,7 @@ pub fn cursor(columns: &impl Columns, root: u32, cell: Zoom, zoom: Zoom, at: [i3
 pub const CHILD_GROUP_WORDS: u32 = 2 * overwrite::CHILDREN;
 
 /// The most child groups one brick's build takes before its fold gives any
-/// back: the most of the format-12 set (2026-10-18, its windows' bricks
+/// back: the most of the format-12 set (2026-10-18, its clip levels' bricks
 /// lined as before the face cell, which only lines more); a tile past it
 /// fails its bake (pxl-geo-bake terrain/pool.rs), and what a build keeps a
 /// brick, its records and the child groups its fold gives back, is held to it.

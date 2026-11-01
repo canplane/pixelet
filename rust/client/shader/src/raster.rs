@@ -1,10 +1,10 @@
 // pxl-shader/raster.rs
 
-//! The samples' stops handed to the rasterizer (pxl-spec-core `raster`):
+//! The samples' hits handed to the rasterizer (pxl-spec-core `raster`):
 //! each stopped sample's box written for the raster's draw (`sample_box_cs`),
 //! which pxl-render raster.wgsl draws and pxl-shader cast.rs `cast_cs`
-//! reads each pixel's visible sample off; and what lies about each stop's
-//! face asked once a stop (`face_cs`), a box's and a missed pixel's alike.
+//! reads each pixel's visible sample off; and what lies about each hit's
+//! face asked once a hit (`face_cs`), a box's and a missed pixel's alike.
 
 use pxl_spec_core::cast::End;
 use pxl_spec_core::{beam, cast, raster, support, way};
@@ -110,14 +110,14 @@ pub(crate) fn taken<W: Words + ?Sized>(
         w.word(k + beam::SAMPLE_ASSET + 1),
     ];
     let (enter, axis, enters) = cast::entry(origin, ray, &node, asset[0]);
-    let stop = cast::Hit {
+    let hit = cast::Hit {
         t: enter,
         axis,
         node,
         at: 0u32,
         asset,
     };
-    (stop, enters && axis == w.word(k + beam::SAMPLE_AXIS))
+    (hit, enters && axis == w.word(k + beam::SAMPLE_AXIS))
 }
 
 /// Each sample of its observer's lattice, a thread each: written as a box
@@ -177,26 +177,26 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
     beams.set(a + beam::ASK_TO, k + beam::SAMPLE_FACES);
 }
 
-/// Each stop asked its faces, a thread each, `raster::FACES_LANES` a
+/// Each hit asked its faces, a thread each, `raster::FACES_LANES` a
 /// workgroup, dispatched off its args (`raster::ARGS_FACES`), each past
 /// their count (`raster::ARGS_INSTANCES`) returning at once: what lies
 /// about the face its ray entered (`World::faced`), asked of the world's
-/// query once a stop rather than once a ray, off the line down to it from
+/// query once a hit rather than once a ray, off the line down to it from
 /// the deepest node of its cell's beam ray's line over it, that line read
 /// in place (`support::sub_line`, beam.rs `Laid`), and left in the word its ask
 /// names (`beam::ASK_TO`). The boxes' asks (`beam::Grid::ask_at`), their
 /// faces left in their samples' words, which the pixels read (cast.rs
-/// `cast_cs`); and the missed pixels' stops' (`beam::Grid::stop_ask_at`;
-/// cast.rs `stop_lead_cs`), their args laid alike (pxl-spec-core
-/// `ray::MISS_ARGS_ASKED`), their faces left in the stops, which their pixels
-/// take (cast.rs `stop_faces_cs`). One pass for both, over the args it is
+/// `cast_cs`); and the missed pixels' hits' (`beam::Grid::hit_ask_at`;
+/// cast.rs `hit_lead_cs`), their args laid alike (pxl-spec-core
+/// `ray::MISS_ARGS_ASKED`), their faces left in the hits, which their pixels
+/// take (cast.rs `hit_faces_cs`). One pass for both, over the args it is
 /// bound to: where its asks lie (`raster::ARGS_ASKS`) and how many.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "face_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn face_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
@@ -219,7 +219,7 @@ pub fn face_cs(
         let (zoom, c) = (node.zoom, node.idx(origin));
         let base = Laid::of(Beamed(w, w.word(a + beam::ASK_LINE)), origin);
         let mut world = World {
-            window,
+            clipmap,
             ground,
             palette_indices: NoPalette(0),
             shards,

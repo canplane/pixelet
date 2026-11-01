@@ -517,7 +517,7 @@ pub fn fill_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f3
     )
 }
 
-/// The top of the cell a stop met, as it is drawn (`fill_bounds`): the
+/// The top of the cell a hit met, as it is drawn (`fill_bounds`): the
 /// floor of its node `n` on its grid from the origin `o`, and the share of
 /// the node's side its top lies over that floor — its cube's top where its
 /// word `asset` keeps it whole, else its fill box's. What a walker and decor
@@ -585,7 +585,7 @@ fn crossing(d: [f32; 3], t: [f32; 3], last: bool) -> u32 {
 
 /// The world as a descent asks it, each node handed what its parent found
 /// (the `At`). The CPU and a GPU answer it from the same reading of the
-/// ground's windows, the caves, the ways' tree and what is placed; only the
+/// ground's clip levels, the caves, the ways' tree and what is placed; only the
 /// CPU's answer strikes decor.
 pub trait Query {
     type At: Copy;
@@ -939,7 +939,7 @@ pub fn walk<Q: Query>(
                 }
             };
             if ends != End::Miss {
-                // Where the walk ends, its stop, made there and nowhere else:
+                // Where the walk ends, its hit, made there and nowhere else:
                 // where the ray enters the node, or its asset's box
                 // (`entered`).
                 let (t, axis) = entered(ray, near);
@@ -987,7 +987,7 @@ pub fn walk<Q: Query>(
             (at, false)
         } else {
             if t1 >= ray.t_max {
-                // Gone on to its interval's end: no stop, which no asker reads.
+                // Gone on to its interval's end: no hit, which no asker reads.
                 let hit = Hit {
                     t: t1,
                     axis: 0,

@@ -62,9 +62,9 @@ use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::preview::Preview;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::propagate::{self, Propagate};
 use crate::gpu::put::put_mat;
 use crate::gpu::ray::{RayCounts, RaysPass};
-use crate::gpu::reach::{self, Reach};
 use crate::gpu::read::Read;
 use crate::gpu::resolve::Resolve;
 use crate::gpu::shadow::{self, Shadow};
@@ -195,8 +195,8 @@ pub struct EarthTiles<'a> {
     pub upload: &'a mut Upload,
 }
 
-/// The ground's windows as the GPU holds them (pxl-spec-core `window`,
-/// their bricks in `SLOTS` slots): the bricks to hand it, and where
+/// The ground's clip levels as the GPU holds them (pxl-spec-core
+/// `clipmap`, their bricks in `SLOTS` slots): the bricks to hand it, and where
 /// their cells come back.
 pub struct GroundBricks<'a> {
     /// Hands each brick whose cells the GPU is to draw to the writer.
@@ -258,13 +258,13 @@ pub struct Cast<'a> {
     /// The eye (pxl-spec-core `eye`; pxl-kernel domain/view/lens.rs `gpu_cast`,
     /// domain/scene/cast.rs `eye`).
     pub eye: [u32; eye::WORDS],
-    /// The windows' table (pxl-spec-core `clipmap::Entry`; pxl-kernel
-    /// domain/layer/terrain/clipmap.rs `table`), four words a row: every window's
-    /// entries, the eye's first, from the top's, each the brick it wants, X
-    /// and Y, the slot holding it plus one while present (`Entry::slot`)
-    /// and the fill it is on its way from; then each window's first brick
+    /// The clipmap's table (pxl-spec-core `clipmap::Entry`; pxl-kernel
+    /// domain/layer/terrain/clipmap.rs `table`), four words a row: every clip
+    /// level's entries, the eye's first, from the top's, each the brick it
+    /// wants, X and Y, the slot holding it plus one while present (`Entry::slot`)
+    /// and the fill it is on its way from; then each clip level's first brick
     /// (`clipmap::ORIGIN_AT`).
-    pub window: &'a [i32],
+    pub clipmap: &'a [i32],
     /// The service area's index (pxl-spec-core `area::Area`), its keys four a
     /// row (pxl-kernel domain/scene/cast.rs `shards`); read where it lies,
     /// unwritten until the page replays the turn.
@@ -305,7 +305,7 @@ pub struct CellsBack {
     pub ticket: u32,
 }
 
-/// A brick handed to the GPU's fill, the record the ground's windows hand
+/// A brick handed to the GPU's fill, the record the ground's clip levels hand
 /// on (pxl-kernel domain/layer/terrain/clipmap.rs `fill`): its words
 /// (pxl-spec-core `clipmap::fresh`), its four palette indices a cell, its tile's
 /// padded samples, its lines as far as they are written
@@ -503,8 +503,8 @@ pub struct Renderer {
     marker: MarkerPass,
     finish: Finish,
     resolve: Resolve,
-    /// The light's map's tiles that changed reached across to the screen's.
-    reach: Reach,
+    /// The light's map's tiles that changed propagated to the screen's.
+    propagate: Propagate,
     debug: DebugPass,
     screen: RaysPass,
     /// The frame's whole input as the last frame drew it (stage 2): the
@@ -550,7 +550,7 @@ pub struct Renderer {
     light_mark_group: u32,
     light_mark_bound: [u32; 4],
     /// The eye's view-projection as `lay_out` took it, which the sheets are
-    /// seen through (`sheets_mark`) and the reach reads.
+    /// seen through (`sheets_mark`) and the propagation reads.
     view_proj: Mat4,
     /// What the occlusion was last found from: the frame's words, its own,
     /// the surface and whether decor is generated, the world's depth the
@@ -615,7 +615,7 @@ impl Renderer {
             marker: MarkerPass::new(g, &mut pipelines, frame_buf, device.align),
             finish: Finish::new(g, &mut pipelines),
             resolve: Resolve::new(g, &mut pipelines),
-            reach: Reach::new(g, &mut pipelines),
+            propagate: Propagate::new(g, &mut pipelines),
             debug: DebugPass::new(g, &mut pipelines, frame_buf, sky_buf, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
@@ -695,7 +695,7 @@ impl Renderer {
         self.screen.set_lit(lit);
     }
 
-    /// `reach` how far the eye draws, in units; none without an eye.
+    /// `eye_far` how far the eye draws, in units; none without an eye.
     fn lay_out(
         &mut self,
         g: &Gpu,
@@ -703,7 +703,7 @@ impl Renderer {
         height: u32,
         screen: (u32, u32),
         env: &[f32],
-        reach: f32,
+        eye_far: f32,
     ) {
         let s = stage_lane();
         let (mut m, mut proj) = (mat4::new(), mat4::new());
@@ -734,7 +734,7 @@ impl Renderer {
             [eye_world[0], eye_world[1]],
             env,
             s[STAGE_AT::CLOUDS],
-            reach * env[ENV_AIR + 1],
+            eye_far * env[ENV_AIR + 1],
         );
         self.stars.lay_out(&m, env, width);
         self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_POLE..ENV_POLE + 3]);
@@ -801,7 +801,7 @@ impl Renderer {
             u[SHADOW_RADIUS_NDC] = shadow_radius_ndc;
         }
 
-        self.atmosphere.lay_out(g, env, reach);
+        self.atmosphere.lay_out(g, env, eye_far);
     }
 
     /// A box is one instance shared by `BOX_VERTICES`; a draw's first box is its first
@@ -835,12 +835,11 @@ impl Renderer {
             return None;
         }
         let (alt, km_per_u) = (f64::from(env[ENV_AIR]), f64::from(env[ENV_AIR + 1]));
-        let reach = f64::from(w[clouds::REACH]);
+        let dist = f64::from(w[clouds::DRAW_DIST]);
         let mut clip: Option<[f32; 4]> = None;
         for km in [cloud::altocumulus::KM, cloud::cirrus::KM] {
             let h = f64::from(km) - alt;
-            let half =
-                libm::sqrt((reach * reach - h * h).max(0.0)) / km_per_u.max(f64::MIN_POSITIVE);
+            let half = libm::sqrt((dist * dist - h * h).max(0.0)) / km_per_u.max(f64::MIN_POSITIVE);
             if half <= 0.0 {
                 continue;
             }
@@ -995,16 +994,16 @@ impl Renderer {
         targets(g, world);
         let animated = input.animated;
         // How far the eye draws, as far as the clouds are drawn.
-        let reach = cast
+        let far = cast
             .as_ref()
-            .map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
+            .map_or(0.0, |c| f32::from_bits(c.eye[eye::FAR]));
         self.lay_out(
             g,
             world.width,
             world.height,
             world.screen,
             input.environment,
-            reach,
+            far,
         );
         // The light box the world is cast from, as the map is aimed; none
         // where no shadow is cast.
@@ -1236,14 +1235,15 @@ impl Renderer {
             .mark(g, [shadow::SIZE; 2], (map_gated, false), None);
         let map_drawn = self.shadows && (!map_gated || casters_marking);
         // Where the map's tiles changed through its gate, the screen's tiles
-        // whose pixels read them are reached on the GPU (gpu/reach.rs): only
+        // whose pixels read them are propagated to on the GPU
+        // (gpu/propagate.rs): only
         // where a caster marks, which marks the screen's tiles too
         // (`screen_marking`), so the host counts the frame as marked.
-        let reaching = map_drawn && map_gated;
-        if reaching {
-            let spread = reach::spread(SHADOW_MARGIN as f32);
+        let propagating = map_drawn && map_gated;
+        if propagating {
+            let spread = propagate::spread(SHADOW_MARGIN as f32);
             let light = &self.shadow.light_view_proj;
-            self.reach
+            self.propagate
                 .lay_out(g, &self.view_proj, light, spread, shadow::SIZE);
         }
         // The tiles marked by what moved where only the listed draws that
@@ -1319,8 +1319,8 @@ impl Renderer {
         }
         // The same from the light, where the map is drawn through its gate:
         // the map's tiles the casters' shadows change, their words set by
-        // their drawn selves, which the reach reads.
-        if reaching {
+        // their drawn selves, which the propagation reads.
+        if propagating {
             let (light_frame, map) = self.shadow.frame_and_map();
             let tiles = &self.light_tiles;
             let (words, uniform) = tiles.bound();
@@ -1358,9 +1358,9 @@ impl Renderer {
             // The box they cover counted into the gate's draw.
             self.light_tiles.dispatch_box_args(&mut ctx);
         }
-        if reaching {
+        if propagating {
             let depth = world.depth_only_view;
-            self.reach
+            self.propagate
                 .dispatch(&mut ctx, depth, &self.light_tiles, &self.resolve.tiles);
         }
         self.screen.dispatch(&mut ctx);
@@ -1515,13 +1515,13 @@ impl Renderer {
         self.impostor.keep(draws.of(PIPELINE_IMPOSTOR), uniforms);
         self.location.keep(&draws, uniforms);
         self.kept.keep(g, ctx.encoder, &read_uploads, &touched, b);
-        // The depth's bound the reach reads, in the tiles the world's pass
+        // The depth's bound the propagation reads, in the tiles the world's pass
         // drew: the claimed, or every one without the stencil. None without
-        // the shadows, which the reach runs with alone: the frame they come
+        // the shadows, which the propagation runs with alone: the frame they come
         // on in moves the frame's words (`SHADOW_STRENGTH`), so it is drawn
         // whole and sets every square before a frame reaches.
         if self.shadows {
-            self.reach
+            self.propagate
                 .set_bounds(&mut ctx, world.depth_only_view, size, drawn, squares);
         }
         let gathered = self.resolve.draw(&mut ctx, self.frame_buf, world, gated);

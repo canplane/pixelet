@@ -31,7 +31,7 @@ use core::f32::consts::SQRT_2;
 /// constants worked out once off the light box (`Light::of`), each a vec4's
 /// first three words: where texel (0, 0)'s ray starts, from the eye, in
 /// units, and how far every ray reaches (the fourth word); the step to the
-/// next texel across and down; the rays' one direction; and how far a stop
+/// next texel across and down; the rays' one direction; and how far a hit
 /// on a face across each axis is pushed back in depth. Their fourth words
 /// hold the clipmap's: the world texel index of the box's texel (0, 0),
 /// `corner`, X then Y, Y counted down the rows; and the share of the box's
@@ -103,7 +103,7 @@ impl Light {
     /// the map's NDC to units from the eye, by its columns: a texel's NDC
     /// `(x, y)` lies at `w + x·x + y·y` on the near plane, and `z` runs
     /// from the near plane to the far; the map `size` texels a side, row 0
-    /// at the top, as the lit passes read it. A stop's push is a raster
+    /// at the top, as the lit passes read it. A hit's push is a raster
     /// caster's polygon offset (`param::light::SLOPE_BIAS`): the face's greatest
     /// change in depth a texel across the map (`slope`), times it.
     /// `corner` is the world texel index of the box's first texel;
@@ -185,7 +185,7 @@ impl Light {
     /// The way up the tallest decor (`generated::TALLEST`) on the box, in
     /// tiles across and down, and the steps it takes a tile apart at most:
     /// a receiver standing on a tile reads the box up it, decor and the
-    /// actors no taller (pxl-shader light.rs `light_reach_cs`). The box is
+    /// actors no taller (pxl-shader light.rs `light_propagate_cs`). The box is
     /// orthographic, so it is the same from every tile.
     pub fn up(&self) -> ([f32; 2], u32) {
         let (low, top, tile) = (
@@ -493,7 +493,7 @@ const FILTER: f32 = 1.0;
 
 /// The tiles a receiver that reads a slot may stand in, across and down from
 /// the slot's tile, from the first to the last: a tap reads that far
-/// (pxl-shader light.rs `light_reach_cs`).
+/// (pxl-shader light.rs `light_propagate_cs`).
 pub const READ_TILES: [i32; 2] = [-2, 1];
 pub const LINE_WORDS: u32 = LINE_MARGIN + 1;
 /// What a cell hands its texels: their start, f32 bits, and the beam ray
@@ -627,7 +627,7 @@ pub const fn stands_at(size: u32) -> u32 {
 /// The tiles a receiver reads, past the stands, as many: the number of the
 /// cast that first read one in its epoch (`HEAD_EPOCH`), read where it lies
 /// within its taps of the way up from a tile one stands on (`Light::up`;
-/// pxl-shader light.rs `light_reach_cs`). A tile this cast's number names is
+/// pxl-shader light.rs `light_propagate_cs`). A tile this cast's number names is
 /// the cast's to cast; one an earlier cast of its epoch names holds what
 /// that cast left; no receiver reads any other.
 pub const fn reads_at(size: u32) -> u32 {
@@ -678,7 +678,7 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
 /// (`LINE_MARGIN`, `sample_margin`; pxl-shader light.rs `light_held_cs`),
 /// then lowered by each listed slot's walk (`missed`, `light_told_cs`);
 /// then where the eye stood, Q3, X, Y and Z, when the cast that cast it
-/// claimed it (`light_reach_cs`).
+/// claimed it (`light_propagate_cs`).
 /// While the eye stands nearer than the margin to where it stood, every zoom
 /// those walks asked is asked again, so the tile holds what it would be cast
 /// anew to (`holds`; `light_detail_cs`).
@@ -710,7 +710,7 @@ pub fn holds(margin: f32, was: [i32; 3], eye: [i32; 3]) -> bool {
 /// The workgroups of the passes that cast tiles, a buffer of their own: each
 /// pass's three words (x, y, z) from its `ARGS_*` word, then each whole from
 /// `ARGS_WHOLE`. A cast starts with none, and a tile claimed as the cast's to
-/// cast (pxl-shader light.rs `light_reach_cs`) copies the whole in; a cast that
+/// cast (pxl-shader light.rs `light_propagate_cs`) copies the whole in; a cast that
 /// claims none, as where the receivers moved only within the tiles cast,
 /// casts none.
 pub const ARGS_BEAM: u32 = 0;
@@ -992,12 +992,12 @@ mod tests {
     }
 
     /// Every texel a receiver's taps read, at any height up to the tallest
-    /// decor over a point stood on, lies in a tile the reach reads from the
-    /// tile stood on (pxl-shader light.rs `light_reach_cs`: a tile `t` is read
+    /// decor over a point stood on, lies in a tile the propagation reads from the
+    /// tile stood on (pxl-shader light.rs `light_propagate_cs`: a tile `t` is read
     /// where one stood on lies at `t − up_at(k) + [−2, 1]²`), whatever the
     /// light's slant.
     #[test]
-    fn reach_covers_receivers() {
+    fn propagate_covers_receivers() {
         for (sx, sz) in [
             (0.0f32, 1.0f32),
             (0.3, 0.95),
@@ -1033,13 +1033,13 @@ mod tests {
                             base[2] + h + s.across[2] / texel * a * texel,
                         ];
                         let t = s.tile_of(p);
-                        let reached = (0..=up.1).any(|k| {
+                        let covered = (0..=up.1).any(|k| {
                             let o = Light::up_at(up, k);
                             let d = [t[0] - o[0] - stood[0], t[1] - o[1] - stood[1]];
                             let read = -READ_TILES[1]..=-READ_TILES[0];
                             read.contains(&d[0]) && read.contains(&d[1])
                         });
-                        assert!(reached, "light {sx} {sz} base {base:?} h {h} tap {a} {b}");
+                        assert!(covered, "light {sx} {sz} base {base:?} h {h} tap {a} {b}");
                     }
                 }
             }
@@ -1083,11 +1083,11 @@ mod tests {
     }
 
     /// A tile held while the eye moves breaks where a node its walk asked
-    /// is asked at another zoom, though the zoom at the stop is the same: a
-    /// node [0, 8]³ units from the ray's origin, the stop on its top face,
+    /// is asked at another zoom, though the zoom at the hit is the same: a
+    /// node [0, 8]³ units from the ray's origin, the hit on its top face,
     /// the eye on X past it stepping a unit nearer across the band edge at
     /// 96 units (`grid::cell_zoom_from`) at the node's nearest point, while
-    /// the stop stays within its band. The check by the stop's zoom, which the
+    /// the hit stays within its band. The check by the hit's zoom, which the
     /// slot's word held before the margin, holds it; the margin breaks it
     /// (`holds`).
     #[test]
@@ -1095,7 +1095,7 @@ mod tests {
         use crate::cast::{Asked, Margin};
         use crate::grid::cell_zoom_from;
         use crate::{FINEST_ZOOM, UNIT_ZOOM};
-        let (hi, stop) = (8.0f32, [0.0f32, 0.0, 8.0]);
+        let (hi, hit) = (8.0f32, [0.0f32, 0.0, 8.0]);
         let detail = |x: f32| Detail {
             range: [0, FINEST_ZOOM],
             eye: [x, 0.0, 0.0],
@@ -1103,29 +1103,29 @@ mod tests {
         };
         let sq = |v: [f32; 3]| v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
         // The node's farthest corner and nearest point from the eye, squared,
-        // as the walk takes them (pxl-spec-core cast.rs `reach`), the eye
+        // as the walk takes them (pxl-spec-core cast.rs `node_dist_sq`), the eye
         // past X's far face.
-        let reach = |d: Detail| {
+        let dist_sq = |d: Detail| {
             let e = d.eye;
             [sq([e[0], hi, hi]), sq([e[0] - hi, 0.0, 0.0])]
         };
         let pair = |d: Detail| {
-            let [far, near] = reach(d);
+            let [far, near] = dist_sq(d);
             [d.at(far), d.at(near)]
         };
-        let at_stop = |d: Detail| {
+        let at_hit = |d: Detail| {
             let e = d.eye;
-            d.at(sq([stop[0] - e[0], stop[1] - e[1], stop[2] - e[2]]))
+            d.at(sq([hit[0] - e[0], hit[1] - e[1], hit[2] - e[2]]))
         };
         let (was, now) = (detail(104.5), detail(103.5));
         assert_eq!(cell_zoom_from(UNIT_ZOOM as i32 - 1), 96.0);
-        // The old check: the stop's zoom alike, so the tile held.
-        assert_eq!(at_stop(was), at_stop(now));
+        // The old check: the hit's zoom alike, so the tile held.
+        assert_eq!(at_hit(was), at_hit(now));
         // What the walk asked moved: the node's nearest zoom is finer.
         assert_ne!(pair(was), pair(now));
         // The new: the eye moved a unit, past the margin the walk told.
         let mut told = Margin::NONE;
-        told.asked(was, reach(was));
+        told.asked(was, dist_sq(was));
         assert!(told.0 < 1.0, "{}", told.0);
         let q3 = |x: f32| [(x * (1 << FRAC_W) as f32) as i32, 0, 0];
         assert!(!holds(told.0, q3(was.eye[0]), q3(now.eye[0])));

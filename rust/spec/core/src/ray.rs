@@ -10,7 +10,7 @@
 //! (`face::word`), the world's own answer about the cell, the same for
 //! every pixel of it. A cell is painted from these, its own, alone, by its
 //! value whichever source holds it. Where it met nothing, the first two
-//! are zero: a stop's value is never void.
+//! are zero: a hit's value is never void.
 
 use crate::Zoom;
 
@@ -38,7 +38,7 @@ const _: () = assert!(FILL_SHIFT + FILL_BITS < 32);
 
 /// The first word the cast's reading walk leaves a pixel it could not
 /// finish from the observed pyramid alone, for the walk that writes it to
-/// find (pxl-shader `cast_cs`, `miss_cs`): no stop's, as
+/// find (pxl-shader `cast_cs`, `miss_cs`): no hit's, as
 /// `first_word` sets no bit past the fill share's, and not the zero of one that
 /// met nothing. It lives within the cast's one pass: the walk again runs
 /// after the reading walk in that pass and overwrites every pixel so
@@ -67,8 +67,8 @@ pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_TALLY + tally::RAYS) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1, 0, 0, 0];
 
 /// The eye's walk again's words past those: the args what lies about the
-/// faces its stops met is asked by, once a run of them (pxl-shader cast.rs
-/// `stop_lead_cs`, raster.rs `face_cs`), laid as the boxes' are
+/// faces its hits met is asked by, once a square of them (pxl-shader cast.rs
+/// `hit_lead_cs`, raster.rs `face_cs`), laid as the boxes' are
 /// (`raster::ARGS_WORDS`: their count, their dispatch, where their asks
 /// lie), at a storage binding's alignment, 256 bytes on every device, so
 /// the faces' pass binds them alone as it binds the boxes'. Set each frame
@@ -76,7 +76,7 @@ pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [MISS_ACROSS, 0, 1, 0, 0, 1,
 pub const MISS_ARGS_ASKED: u32 = 64;
 const _: () = assert!(MISS_ARGS_WORDS as u32 <= MISS_ARGS_ASKED);
 
-/// The first word of a stop at `asset`, an asset's word (`answer`): its
+/// The first word of a hit at `asset`, an asset's word (`answer`): its
 /// value and the share it keeps, the face and the zoom.
 pub const fn first_word(asset: u32, face: u32, zoom: Zoom) -> u32 {
     let fill = asset >> answer::FILL_SHIFT & ((1 << FILL_BITS) - 1);

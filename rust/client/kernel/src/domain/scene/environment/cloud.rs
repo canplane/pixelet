@@ -3,7 +3,7 @@
 //! The cumulus, the sky kind's (`spec/spec/asset/sky.json` `cumulus`),
 //! drawn as decor is and held as decor is not. It claims no cell, so
 //! nothing is built around it and a tower stands through it; it is no layer
-//! and no window's brick holds it. It is laid on the field's own map,
+//! and no clip level's brick holds it. It is laid on the field's own map,
 //! which the wind carries (`pxl-spec-core cloud.rs` `drift`): a patch of
 //! cells there is built once and drawn moved, each instance a model, an
 //! impostor or nothing by its size on the screen (`present_patch`), by the
@@ -74,11 +74,11 @@ const CELLS_AROUND: i64 = 1 << (world::EXTENT[0] - CELL_SHAMT);
 const PATCH_CELLS: u32 = 16;
 const PATCH: f64 = CELL * PATCH_CELLS as f64;
 /// The farthest a patch is built: where the widest cloud is an impostor's worth.
-const REACH_MAX: f64 = cull_dist_u(CLOUD_WIDTH[1]);
-/// The most patches the reach spans, the keys of a side squared: its share of
+const DRAW_DIST_MAX: f64 = cull_dist_u(CLOUD_WIDTH[1]);
+/// The most patches the farthest spans, the keys of a side squared: its share of
 /// the renderer's upload table.
 pub const PATCHES_MAX: usize = {
-    let side = (2.0 * REACH_MAX / PATCH) as usize + 2;
+    let side = (2.0 * DRAW_DIST_MAX / PATCH) as usize + 2;
     side * side
 };
 
@@ -193,11 +193,13 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let largest = CLOUD_WIDTH[1];
     // As far as the eye draws, a flat layer hiding under no horizon, and no
     // farther than its largest cloud is an impostor's worth.
-    let reach = observation::eye_draw_reach().unwrap_or(0.0).min(REACH_MAX);
+    let dist = observation::eye_draw_dist()
+        .unwrap_or(0.0)
+        .min(DRAW_DIST_MAX);
     let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
     let span = |k: usize| {
-        libm::floor((on_map[k] - reach) / PATCH) as i64
-            ..=libm::floor((on_map[k] + reach) / PATCH) as i64
+        libm::floor((on_map[k] - dist) / PATCH) as i64
+            ..=libm::floor((on_map[k] + dist) / PATCH) as i64
     };
     let near = |key: [i64; 2]| {
         let corner = [
@@ -214,7 +216,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     for y in span(1) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
-            if d <= reach
+            if d <= dist
                 && drawn::tier(
                     (largest / d) as f32,
                     decor_model_angle() as f32,
@@ -260,13 +262,13 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             key[1] as f64 * PATCH - moved[1],
         ];
         let [zlo, zhi] = b.heights.map(f64::from);
-        let reach = largest / 2.0;
+        let half = largest / 2.0;
         if !frame.sees_box(
-            [corner[0] - reach, corner[1] - reach, zlo - reach],
+            [corner[0] - half, corner[1] - half, zlo - half],
             [
-                corner[0] + PATCH + reach,
-                corner[1] + PATCH + reach,
-                zhi + reach,
+                corner[0] + PATCH + half,
+                corner[1] + PATCH + half,
+                zhi + half,
             ],
         ) {
             continue;
@@ -492,7 +494,7 @@ fn present_patch(
     let [x0, y0] = b.corner;
     let [zlo, zhi] = b.heights.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
-    let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
+    let far = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
     let nearest = v3::len(&[
         gap(x0, x0 + b.side, eye[0]),
         gap(y0, y0 + b.side, eye[1]),
@@ -500,9 +502,9 @@ fn present_patch(
     ])
     .max(1e-3);
     let farthest = v3::len(&[
-        reach(x0, x0 + b.side, eye[0]),
-        reach(y0, y0 + b.side, eye[1]),
-        reach(zlo, zhi, eye[2]),
+        far(x0, x0 + b.side, eye[0]),
+        far(y0, y0 + b.side, eye[1]),
+        far(zlo, zhi, eye[2]),
     ])
     .max(1e-3);
     // SAFETY: the patch's bytes, `bytes` long, its owner's to write past `index`.

@@ -52,12 +52,12 @@ fn grid_of([min, max]: BBox3857) -> ([f64; 2], f64) {
 /// EPSG:3857: its padded samples and the resample's reach past them.
 pub fn tile_reads(tile_bbox: BBox3857) -> [f64; 4] {
     let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
-    let (side, reach) = (f64::from(ELE_PADDED_SPAN) * stride, stride * 2.0);
+    let (side, margin) = (f64::from(ELE_PADDED_SPAN) * stride, stride * 2.0);
     [
-        ref_x - reach,
-        ref_y - side - reach,
-        ref_x + side + reach,
-        ref_y + reach,
+        ref_x - margin,
+        ref_y - side - margin,
+        ref_x + side + margin,
+        ref_y + margin,
     ]
 }
 
@@ -303,8 +303,8 @@ impl Raster {
         for r in 0..span {
             let y = row0 + r as f64 + 0.5;
             let (s0, s1) = (to_src(0.5, y), to_src(last as f64 + 0.5, y));
-            let reach = last as f64;
-            let (dx, dy) = ((s1.0 - s0.0) / reach, (s1.1 - s0.1) / reach);
+            let steps = last as f64;
+            let (dx, dy) = ((s1.0 - s0.0) / steps, (s1.1 - s0.1) / steps);
             for c in 0..span {
                 let dist = col0 + c as f64;
                 let (px, py) = (s0.0 + dx * dist, s0.1 + dy * dist);

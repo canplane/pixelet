@@ -31,7 +31,7 @@ fn weather(p: vec2f, salt: u32) -> f32 {
 }
 
 // Thins out over the reach's farther part.
-fn reach_fade(t: f32, reach: f32) -> f32 {
-  return 1.0 - smoothstep(CLOUD_REACH_FADE, 1.0, t / reach);
+fn draw_dist_fade(t: f32, dist: f32) -> f32 {
+  return 1.0 - smoothstep(CLOUD_DRAW_DIST_FADE, 1.0, t / dist);
 }
 

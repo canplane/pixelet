@@ -88,20 +88,20 @@ pub fn half_cells(width: f32) -> i32 {
 /// How far from its line a way of `width` cells covers a cell's center: half
 /// its width, and at least half a cell's diagonal so a diagonal way stays
 /// side-connected.
-pub fn reach(width: f32) -> f32 {
+pub fn half_width(width: f32) -> f32 {
     (width * 0.5).max(core::f32::consts::FRAC_1_SQRT_2)
 }
 
 pub fn covers(width: f32, dist: f32) -> bool {
-    dist <= reach(width)
+    dist <= half_width(width)
 }
 
 /// How far from its line a way reaches anything drawn, in its tile's cells:
-/// its reach (`reach`), and a cell past it, so a tile's lines and a brick's
-/// hold every line whose air or slab can stand in the ring of cells about
-/// them, a thin way's included.
+/// its half width (`half_width`), and a cell past it, so a tile's lines and a
+/// brick's hold every line whose air or slab can stand in the ring of cells
+/// about them, a thin way's included.
 pub fn footprint(width: f32) -> f32 {
-    reach(width) + LINE_PAST
+    half_width(width) + LINE_PAST
 }
 
 /// A deck's slab in leaf cells, at least one, `per_m` leaf cells a meter.
@@ -376,12 +376,12 @@ pub fn crossing(s: &Segment, at: [f32; 2], side: f32, st: &Stations) -> Crossing
     let len2 = d[0] * d[0] + d[1] * d[1];
     let near = [a[0] + d[0] * t, a[1] + d[1] * t];
     // the column's brick spans this much of the segment either side of `t`
-    let reach = if len2 > 0.0 {
+    let half_span = if len2 > 0.0 {
         side / 2.0 * (d[0].abs() + d[1].abs()) / len2
     } else {
         0.0
     };
-    let (z0, z1) = (surface(s, t - reach), surface(s, t + reach));
+    let (z0, z1) = (surface(s, t - half_span), surface(s, t + half_span));
     Crossing {
         low: z0.min(z1),
         top: z0.max(z1),

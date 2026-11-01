@@ -30,16 +30,16 @@ import {
 import { LABEL } from "@/shell/ui/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shell/ui/panel.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
-import { touchReach } from "@/shell/ui/touch.ts";
+import { touchOutset } from "@/shell/ui/touch.ts";
 
 // The chip one sees is 32; a press lands on 44, a box laid out around it.
 const CHIP_HEIGHT = 32;
 const PREVIEW = 96;
 const CHIP_GAP_X = 8;
-const CHIP_GAP_Y = 2 * touchReach(CHIP_HEIGHT);
-const CHIP_REACH = {
+const CHIP_GAP_Y = 2 * touchOutset(CHIP_HEIGHT);
+const CHIP_TARGET = {
   paddingHorizontal: CHIP_GAP_X / 2,
-  paddingVertical: touchReach(CHIP_HEIGHT),
+  paddingVertical: touchOutset(CHIP_HEIGHT),
 };
 
 function Chip({
@@ -56,7 +56,7 @@ function Chip({
       onPress={onPress}
       accessibilityRole="radio"
       aria-checked={active}
-      style={CHIP_REACH}
+      style={CHIP_TARGET}
     >
       <View style={[styles.chip, active && styles.chipOn]}>
         {/* Sized to the label's heavier weight, so a pick never rewraps the row. */}

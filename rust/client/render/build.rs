@@ -121,17 +121,17 @@ fn main() {
     }
     // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
-    use pxl_spec_core::eye::{FORWARD, JITTER, ORIGIN, REACH, RIGHT, STEPS, TAN, UP};
+    use pxl_spec_core::eye::{FAR, FORWARD, JITTER, ORIGIN, RIGHT, STEPS, TAN, UP};
     let last = (ORIGIN + 2)
         .max(STEPS)
-        .max(REACH)
+        .max(FAR)
         .max(FORWARD + 2)
         .max(RIGHT + 2)
         .max(UP + 2)
         .max(TAN + 1)
         .max(JITTER + 1);
     let eye = format!(
-        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_REACH: u32 = {REACH}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_JITTER: u32 = {JITTER}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
+        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_FAR: u32 = {FAR}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_JITTER: u32 = {JITTER}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
@@ -355,7 +355,7 @@ fn words() -> String {
         format!("const AO_DOWNSCALE: u32 = {AO_DOWNSCALE}u;\nconst AO_NOISE_SIDE: u32 = {AO_NOISE_SIDE}u;\nconst DECOR_GROUPS: u32 = {DECOR_GROUPS}u;\n"),
         // The depth's bound's square and a screen tile's squares a side, the
         // workgroup its passes take a tile by (screen_bound.wgsl,
-        // screen_reach.wgsl); the frames the jitter's sequence covers a pixel
+        // screen_propagate.wgsl); the frames the jitter's sequence covers a pixel
         // in, each still frame's even share of it (pxl-spec-core
         // `screen::JITTERS`, screen_resolve.wgsl).
         format!(

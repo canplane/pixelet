@@ -20,7 +20,7 @@ fn fs(v: VertexOut) -> FragOut {
     // the far plane's 0 the sky stands at; one that met a face at the depth
     // the lit pixel is drawn at (`behind`), so what is laid on the face shows
     // as it does there.
-    let far = d * bitcast<f32>(eye_word(EYE_REACH));
+    let far = d * bitcast<f32>(eye_word(EYE_FAR));
     let at = select(far, h.at * (1.0 + behind(h, px_steps(a, size, h))), met);
     let clip = frame_view_proj() * vec4f(at, 1.0);
     var o: FragOut;

@@ -5,7 +5,7 @@
 //! number of axes; a node's size is its zoom (`zoom.rs`).
 
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::world::REACH;
+use crate::space::coord::world::BOUNDS;
 use crate::space::coord::zoom::{units, Zoom};
 
 /// A node of the hierarchy in `D` axes: its zoom and its index there.
@@ -15,7 +15,7 @@ pub type Node<const D: usize> = (Zoom, [i32; D]);
 /// over every axis it does not name, as far as the world reaches.
 pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     let side = units(zoom);
-    let mut b = REACH;
+    let mut b = BOUNDS;
     for (k, &v) in at.iter().enumerate() {
         b.min[k] = f64::from(v) * side;
         b.max[k] = b.min[k] + side;

@@ -43,14 +43,14 @@ fn sheet_of(i: u32) -> Sheet {
 }
 
 // How much of the sheet stands where the ray meets it, `t` km out.
-fn sheet_opacity(s: Sheet, world: vec3f, t: f32, footprint: f32, reach: f32) -> f32 {
-  if (t > reach) {
+fn sheet_opacity(s: Sheet, world: vec3f, t: f32, footprint: f32, dist: f32) -> f32 {
+  if (t > dist) {
     return 0.0;
   }
   let p = cloud_lattice(world);
   // Read a whole number of units off, so each layer has its own clouds.
   let field = cloud_opacity_finer(p + vec2f(f32(s.salt % CLOUD_TILE_UNITS)), footprint * s.softer, s.finer);
-  return s.opacity * field * weather(p, s.salt) * reach_fade(t, reach);
+  return s.opacity * field * weather(p, s.salt) * draw_dist_fade(t, dist);
 }
 
 struct CloudOut {
@@ -68,8 +68,8 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> CloudOu
   let cirrus = CIRRUS.km - atmos_camera_alt();
   let k = select(1u - i, i, abs(alto) > abs(cirrus));
   let h = select(cirrus, alto, k == 0u);
-  let reach = clouds_reach();
-  let half = sqrt(max(reach * reach - h * h, 0.0)) / atmos_km_per_u();
+  let dist = clouds_draw_dist();
+  let half = sqrt(max(dist * dist - h * h, 0.0)) / atmos_km_per_u();
   var corners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
   var o: CloudOut;
   o.world = frame_camera_pos() + vec3f(corners[v] * half, 0.0) + frame_up() * (h / atmos_km_per_u());
@@ -85,7 +85,7 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let t = length(to) * atmos_km_per_u();
   // The lattice's footprint, before any branch takes a derivative.
   let footprint = max(length(fwidth(cloud_lattice(v.world))), 1e-6);
-  let alpha = sheet_opacity(sheet_of(v.sheet), v.world, t, footprint, clouds_reach()) * clouds_shown();
+  let alpha = sheet_opacity(sheet_of(v.sheet), v.world, t, footprint, clouds_draw_dist()) * clouds_shown();
   // Where none of it stands, nothing more is read.
   if (alpha <= HALF_STEP) {
     discard;

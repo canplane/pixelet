@@ -12,7 +12,7 @@ use crate::domain::layer::Base as _;
 use core::cell::Cell;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::world::{nearest, nearest_box, REACH};
+use pxl_spec::space::coord::world::{nearest, nearest_box, BOUNDS};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
@@ -52,8 +52,8 @@ pub fn written() -> &'static [Aabb] {
 /// sees each change exactly once.
 pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
     let columns = Aabb {
-        min: [xy[0][0], xy[0][1], REACH.min[2]],
-        max: [xy[1][0], xy[1][1], REACH.max[2]],
+        min: [xy[0][0], xy[0][1], BOUNDS.min[2]],
+        max: [xy[1][0], xy[1][1], BOUNDS.max[2]],
     };
     let about = (columns.min[0] + columns.max[0]) / 2.0;
     let c = changed();

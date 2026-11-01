@@ -30,7 +30,7 @@ mod way;
 mod world;
 
 pub use beam::{beam_cs, cell_cs, sample_cs};
-pub use cast::{cast_cs, miss_cs, miss_list_cs, stop_faces_cs, stop_lead_cs};
+pub use cast::{cast_cs, miss_cs, miss_list_cs, hit_faces_cs, hit_lead_cs};
 pub use decor::{
     decor_args_cs, decor_cnt_cs, decor_compact_cs, decor_cs, decor_mark_cs, decor_thin_cs,
 };
@@ -40,7 +40,7 @@ pub use observed::forget_cs;
 pub use raster::{face_cs, sample_box_cs};
 pub use light::{
     light_beam_cs, light_cs, light_detail_cs, light_held_cs, light_mark_cs, light_mark_drawn_cs,
-    light_miss_cs, light_reach_cs, light_sample_cs, light_told_cs, Head,
+    light_miss_cs, light_propagate_cs, light_sample_cs, light_told_cs, Head,
 };
 pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
 pub use world::{PaletteWords, NoPalette, World};

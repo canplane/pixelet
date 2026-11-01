@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene/gizmo/coverage_gizmo.rs
 
 //! The coverage gizmo (the `world_gizmo` setting, beside the frame's), as
-//! translucent debug lines over the ground: the eye's windows' bricks
+//! translucent debug lines over the ground: the eye's clip levels' bricks
 //! (domain/layer/terrain/clipmap.rs), each where the eye reads it at its zoom,
 //! marked by how it stands, and the drawn ones' tiles and shards, each
 //! colored as its `Mark` says (`gizmo_spec::coverage`).
@@ -22,7 +22,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
-use pxl_spec_core::clipmap::{self, Entry, ENTRIES, EYE_WINDOWS, FIRST_CELL};
+use pxl_spec_core::clipmap::{self, Entry, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
@@ -122,7 +122,7 @@ struct Coverage {
     /// About where what is drawn is laid; none while hidden.
     drawn: Option<V3>,
     /// The lines then the faces, and where the faces begin.
-    lane: (Vec<f32>, usize),
+    vertices: (Vec<f32>, usize),
     /// Those laid this step, kept so their buffer is reused.
     next: (Vec<f32>, usize),
 }
@@ -169,10 +169,10 @@ pub fn coverage_gizmo_step(show: bool) {
     }
     c.next.0.clear();
     c.next.1 = lines.lay(&mut c.next.0, about, &World::now());
-    if c.drawn != Some(about) || c.next != c.lane {
+    if c.drawn != Some(about) || c.next != c.vertices {
         scene.coverage.set(draw, about, &c.next.0, c.next.1);
         c.drawn = Some(about);
-        core::mem::swap(&mut c.next, &mut c.lane);
+        core::mem::swap(&mut c.next, &mut c.vertices);
         request_world_tick();
     }
 }
@@ -187,19 +187,19 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
     )
 }
 
-/// The goal, as the markers' bricks cut the ground
-/// (domain/view/observation.rs `bricks`): each eye window's bricks,
-/// finest first, a brick where the zoom its nearest point asks (pxl-spec
-/// space/camera/grid.rs `cell_zoom_at`, about the eye's height, as a ray's
-/// descent asks) is its window's or finer, within the reach, and not wholly under the finer
-/// window's bricks, which are read there instead; none coarser than the
-/// source's top, which nothing asks for. A piece is drawn where its brick is present, or where a coarser
-/// window's brick is, which the cast reads in its place (pxl-spec-core
-/// `clipmap::step`): from the floor where that brick's tile is the floor's
-/// alone. One not drawn is marked by its line: no tile on it, only the
-/// floor's, or a tile and its brick not yet filled.
+/// The goal, as the markers' bricks cut the ground (domain/view/observation.rs
+/// `bricks`): each eye clip level's bricks, finest first, a brick where the
+/// zoom its nearest point asks (pxl-spec space/camera/grid.rs `cell_zoom_at`,
+/// about the eye's height, as a ray's descent asks) is its clip level's or
+/// finer, within the reach, and not wholly under the finer clip level's bricks,
+/// which are read there instead; none coarser than the source's top, which
+/// nothing asks for. A piece is drawn where its brick is present, or where a
+/// coarser clip level's brick is, which the cast reads in its place
+/// (pxl-spec-core `clipmap::step`): from the floor where that brick's tile is
+/// the floor's alone. One not drawn is marked by its line: no tile on it, only
+/// the floor's, or a tile and its brick not yet filled.
 fn outline(o: &Observation, top: Zoom) -> Outline {
-    let held: [Option<[Entry; ENTRIES as usize]>; EYE_WINDOWS as usize] =
+    let held: [Option<[Entry; ENTRIES as usize]>; EYE_CLIP_LEVELS as usize] =
         core::array::from_fn(|w| eye_entries(clipmap::eye_cell(w as u32)));
     let present = |cell: Zoom, q: [i32; 2]| {
         held[(cell - FIRST_CELL) as usize].is_some_and(|s| s[clipmap::entry(q) as usize].holds(q))
@@ -241,7 +241,9 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
                 .map(|c| (c, [p[0] >> (cell - c), p[1] >> (cell - c)]))
                 .find(|&(c, at)| present(c, at));
             let r2 = near(rect((pz, p)));
-            if r2 > o.reach * o.reach || cell_zoom_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell {
+            if r2 > o.demand_dist * o.demand_dist
+                || cell_zoom_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell
+            {
                 continue;
             }
             read.insert((pz, p));
@@ -318,7 +320,7 @@ impl Lines {
     /// the highest mark over it and is drawn straight between its ends on the
     /// ground. Then each piece's face, a fan from its center through every cut
     /// on its edges, so its rim is the lines' own. Returns where the faces begin.
-    fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &World) -> usize {
+    fn lay(&self, vertices: &mut Vec<f32>, origin: V3, access: &World) -> usize {
         let mut grounds: FnvHashMap<(u64, u64), V3> = FnvHashMap::default();
         let mut ends: Vec<(f64, bool, Mark)> = Vec::new();
         // Each point asked once, by the lines and the faces alike.
@@ -362,7 +364,7 @@ impl Lines {
                 // Every edge on the line cuts it, so a coarse edge over finer
                 // ones is drawn as they are, in its own mark.
                 if let (Some(f), Some(m)) = (from, (0..MARKS).rev().find(|&m| over[m] > 0)) {
-                    stretch(lane, point(f), point(t), Mark::of_rank(m));
+                    stretch(vertices, point(f), point(t), Mark::of_rank(m));
                 }
                 while k < ends.len() && ends[k].0 == t {
                     let (_, opens, m) = ends[k];
@@ -376,7 +378,7 @@ impl Lines {
                 from = Some(t);
             }
         }
-        let lines = lane.len();
+        let lines = vertices.len();
         let mut rim: Vec<f64> = Vec::new();
         // A face only where no finer piece lies inside it, at whatever height: a
         // coarse face would hide the finer edges where the ground dips under it.
@@ -431,7 +433,7 @@ impl Lines {
                         ground(at, t)
                     };
                     for v in [center, last, p] {
-                        lane.extend(v.map(|c| c as f32));
+                        vertices.extend(v.map(|c| c as f32));
                     }
                     last = p;
                 }
@@ -442,15 +444,15 @@ impl Lines {
     }
 }
 
-fn stretch(lane: &mut Vec<f32>, a: V3, b: V3, mark: Mark) {
+fn stretch(vertices: &mut Vec<f32>, a: V3, b: V3, mark: Mark) {
     let pieces = if mark.is_dashed() { DASHES } else { 1 };
     let at = |t: u32| -> [f32; 3] {
         core::array::from_fn(|i| (a[i] + (b[i] - a[i]) * t as f64 / pieces as f64) as f32)
     };
     for i in (0..pieces).step_by(2) {
         for p in [at(i), at(i + 1)] {
-            lane.extend_from_slice(&p);
-            lane.extend_from_slice(&mark.rgba());
+            vertices.extend_from_slice(&p);
+            vertices.extend_from_slice(&mark.rgba());
         }
     }
 }

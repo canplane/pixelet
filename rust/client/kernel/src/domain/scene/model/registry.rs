@@ -1,6 +1,6 @@
 // pxl-kernel/domain/scene/model/registry.rs
 
-//! The registered models. A model's mesh is one heap block read lane by lane
+//! The registered models. A model's mesh is one heap block read column by column
 //! (positions, normals, UVs, joints, weights, indices), in glTF's Y-up scaled
 //! to its registered height; what draws it turns it Z-up. A model poses its
 //! joints at a clip's time and writes their palette for whatever plays it.
@@ -41,7 +41,7 @@ struct Clip {
     speed: f32,
     /// How far any vertex lies from the origin as its first key skins it,
     /// unscaled; set with it.
-    reach: f32,
+    radius: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -73,8 +73,8 @@ pub struct Model {
     /// Unscaled bounding sphere for a hit test to reject by.
     radius: f32,
     /// How far any vertex lies from its origin as its rest pose skins it,
-    /// unscaled: what it covers drawn (`reach`).
-    rest_reach: f32,
+    /// unscaled: what it covers drawn (`pose_radius`).
+    rest_radius: f32,
 }
 
 #[derive(Default)]
@@ -253,7 +253,7 @@ impl Models {
             order: Vec::new(),
             scale: 1.0,
             radius: 0.0,
-            rest_reach: 0.0,
+            rest_radius: 0.0,
         };
         self.models.push(model);
         Some(((self.models.len() - 1) as u32, at))
@@ -291,7 +291,7 @@ impl Models {
             channels: Vec::new(),
             motion: 0.0,
             speed: 0.0,
-            reach: 0.0,
+            radius: 0.0,
         });
         (m.clips.len() - 1) as u32
     }
@@ -354,9 +354,9 @@ impl Models {
                 .iter()
                 .flat_map(|ch| ch.times.first().copied())
                 .fold(0.0f32, f32::min);
-            m.clips[c].reach = m.reach_at(Some((c as u32, first)));
+            m.clips[c].radius = m.radius_at(Some((c as u32, first)));
         }
-        m.rest_reach = m.reach_at(None);
+        m.rest_radius = m.radius_at(None);
     }
 
     pub fn mesh(&self, model: u32) -> Option<MeshRef> {
@@ -407,17 +407,17 @@ impl Model {
     /// How far any vertex lies from the origin as drawn, unscaled, at a
     /// clip's first key and as far as it moves from there, or at rest where
     /// none plays: a sphere about where it stands that holds it.
-    pub fn reach(&self, clip: Option<u32>) -> f32 {
+    pub fn pose_radius(&self, clip: Option<u32>) -> f32 {
         clip.and_then(|c| self.clips.get(c as usize))
-            .map_or(self.rest_reach, |c| c.reach + c.motion)
+            .map_or(self.rest_radius, |c| c.radius + c.motion)
     }
 
     /// How far any vertex lies from the origin as the pose `at` skins it,
     /// unscaled: each vertex its joints' palettes blended by its weights,
-    /// its lanes laid one after another a vertex count apart
+    /// its columns laid one after another a vertex count apart
     /// (`MODEL_VERTEX_WORDS`: positions 3, normals 3, UVs 2, joints 4,
     /// weights 4; scene/model/asset.rs).
-    fn reach_at(&self, at: Option<(u32, f32)>) -> f32 {
+    fn radius_at(&self, at: Option<(u32, f32)>) -> f32 {
         let n = self.joints();
         if n == 0 {
             return self.radius;
@@ -426,18 +426,18 @@ impl Model {
         let mut palette = vec![0.0; n * 16];
         self.pose(at, &mut local);
         self.palette(&local, &mut global, &mut palette);
-        self.reach_of(&palette)
+        self.radius_of(&palette)
     }
 
     /// How far any vertex lies from the origin as `palette`, a mat4 a joint,
-    /// skins it, unscaled (`reach_at`).
-    fn reach_of(&self, palette: &[f32]) -> f32 {
+    /// skins it, unscaled (`radius_at`).
+    fn radius_of(&self, palette: &[f32]) -> f32 {
         if self.joints() == 0 {
             return self.radius;
         }
         let count = self.vertex_cnt as usize;
-        let lane = |k: usize| k * count;
-        // SAFETY: the model's block, sealed: its vertex lanes first.
+        let column = |k: usize| k * count;
+        // SAFETY: the model's block, sealed: its vertex columns first.
         let w = unsafe {
             core::slice::from_raw_parts(
                 mem::at::<u32>(self.at),
@@ -446,11 +446,11 @@ impl Model {
         };
         let mut far = 0.0f32;
         for v in 0..count {
-            let p = [0, 1, 2].map(|k| f32::from_bits(w[lane(0) + v * 3 + k]));
+            let p = [0, 1, 2].map(|k| f32::from_bits(w[column(0) + v * 3 + k]));
             let mut q = [0.0f32; 3];
             for k in 0..4 {
-                let joint = w[lane(8) + v * 4 + k] as usize;
-                let weight = f32::from_bits(w[lane(12) + v * 4 + k]);
+                let joint = w[column(8) + v * 4 + k] as usize;
+                let weight = f32::from_bits(w[column(12) + v * 4 + k]);
                 let Some(m) = palette
                     .get(joint * 16..joint * 16 + 16)
                     .filter(|_| weight != 0.0)

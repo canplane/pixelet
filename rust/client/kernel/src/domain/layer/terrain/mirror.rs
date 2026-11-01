@@ -66,14 +66,14 @@ impl Mirror {
                 .unwrap_or(0)
         };
         let most = (0..n).map(id).max().unwrap_or(0);
-        self.reach(most)?;
+        self.grow_to(most)?;
         tree::lay(self, records);
         Ok(())
     }
 
     /// The chunks grown to hold child group `child_group`; refused where it lies past
     /// the cap or the heap refuses, the chunks grown so far kept.
-    fn reach(&mut self, child_group: u32) -> Result<(), Unlaid> {
+    fn grow_to(&mut self, child_group: u32) -> Result<(), Unlaid> {
         if child_group >= tree::POOL_CHILD_GROUPS {
             return Err(Unlaid::Cap);
         }

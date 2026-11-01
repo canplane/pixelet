@@ -35,42 +35,42 @@ var<private> global: vec3<u32>;
 var<uniform> global_1: type_18;
 @group(0) @binding(8)
 var<storage, read_write> global_2: type_4;
-@group(0) @binding(3)
-var global_3: texture_storage_2d_array<r32uint,read_write>;
 @group(0) @binding(9)
-var<storage> global_4: type_4;
+var<storage> global_3: type_4;
 @group(0) @binding(14)
-var<storage, read_write> global_5: type_26;
+var<storage, read_write> global_4: type_26;
+@group(0) @binding(3)
+var global_5: texture_storage_2d_array<r32uint,read_write>;
 
 fn function_() {
-    var phi_379_: u32;
-    var phi_399_: u32;
-    var phi_380_: u32;
-    var phi_401_: bool;
-    var phi_402_: bool;
+    var phi_318_: u32;
+    var phi_338_: u32;
+    var phi_319_: u32;
+    var phi_340_: bool;
+    var phi_341_: bool;
     var local: bool;
-    var phi_415_: bool;
-    var phi_419_: u32;
-    var phi_420_: bool;
-    var phi_425_: u32;
-    var phi_452_: u32;
-    var phi_472_: u32;
-    var phi_453_: u32;
-    var phi_474_: bool;
-    var phi_475_: bool;
+    var phi_354_: bool;
+    var phi_358_: u32;
+    var phi_359_: bool;
+    var phi_364_: u32;
+    var phi_391_: u32;
+    var phi_411_: u32;
+    var phi_392_: u32;
+    var phi_413_: bool;
+    var phi_414_: bool;
     var local_1: bool;
-    var phi_488_: bool;
-    var phi_492_: u32;
-    var phi_493_: bool;
-    var phi_498_: u32;
-    var phi_499_: u32;
-    var phi_514_: u32;
+    var phi_427_: bool;
+    var phi_431_: u32;
+    var phi_432_: bool;
+    var phi_437_: u32;
+    var phi_438_: u32;
+    var phi_453_: u32;
     var phi_719_: bool;
     var phi_734_: bool;
 
     let _e36 = global;
-    let _e38 = arrayLength((&global_5.member));
-    let _e42 = global_4.member[118u];
+    let _e38 = arrayLength((&global_4.member));
+    let _e42 = global_3.member[118u];
     if (_e36.x >= select(_e42, 524288u, (524288u < _e42))) {
     } else {
         let _e50 = global_1.member.member_8[0u][0u];
@@ -87,139 +87,139 @@ fn function_() {
         let _e91 = (_e90 & 65535u);
         let _e93 = (_e90 >> bitcast<u32>(16i));
         if ((_e91 % 16u) == 0u) {
-            phi_425_ = 524288u;
+            phi_364_ = 524288u;
         } else {
             let _e97 = vec3<u32>((_e91 - 1u), _e93, 3u);
-            let _e103 = textureLoad(global_3, vec2<u32>(_e97.x, _e97.y), i32(_e97.z));
+            let _e103 = textureLoad(global_5, vec2<u32>(_e97.x, _e97.y), i32(_e97.z));
             if ((_e103.x & 2147483648u) == 0u) {
-                phi_419_ = u32();
-                phi_420_ = true;
+                phi_358_ = u32();
+                phi_359_ = true;
             } else {
                 let _e107 = (_e103.x & 2147483647u);
                 if (_e107 >= 524288u) {
-                    phi_415_ = true;
+                    phi_354_ = true;
                 } else {
-                    phi_379_ = 0u;
+                    phi_318_ = 0u;
                     loop {
-                        let _e112 = phi_379_;
+                        let _e112 = phi_318_;
                         if (_e112 < 8u) {
                             let _e117 = global_2.member[((_e70 + (_e107 * 10u)) + _e112)];
                             let _e121 = global_2.member[(_e86 + _e112)];
                             let _e122 = (_e117 != _e121);
                             if _e122 {
-                                phi_399_ = u32();
+                                phi_338_ = u32();
                             } else {
-                                phi_399_ = (_e112 + 1u);
+                                phi_338_ = (_e112 + 1u);
                             }
-                            let _e125 = phi_399_;
-                            phi_380_ = _e125;
-                            phi_401_ = select(true, false, _e122);
-                            phi_402_ = _e122;
+                            let _e125 = phi_338_;
+                            phi_319_ = _e125;
+                            phi_340_ = select(true, false, _e122);
+                            phi_341_ = _e122;
                         } else {
-                            phi_380_ = u32();
-                            phi_401_ = false;
-                            phi_402_ = false;
+                            phi_319_ = u32();
+                            phi_340_ = false;
+                            phi_341_ = false;
                         }
-                        let _e128 = phi_380_;
-                        let _e130 = phi_401_;
-                        let _e132 = phi_402_;
+                        let _e128 = phi_319_;
+                        let _e130 = phi_340_;
+                        let _e132 = phi_341_;
                         local = _e132;
                         continue;
                         continuing {
-                            phi_379_ = _e128;
+                            phi_318_ = _e128;
                             break if !(_e130);
                         }
                     }
                     let _e135 = local;
-                    phi_415_ = select(true, false, select(false, true, select(true, false, _e135)));
+                    phi_354_ = select(true, false, select(false, true, select(true, false, _e135)));
                 }
-                let _e140 = phi_415_;
-                phi_419_ = _e107;
-                phi_420_ = _e140;
+                let _e140 = phi_354_;
+                phi_358_ = _e107;
+                phi_359_ = _e140;
             }
-            let _e142 = phi_419_;
-            let _e144 = phi_420_;
-            phi_425_ = select(_e142, 524288u, _e144);
+            let _e142 = phi_358_;
+            let _e144 = phi_359_;
+            phi_364_ = select(_e142, 524288u, _e144);
         }
-        let _e147 = phi_425_;
+        let _e147 = phi_364_;
         if (_e147 == 524288u) {
             if ((_e93 % 16u) == 0u) {
-                phi_498_ = _e147;
+                phi_437_ = _e147;
             } else {
                 let _e152 = vec3<u32>(_e91, (_e93 - 1u), 3u);
-                let _e158 = textureLoad(global_3, vec2<u32>(_e152.x, _e152.y), i32(_e152.z));
+                let _e158 = textureLoad(global_5, vec2<u32>(_e152.x, _e152.y), i32(_e152.z));
                 if ((_e158.x & 2147483648u) == 0u) {
-                    phi_492_ = u32();
-                    phi_493_ = true;
+                    phi_431_ = u32();
+                    phi_432_ = true;
                 } else {
                     let _e162 = (_e158.x & 2147483647u);
                     if (_e162 >= 524288u) {
-                        phi_488_ = true;
+                        phi_427_ = true;
                     } else {
-                        phi_452_ = 0u;
+                        phi_391_ = 0u;
                         loop {
-                            let _e167 = phi_452_;
+                            let _e167 = phi_391_;
                             if (_e167 < 8u) {
                                 let _e172 = global_2.member[((_e70 + (_e162 * 10u)) + _e167)];
                                 let _e176 = global_2.member[(_e86 + _e167)];
                                 let _e177 = (_e172 != _e176);
                                 if _e177 {
-                                    phi_472_ = u32();
+                                    phi_411_ = u32();
                                 } else {
-                                    phi_472_ = (_e167 + 1u);
+                                    phi_411_ = (_e167 + 1u);
                                 }
-                                let _e180 = phi_472_;
-                                phi_453_ = _e180;
-                                phi_474_ = select(true, false, _e177);
-                                phi_475_ = _e177;
+                                let _e180 = phi_411_;
+                                phi_392_ = _e180;
+                                phi_413_ = select(true, false, _e177);
+                                phi_414_ = _e177;
                             } else {
-                                phi_453_ = u32();
-                                phi_474_ = false;
-                                phi_475_ = false;
+                                phi_392_ = u32();
+                                phi_413_ = false;
+                                phi_414_ = false;
                             }
-                            let _e183 = phi_453_;
-                            let _e185 = phi_474_;
-                            let _e187 = phi_475_;
+                            let _e183 = phi_392_;
+                            let _e185 = phi_413_;
+                            let _e187 = phi_414_;
                             local_1 = _e187;
                             continue;
                             continuing {
-                                phi_452_ = _e183;
+                                phi_391_ = _e183;
                                 break if !(_e185);
                             }
                         }
                         let _e190 = local_1;
-                        phi_488_ = select(true, false, select(false, true, select(true, false, _e190)));
+                        phi_427_ = select(true, false, select(false, true, select(true, false, _e190)));
                     }
-                    let _e195 = phi_488_;
-                    phi_492_ = _e162;
-                    phi_493_ = _e195;
+                    let _e195 = phi_427_;
+                    phi_431_ = _e162;
+                    phi_432_ = _e195;
                 }
-                let _e197 = phi_492_;
-                let _e199 = phi_493_;
-                phi_498_ = select(_e197, 524288u, _e199);
+                let _e197 = phi_431_;
+                let _e199 = phi_432_;
+                phi_437_ = select(_e197, 524288u, _e199);
             }
-            let _e202 = phi_498_;
-            phi_499_ = _e202;
+            let _e202 = phi_437_;
+            phi_438_ = _e202;
         } else {
-            phi_499_ = _e147;
+            phi_438_ = _e147;
         }
-        let _e204 = phi_499_;
+        let _e204 = phi_438_;
         if (_e204 != 524288u) {
             global_2.member[(_e86 + 9u)] = (2147483648u | _e204);
         } else {
             if (65u < _e38) {
-                let _e209 = atomicAdd((&global_5.member[65u]), 1u);
-                phi_514_ = _e209;
+                let _e209 = atomicAdd((&global_4.member[65u]), 1u);
+                phi_453_ = _e209;
             } else {
-                phi_514_ = 0u;
+                phi_453_ = 0u;
             }
-            let _e211 = phi_514_;
+            let _e211 = phi_453_;
             if ((_e211 % 64u) == 0u) {
                 if (68u < _e38) {
-                    let _e219 = atomicMax((&global_5.member[68u]), ((_e211 / 64u) + 1u));
+                    let _e219 = atomicMax((&global_4.member[68u]), ((_e211 / 64u) + 1u));
                 }
             }
-            let _e220 = textureDimensions(global_3);
+            let _e220 = textureDimensions(global_5);
             let _e226 = global_1.member.member_10[0u];
             let _e238 = global_1.member.member_10[1u];
             let _e249 = floor(((((((((f32(_e91) + 0.5f) + _e226) / f32(_e220.x)) * 2f) - 1f) * _e79) + _e79) / _e84));
@@ -255,7 +255,7 @@ fn function_() {
 }
 
 @compute @workgroup_size(64, 1, 1)
-fn stop_lead_cs(@builtin(global_invocation_id) param: vec3<u32>) {
+fn hit_lead_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_();
 }

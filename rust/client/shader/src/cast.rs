@@ -3,9 +3,9 @@
 //! Each drawn pixel's ray (`cast_cs`) off the cell the raster kept at it
 //! or the sky, and the rest walked (`miss_list_cs` over their list,
 //! `miss_cs` over every pixel where the list was full), what lies about
-//! the faces they stopped on asked once a stop, as a box's is
-//! (`stop_lead_cs`, raster.rs `face_cs`), and put at their pixels
-//! (`stop_faces_cs`).
+//! the faces they stopped on asked once a hit, as a box's is
+//! (`hit_lead_cs`, raster.rs `face_cs`), and put at their pixels
+//! (`hit_faces_cs`).
 
 use pxl_spec_core::cast::{self, End, Trace};
 use pxl_spec_core::{beam, observed, raster, ray, tally, way};
@@ -245,11 +245,11 @@ pub(crate) fn enlist(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
 /// Pixel `id`'s ray again from its cell's start, writing what it asks into
 /// the observed pyramid (`Writing`): its words, what lies about the face it
 /// stopped on told at once where it needs no asking (`world::unasked`),
-/// else its stop kept for that to be asked once a stop (`stop`).
+/// else its hit kept for that to be asked once a hit (`keep_hit`).
 #[allow(clippy::too_many_arguments)]
 fn missed(
     eye: &Eye,
-    window: &[IVec4],
+    clipmap: &[IVec4],
     ground: &[u32],
     palette_indices: &[u32],
     shards: &[IVec4],
@@ -261,7 +261,7 @@ fn missed(
     size: UVec3,
 ) -> [u32; ray::WORDS as usize] {
     let world = World {
-        window,
+        clipmap,
         ground,
         palette_indices,
         shards,
@@ -274,7 +274,7 @@ fn missed(
     let (asks, faces) = unasked(met.ends, met.hit.asset[0]);
     let faces = if asks {
         let face = face_of(&aim.ray, met.hit.axis);
-        stop(eye, beams, seen, &met.hit.node, face, id)
+        keep_hit(eye, beams, seen, &met.hit.node, face, id)
     } else {
         faces
     };
@@ -285,14 +285,14 @@ fn missed(
     word(&aim.ray, met, eye.origin.w != 0, faces)
 }
 
-/// The stop at `node` of pixel `id`'s walk again, entered through face
-/// `face`, kept for what lies about that face to be asked once a stop
-/// (pxl-spec-core `beam::STOP_WORDS`): numbered as the walks take them
-/// (`observed::STOPS_CNT`), the dispatch over them raised by the number
-/// that opens a workgroup (`observed::STOPS_ARGS`), and its number marked
-/// waiting (`beam::STOP_WAITS`) as its pixel's last word until its faces
-/// are put there (`stop_faces_cs`); none past `beam::STOPS`.
-fn stop(
+/// The hit at `node` of pixel `id`'s walk again, entered through face
+/// `face`, kept for what lies about that face to be asked once a hit
+/// (pxl-spec-core `beam::HIT_WORDS`): numbered as the walks take them
+/// (`observed::HITS_CNT`), the dispatch over them raised by the number
+/// that opens a workgroup (`observed::HITS_ARGS`), and its number marked
+/// waiting (`beam::HIT_WAITS`) as its pixel's last word until its faces
+/// are put there (`hit_faces_cs`); none past `beam::HITS`.
+fn keep_hit(
     eye: &Eye,
     beams: &mut Beams,
     seen: &mut Seen,
@@ -300,27 +300,27 @@ fn stop(
     face: u32,
     id: UVec3,
 ) -> u32 {
-    let r = seen.add(observed::STOPS_CNT, 1);
-    if r >= beam::STOPS {
+    let r = seen.add(observed::HITS_CNT, 1);
+    if r >= beam::HITS {
         return 0;
     }
-    opens(seen, observed::STOPS_ARGS, r, beam::STOP_LANES);
-    let k = grid(eye).stop_at(r);
-    node_put(beams, k + beam::STOP_NODE, node);
-    beams.set(k + beam::STOP_FACE, face);
-    beams.set(k + beam::STOP_PX, id.y << 16 | id.x);
-    beam::STOP_WAITS | r
+    opens(seen, observed::HITS_ARGS, r, beam::HIT_LANES);
+    let k = grid(eye).hit_at(r);
+    node_put(beams, k + beam::HIT_NODE, node);
+    beams.set(k + beam::HIT_FACE, face);
+    beams.set(k + beam::HIT_PX, id.y << 16 | id.x);
+    beam::HIT_WAITS | r
 }
 const _: () = assert!(
     pxl_spec_core::face::BITS < 31,
-    "a waiting stop's mark lies past every face's bit"
+    "a waiting hit's mark lies past every face's bit"
 );
 
 /// Whether the stops at words `a` and `b` are one: one node entered
 /// through one face, so what lies about it is one.
 fn alike(w: &Beams, a: u32, b: u32) -> bool {
     let mut k = 0;
-    while k < beam::STOP_PX {
+    while k < beam::HIT_PX {
         if w.word(a + k) != w.word(b + k) {
             return false;
         }
@@ -340,7 +340,7 @@ fn alike(w: &Beams, a: u32, b: u32) -> bool {
 pub fn miss_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
@@ -350,7 +350,7 @@ pub fn miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
-    let window: &[IVec4] = window;
+    let clipmap: &[IVec4] = clipmap;
     let size: UVec3 = rays.query_size();
     if id.x >= size.x || id.y >= size.y {
         return;
@@ -360,7 +360,7 @@ pub fn miss_cs(
         return;
     }
     let w = missed(
-        eye, window, ground, palette_indices, shards, overwrites, pool, beams, seen, id, size,
+        eye, clipmap, ground, palette_indices, shards, overwrites, pool, beams, seen, id, size,
     );
     write_ray(rays, id, w);
 }
@@ -377,7 +377,7 @@ pub fn miss_list_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
@@ -387,7 +387,7 @@ pub fn miss_list_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
-    let window: &[IVec4] = window;
+    let clipmap: &[IVec4] = clipmap;
     let k = (group.y * ray::MISS_ACROSS + group.x) * ray::MISS_LANES + lane.x;
     let cnt = seen_at(seen, observed::MARKS_CNT);
     if k >= cnt || k >= observed::MARKS {
@@ -400,50 +400,50 @@ pub fn miss_list_cs(
         return;
     }
     let w = missed(
-        eye, window, ground, palette_indices, shards, overwrites, pool, beams, seen, id, size,
+        eye, clipmap, ground, palette_indices, shards, overwrites, pool, beams, seen, id, size,
     );
     write_ray(rays, id, w);
 }
 
-/// The missed pixels' stops the walks again kept (`stop`), as many as they
-/// took, `beam::STOPS` at most.
-fn stops(seen: &Seen) -> u32 {
-    seen_at(seen, observed::STOPS_CNT).min(beam::STOPS)
+/// The missed pixels' hits the walks again kept (`keep_hit`), as many as they
+/// took, `beam::HITS` at most.
+fn hits(seen: &Seen) -> u32 {
+    seen_at(seen, observed::HITS_CNT).min(beam::HITS)
 }
 
-/// The number of the stop pixel (`x`, `y`) waits for, where it is one
-/// alike the stop at words `k` (`alike`); `beam::STOPS` where not.
-fn waits_alike(rays: &Rays, beams: &Beams, g: &beam::Grid, k: u32, x: u32, y: u32) -> u32 {
+/// The number of the hit pixel (`x`, `y`) waits for, where it is one
+/// alike the hit at words `k` (`alike`); `beam::HITS` where not.
+fn alike_hit(rays: &Rays, beams: &Beams, g: &beam::Grid, k: u32, x: u32, y: u32) -> u32 {
     let w: u32 = rays.read(UVec3::new(x, y, ray::FACES));
-    if w & beam::STOP_WAITS == 0 {
-        return beam::STOPS;
+    if w & beam::HIT_WAITS == 0 {
+        return beam::HITS;
     }
-    let r = w & !beam::STOP_WAITS;
-    if r >= beam::STOPS || !alike(beams, g.stop_at(r), k) {
-        return beam::STOPS;
+    let r = w & !beam::HIT_WAITS;
+    if r >= beam::HITS || !alike(beams, g.hit_at(r), k) {
+        return beam::HITS;
     }
     r
 }
 
-/// Each stop the walks again kept (`stop`), a thread each,
-/// `beam::STOP_LANES` a workgroup, dispatched off their count
-/// (`observed::STOPS_ARGS`): the one that asks what lies about its face is
-/// one whose pixel's neighbors to the left and above wait for no stop alike
-/// (`alike`) within its square of `beam::STOP_RUN` a side, so a patch of
-/// stops alike is asked once a square, not once a pixel or a row, and
+/// Each hit the walks again kept (`keep_hit`), a thread each,
+/// `beam::HIT_LANES` a workgroup, dispatched off their count
+/// (`observed::HITS_ARGS`): the one that asks what lies about its face is
+/// one whose pixel's neighbors to the left and above wait for no hit alike
+/// (`alike`) within its square of `beam::HIT_SQUARE` a side, so a patch of
+/// hits alike is asked once a square, not once a pixel or a row, and
 /// which of them asks is a function of the pixels alone. It is listed with
-/// its ask (`beam::Grid::stop_ask_at`) for the faces' pass as a box is
+/// its ask (`beam::Grid::hit_ask_at`) for the faces' pass as a box is
 /// (raster.rs `face_cs`; `ray::MISS_ARGS_ASKED` of the walk again's words,
 /// its count, and its dispatch raised by the place that opens a
 /// workgroup), off the line its cell's rays resumed from. Any other is told
-/// the neighbor's stop it takes them from, the left before the one above
-/// (`beam::STOP_FOLLOWS`), which `stop_faces_cs` follows to the one that
-/// asks. It reads the stops and its neighbors' last ray words, which the
-/// walks wrote, and writes only its own stop's last word and its ask, so
+/// the neighbor's hit it takes them from, the left before the one above
+/// (`beam::HIT_FOLLOWS`), which `hit_faces_cs` follows to the one that
+/// asks. It reads the hits and its neighbors' last ray words, which the
+/// walks wrote, and writes only its own hit's last word and its ask, so
 /// no thread reads what another writes; the pyramid's head, which it is
 /// dispatched off, it only reads.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "stop_lead_cs"))]
-pub fn stop_lead_cs(
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "hit_lead_cs"))]
+pub fn hit_lead_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
@@ -451,24 +451,24 @@ pub fn stop_lead_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &Seen,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] marks: &mut [u32],
 ) {
-    if id.x >= stops(seen) {
+    if id.x >= hits(seen) {
         return;
     }
     let g = grid(eye);
-    let k = g.stop_at(id.x);
-    let px = beams.word(k + beam::STOP_PX);
+    let k = g.hit_at(id.x);
+    let px = beams.word(k + beam::HIT_PX);
     let (x, y) = (px & 0xffff, px >> 16);
     // The neighbor it takes its faces from: the left, else the one above,
-    // each where its pixel waits for a stop alike within the square.
-    let mut from = beam::STOPS;
-    if x % beam::STOP_RUN != 0 {
-        from = waits_alike(rays, beams, &g, k, x - 1, y);
+    // each where its pixel waits for a hit alike within the square.
+    let mut from = beam::HITS;
+    if x % beam::HIT_SQUARE != 0 {
+        from = alike_hit(rays, beams, &g, k, x - 1, y);
     }
-    if from == beam::STOPS && y % beam::STOP_RUN != 0 {
-        from = waits_alike(rays, beams, &g, k, x, y - 1);
+    if from == beam::HITS && y % beam::HIT_SQUARE != 0 {
+        from = alike_hit(rays, beams, &g, k, x, y - 1);
     }
-    if from != beam::STOPS {
-        beams.set(k + beam::STOP_OUT, beam::STOP_FOLLOWS | from);
+    if from != beam::HITS {
+        beams.set(k + beam::HIT_OUT, beam::HIT_FOLLOWS | from);
         return;
     }
     let asked = ray::MISS_ARGS_ASKED;
@@ -482,40 +482,40 @@ pub fn stop_lead_cs(
     let size: UVec3 = rays.query_size();
     let cell = g.cell(px_tan(eye, UVec3::new(x, y, 0), size));
     let corner = beams.word(g.cell_at(cell) + beam::CELL_CORNER);
-    let face = beams.word(k + beam::STOP_FACE);
-    let a = g.stop_ask_at(place);
-    beams.set(a + beam::ASK_NODE, k + beam::STOP_NODE);
+    let face = beams.word(k + beam::HIT_FACE);
+    let a = g.hit_ask_at(place);
+    beams.set(a + beam::ASK_NODE, k + beam::HIT_NODE);
     beams.set(a + beam::ASK_FACE, face);
     beams.set(a + beam::ASK_LINE, beam::Grid::line(corner));
-    beams.set(a + beam::ASK_TO, k + beam::STOP_OUT);
+    beams.set(a + beam::ASK_TO, k + beam::HIT_OUT);
 }
 
-/// Each stop the walks again kept, a thread each as `stop_lead_cs`, once
+/// Each hit the walks again kept, a thread each as `hit_lead_cs`, once
 /// the faces' pass asked what lies about each patch's face (raster.rs
 /// `face_cs`): those faces put at its pixel as its last ray word
-/// (`ray::FACES`), its own where it asked them, else those of the stop that
+/// (`ray::FACES`), its own where it asked them, else those of the hit that
 /// asked for it, reached through the neighbors each was told
-/// (`beam::STOP_FOLLOWS`), a step left or up within the square each, so
+/// (`beam::HIT_FOLLOWS`), a step left or up within the square each, so
 /// two of its sides at most; no pixel is left waiting past the cast's
 /// pass.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "stop_faces_cs"))]
-pub fn stop_faces_cs(
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "hit_faces_cs"))]
+pub fn hit_faces_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &Seen,
 ) {
-    if id.x >= stops(seen) {
+    if id.x >= hits(seen) {
         return;
     }
     let g = grid(eye);
-    let k = g.stop_at(id.x);
-    let px = beams.word(k + beam::STOP_PX);
-    let mut faces = beams.word(k + beam::STOP_OUT);
+    let k = g.hit_at(id.x);
+    let px = beams.word(k + beam::HIT_PX);
+    let mut faces = beams.word(k + beam::HIT_OUT);
     let mut steps = 0;
-    while faces & beam::STOP_FOLLOWS != 0 && steps < 2 * beam::STOP_RUN {
-        faces = beams.word(g.stop_at(faces & !beam::STOP_FOLLOWS) + beam::STOP_OUT);
+    while faces & beam::HIT_FOLLOWS != 0 && steps < 2 * beam::HIT_SQUARE {
+        faces = beams.word(g.hit_at(faces & !beam::HIT_FOLLOWS) + beam::HIT_OUT);
         steps += 1;
     }
     // SAFETY: a pixel the walk again wrote, within the rays.

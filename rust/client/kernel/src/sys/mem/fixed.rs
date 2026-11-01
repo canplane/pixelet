@@ -6,7 +6,7 @@
 //! into the heap, a model kept parsed and an image only until its texture
 //! lands (sys/io/loader.rs). Which ranges there are and how large is the roof's
 //! (door/layout.rs), which hands each owner its own at boot; a range is read
-//! only through `lane` and `Section::at`, which check its end.
+//! only through `array` and `Section::at`, which check its end.
 
 use xpute_guest::global::Global;
 use xpute_guest::mem;
@@ -37,8 +37,8 @@ impl OwnedRange {
     }
 }
 
-/// `count` of `size` bytes, rounded up to a whole cache line, as a lane is laid.
-pub const fn lane_bytes(cnt: usize, size: usize) -> u32 {
+/// `count` of `size` bytes, rounded up to a whole cache line, as an array is laid.
+pub const fn array_bytes(cnt: usize, size: usize) -> u32 {
     ((cnt * size).div_ceil(64) * 64) as u32
 }
 
@@ -46,9 +46,9 @@ pub const fn lane_bytes(cnt: usize, size: usize) -> u32 {
 /// of bounds or misaligned is a bug, not a refusal.
 ///
 /// # Safety
-/// The caller holds those bytes alone while it keeps the lane, and they are
-/// a valid `T` (zeroed, for the plain numbers every lane here holds).
-pub unsafe fn lane<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
+/// The caller holds those bytes alone while it keeps the array, and they are
+/// a valid `T` (zeroed, for the plain numbers every array here holds).
+pub unsafe fn array<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
     let at = u32::try_from(n * size_of::<T>())
         .ok()
         .and_then(|bytes| s.at(off, bytes))

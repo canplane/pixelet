@@ -285,7 +285,7 @@ struct Pixel {
   d: vec3f,
   c: vec3u,
   faces: u32,
-  // A ray that met nothing leaves its first word zero: no stop is void.
+  // A ray that met nothing leaves its first word zero: no hit is void.
   met: bool,
   h: Hit,
 };

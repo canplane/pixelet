@@ -18,7 +18,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Backing } from "@/shell/ui/backing.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import type { PillProps } from "./pill.tsx";
-import { touchReach } from "@/shell/ui/touch.ts";
+import { touchOutset } from "@/shell/ui/touch.ts";
 
 // Everything the default has, but what this file draws itself.
 export * from "./pill.tsx";
@@ -57,21 +57,21 @@ export function Pill({
   last.current = [x, width];
 
   const r = height / 2;
-  const reach = touch ? touchReach(height) : 0;
+  const outset = touch ? touchOutset(height) : 0;
   // Content stands inside the glass: interactive glass answers only touches
   // given through what it contains.
   return (
     <View
       {...touch}
       style={[
-        touch ? styles.reach : styles.at,
+        touch ? styles.target : styles.at,
         {
-          left: x - reach,
-          top: -reach,
-          width: width + 2 * reach,
-          height: height + 2 * reach + touchBelow,
-          padding: reach,
-          paddingBottom: reach + touchBelow,
+          left: x - outset,
+          top: -outset,
+          width: width + 2 * outset,
+          height: height + 2 * outset + touchBelow,
+          padding: outset,
+          paddingBottom: outset + touchBelow,
         },
       ]}
     >
@@ -110,7 +110,7 @@ export function Pill({
 
 const styles = StyleSheet.create({
   at: { position: "absolute", pointerEvents: "box-none" },
-  reach: { position: "absolute" },
+  target: { position: "absolute" },
   glass: { flex: 1 },
   clip: { overflow: "hidden", pointerEvents: "box-none" },
   content: {

@@ -209,7 +209,7 @@ pub fn stage_render(pace: Pace) {
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
-            window: clipmap::table(),
+            clipmap: clipmap::table(),
             shards: cast::shards(),
             overwrites: cast::overwrites(),
             decor: drawn::frame(),
@@ -305,7 +305,7 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
     };
 
     // The world gizmo, laid before the frame's list begins, so its lines and the
-    // origin they are drawn about are the same turn's: laid after, a new lane
+    // origin they are drawn about are the same turn's: laid after, a new buffer
     // went up under the last origin, and every rebuild flung the lines by how
     // far it moved.
     let show = settings_store().world_gizmo;

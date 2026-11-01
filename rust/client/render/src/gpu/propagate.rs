@@ -1,8 +1,9 @@
-// pxl-render/gpu/reach.rs
+// pxl-render/gpu/propagate.rs
 
-//! The light's map's tiles that changed reached across to the screen's
-//! (screen_reach.wgsl), as the light's reach takes the screen's receivers to
-//! the light's tiles (pxl-shader light.rs `light_reach_cs`): in a frame
+//! The light's map's tiles that changed propagated to the screen's
+//! (screen_propagate.wgsl), as the light's propagation takes the screen's
+//! receivers to the light's tiles (pxl-shader light.rs
+//! `light_propagate_cs`): in a frame
 //! where the casters that changed marked tiles of the map (gpu/tiles.rs),
 //! each screen tile whose pixels' shadow's taps read one of them is set to
 //! have changed this frame, on the GPU, after the marks and before anything
@@ -25,7 +26,7 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec_core::param::light;
 
 use crate::frame::shader::floor::MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP;
-use crate::frame::shader::part::{SHADER_SCREEN_BOUND, SHADER_SCREEN_REACH};
+use crate::frame::shader::part::{SHADER_SCREEN_BOUND, SHADER_SCREEN_PROPAGATE};
 use crate::frame::shader::record::{COMPUTE, DEPTH, STORAGE, STORAGE_RW, UNIFORM};
 use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP};
 use crate::gpu::api::{
@@ -35,7 +36,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::tiles::Tiles;
 
-/// What its pass binds (screen_reach.wgsl): the world's depth, its uniform,
+/// What its pass binds (screen_propagate.wgsl): the world's depth, its uniform,
 /// the map's words and uniform, the screen's words and uniform, the depth's
 /// bound, the map's tiles the frame's marks cover.
 const GROUP: [u32; 24] = [
@@ -54,10 +55,10 @@ const _: () = assert!(
     "a screen tile's squares are a workgroup every device takes"
 );
 
-/// Its uniform's floats (screen_reach.wgsl `Reach`).
+/// Its uniform's floats (screen_propagate.wgsl `Propagate`).
 const UNIFORM_FLOATS: usize = 36;
 
-pub struct Reach {
+pub struct Propagate {
     built: Built,
     uniform: u32,
     /// Its group and what it was made over, made again where one is another.
@@ -73,10 +74,10 @@ pub struct Reach {
     bounds_bound: [u32; 4],
 }
 
-impl Reach {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Reach {
-        Reach {
-            built: pipelines.build_compute(g, SHADER_SCREEN_REACH, &GROUP),
+impl Propagate {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Propagate {
+        Propagate {
+            built: pipelines.build_compute(g, SHADER_SCREEN_PROPAGATE, &GROUP),
             uniform: g.buf(
                 word_bytes(UNIFORM_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -165,7 +166,7 @@ impl Reach {
         g.end(pass);
     }
 
-    /// The map's `light` tiles that changed this frame reached across to the
+    /// The map's `light` tiles that changed this frame propagated to the
     /// `screen`'s, over the depth's bound and, where a square's spans past a
     /// few tiles, the world's depth `depth`, both as the last frame left
     /// them, off the tiles the frame's marks cover (`Tiles::marks_box`).

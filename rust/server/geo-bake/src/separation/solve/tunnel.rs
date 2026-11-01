@@ -53,11 +53,11 @@ const RAIL_INTERIOR_HEIGHT_M: f64 = 4.0;
 /// A block, as a length: what Arnis adds or takes by one.
 const BLOCK_M: f64 = 1.0;
 
-/// The level whose approaches run furthest (`approach_reach`).
+/// The level whose approaches run furthest (`approach_run`).
 pub(super) const DEEPEST: i64 = -(TUNNEL_MAX_LAYERS_BELOW + 1);
 
 /// How far a portal's approaches can run for a road tunnel at `level`, in DB coordinates.
-pub(super) fn approach_reach(level: i64, scale: Scale) -> f64 {
+pub(super) fn approach_run(level: i64, scale: Scale) -> f64 {
     merc_from_u(f64::from(tunnel_drop(level, scale) * TUNNEL_RAMP_RUN) * CELL_U)
 }
 

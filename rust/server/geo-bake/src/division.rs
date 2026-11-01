@@ -4,7 +4,7 @@
 //! as it holds them. A cell is in the deepest division whose area holds its
 //! center; under that, in the child with no area whose point is nearest,
 //! and so on down, the points looked for within the bakes' reach of the tile
-//! (`coverage.rs` `BAKE_REACH`) and no further. A cell in no area is in none.
+//! (`coverage.rs` `BAKE_READ_DIST`) and no further. A cell in no area is in none.
 //! Equal distances go to the lesser id, and a division already on the way
 //! down is not taken again.
 
@@ -20,7 +20,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
 
-use crate::coverage::BAKE_REACH;
+use crate::coverage::BAKE_READ_DIST;
 use crate::pyramid::Base;
 use crate::terrain::pipeline::ground::render_polygon;
 use crate::wkb::wkb_to_geometries;
@@ -127,12 +127,12 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     }
 
     // ---- under the areas, the nearest point of a child, within the reach ----
-    let reach = merc_from_u(BAKE_REACH);
+    let margin = merc_from_u(BAKE_READ_DIST);
     let ring: [&(dyn ToSql + Sync); 4] = [
-        &(min[0] - reach),
-        &(min[1] - reach),
-        &(max[0] + reach),
-        &(max[1] + reach),
+        &(min[0] - margin),
+        &(min[1] - margin),
+        &(max[0] + margin),
+        &(max[1] + margin),
     ];
     let mut children: FnvHashMap<String, Vec<([f64; 2], String)>> = FnvHashMap::default();
     for r in client.query(POINTS_SQL, &ring).map_err(db)? {

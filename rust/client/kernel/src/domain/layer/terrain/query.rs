@@ -1,8 +1,8 @@
 // pxl-kernel/domain/layer/terrain/query.rs
 
-//! Terrain's answers. A node's cells are read from the windows
+//! Terrain's answers. A node's cells are read from the clip levels
 //! (domain/layer/terrain/clipmap.rs) at the cells of the tile its cells fold from,
-//! off the finest window holding them: exact where that is the zoom its
+//! off the finest clip level holding them: exact where that is the zoom its
 //! tile's line says its ground at, coarser where only one over holds them.
 //! A column's ways are its brick's tree the GPU built, its child groups read
 //! back into the pool's mirror (domain/layer/terrain/clipmap.rs `pool`).
@@ -16,7 +16,7 @@ use pxl_spec_core::area::Shard;
 use pxl_spec_core::clipmap::{self as cells, Found};
 use pxl_spec_core::ground::{Bounds, Cell};
 
-use crate::domain::layer::terrain::clipmap::Windowed;
+use crate::domain::layer::terrain::clipmap::HeldClipmap;
 use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
 use crate::sys::io::source;
 
@@ -26,17 +26,17 @@ use pxl_spec::space::coord::aabb::Aabb;
 impl TileCache<TerrainTile> {
     /// The lowest and highest the ground holds over the column `node`'s own
     /// cells, in leaf cells, and the ways apart (pxl-spec-core
-    /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off
-    /// the finest window holding them, one look-up whatever the node's size
-    /// (`relief`). A coarser window standing in holds its own cells, which
-    /// its bound holds, and names the tile lacked; where no window holds it,
-    /// the lack, never nothing. Past the service area no window holds
+    /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off the
+    /// finest clip level holding them, one look-up whatever the node's size
+    /// (`relief`). A coarser clip level standing in holds its own cells, which
+    /// its bound holds, and names the tile lacked; where no clip level holds
+    /// it, the lack, never nothing. Past the service area no clip level holds
     /// anything: a reader asks that first, the descent of its shard
-    /// (pxl-spec-core `area::Shard`). `place` is where a node over it found
-    /// its cells, or `Found::NONE`, and becomes where its own are
-    /// (pxl-spec-core `clipmap::step`). Its cells are read at `cell` as the
-    /// GPU reads them (pxl-spec-core `clipmap::bound_over`); `line` names the
-    /// tile and says whether the window read is its ground's own.
+    /// (pxl-spec-core `area::Shard`). `place` is where a node over it found its
+    /// cells, or `Found::NONE`, and becomes where its own are (pxl-spec-core
+    /// `clipmap::step`). Its cells are read at `cell` as the GPU reads them
+    /// (pxl-spec-core `clipmap::bound_over`); `line` names the tile and says
+    /// whether the clip level read is its ground's own.
     pub fn relief(
         &self,
         line: &Line,
@@ -44,18 +44,18 @@ impl TileCache<TerrainTile> {
         node: Node<2>,
         zooms: [Zoom; 2],
     ) -> Answer<Bounds> {
-        let (r, from, here) = cells::bound_over(&Windowed, place, zooms, node);
+        let (r, from, here) = cells::bound_over(&HeldClipmap, place, zooms, node);
         held(line, from, here, r)
     }
 
-    /// The column `c` at `zoom` off the windows, the area's edge laid on
+    /// The column `c` at `zoom` off the clip levels, the area's edge laid on
     /// it, as the GPU reads it (pxl-spec-core `clipmap::ground`), stepped from
     /// `place`: exact where `line`
-    /// says the ground at the window it was read off or coarser, else
-    /// coarser, naming its tile (`held`); where no window holds it, the
+    /// says the ground at the clip level it was read off or coarser, else
+    /// coarser, naming its tile (`held`); where no clip level holds it, the
     /// lack.
     pub fn column(&self, line: &Line, place: Found, (zoom, c): Node<2>) -> Answer<Cell> {
-        let (cell, f) = cells::ground(&Windowed, place, zoom, c);
+        let (cell, f) = cells::ground(&HeldClipmap, place, zoom, c);
         held(line, f.from(), f.here(), cell)
     }
 
@@ -128,7 +128,7 @@ fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
     tile_at(read, ancestor_of([at[0], at[1]], zoom - read))
 }
 
-/// `v`, read off the window at `from` (`here`, else none held): exact where
+/// `v`, read off the clip level at `from` (`here`, else none held): exact where
 /// `line` says the ground at `from` or coarser, else coarser, naming its tile.
 fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     match here {
@@ -160,7 +160,7 @@ impl Query for TileCache<TerrainTile> {
         }
     }
 
-    /// From the windows' relief over the node's own cells (`relief`), the
+    /// From the clip levels' relief over the node's own cells (`relief`), the
     /// ground's and the ways' joined, down to a cell at `cell` under its
     /// lowest, within the node. A node past the service area, no palette index in
     /// it, holds nothing: known before any of its ground arrives, a shard or

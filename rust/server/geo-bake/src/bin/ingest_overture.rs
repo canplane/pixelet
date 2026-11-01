@@ -45,7 +45,7 @@ use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::{Coverage, Node};
 use pxl_geo_bake::util::fnv1a;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
-use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::coord::world::BOUNDS;
 use serde_json::{Map, Number, Value};
 use xpute_kit::math::scalar::round;
 
@@ -948,7 +948,7 @@ fn items(list: &dyn Array) -> Result<Value, String> {
 /// world's edge clamps latitude (`epsg4326`), so what lies past it is cut off
 /// rather than refused by the projection.
 fn projected(wkb: &str) -> String {
-    let lat = epsg4326::Y_TO_LAT(epsg3857::merc_from_u(REACH.max[1]));
+    let lat = epsg4326::Y_TO_LAT(epsg3857::merc_from_u(BOUNDS.max[1]));
     format!("ST_Transform(ST_ClipByBox2D(ST_GeomFromWKB({wkb}, 4326), ST_MakeEnvelope(-180, -{lat:?}, 180, {lat:?}, 4326)), 3857)")
 }
 

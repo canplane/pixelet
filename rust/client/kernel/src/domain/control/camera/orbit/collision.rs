@@ -248,14 +248,14 @@ fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose
     })
 }
 
-/// What `at`'s pivot meets toward its eye within `reach`: a roof, where the
+/// What `at`'s pivot meets toward its eye within `t_max`: a roof, where the
 /// eye is straight over it; within the eye's own distance, what hides the
 /// pivot from it.
-fn toward_eye(at: &ViewPose, reach: f64, access: &World) -> Option<Hit> {
+fn toward_eye(at: &ViewPose, t_max: f64, access: &World) -> Option<Hit> {
     let ray = Ray {
         origin: at.pivot,
         dir: orbit_eye_off(1.0, at.polar, at.azimuth),
-        reach,
+        t_max,
     };
     access.first_hit(&ray, held()).exact().flatten()
 }

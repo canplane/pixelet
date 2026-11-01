@@ -35,7 +35,7 @@ export function Segmented<T extends string | number>({
             onPress={() => onChange(s.value)}
             accessibilityRole="tab"
             aria-selected={on}
-            style={styles.reach}
+            style={styles.target}
           >
             {/* Always mounted, as dock/strip.tsx `ToolButton` is. */}
             <View collapsable={false} style={[styles.segment, on && styles.on]}>
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.faint,
   },
   // The segment's radius is the track's minus the inset, so the two are concentric.
-  reach: { flex: 1, padding: INSET },
+  target: { flex: 1, padding: INSET },
   segment: {
     flex: 1,
     alignItems: "center",

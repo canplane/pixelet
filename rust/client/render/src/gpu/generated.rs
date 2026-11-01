@@ -1,17 +1,17 @@
 // pxl-render/gpu/generated.rs
 
 //! The decor the GPU generates and draws (pxl-spec-core `scatter`): what the
-//! ground generates in the eye's windows over the cast's world (`decor_cs`),
-//! placed decor handed as records beside it — a candidate generated again
-//! only where what it reads changed (`decor_mark_cs`, `Generation`), its
-//! record standing otherwise, and a brick thinned again only where it is
-//! another; then each frame each
-//! record taken where the rays ask the leaf cell's zoom or finer and sized
-//! for the screen, counted a draw region (`decor_cnt_cs`), the regions laid
-//! out with their indirect args (`decor_args_cs`), and each record drawn
-//! compacted into the decor's instances in the layout the decor and impostor
-//! shaders read (`decor_compact_cs`). The CPU hands what only it knows and
-//! never reads what is generated.
+//! ground generates in the eye's clip levels over the cast's world
+//! (`decor_cs`), placed decor handed as records beside it — a candidate
+//! generated again only where what it reads changed (`decor_mark_cs`,
+//! `Generation`), its record standing otherwise, and a brick thinned again only
+//! where it is another; then each frame each record taken where the rays ask
+//! the leaf cell's zoom or finer and sized for the screen, counted a draw
+//! region (`decor_cnt_cs`), the regions laid out with their indirect args
+//! (`decor_args_cs`), and each record drawn compacted into the decor's
+//! instances in the layout the decor and impostor shaders read
+//! (`decor_compact_cs`). The CPU hands what only it knows and never reads what
+//! is generated.
 
 use pxl_spec_core::decor::DECORS;
 use pxl_spec_core::generated::{self, drawn, GROUPS};
@@ -30,8 +30,8 @@ use crate::gpu::read::Read;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
-    /// Per kind, the window zooms it is generated at, a bit each over the first
-    /// window's (`decor_cs`).
+    /// Per kind, the clip level zooms it is generated at, a bit each over the
+    /// first clip level's (`decor_cs`).
     pub shown: &'a [u32],
     /// pxl-spec-core `generated::drawn`'s drawing words, `DRAWING_WORDS` of them.
     pub drawing: &'a [u32],
@@ -50,18 +50,18 @@ pub struct DecorFrame<'a> {
 }
 
 /// What decor's generation reads besides the frame's decor, none of it the
-/// eye's place: the windows' table, a preview's cuts, and the bricks filled
+/// eye's place: the clip levels' table, a preview's cuts, and the bricks filled
 /// this frame. A slot generates whole where its brick is another; else it
 /// generates again only the records a box reaches, each by what its own
-/// candidate reads (`generated::reaches`): an edit, a cut as it was or is,
-/// or a brick filled at its window's zoom or finer. The overwrites' every write names its
-/// box (the frame's `edits`), and the service area's index is made once,
-/// before any brick is held, so neither generates a slot by itself. A brick
-/// filled reaches its own window's zoom and every coarser one: a coarser
-/// window's decor faces as the leaf cells vote, each read off the finest
-/// window holding it (pxl-spec-core `generated::asks`).
+/// candidate reads (`generated::reaches`): an edit, a cut as it was or is, or a
+/// brick filled at its clip level's zoom or finer. The overwrites' every write
+/// names its box (the frame's `edits`), and the service area's index is made
+/// once, before any brick is held, so neither generates a slot by itself. A
+/// brick filled reaches its own clip level's zoom and every coarser one: a
+/// coarser clip level's decor faces as the leaf cells vote, each read off the
+/// finest clip level holding it (pxl-spec-core `generated::asks`).
 pub struct Generation<'a> {
-    pub window: &'a [i32],
+    pub clipmap: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
     /// The bricks handed this frame (pxl-spec-core `clipmap::FRESH_WORDS`).
     pub fresh: &'a [[u32; clipmap::FRESH_WORDS as usize]],
@@ -107,10 +107,10 @@ pub struct Generated {
     bound: World,
     on: bool,
     /// The kinds' zooms as last written, a constant of the table the kernel
-    /// hands once; the windows' table, the cuts and the placed decor as last
-    /// handed; and whether this frame marks slots to generate.
+    /// hands once; the clip levels' table, the cuts and the placed decor as
+    /// last handed; and whether this frame marks slots to generate.
     shown_read: Read,
-    window: Read,
+    clipmap: Read,
     cuts: [u32; eye::CUTS],
     placed: Read,
     marking: bool,
@@ -135,8 +135,8 @@ pub struct Generated {
     counting: bool,
 }
 
-/// The world `decor_cs` asks: the cast's eye, window, the tiles' frames, the
-/// service area's index, the overwrites and the ways' pool, as the cast
+/// The world `decor_cs` asks: the cast's eye, clip level, the tiles' frames,
+/// the service area's index, the overwrites and the ways' pool, as the cast
 /// asks it.
 pub type World = [u32; 6];
 
@@ -200,7 +200,7 @@ impl Generated {
             bound: [0; 6],
             on: false,
             shown_read: Read::default(),
-            window: Read::default(),
+            clipmap: Read::default(),
             cuts: [0; eye::CUTS],
             placed: Read::default(),
             counted: Read::default(),
@@ -282,18 +282,18 @@ impl Generated {
             hold(&mut self.held, &mut self.holding, b);
         });
         self.cuts = *generation.cuts;
-        let w = &mut self.window;
+        let w = &mut self.clipmap;
         w.begin();
-        w.read(generation.window);
+        w.read(generation.clipmap);
         let moved = !w.end();
         self.marked = self.holding;
-        // A brick filled at any window generates decor there and coarser.
+        // A brick filled at any clip level generates decor there and coarser.
         let fresh = !generation.fresh.is_empty();
         self.marking = self.stale || moved || fresh || self.marked != 0;
         self.boxes = 0;
         if self.marking {
             // The boxes held, at every zoom, then each brick handed, at
-            // its window's and coarser.
+            // its clip level's and coarser.
             let mut boxes = [0u32; (generated::MARKED * generated::BOX_WORDS) as usize];
             let fresh = generation.fresh.iter().map(|f| {
                 let cell = f[clipmap::FRESH_CELL as usize];
@@ -412,18 +412,18 @@ impl Generated {
         for id in self.groups {
             release(id);
         }
-        let [eye, window, ground, shards, overwrites, pool] = world;
+        let [eye, clipmap, ground, shards, overwrites, pool] = world;
         self.groups = [
             group(
                 &self.mark,
-                &[window, self.records, self.list, self.rows, self.shown],
+                &[clipmap, self.records, self.list, self.rows, self.shown],
             ),
-            group(&self.thin, &[window, self.records, self.rows, self.list]),
+            group(&self.thin, &[clipmap, self.records, self.rows, self.list]),
             group(
                 &self.generate,
                 &[
                     eye,
-                    window,
+                    clipmap,
                     ground,
                     shards,
                     overwrites,
@@ -441,7 +441,7 @@ impl Generated {
                     self.rows,
                     self.records,
                     self.regions,
-                    window,
+                    clipmap,
                 ],
             ),
             group(
@@ -456,7 +456,7 @@ impl Generated {
                     self.records,
                     self.regions,
                     self.instances,
-                    window,
+                    clipmap,
                 ],
             ),
         ];
@@ -484,10 +484,10 @@ impl Generated {
 
     /// The frame was dropped, nothing of it recorded: what it wrote is
     /// written again, the slots it marked marked again by the boxes still
-    /// held, the window's table and the placed decor read anew.
+    /// held, the clip level's table and the placed decor read anew.
     pub fn on_dropped(&mut self) {
         self.marked = 0;
-        self.window.forget();
+        self.clipmap.forget();
         self.placed.forget();
         self.shown_read.forget();
         self.counted.forget();
@@ -506,9 +506,9 @@ impl Generated {
         }
     }
 
-    /// Within a compute pass over the cast's world, after the cast: the
-    /// slots to generate again marked, their candidates thinned a window cell
-    /// a thread and generated a record a thread where any may be, then every
+    /// Within a compute pass over the cast's world, after the cast: the slots
+    /// to generate again marked, their candidates thinned a clip level cell a
+    /// thread and generated a record a thread where any may be, then every
     /// record counted, laid out and compacted.
     pub fn dispatch(&self, g: &Gpu, pass: u32) {
         if !self.on || self.groups[0] == 0 {

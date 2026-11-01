@@ -25,7 +25,7 @@ use crate::world::World;
 
 /// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
 /// `beam`): the lines, a corner each, the cells' starts and the samples'
-/// stops, as the frame's `Grid` lays them (`Grid::size`), or as the light's
+/// hits, as the frame's `Grid` lays them (`Grid::size`), or as the light's
 /// list does (`light::list_words`) where the pass casts for the map; a
 /// runtime array as `Seen` is. A pixel's own ray words say whether it
 /// missed (`ray::MISS`), so nothing here is a pixel's.
@@ -197,15 +197,15 @@ pub(crate) fn node_put<W: Words + ?Sized>(w: &mut W, k: u32, n: &cast::Node) {
     w.set(k + beam::NODE_ROOTS + 2, n.roots[2] as u32);
 }
 
-/// A sample's stop `met` put at word `base` (pxl-spec-core
+/// A sample's hit `met` put at word `base` (pxl-spec-core
 /// `beam::SAMPLE_WORDS`), as the raster reads it (raster.rs): the node and
 /// cell it stopped at, `beam::SAMPLE_NONE` where it went on to its reach,
 /// whether what it stopped at lacks, and the axis it entered across; what
 /// lies about that face is the eye's box's, asked once a box (raster.rs
 /// `face_cs`).
 pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Trace<A>) {
-    let stop = &met.hit;
-    node_put(w, base + beam::SAMPLE_NODE, &stop.node);
+    let hit = &met.hit;
+    node_put(w, base + beam::SAMPLE_NODE, &hit.node);
     if met.ends == End::Miss {
         w.set(
             base + beam::SAMPLE_NODE + beam::NODE_ZOOM,
@@ -213,9 +213,9 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Trace
         );
     }
     w.set(base + beam::SAMPLE_LACKS, (met.ends == End::Lacks) as u32);
-    w.set(base + beam::SAMPLE_ASSET, stop.asset[0]);
-    w.set(base + beam::SAMPLE_ASSET + 1, stop.asset[1]);
-    w.set(base + beam::SAMPLE_AXIS, stop.axis);
+    w.set(base + beam::SAMPLE_ASSET, hit.asset[0]);
+    w.set(base + beam::SAMPLE_ASSET + 1, hit.asset[1]);
+    w.set(base + beam::SAMPLE_AXIS, hit.axis);
     w.set(base + beam::SAMPLE_VISITS, met.visits);
 }
 
@@ -259,7 +259,7 @@ where
 pub fn beam_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
@@ -269,14 +269,14 @@ pub fn beam_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
-    let window: &[IVec4] = window;
+    let clipmap: &[IVec4] = clipmap;
     let o = PassObserver::of(eye, head);
     let [across, down] = o.corners();
     if id.x >= across || id.y >= down {
         return;
     }
     let world = World {
-        window,
+        clipmap,
         ground,
         palette_indices,
         shards,
@@ -344,7 +344,7 @@ pub fn cell_cs(
 pub fn sample_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
@@ -354,14 +354,14 @@ pub fn sample_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
-    let window: &[IVec4] = window;
+    let clipmap: &[IVec4] = clipmap;
     let o = PassObserver::of(eye, head);
     let [across, down] = o.samples();
     if id.x >= across || id.y >= down {
         return;
     }
     let world = World {
-        window,
+        clipmap,
         ground,
         palette_indices,
         shards,

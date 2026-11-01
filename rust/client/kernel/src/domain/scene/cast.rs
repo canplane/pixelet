@@ -2,8 +2,8 @@
 
 //! What the GPU's cast of the eye's rays reads (pxl-render gpu/renderer.rs
 //! `Cast`): the eye as the rays leave it, a ray a drawn pixel, the eye's
-//! windows as a table of the bricks each holds, and each brick the
-//! windows want handed to the GPU once, off its tile's packet
+//! clip levels as a table of the bricks each holds, and each brick the
+//! clip levels want handed to the GPU once, off its tile's packet
 //! (domain/layer/terrain/clipmap.rs `fill`).
 
 use pxl_render::gpu::renderer::{Overwrites, TerrainWrite};
@@ -86,7 +86,7 @@ pub fn overwrites() -> Overwrites<'static> {
     }
 }
 
-/// Each brick the windows want to `write`, while it takes them: off the
+/// Each brick the clip levels want to `write`, while it takes them: off the
 /// packets kept for them, and off each void tile, held with none.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::tile_cache();

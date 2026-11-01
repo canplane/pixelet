@@ -173,7 +173,7 @@ fn beyond(dir: vec3f) -> vec3f {
   let d = to_land(dir);
   let p = dir * d;
   let seen = seen_from_eye(p);
-  let octaves = log2(d / atmos_earth_reach());
+  let octaves = log2(d / atmos_earth_dist());
   let n = frame_up();
   let face = earth_face(map_of(p), octaves);
   let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);

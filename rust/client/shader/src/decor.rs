@@ -1,12 +1,12 @@
 // pxl-shader/decor.rs
 
-//! The decor the ground generates in the eye's windows (pxl-spec-core
+//! The decor the ground generates in the eye's clip levels (pxl-spec-core
 //! `scatter`, `generated`): the entries that generate again listed
-//! (`decor_mark_cs`), the candidates the cells under a brick hold that stand
-//! at its window and stand clear, a window cell at a time (`decor_thin_cs`),
-//! each generated (`decor_cs`), and the records counted, laid out and
-//! compacted into their draws' instances (`decor_cnt_cs`, `decor_args_cs`,
-//! `decor_compact_cs`).
+//! (`decor_mark_cs`), the candidates the cells under a brick hold that stand at
+//! its clip level and stand clear, a clip level cell at a time
+//! (`decor_thin_cs`), each generated (`decor_cs`), and the records counted,
+//! laid out and compacted into their draws' instances (`decor_cnt_cs`,
+//! `decor_args_cs`, `decor_compact_cs`).
 
 use pxl_spec_core::answer::{self, In};
 use pxl_spec_core::cast::{End, Query};
@@ -88,7 +88,7 @@ impl DecorQuery for Generating<'_> {
         (f, top, met)
     }
 
-    /// The finest window holding the leaf column present (`clipmap::step`).
+    /// The finest clip level holding the leaf column present (`clipmap::step`).
     fn finest(&mut self, cell: u32, g: [i32; 2]) -> u32 {
         let (f, _) = clipmap::step(&self.world, clipmap::Found::NONE, LEAF_CELL, g);
         if f.here() && f.from() > cell {
@@ -112,14 +112,14 @@ impl DecorQuery for Generating<'_> {
     }
 }
 
-/// Whether decor `j` is shown at the window zoom `cell`: bit `cell −
+/// Whether decor `j` is shown at the clip level zoom `cell`: bit `cell −
 /// FIRST_CELL` of its `shown` word, at a leaf's cells or coarser.
 fn shown_at(shown: &[u32], j: u32, cell: u32) -> bool {
     cell <= LEAF_CELL && at(shown, j) >> (cell - FIRST_CELL) & 1 != 0
 }
 
 /// Whether a box of the frame's (pxl-spec-core `generated::BOXES_AT`)
-/// reaches what a candidate in `cells`, leaf cells of the window at `cell`,
+/// reaches what a candidate in `cells`, leaf cells of the clip level at `cell`,
 /// reads (`generated::reaches`): a brick's, or one candidate's own cell.
 fn is_changed(list: &[u32], cell: u32, cells: [i32; 4]) -> bool {
     let mut k = 0;
@@ -140,7 +140,7 @@ fn is_changed(list: &[u32], cell: u32, cells: [i32; 4]) -> bool {
 }
 
 /// The eye's entries whose decor generates again this frame, a thread an entry,
-/// listed with each decor shown at the entry's window zoom (`shown_at`) for
+/// listed with each decor shown at the entry's clip level zoom (`shown_at`) for
 /// `decor_cs` (pxl-spec-core `generated::LIST_AT`), the decors the catalog's
 /// rows as handed (`rows`), its count the dispatch's. An entry generates whole
 /// where every one does, decor having been off, or its records were not
@@ -154,7 +154,7 @@ fn is_changed(list: &[u32], cell: u32, cells: [i32; 4]) -> bool {
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_mark_cs"))]
 pub fn decor_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] clipmap: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] records: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] list: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] rows: &[Decor],
@@ -164,7 +164,7 @@ pub fn decor_mark_cs(
     if s >= generated::EYE_ENTRIES {
         return;
     }
-    let held = at(window, s);
+    let held = at(clipmap, s);
     if held.z == 0 {
         return;
     }
@@ -227,15 +227,15 @@ pub fn decor_mark_cs(
     }
 }
 
-/// Lanes `decor_thin_cs`'s workgroup has: a window cell each.
+/// Lanes `decor_thin_cs`'s workgroup has: a clip level cell each.
 const CELL_LANES: u32 = 64;
 const _: () = assert!(BRICK_CELLS.is_multiple_of(CELL_LANES));
 
-/// The candidates of an entry `decor_mark_cs` listed, a window cell of its
+/// The candidates of an entry `decor_mark_cs` listed, a clip level cell of its
 /// brick a thread: `x` the cell, `z` the entry and decor listed. Where its
 /// column holds any (`scatter::count`), each leaf cell under it is read off
 /// the decor's hashes (`scatter::candidate_at`); one holding a candidate
-/// whose variant stands at the entry's window (`scatter::stands_at`) and
+/// whose variant stands at the entry's clip level (`scatter::stands_at`) and
 /// which stands clear (`scatter::retained`) is laid as the decor's next record
 /// (`generated::cnt_at`), `RETAINED`, its cell and seed after it, for
 /// `decor_cs` to generate; none past the decor's room (`Decor::cap`). What
@@ -243,7 +243,7 @@ const _: () = assert!(BRICK_CELLS.is_multiple_of(CELL_LANES));
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_thin_cs"))]
 pub fn decor_thin_cs(
     #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] clipmap: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] out: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] list: &[u32],
@@ -253,7 +253,7 @@ pub fn decor_thin_cs(
     if i >= BRICK_CELLS {
         return;
     }
-    let held = at(window, brick);
+    let held = at(clipmap, brick);
     if held.z == 0 {
         return;
     }
@@ -263,7 +263,7 @@ pub fn decor_thin_cs(
         x0 + ((i % BRICK) << s) as i32,
         y0 + ((i / BRICK) << s) as i32,
     ];
-    // None under a window cell its column holds none of.
+    // None under a clip level cell its column holds none of.
     if scatter::count(j as usize, cell, [corner[0] >> s, corner[1] >> s]) == 0 {
         return;
     }
@@ -297,22 +297,22 @@ pub fn decor_thin_cs(
 }
 
 /// The decor an entry's retained candidates generate (`decor_thin_cs`), a
-/// thread a record: `x` its place among the decor's records, `z` the entry
-/// and decor listed, as `decor_thin_cs` laid them. Each record
-/// `RETAINED` is generated on its cell (`generated::generated`), naming the
-/// entry's window zoom; else it is `UNGENERATED`. Of a pair listed in part,
-/// each record a box of the frame's reaches (`is_changed`) is generated
-/// again on the candidate its cell holds (`scatter::candidate_at`), the cell
-/// it keeps generated or not; the rest stand. Only a decor shown at that
-/// zoom is listed (`decor_mark_cs`). What it generates on is the windows' bricks and the ways
-/// over them alone, what is placed left out (`Unplaced`); what is placed
+/// thread a record: `x` its place among the decor's records, `z` the entry and
+/// decor listed, as `decor_thin_cs` laid them. Each record `RETAINED` is
+/// generated on its cell (`generated::generated`), naming the entry's clip
+/// level zoom; else it is `UNGENERATED`. Of a pair listed in part, each record
+/// a box of the frame's reaches (`is_changed`) is generated again on the
+/// candidate its cell holds (`scatter::candidate_at`), the cell it keeps
+/// generated or not; the rest stand. Only a decor shown at that zoom is listed
+/// (`decor_mark_cs`). What it generates on is the clip levels' bricks and the
+/// ways over them alone, what is placed left out (`Unplaced`); what is placed
 /// and the eye's cuts only take it away where they hold its box
 /// (`DecorQuery::is_edited`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_cs"))]
 pub fn decor_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] overwrites: &[u32],
@@ -350,7 +350,7 @@ pub fn decor_cs(
     };
     let mut world = Generating {
         world: World {
-            window,
+            clipmap,
             ground,
             palette_indices: NoPalette(0),
             shards,
@@ -401,13 +401,13 @@ fn entry_word(rows: &[Decor], s: u32, k: u32, i: u32) -> u32 {
 const RECORD_LANES: u32 = 64;
 
 /// Whether workgroup `g` of a decor pass reads records: past the entries,
-/// placed decor's always; an entry's where the windows still hold the brick
+/// placed decor's always; an entry's where the clip levels still hold the brick
 /// they were generated for (`generated::generated_for`).
-fn is_held(records: &[u32], window: &[IVec4], g: u32) -> bool {
+fn is_held(records: &[u32], clipmap: &[IVec4], g: u32) -> bool {
     if g >= generated::EYE_ENTRIES {
         return true;
     }
-    let (h, q) = (generated::head_at(g), at(window, g));
+    let (h, q) = (generated::head_at(g), at(clipmap, g));
     let head = [at(records, h), at(records, h + 1), at(records, h + 2)];
     q.z != 0 && generated::generated_for(head, [q.x, q.y])
 }
@@ -451,7 +451,7 @@ fn run_of(records: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
 /// Each record for the eye this frame, a workgroup an entry's or a run of
 /// placed decor's (`run_of`), its region written into its first word and
 /// counted: nothing where the rays ask another zoom at its distance than the
-/// one its record's window draws at (`generated::drawn_at`), or where it is
+/// one its record's clip level draws at (`generated::drawn_at`), or where it is
 /// the decor left out; else sized for the screen (pxl-spec-core
 /// `generated::drawn`), a model where its group's extent spans `MODEL_ANGLE`
 /// at its distance, an impostor down to `IMPOSTOR_ANGLE`, else culled.
@@ -464,9 +464,9 @@ pub fn decor_cnt_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] records: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] regions: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] clipmap: &[IVec4],
 ) {
-    if !is_held(records, window, group.x) {
+    if !is_held(records, clipmap, group.x) {
         return;
     }
     let mut k = lane.x;
@@ -510,7 +510,7 @@ fn cnt_one(
     let (origin, detail) = eye_origin(eye);
     // Its distance once, for the zoom it is drawn at and its size.
     let d2 = generated::distance2(origin, corner);
-    // Drawn only where the rays ask its window's zoom at its distance, or,
+    // Drawn only where the rays ask its clip level's zoom at its distance, or,
     // placed, past the entries' records, the coarsest it stands at or finer.
     let placed = i >= generated::record_at(generated::SLOT_RECORDS) as usize;
     let here = generated::drawn_at(detail, d2, cell, placed);
@@ -596,9 +596,9 @@ pub fn decor_compact_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] records: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] regions: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] instances: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] clipmap: &[IVec4],
 ) {
-    if !is_held(records, window, group.x) {
+    if !is_held(records, clipmap, group.x) {
         return;
     }
     let mut k = lane.x;

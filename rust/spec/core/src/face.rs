@@ -6,7 +6,7 @@
 //! rising in front of the face; and at each of its four corners, a cell
 //! rising there alone. Asked of the world's one query, at the cell's own
 //! zoom, of the cells beside it (pxl-shader `faced`), once where a
-//! sample stops and handed with its stop to every pixel that shows that
+//! sample stops and handed with its hit to every pixel that shows that
 //! cell: so every pixel of a cell is painted by the same bits in a frame,
 //! whatever the screen shows about it.
 //!

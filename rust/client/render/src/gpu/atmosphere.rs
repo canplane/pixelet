@@ -14,7 +14,7 @@ use core::ops::Range;
 
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::adapter::epsg3857;
-use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
+use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec_core::HEIGHT_BITS;
 
@@ -30,7 +30,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_guest::mem::off_of;
 
 use crate::frame::shader::word::atmos::{
-    BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_REACH, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
+    BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_DIST, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
     GROUND_ALBEDO, KM_PER_U, LAND_ALT_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT, MIE_SCATTERING,
     MOON_COLOR, MOON_DIR, MOON_LAID, MOON_LIGHT, MOON_REACHES, NIGHT_SKY, NIGHT_STOPS,
     OZONE_ABSORPTION, OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT, RAYLEIGH_SCATTERING,
@@ -131,7 +131,7 @@ const EXPOSURE_GROUP: [u32; 39] = [
 ];
 
 /// A layer for each tile the earth layer's floor holds at once: its tile cache's slots.
-pub const EARTH_LAYERS: u32 = REACH_TILES;
+pub const EARTH_LAYERS: u32 = GROUND_DEMAND_TILES;
 /// A tile's layer plus one in four bits, eight to a word.
 const _: () = assert!(
     EARTH_LAYERS < 1 << EARTH_TILE_BITS && EARTH_LAYERS <= 32 / EARTH_TILE_BITS * 4,
@@ -369,8 +369,8 @@ impl Atmosphere {
             words[at] = v as f32;
         }
         words[SUN_DIR + 2] = 1.0;
-        words[EARTH_REACH] = earth::EARTH_REACH as f32;
-        words[EARTH_WINDOW + 2] = f32::from_bits(REACH_ACROSS);
+        words[EARTH_DIST] = earth::EARTH_DIST as f32;
+        words[EARTH_WINDOW + 2] = f32::from_bits(GROUND_DEMAND_ACROSS);
         words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_ZOOM) as u32);
 
         let sampler = g.sampler(
@@ -631,7 +631,7 @@ impl Atmosphere {
 
     /// Every light's and ray's height is measured up the world's z, straight
     /// up where the eye stands.
-    pub fn lay_out(&mut self, g: &Gpu, env: &[f32], reach: f32) {
+    pub fn lay_out(&mut self, g: &Gpu, env: &[f32], far: f32) {
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
         let alt_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
@@ -642,7 +642,7 @@ impl Atmosphere {
         self.words[CAMERA_ALT] = alt_km;
         self.words[KM_PER_U] = env[ENV_AIR + 1];
         self.words[LAND_ALT_KM] = env[ENV_AIR + 3];
-        self.words[DRAWN] = reach;
+        self.words[DRAWN] = far;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         self.plan(g);
         let r = &mut self.read;

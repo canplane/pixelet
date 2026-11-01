@@ -53,8 +53,8 @@ fn standing_ones_never_meet() {
     }
 }
 
-/// A variant that stands as itself at a window stands at every finer one,
-/// so the coarser windows' decor is a subset of the finer's, and every one
+/// A variant that stands as itself at a clip level stands at every finer one,
+/// so the coarser clip levels' decor is a subset of the finer's, and every one
 /// stands at the leaves'.
 #[test]
 fn stands_finer() {
@@ -92,7 +92,7 @@ fn counts_hand_down_whole() {
     }
 }
 
-/// A decor stands where its box keeps an eighth of the window's cell, as a
+/// A decor stands where its box keeps an eighth of the clip level's cell, as a
 /// folded cube of that box is drawn (`answer::eighths`): every variant of
 /// every decor; a tree a unit wide and three high a zoom over the leaves',
 /// none two over.

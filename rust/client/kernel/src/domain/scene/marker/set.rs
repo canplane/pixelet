@@ -55,11 +55,11 @@ pub struct Set {
 }
 
 impl Set {
-    /// `lane` holds INSTANCE_FLOATS floats an instance, relative to `origin`.
-    pub fn write(&mut self, draw: &mut DrawList, origin: V3, lane: &[f32]) {
-        let written = self.held.write(draw, bytes(lane));
+    /// `instances` holds INSTANCE_FLOATS floats an instance, relative to `origin`.
+    pub fn write(&mut self, draw: &mut DrawList, origin: V3, instances: &[f32]) {
+        let written = self.held.write(draw, bytes(instances));
         self.cnt = if written {
-            (lane.len() / INSTANCE_FLOATS) as u32
+            (instances.len() / INSTANCE_FLOATS) as u32
         } else {
             0
         };

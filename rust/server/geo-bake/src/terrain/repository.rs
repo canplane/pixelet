@@ -34,16 +34,16 @@ WHERE t.geom && env.e"
 );
 
 /// How far past a tile what is drawn on it can come from: half the widest line.
-pub const DRAWN_REACH_U: f64 = carto_u(WIDEST_LINE) / 2.0;
+pub const HALF_WIDEST_U: f64 = carto_u(WIDEST_LINE) / 2.0;
 const _: () = assert!(
-    DRAWN_REACH_U <= coverage::BAKE_REACH,
-    "a tile's rows come from past the bakes' reach"
+    HALF_WIDEST_U <= coverage::BAKE_READ_DIST,
+    "a tile's rows come from past the bakes' read distance"
 );
 
-/// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
+/// A tile's bbox grown by `HALF_WIDEST_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
 pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
-    let r = merc_from_u(DRAWN_REACH_U);
+    let r = merc_from_u(HALF_WIDEST_U);
     [
         [min[0] - r, min[1] - r, min[2]],
         [max[0] + r, max[1] + r, max[2]],

@@ -9,7 +9,7 @@
 //! a child as no tile (`Base::occupancy`), its ground is the tile's and the
 //! child is never asked for.
 
-use pxl_spec::bake::tile::earth::EARTH_REACH;
+use pxl_spec::bake::tile::earth::EARTH_DIST;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::global::Global;
@@ -49,7 +49,7 @@ pub trait Observed: Base {
 
     /// How far from the eye the layer draws anything; past it nothing of it
     /// is asked for.
-    fn reach() -> f64 {
+    fn demand_dist() -> f64 {
         f64::INFINITY
     }
 }
@@ -82,8 +82,8 @@ impl Observed for Earth {
         EARTH.get(Demand::default)
     }
 
-    fn reach() -> f64 {
-        EARTH_REACH
+    fn demand_dist() -> f64 {
+        EARTH_DIST
     }
 }
 
@@ -374,7 +374,7 @@ impl<L: Observed> Demand<L> {
         let Some(top) = L::top() else { return };
         let o = observation().map(|o| match L::TOP {
             Some(_) => Observation {
-                reach: L::reach(),
+                demand_dist: L::demand_dist(),
                 ..o
             },
             None => o,

@@ -1,6 +1,6 @@
 // pxl-kernel/domain/layer/terrain/clipmap.test.rs
 //
-// The windows as a test holds them: about a center, each brick of the
+// The clip levels as a test holds them: about a center, each brick of the
 // tiles given present at once, its cells as a GPU would hand them back.
 
 use super::*;
@@ -27,14 +27,14 @@ struct Built {
     slots: Vec<Slot>,
 }
 
-/// What windows are built over: a center and the tiles held.
+/// What clip levels are built over: a center and the tiles held.
 type Over = ([f64; 2], Vec<HeldTile>);
 
-/// The windows built this run, by what they were built over: the same are
+/// The clip levels built this run, by what they were built over: the same are
 /// built once, and each `hold` after takes a copy.
 static BUILT: std::sync::Mutex<Vec<(Over, Built)>> = std::sync::Mutex::new(Vec::new());
 
-const CELLS_WORDS: usize = (SLOTS * CELLS_LANE_BYTES / 4) as usize;
+const CELLS_WORDS: usize = (SLOTS * CELLS_ARRAY_BYTES / 4) as usize;
 const POOL_WORDS: usize = 16 * tree::POOL_CHILD_GROUPS as usize;
 
 /// The pool's mirror holding `records`, a brick's most at a time.
@@ -53,9 +53,9 @@ fn mirrored(records: &[u32]) {
     }
 }
 
-/// The eye's and the pivot's windows about `centre`, in units, X then Y,
+/// The eye's and the pivot's clip levels about `centre`, in units, X then Y,
 /// each brick the tiles `held` cover present in its slot, the pivot's
-/// windows the eye's finest two again: per tile, a cell's own palette index
+/// clip levels the eye's finest two again: per tile, a cell's own palette index
 /// and its height, row by row from its first, and its lines; each brick's
 /// columns, its tops and its ways' spans as its fill keeps them
 /// (`fill_columns`), and its levels as a GPU folds them (pxl-spec-core
@@ -85,22 +85,22 @@ pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
     };
     let b = &built[k].1;
     let of = |words: &[u32], len: usize| {
-        let mut lane = vec![0; len];
-        lane[..words.len()].copy_from_slice(words);
-        lane.leak()
+        let mut array = vec![0; len];
+        array[..words.len()].copy_from_slice(words);
+        array.leak()
     };
     PLANES.set(Planes {
         cells: of(&b.cells, CELLS_WORDS),
     });
     mirrored(&b.records);
-    WINDOWS_STATE.set(fresh());
+    CLIPMAP.set(fresh());
     clipmap().entries.copy_from_slice(&b.entries);
     clipmap().slots.copy_from_slice(&b.slots);
     fold(clipmap());
 }
 
 /// The brick at `cell` holding cell `g` absent, a fill on its way to it,
-/// and the windows folded without it, as a turn's step leaves them before
+/// and the clip levels folded without it, as a turn's step leaves them before
 /// it lands: its slot and that fill's ticket, which `on_resident` takes.
 pub(crate) fn unland(cell: Zoom, g: [i32; 2]) -> (u32, u32) {
     let w = clipmap();
@@ -119,31 +119,31 @@ pub(crate) fn lose() {
     assign_slots(clipmap(), true);
 }
 
-/// `hold`'s windows, built: the child groups their trees took, as records.
+/// `hold`'s clip levels, built: the child groups their trees took, as records.
 fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
     });
-    // The trees built into a pool in one lane, as the GPU's.
+    // The trees built into a pool in one array, as the GPU's.
     let mut pool = vec![0; POOL_WORDS];
     // The pool's child groups, each brick's tree taken after the one before's, as
     // the GPU's stack hands them, child group 0 none's.
     let mut next = 1;
-    WINDOWS_STATE.set(fresh());
+    CLIPMAP.set(fresh());
     let w = clipmap();
-    for win in 0..WINDOWS {
-        let (center_of, cell) = layout(win);
+    for clip_level in 0..CLIP_LEVELS {
+        let (center_of, cell) = layout(clip_level);
         if center_of == Center::Destination {
             continue;
         }
         let first = clipmap::origin(cell, cell_at(cell, center));
-        w.entries[(SLOTS + win) as usize] = Entry {
+        w.entries[(SLOTS + clip_level) as usize] = Entry {
             brick: first,
             present: 1,
             ticket: 0,
         };
         for s in 0..ENTRIES {
-            w.entries[(win * ENTRIES + s) as usize].brick = wanted(cell, first, s);
+            w.entries[(clip_level * ENTRIES + s) as usize].brick = wanted(cell, first, s);
         }
     }
     assign_slots(w, false);
@@ -181,25 +181,25 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
                 )
             },
         };
-        let (mut lane, mut scratch) = (
+        let (mut back, mut scratch) = (
             vec![0u32; clipmap::BRICK_WORDS as usize],
             vec![0u32; tree::SCRATCH_WORDS as usize],
         );
         fill_columns(
             &laid,
             |k| i32::from(heights[at(k)]),
-            &mut lane,
+            &mut back,
             &mut scratch,
         );
         for k in 0..clipmap::LAID_WORDS {
             let half = |j: u32| clipmap::laid_half(u32::from(palette_of[at(2 * k + j)]), 0);
-            lane[(clipmap::LAID_AT + k) as usize] = half(0) | half(1) << 16;
+            back[(clipmap::LAID_AT + k) as usize] = half(0) | half(1) << 16;
         }
         for j in 0..=LEVELS {
             for y in 0..BRICK >> j {
                 for x in 0..BRICK >> j {
                     fill::level(
-                        &mut lane,
+                        &mut back,
                         0,
                         &pxl_spec_core::fill::Scratch {
                             words: &scratch,
@@ -213,12 +213,12 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             }
         }
         // Its ways' tree into the pool's mirror, its root word naming it.
-        let [taken, _, root] = fill::tree(&lane, &scratch, cell, &mut pool, next);
+        let [taken, _, root] = fill::tree(&back, &scratch, cell, &mut pool, next);
         assert_ne!(taken, u32::MAX, "a brick's tree past the pool");
-        lane[clipmap::ROOT_AT as usize] = root;
+        back[clipmap::ROOT_AT as usize] = root;
         next += taken;
-        let at = (b * CELLS_LANE_BYTES / 4) as usize;
-        planes().cells[at..at + clipmap::BACK_WORDS as usize].copy_from_slice(&lane);
+        let at = (b * CELLS_ARRAY_BYTES / 4) as usize;
+        planes().cells[at..at + clipmap::BACK_WORDS as usize].copy_from_slice(&back);
         w.slots[b as usize].present = true;
     }
     for i in 0..SLOTS {
@@ -238,48 +238,48 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
 /// A brick's columns as a GPU's fill writes them (pxl-spec-core
 /// `fill::heights`, `fill::spans`), over cells whose tops are given
 /// (`top`) rather than drawn off samples: each column's word, its top, into
-/// `lane`; and the spans of its columns and its ring off its lines
+/// `back`; and the spans of its columns and its ring off its lines
 /// (`fill::keep`) into its `scratch`.
 fn fill_columns(
     sq: &impl clipmap::Brick,
     top: impl Fn(u32) -> i32,
-    lane: &mut [u32],
+    back: &mut [u32],
     scratch: &mut [u32],
 ) {
     for i in 0..BRICK_CELLS {
-        lane[(clipmap::COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff;
+        back[(clipmap::COLUMNS_AT + i) as usize] = top(i) as u32 & 0xffff;
     }
     for i in 0..clipmap::SPANS_COLUMNS {
         fill::keep(sq, scratch, 0, i);
     }
 }
 
-/// The eye's windows laid out about `eye` and the pivot's about `pivot`, in
-/// units, X then Y, as `step` lays a window that moved, no destination's;
+/// The eye's clip levels laid out about `eye` and the pivot's about `pivot`, in
+/// units, X then Y, as `step` lays a clip level that moved, no destination's;
 /// their bricks slotted (`assign_slots`), what was held before kept.
 fn lay(w: &mut Clipmap, eye: [f64; 2], pivot: [f64; 2]) {
-    for win in 0..WINDOWS {
-        let (center_of, cell) = layout(win);
+    for clip_level in 0..CLIP_LEVELS {
+        let (center_of, cell) = layout(clip_level);
         let p = match center_of {
             Center::Eye => eye,
             Center::Pivot => pivot,
             Center::Destination => continue,
         };
         let first = clipmap::origin(cell, cell_at(cell, p));
-        w.entries[(SLOTS + win) as usize] = Entry {
+        w.entries[(SLOTS + clip_level) as usize] = Entry {
             brick: first,
             present: 1,
             ticket: 0,
         };
         for s in 0..ENTRIES {
-            w.entries[(win * ENTRIES + s) as usize].brick = wanted(cell, first, s);
+            w.entries[(clip_level * ENTRIES + s) as usize].brick = wanted(cell, first, s);
         }
     }
     assign_slots(w, false);
 }
 
 /// Every brick held present, as if each had landed, its cells as they
-/// came back, all zero unless a test held its own (`hold`): the windows
+/// came back, all zero unless a test held its own (`hold`): the clip levels
 /// fold over them wherever they are laid again (`assign_slots`).
 fn land_all(w: &mut Clipmap) {
     PLANES.get(|| Planes {
@@ -303,9 +303,9 @@ fn held_at(w: &Clipmap, cell: Zoom) -> usize {
     w.slots.iter().filter(|b| b.cell == cell).count()
 }
 
-/// The brick window `win` wants in entry `s`.
-fn want(w: &Clipmap, win: u32, s: u32) -> [i32; 2] {
-    w.entries[(win * ENTRIES + s) as usize].brick
+/// The brick clip level `clip_level` wants in entry `s`.
+fn want(w: &Clipmap, clip_level: u32, s: u32) -> [i32; 2] {
+    w.entries[(clip_level * ENTRIES + s) as usize].brick
 }
 
 const CENTER: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
@@ -313,15 +313,15 @@ const CENTER: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
 #[test]
 fn shared_brick_held_once() {
     let _g = sys::serial();
-    WINDOWS_STATE.set(fresh());
+    CLIPMAP.set(fresh());
     let w = clipmap();
     lay(w, leaf(CENTER), leaf(CENTER));
     assert_eq!(
         w.slots.iter().filter(|b| !b.is_free()).count(),
-        (EYE_WINDOWS * ENTRIES) as usize,
-        "the pivot's windows take no slot"
+        (EYE_CLIP_LEVELS * ENTRIES) as usize,
+        "the pivot's clip levels take no slot"
     );
-    for pivot in EYE_WINDOWS..EYE_WINDOWS + 2 {
+    for pivot in EYE_CLIP_LEVELS..EYE_CLIP_LEVELS + 2 {
         let cell = layout(pivot).1;
         let eye = cell - FIRST_CELL;
         for s in 0..ENTRIES {
@@ -334,7 +334,7 @@ fn shared_brick_held_once() {
         }
     }
     land_all(w);
-    for pivot in EYE_WINDOWS..EYE_WINDOWS + 2 {
+    for pivot in EYE_CLIP_LEVELS..EYE_CLIP_LEVELS + 2 {
         for s in 0..ENTRIES {
             let row = w.entries[(pivot * ENTRIES + s) as usize];
             assert!(
@@ -348,12 +348,12 @@ fn shared_brick_held_once() {
 #[test]
 fn left_brick_kept() {
     let _g = sys::serial();
-    WINDOWS_STATE.set(fresh());
+    CLIPMAP.set(fresh());
     let w = clipmap();
-    let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
+    let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_CLIP_LEVELS + 1);
     lay(w, leaf(CENTER), leaf(CENTER));
     land_all(w);
-    // The eye a brick on at the leaves: its window there leaves a column
+    // The eye a brick on at the leaves: its clip level there leaves a column
     // the pivot's still wants, and wants a column the pivot's does not.
     let on = leaf([CENTER[0] + f64::from(BRICK), CENTER[1]]);
     lay(w, on, leaf(CENTER));
@@ -361,7 +361,7 @@ fn left_brick_kept() {
     for s in 0..ENTRIES {
         let q = want(w, pivot, s);
         assert!(
-            Windowed.present(LEAF_CELL, q).1,
+            HeldClipmap.present(LEAF_CELL, q).1,
             "the pivot's bricks stay present"
         );
         assert!(w.entries[(pivot * ENTRIES + s) as usize].holds(q));
@@ -393,25 +393,25 @@ fn left_brick_kept() {
     assert_eq!(
         held_at(w, LEAF_CELL),
         ENTRIES as usize,
-        "the column no window wants is given up"
+        "the column no clip level wants is given up"
     );
 }
 
 #[test]
-fn apart_windows_own_slots() {
+fn apart_clip_levels_own_slots() {
     let _g = sys::serial();
-    WINDOWS_STATE.set(fresh());
+    CLIPMAP.set(fresh());
     let w = clipmap();
     lay(
         w,
         leaf(CENTER),
         leaf([CENTER[0] + 100.0 * f64::from(BRICK), CENTER[1]]),
     );
-    for win in 0..EYE_WINDOWS + 2 {
+    for clip_level in 0..EYE_CLIP_LEVELS + 2 {
         for s in 0..ENTRIES {
             assert_eq!(
-                slot_of(w, layout(win).1, want(w, win, s)),
-                Some(win * ENTRIES + s)
+                slot_of(w, layout(clip_level).1, want(w, clip_level, s)),
+                Some(clip_level * ENTRIES + s)
             );
         }
     }
@@ -424,9 +424,9 @@ fn landing_shows_everywhere() {
     PLANES.set(Planes {
         cells: vec![0; CELLS_WORDS].leak(),
     });
-    WINDOWS_STATE.set(fresh());
+    CLIPMAP.set(fresh());
     let w = clipmap();
-    let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
+    let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_CLIP_LEVELS + 1);
     lay(w, leaf(CENTER), leaf(CENTER));
     let q = want(w, eye, 0);
     let b = slot_of(w, LEAF_CELL, q).unwrap();
@@ -441,11 +441,11 @@ fn landing_shows_everywhere() {
     );
     on_resident(b, 7, Resident::Built(&[0]));
     refold();
-    for win in [eye, pivot] {
-        let row = w.entries[(win * ENTRIES) as usize];
+    for clip_level in [eye, pivot] {
+        let row = w.entries[(clip_level * ENTRIES) as usize];
         assert!(row.holds(q) && row.slot() == b);
     }
-    // Refused while a window wants it, then given up with the last.
+    // Refused while a clip level wants it, then given up with the last.
     w.slots[b as usize] = Slot {
         present: false,
         ticket: REFUSED,
@@ -476,10 +476,10 @@ fn heap_wait_rehanded() {
         releases: RELEASES.load(Ordering::Relaxed),
         ..HeapStat::default()
     });
-    WINDOWS_STATE.set(fresh());
+    CLIPMAP.set(fresh());
     let w = clipmap();
     lay(w, leaf(CENTER), leaf(CENTER));
-    let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_WINDOWS + 1);
+    let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_CLIP_LEVELS + 1);
     let q = want(w, eye, 0);
     let b = slot_of(w, LEAF_CELL, q).unwrap();
     // As `on_resident` leaves it where the heap refused the mirror its chunk.
@@ -501,9 +501,9 @@ fn heap_wait_rehanded() {
         w.slots[b as usize].is_absent() && slot_wants(w, tile_of(LEAF_CELL, q).0, b),
         "absent, to be handed again"
     );
-    for win in [eye, pivot] {
+    for clip_level in [eye, pivot] {
         assert_eq!(
-            w.entries[(win * ENTRIES) as usize].ticket,
+            w.entries[(clip_level * ENTRIES) as usize].ticket,
             0,
             "its rows show it"
         );

@@ -144,8 +144,8 @@ pub mod cloud {
         DETAIL_FIRST: u32 = 2;
         DETAIL_SALT: u32 = 16;
         DETAIL_SHARE: f32 = 0.25;
-        /// The share of the clouds' reach past which they thin out.
-        REACH_FADE: f32 = 0.6;
+        /// The share of the clouds' draw distance past which they thin out.
+        DRAW_DIST_FADE: f32 = 0.6;
     }
 
     /// Where clouds gather: value noise over cells this many lattice units

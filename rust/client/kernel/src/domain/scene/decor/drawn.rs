@@ -10,7 +10,7 @@
 
 use pxl_render::gpu::generated::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_dist, WINDOW_CELLS_A_RAD, WINDOW_MARGIN};
+use pxl_spec::space::camera::grid::{split_dist, CLIP_CELLS_A_RAD, CLIP_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
@@ -47,27 +47,27 @@ pub fn decor_impostor_angle() -> f64 {
     param::DECOR_IMPOSTOR_CELLS * grid::CELL
 }
 
-/// How far a thing `extent_u` wide is an impostor's worth as a window holds
+/// How far a thing `extent_u` wide is an impostor's worth as a clip level holds
 /// it, in units, past which it is culled: where it spans
-/// `DECOR_IMPOSTOR_CELLS` of the window's cells (`WINDOW_CELLS_A_RAD`),
-/// `WINDOW_MARGIN` times as far as `decor_impostor_angle` puts the
+/// `DECOR_IMPOSTOR_CELLS` of the clip level's cells (`CLIP_CELLS_A_RAD`),
+/// `CLIP_MARGIN` times as far as `decor_impostor_angle` puts the
 /// impostor's edge, an upper bound. `is_decor_shown` takes both its
-/// sides at the window's, so its zooms are the view's.
+/// sides at the clip level's, so its zooms are the view's.
 pub const fn cull_dist_u(extent_u: f64) -> f64 {
-    extent_u * WINDOW_CELLS_A_RAD / param::DECOR_IMPOSTOR_CELLS
+    extent_u * CLIP_CELLS_A_RAD / param::DECOR_IMPOSTOR_CELLS
 }
 
 /// Whether a decor `extent_u` wide is an impostor's worth anywhere cells of
 /// `cell_zoom` are drawn: as it spans where that zoom begins.
 fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    split_dist(cell_zoom) * WINDOW_MARGIN <= cull_dist_u(extent_u)
+    split_dist(cell_zoom) * CLIP_MARGIN <= cull_dist_u(extent_u)
 }
 
-/// Each kind's window zooms, a bit each, where it is an impostor's worth: the
-/// leaves', and each coarser one where one of its variants stands as itself,
-/// its own size no narrower than the window's cell (pxl-spec-core
-/// `scatter::stands_at`), the same cells' decor read at every one. A finer
-/// window lies within the leaves'.
+/// Each kind's clip level zooms, a bit each, where it is an impostor's worth:
+/// the leaves', and each coarser one where one of its variants stands as
+/// itself, its own size no narrower than the clip level's cell (pxl-spec-core
+/// `scatter::stands_at`), the same cells' decor read at every one. A finer clip
+/// level lies within the leaves'.
 fn shown() -> [u32; DECORS.len()] {
     shown_by(|d| d.extent(catalog()))
 }
@@ -166,20 +166,20 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         drawing(&mut h.drawing, seen);
         h.shown = shown();
     }
-    // Out to the reach from anywhere in the anchor's unit: every unit of the
-    // eye's cell at the reach's zoom reaches no farther than the cell and
-    // one beside it, whose side the reach is short of. What is past an
-    // eye's own reach `decor_cnt_cs` leaves out by its size, as it does
-    // what is past the box.
+    // Out to `dist` from anywhere in the anchor's unit: every unit of the
+    // eye's cell at its zoom reaches no farther than the cell and one
+    // beside it, whose side `dist` is short of. What is past an eye's own
+    // distance `decor_cnt_cs` leaves out by its size, as it does what is
+    // past the box.
     // No farther than the rays ask the leaves' cells, past which none is drawn.
-    let reach = (DECORS
+    let dist = (DECORS
         .iter()
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
         / decor_impostor_angle())
-    .min(lattice::draw_reach(lattice::GROUND, tile::LEAF_ZOOM));
+    .min(lattice::draw_dist(lattice::GROUND, tile::LEAF_ZOOM));
     let mut zoom = UNIT_ZOOM;
-    while zoom > 0 && units(zoom) < reach {
+    while zoom > 0 && units(zoom) < dist {
         zoom -= 1;
     }
     let side = units(zoom);

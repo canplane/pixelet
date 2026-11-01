@@ -153,7 +153,7 @@ impl Separation {
     /// Each segment that may be over a column of a grid, by the point it
     /// starts at, with the column: column (i, j) the brick of side `step`
     /// about `origin + (i + ½, j + ½) · step` in the tile's cells, a segment
-    /// over it where the column's center is within its way's reach of its
+    /// over it where the column's center is within its way's half width of its
     /// box. Row by row, each segment's in turn, in the points' order.
     pub fn segments_over(
         &self,
@@ -165,7 +165,7 @@ impl Separation {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - f64::from(CELL_CENTER);
         for d in 0..self.starts.len() - 1 {
             let line = self.line(d);
-            let half = line.reach();
+            let half = line.half_width();
             for s in 0..line.points.len().saturating_sub(1) {
                 let (a, b) = (line.point(s), line.point(s + 1));
                 let range = |k: usize| {
@@ -230,7 +230,7 @@ impl Separation {
     /// Each segment of a line that can rise or sink, by its line and its
     /// place in it, with every brick of a tile of `side` cells cut `across`
     /// a side, row by row, that its footprint reaches: the one sweep a
-    /// window's brick's entries and its lines both read.
+    /// clip level's brick's entries and its lines both read.
     pub fn reaches(
         &self,
         side: f64,
@@ -274,8 +274,8 @@ impl Line<'_> {
         f64::from(self.width) / POINT_SCALE
     }
 
-    pub fn reach(&self) -> f64 {
-        f64::from(way::reach(self.width_cells() as f32))
+    pub fn half_width(&self) -> f64 {
+        f64::from(way::half_width(self.width_cells() as f32))
     }
 
     pub fn footprint(&self) -> f64 {
@@ -311,12 +311,12 @@ pub fn footprint(width: f64) -> f64 {
 }
 
 /// The runs of consecutive segments of the line through `points`, in a
-/// tile's cells, whose box comes within `reach` of the tile, as first and
+/// tile's cells, whose box comes within `margin` of the tile, as first and
 /// last point: what a tile keeps of a line, a leaf's (pxl-geo-bake
 /// terrain/pipeline/separation.rs) and a fold's alike, so tiles sharing a
 /// line agree point for point.
-pub fn runs_within(points: &[[f64; 2]], reach: f64) -> Vec<[usize; 2]> {
-    let (lo, hi) = (-reach, f64::from(TILE_CELLS) + reach);
+pub fn runs_within(points: &[[f64; 2]], margin: f64) -> Vec<[usize; 2]> {
+    let (lo, hi) = (-margin, f64::from(TILE_CELLS) + margin);
     let near =
         |a: [f64; 2], b: [f64; 2]| (0..2).all(|k| a[k].max(b[k]) >= lo && a[k].min(b[k]) <= hi);
     let mut runs = Vec::new();

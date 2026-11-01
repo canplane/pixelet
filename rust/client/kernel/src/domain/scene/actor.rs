@@ -160,7 +160,7 @@ impl Actor {
         let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
         let (about, r) = (
             v3::sub(&transform.at, &frame.anchor),
-            f64::from(m.reach(self.cur.map(|p| p.clip)) * transform.scale),
+            f64::from(m.pose_radius(self.cur.map(|p| p.clip)) * transform.scale),
         );
         // What spans the model's edge at the actor's distance is observed, as a
         // decor's model is; what spans the impostor's is drawn, posed or not,

@@ -245,7 +245,7 @@ impl Tiles {
         }
         if self.box_args.is_some() {
             // The one handed, which the draws that mark widen; none an i32's
-            // greatest, as the reach reads it (screen_reach.wgsl).
+            // greatest, as the propagation reads it (screen_propagate.wgsl).
             let none = i32::MAX as u32;
             let marks_box = tiles.unwrap_or([none, none, 0, 0]);
             g.write_buf(self.marks_box, 0, bytes(&marks_box));
@@ -392,8 +392,8 @@ impl Tiles {
     }
 
     /// A mark a pass beside set in the frame numbered `at`, the draws that
-    /// changed drawn and the reach their frame's (gpu/pass/mark.rs,
-    /// gpu/reach.rs): the tiles gather from it as from one handed, where it
+    /// changed drawn and the propagation their frame's (gpu/pass/mark.rs,
+    /// gpu/propagate.rs): the tiles gather from it as from one handed, where it
     /// is later than the last.
     pub fn marked_in(&mut self, at: u32) {
         if screen::age(self.now, at) < screen::age(self.now, self.marked_at) {

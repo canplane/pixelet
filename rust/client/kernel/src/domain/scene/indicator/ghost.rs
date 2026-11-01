@@ -174,8 +174,8 @@ impl GhostDraw {
     }
 
     /// None where the heap refused, so the next asks again.
-    fn write(&mut self, draw: &mut DrawList, shape: Shape, lane: &[u8]) {
-        self.shape = self.held.write(draw, lane).then_some(shape);
+    fn write(&mut self, draw: &mut DrawList, shape: Shape, instance: &[u8]) {
+        self.shape = self.held.write(draw, instance).then_some(shape);
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {

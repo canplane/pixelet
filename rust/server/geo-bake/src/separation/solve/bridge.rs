@@ -54,7 +54,7 @@ const STREAM_HEADROOM_M: f64 = 2.0;
 const MAX_CLEARANCE_SLOPE: f64 = 1.0;
 const PROFILE_MONOTONIC_TOLERANCE_M: f64 = 2.0;
 const OBSTACLE_GRID_M: f64 = 64.0;
-const RAIL_ON_DECK_REACH_M: f64 = 2.0;
+const RAIL_ON_DECK_RADIUS_M: f64 = 2.0;
 const DECK_RAMP_FRACTION: f64 = 0.35;
 const DECK_RAMP_M: [f64; 2] = [15.0, 50.0];
 const RAIL_BRIDGE_FLAT_CLEARANCE_M: f64 = 4.0;
@@ -145,7 +145,7 @@ impl Obstacles {
                         headroom,
                         nodes: nodes.clone(),
                     });
-                    let r = f64::from(way::reach(width));
+                    let r = f64::from(way::half_width(width));
                     let k = |v: f64| (v / out.bucket).floor() as i64;
                     for bx in k(pair[0][0].min(pair[1][0]) - r)..=k(pair[0][0].max(pair[1][0]) + r)
                     {
@@ -330,9 +330,9 @@ fn side_by_side(a: &Stretch, b: &Stretch, scale: Scale) -> bool {
         return false;
     }
     let same = effective_layer(a) == effective_layer(b);
-    // their edges meet where each way's cover ends (pxl-spec-core `reach`)
-    let reach = |r: &Stretch| f64::from(way::reach((r.width_u / CELL_U) as f32));
-    let touching = reach(a) + reach(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M));
+    // their edges meet where each way's cover ends (pxl-spec-core `half_width`)
+    let half_width = |r: &Stretch| f64::from(way::half_width((r.width_u / CELL_U) as f32));
+    let touching = half_width(a) + half_width(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same {
         touching.max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DIST_M)))
     } else {
@@ -572,7 +572,7 @@ fn deck_panel(
     let c = r.whole.at(((k * DECK_PANEL) as f64).min(r.whole.length()));
     let within = |p: &[f64; 2], d: usize| libm::hypot(p[0] - c[0], p[1] - c[1]) <= d as f64;
     // what the source gives within the window, what another deck sets within the near
-    let reach = |set_by_deck: bool| if set_by_deck { DECK_NEAR } else { DECK_WINDOW };
+    let radius = |set_by_deck: bool| if set_by_deck { DECK_NEAR } else { DECK_WINDOW };
     let grounds: Vec<&([f64; 2], i32, usize)> = needs
         .grounds
         .iter()
@@ -581,12 +581,12 @@ fn deck_panel(
     let anchors: Vec<&([f64; 2], i32, bool, usize)> = needs
         .anchors
         .iter()
-        .filter(|a| within(&a.0, reach(a.2)))
+        .filter(|a| within(&a.0, radius(a.2)))
         .collect();
     let clears: Vec<&([f64; 2], i32, f64, bool)> = needs
         .clears
         .iter()
-        .filter(|n| within(&n.0, reach(n.3)))
+        .filter(|n| within(&n.0, radius(n.3)))
         .collect();
     let (Some(tmax), Some(tmin)) = (
         grounds.iter().map(|g| g.1).max(),
@@ -724,9 +724,9 @@ fn road_decks(
         .iter()
         .map(|&q| cells_box(&stretches[q].whole.points))
         .collect();
-    let reach = |q: usize| f64::from(way::reach((stretches[q].width_u / CELL_U) as f32));
+    let half_width = |q: usize| f64::from(way::half_width((stretches[q].width_u / CELL_U) as f32));
     let farthest = |a: usize, b: usize| {
-        (reach(a) + reach(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M)))
+        (half_width(a) + half_width(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M)))
             .max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DIST_M)))
     };
     for i in 0..road.len() {
@@ -1014,7 +1014,7 @@ fn road_decks(
             }
             let layer = effective_layer(r);
             let width = (r.width_u / CELL_U) as f32;
-            let around = disk(way::reach(width));
+            let around = disk(way::half_width(width));
             for (&c, &y) in r.cell.iter().zip(&ys[m]) {
                 let (x, z) = cell_key(c);
                 for &[dx, dz] in &around {
@@ -1053,7 +1053,7 @@ fn rail_decks(
         }
     }
     // what each track cell rides: the nearest road deck of its layer within reach
-    let reach = i64::from(scale.c(RAIL_ON_DECK_REACH_M));
+    let radius = i64::from(scale.c(RAIL_ON_DECK_RADIUS_M));
     let on: Vec<Vec<Option<i32>>> = rail
         .iter()
         .map(|&q| {
@@ -1064,8 +1064,8 @@ fn rail_decks(
                 .map(|&c| {
                     let (x, z) = cell_key(c);
                     let mut best: Option<(i64, i32)> = None;
-                    for dx in -reach..=reach {
-                        for dz in -reach..=reach {
+                    for dx in -radius..=radius {
+                        for dz in -radius..=radius {
                             if let Some(&(y, l)) = laid.get(&(x + dx, z + dz)) {
                                 let d = dx.abs() + dz.abs();
                                 if l == layer && best.is_none_or(|(bd, _)| d < bd) {

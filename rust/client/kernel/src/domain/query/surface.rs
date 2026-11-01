@@ -1,7 +1,7 @@
 // pxl-kernel/domain/query/surface.rs
 
 //! The ground's surface: a cell's top and the asset its face is, read off
-//! the windows by the one reading of a column the GPU reads too
+//! the clip levels by the one reading of a column the GPU reads too
 //! (pxl-spec-core `clipmap::ground`), the area's edge laid on it. The
 //! ground's alone, so a part of the support (`support.rs`), where a walker
 //! starts looking for what it stands on, and read inside the query only:
@@ -14,7 +14,7 @@ use pxl_spec_core::area::Shard;
 use pxl_spec_core::clipmap::Found;
 
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::Windowed;
+use crate::domain::layer::terrain::clipmap::HeldClipmap;
 use crate::domain::layer::{Answer, Query};
 use pxl_spec::asset::cube::sentinel;
 
@@ -30,7 +30,7 @@ impl World<'_> {
     /// and its face; past the service area the Earth's, at sea level; none
     /// where it has no ground.
     pub(super) fn surface_of(&self, cell: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
-        let shard = Shard::UNKNOWN.at(&Windowed, (cell, c));
+        let shard = Shard::UNKNOWN.at(&HeldClipmap, (cell, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(pxl_spec_core::SEA_LEVEL),

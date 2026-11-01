@@ -20,7 +20,7 @@ pub struct Eye {
     /// The Q3 position, and whether a ray reports the nodes its descent
     /// asked (`word`), not what it met.
     pub origin: IVec4,
-    /// The unit forward, and the reach.
+    /// The unit forward, and how far the rays go (pxl-spec-core `eye::FAR`).
     pub forward_far: Vec4,
     /// The unit right, and a pad.
     pub right: Vec4,

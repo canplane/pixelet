@@ -134,11 +134,11 @@ fn casts_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i
 }
 
 /// The world as the light's walk again reads it, as the eye's do, the palette indices
-/// too, which only what a stop is drawn by holds and the map's word leaves
+/// too, which only what a hit is drawn by holds and the map's word leaves
 /// out (`Map::word`).
 fn world<'a>(
     eye: &'a Eye,
-    window: &'a [IVec4],
+    clipmap: &'a [IVec4],
     ground: &'a [u32],
     palette_indices: &'a [u32],
     shards: &'a [IVec4],
@@ -146,7 +146,7 @@ fn world<'a>(
     pool: &'a [u32],
 ) -> World<'a, &'a [u32]> {
     World {
-        window,
+        clipmap,
         ground,
         palette_indices,
         shards,
@@ -228,7 +228,7 @@ impl Observer for Map {
         tally::LIGHT
     }
 
-    /// None: its rays need only a stop's depth, and the pyramid's slots,
+    /// None: its rays need only a hit's depth, and the pyramid's slots,
     /// a fixed few a bucket (`observed::victim`), are kept for the cells the
     /// eye's rays are drawn by and walk again.
     fn assets(&self) -> bool {
@@ -278,7 +278,7 @@ impl Observer for Map {
         }
     }
 
-    /// Its stop less `light::margin`, none before the near plane.
+    /// Its hit less `light::margin`, none before the near plane.
     fn handed(&self, aim: &Aim, t: f32) -> f32 {
         let width = aim.detail.spacing.width(0.0);
         let t = t - pxl_spec_core::light::margin(width);
@@ -478,11 +478,11 @@ pub fn light_cs(
     let p = m.light.texel(n, at);
     // [naga] Fetched at u32s, as the raster wrote them.
     let kept: UVec4 = visibility.fetch(UVec3::new(p[0], p[1], 0));
-    let (took, stop, _) = observer::resolve(&m, &*list, at, &aim, kept.x);
+    let (took, hit, _) = observer::resolve(&m, &*list, at, &aim, kept.x);
     if took == Take::Sample {
         let met = cast::Trace {
             ends: cast::End::Hit,
-            hit: stop,
+            hit,
             visits: 0,
         };
         add_cnt(misses, counts(head), tally::TOOK, 1);
@@ -520,7 +520,7 @@ pub fn light_miss_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
@@ -531,7 +531,7 @@ pub fn light_miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Seen,
 ) {
-    let window: &[IVec4] = window;
+    let clipmap: &[IVec4] = clipmap;
     let m = Map::of(eye, head);
     let n = m.side();
     let i = (group.y * pxl_spec_core::ray::MISS_ACROSS + group.x) * pxl_spec_core::ray::MISS_LANES
@@ -541,7 +541,7 @@ pub fn light_miss_cs(
     }
     let w = list.word(pxl_spec_core::light::misses_at(n) + i);
     let slot = UVec3::new(w & 0xffff, w >> 16, 0);
-    let world = world(eye, window, ground, palette_indices, shards, overwrites, pool);
+    let world = world(eye, clipmap, ground, palette_indices, shards, overwrites, pool);
     let mut told = Margin::NONE;
     let at = [slot.x, slot.y];
     let (_, met, _) = observer::walked(&m, world, seen, &*list, at, &mut (), &mut told);
@@ -588,7 +588,7 @@ pub fn light_told_cs(
 pub fn light_beam_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
@@ -598,13 +598,13 @@ pub fn light_beam_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
 ) {
-    let window: &[IVec4] = window;
+    let clipmap: &[IVec4] = clipmap;
     let m = Map::of(eye, head);
     let [across, down] = m.corners();
     if id.x >= across || id.y >= down {
         return;
     }
-    let world = world(eye, window, ground, palette_indices, shards, overwrites, pool);
+    let world = world(eye, clipmap, ground, palette_indices, shards, overwrites, pool);
     let (c, mut told) = ([id.x, id.y], Margin::NONE);
     observer::beam(&m, world, seen, list, c, &mut told);
     list.set(
@@ -615,7 +615,7 @@ pub fn light_beam_cs(
 
 /// Each sample of the shadow map's lattice (`param::light::SAMPLE`), a
 /// thread each, as the eye's are (beam.rs `sample_cs`; observer.rs
-/// `sample`), its stop left in the list for the raster, and the least
+/// `sample`), its hit left in the list for the raster, and the least
 /// margin of the nodes it asked (`light::sample_margin`), which the tiles it
 /// feeds gather (`light_held_cs`). The list read and written plainly.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_sample_cs"))]
@@ -623,7 +623,7 @@ pub fn light_beam_cs(
 pub fn light_sample_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
@@ -633,13 +633,13 @@ pub fn light_sample_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut Beams,
 ) {
-    let window: &[IVec4] = window;
+    let clipmap: &[IVec4] = clipmap;
     let m = Map::of(eye, head);
     let [across, down] = m.samples();
     if id.x >= across || id.y >= down {
         return;
     }
-    let world = world(eye, window, ground, palette_indices, shards, overwrites, pool);
+    let world = world(eye, clipmap, ground, palette_indices, shards, overwrites, pool);
     let (at, mut told) = ([id.x, id.y], Margin::NONE);
     observer::sample(&m, world, seen, list, at, &mut told);
     list.set(
@@ -733,8 +733,9 @@ pub fn light_held_cs(
 /// a jittered ray stands on a tile marked whichever way it moves, where the
 /// head asks it (`light::HEAD_FOOTPRINT`), else its own tile alone; nothing
 /// where it met nothing. A word written alike by every thread it is marked
-/// by, so none needs an atomic. Run after the eye's rays, before the reach
-/// (`light_reach_cs`); the drawn receivers stand apart (`light_mark_drawn_cs`).
+/// by, so none needs an atomic. Run after the eye's rays, before the
+/// propagation (`light_propagate_cs`); the drawn receivers stand apart
+/// (`light_mark_drawn_cs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_mark_cs"))]
 pub fn light_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -875,7 +876,7 @@ fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
 /// (`eye::sees`); the tiles about its own stood on too, as many as half
 /// the widest decor spans (`Light::ring`). The actors are those the scene
 /// draws in the world (pxl-render gpu/renderer.rs `Cast::actors`), no more
-/// than `light::ACTORS`. Run after decor is placed, before the reach.
+/// than `light::ACTORS`. Run after decor is placed, before the propagation.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "light_mark_drawn_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn light_mark_drawn_cs(
@@ -949,8 +950,8 @@ pub fn light_mark_drawn_cs(
 /// (`light::HELD_WORDS`). A tile's words its own thread's
 /// alone. One claimed, the passes that cast tiles go whole
 /// (`light::ARGS_WORDS`), each claim writing the same words.
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "light_reach_cs"))]
-pub fn light_reach_cs(
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "light_propagate_cs"))]
+pub fn light_propagate_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
@@ -1024,8 +1025,8 @@ pub fn light_reach_cs(
 /// pxl-render gpu/ray/cast.rs `prepare`). A tile the box slid onto, and one
 /// whose eye moved as far from where it stood when it was cast as the least
 /// margin of every node the walks that fed it asked (`light::holds`,
-/// `light::HELD_WORDS`), is set to none, so the reach takes it, read, as
-/// read anew (`light_reach_cs`); the rest hold what their cast left, every
+/// `light::HELD_WORDS`), is set to none, so the propagation takes it, read, as
+/// read anew (`light_propagate_cs`); the rest hold what their cast left, every
 /// zoom their walks asked asked again, so cast anew they would meet what
 /// they met. Each writes none alone, so none waits on another.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_detail_cs"))]

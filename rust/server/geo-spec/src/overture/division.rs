@@ -30,22 +30,22 @@ macro_rules! division_names {
 
 /// How far a point looks for the nearest division where no area of it
 /// covers the point.
-pub const NEAREST_REACH_M: f64 = 2048.0;
+pub const NEAREST_RADIUS_M: f64 = 2048.0;
 
-/// [`NEAREST_REACH_M`] at the DB's `y`, in the DB's coordinates.
-pub fn reach_at(y: f64) -> f64 {
-    merc_from_u(NEAREST_REACH_M * u_per_m(u_from_merc(y)))
+/// [`NEAREST_RADIUS_M`] at the DB's `y`, in the DB's coordinates.
+pub fn radius_at(y: f64) -> f64 {
+    merc_from_u(NEAREST_RADIUS_M * u_per_m(u_from_merc(y)))
 }
 
 /// The division each of a batch of points is in: `$1`/`$2` are EPSG:3857
-/// meters and `$3` [`reach_at`] them, `idx` counts the points from 1. It is
+/// meters and `$3` [`radius_at`] them, `idx` counts the points from 1. It is
 /// the deepest division an area of contains the point, or, nearer, a child
 /// of it with no area, the nearest within reach; where no area contains the
 /// point, the nearest division within reach. Many localities have a point
 /// and no area. `approx` marks a division found by nearness.
 pub const FINEST_SQL: &str = "
 SELECT p.idx, COALESCE(c.id, a.id, n.id) AS division_id, a.id IS NULL OR c.id IS NOT NULL AS approx
-FROM unnest($1::float8[], $2::float8[], $3::float8[]) WITH ORDINALITY AS p(x, y, reach, idx)
+FROM unnest($1::float8[], $2::float8[], $3::float8[]) WITH ORDINALITY AS p(x, y, radius, idx)
 CROSS JOIN LATERAL (SELECT ST_SetSRID(ST_MakePoint(p.x, p.y), 3857) AS pt) g
 LEFT JOIN LATERAL (
   SELECT d.gers_id AS id FROM overture_division_areas s JOIN overture_divisions d ON d.gers_id = s.properties->>'division_id'
@@ -54,13 +54,13 @@ LEFT JOIN LATERAL (
 ) a ON true
 LEFT JOIN LATERAL (
   SELECT q.gers_id AS id FROM overture_divisions q
-  WHERE a.id IS NOT NULL AND q.properties->>'parent_division_id' = a.id AND ST_DWithin(q.geom, g.pt, p.reach)
+  WHERE a.id IS NOT NULL AND q.properties->>'parent_division_id' = a.id AND ST_DWithin(q.geom, g.pt, p.radius)
     AND NOT EXISTS (SELECT 1 FROM overture_division_areas qs WHERE qs.geom && q.geom AND qs.properties->>'division_id' = q.gers_id)
   ORDER BY q.geom <-> g.pt LIMIT 1
 ) c ON true
 LEFT JOIN LATERAL (
   SELECT q.gers_id AS id FROM overture_divisions q
-  WHERE a.id IS NULL AND ST_DWithin(q.geom, g.pt, p.reach)
+  WHERE a.id IS NULL AND ST_DWithin(q.geom, g.pt, p.radius)
   ORDER BY q.geom <-> g.pt LIMIT 1
 ) n ON true
 WHERE COALESCE(c.id, a.id, n.id) IS NOT NULL";

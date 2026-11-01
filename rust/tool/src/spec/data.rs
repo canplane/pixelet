@@ -252,7 +252,7 @@ const DATA_SPECS: [DataSpec; 23] = [
         rs: Some("rust/client/kernel/src/perf/perf.spec.rs"),
         rs_also: &[],
         module: Some("spec"),
-        enums: Enums::Named(&["WAKES"]),
+        enums: Enums::Named(&["WAKES", "HIT_KINDS"]),
         ts_names: None,
     },
     DataSpec {

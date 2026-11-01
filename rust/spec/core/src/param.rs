@@ -14,8 +14,8 @@ pub mod beam {
     /// is one a sample stopped at.
     pub const NEAR: u32 = 2;
 
-    /// The margin a beam ray's reach takes over a cube's, `√6 · s`.
-    pub const REACH_SLACK: f32 = 1.01;
+    /// The margin a beam ray's radius takes over a cube's, `√6 · s`.
+    pub const RADIUS_SLACK: f32 = 1.01;
 }
 
 pub mod cave {

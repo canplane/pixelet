@@ -31,17 +31,17 @@ pub const EPS: f64 = units(GROUND.cell());
 /// divisions leaf looks this far for the point of a division with no area,
 /// past the gap between such points nearly everywhere (99% of Korea's
 /// neighborhoods, most of its villages, measured 2026-10-08).
-pub const BAKE_REACH: f64 = units(LEAF_ZOOM - 2);
+pub const BAKE_READ_DIST: f64 = units(LEAF_ZOOM - 2);
 
 const _: () = assert!(
-    2.0 * units(LEAF_ZOOM) <= BAKE_REACH,
-    "a terrain leaf's 2-ring reads past the bakes' reach"
+    2.0 * units(LEAF_ZOOM) <= BAKE_READ_DIST,
+    "a terrain leaf's 2-ring reads past the bakes' read distance"
 );
 
-/// How far past its edges a shard holds, in units: the bakes' reach and
-/// `EPS`, so every leaf bakes from its shard alone. A read past `BAKE_REACH` is a
-/// violation, never a reason to grow this.
-pub const SHARD_APRON: f64 = BAKE_REACH + EPS;
+/// How far past its edges a shard holds, in units: the bakes' read distance
+/// and `EPS`, so every leaf bakes from its shard alone. A read past
+/// `BAKE_READ_DIST` is a violation, never a reason to grow this.
+pub const SHARD_APRON: f64 = BAKE_READ_DIST + EPS;
 
 /// A node of the hierarchy at or above the shards: its zoom and index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

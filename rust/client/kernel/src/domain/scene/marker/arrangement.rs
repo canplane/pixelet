@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene/marker/arrangement.rs
 
 //! The markers' arrangement: where each is drawn, read by its own source
-//! over the eye's windows' bricks, as decor is generated over them
+//! over the eye's clip levels' bricks, as decor is generated over them
 //! (domain/view/observation.rs `bricks`), and shown at the zoom the camera
 //! grid's cell at its own point is: a place as Carto draws it at that zoom
 //! (`place.rs`); a pin someone put up, near enough (`pin.rs`); a line said,
@@ -41,13 +41,13 @@ use pxl_render::frame::draw::DrawList;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::coord::world::BOUNDS;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::clipmap::BRICK_SHIFT;
 
-/// A brick of the eye's windows the markers are read over, by its zoom
+/// A brick of the eye's clip levels the markers are read over, by its zoom
 /// and place, X running on round the world as the view's frame does
 /// (domain/view/observation.rs `bricks`).
 pub(super) type Brick = Node<2>;
@@ -168,7 +168,7 @@ struct Found {
 /// cull of a brick leaves it: a bound, twice a place's cell, the width its
 /// name wraps to (`SPACING_PX`), past a pin's longest pill and a name's
 /// lines over its icon.
-fn reach_px(spacing: f64) -> f64 {
+fn extent_px(spacing: f64) -> f64 {
     2.0 * spacing
 }
 
@@ -185,7 +185,7 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
     let ray = Ray {
         origin: [xy[0], xy[1], high],
         dir: [0.0, 0.0, -1.0],
-        reach: high - low,
+        t_max: high - low,
     };
     let hit = World::now()
         .first_hit(&ray, at_zoom(zoom))
@@ -232,14 +232,14 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         return;
     }
     p.last = Some(seen.clone());
-    // The eye's windows' bricks in view (domain/view/observation.rs
+    // The eye's clip levels' bricks in view (domain/view/observation.rs
     // `bricks`), as decor's are: the box the world stands in over each,
     // grown by what a marker draws past it at the box's far side; none past
     // where the rays end, over ground the sky's Earth stands for.
     let now = &mut p.now;
     now.drawn.clear();
-    let reach = reach_px(SPACING_PX);
-    let drawn = observation::eye_draw_reach().unwrap_or(0.0);
+    let extent = extent_px(SPACING_PX);
+    let drawn = observation::eye_draw_dist().unwrap_or(0.0);
     observation::bricks(&o, &mut |brick, heights| {
         let b = region(brick, heights);
         if o.measure(&b).near > drawn {
@@ -248,7 +248,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         let far = v3::len(&core::array::from_fn(|k| {
             (b.min[k] - o.eye[k]).abs().max((b.max[k] - o.eye[k]).abs())
         }));
-        let pad = reach * units_per_px_at(far);
+        let pad = extent * units_per_px_at(far);
         if frame.sees_box(b.min.map(|v| v - pad), b.max.map(|v| v + pad)) {
             now.drawn.push(brick);
         }
@@ -269,7 +269,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         _ => &[],
     };
     let moved_places = &p.moved_places;
-    let columns = |s: Brick| region(s, [REACH.min[2], REACH.max[2]]);
+    let columns = |s: Brick| region(s, [BOUNDS.min[2], BOUNDS.max[2]]);
     let drawn = |s: &Brick| now.drawn.binary_search(s).is_ok();
     let stands = |&s: &Brick| {
         let r = columns(s);

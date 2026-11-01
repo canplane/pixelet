@@ -8,7 +8,7 @@
 //! level of detail at that zoom and from what the node's parent found,
 //! handed down (`At`; `World::asset` for an asker with none):
 //!
-//! - the ground: its column off the windows, as the GPU drew it and the CPU
+//! - the ground: its column off the clip levels, as the GPU drew it and the CPU
 //!   read it back, and the area's edge laid on it; the ways off the tree the
 //!   GPU built of its brick, its child groups read back into the pool's mirror,
 //!   read as the GPU reads them (pxl-spec-core `clipmap::ground`,
@@ -26,10 +26,10 @@
 //! only splits more, never from detail finer than asked:
 //!
 //! - the ground: by its one rule (pxl-spec-core `ground::slab`, as a cell's
-//!   asset asks `Cell::opens` of one cell) over the lowest and highest the windows
-//!   hold under the node (`TileCache::relief`, off the finest window holding
-//!   its cells), every cell under it at each zoom asked over the ground, or
-//!   ground a cave may take with a cave through all of it;
+//!   asset asks `Cell::opens` of one cell) over the lowest and highest the
+//!   clip levels hold under the node (`TileCache::relief`, off the finest clip
+//!   level holding its cells), every cell under it at each zoom asked over the
+//!   ground, or ground a cave may take with a cave through all of it;
 //! - the ways: by their own rule (pxl-spec-core `way::slab`) over their
 //!   own bound in the same levels, the leaf cells the ways write in each
 //!   column (pxl-spec-core `way::bound`) joined apart from the ground's
@@ -57,7 +57,7 @@ use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::world;
 
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::{pool, Windowed};
+use crate::domain::layer::terrain::clipmap::{pool, HeldClipmap};
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::Answer;
 use crate::sys::io::source;
@@ -139,7 +139,7 @@ impl World<'_> {
     /// What is in `at`'s node, asked from `far` to `near`, the zooms a reader
     /// asks within it: the world's one query (pxl-spec-core `world::node`),
     /// the ground read as the GPU reads it, off what it drew and read back
-    /// (`Windowed`), down the node's line through the tile cache
+    /// (`HeldClipmap`), down the node's line through the tile cache
     /// (`Reading`). Its answer (pxl-spec-core `answer`): a split and its
     /// box in its own steps; the asset of a cell at the zoom asked, void for air; or,
     /// coarser than asked and nothing under it filling, air its size, which
@@ -159,7 +159,7 @@ impl World<'_> {
         let mut reading = Reading::new(self, lines);
         let i = world::node(
             &mut reading,
-            &Windowed,
+            &HeldClipmap,
             &lanes,
             pool(),
             &mut at.inherited,
@@ -227,9 +227,9 @@ impl Area for Reading<'_, '_> {
 }
 
 impl ground::Held for Reading<'_, '_> {
-    /// The bound over the node of the cells at `cell`, off the windows,
+    /// The bound over the node of the cells at `cell`, off the clip levels,
     /// stepped from `place` (pxl-spec-core `Held::relief`); its line names the
-    /// tile a lack or a coarser window stands for; where it lacks, `EMPTY`
+    /// tile a lack or a coarser clip level stands for; where it lacks, `EMPTY`
     /// and false.
     fn relief(
         &mut self,
@@ -251,10 +251,10 @@ impl ground::Held for Reading<'_, '_> {
         }
     }
 
-    /// The cell's column off the windows, the area's edge laid on it, as
+    /// The cell's column off the clip levels, the area's edge laid on it, as
     /// the GPU reads it (pxl-spec-core `clipmap::ground`), stepped from where
     /// its relief found its cells.
     fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
-        clipmap::ground(&Windowed, place, zoom, [c[0], c[1]]).0
+        clipmap::ground(&HeldClipmap, place, zoom, [c[0], c[1]]).0
     }
 }

@@ -77,11 +77,11 @@ fn parent_child_cells() {
 /// stored X stands for an eye at its nearest copy.
 #[test]
 fn point_wrap_x_clamp_y() {
-    use crate::space::coord::world::{self, REACH};
+    use crate::space::coord::world::{self, BOUNDS};
     let half = ROUND / 2.0;
     assert_eq!(
-        world::point(half + 3.0, REACH.max[1] + 100.0, 0.0),
-        world::point(-half + 3.0, REACH.max[1], 0.0)
+        world::point(half + 3.0, BOUNDS.max[1] + 100.0, 0.0),
+        world::point(-half + 3.0, BOUNDS.max[1], 0.0)
     );
     assert_eq!(nearest(-half + 3.0, half - 1.0), half + 3.0);
     assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);

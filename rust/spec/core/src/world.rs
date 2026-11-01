@@ -25,7 +25,7 @@ use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 /// descent asks each node's sources once rather than again from the top:
 /// its caves (`Cave`), what is placed (`overwrite::Held`, its cursor in the
 /// objects' tree), what is known of the service area at its shard
-/// (`area::Shard`), where the windows held the ground's cells of a node
+/// (`area::Shard`), where the clip levels held the ground's cells of a node
 /// over it (`clipmap::Found`, `clipmap::step`), and the ways' cursor in the
 /// tree of the brick `ground` names (`way::tree`). The CPU's and a GPU's
 /// alike.

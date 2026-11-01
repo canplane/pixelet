@@ -18,7 +18,7 @@ pub mod floor;
 use fnv::FnvHashMap;
 use pxl_spec::bake::tile::Occupancy;
 
-use pxl_spec::space::layer::demand::reach_tiles;
+use pxl_spec::space::layer::demand::demand_tiles;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::domain::layer::{AskScope, Base};
@@ -95,7 +95,7 @@ impl<L: Base> TileCache<L> {
     pub const DST_TILES: u32 = Self::ZOOMS;
 
     /// The most of its tiles a zoom's demand names, by its lattice.
-    pub const ZOOM_DEMAND_TILES: u32 = reach_tiles(L::LATTICE);
+    pub const ZOOM_DEMAND_TILES: u32 = demand_tiles(L::LATTICE);
 
     const DEMAND_TILES: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
         OBSERVERS * Self::ZOOM_DEMAND_TILES * Self::ZOOMS

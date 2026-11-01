@@ -89,7 +89,7 @@ pub(crate) trait Observer {
     /// Its samples across and down.
     fn samples(&self) -> [u32; 2];
     /// Where sample `s` is aimed, the cell it starts from, and the first
-    /// word of its stop (`beam::SAMPLE_WORDS`).
+    /// word of its hit (`beam::SAMPLE_WORDS`).
     fn point(&self, s: [u32; 2]) -> Self::At;
     fn sample_cell(&self, s: [u32; 2]) -> [u32; 2];
     fn sample_at(&self, s: [u32; 2]) -> u32;
@@ -220,7 +220,7 @@ where
 }
 
 /// Sample `s`'s ray resumed from its cell's start, walked to the cell that
-/// fills through the observed pyramid writing what it asks, and its stop
+/// fills through the observed pyramid writing what it asks, and its hit
 /// left in `w` for the raster (`sample_put`), with the nodes it and its
 /// beam ray visited; each node it asks told to `told`.
 pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
@@ -263,7 +263,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     sample_put(w, o.sample_at(s), &met);
 }
 
-/// Sample `s`'s stop written as a box for the raster's draw (raster.rs
+/// Sample `s`'s hit written as a box for the raster's draw (raster.rs
 /// `boxed`), the one across and up before it: its place among the boxes,
 /// `NONE` where it wrote none.
 pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
@@ -310,7 +310,7 @@ pub(crate) enum Take {
 
 /// What the ray at `at` aimed `aim` takes, `visible` the visibility buffer's
 /// there: the cell it enters as the visible sample entered it (`took`), its
-/// stop and that sample's first word; else the sky where no sample about it met
+/// hit and that sample's first word; else the sky where no sample about it met
 /// anything and none was visible (`sky`); else a walk of its own, which its
 /// pass lists for the walk again. The eye's pixels and the light's slots alike.
 pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
@@ -321,9 +321,9 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
     visible: u32,
 ) -> (Take, cast::Hit<u32>, u32) {
     if visible != 0 && visible & raster::LACK == 0 {
-        let (stop, k, enters) = took(o, w, aim, visible);
+        let (hit, k, enters) = took(o, w, aim, visible);
         if enters {
-            return (Take::Sample, stop, k);
+            return (Take::Sample, hit, k);
         }
     }
     let none = cast::Hit {
@@ -352,8 +352,8 @@ pub(crate) fn took<O: Observer, W: Words + ?Sized>(
 ) -> (cast::Hit<u32>, u32, bool) {
     let (n, s) = (o.samples()[0], raster::sample_of(visible));
     let k = o.sample_at([s % n, s / n]);
-    let (stop, enters) = taken(w, k, aim.origin, &aim.ray);
-    (stop, k, enters)
+    let (hit, enters) = taken(w, k, aim.origin, &aim.ray);
+    (hit, k, enters)
 }
 
 /// Whether the four samples about `at` each went on to its reach

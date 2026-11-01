@@ -180,10 +180,10 @@ pub fn side_of(decor: &Decor, c: &Candidate) -> i32 {
 /// cells asked are those a brick meeting `c`'s may start at, as wide as the
 /// decor's widest.
 pub fn retained(decor: &Decor, c: &Candidate) -> bool {
-    let (side, reach) = (side_of(decor, c), decor.widest() as i32 - 1);
-    let mut y = c.cell[1] - reach;
+    let (side, extent) = (side_of(decor, c), decor.widest() as i32 - 1);
+    let mut y = c.cell[1] - extent;
     while y < c.cell[1] + side {
-        let mut x = c.cell[0] - reach;
+        let mut x = c.cell[0] - extent;
         while x < c.cell[0] + side {
             if x != c.cell[0] || y != c.cell[1] {
                 let (d, here) = candidate_at(decor, [x, y]);
@@ -205,10 +205,10 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
     (here && retained(decor, &c)).then_some(c)
 }
 
-/// Whether `variant` of `decor` stands as itself in a window at `cell`, by
-/// its own size, not the window's: at the leaves' always, the finest window
-/// there is; at a coarser one where its box, in one of the window's cells,
-/// keeps an eighth of it or more, floored as a folded cube's share is
+/// Whether `variant` of `decor` stands as itself in a clip level at `cell`, by
+/// its own size, not the clip level's: at the leaves' always, the finest clip
+/// level there is; at a coarser one where its box, in one of the clip level's
+/// cells, keeps an eighth of it or more, floored as a folded cube's share is
 /// (`answer::eighths`), so a decor stands at the zooms a cube of its box is
 /// drawn at (`stands`). Where it keeps none it is none there, and in none
 /// coarser.
@@ -224,7 +224,7 @@ const fn stands([x, y, z]: [u32; 3], own: Zoom, cell: Zoom) -> bool {
     cell >= LEAF_CELL || (steps < u32::BITS && (EIGHTHS * x * y * z) >> steps >= 1)
 }
 
-/// The coarsest window zoom `variant` of `decor` stands at (`stands_at`).
+/// The coarsest clip level zoom `variant` of `decor` stands at (`stands_at`).
 pub const fn coarsest_stand(decor: &Decor, variant: u32) -> Zoom {
     let mut cell = LEAF_CELL;
     while cell > 0 && stands_at(decor, variant, cell - 1) {
@@ -233,7 +233,7 @@ pub const fn coarsest_stand(decor: &Decor, variant: u32) -> Zoom {
     cell
 }
 
-/// The coarsest window zoom any variant of `decor` stands at
+/// The coarsest clip level zoom any variant of `decor` stands at
 /// (`any_stands_at`).
 pub const fn root(decor: &Decor) -> Zoom {
     let mut cell = LEAF_CELL;
@@ -243,7 +243,7 @@ pub const fn root(decor: &Decor) -> Zoom {
     cell
 }
 
-/// Each decor's counts' root (`count`, `root`): where a window first reads
+/// Each decor's counts' root (`count`, `root`): where a clip level first reads
 /// its columns.
 pub const ROOTS: [Zoom; DECORS.len()] = {
     let mut roots = [LEAF_CELL; DECORS.len()];

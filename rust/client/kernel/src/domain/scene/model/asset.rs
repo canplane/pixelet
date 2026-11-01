@@ -139,7 +139,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
         let n = (vertex_cnt * MODEL_VERTEX_WORDS + idx_cnt) as usize;
         // SAFETY: the model's block, `n` words, ours until sealed.
         let words = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(block), n) };
-        let lane = |k: usize| k * vertex_cnt as usize;
+        let column = |k: usize| k * vertex_cnt as usize;
         let put_f = |words: &mut [u32], at: usize, v: f32| words[at] = v.to_bits();
 
         let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
@@ -179,32 +179,36 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                     );
                     normal = [n[0] as f32, n[1] as f32, n[2] as f32];
                 }
-                put_f(words, lane(0) + v * 3, x);
-                put_f(words, lane(0) + v * 3 + 1, y);
-                put_f(words, lane(0) + v * 3 + 2, z);
+                put_f(words, column(0) + v * 3, x);
+                put_f(words, column(0) + v * 3 + 1, y);
+                put_f(words, column(0) + v * 3 + 2, z);
                 for (c, val) in normal.into_iter().enumerate() {
-                    put_f(words, lane(3) + v * 3 + c, val);
+                    put_f(words, column(3) + v * 3 + c, val);
                 }
                 let uv = prim
                     .uv
                     .as_ref()
                     .map_or([0.0, 0.0], |uv| [uv[i * 2], uv[i * 2 + 1]]);
-                put_f(words, lane(6) + v * 2, uv[0]);
-                put_f(words, lane(6) + v * 2 + 1, uv[1]);
+                put_f(words, column(6) + v * 2, uv[0]);
+                put_f(words, column(6) + v * 2 + 1, uv[1]);
                 for c in 0..4 {
                     match (&remap, &prim.joints) {
                         (Some(remap), Some(joints)) => {
-                            words[lane(8) + v * 4 + c] =
+                            words[column(8) + v * 4 + c] =
                                 *remap.get(joints[i * 4 + c] as usize).unwrap_or(&0);
                             let w = prim
                                 .weights
                                 .as_ref()
                                 .map_or(if c == 0 { 1.0 } else { 0.0 }, |w| w[i * 4 + c]);
-                            put_f(words, lane(12) + v * 4 + c, w);
+                            put_f(words, column(12) + v * 4 + c, w);
                         }
                         _ => {
-                            words[lane(8) + v * 4 + c] = if c == 0 { own_joint } else { 0 };
-                            put_f(words, lane(12) + v * 4 + c, if c == 0 { 1.0 } else { 0.0 });
+                            words[column(8) + v * 4 + c] = if c == 0 { own_joint } else { 0 };
+                            put_f(
+                                words,
+                                column(12) + v * 4 + c,
+                                if c == 0 { 1.0 } else { 0.0 },
+                            );
                         }
                     }
                 }
@@ -217,7 +221,7 @@ fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
                 hi = hi.max(at_y);
             }
             for (i, &idx) in prim.idx.iter().enumerate() {
-                words[lane(MODEL_VERTEX_WORDS as usize) + i0 + i] = v0 as u32 + idx;
+                words[column(MODEL_VERTEX_WORDS as usize) + i0 + i] = v0 as u32 + idx;
             }
             v0 += cnt;
             i0 += prim.idx.len();

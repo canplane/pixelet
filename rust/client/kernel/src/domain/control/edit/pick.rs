@@ -16,7 +16,7 @@ use crate::domain::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::aabb::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
-const PICK_REACH_U: f64 = 32.0;
+const PICK_DIST_U: f64 = 32.0;
 
 // Above the 1/256-grid round trip's error (±1/512 u), below the gap between
 // any two object tiers (the finest's side).
@@ -99,7 +99,7 @@ pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     let ray = Ray {
         origin,
         dir,
-        reach: PICK_REACH_U,
+        t_max: PICK_DIST_U,
     };
     // A coarser tile's answer is a summary, not what is held.
     World::now()

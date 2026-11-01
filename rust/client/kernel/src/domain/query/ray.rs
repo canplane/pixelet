@@ -87,7 +87,7 @@ pub fn cell_zoom_at(eye: V3, at: V3) -> Zoom {
 pub struct Ray {
     pub origin: V3,
     pub dir: V3,
-    pub reach: f64,
+    pub t_max: f64,
 }
 
 impl Ray {
@@ -228,7 +228,7 @@ fn decor_hit(ray: &Ray, t: f64, axis: usize, i: Instance) -> Hit {
 }
 
 impl<'a> World<'a> {
-    /// The first cell `ray` meets within its reach that fills, at the zoom
+    /// The first cell `ray` meets within its `t_max` that fills, at the zoom
     /// `detail` asks where it meets it, or the decor struck nearer. What the
     /// ray starts inside is not met, so an eye under the ground is not
     /// stopped where it stands. A cell met coarser than held is the lack;
@@ -266,9 +266,9 @@ impl<'a> World<'a> {
             lines: Lines::default(),
         };
         let o = ray.origin;
-        let end = ray.at(ray.reach);
+        let end = ray.at(ray.t_max);
         self.read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
-        let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.reach as f32);
+        let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.t_max as f32);
         let q = origin(o[0], o[1], o[2]);
         let met = cast::first(&mut walker, q, &from, detail, until);
         let met = (met.ends == End::Hit).then(|| self.hit(ray, q, met.hit));

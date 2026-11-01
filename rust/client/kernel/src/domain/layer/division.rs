@@ -29,7 +29,7 @@ static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 pub static RANGE: OwnedRange = OwnedRange::new();
 
 /// A record's cells, a word each, on a whole cache line.
-const RECORD_BYTES: u32 = fixed::lane_bytes(CELLS, 4);
+const RECORD_BYTES: u32 = fixed::array_bytes(CELLS, 4);
 
 /// A record a frame, end to end.
 pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * RECORD_BYTES;
@@ -57,7 +57,7 @@ impl Base for DivisionTile {
         _phases: &mut Phases,
     ) -> Result<DivisionTile, Failure> {
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
-        let room = unsafe { fixed::lane::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS) };
+        let room = unsafe { fixed::array::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS) };
         Ok(division::decode_into(pkt, room)?)
     }
 }

@@ -11,7 +11,7 @@
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::demand::{reach_tiles, tiles_within};
+use pxl_spec::space::layer::demand::{demand_tiles, tiles_within};
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::Tile;
 
@@ -31,12 +31,12 @@ pub fn floor(o: &Observation, top: Zoom, each: impl FnMut(Tile)) {
 /// these are at most the tiles a miss can name there, in the layer's own
 /// tiles.
 pub const fn tiles(lattice: Lattice) -> u32 {
-    reach_tiles(lattice)
+    demand_tiles(lattice)
 }
 
 /// How far from the eye the top's ground is held: the far edge cut by the
 /// ground; none where the eye is over the edge.
 pub fn ring(o: &Observation) -> Option<f64> {
     let over = (o.eye[2] - o.ground).max(0.0);
-    (over < o.reach).then(|| (o.reach * o.reach - over * over).sqrt())
+    (over < o.demand_dist).then(|| (o.demand_dist * o.demand_dist - over * over).sqrt())
 }

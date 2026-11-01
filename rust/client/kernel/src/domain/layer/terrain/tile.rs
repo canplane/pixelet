@@ -2,11 +2,11 @@
 
 //! Terrain as a layer of the pyramid; a tile's record is a room in
 //! `.fixed.terrain` for what is read of it whole, its lines, decoded into
-//! straight from the packet. Its cells are its
-//! windows' (domain/layer/terrain/clipmap.rs), filled off the packet, which is kept
-//! only until the GPU has what they want of it (`uploads`). A tile the bake
-//! left as no object is drawn from the tile over it, whose cells there are
-//! open water; at the source's top, it is void.
+//! straight from the packet. Its cells are its clip levels'
+//! (domain/layer/terrain/clipmap.rs), filled off the packet, which is kept only
+//! until the GPU has what they want of it (`uploads`). A tile the bake left as
+//! no object is drawn from the tile over it, whose cells there are open water;
+//! at the source's top, it is void.
 
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::tile_cache::TileCache;
@@ -25,7 +25,7 @@ use crate::sys::io::failure::Failure;
 
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::layer::terrain::fixed::RANGE;
-use crate::domain::layer::terrain::fixed::{separation_lane, SEPARATION_LANES};
+use crate::domain::layer::terrain::fixed::{separation_column, SEPARATION_COLUMNS};
 use crate::domain::layer::Base;
 use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::sys::io::fetch;
@@ -39,7 +39,7 @@ static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
 impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
-    /// The pivot's and a destination's windows' tiles.
+    /// The pivot's and a destination's clip levels' tiles.
     const PINNED: u32 = clipmap::PINNED_TILES;
 
     fn occupancy(&self) -> Occupancy {
@@ -69,9 +69,9 @@ impl Base for TerrainTile {
         Ok(terrain)
     }
 
-    /// What its windows want of it is the GPU's, off the packet: kept only
-    /// where a window wants one of its bricks, so an ancestor's or another
-    /// zoom's packet no window reads takes no place of `most_pending`.
+    /// What its clip levels want of it is the GPU's, off the packet: kept only
+    /// where a clip level wants one of its bricks, so an ancestor's or another
+    /// zoom's packet no clip level reads takes no place of `most_pending`.
     fn keep(record: Option<u32>, block: Block) {
         let wanted = |r: &u32| {
             TerrainTile::tile_cache()
@@ -115,7 +115,7 @@ pub fn again_room() -> u32 {
     most_pending().saturating_sub(uploads().cnt() + coming)
 }
 
-/// The tiles whose bricks the windows want filled, off their packets.
+/// The tiles whose bricks the clip levels want filled, off their packets.
 static UPLOADS: Global<Uploads> = Global::new();
 
 pub fn uploads() -> &'static mut Uploads {
@@ -130,38 +130,38 @@ pub fn pending_for(tile: Tile) -> bool {
 }
 
 /// # Safety
-/// The record's lanes are the tile's that is given them, and no other's,
+/// The record's columns are the tile's that is given them, and no other's,
 /// from now until another tile takes the record.
 unsafe fn room_of(record: u32) -> separation::Room {
-    /// Lane `K` of the record, as long as the layout makes it, its element
+    /// Column `K` of the record, as long as the layout makes it, its element
     /// the room's own and as wide as the layout counts it.
     ///
     /// # Safety
     /// As `room_of`'s.
-    unsafe fn lane<T, const K: usize>(record: u32) -> &'static mut [T] {
+    unsafe fn column<T, const K: usize>(record: u32) -> &'static mut [T] {
         const {
             assert!(
-                SEPARATION_LANES[K].1 == size_of::<T>(),
-                "a lane's element as wide as the layout counts it"
+                SEPARATION_COLUMNS[K].1 == size_of::<T>(),
+                "a column's element as wide as the layout counts it"
             );
         };
-        let (at, bytes) = separation_lane(record, K);
+        let (at, bytes) = separation_column(record, K);
         // Inside the range by the layout, so past its end is a bug.
         let at = RANGE.get().at(at, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
-        // SAFETY: the lane is kernel memory at its own size, never freed, and
+        // SAFETY: the column is kernel memory at its own size, never freed, and
         // the caller's contract makes it this tile's alone.
-        unsafe { core::slice::from_raw_parts_mut(mem::at::<T>(at), SEPARATION_LANES[K].0) }
+        unsafe { core::slice::from_raw_parts_mut(mem::at::<T>(at), SEPARATION_COLUMNS[K].0) }
     }
     // SAFETY: as this function's.
     unsafe {
         separation::Room {
-            starts: lane::<_, 0>(record),
-            points: lane::<_, 1>(record),
-            tops: lane::<_, 2>(record),
-            width: lane::<_, 3>(record),
-            kind: lane::<_, 4>(record),
-            form: lane::<_, 5>(record),
-            clear: lane::<_, 6>(record),
+            starts: column::<_, 0>(record),
+            points: column::<_, 1>(record),
+            tops: column::<_, 2>(record),
+            width: column::<_, 3>(record),
+            kind: column::<_, 4>(record),
+            form: column::<_, 5>(record),
+            clear: column::<_, 6>(record),
         }
     }
 }

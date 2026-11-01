@@ -26,21 +26,21 @@ pub fn fov() -> f64 {
 /// The view's cells a radian (pxl-spec-core `grid::CELLS_A_RAD`).
 pub const CELLS_A_RAD: f64 = grid::CELLS_A_RAD as f64;
 
-/// How many times as far a window holds its zoom's cells as the view draws
-/// them (pxl-spec-core `grid::WINDOW_MARGIN`).
-pub const WINDOW_MARGIN: f64 = grid::WINDOW_MARGIN as f64;
+/// How many times as far a clip level holds its zoom's cells as the view draws
+/// them (pxl-spec-core `grid::CLIP_MARGIN`).
+pub const CLIP_MARGIN: f64 = grid::CLIP_MARGIN as f64;
 
-/// The grid the bands and windows are sized for, the view's
-/// `WINDOW_MARGIN` times finer (pxl-spec-core `grid::WINDOW_CELLS_A_RAD`).
-pub const WINDOW_CELLS_A_RAD: f64 = grid::WINDOW_CELLS_A_RAD as f64;
+/// The grid the bands and clip levels are sized for, the view's
+/// `CLIP_MARGIN` times finer (pxl-spec-core `grid::CLIP_CELLS_A_RAD`).
+pub const CLIP_CELLS_A_RAD: f64 = grid::CLIP_CELLS_A_RAD as f64;
 
 /// The view's camera grid cell, an angle in radians, 1/`CELLS_A_RAD`
 /// (pxl-spec-core `grid::CELL`).
 pub const CELL: f64 = 1.0 / CELLS_A_RAD;
 
 /// Where ground starts being drawn with cells at `cell_zoom`, going out: where
-/// its side spans `SPANS` of the view's cells (pxl-spec-core `grid`). A window
-/// holds them out to `WINDOW_MARGIN` times as far.
+/// its side spans `SPANS` of the view's cells (pxl-spec-core `grid`). A clip
+/// level holds them out to `CLIP_MARGIN` times as far.
 pub const fn split_dist(cell_zoom: Zoom) -> f64 {
     CELLS_A_RAD * units(cell_zoom) / grid::SPANS as f64
 }

@@ -14,7 +14,7 @@
 //! One buffer of words:
 //!
 //! - its head: the frame's number, what is forgotten, and the eye's
-//!   windows' entries that moved (`HEAD_WORDS`);
+//!   clip levels' entries that moved (`HEAD_WORDS`);
 //! - the entries, a slot each (`ENTRIES_AT`);
 //! - the pixels the frame's reading walk marked missed, listed for the walk
 //!   that writes the pyramid (`MARKS_AT`).
@@ -37,7 +37,7 @@
 //! in between.
 
 use crate::answer::Kind;
-use crate::clipmap::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_WINDOWS};
+use crate::clipmap::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_CLIP_LEVELS};
 use crate::overwrite;
 use crate::overwrite::Held;
 use crate::overwrite::{cut_box, BOXES};
@@ -47,20 +47,20 @@ use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 
 /// The head's words: the frame's number, what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit an entry of the
-/// eye's windows, a window's `clipmap::ENTRIES` bits in turn, set where the brick it
-/// holds moved or was handed since the last cast; and the boxes of leaf
-/// cells whose columns what is placed or a preview's cuts changed since the
-/// last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
+/// eye's clip levels, a clip level's `clipmap::ENTRIES` bits in turn, set where
+/// the brick it holds moved or was handed since the last cast; and the boxes of
+/// leaf cells whose columns what is placed or a preview's cuts changed since
+/// the last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
 /// generation is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
 /// pxl-render gpu/generated.rs); and the child groups of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
 /// `WRITTEN` at most, past which all is forgotten (`reads_written`); and
-/// whether its walks count what they ask, and what they counted
-/// (`TALLY_ON`, `TALLY_AT`).
+/// whether its walks count what they ask, and what they counted (`TALLY_ON`,
+/// `TALLY_AT`).
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
 pub const MOVED_AT: u32 = 2;
-pub const MOVED_WORDS: u32 = (EYE_WINDOWS * clipmap::ENTRIES).div_ceil(32);
+pub const MOVED_WORDS: u32 = (EYE_CLIP_LEVELS * clipmap::ENTRIES).div_ceil(32);
 pub const BOXES_AT: u32 = MOVED_AT + MOVED_WORDS;
 pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
 pub const WRITTEN: u32 = 32;
@@ -70,13 +70,13 @@ pub const WRITTEN: u32 = 32;
 pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN;
 pub const TALLY_AT: u32 = TALLY_ON + 1;
 pub const TALLY_WORDS: u32 = tally::OBSERVERS * tally::WALKS;
-/// The missed pixels' stops kept for their faces (pxl-spec-core
-/// `beam::STOP_WORDS`): the dispatch over them, as the walks again raise
-/// it, and their count (`STOPS_ARGS`, `STOPS_CNT`), set each frame the cast
+/// The missed pixels' hits kept for their faces (pxl-spec-core
+/// `beam::HIT_WORDS`): the dispatch over them, as the walks again raise
+/// it, and their count (`HITS_ARGS`, `HITS_CNT`), set each frame the cast
 /// runs with the head; read, not written, by the passes it dispatches.
-pub const STOPS_ARGS: u32 = TALLY_AT + TALLY_WORDS;
-pub const STOPS_CNT: u32 = STOPS_ARGS + 3;
-pub const HEAD_WORDS: u32 = STOPS_CNT + 1;
+pub const HITS_ARGS: u32 = TALLY_AT + TALLY_WORDS;
+pub const HITS_CNT: u32 = HITS_ARGS + 3;
+pub const HEAD_WORDS: u32 = HITS_CNT + 1;
 
 /// Where `observer`'s walks count lane `lane` (pxl-spec-core `tally::BEAM`
 /// to `tally::MISS`) in the head.
@@ -248,11 +248,11 @@ pub const fn kind_of(w: u32) -> Kind {
 /// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,
 /// `moved` the moved entries' words (`MOVED_AT`), as a walk holds them, never
 /// a closure over the buffer, which rust-gpu reads wrongly: a node's answer reads
-/// the bricks under it alone — its cells' and their windows' over them
+/// the bricks under it alone — its cells' and their clip levels' over them
 /// (`clipmap::step`), a wider node's the block of bricks its own size
 /// (`clipmap::bounded`) — and what was handed it found its cells there, so a
-/// node no moved brick lies under answers as it did. A node a window's
-/// whole side wide or wider reads every entry of the window.
+/// node no moved brick lies under answers as it did. A node a clip level's
+/// whole side wide or wider reads every entry of the clip level.
 /// Whether the node of `zoom` at column `[x, y]` stands over the box `b` of
 /// leaf cells `[x0, y0, x1, y1)`, X round the world: its own columns as a
 /// box of leaf cells (`overwrite::cut_box`) meet it. A node's answer, and what
@@ -286,9 +286,9 @@ pub fn reads_written(placed: u32, first: u32) -> bool {
 
 pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]) -> bool {
     let mut w = 0;
-    while w < EYE_WINDOWS {
+    while w < EYE_CLIP_LEVELS {
         let c = eye_cell(w);
-        // The node's cells at the window's zoom, first and last, then its
+        // The node's cells at the clip level's zoom, first and last, then its
         // bricks.
         let (lo, hi) = if zoom <= c {
             let s = c - zoom;
@@ -301,7 +301,7 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
             [lo[0] >> BRICK_SHIFT, lo[1] >> BRICK_SHIFT],
             [hi[0] >> BRICK_SHIFT, hi[1] >> BRICK_SHIFT],
         );
-        // As wide as the window or wider, every entry; else each brick.
+        // As wide as the clip level or wider, every entry; else each brick.
         let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
         if wide {
             let mut k = 0;
@@ -329,7 +329,7 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
     false
 }
 
-/// Whether entry `entry` of the eye's window `w` moved, among the moved
+/// Whether entry `entry` of the eye's clip level `w` moved, among the moved
 /// entries' words.
 pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, entry: u32) -> bool {
     let k = w * clipmap::ENTRIES + entry;

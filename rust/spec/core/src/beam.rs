@@ -35,14 +35,14 @@ pub struct Grid {
     /// The cell as an angle (`grid::CELL`), in the screen's tangents at its
     /// axis.
     pub s: f32,
-    /// What a beam ray's stop is shortened by, `1 − γ`, the margin `γ`
+    /// What a beam ray's hit is shortened by, `1 − γ`, the margin `γ`
     /// within which two rays enter a cube under `2√2 · s · d` wide apart
     /// (`handed`).
     keep: f32,
     /// As far as a cube a beam ray must cross reaches from its center, `√6
     /// · s` as an angle with the margin, and its tangent (`window`).
-    reach: f32,
-    reach_tan: f32,
+    radius: f32,
+    radius_tan: f32,
     /// The corners past the screen on each side: the widest window of its
     /// cells, the last's, whose far corner lies past the screen by under a
     /// cell where the cells do not divide it.
@@ -54,20 +54,20 @@ pub struct Grid {
     pub span: [u32; 2],
     pub corners: [u32; 2],
     pub samples: [u32; 2],
-    /// Where the cells' starts and the samples' stops start among the beam
+    /// Where the cells' starts and the samples' hits start among the beam
     /// rays' words, past the lines; then the boxes' asks, a sample's room
-    /// each (`asks_at`), the missed pixels' stops (`stops_at`) and their
-    /// asks (`stop_asks_at`), `STOPS` each.
+    /// each (`asks_at`), the missed pixels' hits (`hits_at`) and their
+    /// asks (`hit_asks_at`), `HITS` each.
     cells_at: u32,
     samples_at: u32,
     pub asks_at: u32,
-    pub stops_at: u32,
-    pub stop_asks_at: u32,
+    pub hits_at: u32,
+    pub hit_asks_at: u32,
 }
 
-/// The grid's words among the eye's (`eye::GRID`): `s`, `keep`, `reach`,
-/// `reach_tan` as f32 bits, then `past`, `span`, `corners`, `samples`,
-/// `cells_at`, `samples_at`, `asks_at`, `stops_at`, `stop_asks_at`: whole
+/// The grid's words among the eye's (`eye::GRID`): `s`, `keep`, `radius`,
+/// `radius_tan` as f32 bits, then `past`, `span`, `corners`, `samples`,
+/// `cells_at`, `samples_at`, `asks_at`, `hits_at`, `hit_asks_at`: whole
 /// vec4s.
 pub const GRID_WORDS: usize = 16;
 
@@ -77,7 +77,7 @@ impl Grid {
         let s = CELL;
         let r6 = cast::SQRT_6 * s;
         let k = 2.0 * r6;
-        let reach = r6 / (1.0 - r6) * beam::REACH_SLACK;
+        let radius = r6 / (1.0 - r6) * beam::RADIUS_SLACK;
         let span = [
             libm::ceilf(2.0 * tan[0] / s) as u32,
             libm::ceilf(2.0 * tan[1] / s) as u32,
@@ -90,8 +90,8 @@ impl Grid {
             tan,
             s,
             keep: 1.0 - k / (1.0 - k),
-            reach,
-            reach_tan: libm::tanf(reach),
+            radius,
+            radius_tan: libm::tanf(radius),
             past: 0,
             span,
             corners: [0; 2],
@@ -99,16 +99,16 @@ impl Grid {
             cells_at: 0,
             samples_at: 0,
             asks_at: 0,
-            stops_at: 0,
-            stop_asks_at: 0,
+            hits_at: 0,
+            hit_asks_at: 0,
         };
         g.past = g.cell_window([span[0] - 1, span[1] - 1]);
         g.corners = [span[0] + 1 + 2 * g.past, span[1] + 1 + 2 * g.past];
         g.cells_at = g.corners[0] * g.corners[1] * LINE_WORDS;
         g.samples_at = g.cells_at + span[0] * span[1] * CELL_WORDS;
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
-        g.stops_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
-        g.stop_asks_at = g.stops_at + STOPS * STOP_WORDS;
+        g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
+        g.hit_asks_at = g.hits_at + HITS * HIT_WORDS;
         g
     }
 
@@ -118,8 +118,8 @@ impl Grid {
         [
             f(self.s),
             f(self.keep),
-            f(self.reach),
-            f(self.reach_tan),
+            f(self.radius),
+            f(self.radius_tan),
             self.past,
             self.span[0],
             self.span[1],
@@ -130,8 +130,8 @@ impl Grid {
             self.cells_at,
             self.samples_at,
             self.asks_at,
-            self.stops_at,
-            self.stop_asks_at,
+            self.hits_at,
+            self.hit_asks_at,
         ]
     }
 
@@ -142,8 +142,8 @@ impl Grid {
             tan,
             s: f(w[0]),
             keep: f(w[1]),
-            reach: f(w[2]),
-            reach_tan: f(w[3]),
+            radius: f(w[2]),
+            radius_tan: f(w[3]),
             past: w[4],
             span: [w[5], w[6]],
             corners: [w[7], w[8]],
@@ -151,8 +151,8 @@ impl Grid {
             cells_at: w[11],
             samples_at: w[12],
             asks_at: w[13],
-            stops_at: w[14],
-            stop_asks_at: w[15],
+            hits_at: w[14],
+            hit_asks_at: w[15],
         }
     }
 
@@ -163,14 +163,14 @@ impl Grid {
     }
 
     /// The cells about a pixel at the screen's tangents `at`, a side, whose
-    /// corners its start is the least of: the reach stretched by the
+    /// corners its start is the least of: the radius stretched by the
     /// screen's slope there out to it, plus the distance from that center
     /// to the corner nearest it.
     fn window(&self, at: [f32; 2]) -> u32 {
         let edge = libm::sqrtf(at[0] * at[0] + at[1] * at[1]);
-        let beyond = (edge + self.reach_tan) / (1.0 - edge * self.reach_tan);
+        let beyond = (edge + self.radius_tan) / (1.0 - edge * self.radius_tan);
         let stretch = 1.0 + beyond * beyond;
-        libm::ceilf(core::f32::consts::FRAC_1_SQRT_2 + self.reach * stretch / self.s) as u32
+        libm::ceilf(core::f32::consts::FRAC_1_SQRT_2 + self.radius * stretch / self.s) as u32
     }
 
     /// The window of the screen's cell `[x, y]`, from its left and top: at
@@ -251,7 +251,7 @@ impl Grid {
         self.cells_at + (y * self.span[0] + x) * CELL_WORDS
     }
 
-    /// The first word of sample `[i, j]`'s stop.
+    /// The first word of sample `[i, j]`'s hit.
     pub fn sample_at(&self, [i, j]: [u32; 2]) -> u32 {
         self.samples_at + (j * self.samples[0] + i) * SAMPLE_WORDS
     }
@@ -262,26 +262,26 @@ impl Grid {
         self.asks_at + place * ASK_WORDS
     }
 
-    /// The first word of the missed pixels' stop numbered `r`.
-    pub fn stop_at(&self, r: u32) -> u32 {
-        self.stops_at + r * STOP_WORDS
+    /// The first word of the missed pixels' hit numbered `r`.
+    pub fn hit_at(&self, r: u32) -> u32 {
+        self.hits_at + r * HIT_WORDS
     }
 
-    /// The first word of the ask at `place` among the missed pixels' stops'
+    /// The first word of the ask at `place` among the missed pixels' hits'
     /// (`ray::MISS_ARGS_ASKED`).
-    pub fn stop_ask_at(&self, place: u32) -> u32 {
-        self.stop_asks_at + place * ASK_WORDS
+    pub fn hit_ask_at(&self, place: u32) -> u32 {
+        self.hit_asks_at + place * ASK_WORDS
     }
 
     /// The beam rays' words: the lines, the cells' starts, the samples'
-    /// stops, the boxes' asks and the missed pixels' stops and theirs, as
+    /// hits, the boxes' asks and the missed pixels' hits and theirs, as
     /// many as the grid lays, whatever the pixels drawn.
     pub fn size(&self) -> u32 {
-        self.stop_asks_at + STOPS * ASK_WORDS
+        self.hit_asks_at + HITS * ASK_WORDS
     }
 }
 
-/// A node as a beam ray's line and a sample's stop each hold it, in words:
+/// A node as a beam ray's line and a sample's hit each hold it, in words:
 /// its zoom, its corner, its roots.
 pub const NODE_ZOOM: u32 = 0;
 pub const NODE_CORNER: u32 = 1;
@@ -338,15 +338,15 @@ pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
 
-/// What a stop's faces are asked off, once a stop (pxl-shader raster.rs
+/// What a hit's faces are asked off, once a hit (pxl-shader raster.rs
 /// `face_cs`), in words: the first word of its node (`NODE_WORDS`) among
 /// the beam rays' words, the face its ray entered (pxl-spec-core `ray`),
 /// the first word of the beam ray's line its faces are asked off, the line
 /// its cell's rays resumed from (`CELL_CORNER`), and the word its faces are
 /// left in, `ASK_NONE` where it asks none. A box's (`Grid::ask_at`), its
-/// sample's stop's, its faces left in its sample's words (`SAMPLE_FACES`);
-/// a missed pixel's stop's (`Grid::stop_ask_at`), its faces left in the
-/// stop (`STOP_OUT`).
+/// sample's hit's, its faces left in its sample's words (`SAMPLE_FACES`);
+/// a missed pixel's hit's (`Grid::hit_ask_at`), its faces left in the
+/// hit (`HIT_OUT`).
 pub const ASK_NODE: u32 = 0;
 pub const ASK_FACE: u32 = 1;
 pub const ASK_LINE: u32 = 2;
@@ -354,27 +354,27 @@ pub const ASK_TO: u32 = 3;
 pub const ASK_WORDS: u32 = 4;
 pub const ASK_NONE: u32 = u32::MAX;
 
-/// The stops of the pixels that missed and walked again (pxl-shader cast.rs
-/// `missed`) whose faces are asked, `STOPS` at most, a number each as the
+/// The hits of the pixels that missed and walked again (pxl-shader cast.rs
+/// `missed`) whose faces are asked, `HITS` at most, a number each as the
 /// walks take them, in words: its node (`NODE_WORDS`), the face its ray
 /// entered, its pixel, its row over its column, and what it is told
-/// (`STOP_OUT`): its faces where it asks them, else `STOP_FOLLOWS` and the
-/// number of the stop alike it takes them from, its pixel's left
-/// neighbor's, else the one above's, within its square of `STOP_RUN` a
-/// side, the pixels' columns and rows `STOP_RUN` divides. Its pixel's
-/// last ray word holds `STOP_WAITS` and its number until its faces are put
-/// there (`ray::FACES`), in the walk's own pass. A pixel past `STOPS`
+/// (`HIT_OUT`): its faces where it asks them, else `HIT_FOLLOWS` and the
+/// number of the hit alike it takes them from, its pixel's left
+/// neighbor's, else the one above's, within its square of `HIT_SQUARE` a
+/// side, the pixels' columns and rows `HIT_SQUARE` divides. Its pixel's
+/// last ray word holds `HIT_WAITS` and its number until its faces are put
+/// there (`ray::FACES`), in the walk's own pass. A pixel past `HITS`
 /// asks none.
-pub const STOP_NODE: u32 = 0;
-pub const STOP_FACE: u32 = NODE_WORDS;
-pub const STOP_PX: u32 = STOP_FACE + 1;
-pub const STOP_OUT: u32 = STOP_PX + 1;
-pub const STOP_WORDS: u32 = STOP_OUT + 1;
-pub const STOPS: u32 = 1 << 19;
-pub const STOP_RUN: u32 = 16;
-pub const STOP_LANES: u32 = 64;
-pub const STOP_FOLLOWS: u32 = 1 << 31;
-pub const STOP_WAITS: u32 = 1 << 31;
+pub const HIT_NODE: u32 = 0;
+pub const HIT_FACE: u32 = NODE_WORDS;
+pub const HIT_PX: u32 = HIT_FACE + 1;
+pub const HIT_OUT: u32 = HIT_PX + 1;
+pub const HIT_WORDS: u32 = HIT_OUT + 1;
+pub const HITS: u32 = 1 << 19;
+pub const HIT_SQUARE: u32 = 16;
+pub const HIT_LANES: u32 = 64;
+pub const HIT_FOLLOWS: u32 = 1 << 31;
+pub const HIT_WAITS: u32 = 1 << 31;
 
 #[cfg(test)]
 mod tests {

@@ -21,7 +21,7 @@ use crate::perf::section::TASK_PHASES;
 use crate::perf::section::{
     FramesSection, Percentiles, StepStats, StepsSection, StreamStats, TasksSection, ViewSection,
 };
-use crate::perf::spec::{LIMIT, NOW, STAT};
+use crate::perf::spec::{self, LIMIT, NOW, STAT};
 use crate::perf::task::TaskRow;
 use crate::perf::word::put;
 use crate::sys::io::failure::Outcome;
@@ -275,7 +275,7 @@ fn view() -> ViewSection {
         let ray = Ray {
             origin,
             dir,
-            reach: observation::eye_draw_reach().unwrap_or(0.0),
+            t_max: observation::eye_draw_dist().unwrap_or(0.0),
         };
         let detail = query::by_dist();
         let hit = query::World::now()
@@ -290,11 +290,13 @@ fn view() -> ViewSection {
     let (hover, cell) = (met.map(|m| m.0), met.map(|m| m.1));
     // What the tool held strikes there, as the hover picks it.
     let picked = pointed.and_then(|[x, y]| edit::pick_at(x, y));
-    let hit_kind = picked.as_ref().map_or(f64::NAN, |p| match p.hit.kind {
-        HitKind::Ground => 0.0,
-        HitKind::Object(_) => 1.0,
-        HitKind::Objects => 2.0,
-        HitKind::Decor(_) => 3.0,
+    let hit_kind = picked.as_ref().map_or(f64::NAN, |p| {
+        f64::from(match p.hit.kind {
+            HitKind::Ground => spec::HitKind::ground,
+            HitKind::Object(_) => spec::HitKind::object,
+            HitKind::Objects => spec::HitKind::objects,
+            HitKind::Decor(_) => spec::HitKind::decor,
+        } as u8)
     });
     let tool = collision::PlacementTool::of(&edit::tool());
     let place = edit::hover().coord.filter(|_| tool.is_some());

@@ -1,7 +1,8 @@
-// pxl-render/frame/shader/screen_reach.wgsl
+// pxl-render/frame/shader/screen_propagate.wgsl
 
-// The light's changed tiles reached across to the screen (gpu/reach.rs), the
-// light's reach turned round: where pxl-shader light.rs `light_reach_cs`
+// The light's changed tiles propagated to the screen (gpu/propagate.rs), the
+// light's propagation turned round: where pxl-shader light.rs
+// `light_propagate_cs`
 // takes the screen's receivers to the light's tiles, this takes the light's
 // tiles that changed back to the pixels that read them. A workgroup a screen
 // tile, a thread a square of its pixels: the slab of the square's world,
@@ -20,7 +21,7 @@ struct Tiles {
   size: vec4f,
 };
 
-struct Reach {
+struct Propagate {
   // From the screen's clip, its depth reversed, to units from the eye; and
   // from those to the light's clip.
   unproject: mat4x4f,
@@ -30,7 +31,7 @@ struct Reach {
 };
 
 @group(0) @binding(0) var depth: texture_depth_2d;
-@group(0) @binding(1) var<uniform> reach: Reach;
+@group(0) @binding(1) var<uniform> propagate: Propagate;
 @group(0) @binding(2) var<storage, read> light_changed_at: array<u32>;
 @group(0) @binding(3) var<uniform> light_tiles: Tiles;
 @group(0) @binding(4) var<storage, read_write> changed_at: array<u32>;
@@ -45,7 +46,7 @@ struct Reach {
 @group(0) @binding(7) var<storage, read> marks_box: vec4u;
 
 // Whether tile `t` of the map changed this frame: claimed by its words.
-fn reach_changed(t: vec2i) -> bool {
+fn propagate_changed(t: vec2i) -> bool {
   let n = vec2i(light_tiles.count.xy);
   if (any(t < vec2i(0)) || any(t >= n)) {
     return false;
@@ -56,7 +57,7 @@ fn reach_changed(t: vec2i) -> bool {
 
 // The depth the world's pass left at pixel `p` of a target `size`, 0 past
 // it.
-fn reach_depth(p: vec2u, size: vec2u) -> f32 {
+fn propagate_depth(p: vec2u, size: vec2u) -> f32 {
   if (any(p >= size)) {
     return 0.0;
   }
@@ -65,26 +66,26 @@ fn reach_depth(p: vec2u, size: vec2u) -> f32 {
 
 // Where the pixel point `c`, in pixels of a target `size`, at depth `d`
 // (reversed), lies in the light's map, in its texels.
-fn reach_texel(c: vec2f, d: f32, size: vec2u) -> vec2f {
+fn propagate_texel(c: vec2f, d: f32, size: vec2u) -> vec2f {
   let ndc = vec2f(c.x / f32(size.x) * 2.0 - 1.0, 1.0 - c.y / f32(size.y) * 2.0);
-  let e = reach.unproject * vec4f(ndc, d, 1.0);
-  let l = reach.light * vec4f(e.xyz / e.w, 1.0);
-  return vec2f(l.x * 0.5 + 0.5, 0.5 - l.y * 0.5) * reach.spread.y;
+  let e = propagate.unproject * vec4f(ndc, d, 1.0);
+  let l = propagate.light * vec4f(e.xyz / e.w, 1.0);
+  return vec2f(l.x * 0.5 + 0.5, 0.5 - l.y * 0.5) * propagate.spread.y;
 }
 
 // The tiles of the map a receiver's taps read about the texels from `lo` to
 // `hi`, held to a tile past the map each way.
-fn reach_range(lo: vec2f, hi: vec2f) -> vec4i {
+fn propagate_range(lo: vec2f, hi: vec2f) -> vec4i {
   let n = vec2f(light_tiles.count.xy);
   let side = light_tiles.size.w;
-  let a = vec2i(clamp(floor((lo - reach.spread.x) / side), vec2f(-1.0), n));
-  let b = vec2i(clamp(floor((hi + reach.spread.x) / side), vec2f(-1.0), n));
+  let a = vec2i(clamp(floor((lo - propagate.spread.x) / side), vec2f(-1.0), n));
+  let b = vec2i(clamp(floor((hi + propagate.spread.x) / side), vec2f(-1.0), n));
   return vec4i(a, b);
 }
 
-// Whether any tile `reach_range` holds lies among those the marks cover.
-fn reach_in_marks_box(lo: vec2f, hi: vec2f) -> bool {
-  let r = reach_range(lo, hi);
+// Whether any tile `propagate_range` holds lies among those the marks cover.
+fn propagate_in_marks_box(lo: vec2f, hi: vec2f) -> bool {
+  let r = propagate_range(lo, hi);
   let m = vec4i(marks_box);
   return r.x < m.z && r.z >= m.x && r.y < m.w && r.w >= m.y;
 }
@@ -92,12 +93,12 @@ fn reach_in_marks_box(lo: vec2f, hi: vec2f) -> bool {
 // The box in the map's texels of the slab of pixels from `at` to `at + side`
 // each way between depths `far` and `near` (reversed), its 8 corners taken
 // into the map: what the pixels between read lies within it.
-fn reach_slab(at: vec2u, side: u32, far: f32, near: f32, size: vec2u) -> array<vec2f, 2> {
+fn propagate_slab(at: vec2u, side: u32, far: f32, near: f32, size: vec2u) -> array<vec2f, 2> {
   var lo = vec2f(1e30);
   var hi = vec2f(-1e30);
   for (var k = 0u; k < 8u; k++) {
     let c = at + vec2u(k & 1u, (k >> 1u) & 1u) * side;
-    let t = reach_texel(vec2f(c), select(far, near, (k & 4u) != 0u), size);
+    let t = propagate_texel(vec2f(c), select(far, near, (k & 4u) != 0u), size);
     lo = min(lo, t);
     hi = max(hi, t);
   }
@@ -111,29 +112,29 @@ var<workgroup> slab_far: atomic<u32>;
 var<workgroup> slab_near: atomic<u32>;
 var<workgroup> slab_in_marks_box: bool;
 
-// How many tiles `reach_range` holds.
-fn reach_tiles(lo: vec2f, hi: vec2f) -> i32 {
-  let r = reach_range(lo, hi);
+// How many tiles `propagate_range` holds.
+fn propagate_tiles(lo: vec2f, hi: vec2f) -> i32 {
+  let r = propagate_range(lo, hi);
   return (r.z - r.x + 1) * (r.w - r.y + 1);
 }
 
-// Whether any tile `reach_range` holds changed this frame.
-fn reach_box(lo: vec2f, hi: vec2f) -> bool {
-  let r = reach_range(lo, hi);
+// Whether any tile `propagate_range` holds changed this frame.
+fn propagate_box(lo: vec2f, hi: vec2f) -> bool {
+  let r = propagate_range(lo, hi);
   var hit = false;
   for (var y = r.y; y <= r.w; y++) {
     for (var x = r.x; x <= r.z; x++) {
-      hit = hit || reach_changed(vec2i(x, y));
+      hit = hit || propagate_changed(vec2i(x, y));
     }
   }
   return hit;
 }
 
 // The tiles a square's box asks at most before each pixel is asked alone.
-const REACH_BOX_MOST: i32 = 16;
+const PROPAGATE_BOX_MOST: i32 = 16;
 
 @compute @workgroup_size(BOUND_SQUARES, BOUND_SQUARES, 1)
-fn screen_reach_cs(
+fn screen_propagate_cs(
   @builtin(workgroup_id) wg: vec3u,
   @builtin(local_invocation_id) l: vec3u,
   @builtin(local_invocation_index) li: u32,
@@ -167,9 +168,9 @@ fn screen_reach_cs(
   // frame already.
   if (li == 0u) {
     let near = bitcast<f32>(atomicLoad(&slab_near));
-    let box = reach_slab(tile * side, side, bitcast<f32>(atomicLoad(&slab_far)), near, size);
+    let box = propagate_slab(tile * side, side, bitcast<f32>(atomicLoad(&slab_far)), near, size);
     let changed = tiles.count.w - changed_at[ti] == 0u;
-    slab_in_marks_box = !changed && near > 0.0 && reach_in_marks_box(box[0], box[1]);
+    slab_in_marks_box = !changed && near > 0.0 && propagate_in_marks_box(box[0], box[1]);
   }
   if (!workgroupUniformLoad(&slab_in_marks_box)) {
     return;
@@ -180,26 +181,26 @@ fn screen_reach_cs(
     return;
   }
   // The square's slab: what its pixels read lies within its box.
-  let box = reach_slab(at, BOUND_STEP, far, near, size);
+  let box = propagate_slab(at, BOUND_STEP, far, near, size);
   let lo = box[0];
   let hi = box[1];
-  if (!reach_in_marks_box(lo, hi)) {
+  if (!propagate_in_marks_box(lo, hi)) {
     return;
   }
   var hit = false;
-  if (reach_tiles(lo, hi) <= REACH_BOX_MOST) {
-    hit = reach_box(lo, hi);
+  if (propagate_tiles(lo, hi) <= PROPAGATE_BOX_MOST) {
+    hit = propagate_box(lo, hi);
   } else {
     // A box past a few tiles (an edge between near and far): each pixel
     // its own, as tight as before.
     for (var k = 0u; k < BOUND_STEP * BOUND_STEP; k++) {
       let p = at + vec2u(k % BOUND_STEP, k / BOUND_STEP);
-      let v = reach_depth(p, size);
+      let v = propagate_depth(p, size);
       if (hit || !(v > 0.0)) {
         continue;
       }
-      let t = reach_texel(vec2f(p) + 0.5, v, size);
-      hit = reach_box(t, t);
+      let t = propagate_texel(vec2f(p) + 0.5, v, size);
+      hit = propagate_box(t, t);
     }
   }
   if (hit) {

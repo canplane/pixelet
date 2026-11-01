@@ -143,13 +143,13 @@ fn render_linear_feat(
     mask: Sea,
 ) {
     let (width, center) = (width_cell as f32, f64::from(CELL_CENTER));
-    let reach = f64::from(way::reach(width));
+    let half_width = f64::from(way::half_width(width));
     let last = points.len().saturating_sub(2);
     for (s, w) in points.windows(2).enumerate() {
         let (a, b) = ([w[0][0], w[0][1]], [w[1][0], w[1][1]]);
         let span = |k: usize| {
-            let lo = (a[k].min(b[k]) - reach - center).ceil().max(0.0) as i64;
-            let hi = (a[k].max(b[k]) + reach - center)
+            let lo = (a[k].min(b[k]) - half_width - center).ceil().max(0.0) as i64;
+            let hi = (a[k].max(b[k]) + half_width - center)
                 .floor()
                 .min((SPAN - 1) as f64) as i64;
             lo..=hi

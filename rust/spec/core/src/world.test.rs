@@ -7,9 +7,9 @@ use crate::area::Area;
 use crate::cast::{End, Query};
 use crate::clipmap::{
     self, bound_over, column_top, entry, fold, join, joined_idx, laid_half, level_idx, of_idx,
-    Entry, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, COLUMNS_AT, ENTRIES, EYE_WINDOWS,
-    FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS, LAID_AT, LEVELS, LEVELS_AT,
-    LEVEL_ENTRY_WORDS, ORIGIN_AT, WINDOW, WINDOWS,
+    Entry, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE,
+    COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS,
+    LAID_AT, LEVELS, LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT,
 };
 use crate::cube::ground::stone;
 use crate::fill::{column_of, laid_of, level_of, put, root_of, Fresh};
@@ -17,12 +17,12 @@ use crate::ground::Bounds;
 use crate::support::{asset, column_surface};
 use std::{vec, vec::Vec};
 
-/// The window whose bricks are half held, its east half not yet, the
-/// windows over it held whole: the leaves', as decor's column surfaces ask, where
-/// a node wider than a brick may stand clear over the ground.
+/// The clip level whose bricks are half held, its east half not yet, the clip
+/// levels over it held whole: the leaves', as decor's column surfaces ask,
+/// where a node wider than a brick may stand clear over the ground.
 const CELL: Zoom = LEAF_CELL;
 
-/// Where the windows lie about, a leaf cell.
+/// Where the clip levels lie about, a leaf cell.
 const EYE: [i32; 2] = [1000 << 10, (1 << 20) + 12_345];
 
 /// The ground's top at leaf cell `[x, y]`, in leaf cells: hills, and a
@@ -38,9 +38,9 @@ fn height([x, y]: [i32; 2]) -> i32 {
 /// Where a tower stands in a brick of the leaves, on each axis.
 const TOWER: core::ops::Range<i32> = 40..48;
 
-/// The windows as one side holds them, laid out as a GPU's are (pxl-shader
-/// world.rs `World`): every window's entries then their first bricks
-/// (`ORIGIN_AT`), the eye's windows' entries, and each slot's brick.
+/// The clip levels as one side holds them, laid out as a GPU's are (pxl-shader
+/// world.rs `World`): every clip level's entries then their first bricks
+/// (`ORIGIN_AT`), the eye's clip levels' entries, and each slot's brick.
 #[derive(Clone, Copy)]
 struct Clipmap<'a> {
     rows: &'a [Entry],
@@ -116,7 +116,7 @@ impl Columns for Nothing {
     }
 }
 
-/// The world's one query over the windows, counting the nodes asked.
+/// The world's one query over the clip levels, counting the nodes asked.
 struct Asked<'a> {
     w: Clipmap<'a>,
     nodes: u32,
@@ -153,11 +153,11 @@ impl Query for Asked<'_> {
     }
 }
 
-/// The windows from the first to `CELL`, each about `EYE`, every brick
+/// The clip levels from the first to `CELL`, each about `EYE`, every brick
 /// held but `CELL`'s east half; each held brick's columns, cells as laid
 /// and levels, a slot each. Its entries are not folded.
 fn clipmap() -> (Vec<Entry>, Vec<u32>) {
-    let mut rows = vec![Entry::absent([0, 0]); (ORIGIN_AT + WINDOWS) as usize];
+    let mut rows = vec![Entry::absent([0, 0]); (ORIGIN_AT + CLIP_LEVELS) as usize];
     let mut ground = Vec::new();
     for cell in FIRST_CELL..=CELL {
         let s = LEAF_CELL - cell;
@@ -224,11 +224,11 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
     (rows, ground)
 }
 
-/// Each window's entries folded a level at a time, as `joined_cs` folds
+/// Each clip level's entries folded a level at a time, as `joined_cs` folds
 /// them; `zero`, the zero entry, none, over a block a brick of which the
-/// window does not hold present: no bound, which only splits more.
+/// clip level does not hold present: no bound, which only splits more.
 fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS as usize]> {
-    let mut joined = vec![[0; JOINED_WORDS as usize]; (EYE_WINDOWS * JOINED_ENTRIES) as usize];
+    let mut joined = vec![[0; JOINED_WORDS as usize]; (EYE_CLIP_LEVELS * JOINED_ENTRIES) as usize];
     for l in 1..=JOINED_LEVELS {
         let blocks = (ACROSS >> l) * (ACROSS >> l);
         for cell in FIRST_CELL..=CELL {
@@ -261,8 +261,8 @@ fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS 
     joined
 }
 
-/// A block of a window a brick of which it does not hold yet is bounded
-/// by the cells a ray reads in its place, a coarser window's: every one of
+/// A block of a clip level a brick of which it does not hold yet is bounded
+/// by the cells a ray reads in its place, a coarser clip level's: every one of
 /// them lies in the bound a node over the block reads (`clipmap::fold`).
 #[test]
 fn partial_block_bounded() {
@@ -307,8 +307,8 @@ fn partial_block_bounded() {
     assert_eq!(unheld, ENTRIES / 8);
 }
 
-/// A column surface down any column of the half held window stands where it
-/// stands with no bound over a block a brick of which the window does not
+/// A column surface down any column of the half held clip level stands where it
+/// stands with no bound over a block a brick of which the clip level does not
 /// hold, with the same assets about it off its line, and asks fewer nodes.
 #[test]
 fn footing_without_bound() {
@@ -324,12 +324,12 @@ fn footing_without_bound() {
     };
     let (mut was, mut is) = (world(&none), world(&folded));
     let (first, _) = was.w.origin(CELL);
-    let mut stops = 0;
-    // Spread over the window, and on every brick's tower.
+    let mut hits = 0;
+    // Spread over the clip level, and on every brick's tower.
     let (side, brick) = (ACROSS as i32, BRICK as i32);
-    let spread = (0..WINDOW as i32)
+    let spread = (0..CLIP_SIZE as i32)
         .step_by(29)
-        .flat_map(|x| (0..WINDOW as i32).step_by(37).map(move |y| [x, y]));
+        .flat_map(|x| (0..CLIP_SIZE as i32).step_by(37).map(move |y| [x, y]));
     let towers = (0..side * side).map(|k| [k % side * brick + 44, k / side * brick + 44]);
     for [gx, gy] in spread.chain(towers) {
         let g = [
@@ -341,7 +341,7 @@ fn footing_without_bound() {
             column_surface(&mut is, CELL, g),
         );
         assert_eq!((a.top, a.ends), (b.top, b.ends), "{g:?}");
-        stops += (a.ends == End::Hit) as u32;
+        hits += (a.ends == End::Hit) as u32;
         for d in 0..27 {
             let c = [g[0] + d % 3 - 1, g[1] + d / 3 % 3 - 1, a.top.0 + d / 9 - 1];
             assert_eq!(
@@ -351,7 +351,7 @@ fn footing_without_bound() {
             );
         }
     }
-    assert!(stops > 0, "some column_surface stands on the ground");
+    assert!(hits > 0, "some column_surface stands on the ground");
     assert!(
         is.nodes < was.nodes,
         "{} nodes, {} with no bound",

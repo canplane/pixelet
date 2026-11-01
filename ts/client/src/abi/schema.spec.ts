@@ -43,7 +43,7 @@ export const SETTING = {
   /** Procedurally scattered decor only; what the player placed stays.
    *
    * Med because it is models rather than a shading term: the GPU generates the
-   * ground's decor where the eye's windows are (decor_cs) and the frame draws
+   * ground's decor where the eye's clip levels are (decor_cs) and the frame draws
    * each kind as a model, an impostor or nothing by the angle it
    * spans, so what it costs follows what is in view. The badge is an ordering,
    * and this is the one to reach for before any shading term. */
@@ -272,7 +272,7 @@ export const SETTING_SHIPPED = {
   /** Procedurally scattered decor only; what the player placed stays.
    *
    * Med because it is models rather than a shading term: the GPU generates the
-   * ground's decor where the eye's windows are (decor_cs) and the frame draws
+   * ground's decor where the eye's clip levels are (decor_cs) and the frame draws
    * each kind as a model, an impostor or nothing by the angle it
    * spans, so what it costs follows what is in view. The badge is an ordering,
    * and this is the one to reach for before any shading term. */

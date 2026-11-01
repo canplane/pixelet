@@ -1,6 +1,6 @@
 // pxl-render/gpu/ray/raster.rs
 
-//! The samples' stops handed to the rasterizer (pxl-spec-core `raster`,
+//! The samples' hits handed to the rasterizer (pxl-spec-core `raster`,
 //! pxl-shader raster.rs): after the samples, each stopped sample's box
 //! written (`sample_box_cs`) and the boxes drawn at the rays' pixels
 //! (raster.wgsl), the nearest face a pixel's ray enters kept with its
@@ -38,7 +38,7 @@ use pxl_spec_core::param::raster::GROWN;
 /// size: a pixel's sample (r32uint, drawn into as 2D and read as a
 /// one-layer array, `visibility`, the visibility buffer) and the depth it is
 /// tested by; and the groups of the boxes' writing, their drawing and the
-/// faces' asking, the boxes' and the missed pixels' stops', made again
+/// faces' asking, the boxes' and the missed pixels' hits', made again
 /// exactly when what they bind is another (`bound`).
 pub(super) struct Raster {
     /// The boxes' writing, the eye's and the shadow map's (pxl-shader
@@ -131,10 +131,10 @@ impl Raster {
     /// cleared where the samples are cast again (`samples_cast`), else the
     /// boxes they left kept; its groups over the cast's `eye`, `beams` and
     /// the eye's `head` (pxl-spec-core `light::HEAD_SIZE`), and, for the
-    /// faces' asking, the world's query's buffers (the window, the tiles'
+    /// faces' asking, the world's query's buffers (the clip level, the tiles'
     /// frames, the service area's index, the overwrites, the ways' pool)
     /// and the walk again's words (`marks`), which hold the missed pixels'
-    /// stops' args (`ask_stops`).
+    /// hits' args (`ask_hits`).
     pub(super) fn prepare(
         &mut self,
         g: &Gpu,
@@ -142,7 +142,7 @@ impl Raster {
         size: [u32; 2],
         grid: &beam::Grid,
         samples_cast: bool,
-        [eye, beams, head, window, ground, shards, overwrites, pool, marks]: [u32; 9],
+        [eye, beams, head, clipmap, ground, shards, overwrites, pool, marks]: [u32; 9],
     ) {
         let samples = grid.samples[0] * grid.samples[1];
         if samples > self.room {
@@ -180,7 +180,7 @@ impl Raster {
         let (r, u, f) = (v(eye::RIGHT), v(eye::UP), v(eye::FORWARD));
         let tan = [e[eye::TAN], e[eye::TAN + 1]].map(f32::from_bits);
         let [w, h] = size.map(|s| s.max(1) as f32);
-        let reach = f32::from_bits(e[eye::REACH]);
+        let far = f32::from_bits(e[eye::FAR]);
         let px = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
         let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, u, f));
         let uniform: [f32; RASTER_FLOATS] = [
@@ -203,7 +203,7 @@ impl Raster {
             GROWN * px,
             w,
             h,
-            reach,
+            far,
             f32::from_bits(e[eye::JITTER]),
             f32::from_bits(e[eye::JITTER + 1]),
             0.0,
@@ -219,21 +219,21 @@ impl Raster {
             g.write_buf(self.args, 0, bytes(&args));
         }
         let bound = [
-            eye, beams, head, self.boxes, window, ground, shards, overwrites, pool, marks,
+            eye, beams, head, self.boxes, clipmap, ground, shards, overwrites, pool, marks,
         ];
         if bound != self.bound {
             for group in self.groups {
                 release(group);
             }
             // The faces' pass over the boxes' asks, its args the raster's,
-            // or over the missed pixels' stops', theirs in the pyramid's
+            // or over the missed pixels' hits', theirs in the pyramid's
             // head: one pass, bound to either's args.
             let faces = |args: u32, at: u32| {
                 g.bind_group(
                     self.faces_built.layouts[0],
                     &[
                         buf_entry(0, eye),
-                        buf_entry(1, window),
+                        buf_entry(1, clipmap),
                         buf_entry(2, ground),
                         buf_entry(5, shards),
                         buf_entry(6, overwrites),
@@ -265,11 +265,11 @@ impl Raster {
         }
     }
 
-    /// What lies about each missed pixel's stop's face asked once a run of
+    /// What lies about each missed pixel's hit's face asked once a square of
     /// them, in the cast's pass `pass` (ray/cast.rs): the faces' pass over
-    /// the stops' asks, its args among the walk again's words (`marks`,
+    /// the hits' asks, its args among the walk again's words (`marks`,
     /// pxl-spec-core `ray::MISS_ARGS_ASKED`) as the boxes' are in its own.
-    pub(super) fn ask_stops(&self, g: &Gpu, pass: u32, marks: u32) {
+    pub(super) fn ask_hits(&self, g: &Gpu, pass: u32, marks: u32) {
         g.set_pipeline(pass, self.faces_built.pipeline);
         g.set_bind_group(pass, 0, self.groups[3], &[]);
         let at = ray::MISS_ARGS_ASKED + raster::ARGS_FACES;

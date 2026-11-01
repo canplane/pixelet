@@ -9,7 +9,7 @@
 
 use crate::bake::malformed;
 use crate::space::coord::zoom::Zoom;
-use crate::space::layer::lattice::demand_reach;
+use crate::space::layer::lattice::demand_dist;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::tile::TOP_ZOOM;
 use xpute_kit::status::error::MarshalError;
@@ -21,7 +21,7 @@ pub const EARTH_ZOOM: Zoom = TOP_ZOOM;
 
 /// How far from the eye the tiles are drawn, before the global picture: the
 /// ground's demand at that zoom.
-pub const EARTH_REACH: f64 = demand_reach(GROUND, EARTH_ZOOM);
+pub const EARTH_DIST: f64 = demand_dist(GROUND, EARTH_ZOOM);
 
 pub const EARTH_BYTES: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
 

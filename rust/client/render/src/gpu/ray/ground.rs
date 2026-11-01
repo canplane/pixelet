@@ -1,6 +1,6 @@
 // pxl-render/gpu/ray/ground.rs
 
-//! The windows' bricks on the GPU: each handed brick filled in its turn
+//! The clip levels' bricks on the GPU: each handed brick filled in its turn
 //! (`height_cs`, `way_cs`, `bound_cs`, the ways' tree) and its cells and
 //! its tree's records read back where the CPU looks them up.
 
@@ -34,7 +34,7 @@ const FREE: u32 = u32::MAX;
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 pub(super) struct GroundBuffers {
-    /// Per slot of the windows' bricks (`clipmap::SLOTS`), its columns,
+    /// Per slot of the clip levels' bricks (`clipmap::SLOTS`), its columns,
     /// levels, cells as laid and root, which `height_cs`, `bound_cs` and
     /// `way_tree_cs` write in the turn it is handed (pxl-spec-core
     /// `clipmap::BRICK_WORDS`).
@@ -352,16 +352,16 @@ impl GroundBuffers {
 /// A brick on the GPU, in bytes.
 const BRICK_BYTES: u32 = BRICK_WORDS * 4;
 
-/// The windows' bricks on the GPU, in bytes: one storage buffer, bound
+/// The clip levels' bricks on the GPU, in bytes: one storage buffer, bound
 /// whole by the cast's, the levels' and the ways' groups.
 const GROUND_BYTES: u64 = SLOTS as u64 * BRICK_BYTES as u64;
 const _: () = assert!(
     floor::fits(GROUND_BYTES, true),
-    "GROUND_BYTES: the windows' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+    "GROUND_BYTES: the clip levels' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// The windows' bricks' cells' four palette indices, a word a cell in the slots'
-/// order: written by the fill off each handed brick (`height_cs`), read
+/// The clip levels' bricks' cells' four palette indices, a word a cell in the
+/// slots' order: written by the fill off each handed brick (`height_cs`), read
 /// by the cast at a hit (pxl-shader `World`'s `PaletteWords`). Their own
 /// buffer, as the bricks' binding has no room for them.
 const PALETTE_BYTES: u64 = SLOTS as u64 * BRICK_CELLS as u64 * 4;
@@ -507,7 +507,7 @@ impl RaysPass {
     /// The bricks this turn handed filled: their tops from their samples,
     /// their ways' spans, their levels a dispatch, level 0 a column's own and
     /// each over the one before, and their ways' trees. Ahead of the frame,
-    /// as they outlive it, so no brick the window names is cast before its
+    /// as they outlive it, so no brick the clip level names is cast before its
     /// cells are written, even when the frame proper is dropped. Whether it
     /// recorded any.
     pub fn grids(&mut self, ctx: &mut RenderContext) -> bool {

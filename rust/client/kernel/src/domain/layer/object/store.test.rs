@@ -85,11 +85,12 @@ impl Rng {
     }
 }
 
-/// A node from a unit to a kilometer wide, within `reach` units of the origin.
-fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
+/// A node from a unit to a kilometer wide, within `radius` units of the origin.
+fn some_node(rng: &mut Rng, radius: f64) -> Node<3> {
     let zoom: Zoom = rng.pick(&[24, 21, 18, 16, 14]);
-    let at = [0, 1, 2]
-        .map(|_| ((rng.next() % (2 * reach as u64)) as f64 - reach).div_euclid(units(zoom)) as i32);
+    let at = [0, 1, 2].map(|_| {
+        ((rng.next() % (2 * radius as u64)) as f64 - radius).div_euclid(units(zoom)) as i32
+    });
     (zoom, at)
 }
 
@@ -217,7 +218,7 @@ fn axis_turn() {
 }
 
 #[test]
-fn column_reach() {
+fn column_extent() {
     let mut rng = Rng(SplitMix64::new(0x7d3a_51e9_c2b4_0f86));
     let red = cube_id(Cube::Object(Object::red));
     let mut store = Store::default();
@@ -229,9 +230,9 @@ fn column_reach() {
         ];
         cube_at(&mut store, at, rng.pick(&[red, red, AIR]));
     }
-    // Each leaf's reach along z in the column, as the cube of the column's
+    // Each leaf's extent along z in the column, as the cube of the column's
     // zoom it lies in where it is finer.
-    let reach = |(zoom, [x, y]): Node<2>| {
+    let extent = |(zoom, [x, y]): Node<2>| {
         let mut z: Option<[f64; 2]> = None;
         store.each(&mut |e| {
             let (k, at) = (
@@ -263,7 +264,7 @@ fn column_reach() {
             zoom,
             [0, 1].map(|_| (rng.next() % side.max(1) as u64) as i32),
         );
-        assert_eq!(store.column(&mut walk, node), reach(node), "{node:?}");
+        assert_eq!(store.column(&mut walk, node), extent(node), "{node:?}");
     }
 }
 

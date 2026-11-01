@@ -52,7 +52,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::separation::{footprint as line_reach, Form};
+use pxl_spec::bake::separation::{footprint as line_footprint, Form};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
 use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
@@ -194,20 +194,20 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     // draws, whether or not it touches the tile: the tunnels about the tile are asked for alone, as far
     // as the deepest one's approaches run, a reach well inside the ring, and only about a portal that
     // near are the ring's tiles read, as far as its approaches run
-    let reach_of = |level: i64| tunnel::approach_reach(level, scale);
+    let approach_of = |level: i64| tunnel::approach_run(level, scale);
     let off = |p: [f64; 2]| {
         let d = [0, 1].map(|k| (own[0][k] - p[k]).max(p[k] - own[1][k]).max(0.0));
         libm::hypot(d[0], d[1])
     };
     // and never past the ring, whatever the reach comes to: the query is cut to the ring's box, as `load`
     // refuses a tile past it
-    let asked = grown(own, reach_of(tunnel::DEEPEST));
+    let asked = grown(own, approach_of(tunnel::DEEPEST));
     let asked = [
         [asked[0][0].max(lo[0]), asked[0][1].max(lo[1])],
         [asked[1][0].min(hi[0]), asked[1][1].min(hi[1])],
     ];
     for p in portals_in(r.client, asked)? {
-        let d = reach_of(p.level);
+        let d = approach_of(p.level);
         if off(p.at) <= d {
             let [a, b] = [
                 tile_of([p.at[0] - d, p.at[1] - d]),
@@ -225,7 +225,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         is_road_tunnel(&s.piece)
             && [p[0], p[p.len() - 1]]
                 .iter()
-                .any(|e| off([e[0], e[1]]) <= reach_of(s.piece.way.tags.level.unwrap_or(0)))
+                .any(|e| off([e[0], e[1]]) <= approach_of(s.piece.way.tags.level.unwrap_or(0)))
     };
     let mut queue: Vec<PartId> = src
         .pieces
@@ -237,7 +237,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     if queue.is_empty() {
         return Ok(Solved::default());
     }
-    let reach = merc_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DIST_M) + 16) * CELL_U);
+    let radius = merc_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DIST_M) + 16) * CELL_U);
     // each piece is looked at once, against the pieces read so far; a piece a later read brings in
     // is held against what was looked at before it (`seen`), so no pass is repeated
     let lies_on = |o: &Piece, ends: &FnvHashSet<End>| {
@@ -281,7 +281,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
             seen_portals.extend(ends);
         }
         if s.piece.form == Form::Bridge {
-            let b = grown(bbox_of(s), reach);
+            let b = grown(bbox_of(s), radius);
             reached.extend(
                 src.pieces
                     .iter()
@@ -409,7 +409,7 @@ impl Ring {
         let step = merc_from_u(CELL_U);
         let line = Polyline::of(s.piece.way.points.iter().map(|p| [p[0], p[1]]));
         let length = s.piece.way.length();
-        let reach = merc_from_u((line_reach(s.piece.width() / CELL_U) + 16.0) * CELL_U);
+        let radius = merc_from_u((line_footprint(s.piece.width() / CELL_U) + 16.0) * CELL_U);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
             .filter(|(_, p)| self.tiles.contains(&tile_of(*p)))
@@ -418,10 +418,10 @@ impl Ring {
         for (_, p) in &at {
             for d in [
                 [0.0, 0.0],
-                [reach, 0.0],
-                [-reach, 0.0],
-                [0.0, reach],
-                [0.0, -reach],
+                [radius, 0.0],
+                [-radius, 0.0],
+                [0.0, radius],
+                [0.0, -radius],
             ] {
                 wanted.insert(tile_of([p[0] + d[0], p[1] + d[1]]));
             }
@@ -519,13 +519,13 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
     out
 }
 
-/// The cells about one whose centers lie within `reach` cells of its own, as
+/// The cells about one whose centers lie within `radius` cells of its own, as
 /// a way covers them (pxl-spec-core `covers`, here its distance to its own).
-fn disk(reach: f32) -> Vec<[i64; 2]> {
-    let r = libm::ceilf(reach) as i64;
+fn disk(radius: f32) -> Vec<[i64; 2]> {
+    let r = libm::ceilf(radius) as i64;
     (-r..=r)
         .flat_map(|dz| (-r..=r).map(move |dx| [dx, dz]))
-        .filter(|&[dx, dz]| libm::hypotf(dx as f32, dz as f32) <= reach)
+        .filter(|&[dx, dz]| libm::hypotf(dx as f32, dz as f32) <= radius)
         .collect()
 }
 

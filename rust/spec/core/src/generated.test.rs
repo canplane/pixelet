@@ -3,12 +3,12 @@
 use super::*;
 use crate::cast::Spacing;
 
-/// Decor of the leaves' window is drawn where the rays ask the leaf cell's
-/// zoom or finer at its distance, decor of a coarser window where they ask
-/// that window's zoom alone, so a distance draws one window's, and placed
-/// decor where they ask the coarsest zoom it stands at or finer.
+/// Decor of the leaves' clip level is drawn where the rays ask the leaf cell's
+/// zoom or finer at its distance, decor of a coarser clip level where they ask
+/// that clip level's zoom alone, so a distance draws one clip level's, and
+/// placed decor where they ask the coarsest zoom it stands at or finer.
 #[test]
-fn decor_at_its_window() {
+fn decor_at_its_clip_level() {
     let detail = Detail {
         range: [0, crate::FINEST_ZOOM],
         eye: [0.0; 3],

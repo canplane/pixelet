@@ -43,7 +43,7 @@ fn top() -> Tile {
 }
 
 /// A leaf as a client holds it: its lines, and its cells, each its own palette index
-/// and its height, as its windows hold them once a GPU drew them.
+/// and its height, as its clip levels hold them once a GPU drew them.
 #[derive(Clone)]
 struct Leaf {
     tile: TerrainTile,
@@ -55,7 +55,7 @@ struct Leaf {
 /// source supplies whole, as the floor holds it all around the eye
 /// (`domain/layer/tile_cache/floor.rs`): a tile's coarser pictures here are the
 /// same ground, each marking its children held; their cells held in the
-/// windows about `centre`, in units.
+/// clip levels about `centre`, in units.
 fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
     use pxl_spec::bake::tile::Occupancy;
     let mut tile_cache = TileCache::default();
@@ -127,7 +127,7 @@ fn down(at: [f64; 2]) -> Ray {
     Ray {
         origin: [at[0], at[1], 10_000.0],
         dir: [0.0, 0.0, -1.0],
-        reach: 20_000.0,
+        t_max: 20_000.0,
     }
 }
 
@@ -293,7 +293,7 @@ fn ray_across_antimeridian() {
     let along = Ray {
         origin: [seam - 30.0, 100.5, top + 0.5],
         dir: [1.0, 0.0, 0.0],
-        reach: 200.0,
+        t_max: 200.0,
     };
     let hit = access
         .first_hit(&along, at_zoom(LEAF_ZOOM))
@@ -335,11 +335,11 @@ fn ray_from_above_meets_ground() {
         .flatten()
         .unwrap()
         .point[2];
-    let high = 2.0 * world::REACH.max[2];
+    let high = 2.0 * world::BOUNDS.max[2];
     let over = Ray {
         origin: [at[0], at[1], high],
         dir: [0.0, 0.0, -1.0],
-        reach: 2.0 * high,
+        t_max: 2.0 * high,
     };
     let met = access.first_hit(&over, at_zoom(LEAF_ZOOM));
     assert!(matches!(met, Answer::Exact(_)), "{met:?}");
@@ -627,7 +627,7 @@ fn box_placed_matches_store() {
     assert_eq!(asked, held);
 }
 
-/// A brick that lands after the windows were folded without it is read
+/// A brick that lands after the clip levels were folded without it is read
 /// with what it holds once the landings are folded, as the stage folds them
 /// (domain/layer/terrain/clipmap.rs `refold`): a spike
 /// a cell wide in it, over ground at five and taller than a node over the
@@ -636,9 +636,9 @@ fn box_placed_matches_store() {
 /// read over it at any zoom over a brick.
 #[test]
 fn late_brick_spike() {
-    use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, Windowed};
+    use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, HeldClipmap};
     use pxl_render::gpu::renderer::Resident;
-    use pxl_spec_core::clipmap::{self as cells, Bricks, Found, BRICK, LEVELS, WINDOW};
+    use pxl_spec_core::clipmap::{self as cells, Bricks, Found, BRICK, CLIP_SIZE, LEVELS};
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let leaf = top().children()[0];
@@ -654,12 +654,13 @@ fn late_brick_spike() {
     let (x0, y0, _) = leaf.rect();
     let tile_cache = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
     let store = Store::default();
-    // The spike's column in the eye's leaves' window.
-    let (first, _) = Windowed.origin(LEAF_CELL);
-    let top = |g: [i32; 2]| cells::column_top(cells::cell(&Windowed, Found::NONE, LEAF_CELL, g).1);
-    let spike = (0..WINDOW as i32 * WINDOW as i32)
+    // The spike's column in the eye's leaves' clip level.
+    let (first, _) = HeldClipmap.origin(LEAF_CELL);
+    let top =
+        |g: [i32; 2]| cells::column_top(cells::cell(&HeldClipmap, Found::NONE, LEAF_CELL, g).1);
+    let spike = (0..CLIP_SIZE as i32 * CLIP_SIZE as i32)
         .map(|k| {
-            let w = WINDOW as i32;
+            let w = CLIP_SIZE as i32;
             [
                 first[0] * BRICK as i32 + k % w,
                 first[1] * BRICK as i32 + k / w,
@@ -697,7 +698,7 @@ fn late_brick_spike() {
         for zoom in TOP_ZOOM..LEAF_CELL - LEVELS {
             let s = LEAF_CELL - zoom;
             let (b, _, _) = cells::bound_over(
-                &Windowed,
+                &HeldClipmap,
                 &mut Found::NONE.clone(),
                 [LEAF_CELL, LEAF_CELL],
                 (zoom, [g[0] >> s, g[1] >> s]),
@@ -710,17 +711,17 @@ fn late_brick_spike() {
 
 /// The device that went took every brick it held: the turn that sees it
 /// gives up their cells (domain/layer/terrain/clipmap.rs `assign_slots`, as `step`
-/// runs it) and folds the windows over none, so no node over a brick of
+/// runs it) and folds the clip levels over none, so no node over a brick of
 /// the eye's leaves keeps a bound of cells gone.
 #[test]
 fn device_loss_drops_bounds() {
-    use crate::domain::layer::terrain::clipmap::{test::lose, Windowed};
+    use crate::domain::layer::terrain::clipmap::{test::lose, HeldClipmap};
     use pxl_spec_core::clipmap::{self as cells, Bricks, Found, BRICK, LEVELS};
     use pxl_spec_core::ground::UNBOUNDED;
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let _held = flat_at_five();
-    let (first, _) = Windowed.origin(LEAF_CELL);
+    let (first, _) = HeldClipmap.origin(LEAF_CELL);
     let zoom = LEAF_CELL - LEVELS - 1;
     let over = || {
         let s = LEAF_CELL - zoom;
@@ -729,7 +730,7 @@ fn device_loss_drops_bounds() {
             (first[1] * BRICK as i32) >> s,
         ];
         let mut place = Found::NONE;
-        cells::bound_over(&Windowed, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
+        cells::bound_over(&HeldClipmap, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
     };
     assert_ne!(over(), [UNBOUNDED; 2], "held");
     lose();
@@ -747,8 +748,8 @@ fn generated_decor_stays() {
     let near = |store: &Store| {
         let world = World::new(&tile_cache, store);
         let space = Aabb {
-            min: [x - 8.0, y - 8.0, world::REACH.min[2]],
-            max: [x + 8.0, y + 8.0, world::REACH.max[2]],
+            min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
+            max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
         };
         world.generated_over(&space)
     };
@@ -780,8 +781,8 @@ fn generated_decor_edit_removes() {
     let empty = Store::default();
     let world = World::new(&tile_cache, &empty);
     let space = Aabb {
-        min: [x - 8.0, y - 8.0, world::REACH.min[2]],
-        max: [x + 8.0, y + 8.0, world::REACH.max[2]],
+        min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
+        max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
     };
     let at = |tree: &Instance| {
         let [cx, cy, cz] = tree.generated_in().unwrap();

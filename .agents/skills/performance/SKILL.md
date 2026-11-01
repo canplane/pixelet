@@ -19,7 +19,7 @@ it".
 
 Before changing anything, name the contracts the change touches and what each
 solves. In the renderer, for example: the light's cast and the screen as one
-mark → reach → claim, each deciding on the CPU whether to work at all and on
+mark → propagate → claim, each deciding on the CPU whether to work at all and on
 the GPU which tiles; the host giving no number a meaning; the shell computing
 no coordinate or tile.
 

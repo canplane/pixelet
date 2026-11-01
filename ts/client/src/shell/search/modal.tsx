@@ -53,7 +53,7 @@ import {
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/shell/fixed.ts";
-import { touchReach } from "@/shell/ui/touch.ts";
+import { touchOutset } from "@/shell/ui/touch.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 const DEBOUNCE_MS = 300;
@@ -316,7 +316,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                   onPress={() => setQuery("")}
                   accessibilityRole="button"
                   accessibilityLabel={t("world.search.clear_aria_label")}
-                  style={styles.clearReach}
+                  style={styles.clearTarget}
                 >
                   <View style={styles.clear}>
                     <Glyph
@@ -409,10 +409,10 @@ const styles = StyleSheet.create({
     borderRadius: PANEL_CONTROL / 2,
   },
   field: { flex: 1, minWidth: 0, color: LABEL.primary },
-  clearReach: {
+  clearTarget: {
     width: chrome.target,
     height: chrome.target,
-    marginHorizontal: -touchReach(CLEAR),
+    marginHorizontal: -touchOutset(CLEAR),
     alignItems: "center",
     justifyContent: "center",
   },

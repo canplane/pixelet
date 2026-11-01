@@ -3,7 +3,7 @@
 //! gpu-portable: the camera grid, the one knob of resolution: a cell is an
 //! angle about the eye, and the zoom a node is drawn at, at a distance, is
 //! the one at which it spans a cell there. What the descent asks at a
-//! distance and how far the ground's windows reach both follow from it.
+//! distance and how far the ground's clip levels reach both follow from it.
 
 use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 
@@ -17,11 +17,11 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 /// theirs to decide.
 pub const CELLS_A_RAD: f32 = 96.0;
 
-/// How many times finer than the view's a grid the bands and windows are
-/// sized for (`WINDOW_CELLS_A_RAD`, `clipmap::RADIUS`): a window holds its
-/// zoom's cells out to `WINDOW_MARGIN` times where the view stops drawing them.
+/// How many times finer than the view's a grid the bands and clip levels are
+/// sized for (`CLIP_CELLS_A_RAD`, `clipmap::RADIUS`): a clip level holds its
+/// zoom's cells out to `CLIP_MARGIN` times where the view stops drawing them.
 /// Whether a margin of 1 keeps up with a moving eye is unmeasured.
-pub const WINDOW_MARGIN: f32 = 2.0;
+pub const CLIP_MARGIN: f32 = 2.0;
 
 // ---- the split's rule ----
 
@@ -33,9 +33,9 @@ pub const SPANS: f32 = 2.0;
 
 // ---- derived from the knobs ----
 
-/// The grid the bands and windows are sized for, cells a radian: the view's
-/// `WINDOW_MARGIN` times finer.
-pub const WINDOW_CELLS_A_RAD: f32 = CELLS_A_RAD * WINDOW_MARGIN;
+/// The grid the bands and clip levels are sized for, cells a radian: the view's
+/// `CLIP_MARGIN` times finer.
+pub const CLIP_CELLS_A_RAD: f32 = CELLS_A_RAD * CLIP_MARGIN;
 
 /// The view's cell, an angle in radians: what a beam's rays lie apart by
 /// (`beam::Grid`), and the angle every eye's ray is asked at (`cell_zoom_at`).

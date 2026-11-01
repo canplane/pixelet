@@ -49,12 +49,12 @@ struct ZoneSample {
 }
 
 /// How far the zone reaches from its center along an axis, in cells.
-fn zone_reach() -> i32 {
+fn zone_extent() -> i32 {
     ZONE_RADIUS_CELL.ceil() as i32
 }
 
 fn zone_samples() -> impl Iterator<Item = ZoneSample> {
-    let range = zone_reach();
+    let range = zone_extent();
     let flag = |b: bool| if b { 1.0 } else { 0.0 };
     (-range..=range)
         .flat_map(move |x| (-range..=range).map(move |y| (x as f64, y as f64)))
@@ -100,7 +100,7 @@ pub fn location_step(device_coord: Option<Q3>) {
     scene.location.step(draw, device_coord, night);
 }
 
-/// The zone's instances about `center_pos` into `lane`, ZONE_INSTANCE_FLOATS
+/// The zone's instances about `center_pos` into `instances`, ZONE_INSTANCE_FLOATS
 /// floats an instance: each cell's ground asked of `ground` once, of the
 /// zone and of the ring its sides look across to, `rise` the room it is
 /// kept in.
@@ -108,12 +108,12 @@ fn lay_zone(
     center_pos: V3,
     mut ground: impl FnMut(&Q3) -> Option<f64>,
     rise: &mut Vec<Option<f64>>,
-    lane: &mut Vec<f32>,
+    instances: &mut Vec<f32>,
 ) {
-    lane.clear();
+    instances.clear();
     let cell = units(GROUND.cell());
     const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    let ring = zone_reach() + 1;
+    let ring = zone_extent() + 1;
     let across = (2 * ring + 1) as usize;
     let idx = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
     rise.clear();
@@ -151,7 +151,7 @@ fn lay_zone(
         let open = BESIDE.iter().enumerate().fold(1 << 4, |open, (k, &d)| {
             open | u32::from(box_at(&s, d)[2] < v[2]) << k
         });
-        lane.extend([
+        instances.extend([
             v[0] as f32,
             v[1] as f32,
             v[2] as f32,
@@ -213,9 +213,9 @@ pub struct LocationIndicator {
     /// grounding it read (`Asked`).
     grounded: Asked<Seen, Option<V3>>,
     /// The zone grounded this step, kept so a step allocates nothing.
-    lane: Vec<f32>,
+    instances: Vec<f32>,
     /// Each cell's ground over the zone's center, of the zone and the ring
-    /// about it, kept as `lane` is.
+    /// about it, kept as `instances` is.
     rise: Vec<Option<f64>>,
     /// The zone's instances drawn, ZONE_INSTANCE_FLOATS floats an instance,
     /// which `held` holds, so grounding it again to the same heights draws
@@ -269,18 +269,18 @@ impl LocationIndicator {
         let raw = [pos[0], pos[1], center_z];
         let center_pos = v3::floor(&raw, units(GROUND.cell()));
 
-        let (mut lane, mut rise) = (
-            core::mem::take(&mut self.lane),
+        let (mut instances, mut rise) = (
+            core::mem::take(&mut self.instances),
             core::mem::take(&mut self.rise),
         );
         lay_zone(
             center_pos,
             |at| world.surface_support(at).val().flatten(),
             &mut rise,
-            &mut lane,
+            &mut instances,
         );
-        if self.zone.as_ref().is_none_or(|z| z.center != center_pos) || self.drawn != lane {
-            self.held.write(draw, bytes(&lane));
+        if self.zone.as_ref().is_none_or(|z| z.center != center_pos) || self.drawn != instances {
+            self.held.write(draw, bytes(&instances));
             match self.zone.as_mut() {
                 // Follows the center, so a whole-cell move does not play as a slide back.
                 Some(z) => {
@@ -304,10 +304,10 @@ impl LocationIndicator {
                     });
                 }
             }
-            core::mem::swap(&mut self.drawn, &mut lane);
+            core::mem::swap(&mut self.drawn, &mut instances);
             request_world_tick();
         }
-        (self.lane, self.rise) = (lane, rise);
+        (self.instances, self.rise) = (instances, rise);
         Some(center_pos)
     }
 

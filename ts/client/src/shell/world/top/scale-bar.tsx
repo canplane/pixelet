@@ -15,7 +15,7 @@ import { useKernel } from "@/shell/store/watch.ts";
 const TICK_PX = 5;
 const QUARTER_TICK_PX = 3;
 const LINE_PX = 1;
-const PAD_PX = LINE_PX + halo.reach + 1;
+const PAD_PX = LINE_PX + halo.width + 1;
 const LABEL_GAP_PX = 8;
 const BAR_MAX_PX = 80;
 
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: PAD_PX + TICK_PX + LABEL_GAP_PX - halo.reach,
+    bottom: PAD_PX + TICK_PX + LABEL_GAP_PX - halo.width,
     alignItems: "center",
   },
   label: {

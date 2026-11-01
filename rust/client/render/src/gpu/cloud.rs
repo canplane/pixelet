@@ -8,7 +8,7 @@
 use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::word::clouds::{BASE, CNT, DRIFT, FRAC, REACH, SHOWN};
+use crate::frame::shader::word::clouds::{BASE, CNT, DRAW_DIST, DRIFT, FRAC, SHOWN};
 use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
@@ -99,12 +99,12 @@ impl CloudPass {
     }
 
     /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
-    /// place on the map in the world's doubles; `reach_km` how far it
+    /// place on the map in the world's doubles; `draw_dist_km` how far it
     /// draws: past it no sheet is drawn. The field moves with the wind,
     /// so its words are the clouds' own.
-    pub fn lay_out(&mut self, over: [f64; 2], env: &[f32], shown: f64, reach_km: f32) {
+    pub fn lay_out(&mut self, over: [f64; 2], env: &[f32], shown: f64, draw_dist_km: f32) {
         self.words[SHOWN] = shown as f32;
-        self.words[REACH] = reach_km;
+        self.words[DRAW_DIST] = draw_dist_km;
         field(&mut self.words, over, env);
     }
 

@@ -1,6 +1,6 @@
 // pxl-spec-core/raster.rs
 
-//! gpu-portable: the samples' stops drawn as boxes, so the rasterizer keeps
+//! gpu-portable: the samples' hits drawn as boxes, so the rasterizer keeps
 //! each drawn pixel's cell (pxl-shader raster.rs `sample_box_cs`, cast.rs
 //! `cast_cs`; pxl-render gpu/ray/raster.rs, raster.wgsl). Each sample that
 //! stopped is a box, the cell as the cast stops on it (`cast::drawn`),
@@ -26,7 +26,7 @@
 /// One dispatch's 65535 workgroups hold 4.2M boxes, a box a sample at most;
 /// the samples are `param::beam::SAMPLE` a camera grid cell a side, about
 /// 270 thousand on a 16:9 view whatever its pixels. The missed pixels'
-/// stops' faces are asked by args laid alike, their count where the boxes'
+/// hits' faces are asked by args laid alike, their count where the boxes'
 /// is (`ray::MISS_ARGS_ASKED`).
 /// Then the boxes' buffer, `BOX_WORDS` a box: its planes in units from the
 /// eye's origin, lowest then highest, f32 bits, its sample's number

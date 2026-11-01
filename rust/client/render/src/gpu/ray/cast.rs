@@ -15,11 +15,11 @@ use super::tally::{self, Counted, RayCounts, Tally};
 use super::{casts_px, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FORGET, SHADER_JOINED,
-    SHADER_LIGHT, SHADER_LIGHT_BEAM, SHADER_LIGHT_DETAIL, SHADER_LIGHT_HELD, SHADER_LIGHT_MARK,
-    SHADER_LIGHT_MARK_DRAWN, SHADER_LIGHT_MISS, SHADER_LIGHT_REACH, SHADER_LIGHT_SAMPLE,
-    SHADER_LIGHT_TOLD, SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_STOP_FACES,
-    SHADER_STOP_LEAD, UNIFORM,
+    compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FORGET,
+    SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_JOINED, SHADER_LIGHT, SHADER_LIGHT_BEAM,
+    SHADER_LIGHT_DETAIL, SHADER_LIGHT_HELD, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWN,
+    SHADER_LIGHT_MISS, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_TOLD, SHADER_MISS,
+    SHADER_MISS_LIST, SHADER_SAMPLE, UNIFORM,
 };
 use crate::gpu::api;
 use crate::gpu::api::{
@@ -43,7 +43,7 @@ pub(super) struct CastBuffers {
     /// the cast's group and the shadow map's over the light's (`light_groups`),
     /// each told by the head it binds (`eye_head`, `light_moved`); and the
     /// eye's buffer (pxl-spec-core `beam`): a line a corner, a start a
-    /// cell, a stop a sample, as the eye's words lay the frame's `grid`, none
+    /// cell, a hit a sample, as the eye's words lay the frame's `grid`, none
     /// a pixel's; room for `beam_room` words.
     beam_built: Built,
     cells_built: Built,
@@ -63,7 +63,7 @@ pub(super) struct CastBuffers {
     /// reading walk counts them in (`marks`, pxl-spec-core
     /// `ray::MISS_ARGS_WORDS`); the pyramid forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
-    /// (`forget`), or the nodes over the eye's windows' entries that moved
+    /// (`forget`), or the nodes over the eye's clip levels' entries that moved
     /// (`moved`, a bit an entry, against the entries as `entries` last held them)
     /// and over the boxes of what is placed or cut that changed (`boxes`,
     /// `holding` of them, as decor's generation holds them, gpu/generated.rs
@@ -76,17 +76,17 @@ pub(super) struct CastBuffers {
     miss_list_built: Built,
     marks: u32,
     /// What lies about the faces the walks again stopped on, asked once a
-    /// run of their stops (pxl-spec-core `beam::STOP_WORDS`): the one of
-    /// each run that asks listed (`stop_lead_cs`), the faces' pass over
-    /// their asks (ray/raster.rs `ask_stops`), and the faces put at their
-    /// pixels (`stop_faces_cs`), each dispatched off the walks' count in the
-    /// pyramid's head (`observed::STOPS_ARGS`) or the leaders' among the
+    /// square of their hits (pxl-spec-core `beam::HIT_WORDS`): the one of
+    /// each square that asks listed (`hit_lead_cs`), the faces' pass over
+    /// their asks (ray/raster.rs `ask_hits`), and the faces put at their
+    /// pixels (`hit_faces_cs`), each dispatched off the walks' count in the
+    /// pyramid's head (`observed::HITS_ARGS`) or the leaders' among the
     /// walk again's words (`ray::MISS_ARGS_ASKED`); their groups, and the
     /// buffers they bind, made again exactly when one of them is another.
-    stop_lead_built: Built,
-    stop_faces_built: Built,
-    stop_groups: [u32; 2],
-    stop_bound: [u32; 5],
+    hit_lead_built: Built,
+    hit_faces_built: Built,
+    hit_groups: [u32; 2],
+    hit_bound: [u32; 5],
     forget_built: Built,
     seen: u32,
     frame: u32,
@@ -100,9 +100,9 @@ pub(super) struct CastBuffers {
     entries: Vec<i32>,
     forgets: u32,
     cuts: [u32; eye::CUTS],
-    /// The eye's windows folded over their bricks (`joined_cs`), over its
-    /// group, the window buffer's rows past their entry table
-    /// (`clipmap::JOINED_AT`), written where the windows' entries moved
+    /// The eye's clip levels folded over their bricks (`joined_cs`), over its
+    /// group, the clip level buffer's rows past their entry table
+    /// (`clipmap::JOINED_AT`), written where the clip levels' entries moved
     /// (`refold`). The CPU folds its own over the bricks it holds
     /// (pxl-kernel domain/layer/terrain/clipmap.rs `fold`).
     joined_built: Built,
@@ -114,13 +114,13 @@ pub(super) struct CastBuffers {
     /// The tiles of the light's box its receivers stand on in a cast
     /// (pxl-spec-core `light::stands_at`): where the eye's rays meet the world
     /// (`light_mark_cs`), and where the decor and the actors drawn stand
-    /// (`light_mark_drawn_cs`); then those they read (`light_reach_cs`).
+    /// (`light_mark_drawn_cs`); then those they read (`light_propagate_cs`).
     light_mark_built: Built,
     light_mark_drawn_built: Built,
-    light_reach_built: Built,
+    light_propagate_built: Built,
     /// The tiles the box slid onto, or whose eye moved past the margin of
     /// what their walks asked, set back to be read anew (`light_detail_cs`),
-    /// before the reach.
+    /// before the propagation.
     light_detail_built: Built,
     /// The light's beam rays and samples, the eye's passes in entries of
     /// their own, which keep the margin of what their walks ask
@@ -203,7 +203,7 @@ pub(super) struct CastBuffers {
     group: u32,
     bound: [u32; 11],
     eye: u32,
-    pub(super) window: u32,
+    pub(super) clipmap: u32,
     shards: u32,
     /// Shards the buffer holds.
     shard_room: usize,
@@ -226,7 +226,7 @@ pub(super) struct CastBuffers {
     /// Whether the samples' raster is drawn through its gate, in the claimed
     /// tiles alone: where only the kernel's bounds moved.
     gated: bool,
-    /// The samples' stops handed to the rasterizer (ray/raster.rs), whose
+    /// The samples' hits handed to the rasterizer (ray/raster.rs), whose
     /// visible sample at each pixel the pixels read (`cast_cs`), over a group
     /// of their own (`px_group`): the eye, the rays, the beam's words, the
     /// pyramid, the visibility buffer and the claimed tiles (`px_bound`),
@@ -320,10 +320,9 @@ impl RaysPass {
         let joined_built = pipelines.build_compute(g, SHADER_JOINED, group);
         let miss_built = pipelines.build_compute(g, SHADER_MISS, group);
         let miss_list_built = pipelines.build_compute(g, SHADER_MISS_LIST, group);
-        let stop_lead_built =
-            pipelines.build_compute(g, SHADER_STOP_LEAD, &compute::STOP_LEAD_GROUP);
-        let stop_faces_built =
-            pipelines.build_compute(g, SHADER_STOP_FACES, &compute::STOP_FACES_GROUP);
+        let hit_lead_built = pipelines.build_compute(g, SHADER_HIT_LEAD, &compute::HIT_LEAD_GROUP);
+        let hit_faces_built =
+            pipelines.build_compute(g, SHADER_HIT_FACES, &compute::HIT_FACES_GROUP);
         let forget_built = pipelines.build_compute(g, SHADER_FORGET, group);
         let light_built = pipelines.build_compute(g, SHADER_LIGHT, &compute::LIGHT_GROUP);
         let light_miss_built =
@@ -332,8 +331,8 @@ impl RaysPass {
             pipelines.build_compute(g, SHADER_LIGHT_MARK, &compute::LIGHT_MARK_GROUP);
         let light_mark_drawn_built =
             pipelines.build_compute(g, SHADER_LIGHT_MARK_DRAWN, &compute::LIGHT_MARK_DRAWN_GROUP);
-        let light_reach_built =
-            pipelines.build_compute(g, SHADER_LIGHT_REACH, &compute::LIGHT_REACH_GROUP);
+        let light_propagate_built =
+            pipelines.build_compute(g, SHADER_LIGHT_PROPAGATE, &compute::LIGHT_PROPAGATE_GROUP);
         let light_detail_built =
             pipelines.build_compute(g, SHADER_LIGHT_DETAIL, &compute::LIGHT_DETAIL_GROUP);
         let light_beam_built =
@@ -360,17 +359,17 @@ impl RaysPass {
             beam_room: 0,
             miss_built,
             miss_list_built,
-            // The walk again's words, and the stops' faces' args past them.
+            // The walk again's words, and the hits' faces' args past them.
             marks: buf(
                 word_bytes((ray::MISS_ARGS_ASKED + raster::ARGS_WORDS) as usize),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             ),
-            stop_lead_built,
-            stop_faces_built,
-            stop_groups: [0; 2],
-            stop_bound: [0; 5],
+            hit_lead_built,
+            hit_faces_built,
+            hit_groups: [0; 2],
+            hit_bound: [0; 5],
             forget_built,
-            // Indirect too: the stops' passes are dispatched off its head.
+            // Indirect too: the hits' passes are dispatched off its head.
             seen: buf(
                 word_bytes(observed::WORDS as usize),
                 storage | buffer_usage::COPY_SRC | buffer_usage::INDIRECT,
@@ -391,7 +390,7 @@ impl RaysPass {
             light_miss_built,
             light_mark_built,
             light_mark_drawn_built,
-            light_reach_built,
+            light_propagate_built,
             light_detail_built,
             light_beam_built,
             light_sample_built,
@@ -438,7 +437,7 @@ impl RaysPass {
                 word_bytes(eye::WORDS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            window: buf(
+            clipmap: buf(
                 word_bytes((4 * clipmap::JOINED_AT + clipmap::EYE_JOINED_WORDS) as usize),
                 storage | buffer_usage::COPY_SRC,
             ),
@@ -500,7 +499,7 @@ impl RaysPass {
         // (`Generated::prepare`), so a change to decor alone casts no ray again.
         let Cast {
             eye,
-            window,
+            clipmap,
             shards,
             overwrites:
                 Overwrites {
@@ -521,7 +520,7 @@ impl RaysPass {
         r.begin();
         // The light's words are its cast's alone (below).
         let eye_moved = r.read(&eye[..eye::LIGHT]);
-        let window_moved = r.read(window);
+        let clipmap_moved = r.read(clipmap);
         let shards_moved = r.read(shards);
         // A surface made again holds no rays.
         r.read(&[*room as u32, *revision, rays.0]);
@@ -538,18 +537,18 @@ impl RaysPass {
         };
         let (kind, casts) = (self.kind, casts_px(self.kind));
         xpute_kit::ensure!(
-            cast.window.len() == (4 * clipmap::JOINED_AT) as usize,
+            cast.clipmap.len() == (4 * clipmap::JOINED_AT) as usize,
             ENOTRECOVERABLE,
-            cast.window.len()
+            cast.clipmap.len()
         );
-        if window_moved {
-            g.write_buf(c.window, 0, bytes(cast.window));
+        if clipmap_moved {
+            g.write_buf(c.clipmap, 0, bytes(cast.clipmap));
             c.refold = true;
         }
         c.size = rays.1;
         // The grid as the eye's words lay it (pxl-spec-core `eye::GRID`), the
         // dispatches' sizes, and room for its corners' lines, its cells'
-        // starts and its samples' stops, made again only where they outgrow
+        // starts and its samples' hits, made again only where they outgrow
         // it.
         let tan = [
             f32::from_bits(cast.eye[eye::TAN]),
@@ -646,14 +645,14 @@ impl RaysPass {
             }
             c.overwrite_revision = Some(o.revision);
         }
-        // What the world's query reads moved: the windows, the bricks the
+        // What the world's query reads moved: the clip levels, the bricks the
         // turn handed (their cells, palette indices and ways), the service area, what
         // is placed, a preview's cuts. What the observed pyramid kept is
         // forgotten; so it is once its frames would outrun a key's tag.
         let cuts: [u32; eye::CUTS] = cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
             .try_into()
             .or_bug(Errno::ENOTRECOVERABLE);
-        let world_moved = window_moved
+        let world_moved = clipmap_moved
             || fresh != 0
             || shards_moved
             || shards_grow
@@ -673,12 +672,12 @@ impl RaysPass {
             || overwrites_grow
             || (overwrites_moved && edits.is_empty())
             || c.frame >= observed::FRAMES;
-        // The eye's windows' entries that hold another brick, or whose brick
-        // the turn handed: what is over them is asked again.
+        // The eye's clip levels' entries that hold another brick, or whose
+        // brick the turn handed: what is over them is asked again.
         c.cuts = cuts;
-        let eye_rows = (clipmap::EYE_WINDOWS * clipmap::ENTRIES) as usize;
-        if window_moved {
-            let rows = &cast.window[..4 * eye_rows];
+        let eye_rows = (clipmap::EYE_CLIP_LEVELS * clipmap::ENTRIES) as usize;
+        if clipmap_moved {
+            let rows = &cast.clipmap[..4 * eye_rows];
             for k in 0..eye_rows {
                 let row = &rows[4 * k..4 * k + 4];
                 if c.entries.get(4 * k..4 * k + 4) != Some(row) {
@@ -689,7 +688,7 @@ impl RaysPass {
             c.entries.extend_from_slice(rows);
         }
         // A brick handed moves the eye's entry that wants it, whichever
-        // window's slot it is filled into.
+        // clip level's slot it is filled into.
         if let Some(gb) = self.ground.as_ref() {
             for f in &gb.handed[..fresh as usize] {
                 let (cell, q) = (
@@ -698,17 +697,17 @@ impl RaysPass {
                 );
                 let w = cell.wrapping_sub(clipmap::FIRST_CELL);
                 let k = (w * clipmap::ENTRIES + clipmap::entry(q)) as usize;
-                let row = &cast.window[4 * k..4 * k + 4];
-                if w < clipmap::EYE_WINDOWS && [row[0], row[1]] == q {
+                let row = &cast.clipmap[4 * k..4 * k + 4];
+                if w < clipmap::EYE_CLIP_LEVELS && [row[0], row[1]] == q {
                     c.moved[k / 32] |= 1 << (k % 32);
                 }
             }
         }
         // Decor generated first: where it stands is what the light's cast reads
         // of it, and its buffers what the light's groups bind.
-        let world = [c.eye, c.window, ground, c.shards, c.overwrites, pool];
+        let world = [c.eye, c.clipmap, ground, c.shards, c.overwrites, pool];
         let generation = Generation {
-            window: cast.window,
+            clipmap: cast.clipmap,
             cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
                 .try_into()
                 .or_bug(Errno::ENOTRECOVERABLE),
@@ -781,7 +780,7 @@ impl RaysPass {
         // again by the next cast after the rays were cast anew, or where an
         // epoch begins. Else what they stood on stands, marked in the epoch
         // already, so none of it is the cast's to cast anew
-        // (`light_reach_cs`); the jitter's casts move a ray within its
+        // (`light_propagate_cs`); the jitter's casts move a ray within its
         // footprint, marked already where the eye stood when they were.
         c.light_world |= kind == FrameKind::cast || !held || footprint_owed;
         if c.light_cast {
@@ -857,9 +856,9 @@ impl RaysPass {
             let written = observed::WRITTEN_AT as usize;
             head[written] = c.writes as u32;
             head[written + 1..written + 1 + c.writes].copy_from_slice(&c.written[..c.writes]);
-            // The stops' dispatch none, a workgroup deep and high.
-            head[observed::STOPS_ARGS as usize + 1] = 1;
-            head[observed::STOPS_ARGS as usize + 2] = 1;
+            // The hits' dispatch none, a workgroup deep and high.
+            head[observed::HITS_ARGS as usize + 1] = 1;
+            head[observed::HITS_ARGS as usize + 2] = 1;
             g.write_buf(c.seen, 0, bytes(&head));
             g.write_buf(c.marks, 0, bytes(&ray::MISS_ARGS_EMPTY));
             // Their faces' args none, laid as the boxes' are, their asks
@@ -867,7 +866,7 @@ impl RaysPass {
             let mut asked = [0u32; raster::ARGS_WORDS as usize];
             asked[raster::ARGS_FACES as usize + 1] = 1;
             asked[raster::ARGS_FACES as usize + 2] = 1;
-            asked[raster::ARGS_ASKS as usize] = c.grid.stop_asks_at;
+            asked[raster::ARGS_ASKS as usize] = c.grid.hit_asks_at;
             g.write_buf(
                 c.marks,
                 word_bytes(ray::MISS_ARGS_ASKED as usize),
@@ -896,7 +895,7 @@ impl RaysPass {
         c.tally.begin(g, ray_counts, c.seen, frame);
         let bound = [
             c.eye,
-            c.window,
+            c.clipmap,
             ground,
             rays.0,
             palette_indices,
@@ -923,7 +922,7 @@ impl RaysPass {
                     c.eye,
                     c.beams,
                     c.eye_head,
-                    c.window,
+                    c.clipmap,
                     ground,
                     c.shards,
                     c.overwrites,
@@ -931,14 +930,13 @@ impl RaysPass {
                     c.marks,
                 ],
             );
-            let stop_bound = [c.eye, rays.0, c.beams, c.seen, c.marks];
-            if stop_bound != c.stop_bound {
-                for group in c.stop_groups {
+            let hit_bound = [c.eye, rays.0, c.beams, c.seen, c.marks];
+            if hit_bound != c.hit_bound {
+                for group in c.hit_groups {
                     release(group);
                 }
-                c.stop_groups =
-                    stop_groups(g, [&c.stop_lead_built, &c.stop_faces_built], stop_bound);
-                c.stop_bound = stop_bound;
+                c.hit_groups = hit_groups(g, [&c.hit_lead_built, &c.hit_faces_built], hit_bound);
+                c.hit_bound = hit_bound;
             }
             let px_bound = [
                 c.eye,
@@ -961,7 +959,7 @@ impl RaysPass {
             .map_or([c.light_none; 3], |p| [p.drawing, p.regions, p.instances]);
         let light_bound = [
             c.eye,
-            c.window,
+            c.clipmap,
             ground,
             palette_indices,
             c.shards,
@@ -992,7 +990,7 @@ impl RaysPass {
                     &c.light_miss_built,
                     &c.light_mark_built,
                     &c.light_mark_drawn_built,
-                    &c.light_reach_built,
+                    &c.light_propagate_built,
                     &c.light_detail_built,
                     &c.light_beam_built,
                     &c.light_sample_built,
@@ -1024,7 +1022,7 @@ impl RaysPass {
         }
     }
 
-    /// The eye's windows folded over their bricks where their entries moved
+    /// The eye's clip levels folded over their bricks where their entries moved
     /// (`joined_cs`): ahead of the frame, as the fold outlives it.
     pub fn fold(&mut self, ctx: &mut RenderContext) -> bool {
         let (g, encoder) = (ctx.g, ctx.encoder);
@@ -1041,7 +1039,7 @@ impl RaysPass {
             let blocks = (clipmap::ACROSS >> l) * (clipmap::ACROSS >> l);
             g.dispatch(
                 pass,
-                (blocks * clipmap::EYE_WINDOWS).div_ceil(compute::JOINED_WORKGROUP[0]),
+                (blocks * clipmap::EYE_CLIP_LEVELS).div_ceil(compute::JOINED_WORKGROUP[0]),
                 1,
                 l,
             );
@@ -1141,17 +1139,17 @@ impl RaysPass {
             g.dispatch_indirect(pass, c.marks, word_bytes(ray::MISS_ARGS_LIST as usize));
             g.set_pipeline(pass, c.miss_built.pipeline);
             g.dispatch_indirect(pass, c.marks, word_bytes(ray::MISS_ARGS_WHOLE as usize));
-            // What lies about the faces they stopped on, once a run of
-            // stops: the one of each run that asks listed, the faces' pass
+            // What lies about the faces they stopped on, once a square of
+            // hits: the one of each square that asks listed, the faces' pass
             // over their asks, and the faces put at their pixels.
-            let stops = word_bytes(observed::STOPS_ARGS as usize);
-            g.set_pipeline(pass, c.stop_lead_built.pipeline);
-            g.set_bind_group(pass, 0, c.stop_groups[0], &[]);
-            g.dispatch_indirect(pass, c.seen, stops);
-            c.raster.ask_stops(g, pass, c.marks);
-            g.set_pipeline(pass, c.stop_faces_built.pipeline);
-            g.set_bind_group(pass, 0, c.stop_groups[1], &[]);
-            g.dispatch_indirect(pass, c.seen, stops);
+            let hits = word_bytes(observed::HITS_ARGS as usize);
+            g.set_pipeline(pass, c.hit_lead_built.pipeline);
+            g.set_bind_group(pass, 0, c.hit_groups[0], &[]);
+            g.dispatch_indirect(pass, c.seen, hits);
+            c.raster.ask_hits(g, pass, c.marks);
+            g.set_pipeline(pass, c.hit_faces_built.pipeline);
+            g.set_bind_group(pass, 0, c.hit_groups[1], &[]);
+            g.dispatch_indirect(pass, c.seen, hits);
             g.end(pass);
         }
         // The decor generated over the rays, before the light's cast, which
@@ -1208,7 +1206,7 @@ impl RaysPass {
             // where the eye's rays meet the world, a thread a brick of pixels
             // `light::MARK` a side (`light_mark_cs`), and where the decor and
             // the actors drawn stand, a thread each (`light_mark_drawn_cs`);
-            // then those they read, a thread a tile (`light_reach_cs`).
+            // then those they read, a thread a tile (`light_propagate_cs`).
             if c.light_world {
                 c.light_world = false;
                 g.set_bind_group(pass, 0, c.light_groups[4], &[]);
@@ -1223,14 +1221,14 @@ impl RaysPass {
             let w = compute::LIGHT_MARK_DRAWN_WORKGROUP;
             g.dispatch(pass, (cap + light::ACTORS as u32).div_ceil(w[0]), 1, 1);
             g.set_bind_group(pass, 0, c.light_groups[6], &[]);
-            g.set_pipeline(pass, c.light_reach_built.pipeline);
-            let w = compute::LIGHT_REACH_WORKGROUP;
+            g.set_pipeline(pass, c.light_propagate_built.pipeline);
+            let w = compute::LIGHT_PROPAGATE_WORKGROUP;
             let n = light::tiles(shadow::SIZE);
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             // The beam by its entry of its own, which tells the margin of
             // what its walks ask (`light_beam_cs`), then the cells' starts by
             // the eye's pass over the light's world's group, which hands it
-            // the light's head. Each as many workgroups as the reach left it
+            // the light's head. Each as many workgroups as the propagation left it
             // (`light::ARGS_WORDS`).
             let args = |w: u32| word_bytes(w as usize);
             g.set_bind_group(pass, 0, c.light_groups[8], &[]);
@@ -1394,18 +1392,18 @@ impl RaysPass {
     }
 }
 
-/// The cast's group 0 over `bound`: the eye, the window and its fold
+/// The cast's group 0 over `bound`: the eye, the clip level and its fold
 /// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
 /// surface's rays, the bricks' palette indices, the service area's index, the
 /// overwrites, the ways' pool, the beam rays' lines and the cells' starts,
 /// the observed pyramid, and the head (`WORLD_GROUP`): the eye's, or, over
 /// the light's list and head, the shadow map's (`light_groups`).
 fn cast_group(g: &Gpu, built: &Built, bound: [u32; 11]) -> u32 {
-    let [eye, window, ground, rays, palette_indices, shards, overwrites, pool, beams, seen, head] =
+    let [eye, clipmap, ground, rays, palette_indices, shards, overwrites, pool, beams, seen, head] =
         bound;
     let entries = [
         buf_entry(0, eye),
-        buf_entry(1, window),
+        buf_entry(1, clipmap),
         buf_entry(2, ground),
         view_entry(3, rays),
         buf_entry(4, palette_indices),
@@ -1419,11 +1417,11 @@ fn cast_group(g: &Gpu, built: &Built, bound: [u32; 11]) -> u32 {
     g.bind_group(built.layouts[0], &entries)
 }
 
-/// The missed pixels' stops' passes' groups 0 (`stop_lead_cs`,
-/// `stop_faces_cs`) over `bound`: the eye, the rays, the beam's words, the
+/// The missed pixels' hits' passes' groups 0 (`hit_lead_cs`,
+/// `hit_faces_cs`) over `bound`: the eye, the rays, the beam's words, the
 /// pyramid, and the walk again's words, which the faces' leaders are
 /// listed in and the faces' pass none of.
-fn stop_groups(g: &Gpu, [lead, faces]: [&Built; 2], bound: [u32; 5]) -> [u32; 2] {
+fn hit_groups(g: &Gpu, [lead, faces]: [&Built; 2], bound: [u32; 5]) -> [u32; 2] {
     let [eye, rays, beams, seen, marks] = bound;
     [
         g.bind_group(
@@ -1522,32 +1520,32 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
     )
 }
 
-/// The light's cast's groups 0, over `bound`: the eye, the window, the
+/// The light's cast's groups 0, over `bound`: the eye, the clip level, the
 /// tiles' frames, the bricks' palette indices, the service area's index, the
 /// overwrites and the ways' pool, the cast's alone; the observed pyramid,
 /// which the light's walks read and write as the eye's do; the clipmap; its
 /// head, the beam's lines, the samples and the misses (`list`),
 /// the raster's boxes, visibility buffer and args, the misses' dispatch and
-/// the casting passes' workgroups (`light::ARGS_WORDS`), which the reach
-/// writes; the eye's rays, which the mark reads, and the decor's drawing
+/// the casting passes' workgroups (`light::ARGS_WORDS`), which the
+/// propagation writes; the eye's rays, which the mark reads, and the decor's drawing
 /// words, regions and instances, which the drawn mark reads. The slots',
 /// its world's (the cells' starts, the eye's pass, over `WORLD_GROUP`, its
 /// list where the eye's beam rays' buffer lies and its head where the
 /// eye's), its boxes' (the eye's raster's pass), the misses' walk's, the two
-/// marks', the reach's, the detail's, the beam's, the samples', the held
+/// marks', the propagation's, the detail's, the beam's, the samples', the held
 /// margins' gather's and the misses' margins'; the boxes' none before its
 /// raster's buffers are made.
 fn light_groups(
     g: &Gpu,
-    [walk, world, boxes_built, miss, mark, mark_drawn, reach, detail, beam, sample, held, told]: [&Built; 12],
+    [walk, world, boxes_built, miss, mark, mark_drawn, propagate, detail, beam, sample, held, told]: [&Built; 12],
     bound: [u32; 12],
     [seen, head, list, boxes, visibility, args, misses, light_args]: [u32; 8],
 ) -> [u32; 12] {
-    let [eye, window, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances] =
+    let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances] =
         bound;
     let entries = [
         (0, buf_entry(0, eye)),
-        (1, buf_entry(1, window)),
+        (1, buf_entry(1, clipmap)),
         (2, buf_entry(2, ground)),
         (3, view_entry(3, rays)),
         (4, buf_entry(4, palette_indices)),
@@ -1582,7 +1580,7 @@ fn light_groups(
             world,
             [
                 eye,
-                window,
+                clipmap,
                 ground,
                 rays,
                 palette_indices,
@@ -1612,7 +1610,7 @@ fn light_groups(
         g.bind_group(miss.layouts[0], &of(&compute::LIGHT_MISS_GROUP)),
         g.bind_group(mark.layouts[0], &of(&compute::LIGHT_MARK_GROUP)),
         g.bind_group(mark_drawn.layouts[0], &of(&compute::LIGHT_MARK_DRAWN_GROUP)),
-        g.bind_group(reach.layouts[0], &of(&compute::LIGHT_REACH_GROUP)),
+        g.bind_group(propagate.layouts[0], &of(&compute::LIGHT_PROPAGATE_GROUP)),
         g.bind_group(detail.layouts[0], &of(&compute::LIGHT_DETAIL_GROUP)),
         g.bind_group(beam.layouts[0], &of(&compute::LIGHT_BEAM_GROUP)),
         g.bind_group(sample.layouts[0], &of(&compute::LIGHT_SAMPLE_GROUP)),

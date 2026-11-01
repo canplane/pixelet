@@ -7,7 +7,7 @@ use crate::sys;
 use pxl_spec::space::camera::grid::CELL;
 
 /// Decor's tiers are angles: the model's and the impostor's edges are their
-/// shares of the view's cell (`CELL`), whatever the window's height.
+/// shares of the view's cell (`CELL`), whatever the clip level's height.
 #[test]
 fn decor_edges_cell_shares() {
     let _g = sys::serial();
@@ -20,12 +20,12 @@ fn decor_edges_cell_shares() {
     }
 }
 
-/// A kind is generated at the leaves' window and at each coarser one where a
-/// variant stands as itself (`scatter::stands_at`): its windows run from the
-/// leaves' up, unbroken, never at one whose cell its largest box keeps no
+/// A kind is generated at the leaves' clip level and at each coarser one where
+/// a variant stands as itself (`scatter::stands_at`): its clip levels run from
+/// the leaves' up, unbroken, never at one whose cell its largest box keeps no
 /// eighth of, as a folded cube of it would keep none.
 #[test]
-fn decor_windows_by_size() {
+fn decor_clip_levels_by_size() {
     let leaf = 1 << (LEAF_CELL - FIRST_CELL);
     // From a tuft to a ship, as it shows.
     for extent in [0.5, 2.0, 8.0, 40.0, 400.0] {

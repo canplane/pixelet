@@ -55,8 +55,8 @@ pub const fn floats(fields: &[Field]) -> usize {
     let mut end = 0;
     let mut k = 0;
     while k < fields.len() {
-        let reach = fields[k].at + fields[k].kind.floats();
-        end = if reach > end { reach } else { end };
+        let field_end = fields[k].at + fields[k].kind.floats();
+        end = if field_end > end { field_end } else { end };
         k += 1;
     }
     end.div_ceil(4) * 4
@@ -163,7 +163,7 @@ uniform! {
         MOON_LIGHT: F32 = 31,
         /// As it reaches the air, against the sun's white.
         MOON_COLOR: Vec3 = 32,
-        /// Where the eye's rays end, in units (pxl-spec-core `eye::REACH`):
+        /// Where the eye's rays end, in units (pxl-spec-core `eye::FAR`):
         /// past it the land is the Earth's picture whole.
         DRAWN: F32 = 35,
         /// Lights the ground, never drawn: drawn, the sky went pale blue.
@@ -173,7 +173,7 @@ uniform! {
         /// A lit city's radiance where the picture holds all of it.
         CITY_LIGHT: Vec3 = 40,
         /// In units.
-        EARTH_REACH: F32 = 43,
+        EARTH_DIST: F32 = 43,
         /// The south-west tile, tiles across the window and around the
         /// world; then a tile's layer plus one in `EARTH_TILE_BITS`, row by
         /// row, zero for the global picture.
@@ -201,7 +201,7 @@ uniform! {
         /// domain/scene/environment/cloud.rs `clouds_shown`).
         SHOWN: F32 = 0,
         /// How far the eye draws, in km: past it no sheet is drawn.
-        REACH: F32 = 1,
+        DRAW_DIST: F32 = 1,
         /// The lattice's units around; the cells the wind has moved it
         /// under the map; the field's lattice unit the eye is over and its
         /// share of one (gpu/cloud.rs `field`).
@@ -272,8 +272,8 @@ pub const AO_DOWNSCALE: u32 = 2;
 /// N8AO's blue noise a side (gpu/ao.rs), which a pixel reads tiled.
 pub const AO_NOISE_SIDE: u32 = 128;
 
-/// A square of the depth's bound the reach reads, its pixels a side
-/// (gpu/reach.rs, screen_bound.wgsl, screen_reach.wgsl).
+/// A square of the depth's bound the propagation reads, its pixels a side
+/// (gpu/propagate.rs, screen_bound.wgsl, screen_propagate.wgsl).
 pub const BOUND_STEP: u32 = 4;
 /// A screen tile's squares a side (pxl-spec-core `screen::TILE`), a thread
 /// each of the workgroup a tile both passes take: every square of a tile is

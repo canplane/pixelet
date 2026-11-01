@@ -22,7 +22,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
-use pxl_spec::space::layer::lattice::{draw_reach, GROUND};
+use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::ray::Ray;
@@ -292,7 +292,8 @@ impl<'a> World<'a> {
     }
 
     /// What the ground generates of `decor` standing in the leaf cell `at` lies
-    /// in; none where it generates nothing there or the windows do not hold it.
+    /// in; none where it generates nothing there or the clip levels do not hold
+    /// it.
     pub fn generated(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
         let [x, y, z] = idx_of(GROUND.cell(), at);
         let mut met = None;
@@ -311,7 +312,7 @@ impl<'a> World<'a> {
         }
         // Held as it is out to where the view draws the leaves' tiles.
         let held = match GROUND.z_at(0.0) {
-            LEAF_ZOOM => draw_reach(GROUND, LEAF_ZOOM).min(ray.reach),
+            LEAF_ZOOM => draw_dist(GROUND, LEAF_ZOOM).min(ray.t_max),
             _ => return None,
         };
         let extent = box_extent();
@@ -372,11 +373,12 @@ impl<'a> World<'a> {
         }
     }
 
-    /// Whether decor `s` strikes may reach into the node `(zoom, c)`, X on
-    /// the asker's lap, where no cell under it fills: decor stands on the
-    /// ground or where something is placed, and extent's no farther than its    /// extent from there, so a node is out of it where, about it and as wide
-    /// as the extent, the windows' relief holds no top over its bottom less the
-    /// extent and the objects' pyramid no record, past the area none, as
+    /// Whether decor `s` strikes may reach into the node `(zoom, c)`, X on the
+    /// asker's lap, where no cell under it fills: decor stands on the ground or
+    /// where something is placed, and extent's no farther than its    ///
+    /// extent from there, so a node is out of it where, about it and as wide as
+    /// the extent, the clip levels' relief holds no top over its bottom less
+    /// the extent and the objects' pyramid no record, past the area none, as
     /// `shard`, what the descent established at the node, says. What is not
     /// held may.
     ///

@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/raster.wgsl
 
-// The samples' stops drawn at the eye's rays' pixels (pxl-spec-core raster.rs):
+// The samples' hits drawn at the eye's rays' pixels (pxl-spec-core raster.rs):
 // each box an instance, its three faces turned to the eye, one an axis, as
 // `corner` winds them, the faces turned away never drawn, each grown in its own
 // plane by `GROWN` (pxl-spec-core param.rs `raster::GROWN`) of a drawn pixel. A
@@ -15,7 +15,7 @@
 // the whole screen at the nearest depth, a lack's nearer still, tested alike
 // but for the axis.
 //
-// The light's samples' stops are drawn the same way into the light's box
+// The light's samples' hits are drawn the same way into the light's box
 // (pxl-spec-core param.rs `param::light::SAMPLE`), orthographic, where
 // `turn.y` says: a texel's ray starts on the box's near plane at its middle,
 // off `first`, and runs along the light; a box's face turned to it is the one
@@ -153,7 +153,7 @@ fn raster_moves(d: f32) -> f32 {
 // The ray's t at the near and far planes on one axis (pxl-spec-core cast.rs
 // `planes`, from 0): an axis it runs beside, its whole reach inside the
 // slab, none outside.
-fn raster_planes(d: f32, lo: f32, hi: f32, reach: f32) -> vec2f {
+fn raster_planes(d: f32, lo: f32, hi: f32, far: f32) -> vec2f {
   if (d > 0.0) {
     let inv = 1.0 / d;
     return vec2f(lo * inv, hi * inv);
@@ -163,9 +163,9 @@ fn raster_planes(d: f32, lo: f32, hi: f32, reach: f32) -> vec2f {
     return vec2f(hi * inv, lo * inv);
   }
   if (lo <= 0.0 && 0.0 < hi) {
-    return vec2f(0.0, reach);
+    return vec2f(0.0, far);
   }
-  return vec2f(reach, 0.0);
+  return vec2f(far, 0.0);
 }
 
 // The drawn pixel's tangents across and up at `at`, where its ray goes
@@ -181,12 +181,12 @@ fn raster_tan(at: vec2f) -> vec2f {
 // tie (`crossing`).
 fn raster_enters(o: vec3f, u: vec3f, lo: vec3f, hi: vec3f, a: u32) -> bool {
   let d = vec3f(raster_moves(u.x), raster_moves(u.y), raster_moves(u.z));
-  let reach = raster.screen.w;
-  let x = raster_planes(d.x, lo.x - o.x, hi.x - o.x, reach);
-  let y = raster_planes(d.y, lo.y - o.y, hi.y - o.y, reach);
-  let z = raster_planes(d.z, lo.z - o.z, hi.z - o.z, reach);
+  let far = raster.screen.w;
+  let x = raster_planes(d.x, lo.x - o.x, hi.x - o.x, far);
+  let y = raster_planes(d.y, lo.y - o.y, hi.y - o.y, far);
+  let z = raster_planes(d.z, lo.z - o.z, hi.z - o.z, far);
   let t0 = max(max(max(0.0, x.x), y.x), z.x);
-  let t1 = min(min(min(reach, x.y), y.y), z.y);
+  let t1 = min(min(min(far, x.y), y.y), z.y);
   let near = vec3f(x.x, y.x, z.x);
   var e = 2u;
   if (d.x != 0.0) {

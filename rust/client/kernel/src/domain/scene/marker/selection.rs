@@ -14,7 +14,7 @@ use crate::domain::view::frame::screen::{ndc_to_px, size};
 
 /// A fraction of the distance, since the marker holds a constant screen size.
 /// Generous: one marker too many costs a sprite.
-const ANCHOR_REACH: f64 = 0.08;
+const ANCHOR_RADIUS: f64 = 0.08;
 
 /// Indices into `candidates`, in the root frame.
 pub fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
@@ -32,7 +32,7 @@ pub fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
         ];
         let to = v3::sub(&pos, &eye);
         let dist2 = v3::dot(&to, &to);
-        if !v.frustum.sees(pos, dist2.sqrt() * ANCHOR_REACH) {
+        if !v.frustum.sees(pos, dist2.sqrt() * ANCHOR_RADIUS) {
             continue;
         }
         candidates.d2[i] = dist2;

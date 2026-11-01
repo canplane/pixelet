@@ -99,7 +99,7 @@ impl Bricks for Fresh<'_> {
     fn present(&self, _: u32, _: [i32; 2]) -> (u32, bool) {
         (0, true)
     }
-    /// A brick on its own is no window's.
+    /// A brick on its own is no clip level's.
     fn brick(&self, _: u32, _: u32) -> ([i32; 2], bool) {
         ([0; 2], false)
     }

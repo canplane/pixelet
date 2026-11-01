@@ -14,11 +14,11 @@ use pxl_spec::space::coord::adapter::epsg3857::{self, merc_from_u};
 use crate::separation::{self, source::Store};
 use crate::terrain::bake::assemble;
 use crate::terrain::pipeline::separation::bake_separation;
-use crate::terrain::repository::{self, DRAWN_REACH_U};
+use crate::terrain::repository::{self, HALF_WIDEST_U};
 use crate::terrain::source::fetch_surface;
 
 /// Whether anything is drawn in a tile: land or a building in it, or a way
-/// (not a ferry) within `DRAWN_REACH_U`. `CASE` fixes the order, which
+/// (not a ferry) within `HALF_WIDEST_U`. `CASE` fixes the order, which
 /// `OR` does not, so the costly coastline test runs last.
 const HAS_GROUND_SQL: &str = "
   SELECT t.ord, CASE
@@ -52,8 +52,8 @@ pub fn has_ground(client: &mut Client, tiles: &[[i32; 2]]) -> Result<Vec<bool>, 
     let ord: Vec<i32> = (0..tiles.len() as i32).collect();
     let col = |k: usize| -> Vec<f64> { bbox.iter().map(|b| b[k]).collect() };
     let (minx, miny, maxx, maxy) = (col(0), col(1), col(2), col(3));
-    let reach = merc_from_u(DRAWN_REACH_U);
-    let params: [&(dyn ToSql + Sync); 6] = [&ord, &minx, &miny, &maxx, &maxy, &reach];
+    let half_widest = merc_from_u(HALF_WIDEST_U);
+    let params: [&(dyn ToSql + Sync); 6] = [&ord, &minx, &miny, &maxx, &maxy, &half_widest];
 
     let mut out = vec![false; tiles.len()];
     for row in client.query(HAS_GROUND_SQL, &params)? {
