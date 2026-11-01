@@ -230,14 +230,14 @@ impl Resolve {
     /// its places, the nearest copy of the last's about this one's.
     fn reproject(&self) -> Mat4 {
         let ((now, eye), (last, was)) = (&self.view, &self.last);
-        let moved = [
+        let shift = [
             world::nearest(eye[0], was[0]) - was[0],
             eye[1] - was[1],
             eye[2] - was[2],
         ];
         let (mut inv, mut t, mut a, mut m) = (mat4::new(), mat4::new(), mat4::new(), mat4::new());
         mat4::invert(&mut inv, now);
-        mat4::translation(&mut t, moved[0], moved[1], moved[2]);
+        mat4::translation(&mut t, shift[0], shift[1], shift[2]);
         mat4::mul(&mut a, &t, &inv);
         mat4::mul(&mut m, last, &a);
         m

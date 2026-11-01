@@ -146,7 +146,7 @@ const MARGIN_SLACK: f32 = 1.0 / 65536.0;
 /// node `node` at `zoom`, `at` what was handed it and the ray in it from
 /// `t0`, its farthest and nearest distances from the eye squared
 /// (`node_dist_sq`), and what the visitor keeps of it. A walk nothing reads
-/// it of (`()`) asks it at the zooms its rays ask (`asked`) and keeps
+/// it of (`()`) asks it at the zooms its rays ask (`zooms`) and keeps
 /// nothing, so it costs nothing.
 pub trait Visitor {
     fn visit<Q: Query>(
@@ -628,7 +628,7 @@ pub trait Query {
         at: &mut Self::At,
         zoom: Zoom,
         node: [i32; 3],
-        asked: [Zoom; 2],
+        zooms: [Zoom; 2],
         t0: f32,
     ) -> In<[u32; 2]>;
 }
@@ -712,7 +712,7 @@ fn ask_zooms(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
 /// finer than its zoom, and a coarser node how far before its `near` is its
 /// zoom, or past the zooms it was asked at. A coarser node is asked a zoom
 /// wider each way than its rays ask (which only splits more and stops on
-/// the same cell, as `asked`'s coarser zooms do), so its claim holds while the eye moves a band; and where the walk
+/// the same cell, as `zooms`'s coarser zooms do), so its claim holds while the eye moves a band; and where the walk
 /// passes it as air (`Kind::Cell`, transparent) one band off the zoom its
 /// cell is decided at, it is asked as it would be past that band too, and
 /// where it is air there as well that band's edge tells nothing: a node
@@ -823,7 +823,7 @@ pub fn first<Q: Query>(
 }
 
 /// `walk` from the world's root holding the origin, at 0, leaving its line
-/// to `keep` and telling each node it asks to `told`.
+/// to `keep` and telling each node it asks to `visitor`.
 pub fn walk_from_root<Q: Query>(
     q: &mut Q,
     o: [i32; 3],
@@ -831,7 +831,7 @@ pub fn walk_from_root<Q: Query>(
     detail: Detail,
     until: Until,
     keep: &mut impl Keep<Q::At>,
-    told: &mut impl Visitor,
+    visitor: &mut impl Visitor,
 ) -> Trace<Q::At> {
     let at = q.root(Node::ROOT.idx(o));
     walk(
@@ -843,7 +843,7 @@ pub fn walk_from_root<Q: Query>(
         (Node::ROOT, at, 0.0),
         &Root(at),
         keep,
-        told,
+        visitor,
     )
 }
 
@@ -887,7 +887,7 @@ impl<A: Copy> Keep<A> for () {
 
 /// The first cell `ray` meets within its interval that `until` stops at, at
 /// the zoom `detail` asks where it meets it, its line left where it ended
-/// to `keep` and each node it asks told to `told` (`Visitor`): down the
+/// to `keep` and each node it asks told to `visitor` (`Visitor`): down the
 /// pyramid from `from`, a node holding where the ray is at its `t`, what was
 /// handed it, and that `t` — the world's root holding
 /// the origin at 0 (`first`), or a node of the line a beam ray handed on —
@@ -900,7 +900,7 @@ impl<A: Copy> Keep<A> for () {
 /// where the ray is, `t`; the planes, the span and the axis entered across
 /// are worked out from those where asked. A node is entered once: asked
 /// whether anything under it is not transparent at the zooms every ray from
-/// the origin asks within it (`asked`); a cell — the asset at that zoom, or
+/// the origin asks within it (`zooms`); a cell — the asset at that zoom, or
 /// air where all under it is — the walk stops at (for an eye, where it is not
 /// transparent,
 /// but not in the cell it starts in, and where the ray enters the box a

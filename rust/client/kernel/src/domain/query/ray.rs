@@ -156,7 +156,7 @@ impl<'a> Query for Walker<'_, 'a> {
         at: &mut At,
         _: Zoom,
         _: [i32; 3],
-        asked: [Zoom; 2],
+        zooms: [Zoom; 2],
         t0: f32,
     ) -> In<[u32; 2]> {
         let (zoom, c) = at.node;
@@ -174,7 +174,7 @@ impl<'a> Query for Walker<'_, 'a> {
                 self.world.intersect_near(s, ray, (zoom, c));
             }
         }
-        let answer = match self.world.node(at, asked, &mut self.lines) {
+        let answer = match self.world.node(at, zooms, &mut self.lines) {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
                 return In {
@@ -197,7 +197,7 @@ impl<'a> Query for Walker<'_, 'a> {
             // Air coarser than asked, gone into where decor may stand in it;
             // and a split entered whole, its box the world's, not the decor
             // standing over it.
-            Kind::Cell if zoom < asked[1] && decor => In {
+            Kind::Cell if zoom < zooms[1] && decor => In {
                 kind: Kind::Split,
                 asset: answer::BOX_WHOLE,
             },
@@ -277,8 +277,8 @@ impl<'a> World<'a> {
         let q = origin(o[0], o[1], o[2]);
         let met = cast::first(&mut walker, q, &from, detail, until);
         *lines = walker.lines;
-        let met = (met.ends == End::Hit).then(|| self.hit(ray, q, met.hit));
-        let answer = match (met, walker.lack, walker.answered) {
+        let hit = (met.ends == End::Hit).then(|| self.hit(ray, q, met.hit));
+        let answer = match (hit, walker.lack, walker.answered) {
             (h, None, _) => Answer::Exact(h),
             (Some(h), Some(l), _) => Answer::Coarser(Some(h), l),
             (None, Some(l), true) => Answer::Coarser(None, l),

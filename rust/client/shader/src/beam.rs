@@ -222,7 +222,7 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Trace
 /// `ray`'s walk to the cell that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
 /// root, from the root at it; through `q`, reading or writing, its line
-/// left where it ends to `keep` and each node it asks told to `told`.
+/// left where it ends to `keep` and each node it asks told to `visitor`.
 pub(crate) fn resume_walk<'a, Q: Query, W: Words + ?Sized>(
     q: &mut Q,
     origin: [i32; 3],
@@ -232,7 +232,7 @@ pub(crate) fn resume_walk<'a, Q: Query, W: Words + ?Sized>(
     line: &BeamLine<'a, W>,
     node: cast::Node,
     keep: &mut impl cast::Keep<Q::At>,
-    told: &mut impl cast::Visitor,
+    visitor: &mut impl cast::Visitor,
 ) -> Trace<Q::At>
 where
     BeamLine<'a, W>: cast::Over<Q::At>,
@@ -248,7 +248,7 @@ where
     } else {
         (cast::Node::ROOT, q.root(cast::Node::ROOT.idx(origin)), t)
     };
-    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, keep, told)
+    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, keep, visitor)
 }
 
 /// Each beam ray of the camera grid, a thread a corner (pxl-spec-core

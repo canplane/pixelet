@@ -223,11 +223,11 @@ pub fn pose() -> Option<ObserverPose> {
     let c = controllers();
     match (&c.tracker, c.base) {
         (Some(t), _) => {
-            let (mut camera_to_world, mut rot, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
+            let (mut camera_to_world, mut rot, mut off) = (mat4::new(), mat4::new(), [0.0; 3]);
             mat4::mul(&mut camera_to_world, &t.world_turn, &t.turn);
-            mat4::transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
+            mat4::transform_point(&mut off, &t.world_turn, t.at[0], t.at[1], t.at[2]);
             Some(ObserverPose {
-                eye: v3::add(&t.world_at, &moved),
+                eye: v3::add(&t.world_at, &off),
                 rot: *mat4::transpose(&mut rot, &camera_to_world),
             })
         }
@@ -372,7 +372,7 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let c = controllers();
     if c.tracker.is_none() {
         let Some(now) = pose() else { return };
-        let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) =
+        let (mut camera_to_world, mut turn_back, mut world_turn, mut off) =
             (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
         mat4::transpose(&mut camera_to_world, &now.rot);
         mat4::mul(
@@ -380,10 +380,10 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
             &camera_to_world,
             mat4::transpose(&mut turn_back, &turn),
         );
-        mat4::transform_point(&mut moved, &world_turn, at[0], at[1], at[2]);
+        mat4::transform_point(&mut off, &world_turn, at[0], at[1], at[2]);
         c.tracker = Some(TrackerSpace {
             world_turn,
-            world_at: v3::sub(&now.eye, &moved),
+            world_at: v3::sub(&now.eye, &off),
             turn,
             at,
         });

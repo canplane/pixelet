@@ -143,13 +143,13 @@ impl World<'_> {
     /// (`Reading`). Its answer (pxl-spec-core `answer`): a split and its
     /// box in its own steps; the asset of a cell at the zoom asked, void for air; or,
     /// coarser than asked and nothing under it filling, air its size, which
-    /// its zoom against `asked` tells. The four palette indices a cell is drawn by are the GPU's to
+    /// its zoom against `zooms` tells. The four palette indices a cell is drawn by are the GPU's to
     /// draw. `lines` are the ground's lines the walk asking it read, which
     /// its own steps from (`walk_line`).
     pub(super) fn node(
         &self,
         at: &mut At,
-        asked: [Zoom; 2],
+        zooms: [Zoom; 2],
         lines: &mut Lines,
     ) -> Answer<In<[u32; 2]>> {
         let (lanes, cuts) = (
@@ -164,7 +164,7 @@ impl World<'_> {
             pool(),
             &mut at.inheritance,
             at.node,
-            asked,
+            zooms,
             cuts,
         );
         reading.answer(i.kind != Kind::Lacks, || i)

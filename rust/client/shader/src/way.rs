@@ -124,10 +124,10 @@ fn settle() {
 /// (pxl-kernel domain/layer/terrain/mirror.rs).
 const TAKEN_CNT: u32 = 0;
 
-/// The child groups free when `taken` are of a stack of `len` slots, child group 0
+/// The child groups free when `group_cnt` are of a stack of `len` slots, child group 0
 /// never one.
-fn free(len: u32, taken: u32) -> u32 {
-    len - 1 - taken
+fn free(len: u32, group_cnt: u32) -> u32 {
+    len - 1 - group_cnt
 }
 
 /// The id stack slot `i` holds.
@@ -147,11 +147,11 @@ fn push(stack: &mut [u32], child_group: u32) {
     put_id(stack, was, child_group);
 }
 
-/// `n` child groups off the stack together for a brick that has taken `taken`:
+/// `n` child groups off the stack together for a brick that has taken `group_cnt`:
 /// where their ids begin in it, and false where fewer are free or the
 /// brick would take more than its most (`way::tree::fits`), none taken.
 /// One exit, for the reason `add` gives.
-fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
+fn pop(stack: &mut [u32], group_cnt: u32, n: u32) -> (u32, bool) {
     let len = stack.len() as u32;
     // SAFETY: word `TAKEN_CNT`, the stack's first; the buffer is never empty
     // (pxl-render gpu/ray/ground.rs makes it a word a child group of the pool's).
@@ -163,7 +163,7 @@ fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
     };
     let (mut done, mut ok) = (false, false);
     while !done {
-        if !tree::fits(free(len, gone), taken, n) {
+        if !tree::fits(free(len, gone), group_cnt, n) {
             done = true;
         } else {
             // SAFETY: as above.
@@ -337,7 +337,7 @@ pub fn way_tree_cs(
         let (from, n) = (load_shared(levels, 2 * j), load_shared(levels, 2 * j + 1));
         let brick = fill::LoneBrick { ground, base };
         // The flagged, counted, then given their child groups together.
-        let (mut flagged, mut c) = (0, 0);
+        let (mut flag_cnt, mut c) = (0, 0);
         while c < n {
             // Asked of every lane, its own past the level or not, then
             // chosen: a short circuit would put the scan after it in a
@@ -345,28 +345,28 @@ pub fn way_tree_cs(
             let i = c + t;
             let flag = tree::flag(&pool, &brick, 0, cell, zoom, slot(stack, from, i)) & (i < n);
             scan(sums, t, flag as u32);
-            flagged += load_shared(sums, lanes - 1);
+            flag_cnt += load_shared(sums, lanes - 1);
             c += lanes;
         }
         if t == 0 {
             let had = lane_word(levels, taken);
             // Past the brick's most, or past its scratch, none is taken:
             // the pool is asked only of what the scratch holds.
-            let short = if tree::past(had, flagged) {
+            let short = if tree::past(had, flag_cnt) {
                 PAST
-            } else if tree::is_cramped(room, had, flagged) {
+            } else if tree::is_cramped(room, had, flag_cnt) {
                 SHORT
             } else {
                 0
             };
             let (next, fits) = if short == 0 {
-                pop(stack, had, flagged)
+                pop(stack, had, flag_cnt)
             } else {
                 (0, false)
             };
-            set_shared(levels, t, taken, had + flagged);
+            set_shared(levels, t, taken, had + flag_cnt);
             set_shared(levels, t, 2 * j + 2, next);
-            set_shared(levels, t, 2 * j + 3, 8 * flagged);
+            set_shared(levels, t, 2 * j + 3, 8 * flag_cnt);
             set_shared(levels, t, held, if fits { HELD } else { short });
         }
         ok = load_shared(levels, held) == HELD;

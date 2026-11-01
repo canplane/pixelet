@@ -403,10 +403,10 @@ export function perf_frames(): Frame[] {
 
 /** The tasks the ring holds, oldest first: its last `last`, or every one at null. */
 export function perf_tasks(last: u32 | null = null): TaskRecord[] {
-  const [ring, held] = rings().tasks;
-  const from = last === null ? 0 : Math.max(0, held - last);
+  const [ring, len] = rings().tasks;
+  const from = last === null ? 0 : Math.max(0, len - last);
   const at = ring + from * TASK.WORDS * WORD;
-  const cnt = held - from;
+  const cnt = len - from;
   const w = words(at, cnt * TASK.WORDS);
   const subjects = new BigUint64Array(HOST.guest.mem, at, cnt * TASK.WORDS);
   return Array.from({ length: cnt }, (_, i) => {

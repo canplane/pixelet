@@ -6,8 +6,8 @@ use crate::sys;
 
 /// The drift's step as it was written before the view held the seen step:
 /// a twelfth of a cell at the nearest drawn, over the wind's speed.
-fn drift_step_s_as_written(seen: f64) -> f64 {
-    1.0 / 12.0 * lens::cell_there(seen) / libm::hypot(WIND[0], WIND[1])
+fn drift_step_s_as_written(dist: f64) -> f64 {
+    1.0 / 12.0 * lens::cell_there(dist) / libm::hypot(WIND[0], WIND[1])
 }
 
 #[test]

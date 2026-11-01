@@ -487,10 +487,10 @@ fn walk_to(
 
 /// The floor `stands` as the eye's rays draw it under `at`: the world asked
 /// at the zoom the camera grid takes there from the eye, kept in
-/// `asked` while none of it moves. A coarser answer is taken where that zoom
+/// `memo` while none of it moves. A coarser answer is taken where that zoom
 /// is not held, as a ray draws the ground it has.
 fn drawn_floor(
-    asked: &mut Memo<([f64; 2], f64, Zoom), f64>,
+    memo: &mut Memo<([f64; 2], f64, Zoom), f64>,
     at: [f64; 2],
     stands: f64,
     p: &CompanionProps,
@@ -501,7 +501,7 @@ fn drawn_floor(
         .map(|k| (center[k] - eye[k]) * (center[k] - eye[k]))
         .sum();
     let zoom = GROUND.z_at(r2);
-    asked.of(World::now(), (at, stands, zoom), |w| {
+    memo.of(World::now(), (at, stands, zoom), |w| {
         w.floor_under(&world_to_canonical(&center), zoom)
             .val()
             .flatten()

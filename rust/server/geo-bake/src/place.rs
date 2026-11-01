@@ -28,8 +28,8 @@ impl Base for PlaceTile {
         place::decode(raw).map_err(|e| e.to_string())
     }
 
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        let [a, b, c, d] = p.children().map(held);
+    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+        let [a, b, c, d] = p.children().map(get);
         Some(place::fold(p, [a?, b?, c?, d?]))
     }
 

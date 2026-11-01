@@ -276,33 +276,33 @@ pub fn flag(pool: &impl Pool, w: &impl Bricks, s: u32, cell: Zoom, zoom: Zoom, s
 }
 
 /// Whether a level's child groups, a flagged candidate's each, may be taken
-/// together: the pool has `flagged` left of `left`, and the brick, having
-/// taken `taken`, stays within `BRICK_CHILD_GROUPS`. None is taken past either:
+/// together: the pool has `flag_cnt` left of `left`, and the brick, having
+/// taken `group_cnt`, stays within `BRICK_CHILD_GROUPS`. None is taken past either:
 /// the tree is refused, its root word 0 and its records' count `STARVED`,
 /// which the renderer reads as the pool's to grow or, at its cap, the
 /// brick's to stay absent; its count `NONE` where it is `past` the brick's most,
 /// absent at once (pxl-render gpu/renderer.rs `Resident`). The bake bounds
 /// a set's and a brick's (pxl-geo-bake terrain/pool.rs).
-pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
-    flagged <= left && !past(taken, flagged)
+pub fn fits(left: u32, group_cnt: u32, flag_cnt: u32) -> bool {
+    flag_cnt <= left && !past(group_cnt, flag_cnt)
 }
 
-/// Whether a level's `flagged` child groups take a brick that has taken `taken`
+/// Whether a level's `flag_cnt` child groups take a brick that has taken `group_cnt`
 /// past its most, `BRICK_CHILD_GROUPS`: refused whatever the pool holds, so its
 /// build keeps `NONE` for its records' count rather than `STARVED`, which
 /// the pool's growth answers (pxl-shader `way_tree_cs`).
-pub fn past(taken: u32, flagged: u32) -> bool {
-    flagged > BRICK_CHILD_GROUPS - taken
+pub fn past(group_cnt: u32, flag_cnt: u32) -> bool {
+    flag_cnt > BRICK_CHILD_GROUPS - group_cnt
 }
 
-/// Whether a level's `flagged` child groups take a brick that has taken `taken`
+/// Whether a level's `flag_cnt` child groups take a brick that has taken `group_cnt`
 /// past the `child_groups` its scratch holds (`scratch_child_groups`), whose freed
 /// child groups and records each have room for so many: not taken, its build
 /// keeping `CRAMPED` for its records' count, which the scratch's growth
 /// answers (pxl-shader `way_tree_cs`). Asked after `past`, so it marks
 /// only what a larger scratch holds.
-pub fn is_cramped(child_groups: u32, taken: u32, flagged: u32) -> bool {
-    taken + flagged > child_groups
+pub fn is_cramped(child_groups: u32, group_cnt: u32, flag_cnt: u32) -> bool {
+    group_cnt + flag_cnt > child_groups
 }
 
 /// The flagged candidate at `slot`, a branch whose child group begins
@@ -334,9 +334,9 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
 /// they write none. A bore's air is placed air in the tree, filling what it
 /// holds (`overwrite::voxel`), and the ground's void where a reader reads
 /// it, as the ways write it (`way::AIR`).
-pub fn leaf(pool: &mut impl Pool, kept: &impl super::ColumnSpans, cell: Zoom, slot: u32) {
+pub fn leaf(pool: &mut impl Pool, column_spans: &impl super::ColumnSpans, cell: Zoom, slot: u32) {
     let at = unpack(pool.data(slot));
-    let val = super::way_cell(kept, [at[0], at[1]], cell, at[2]);
+    let val = super::way_cell(column_spans, [at[0], at[1]], cell, at[2]);
     let word = if val == super::NOTHING {
         ground::VOID
     } else if val == super::AIR {

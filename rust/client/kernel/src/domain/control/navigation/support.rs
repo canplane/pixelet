@@ -92,13 +92,13 @@ pub fn drawn_floor(world: World<'_>, at: &Q3) -> Option<f64> {
     }
 }
 
-/// Where `at` is drawn; at `held`'s height where nothing is known.
-pub fn resolve(at: &Q3, held: V3) -> V3 {
+/// Where `at` is drawn; at `cur`'s height where nothing is known.
+pub fn resolve(at: &Q3, cur: V3) -> V3 {
     match standing(World::now(), at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => to_world(&p),
         Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => {
             let l = to_world(at);
-            [l[0], l[1], held[2]]
+            [l[0], l[1], cur[2]]
         }
     }
 }
@@ -118,12 +118,12 @@ pub fn exact(at: &Q3) -> Option<Q3> {
 }
 
 /// `resolve` for a camera's `to`, writing the leaves' Z into it once known.
-pub fn resolve_to(to: &mut Option<Q3>, held: V3) -> V3 {
-    let Some(at) = *to else { return held };
+pub fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
+    let Some(at) = *to else { return cur };
     if let Some(p) = exact(&at) {
         *to = Some(p);
     }
-    resolve(&to.unwrap_or(at), held)
+    resolve(&to.unwrap_or(at), cur)
 }
 
 /// By the world's step-slide, the way `lx`, `ly` in units across and up the

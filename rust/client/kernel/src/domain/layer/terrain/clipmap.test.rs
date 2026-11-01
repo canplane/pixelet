@@ -213,10 +213,10 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             }
         }
         // Its ways' tree into the pool's mirror, its root word naming it.
-        let [taken, _, root] = fill::tree(&back, &scratch, cell, &mut pool, next);
-        assert_ne!(taken, u32::MAX, "a brick's tree past the pool");
+        let [group_cnt, _, root] = fill::tree(&back, &scratch, cell, &mut pool, next);
+        assert_ne!(group_cnt, u32::MAX, "a brick's tree past the pool");
         back[clipmap::ROOT_AT as usize] = root;
-        next += taken;
+        next += group_cnt;
         let at = (b * CELLS_ARR_BYTES / 4) as usize;
         planes().cells[at..at + clipmap::BACK_WORDS as usize].copy_from_slice(&back);
         w.slots[b as usize].present = true;

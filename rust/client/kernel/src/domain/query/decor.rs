@@ -224,8 +224,8 @@ impl Around {
             return None;
         }
         let (mut out, mut n) = ([((0, [0; 3]), NodeSlot::NOTHING); 27], 0);
-        for (k, &held) in self.slots[z].iter().enumerate() {
-            if !held.holds() {
+        for (k, &node_slot) in self.slots[z].iter().enumerate() {
+            if !node_slot.holds() {
                 continue;
             }
             let c = [
@@ -233,10 +233,10 @@ impl Around {
                 a[1] + (k / 3 % 3) as i32 - 1,
                 a[2] + (k / 9) as i32 - 1,
             ];
-            let h = held.zoom();
+            let h = node_slot.zoom();
             let node = (h, overwrite::path(h, c.map(|v| v >> (zoom - h))));
             if !out[..n].iter().any(|&(o, _)| o == node) {
-                out[n] = (node, held);
+                out[n] = (node, node_slot);
                 n += 1;
             }
         }

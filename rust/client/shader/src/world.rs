@@ -234,11 +234,11 @@ impl<L: PaletteWords> Query for World<'_, L> {
         at: &mut Inheritance,
         zoom: u32,
         c: [i32; 3],
-        asked: [u32; 2],
+        zooms: [u32; 2],
         _t0: f32,
     ) -> In<[u32; 2]> {
         let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
-        world::node(self, &w, &w, &w.pool, at, (zoom, c), asked, cuts)
+        world::node(self, &w, &w, &w.pool, at, (zoom, c), zooms, cuts)
     }
 }
 

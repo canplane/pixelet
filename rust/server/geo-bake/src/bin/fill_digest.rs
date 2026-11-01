@@ -116,19 +116,19 @@ fn key(root: &Path, set: &Path) -> Result<String, String> {
 /// `h`: its zoom, whether it holds, whether folded, and its word.
 fn walk(
     l: &impl Columns,
-    held: NodeSlot,
+    node_slot: NodeSlot,
     (zoom, cell): (Zoom, Zoom),
     at: [i32; 3],
     h: &mut FnvHasher,
 ) {
     h.write_u32(zoom);
-    if !held.holds() {
+    if !node_slot.holds() {
         h.write_u32(0);
         return;
     }
-    h.write_u32(1 + u32::from(held.is_folded()));
-    h.write_u32(l.data(held.slot()));
-    if held.is_folded() && zoom < cell {
+    h.write_u32(1 + u32::from(node_slot.is_folded()));
+    h.write_u32(l.data(node_slot.slot()));
+    if node_slot.is_folded() && zoom < cell {
         for k in 0..8 {
             let c = [
                 2 * at[0] + (k & 1),
@@ -137,7 +137,7 @@ fn walk(
             ];
             walk(
                 l,
-                overwrite::child(l, held, zoom + 1, c),
+                overwrite::child(l, node_slot, zoom + 1, c),
                 (zoom + 1, cell),
                 c,
                 h,
@@ -160,8 +160,8 @@ fn line(name: &str, k: u32, b: &FilledBrick<'_>) -> String {
     let (l, mut sub) = (Read(b.pool), FnvHasher::default());
     if nodes > 0 {
         for z in z0 - 2..z0 + nodes as i32 + 2 {
-            let held = tree::cursor(&l, b.root, b.cell, top, [0, 0, z]);
-            walk(&l, held, (top, b.cell), [0, 0, z], &mut sub);
+            let node_slot = tree::cursor(&l, b.root, b.cell, top, [0, 0, z]);
+            walk(&l, node_slot, (top, b.cell), [0, 0, z], &mut sub);
         }
     }
     format!(

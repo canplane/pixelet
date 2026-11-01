@@ -125,7 +125,7 @@ fn idx(across: u32, c: [u32; 2]) -> u32 {
 /// that fills or lacks, or the first split too narrow to share
 /// (`cast::Until::Beam`), through the observed pyramid writing what it asks,
 /// its line left in `w` for the rays about it (`Leaving`), how far they
-/// start from it and the nodes it visited; each node it asks told to `told`
+/// start from it and the nodes it visited; each node it asks told to `visitor`
 /// (`cast::Visitor`), none where the cast needs it not.
 pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
@@ -133,7 +133,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     pyramid: &mut Pyramid,
     w: &mut W,
     c: [u32; 2],
-    told: &mut impl cast::Visitor,
+    visitor: &mut impl cast::Visitor,
 ) {
     if !o.needs(&*w, Level::Corner, c) {
         return;
@@ -155,7 +155,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         aim.detail,
         Until::Beam,
         &mut Leaving(&mut *w, base),
-        told,
+        visitor,
     );
     add_tally(pyramid, o.tally(), tally::BEAM, met.visits);
     w.set(o.hand_at(k), o.handed(&aim, met.hit.t).to_bits());
@@ -201,7 +201,7 @@ pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]
 /// is there, held from the ray's own origin, or from the root at it where
 /// that lies in another root (beam.rs `resume_walk`); through `q`, reading or
 /// writing, its line left where it ends to `keep` and each node it asks
-/// told to `told`. Its met, and the nodes the line's beam ray visited.
+/// told to `visitor`. Its met, and the nodes the line's beam ray visited.
 pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
     o: &O,
     q: &mut Q,
@@ -209,7 +209,7 @@ pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
     aim: &Aim,
     cell: [u32; 2],
     keep: &mut impl cast::Keep<Q::At>,
-    told: &mut impl cast::Visitor,
+    visitor: &mut impl cast::Visitor,
 ) -> (Trace<Q::At>, u32)
 where
     BeamLine<'a, W>: cast::Over<Q::At>,
@@ -222,21 +222,21 @@ where
     } else {
         line.node()
     };
-    let met = resume_walk(q, aim.origin, &aim.ray, aim.detail, t, &line, node, keep, told);
+    let met = resume_walk(q, aim.origin, &aim.ray, aim.detail, t, &line, node, keep, visitor);
     (met, line.visits())
 }
 
 /// Sample `s`'s ray resumed from its cell's start, walked to the cell that
 /// fills through the observed pyramid writing what it asks, and its hit
 /// left in `w` for the raster (`sample_put`), with the nodes it and its
-/// beam ray visited; each node it asks told to `told`.
+/// beam ray visited; each node it asks told to `visitor`.
 pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
     pyramid: &mut Pyramid,
     w: &mut W,
     s: [u32; 2],
-    told: &mut impl cast::Visitor,
+    visitor: &mut impl cast::Visitor,
 ) {
     // One not needed meets nothing, so draws no box (`sample_box`).
     if !o.needs(&*w, Level::Sample, s) {
@@ -260,7 +260,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         &aim,
         o.sample_cell(s),
         &mut (),
-        told,
+        visitor,
     );
     add_tally(pyramid, o.tally(), tally::SAMPLE, met.visits);
     let met = Trace {
@@ -387,7 +387,7 @@ fn went_on<O: Observer, W: Words + ?Sized>(o: &O, w: &W, s: [u32; 2]) -> bool {
 /// The ray at `at` walked again from its cell's start through the observed
 /// pyramid writing what it asks, a ray its visible sample and the pyramid left
 /// unmet, its line left where it ends to `keep` and each node it asks told
-/// to `told`: its aim, its met and the nodes its beam ray visited.
+/// to `visitor`: its aim, its met and the nodes its beam ray visited.
 pub(crate) fn walk_again<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
@@ -395,7 +395,7 @@ pub(crate) fn walk_again<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     w: &W,
     at: O::At,
     keep: &mut impl cast::Keep<Inheritance>,
-    told: &mut impl cast::Visitor,
+    visitor: &mut impl cast::Visitor,
 ) -> (Aim, Trace<Inheritance>, u32) {
     let aim = o.aim(at);
     let tag = pyramid::tag(pyramid_at(pyramid, pyramid::FRAME), o.passes()[2]);
@@ -411,7 +411,7 @@ pub(crate) fn walk_again<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         &aim,
         o.cell_of(at),
         keep,
-        told,
+        visitor,
     );
     add_tally(pyramid, o.tally(), tally::MISS, met.visits);
     (aim, met, before)

@@ -265,8 +265,8 @@ impl Base for DivisionTile {
         division::decode(raw).map_err(|e| format!("{e:?}"))
     }
 
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        let [a, b, c, d] = p.children().map(held);
+    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+        let [a, b, c, d] = p.children().map(get);
         Some(division::fold([a?, b?, c?, d?], p.zoom))
     }
 

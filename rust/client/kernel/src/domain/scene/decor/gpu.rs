@@ -240,9 +240,9 @@ fn meets(e: &[i32; 4], around: &Aabb) -> bool {
         .any(|s| i64::from(e[0]) + s < b[2] && b[0] < i64::from(e[2]) + s)
 }
 
-/// The drawing words of a hand-over `seen` makes.
-fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
-    let anchor = seen.anchor;
+/// The drawing words of a hand-over `key` makes.
+fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], key: Key) {
+    let anchor = key.anchor;
     p.fill(0);
     p[drawn::MODEL_ANGLE as usize] = (decor_model_angle() as f32).to_bits();
     p[drawn::IMPOSTOR_ANGLE as usize] = (decor_impostor_angle() as f32).to_bits();
@@ -250,7 +250,7 @@ fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
     p[at] = wrap(anchor[0] as i32);
     p[at + 1] = anchor[1] as i32 as u32;
     p[at + 2] = anchor[2] as i32 as u32;
-    if let Some([x, y, z]) = seen.scattered_cell {
+    if let Some([x, y, z]) = key.scattered_cell {
         let at = drawn::HIDE as usize;
         p[at..at + 4].copy_from_slice(&[wrap(x), y as u32, z as u32, 1]);
     }

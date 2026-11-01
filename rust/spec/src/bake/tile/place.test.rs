@@ -14,7 +14,7 @@ fn point(x: u32, y: u32) -> Q3 {
     first.up(0).inner_at(GROUND, LEAF_ZOOM, [x, y]).mid()
 }
 
-fn called<'a>(name: &'a str, category: &str, id: &'a str) -> Place<'a> {
+fn place_of<'a>(name: &'a str, category: &str, id: &'a str) -> Place<'a> {
     Place {
         name,
         category: category_of(category),
@@ -34,9 +34,9 @@ fn tile_round_trip() {
     let tile = PlaceTile::leaf(
         leaf(),
         [
-            (point(1, 2), called("Zürich HB", "train_station", "3")),
-            (point(40, 7), called("Cafe", "cafe", "9")),
-            (point(41, 7), called("", "hospital", "4")),
+            (point(1, 2), place_of("Zürich HB", "train_station", "3")),
+            (point(40, 7), place_of("Cafe", "cafe", "9")),
+            (point(41, 7), place_of("", "hospital", "4")),
         ],
     );
     assert_eq!(decode(&encode(&tile).unwrap()).unwrap(), tile);
@@ -46,7 +46,7 @@ fn tile_round_trip() {
 fn undrawn_kind_dropped() {
     let tile = PlaceTile::leaf(
         leaf(),
-        [(point(1, 2), called("School", "elementary_school", "1"))],
+        [(point(1, 2), place_of("School", "elementary_school", "1"))],
     );
     assert!(tile.is_empty());
 }
@@ -57,8 +57,8 @@ fn cell_keeps_first() {
     let tile = PlaceTile::leaf(
         leaf(),
         [
-            (point(8, 10), called("Cafe", "cafe", "1")),
-            (point(24, 10), called("Hospital", "hospital", "9")),
+            (point(8, 10), place_of("Cafe", "cafe", "1")),
+            (point(24, 10), place_of("Hospital", "hospital", "9")),
         ],
     );
     assert_eq!(shown_at(&tile, 15), ["Hospital"]);
@@ -72,8 +72,8 @@ fn parent_from_children() {
     let child = PlaceTile::leaf(
         leaf(),
         [
-            (point(10, 10), called("Peak", "mountain", "1")),
-            (point(300, 10), called("Cafe", "cafe", "2")),
+            (point(10, 10), place_of("Peak", "mountain", "1")),
+            (point(300, 10), place_of("Cafe", "cafe", "2")),
         ],
     );
     let empty = PlaceTile::default();

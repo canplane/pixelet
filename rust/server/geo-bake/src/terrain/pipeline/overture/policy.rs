@@ -333,7 +333,7 @@ pub(crate) fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
 /// route or a strait's label line, nor of a crossing, a line over a road the
 /// road already shows; and not where a line draws it, cut square there, so
 /// the paint ends where the line begins.
-pub fn ways(row: &Part, drawn: &[WayRange], tile_min: G3857) -> Vec<Feature> {
+pub fn ways(row: &Part, way_ranges: &[WayRange], tile_min: G3857) -> Vec<Feature> {
     if row.subtype == "water"
         || row.tags.tunnel
         || row.tags.indoor
@@ -344,7 +344,7 @@ pub fn ways(row: &Part, drawn: &[WayRange], tile_min: G3857) -> Vec<Feature> {
     // the lines' ranges are the segment's; in the part's own
     let [a0, b0] = row.span;
     let lined = merged(
-        drawn
+        way_ranges
             .iter()
             .filter(|c| c.gers_id == row.gers_id && c.range[1] > a0 && c.range[0] < b0)
             .map(|c| c.range.map(|f| ((f - a0) / (b0 - a0)).clamp(0.0, 1.0)))

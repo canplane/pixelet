@@ -527,8 +527,8 @@ impl Model {
                         .map(|&i| d[i] * d[i])
                         .sum::<f32>()
                         .sqrt();
-                    let moved = (d[12] * d[12] + d[13] * d[13] + d[14] * d[14]).sqrt();
-                    moved + linear * self.radius
+                    let shift = (d[12] * d[12] + d[13] * d[13] + d[14] * d[14]).sqrt();
+                    shift + linear * self.radius
                 })
                 .fold(0.0f32, f32::max)
         };

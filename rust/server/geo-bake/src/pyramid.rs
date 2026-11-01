@@ -53,7 +53,7 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     }
 
     /// `p` from its sources; None where a required one is not held.
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self>;
+    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self>;
 
     /// Which of its children are tiles, as the tile says.
     fn occupancy(&self) -> Occupancy;

@@ -259,8 +259,8 @@ impl LocationIndicator {
 
     /// The zone grounded at the fix and drawn where it changed: its center, none
     /// where the fix has no height yet.
-    fn ground(&mut self, world: World, draw: &mut DrawList, seen: Key) -> Option<V3> {
-        let (device, pos) = (seen.device, seen.pos);
+    fn ground(&mut self, world: World, draw: &mut DrawList, key: Key) -> Option<V3> {
+        let (device, pos) = (key.device, key.pos);
         // The fix names a place and not how high.
         if let Some(z) = world.surface_support(&device).val().flatten() {
             self.last_known_center_z = Some(z);

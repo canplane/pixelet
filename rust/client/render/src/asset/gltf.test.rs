@@ -18,7 +18,7 @@ fn parse(bytes: &[u8]) -> Result<Gltf, MarshalError> {
     }
 }
 
-fn refused(bytes: &[u8]) -> Errno {
+fn errno_of(bytes: &[u8]) -> Errno {
     parse(bytes).expect_err("refused").errnum
 }
 
@@ -109,7 +109,7 @@ fn triangle_parses() {
 #[test]
 fn idx_past_vertices_refused() {
     let bytes = glb(TRIANGLE, &triangle_bin([0, 1, 3]));
-    assert_eq!(refused(&bytes), Errno::EBADMSG);
+    assert_eq!(errno_of(&bytes), Errno::EBADMSG);
 }
 
 #[test]
@@ -232,19 +232,19 @@ fn unread_refused() {
         r#""count":3,"type":"VEC3"}"#,
         r#""count":3,"type":"VEC3","sparse":{"count":1}}"#,
     )]);
-    assert_eq!(refused(&sparse), Errno::ENOTSUP);
+    assert_eq!(errno_of(&sparse), Errno::ENOTSUP);
     let required = edited(&[(
         r#"{"asset":"#,
         r#"{"extensionsRequired":["KHR_draco_mesh_compression"],"asset":"#,
     )]);
-    assert_eq!(refused(&required), Errno::ENOTSUP);
+    assert_eq!(errno_of(&required), Errno::ENOTSUP);
 }
 
 #[test]
 fn chunk_past_file_refused() {
     let mut bytes = edited(&[]);
     bytes[12..16].copy_from_slice(&u32::MAX.to_le_bytes());
-    assert_eq!(refused(&bytes), Errno::EBADMSG);
+    assert_eq!(errno_of(&bytes), Errno::EBADMSG);
 }
 
 #[test]
@@ -254,7 +254,7 @@ fn oversize_decode_refused() {
         r#"{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}"#,
         r#"{"componentType":5126,"count":1e9,"type":"VEC3"}"#,
     )]);
-    assert_eq!(refused(&zeros), Errno::EFBIG);
+    assert_eq!(errno_of(&zeros), Errno::EFBIG);
     // One large accessor read again for each of a few primitives.
     let vertices = 10_000;
     let primitive = r#"{"attributes":{"POSITION":0},"indices":1}"#;
@@ -279,7 +279,7 @@ fn oversize_decode_refused() {
     }
     let mut bin = vec![0; vertices * 12];
     bin.extend([0, 0, 1, 0, 2, 0]);
-    assert_eq!(refused(&glb(&json, &bin)), Errno::EFBIG);
+    assert_eq!(errno_of(&glb(&json, &bin)), Errno::EFBIG);
 }
 
 #[test]
@@ -293,7 +293,7 @@ fn mesh_counted_per_node() {
         ),
         (r#"{"mesh":0}"#, &nodes),
     ]);
-    assert_eq!(refused(&instanced), Errno::EFBIG);
+    assert_eq!(errno_of(&instanced), Errno::EFBIG);
 }
 
 #[test]

@@ -323,15 +323,17 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         || terrain.revision() != w.read
         || kept != w.upload_cnt;
     for clip_level in 0..CLIP_LEVELS {
-        let (center, laid) = layout(clip_level);
+        let (center, layout_cell) = layout(clip_level);
         let p = at[center as usize];
         let cell = match (center, p) {
             // Where its line says the ground: open sea's leaf is the tile over it.
             (Center::Destination, Some(p)) => {
                 let leaf = tile_at(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
-                terrain.src(leaf).map_or(laid, |t| GROUND.cell_zoom(t.zoom))
+                terrain
+                    .src(leaf)
+                    .map_or(layout_cell, |t| GROUND.cell_zoom(t.zoom))
             }
-            _ => laid,
+            _ => layout_cell,
         };
         let first = p.map(|p| clipmap::origin(cell, cell_at(cell, p)));
         let was = (

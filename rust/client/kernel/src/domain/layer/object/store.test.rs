@@ -31,10 +31,16 @@ fn write_undo_round_trip() {
         let finest = at.map(|v| v << (OBJECT_FINEST - OBJECT_COARSEST));
         assert!(
             {
-                let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
-                held.holds()
-                    && !held.is_folded()
-                    && overwrite::val(&store.columns(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
+                let node_slot = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
+                node_slot.holds()
+                    && !node_slot.is_folded()
+                    && overwrite::val(
+                        &store.columns(),
+                        node_slot,
+                        Cut::NONE,
+                        OBJECT_FINEST,
+                        finest,
+                    ) == 3
             },
             "a cell leaf covers its steps"
         );
@@ -116,9 +122,9 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
     for z in -4..8 {
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
-                let held = store.cursor((target, [x, y, z]), target);
-                let v = overwrite::val(&store.columns(), held, Cut::NONE, target, [x, y, z]);
-                let kept = answer::eighths(overwrite::fill_share(&store.columns(), held));
+                let node_slot = store.cursor((target, [x, y, z]), target);
+                let v = overwrite::val(&store.columns(), node_slot, Cut::NONE, target, [x, y, z]);
+                let kept = answer::eighths(overwrite::fill_share(&store.columns(), node_slot));
                 if v != VOID && kept > 0 {
                     out.insert([x, y, z], (v, kept));
                 }

@@ -55,7 +55,7 @@ impl Query for Ground<'_, '_> {
         at: &mut Inheritance,
         zoom: u32,
         c: [i32; 3],
-        asked: [u32; 2],
+        zooms: [u32; 2],
         _t0: f32,
     ) -> In<[u32; 2]> {
         let w = *self.0;
@@ -66,7 +66,7 @@ impl Query for Ground<'_, '_> {
             &w.pool,
             at,
             (zoom, c),
-            asked,
+            zooms,
             [Cut::NONE; 2],
         )
     }

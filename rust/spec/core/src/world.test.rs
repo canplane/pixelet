@@ -138,7 +138,7 @@ impl Query for Counter<'_> {
         at: &mut Inheritance,
         zoom: Zoom,
         c: [i32; 3],
-        asked: [Zoom; 2],
+        zooms: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
         self.nodes += 1;
@@ -150,7 +150,7 @@ impl Query for Counter<'_> {
             &Nothing,
             at,
             (zoom, c),
-            asked,
+            zooms,
             [Cut::NONE; 2],
         )
     }

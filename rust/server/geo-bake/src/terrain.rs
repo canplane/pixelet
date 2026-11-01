@@ -60,8 +60,8 @@ impl Base for TerrainTile {
         neighborhood(p).to_vec()
     }
 
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        fold_terrain(neighborhood(p).map(held), p.zoom).map(|t| terrain::drawn(p, t))
+    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+        fold_terrain(neighborhood(p).map(get), p.zoom).map(|t| terrain::drawn(p, t))
     }
 
     fn occupancy(&self) -> Occupancy {

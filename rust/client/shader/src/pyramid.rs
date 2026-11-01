@@ -160,7 +160,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
         n: &mut Inheritance,
         zoom: u32,
         c: [i32; 3],
-        asked: [u32; 2],
+        zooms: [u32; 2],
         t0: f32,
     ) -> In<[u32; 2]> {
         let first = bucket_of(zoom, c);
@@ -173,10 +173,10 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
             let mut k = 0;
             while k < pyramid::BUCKET {
                 let w = pyramid::entry_at(first + k);
-                let held = pyramid_load(self.pyramid, w);
-                if held != pyramid::CLAIMED && held != 0 && is_node(self.pyramid, w, zoom, c) {
-                    if pyramid::holds(held, asked) {
-                        if pyramid::tag_of(held) == self.tag {
+                let word = pyramid_load(self.pyramid, w);
+                if word != pyramid::CLAIMED && word != 0 && is_node(self.pyramid, w, zoom, c) {
+                    if pyramid::holds(word, zooms) {
+                        if pyramid::tag_of(word) == self.tag {
                             // Kept by a walk of this pass: asked of the
                             // world, as its words may be half written, and
                             // left to that walk.
@@ -197,7 +197,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                             pyramid_at(self.pyramid, w + pyramid::W_ASSET),
                             pyramid_at(self.pyramid, w + pyramid::W_ASSET + 1),
                         ];
-                        if pyramid_load(self.pyramid, w) == held {
+                        if pyramid_load(self.pyramid, w) == word {
                             *n = at;
                             return In { kind, asset };
                         }
@@ -209,10 +209,10 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                     // written over. One this frame asked so (the eye's and
                     // the light's ask the nodes near the eye apart) stands
                     // beside it.
-                    if pyramid::tag_of(held) / pyramid::PASSES < self.tag / pyramid::PASSES {
-                        (to, key) = (first + k, held);
+                    if pyramid::tag_of(word) / pyramid::PASSES < self.tag / pyramid::PASSES {
+                        (to, key) = (first + k, word);
                     }
-                } else if held == 0 && free == pyramid::NONE {
+                } else if word == 0 && free == pyramid::NONE {
                     free = first + k;
                 }
                 k += 1;
@@ -224,7 +224,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                 (to, key) = (v, pyramid_load(self.pyramid, pyramid::entry_at(v)));
             }
         }
-        let answer = Query::node(&mut self.world, n, zoom, c, asked, t0);
+        let answer = Query::node(&mut self.world, n, zoom, c, zooms, t0);
         let w = pyramid::entry_at(to);
         if to != pyramid::NONE
             && (self.assets
@@ -252,7 +252,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
             pyramid_put(self.pyramid, k + 1, c[0] as u32);
             pyramid_put(self.pyramid, k + 2, c[1] as u32);
             pyramid_put(self.pyramid, k + 3, c[2] as u32);
-            pyramid_store(self.pyramid, w, pyramid::key(self.tag, asked));
+            pyramid_store(self.pyramid, w, pyramid::key(self.tag, zooms));
         }
         answer
     }

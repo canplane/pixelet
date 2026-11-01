@@ -275,7 +275,7 @@ fn record(
 }
 
 /// The clip level's brick at `place` (in bricks) of `tile`, handed into
-/// `handed` (`record`) and filled into `column`, its spans into `kept`, its
+/// `fresh` (`record`) and filled into `column`, its spans into `span_scratch`, its
 /// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-spec-core
 /// `fill::brick`): the most spans a column makes.
 pub(crate) fn brick_spans(
@@ -283,14 +283,14 @@ pub(crate) fn brick_spans(
     held: &TerrainTile,
     place: [u32; 2],
     scratch: &mut [(u32, u32)],
-    [handed, column, kept]: [&mut [u32]; 3],
+    [fresh, column, span_scratch]: [&mut [u32]; 3],
 ) -> u32 {
     use pxl_spec_core::clipmap::BRICK;
-    record(tile, held, place, scratch, handed);
+    record(tile, held, place, scratch, fresh);
     let cell = GROUND.cell_zoom(tile.zoom);
     let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * BRICK) as i32);
     let first = [pxl_spec_core::wrap_idx(cell, first[0]), first[1]];
-    fill::brick(handed, column, kept, place, cell, first)
+    fill::brick(fresh, column, span_scratch, place, cell, first)
 }
 
 /// The child groups the clip levels' trees take wherever the eye is, of the
@@ -420,7 +420,7 @@ pub fn fill_fit(
         return Ok(fit);
     }
     let mut scratch = vec![(0, 0); WAYS_BRICK_SEGMENTS];
-    let (mut handed, mut column, mut kept) = (
+    let (mut fresh, mut column, mut span_scratch) = (
         vec![0; HANDED_WORDS as usize],
         vec![0; BRICK_WORDS as usize],
         vec![0; SCRATCH_WORDS as usize],
@@ -435,37 +435,38 @@ pub fn fill_fit(
             held,
             place,
             &mut scratch,
-            [&mut handed, &mut column, &mut kept],
+            [&mut fresh, &mut column, &mut span_scratch],
         );
         if spans > way::SPANS as u32 {
             return Err((place, Unfit::Spans(spans)));
         }
-        let cell = fill::cell_of(&handed, 0);
+        let cell = fill::cell_of(&fresh, 0);
         // Asked before the build, which refuses past either alike.
         let (_, nodes) = fill::root_span(&column, 0, cell);
         if nodes > ROOT_NODES {
             return Err((place, Unfit::Nodes(nodes)));
         }
-        let [taken, child_groups, root] = fill::tree(&column, &kept, cell, &mut pool, 1);
-        if taken == u32::MAX {
+        let [group_cnt, child_groups, root] =
+            fill::tree(&column, &span_scratch, cell, &mut pool, 1);
+        if group_cnt == u32::MAX {
             return Err((place, Unfit::ChildGroups));
         }
         each(
             k,
             &FilledBrick {
                 column: &column,
-                spans: &kept,
+                spans: &span_scratch,
                 cell,
                 pool: &pool,
                 root,
-                peak_groups: taken,
+                peak_groups: group_cnt,
                 groups: child_groups,
             },
         );
         if child_groups > 0 {
             fit.bricks.push((k, child_groups));
         }
-        fit.peak_groups = fit.peak_groups.max(taken);
+        fit.peak_groups = fit.peak_groups.max(group_cnt);
     }
     Ok(fit)
 }

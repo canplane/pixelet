@@ -188,7 +188,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     if opacity <= 0.0 {
         return;
     }
-    let moved = drift(f64::from(env[ENV_SKY + 1]));
+    let off = drift(f64::from(env[ENV_SKY + 1]));
     let base = layer_u();
     let largest = CLOUD_WIDTH[1];
     // As far as the eye draws, a flat layer hiding under no horizon, and no
@@ -196,15 +196,15 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let dist = observation::eye_draw_dist()
         .unwrap_or(0.0)
         .min(DRAW_DIST_MAX);
-    let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
+    let on_map = [eye[0] + off[0], eye[1] + off[1]];
     let span = |k: usize| {
         libm::floor((on_map[k] - dist) / PATCH) as i64
             ..=libm::floor((on_map[k] + dist) / PATCH) as i64
     };
     let near = |key: [i64; 2]| {
         let corner = [
-            key[0] as f64 * PATCH - moved[0],
-            key[1] as f64 * PATCH - moved[1],
+            key[0] as f64 * PATCH - off[0],
+            key[1] as f64 * PATCH - off[1],
         ];
         let gap = |lo: f64, v: f64| (lo - v).max(v - lo - PATCH).max(0.0);
         let x0 = nearest(corner[0], eye[0]);
@@ -258,8 +258,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let frame_eye = frame.eye;
     for (&key, b) in &c.patches {
         let corner = [
-            key[0] as f64 * PATCH - moved[0],
-            key[1] as f64 * PATCH - moved[1],
+            key[0] as f64 * PATCH - off[0],
+            key[1] as f64 * PATCH - off[1],
         ];
         let [zlo, zhi] = b.heights.map(f64::from);
         let half = largest / 2.0;

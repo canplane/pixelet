@@ -293,21 +293,22 @@ impl Store {
         }
     }
 
-    /// `descend` under the node `at` of `zoom` that holds `held`, by the step
+    /// `descend` under the node `at` of `zoom` that holds `node_slot`, by the step
     /// every descent of the tree takes (`overwrite::child`).
-    fn walk(&self, held: NodeSlot, zoom: Zoom, at: [i32; 3], about: f64, enter: &mut Enter) {
-        if !held.holds() {
+    fn walk(&self, node_slot: NodeSlot, zoom: Zoom, at: [i32; 3], about: f64, enter: &mut Enter) {
+        if !node_slot.holds() {
             return;
         }
-        let leaf = (!held.is_folded()).then(|| Leaf::of(self.tree.data()[held.slot() as usize]));
+        let leaf =
+            (!node_slot.is_folded()).then(|| Leaf::of(self.tree.data()[node_slot.slot() as usize]));
         let here = node_near(zoom, at, about);
-        if !enter(zoom, here, &cube(zoom, here), leaf) || !held.is_folded() {
+        if !enter(zoom, here, &cube(zoom, here), leaf) || !node_slot.is_folded() {
             return;
         }
         for k in 0..8 {
             let child = wrap_cell(zoom + 1, child_of(at, k));
             self.walk(
-                self.child(&held, (zoom + 1, child), zoom + 1),
+                self.child(&node_slot, (zoom + 1, child), zoom + 1),
                 zoom + 1,
                 child,
                 about,
@@ -352,13 +353,13 @@ impl Store {
         visit: &mut dyn FnMut(&Entry),
     ) {
         let about = about(query);
-        for &((zoom, at), held) in from {
-            if !held.holds() {
+        for &((zoom, at), node_slot) in from {
+            if !node_slot.holds() {
                 continue;
             }
-            let z = held.zoom();
+            let z = node_slot.zoom();
             let at = wrap_cell(z, at.map(|c| c >> (zoom - z)));
-            self.walk(held, z, at, about, &mut |zoom, at, whole, leaf| {
+            self.walk(node_slot, z, at, about, &mut |zoom, at, whole, leaf| {
                 if whole.meet(*query).is_none() {
                     return false;
                 }
@@ -370,16 +371,22 @@ impl Store {
         }
     }
 
-    /// Every leaf meeting the cube at `zoom` that holds `held`, X in the
+    /// Every leaf meeting the cube at `zoom` that holds `node_slot`, X in the
     /// cube's frame: walked from the slot the cursor names, the node's own or
     /// the leaf over it.
-    fn each_in(&self, zoom: Zoom, at: [i32; 3], held: NodeSlot, visit: &mut dyn FnMut(&Entry)) {
-        if !held.holds() {
+    fn each_in(
+        &self,
+        zoom: Zoom,
+        at: [i32; 3],
+        node_slot: NodeSlot,
+        visit: &mut dyn FnMut(&Entry),
+    ) {
+        if !node_slot.holds() {
             return;
         }
-        let z = held.zoom();
+        let z = node_slot.zoom();
         self.walk(
-            held,
+            node_slot,
             z,
             at.map(|c| c >> (zoom - z)),
             about(&cube(zoom, at)),
@@ -394,9 +401,14 @@ impl Store {
 
     /// The value placed at exactly the node `at` of `zoom`, if one is, read
     /// off the cursor a descent holds there (`Query::cursor`, `Query::child`).
-    pub(crate) fn entry_at(&self, zoom: Zoom, at: [i32; 3], held: NodeSlot) -> Option<Entry> {
-        (held.holds() && !held.is_folded() && held.zoom() == zoom)
-            .then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[held.slot() as usize])))
+    pub(crate) fn entry_at(&self, zoom: Zoom, at: [i32; 3], node_slot: NodeSlot) -> Option<Entry> {
+        (node_slot.holds() && !node_slot.is_folded() && node_slot.zoom() == zoom).then(|| {
+            Entry::of(
+                zoom,
+                at,
+                Leaf::of(self.tree.data()[node_slot.slot() as usize]),
+            )
+        })
     }
 
     /// What a leaf carries beyond its id, if anything.
@@ -462,16 +474,16 @@ impl Store {
     /// at it or under it. One over it with a record is never split.
     fn release(&mut self, zoom: Zoom, at: [i32; 3]) {
         let mut freed = Vec::new();
-        let held = self.cursor((zoom, at), zoom);
-        if held.holds() && !held.is_folded() {
-            let z = held.zoom();
+        let node_slot = self.cursor((zoom, at), zoom);
+        if node_slot.holds() && !node_slot.is_folded() {
+            let z = node_slot.zoom();
             xpute_kit::ensure!(
-                z == zoom || Leaf::of(self.tree.data()[held.slot() as usize]).ext == NONE,
+                z == zoom || Leaf::of(self.tree.data()[node_slot.slot() as usize]).ext == NONE,
                 ENOTRECOVERABLE,
                 z
             );
         }
-        self.each_in(zoom, at, held, &mut |e| {
+        self.each_in(zoom, at, node_slot, &mut |e| {
             if e.ext != NONE {
                 freed.push((e.state, e.ext));
             }
@@ -502,12 +514,12 @@ impl Store {
     /// The node `at` at `SHARD_ZOOM` emptied where `set_fold` held it, no
     /// leaf under it; its cube where it changed.
     pub(crate) fn clear_fold(&mut self, at: [i32; 3]) -> Option<Aabb> {
-        let held = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
-        if !held.is_folded() || held.zoom() != SHARD_ZOOM {
+        let node_slot = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
+        if !node_slot.is_folded() || node_slot.zoom() != SHARD_ZOOM {
             return None;
         }
         let mut leaf = false;
-        self.each_in(SHARD_ZOOM, at, held, &mut |_| leaf = true);
+        self.each_in(SHARD_ZOOM, at, node_slot, &mut |_| leaf = true);
         if leaf {
             return None;
         }
@@ -525,8 +537,9 @@ impl Store {
     /// or what its leaves fold to; none where nothing is under it.
     #[cfg(test)]
     pub(crate) fn word_at(&self, at: [i32; 3]) -> Option<u32> {
-        let held = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
-        (held.holds() && held.zoom() == SHARD_ZOOM).then(|| self.tree.data()[held.slot() as usize])
+        let node_slot = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
+        (node_slot.holds() && node_slot.zoom() == SHARD_ZOOM)
+            .then(|| self.tree.data()[node_slot.slot() as usize])
     }
 
     #[cfg(test)]
@@ -613,12 +626,12 @@ impl Query for Store {
     /// node (pxl-kernel domain/view/observation.rs `bricks`, `order_of_tile`).
     fn bound<const D: usize>(
         &self,
-        held: &NodeSlot,
+        node_slot: &NodeSlot,
         node: Node<D>,
         _: Zoom,
     ) -> Answer<Option<Aabb>> {
         Answer::Exact(match D {
-            3 => held.holds().then(|| region(node)),
+            3 => node_slot.holds().then(|| region(node)),
             _ => self.column(&mut Walk::default(), (node.0, [node.1[0], node.1[1]])),
         })
     }

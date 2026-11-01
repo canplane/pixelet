@@ -272,8 +272,8 @@ pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
 /// a node beside the box holds a slot the write changed, and reads another
 /// node's what is placed after it.
 pub fn reads_written(placed: u32, first: u32) -> bool {
-    let held = NodeSlot::of_word(placed);
-    held.holds() && held.slot().wrapping_sub(first) < overwrite::CHILDREN
+    let node_slot = NodeSlot::of_word(placed);
+    node_slot.holds() && node_slot.slot().wrapping_sub(first) < overwrite::CHILDREN
 }
 
 /// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,
