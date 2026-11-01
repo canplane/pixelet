@@ -21,6 +21,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 
 use super::ray::{at_zoom, cell_zoom_at, Ray, Until};
 use super::world::World;
+use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::*;
 use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::cast::Detail;
@@ -52,7 +53,9 @@ fn xy(at: &Q3) -> [f64; 2] {
 /// What a walker meets straight up and down the cell over `xy` at the tile
 /// zoom `zoom`'s cells, asked of its columns at the finest zoom anything is
 /// placed at in it, `across` a side, a ray through each one's middle at that
-/// zoom; and the first tile an answer lacked.
+/// zoom; and the first tile an answer lacked. Its rays' tiles' lines each
+/// stepped from the last ray's (`lines`), handed on from the column it was
+/// made beside, as they climb the same tiles over the same tile cache.
 struct Upright<'w, 'a> {
     world: &'w World<'a>,
     corner: [f64; 2],
@@ -61,10 +64,11 @@ struct Upright<'w, 'a> {
     detail: Detail,
     lack: Option<Tile>,
     zoom: Zoom,
+    lines: Lines,
 }
 
 impl<'w, 'a> Upright<'w, 'a> {
-    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom) -> Upright<'w, 'a> {
+    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, lines: Lines) -> Upright<'w, 'a> {
         let cell = GROUND.cell_zoom(zoom);
         let side = units(cell);
         let corner = xy.map(|v| libm::floor(v / side) * side);
@@ -83,6 +87,7 @@ impl<'w, 'a> Upright<'w, 'a> {
             detail: at_zoom(zoom + finer),
             lack: None,
             zoom,
+            lines,
         }
     }
 
@@ -111,7 +116,9 @@ impl<'w, 'a> Upright<'w, 'a> {
             dir: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             t_max: (to - z).abs(),
         };
-        let (answer, _) = self.world.along(&ray, self.detail, until, None);
+        let (answer, _) = self
+            .world
+            .along(&ray, self.detail, until, None, &mut self.lines);
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
@@ -226,7 +233,7 @@ impl<'a> World<'a> {
     /// the first solid under it; none where nothing stands, a cell with no
     /// surface and nothing placed.
     pub fn surface_support(&self, at: &Q3) -> Answer<Option<f64>> {
-        let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
+        let mut c = Upright::new(self, xy(at), LEAF_ZOOM, Lines::default());
         let [lo, hi] = [BOUNDS.min[2], BOUNDS.max[2]];
         let surface = c.surface();
         // With no surface, the search starts at the highest solid, or at the reach's floor.
@@ -243,7 +250,7 @@ impl<'a> World<'a> {
     /// nothing stands under `at`.
     pub fn floor_under(&self, at: &Q3, zoom: Zoom) -> Answer<Option<f64>> {
         let start = q3::to_real(i64::from(at[2]));
-        let mut c = Upright::new(self, xy(at), zoom);
+        let mut c = Upright::new(self, xy(at), zoom, Lines::default());
         let stands = match c.lift(start) {
             z if z > start => Some(z.min(BOUNDS.max[2])),
             z => c.below(z),
@@ -256,7 +263,7 @@ impl<'a> World<'a> {
     /// where nothing stands.
     pub fn support_nearest(&self, at: &Q3) -> Answer<Option<f64>> {
         let z = q3::to_real(i64::from(at[2]));
-        let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
+        let mut c = Upright::new(self, xy(at), LEAF_ZOOM, Lines::default());
         let down = match c.lift(z) {
             t if t > z => Some(t.min(BOUNDS.max[2])),
             t => c.below(t),
@@ -342,9 +349,11 @@ impl<'a> World<'a> {
         };
         let mut at = [sx, sy].map(|v| libm::floor(v / s));
         // Out of what fills its own cell first: only what is over that is a ceiling.
+        let mut lines = Lines::default();
         floor = {
-            let mut c = Upright::new(self, center(at), LEAF_ZOOM);
+            let mut c = Upright::new(self, center(at), LEAF_ZOOM, lines);
             let f = c.lift(floor);
+            lines = c.lines;
             c.answer(f).exact()?
         };
         // Amanatides and Woo's traversal: the share of `way` at each axis's next edge.
@@ -372,7 +381,7 @@ impl<'a> World<'a> {
             into[k] += way[k].signum();
             // Short of the edge by less than a position's fraction, so the cell it ends in is this one.
             let short = edge(k) - way[k].signum() * s * 1e-6;
-            match self.step(center(at), floor, center(into), falls, walled) {
+            match self.step(center(at), floor, center(into), (falls, walled), &mut lines) {
                 Some(Some(top)) => (at, floor) = (into, top),
                 // Slid along: this axis stays in its cell, the other goes on.
                 Some(None) => (end[k], blocked[k]) = (short, true),
@@ -392,14 +401,15 @@ impl<'a> World<'a> {
     /// down onto the floor if it `falls`; the floor there, none where the
     /// cell left's ceiling stops it, the outer none where `to` or the cell
     /// left is not held at the leaf. The ceiling is asked only as high as the
-    /// climb, never past it.
+    /// climb, never past it. Its columns' rays step their tiles' lines from
+    /// `lines`, the walk's last, and leave theirs there.
     fn step(
         &self,
         from: [f64; 2],
         floor: f64,
         to: [f64; 2],
-        falls: bool,
-        walled: bool,
+        (falls, walled): (bool, bool),
+        lines: &mut Lines,
     ) -> Option<Option<f64>> {
         // Past the service area is a wall, slid along as any, to what is
         // `walled` and within it; one already past it walks out of there.
@@ -409,11 +419,12 @@ impl<'a> World<'a> {
             return Some(None);
         }
         let cell = units(GROUND.cell());
-        let mut c = Upright::new(self, to, LEAF_ZOOM);
+        let mut c = Upright::new(self, to, LEAF_ZOOM, *lines);
         let mut z = c.lift(floor);
         let moved = if z > floor {
-            let mut left = Upright::new(self, from, LEAF_ZOOM);
+            let mut left = Upright::new(self, from, LEAF_ZOOM, c.lines);
             let stopped = left.above(floor, z + cell).is_some();
+            (*lines, c.lines) = (left.lines, left.lines);
             left.answer(()).exact()?;
             (!stopped).then_some(z)
         } else {
@@ -422,6 +433,7 @@ impl<'a> World<'a> {
             }
             Some(z)
         };
+        *lines = c.lines;
         c.answer(moved).exact()
     }
 }

@@ -181,6 +181,7 @@ pub struct Line {
 /// The lines of a walk's last tile and the tiles over it, by zoom, so a walk
 /// to a tile beside it steps down only from where their lines part. Good
 /// while the tile cache it was walked over is unchanged.
+#[derive(Clone, Copy)]
 pub struct Lines {
     at: [Option<Line>; LEAF_ZOOM as usize + 1],
 }

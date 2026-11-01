@@ -235,7 +235,9 @@ impl<'a> World<'a> {
     /// one not held at all is the lack too, past which the ray tells nothing.
     /// Decor, which fills no cell, is struck at the leaf cells it passes.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
-        let (met, decor_ray) = self.along(ray, detail, Until::Opaque, self.decor_ray(ray));
+        let mut lines = Lines::default();
+        let (met, decor_ray) =
+            self.along(ray, detail, Until::Opaque, self.decor_ray(ray), &mut lines);
         let decor = decor_ray
             .and_then(|s| s.best)
             .filter(|&(d, ..)| met.val().flatten().is_none_or(|h: Hit| d < h.t));
@@ -251,19 +253,22 @@ impl<'a> World<'a> {
     /// The first cell along `ray` that `until` stops at, at the zoom `detail`
     /// asks where it meets it (pxl-spec-core `cast::first`), from the ray's
     /// origin, over the world where it stands there (pxl-spec `world::origin`).
+    /// Its tiles' lines stepped from `lines`, the ground's a walk beside it
+    /// read over the same tile cache, and left there for the next.
     pub(super) fn along(
         &self,
         ray: &Ray,
         detail: Detail,
         until: Until,
         decor_ray: Option<DecorRay>,
+        lines: &mut Lines,
     ) -> (Answer<Option<Hit>>, Option<DecorRay>) {
         let mut walker = Walker {
             world: self,
             lack: None,
             answered: false,
             decor_ray: decor_ray.map(|s| (ray, s)),
-            lines: Lines::default(),
+            lines: *lines,
         };
         let o = ray.origin;
         let end = ray.at(ray.t_max);
@@ -271,6 +276,7 @@ impl<'a> World<'a> {
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.t_max as f32);
         let q = origin(o[0], o[1], o[2]);
         let met = cast::first(&mut walker, q, &from, detail, until);
+        *lines = walker.lines;
         let met = (met.ends == End::Hit).then(|| self.hit(ray, q, met.hit));
         let answer = match (met, walker.lack, walker.answered) {
             (h, None, _) => Answer::Exact(h),
