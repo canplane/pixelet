@@ -17,6 +17,7 @@ pub mod port;
 pub mod toc;
 
 use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, ShellSnapshotEvent};
+use crate::domain::control::sensor;
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
 use crate::door::toc::key::GPU_STREAM;
@@ -124,7 +125,7 @@ fn on_host_attached(s: &mut State) {
     for handle in open {
         close_surface(handle);
     }
-    crate::domain::control::sensor::sensors_close();
+    sensor::sensors_close();
     text::text_forget();
     s.sent = Default::default();
 }
