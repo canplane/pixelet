@@ -1,0 +1,90 @@
+#!/bin/bash
+# PreToolUse(Bash): before a command runs, a cargo target it will use that
+# does not exist yet is cloned (APFS clonefile, `cp -c`) from the session
+# target last used, preferring one built from the same checkout; a worktree
+# without node modules gets main's the same way. Nothing else changes: the
+# paths are the ones the command and the cargo skill already name.
+# Never blocks the command.
+
+in=$(cat)
+cwd=$(jq -r '.cwd // empty' <<<"$in")
+cmd=$(jq -r '.tool_input.command // empty' <<<"$in")
+sid=$(jq -r '.session_id // empty' <<<"$in")
+[ -n "$cwd" ] && cd "$cwd" 2>/dev/null || exit 0
+top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
+main=${common%/.git}
+[ -d "$main/rust" ] || exit 0
+
+# Clone $1 to $2 once, atomically. The lock holds the cloner's pid; a
+# second caller waits while that process lives, and takes over a lock its
+# holder left behind.
+clone() {
+  local src=$1 dst=$2 lock="$2.seeding" pid
+  mkdir -p "${dst%/*}"
+  while [ ! -e "$dst" ]; do
+    if mkdir "$lock" 2>/dev/null; then
+      echo $$ > "$lock/pid"
+      cp -c -R "$src" "$lock/x" 2>/dev/null && [ ! -e "$dst" ] && mv "$lock/x" "$dst"
+      rm -rf "$lock"
+      return
+    fi
+    pid=$(cat "$lock/pid" 2>/dev/null)
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+      rm -rf "$lock"
+    else
+      sleep 1
+    fi
+  done
+}
+
+# A worktree's node modules and xpute's untracked lockfile, from main's.
+if [ "$top" != "$main" ]; then
+  for p in ts/node_modules xpute/ts/node_modules xpute/ts/pnpm-lock.yaml; do
+    [ -e "$main/$p" ] && clone "$main/$p" "$top/$p"
+  done
+fi
+
+case $cmd in *cargo*|*make*|*pnpm*) ;; *) exit 0 ;; esac
+
+# Session targets cargo has not used for 3 days go, once an hour at most,
+# in the background; a target being seeded is left.
+stamp=$main/rust/target/session/.swept
+if [ -d "${stamp%/*}" ] && [ -z "$(find "$stamp" -mmin -60 2>/dev/null)" ]; then
+  touch "$stamp"
+  (
+    for d in "$main"/rust/target/session/*/ "$main"/.claude/worktrees/*/rust/target/session/*/; do
+      d=${d%/}
+      case $d in *.seeding) continue ;; esac
+      [ -d "$d.seeding" ] && continue
+      f=$d/.rustc_info.json; [ -f "$f" ] || f=$d
+      [ -n "$(find "$f" -maxdepth 0 -mtime +3 2>/dev/null)" ] && rm -rf "$d"
+    done
+  ) </dev/null >/dev/null 2>&1 &
+  disown 2>/dev/null
+fi
+
+# The target the command names, else the cargo skill's.
+dst=
+val=$(grep -oE "CARGO_TARGET_DIR=(\"[^\"]*\"|'[^']*'|[^ ;&]+)" <<<"$cmd" | tail -1 | sed -E "s/^CARGO_TARGET_DIR=//; s/^[\"']//; s/[\"']\$//")
+if [ -n "$val" ]; then
+  # The cwd cargo runs in: the command's leading cd, if any.
+  d=$(grep -oE '^cd +[^ ;&]+' <<<"$cmd" | head -1 | sed -E 's/^cd +//')
+  base=$cwd; [ -n "$d" ] && base=$(cd "$cwd" && cd "$d" 2>/dev/null && pwd)
+  val=${val//'$(git rev-parse --show-toplevel)'/$top}
+  val=${val//'${CLAUDE_CODE_SESSION_ID}'/$sid}
+  val=${val//'$CLAUDE_CODE_SESSION_ID'/$sid}
+  val=${val//'$PWD'/$base}
+  [ "${val#/}" = "$val" ] && val=$base/$val
+  case $val in *'$'*|*'<'*) ;; *) dst=$val ;; esac
+fi
+[ -z "$dst" ] && [ -n "$sid" ] && dst=$top/rust/target/session/$sid
+[ -z "$dst" ] || [ -e "$dst" ] && exit 0
+
+# The session target of any checkout holding the most units; cargo reuses
+# them across checkouts, its hashes taking no absolute path.
+src=$(for d in "$main"/rust/target/session/*/ "$main"/.claude/worktrees/*/rust/target/session/*/; do
+  d=${d%/}; [ -d "$d/debug/.fingerprint" ] && echo "$(ls "$d/debug/.fingerprint" | wc -l) $d"
+done | sort -rn | head -1 | sed -E 's/^ *[0-9]+ //')
+[ -n "$src" ] && clone "$src" "$dst"
+exit 0
