@@ -3,10 +3,10 @@
 //! Every brick of a terrain set filled and its ways' tree built as a client
 //! fills and builds them, in the bake's own pass (pxl-spec
 //! `terrain::fill_fit`), each one line of what a reader reads of it: its
-//! levels' words, the families its tree took and holds, and its tree under
+//! levels' words, the child groups its tree took and holds, and its tree under
 //! each of its own nodes along z as a reader steps down it
 //! (pxl-spec-core `way::tree::cursor`), each node's holding, folding and
-//! word, no family's id. Two checkouts' lines over one set are a proof that
+//! word, no child group's id. Two checkouts' lines over one set are a proof that
 //! a change left what the fill makes as it was.
 //!
 //! The lines are a function of the sources that make them and the set they
@@ -29,9 +29,9 @@ use pxl_geo_bake::pyramid::{Base, TileSet};
 use pxl_spec::bake::tile::terrain::{self, Built, TerrainTile};
 use pxl_spec::directory;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec_core::overwrite::{self, Held, Lanes};
+use pxl_spec_core::overwrite::{self, Columns, Held};
 use pxl_spec_core::way::tree::{self, Read};
-use pxl_spec_core::{fill, window};
+use pxl_spec_core::{clipmap, fill};
 
 /// The set a proof reads when none is named: the finished one, which no
 /// bake writes while it is read (out/terrain.stage is).
@@ -114,7 +114,7 @@ fn key(root: &Path, set: &Path) -> Result<String, String> {
 
 /// The node `at` of `zoom` and every node under it a reader steps to, into
 /// `h`: its zoom, whether it holds, whether folded, and its word.
-fn walk(l: &impl Lanes, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], h: &mut FnvHasher) {
+fn walk(l: &impl Columns, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], h: &mut FnvHasher) {
     h.write_u32(zoom);
     if !held.holds() {
         h.write_u32(0);
@@ -140,17 +140,17 @@ fn walk(l: &impl Lanes, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], h:
     }
 }
 
-/// A brick's line: its levels' words, the families its build took and
+/// A brick's line: its levels' words, the child groups its build took and
 /// holds, and its tree under each of its own nodes along z its ways meet
 /// and two past either end.
 fn line(name: &str, k: u32, b: &Built<'_>) -> String {
-    let at = window::LEVELS_AT as usize;
+    let at = clipmap::LEVELS_AT as usize;
     let mut levels = FnvHasher::default();
-    for w in &b.lane[at..at + window::LEVEL_WORDS as usize] {
+    for w in &b.column[at..at + clipmap::LEVEL_WORDS as usize] {
         levels.write_u32(*w);
     }
-    let (z0, nodes) = fill::root_span(b.lane, 0, b.cell);
-    let top = b.cell - window::BRICK_SHIFT;
+    let (z0, nodes) = fill::root_span(b.column, 0, b.cell);
+    let top = b.cell - clipmap::BRICK_SHIFT;
     let (l, mut sub) = (Read(b.pool), FnvHasher::default());
     if nodes > 0 {
         for z in z0 - 2..z0 + nodes as i32 + 2 {

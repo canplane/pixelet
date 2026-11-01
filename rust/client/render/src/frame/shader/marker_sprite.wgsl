@@ -4,8 +4,8 @@
 // (marker.wgsl); one whose anchor is off the screen is drawn.
 
 @group(2) @binding(1) var nearest: texture_2d<f32>;
-@group(3) @binding(0) var sheet: texture_2d<f32>;
-@group(3) @binding(1) var sheet_sampler: sampler;
+@group(3) @binding(0) var atlas: texture_2d<f32>;
+@group(3) @binding(1) var atlas_sampler: sampler;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -36,9 +36,9 @@ struct FragOut {
 
 @fragment
 fn fs(i: VertexOut) -> FragOut {
-  let texel = textureSample(sheet, sheet_sampler, i.uv);
+  let texel = textureSample(atlas, atlas_sampler, i.uv);
   var o: FragOut;
-  // The sheet is premultiplied so its mips filter without a dark fringe.
+  // The atlas is premultiplied so its mips filter without a dark fringe.
   let color = texel.rgb / max(texel.a, 1e-4);
   o.color = vec4f(to_srgb(color * vignette_of(i.clip.xy, frame_screen(), frame_vignette())), texel.a);
   o.depth = i.upright_z;

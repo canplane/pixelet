@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 
 import { Motion } from "@/shell/ui/motion/motion.tsx";
-import { Dim } from "@/shell/ui/motion/veil.ts";
+import { Dim } from "@/shell/ui/motion/dim.ts";
 import { DIM } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";
 import { bracket } from "@/bracket.tsx";

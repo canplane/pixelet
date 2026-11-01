@@ -11,7 +11,7 @@ use super::decor::claim;
 use super::world::World;
 use crate::domain::layer::object::meta::placed;
 use crate::domain::layer::object::store::Entry;
-use crate::domain::query::decor::strike::reach;
+use crate::domain::query::decor::intersect::box_extent;
 use pxl_spec::bake::constant::EntryAt;
 
 impl<'a> World<'a> {
@@ -52,7 +52,7 @@ impl<'a> World<'a> {
     pub fn placed_occupying(&self, space: &Aabb, which: impl Fn(&Entry) -> bool) -> Option<Entry> {
         // A decor's box reaches past its cell's corner.
         let around = Aabb {
-            min: space.min.map(|v| v - reach()),
+            min: space.min.map(|v| v - box_extent()),
             max: space.max,
         };
         let mut met = None;

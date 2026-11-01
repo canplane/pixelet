@@ -31,7 +31,7 @@ pub struct GpuSample {
     /// The share of the display's pixels, each way, the world was drawn at.
     pub scale: f64,
     /// The frame's draws and their triangles, every pipeline a draw names
-    /// (pxl-render renderer.rs `FrameStat::census`, summed).
+    /// (pxl-render renderer.rs `FrameStat::draws`, summed).
     pub draws: f64,
     pub triangles: f64,
     /// The renderer's number of this frame (pxl-render renderer.rs
@@ -210,7 +210,7 @@ words!(FrameSample, FRAME::WORDS,
     heap_used_bytes => FRAME::heap_used_bytes,
 );
 
-// The `rays` group's lanes, each where FRAME lays it, from the group's first.
+// The `rays` group's columns, each where FRAME lays it, from the group's first.
 words!(RaySample, FRAME_GROUP::rays,
     eye_cast => 0, eye_rays => FRAME::eye_rays - FRAME::eye_cast,
     eye_beam => FRAME::eye_beam - FRAME::eye_cast, eye_sample => FRAME::eye_sample - FRAME::eye_cast,

@@ -1,4 +1,4 @@
-// pxl-shader/either.rs
+// pxl-shader/pass_observer.rs
 
 //! The observer of a pass both the eye and the shadow map take (observer.rs
 //! `Observer`), chosen by the head the pass is handed: one entry a pass, so
@@ -16,17 +16,17 @@ use crate::light::{self, Map, Head};
 /// (pxl-spec-core `light::HEAD_SIZE`): the shadow map where the head names
 /// one, else the eye, whose head is all zero. Each call is its observer's;
 /// no walk asks which, so the walk is one in the module whichever casts.
-/// Both walk the same world, its looks too, which only what a stop is drawn
+/// Both walk the same world, its palette indices too, which only what a stop is drawn
 /// by holds, and the map's word leaves out (light.rs `Map::word`).
-pub(crate) struct Either<'a> {
+pub(crate) struct PassObserver<'a> {
     eye: &'a Eye,
     map: Map,
     light: bool,
 }
 
-impl<'a> Either<'a> {
-    pub(crate) fn of(eye: &'a Eye, head: &Head) -> Either<'a> {
-        Either {
+impl<'a> PassObserver<'a> {
+    pub(crate) fn of(eye: &'a Eye, head: &Head) -> PassObserver<'a> {
+        PassObserver {
             eye,
             map: Map::of(eye, head),
             light: light::size(head) != 0,
@@ -39,7 +39,7 @@ impl<'a> Either<'a> {
     }
 }
 
-/// A point of either lattice (`Either`): the eye's tangents, or the map's
+/// A point of either lattice (`PassObserver`): the eye's tangents, or the map's
 /// slot; the other none.
 #[derive(Clone, Copy)]
 pub(crate) struct Point {
@@ -47,7 +47,7 @@ pub(crate) struct Point {
     pub(crate) slot: [u32; 2],
 }
 
-impl Observer for Either<'_> {
+impl Observer for PassObserver<'_> {
     type At = Point;
 
     fn tally(&self) -> u32 {

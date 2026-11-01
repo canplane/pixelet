@@ -6,7 +6,7 @@
 //! what its parent found (`Walker`). What only the CPU answers, decor,
 //! rides on that answer.
 
-use super::decor::Strike;
+use super::decor::DecorRay;
 use super::node::{coarsest, At};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
@@ -27,7 +27,7 @@ use pxl_spec_core::answer::{self, In, Kind};
 pub(super) use pxl_spec_core::cast::Until;
 use pxl_spec_core::cast::{self, Detail, End, Query, Spacing};
 use pxl_spec_core::support;
-use pxl_spec_core::support::{Footing, Line};
+use pxl_spec_core::support::{ColumnSurface, Line};
 
 /// The zooms a cell is asked at: no coarser than a tile draws and no finer
 /// than what is placed is held.
@@ -97,7 +97,7 @@ impl Ray {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Struck {
+pub enum HitKind {
     Ground,
     Object(EntryAt),
     /// Objects folded into a cell above the leaves; no single object is met.
@@ -114,7 +114,7 @@ pub struct Hit {
     pub normal: V3,
     /// The box struck.
     pub cube: Aabb,
-    pub struck: Struck,
+    pub kind: HitKind,
 }
 
 /// The world as the descent asks it, with what only the CPU carries along
@@ -125,7 +125,7 @@ pub(super) struct Walker<'w, 'a> {
     lack: Option<Tile>,
     answered: bool,
     /// The decor struck along the ray, where the walk strikes any.
-    strike: Option<(&'w Ray, Strike)>,
+    decor_ray: Option<(&'w Ray, DecorRay)>,
     /// The ground's lines the walk read, each node's stepped from them
     /// (`World::node`).
     lines: Lines,
@@ -163,15 +163,15 @@ impl<'a> Query for Walker<'_, 'a> {
         let t0 = f64::from(t0);
         // What is placed and where the ground stands about it, off what was
         // about its parent, while decor is struck there.
-        if let Some((_, s)) = self.strike.as_mut() {
-            s.about.visit(&self.world.object.lanes(), at.node);
+        if let Some((_, s)) = self.decor_ray.as_mut() {
+            s.about.visit(&self.world.object.columns(), at.node);
             if t0 < s.held && s.about_zoom(zoom) == zoom {
                 s.about.read_columns(self.world, (zoom, [c[0], c[1]]));
             }
         }
         if zoom == GROUND.cell() {
-            if let Some((ray, s)) = self.strike.as_mut().filter(|(_, s)| t0 < s.held) {
-                self.world.strike_near(s, ray, (zoom, c));
+            if let Some((ray, s)) = self.decor_ray.as_mut().filter(|(_, s)| t0 < s.held) {
+                self.world.intersect_near(s, ray, (zoom, c));
             }
         }
         let answer = match self.world.node(at, asked, &mut self.lines) {
@@ -190,8 +190,8 @@ impl<'a> Query for Walker<'_, 'a> {
         };
         self.answered = true;
         let decor = zoom < GROUND.cell()
-            && self.strike.as_ref().is_some_and(|(_, s)| {
-                t0 < s.held && self.world.may_strike(s, at.node, at.handed.shard)
+            && self.decor_ray.as_ref().is_some_and(|(_, s)| {
+                t0 < s.held && self.world.may_intersect(s, at.node, at.inherited.shard)
             });
         match answer.kind {
             // Air coarser than asked, gone into where decor may stand in it;
@@ -210,7 +210,7 @@ impl<'a> Query for Walker<'_, 'a> {
     }
 }
 
-/// A decor struck at `t`, its box entered across `axis` (`decor::strike`),
+/// A decor struck at `t`, its box entered across `axis` (`decor::intersect`),
 /// as the block it is: the box it claims and that face, as a cell is
 /// struck, so what is placed stands on that box (pxl-spec asset/id.rs
 /// `Kind::stood_on`).
@@ -223,7 +223,7 @@ fn decor_hit(ray: &Ray, t: f64, axis: usize, i: Instance) -> Hit {
         point: ray.at(t),
         normal,
         cube: claimed,
-        struck: Struck::Decor(i),
+        kind: HitKind::Decor(i),
     }
 }
 
@@ -235,8 +235,8 @@ impl<'a> World<'a> {
     /// one not held at all is the lack too, past which the ray tells nothing.
     /// Decor, which fills no cell, is struck at the leaf cells it passes.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
-        let (met, strike) = self.along(ray, detail, Until::Opaque, self.strike(ray));
-        let decor = strike
+        let (met, decor_ray) = self.along(ray, detail, Until::Opaque, self.decor_ray(ray));
+        let decor = decor_ray
             .and_then(|s| s.best)
             .filter(|&(d, ..)| met.val().flatten().is_none_or(|h: Hit| d < h.t));
         match (decor, met) {
@@ -256,13 +256,13 @@ impl<'a> World<'a> {
         ray: &Ray,
         detail: Detail,
         until: Until,
-        strike: Option<Strike>,
-    ) -> (Answer<Option<Hit>>, Option<Strike>) {
+        decor_ray: Option<DecorRay>,
+    ) -> (Answer<Option<Hit>>, Option<DecorRay>) {
         let mut walker = Walker {
             world: self,
             lack: None,
             answered: false,
-            strike: strike.map(|s| (ray, s)),
+            decor_ray: decor_ray.map(|s| (ray, s)),
             lines: Lines::default(),
         };
         let o = ray.origin;
@@ -271,32 +271,32 @@ impl<'a> World<'a> {
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.reach as f32);
         let q = origin(o[0], o[1], o[2]);
         let met = cast::first(&mut walker, q, &from, detail, until);
-        let met = (met.ends == End::Stop).then(|| self.hit(ray, q, met.stop));
+        let met = (met.ends == End::Hit).then(|| self.hit(ray, q, met.hit));
         let answer = match (met, walker.lack, walker.answered) {
             (h, None, _) => Answer::Exact(h),
             (Some(h), Some(l), _) => Answer::Coarser(Some(h), l),
             (None, Some(l), true) => Answer::Coarser(None, l),
             (None, Some(l), false) => Answer::Nothing(l),
         };
-        (answer, walker.strike.map(|(_, s)| s))
+        (answer, walker.decor_ray.map(|(_, s)| s))
     }
 
-    /// The footing down column `g` at `cell` (pxl-spec-core
-    /// `support::footing`): the top of the cell met as drawn, with what the
+    /// The column surface down column `g` at `cell` (pxl-spec-core
+    /// `support::column_surface`): the top of the cell met as drawn, with what the
     /// world lacked on the way, none where nothing a ray cannot see through
-    /// is met; and the footing itself, whose line the cells about it are
+    /// is met; and the column surface itself, whose line the cells about it are
     /// asked off (`asset_about`).
-    pub(super) fn footing(
+    pub(super) fn column_surface(
         &self,
         cell: Zoom,
         g: [i32; 2],
-    ) -> (Answer<Option<(i32, f32)>>, Footing<At>) {
+    ) -> (Answer<Option<(i32, f32)>>, ColumnSurface<At>) {
         let mut walker = self.walker();
         let side = units(cell);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell);
-        let f = support::footing(&mut walker, cell, g);
-        let met = (f.ends == End::Stop).then_some(f.top);
+        let f = support::column_surface(&mut walker, cell, g);
+        let met = (f.ends == End::Hit).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
             (m, None, _) => Answer::Exact(m),
             (Some(m), Some(l), _) => Answer::Coarser(Some(m), l),
@@ -325,7 +325,7 @@ impl<'a> World<'a> {
             world: self,
             lack: None,
             answered: false,
-            strike: None,
+            decor_ray: None,
             lines: Lines::default(),
         }
     }
@@ -334,7 +334,7 @@ impl<'a> World<'a> {
     /// stopped, in units: its node's box put back on the unit cell holding
     /// the origin, so it lies on the origin's lap, inset to the box its cell
     /// keeps.
-    fn hit(&self, ray: &Ray, q: Q3, s: cast::Stop<At>) -> Hit {
+    fn hit(&self, ray: &Ray, q: Q3, s: cast::Hit<At>) -> Hit {
         let (zoom, c) = s.at.node;
         let side = units(zoom);
         let unit = ray.origin.map(libm::floor);
@@ -348,16 +348,16 @@ impl<'a> World<'a> {
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
         normal[axis] = if ray.dir[axis] > 0.0 { -1.0 } else { 1.0 };
-        let struck = match answer::is_placed(s.asset[0]) {
+        let kind = match answer::is_placed(s.asset[0]) {
             true => self
                 .object
-                .placed(zoom, wrap_cell(zoom, c), s.at.handed.placed)
-                .map_or(Struck::Objects, |e| Struck::Object(e.id())),
-            false => Struck::Ground,
+                .placed(zoom, wrap_cell(zoom, c), s.at.inherited.placed)
+                .map_or(HitKind::Objects, |e| HitKind::Object(e.id())),
+            false => HitKind::Ground,
         };
         // A cell kept short of its cube is the box it is drawn as, about
-        // its cube's center (pxl-spec-core `cast::kept_bounds`).
-        let (lo, hi) = cast::kept_bounds(([0.0; 3], [1.0; 3]), s.asset[0]);
+        // its cube's center (pxl-spec-core `cast::fill_bounds`).
+        let (lo, hi) = cast::fill_bounds(([0.0; 3], [1.0; 3]), s.asset[0]);
         let t = f64::from(s.t);
         Hit {
             t,
@@ -367,7 +367,7 @@ impl<'a> World<'a> {
                 min: std::array::from_fn(|k| min[k] + side * f64::from(lo[k])),
                 max: std::array::from_fn(|k| min[k] + side * f64::from(hi[k])),
             },
-            struck,
+            kind,
         }
     }
 }

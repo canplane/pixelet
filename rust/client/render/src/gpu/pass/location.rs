@@ -1,11 +1,13 @@
-// pxl-render/gpu/pass/puck.rs
+// pxl-render/gpu/pass/location.rs
 
-//! The location puck: an instanced zone of unit boxes and an octahedron beacon.
+//! The location indicator: an instanced zone of unit boxes and an octahedron beacon.
 //! Each, its draw changed, marks the screen's tiles it covers where it was and
 //! where it is (gpu/pass/mark.rs), the zone its boxes the upload it reads.
 
-use crate::frame::draw::{uniform_of, DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
-use crate::frame::shader::record::{PIPELINE_PUCK_BEACON_MARK, PIPELINE_PUCK_ZONE_MARK};
+use crate::frame::draw::{
+    uniform_of, DRAW_WORDS, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE,
+};
+use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
 use crate::frame::shader::word::BOX_VERTICES;
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, Gpu, TrackedRenderPass};
 use crate::gpu::pass::mark::{self, Marks, UploadCopies};
@@ -14,7 +16,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::upload::{buf_size, Draws, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
-use crate::param::puck::beacon;
+use crate::param::location::beacon;
 
 /// The octahedron's: three for each of its eight faces.
 pub const BEACON_VERTICES: u32 = 24;
@@ -75,7 +77,7 @@ fn octahedron_lanes() -> ([f32; BEACON_LANE], [f32; BEACON_LANE]) {
     (pos, normal)
 }
 
-pub struct PuckPass {
+pub struct LocationPass {
     zone: Built,
     beacon: Built,
     /// A slot a draw, each read at its own offset (`prepare`).
@@ -94,7 +96,7 @@ pub struct PuckPass {
 }
 
 /// A mark's uniform: the draw's place and turn, as the lit pass's first
-/// words (puck.wgsl `Draw`).
+/// words (location.wgsl `Draw`).
 fn put_mark(buf: &mut [u8], (_, u): &mark::Drawn) {
     buf[..DRAW_BYTES as usize]
         .copy_from_slice(bytes(&[u[0], u[1], u[2], u[3], 0.0, 0.0, 0.0, 0.0]));
@@ -108,17 +110,17 @@ fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
 
 /// The zones drawn: one of no boxes is not.
 fn zones<'a>(draws: &Draws<'a>) -> impl Iterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
-    draws.of(PIPELINE_PUCK_ZONE).filter(|d| d[1] > 0)
+    draws.of(PIPELINE_LOCATION_ZONE).filter(|d| d[1] > 0)
 }
 
-impl PuckPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> PuckPass {
-        let zone = pipelines.build_world(g, PIPELINE_PUCK_ZONE);
-        let beacon = pipelines.build_world(g, PIPELINE_PUCK_BEACON);
+impl LocationPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> LocationPass {
+        let zone = pipelines.build_world(g, PIPELINE_LOCATION_ZONE);
+        let beacon = pipelines.build_world(g, PIPELINE_LOCATION_BEACON);
         let (box_p, box_uv, box_i) = box_lanes();
         let (oct_p, oct_n) = octahedron_lanes();
         let [r, gr, b] = linear_rgb(indicator::ACTION);
-        PuckPass {
+        LocationPass {
             frame_group: g.bind_group(zone.layouts[0], &[buf_entry(0, frame_buf)]),
             zone_uniforms: DrawUniforms::new(DRAW_BYTES, align),
             beacon_uniforms: DrawUniforms::new(DRAW_BYTES, align),
@@ -133,14 +135,14 @@ impl PuckPass {
             zone_marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_PUCK_ZONE_MARK,
+                PIPELINE_LOCATION_ZONE_MARK,
                 align,
                 (|d| d[0], put_mark),
             ),
             beacon_marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_PUCK_BEACON_MARK,
+                PIPELINE_LOCATION_BEACON_MARK,
                 align,
                 (|_| 0, put_mark),
             ),
@@ -161,7 +163,7 @@ impl PuckPass {
         let zones = self
             .zone_marks
             .prepare(g, zones(draws), uniforms, touched, uploads, kept);
-        let beacons = draws.of(PIPELINE_PUCK_BEACON);
+        let beacons = draws.of(PIPELINE_LOCATION_BEACON);
         let beacon = self
             .beacon_marks
             .prepare(g, beacons, uniforms, touched, uploads, kept);
@@ -189,14 +191,15 @@ impl PuckPass {
     /// (`Marks::reads`).
     pub fn marks_read(&self, draws: &Draws, out: &mut Vec<u32>) {
         self.zone_marks.reads(zones(draws), out);
-        self.beacon_marks.reads(draws.of(PIPELINE_PUCK_BEACON), out);
+        self.beacon_marks
+            .reads(draws.of(PIPELINE_LOCATION_BEACON), out);
     }
 
     /// What this frame listed kept for the next's marks where it was.
     pub fn keep(&mut self, draws: &Draws, uniforms: &[f32]) {
         self.zone_marks.keep(zones(draws), uniforms);
         self.beacon_marks
-            .keep(draws.of(PIPELINE_PUCK_BEACON), uniforms);
+            .keep(draws.of(PIPELINE_LOCATION_BEACON), uniforms);
     }
 
     /// Each draw's uniform in a slot of its own, written once before the
@@ -216,7 +219,7 @@ impl PuckPass {
             buf[..DRAW_BYTES as usize]
                 .copy_from_slice(bytes(&[u[0], u[1], u[2], u[3], c[0], c[1], c[2], night]));
         };
-        let beacons = draws.of(PIPELINE_PUCK_BEACON);
+        let beacons = draws.of(PIPELINE_LOCATION_BEACON);
         self.beacon_uniforms.write(
             g,
             self.beacon.layouts[1],
@@ -246,7 +249,7 @@ impl PuckPass {
         let Some(slots) = self.beacon_uniforms.slots() else {
             return;
         };
-        let cnt = draws.of(PIPELINE_PUCK_BEACON).len() as u32;
+        let cnt = draws.of(PIPELINE_LOCATION_BEACON).len() as u32;
         if cnt == 0 {
             return;
         }

@@ -1,13 +1,13 @@
 // pxl-kernel/domain/scene/character/preview.rs
 
-//! Previews for the variant picker: a character idling and spinning in
+//! Previews for the character picker: a character idling and spinning in
 //! place, drawn into the preview's own canvas from far below the world. A preview
-//! is a holder of its actor's instance: the variant's one registered model,
-//! which the instance's stance scales to one unit tall, since the previews
+//! is a holder of its actor's instance: the character's one registered model,
+//! which the instance's transform scales to one unit tall, since the previews
 //! compare silhouettes, not scale.
 
-use crate::domain::scene::actor::{Actor, Stance};
-use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
+use crate::domain::scene::actor::{Actor, Transform};
+use crate::domain::scene::character::{Character, Group};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::scene::model::asset::{model_of, ModelHandle};
@@ -30,10 +30,10 @@ const CASE_DEPTH_U: f64 = 100_000.0;
 
 struct Preview {
     id: u32,
-    variant: CharacterVariant,
+    character: Character,
     actor: Option<Actor>,
     /// Where its actor stands, once held.
-    stance: Option<Stance>,
+    transform: Option<Transform>,
     model: Option<ModelHandle>,
     spin: f64,
 }
@@ -54,18 +54,18 @@ fn previews() -> &'static mut Previews {
 pub const PREVIEWS_MAX: usize = surface::SURFACES;
 
 /// Replaces a preview already open under `id`. False where `id` names no
-/// surface or no variant.
-/// On a live surface; false for a variant there is none of.
+/// surface or no character.
+/// On a live surface; false for a character there is none of.
 pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
     preview_close(id);
-    let Some(variant) = character_variant(group, number) else {
+    let Some(character) = Character::of(group, number) else {
         return false;
     };
     previews().previews.push(Preview {
         id,
-        variant,
+        character,
         actor: None,
-        stance: None,
+        transform: None,
         model: None,
         spin: 0.0,
     });
@@ -103,12 +103,12 @@ pub fn preview_step(ctx: &mut TickContext) {
     let mut turned = false;
     for preview in &mut c.previews {
         if preview.model.is_none() {
-            preview.model = model_of(preview.variant.model, Some(preview.variant.height_u));
+            preview.model = model_of(preview.character.model, Some(preview.character.height_u));
         }
         if preview.actor.is_none() {
             if let (Some(model), Some(_)) = (
                 &preview.model,
-                load_of(preview.variant.skin).and_then(load_image),
+                load_of(preview.character.skin).and_then(load_image),
             ) {
                 let id = model.model;
                 preview.actor =
@@ -122,9 +122,9 @@ pub fn preview_step(ctx: &mut TickContext) {
             continue;
         };
         preview.spin += SPIN_RATE_RAD_S * ctx.delta;
-        // The model as registered, the variant's height tall, at one unit.
-        let scale = model.scale / preview.variant.height_u as f32;
-        preview.stance = Some(Stance {
+        // The model as registered, the character's height tall, at one unit.
+        let scale = model.scale / preview.character.height_u as f32;
+        preview.transform = Some(Transform {
             at,
             rot_z: preview.spin as f32,
             scale,
@@ -141,8 +141,8 @@ pub fn preview_step(ctx: &mut TickContext) {
 pub fn preview_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
     let mut moved = false;
     for preview in &mut previews().previews {
-        if let (Some(actor), Some(stance)) = (preview.actor.as_mut(), preview.stance) {
-            moved |= actor.tick(draw, models, frame, &stance);
+        if let (Some(actor), Some(transform)) = (preview.actor.as_mut(), preview.transform) {
+            moved |= actor.tick(draw, models, frame, &transform);
         }
     }
     moved
@@ -151,8 +151,8 @@ pub fn preview_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> b
 /// Each preview's actor into the frame's list, where it stands.
 pub fn preview_draw(draw: &mut DrawList, models: &Models, eye: V3) {
     for preview in &previews().previews {
-        if let (Some(actor), Some(stance)) = (&preview.actor, preview.stance) {
-            actor.draw(draw, models, &stance, eye);
+        if let (Some(actor), Some(transform)) = (&preview.actor, preview.transform) {
+            actor.draw(draw, models, &transform, eye);
         }
     }
 }
@@ -166,7 +166,7 @@ pub fn preview_rows() -> impl Iterator<Item = (u32, u32, (u32, &'static [u8]))> 
         Some((
             preview.id,
             preview.actor.as_ref()?.palette(),
-            load_of(preview.variant.skin).and_then(load_image)?,
+            load_of(preview.character.skin).and_then(load_image)?,
         ))
     })
 }

@@ -4,6 +4,7 @@
 
 pub mod ao;
 pub mod api;
+pub mod atlas;
 pub mod atmosphere;
 pub mod cloud;
 pub mod finish;
@@ -20,7 +21,6 @@ pub mod read;
 pub mod renderer;
 pub mod resolve;
 pub mod shadow;
-pub mod sheet;
 #[path = "gpu/span.spec.rs"]
 pub mod span_spec;
 pub mod star;

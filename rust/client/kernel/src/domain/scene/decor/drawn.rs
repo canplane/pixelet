@@ -30,8 +30,8 @@ use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::layer::lattice;
 use pxl_spec::space::layer::tile;
+use pxl_spec_core::clipmap::FIRST_CELL;
 use pxl_spec_core::decor;
-use pxl_spec_core::window::FIRST_CELL;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
 /// cell, the model's edge, an angle about the eye in radians (pxl-spec

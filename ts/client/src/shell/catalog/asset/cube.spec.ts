@@ -2,11 +2,11 @@
 //
 // GENERATED from spec/spec/asset/cube.json
 //
-// One value space: a ground cell is a byte, a Carto look numbered in the
+// One value space: a ground cell is a byte, a Carto palette entry numbered in the
 // order Carto paints, and an object's value a u16 whose byte range is
 // that palette and whose range past it is what only an object can be.
 
-/** The catalog's section a placeable cube is listed under, as Carto groups the looks. */
+/** The catalog's section a placeable cube is listed under, as Carto groups the palette entries. */
 export type CubeSection =
   | "landcover"
   | "water"
@@ -22,7 +22,7 @@ import * as object from "./cube/object.spec.ts";
 
 export { ground, object };
 
-/** The placeable cubes: the placed colors first, then the looks in paint order. */
+/** The placeable cubes: the placed colors first, then the palette entries in paint order. */
 export const CUBES: readonly number[] = [
   257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 1,
   2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,

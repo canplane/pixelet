@@ -10,7 +10,7 @@ use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::renderer::{
-    render_frame, Cast, EarthTiles, FrameInput, GroundBricks, Landing,
+    render_frame, Cast, EarthTiles, FrameInput, GroundBricks, Resident,
 };
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
@@ -26,7 +26,7 @@ use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::environment::cloud::cloud_groups;
 use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_step;
 use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_step;
-use crate::domain::scene::marker::sheet;
+use crate::domain::scene::marker::atlas;
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
@@ -53,7 +53,7 @@ pub fn is_screen_drawn() -> bool {
 const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::object::preview;
-use crate::domain::layer::terrain::window;
+use crate::domain::layer::terrain::clipmap;
 use crate::domain::scene::cast;
 use crate::domain::scene::decor::drawn;
 use crate::domain::scene::environment::cloud;
@@ -77,8 +77,8 @@ use pxl_spec::asset::sky::moon;
 use pxl_spec::object;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3;
+use pxl_spec_core::clipmap::HANDED;
 use pxl_spec_core::way::tree;
-use pxl_spec_core::window::HANDED;
 
 const _: () = assert!(
     EARTH_SLOTS == EARTH_LAYERS,
@@ -180,9 +180,9 @@ pub fn stage_render(pace: Pace) {
     let eye = o.as_ref().and_then(cast::eye);
     let mut terrain_upload = cast::upload;
     let landed = core::cell::Cell::new(false);
-    let mut terrain_landed = |b: u32, ticket: u32, landing: Landing<'_>| {
+    let mut terrain_landed = |b: u32, ticket: u32, resident: Resident<'_>| {
         landed.set(true);
-        window::on_landed(b, ticket, landing);
+        clipmap::on_resident(b, ticket, resident);
     };
     // The draws the scene bounds, and whether what it animates stepped.
     let (bounded, animated) = region::take();
@@ -203,13 +203,13 @@ pub fn stage_render(pace: Pace) {
         ground: GroundBricks {
             upload: &mut terrain_upload,
             landed: &mut terrain_landed,
-            pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::FAMILY_WORDS),
-            scratch: tree::scratch_families(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HANDED)),
+            pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
+            scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HANDED)),
             records: param::WAYS_RECORDS_FIRST_BYTES,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
-            window: window::table(),
+            window: clipmap::table(),
             shards: cast::shards(),
             overwrites: cast::overwrites(),
             decor: drawn::frame(),
@@ -217,7 +217,7 @@ pub fn stage_render(pace: Pace) {
             ray_counts: settings_store().ray_counts,
         }),
         text: text_raster,
-        sheet: sheet(),
+        atlas: atlas(),
         admit: boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().perf,
@@ -225,9 +225,9 @@ pub fn stage_render(pace: Pace) {
         animated,
     });
     // What landed, folded once after all of it, before anything reads a
-    // bound again (domain/layer/terrain/window.rs `refold`).
+    // bound again (domain/layer/terrain/clipmap.rs `refold`).
     if landed.get() {
-        window::refold();
+        clipmap::refold();
     }
     if out.redraw {
         request_world_tick();
@@ -257,7 +257,7 @@ pub fn stage_render(pace: Pace) {
     };
     DRAWN.set(Some(api::device_generation()));
     let [draws, triangles] = stat
-        .census
+        .draws
         .iter()
         .fold([0.0; 2], |[d, t], c| [d + c[0], t + c[1]]);
     set_host_frame(

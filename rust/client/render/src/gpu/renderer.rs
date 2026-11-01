@@ -8,12 +8,12 @@ use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
+use pxl_spec_core::clipmap::{FRESH_WORDS, HANDED};
 use pxl_spec_core::eye;
 use pxl_spec_core::generated::GROUPS;
 use pxl_spec_core::light::TILE as LIGHT_TILE;
 use pxl_spec_core::ray;
 use pxl_spec_core::way;
-use pxl_spec_core::window::{FRESH_WORDS, HANDED};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -22,10 +22,10 @@ use xpute_kit::status::errno::Errno;
 use crate::api_spec::surface_role;
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{
-    census_slot, DrawCensus, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID,
-    PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS,
-    UPLOAD_WORDS,
+    stats_slot, DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG,
+    PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_SKINNED,
+    REWRITE_WORDS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
@@ -42,8 +42,9 @@ use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
     pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
-    Format, Gpu, Image, Load, RenderContext, Stamp, TrackedRenderPass,
+    Format, Gpu, Image, Load, RenderContext, TimestampWrites, TrackedRenderPass,
 };
+use crate::gpu::atlas::shelf::Atlas;
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
 use crate::gpu::finish::Finish;
@@ -54,11 +55,11 @@ use crate::gpu::pack::Pack;
 use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
+use crate::gpu::pass::location::{LocationPass, BEACON_VERTICES};
 use crate::gpu::pass::mark::UploadCopies;
 use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::preview::Preview;
-use crate::gpu::pass::puck::{PuckPass, BEACON_VERTICES};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
@@ -67,7 +68,6 @@ use crate::gpu::reach::{self, Reach};
 use crate::gpu::read::Read;
 use crate::gpu::resolve::Resolve;
 use crate::gpu::shadow::{self, Shadow};
-use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
 use crate::gpu::surface::{
@@ -110,12 +110,12 @@ pub struct FrameInput<'a> {
     /// screen pass draws, a drawn pixel each; none without an eye, and none
     /// drawn.
     pub cast: Option<Cast<'a>>,
-    pub sheet: &'a mut Sheet,
+    pub atlas: &'a mut Atlas,
     pub text: TextOf,
     /// Whether the surfaces take a frame now without blocking; one admitted
     /// is drawn. Asked only once nothing else stops the frame.
     pub admit: fn() -> bool,
-    /// Whether its draws are counted (`FrameStat::census`): the profiler's
+    /// Whether its draws are counted (`FrameStat::draws`): the profiler's
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
     /// The draws among `BESIDE`'s the kernel bounds, by their handles
@@ -204,14 +204,14 @@ pub struct GroundBricks<'a> {
     /// Told each brick whose cells came back, and the fill they are of
     /// (`CellsBack::ticket`).
     pub landed: &'a mut CellsLanded<'a>,
-    /// The ways' pool's families at first (pxl-kernel domain/scene/param.rs
+    /// The ways' pool's child groups at first (pxl-kernel domain/scene/param.rs
     /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
-    /// to `way::tree::POOL_FAMILIES` (`GroundBuffers::grow`).
+    /// to `way::tree::POOL_CHILD_GROUPS` (`GroundBuffers::grow`).
     pub pool: u32,
-    /// The families each handed brick's scratch holds a tree of at first
+    /// The child groups each handed brick's scratch holds a tree of at first
     /// (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_FIRST_BYTES`): it
     /// doubles each time a build outgrows it, up to
-    /// `way::tree::BRICK_FAMILIES` (`GroundBuffers::grow_scratch`).
+    /// `way::tree::BRICK_CHILD_GROUPS` (`GroundBuffers::grow_scratch`).
     pub scratch: u32,
     /// A read's records' room at first, in bytes: every read's is doubled
     /// past a brick's records that outgrew it, up to
@@ -220,8 +220,8 @@ pub struct GroundBricks<'a> {
 }
 
 /// How a brick's fill landed: its cells are back in every case.
-pub enum Landing<'a> {
-    /// Its ways' tree built: the families it holds, their count first, a
+pub enum Resident<'a> {
+    /// Its ways' tree built: the child groups it holds, their count first, a
     /// record each (pxl-spec-core `way::tree::lay`).
     Built(&'a [u32]),
     /// To be filled again, for want of room the renderer grows: its tree not
@@ -249,7 +249,7 @@ pub const RECORD_ROOMS_BYTES: u64 =
 /// A brick whose cells came back, the fill they are of
 /// (`CellsBack::ticket`), and how its ways' tree landed; what is told may
 /// borrow its caller's for the frame.
-pub type CellsLanded<'a> = dyn FnMut(u32, u32, Landing<'_>) + 'a;
+pub type CellsLanded<'a> = dyn FnMut(u32, u32, Resident<'_>) + 'a;
 
 /// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
@@ -258,12 +258,12 @@ pub struct Cast<'a> {
     /// The eye (pxl-spec-core `eye`; pxl-kernel domain/view/lens.rs `gpu_cast`,
     /// domain/scene/cast.rs `eye`).
     pub eye: [u32; eye::WORDS],
-    /// The windows' table (pxl-spec-core `window::Entry`; pxl-kernel
-    /// domain/layer/terrain/window.rs `table`), four words a row: every window's
+    /// The windows' table (pxl-spec-core `clipmap::Entry`; pxl-kernel
+    /// domain/layer/terrain/clipmap.rs `table`), four words a row: every window's
     /// entries, the eye's first, from the top's, each the brick it wants, X
     /// and Y, the slot holding it plus one while present (`Entry::slot`)
     /// and the fill it is on its way from; then each window's first brick
-    /// (`window::ORIGIN_AT`).
+    /// (`clipmap::ORIGIN_AT`).
     pub window: &'a [i32],
     /// The service area's index (pxl-spec-core `area::Area`), its keys four a
     /// row (pxl-kernel domain/scene/cast.rs `shards`); read where it lies,
@@ -282,12 +282,12 @@ pub struct Cast<'a> {
 }
 
 /// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
-/// heap and data lanes, unwritten until the page replays the turn, the room
-/// either has before it grows, the revision they are at, and the families
+/// child pointer and data lanes, unwritten until the page replays the turn, the room
+/// either has before it grows, the revision they are at, and the child groups
 /// written since `since`, the revision they were last handed at, by their
-/// first slots (`GpuLanes`).
+/// first slots (`GpuColumns`).
 pub struct Overwrites<'a> {
-    pub heap: &'a [u32],
+    pub first_child: &'a [u32],
     pub data: &'a [u32],
     pub room: usize,
     pub revision: u32,
@@ -297,7 +297,7 @@ pub struct Overwrites<'a> {
 
 /// Where a brick's cells, which the GPU draws, come back to in the
 /// kernel's memory: its columns, levels, laid cells and root
-/// (pxl-spec-core `window::BACK_WORDS`); and the fill's ticket, never 0,
+/// (pxl-spec-core `clipmap::BACK_WORDS`); and the fill's ticket, never 0,
 /// which the kernel is told once this fill's are in.
 #[derive(Clone, Copy, Default)]
 pub struct CellsBack {
@@ -306,13 +306,13 @@ pub struct CellsBack {
 }
 
 /// A brick handed to the GPU's fill, the record the ground's windows hand
-/// on (pxl-kernel domain/layer/terrain/window.rs `fill`): its words
-/// (pxl-spec-core `window::fresh`), its four looks a cell, its tile's
+/// on (pxl-kernel domain/layer/terrain/clipmap.rs `fill`): its words
+/// (pxl-spec-core `clipmap::fresh`), its four palette indices a cell, its tile's
 /// padded samples, its lines as far as they are written
-/// (`window::LINES_AT`), and where its cells come back to.
+/// (`clipmap::LINES_AT`), and where its cells come back to.
 pub struct FreshBrick<'a> {
     pub fresh: [u32; FRESH_WORDS as usize],
-    pub looks: &'a [u8],
+    pub palette_indices: &'a [u8],
     pub samples: &'a [i16],
     pub lines: &'a [u32],
     pub back: CellsBack,
@@ -354,7 +354,7 @@ pub struct FrameStat {
     pub pack_bytes: f64,
     /// Every draw's, counted only while `counted`: its sums are the frame's
     /// draws and triangles.
-    pub census: DrawCensus,
+    pub draws: DrawStats,
     pub gpu_spans: [f64; GPU_SPAN_NAMES],
     /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
     /// order (gpu/ray/cast.rs `light_why`), and the boxes decor's slots were
@@ -499,7 +499,7 @@ pub struct Renderer {
     decor: DecorPass,
     impostor: ImpostorPass,
     skinned: SkinnedPass,
-    puck: PuckPass,
+    location: LocationPass,
     marker: MarkerPass,
     finish: Finish,
     resolve: Resolve,
@@ -510,7 +510,7 @@ pub struct Renderer {
     /// The frame's whole input as the last frame drew it (stage 2): the
     /// frame's words but the jitter, the sky's and the stars' words, the
     /// air's, the surface's textures, the draws and the uploads they read,
-    /// the markers' sheet, the clouds' words and the previews, and what came or
+    /// the markers' atlas, the clouds' words and the previews, and what came or
     /// was drawn again without words.
     frame_read: Read,
     /// The jitter in the frame's words as the GPU holds them (`JITTER`).
@@ -611,7 +611,7 @@ impl Renderer {
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
-            puck: PuckPass::new(g, &mut pipelines, frame_buf, device.align),
+            location: LocationPass::new(g, &mut pipelines, frame_buf, device.align),
             marker: MarkerPass::new(g, &mut pipelines, frame_buf, device.align),
             finish: Finish::new(g, &mut pipelines),
             resolve: Resolve::new(g, &mut pipelines),
@@ -874,7 +874,7 @@ impl Renderer {
         self.decor.marks_read(draws, &mut out);
         self.impostor
             .marks_read(draws.of(PIPELINE_IMPOSTOR), &mut out);
-        self.puck.marks_read(draws, &mut out);
+        self.location.marks_read(draws, &mut out);
         out.sort_unstable();
         out.dedup();
         out
@@ -922,7 +922,7 @@ impl Renderer {
     /// the cast's rays (stage 1, `RaysPass::prepare`); and the frame,
     /// everything the world and its light make off those rays, then over it
     /// what moves on its own — the actors, whose clips play, the clouds,
-    /// which the wind carries, the puck, the ghosts, the markers, the gizmos
+    /// which the wind carries, the location indicator, the ghosts, the markers, the gizmos
     /// (stage 2, `frame_read`). The rays hold the world as the cast left
     /// it, so the frame draws it again off them rather than off an image of
     /// it: that costs what laying an image would.
@@ -963,7 +963,7 @@ impl Renderer {
         );
         read.mark(
             self.marker
-                .sync_sheet(g, &self.mips, input.sheet, input.text),
+                .sync_atlas(g, &self.mips, input.atlas, input.text),
         );
         let lists = input.lists;
         let touched: Vec<u32> = lists
@@ -1099,7 +1099,7 @@ impl Renderer {
             .prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
         self.skinned
             .prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
-        self.puck.prepare(g, &draws, uniforms, lists_moved, b);
+        self.location.prepare(g, &draws, uniforms, lists_moved, b);
         self.marker.prepare(
             g,
             world.screen_depth_view,
@@ -1144,7 +1144,8 @@ impl Renderer {
         self.prepare_previews(g, &draws, uniforms, input.previews, lists_moved);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
-        let mut stamps: [Stamp; GPU_SPAN_NAMES] = core::array::from_fn(|span| Stamp::of(q, span));
+        let mut stamps: [TimestampWrites; GPU_SPAN_NAMES] =
+            core::array::from_fn(|span| TimestampWrites::of(q, span));
         // What outlives the frame is drawn and submitted ahead of it: from here on
         // the frame only describes itself.
         let ahead = g.encoder();
@@ -1209,8 +1210,11 @@ impl Renderer {
             let impostors =
                 self.impostor
                     .prepare_marks(g, draws.of(PIPELINE_IMPOSTOR), uniforms, t, b, k);
-            let puck = self.puck.prepare_marks(g, &draws, uniforms, t, b, k);
-            (actors || decor || impostors || puck, actors || decor_casts)
+            let location = self.location.prepare_marks(g, &draws, uniforms, t, b, k);
+            (
+                actors || decor || impostors || location,
+                actors || decor_casts,
+            )
         } else {
             (false, false)
         };
@@ -1310,7 +1314,7 @@ impl Renderer {
             self.skinned.draw_marks(&mut pass, frames, b);
             self.decor.draw_marks(&mut pass, frames, b, false);
             self.impostor.draw_marks(&mut pass, frames);
-            self.puck.draw_marks(&mut pass, frames);
+            self.location.draw_marks(&mut pass, frames);
             pass.end();
         }
         // The same from the light, where the map is drawn through its gate:
@@ -1495,8 +1499,8 @@ impl Renderer {
         self.impostor
             .draw(&mut pass, draws.of(PIPELINE_IMPOSTOR), b, frame_group);
         self.clouds.draw(&mut pass);
-        self.puck.draw_beacon(&mut pass, &draws, frame_group);
-        self.puck.draw_zone(&mut pass, &draws, b);
+        self.location.draw_beacon(&mut pass, &draws, frame_group);
+        self.location.draw_zone(&mut pass, &draws, b);
         self.draw_boxes(&mut pass, &draws);
         self.decor
             .draw_ghosts(&mut pass, &draws, b, self.models.frame);
@@ -1509,7 +1513,7 @@ impl Renderer {
         self.skinned.keep(draws.of(PIPELINE_SKINNED), uniforms);
         self.decor.keep(&draws, uniforms);
         self.impostor.keep(draws.of(PIPELINE_IMPOSTOR), uniforms);
-        self.puck.keep(&draws, uniforms);
+        self.location.keep(&draws, uniforms);
         self.kept.keep(g, ctx.encoder, &read_uploads, &touched, b);
         // The depth's bound the reach reads, in the tiles the world's pass
         // drew: the claimed, or every one without the stencil. None without
@@ -1590,7 +1594,7 @@ impl Renderer {
             self.resolve.on_drawn(gated);
             // The jitter's sequence run through once anything moved, as
             // nothing else asks for those frames while it stands. What
-            // moves on its own (an actor, the clouds, the puck) wakes the
+            // moves on its own (an actor, the clouds, the location indicator) wakes the
             // turn at its own steps and takes a place of the sequence a
             // step, held to the pixels about it: it is not hurried to the
             // display's rate.
@@ -1693,22 +1697,22 @@ impl Renderer {
         gpu_spans: [f64; GPU_SPAN_NAMES],
     ) -> FrameStat {
         let b = uploads();
-        let mut census: DrawCensus = [[0.0; 2]; DRAW_PIPELINES.len()];
+        let mut stats: DrawStats = [[0.0; 2]; DRAW_PIPELINES.len()];
         for d in draws.iter().filter(|_| counted) {
             let tris = match d[4] {
                 PIPELINE_GHOST_BOX => d[1] * BOX_VERTICES / 3,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
                 PIPELINE_IMPOSTOR => 2 * d[2],
                 PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3),
-                PIPELINE_PUCK_ZONE => BOX_VERTICES / 3 * d[1],
-                PIPELINE_PUCK_BEACON => BEACON_VERTICES / 3,
+                PIPELINE_LOCATION_ZONE => BOX_VERTICES / 3 * d[1],
+                PIPELINE_LOCATION_BEACON => BEACON_VERTICES / 3,
                 PIPELINE_MARKER => 2 * d[1],
                 // Two a segment, and the faces'.
                 PIPELINE_DEBUG => d[1] + d[2] / 3,
                 PIPELINE_CAMERA_GRID => 1,
                 _ => 0,
             };
-            let c = &mut census[census_slot(d[4])];
+            let c = &mut stats[stats_slot(d[4])];
             c[0] += 1.0;
             c[1] += tris as f64;
         }
@@ -1721,7 +1725,7 @@ impl Renderer {
             uploads: b.cnt as f64,
             upload_bytes: b.bytes as f64,
             pack_bytes: self.pack.bytes as f64,
-            census,
+            draws: stats,
             gpu_spans,
             light_moved: f64::from(self.screen.light_why()),
             decor_boxes: f64::from(self.screen.decor_boxes()),

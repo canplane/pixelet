@@ -250,11 +250,11 @@ uniform! {
 }
 pub const MARKER_FLOATS: usize = floats(marker::FIELDS);
 
-/// A marker's instance and a puck zone's box's, in floats, as the kernel
-/// lays them (pxl-kernel domain/scene/marker/set.rs, location_puck.rs) and
-/// marker.wgsl and puck_zone.wgsl read them.
+/// A marker's instance and a location indicator zone's box's, in floats, as the kernel
+/// lays them (pxl-kernel domain/scene/marker/set.rs, location.rs) and
+/// marker.wgsl and location_zone.wgsl read them.
 pub const MARKER_INSTANCE_FLOATS: u32 = 11;
-pub const PUCK_ZONE_INSTANCE_FLOATS: u32 = 8;
+pub const LOCATION_ZONE_INSTANCE_FLOATS: u32 = 8;
 
 /// A star's record as the sky reads it (gpu/star.rs, star.wgsl): its
 /// direction and flux, then its color and a pad.
@@ -294,12 +294,12 @@ pub const IRRADIANCE_SIZE: (u32, u32) = (64, 16);
 /// (impostor.wgsl `fits`).
 pub const DECOR_GROUPS: usize = 64;
 
-/// A sheet's shapes (gpu/sheet.rs, sheet.wgsl `fs`).
-pub const SHEET_FILL: u32 = 0;
-pub const SHEET_STROKE: u32 = 1;
-pub const SHEET_TRIANGLE: u32 = 2;
-pub const SHEET_TEXT: u32 = 3;
-pub const SHEET_HALO: u32 = 4;
+/// The atlas painter's shapes (gpu/atlas.rs, atlas.wgsl `fs`).
+pub const ATLAS_FILL: u32 = 0;
+pub const ATLAS_STROKE: u32 = 1;
+pub const ATLAS_TRIANGLE: u32 = 2;
+pub const ATLAS_TEXT: u32 = 3;
+pub const ATLAS_HALO: u32 = 4;
 
 /// A box's steps a cell across (mesh/ghost.rs, box.wgsl); its z is held in
 /// its mesh's own.

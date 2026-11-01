@@ -35,7 +35,7 @@ use crate::domain::layer::division;
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::preview;
 use crate::domain::layer::object::repository;
-use crate::domain::layer::terrain::window;
+use crate::domain::layer::terrain::clipmap;
 use crate::domain::query::changed;
 use crate::domain::scene::character::companion;
 use crate::domain::scene::character::companion::{companion_step, CompanionProps};
@@ -43,7 +43,7 @@ use crate::domain::scene::character::preview::preview_step;
 use crate::domain::scene::decor::asset::decor_models_step;
 use crate::domain::scene::decor::drawn;
 use crate::domain::scene::environment::environment_step;
-use crate::domain::scene::indicator::location_puck::location_puck_step;
+use crate::domain::scene::indicator::location::location_step;
 use crate::domain::scene::marker;
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
@@ -128,7 +128,7 @@ fn companion_tick(ctx: &mut TickContext) {
 fn demand_tick(ctx: &mut TickContext) {
     // The ground's windows where their centers now stand, before what arrives fills them.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
-    let pinned = window::step(
+    let pinned = clipmap::step(
         [
             observation::eye().map(|e| [e[0], e[1]]),
             controller::pivot().map(at),
@@ -141,7 +141,7 @@ fn demand_tick(ctx: &mut TickContext) {
     }
     demand::admit_arrived(&ctx.pass);
     changes_step();
-    TerrainTile::demand().step(destination::tile(), window::pinned());
+    TerrainTile::demand().step(destination::tile(), clipmap::pinned());
     // Nothing is fetched while places are hidden.
     match store::settings_store().place {
         true => PlaceTile::demand().step(None, &[]),
@@ -267,8 +267,8 @@ pub fn world_turn() -> f64 {
     });
     effect!(times, decor, decor_models_step());
     effect!(times, objects, repository::step());
-    // device_coord is not gated like pivot: the puck keeps its last coordinate across a transient none.
-    effect!(times, puck, location_puck_step(off_center().device_coord));
+    // device_coord is not gated like pivot: the location indicator keeps its last coordinate across a transient none.
+    effect!(times, location, location_step(off_center().device_coord));
     effect!(times, settings, store::settings_keep_step());
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times;
     now() - at

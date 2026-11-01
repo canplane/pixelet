@@ -1,7 +1,7 @@
 // pxl-spec/bake/way.rs
 
 //! A way covers the cells along its line by pxl-spec-core way.rs's rule
-//! (`covers`, `reach`), on the ground and on a deck alike. An approach's look is laid into a leaf's cells (`lay`), so every zoom
+//! (`covers`, `reach`), on the ground and on a deck alike. An approach's palette index is laid into a leaf's cells (`lay`), so every zoom
 //! folds it as the ground's; its embankment or cutting stays a line.
 
 use fnv::FnvHashMap;
@@ -12,18 +12,18 @@ use crate::asset::cube::{sentinel, Ground};
 use crate::procedural::Frame;
 use crate::space::layer::lattice::TILE_CELLS;
 
-/// The looks of a leaf at `frame` an approach's line crosses, laid: each
+/// The palette indices of a leaf at `frame` an approach's line crosses, laid: each
 /// such cell the way's kind, the highest's where two cross one. Bedrock and
 /// kinds that do not ground are left as they are, as the ground's face takes
 /// no way there; an embankment's or a cutting's height stays its line's.
-pub fn lay(sep: &Separation, frame: Frame, looks: &mut [GroundId]) {
+pub fn lay(sep: &Separation, frame: Frame, palette_indices: &mut [GroundId]) {
     let n = i64::from(TILE_CELLS);
     // per cell: the highest top over it, and its kind
     let mut laid: FnvHashMap<usize, (f32, u8)> = FnvHashMap::default();
     sep.crossing_grid(frame, [0.0, 0.0], 1.0, [n, n], |x, y, _, o| {
         let col = (y * n + x) as usize;
         if o.form != u32::from(Form::Approach.byte())
-            || looks[col] == sentinel::unknown
+            || palette_indices[col] == sentinel::unknown
             || !Ground::grounds(o.kind)
         {
             return;
@@ -34,6 +34,6 @@ pub fn lay(sep: &Separation, frame: Frame, looks: &mut [GroundId]) {
         }
     });
     for (col, (_, kind)) in laid {
-        looks[col] = kind;
+        palette_indices[col] = kind;
     }
 }

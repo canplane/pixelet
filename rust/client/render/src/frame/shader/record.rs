@@ -71,7 +71,7 @@ pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 18;
 pub const PIPELINE_STAR: u32 = 19;
 pub const PIPELINE_CLOUD: u32 = 20;
 pub const PIPELINE_CLOUD_FIELD: u32 = 21;
-pub const PIPELINE_SHEET: u32 = 22;
+pub const PIPELINE_ATLAS: u32 = 22;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 23;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 24;
 /// The markers' regions, numbered, into a target of their own (pass/marker.rs).
@@ -113,12 +113,12 @@ pub const PIPELINE_LIGHT_GATE: u32 = 38;
 /// An actor drawn where it was and where it is, its fragments setting their
 /// screen tiles' words (gpu/pass/skinned.rs `draw_marks`).
 pub const PIPELINE_SKINNED_MARK: u32 = 39;
-/// The same of decor, an impostor, the location puck's zone and its beacon
+/// The same of decor, an impostor, the location indicator's zone and its beacon
 /// (gpu/pass/mark.rs `Marks`).
 pub const PIPELINE_DECOR_MARK: u32 = 40;
 pub const PIPELINE_IMPOSTOR_MARK: u32 = 41;
-pub const PIPELINE_PUCK_ZONE_MARK: u32 = 42;
-pub const PIPELINE_PUCK_BEACON_MARK: u32 = 43;
+pub const PIPELINE_LOCATION_ZONE_MARK: u32 = 42;
+pub const PIPELINE_LOCATION_BEACON_MARK: u32 = 43;
 pub const PIPELINES: u32 = 44;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
@@ -174,7 +174,8 @@ pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) ->
 
 use crate::frame::draw::{
     PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
-    PIPELINE_IMPOSTOR, PIPELINE_MARKER, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
+    PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
+    PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
 use pxl_spec_core::param::light;
@@ -391,8 +392,9 @@ const BOX_LANES: [Lane; 2] = [
         attributes: &[[1, 16, U32]],
     },
 ];
-const PUCK_ZONE_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
-const PUCK_BEACON_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]])];
+const LOCATION_ZONE_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
+const LOCATION_BEACON_LANES: [Lane; 2] =
+    [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]])];
 /// A debug line's vertex, its place and its color, a segment's two read as
 /// one instance; a debug face's vertex, its place.
 pub const DEBUG_VERTEX_BYTES: u32 = 28;
@@ -516,14 +518,14 @@ const fn desc_of(id: u32) -> Descriptor {
             &SKINNED_LANES,
             &MODEL_GROUPS,
         ),
-        PIPELINE_PUCK_ZONE => Descriptor::new(
-            blended(SHADER_PUCK_ZONE, CULL_NONE),
-            &PUCK_ZONE_LANES,
+        PIPELINE_LOCATION_ZONE => Descriptor::new(
+            blended(SHADER_LOCATION_ZONE, CULL_NONE),
+            &LOCATION_ZONE_LANES,
             &[FRAME, &DRAW, &UPLOAD],
         ),
-        PIPELINE_PUCK_BEACON => Descriptor::new(
-            lit(SHADER_PUCK_BEACON, CULL_BACK),
-            &PUCK_BEACON_LANES,
+        PIPELINE_LOCATION_BEACON => Descriptor::new(
+            lit(SHADER_LOCATION_BEACON, CULL_BACK),
+            &LOCATION_BEACON_LANES,
             &[&LIT_FRAME, &DRAW],
         ),
         PIPELINE_MARKER => Descriptor::new(
@@ -630,14 +632,14 @@ const fn desc_of(id: u32) -> Descriptor {
                 &UPLOAD,
             ],
         ),
-        PIPELINE_PUCK_ZONE_MARK => Descriptor::new(
-            mark(SHADER_PUCK_ZONE_MARK),
-            &PUCK_ZONE_LANES,
+        PIPELINE_LOCATION_ZONE_MARK => Descriptor::new(
+            mark(SHADER_LOCATION_ZONE_MARK),
+            &LOCATION_ZONE_LANES,
             &[MARK_FRAME, &DRAW, &UPLOAD],
         ),
-        PIPELINE_PUCK_BEACON_MARK => Descriptor::new(
-            mark(SHADER_PUCK_BEACON_MARK),
-            &PUCK_BEACON_LANES,
+        PIPELINE_LOCATION_BEACON_MARK => Descriptor::new(
+            mark(SHADER_LOCATION_BEACON_MARK),
+            &LOCATION_BEACON_LANES,
             &[MARK_FRAME, &DRAW],
         ),
         // Every texel of the box the world's cast holds, whatever lies
@@ -778,11 +780,11 @@ const fn desc_of(id: u32) -> Descriptor {
             &MODEL_LANES,
             &[&DRAW, &SKIN],
         ),
-        PIPELINE_SHEET => Descriptor::new(
+        PIPELINE_ATLAS => Descriptor::new(
             Head {
                 topology: STRIP,
                 blend: ALPHA,
-                ..screen(SHADER_SHEET)
+                ..screen(SHADER_ATLAS)
             },
             &[],
             &[

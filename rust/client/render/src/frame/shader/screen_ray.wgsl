@@ -12,7 +12,7 @@
 // same bits.
 
 // The rays, a layer a word: what a ray met (val, face, zoom), how far it
-// went (f32 bits), the four looks the ground's cell is drawn by or, in the
+// went (f32 bits), the four palette indices the ground's cell is drawn by or, in the
 // steps view, the nodes its descent asked, and its face's edges and corners
 // (`RAY_FACES`). A cell is painted from these, its own, alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
@@ -60,7 +60,7 @@ fn aim(frag: vec2f, size: vec2f) -> vec3f {
 }
 
 // How far behind its face a ray's depth is written (`behind`): the world is
-// the one that steps back, and what is laid on its faces — the puck's zone,
+// the one that steps back, and what is laid on its faces — the location indicator's zone,
 // the ghosts, the markers' anchors — is rasterized with no offset at all. A
 // raster on the face rounds apart from the ray's exact depth two ways:
 // - its depth interpolated across its corners in f32, about 2^-23 of it:
@@ -117,7 +117,7 @@ struct Drawn {
 // What the cell a px's ray met is drawn as, by its val, whichever
 // source holds it: at the ground's cell or finer, its swatch and its layer
 // in all four taps; coarser, one color as it reads from afar, the ground's
-// the mean of the four looks its cell folds where its face's own is among
+// the mean of the four palette indices its cell folds where its face's own is among
 // them.
 fn drawn(c: vec3u) -> Drawn {
   let val = ray_val(c.x);
@@ -125,7 +125,7 @@ fn drawn(c: vec3u) -> Drawn {
   if (ray_zoom(c.x) >= GROUND_CELL) {
     return Drawn(swatch(l), vec4f(f32(l.y >> 16u)));
   }
-  let fold = ray_looks(c.z);
+  let fold = ray_palette_indices(c.z);
   if (any(fold == vec4u(val))) {
     let sum = far(look(fold.x)) + far(look(fold.y)) + far(look(fold.z)) + far(look(fold.w));
     return Drawn(sum * 0.25, vec4f(NO_LAYER));
@@ -148,7 +148,7 @@ fn eye_phase(axis: u32, k: i32) -> f32 {
 // the lattice, and the face's plane through it), the face's normal and
 // the axis it lies across, that cell's corner, its least on every axis,
 // and its side, in units: of the box it is where it keeps less than its
-// cube (`ray_kept`).
+// cube (`ray_fill`).
 struct Hit {
   at: vec3f,
   normal: vec3f,
@@ -165,10 +165,10 @@ fn hit_of(c: vec2u, d: vec3f) -> Hit {
   let side = exp2(f32(k));
   let e = vec3f(eye_phase(0u, k), eye_phase(1u, k), eye_phase(2u, k));
   let t = bitcast<f32>(c.y);
-  let node = floor((e + d * t - n * (0.5 * kept_side(ray_kept(c.x)) * side)) / side) * side - e;
+  let node = floor((e + d * t - n * (0.5 * fill_side(ray_fill(c.x)) * side)) / side) * side - e;
   // A cell kept short of its cube is the box its share fills, inset about
-  // the cube's center (pxl-spec-core cast.rs `kept_bounds`).
-  let box = side * kept_side(ray_kept(c.x));
+  // the cube's center (pxl-spec-core cast.rs `fill_bounds`).
+  let box = side * fill_side(ray_fill(c.x));
   let corner = node + vec3f(0.5 * (side - box));
   let plane = corner[axis] + select(0.0, box, n[axis] > 0.0);
   let s = select(t, plane / d[axis], d[axis] * plane > 0.0);

@@ -100,25 +100,25 @@ pub struct Device {
 /// A span's pair of timestamp queries: the first pass writes the begin, every
 /// pass the end, so the last one's stands. A span with no passes reads 0.
 #[derive(Clone, Copy)]
-pub struct Stamp {
+pub struct TimestampWrites {
     set: Id,
     begin: Option<u32>,
     end: u32,
 }
 
-impl Stamp {
-    pub const NONE: Stamp = Stamp {
+impl TimestampWrites {
+    pub const NONE: TimestampWrites = TimestampWrites {
         set: 0,
         begin: None,
         end: 0,
     };
 
-    pub fn of(set: Id, span: usize) -> Stamp {
+    pub fn of(set: Id, span: usize) -> TimestampWrites {
         if set == 0 {
-            return Stamp::NONE;
+            return TimestampWrites::NONE;
         }
         let begin = 2 * span as u32;
-        Stamp {
+        TimestampWrites {
             set,
             begin: Some(begin),
             end: begin + 1,
@@ -157,15 +157,15 @@ pub fn place(texture: Id, origin: [u32; 3]) -> encode::TexelCopyTexture {
 pub struct RenderContext<'a> {
     pub g: &'a Gpu,
     pub encoder: Id,
-    stamps: &'a mut [Stamp; GPU_SPAN_NAMES],
+    stamps: &'a mut [TimestampWrites; GPU_SPAN_NAMES],
 }
 
 impl<'a> RenderContext<'a> {
-    pub fn new(g: &'a Gpu, encoder: Id, stamps: &'a mut [Stamp; GPU_SPAN_NAMES]) -> Self {
+    pub fn new(g: &'a Gpu, encoder: Id, stamps: &'a mut [TimestampWrites; GPU_SPAN_NAMES]) -> Self {
         Self { g, encoder, stamps }
     }
 
-    pub fn stamp(&mut self, span: GpuSpanName) -> &mut Stamp {
+    pub fn stamp(&mut self, span: GpuSpanName) -> &mut TimestampWrites {
         &mut self.stamps[span as usize]
     }
 }

@@ -15,7 +15,7 @@
 
 use pxl_spec_core::decor::DECORS;
 use pxl_spec_core::generated::{self, drawn, GROUPS};
-use pxl_spec_core::{eye, overwrite, window};
+use pxl_spec_core::{clipmap, eye, overwrite};
 
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
@@ -63,8 +63,8 @@ pub struct DecorFrame<'a> {
 pub struct Generation<'a> {
     pub window: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
-    /// The bricks handed this frame (pxl-spec-core `window::FRESH_WORDS`).
-    pub fresh: &'a [[u32; window::FRESH_WORDS as usize]],
+    /// The bricks handed this frame (pxl-spec-core `clipmap::FRESH_WORDS`).
+    pub fresh: &'a [[u32; clipmap::FRESH_WORDS as usize]],
     /// The eye as the cast's (pxl-spec-core `eye`), of which the count pass
     /// reads its place and the zooms it asks (`ORIGIN`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
@@ -91,7 +91,7 @@ pub struct Generated {
     /// decor and impostor shaders read one, its index set by the args pass.
     uniforms: u32,
     /// The records, laid by slot (`generated::record_at`); then the decor's
-    /// instances, `drawn::LANES` lanes and the index list, `cap` slots each.
+    /// instances, `drawn::COLUMNS` lanes and the index list, `cap` slots each.
     records: u32,
     instances: u32,
     /// The draws' bind groups over the uniforms, a region's at a dynamic
@@ -237,7 +237,7 @@ impl Generated {
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
             self.instances = g.buf(
-                word_bytes(((drawn::LANES + 1) * need) as usize),
+                word_bytes(((drawn::COLUMNS + 1) * need) as usize),
                 buffer_usage::STORAGE,
             );
             if records != 0 {
@@ -296,10 +296,10 @@ impl Generated {
             // its window's and coarser.
             let mut boxes = [0u32; (generated::MARKED * generated::BOX_WORDS) as usize];
             let fresh = generation.fresh.iter().map(|f| {
-                let cell = f[window::FRESH_CELL as usize];
-                let q = window::fresh_brick([
-                    f[window::FRESH_FIRST as usize],
-                    f[window::FRESH_FIRST as usize + 1],
+                let cell = f[clipmap::FRESH_CELL as usize];
+                let q = clipmap::fresh_brick([
+                    f[clipmap::FRESH_FIRST as usize],
+                    f[clipmap::FRESH_FIRST as usize + 1],
                 ]);
                 (generated::brick_box(cell, q), cell)
             });
@@ -319,7 +319,7 @@ impl Generated {
                 self.list,
                 0,
                 bytes(&[
-                    window::BRICK_CELLS.div_ceil(s[0]),
+                    clipmap::BRICK_CELLS.div_ceil(s[0]),
                     1,
                     0,
                     0,
@@ -394,7 +394,7 @@ impl Generated {
                 self.cap,
                 1.0f32.to_bits(),
                 layer,
-                drawn::LANES * self.cap,
+                drawn::COLUMNS * self.cap,
             ]);
         }
         g.write_buf(self.uniforms, 0, bytes(&uniforms));

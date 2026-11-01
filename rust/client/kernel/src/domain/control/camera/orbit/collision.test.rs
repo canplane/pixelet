@@ -1,4 +1,4 @@
-// pxl-kernel/domain/control/camera/orbit/terrain_gate.test.rs
+// pxl-kernel/domain/control/camera/orbit/collision.test.rs
 //
 // The dive under a roof and the zoom out held under it, and the climb beside
 // them: flat ground at five, and a cube over it for the roof, or a tunnel's

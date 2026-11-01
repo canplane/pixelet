@@ -59,15 +59,15 @@ fn submit(write: Write) {
     apply([write]);
 }
 
-/// Whether a whole-cell pick of a look only undoes a carve: the cell holds
-/// an AIR leaf, and the ground there without it is that look, its stratum's
+/// Whether a whole-cell pick of a palette entry only undoes a carve: the cell holds
+/// an AIR leaf, and the ground there without it is that palette entry, its stratum's
 /// at that depth (without the carve, every cube stacked on matching ground
 /// was dropped).
 fn place_val_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
     if zoom > GROUND.cell() || !is_carved(at) {
         return false;
     }
-    let Cube::Ground(look) = cube else {
+    let Cube::Ground(palette_idx) = cube else {
         return false;
     };
     let entry = EntryAt::holding(zoom, at);
@@ -76,7 +76,7 @@ fn place_val_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
         .previewing(Some(entry), None)
         .asset_of(&middle(entry))
         .exact();
-    ground == Some(look as u32)
+    ground == Some(palette_idx as u32)
 }
 
 /// The middle of the cube `at` names.

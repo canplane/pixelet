@@ -7,12 +7,12 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 
 import type {
   Frame,
-  Spread,
+  Percentiles,
   TaskRecord,
   TaskSummary,
   Worst,
 } from "@/port/perf.ts";
-import { n1, pct, phaseText, tris, valueText } from "./lane.ts";
+import { n1, pct, phaseText, tris, valueText } from "./column.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
@@ -29,17 +29,17 @@ const pastText = (f: Frame) =>
   f.busy_ms > f.interval_ms
     ? `over by ${n1(f.busy_ms - f.interval_ms)}`
     : `off-turn ${n1(f.interval_ms - f.busy_ms)}`;
-const spread = (s: Spread) =>
+const percentiles = (s: Percentiles) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 /** The `ray_counts` setting's counts over the window, the kernel's sums of
- * its frames' (perf.json FRAME's rays lanes): an observer's line each where
+ * its frames' (perf.json FRAME's rays columns): an observer's line each where
  * it cast — the nodes its beam rays, its samples and its walk again asked a
  * cast, its pixels that took the visible sample and that walked (the eye's
  * as a share of its pixels, the light's a cast), the nodes its walk again
  * asked a walking one, and the boxes it drew a cast. */
 const raysText = (f: Record<string, f64>) => {
   const observer = (name: "eye" | "light") => {
-    const at = (lane: string) => f[`${name}_${lane}`] ?? 0;
+    const at = (column: string) => f[`${name}_${column}`] ?? 0;
     const casts = at("cast");
     if (casts === 0) return [];
     const perCast = (n: number) => n1(n / casts);
@@ -208,33 +208,33 @@ function windowSection(r: PerfReport): string[] {
       2,
     )}   turns ${f.turns}`,
     `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
-    `  interval ${spread(f.interval)} ms   missed ${f.missed} (${pct(
+    `  interval ${percentiles(f.interval)} ms   missed ${f.missed} (${pct(
       f.missed,
       f.moving,
     )}% of moving frames)`,
-    `  busy    ${spread(f.busy)} ms   (the interval's turns, rise to fall)`,
+    `  busy    ${percentiles(f.busy)} ms   (the interval's turns, rise to fall)`,
     `  long    ${f.long} (turns past their interval)`,
-    `  tick    ${spread(f.tick)} ms   overran ${f.overran}   budget ${n1(
+    `  tick    ${percentiles(f.tick)} ms   overran ${f.overran}   budget ${n1(
       last.budget_ms,
     )}${last.settled ? " (still)" : ""}   phase p95 ${f.phases
       .map((p) => `${p.name} ${n1(p.p95)}`)
       .join("  ")}`,
-    `  effects ${spread(f.effects)} ms   p95 ${
+    `  effects ${percentiles(f.effects)} ms   p95 ${
       f.effects_p95
         .filter((e) => e.p95 > 0)
         .map((e) => `${e.name} ${n1(e.p95)}`)
         .join("  ") || "-"
     }`,
-    `  stage   ${spread(
+    `  stage   ${percentiles(
       f.stage,
     )} ms   (the pump, the stage's write and the render)`,
-    `  tasks   ${spread(f.tasks)} ms`,
-    `  perf ${spread(f.perf)} ms   (its own record and the shell's reads)`,
-    `  rest    ${spread(
+    `  tasks   ${percentiles(f.tasks)} ms`,
+    `  perf ${percentiles(f.perf)} ms   (its own record and the shell's reads)`,
+    `  rest    ${percentiles(
       f.rest,
     )} ms   (busy unmeasured: the door's commands, rise and fall)`,
     f.gpu_read > 0
-      ? `  gpu     ${spread(
+      ? `  gpu     ${percentiles(
           f.gpu_busy,
         )} ms busy   (over the ${f.gpu_read} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",

@@ -1,4 +1,4 @@
-// @pxl/client/abi/perf/spread.spec.ts
+// @pxl/client/abi/perf/percentiles.spec.ts
 //
 // GENERATED from spec/client/kernel/perf/perf.json
 

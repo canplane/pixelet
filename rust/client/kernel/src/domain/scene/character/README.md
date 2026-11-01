@@ -9,12 +9,13 @@ spans: posed down to the model's edge, its pose held down to the impostor's,
 and none below (`../actor.rs` `Actor::tick`).
 
 An actor's instance is held by its holder, which stands it where it is (its
-`Stance`) and declares how many it holds. This directory holds every holder:
+`Transform`) and declares how many it holds. This directory holds every
+holder:
 
 - the companion, the person and the pet at the pivot, each a figure the walk
   moves (`companion.rs` `Figure`, `FIGURES`), placed each tick in the
   interaction phase (`../../../turn.rs` `companion_tick`);
-- the variant picker's previews, a character idling in its preview's own
+- the character picker's previews, a character idling in its preview's own
   canvas (`preview.rs`, `PREVIEWS_MAX`).
 
 Where an actor stands is the kernel's, never the shell's. Its clips advance in
@@ -26,4 +27,4 @@ with the others (`../marker/arrangement.rs`).
 
 The folder is `character/`, not `actors/`, because "Character" is already what a
 user reads: the settings' Character section and the drawer's Character tab
-choose which variant the person and the pet use.
+choose which character the person and the pet are.

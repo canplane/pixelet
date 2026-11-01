@@ -8,7 +8,7 @@
 
 use pxl_spec::asset::symbol::{SYMBOL_PX, SYMBOL_RATIO};
 
-use crate::gpu::sheet::Halo;
+use crate::gpu::atlas::Halo;
 use crate::gpu::text::Font;
 
 // Regular and semibold, not canvas's "bold" (700); the system faces carry a real
@@ -94,7 +94,7 @@ pub const POINT_TEXT_HALO: Halo = Halo {
 pub const POINT_LINE: f32 = POINT_FONT.px + 2.0 * POINT_HALO;
 /// From one line to the next, as Mapnik sets it (text_line.cpp): the face's
 /// own line height plus Carto's @standard-line-spacing-size, −0.15 em. The
-/// face is the system's, whose metrics the sheet does not read; 1.2 em is
+/// face is the system's, whose metrics the atlas does not read; 1.2 em is
 /// CSS's `line-height: normal` at its high end (CSS 2.1 §10.8.1).
 pub const POINT_PITCH: f32 = (1.2 - 0.15) * POINT_FONT.px;
 

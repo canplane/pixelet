@@ -1,4 +1,4 @@
-// pxl-kernel/domain/scene/indicator/location_puck.test.rs
+// pxl-kernel/domain/scene/indicator/location.test.rs
 
 use super::*;
 use crate::sys;
@@ -92,7 +92,7 @@ fn zone_cells_once() {
 #[test]
 fn beacon_holds_on_stall() {
     let _g = sys::serial();
-    let mut puck = LocationPuck {
+    let mut location = LocationIndicator {
         zone: Some(Zone {
             center: [0.0; 3],
             target: [0.0; 2],
@@ -107,18 +107,18 @@ fn beacon_holds_on_stall() {
         ..Default::default()
     };
     // The eye at the zone's center: seen, and the bob spans the cell there.
-    puck.tick(&Frame {
+    location.tick(&Frame {
         delta_s: 0.05,
         ..Frame::default()
     });
     // A minute passes, a hidden tab; the turn's step is capped as turn.rs
     // caps it (`MAX_STEP_S`).
     clock::set(|| 60_000.0);
-    puck.tick(&Frame {
+    location.tick(&Frame {
         delta_s: 0.1,
         ..Frame::default()
     });
     clock::set(|| 0.0);
-    let time = puck.zone.as_ref().map_or(f64::NAN, |z| z.time);
+    let time = location.zone.as_ref().map_or(f64::NAN, |z| z.time);
     assert!(time > 0.0 && time < 0.2, "the bob leapt to {time} s");
 }

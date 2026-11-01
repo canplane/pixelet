@@ -17,7 +17,7 @@ import {
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP, type Transition } from "@/shell/ui/motion/transition.ts";
-import { useVeil } from "@/shell/ui/motion/veil.ts";
+import { useDim } from "@/shell/ui/motion/dim.ts";
 import { alpha, type Material } from "@/shell/ui/theme.ts";
 
 /** Decides the iPhone's glass style: clear `OnSheet`, regular (frosted)
@@ -68,10 +68,10 @@ export function Backing({
   style,
   children,
 }: BackingProps) {
-  const veil = useVeil(fade, transition, fadeFrom);
+  const dim = useDim(fade, transition, fadeFrom);
   return (
     <Motion
-      {...veil.motion}
+      {...dim.motion}
       style={[
         style,
         material

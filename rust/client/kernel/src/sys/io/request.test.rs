@@ -1,23 +1,23 @@
 // pxl-kernel/sys/io/request.test.rs
 //
-// What the request scheduler keeps whatever its policy. The policy here orders by why
+// What the request scheduler keeps whatever its policy. The policy here orders by priority
 // then distance, blames by errno as the kernel's does, and waits 2 s after a failure,
 // giving the server up after its second.
 
 use super::*;
-use crate::sys::io::demand::Why;
+use crate::sys::io::demand::Priority;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys;
 use crate::sys::io::demand::Order;
 use crate::sys::io::failure::{Ended, Failure};
 
-struct ByWhy;
+struct ByPriority;
 
-impl Serve for ByWhy {
+impl Serve for ByPriority {
     fn rank(&self, _category: Stream, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         Rank {
-            class: ask.why as u8,
+            class: ask.priority as u8,
             dist: ask.order.near,
             detail: 0,
         }
@@ -27,31 +27,31 @@ impl Serve for ByWhy {
         u32::MAX
     }
 
-    fn blame(&self, failure: Failure) -> Blame {
+    fn fault(&self, failure: Failure) -> Fault {
         match failure.errnum {
-            Errno::ENETUNREACH => Blame::Network,
-            Errno::EACCES => Blame::Server,
-            _ => Blame::Object,
+            Errno::ENETUNREACH => Fault::Network,
+            Errno::EACCES => Fault::Server,
+            _ => Fault::Object,
         }
     }
 
-    fn backoff(&self, strikes: u32, _seed: u64) -> Option<f64> {
-        (strikes <= 2).then_some(2_000.0)
+    fn backoff(&self, failures: u32, _seed: u64) -> Option<f64> {
+        (failures <= 2).then_some(2_000.0)
     }
 }
 
 /// Room for every test's wants in each stream.
 const BOUNDS: Bounds = [64; Stream::ALL.len()];
 
-fn scheduler() -> RequestScheduler<ByWhy> {
-    let mut l = RequestScheduler::new(ByWhy, BOUNDS);
+fn scheduler() -> RequestScheduler<ByPriority> {
+    let mut l = RequestScheduler::new(ByPriority, BOUNDS);
     l.set_credits(2);
     l
 }
 
-fn ask(why: Why, near: f64) -> Ask {
+fn ask(priority: Priority, near: f64) -> Ask {
     Ask {
-        why,
+        priority,
         order: Order { seen: true, near },
     }
 }
@@ -59,7 +59,7 @@ fn ask(why: Why, near: f64) -> Ask {
 /// A class worse than any seen ask.
 fn unseen(near: f64) -> Ask {
     Ask {
-        why: Why::Demand,
+        priority: Priority::Demand,
         order: Order { seen: false, near },
     }
 }
@@ -96,7 +96,7 @@ fn failed_with<S: Serve>(l: &mut RequestScheduler<S>, key: u64, errnum: Errno, a
 #[test]
 fn same_set_no_change() {
     let mut l = scheduler();
-    let want = [(1u64, ask(Why::Demand, 0.0))];
+    let want = [(1u64, ask(Priority::Demand, 0.0))];
     l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
     assert_eq!(started(&mut l).len(), 1);
@@ -113,7 +113,7 @@ fn same_set_no_change() {
 #[test]
 fn answer_asked_once() {
     let mut l = scheduler();
-    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
+    l.declare(Stream::terrain, &[(1, ask(Priority::Demand, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
     ok(&mut l, key, 0.0);
@@ -124,7 +124,7 @@ fn answer_asked_once() {
     );
     assert!(stopped(&mut l).is_empty());
     assert_eq!(l.stream_counts(Stream::terrain), (0, 0));
-    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 1.0);
+    l.declare(Stream::terrain, &[(1, ask(Priority::Demand, 0.0))], 1.0);
     l.pump(1.0);
     assert_eq!(started(&mut l).len(), 1);
 }
@@ -132,13 +132,17 @@ fn answer_asked_once() {
 #[test]
 fn failure_backs_off() {
     let mut l = scheduler();
-    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
+    l.declare(Stream::terrain, &[(1, ask(Priority::Demand, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
     failed(&mut l, key, 0.0);
     // A failure is not a withdrawal.
     for t in 0..5 {
-        l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], t as f64);
+        l.declare(
+            Stream::terrain,
+            &[(1, ask(Priority::Demand, 0.0))],
+            t as f64,
+        );
         l.pump(t as f64);
         assert!(
             started(&mut l).is_empty(),
@@ -161,7 +165,10 @@ fn failure_backs_off() {
 #[test]
 fn failed_object_dropped() {
     let mut l = scheduler();
-    let want = [(1u64, ask(Why::Demand, 0.0)), (2, ask(Why::Demand, 1.0))];
+    let want = [
+        (1u64, ask(Priority::Demand, 0.0)),
+        (2, ask(Priority::Demand, 1.0)),
+    ];
     l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
     let out = started(&mut l);
@@ -175,7 +182,7 @@ fn failed_object_dropped() {
             "a missing object is not asked again"
         );
     }
-    l.declare(Stream::terrain, &[(3, ask(Why::Demand, 0.0))], 5_000.0);
+    l.declare(Stream::terrain, &[(3, ask(Priority::Demand, 0.0))], 5_000.0);
     l.pump(5_000.0);
     assert_eq!(
         started(&mut l).len(),
@@ -196,7 +203,7 @@ fn heap_refusal_waits_release() {
         ..HeapStat::default()
     });
     let mut l = scheduler();
-    let want = [(1u64, ask(Why::Demand, 0.0))];
+    let want = [(1u64, ask(Priority::Demand, 0.0))];
     l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
@@ -206,7 +213,7 @@ fn heap_refusal_waits_release() {
         l.pump(t as f64 * 10_000.0);
         assert!(started(&mut l).is_empty(), "no time ends a heap's refusal");
     }
-    let both = [want[0], (2, ask(Why::Demand, 0.0))];
+    let both = [want[0], (2, ask(Priority::Demand, 0.0))];
     l.declare(Stream::terrain, &both, 50_000.0);
     l.pump(50_000.0);
     assert_eq!(
@@ -237,7 +244,7 @@ fn early_release_not_rewaited() {
         ..HeapStat::default()
     });
     let mut l = scheduler();
-    let want = [(1u64, ask(Why::Demand, 0.0))];
+    let want = [(1u64, ask(Priority::Demand, 0.0))];
     l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
@@ -258,7 +265,9 @@ fn early_release_not_rewaited() {
 #[test]
 fn failing_server_probe() {
     let mut l = scheduler();
-    let want: Vec<(u64, Ask)> = (0..4).map(|k| (k, ask(Why::Demand, k as f64))).collect();
+    let want: Vec<(u64, Ask)> = (0..4)
+        .map(|k| (k, ask(Priority::Demand, k as f64)))
+        .collect();
     l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
     let out = started(&mut l);
@@ -275,14 +284,14 @@ fn failing_server_probe() {
         "one out already: the other attempt is the probe"
     );
     failed_with(&mut l, out[1], Errno::EACCES, 2_000.0);
-    assert_eq!(l.strikes, 1, "out before the strike, so the same outage");
+    assert_eq!(l.failures, 1, "out before the failure, so the same outage");
     let mut at = 2_000.0;
-    for strike in 2..=3 {
+    for n in 2..=3 {
         l.pump(at);
         let probe = started(&mut l);
         assert_eq!(probe.len(), 1, "one probe after the wait");
         failed_with(&mut l, probe[0], Errno::EACCES, at);
-        assert_eq!(l.strikes, strike);
+        assert_eq!(l.failures, n);
         at += 2_000.0;
     }
     assert!(l.given_up, "past the last wait");
@@ -295,14 +304,17 @@ fn outage_counts_once() {
     let mut l = scheduler();
     l.declare(
         Stream::terrain,
-        &[(1, ask(Why::Demand, 0.0)), (2, ask(Why::Demand, 1.0))],
+        &[
+            (1, ask(Priority::Demand, 0.0)),
+            (2, ask(Priority::Demand, 1.0)),
+        ],
         0.0,
     );
     l.pump(0.0);
     for key in started(&mut l) {
         failed_with(&mut l, key, Errno::EACCES, 10.0);
     }
-    assert_eq!(l.strikes, 1, "one outage, one wait");
+    assert_eq!(l.failures, 1, "one outage, one wait");
     assert!(!l.given_up);
 }
 
@@ -313,7 +325,7 @@ fn cur_demand_said() {
     l.pump(0.0);
     let out = started(&mut l);
     assert_eq!(out.len(), 2);
-    l.declare(Stream::terrain, &[(3, ask(Why::Demand, 0.0))], 0.0);
+    l.declare(Stream::terrain, &[(3, ask(Priority::Demand, 0.0))], 0.0);
     assert_eq!(
         l.stream_counts(Stream::terrain).0,
         1,
@@ -355,7 +367,7 @@ fn running_attempt_kept() {
     );
     l.declare(
         Stream::terrain,
-        &[(1, unseen(5.0)), (3, ask(Why::Demand, 9.0))],
+        &[(1, unseen(5.0)), (3, ask(Priority::Demand, 9.0))],
         0.0,
     );
     l.pump(0.0);
@@ -382,8 +394,8 @@ impl Serve for Restless {
         1
     }
 
-    fn blame(&self, _failure: Failure) -> Blame {
-        Blame::Network
+    fn fault(&self, _failure: Failure) -> Fault {
+        Fault::Network
     }
 
     fn backoff(&self, _strikes: u32, _seed: u64) -> Option<f64> {
@@ -396,7 +408,7 @@ fn wants_served_at_rest() {
     let mut l = RequestScheduler::new(Restless, BOUNDS);
     l.set_credits(2);
     let mut wanted: Vec<(u64, Ask)> = (0..12)
-        .map(|k| (k, ask(Why::Demand, (k * 7 % 12) as f64)))
+        .map(|k| (k, ask(Priority::Demand, (k * 7 % 12) as f64)))
         .collect();
     let mut out: Vec<u64> = Vec::new();
     for turn in 0..200 {
@@ -423,7 +435,7 @@ fn wants_served_at_rest() {
 fn asset_shares_credits() {
     let mut l = scheduler();
     l.set_credits(1);
-    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
+    l.declare(Stream::terrain, &[(1, ask(Priority::Demand, 0.0))], 0.0);
     l.declare(Stream::asset, &[(7, Ask::PLAIN)], 0.0);
     l.pump(0.0);
     assert_eq!(
@@ -441,7 +453,7 @@ fn asset_shares_credits() {
 #[test]
 fn failed_want_reported() {
     let mut l = scheduler();
-    let want = [(1u64, ask(Why::Demand, 0.0))];
+    let want = [(1u64, ask(Priority::Demand, 0.0))];
     l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];

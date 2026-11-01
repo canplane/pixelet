@@ -15,14 +15,14 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use pxl_spec_core::window::{bricks_zoom, BRICK_SHIFT};
+use pxl_spec_core::clipmap::{bricks_zoom, BRICK_SHIFT};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
 use crate::domain::query::changed;
 use crate::domain::query::{Walked, World};
+use crate::domain::view::above_ground::eye_height;
 use crate::domain::view::frame::pose::view;
-use crate::domain::view::reach::eye_height;
 use crate::sys::io::source;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -90,7 +90,7 @@ pub fn observation() -> Option<Observation> {
     })
 }
 
-/// The eye's windows' bricks (pxl-spec-core window.rs), the ground about
+/// The eye's windows' bricks (pxl-spec-core clipmap.rs), the ground about
 /// the eye cut into one partition: from the coarsest bricks within the
 /// floor's ring (tile_cache/floor.rs `ring`), the far edge cut by the ground,
 /// a brick splits into its four while its nearest point is nearer than its

@@ -1,14 +1,14 @@
 // pxl-kernel/perf/section.rs
 
 //! Every STAT and NOW section as a record held to perf.json by `words!`.
-//! Written word by word, sections had shifted lanes, mirrored structures and
+//! Written word by word, sections had shifted columns, mirrored structures and
 //! unread fields that only an audit found (2026-09-23); a record makes each
 //! of those a compile error.
 
 use core::mem::{offset_of, size_of};
 
 use crate::perf::frame::{FrameSample, RaySample, EFFECTS, GPU_SPANS};
-use crate::perf::spec::{FRAME, LIMIT, NOW, SPREAD, STAT, STEP_STAT, STREAM_STAT, WAKES};
+use crate::perf::spec::{FRAME, LIMIT, NOW, PERCENTILES, STAT, STEP_STAT, STREAM_STAT, WAKES};
 use crate::perf::word::{words, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use crate::sys::sched::phase_spec::PHASES;
@@ -22,13 +22,13 @@ const CATEGORIES: usize = STREAM_NAMES;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Spread {
+pub struct Percentiles {
     pub p50: f64,
     pub p95: f64,
     pub max: f64,
 }
 
-words!(Spread, SPREAD::WORDS, p50 => SPREAD::p50, p95 => SPREAD::p95, max => SPREAD::max);
+words!(Percentiles, PERCENTILES::WORDS, p50 => PERCENTILES::p50, p95 => PERCENTILES::p95, max => PERCENTILES::max);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -60,20 +60,20 @@ pub struct FramesSection {
     pub turns: f64,
     /// Frames a GPU read timed: the GPU's figures are over these alone.
     pub gpu_read: f64,
-    pub interval: Spread,
-    pub busy: Spread,
-    pub tick: Spread,
+    pub interval: Percentiles,
+    pub busy: Percentiles,
+    pub tick: Percentiles,
     /// The other parts of `busy`, and what they leave of it, unmeasured.
-    pub effects: Spread,
-    pub stage: Spread,
-    pub tasks: Spread,
-    pub perf: Spread,
-    pub rest: Spread,
+    pub effects: Percentiles,
+    pub stage: Percentiles,
+    pub tasks: Percentiles,
+    pub perf: Percentiles,
+    pub rest: Percentiles,
     /// Each effect's p95, in EFFECT_NAMES' order.
     pub effects_p95: [f64; EFFECTS],
     /// The GPU's time: the time its spans ran, those that overlap counted
     /// once.
-    pub gpu_busy: Spread,
+    pub gpu_busy: Percentiles,
     /// The busy time's p50 and p95 of the frames of each of the renderer's
     /// FRAME_KINDS a read timed, and how many they are, three a kind, all 0
     /// for a kind none was.
@@ -168,7 +168,7 @@ pub struct ViewSection {
     pub hover_y: f64,
     pub hover_z: f64,
     pub cell: f64,
-    pub struck: f64,
+    pub hit_kind: f64,
     pub held: f64,
     pub drawn: f64,
     pub folded: f64,
@@ -185,7 +185,7 @@ words!(ViewSection, NOW::view::WORDS,
     pivot_x => NOW::view::pivot_x, pivot_y => NOW::view::pivot_y, pivot_z => NOW::view::pivot_z,
     pivot_lon => NOW::view::pivot_lon, pivot_lat => NOW::view::pivot_lat, pivot_alt => NOW::view::pivot_alt,
     hover_x => NOW::view::hover_x, hover_y => NOW::view::hover_y, hover_z => NOW::view::hover_z,
-    cell => NOW::view::cell, struck => NOW::view::struck, held => NOW::view::held, drawn => NOW::view::drawn,
+    cell => NOW::view::cell, hit_kind => NOW::view::hit_kind, held => NOW::view::held, drawn => NOW::view::drawn,
     folded => NOW::view::folded, place_x => NOW::view::place_x, place_y => NOW::view::place_y, place_z => NOW::view::place_z,
     place_zoom => NOW::view::place_zoom, blocked => NOW::view::blocked,
 );

@@ -16,7 +16,7 @@ import {
 } from "./cube.spec.ts";
 import { decor, DECOR_LABEL, DECORS } from "./decor.spec.ts";
 
-/** A cube by its number in the catalog's one value space: a ground look or a placed color. */
+/** A cube by its number in the catalog's one value space: a ground palette entry or a placed color. */
 export type Cube = u16;
 
 /** The catalog's section the drawer lists a cube under. */
@@ -33,7 +33,7 @@ export function cubeLabel(cube: Cube): string {
   return CUBE_LABEL[cube] ?? "";
 }
 
-/** The placed colors first, then the looks in paint order. */
+/** The placed colors first, then the palette entries in paint order. */
 export const allCubes: readonly Cube[] = CUBES;
 
 export const decorIds: readonly u16[] = DECORS;

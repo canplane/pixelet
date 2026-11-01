@@ -2,7 +2,7 @@
 
 //! A texture's mip chain, each level drawn from the one above it
 //! (mip.wgsl): for the texture pack, the cloud sheets' tile, an image and
-//! the marker sheet alike.
+//! the marker atlas alike.
 
 use crate::frame::shader::record::PIPELINE_MIP;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};

@@ -28,7 +28,7 @@ pub struct World<'a> {
     /// through decor.
     pub(super) decor: bool,
     /// Whether it is unplaced, nothing placed asked of it: the ground's alone
-    /// (pxl-spec-core `world::Handed::unplaced`).
+    /// (pxl-spec-core `world::Inherited::unplaced`).
     pub(super) unplaced: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
@@ -39,7 +39,7 @@ pub struct World<'a> {
 
 impl World<'static> {
     /// The world as stored: what every mechanic asks, the pick, a walk, the
-    /// camera's clearance, an edit's reads and decor's footing.
+    /// camera's clearance, an edit's reads and decor's column surface.
     pub fn now() -> World<'static> {
         let object: &'static Store = store::object();
         World::new(TerrainTile::tile_cache(), object)
@@ -70,7 +70,7 @@ impl<'a> World<'a> {
 
     /// As it is unplaced: nothing placed and no preview's cuts asked of it,
     /// the ground's alone, which decor generates on (pxl-spec-core
-    /// `generated::DecorQuery::footing`).
+    /// `generated::DecorQuery::column_surface`).
     pub(super) fn unplaced(self) -> World<'a> {
         World {
             unplaced: true,

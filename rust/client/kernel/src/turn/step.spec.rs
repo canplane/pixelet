@@ -68,7 +68,7 @@ pub enum EffectName {
     dst = 4,
     decor = 5,
     objects = 6,
-    puck = 7,
+    location = 7,
     settings = 8,
 }
 
@@ -82,7 +82,7 @@ impl EffectName {
         EffectName::dst,
         EffectName::decor,
         EffectName::objects,
-        EffectName::puck,
+        EffectName::location,
         EffectName::settings,
     ];
 

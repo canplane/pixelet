@@ -1,14 +1,14 @@
-// pxl-render/gpu/sheet.rs
+// pxl-render/gpu/atlas.rs
 
-//! A sticker on the marker sheet drawn on the device into a texture of its size and
-//! copied into its rectangle. Sketches are in logical pixels, drawn at the
-//! sheet's scale.
+//! A sprite on the marker atlas drawn on the device into a texture of its size and
+//! copied into its rectangle. Display lists are in logical pixels, drawn at the
+//! atlas's scale.
 
 pub mod shelf;
 
-use crate::frame::shader::record::PIPELINE_SHEET;
+use crate::frame::shader::record::PIPELINE_ATLAS;
 use crate::frame::shader::word::{
-    SHEET_FILL, SHEET_HALO, SHEET_STROKE, SHEET_TEXT, SHEET_TRIANGLE,
+    ATLAS_FILL, ATLAS_HALO, ATLAS_STROKE, ATLAS_TEXT, ATLAS_TRIANGLE,
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
@@ -16,8 +16,8 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, place, room, sampler_entry, texture_usage,
     view_entry, write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
 };
+use crate::gpu::atlas::shelf::PAD;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::sheet::shelf::PAD;
 use crate::gpu::text::{Font, Raster, TextOf};
 use pxl_spec::asset::symbol;
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
@@ -45,13 +45,13 @@ pub struct Halo {
     pub shadow_dy: f32,
 }
 
-/// Device pixels a sheet draws per logical pixel: the symbols' masks', laid
+/// Device pixels an atlas draws per logical pixel: the symbols' masks', laid
 /// texel for texel (pxl-spec asset/symbol.spec.rs `SYMBOL_RATIO`). A display
 /// finer than it shows a marker drawn up from it.
-pub const SHEET_SCALE: f64 = symbol::SYMBOL_RATIO as f64;
+pub const ATLAS_SCALE: f64 = symbol::SYMBOL_RATIO as f64;
 
 #[derive(Default)]
-pub struct Sketch {
+pub struct DisplayList {
     shapes: Vec<[f32; SHAPE_FLOATS]>,
     lines: Vec<Line>,
     icons: Vec<Icon>,
@@ -77,7 +77,7 @@ fn tinted(symbol: usize, color: u32) -> Vec<u8> {
 }
 
 fn px(v: f32) -> f32 {
-    PAD as f32 + v * SHEET_SCALE as f32
+    PAD as f32 + v * ATLAS_SCALE as f32
 }
 
 /// The texture is sRGB, and what a shader writes into it is linear.
@@ -103,14 +103,14 @@ fn shape(kind: u32, rect: [f32; 4], color: u32, p: [f32; 4], q: [f32; 2]) -> [f3
     s
 }
 
-impl Sketch {
+impl DisplayList {
     pub fn round_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
         let rect = [px(x), px(y), px(x + w), px(y + h)];
         self.shapes.push(shape(
-            SHEET_FILL,
+            ATLAS_FILL,
             rect,
             color,
-            [r * SHEET_SCALE as f32, 0.0, 0.0, 0.0],
+            [r * ATLAS_SCALE as f32, 0.0, 0.0, 0.0],
             [0.0; 2],
         ));
     }
@@ -127,9 +127,9 @@ impl Sketch {
     /// at its top and as much darker at its foot.
     pub fn soft_circle(&mut self, cx: f32, cy: f32, r: f32, edge: f32, shade: f32, color: u32) {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
-        let scale = SHEET_SCALE as f32;
+        let scale = ATLAS_SCALE as f32;
         self.shapes.push(shape(
-            SHEET_FILL,
+            ATLAS_FILL,
             rect,
             color,
             [r * scale, edge * scale, 0.0, 0.0],
@@ -139,9 +139,9 @@ impl Sketch {
 
     pub fn ring(&mut self, cx: f32, cy: f32, r: f32, width: f32, color: u32) {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
-        let scale = SHEET_SCALE as f32;
+        let scale = ATLAS_SCALE as f32;
         self.shapes.push(shape(
-            SHEET_STROKE,
+            ATLAS_STROKE,
             rect,
             color,
             [r * scale, width * scale, 0.0, 0.0],
@@ -158,7 +158,7 @@ impl Sketch {
             a[1].max(b[1]).max(c[1]),
         ];
         self.shapes.push(shape(
-            SHEET_TRIANGLE,
+            ATLAS_TRIANGLE,
             rect,
             color,
             [a[0], a[1], b[0], b[1]],
@@ -195,13 +195,13 @@ impl Sketch {
     }
 }
 
-pub struct SheetPainter {
+pub struct AtlasPainter {
     built: Built,
     sampler: u32,
 }
 
-impl SheetPainter {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> SheetPainter {
+impl AtlasPainter {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> AtlasPainter {
         let sampler = g.sampler(
             FilterMode::linear,
             FilterMode::linear,
@@ -210,23 +210,22 @@ impl SheetPainter {
             None,
             1,
         );
-        SheetPainter {
-            built: pipelines.build(g, PIPELINE_SHEET, Format::rgba8unorm_srgb),
+        AtlasPainter {
+            built: pipelines.build(g, PIPELINE_ATLAS, Format::rgba8unorm_srgb),
             sampler,
         }
     }
 
-    /// The rasters of a sketch's lines, as the host has drawn them; none while
+    /// The rasters of a display list's lines, as the host has drawn them; none while
     /// one is not drawn yet, whose landing is the turn that paints it.
-    pub fn rasters(sketch: &Sketch, text: TextOf) -> Option<Vec<Raster<'static>>> {
-        sketch
-            .lines
+    pub fn rasters(list: &DisplayList, text: TextOf) -> Option<Vec<Raster<'static>>> {
+        list.lines
             .iter()
             .map(|line| text(line.font, line.color, &line.text))
             .collect()
     }
 
-    /// `sketch` painted with its lines' `rasters` (`rasters`), and what it
+    /// `list` painted with its lines' `rasters` (`rasters`), and what it
     /// made for that, let go once the encoder is submitted; none, and
     /// nothing recorded, where its pixels do not fit this turn's stream
     /// (`room`).
@@ -234,12 +233,12 @@ impl SheetPainter {
         &self,
         g: &Gpu,
         encoder: u32,
-        sheet: u32,
+        atlas: u32,
         rect: [u32; 4],
-        sketch: &Sketch,
+        list: &DisplayList,
         rasters: Vec<Raster<'static>>,
     ) -> Option<[u32; 9]> {
-        let icons: Vec<Vec<u8>> = sketch
+        let icons: Vec<Vec<u8>> = list
             .icons
             .iter()
             .map(|i| tinted(i.symbol, i.color))
@@ -261,8 +260,8 @@ impl SheetPainter {
             .unwrap_or(1)
             .max(icon_side);
         let layers = (drawn as u32).max(1);
-        let mut shapes = sketch.shapes.clone();
-        let placed: Vec<([f32; 4], [f32; 4])> = sketch
+        let mut shapes = list.shapes.clone();
+        let placed: Vec<([f32; 4], [f32; 4])> = list
             .lines
             .iter()
             .zip(&rasters)
@@ -283,15 +282,15 @@ impl SheetPainter {
             })
             .collect();
         // Every shadow, then every halo, so one line's never covers another's.
-        let scale = SHEET_SCALE as f32;
-        for (line, &(place, cover)) in sketch.lines.iter().zip(&placed) {
+        let scale = ATLAS_SCALE as f32;
+        for (line, &(place, cover)) in list.lines.iter().zip(&placed) {
             if let Some(h) = line.halo {
                 let dy = round(h.shadow_dy * scale);
                 let dropped = [place[0], place[1] + dy, place[2], place[3] + dy];
                 // Soft over all of its radius past the halo's.
                 let soft = (h.shadow_radius - h.radius) * scale;
                 shapes.push(shape(
-                    SHEET_HALO,
+                    ATLAS_HALO,
                     dropped,
                     h.shadow,
                     [cover[0], cover[1], cover[2], h.shadow_radius * scale],
@@ -299,10 +298,10 @@ impl SheetPainter {
                 ));
             }
         }
-        for (line, &(place, cover)) in sketch.lines.iter().zip(&placed) {
+        for (line, &(place, cover)) in list.lines.iter().zip(&placed) {
             if let Some(h) = line.halo {
                 shapes.push(shape(
-                    SHEET_HALO,
+                    ATLAS_HALO,
                     place,
                     h.color,
                     [cover[0], cover[1], cover[2], h.radius * scale],
@@ -311,11 +310,11 @@ impl SheetPainter {
             }
         }
         for &(place, cover) in &placed {
-            shapes.push(shape(SHEET_TEXT, place, 0, cover, [0.0; 2]));
+            shapes.push(shape(ATLAS_TEXT, place, 0, cover, [0.0; 2]));
         }
         // A mask is laid texel for texel: rasterized at `SYMBOL_RATIO`, the
-        // sheet's scale.
-        for (k, icon) in sketch.icons.iter().enumerate() {
+        // atlas's scale.
+        for (k, icon) in list.icons.iter().enumerate() {
             let layer = (rasters.len() + k) as u32;
             let half = SYMBOL_PX as f32 / 2.0;
             let (x0, y0) = (round(px(icon.at[0]) - half), round(px(icon.at[1]) - half));
@@ -326,7 +325,7 @@ impl SheetPainter {
                 SYMBOL_PX as f32 / layer_h as f32,
                 0.0,
             ];
-            shapes.push(shape(SHEET_TEXT, place, 0, cover, [0.0; 2]));
+            shapes.push(shape(ATLAS_TEXT, place, 0, cover, [0.0; 2]));
         }
         // What goes into the stream whole, asked of it at once: the text's and
         // the icons' pixels, the size and the shapes, as their writers measure them.
@@ -397,7 +396,7 @@ impl SheetPainter {
         g.copy_texture(
             encoder,
             &place(target, [0, 0, 0]),
-            &place(sheet, [x, y, 0]),
+            &place(atlas, [x, y, 0]),
             [w, h, 1],
         );
         Some([

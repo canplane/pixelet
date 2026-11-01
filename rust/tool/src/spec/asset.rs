@@ -72,7 +72,7 @@ pub fn pack_path() -> Result<String, String> {
         .ok_or(format!("{CUBE_JSON}: no pack"))
 }
 
-/// The catalog's groups a texture is filed under: the ground's looks, the
+/// The catalog's groups a texture is filed under: the ground's palette entries, the
 /// object's colors, and the sentinels, of which the world draws the bedrock.
 pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     let spec = read(CUBE_JSON)?;
@@ -120,7 +120,7 @@ fn sectioned<'l, 'a>(
         .flatten()
 }
 
-/// Each ground look's color by name, packed `0xRRGGBB`, as color.json gives it.
+/// Each ground palette entry's color by name, packed `0xRRGGBB`, as color.json gives it.
 pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String> {
     let spec = read(COLOR_JSON)?;
     let ground = spec.get("ground").ok_or("color.json has no ground")?;
@@ -145,7 +145,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
         "//",
         "// GENERATED from spec/spec/asset/color.json",
         "//",
-        "// The color of every look and every placed color: what a cube *is* to",
+        "// The color of every palette entry and every placed color: what a cube *is* to",
         "// the eye when no texture is drawn over it — everything drawn with the",
         "// pack off reads this, the coarse cells included, which summarize it",
         "// the way they summarize the tiles with the pack on",
@@ -251,7 +251,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     let base = spec.get("base").ok_or(format!("{CUBE_JSON}: no base"))?;
     let base_type = base.str_at("type").ok_or("base has no type")?;
 
-    // One value space: the sentinels and the looks within a byte, the object's own and decor past it.
+    // One value space: the sentinels and the palette entries within a byte, the object's own and decor past it.
     let decor = read(DECOR_JSON)?;
     let decor: Vec<(&str, u32)> = decor
         .get("decors")
@@ -329,7 +329,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "//",
         "// GENERATED from spec/spec/asset/cube.json",
         "//",
-        "// One value space: a ground cell is a byte, a Carto look numbered in the",
+        "// One value space: a ground cell is a byte, a Carto palette entry numbered in the",
         "// order Carto paints, and an object's value a u16 whose byte range is",
         "// that palette and whose range past it is what only an object can be.",
     ]
@@ -352,7 +352,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     // TS
     let mut ts = vec!["// @pxl/client/shell/catalog/asset/cube.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
-    // Every placeable cube under its heading: the ground's looks, and the colors past a ground byte.
+    // Every placeable cube under its heading: the ground's palette entries, and the colors past a ground byte.
     let cube_sections: Vec<(&str, &Entry)> = sectioned(&ground)
         .chain(sectioned(&object).filter(|(_, e)| is_color(e)))
         .collect();
@@ -364,7 +364,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     }
     ts.extend([
         String::new(),
-        "/** The catalog's section a placeable cube is listed under, as Carto groups the looks. */"
+        "/** The catalog's section a placeable cube is listed under, as Carto groups the palette entries. */"
             .to_string(),
         format!(
             "export type CubeSection = {};",
@@ -419,7 +419,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         String::new(),
         "export { ground, object };".to_string(),
         String::new(),
-        "/** The placeable cubes: the placed colors first, then the looks in paint order. */"
+        "/** The placeable cubes: the placed colors first, then the palette entries in paint order. */"
             .to_string(),
         "export const CUBES: readonly number[] = [".to_string(),
     ]);
@@ -532,9 +532,9 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         }
     }
     rs.extend(["    }".to_string(), String::new()]);
-    // The looks as an enum.
+    // The palette entries as an enum.
     rs.extend([
-        "    /// A look, by its number.".to_string(),
+        "    /// A palette entry, by its number.".to_string(),
         "    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]".into(),
         "    #[repr(u8)]".into(),
         "    pub enum Ground {".into(),
@@ -544,7 +544,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "    }".to_string(),
         String::new(),
         "    impl Ground {".into(),
-        "        /// Every look, in paint order.".into(),
+        "        /// Every palette entry, in paint order.".into(),
         format!(
             "        pub const ALL: [Ground; {}] = [",
             named(&ground).count()
@@ -554,7 +554,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     rs.extend([
         "        ];".to_string(),
         String::new(),
-        "        /// The look a byte names; none for a sentinel or a number the palette does not give out.".into(),
+        "        /// The palette entry a byte names; none for a sentinel or a number the palette does not give out.".into(),
         "        pub const fn of(val: u8) -> Option<Ground> {".into(),
         "            match val {".into(),
     ]);
@@ -566,7 +566,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "            }".into(),
         "        }".into(),
         String::new(),
-        "        /// Whether a look read into a word, as a GPU has it with no byte, is one `of`"
+        "        /// Whether a palette entry read into a word, as a GPU has it with no byte, is one `of`"
             .into(),
         "        /// names.".into(),
         format!(
@@ -577,7 +577,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// A way: decor faces along it and no pier stands on it.".into(),
         "        pub const fn transport(self) -> bool { Ground::transports(self as u32) }".into(),
         String::new(),
-        "        /// Whether a look read into a word is a way (`transport`).".into(),
+        "        /// Whether a palette entry read into a word is a way (`transport`).".into(),
         format!(
             "        pub const fn transports(val: u32) -> bool {{ matches!(val, {}) }}",
             runs(named(&ground).filter(|e| e.transport).map(|e| e.val)).join(" | ")
@@ -692,7 +692,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
                 .collect()
         })
         .unwrap_or_default();
-    let (portable, table) = decor_table(&spec, &ground_looks()?)?;
+    let (portable, table) = decor_table(&spec, &ground_palette()?)?;
 
     let mut ts = vec!["// @pxl/client/shell/catalog/asset/decor.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
@@ -805,7 +805,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     row.extend(
         [
             "// The decors as the GPU reads them too: how the ground generates each one, the",
-            "// looks it stands on and the boxes its variants claim, in the catalog's",
+            "// palette entries it stands on and the boxes its variants claim, in the catalog's",
             "// order. pxl-spec asset/decor.spec.rs adds their models over each row.",
             "#![allow(non_camel_case_types, reason = \"generated from the spec\")]",
         ]
@@ -826,8 +826,8 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-/// The ground's looks by name and number, what a decor may stand on.
-fn ground_looks() -> Result<Vec<(String, u32)>, String> {
+/// The ground's palette entries by name and number, what a decor may stand on.
+fn ground_palette() -> Result<Vec<(String, u32)>, String> {
     let spec = read(CUBE_JSON)?;
     Ok(
         named(&entries(spec.get("ground").ok_or("no ground")?, "ground")?)
@@ -838,9 +838,12 @@ fn ground_looks() -> Result<Vec<(String, u32)>, String> {
 
 /// The decors' table, in the catalog's order, which is the order their
 /// variants are numbered in: in pxl-spec-core every number the GPU reads too
-/// (how the ground generates each one, its looks, its boxes), in pxl-spec its
+/// (how the ground generates each one, its palette entries, its boxes), in pxl-spec its
 /// models over that row.
-fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec<String>), String> {
+fn decor_table(
+    spec: &Node,
+    palette_indices: &[(String, u32)],
+) -> Result<(Vec<String>, Vec<String>), String> {
     const SLOT: &str = "crate::asset::catalog::Slot";
     let mut slot = run_of(DECOR_JSON)?.0;
     struct Row {
@@ -878,10 +881,10 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
         for l in k.get("on").and_then(Node::arr).ok_or(at("on"))? {
             let v = l
                 .str()
-                .and_then(|l| looks.iter().find(|(g, _)| g == l))
+                .and_then(|l| palette_indices.iter().find(|(g, _)| g == l))
                 .map(|(_, v)| *v)
                 .filter(|v| *v < 256)
-                .ok_or(format!("{}: {l:?} is no ground look", at("on")))?;
+                .ok_or(format!("{}: {l:?} is no ground palette_idx", at("on")))?;
             on[(v >> 5) as usize] |= 1 << (v & 31);
         }
         let scale_steps = match k.get("scale_steps") {
@@ -978,7 +981,7 @@ fn decor_table(spec: &Node, looks: &[(String, u32)]) -> Result<(Vec<String>, Vec
             "    /// (pxl-spec-core scatter.rs `count`).",
             "    pub chance: u32,",
             "    pub orientation: Orientation,",
-            "    /// The looks it may stand on, a bit each.",
+            "    /// The palette entries it may stand on, a bit each.",
             "    pub on: [u32; 8],",
             "    /// Its cell: a unit's zoom, this many coarser.",
             "    pub scale_steps: i32,",

@@ -10,16 +10,16 @@
 //! observer (beam.rs, cast.rs, raster.rs, light.rs); its lattice, its rays and
 //! what its walks leave are its own (eye.rs `Eye`, light.rs `Map`). A pass both
 //! observers take is one entry, its observer the one its head names
-//! (either.rs `Either`), so a pass is one module whichever casts it.
+//! (pass_observer.rs `PassObserver`), so a pass is one module whichever casts it.
 
-use pxl_spec_core::cast::{self, Detail, Met, Query, Until};
-use pxl_spec_core::world::Handed;
+use pxl_spec_core::cast::{self, Detail, Trace, Query, Until};
+use pxl_spec_core::world::Inherited;
 use pxl_spec_core::{beam, observed, raster, tally};
 
 use crate::beam::{resumed, sample_put, Beamed, Leaving, Words};
 use crate::observed::{add_tally, seen_at, Seen, Writing};
 use crate::raster::{boxed, taken, NONE};
-use crate::world::{Looks, World};
+use crate::world::{PaletteWords, World};
 
 /// A ray as an observer aims it: where it starts, its way and reach, and
 /// the zooms it asks with the spacing its beam rays lie apart by
@@ -121,7 +121,7 @@ fn idx(across: u32, c: [u32; 2]) -> u32 {
 /// its line left in `w` for the rays about it (`Leaving`), how far they
 /// start from it and the nodes it visited; each node it asks told to `told`
 /// (`cast::Asked`), none where the cast needs it not.
-pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: Looks>(
+pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
     seen: &mut Seen,
@@ -151,7 +151,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: Looks>(
         told,
     );
     add_tally(seen, o.tally(), tally::BEAM, met.visits);
-    w.set(base + beam::LINE_T, o.handed(&aim, met.stop.t).to_bits());
+    w.set(base + beam::LINE_T, o.handed(&aim, met.hit.t).to_bits());
     w.set(base + beam::LINE_VISITS, met.visits);
 }
 
@@ -203,7 +203,7 @@ pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
     cell: [u32; 2],
     keep: &mut impl cast::Keep<Q::At>,
     told: &mut impl cast::Asked,
-) -> (Met<Q::At>, u32)
+) -> (Trace<Q::At>, u32)
 where
     Beamed<'a, W>: cast::Over<Q::At>,
 {
@@ -223,7 +223,7 @@ where
 /// fills through the observed pyramid writing what it asks, and its stop
 /// left in `w` for the raster (`sample_put`), with the nodes it and its
 /// beam ray visited; each node it asks told to `told`.
-pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: Looks>(
+pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
     seen: &mut Seen,
@@ -256,7 +256,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: Looks>(
         told,
     );
     add_tally(seen, o.tally(), tally::SAMPLE, met.visits);
-    let met = Met {
+    let met = Trace {
         visits: met.visits + before,
         ..met
     };
@@ -319,14 +319,14 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
     at: O::At,
     aim: &Aim,
     visible: u32,
-) -> (Take, cast::Stop<u32>, u32) {
+) -> (Take, cast::Hit<u32>, u32) {
     if visible != 0 && visible & raster::LACK == 0 {
         let (stop, k, enters) = took(o, w, aim, visible);
         if enters {
             return (Take::Sample, stop, k);
         }
     }
-    let none = cast::Stop {
+    let none = cast::Hit {
         t: aim.ray.t_max,
         axis: 0,
         node: cast::Node::ROOT,
@@ -349,7 +349,7 @@ pub(crate) fn took<O: Observer, W: Words + ?Sized>(
     w: &W,
     aim: &Aim,
     visible: u32,
-) -> (cast::Stop<u32>, u32, bool) {
+) -> (cast::Hit<u32>, u32, bool) {
     let (n, s) = (o.samples()[0], raster::sample_of(visible));
     let k = o.sample_at([s % n, s / n]);
     let (stop, enters) = taken(w, k, aim.origin, &aim.ray);
@@ -380,15 +380,15 @@ fn went_on<O: Observer, W: Words + ?Sized>(o: &O, w: &W, s: [u32; 2]) -> bool {
 /// pyramid writing what it asks, a ray its visible sample and the pyramid left
 /// unmet, its line left where it ends to `keep` and each node it asks told
 /// to `told`: its aim, its met and the nodes its beam ray visited.
-pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: Looks>(
+pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
     seen: &mut Seen,
     w: &W,
     at: O::At,
-    keep: &mut impl cast::Keep<Handed>,
+    keep: &mut impl cast::Keep<Inherited>,
     told: &mut impl cast::Asked,
-) -> (Aim, Met<Handed>, u32) {
+) -> (Aim, Trace<Inherited>, u32) {
     let aim = o.aim(at);
     let tag = observed::tag(seen_at(seen, observed::FRAME), o.passes()[2]);
     let (met, before) = resume(

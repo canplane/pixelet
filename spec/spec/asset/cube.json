@@ -2,7 +2,7 @@
   "pack": {
     "$val": "cube/pack.webp",
     "$doc": [
-      "The texture pack, the file the cube kind's look is drawn from: one image",
+      "The texture pack, the file the cube kind's palette entry is drawn from: one image",
       "of every tile under asset/content/cube/, which the asset ingest composes",
       "and ships as the table's file at this path, with which tile each cube",
       "wears on which face (pxl-tool bin/ingest_asset.rs, ingested.json); the",
@@ -34,11 +34,11 @@
   ],
   "ground": {
     "$doc": [
-      "The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in",
+      "The ground: one byte a cell, a palette entry from OpenStreetMap Carto, numbered in",
       "the order Carto paints.",
       "`transport` marks a way: decor faces along it and no pier stands on it;",
-      "every look stands at its sampled height. The byte's values: 1 to 63",
-      "Carto's looks, in its paint order; from 64 pixelet's own, the",
+      "every palette entry stands at its sampled height. The byte's values: 1 to 63",
+      "Carto's palette entries, in its paint order; from 64 pixelet's own, the",
       "underground, which Carto paints nothing of; 0 and 255 the sentinels."
     ],
     "entries": [

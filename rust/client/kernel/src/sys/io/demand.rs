@@ -73,9 +73,9 @@ impl Stream {
     }
 }
 
-/// Why a tile is asked for, strongest first: the hold the tile cache keeps it by.
+/// How strongly a tile is asked for, strongest first: the hold the tile cache keeps it by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Why {
+pub enum Priority {
     Floor,
     /// On a line asked for exactly: the camera's destination's, or the division layer's pivot's.
     Destination,
@@ -87,14 +87,14 @@ pub enum Why {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ask {
-    pub why: Why,
+    pub priority: Priority,
     pub order: Order,
 }
 
 impl Ask {
     /// A want with no place in the view, ordered by its stream alone.
     pub const PLAIN: Ask = Ask {
-        why: Why::Demand,
+        priority: Priority::Demand,
         order: Order::LAST,
     };
 
@@ -102,7 +102,7 @@ impl Ask {
     /// is held says nothing of when the view needs it.
     pub fn best(self, other: Ask) -> Ask {
         Ask {
-            why: self.why.min(other.why),
+            priority: self.priority.min(other.priority),
             order: self.order.min(other.order),
         }
     }

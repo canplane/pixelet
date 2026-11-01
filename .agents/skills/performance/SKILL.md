@@ -88,7 +88,7 @@ ownership and lifetime.
   ray counts summed, where the `ray_counts` setting is on; the view's pivot,
   distance and angles and the world's pixels; and the heap's, rings' and
   body slots' extremes since the recording started. A p95 is the nearest
-  rank (perf.json `SPREAD`). `pxl.perf.trace()` saves the window for
+  rank (perf.json `PERCENTILES`). `pxl.perf.trace()` saves the window for
   ui.perfetto.dev, a download, with every lane of every frame: which frames
   took terrain tiles in (`tiles_landed`), why the light's map cast
   (`light_moved`), and the ray counts of the frame they were counted in.

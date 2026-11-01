@@ -15,7 +15,7 @@ use xpute_guest::global::Global;
 
 /// What the eraser's preview changes in what is drawn only: every mechanic
 /// — the pick, a walk, the camera's clearance, an edit's own reads, decor's
-/// footing — asks the stored world (`World::now`), or hover would clear,
+/// column surface — asks the stored world (`World::now`), or hover would clear,
 /// the hide lift and the pick hit it again, forever, and a walker would fall
 /// into a hole not dug. No revision moves, so saves do not see the hover.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

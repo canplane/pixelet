@@ -17,16 +17,16 @@ import { CharacterPreview } from "./preview.tsx";
 import { kernel_setting } from "@/port/setting.ts";
 import { SETTING } from "@/shell/setting/schema.ts";
 import {
-  type CharacterVariant,
+  type Character,
   type Gender,
   genderOf,
   GENDER_LABEL_KEY,
   GENDERS,
-  personVariant,
-  personVariantsOf,
-  PET_VARIANTS,
-  petVariant,
-} from "./variant.ts";
+  personAt,
+  personsOf,
+  PETS,
+  petAt,
+} from "./character.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shell/ui/panel.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -91,14 +91,14 @@ function PickerCard({
   children,
 }: {
   label: string;
-  selected: CharacterVariant;
+  selected: Character;
   children: ReactNode;
 }) {
   return (
     <View style={styles.picker}>
       <SectionTitle>{label}</SectionTitle>
       <View style={styles.pickerRow}>
-        <CharacterPreview variant={selected} style={styles.preview} />
+        <CharacterPreview character={selected} style={styles.preview} />
         <View style={styles.chipColumn}>{children}</View>
       </View>
     </View>
@@ -108,15 +108,15 @@ function PickerCard({
 interface PersonPickerProps {
   gender: Gender;
   onGenderChange: (gender: Gender) => void;
-  selected: CharacterVariant;
-  onSelect: (variant: CharacterVariant) => void;
+  selected: Character;
+  onSelect: (character: Character) => void;
 }
 
-/** The preview tracks the equipped variant; browsing genders changes nothing until a variant is picked. */
+/** The preview tracks the equipped character; browsing genders changes nothing until a character is picked. */
 function PersonPicker(props: PersonPickerProps) {
   const { gender, onGenderChange, selected, onSelect } = props;
   const { t } = useTranslation();
-  const variants = personVariantsOf(gender);
+  const characters = personsOf(gender);
 
   return (
     <PickerCard label={t("drawer.character.person_label")} selected={selected}>
@@ -132,7 +132,7 @@ function PersonPicker(props: PersonPickerProps) {
       </View>
       <View style={styles.rule} />
       <View style={styles.chips}>
-        {variants.map((v, i) => (
+        {characters.map((v, i) => (
           <Chip
             key={v.number}
             label={`${i + 1}`}
@@ -146,8 +146,8 @@ function PersonPicker(props: PersonPickerProps) {
 }
 
 interface PetPickerProps {
-  selected: CharacterVariant;
-  onSelect: (variant: CharacterVariant) => void;
+  selected: Character;
+  onSelect: (character: Character) => void;
 }
 
 function PetPicker(props: PetPickerProps) {
@@ -157,7 +157,7 @@ function PetPicker(props: PetPickerProps) {
   return (
     <PickerCard label={t("drawer.character.pet_label")} selected={selected}>
       <View style={styles.chips}>
-        {PET_VARIANTS.map((v) => (
+        {PETS.map((v) => (
           <Chip
             key={v.number}
             label={v.label}
@@ -170,12 +170,12 @@ function PetPicker(props: PetPickerProps) {
   );
 }
 
-/** Picks take effect at once and the sheet stays open, for comparing variants. */
+/** Picks take effect at once and the sheet stays open, for comparing characters. */
 export function CharacterPicker() {
-  const person = personVariant(
+  const person = personAt(
     useKernel((s) => s.settings[SETTING.person.key] ?? -1),
   );
-  const pet = petVariant(useKernel((s) => s.settings[SETTING.pet.key] ?? -1));
+  const pet = petAt(useKernel((s) => s.settings[SETTING.pet.key] ?? -1));
 
   // Opens on the selection's gender, so a pick does not look reset on reopen.
   const [gender, setGender] = useState<Gender>(genderOf(person));

@@ -1,7 +1,7 @@
-// pxl-render/frame/shader/puck_beacon_place.wgsl
+// pxl-render/frame/shader/location_beacon_place.wgsl
 
 // The beacon's octahedron placed, spun about Z: what the lit pass
-// (puck_beacon.wgsl) and the mark (tile_mark.wgsl) lay alike.
+// (location_beacon.wgsl) and the mark (tile_mark.wgsl) lay alike.
 
 fn beacon_world(pos: vec3f) -> vec3f {
   return spin_z(pos, draw_fourth()) + draw_translation();

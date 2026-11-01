@@ -64,7 +64,7 @@ pub struct TileCache<L: Base> {
     /// The tile each slot holds: the slots' side of `Held::slot`, one
     /// association read both ways — a tile's slot by every reader of a
     /// tile (`slot`, `is_slotted`; domain/layer/earth.rs `earth_window`,
-    /// domain/layer/terrain/tile.rs `held_for`, domain/layer/terrain/window.rs `voids`),
+    /// domain/layer/terrain/tile.rs `pending_for`, domain/layer/terrain/clipmap.rs `voids`),
     /// a slot's tile by the GPU's hand-offs, which walk the slots
     /// (domain/scene/cast.rs `upload`, domain/layer/earth.rs `earth_upload`). Written only
     /// where a slot is taken or given up (`put`, `remove`).

@@ -11,7 +11,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
 
-/// Struck at a point off every tier boundary.
+/// HitKind at a point off every tier boundary.
 fn struck(normal: V3, point: V3) -> Hit {
     Hit {
         t: 1.0,
@@ -21,7 +21,7 @@ fn struck(normal: V3, point: V3) -> Hit {
             min: [3.0, 5.0, 2.0],
             max: [4.0, 6.0, 3.0],
         },
-        struck: Struck::Ground,
+        kind: HitKind::Ground,
     }
 }
 

@@ -10,8 +10,8 @@
 pub const SHADER_BOX: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
 pub const SHADER_SKINNED: u32 = 2;
-pub const SHADER_PUCK_ZONE: u32 = 3;
-pub const SHADER_PUCK_BEACON: u32 = 4;
+pub const SHADER_LOCATION_ZONE: u32 = 3;
+pub const SHADER_LOCATION_BEACON: u32 = 4;
 pub const SHADER_MARKER: u32 = 5;
 pub const SHADER_SKY: u32 = 6;
 pub const SHADER_DEBUG: u32 = 7;
@@ -28,7 +28,7 @@ pub const SHADER_ATMOS_EXPOSURE: u32 = 15;
 pub const SHADER_STAR: u32 = 16;
 pub const SHADER_CLOUD: u32 = 17;
 pub const SHADER_CLOUD_FIELD: u32 = 18;
-pub const SHADER_SHEET: u32 = 19;
+pub const SHADER_ATLAS: u32 = 19;
 pub const SHADER_IMPOSTOR: u32 = 20;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 21;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 22;
@@ -40,7 +40,7 @@ pub const SHADER_SCREEN_RAY: u32 = 24;
 pub const SHADER_CAST: u32 = 25;
 /// Each newly held brick's levels over its columns, a level a dispatch,
 /// generated with the cast from pxl-spec-core's `fill::level` and
-/// `window::join`: its one compute entry.
+/// `clipmap::join`: its one compute entry.
 pub const SHADER_BOUND: u32 = 26;
 /// Each newly held brick's columns' ground tops off its samples,
 /// generated with the cast from pxl-spec-core's `ground::height`: its one
@@ -65,14 +65,14 @@ pub const SHADER_WAY: u32 = 32;
 /// compute entry.
 pub const SHADER_GENERATED_MARK: u32 = 33;
 /// The eye's windows folded over their bricks, generated with the cast
-/// from pxl-spec-core's `window::fold`: its one compute entry.
+/// from pxl-spec-core's `clipmap::fold`: its one compute entry.
 pub const SHADER_JOINED: u32 = 34;
 /// A light's share of the air's volume, a column of froxels a workgroup
 /// (atmos_froxel.wgsl): its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 35;
 /// Each handed brick's ways as a tree of cells in one pool (pxl-spec-core
-/// `way::tree`), generated with the cast: a re-filled brick's old families
-/// given back, its tree built off the pool's stack, the families its build
+/// `way::tree`), generated with the cast: a re-filled brick's old child groups
+/// given back, its tree built off the pool's stack, the child groups its build
 /// gave back pushed after: a compute entry each.
 pub const SHADER_WAY_FREE: u32 = 36;
 pub const SHADER_WAY_TREE: u32 = 37;
@@ -162,12 +162,12 @@ pub const SHADER_SKINNED_MARK: u32 = 67;
 /// the margin of what their walks asked (pxl-spec-core `light::holds`): a
 /// compute entry.
 pub const SHADER_LIGHT_DETAIL: u32 = 68;
-/// Decor, an impostor, the location puck's zone and its beacon where each
+/// Decor, an impostor, the location indicator's zone and its beacon where each
 /// was and where it is, their fragments marking their tiles (tile_mark.wgsl).
 pub const SHADER_DECOR_MARK: u32 = 69;
 pub const SHADER_IMPOSTOR_MARK: u32 = 70;
-pub const SHADER_PUCK_ZONE_MARK: u32 = 71;
-pub const SHADER_PUCK_BEACON_MARK: u32 = 72;
+pub const SHADER_LOCATION_ZONE_MARK: u32 = 71;
+pub const SHADER_LOCATION_BEACON_MARK: u32 = 72;
 /// The shadow map's beam rays and samples, the eye's passes in entries of
 /// their own, which tell what their walks ask of (pxl-spec-core
 /// `cast::Margin`): compute entries.
@@ -213,17 +213,22 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     lit!["place", "instance", "decor_place", "decor"],
     // SHADER_SKINNED
     lit!["place", "skinned_place", "skinned"],
-    // SHADER_PUCK_ZONE
+    // SHADER_LOCATION_ZONE
     &[
         "frame",
         "encode",
         "finish",
-        "puck",
-        "puck_zone_place",
-        "puck_zone",
+        "location",
+        "location_zone_place",
+        "location_zone",
     ],
-    // SHADER_PUCK_BEACON
-    lit!["place", "puck", "puck_beacon_place", "puck_beacon"],
+    // SHADER_LOCATION_BEACON
+    lit![
+        "place",
+        "location",
+        "location_beacon_place",
+        "location_beacon"
+    ],
     // SHADER_MARKER
     &["frame", "encode", "marker", "marker_sprite"],
     // SHADER_SKY
@@ -298,8 +303,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "atmos_pass",
         "cloud_bake",
     ],
-    // SHADER_SHEET
-    &["sheet"],
+    // SHADER_ATLAS
+    &["atlas"],
     // SHADER_IMPOSTOR
     lit!["instance", "impostor_place", "impostor"],
     // SHADER_IMPOSTOR_BAKE
@@ -426,10 +431,16 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["frame", "place", "instance", "decor_place", "tile_mark"],
     // SHADER_IMPOSTOR_MARK
     &["frame", "instance", "impostor_place", "tile_mark"],
-    // SHADER_PUCK_ZONE_MARK
-    &["frame", "puck", "puck_zone_place", "tile_mark"],
-    // SHADER_PUCK_BEACON_MARK
-    &["frame", "place", "puck", "puck_beacon_place", "tile_mark"],
+    // SHADER_LOCATION_ZONE_MARK
+    &["frame", "location", "location_zone_place", "tile_mark"],
+    // SHADER_LOCATION_BEACON_MARK
+    &[
+        "frame",
+        "place",
+        "location",
+        "location_beacon_place",
+        "tile_mark",
+    ],
     // SHADER_LIGHT_BEAM
     &["light_beam.gen"],
     // SHADER_LIGHT_SAMPLE

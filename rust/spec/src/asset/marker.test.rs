@@ -31,11 +31,11 @@ fn marker_cell_nests() {
 }
 
 /// A marker's cell lies in the window's brick drawing its grid's cells
-/// (pxl-spec-core window.rs), so no cell's count is split between two
+/// (pxl-spec-core clipmap.rs), so no cell's count is split between two
 /// bricks, wherever the brick is no finer than the marker.
 #[test]
 fn marker_cell_in_brick() {
-    use pxl_spec_core::window::{bricks_zoom, BRICK_SHIFT};
+    use pxl_spec_core::clipmap::{bricks_zoom, BRICK_SHIFT};
     for at in markers() {
         for cell in MARKER_SHOWN_FROM as Zoom..=at.zoom() + BRICK_SHIFT {
             let (z, c) = marker_cell_of(cell, at);

@@ -28,7 +28,7 @@
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the
 //! answer's kind and asset, what was handed the node after it was asked
-//! (`world::Handed::words`), and the node, its zoom and its index, which tell
+//! (`world::Inherited::words`), and the node, its zoom and its index, which tell
 //! it from another node of the same slot (`forgets` reads its column). A
 //! walk writes a slot only once it has claimed it, its key swapped to
 //! `CLAIMED` in one compare-and-swap, and writes the key last; a writing
@@ -37,22 +37,22 @@
 //! in between.
 
 use crate::answer::Kind;
+use crate::clipmap::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_WINDOWS};
 use crate::overwrite;
 use crate::overwrite::Held;
 use crate::overwrite::{cut_box, BOXES};
 use crate::tally;
-use crate::window::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_WINDOWS};
-use crate::world::HANDED_WORDS;
+use crate::world::INHERITED_WORDS;
 use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 
 /// The head's words: the frame's number, what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit an entry of the
-/// eye's windows, a window's `window::ENTRIES` bits in turn, set where the brick it
+/// eye's windows, a window's `clipmap::ENTRIES` bits in turn, set where the brick it
 /// holds moved or was handed since the last cast; and the boxes of leaf
 /// cells whose columns what is placed or a preview's cuts changed since the
 /// last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
 /// generation is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
-/// pxl-render gpu/generated.rs); and the families of what is placed written
+/// pxl-render gpu/generated.rs); and the child groups of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
 /// `WRITTEN` at most, past which all is forgotten (`reads_written`); and
 /// whether its walks count what they ask, and what they counted
@@ -60,7 +60,7 @@ use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
 pub const MOVED_AT: u32 = 2;
-pub const MOVED_WORDS: u32 = (EYE_WINDOWS * window::ENTRIES).div_ceil(32);
+pub const MOVED_WORDS: u32 = (EYE_WINDOWS * clipmap::ENTRIES).div_ceil(32);
 pub const BOXES_AT: u32 = MOVED_AT + MOVED_WORDS;
 pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
 pub const WRITTEN: u32 = 32;
@@ -87,7 +87,7 @@ pub const fn tally_at(observer: u32, lane: u32) -> u32 {
 /// What a frame forgets: nothing; everything, where what every node is
 /// asked of moved (the service area) or the keys' frames ran out; the nodes
 /// over the bricks that moved (`forgets`), over a box of what is placed or
-/// cut that changed (`over_box`), or handed a slot of a family of what is
+/// cut that changed (`over_box`), or handed a slot of a child group of what is
 /// placed that was written (`reads_written`).
 pub const FORGETS_NONE: u32 = 0;
 pub const FORGETS_ALL: u32 = 1;
@@ -97,12 +97,12 @@ pub const FORGETS_MOVED: u32 = 2;
 pub const W_KEY: u32 = 0;
 pub const W_KIND: u32 = 1;
 pub const W_ASSET: u32 = 2;
-pub const W_HANDED: u32 = 4;
+pub const W_INHERITED: u32 = 4;
 /// The node: its zoom, then its index on X, Y and Z.
-pub const W_NODE: u32 = W_HANDED + HANDED_WORDS;
-/// What was handed it of what is placed, its `Handed`'s second word
-/// (`world::Handed::words`).
-pub const W_PLACED: u32 = W_HANDED + 1;
+pub const W_NODE: u32 = W_INHERITED + INHERITED_WORDS;
+/// What was handed it of what is placed, its `Inherited`'s second word
+/// (`world::Inherited::words`).
+pub const W_PLACED: u32 = W_INHERITED + 1;
 pub const ENTRY_WORDS: u32 = W_NODE + 4;
 
 /// The slots: no more than the tiles' entries were (8 roots and 2^16 tiles
@@ -249,8 +249,8 @@ pub const fn kind_of(w: u32) -> Kind {
 /// `moved` the moved entries' words (`MOVED_AT`), as a walk holds them, never
 /// a closure over the buffer, which rust-gpu reads wrongly: a node's answer reads
 /// the bricks under it alone — its cells' and their windows' over them
-/// (`window::step`), a wider node's the block of bricks its own size
-/// (`window::bounded`) — and what was handed it found its cells there, so a
+/// (`clipmap::step`), a wider node's the block of bricks its own size
+/// (`clipmap::bounded`) — and what was handed it found its cells there, so a
 /// node no moved brick lies under answers as it did. A node a window's
 /// whole side wide or wider reads every entry of the window.
 /// Whether the node of `zoom` at column `[x, y]` stands over the box `b` of
@@ -272,16 +272,16 @@ pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
     across && b[1] < n[3] && b[3] > n[1]
 }
 
-/// Whether what was handed a node of what is placed, its `Handed`'s word
-/// `placed` (`overwrite::Held`), answers from a slot of the family written
+/// Whether what was handed a node of what is placed, its `Inherited`'s word
+/// `placed` (`overwrite::Held`), answers from a slot of the child group written
 /// whose first slot is `first`. A write folds up its own path in place, and
 /// that path's nodes stand over its box (`over_box`); but where it splits a
-/// leaf that covered wider than the box, or takes a family a join let go of,
+/// leaf that covered wider than the box, or takes a child group a join let go of,
 /// a node beside the box holds a slot the write changed, and reads another
 /// node's what is placed after it.
 pub fn reads_written(placed: u32, first: u32) -> bool {
     let held = Held::of_word(placed);
-    held.holds() && held.slot().wrapping_sub(first) < overwrite::FAMILY
+    held.holds() && held.slot().wrapping_sub(first) < overwrite::CHILDREN
 }
 
 pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]) -> bool {
@@ -305,7 +305,7 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
         let wide = q1[0] - q0[0] + 1 >= ACROSS as i32 || q1[1] - q0[1] + 1 >= ACROSS as i32;
         if wide {
             let mut k = 0;
-            while k < window::ENTRIES {
+            while k < clipmap::ENTRIES {
                 if moved_in(moved, w, k) {
                     return true;
                 }
@@ -316,7 +316,7 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
             while qy <= q1[1] {
                 let mut qx = q0[0];
                 while qx <= q1[0] {
-                    if moved_in(moved, w, window::entry([qx, qy])) {
+                    if moved_in(moved, w, clipmap::entry([qx, qy])) {
                         return true;
                     }
                     qx += 1;
@@ -332,7 +332,7 @@ pub fn forgets(moved: &[u32; MOVED_WORDS as usize], zoom: Zoom, [x, y]: [i32; 2]
 /// Whether entry `entry` of the eye's window `w` moved, among the moved
 /// entries' words.
 pub const fn moved_in(moved: &[u32; MOVED_WORDS as usize], w: u32, entry: u32) -> bool {
-    let k = w * window::ENTRIES + entry;
+    let k = w * clipmap::ENTRIES + entry;
     moved[(k / 32) as usize] & 1 << (k % 32) != 0
 }
 
@@ -367,15 +367,15 @@ mod tests {
         assert!(over_box(0, [0, 0], b));
     }
 
-    /// A node reads a written family where what was handed it answers from
-    /// one of that family's slots, and not where it holds nothing.
+    /// A node reads a written child group where what was handed it answers from
+    /// one of that child group's slots, and not where it holds nothing.
     #[test]
-    fn node_reads_families() {
-        use crate::overwrite::{Held, FAMILY};
+    fn node_reads_child_groups() {
+        use crate::overwrite::{Held, CHILDREN};
         let held = |slot: u32| Held::branch(slot, 9).word();
         assert!(reads_written(held(40), 40));
-        assert!(reads_written(held(40 + FAMILY - 1), 40));
-        assert!(!reads_written(held(40 + FAMILY), 40));
+        assert!(reads_written(held(40 + CHILDREN - 1), 40));
+        assert!(!reads_written(held(40 + CHILDREN), 40));
         assert!(!reads_written(held(39), 40));
         assert!(!reads_written(Held::NOTHING.word(), 0));
     }

@@ -1,10 +1,10 @@
-// @pxl/client/shell/debug/perf/lane.ts
+// @pxl/client/shell/debug/perf/column.ts
 
 /**
- * How the report, panel and trace show a frame's lanes, as abi/perf.ts
- * decodes them. A lane's unit is its name's suffix (`_ms`, `_bytes`, `_px`,
- * `_name`, as perf.json FRAME says), so a lane the kernel adds needs no
- * word here; only a list lane's names are spelled out.
+ * How the report, panel and trace show a frame's columns, as abi/perf.ts
+ * decodes them. A column's unit is its name's suffix (`_ms`, `_bytes`, `_px`,
+ * `_name`, as perf.json FRAME says), so a column the kernel adds needs no
+ * word here; only a list column's names are spelled out.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -12,7 +12,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@/abi/phase.spec.ts";
 import { FRAME_GROUP, WAKES } from "@/abi/perf.spec.ts";
-import type { ListLane } from "@/port/perf.ts";
+import type { ListColumn } from "@/port/perf.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { fixed } from "@/shell/fixed.ts";
@@ -23,8 +23,8 @@ const MIB = 1048576;
 /** The kernel gives a zoom as its number. */
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 
-/** Each list lane's names, slot by slot. */
-export const LIST_NAMES: Record<ListLane, readonly string[]> = {
+/** Each list column's names, slot by slot. */
+export const LIST_NAMES: Record<ListColumn, readonly string[]> = {
   phases: PHASES,
   effects: EFFECT_NAMES,
   gpu_spans: GPU_SPAN_NAMES,

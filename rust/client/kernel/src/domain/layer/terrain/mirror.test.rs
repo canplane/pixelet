@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Records of families `ids`, family `b`'s heap words `b` and its data words
+/// Records of child groups `ids`, child group `b`'s child pointers `b` and its data words
 /// `b + 1`.
 fn records(ids: &[u32]) -> Vec<u32> {
     let mut r = vec![ids.len() as u32];
@@ -17,37 +17,37 @@ fn records(ids: &[u32]) -> Vec<u32> {
 #[test]
 fn landing_grows_mirror() {
     let mut m = Mirror::default();
-    assert_eq!(m.lay(&records(&[1, 3 * CHUNK_FAMILIES + 5])), Ok(()));
+    assert_eq!(m.lay(&records(&[1, 3 * CHUNK_CHILD_GROUPS + 5])), Ok(()));
     assert_eq!(
         m.chunks.len(),
         4,
         "grown a chunk at a time to the highest id laid"
     );
-    for b in [1, 3 * CHUNK_FAMILIES + 5] {
+    for b in [1, 3 * CHUNK_CHILD_GROUPS + 5] {
         for k in 0..8 {
-            assert_eq!((m.heap(8 * b + k), m.data(8 * b + k)), (b, b + 1));
+            assert_eq!((m.first_child(8 * b + k), m.data(8 * b + k)), (b, b + 1));
         }
     }
     assert_eq!(
-        (m.heap(8 * 2), m.data(8 * 2)),
+        (m.first_child(8 * 2), m.data(8 * 2)),
         (0, 0),
-        "a family never laid holds nothing"
+        "a child group never laid holds nothing"
     );
     assert_eq!(
-        m.heap(8 * 10 * CHUNK_FAMILIES),
+        m.first_child(8 * 10 * CHUNK_CHILD_GROUPS),
         0,
         "past the chunks, nothing"
     );
 }
 
 #[test]
-fn family_past_cap_refused() {
+fn child_group_past_cap_refused() {
     let mut m = Mirror::default();
     assert_eq!(
-        m.lay(&records(&[1, tree::POOL_FAMILIES])),
+        m.lay(&records(&[1, tree::POOL_CHILD_GROUPS])),
         Err(Unlaid::Cap),
         "past the cap, which no asking again changes"
     );
-    assert_eq!(m.heap(8), 0);
+    assert_eq!(m.first_child(8), 0);
     assert!(m.chunks.is_empty());
 }

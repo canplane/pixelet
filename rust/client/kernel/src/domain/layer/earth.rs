@@ -54,7 +54,7 @@ impl Base for Earth {
     }
 
     /// The texels are kept until the GPU has them: every frame's, whose
-    /// slots terrain's bound leaves them (domain/layer/terrain/tile.rs `most_held`).
+    /// slots terrain's bound leaves them (domain/layer/terrain/tile.rs `most_pending`).
     fn keep(record: Option<u32>, block: Block) {
         uploads().keep(record, block, EARTH_SLOTS);
     }

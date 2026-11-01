@@ -201,7 +201,7 @@
     },
     "orbit_obstacle": {
       "number": 7,
-      "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/terrain_gate.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default."],
+      "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default."],
       "kind": "choice",
       "default": "climb",
       "options": "ORBIT_OBSTACLE_MODES",

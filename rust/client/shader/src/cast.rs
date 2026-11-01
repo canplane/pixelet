@@ -7,7 +7,7 @@
 //! (`stop_lead_cs`, raster.rs `face_cs`), and put at their pixels
 //! (`stop_faces_cs`).
 
-use pxl_spec_core::cast::{self, End, Met};
+use pxl_spec_core::cast::{self, End, Trace};
 use pxl_spec_core::{beam, observed, raster, ray, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
@@ -30,20 +30,20 @@ pub(crate) type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = tru
 type Visibility = Image!(2D, type = u32, sampled = true, arrayed = true);
 
 /// A ray's words, a layer each of `Rays`: the value it stopped on and the
-/// face it entered through, then how far as f32 bits, then the four looks
+/// face it entered through, then how far as f32 bits, then the four palette indices
 /// the ground's asset is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about, then what lies about its
 /// face (`World::faced`); where it met nothing, the first two zero.
 fn word<A: Copy>(
     ray: &cast::Ray,
-    met: Met<A>,
+    met: Trace<A>,
     steps: bool,
     faces: u32,
 ) -> [u32; ray::WORDS as usize] {
-    if met.ends != End::Stop {
+    if met.ends != End::Hit {
         return [0, 0, met.visits, 0];
     }
-    let s = met.stop;
+    let s = met.hit;
     let [val, four] = s.asset;
     [
         ray::first_word(val, face_of(ray, s.axis), s.node.zoom),
@@ -153,9 +153,9 @@ pub fn cast_cs(
             id,
             word(
                 &ray,
-                Met {
-                    ends: End::On,
-                    stop: hit,
+                Trace {
+                    ends: End::Miss,
+                    hit,
                     visits: if steps {
                         seen_at(
                             beams,
@@ -184,9 +184,9 @@ pub fn cast_cs(
             id,
             word(
                 &ray,
-                Met {
-                    ends: End::Stop,
-                    stop: hit,
+                Trace {
+                    ends: End::Hit,
+                    hit,
                     visits,
                 },
                 steps,
@@ -251,7 +251,7 @@ fn missed(
     eye: &Eye,
     window: &[IVec4],
     ground: &[u32],
-    looks: &[u32],
+    palette_indices: &[u32],
     shards: &[IVec4],
     overwrites: &[u32],
     pool: &[u32],
@@ -263,7 +263,7 @@ fn missed(
     let world = World {
         window,
         ground,
-        looks,
+        palette_indices,
         shards,
         overwrites,
         eye,
@@ -271,14 +271,14 @@ fn missed(
     };
     let (aim, met, before) =
         observer::walked(eye, world, seen, &*beams, px_tan(eye, id, size), &mut (), &mut ());
-    let (asks, faces) = unasked(met.ends, met.stop.asset[0]);
+    let (asks, faces) = unasked(met.ends, met.hit.asset[0]);
     let faces = if asks {
-        let face = face_of(&aim.ray, met.stop.axis);
-        stop(eye, beams, seen, &met.stop.node, face, id)
+        let face = face_of(&aim.ray, met.hit.axis);
+        stop(eye, beams, seen, &met.hit.node, face, id)
     } else {
         faces
     };
-    let met = Met {
+    let met = Trace {
         visits: met.visits + before,
         ..met
     };
@@ -343,7 +343,7 @@ pub fn miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
@@ -360,7 +360,7 @@ pub fn miss_cs(
         return;
     }
     let w = missed(
-        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
+        eye, window, ground, palette_indices, shards, overwrites, pool, beams, seen, id, size,
     );
     write_ray(rays, id, w);
 }
@@ -380,7 +380,7 @@ pub fn miss_list_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
@@ -400,7 +400,7 @@ pub fn miss_list_cs(
         return;
     }
     let w = missed(
-        eye, window, ground, looks, shards, overwrites, pool, beams, seen, id, size,
+        eye, window, ground, palette_indices, shards, overwrites, pool, beams, seen, id, size,
     );
     write_ray(rays, id, w);
 }

@@ -12,9 +12,9 @@ use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
 use crate::domain::layer::terrain::mirror;
+use crate::domain::scene::character;
 use crate::domain::scene::character::companion;
 use crate::domain::scene::character::preview;
-use crate::domain::scene::character::variant;
 use crate::domain::scene::decor::asset;
 use crate::domain::scene::environment::cloud;
 use crate::perf::record;
@@ -116,9 +116,9 @@ pub enum Fixed {
 }
 
 /// None is let go.
-const MODELS_MAX: usize = variant::MODELS_MAX + asset::MODELS_MAX + cloud::MODELS_MAX;
+const MODELS_MAX: usize = character::MODELS_MAX + asset::MODELS_MAX + cloud::MODELS_MAX;
 
-/// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
+/// The ghost's, the location indicator's zone, the two debug line sets' (the gizmo's and the
 /// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
 const SINGLE_UPLOADS: usize = 5;
 
@@ -172,7 +172,7 @@ const fn body_block(stream: Stream) -> u64 {
 /// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
 /// (sys/io/body.rs), and a body on every credit in the buddy's block for the
 /// longest other kind, each freed as it is decoded; the ways' pool's
-/// mirror at its most (domain/layer/terrain/mirror.rs, pxl-spec-core way/tree.rs `POOL_FAMILIES`),
+/// mirror at its most (domain/layer/terrain/mirror.rs, pxl-spec-core way/tree.rs `POOL_CHILD_GROUPS`),
 /// the renderer's rooms for the bricks' records, every read's at a
 /// brick's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
 /// the profiler's lanes while its setting is on (perf/record.rs), each

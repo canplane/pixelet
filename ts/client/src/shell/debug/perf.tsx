@@ -14,7 +14,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { alpha, color, disabledContent } from "@/shell/ui/theme.ts";
 import { gauge, PerfGauge, PerfRec } from "./perf/gauge.tsx";
 import { Accordion, HINT_INK } from "./accordion.tsx";
-import { n1 } from "./perf/lane.ts";
+import { n1 } from "./perf/column.ts";
 import { perfReportCopy, perfReportText } from "./perf/report.ts";
 import { movingFps, perfReportRead } from "./perf/view.ts";
 import { LIVE_WINDOW_MS, usePerfGauge } from "./perf/poll.ts";

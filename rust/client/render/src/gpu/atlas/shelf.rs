@@ -1,16 +1,16 @@
-// pxl-render/gpu/sheet/shelf.rs
+// pxl-render/gpu/atlas/shelf.rs
 
-//! Where each marker's bitmap lies in the sheet, one texture, so all markers draw in one instanced
+//! Where each marker's bitmap lies in the atlas, one texture, so all markers draw in one instanced
 //! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth
-//! doubles the sheet and replays each sticker's `Paint`. Only dirty rectangles
-//! are uploaded: a whole sheet re-uploaded each frame costs a phone many
+//! doubles the atlas and replays each sprite's `Paint`. Only dirty rectangles
+//! are uploaded: a whole atlas re-uploaded each frame costs a phone many
 //! frames' time (~100 ms, measured at 4096 a side).
 
 /// Slot rectangles are in canvas orientation (v0 top < v1 bottom) and move on a
 /// repack, so read them on every use; the slot index is what stays.
 pub const NO_SLOT: i32 = -1;
 
-/// What a sticker paints, in logical pixels before the render scale.
+/// What a sprite paints, in logical pixels before the render scale.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Paint {
     /// Text alone on a pill in its fill and text colors (`ink`).
@@ -44,19 +44,19 @@ const HEIGHT_BUCKET: u32 = 16;
 pub const INIT_SIZE: u32 = 1024;
 
 /// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen markers (one per
-/// places cell); past the limit a sticker waits unshown (`NO_SLOT`).
+/// places cell); past the limit a sprite waits unshown (`NO_SLOT`).
 const MAX_SIZE: u32 = 2048;
 
 /// Transparent margin so a linear or mipmapped sample cannot reach a neighbor.
 pub const PAD: u32 = 1;
 
-/// The most slots a sheet holds: a live or free one holds a rectangle of a
+/// The most slots an atlas holds: a live or free one holds a rectangle of a
 /// size class at least (`WIDTH_BUCKET` × `HEIGHT_BUCKET`), none overlapping,
-/// in a sheet `MAX_SIZE` a side at most; an unused one is reused before
+/// in an atlas `MAX_SIZE` a side at most; an unused one is reused before
 /// another is made.
 pub const SLOTS_MAX: usize = ((MAX_SIZE / WIDTH_BUCKET) * (MAX_SIZE / HEIGHT_BUCKET)) as usize;
 
-/// A set of a sheet's slots, a bit each.
+/// A set of an atlas's slots, a bit each.
 #[derive(Clone, Copy)]
 pub struct SlotSet([u64; SLOTS_MAX / 64]);
 
@@ -105,7 +105,7 @@ fn bucket(v: f64, to: u32) -> u32 {
     (v / to as f64).ceil() as u32 * to
 }
 
-/// Every sticker in a shelf takes the shelf's height.
+/// Every sprite in a shelf takes the shelf's height.
 #[derive(Default)]
 struct Shelves {
     y: Vec<u32>,
@@ -137,7 +137,7 @@ impl Shelves {
     }
 }
 
-/// Every sticker's place on a sheet of `size`, laid out on scratch shelves so
+/// Every sprite's place on an atlas of `size`, laid out on scratch shelves so
 /// a failed layout changes nothing.
 struct Layout {
     at: Vec<(u32, u32)>,
@@ -160,7 +160,7 @@ pub struct Flush {
 }
 
 #[derive(Default)]
-pub struct Sheet {
+pub struct Atlas {
     size: u32,
 
     shelves: Shelves,
@@ -174,7 +174,7 @@ pub struct Sheet {
     h: Vec<u32>,
     cw: Vec<u32>,
     ch: Vec<u32>,
-    /// What drew each sticker, kept so a repack can replay it.
+    /// What drew each sprite, kept so a repack can replay it.
     paints: Vec<Option<Paint>>,
 
     generation: u32,
@@ -183,9 +183,9 @@ pub struct Sheet {
     dirty: SlotSet,
 }
 
-impl Sheet {
-    pub fn new() -> Sheet {
-        Sheet {
+impl Atlas {
+    pub fn new() -> Atlas {
+        Atlas {
             size: INIT_SIZE,
             ..Default::default()
         }
@@ -226,7 +226,7 @@ impl Sheet {
             .flatten()
     }
 
-    /// The slot drawn into, or NO_SLOT when the sheet is full. `w`/`h` are device pixels.
+    /// The slot drawn into, or NO_SLOT when the atlas is full. `w`/`h` are device pixels.
     pub fn add(&mut self, w: f64, h: f64, paint: Paint) -> i32 {
         let bw = bucket(w + (PAD * 2) as f64, WIDTH_BUCKET);
         let bh = bucket(h + (PAD * 2) as f64, HEIGHT_BUCKET);
@@ -255,7 +255,7 @@ impl Sheet {
         self.dirty.insert(slot);
     }
 
-    /// The slots to paint into `paint`: every live one if the sheet was
+    /// The slots to paint into `paint`: every live one if the atlas was
     /// replaced since `generation`, else the dirty ones, which are then clean.
     pub fn flush(&mut self, generation: u32, paint: &mut SlotSet) -> Flush {
         let whole = generation != self.generation;
@@ -331,8 +331,8 @@ impl Sheet {
         (slots, ws, hs)
     }
 
-    /// Halves the sheet while every live sticker still fits. Without it a sheet one
-    /// dense view grew stays that large, canvas and texture, for a dozen stickers.
+    /// Halves the atlas while every live sprite still fits. Without it an atlas one
+    /// dense view grew stays that large, canvas and texture, for a dozen sprites.
     pub fn compact(&mut self) -> bool {
         let mut changed = false;
         while self.size > INIT_SIZE {

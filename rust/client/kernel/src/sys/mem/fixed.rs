@@ -15,17 +15,17 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 /// One owner's range, handed in once at boot; asking before is a bug.
-pub struct Held(Global<Option<Section>>);
+pub struct OwnedRange(Global<Option<Section>>);
 
-impl Default for Held {
-    fn default() -> Held {
-        Held::new()
+impl Default for OwnedRange {
+    fn default() -> OwnedRange {
+        OwnedRange::new()
     }
 }
 
-impl Held {
-    pub const fn new() -> Held {
-        Held(Global::new())
+impl OwnedRange {
+    pub const fn new() -> OwnedRange {
+        OwnedRange(Global::new())
     }
 
     pub fn set(&self, s: Section) {

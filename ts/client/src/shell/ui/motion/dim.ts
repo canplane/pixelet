@@ -1,4 +1,4 @@
-// @pxl/client/shell/ui/motion/veil.ts
+// @pxl/client/shell/ui/motion/dim.ts
 
 /**
  * A surface's presence (1 to 0), told to the surface rather than applied as a
@@ -14,18 +14,18 @@ import { DIM, type Transition } from "./transition.ts";
 
 export const Dim = createContext<f64>(1);
 
-interface Veil {
+interface Dimmed {
   level: f64;
   /** A Motion's props for it. */
   motion: { from?: Pose; to: Pose; transition: Transition };
 }
 
 /** A change of dim moves as the dim does; anything else as the surface's own fade. */
-export function useVeil(
+export function useDim(
   fade: f64,
   transition: Transition,
   fadeFrom?: f64,
-): Veil {
+): Dimmed {
   const dim = useContext(Dim);
   const last = useRef(dim);
   const dimming = dim !== last.current;

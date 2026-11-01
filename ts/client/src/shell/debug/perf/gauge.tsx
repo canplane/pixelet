@@ -8,7 +8,7 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./lane.ts";
+import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./column.ts";
 
 const bytes = (b: number) => valueText("_bytes", b);
 import { failText } from "./report.ts";
@@ -53,7 +53,7 @@ const geo = (lat: number, lon: number) =>
 const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
 /** What the pick met, by the kernel's code (perf.json `NOW.view`). */
-const STRUCK = ["ground", "cube", "cubes, folded", "decor"];
+const HIT_KIND = ["ground", "cube", "cubes, folded", "decor"];
 
 /** A unit to an eighth, the finest cell (z27), with no trailing zeros. */
 const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
@@ -67,7 +67,7 @@ const coord = (x: number, y: number, z: number) =>
  * strikes there, so a hover that takes nothing shows where the two part.
  */
 export function PerfView({ v }: { v: Gauge["view"] }) {
-  const picked = !Number.isNaN(v.struck);
+  const picked = !Number.isNaN(v.hit_kind);
   const folded = v.folded === 1;
   return (
     <>
@@ -86,17 +86,17 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
       <Row k="coord" v={coord(v.hover_x, v.hover_y, v.hover_z)} />
       <Row k="drawn at" v={zoomName(v.cell)} />
       <Row
-        k="struck"
+        k="hit"
         v={
           picked
-            ? (STRUCK[v.struck] ?? "-")
+            ? (HIT_KIND[v.hit_kind] ?? "-")
             : Number.isNaN(v.hover_x)
               ? "-"
               : "nothing in reach"
         }
       />
       <Row
-        k="struck/drawn at"
+        k="hit/drawn at"
         v={
           picked
             ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`

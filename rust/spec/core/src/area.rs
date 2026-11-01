@@ -242,14 +242,14 @@ pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
 /// none past in a shard known `inside`: what the fill lays a cell's edge by
 /// once (pxl-spec-core `fill::heights`), for every read of it after.
 ///
-/// Gone is past, one fact two ways: a cell whose look is `UNKNOWN`
+/// Gone is past, one fact two ways: a cell whose palette index is `UNKNOWN`
 /// (nothing known) is exactly one past the area. The bake writes `unknown`
 /// only for tiles its coverage does not meet (pxl-geo-bake
 /// terrain/absent.rs `Absence::at`), its coverage is the served shards, and
 /// no window's cell is coarser than a shard, so none straddles the area's
 /// edge. So the leaf cells about one are never read to know them gone:
 /// each is past or not off the shard's bits (`Shard::past_leaf`), and a
-/// cell's own look answers its own. They lie a leaf cell past `l`, inside
+/// cell's own palette index answers its own. They lie a leaf cell past `l`, inside
 /// its shard's nine wherever `node`'s shard is `l`'s, as a leaf window's
 /// brick is, a node far narrower than a shard.
 pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
@@ -271,24 +271,24 @@ pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
 }
 
 /// The column `b` at `cell` of a cell laid as the fill lays it (`laid` low
-/// byte its own look, high the leaf cells about it gone, `gone_ring`), with
+/// byte its own palette index, high the leaf cells about it gone, `gone_ring`), with
 /// the area's edge laid, the one rule a column is read by (pxl-spec-core
-/// `window::ground`) and the ways' fill walls one by
+/// `clipmap::ground`) and the ways' fill walls one by
 /// (`way::Columns::is_walled`), on the CPU and a GPU alike: at a leaf's cells
 /// or finer, ground beside a gone leaf cell, of those the column touches
 /// (`ring`), is the wall, bedrock (`UNKNOWN`) up to its own face. A gone
-/// cell is bedrock already, its look `UNKNOWN` (gone is past), and its top
+/// cell is bedrock already, its palette index `UNKNOWN` (gone is past), and its top
 /// the Earth's at sea level as its fill lays it (pxl-spec-core
 /// `fill::heights`): the wall at sea level, so a cell of it is the Earth's
 /// (`earth`). A column read off a brick coarser than a leaf's cells, a
 /// stand-in, has none gone about it, so no wall: the stand-in is the world
 /// at its zoom, and the wall is a fact of the leaves it does not hold.
 pub fn laid(laid: u32, cell: Zoom, b: [i32; 2]) -> u32 {
-    let look = laid & 0xff;
-    if cell >= LEAF_CELL && Ground::grounds(look) && ring(cell, b) & laid >> 8 != 0 {
+    let palette_idx = laid & 0xff;
+    if cell >= LEAF_CELL && Ground::grounds(palette_idx) && ring(cell, b) & laid >> 8 != 0 {
         UNKNOWN
     } else {
-        look
+        palette_idx
     }
 }
 

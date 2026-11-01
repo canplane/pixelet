@@ -1,4 +1,4 @@
-// pxl-kernel/domain/control/camera/orbit/terrain_gate.rs
+// pxl-kernel/domain/control/camera/orbit/collision.rs
 
 //! How far the orbit gets toward what the controls ask before terrain is in
 //! the way. The controls keep what was asked; the drawn orbit stops short.
@@ -13,7 +13,7 @@ use xpute_kit::math::scalar::wrap;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::orbit::orbit_eye_off;
 use crate::domain::control::camera::state::Intent;
-use crate::domain::control::param::{CLIMB_PASSES, GATE_STEP_SAMPLES};
+use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST};
 use crate::domain::query::changed::Asked;
 use crate::domain::query::{held, over, Hit, Ray, World};
@@ -125,8 +125,8 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     };
 
     let mut last = *from;
-    for i in 1..=GATE_STEP_SAMPLES {
-        let at = between(from, to, i as f64 / GATE_STEP_SAMPLES as f64);
+    for i in 1..=COLLISION_STEP_SAMPLES {
+        let at = between(from, to, i as f64 / COLLISION_STEP_SAMPLES as f64);
         let deep =
             penetration(&at).is_some_and(|deep| deep > limit) && !embedded(&eye(&at).1, &access);
         // The last clear sample, not the crossing: on the boundary, the next frame's
@@ -204,8 +204,8 @@ fn crossed(last: &ViewPose, at: &ViewPose, access: &World) -> bool {
 fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
     let access = World::now();
     let mut last = *from;
-    (1..=GATE_STEP_SAMPLES).all(|i| {
-        let at = between(from, to, i as f64 / GATE_STEP_SAMPLES as f64);
+    (1..=COLLISION_STEP_SAMPLES).all(|i| {
+        let at = between(from, to, i as f64 / COLLISION_STEP_SAMPLES as f64);
         let clear = (!in_solid(&at, &access) || embedded(&eye(&at).1, &access))
             && !crossed(&last, &at, &access);
         last = at;
@@ -338,5 +338,5 @@ fn climbed(at: ViewPose, access: &World) -> (ViewPose, bool) {
 }
 
 #[cfg(test)]
-#[path = "terrain_gate.test.rs"]
+#[path = "collision.test.rs"]
 mod test;

@@ -1,16 +1,16 @@
-// pxl-spec-core/window.rs
+// pxl-spec-core/clipmap.rs
 
-//! gpu-portable: the ground's cells as they are held, a window a zoom about
+//! gpu-portable: the ground's cells as they are held, a clipmap level (Tanner 1998) a zoom about
 //! a center. A ray observes a zoom's cells only within `RADIUS` of them
 //! from the eye (pxl-spec space/layer/demand.rs `band`, the top's by its
-//! reach), so a window `WINDOW` cells a side about it holds every cell it
-//! can observe there. A window is `ACROSS` bricks a side, each brick
-//! held in the entry its place names modulo `ACROSS`, so the window follows
-//! its center a brick at a time and no held cell moves. Windows at one
+//! reach), so a clipmap level `WINDOW` cells a side about it holds every cell it
+//! can observe there. A clipmap level is `ACROSS` bricks a side, each brick
+//! held in the entry its place names modulo `ACROSS`, so the clipmap level follows
+//! its center a brick at a time and no held cell moves. Clipmap levels at one
 //! zoom hold a brick in the same entry, so a brick at a zoom is held once,
-//! in a slot of that entry, however many windows want it (`Entry`). A brick
+//! in a slot of that entry, however many clipmap levels want it (`Entry`). A brick
 //! is present once its cells are drawn; a reader of one absent reads the
-//! coarser window's (`step`).
+//! coarser clipmap level's (`step`).
 
 use crate::area;
 use crate::area::Area;
@@ -52,10 +52,10 @@ pub const fn eye_cell(w: u32) -> Zoom {
 }
 /// Every window: the eye's; the pivot's, the leaves' and one over, what
 /// walking and editing read; a destination's one, at the zoom its line says
-/// its ground, found exactly (pxl-kernel domain/layer/terrain/window.rs).
+/// its ground, found exactly (pxl-kernel domain/layer/terrain/clipmap.rs).
 pub const WINDOWS: u32 = EYE_WINDOWS + 3;
 /// The slots every window's bricks are held in, `WINDOWS` an entry, slot
-/// `k × ENTRIES + s` entry `s`'s `k`-th (pxl-kernel domain/layer/terrain/window.rs
+/// `k × ENTRIES + s` entry `s`'s `k`-th (pxl-kernel domain/layer/terrain/clipmap.rs
 /// `Slot`): no more bricks want an entry than there are windows, so the
 /// most the GPU holds, and so the most of their cells read back at once,
 /// where no two windows at a zoom overlap. A brick two of them want takes
@@ -69,12 +69,12 @@ pub const FILL_BRICK_MS: f32 = 0.22;
 /// The share of a frame the fill may take.
 pub const FILL_SHARE_MS: f32 = 4.0;
 /// The bricks a frame hands the fill at most, nearest first (pxl-kernel
-/// domain/layer/terrain/window.rs `due`): its share less its passes, over a brick.
+/// domain/layer/terrain/clipmap.rs `due`): its share less its passes, over a brick.
 pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
 
 /// A brick handed to the GPU's fill, in words: its slot, where it lies in
 /// its tile (`place_word`, in bricks), its cells' zoom, its window's as the
-/// window holds it (pxl-kernel domain/layer/terrain/window.rs `Window::cell`; a
+/// window holds it (pxl-kernel domain/layer/terrain/clipmap.rs `Window::cell`; a
 /// destination's moves with its line), never derived from the index; its
 /// first cell at that zoom as the world names it, X wrapped there, then Y,
 /// two words; and what is known of the service area at it (`area::Shard`,
@@ -271,7 +271,7 @@ pub const fn column_top(w: u32) -> i32 {
 }
 
 /// A brick's cells as its fill lays them, two a word, cell `i` in the
-/// `i % 2`-th half (`laid_at`): its own look, low (`ground::own` of its four
+/// `i % 2`-th half (`laid_at`): its own palette index, low (`ground::own` of its four
 /// at the brick's zoom), and which of the eight leaf cells about it are
 /// past the area, high (`area::gone_ring`, none at a brick coarser than a
 /// leaf's): what a read of it lays the area's edge by (`area::laid`),
@@ -283,9 +283,9 @@ pub const fn laid_at(w: u32, i: u32) -> u32 {
     (w >> (16 * (i % 2))) & 0xffff
 }
 
-/// A cell's laid half: its own look and the leaf cells about it gone.
-pub const fn laid_half(look: u32, gone: u32) -> u32 {
-    look & 0xff | gone << 8
+/// A cell's laid half: its own palette index and the leaf cells about it gone.
+pub const fn laid_half(palette_idx: u32, gone: u32) -> u32 {
+    palette_idx & 0xff | gone << 8
 }
 
 /// A brick's words on a GPU, what outlives its fill, its lanes in order:
@@ -295,8 +295,8 @@ pub const fn laid_half(look: u32, gone: u32) -> u32 {
 pub const COLUMNS_AT: u32 = 0;
 pub const LEVELS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const LAID_AT: u32 = LEVELS_AT + LEVEL_WORDS;
-/// Its ways' tree's root word: the family of its own nodes along z in the
-/// pool and the first one's Z (`way::tree::root_word`); 0, family 0, never
+/// Its ways' tree's root word: the child group of its own nodes along z in the
+/// pool and the first one's Z (`way::tree::root_word`); 0, child group 0, never
 /// handed out, where it has none.
 pub const ROOT_AT: u32 = LAID_AT + LAID_WORDS;
 pub const BRICK_WORDS: u32 = ROOT_AT + 1;
@@ -306,10 +306,10 @@ pub const BACK_WORDS: u32 = BRICK_WORDS;
 
 /// A brick handed to the fill as a frame's fresh list holds it, a record
 /// each, `HANDED` at most: its words (`fresh`), then what only its fill
-/// reads, gone with the frame — its four looks a cell, its tile's padded
+/// reads, gone with the frame — its four palette indices a cell, its tile's padded
 /// samples, two a word, and its lines.
-pub const LOOKS_AT: u32 = FRESH_WORDS;
-pub const ELE_AT: u32 = LOOKS_AT + BRICK_CELLS;
+pub const PALETTE_AT: u32 = FRESH_WORDS;
+pub const ELE_AT: u32 = PALETTE_AT + BRICK_CELLS;
 pub const LINES_AT: u32 = ELE_AT + ELE_WORDS;
 pub const HANDED_WORDS: u32 = LINES_AT + LINES_WORDS;
 
@@ -328,8 +328,8 @@ pub trait Bricks {
     /// The brick the eye's window at `cell` wants in `entry`, and whether
     /// present: `present` the other way.
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool);
-    /// The four looks of cell `i` of the brick in `slot` (`ground::looks`).
-    fn look(&self, cell: Zoom, slot: u32, i: u32) -> u32;
+    /// The four palette indices of cell `i` of the brick in `slot` (`ground::palette_indices`).
+    fn palette_word(&self, cell: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
     /// `BRICK_CELLS`.
     fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32;
@@ -354,7 +354,7 @@ pub trait Bricks {
 /// One brick as its fill reads it, for the ways' one rule
 /// (`way::Columns`): its cells' zoom, where it lies in its tile (in
 /// bricks), word `k` of its lines (`LINES_AT`), cell `i` as `heights` laid
-/// it (`LAID_WORDS`), its own look and the area's edge it is walled by, and
+/// it (`LAID_WORDS`), its own palette index and the area's edge it is walled by, and
 /// column `c`'s height off its tile's samples, `c`
 /// counted from its first cell, the ring of columns about it included.
 /// Its columns are its cells and that ring, a ring column read off the
@@ -458,10 +458,10 @@ impl<Q: Brick> Columns for Q {
     fn stations(&self) -> Stations {
         header_of(self).1
     }
-    /// Its own look, before the service area's wall is laid, as its fill
+    /// Its own palette index, before the service area's wall is laid, as its fill
     /// laid it (`LAID_WORDS`): the wall is the descent's to lay (`ground`'s
     /// reader).
-    fn look(&self, c: [i32; 2]) -> u32 {
+    fn palette_idx(&self, c: [i32; 2]) -> u32 {
         let i = cell_idx(c);
         if i == BRICK_CELLS {
             VOID
@@ -605,7 +605,7 @@ pub const fn held_to(cell: Zoom) -> Zoom {
 }
 
 /// The ground's cell `g` at `cell`, off the finest window holding it
-/// present, stepped from `place` (`step`): its four looks, its column's
+/// present, stepped from `place` (`step`): its four palette indices, its column's
 /// word (its height), it as laid, and where it is held; `void` at sea level
 /// where none holds it.
 pub fn cell(w: &impl Bricks, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u32, u32, Found) {
@@ -615,7 +615,7 @@ pub fn cell(w: &impl Bricks, place: Found, cell: Zoom, g: [i32; 2]) -> (u32, u32
     }
     let (from, slot, i) = (f.from(), f.slot(), idx_of(at));
     (
-        w.look(from, slot, i),
+        w.palette_word(from, slot, i),
         w.column(from, slot, i),
         w.laid(from, slot, i),
         f,
@@ -631,10 +631,10 @@ pub fn ground(w: &(impl Bricks + Area), place: Found, zoom: Zoom, b: [i32; 2]) -
     let (word, column, laid, f) = cell(w, place, read, cell_at(zoom, read, b));
     let (top, part) = ground::top(zoom, column_top(column) as f32);
     let cell = Cell {
-        look: area::laid(laid, zoom, b),
+        palette_idx: area::laid(laid, zoom, b),
         top,
         part,
-        fold: ground::looks(word),
+        fold: ground::palette_indices(word),
     };
     (cell, f)
 }
@@ -674,7 +674,7 @@ pub const JOINED_ENTRIES: u32 = joined_idx(JOINED_LEVELS + 1, [0, 0]);
 /// buffer, an `IVec4` as their entry table's are, after it (`JOINED_AT`).
 pub const JOINED_WORDS: u32 = 4;
 /// A row of the windows' table, as the kernel writes it (pxl-kernel
-/// domain/layer/terrain/window.rs `table`) and the GPU reads it (pxl-shader
+/// domain/layer/terrain/clipmap.rs `table`) and the GPU reads it (pxl-shader
 /// `World`), an `IVec4` of its buffer: the brick an entry's window wants
 /// there; where its cells are present, the slot holding them plus one
 /// (`slot`), which another window at its zoom may have filled, 0 while

@@ -1,4 +1,4 @@
-// One sticker on the marker sheet: shapes by signed distance, text as the platform's
+// One sprite on the marker atlas: shapes by signed distance, text as the platform's
 // pixels. Stored premultiplied; marker.wgsl divides it out.
 
 // kind: 0 filled rounded rect, 1 stroked, 2 triangle, 3 text, 4 a text's halo.
@@ -68,19 +68,19 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var rgb = s.color.rgb;
   var edge = 1.0;
   switch s.kind.x {
-    case SHEET_FILL: {
+    case ATLAS_FILL: {
       d = round_box(i.at - center, half, s.p.x);
       edge = max(s.p.y, 1.0);
       let down = (i.at.y - s.rect.y) / max(s.rect.w - s.rect.y, 1.0);
       rgb = rgb * (1.0 + s.q.x * (1.0 - 2.0 * down));
     }
-    case SHEET_STROKE: {
+    case ATLAS_STROKE: {
       d = abs(round_box(i.at - center, half, s.p.x)) - s.p.y * 0.5;
     }
-    case SHEET_TRIANGLE: {
+    case ATLAS_TRIANGLE: {
       d = triangle(i.at, s.p.xy, s.p.zw, s.q.xy);
     }
-    case SHEET_HALO: {
+    case ATLAS_HALO: {
       // The glyphs' coverage grown by the radius: the most of it within reach,
       // each texel weighed by how much of it the disc covers.
       let size = vec2i(s.rect.zw - s.rect.xy);

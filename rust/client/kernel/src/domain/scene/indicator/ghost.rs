@@ -7,7 +7,7 @@
 //! is decided here: a box's color and texture, and the box that stands in for
 //! a decor until it can be drawn as itself.
 
-use pxl_render::frame::draw::{DrawList, Held, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
+use pxl_render::frame::draw::{DrawList, MirroredBlock, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
 use pxl_render::frame::shader::record::BOX_WORDS;
 use pxl_render::frame::shader::word::NO_LAYER;
 use pxl_render::gpu::api::bytes;
@@ -19,8 +19,8 @@ use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::domain::layer::object::preview::{Ghost, GhostBox};
+use crate::domain::scene::column::GroupColumns;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
-use crate::domain::scene::lane::GroupLanes;
 use crate::domain::view::setting::store::settings_store;
 
 pub const GHOST_OPACITY: f32 = 0.5;
@@ -44,7 +44,7 @@ enum Shape {
 pub struct GhostDraw {
     /// What `held` holds; none where nothing is drawn.
     shape: Option<Shape>,
-    held: Held,
+    held: MirroredBlock,
     /// A box's, as written (write_lone_box).
     z_step: f64,
     /// A box's min corner, a decor instance's base.
@@ -158,11 +158,11 @@ impl GhostDraw {
         if self.shape == Some(shape) {
             return moved;
         }
-        // One group of one, with no header: its lanes, its flags, and the
+        // One group of one, with no header: its columns, its flags, and the
         // index list.
-        let lane = GroupLanes { first: 0, cnt: 1 };
-        let mut m = [0u32; GroupLanes::words(1) + 1];
-        (m[lane.f32_at(3, 0)], m[lane.f32_at(4, 0)]) = (rot.to_bits(), scale.to_bits());
+        let column = GroupColumns { first: 0, cnt: 1 };
+        let mut m = [0u32; GroupColumns::words(1) + 1];
+        (m[column.f32_at(3, 0)], m[column.f32_at(4, 0)]) = (rot.to_bits(), scale.to_bits());
         self.write(draw, shape, bytes(&m));
         true
     }
@@ -197,7 +197,7 @@ impl GhostDraw {
                 );
             }
             Shape::Decor { group, .. } => {
-                let idx = GroupLanes::words(1) as u32;
+                let idx = GroupColumns::words(1) as u32;
                 draw.draw_instances(
                     PIPELINE_GHOST_DECOR,
                     self.held.handle,

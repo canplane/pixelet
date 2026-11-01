@@ -1,4 +1,4 @@
-// pxl-kernel/domain/view/reach.rs
+// pxl-kernel/domain/view/above_ground.rs
 
 //! Where the ground under a point stands: the eye's height over it.
 

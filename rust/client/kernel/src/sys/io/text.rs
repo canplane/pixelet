@@ -9,7 +9,7 @@ use std::collections::hash_map::Entry;
 
 use fnv::FnvHashMap;
 
-use pxl_render::gpu::sheet::SHEET_SCALE;
+use pxl_render::gpu::atlas::ATLAS_SCALE;
 use pxl_render::gpu::text::{raster_box, Font, Raster};
 use xpute_guest::mem::off_of_slice;
 
@@ -145,7 +145,7 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
     }
     let advance = text_width(font, text_in)? as f32;
     let (size, origin) = raster_box(font, advance);
-    let scale = SHEET_SCALE as f32;
+    let scale = ATLAS_SCALE as f32;
     let mut px = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
     let mut args = [0u32; RASTER::WORDS as usize];
     args[RASTER::weight as usize] = font.weight;

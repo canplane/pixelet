@@ -7,12 +7,12 @@
 use pxl_spec_core::answer::In;
 use pxl_spec_core::cast::Query;
 use pxl_spec_core::observed;
-use pxl_spec_core::world::Handed;
+use pxl_spec_core::world::Inherited;
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
-use crate::world::{Looks, World};
+use crate::world::{PaletteWords, World};
 
 /// The observed pyramid's buffer (pxl-spec-core `observed`), bound as a
 /// runtime array, whose pointer a walk holds whole: a slice's would be a
@@ -131,7 +131,7 @@ fn is_node(seen: &Seen, w: u32, zoom: u32, c: [i32; 3]) -> bool {
 /// pass is still writing it (`tag`), taken where the key still stood once
 /// it was read; any other asked of the world's one query there and then,
 /// from what was handed it, and written where this walk claims the slot.
-/// A walk holds of a node what was handed it alone (`world::Handed`), as the
+/// A walk holds of a node what was handed it alone (`world::Inherited`), as the
 /// world's one query does: a node's slot is its key's (`observed::entry_of`),
 /// found again wherever the node is asked.
 pub(crate) struct Writing<'a, L> {
@@ -144,20 +144,20 @@ pub(crate) struct Writing<'a, L> {
     pub(crate) assets: bool,
 }
 
-impl<L: Looks> Query for Writing<'_, L> {
-    type At = Handed;
+impl<L: PaletteWords> Query for Writing<'_, L> {
+    type At = Inherited;
 
-    fn root(&mut self, node: [i32; 3]) -> Handed {
+    fn root(&mut self, node: [i32; 3]) -> Inherited {
         Query::root(&mut self.world, node)
     }
 
-    fn child(&mut self, parent: &Handed, zoom: u32, node: [i32; 3]) -> Handed {
+    fn child(&mut self, parent: &Inherited, zoom: u32, node: [i32; 3]) -> Inherited {
         Query::child(&mut self.world, parent, zoom, node)
     }
 
     fn node(
         &mut self,
-        n: &mut Handed,
+        n: &mut Inherited,
         zoom: u32,
         c: [i32; 3],
         asked: [u32; 2],
@@ -184,8 +184,8 @@ impl<L: Looks> Query for Writing<'_, L> {
                             free = observed::NONE;
                             break;
                         }
-                        let a = w + observed::W_HANDED;
-                        let at = Handed::of_words([
+                        let a = w + observed::W_INHERITED;
+                        let at = Inherited::of_words([
                             seen_at(self.seen, a),
                             seen_at(self.seen, a + 1),
                             seen_at(self.seen, a + 2),
@@ -241,7 +241,7 @@ impl<L: Looks> Query for Writing<'_, L> {
             seen_put(self.seen, w + observed::W_ASSET, answer.asset[0]);
             seen_put(self.seen, w + observed::W_ASSET + 1, answer.asset[1]);
             let words = n.words();
-            let a = w + observed::W_HANDED;
+            let a = w + observed::W_INHERITED;
             seen_put(self.seen, a, words[0]);
             seen_put(self.seen, a + 1, words[1]);
             seen_put(self.seen, a + 2, words[2]);
@@ -262,7 +262,7 @@ impl<L: Looks> Query for Writing<'_, L> {
 /// the world's query reads changed (pxl-spec-core `observed::FORGETS`):
 /// every slot's key, or the key of each slot over a brick that moved
 /// (`observed::forgets`), over a box of what is placed or cut that changed
-/// (`observed::over_box`), or handed a slot of a family of what is placed
+/// (`observed::over_box`), or handed a slot of a child group of what is placed
 /// that was written (`observed::reads_written`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "forget_cs"))]
 pub fn forget_cs(
@@ -295,7 +295,7 @@ pub fn forget_cs(
         seen_put(seen, w + observed::W_KEY, 0);
         return;
     }
-    // Or handed a slot of a family of what is placed that was written.
+    // Or handed a slot of a child group of what is placed that was written.
     let placed = seen_at(seen, w + observed::W_PLACED);
     let mut f = 0;
     while f < seen_at(seen, observed::WRITTEN_AT) {

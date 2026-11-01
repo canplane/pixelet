@@ -22,7 +22,9 @@
 //! a node can have, and from a child it steps to the next across the face
 //! it leaves by, so no frame holds its siblings.
 
-use crate::answer::{box_of, kept, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS};
+use crate::answer::{
+    box_of, fill_eighths, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS,
+};
 use crate::grid::{cell_zoom_at, cell_zoom_from};
 use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
@@ -70,7 +72,7 @@ impl Spacing {
 /// The distance is the eye's, `eye` units from the walk's origin: none for
 /// the eye's own rays; for a ray from elsewhere, a ray toward the light from
 /// what an eye's ray met, where the eye stands from it, so a node is asked
-/// at the zooms the eye's rays ask it (`reach`). `spacing` is how far a
+/// at the zooms the eye's rays ask it (`node_dist_sq`). `spacing` is how far a
 /// beam ray lies from the next of its grid (`Spacing`, `Until::Beam`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
@@ -130,10 +132,10 @@ const MARGIN_SLACK: f32 = 1.0 / 65536.0;
 
 /// What a walk tells of each node it asks (`walk`): the detail it asks it
 /// under and the node's farthest and nearest distances from the eye,
-/// squared (`reach`), which the zooms it is asked at follow from alone. A
+/// squared (`node_dist_sq`), which the zooms it is asked at follow from alone. A
 /// walk nothing reads it of tells nothing (`()`), so it costs nothing.
 pub trait Asked {
-    fn asked(&mut self, detail: Detail, reach: [f32; 2]);
+    fn asked(&mut self, detail: Detail, dist_sq: [f32; 2]);
 }
 
 impl Asked for () {
@@ -411,17 +413,17 @@ fn idx_on(root: i32, c: u32, z: Zoom) -> i32 {
 
 /// The ray's t at the near and far planes on one axis, `lo` and `hi` units
 /// from the origin (Revelles, Ureña & Lastra 2000); an axis it runs beside,
-/// the walk's span whole inside the slab (from `t` to `reach`), none
+/// the walk's span whole inside the slab (from `t` to `t_max`), none
 /// outside: no extreme a float literal could name past a shader's range.
-fn planes(d: f32, inv: f32, lo: f32, hi: f32, (t, reach): (f32, f32)) -> (f32, f32) {
+fn planes(d: f32, inv: f32, lo: f32, hi: f32, (t, t_max): (f32, f32)) -> (f32, f32) {
     if d > 0.0 {
         (lo * inv, hi * inv)
     } else if d < 0.0 {
         (hi * inv, lo * inv)
     } else if lo <= 0.0 && 0.0 < hi {
-        (t, reach)
+        (t, t_max)
     } else {
-        (reach, t)
+        (t_max, t)
     }
 }
 
@@ -496,10 +498,10 @@ fn entered(ray: &Ray, near: [f32; 3]) -> (f32, u32) {
 
 /// A cell's planes as it is drawn, its node's planes `(lo, hi)`
 /// (`bounds`) inset about their center on every axis alike by the share of
-/// its cube its word `asset` keeps (`answer::kept`, `answer::side`): a box
+/// its cube its word `asset` keeps (`answer::fill_eighths`, `answer::side`): a box
 /// that share's volume, its node itself where it keeps it whole.
-pub fn kept_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f32; 3]) {
-    let k = kept(asset);
+pub fn fill_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f32; 3]) {
+    let k = fill_eighths(asset);
     if k == EIGHTHS {
         return (lo, hi);
     }
@@ -515,24 +517,24 @@ pub fn kept_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f3
     )
 }
 
-/// The top of the cell a stop met, as it is drawn (`kept_bounds`): the
+/// The top of the cell a stop met, as it is drawn (`fill_bounds`): the
 /// floor of its node `n` on its grid from the origin `o`, and the share of
 /// the node's side its top lies over that floor — its cube's top where its
-/// word `asset` keeps it whole, else its kept box's. What a walker and decor
-/// stand on (pxl-kernel domain/query/ray.rs `hit`, `support::footing`).
+/// word `asset` keeps it whole, else its fill box's. What a walker and decor
+/// stand on (pxl-kernel domain/query/ray.rs `hit`, `support::column_surface`).
 pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
-    (n.idx(o)[2], kept_bounds(([0.0; 3], [1.0; 3]), asset).1[2])
+    (n.idx(o)[2], fill_bounds(([0.0; 3], [1.0; 3]), asset).1[2])
 }
 
 /// The asset `asset` at the node `n` as drawn from the origin `o`, in units
-/// from it (`bounds`, `kept_bounds`): the box `entry` asks a ray into, as
+/// from it (`bounds`, `fill_bounds`): the box `entry` asks a ray into, as
 /// the samples' boxes are drawn (`raster`).
 pub fn drawn(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
-    kept_bounds(bounds(n, grid_of(o)), asset)
+    fill_bounds(bounds(n, grid_of(o)), asset)
 }
 
 /// Where `ray` from the origin `o` enters the cell `asset` is in (an asset's word,
-/// `answer`) at the node `n`, and whether it does within its reach: its span
+/// `answer`) at the node `n`, and whether it does within its interval: its span
 /// in the cell as drawn from the origin (`drawn`, `spans`), and
 /// where that span begins (`entered`). Only touched, at a face or an edge,
 /// is not entered, as the walk has it.
@@ -608,7 +610,7 @@ pub trait Query {
 /// Where a ray stopped: how far, the axis it entered across, the node
 /// (`Node`, from the ray's origin) and what it is there.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Stop<A> {
+pub struct Hit<A> {
     pub t: f32,
     pub axis: u32,
     pub node: Node,
@@ -619,13 +621,13 @@ pub struct Stop<A> {
     pub asset: [u32; 2],
 }
 
-/// How a walk ended: where it stopped, gone on to its reach, or at a node
+/// How a walk ended: where it stopped, gone on to its interval's end, or at a node
 /// not held, past which it tells nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum End {
-    Stop,
-    On,
+    Hit,
+    Miss,
     Lacks,
 }
 
@@ -633,9 +635,9 @@ pub enum End {
 /// many nodes it asked the world about (`Query::node`), the one count of a
 /// ray's steps the CPU and a GPU both report.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Met<A> {
+pub struct Trace<A> {
     pub ends: End,
-    pub stop: Stop<A>,
+    pub hit: Hit<A>,
     pub visits: u32,
 }
 
@@ -649,7 +651,7 @@ pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 /// A node's farthest and nearest distances from the eye, squared, its
 /// planes `lo` and `hi` units from the eye on each axis: its corner
 /// farthest from the eye and its point nearest it.
-fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
+fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
     let near = [
         lesser(greater(lo[0], 0.0), hi[0]),
         lesser(greater(lo[1], 0.0), hi[1]),
@@ -664,7 +666,7 @@ fn reach(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
 }
 
 /// The zooms a node is asked at by every ray from the origin in it, from
-/// its farthest corner to its nearest point (`reach`, `Detail::at`). A
+/// its farthest corner to its nearest point (`node_dist_sq`, `Detail::at`). A
 /// function of the node and the eye alone, so a node's answer is one for
 /// every ray through it; a ray asks within it no coarser than the farthest
 /// corner, so this only adds coarser zooms than its own, which splits more
@@ -678,7 +680,7 @@ fn squared(v: [f32; 3]) -> f32 {
     v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
 }
 
-/// The first cell `ray` meets within its reach that `until` stops at, at
+/// The first cell `ray` meets within its interval that `until` stops at, at
 /// the zoom `detail` asks where it meets it, from the world's root holding
 /// the origin (`walk`).
 pub fn first<Q: Query>(
@@ -687,7 +689,7 @@ pub fn first<Q: Query>(
     ray: &Ray,
     detail: Detail,
     until: Until,
-) -> Met<Q::At> {
+) -> Trace<Q::At> {
     rooted(q, o, ray, detail, until, &mut (), &mut ())
 }
 
@@ -701,7 +703,7 @@ pub fn rooted<Q: Query>(
     until: Until,
     keep: &mut impl Keep<Q::At>,
     told: &mut impl Asked,
-) -> Met<Q::At> {
+) -> Trace<Q::At> {
     let at = q.root(Node::ROOT.idx(o));
     walk(
         q,
@@ -736,7 +738,7 @@ impl<A: Copy> Over<A> for Rooted<A> {
 
 /// What a walk leaves where it ends (`walk`), for what reads on from it:
 /// its met, whose stop is the node it ended at and what was handed it
-/// (`Stop::node`, `Stop::at`), and what was handed every node over that,
+/// (`Hit::node`, `Hit::at`), and what was handed every node over that,
 /// its stack by zoom, `over`'s where the walk started under it (`LINE`). A
 /// walk nothing reads on from leaves nothing (`()`), and reads nothing of
 /// `over` for it.
@@ -745,16 +747,16 @@ pub trait Keep<A: Copy> {
     /// ends.
     const LINE: bool = true;
 
-    fn keep(&mut self, met: &Met<A>, stack: &[A; DEPTH]);
+    fn keep(&mut self, met: &Trace<A>, stack: &[A; DEPTH]);
 }
 
 impl<A: Copy> Keep<A> for () {
     const LINE: bool = false;
 
-    fn keep(&mut self, _: &Met<A>, _: &[A; DEPTH]) {}
+    fn keep(&mut self, _: &Trace<A>, _: &[A; DEPTH]) {}
 }
 
-/// The first cell `ray` meets within its reach that `until` stops at, at
+/// The first cell `ray` meets within its interval that `until` stops at, at
 /// the zoom `detail` asks where it meets it, its line left where it ended
 /// to `keep` and each node it asks told to `told` (`Asked`): down the
 /// pyramid from `from`, a node holding where the ray is at its `t`, what was
@@ -773,7 +775,7 @@ impl<A: Copy> Keep<A> for () {
 /// air where all under it is — the walk stops at (for an eye, where it is not
 /// transparent,
 /// but not in the cell it starts in, and where the ray enters the box a
-/// cell keeping less than its cube is, `kept_bounds`; for what is climbed
+/// cell keeping less than its cube is, `fill_bounds`; for what is climbed
 /// out of, where it does not) or goes on past; else its child the ray is in (PUSH, Laine &
 /// Karras 2010 §3). Past a node the corner steps on the axis the ray leaves
 /// by (Amanatides & Woo 1987) and the walk is at the child of the nearest
@@ -793,7 +795,7 @@ pub fn walk<Q: Query>(
     over: &impl Over<Q::At>,
     keep: &mut impl Keep<Q::At>,
     told: &mut impl Asked,
-) -> Met<Q::At> {
+) -> Trace<Q::At> {
     let og = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
@@ -816,12 +818,12 @@ pub fn walk<Q: Query>(
         let mut into = false;
         if t1 > t0 {
             let e = detail.eye;
-            let reach = reach(
+            let dist_sq = node_dist_sq(
                 [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
                 [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
             );
-            told.asked(detail, reach);
-            let i = q.node(&mut at, n.zoom, n.idx(o), asked(detail, reach), t0);
+            told.asked(detail, dist_sq);
+            let i = q.node(&mut at, n.zoom, n.idx(o), asked(detail, dist_sq), t0);
             visits += 1;
             let inside = lo[0] <= 0.0
                 && 0.0 < hi[0]
@@ -878,25 +880,25 @@ pub fn walk<Q: Query>(
             let ends = match i.kind {
                 Kind::Lacks => End::Lacks,
                 // A cell keeping less than its cube is the box its share
-                // fills (`kept_bounds`): an eye's ray stops where it enters
+                // fills (`fill_bounds`): an eye's ray stops where it enters
                 // the box and passes it as air where it misses; a beam ray
                 // stops at its node, as the samples it hands on may meet it.
                 Kind::Cell
                     if until == Until::Opaque
                         && !transparent(i.asset[0])
                         && !inside
-                        && kept(i.asset[0]) < EIGHTHS =>
+                        && fill_eighths(i.asset[0]) < EIGHTHS =>
                 {
-                    let (bx, by, bz) = spans(ray, kept_bounds((lo, hi), i.asset[0]), t);
+                    let (bx, by, bz) = spans(ray, fill_bounds((lo, hi), i.asset[0]), t);
                     let (b0, b1) = (
                         greater(greater(greater(t, bx.0), by.0), bz.0),
                         lesser(lesser(lesser(ray.t_max, bx.1), by.1), bz.1),
                     );
                     near = [bx.0, by.0, bz.0];
                     if b1 > b0 {
-                        End::Stop
+                        End::Hit
                     } else {
-                        End::On
+                        End::Miss
                     }
                 }
                 Kind::Cell
@@ -906,9 +908,9 @@ pub fn walk<Q: Query>(
                         Until::Beam => !transparent(i.asset[0]),
                     } =>
                 {
-                    End::Stop
+                    End::Hit
                 }
-                Kind::Cell => End::On,
+                Kind::Cell => End::Miss,
                 // A beam ray passes whole a split whose box it clears by
                 // `2√2` of the grid's width there, as the grid's rays about
                 // it clear it too; else it stops at one it may not share with
@@ -917,14 +919,14 @@ pub fn walk<Q: Query>(
                     // The grid's rays' spacing at the node's far corner: a
                     // split narrower than `2√2` of that may lie between them
                     // (`narrow`).
-                    let width = detail.spacing.width(libm::sqrtf(reach[0]));
+                    let width = detail.spacing.width(libm::sqrtf(dist_sq[0]));
                     let narrow = narrow(side * side, width * width);
                     let meets = meets_box(NARROW * width);
                     into = meets && !narrow;
                     if meets && narrow {
-                        End::Stop
+                        End::Hit
                     } else {
-                        End::On
+                        End::Miss
                     }
                 }
                 // A span wholly out of the box, or touching it alone, meets
@@ -933,22 +935,22 @@ pub fn walk<Q: Query>(
                 // stop is where that span begins.
                 Kind::Split => {
                     into = until == Until::Transparent || meets_box(0.0);
-                    End::On
+                    End::Miss
                 }
             };
-            if ends != End::On {
+            if ends != End::Miss {
                 // Where the walk ends, its stop, made there and nowhere else:
                 // where the ray enters the node, or its asset's box
                 // (`entered`).
                 let (t, axis) = entered(ray, near);
-                let stop = Stop {
+                let hit = Hit {
                     t,
                     axis,
                     node: n,
                     at,
                     asset: i.asset,
                 };
-                let met = Met { ends, stop, visits };
+                let met = Trace { ends, hit, visits };
                 leave(keep, &met, &mut stack, low, over);
                 return met;
             }
@@ -985,17 +987,17 @@ pub fn walk<Q: Query>(
             (at, false)
         } else {
             if t1 >= ray.t_max {
-                // Gone on to its reach: no stop, which no asker reads.
-                let stop = Stop {
+                // Gone on to its interval's end: no stop, which no asker reads.
+                let hit = Hit {
                     t: t1,
                     axis: 0,
                     node: n,
                     at,
                     asset: AIR,
                 };
-                let met = Met {
-                    ends: End::On,
-                    stop,
+                let met = Trace {
+                    ends: End::Miss,
+                    hit,
                     visits,
                 };
                 leave(keep, &met, &mut stack, low, over);
@@ -1065,7 +1067,7 @@ pub fn walk<Q: Query>(
 /// `keep` reads it (`Keep::LINE`).
 fn leave<A: Copy, K: Keep<A>>(
     keep: &mut K,
-    met: &Met<A>,
+    met: &Trace<A>,
     stack: &mut [A; DEPTH],
     low: Zoom,
     over: &impl Over<A>,
@@ -1116,15 +1118,15 @@ mod tests {
     }
     use crate::answer;
     use crate::answer::BoxWords;
-    use crate::answer::{kept_word, BOX_WHOLE, EIGHTHS, FULL};
+    use crate::answer::{fill_word, BOX_WHOLE, EIGHTHS, FULL};
     use crate::cube::ground::stone;
     use crate::grid;
     use crate::overwrite::AIR;
 
-    /// One cell of stone at `TARGET`, a unit cell, keeping `kept` eighths of
+    /// One cell of stone at `TARGET`, a unit cell, keeping `fill` eighths of
     /// its cube; air about it.
     struct One {
-        kept: u32,
+        fill: u32,
     }
 
     const TARGET: [i32; 3] = [10, 0, 0];
@@ -1150,7 +1152,7 @@ mod tests {
                 },
                 (false, true) => In {
                     kind: Kind::Cell,
-                    asset: [kept_word(stone as u32, self.kept), 0],
+                    asset: [fill_word(stone as u32, self.fill), 0],
                 },
                 _ => In {
                     kind: Kind::Cell,
@@ -1161,8 +1163,8 @@ mod tests {
     }
 
     /// A ray along +x from five units, at `y` and `z` units, against a cell
-    /// keeping `kept` eighths.
-    fn along(kept: u32, y: f32, z: f32) -> Met<()> {
+    /// keeping `fill` eighths.
+    fn along(fill: u32, y: f32, z: f32) -> Trace<()> {
         let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
         let o = [steps(5.0), steps(y), steps(z)];
         let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
@@ -1171,13 +1173,13 @@ mod tests {
             eye: [0.0; 3],
             spacing: Spacing::NONE,
         };
-        first(&mut One { kept }, o, &ray, detail, Until::Opaque)
+        first(&mut One { fill }, o, &ray, detail, Until::Opaque)
     }
 
     #[test]
     fn share_box_volume() {
         for k in 1..=EIGHTHS {
-            let (lo, hi) = kept_bounds(([0.0; 3], [1.0; 3]), kept_word(0, k));
+            let (lo, hi) = fill_bounds(([0.0; 3], [1.0; 3]), fill_word(0, k));
             let volume = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2]);
             assert!(
                 (volume - k as f32 / EIGHTHS as f32).abs() < 1e-6,
@@ -1196,12 +1198,12 @@ mod tests {
     fn ray_stops_at_entry() {
         // An eighth kept is a box half the side, a quarter in from each face.
         let met = along(1, 0.5, 0.5);
-        assert_eq!(met.ends, End::Stop);
-        assert!((met.stop.t - 5.25).abs() < 1e-5, "{}", met.stop.t);
-        assert_eq!(met.stop.axis, 0);
+        assert_eq!(met.ends, End::Hit);
+        assert!((met.hit.t - 5.25).abs() < 1e-5, "{}", met.hit.t);
+        assert_eq!(met.hit.axis, 0);
         // Whole, the cube's face.
         let met = along(EIGHTHS, 0.5, 0.5);
-        assert!((met.stop.t - 5.0).abs() < 1e-5, "{}", met.stop.t);
+        assert!((met.hit.t - 5.0).abs() < 1e-5, "{}", met.hit.t);
     }
 
     /// Every split's content in the box `0` names, air at the leaves.
@@ -1257,7 +1259,12 @@ mod tests {
             box_word([0, 0, 512], [1024; 3]),
         ] {
             let met = walk(missed);
-            assert_eq!((met.ends, met.visits), (End::On, 1), "{:?}", box_of(missed));
+            assert_eq!(
+                (met.ends, met.visits),
+                (End::Miss, 1),
+                "{:?}",
+                box_of(missed)
+            );
         }
         assert!(walk(box_word([0; 3], [512; 3])).visits > 1);
         // An edge that is not a half: the origin lies in the root's first
@@ -1309,11 +1316,11 @@ mod tests {
     #[test]
     fn ray_beside_box_passes() {
         let met = along(1, 0.1, 0.5);
-        assert_eq!(met.ends, End::On);
+        assert_eq!(met.ends, End::Miss);
         let met = along(4, 0.5, 0.05);
-        assert_eq!(met.ends, End::On);
+        assert_eq!(met.ends, End::Miss);
         // The whole cube stops it there.
-        assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Stop);
+        assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Hit);
     }
 
     /// A walk tells each node it asks (`Asked`): its least margin is a
@@ -1330,7 +1337,7 @@ mod tests {
         };
         let mut told = Margin::NONE;
         let met = rooted(
-            &mut One { kept: EIGHTHS },
+            &mut One { fill: EIGHTHS },
             o,
             &ray,
             detail,
@@ -1338,7 +1345,7 @@ mod tests {
             &mut (),
             &mut told,
         );
-        assert_eq!(met.ends, End::Stop);
+        assert_eq!(met.ends, End::Hit);
         assert!(told.0 < Margin::NONE.0);
     }
 }

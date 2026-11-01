@@ -5,7 +5,7 @@
 // The decors, the cube catalog's sibling: drawn as a model, not a cell the rays meet.
 //
 // The decors as the GPU reads them too: how the ground generates each one, the
-// looks it stands on and the boxes its variants claim, in the catalog's
+// palette entries it stands on and the boxes its variants claim, in the catalog's
 // order. pxl-spec asset/decor.spec.rs adds their models over each row.
 #![allow(non_camel_case_types, reason = "generated from the spec")]
 
@@ -34,7 +34,7 @@ pub struct Decor {
     /// (pxl-spec-core scatter.rs `count`).
     pub chance: u32,
     pub orientation: Orientation,
-    /// The looks it may stand on, a bit each.
+    /// The palette entries it may stand on, a bit each.
     pub on: [u32; 8],
     /// Its cell: a unit's zoom, this many coarser.
     pub scale_steps: i32,

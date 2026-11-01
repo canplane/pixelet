@@ -5,20 +5,20 @@ extern crate std;
 use super::*;
 use crate::area::Area;
 use crate::cast::{End, Query};
-use crate::cube::ground::stone;
-use crate::fill::{column_of, laid_of, level_of, put, root_of, Fresh};
-use crate::ground::Bounds;
-use crate::support::{asset, footing};
-use crate::window::{
+use crate::clipmap::{
     self, bound_over, column_top, entry, fold, join, joined_idx, laid_half, level_idx, of_idx,
     Entry, ACROSS, BRICK, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, COLUMNS_AT, ENTRIES, EYE_WINDOWS,
     FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS, LAID_AT, LEVELS, LEVELS_AT,
     LEVEL_ENTRY_WORDS, ORIGIN_AT, WINDOW, WINDOWS,
 };
+use crate::cube::ground::stone;
+use crate::fill::{column_of, laid_of, level_of, put, root_of, Fresh};
+use crate::ground::Bounds;
+use crate::support::{asset, column_surface};
 use std::{vec, vec::Vec};
 
 /// The window whose bricks are half held, its east half not yet, the
-/// windows over it held whole: the leaves', as decor's footings ask, where
+/// windows over it held whole: the leaves', as decor's column surfaces ask, where
 /// a node wider than a brick may stand clear over the ground.
 const CELL: Zoom = LEAF_CELL;
 
@@ -42,13 +42,13 @@ const TOWER: core::ops::Range<i32> = 40..48;
 /// world.rs `World`): every window's entries then their first bricks
 /// (`ORIGIN_AT`), the eye's windows' entries, and each slot's brick.
 #[derive(Clone, Copy)]
-struct Windows<'a> {
+struct Clipmap<'a> {
     rows: &'a [Entry],
     joined: &'a [[u32; JOINED_WORDS as usize]],
     ground: &'a [u32],
 }
 
-impl Bricks for Windows<'_> {
+impl Bricks for Clipmap<'_> {
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
         let row = self.rows[((cell - FIRST_CELL) * ENTRIES + entry(q)) as usize];
         (row.slot(), row.holds(q))
@@ -56,7 +56,7 @@ impl Bricks for Windows<'_> {
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.rows[((cell - FIRST_CELL) * ENTRIES + entry) as usize].held()
     }
-    fn look(&self, _: Zoom, _: u32, _: u32) -> u32 {
+    fn palette_word(&self, _: Zoom, _: u32, _: u32) -> u32 {
         ground::word([stone as u32; 4])
     }
     fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
@@ -80,7 +80,7 @@ impl Bricks for Windows<'_> {
 }
 
 /// No service area: nothing is past it.
-impl Area for Windows<'_> {
+impl Area for Clipmap<'_> {
     fn ends(&self) -> bool {
         false
     }
@@ -89,7 +89,7 @@ impl Area for Windows<'_> {
     }
 }
 
-impl Held for Windows<'_> {
+impl Held for Clipmap<'_> {
     fn relief(
         &mut self,
         place: &mut Found,
@@ -100,15 +100,15 @@ impl Held for Windows<'_> {
         (r, here)
     }
     fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> ground::Cell {
-        window::ground(self, place, zoom, [c[0], c[1]]).0
+        clipmap::ground(self, place, zoom, [c[0], c[1]]).0
     }
 }
 
 /// Nothing placed and no ways.
 struct Nothing;
 
-impl Lanes for Nothing {
-    fn heap(&self, _: u32) -> u32 {
+impl Columns for Nothing {
+    fn first_child(&self, _: u32) -> u32 {
         0
     }
     fn data(&self, _: u32) -> u32 {
@@ -118,21 +118,21 @@ impl Lanes for Nothing {
 
 /// The world's one query over the windows, counting the nodes asked.
 struct Asked<'a> {
-    w: Windows<'a>,
+    w: Clipmap<'a>,
     nodes: u32,
 }
 
 impl Query for Asked<'_> {
-    type At = Handed;
-    fn root(&mut self, node: [i32; 3]) -> Handed {
-        Handed::of(&Nothing, (0, node))
+    type At = Inherited;
+    fn root(&mut self, node: [i32; 3]) -> Inherited {
+        Inherited::of(&Nothing, (0, node))
     }
-    fn child(&mut self, at: &Handed, zoom: Zoom, node: [i32; 3]) -> Handed {
+    fn child(&mut self, at: &Inherited, zoom: Zoom, node: [i32; 3]) -> Inherited {
         at.child(&Nothing, &Nothing, (zoom, node))
     }
     fn node(
         &mut self,
-        at: &mut Handed,
+        at: &mut Inherited,
         zoom: Zoom,
         c: [i32; 3],
         asked: [Zoom; 2],
@@ -156,7 +156,7 @@ impl Query for Asked<'_> {
 /// The windows from the first to `CELL`, each about `EYE`, every brick
 /// held but `CELL`'s east half; each held brick's columns, cells as laid
 /// and levels, a slot each. Its entries are not folded.
-fn windows() -> (Vec<Entry>, Vec<u32>) {
+fn clipmap() -> (Vec<Entry>, Vec<u32>) {
     let mut rows = vec![Entry::absent([0, 0]); (ORIGIN_AT + WINDOWS) as usize];
     let mut ground = Vec::new();
     for cell in FIRST_CELL..=CELL {
@@ -232,7 +232,7 @@ fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS 
     for l in 1..=JOINED_LEVELS {
         let blocks = (ACROSS >> l) * (ACROSS >> l);
         for cell in FIRST_CELL..=CELL {
-            let w = Windows {
+            let w = Clipmap {
                 rows,
                 joined: &joined,
                 ground,
@@ -263,12 +263,12 @@ fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS 
 
 /// A block of a window a brick of which it does not hold yet is bounded
 /// by the cells a ray reads in its place, a coarser window's: every one of
-/// them lies in the bound a node over the block reads (`window::fold`).
+/// them lies in the bound a node over the block reads (`clipmap::fold`).
 #[test]
 fn partial_block_bounded() {
-    let (rows, ground) = windows();
+    let (rows, ground) = clipmap();
     let joined = folded(&rows, &ground, false);
-    let w = Windows {
+    let w = Clipmap {
         rows: &rows,
         joined: &joined,
         ground: &ground,
@@ -294,7 +294,7 @@ fn partial_block_bounded() {
         );
         for i in 0..side * side {
             let g = [c[0] * side + i % side, c[1] * side + i / side];
-            let (_, column, _, f) = window::cell(&w, Found::NONE, CELL, g);
+            let (_, column, _, f) = clipmap::cell(&w, Found::NONE, CELL, g);
             assert!(f.here(), "{g:?} held");
             let top = column_top(column);
             assert!(
@@ -307,15 +307,15 @@ fn partial_block_bounded() {
     assert_eq!(unheld, ENTRIES / 8);
 }
 
-/// A footing down any column of the half held window stands where it
+/// A column surface down any column of the half held window stands where it
 /// stands with no bound over a block a brick of which the window does not
 /// hold, with the same assets about it off its line, and asks fewer nodes.
 #[test]
 fn footing_without_bound() {
-    let (rows, ground) = windows();
+    let (rows, ground) = clipmap();
     let (none, folded) = (folded(&rows, &ground, true), folded(&rows, &ground, false));
     let world = |joined| Asked {
-        w: Windows {
+        w: Clipmap {
             rows: &rows,
             joined,
             ground: &ground,
@@ -336,9 +336,12 @@ fn footing_without_bound() {
             (first[0] << BRICK_SHIFT) + gx,
             (first[1] << BRICK_SHIFT) + gy,
         ];
-        let (a, b) = (footing(&mut was, CELL, g), footing(&mut is, CELL, g));
+        let (a, b) = (
+            column_surface(&mut was, CELL, g),
+            column_surface(&mut is, CELL, g),
+        );
         assert_eq!((a.top, a.ends), (b.top, b.ends), "{g:?}");
-        stops += (a.ends == End::Stop) as u32;
+        stops += (a.ends == End::Hit) as u32;
         for d in 0..27 {
             let c = [g[0] + d % 3 - 1, g[1] + d / 3 % 3 - 1, a.top.0 + d / 9 - 1];
             assert_eq!(
@@ -348,7 +351,7 @@ fn footing_without_bound() {
             );
         }
     }
-    assert!(stops > 0, "some footing stands on the ground");
+    assert!(stops > 0, "some column_surface stands on the ground");
     assert!(
         is.nodes < was.nodes,
         "{} nodes, {} with no bound",

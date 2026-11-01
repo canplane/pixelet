@@ -8,7 +8,7 @@ use crate::sys::sched::tick::{set_step_timing, tick_step_stats_reset};
 
 /// Called with the stored setting the turn the settings are read, a few
 /// turns from boot, so a profiler left on has the world's start in its
-/// window; turned off, the recording's lanes go back to the heap.
+/// window; turned off, the recording's columns go back to the heap.
 pub fn perf_follow(on: bool) {
     if on {
         perf_window_start();
@@ -20,7 +20,7 @@ pub fn perf_follow(on: bool) {
 
 /// Step timing starts here, not at boot: it is a clock read around every
 /// step of every tick, and only the report reads it. False, nothing
-/// recorded, where the heap refuses the recording's lanes.
+/// recorded, where the heap refuses the recording's columns.
 pub fn perf_window_start() -> bool {
     if !perf_recording_start() {
         return false;

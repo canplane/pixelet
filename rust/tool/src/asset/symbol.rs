@@ -2,7 +2,7 @@
 
 //! Carto's place symbols, each SVG under `asset/raw/place/symbol/` named by the
 //! path Carto gives it (`symbols/…`), which is how the places' theme names
-//! it: for the marker sheet, the masks it tints, each rasterized once to
+//! it: for the marker atlas, the masks it tints, each rasterized once to
 //! its coverage, a byte a pixel, in a square of `SYMBOL_PX`, laid end to end
 //! in one file the spec crate includes; for the shell, its outlines.
 
@@ -14,7 +14,7 @@ use resvg::usvg::Node;
 use resvg::usvg::Tree;
 use std::path::Path;
 
-/// Carto's symbols, drawn at the sheet's device pixels a pixel.
+/// Carto's symbols, drawn at the atlas's device pixels a pixel.
 pub const SYMBOL_PX: u32 = CARTO_PX * SYMBOL_RATIO;
 
 /// Carto's symbols' side, in pixels.

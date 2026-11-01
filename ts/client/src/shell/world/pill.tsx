@@ -24,7 +24,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { BackingPlace } from "@/shell/ui/backing.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP, type Transition } from "@/shell/ui/motion/transition.ts";
-import { useVeil } from "@/shell/ui/motion/veil.ts";
+import { useDim } from "@/shell/ui/motion/dim.ts";
 import { touchReach } from "@/shell/ui/touch.ts";
 
 export interface PillProps {
@@ -67,7 +67,7 @@ export function Pill({
   onContentWidth,
 }: PillProps) {
   const transition = SNAP;
-  const veil = useVeil(fade, fadeTransition, fadeFrom);
+  const dim = useDim(fade, fadeTransition, fadeFrom);
   const r = height / 2;
   const slide = width - span;
   const edge: ViewStyle = {
@@ -98,7 +98,7 @@ export function Pill({
   return (
     <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
       <Motion
-        {...veil.motion}
+        {...dim.motion}
         style={[
           styles.fade,
           {

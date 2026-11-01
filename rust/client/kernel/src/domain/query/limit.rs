@@ -20,7 +20,7 @@ use super::World;
 use crate::domain::layer::Query;
 use crate::sys::io::source;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec_core::window::Found;
+use pxl_spec_core::clipmap::Found;
 
 impl World<'_> {
     /// Whether the leaf cell under `at` is the service area's and off its

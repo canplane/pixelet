@@ -33,7 +33,7 @@ use crate::world::World;
 /// visible sample or walked through the world's one query to the cell that
 /// fills (`cast::first`) as the eye's are, and the word it leaves there,
 /// every frame the map is cast. Its one layer read and written in place,
-/// the one format family WebGPU lets a shader do both to, as the rays' are.
+/// the one format child group WebGPU lets a shader do both to, as the rays' are.
 type LightWords = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// The visible sample at each texel of the box, in the
@@ -133,14 +133,14 @@ fn casts_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i
     false
 }
 
-/// The world as the light's walk again reads it, as the eye's do, the looks
+/// The world as the light's walk again reads it, as the eye's do, the palette indices
 /// too, which only what a stop is drawn by holds and the map's word leaves
 /// out (`Map::word`).
 fn world<'a>(
     eye: &'a Eye,
     window: &'a [IVec4],
     ground: &'a [u32],
-    looks: &'a [u32],
+    palette_indices: &'a [u32],
     shards: &'a [IVec4],
     overwrites: &'a [u32],
     pool: &'a [u32],
@@ -148,7 +148,7 @@ fn world<'a>(
     World {
         window,
         ground,
-        looks,
+        palette_indices,
         shards,
         overwrites,
         eye,
@@ -216,7 +216,7 @@ impl Map {
     }
 
     /// The word a slot leaves for the walk `met` of its ray.
-    fn word<A>(&self, met: &cast::Met<A>) -> u32 {
+    fn word<A>(&self, met: &cast::Trace<A>) -> u32 {
         pxl_spec_core::light::word(pxl_spec_core::light::depth(&self.light, met))
     }
 }
@@ -480,9 +480,9 @@ pub fn light_cs(
     let kept: UVec4 = visibility.fetch(UVec3::new(p[0], p[1], 0));
     let (took, stop, _) = observer::resolve(&m, &*list, at, &aim, kept.x);
     if took == Take::Sample {
-        let met = cast::Met {
-            ends: cast::End::Stop,
-            stop,
+        let met = cast::Trace {
+            ends: cast::End::Hit,
+            hit: stop,
             visits: 0,
         };
         add_cnt(misses, counts(head), tally::TOOK, 1);
@@ -522,7 +522,7 @@ pub fn light_miss_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
@@ -541,7 +541,7 @@ pub fn light_miss_cs(
     }
     let w = list.word(pxl_spec_core::light::misses_at(n) + i);
     let slot = UVec3::new(w & 0xffff, w >> 16, 0);
-    let world = world(eye, window, ground, looks, shards, overwrites, pool);
+    let world = world(eye, window, ground, palette_indices, shards, overwrites, pool);
     let mut told = Margin::NONE;
     let at = [slot.x, slot.y];
     let (_, met, _) = observer::walked(&m, world, seen, &*list, at, &mut (), &mut told);
@@ -590,7 +590,7 @@ pub fn light_beam_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
@@ -604,7 +604,7 @@ pub fn light_beam_cs(
     if id.x >= across || id.y >= down {
         return;
     }
-    let world = world(eye, window, ground, looks, shards, overwrites, pool);
+    let world = world(eye, window, ground, palette_indices, shards, overwrites, pool);
     let (c, mut told) = ([id.x, id.y], Margin::NONE);
     observer::beam(&m, world, seen, list, c, &mut told);
     list.set(
@@ -625,7 +625,7 @@ pub fn light_sample_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
@@ -639,7 +639,7 @@ pub fn light_sample_cs(
     if id.x >= across || id.y >= down {
         return;
     }
-    let world = world(eye, window, ground, looks, shards, overwrites, pool);
+    let world = world(eye, window, ground, palette_indices, shards, overwrites, pool);
     let (at, mut told) = ([id.x, id.y], Margin::NONE);
     observer::sample(&m, world, seen, list, at, &mut told);
     list.set(

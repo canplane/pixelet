@@ -12,7 +12,7 @@ use pxl_spec::space::layer::lattice::{Cells, GROUND, TILE_CELLS};
 use super::*;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::Answer;
-use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_LANE};
+use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_COLUMN};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
@@ -23,7 +23,7 @@ use crate::domain::layer::tile_cache::TileCache;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom};
 
 use crate::domain::layer::object::store::Write;
-use crate::domain::layer::terrain::window::test;
+use crate::domain::layer::terrain::clipmap::test;
 use crate::sys::io::demand::Ask;
 use crate::sys::serial;
 use pxl_spec::asset::decor::Decor;
@@ -35,19 +35,19 @@ use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::tile;
 use pxl_spec_core::world::placed_in;
 
-const CELLS: usize = GROUND_LANE;
+const CELLS: usize = GROUND_COLUMN;
 const SPAN: usize = TILE_CELLS as usize;
 
 fn top() -> Tile {
     Tile::new(LEAF_ZOOM - 1, [40, -20])
 }
 
-/// A leaf as a client holds it: its lines, and its cells, each its own look
+/// A leaf as a client holds it: its lines, and its cells, each its own palette index
 /// and its height, as its windows hold them once a GPU drew them.
 #[derive(Clone)]
 struct Leaf {
     tile: TerrainTile,
-    looks: Vec<GroundId>,
+    palette_indices: Vec<GroundId>,
     heights: Vec<i16>,
 }
 
@@ -65,7 +65,7 @@ fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
         p,
         Leaf {
             tile,
-            looks,
+            palette_indices,
             heights,
         },
     ) in held
@@ -76,7 +76,12 @@ fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
                 continue;
             }
             admitted.push(q);
-            cells.push((q, looks.clone(), heights.clone(), tile.separation.clone()));
+            cells.push((
+                q,
+                palette_indices.clone(),
+                heights.clone(),
+                tile.separation.clone(),
+            ));
             let picture = match k {
                 0 => tile.clone(),
                 _ => TerrainTile {
@@ -98,7 +103,7 @@ fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
     tile_cache
 }
 
-/// A leaf as a client holds it once its cells are back: each cell's height and look given.
+/// A leaf as a client holds it once its cells are back: each cell's height and palette index given.
 fn drawn(heights: Vec<i16>, ground: Ground, separation: Separation) -> Leaf {
     Leaf {
         tile: TerrainTile::of(
@@ -109,7 +114,7 @@ fn drawn(heights: Vec<i16>, ground: Ground, separation: Separation) -> Leaf {
             separation,
             Occupancy::LEAF,
         ),
-        looks: ground.cells.into_owned(),
+        palette_indices: ground.cells.into_owned(),
         heights,
     }
 }
@@ -192,7 +197,7 @@ fn no_surface_placed_stands() {
         .val()
         .flatten()
         .unwrap();
-    assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
+    assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
 }
 
 /// A deck stands on its own, not on the ground under it: over a void cell
@@ -295,7 +300,7 @@ fn ray_across_antimeridian() {
         .exact()
         .flatten()
         .unwrap();
-    assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
+    assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
     assert_eq!(hit.point[0], seam + 40.0, "{hit:?}");
 }
 
@@ -414,7 +419,7 @@ fn half_cube_met() {
         .exact()
         .flatten()
         .unwrap();
-    assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
+    assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
     assert_eq!(
         [hit.point[2], hit.cube.extent()[0]],
         [5.0 + half, half],
@@ -596,7 +601,7 @@ fn box_placed_matches_store() {
     let (a, b, c) = (cell(corners[0]), cell(corners[1]), cell(corners[2]));
     let lo = [a[0].min(c[0]), a[1].min(b[1]), c[2].min(a[2])];
     let hi = [a[0].max(c[0]), a[1].max(b[1]), c[2].max(a[2])];
-    let lanes = store.lanes();
+    let lanes = store.columns();
     let mut asked = Vec::new();
     let mut placed = placed_in(lo, hi);
     loop {
@@ -624,16 +629,16 @@ fn box_placed_matches_store() {
 
 /// A brick that lands after the windows were folded without it is read
 /// with what it holds once the landings are folded, as the stage folds them
-/// (domain/layer/terrain/window.rs `refold`): a spike
+/// (domain/layer/terrain/clipmap.rs `refold`): a spike
 /// a cell wide in it, over ground at five and taller than a node over the
 /// brick, is met where a walker's ray down it met it while the brick was
 /// held from the start, and no cell of the brick stands outside the bound
 /// read over it at any zoom over a brick.
 #[test]
 fn late_brick_spike() {
-    use crate::domain::layer::terrain::window::{on_landed, refold, test::unland, Windowed};
-    use pxl_render::gpu::renderer::Landing;
-    use pxl_spec_core::window::{self as cells, Bricks, Found, BRICK, LEVELS, WINDOW};
+    use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, Windowed};
+    use pxl_render::gpu::renderer::Resident;
+    use pxl_spec_core::clipmap::{self as cells, Bricks, Found, BRICK, LEVELS, WINDOW};
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let leaf = top().children()[0];
@@ -678,7 +683,7 @@ fn late_brick_spike() {
     let held = met(&World::new(&tile_cache, &store));
     let (b, ticket) = unland(LEAF_CELL, spike);
     // As the stage lands a read-back: each landing, then one fold.
-    on_landed(b, ticket, Landing::Built(&[0]));
+    on_resident(b, ticket, Resident::Built(&[0]));
     refold();
     assert_eq!(met(&World::new(&tile_cache, &store)), held, "the spike met");
     let q = cells::brick_of(spike).0;
@@ -704,14 +709,14 @@ fn late_brick_spike() {
 }
 
 /// The device that went took every brick it held: the turn that sees it
-/// gives up their cells (domain/layer/terrain/window.rs `assign_slots`, as `step`
+/// gives up their cells (domain/layer/terrain/clipmap.rs `assign_slots`, as `step`
 /// runs it) and folds the windows over none, so no node over a brick of
 /// the eye's leaves keeps a bound of cells gone.
 #[test]
 fn device_loss_drops_bounds() {
-    use crate::domain::layer::terrain::window::{test::lose, Windowed};
+    use crate::domain::layer::terrain::clipmap::{test::lose, Windowed};
+    use pxl_spec_core::clipmap::{self as cells, Bricks, Found, BRICK, LEVELS};
     use pxl_spec_core::ground::UNBOUNDED;
-    use pxl_spec_core::window::{self as cells, Bricks, Found, BRICK, LEVELS};
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let _held = flat_at_five();

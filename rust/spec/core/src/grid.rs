@@ -18,7 +18,7 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 pub const CELLS_A_RAD: f32 = 96.0;
 
 /// How many times finer than the view's a grid the bands and windows are
-/// sized for (`WINDOW_CELLS_A_RAD`, `window::RADIUS`): a window holds its
+/// sized for (`WINDOW_CELLS_A_RAD`, `clipmap::RADIUS`): a window holds its
 /// zoom's cells out to `WINDOW_MARGIN` times where the view stops drawing them.
 /// Whether a margin of 1 keeps up with a moving eye is unmeasured.
 pub const WINDOW_MARGIN: f32 = 2.0;

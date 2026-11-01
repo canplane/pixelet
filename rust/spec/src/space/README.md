@@ -144,7 +144,7 @@ tree's own, and follow from what it represents:
 |                                                       | axes | resident                                                                           | a node holds                                                    | stored                                                                                                                                      | walked                                                          |
 | ----------------------------------------------------- | ---- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | the pyramid (`layer/tile.rs`)                         | 2    | resident by tile: one can be missing                                               | a layer's fold of all under it                                  | a record a tile                                                                                                                             | from a point, up to the nearest resident tile                   |
-| a window's bound (pxl-spec-core window.rs `bounded`)  | 2    | with its brick, while a window about the eye, the pivot or a destination holds it | the lowest and highest drawn under a cell, the ways' included   | made by the GPU from a brick's cells and its ways, a level a zoom to the brick whole, and read back; bricks joined to the window's width | a coarse cell passed whole where a ray is above it              |
+| a window's bound (pxl-spec-core clipmap.rs `bounded`) | 2    | with its brick, while a window about the eye, the pivot or a destination holds it | the lowest and highest drawn under a cell, the ways' included   | made by the GPU from a brick's cells and its ways, a level a zoom to the brick whole, and read back; bricks joined to the window's width | a coarse cell passed whole where a ray is above it              |
 | the objects (pxl-kernel domain/layer/object/store.rs) | 3    | whole                                                                              | its leaf's value, or the majority of its eight, read when asked | the leaves alone, one tree a column (`hierarchy/sparse_tree.rs`)                                                                            | down a cube's key range, by a box, or along a ray nearest first |
 
 The pyramid is a tree across zooms: every tile holds a summary of the ground
@@ -168,7 +168,7 @@ child that is the zero tile, its vote being lossy.
 They stay two because one is resident by tile and the other is not. Objects keep
 no coarse zoom: their query folds a node's leaves when it is asked. Were objects
 ever resident by tile, their branches would be a layer of the pyramid, and a
-family of equal leaves joined its occupancy.
+child group of equal leaves joined its occupancy.
 
 A ray crosses the pyramid and the objects in one descent (pxl-spec-core
 `cast.rs` `first`, which pxl-kernel domain/query/ray.rs `first_hit` takes on the

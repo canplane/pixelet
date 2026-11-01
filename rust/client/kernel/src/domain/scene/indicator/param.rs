@@ -1,6 +1,6 @@
 // pxl-kernel/domain/scene/indicator/param.rs
 
-//! The location puck's tuned numbers: its zone's footprint and its beacon.
+//! The location indicator's tuned numbers: its zone's footprint and its beacon.
 
 /// The zone's footprint in world units, whatever the ground's cell.
 pub const ZONE_FOOTPRINT_U: f64 = 4.0;

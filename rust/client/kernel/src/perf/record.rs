@@ -2,8 +2,8 @@
 
 //! Read-only instrument: records where time and work go. Never read back
 //! into a scheduling decision. Records are laid out word for word as
-//! perf.json says, in lanes the shell reads in place, so reading the
-//! profiler allocates nothing in the heap it measures. The lanes are the
+//! perf.json says, in columns the shell reads in place, so reading the
+//! profiler allocates nothing in the heap it measures. The columns are the
 //! heap's while the profiler's setting is on, taken whole as it starts
 //! recording and given back as it is turned off (`perf_release`): its
 //! heap figures count them all along, so a frame's deltas do not.
@@ -21,13 +21,13 @@ use crate::perf::task::TaskRow;
 
 /// The rings keep the last minute (perf.json `LIMIT.WINDOW_MS`, the
 /// shell's long frames alike). At 60 Hz that is 3,600 frames; a faster
-/// display or a heavy minute fills a lane early, which drops its oldest and
+/// display or a heavy minute fills a column early, which drops its oldest and
 /// sets `truncated`.
 const WINDOW_MS: f64 = LIMIT::WINDOW_MS as f64;
 const TASK_LIMIT: usize = 2_048;
 const FRAME_LIMIT: usize = 4_096;
 const WORST_CAP: usize = 12;
-pub const SPREAD_LIMIT: usize = if FRAME_LIMIT > TASK_LIMIT {
+pub const PERCENTILES_LIMIT: usize = if FRAME_LIMIT > TASK_LIMIT {
     FRAME_LIMIT
 } else {
     TASK_LIMIT
@@ -47,9 +47,9 @@ fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> 
     }
 }
 
-/// Returns false where a full lane dropped its oldest quarter for `rec`: a
-/// shift a quarter of the lane apart rather than one a record.
-fn land_lane<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
+/// Returns false where a full column dropped its oldest quarter for `rec`: a
+/// shift a quarter of the column apart rather than one a record.
+fn land_column<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
     let full = *len == ring.len() && *head == 0;
     if *len == ring.len() {
         let n = if full {
@@ -69,35 +69,35 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     *len -= n;
 }
 
-/// The lanes, in order: tasks, frames, the worst frames and the read's
+/// The columns, in order: tasks, frames, the worst frames and the read's
 /// scratch (read.rs).
-const LANES: [u32; 4] = [
+const COLUMNS: [u32; 4] = [
     (TASK_LIMIT * size_of::<TaskRow>()) as u32,
     (FRAME_LIMIT * size_of::<FrameSample>()) as u32,
     (WORST_CAP * size_of::<WorstFrame>()) as u32,
-    (SPREAD_LIMIT * size_of::<f64>()) as u32,
+    (PERCENTILES_LIMIT * size_of::<f64>()) as u32,
 ];
 
 /// What the heap holds of the profiler while its setting is on, in the
-/// buddy's blocks: each lane a power of two as the heap gives it
+/// buddy's blocks: each column a power of two as the heap gives it
 /// (door/layout.rs `HEAP_FLOWS_BYTES`).
 pub const PERF_BYTES: u64 = {
     let mut sum = 0;
     let mut k = 0;
-    while k < LANES.len() {
-        sum += (LANES[k] as u64).next_power_of_two();
+    while k < COLUMNS.len() {
+        sum += (COLUMNS[k] as u64).next_power_of_two();
         k += 1;
     }
     sum
 };
 
-/// A lane of `n` records, zeroed, a valid record each; none where the heap
+/// A column of `n` records, zeroed, a valid record each; none where the heap
 /// refuses it.
-fn heap_lane<T: Copy + Default>(n: usize) -> Option<Box<[T]>> {
-    let mut lane = Vec::new();
-    lane.try_reserve_exact(n).ok()?;
-    lane.resize(n, T::default());
-    Some(lane.into_boxed_slice())
+fn heap_column<T: Copy + Default>(n: usize) -> Option<Box<[T]>> {
+    let mut column = Vec::new();
+    column.try_reserve_exact(n).ok()?;
+    column.resize(n, T::default());
+    Some(column.into_boxed_slice())
 }
 
 struct Perf {
@@ -118,7 +118,7 @@ struct Perf {
     /// What the frames held at the most or the least since the recording
     /// started (`perf_fold_recording`).
     held: RecordingSection,
-    /// The read's, where it sorts what it spreads (read.rs).
+    /// The read's, where it sorts what it takes percentiles of (read.rs).
     scratch: Box<[f64]>,
     /// The interval in progress: the last frame turn's record, which every
     /// turn after it adds its time to until the next frame turn closes it.
@@ -169,16 +169,16 @@ pub fn perf_recording_state() -> RecSection {
     }
 }
 
-/// Recording from now, its lanes taken from the heap where it holds none
+/// Recording from now, its columns taken from the heap where it holds none
 /// yet: false, nothing recorded, where the heap refuses them.
 pub fn perf_recording_start() -> bool {
     let l = perf();
     if l.task_ring.is_empty() {
         let (Some(tasks), Some(frames), Some(worst), Some(scratch)) = (
-            heap_lane(TASK_LIMIT),
-            heap_lane(FRAME_LIMIT),
-            heap_lane(WORST_CAP),
-            heap_lane(SPREAD_LIMIT),
+            heap_column(TASK_LIMIT),
+            heap_column(FRAME_LIMIT),
+            heap_column(WORST_CAP),
+            heap_column(PERCENTILES_LIMIT),
         ) else {
             return false;
         };
@@ -204,7 +204,7 @@ pub fn perf_recording_stop() {
     l.stopped_at = Some(now());
 }
 
-/// The lanes given back to the heap, what they held with them: the
+/// The columns given back to the heap, what they held with them: the
 /// profiler's setting is off, so nothing shows them.
 pub fn perf_release() {
     perf_recording_stop();
@@ -224,7 +224,7 @@ pub fn perf_release() {
     );
 }
 
-/// The read's scratch, empty while the lanes are not held.
+/// The read's scratch, empty while the columns are not held.
 pub(crate) fn perf_scratch() -> &'static mut [f64] {
     &mut perf().scratch
 }
@@ -243,7 +243,7 @@ pub fn perf_record(row: impl FnOnce() -> TaskRow) {
         |r| r.end_ms,
     );
     drop_front(&mut l.task_ring, &mut l.task_len, dropped);
-    if !land_lane(&mut l.task_ring, &mut l.task_len, &mut l.task_head, row) {
+    if !land_column(&mut l.task_ring, &mut l.task_len, &mut l.task_head, row) {
         l.truncated = true;
     }
 }
@@ -379,7 +379,7 @@ fn land(l: &mut Perf, s: FrameSample) {
         |f| f.t,
     );
     drop_front(&mut l.frame_ring, &mut l.frame_len, dropped);
-    if !land_lane(&mut l.frame_ring, &mut l.frame_len, &mut l.frame_head, s) {
+    if !land_column(&mut l.frame_ring, &mut l.frame_len, &mut l.frame_head, s) {
         l.truncated = true;
     }
 }

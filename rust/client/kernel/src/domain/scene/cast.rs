@@ -4,7 +4,7 @@
 //! `Cast`): the eye as the rays leave it, a ray a drawn pixel, the eye's
 //! windows as a table of the bricks each holds, and each brick the
 //! windows want handed to the GPU once, off its tile's packet
-//! (domain/layer/terrain/window.rs `fill`).
+//! (domain/layer/terrain/clipmap.rs `fill`).
 
 use pxl_render::gpu::renderer::{Overwrites, TerrainWrite};
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -14,8 +14,8 @@ use xpute_guest::global::Global;
 
 use crate::domain::layer::object::preview;
 use crate::domain::layer::object::store::object;
+use crate::domain::layer::terrain::clipmap::{self, TileContent};
 use crate::domain::layer::terrain::tile::uploads;
-use crate::domain::layer::terrain::window::{self, Handed};
 use crate::domain::layer::upload::Offered;
 use crate::domain::layer::Base as _;
 use crate::domain::view::lens;
@@ -71,13 +71,13 @@ pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
 }
 
 /// What is placed, for the GPU: the objects' tree's lanes as they live, the
-/// room either has, the store's revision, and the families written since the
+/// room either has, the store's revision, and the child groups written since the
 /// revision the lanes were last handed at, so the GPU takes only those
-/// again where it holds that one (domain/layer/object/store.rs `gpu_lanes`).
+/// again where it holds that one (domain/layer/object/store.rs `gpu_columns`).
 pub fn overwrites() -> Overwrites<'static> {
-    let l = object().gpu_lanes();
+    let l = object().gpu_columns();
     Overwrites {
-        heap: l.heap,
+        first_child: l.first_child,
         data: l.data,
         room: l.room,
         revision: l.revision,
@@ -93,7 +93,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
     let wanted = |slot| {
         terrain
             .in_slot(slot)
-            .is_some_and(|t| terrain.get(t).is_some() && window::is_tile_wanted(t))
+            .is_some_and(|t| terrain.get(t).is_some() && clipmap::is_tile_wanted(t))
     };
     uploads().send(
         api::device_generation(),
@@ -104,13 +104,13 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
             let Some(held) = terrain.get(t) else {
                 return Offered::Taken;
             };
-            window::fill(t, Handed::Packet(pkt, held), write)
+            clipmap::fill(t, TileContent::Packet(pkt, held), write)
         },
         &wanted,
     );
     // The due bricks' void tiles, not every tile held.
-    for p in window::voids() {
-        if window::fill(p, Handed::Void, write) == Offered::Full {
+    for p in clipmap::voids() {
+        if clipmap::fill(p, TileContent::Void, write) == Offered::Full {
             return;
         }
     }

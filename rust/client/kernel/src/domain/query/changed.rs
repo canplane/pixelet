@@ -68,7 +68,7 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
 
 /// The columns a reader's queries read, their corners in units, X on the
 /// lap of the first: each ray the cells it passes at the coarsest zoom it
-/// is answered at, each surface and footing its cell (`World::reading`).
+/// is answered at, each surface and column surface its cell (`World::reading`).
 #[derive(Default)]
 pub struct Columns(Cell<Option<[[f64; 2]; 2]>>);
 

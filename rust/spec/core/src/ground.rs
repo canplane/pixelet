@@ -1,13 +1,13 @@
 // pxl-spec-core/ground.rs
 
 //! gpu-portable: the ground's column at a cell, the one rule a node's ground
-//! is answered by (`node`) before what overwrites it: a cell's look and
-//! height off the window drawing it (`window::ground`), and its cells by
+//! is answered by (`node`) before what overwrites it: a cell's palette index and
+//! height off the window drawing it (`clipmap::ground`), and its cells by
 //! depth with a cave's air where a cave may take them. What overwrites it
 //! is not here: the ways by their own rule (`way.rs`), and what is placed
 //! by its own (`placed.rs`).
 //!
-//! A look and a height are stored as a byte and an i16 and read into a word
+//! A palette index and a height are stored as a byte and an i16 and read into a word
 //! here, since WGSL has no narrower integer.
 //!
 //! Heights are f32 here, as WGSL has them. WGSL's f32 is not strictly IEEE (a
@@ -21,6 +21,7 @@ use crate::answer::{
 };
 use crate::area::{earth, is_walled, Area, Shard};
 use crate::cave::Cave;
+use crate::clipmap::Found;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
@@ -28,11 +29,10 @@ use crate::param::ground::BEDROCK_DEPTH;
 use crate::param::ground::FILLER_DEPTH;
 use crate::param::ground::HEADROOM;
 use crate::param::ground::SANDSTONE_DEPTH;
-use crate::window::Found;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
-// The catalog's looks this rule names, read into a word.
-/// The catalog's void and unknown as the words a look is read into.
+// The catalog's palette indices this rule names, read into a word.
+/// The catalog's void and unknown as the words a palette index is read into.
 pub const VOID: u32 = sentinel::void as u32;
 pub const UNKNOWN: u32 = sentinel::unknown as u32;
 const SAND: u32 = ground::sand as u32;
@@ -82,7 +82,7 @@ pub const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
 
 /// What the windows bound under a node, each source its own: the ground's
 /// faces, the lowest and highest, and the leaf cells the ways fill, the
-/// lowest and past the highest (`window::LEVEL_WORDS`, `fill::level`).
+/// lowest and past the highest (`clipmap::LEVEL_WORDS`, `fill::level`).
 pub type Bounds = [[i32; 2]; 2];
 
 /// Bounds as their two bound words.
@@ -103,29 +103,29 @@ pub fn joined(a: Bounds, b: Bounds) -> Bounds {
     ]
 }
 
-/// The bits a look takes in a cell's word, four to the word.
-pub const LOOK_BITS: u32 = 8;
+/// The bits a palette index takes in a cell's word, four to the word.
+pub const PALETTE_BITS: u32 = 8;
 
-/// A cell's word's four looks, `dx + 2·dy`.
-pub fn looks(word: u32) -> [u32; 4] {
-    let m = (1 << LOOK_BITS) - 1;
+/// A cell's word's four palette indices, `dx + 2·dy`.
+pub fn palette_indices(word: u32) -> [u32; 4] {
+    let m = (1 << PALETTE_BITS) - 1;
     [
         word & m,
-        word >> LOOK_BITS & m,
-        word >> (2 * LOOK_BITS) & m,
-        word >> (3 * LOOK_BITS),
+        word >> PALETTE_BITS & m,
+        word >> (2 * PALETTE_BITS) & m,
+        word >> (3 * PALETTE_BITS),
     ]
 }
 
-/// Four looks as a cell's word.
+/// Four palette indices as a cell's word.
 pub fn word([a, b, c, d]: [u32; 4]) -> u32 {
-    a | b << LOOK_BITS | c << (2 * LOOK_BITS) | d << (3 * LOOK_BITS)
+    a | b << PALETTE_BITS | c << (2 * PALETTE_BITS) | d << (3 * PALETTE_BITS)
 }
 
 /// A cell's own look at `cell`: the majority of the four it folds, as the
 /// bake folds a tile's (pxl-spec bake/fold.rs `fold_ground`).
 pub fn own(w: u32, cell: Zoom) -> u32 {
-    majority(looks(w), cell)
+    majority(palette_indices(w), cell)
 }
 
 /// Tile cells an elevation sample spans.
@@ -280,21 +280,21 @@ pub fn rock(cell: Zoom, face: i32) -> i32 {
     cells(cell, bedrock(face) as f32)
 }
 
-/// What the ground is in cell `z` of a column of `cell` whose look is `look`
+/// What the ground is in cell `z` of a column of `cell` whose palette index is `palette_idx`
 /// and whose top is `top` cells: by depth under its top, `void` over it. A
 /// column coarser than the leaves' is a summary of the faces under it, its
 /// ground its face whole; the wall (`unknown`) is itself all through.
-pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
+pub fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
     if z >= top {
         return VOID;
     }
-    if cell < LEAF_CELL || look == UNKNOWN {
-        return look;
+    if cell < LEAF_CELL || palette_idx == UNKNOWN {
+        return palette_idx;
     }
     let s = leaf_cells(cell);
     // Water's filler is water, as sand's is sand: under a face it is the
     // same cell, never dirt.
-    let (filler, sandstone) = match look {
+    let (filler, sandstone) = match palette_idx {
         SAND | BEACH => (SAND, SANDSTONE_DEPTH),
         WATER => (WATER, 0),
         _ => (SOIL, 0),
@@ -302,7 +302,7 @@ pub fn by_depth(cell: Zoom, look: u32, top: i32, z: i32) -> u32 {
     let face = top - s;
     let filled = face - FILLER_DEPTH * s;
     if z >= face {
-        look
+        palette_idx
     } else if z >= filled {
         filler
     } else if z >= filled - sandstone * s {
@@ -405,19 +405,19 @@ pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 
 /// How the ground is held where a node reads it: the windows, as the CPU
-/// read them back or a GPU filled them, read the one way (`window::ground`,
-/// `window::bound_over`).
+/// read them back or a GPU filled them, read the one way (`clipmap::ground`,
+/// `clipmap::bound_over`).
 pub trait Held: Area {
     /// The lowest and highest the ground's cells at `cell` reach over the
     /// node `(zoom, c)`, and the ways' over them, apart (`Bounds`), off the
-    /// finest held tile they are read from (`window::bound_over`); bounds no
+    /// finest held tile they are read from (`clipmap::bound_over`); bounds no
     /// tighter than the heights' whole range (`UNBOUNDED`) where no brick
     /// it reads is held, which only splits more; false where no tile over
     /// it is held.
     /// `place` is where the cells at `cells`' finest of a node over it were
     /// found, or `Found::NONE`, and becomes where its own are
-    /// (`window::step`). Read over every zoom from `cells`' coarsest to its
-    /// finest (`window::bound_over`).
+    /// (`clipmap::step`). Read over every zoom from `cells`' coarsest to its
+    /// finest (`clipmap::bound_over`).
     fn relief(
         &mut self,
         place: &mut Found,
@@ -425,21 +425,21 @@ pub trait Held: Area {
         node: (Zoom, [i32; 3]),
     ) -> (Bounds, bool);
     /// The column of the cell `c` at `zoom` off the windows
-    /// (`window::ground`), the service area's edge laid on it as its fill
+    /// (`clipmap::ground`), the service area's edge laid on it as its fill
     /// laid it (`Cell`); its cell where `place` found it, the zoom's cells'
     /// (`relief`'s), or found anew where `place` is `NONE`.
     fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell;
 }
 
 /// What the ground answers of a node (`node`): its kind, and a cell's
-/// asset and look.
+/// asset and palette index.
 pub type Answer = In<[u32; 2]>;
 
 /// The ground's answer for a node, the one way a descent asks the ground,
 /// `cave` the caves there and `is_cell` whether it is asked at its own zoom:
 /// past the service area, the Earth's; else the node's own bound first, of
 /// each zoom's tile its cells are read from (`Held::relief`) — at its own zoom,
-/// over it is air, else its column's asset (`Cell::asset`), its look; a
+/// over it is air, else its column's asset (`Cell::asset`), its palette index; a
 /// coarser node no part of which lies where the ground may fill at the zooms asked (`slab`, `meets`) a cube of
 /// air its size, else split; where no tile over it is held, a node at its own
 /// zoom is the lack and a coarser node split, not known empty.
@@ -540,13 +540,13 @@ pub fn node<H: Held>(
     (answer, Cell::NONE, ways)
 }
 
-/// A cell's ground, as a column reads it: its look (`unknown` for the
+/// A cell's ground, as a column reads it: its palette index (`unknown` for the
 /// service area's wall), its top in cells of its zoom and the share of
-/// its top cell it fills (`top`), and the four looks its fold took
-/// (`looks`, `dx + 2·dy`).
+/// its top cell it fills (`top`), and the four palette indices its fold took
+/// (`palette_indices`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
-    pub look: u32,
+    pub palette_idx: u32,
     pub top: i32,
     pub part: u32,
     pub fold: [u32; 4],
@@ -555,7 +555,7 @@ pub struct Cell {
 impl Cell {
     /// No ground: void at sea level, as a column no tile is read for.
     pub const NONE: Cell = Cell {
-        look: VOID,
+        palette_idx: VOID,
         top: 0,
         part: FULL,
         fold: [VOID; 4],
@@ -572,9 +572,9 @@ impl Cell {
         }
     }
 
-    /// Whether it has ground at all: a look the catalog grounds, or the wall.
+    /// Whether it has ground at all: a palette index the catalog grounds, or the wall.
     pub fn is_grounded(&self) -> bool {
-        self.look == UNKNOWN || Ground::grounds(self.look)
+        self.palette_idx == UNKNOWN || Ground::grounds(self.palette_idx)
     }
 
     /// Whether a cave may take cell `z` of the column at `cell`: the ground's
@@ -586,16 +586,16 @@ impl Cell {
     fn opens(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
         let under = face_cell(cell, face) - (self.part < FULL) as i32;
-        self.look != UNKNOWN && z < under && z >= rock(cell, face)
+        self.palette_idx != UNKNOWN && z < under && z >= rock(cell, face)
     }
 
-    /// The four looks asset `g` of the column at `cell` is drawn by: where it
+    /// The four palette indices asset `g` of the column at `cell` is drawn by: where it
     /// is the cell's own look at a cell coarser than the leaves', the four
     /// its fold took, whose mean it is drawn as, as the cell reads from afar;
-    /// else, a stratum under it or a leaf's cell, `g` four times. A way written over it is its own look four
+    /// else, a stratum under it or a leaf's cell, `g` four times. A way written over it is its own palette index four
     /// times (`world::node`).
     pub fn four(&self, cell: Zoom, g: u32) -> [u32; 4] {
-        if cell >= LEAF_CELL || g != self.look {
+        if cell >= LEAF_CELL || g != self.palette_idx {
             [g; 4]
         } else {
             self.fold
@@ -604,13 +604,13 @@ impl Cell {
 
     /// The asset in cell `z` of the column at `cell`, a cave's air where a cave may take
     /// it (`opens`) and `hollow` says one does, asked only there: the
-    /// ground's look, its fold's majority at a coarser cell, as what is
+    /// ground's palette index, its fold's majority at a coarser cell, as what is
     /// placed is its fold's, `void` for air.
     pub fn asset(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
         if !self.is_grounded() {
             return VOID;
         }
-        let g = by_depth(cell, self.look, self.top, z);
+        let g = by_depth(cell, self.palette_idx, self.top, z);
         if g == VOID || self.opens(cell, z) && hollow() {
             return VOID;
         }

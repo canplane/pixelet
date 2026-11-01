@@ -35,7 +35,7 @@ use crate::domain::query::Walked;
 use crate::domain::view::observation;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::io::demand::Order;
-use crate::sys::io::demand::{Ask, Phases, Why};
+use crate::sys::io::demand::{Ask, Phases, Priority};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
@@ -233,7 +233,7 @@ impl<L: Observed> Demand<L> {
                     &mut asks,
                     at,
                     Ask {
-                        why: Why::Demand,
+                        priority: Priority::Demand,
                         order: order(o, p),
                     },
                 );
@@ -241,14 +241,17 @@ impl<L: Observed> Demand<L> {
                 for q in
                     std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1)
                 {
-                    if asks.get(&q).is_some_and(|a| a.why <= Why::Ancestor) {
+                    if asks
+                        .get(&q)
+                        .is_some_and(|a| a.priority <= Priority::Ancestor)
+                    {
                         break;
                     }
                     ask(
                         &mut asks,
                         q,
                         Ask {
-                            why: Why::Ancestor,
+                            priority: Priority::Ancestor,
                             order: order(o, q),
                         },
                     );
@@ -273,7 +276,7 @@ impl<L: Observed> Demand<L> {
                         &mut asks,
                         p,
                         Ask {
-                            why: Why::Floor,
+                            priority: Priority::Floor,
                             order: order(o, p),
                         },
                     );
@@ -295,7 +298,7 @@ impl<L: Observed> Demand<L> {
                 &mut asks,
                 p,
                 Ask {
-                    why: Why::Destination,
+                    priority: Priority::Destination,
                     order: Order::FIRST,
                 },
             );

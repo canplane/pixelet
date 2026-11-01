@@ -138,7 +138,7 @@ pub fn view_resize(width: f64, height: f64) {
 ///
 /// The eye is held on the steps the cast's rays leave from (pxl-spec
 /// `world::origin`), so the world the rays draw and what is rasterized on
-/// its faces — the puck's zone, the ghosts, the markers' anchors — stand
+/// its faces — the location indicator's zone, the ghosts, the markers' anchors — stand
 /// about one eye. Off them, the rays' eye stood up to a step from the
 /// raster's, past the step back the world's depth is written by
 /// (screen_ray.wgsl `behind`) within ~64 units, and a face and what lay on

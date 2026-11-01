@@ -23,7 +23,7 @@ fn ran_out_says_what() {
     // own most, grows neither.
     assert_eq!(short_of(0), None);
     assert_eq!(short_of(1), None);
-    assert_eq!(short_of(way::tree::BRICK_FAMILIES), None);
+    assert_eq!(short_of(way::tree::BRICK_CHILD_GROUPS), None);
     assert_eq!(short_of(way::tree::NONE), None);
 }
 
@@ -31,7 +31,7 @@ fn ran_out_says_what() {
 fn scratch_peak_unchanged() {
     // 18.01 MiB, `HANDED` bricks of `SCRATCH_WORDS`.
     assert_eq!(
-        scratch_bytes(way::tree::BRICK_FAMILIES),
+        scratch_bytes(way::tree::BRICK_CHILD_GROUPS),
         HANDED * way::tree::SCRATCH_WORDS * 4
     );
 }

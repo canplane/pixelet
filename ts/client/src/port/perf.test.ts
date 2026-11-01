@@ -7,7 +7,7 @@ import { FRAME } from "@/abi/perf.spec.ts";
 import { GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { frame_at } from "./perf.ts";
 
-test("frame_at - reads each lane at its word", () => {
+test("frame_at - reads each column at its word", () => {
   const words = Float64Array.from({ length: FRAME.WORDS }, (_, k) => k);
   const f = frame_at(words, 0);
   assert.deepStrictEqual(f.budget_ms, FRAME.budget_ms);

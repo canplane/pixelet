@@ -154,12 +154,12 @@ const fn depth(zoom: Zoom) -> u32 {
     zoom + 1
 }
 
-/// The tree's lanes as pxl-spec-core `overwrite` reads them, the CPU as a GPU.
-pub struct Lanes<'a>(&'a Tree);
+/// The tree's columns as pxl-spec-core `overwrite` reads them, the CPU as a GPU.
+pub struct Columns<'a>(&'a Tree);
 
-impl overwrite::Lanes for Lanes<'_> {
-    fn heap(&self, slot: u32) -> u32 {
-        self.0.heap()[slot as usize]
+impl overwrite::Columns for Columns<'_> {
+    fn first_child(&self, slot: u32) -> u32 {
+        self.0.first_child()[slot as usize]
     }
     fn data(&self, slot: u32) -> u32 {
         self.0.data()[slot as usize]
@@ -212,21 +212,21 @@ pub struct Store {
     tree: Tree,
     ext: Pools,
     /// Bumped by every write that changes the tree, so a reader holding a
-    /// copy of its lanes, the GPU's, knows to take them again.
+    /// copy of its columns, the GPU's, knows to take them again.
     revision: u32,
-    /// The families the tree wrote between the revision the lanes were last
-    /// handed at (`since`) and that hand (`gpu_lanes`), each once.
+    /// The child groups the tree wrote between the revision the columns were last
+    /// handed at (`since`) and that hand (`gpu_columns`), each once.
     handed: Vec<u32>,
     since: u32,
 }
 
-/// The tree's lanes as the GPU takes them (`Store::gpu_lanes`): both as
+/// The tree's columns as the GPU takes them (`Store::gpu_columns`): both as
 /// they live, the room either has before it grows, the store's revision,
-/// and the families written since the lanes were last handed, at `since`, by
-/// their first slots: a copy of them at `since` with those families taken
-/// again is the lanes at `revision`.
-pub struct GpuLanes<'a> {
-    pub heap: &'a [u32],
+/// and the child groups written since the columns were last handed, at `since`, by
+/// their first slots: a copy of them at `since` with those child groups taken
+/// again is the columns at `revision`.
+pub struct GpuColumns<'a> {
+    pub first_child: &'a [u32],
     pub data: &'a [u32],
     pub room: usize,
     pub revision: u32,
@@ -253,9 +253,9 @@ pub(super) type Tree = SparseTree<u32, 3>;
 type Enter<'a> = dyn FnMut(Zoom, [i32; 3], &Aabb, Option<Leaf>) -> bool + 'a;
 
 impl Store {
-    /// The tree's lanes, read where they live.
-    pub fn lanes(&self) -> Lanes<'_> {
-        Lanes(&self.tree)
+    /// The tree's columns, read where they live.
+    pub fn columns(&self) -> Columns<'_> {
+        Columns(&self.tree)
     }
 
     /// What is placed as of now, which every write moves.
@@ -263,15 +263,15 @@ impl Store {
         self.revision
     }
 
-    /// The tree's lanes as the GPU takes them (`GpuLanes`): the families
+    /// The tree's columns as the GPU takes them (`GpuColumns`): the child groups
     /// written since the last hand, each once, and the revision it was at.
-    pub fn gpu_lanes(&mut self) -> GpuLanes<'_> {
+    pub fn gpu_columns(&mut self) -> GpuColumns<'_> {
         self.tree.take_written(&mut self.handed);
         self.handed.sort_unstable();
         self.handed.dedup();
         let since = core::mem::replace(&mut self.since, self.revision);
-        GpuLanes {
-            heap: self.tree.heap(),
+        GpuColumns {
+            first_child: self.tree.first_child(),
             data: self.tree.data(),
             room: self.tree.room(),
             revision: self.revision,
@@ -312,7 +312,7 @@ impl Store {
         }
     }
 
-    /// Every leaf, as the lanes name it.
+    /// Every leaf, as the columns name it.
     pub fn each(&self, visit: &mut dyn FnMut(&Entry)) {
         self.descend(f64::NAN, &mut |zoom, at, _, leaf| {
             if let Some(v) = leaf {
@@ -442,8 +442,8 @@ impl Store {
             .word();
             let set = self
                 .tree
-                .set(depth(zoom), path(zoom, at), val, |tree, family, d| {
-                    fold(tree, family, d - 1)
+                .set(depth(zoom), path(zoom, at), val, |tree, child_group, d| {
+                    fold(tree, child_group, d - 1)
                 });
             if set || handle != NONE {
                 changed.push(cube(zoom, at));
@@ -537,7 +537,7 @@ impl Query for Store {
     fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> Held {
         match D {
             3 => overwrite::cursor(
-                &self.lanes(),
+                &self.columns(),
                 overwrite::PLACED,
                 zoom,
                 [at[0], at[1], at[2]],
@@ -548,7 +548,7 @@ impl Query for Store {
 
     fn child<const D: usize>(&self, parent: &Held, (zoom, at): Node<D>, _: Zoom) -> Held {
         match D {
-            3 => overwrite::child(&self.lanes(), *parent, zoom, [at[0], at[1], at[2]]),
+            3 => overwrite::child(&self.columns(), *parent, zoom, [at[0], at[1], at[2]]),
             _ => *parent,
         }
     }

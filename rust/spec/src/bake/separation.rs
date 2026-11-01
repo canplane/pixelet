@@ -79,7 +79,7 @@ pub const fn holds(lines: usize, points: usize) -> bool {
     lines <= MAX_LINES && points <= MAX_POINTS
 }
 
-/// A tile's lines, structure-of-arrays: a lane a line, then a lane a point.
+/// A tile's lines, structure-of-arrays: a column a line, then a column a point.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Separation {
     pub starts: Cow<'static, [u32]>, // line d is points starts[d]..starts[d + 1]
@@ -91,7 +91,7 @@ pub struct Separation {
     pub clear: Cow<'static, [u8]>,   // a bore's clear space over its surface, in leaf cells: solved
     /// The coarsest zoom each point is held at (pxl-spec-core `way::coarsest`):
     /// what a fold keeps of a line, the bake's alone — no client path folds,
-    /// so a client's record holds none (`Lanes::into_room`).
+    /// so a client's record holds none (`Columns::into_room`).
     pub coarsest: Cow<'static, [u8]>,
 }
 
@@ -347,7 +347,7 @@ pub fn runs_within(points: &[[f64; 2]], reach: f64) -> Vec<[usize; 2]> {
 /// segments rejoin where a copy held one after another and the second starts
 /// where the first ends, surface and all, so a line runs on through its
 /// copies' cuts; then of each line only the points held at `zoom`
-/// (from its `way::coarsest` on) stay, each by its own lane, so what a parent holds is a
+/// (from its `way::coarsest` on) stay, each by its own column, so what a parent holds is a
 /// function of the world's lines alone, not of which tiles held them. A line
 /// holds a point where it crosses each edge of the tiles of the zoom under
 /// one it is held at (geo-bake terrain/pipeline/separation.rs), so a
@@ -578,7 +578,7 @@ pub fn write_branch<'a>(separation: &'a Separation, b: &mut BranchViewImpl<'a>) 
     }));
 }
 
-pub struct Lanes<'a> {
+pub struct Columns<'a> {
     starts: &'a [u32],
     points: &'a [[i16; 2]],
     tops: &'a [i16],
@@ -589,13 +589,13 @@ pub struct Lanes<'a> {
     coarsest: &'a [u8],
 }
 
-/// Refused unless the lanes are one tile's separation, consistently sized and within a record's room.
-pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
+/// Refused unless the columns are one tile's separation, consistently sized and within a record's room.
+pub fn read_branch(d: BranchCursor<'_>) -> Result<Columns<'_>, MarshalError> {
     let starts = d.at(0)?.get_array::<u32>()?;
     let (points, []) = d.at(1)?.get_array::<i16>()?.as_chunks::<2>() else {
         return Err(malformed());
     };
-    let lanes = Lanes {
+    let columns = Columns {
         starts,
         points,
         tops: d.at(2)?.get_array::<i16>()?,
@@ -605,22 +605,25 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
         clear: d.at(6)?.get_array::<u8>()?,
         coarsest: d.at(7)?.get_array::<u8>()?,
     };
-    let n = lanes.width.len();
-    let shaped = lanes.kind.len() == n
-        && lanes.form.len() == n
-        && lanes.clear.len() == n
+    let n = columns.width.len();
+    let shaped = columns.kind.len() == n
+        && columns.form.len() == n
+        && columns.clear.len() == n
         && starts.len() == n + 1
-        && lanes.tops.len() == points.len()
-        && lanes.coarsest.len() == points.len()
+        && columns.tops.len() == points.len()
+        && columns.coarsest.len() == points.len()
         && holds(n, points.len())
         && starts.first() == Some(&0)
         && starts.last() == Some(&(points.len() as u32))
         && starts.windows(2).all(|w| w[0] <= w[1])
-        && lanes.form.iter().all(|&f| usize::from(f) < Form::ALL.len());
-    shaped.then_some(lanes).ok_or_else(malformed)
+        && columns
+            .form
+            .iter()
+            .all(|&f| usize::from(f) < Form::ALL.len());
+    shaped.then_some(columns).ok_or_else(malformed)
 }
 
-impl Lanes<'_> {
+impl Columns<'_> {
     pub fn to_separation(&self) -> Separation {
         Separation {
             starts: self.starts.to_vec().into(),
@@ -634,7 +637,7 @@ impl Lanes<'_> {
         }
     }
 
-    /// Into a client's record: every lane but `coarsest`, which only a fold
+    /// Into a client's record: every column but `coarsest`, which only a fold
     /// reads; a client reads a brick's lines whole (bake/tile/terrain.rs
     /// `brick_lines`).
     pub fn into_room(&self, room: Room) -> Separation {
@@ -656,7 +659,7 @@ impl Lanes<'_> {
     }
 }
 
-/// A record's room for lines, each lane `MAX_LINES` or `MAX_POINTS` long.
+/// A record's room for lines, each column `MAX_LINES` or `MAX_POINTS` long.
 pub struct Room {
     pub starts: &'static mut [u32],
     pub points: &'static mut [[i16; 2]],

@@ -13,23 +13,23 @@
 //! other.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
-use crate::domain::approach::damp_alpha;
 use crate::domain::param;
 use crate::domain::query::changed::Asked;
 use crate::domain::query::World;
 use crate::domain::query::{cell_zoom_at, over, under, walks};
-use crate::domain::scene::actor::{Actor, Stance};
+use crate::domain::scene::actor::{Actor, Transform};
 use crate::domain::scene::character::param::{
     CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
 };
 use crate::domain::scene::character::path::{heading_to, SettleTracker, WalkPlan};
-use crate::domain::scene::character::variant::{character_variant, CharacterVariant, Group};
+use crate::domain::scene::character::{Character, Group};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::scene::model::asset::{model_of, ModelHandle};
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::model::registry::Models;
+use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{load_image, load_of};
@@ -71,10 +71,10 @@ struct Held {
 /// A person or a pet: a figure the walk moves, holding its actor's
 /// instance once its model and skin have landed.
 struct Figure {
-    variant: CharacterVariant,
+    character: Character,
     held: Option<Held>,
     /// Where its actor stands, once held and placed.
-    stance: Option<Stance>,
+    transform: Option<Transform>,
     at: [f64; 2],
     heading: f64,
     actor_clip: Option<u32>,
@@ -92,11 +92,11 @@ struct Figure {
 }
 
 impl Figure {
-    fn new(variant: &CharacterVariant, target: [f64; 2]) -> Figure {
+    fn new(character: &Character, target: [f64; 2]) -> Figure {
         Figure {
-            variant: *variant,
+            character: *character,
             held: None,
-            stance: None,
+            transform: None,
             at: [0.0; 2],
             heading: 0.0,
             actor_clip: None,
@@ -114,13 +114,13 @@ impl Figure {
     /// Placed at the target on creation; walking from the frame's origin would
     /// take far too long.
     fn acquire(&mut self, target: [f64; 2]) {
-        let variant = self.variant;
+        let character = self.character;
         if self.held.is_some() {
             return;
         }
         let (Some(model), Some(_)) = (
-            model_of(variant.model, Some(variant.height_u)),
-            load_of(variant.skin).and_then(load_image),
+            model_of(character.model, Some(character.height_u)),
+            load_of(character.skin).and_then(load_image),
         ) else {
             return;
         };
@@ -134,7 +134,7 @@ impl Figure {
     }
 
     fn release(&mut self) {
-        self.stance = None;
+        self.transform = None;
         if let Some(held) = self.held.take() {
             if section::map().is_some() {
                 held.actor.free(draw_list());
@@ -146,7 +146,7 @@ impl Figure {
     /// rather than walked to once it settles; a steered one faces its way.
     fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, p: &CompanionProps) {
         let (follows, steered) = (p.following || p.steered, p.steered);
-        let variant = self.variant;
+        let character = self.character;
         self.acquire(target);
         if self.held.is_none() {
             return;
@@ -162,7 +162,7 @@ impl Figure {
         if follows {
             // From where it stands, as the camera eases from where it is: a key moves
             // the target a step ahead at once, and a jump there started it off apart.
-            let a = damp_alpha(FOLLOW_LERP_K, ctx.delta);
+            let a = smoothing_factor(FOLLOW_LERP_K, ctx.delta);
             at = std::array::from_fn(|k| self.at[k] + (target[k] - self.at[k]) * a);
             if !steered {
                 self.heading = back_to_camera(p.azimuth);
@@ -256,13 +256,13 @@ impl Figure {
         self.at = at;
 
         let Some(held) = &mut self.held else { return };
-        self.stance = Some(Stance {
+        self.transform = Some(Transform {
             at: [at[0], at[1], drawn_floor(&mut self.drawn, at, *stands, p)],
             rot_z: self.heading as f32,
             scale: held.model.scale,
         });
         let clip = if is_walking {
-            variant.move_clip
+            character.move_clip
         } else {
             IDLE_CLIP
         };
@@ -282,8 +282,8 @@ impl Figure {
     }
 
     /// Its actor and where it stands, once both are.
-    fn drawn(&mut self) -> Option<(&mut Actor, Stance)> {
-        Some((&mut self.held.as_mut()?.actor, self.stance?))
+    fn drawn(&mut self) -> Option<(&mut Actor, Transform)> {
+        Some((&mut self.held.as_mut()?.actor, self.transform?))
     }
 }
 
@@ -343,18 +343,18 @@ pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Opti
 
 fn figure_for<'a>(
     slot: &'a mut Option<Figure>,
-    variant: &CharacterVariant,
+    character: &Character,
     target: [f64; 2],
 ) -> &'a mut Figure {
     if slot
         .as_ref()
-        .is_some_and(|w| w.variant.number != variant.number)
+        .is_some_and(|w| w.character.number != character.number)
     {
         if let Some(mut old) = slot.take() {
             old.release();
         }
     }
-    slot.get_or_insert_with(|| Figure::new(variant, target))
+    slot.get_or_insert_with(|| Figure::new(character, target))
 }
 
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
@@ -376,8 +376,8 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     };
     let settings = settings_store();
     let (Some(person_variant), Some(pet_variant)) = (
-        character_variant(Group::person, settings.person),
-        character_variant(Group::pet, settings.pet),
+        Character::of(Group::person, settings.person),
+        Character::of(Group::pet, settings.pet),
     ) else {
         return;
     };
@@ -420,12 +420,12 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
     let c = companion();
     let mut moved = false;
-    for (actor, stance) in [&mut c.person, &mut c.pet]
+    for (actor, transform) in [&mut c.person, &mut c.pet]
         .into_iter()
         .flatten()
         .filter_map(Figure::drawn)
     {
-        moved |= actor.tick(draw, models, frame, &stance);
+        moved |= actor.tick(draw, models, frame, &transform);
     }
     moved
 }
@@ -433,27 +433,27 @@ pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) ->
 /// Each figure's actor into the frame's list, where it stands.
 pub fn companion_draw(draw: &mut DrawList, models: &Models, eye: V3) {
     let c = companion();
-    for (actor, stance) in [&mut c.person, &mut c.pet]
+    for (actor, transform) in [&mut c.person, &mut c.pet]
         .into_iter()
         .flatten()
         .filter_map(Figure::drawn)
     {
-        actor.draw(draw, models, &stance, eye);
+        actor.draw(draw, models, &transform, eye);
     }
 }
 
 /// Where the person's line hangs, over its head, while the person shows it,
-/// seen from `eye`: while the person is drawn (its stance is set
+/// seen from `eye`: while the person is drawn (its transform is set
 /// only while it holds its actor), and where the camera grid's cell at its
 /// feet is one a marker shows at (`marker_shows`), so a line reads where
 /// the markers about it do.
 pub fn line_hangs(eye: V3) -> Option<Q3> {
     let person = companion().person.as_ref()?;
-    let feet = person.stance?.at;
+    let feet = person.transform?.at;
     let over = [
         feet[0],
         feet[1],
-        feet[2] + person.variant.height_u + HEAD_CLEARANCE_U,
+        feet[2] + person.character.height_u + HEAD_CLEARANCE_U,
     ];
     marker_shows(cell_zoom_at(eye, feet)).then(|| world_to_canonical(&over))
 }
@@ -465,7 +465,7 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, (u32, &'static [u8]))> {
     [&c.person, &c.pet].into_iter().flatten().filter_map(|w| {
         Some((
             w.held.as_ref()?.model.model,
-            load_of(w.variant.skin).and_then(load_image)?,
+            load_of(w.character.skin).and_then(load_image)?,
         ))
     })
 }

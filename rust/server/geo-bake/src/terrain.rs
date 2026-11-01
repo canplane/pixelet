@@ -19,9 +19,9 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
-use pxl_spec_core::way::tree::{BRICK_FAMILIES, ROOT_NODES};
+use pxl_spec_core::clipmap::BRICK;
+use pxl_spec_core::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
 use pxl_spec_core::way::SPANS;
-use pxl_spec_core::window::BRICK;
 
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
 pub const CELL_U: f64 = units(GROUND.cell());
@@ -80,6 +80,6 @@ pub fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
     match why {
         Unfit::Spans(spans) => format!("its brick ({qx}, {qy}) makes a column of {spans} of the ways' spans, past SPANS ({SPANS})"),
         Unfit::Nodes(nodes) => format!("its brick ({qx}, {qy}) has its ways meet {nodes} of its nodes along z, past ROOT_NODES ({ROOT_NODES})"),
-        Unfit::Families => format!("its brick ({qx}, {qy}) takes more than BRICK_FAMILIES ({BRICK_FAMILIES}) of its ways' tree's families"),
+        Unfit::ChildGroups => format!("its brick ({qx}, {qy}) takes more than BRICK_CHILD_GROUPS ({BRICK_CHILD_GROUPS}) of its ways' tree's child_groups"),
     }
 }

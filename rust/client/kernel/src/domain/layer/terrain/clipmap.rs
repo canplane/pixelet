@@ -1,29 +1,29 @@
-// pxl-kernel/domain/layer/terrain/window.rs
+// pxl-kernel/domain/layer/terrain/clipmap.rs
 
-//! The ground's cells as the kernel holds them: a window a zoom about each
+//! The ground's cells as the kernel holds them: a clipmap level a zoom about each
 //! center a reader declares — the eye, the pivot where walking and editing
 //! happen, a destination being gone to — each as deep as its reader reads
-//! (pxl-spec-core `window`). A brick at a zoom is held once, in a slot,
-//! however many windows want it (`Slot`). It is filled from its tile as it
-//! lands: its four looks and its tile's samples handed to the GPU, which
+//! (pxl-spec-core `clipmap`). A brick at a zoom is held once, in a slot,
+//! however many clipmap levels want it (`Slot`). It is filled from its tile as it
+//! lands: its four palette indices and its tile's samples handed to the GPU, which
 //! draws and lays its cells; they come back into `.fixed.terrain`, and the
-//! brick is present from then on (`on_landed`). Nothing of a tile is kept for
+//! brick is present from then on (`on_resident`). Nothing of a tile is kept for
 //! a brick still to come: one that enters asks its tile again
 //! (`TileCache::again`), which the browser's cache answers.
 
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, handed, GroundId, TerrainTile, ELE_LANE, LOOK_LANE,
+    brick_lines, handed, GroundId, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use pxl_spec_core::area::{Area, Shard};
-use pxl_spec_core::fill;
-use pxl_spec_core::ground::word;
-use pxl_spec_core::window::{
+use pxl_spec_core::clipmap::{
     self, Bricks, Entry, BRICK, BRICK_CELLS, BRICK_SHIFT, ENTRIES, EYE_WINDOWS, FIRST_CELL, HANDED,
     LEVELS, SLOTS, WINDOWS,
 };
+use pxl_spec_core::fill;
+use pxl_spec_core::ground::word;
 use pxl_spec_core::wrap_idx;
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
@@ -41,7 +41,7 @@ use crate::sys::io::room::Refused;
 use crate::sys::io::source::Declared;
 use crate::sys::mem::fixed::lane;
 use pxl_render::gpu::api::DONE;
-use pxl_render::gpu::renderer::{CellsBack, FreshBrick, Landing};
+use pxl_render::gpu::renderer::{CellsBack, FreshBrick, Resident};
 
 /// Who a window is about.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -55,7 +55,7 @@ pub enum Center {
 /// two tiles a side.
 pub const PINNED_TILES: u32 = (WINDOWS - EYE_WINDOWS) * 4;
 const _: () = assert!(
-    window::WINDOW <= TILE_CELLS + 1,
+    clipmap::WINDOW <= TILE_CELLS + 1,
     "a window spans two tiles a side"
 );
 
@@ -63,7 +63,7 @@ const _: () = assert!(
 /// destination's is its line's.
 const fn layout(w: u32) -> (Center, Zoom) {
     match w {
-        w if w < EYE_WINDOWS => (Center::Eye, window::eye_cell(w)),
+        w if w < EYE_WINDOWS => (Center::Eye, clipmap::eye_cell(w)),
         w if w < EYE_WINDOWS + 2 => (Center::Pivot, LEAF_CELL - 1 + (w - EYE_WINDOWS)),
         _ => (Center::Destination, LEAF_CELL),
     }
@@ -80,7 +80,7 @@ struct Window {
 /// (pxl-render gpu/ray/ground.rs `GROUND_BYTES`) and its lane of cells back
 /// in `.fixed.terrain` (`cells`), one a brick at a zoom however many
 /// windows want it. Windows at one zoom want a brick in the same entry
-/// (`window::entry`), so it is held in one of that entry's slots, `WINDOWS`
+/// (`clipmap::entry`), so it is held in one of that entry's slots, `WINDOWS`
 /// of them (`of_entry`); no more bricks want an entry than there are
 /// windows, so a brick wanted always finds one free (`assign_slots`), and
 /// windows that overlap take no slot more than the bricks they want. A
@@ -131,12 +131,12 @@ fn of_entry(s: u32) -> impl Iterator<Item = u32> {
     (0..WINDOWS).map(move |k| k * ENTRIES + s)
 }
 
-struct Windows {
+struct Clipmap {
     windows: [Window; WINDOWS as usize],
     /// Every window's entries, each its brick and its slot's state, then
     /// each window's first brick, a row shaped as an entry's, its brick the
     /// first and present while it is laid out, none while its center is not
-    /// (pxl-spec-core `window::ORIGIN_AT`): the GPU's table as it is
+    /// (pxl-spec-core `clipmap::ORIGIN_AT`): the GPU's table as it is
     /// (`table`).
     entries: [Entry; (SLOTS + WINDOWS) as usize],
     /// The bricks the windows want, each in one slot (`Slot`).
@@ -144,7 +144,8 @@ struct Windows {
     /// The eye's windows' levels over their bricks, folded over the
     /// bricks as they are held here (`fold`), the zero entry, none, before
     /// any is.
-    joined: [[u32; window::JOINED_WORDS as usize]; (EYE_WINDOWS * window::JOINED_ENTRIES) as usize],
+    joined:
+        [[u32; clipmap::JOINED_WORDS as usize]; (EYE_WINDOWS * clipmap::JOINED_ENTRIES) as usize],
     /// The device the entries' bricks were handed to (`device_generation`):
     /// one that went took them all.
     on: u32,
@@ -162,33 +163,33 @@ struct Windows {
     pinned: List<Tile, { PINNED_TILES as usize }>,
     /// The slots this turn hands the fill (`due`).
     due: List<u32, { HANDED as usize }>,
-    /// The heap as it was when it first refused a brick's families the
+    /// The heap as it was when it first refused a brick's child groups the
     /// mirror's room, while one waits on it (`WAITING`).
     heap: Option<Refused>,
 }
 
-static WINDOWS_STATE: Global<Windows> = Global::new();
+static WINDOWS_STATE: Global<Clipmap> = Global::new();
 
-fn windows() -> &'static mut Windows {
+fn clipmap() -> &'static mut Clipmap {
     WINDOWS_STATE.get(fresh)
 }
 
 /// Window `win`'s first brick, none while its center is not.
-fn first_of(w: &Windows, win: u32) -> Option<[i32; 2]> {
+fn first_of(w: &Clipmap, win: u32) -> Option<[i32; 2]> {
     let (first, laid) = w.entries[(SLOTS + win) as usize].held();
     laid.then_some(first)
 }
 
 /// The windows before any center stands: every entry absent.
-fn fresh() -> Windows {
-    Windows {
+fn fresh() -> Clipmap {
+    Clipmap {
         windows: core::array::from_fn(|w| Window {
             cell: layout(w as u32).1,
         }),
         entries: [Entry::absent([i32::MIN; 2]); (SLOTS + WINDOWS) as usize],
         slots: [Slot::FREE; SLOTS as usize],
-        joined: [[0; window::JOINED_WORDS as usize];
-            (EYE_WINDOWS * window::JOINED_ENTRIES) as usize],
+        joined: [[0; clipmap::JOINED_WORDS as usize];
+            (EYE_WINDOWS * clipmap::JOINED_ENTRIES) as usize],
         on: 0,
         ticket: 0,
         read: 0,
@@ -211,11 +212,11 @@ fn cell_at(cell: Zoom, p: [f64; 2]) -> [i32; 2] {
 
 /// The brick window `first` holds in entry `s`.
 fn wanted(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
-    let m = (window::ACROSS - 1) as i32;
+    let m = (clipmap::ACROSS - 1) as i32;
     let at = |o: i32, k: i32| o + ((k - (o & m)) & m);
     let q = [
-        at(first[0], (s % window::ACROSS) as i32),
-        at(first[1], (s / window::ACROSS) as i32),
+        at(first[0], (s % clipmap::ACROSS) as i32),
+        at(first[1], (s / clipmap::ACROSS) as i32),
     ];
     [wrap_idx(cell - BRICK_SHIFT, q[0]), q[1]]
 }
@@ -232,10 +233,10 @@ pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
 }
 
 /// Every brick's planes on the CPU, in `.fixed.terrain` (fixed.rs): its
-/// cells as they come back; a test's own. Its ways' trees' families are the
+/// cells as they come back; a test's own. Its ways' trees' child groups are the
 /// heap's (mirror.rs).
 pub(crate) struct Planes {
-    /// Each brick's words as they came back, whole (`window::BACK_WORDS`),
+    /// Each brick's words as they came back, whole (`clipmap::BACK_WORDS`),
     /// `CELLS_LANE_BYTES` apart.
     pub cells: &'static mut [u32],
 }
@@ -255,28 +256,28 @@ fn planes() -> &'static mut Planes {
 }
 
 /// The eye's windows' levels over their bricks folded again, a level at a
-/// time, as the GPU folds its own (pxl-spec-core `window::fold`; pxl-shader
+/// time, as the GPU folds its own (pxl-spec-core `clipmap::fold`; pxl-shader
 /// `joined_cs`), over the bricks as they are held here. The writers of a
 /// brick a window wants or its presence are `assign_slots`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
-/// (`on_landed`), folded once after all of them (`refold`): no read of a bound
+/// (`on_resident`), folded once after all of them (`refold`): no read of a bound
 /// (`Windowed`) comes between a write and its fold, so none finds one of
 /// other bricks than its read of the cells does. Read through the windows
 /// it is handed (`Holding`), which its writer holds while it runs.
-fn fold(w: &mut Windows) {
-    for l in 1..=window::JOINED_LEVELS {
-        let blocks = (window::ACROSS >> l) * (window::ACROSS >> l);
+fn fold(w: &mut Clipmap) {
+    for l in 1..=clipmap::JOINED_LEVELS {
+        let blocks = (clipmap::ACROSS >> l) * (clipmap::ACROSS >> l);
         for win in 0..EYE_WINDOWS {
             for b in 0..blocks {
-                let e = window::fold(&Holding(w), FIRST_CELL + win, l, b);
-                let at = win * window::JOINED_ENTRIES + window::joined_idx(l, [0, 0]) + b;
+                let e = clipmap::fold(&Holding(w), FIRST_CELL + win, l, b);
+                let at = win * clipmap::JOINED_ENTRIES + clipmap::joined_idx(l, [0, 0]) + b;
                 w.joined[at as usize] = e;
             }
         }
     }
 }
 
-/// The GPU's ways' pool as the CPU mirrors it, the landed bricks' families
+/// The GPU's ways' pool as the CPU mirrors it, the landed bricks' child groups
 /// at the GPU's entries, which a cursor reads as the cast reads the GPU's
 /// (pxl-spec-core `way::tree`).
 pub fn pool() -> &'static Mirror {
@@ -287,11 +288,11 @@ pub fn pool() -> &'static Mirror {
 /// first, which pxl-spec-core reads a brick's words by (`fill::column_of`).
 fn cells(b: u32) -> &'static [u32] {
     let at = (b * CELLS_LANE_BYTES / 4) as usize;
-    &planes().cells[at..at + window::BACK_WORDS as usize]
+    &planes().cells[at..at + clipmap::BACK_WORDS as usize]
 }
 
 const _: () = assert!(
-    window::COLUMNS_AT == 0 && window::BACK_WORDS == window::BRICK_WORDS,
+    clipmap::COLUMNS_AT == 0 && clipmap::BACK_WORDS == clipmap::BRICK_WORDS,
     "a brick comes back whole"
 );
 
@@ -305,7 +306,7 @@ const _: () = assert!(
 /// stage. True where the tiles the windows apart from the eye's want
 /// changed.
 pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
-    let w = windows();
+    let w = clipmap();
     let terrain = TerrainTile::tile_cache();
     let lost = core::mem::replace(&mut w.on, on) != on;
     // The device that went took its pool: no brick holds a tree of it.
@@ -332,7 +333,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             }
             _ => laid,
         };
-        let first = p.map(|p| window::origin(cell, cell_at(cell, p)));
+        let first = p.map(|p| clipmap::origin(cell, cell_at(cell, p)));
         let was = (
             core::mem::replace(&mut w.windows[win as usize], Window { cell }).cell,
             first_of(w, win),
@@ -379,7 +380,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         let held = w.slots[b as usize];
         if held.is_absent() {
             let t = tile_of(held.cell, held.brick).0;
-            if room > 0 && !tile::held_for(t) && !terrain.is_again_held(t) {
+            if room > 0 && !tile::pending_for(t) && !terrain.is_again_held(t) {
                 terrain.again(t);
                 room -= u32::from(terrain.is_again_held(t));
             }
@@ -410,7 +411,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
 /// Each brick waiting on the heap absent again, to be handed again, where
 /// the heap gave a page back since it refused one the mirror's room
 /// (`WAITING`): true where it did.
-fn wake(w: &mut Windows) -> bool {
+fn wake(w: &mut Clipmap) -> bool {
     if !w.heap.is_some_and(|h| h.over()) {
         return false;
     }
@@ -423,17 +424,17 @@ fn wake(w: &mut Windows) -> bool {
 
 /// Each brick a laid window wants held in one slot: the device that went
 /// took every slot's cells; a slot no window wants any more is given up,
-/// a fill on its way to it laying nothing (`on_landed`); and a brick wanted
+/// a fill on its way to it laying nothing (`on_resident`); and a brick wanted
 /// that no slot holds takes a free one of its entry's, its window's own
 /// first, absent. Then every entry's row shows its slot (`show`), and the
 /// windows are folded over them (`fold`).
-fn assign_slots(w: &mut Windows, lost: bool) {
+fn assign_slots(w: &mut Clipmap, lost: bool) {
     for b in 0..SLOTS as usize {
         let held = w.slots[b];
         if held.is_free() {
             continue;
         }
-        let s = window::entry(held.brick);
+        let s = clipmap::entry(held.brick);
         let wants = |win: u32| {
             w.windows[win as usize].cell == held.cell
                 && first_of(w, win).is_some()
@@ -477,14 +478,14 @@ fn assign_slots(w: &mut Windows, lost: bool) {
 }
 
 /// The slot holding brick `q` at `cell`, present or not.
-fn slot_of(w: &Windows, cell: Zoom, q: [i32; 2]) -> Option<u32> {
-    of_entry(window::entry(q)).find(|&b| w.slots[b as usize].holds(cell, q))
+fn slot_of(w: &Clipmap, cell: Zoom, q: [i32; 2]) -> Option<u32> {
+    of_entry(clipmap::entry(q)).find(|&b| w.slots[b as usize].holds(cell, q))
 }
 
 /// Entry `i`'s row of the table: its brick, and its slot's state, present
 /// there (`Entry::present`, the slot plus one), on its way, refused or
 /// absent; absent while its window is not laid out.
-fn show(w: &mut Windows, i: u32) {
+fn show(w: &mut Clipmap, i: u32) {
     let (win, brick) = (i / ENTRIES, w.entries[i as usize].brick);
     let held = first_of(w, win).and_then(|_| slot_of(w, w.windows[win as usize].cell, brick));
     w.entries[i as usize] = match held {
@@ -503,38 +504,38 @@ fn show(w: &mut Windows, i: u32) {
 
 /// A slot's ticket while its brick's ways' tree is refused, the pool or
 /// the scratch at its cap (pxl-render gpu/ray/ground.rs `Short`), the brick
-/// past its own most or its families past the mirror's cap (`on_landed`), none
+/// past its own most or its child groups past the mirror's cap (`on_resident`), none
 /// of which asking again changes: never a fill's (`fill`), and not absent,
 /// so the brick is not handed again every turn, nor its tile asked or kept
 /// for it, while a window wants it (`assign_slots`). A reader reads the coarser
 /// window's, as for any brick absent.
 const REFUSED: u32 = u32::MAX;
-/// A slot's ticket while the heap refused its brick's families the
+/// A slot's ticket while the heap refused its brick's child groups the
 /// mirror's room (`mirror::Unlaid::Heap`): not absent, as `REFUSED`, until
-/// the heap gives a page back (`Windows::heap`), when it is absent again
+/// the heap gives a page back (`Clipmap::heap`), when it is absent again
 /// and handed again (`step`).
 const WAITING: u32 = u32::MAX - 1;
 const _: () = assert!(WAITING > DONE - 1, "no fill's ticket waits");
 
 /// Slot `b`'s cells back from its fill `ticket` (pxl-render
 /// `read_back`), and how its ways' tree landed, where the slot still waits
-/// on that fill: built, its families laid into the pool's mirror at their
+/// on that fill: built, its child groups laid into the pool's mirror at their
 /// entries, it is present and what is read over its tile moved; to be filled
-/// again (`Landing::Again`), it is absent, handed again; refused, or its
-/// families past the mirror's cap, it is absent and `REFUSED` while a window
-/// wants it; its families refused the mirror's room by the heap, it is absent
+/// again (`Resident::Again`), it is absent, handed again; refused, or its
+/// child groups past the mirror's cap, it is absent and `REFUSED` while a window
+/// wants it; its child groups refused the mirror's room by the heap, it is absent
 /// and `WAITING` on the heap. A fill no slot waits on lays
-/// nothing: its families may be another's by now. Every window's entry
+/// nothing: its child groups may be another's by now. Every window's entry
 /// holding the brick shows it (`show`). The windows are folded over it
 /// once the read-back's landings are all in (`refold`).
-pub fn on_landed(b: u32, ticket: u32, landing: Landing) {
-    let w = windows();
+pub fn on_resident(b: u32, ticket: u32, resident: Resident) {
+    let w = clipmap();
     let held = &mut w.slots[b as usize];
     if held.ticket != ticket {
         return;
     }
-    held.ticket = match landing {
-        Landing::Built(records) => match mirror().lay(records) {
+    held.ticket = match resident {
+        Resident::Built(records) => match mirror().lay(records) {
             Ok(()) => {
                 held.present = true;
                 TerrainTile::tile_cache().moved_at(tile_of(held.cell, held.brick).0);
@@ -546,8 +547,8 @@ pub fn on_landed(b: u32, ticket: u32, landing: Landing) {
             }
             Err(Unlaid::Cap) => REFUSED,
         },
-        Landing::Again => 0,
-        Landing::Refused => REFUSED,
+        Resident::Again => 0,
+        Resident::Refused => REFUSED,
     };
     // Absent again: what is due moves.
     w.filled |= !held.present;
@@ -557,24 +558,24 @@ pub fn on_landed(b: u32, ticket: u32, landing: Landing) {
 }
 
 /// The windows folded again over the bricks a frame's read-back landed
-/// (`on_landed`), once after all of them: the stage's, as soon as the frame it
+/// (`on_resident`), once after all of them: the stage's, as soon as the frame it
 /// renders returns (domain/scene/stage.rs `stage_render`), between whose
 /// landings nothing reads a bound here, the renderer reading only the GPU's.
 pub fn refold() {
-    fold(windows());
+    fold(clipmap());
 }
 
 /// The slots this turn hands, nearest first, as many as a frame's fill
 /// takes: the eye's windows coarsest first, since a reader of a brick
-/// absent reads the coarser window's (pxl-spec-core `window::step`), then the
+/// absent reads the coarser window's (pxl-spec-core `clipmap::step`), then the
 /// pivot's and a destination's; in a window by how far its brick lies from
 /// the center. A brick another window listed first is not listed again.
 /// Only a brick whose tile can hand it now: one waiting on its tile does
 /// not hold a place another could take.
-fn due(w: &mut Windows) {
+fn due(w: &mut Clipmap) {
     let terrain = TerrainTile::tile_cache();
     let handable =
-        |t: Tile| tile::held_for(t) || terrain.get(t).is_some() && terrain.slot(t).is_none();
+        |t: Tile| tile::pending_for(t) || terrain.get(t).is_some() && terrain.slot(t).is_none();
     w.due.clear();
     for win in 0..WINDOWS {
         let (cell, Some(first)) = (w.windows[win as usize].cell, first_of(w, win)) else {
@@ -604,10 +605,10 @@ fn due(w: &mut Windows) {
 }
 
 /// The tiles of the bricks this turn hands (`due`) held with no frame,
-/// each once: void tiles, whose bricks are filled off their looks alone
-/// (`Handed::Void`).
+/// each once: void tiles, whose bricks are filled off their palette indices alone
+/// (`TileContent::Void`).
 pub fn voids() -> List<Tile, { HANDED as usize }> {
-    let (w, terrain) = (windows(), TerrainTile::tile_cache());
+    let (w, terrain) = (clipmap(), TerrainTile::tile_cache());
     let mut voids = List::new();
     for &b in w.due.iter() {
         let held = w.slots[b as usize];
@@ -622,10 +623,10 @@ pub fn voids() -> List<Tile, { HANDED as usize }> {
 /// How far brick `q` at `cell` lies from the center of the window whose
 /// first brick is `first`, squared, in cells, X the short way round: the
 /// center as the window places it, the middle of the brick's worth of
-/// cells its first holds it over (`window::origin`).
+/// cells its first holds it over (`clipmap::origin`).
 fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
     let mid = |v: i32| i64::from(v) * i64::from(BRICK) + i64::from(BRICK / 2);
-    let center = |v: i32| mid(v) + i64::from(window::RADIUS);
+    let center = |v: i32| mid(v) + i64::from(clipmap::RADIUS);
     let round = 1i64 << cell;
     let dx = (mid(q[0]) - center(first[0])).rem_euclid(round);
     let dx = dx.min(round - dx);
@@ -637,7 +638,7 @@ fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
 /// demand need not name: held hard, as a destination's line is
 /// (pxl-kernel domain/view/demand.rs `observe`).
 pub fn pinned() -> &'static [Tile] {
-    &windows().pinned
+    &clipmap().pinned
 }
 
 /// The eye's window at `cell`'s entries as it holds them, each brick
@@ -645,7 +646,7 @@ pub fn pinned() -> &'static [Tile] {
 /// reader's (domain/scene/gizmo/coverage_gizmo.rs): a copy, moving nothing.
 pub fn eye_entries(cell: Zoom) -> Option<[Entry; ENTRIES as usize]> {
     let (w, win) = (
-        windows(),
+        clipmap(),
         cell.checked_sub(FIRST_CELL).filter(|&w| w < EYE_WINDOWS)?,
     );
     first_of(w, win)?;
@@ -656,9 +657,9 @@ pub fn eye_entries(cell: Zoom) -> Option<[Entry; ENTRIES as usize]> {
 
 /// The windows' entries and their first bricks, as the GPU's cast reads
 /// them (pxl-shader `World::present`, `World::origin`): a row an entry
-/// (pxl-spec-core `window::Entry`), then a row a window (`window::ORIGIN_AT`).
+/// (pxl-spec-core `clipmap::Entry`), then a row a window (`clipmap::ORIGIN_AT`).
 pub fn table() -> &'static [i32] {
-    let rows = &windows().entries[..];
+    let rows = &clipmap().entries[..];
     // SAFETY: an entry is four plain words in order (`Entry`), so the entries are
     // their rows' words.
     unsafe { core::slice::from_raw_parts(rows.as_ptr().cast::<i32>(), 4 * rows.len()) }
@@ -666,13 +667,13 @@ pub fn table() -> &'static [i32] {
 
 /// What a tile hands its bricks: its packet and the tile as it is held, its
 /// lines; or a void tile's own
-/// looks over samples all zero.
-pub enum Handed<'a> {
+/// palette indices over samples all zero.
+pub enum TileContent<'a> {
     Packet(&'a [u8], &'a TerrainTile),
     Void,
 }
 
-/// A brick's four looks a cell, cut from its tile's, the tile's own
+/// A brick's four palette indices a cell, cut from its tile's, the tile's own
 /// expanded where it holds one a cell, and its lines and the room they are
 /// laid in: lanes of `.fixed.terrain` (fixed.rs `FILL_LANE_BYTES`).
 struct Fill {
@@ -685,10 +686,10 @@ struct Fill {
 static FILL: Global<Fill> = Global::new();
 
 /// A void tile's samples.
-static ZEROS: [i16; ELE_LANE] = [0; ELE_LANE];
+static ZEROS: [i16; ELE_COLUMN] = [0; ELE_COLUMN];
 
 /// Whether slot `b` holds a brick of `tile` a window wants, absent.
-fn slot_wants(w: &Windows, tile: Tile, b: u32) -> bool {
+fn slot_wants(w: &Clipmap, tile: Tile, b: u32) -> bool {
     let held = w.slots[b as usize];
     held.is_absent()
         && held.cell == GROUND.cell_zoom(tile.zoom)
@@ -698,20 +699,24 @@ fn slot_wants(w: &Windows, tile: Tile, b: u32) -> bool {
 /// Whether a window wants one of `tile`'s bricks, absent: its packet is
 /// kept for it while one does.
 pub fn is_tile_wanted(tile: Tile) -> bool {
-    let w = windows();
+    let w = clipmap();
     (0..SLOTS).any(|b| slot_wants(w, tile, b))
 }
 
 /// Each brick the turn hands (`due`) in `tile`, filled from `from` while
-/// `write` takes them: its own looks here, its four looks and the tile's
+/// `write` takes them: its own palette indices here, its four palette indices and the tile's
 /// samples to the GPU. Taken where no window wants another of its bricks;
 /// kept where one still does, for a later turn; full where the stream ran
 /// out first.
-pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> bool) -> Offered {
+pub fn fill(
+    tile: Tile,
+    from: TileContent,
+    write: &mut dyn FnMut(FreshBrick<'_>) -> bool,
+) -> Offered {
     let cell = GROUND.cell_zoom(tile.zoom);
-    let w = windows();
-    let wants = |w: &Windows, b: u32| slot_wants(w, tile, b);
-    let rest = |w: &Windows| match (0..SLOTS).any(|i| wants(w, i)) {
+    let w = clipmap();
+    let wants = |w: &Clipmap, b: u32| slot_wants(w, tile, b);
+    let rest = |w: &Clipmap| match (0..SLOTS).any(|i| wants(w, i)) {
         true => Offered::Uploads,
         false => Offered::Taken,
     };
@@ -723,28 +728,28 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> b
         // SAFETY: the fill's lanes are its alone, plain numbers, zeroed at boot.
         unsafe {
             Fill {
-                room: lane(r, fill_off(0), LOOK_LANE),
+                room: lane(r, fill_off(0), PALETTE_COLUMN),
                 cut: lane(r, fill_off(1), 4 * BRICK_CELLS as usize),
-                lines: lane(r, fill_off(2), window::LINES_WORDS as usize),
-                scratch: lane(r, fill_off(3), window::WAYS_BRICK_SEGMENTS as usize),
+                lines: lane(r, fill_off(2), clipmap::LINES_WORDS as usize),
+                scratch: lane(r, fill_off(3), clipmap::WAYS_BRICK_SEGMENTS as usize),
             }
         }
     });
     let (room, cut, lines, scratch) = (&mut *f.room, &mut *f.cut, &mut *f.lines, &mut *f.scratch);
     let void = TerrainTile::void();
     let held: &TerrainTile = match from {
-        Handed::Packet(_, held) => held,
-        Handed::Void => &void,
+        TileContent::Packet(_, held) => held,
+        TileContent::Void => &void,
     };
     let (lane, ele): (&[GroundId], &[i16]) = match from {
-        Handed::Packet(pkt, _) => match handed(pkt, room) {
+        TileContent::Packet(pkt, _) => match handed(pkt, room) {
             Ok(h) => h,
             Err(_) => {
                 w.filled = true;
                 return Offered::Taken;
             }
         },
-        Handed::Void => {
+        TileContent::Void => {
             for (q, &l) in room.chunks_mut(4).zip(void.ground.cells.iter()) {
                 q.fill(l);
             }
@@ -758,12 +763,12 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> b
         }
         let key = w.slots[b as usize].brick;
         let place = tile_of(cell, key).1;
-        // The brick's cells out of the tile's, four looks a cell, each at
-        // its index in the brick (`window::idx_of`).
+        // The brick's cells out of the tile's, four palette indices a cell, each at
+        // its index in the brick (`clipmap::idx_of`).
         let side = GROUND.tile_cells() as usize;
         let (x0, y0) = ((place[0] * BRICK) as usize, (place[1] * BRICK) as usize);
         for i in 0..BRICK_CELLS {
-            let [x, y] = window::of_idx(i);
+            let [x, y] = clipmap::of_idx(i);
             let from = 4 * ((y0 + y as usize) * side + x0 + x as usize);
             cut[4 * i as usize..4 * i as usize + 4].copy_from_slice(&lane[from..from + 4]);
         }
@@ -776,16 +781,16 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> b
             cells: off_of_slice(cells(b)) as u32,
             ticket: w.ticket,
         };
-        let shard = Shard::UNKNOWN.at(&Declared, (window::bricks_zoom(cell), key));
+        let shard = Shard::UNKNOWN.at(&Declared, (clipmap::bricks_zoom(cell), key));
         let taken = write(FreshBrick {
-            fresh: window::fresh(
+            fresh: clipmap::fresh(
                 b,
-                window::place_word(place),
+                clipmap::place_word(place),
                 cell,
                 [key[0] << BRICK_SHIFT, key[1] << BRICK_SHIFT],
                 shard,
             ),
-            looks: cut,
+            palette_indices: cut,
             samples: ele,
             lines: &lines[..written],
             back,
@@ -803,9 +808,9 @@ pub fn fill(tile: Tile, from: Handed, write: &mut dyn FnMut(FreshBrick<'_>) -> b
 }
 
 /// The windows as the CPU holds them, for pxl-spec-core's one reading of a
-/// cell (`window::step`, `window::bound_over`): each brick's columns,
+/// cell (`clipmap::step`, `clipmap::bound_over`): each brick's columns,
 /// levels and ways' tree's root as the GPU drew them, read back (its tree's
-/// families in the pool's mirror, `pool`), the eye's windows' levels over
+/// child groups in the pool's mirror, `pool`), the eye's windows' levels over
 /// them folded here (`fold`); and the service area they end at
 /// (pxl-spec-core `area::Area`).
 #[derive(Clone, Copy)]
@@ -822,7 +827,7 @@ impl Area for Windowed {
 
 /// The windows as a caller holds them, read as `Windowed` reads the
 /// kernel's (`fold`, which runs while its writer holds them).
-struct Holding<'a>(&'a Windows);
+struct Holding<'a>(&'a Clipmap);
 
 impl Bricks for Holding<'_> {
     /// Present as the GPU holds it: its cells back, in the slot holding
@@ -837,15 +842,15 @@ impl Bricks for Holding<'_> {
         self.0.entries[((cell - FIRST_CELL) * ENTRIES + entry) as usize].held()
     }
 
-    /// The CPU reads a cell's own look alone, as laid: its four are it four
+    /// The CPU reads a cell's own palette index alone, as laid: its four are it four
     /// times.
-    fn look(&self, cell: Zoom, b: u32, i: u32) -> u32 {
+    fn palette_word(&self, cell: Zoom, b: u32, i: u32) -> u32 {
         word([self.laid(cell, b, i) & 0xff; 4])
     }
 
     /// As this side folded it over its bricks (`fold`).
-    fn joined(&self, cell: Zoom, e: u32) -> [u32; window::JOINED_WORDS as usize] {
-        self.0.joined[((cell - FIRST_CELL) * window::JOINED_ENTRIES + e) as usize]
+    fn joined(&self, cell: Zoom, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
+        self.0.joined[((cell - FIRST_CELL) * clipmap::JOINED_ENTRIES + e) as usize]
     }
 
     fn origin(&self, cell: Zoom) -> ([i32; 2], bool) {
@@ -873,36 +878,36 @@ impl Bricks for Holding<'_> {
 /// The kernel's windows as they are held (`Holding`).
 impl Bricks for Windowed {
     fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
-        Holding(windows()).present(cell, q)
+        Holding(clipmap()).present(cell, q)
     }
     fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
-        Holding(windows()).brick(cell, entry)
+        Holding(clipmap()).brick(cell, entry)
     }
-    fn look(&self, cell: Zoom, b: u32, i: u32) -> u32 {
-        Holding(windows()).look(cell, b, i)
+    fn palette_word(&self, cell: Zoom, b: u32, i: u32) -> u32 {
+        Holding(clipmap()).palette_word(cell, b, i)
     }
-    fn joined(&self, cell: Zoom, e: u32) -> [u32; window::JOINED_WORDS as usize] {
-        Holding(windows()).joined(cell, e)
+    fn joined(&self, cell: Zoom, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
+        Holding(clipmap()).joined(cell, e)
     }
     fn origin(&self, cell: Zoom) -> ([i32; 2], bool) {
-        Holding(windows()).origin(cell)
+        Holding(clipmap()).origin(cell)
     }
     fn laid(&self, cell: Zoom, b: u32, i: u32) -> u32 {
-        Holding(windows()).laid(cell, b, i)
+        Holding(clipmap()).laid(cell, b, i)
     }
     fn column(&self, cell: Zoom, b: u32, i: u32) -> u32 {
-        Holding(windows()).column(cell, b, i)
+        Holding(clipmap()).column(cell, b, i)
     }
     fn level(&self, cell: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        Holding(windows()).level(cell, b, j, at)
+        Holding(clipmap()).level(cell, b, j, at)
     }
     fn root(&self, cell: Zoom, b: u32) -> u32 {
-        Holding(windows()).root(cell, b)
+        Holding(clipmap()).root(cell, b)
     }
 }
 
 const _: () = assert!(LEVELS <= BRICK_SHIFT);
 
 #[cfg(test)]
-#[path = "window.test.rs"]
+#[path = "clipmap.test.rs"]
 pub(crate) mod test;

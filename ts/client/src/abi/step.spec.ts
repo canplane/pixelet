@@ -27,6 +27,6 @@ export const EFFECT_NAMES = [
   "dst",
   "decor",
   "objects",
-  "puck",
+  "location",
   "settings",
 ] as const;

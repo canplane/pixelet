@@ -32,7 +32,7 @@ type Cell = (Zoom, [i32; 3]);
 /// What holds a pin's instance: its entry, or the pin's cell its
 /// count stands for.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) enum Held {
+pub(super) enum Holder {
     One(EntryAt),
     Cell(Cell),
 }
@@ -84,7 +84,7 @@ fn cnt(n: usize) -> Design {
 /// with.
 fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
     Instance {
-        key: Key::Pin(Held::One(at)),
+        key: Key::Pin(Holder::One(at)),
         design,
         stands,
         tap: Some(MarkerHit::Pin(at, stands)),
@@ -145,7 +145,7 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
         };
         run.iter_mut().for_each(|p| p.crowd = Some((cell, at)));
         out.push(Instance {
-            key: Key::Pin(Held::Cell(cell)),
+            key: Key::Pin(Holder::Cell(cell)),
             design: cnt(n),
             stands: at,
             tap: Some(MarkerHit::To(at)),

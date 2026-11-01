@@ -29,7 +29,7 @@ import {
   RING,
   RING_NAMES,
   RINGS,
-  SPREAD,
+  PERCENTILES,
   STAT,
   STATS,
   STEP_STAT,
@@ -71,25 +71,25 @@ const site = (file: u32, bytes: u32, line: u32) =>
     ? null
     : `${td.decode(new Uint8Array(HOST.guest.mem, file, bytes))}:${line}`;
 
-/** The lanes that are lists, a word a name. The names are their owners', and
+/** The columns that are lists, a word a name. The names are their owners', and
  * shown by the shell. */
-export const LIST_LANES = ["phases", "effects", "gpu_spans"] as const;
-export type ListLane = (typeof LIST_LANES)[number];
-export type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
-type ScalarLane = Exclude<FrameLane, ListLane>;
+export const LIST_COLUMNS = ["phases", "effects", "gpu_spans"] as const;
+export type ListColumn = (typeof LIST_COLUMNS)[number];
+export type FrameColumn = Exclude<keyof typeof FRAME, "WORDS">;
+type ScalarColumn = Exclude<FrameColumn, ListColumn>;
 
-export type Frame = { [K in ScalarLane]: f64 } & {
+export type Frame = { [K in ScalarColumn]: f64 } & {
   phases: f64[];
   effects: f64[];
   gpu_spans: f64[];
 };
 
-/** Each lane at its word, and the words it spans: to the next lane's, the last to FRAME's end. */
-export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] =
+/** Each column at its word, and the words it spans: to the next column's, the last to FRAME's end. */
+export const COLUMNS: readonly { name: FrameColumn; at: u32; width: u32 }[] =
   (() => {
-    const at = (Object.entries(FRAME) as [FrameLane | "WORDS", u32][]).filter(
+    const at = (Object.entries(FRAME) as [FrameColumn | "WORDS", u32][]).filter(
       ([k]) => k !== "WORDS",
-    ) as [FrameLane, u32][];
+    ) as [FrameColumn, u32][];
     at.sort((a, b) => a[1] - b[1]);
     return at.map(([name, a], i) => ({
       name,
@@ -98,13 +98,14 @@ export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] =
     }));
   })();
 
-const LISTS: ReadonlySet<string> = new Set(LIST_LANES);
-export const is_list = (lane: FrameLane): lane is ListLane => LISTS.has(lane);
+const LISTS: ReadonlySet<string> = new Set(LIST_COLUMNS);
+export const is_list = (column: FrameColumn): column is ListColumn =>
+  LISTS.has(column);
 
 /** The FRAME record at word `o` of `words`. */
 export function frame_at(words: ArrayLike<f64>, o: u32): Frame {
   const f: Record<string, f64 | f64[]> = {};
-  for (const { name, at, width } of LANES) {
+  for (const { name, at, width } of COLUMNS) {
     const w = (k: u32) => words[o + at + k];
     if (is_list(name)) {
       f[name] = Array.from({ length: width }, (_, k) => w(k));
@@ -113,7 +114,7 @@ export function frame_at(words: ArrayLike<f64>, o: u32): Frame {
   return f as Frame;
 }
 
-export interface Spread {
+export interface Percentiles {
   p50: f64;
   p95: f64;
   max: f64;
@@ -132,17 +133,17 @@ export interface FrameSummary {
   turns: f64;
   /** Frames a GPU read timed, which the GPU's figures are over. */
   gpu_read: f64;
-  interval: Spread;
-  busy: Spread;
-  tick: Spread;
+  interval: Percentiles;
+  busy: Percentiles;
+  tick: Percentiles;
   /** The other parts of `busy`, and what they leave of it, unmeasured. */
-  effects: Spread;
-  stage: Spread;
-  tasks: Spread;
-  perf: Spread;
-  rest: Spread;
+  effects: Percentiles;
+  stage: Percentiles;
+  tasks: Percentiles;
+  perf: Percentiles;
+  rest: Percentiles;
   /** The GPU's time: the time its spans ran, those that overlap counted once. */
-  gpu_busy: Spread;
+  gpu_busy: Percentiles;
   /** The busy time's p50 and p95 of each kind's frames a read timed, and how
    * many they are. */
   gpu_busy_kinds: { name: string; p50: f64; p95: f64; n: f64 }[];
@@ -156,7 +157,7 @@ export interface FrameSummary {
   wakes: { name: string; n: f64 }[];
   /** The world's pixels of the last frame a read timed. */
   gpu_px: f64;
-  /** The ray counts of the window's frames summed, by FRAME's rays lanes. */
+  /** The ray counts of the window's frames summed, by FRAME's rays columns. */
   rays: Record<string, f64>;
   /** The heap's high-water mark, the window's last frame's less its first's. */
   heap_used_delta_bytes: f64;
@@ -228,10 +229,10 @@ export interface RingCounts {
   worst: u32;
 }
 
-const spread_at = (s: F64Array, at: u32): Spread => ({
-  p50: s[at + SPREAD.p50],
-  p95: s[at + SPREAD.p95],
-  max: s[at + SPREAD.max],
+const percentiles_at = (s: F64Array, at: u32): Percentiles => ({
+  p50: s[at + PERCENTILES.p50],
+  p95: s[at + PERCENTILES.p95],
+  max: s[at + PERCENTILES.max],
 });
 
 function frame_summary(s: F64Array): FrameSummary | null {
@@ -250,15 +251,15 @@ function frame_summary(s: F64Array): FrameSummary | null {
     long: s[a + F.long],
     turns: s[a + F.turns],
     gpu_read: s[a + F.gpu_read],
-    interval: spread_at(s, a + F.interval),
-    busy: spread_at(s, a + F.busy),
-    tick: spread_at(s, a + F.tick),
-    effects: spread_at(s, a + F.effects),
-    stage: spread_at(s, a + F.stage),
-    tasks: spread_at(s, a + F.tasks),
-    perf: spread_at(s, a + F.perf),
-    rest: spread_at(s, a + F.rest),
-    gpu_busy: spread_at(s, a + F.gpu_busy),
+    interval: percentiles_at(s, a + F.interval),
+    busy: percentiles_at(s, a + F.busy),
+    tick: percentiles_at(s, a + F.tick),
+    effects: percentiles_at(s, a + F.effects),
+    stage: percentiles_at(s, a + F.stage),
+    tasks: percentiles_at(s, a + F.tasks),
+    perf: percentiles_at(s, a + F.perf),
+    rest: percentiles_at(s, a + F.rest),
+    gpu_busy: percentiles_at(s, a + F.gpu_busy),
     gpu_busy_kinds: FRAME_KINDS.map((name, k) => ({
       name,
       p50: s[a + F.gpu_busy_kinds + 3 * k],

@@ -26,7 +26,7 @@ use crate::domain::view::frame::coord;
 use pxl_spec_core::answer;
 use xpute_guest::global::Global;
 
-/// The look of the ground the eraser would carve, of the hovered point:
+/// The palette entry of the ground the eraser would carve, of the hovered point:
 /// asked again only where the hover moved or a change touched its column.
 static CARVED: Global<Asked<Q3, Option<Cube>>> = Global::new();
 

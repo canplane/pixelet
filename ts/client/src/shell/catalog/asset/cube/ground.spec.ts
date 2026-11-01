@@ -1,11 +1,11 @@
 // @pxl/client/shell/catalog/asset/cube/ground.spec.ts
 //
 // GENERATED from spec/spec/asset/cube.json
-// The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in
+// The ground: one byte a cell, a palette entry from OpenStreetMap Carto, numbered in
 // the order Carto paints.
 // `transport` marks a way: decor faces along it and no pier stands on it;
-// every look stands at its sampled height. The byte's values: 1 to 63
-// Carto's looks, in its paint order; from 64 pixelet's own, the
+// every palette entry stands at its sampled height. The byte's values: 1 to 63
+// Carto's palette entries, in its paint order; from 64 pixelet's own, the
 // underground, which Carto paints nothing of; 0 and 255 the sentinels.
 
 // ---- landcover ----

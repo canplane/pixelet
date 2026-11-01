@@ -16,6 +16,7 @@ pub mod area;
 pub mod beam;
 pub mod cast;
 pub mod cave;
+pub mod clipmap;
 pub mod cloud;
 #[path = "cube.spec.rs"]
 pub mod cube;
@@ -39,7 +40,6 @@ pub mod screen;
 pub mod support;
 pub mod tally;
 pub mod way;
-pub mod window;
 pub mod world;
 
 /// Every size is a zoom (pxl-spec space/coord/zoom.rs).

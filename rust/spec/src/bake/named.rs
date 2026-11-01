@@ -8,31 +8,31 @@ use xpute_kit::status::error::MarshalError;
 use crate::bake::malformed;
 use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView, Strs};
 
-pub struct NameLanes<'a> {
+pub struct NameColumns<'a> {
     /// Where each place's pairs start; one longer than the places.
     starts: Vec<u32>,
     names: Vec<&'a str>,
     langs: Vec<&'a str>,
 }
 
-impl<'a> NameLanes<'a> {
+impl<'a> NameColumns<'a> {
     /// Each place's name and its (tag, name) pairs.
     pub fn of<L: IntoIterator<Item = (&'a str, &'a str)>>(
         places: impl IntoIterator<Item = (&'a str, L)>,
-    ) -> NameLanes<'a> {
-        let mut lanes = NameLanes {
+    ) -> NameColumns<'a> {
+        let mut columns = NameColumns {
             starts: vec![0],
             names: Vec::new(),
             langs: Vec::new(),
         };
         for (name, names) in places {
-            lanes.names.push(name);
-            lanes
+            columns.names.push(name);
+            columns
                 .langs
                 .extend(names.into_iter().flat_map(|(tag, name)| [tag, name]));
-            lanes.starts.push((lanes.langs.len() / 2) as u32);
+            columns.starts.push((columns.langs.len() / 2) as u32);
         }
-        lanes
+        columns
     }
 
     pub fn write(&'a self, b: &mut BranchViewImpl<'a>) {

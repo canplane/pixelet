@@ -1,9 +1,11 @@
-// pxl-kernel/domain/scene/indicator/location_puck.rs
+// pxl-kernel/domain/scene/indicator/location.rs
 
-//! The device's location puck: a zone of cells about the fix, each on the
+//! The device's location indicator: a zone of cells about the fix, each on the
 //! ground under it, and a beacon above that eases, spins and bobs.
 
-use pxl_render::frame::draw::{DrawList, Held, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
+use pxl_render::frame::draw::{
+    DrawList, MirroredBlock, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE,
+};
 use pxl_render::gpu::api::bytes;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3::Q3;
@@ -28,7 +30,7 @@ use crate::domain::view::lens::{seen_step_s, Stepped};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, wake_at};
 use pxl_render::frame::shader::word;
-use pxl_render::param::puck::beacon;
+use pxl_render::param::location::beacon;
 use xpute_guest::clock::now;
 
 // The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
@@ -90,12 +92,12 @@ struct Seen {
     pos: V3,
 }
 
-pub fn location_puck_step(device_coord: Option<Q3>) {
+pub fn location_step(device_coord: Option<Q3>) {
     let Some((scene, draw)) = section::map().map(|_| (scene(), draw_list())) else {
         return;
     };
     let night = scene.environment.night();
-    scene.puck.step(draw, device_coord, night);
+    scene.location.step(draw, device_coord, night);
 }
 
 /// The zone's instances about `center_pos` into `lane`, ZONE_INSTANCE_FLOATS
@@ -164,7 +166,7 @@ fn lay_zone(
 
 /// The beacon's fastest motion, in u/s: at its middle the bob's, and the
 /// spin's at its tips, the octahedron's radius out (pxl-render param.rs
-/// `puck::beacon::RADIUS`), at right angles and at their peaks together.
+/// `location::beacon::RADIUS`), at right angles and at their peaks together.
 fn beacon_speed() -> f64 {
     libm::hypot(
         BEACON_BOB * BEACON_BOB_RATE,
@@ -174,9 +176,9 @@ fn beacon_speed() -> f64 {
 
 /// The box's center relative to the zone's (3), its border flags (4), and
 /// the faces open to the air it draws (1, a bit a face): the stride
-/// puck_zone.wgsl reads (pxl-render frame/shader/word.rs
-/// `PUCK_ZONE_INSTANCE_FLOATS`).
-pub const ZONE_INSTANCE_FLOATS: usize = word::PUCK_ZONE_INSTANCE_FLOATS as usize;
+/// location_zone.wgsl reads (pxl-render frame/shader/word.rs
+/// `LOCATION_ZONE_INSTANCE_FLOATS`).
+pub const ZONE_INSTANCE_FLOATS: usize = word::LOCATION_ZONE_INSTANCE_FLOATS as usize;
 
 /// The zone shown and its beacon.
 struct Zone {
@@ -200,7 +202,7 @@ struct Zone {
 }
 
 #[derive(Default)]
-pub struct LocationPuck {
+pub struct LocationIndicator {
     /// Holds across a GPS dropout: rebuilding the zone on a blip caused a
     /// stacked-cube glitch after tab-away-and-back.
     last_known_device_coord: Option<Q3>,
@@ -219,12 +221,12 @@ pub struct LocationPuck {
     /// which `held` holds, so grounding it again to the same heights draws
     /// nothing anew.
     drawn: Vec<f32>,
-    held: Held,
+    held: MirroredBlock,
     /// None where nothing is shown.
     zone: Option<Zone>,
 }
 
-impl LocationPuck {
+impl LocationIndicator {
     fn step(&mut self, draw: &mut DrawList, device_coord: Option<Q3>, night: bool) {
         if device_coord.is_some() {
             self.last_known_device_coord = device_coord;
@@ -318,8 +320,8 @@ impl LocationPuck {
         request_world_tick();
     }
 
-    /// Whether the beacon slides and wants frames. The puck is drawn where
-    /// an actor would be (domain/scene/actor.rs `tick`): in the frustum and
+    /// Whether the beacon slides and wants frames. The location indicator is
+    /// drawn where an actor would be (domain/scene/actor.rs `tick`): in the frustum and
     /// spanning a camera cell at its distance; its zone only where the ground
     /// under it is drawn in its own cells (`zone_drawn`); and its beacon slides to its
     /// target, a frame a step, only where the slide spans one. Its bob and
@@ -375,7 +377,7 @@ impl LocationPuck {
         if p.zone_drawn {
             let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
             draw.draw_as(
-                PIPELINE_PUCK_ZONE,
+                PIPELINE_LOCATION_ZONE,
                 self.held.handle,
                 cnt,
                 0,
@@ -390,7 +392,7 @@ impl LocationPuck {
             center[2] + (BEACON_Z_BIAS + libm::sin(p.time * BEACON_BOB_RATE) * BEACON_BOB) as f32,
         ];
         draw.draw_as(
-            PIPELINE_PUCK_BEACON,
+            PIPELINE_LOCATION_BEACON,
             0,
             p.night as u32,
             0,
@@ -402,5 +404,5 @@ impl LocationPuck {
 }
 
 #[cfg(test)]
-#[path = "location_puck.test.rs"]
+#[path = "location.test.rs"]
 mod test;

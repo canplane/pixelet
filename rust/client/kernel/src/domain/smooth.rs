@@ -1,6 +1,6 @@
-// pxl-kernel/domain/approach.rs
+// pxl-kernel/domain/smooth.rs
 
-//! One exponential approach for everything that eases, the camera's
+//! One exponential smoothing for everything that eases, the camera's
 //! channels and the companion alike. Within `eps`
 //! it takes the target whole, so it ends rather than asking for frames
 //! forever on a remainder no screen shows.
@@ -8,28 +8,28 @@
 use xpute_kit::math::scalar::wrap;
 
 /// `1 - e^(-k·delta)`: the same curve at any frame rate.
-pub fn damp_alpha(k: f64, delta: f64) -> f64 {
+pub fn smoothing_factor(k: f64, delta: f64) -> f64 {
     1.0 - libm::exp(-k * delta)
 }
 
 /// The short way round, in [-π, π).
-pub fn approach_angle(cur: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
+pub fn smooth_angle(cur: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
     let pi = core::f64::consts::PI;
     let left = wrap(target - cur, -pi, pi);
-    let ([moved], moving) = approach_vec([0.0], [left], k, delta, eps);
+    let ([moved], moving) = smooth_vec([0.0], [left], k, delta, eps);
     (wrap(cur + moved, -pi, pi), moving)
 }
 
 /// Every axis by the same share, so the path is straight; done within `eps`
 /// in any direction.
-pub fn approach_vec<const N: usize>(
+pub fn smooth_vec<const N: usize>(
     cur: [f64; N],
     target: [f64; N],
     k: f64,
     delta: f64,
     eps: f64,
 ) -> ([f64; N], bool) {
-    let a = damp_alpha(k, delta);
+    let a = smoothing_factor(k, delta);
     let next: [f64; N] = std::array::from_fn(|i| cur[i] + (target[i] - cur[i]) * a);
     let left = (0..N)
         .map(|i| (target[i] - next[i]) * (target[i] - next[i]))

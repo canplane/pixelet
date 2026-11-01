@@ -6,12 +6,12 @@
 pub mod actor;
 pub mod cast;
 pub mod character;
+pub mod column;
 pub mod decor;
 pub mod environment;
 pub mod frame;
 pub mod gizmo;
 pub mod indicator;
-pub mod lane;
 pub mod marker;
 pub mod model;
 pub mod param;
@@ -28,7 +28,7 @@ use crate::domain::scene::environment::EnvironmentDraw;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::gizmo::debug_line::DebugLines;
 use crate::domain::scene::indicator::ghost::GhostDraw;
-use crate::domain::scene::indicator::location_puck::LocationPuck;
+use crate::domain::scene::indicator::location::LocationIndicator;
 use crate::domain::scene::model::registry::Models;
 
 /// The scene's state, one for the module's life.
@@ -41,7 +41,7 @@ pub fn scene() -> &'static mut Scene {
 #[derive(Default)]
 pub struct Scene {
     pub ghost: GhostDraw,
-    pub puck: LocationPuck,
+    pub location: LocationIndicator,
     pub environment: EnvironmentDraw,
     pub debug: DebugLines,
     /// The coverage gizmo's (domain/scene/gizmo/coverage_gizmo.rs).
@@ -53,7 +53,7 @@ impl Scene {
     pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
         companion_animate(draw, models, frame)
             | preview_animate(draw, models, frame)
-            | self.puck.tick(frame)
+            | self.location.tick(frame)
             | self.environment.tick(frame)
     }
 
@@ -63,7 +63,7 @@ impl Scene {
         self.ghost.draw(draw, eye);
         companion_draw(draw, models, eye);
         preview_draw(draw, models, eye);
-        self.puck.draw(draw, eye);
+        self.location.draw(draw, eye);
         self.debug.draw(draw, eye);
         self.coverage.draw(draw, eye);
     }

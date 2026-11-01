@@ -14,11 +14,11 @@ import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/deploy.ts";
 import {
   type Frame,
   is_list,
-  LANES,
+  COLUMNS,
   perf_frames,
   perf_tasks,
 } from "@/port/perf.ts";
-import { LIST_NAMES } from "./lane.ts";
+import { LIST_NAMES } from "./column.ts";
 import { failText } from "./report.ts";
 import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/shell/fixed.ts";
@@ -68,10 +68,10 @@ function event(
 const threadName = (tid: u32, name: string) =>
   event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
-/** A frame's lanes as the counter track's arguments. */
+/** A frame's columns as the counter track's arguments. */
 function frameArgs(f: Frame): Args {
   const args: Args = {};
-  for (const { name } of LANES) {
+  for (const { name } of COLUMNS) {
     if (!is_list(name)) {
       args[name] = fixedN(f[name], 2);
       continue;

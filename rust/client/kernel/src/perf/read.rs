@@ -3,12 +3,12 @@
 //! What PERF_STATS reads: the profiler window reduced into perf.json's
 //! STAT, and what holds as it reads into its NOW, each read in place by the
 //! panel and the report so both agree. Sections go only through `put`;
-//! indexing lanes by hand let sections drift out of order (2026-09-23).
+//! indexing columns by hand let sections drift out of order (2026-09-23).
 
 use crate::domain::control::camera::controller;
 use crate::domain::query;
+use crate::domain::query::HitKind;
 use crate::domain::query::Ray;
-use crate::domain::query::Struck;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
@@ -19,7 +19,7 @@ use crate::perf::record::{
 };
 use crate::perf::section::TASK_PHASES;
 use crate::perf::section::{
-    FramesSection, Spread, StepStats, StepsSection, StreamStats, TasksSection, ViewSection,
+    FramesSection, Percentiles, StepStats, StepsSection, StreamStats, TasksSection, ViewSection,
 };
 use crate::perf::spec::{LIMIT, NOW, STAT};
 use crate::perf::task::TaskRow;
@@ -53,8 +53,8 @@ fn read() -> &'static mut Read {
     })
 }
 
-/// `vals`' spread (perf.json SPREAD), and how many they are.
-fn spread_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Spread, usize) {
+/// `vals`' percentiles (perf.json PERCENTILES), and how many they are.
+fn percentiles_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Percentiles, usize) {
     let mut n = 0;
     for v in vals.take(scratch.len()) {
         scratch[n] = v;
@@ -63,7 +63,7 @@ fn spread_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Spread, us
     let sorted = &mut scratch[..n];
     sorted.sort_by(f64::total_cmp);
     (
-        Spread {
+        Percentiles {
             p50: rank(sorted, 0.5),
             p95: rank(sorted, 0.95),
             max: sorted.last().copied().unwrap_or(0.0),
@@ -72,8 +72,8 @@ fn spread_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Spread, us
     )
 }
 
-fn spread(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Spread {
-    spread_n(scratch, vals).0
+fn percentiles(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Percentiles {
+    percentiles_n(scratch, vals).0
 }
 
 /// The nearest rank of `q` in `sorted`: the value at ceil(q × n) − 1, the
@@ -131,7 +131,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
     let spans: [(f64, f64); GPU_SPANS] = core::array::from_fn(|k| {
         let ran = read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0);
-        let (s, n) = spread_n(scratch, ran);
+        let (s, n) = percentiles_n(scratch, ran);
         (s.p95, n as f64)
     });
     FramesSection {
@@ -144,30 +144,30 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         overran: cnt(&overran),
         long: cnt(&long),
         turns: sum(&|f| f.turns),
-        interval: spread(scratch, moving().map(|f| f.interval_ms)),
-        busy: spread(scratch, frames.iter().map(|f| f.busy_ms)),
-        tick: spread(scratch, frames.iter().map(|f| f.tick_ms)),
-        effects: spread(scratch, frames.iter().map(|f| f.effects_ms)),
-        stage: spread(scratch, frames.iter().map(|f| f.stage_ms)),
-        tasks: spread(scratch, frames.iter().map(|f| f.tasks_ms)),
-        perf: spread(scratch, frames.iter().map(|f| f.perf_ms)),
-        rest: spread(scratch, frames.iter().map(unmeasured)),
+        interval: percentiles(scratch, moving().map(|f| f.interval_ms)),
+        busy: percentiles(scratch, frames.iter().map(|f| f.busy_ms)),
+        tick: percentiles(scratch, frames.iter().map(|f| f.tick_ms)),
+        effects: percentiles(scratch, frames.iter().map(|f| f.effects_ms)),
+        stage: percentiles(scratch, frames.iter().map(|f| f.stage_ms)),
+        tasks: percentiles(scratch, frames.iter().map(|f| f.tasks_ms)),
+        perf: percentiles(scratch, frames.iter().map(|f| f.perf_ms)),
+        rest: percentiles(scratch, frames.iter().map(unmeasured)),
         effects_p95: core::array::from_fn(|k| {
-            spread(scratch, frames.iter().map(|f| f.effects[k])).p95
+            percentiles(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
         gpu_read: cnt(&|f| f.gpu.read != 0.0),
-        gpu_busy: spread(scratch, read().map(|f| f.gpu.busy_ms)),
+        gpu_busy: percentiles(scratch, read().map(|f| f.gpu.busy_ms)),
         gpu_busy_kinds: {
             let mut by = [0.0; 3 * FRAME_KINDS];
             for k in 0..FRAME_KINDS {
                 let busy = read().filter(|f| f.kind == k as f64).map(|f| f.gpu.busy_ms);
-                let (s, n) = spread_n(scratch, busy);
+                let (s, n) = percentiles_n(scratch, busy);
                 by[3 * k..3 * k + 3].copy_from_slice(&[s.p50, s.p95, n as f64]);
             }
             by
         },
         phases_p95: core::array::from_fn(|k| {
-            spread(scratch, frames.iter().map(|f| f.phases[k])).p95
+            percentiles(scratch, frames.iter().map(|f| f.phases[k])).p95
         }),
         gpu_spans_p95: spans.map(|(p95, _)| p95),
         gpu_spans_n: spans.map(|(_, n)| n),
@@ -229,7 +229,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
             }
         }
 
-        let lat = spread(
+        let lat = percentiles(
             scratch,
             mine()
                 .filter(|r| r.outcome == ok)
@@ -290,11 +290,11 @@ fn view() -> ViewSection {
     let (hover, cell) = (met.map(|m| m.0), met.map(|m| m.1));
     // What the tool held strikes there, as the hover picks it.
     let picked = pointed.and_then(|[x, y]| edit::pick_at(x, y));
-    let struck = picked.as_ref().map_or(f64::NAN, |p| match p.hit.struck {
-        Struck::Ground => 0.0,
-        Struck::Object(_) => 1.0,
-        Struck::Objects => 2.0,
-        Struck::Decor(_) => 3.0,
+    let hit_kind = picked.as_ref().map_or(f64::NAN, |p| match p.hit.kind {
+        HitKind::Ground => 0.0,
+        HitKind::Object(_) => 1.0,
+        HitKind::Objects => 2.0,
+        HitKind::Decor(_) => 3.0,
     });
     let tool = collision::PlacementTool::of(&edit::tool());
     let place = edit::hover().coord.filter(|_| tool.is_some());
@@ -324,7 +324,7 @@ fn view() -> ViewSection {
         hover_y,
         hover_z,
         cell: zoom(cell),
-        struck,
+        hit_kind,
         held: zoom(picked.as_ref().map(|p| p.held())),
         drawn: zoom(picked.as_ref().and_then(|p| p.drawn)),
         folded: picked

@@ -15,7 +15,7 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::malformed;
-use crate::bake::named::{NameLanes, NamesView};
+use crate::bake::named::{NameColumns, NamesView};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::division::Subtype;
 use crate::space::coord::adapter::epsg3857::cell_zoom_of;
@@ -124,7 +124,7 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
     let subtypes: Vec<u8> = d.iter().map(|d| d.subtype as u8).collect();
     let prominence: Vec<u8> = d.iter().map(|d| d.prominence).collect();
     let area: Vec<u8> = d.iter().map(|d| d.area as u8).collect();
-    let names = NameLanes::of(d.iter().map(|d| {
+    let names = NameColumns::of(d.iter().map(|d| {
         (
             d.name.as_str(),
             d.names

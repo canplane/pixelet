@@ -2,7 +2,7 @@
 
 //! The ground's surface: a cell's top and the asset its face is, read off
 //! the windows by the one reading of a column the GPU reads too
-//! (pxl-spec-core `window::ground`), the area's edge laid on it. The
+//! (pxl-spec-core `clipmap::ground`), the area's edge laid on it. The
 //! ground's alone, so a part of the support (`support.rs`), where a walker
 //! starts looking for what it stands on, and read inside the query only:
 //! what a cell holds, a cave, a way, a bridge or what is placed included,
@@ -11,10 +11,10 @@
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec_core::area::Shard;
-use pxl_spec_core::window::Found;
+use pxl_spec_core::clipmap::Found;
 
 use super::world::World;
-use crate::domain::layer::terrain::window::Windowed;
+use crate::domain::layer::terrain::clipmap::Windowed;
 use crate::domain::layer::{Answer, Query};
 use pxl_spec::asset::cube::sentinel;
 
@@ -46,7 +46,7 @@ impl World<'_> {
             .map(|col| {
                 col.is_grounded().then(|| Surface {
                     top: f64::from(col.top) * units(cell),
-                    asset: col.look as GroundId,
+                    asset: col.palette_idx as GroundId,
                 })
             })
     }
