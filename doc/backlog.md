@@ -45,19 +45,6 @@ Nothing now.
   regression against the prepass was the `ao` span's, which reads the world
   pass's first half with its own — [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md),
   "The closing round".
-- **Samples closer only where their faces part.** Counted (ddd72660c, S1
-  with `ray_counts`, 9.15M pixels drawn, about 279k samples, 33 pixels a
-  sample): the eye's walks 0.55 % of the pixels at 26 nodes each, `miss`
-  6.6 ms at the p95, some 128 ns a walk; `sample` 4.7 ms, some 17 ns a
-  sample at 10 nodes; boxes 14.2k a cast, a box every 20 samples. A refine
-  where neighbouring samples stopped on different nodes flags some 45 % of
-  the squares between four samples: three samples more each, +6 ms on
-  `sample` for at most the walks' 6.6, so it does not pay, and a camera
-  cell's refine less. What could pay: a square refined only where its
-  corners' faces lie in different planes (a step, a silhouette, one met
-  nothing), coplanar node boundaries left; at 12 % of the squares, +1.7 ms
-  on `sample` with the boxes and their raster for 40 to 60 % of the walks.
-  First a tally lane counting such squares; build only under 15 %.
 - **The stencil and the early depth test on the devices.** Answered from
   the code and the vendors' records (the minutes' "Open"); left to a device
   in hand: the iPhone's hidden-surface removal for the boxes and the
