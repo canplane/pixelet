@@ -20,13 +20,21 @@ Nothing now.
   `pixelet-worker-ci` takes Workers R2 Storage: Read. Once it is out and the
   smoke passes: `pixelet-tiles` taken off `pixelet-bucket-publish`, and
   `pixelet-tiles` emptied and deleted.
-- **The light cast again on every walking frame.** Built and measured in
-  the closing round: the frames a brick lands in cost the light what the
-  rest do, the map cast whatever landed. Supposed, by the agent that
-  changed the light's list: a tile's held margin, the least over some 196
-  beam walks and 36 samples, so small the eye passes it on nearly every
-  move. Which input trips it is now recorded a frame (`light_moved`'s four
-  bits, the profiler) — [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md),
+- **The light cast again on every walking frame.** Measured (2026-11-02,
+  `light_moved` over 10 s walks): the detail and receivers bits on every
+  walking frame, content on 54 of 113 at noon with 9 bricks landed; a
+  detail-and-receivers frame casts as many rays as a new epoch. Confirmed by
+  a probe (the margin test in `holds` made never true): samples 81,917 to
+  2,653 and walks 30,457 to 294 a frame, 37 of 424 such frames casting at
+  all. The cause: `cast::Margin::asked` takes `Detail::margin` of every node
+  a walk asks, the distance to the nearest band edge whether or not crossing
+  it changes that node's answer, so a tile's least sits under one frame's
+  step. The fix: a node counts toward the margin only through the band edges
+  that change its own answer (where its zoom is crossed, or a zoom its
+  content lies at); one whose answer is the same at every zoom asked counts
+  none, which needs the query to say which asked zooms its answer read. And
+  the content bit's trips at noon past the bricks, supposed the clip levels
+  sliding (`world_moved`), not traced — [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md),
   "The closing round"; [20261029](./minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md),
   "Taken in the closing round", the recast not taken.
 
