@@ -476,6 +476,37 @@ fn stack_gap_floored() {
     assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
 }
 
+/// A cell coarser than what is placed in it is read as the cast draws it
+/// there, one column whatever is placed finer: from over it or from in the
+/// box it is drawn as, its floor is that box's top (`cast::top`), as a ray
+/// at that zoom meets it.
+#[test]
+fn coarse_cell_floored_as_drawn() {
+    let _g = serial();
+    let (tile_cache, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    write(&mut store, [x, y, 5.0], OBJECT_COARSEST, red);
+    write(&mut store, [x + 1.0, y, 5.0], OBJECT_FINEST, red);
+    let access = World::new(&tile_cache, &store);
+    let zoom = LEAF_ZOOM - 1;
+    let at = [x + 0.5, y + 0.5];
+    let drawn = access
+        .first_hit(&down(at), at_zoom(zoom))
+        .exact()
+        .flatten()
+        .unwrap()
+        .cube
+        .max[2];
+    for z in [drawn + 3.0, drawn - 0.25] {
+        assert_eq!(
+            access.floor_under(&world::point(at[0], at[1], z), zoom),
+            Answer::Exact(Some(drawn)),
+            "from {z}"
+        );
+    }
+}
+
 /// Quake III's step-slide, a column at a time: blocked, the walker climbs the
 /// blocker as far as its own column is open over its head, then settles; with
 /// a ceiling first it stops there, and an axis that is blocked is slid along.

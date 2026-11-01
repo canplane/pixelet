@@ -1,13 +1,16 @@
 // pxl-kernel/domain/query/support.rs
 
 //! Where something stands: the support, floor and ceiling over a point,
-//! climbing as a walker would. A walker is a cell wide, so each is asked of
-//! the point's cell as its columns at the finest zoom anything is placed at
-//! in it, a ray straight up or down through each (`Upright`), the ray every
-//! reader casts (`World::along`): the first cell that fills, or out of what
-//! fills the first that does not, in any of them. So a walker stands on
-//! what is placed as it is held, whatever its size; a cell with nothing
-//! placed finer than it is one column, one ray.
+//! climbing as a walker would. Each is asked of the point's cell as its
+//! columns, a ray straight up or down through each (`CellColumns`), the ray
+//! every reader casts (`World::along`): the first cell that fills, or out of
+//! what fills the first that does not, in any of them. At the leaf the cell
+//! is cut to the finest zoom anything is placed at in it, the world read as
+//! finely as it is held (query/ray.rs `finest`), so a walker, a cell wide,
+//! stands on what is placed whatever its size; a coarser zoom's cell is one
+//! column, read as that zoom's cells are (`at_zoom`), what is placed finer
+//! folded into it. Either way a cell kept short of its cube stands to the
+//! top of the box it is drawn as (pxl-spec-core `cast::top`).
 
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
@@ -19,7 +22,7 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::ray::{at_zoom, cell_zoom_at, Ray, Until};
+use super::ray::{at_zoom, cell_zoom_at, finest, Ray, Until};
 use super::world::World;
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::*;
@@ -50,13 +53,14 @@ fn xy(at: &Q3) -> [f64; 2] {
     [q3::to_real(i64::from(at[0])), q3::to_real(i64::from(at[1]))]
 }
 
-/// What a walker meets straight up and down the cell over `xy` at the tile
-/// zoom `zoom`'s cells, asked of its columns at the finest zoom anything is
-/// placed at in it, `across` a side, a ray through each one's middle at that
-/// zoom; and the first tile an answer lacked. Its rays' tiles' lines each
-/// stepped from the last ray's (`lines`), handed on from the column it was
-/// made beside, as they climb the same tiles over the same tile cache.
-struct Upright<'w, 'a> {
+/// The cell over `xy` at the tile zoom `zoom`'s cells as its columns: at the
+/// leaf, `across` a side at the finest zoom anything is placed at in it, a
+/// coarser zoom's the one column (module doc). What a walker meets straight
+/// up and down each, a ray through its middle; and the first tile an answer
+/// lacked. Its rays' tiles' lines each stepped from the last ray's
+/// (`lines`), handed on from the column it was made beside, as they climb
+/// the same tiles over the same tile cache.
+struct CellColumns<'w, 'a> {
     world: &'w World<'a>,
     corner: [f64; 2],
     side: f64,
@@ -67,8 +71,8 @@ struct Upright<'w, 'a> {
     lines: Lines,
 }
 
-impl<'w, 'a> Upright<'w, 'a> {
-    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, lines: Lines) -> Upright<'w, 'a> {
+impl<'w, 'a> CellColumns<'w, 'a> {
+    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, lines: Lines) -> CellColumns<'w, 'a> {
         let cell = GROUND.cell_zoom(zoom);
         let side = units(cell);
         let corner = xy.map(|v| libm::floor(v / side) * side);
@@ -76,10 +80,15 @@ impl<'w, 'a> Upright<'w, 'a> {
             min: [corner[0], corner[1], BOUNDS.min[2]],
             max: [corner[0] + side, corner[1] + side, BOUNDS.max[2]],
         };
+        let read = if zoom == LEAF_ZOOM {
+            finest()
+        } else {
+            at_zoom(zoom)
+        };
         let finer = world
             .finest_in(&column)
-            .map_or(0, |z| z.saturating_sub(cell));
-        Upright {
+            .map_or(0, |z| z.min(read.range[1]).saturating_sub(cell));
+        CellColumns {
             world,
             corner,
             side: side / f64::from(1u32 << finer),
@@ -128,16 +137,31 @@ impl<'w, 'a> Upright<'w, 'a> {
     /// The top of what fills at the height `z` in any column: out of each
     /// one's fill in turn, until none fills where the walker stands. A
     /// column's fill tops at the bottom of its first cell that does not
-    /// fill from `z` up, `z` where its own does not; filled to the reach's
-    /// top only where the world holds it so: a way into tiles not held fills
-    /// nothing, as what a zoom does not hold is absent there.
+    /// fill from `z` up, `z` where its own does not, and the cell under that
+    /// at the top of the box it is drawn as where it is kept short of its
+    /// cube, as `below` meets it; filled to the reach's top only where the
+    /// world holds it so: a way into tiles not held fills nothing, as what a
+    /// zoom does not hold is absent there.
     fn lift(&mut self, mut z: f64) -> f64 {
         loop {
             let top = (0..self.across * self.across)
                 .map(
                     |k| match self.meet(k, z, BOUNDS.max[2], Until::Transparent) {
                         Answer::Exact(None) => BOUNDS.max[2],
-                        Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => b.min[2].max(z),
+                        Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => {
+                            let open = b.min[2].max(z);
+                            // Down from the open cell's middle, which a ray
+                            // does not meet, onto the cell under it: met
+                            // nowhere over `z`, the fill tops there.
+                            if open > z {
+                                self.meet(k, open + self.side / 2.0, z, Until::Opaque)
+                                    .val()
+                                    .flatten()
+                                    .map_or(z, |c| c.max[2].min(open).max(z))
+                            } else {
+                                open
+                            }
+                        }
                         Answer::Coarser(None, _) | Answer::Nothing(_) => z,
                     },
                 )
@@ -233,7 +257,7 @@ impl<'a> World<'a> {
     /// the first solid under it; none where nothing stands, a cell with no
     /// surface and nothing placed.
     pub fn surface_support(&self, at: &Q3) -> Answer<Option<f64>> {
-        let mut c = Upright::new(self, xy(at), LEAF_ZOOM, Lines::default());
+        let mut c = CellColumns::new(self, xy(at), LEAF_ZOOM, Lines::default());
         let [lo, hi] = [BOUNDS.min[2], BOUNDS.max[2]];
         let surface = c.surface();
         // With no surface, the search starts at the highest solid, or at the reach's floor.
@@ -250,7 +274,7 @@ impl<'a> World<'a> {
     /// nothing stands under `at`.
     pub fn floor_under(&self, at: &Q3, zoom: Zoom) -> Answer<Option<f64>> {
         let start = q3::to_real(i64::from(at[2]));
-        let mut c = Upright::new(self, xy(at), zoom, Lines::default());
+        let mut c = CellColumns::new(self, xy(at), zoom, Lines::default());
         let stands = match c.lift(start) {
             z if z > start => Some(z.min(BOUNDS.max[2])),
             z => c.below(z),
@@ -263,7 +287,7 @@ impl<'a> World<'a> {
     /// where nothing stands.
     pub fn support_nearest(&self, at: &Q3) -> Answer<Option<f64>> {
         let z = q3::to_real(i64::from(at[2]));
-        let mut c = Upright::new(self, xy(at), LEAF_ZOOM, Lines::default());
+        let mut c = CellColumns::new(self, xy(at), LEAF_ZOOM, Lines::default());
         let down = match c.lift(z) {
             t if t > z => Some(t.min(BOUNDS.max[2])),
             t => c.below(t),
@@ -351,7 +375,7 @@ impl<'a> World<'a> {
         // Out of what fills its own cell first: only what is over that is a ceiling.
         let mut lines = Lines::default();
         floor = {
-            let mut c = Upright::new(self, center(at), LEAF_ZOOM, lines);
+            let mut c = CellColumns::new(self, center(at), LEAF_ZOOM, lines);
             let f = c.lift(floor);
             lines = c.lines;
             c.answer(f).exact()?
@@ -419,10 +443,10 @@ impl<'a> World<'a> {
             return Some(None);
         }
         let cell = units(GROUND.cell());
-        let mut c = Upright::new(self, to, LEAF_ZOOM, *lines);
+        let mut c = CellColumns::new(self, to, LEAF_ZOOM, *lines);
         let mut z = c.lift(floor);
         let moved = if z > floor {
-            let mut left = Upright::new(self, from, LEAF_ZOOM, c.lines);
+            let mut left = CellColumns::new(self, from, LEAF_ZOOM, c.lines);
             let stopped = left.above(floor, z + cell).is_some();
             (*lines, c.lines) = (left.lines, left.lines);
             left.answer(()).exact()?;
