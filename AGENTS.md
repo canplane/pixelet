@@ -30,10 +30,11 @@
   representation, and any refactor, takes `facts`
   (`.agents/skills/facts/SKILL.md`).
 - `ARCHITECTURE.md`, `xpute/ARCHITECTURE.md` and the READMEs beside the code
-  state the parts' contracts; a skill gives a task's procedure; the code shows
-  the implementation, its debt and its work in progress among it. A pattern in
-  the code, however often repeated, is not by itself a rule, and an asymmetry
-  is not by itself debt.
+  state the parts' contracts; a skill gives a task's procedure. The code is
+  agents' work, not the user's intent: read it as suspect. Decide what a part
+  must do from the contracts and the user's decisions, then judge the code
+  against that; a comment, a structure or a pattern in it, however often
+  repeated, is no reason to keep it, and an asymmetry is not by itself debt.
 - The records under `doc/` recover intent, scope and limits. A record that
   attributes a decision to the user explicitly makes it an adopted decision;
   check its scope, and whether a later adopted decision replaced it. A
