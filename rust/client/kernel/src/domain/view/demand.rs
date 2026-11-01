@@ -152,6 +152,11 @@ pub struct Demand<L: ObservedLayer> {
     /// what was asked is the tile cache's (`TileCache::ask`).
     demand: Vec<Tile>,
     asks: FnvHashMap<Tile, Ask>,
+    /// Each ask in the view and the tile its place in the view is taken of:
+    /// a demanded tile's for the tile its ground is asked of, a line's or the
+    /// floor's its own. Read only for the asks left unanswered, the wants,
+    /// whose order alone is read (`Policy::rank`).
+    placed: Vec<(Tile, Tile)>,
     /// The tile cache's revision as it idled it (`idle`), none while it steps.
     idle_revision: Option<u32>,
 }
@@ -171,6 +176,7 @@ impl<L: ObservedLayer> Default for Demand<L> {
                 TileCache::<L>::SLOTS as usize,
                 Default::default(),
             ),
+            placed: Vec::new(),
             idle_revision: None,
         }
     }
@@ -224,14 +230,18 @@ impl<L: ObservedLayer> Demand<L> {
     ) {
         let mut demand = core::mem::take(&mut self.demand);
         let mut asks = core::mem::take(&mut self.asks);
-        let ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, a: Ask| {
+        let mut placed = core::mem::take(&mut self.placed);
+        // An ask in the view placed last until the wants are ordered: its
+        // place, the least of those it is asked by, is read of a want alone.
+        let mut ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, priority: Priority, of: Tile| {
+            let a = Ask {
+                priority,
+                order: Order::LAST,
+            };
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
+            placed.push((p, of));
         };
-        // One walk down the pyramid in key order, so each tile's line, its
-        // own and the ground's it is ordered by, steps from its neighbor's.
-        let (mut lines, mut ground) = (Lines::default(), ColumnWalk::default());
-        let mut order =
-            |o: &Observation, p: Tile| observation::order_of_tile(o, L::LATTICE, p, &mut ground);
+        let mut lines = Lines::default();
         if let Some(o) = o {
             if matches!(L::ASK_SCOPE, AskScope::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
@@ -240,14 +250,7 @@ impl<L: ObservedLayer> Demand<L> {
             demand.dedup();
             for &p in &demand {
                 let at = L::tile_cache().seek(&mut lines, p).src.unwrap_or(p);
-                ask(
-                    &mut asks,
-                    at,
-                    Ask {
-                        priority: Priority::Demand,
-                        order: order(o, p),
-                    },
-                );
+                ask(&mut asks, at, Priority::Demand, p);
                 // A line already asked is asked to the top.
                 for q in
                     std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1)
@@ -258,14 +261,7 @@ impl<L: ObservedLayer> Demand<L> {
                     {
                         break;
                     }
-                    ask(
-                        &mut asks,
-                        q,
-                        Ask {
-                            priority: Priority::Ancestor,
-                            order: order(o, q),
-                        },
-                    );
+                    ask(&mut asks, q, Priority::Ancestor, q);
                 }
             }
             // More demanded than the structure's bound means the capacity is broken too:
@@ -283,14 +279,7 @@ impl<L: ObservedLayer> Demand<L> {
                 self.floor.clear();
                 floor::floor(o, top, |p| {
                     self.floor.push(p);
-                    ask(
-                        &mut asks,
-                        p,
-                        Ask {
-                            priority: Priority::Floor,
-                            order: order(o, p),
-                        },
-                    );
+                    ask(&mut asks, p, Priority::Floor, p);
                 });
                 xpute_kit::ensure!(
                     self.floor.len() <= floor::tiles(L::LATTICE) as usize,
@@ -305,14 +294,11 @@ impl<L: ObservedLayer> Demand<L> {
         let mut named = 0u32;
         for p in dst {
             named += 1;
-            ask(
-                &mut asks,
-                p,
-                Ask {
-                    priority: Priority::Destination,
-                    order: Order::FIRST,
-                },
-            );
+            let a = Ask {
+                priority: Priority::Destination,
+                order: Order::FIRST,
+            };
+            asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         }
         xpute_kit::ensure!(
             named
@@ -356,16 +342,31 @@ impl<L: ObservedLayer> Demand<L> {
         }
         // By subject, as a stream's wants are said (sys/io/request.rs `declare`):
         // key order, a subject being its key's high half, after every absence
-        // is written.
-        let mut lines = Lines::default();
+        // is written. Each want's place the least of the tiles it is asked by
+        // (`placed`), found in one walk down the pyramid in key order, so each
+        // tile's line, its own and the ground's it is ordered by, steps from
+        // its neighbor's.
+        placed.sort_unstable_by_key(|&(p, of)| (p.key(), of.key()));
+        let (mut lines, mut ground) = (Lines::default(), ColumnWalk::default());
         self.wants.clear();
         for &p in &demand {
             if unanswered(p, &mut lines) {
-                self.wants.push((p.subject(), asks[&p]));
+                let mut a = asks[&p];
+                if let Some(o) = o {
+                    let from = placed.partition_point(|&(q, _)| q.key() < p.key());
+                    for &(_, of) in placed[from..].iter().take_while(|&&(q, _)| q == p) {
+                        a.order =
+                            a.order
+                                .min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
+                    }
+                }
+                self.wants.push((p.subject(), a));
             }
         }
         asks.clear();
         self.asks = asks;
+        placed.clear();
+        self.placed = placed;
         demand.clear();
         self.demand = demand;
 
