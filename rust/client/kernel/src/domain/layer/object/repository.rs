@@ -30,7 +30,7 @@ use fnv::FnvHashSet;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{units, CUBE_ZOOM, SHARD_ZOOM};
-use pxl_spec::space::hierarchy::morton::node_of;
+use pxl_spec::space::hierarchy::morton::{is_key, node_of};
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
 use pxl_spec::space::layer::tile::{tile_at, Tile};
 use pxl_spec_core::answer::FULL;
@@ -331,12 +331,6 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
             ext: ext[r].take(),
         })
         .collect())
-}
-
-/// Whether `key` can be read back as a node (pxl-spec morton.rs `node_of`):
-/// a 1 ends its digits below bit 127, which no key sets.
-fn is_key(key: u128) -> bool {
-    key & (u128::MAX >> 1) != 0
 }
 
 /// The leaves `bytes`, the file of `shard`, holds, whole or none: every one

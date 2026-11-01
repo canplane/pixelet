@@ -59,16 +59,19 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
         };
     }
     let unseen = !ask.order.seen as u8;
-    let class = match layer {
-        Stream::terrain => TERRAIN + unseen * GROUND_SHELL,
-        Stream::object => OBJECT + unseen * GROUND_SHELL,
-        _ => PLACE + unseen,
+    // A zoom fits the rank's byte. The objects' subjects are their files'
+    // numbers: the top's, no tile, and shards all at `SHARD_ZOOM`, which no
+    // zoom orders.
+    let zoom = || Tile::of_subject(subject).zoom as u8;
+    let (class, detail) = match layer {
+        Stream::terrain => (TERRAIN + unseen * GROUND_SHELL, zoom()),
+        Stream::object => (OBJECT + unseen * GROUND_SHELL, 0),
+        _ => (PLACE + unseen, zoom()),
     };
     Rank {
         class,
         dist: ask.order.near,
-        // A zoom fits the rank's byte.
-        detail: Tile::of_subject(subject).zoom as u8,
+        detail,
     }
 }
 
