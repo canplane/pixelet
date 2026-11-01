@@ -136,7 +136,7 @@ xpute_guest::program! {
 fn count(cx: &mut Turn<'_>, p: Count<'_>) -> Result<i32, Errno> {
     let path = String::from(p.path);
     cx.spawn(async move {
-        let res = match read(ROOT, &path).await {
+        let res = match read(Root::FILES as u32, &path).await {
             Ok(bytes) => bytes.len() as i32,
             Err(e) => e as i32,
         };
@@ -156,7 +156,7 @@ Task<> count_bytes(Read file) {
 }
 
 Result<int32_t> count(Turn &cx, Count p) {
-    if (Result<void> s = cx.spawn(count_bytes(read(ROOT, p.path))); !s) return s.error();
+    if (Result<void> s = cx.spawn(count_bytes(read(static_cast<std::uint32_t>(Root::FILES), p.path))); !s) return s.error();
     return 0;
 }
 
@@ -164,7 +164,7 @@ XPUTE_PROGRAM(on<Command::SUM, sum>, on<Command::COUNT, count>) // sum: Result<i
 ```
 
 ```ts
-const guest = open(module, { answer: { [ASK]: () => HELD }, fs });
+const guest = open(module, { answer: { [Hostcall.ASK]: () => HELD }, fs });
 guest.on(SUMMED, (total) => console.log(total)); // 5
 guest.call(SUM, 2, 3); // 2 + 3 + HELD
 guest.on(COUNTED, (res) => console.log(res)); // the file's bytes, or -errno

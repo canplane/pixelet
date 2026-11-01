@@ -26,6 +26,40 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
 
+/// The example's hostcalls of its own, each answered by the function its host's `open` is given.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum Hostcall {
+    /// The number the host holds, answered now.
+    ASK = 1,
+}
+
+impl Hostcall {
+    pub const ALL: [Hostcall; 1] = [Hostcall::ASK];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<Hostcall> {
+        Hostcall::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// The roots the example's files are read below; what each means is its host's `Fs`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum Root {
+    /// The files COUNT reads.
+    FILES = 0,
+}
+
+impl Root {
+    pub const ALL: [Root; 1] = [Root::FILES];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<Root> {
+        Root::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
 /// The example's commands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]

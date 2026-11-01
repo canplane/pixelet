@@ -18,16 +18,10 @@ using namespace example;
 
 namespace {
 
-// The hostcall: the number the host adds.
-constexpr std::uint32_t ASK = 1;
-
-// The root the example's files are read below; what it means is the host's.
-constexpr std::uint32_t ROOT = 0;
-
 Result<std::int32_t> sum(Turn &cx, Sum p) {
     std::uint32_t total = p.a + p.b;
     cx.raise(SummedEvent{.total = total});
-    Result<std::uint32_t> held = cx.call_now(ASK);
+    Result<std::uint32_t> held = cx.call_now(static_cast<std::uint32_t>(example::Hostcall::ASK));
     if (!held) return held.error();
     return static_cast<std::int32_t>(total + *held);
 }
@@ -41,7 +35,7 @@ Task<> count_bytes(Read file) {
 // The read holds its own copy of the path, which the packet's lasts only as
 // long as the handler.
 Result<std::int32_t> count(Turn &cx, Count p) {
-    Result<void> spawned = cx.spawn(count_bytes(read(ROOT, p.path)));
+    Result<void> spawned = cx.spawn(count_bytes(read(static_cast<std::uint32_t>(Root::FILES), p.path)));
     if (!spawned) return spawned.error();
     return 0;
 }

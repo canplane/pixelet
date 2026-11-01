@@ -27,6 +27,34 @@ using ::xpute::abi::finite;
 using ::xpute::abi::integer;
 namespace xtp = ::xpute::xtp;
 
+// The example's hostcalls of its own, each answered by the function its host's `open` is given.
+enum class Hostcall : std::uint32_t {
+    // The number the host holds, answered now.
+    ASK = 1,
+};
+
+} // namespace example
+
+template <> struct xpute::Members<example::Hostcall> {
+    static constexpr std::array<example::Hostcall, 1> ALL{example::Hostcall::ASK};
+};
+
+namespace example {
+
+// The roots the example's files are read below; what each means is its host's `Fs`.
+enum class Root : std::uint32_t {
+    // The files COUNT reads.
+    FILES = 0,
+};
+
+} // namespace example
+
+template <> struct xpute::Members<example::Root> {
+    static constexpr std::array<example::Root, 1> ALL{example::Root::FILES};
+};
+
+namespace example {
+
 // The example's commands.
 enum class Command : std::uint32_t {
     // Two numbers, answered with their sum and the number the host holds.

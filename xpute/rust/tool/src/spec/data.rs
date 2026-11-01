@@ -21,6 +21,9 @@ struct DataSpec {
     rs: &'static str,
     enums: Enums,
     cpp: (&'static str, &'static str),
+    /// For a spec a Makefile reads: where its numbers are written as make
+    /// variables, and the prefix each takes.
+    mk: Option<(&'static str, &'static str)>,
 }
 
 const DATA_SPECS: [DataSpec; 8] = [
@@ -30,6 +33,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         rs: "rust/conformance/src/guest.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/conformance/guest.spec.hpp", "xpute::conformance"),
+        mk: Some(("cpp/conformance/guest.spec.mk", "CONFORMANCE_")),
     },
     DataSpec {
         json: "spec/ipc/toc.json",
@@ -37,6 +41,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         rs: "rust/guest/src/ipc/toc.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/toc.spec.hpp", "xpute::toc"),
+        mk: None,
     },
     DataSpec {
         json: "spec/ipc/frame.json",
@@ -44,6 +49,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         rs: "rust/guest/src/ipc/frame.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/frame.spec.hpp", "xpute::frame"),
+        mk: None,
     },
     DataSpec {
         json: "spec/ipc/ring.json",
@@ -51,6 +57,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         rs: "rust/guest/src/ipc/ring.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/ring.spec.hpp", "xpute::ring"),
+        mk: None,
     },
     DataSpec {
         json: "spec/ipc/sys.json",
@@ -58,6 +65,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         rs: "rust/guest/src/ipc/sys.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/sys.spec.hpp", "xpute::sys"),
+        mk: None,
     },
     DataSpec {
         json: "spec/program.json",
@@ -65,6 +73,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         rs: "rust/guest/src/program.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/program.spec.hpp", "xpute::program"),
+        mk: Some(("cpp/xpute/guest/program.spec.mk", "PROGRAM_")),
     },
     DataSpec {
         json: "spec/gpu/api.json",
@@ -72,6 +81,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         rs: "rust/gpu/src/api.spec.rs",
         enums: Enums::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
         cpp: ("cpp/xpute/gpu/api.spec.hpp", "xpute::gpu"),
+        mk: None,
     },
     DataSpec {
         json: "spec/gpu/enum.json",
@@ -107,6 +117,7 @@ const DATA_SPECS: [DataSpec; 8] = [
             "LIMIT_NAME",
         ]),
         cpp: ("cpp/xpute/gpu/enum.spec.hpp", "xpute::gpu"),
+        mk: None,
     },
 ];
 
@@ -680,6 +691,21 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
         cpp.extend([String::new(), format!("}} // namespace {namespace}")]);
         outputs.push(Output::new(cpp_path, file(&cpp)));
+        if let Some((mk_path, prefix)) = d.mk {
+            // Each whole number at the top, a make variable a link reads.
+            let mut mk = vec![
+                format!("# {mk_path}"),
+                "#".into(),
+                format!("# GENERATED from {}", d.json),
+            ];
+            for name in &names {
+                let val = spec.get(name).map(Node::value).and_then(Node::num);
+                if let Some(v) = val.filter(|v| v.fract() == 0.0 && *v >= 0.0) {
+                    mk.push(format!("{prefix}{name} := {v}"));
+                }
+            }
+            outputs.push(Output::new(mk_path, file(&mk)));
+        }
     }
     Ok(outputs)
 }

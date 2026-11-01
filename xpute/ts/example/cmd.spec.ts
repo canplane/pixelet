@@ -14,7 +14,17 @@ import type {
 } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Raised, Sent } from "@xpute/host/port.ts";
+import * as Hostcall from "./cmd/hostcall.spec.ts";
+import * as Root from "./cmd/root.spec.ts";
 import * as Command from "./cmd/command.spec.ts";
+
+/** One of Hostcall's, as its enum was a type. */
+type Hostcall = (typeof Hostcall)[keyof typeof Hostcall];
+export { Hostcall };
+
+/** One of Root's, as its enum was a type. */
+type Root = (typeof Root)[keyof typeof Root];
+export { Root };
 
 /** One of Command's, as its enum was a type. */
 type Command = (typeof Command)[keyof typeof Command];

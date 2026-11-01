@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError, type Fs } from "@xpute/host/ipc/sys.ts";
 import { open } from "@xpute/host/port.ts";
-import { COUNT, COUNTED, SUM, SUMMED } from "./cmd.spec.ts";
+import { COUNT, COUNTED, Hostcall, SUM, SUMMED } from "./cmd.spec.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 /** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
@@ -31,10 +31,6 @@ const GUESTS: Record<string, string> = {
   rust: join(CARGO_TARGET, "wasm32-unknown-unknown/debug/xpute_example.wasm"),
   cpp: join(ROOT, "cpp/target/xpute_example.wasm"),
 };
-
-/** The hostcall the guest makes (rust/example/src/lib.rs, cpp/example/guest.cpp
- * `ASK`). */
-const ASK = 1;
 
 /** What the host holds and the guest asks for. */
 const HELD = 100;
@@ -61,7 +57,7 @@ for (const [lang, path] of Object.entries(GUESTS)) {
     const module = () => new WebAssembly.Module(readFileSync(path));
 
     test("example - a command answered with what the guest asked its host", () => {
-      const guest = open(module(), { answer: { [ASK]: () => HELD } });
+      const guest = open(module(), { answer: { [Hostcall.ASK]: () => HELD } });
       let summed = -1;
       guest.on(SUMMED, (total) => {
         summed = total;

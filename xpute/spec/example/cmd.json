@@ -6,6 +6,22 @@
   "extern": [],
   "enums": [
     {
+      "name": "Hostcall",
+      "$doc": ["The example's hostcalls of its own, each answered by the function its host's `open` is given."],
+      "format": "dec",
+      "entries": [
+        { "name": "ASK", "val": 1, "$doc": ["The number the host holds, answered now."] }
+      ]
+    },
+    {
+      "name": "Root",
+      "$doc": ["The roots the example's files are read below; what each means is its host's `Fs`."],
+      "format": "dec",
+      "entries": [
+        { "name": "FILES", "val": 0, "$doc": ["The files COUNT reads."] }
+      ]
+    },
+    {
       "name": "Command",
       "$doc": ["The example's commands."],
       "format": "hex4",

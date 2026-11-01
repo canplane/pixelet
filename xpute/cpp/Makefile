@@ -39,17 +39,16 @@ FLAGS := -std=c++20 -fno-exceptions -fno-rtti -ffp-contract=off -Wall -Wextra -W
 PREFIX_MAP := -fmacro-prefix-map=./=cpp/ $(foreach d,xpute conformance,-fmacro-prefix-map=$(d)/=cpp/$(d)/)
 AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OUT)/conformance/=cpp/conformance/ \
 	-fmacro-prefix-map=$(OUT)/example/=cpp/example/
-# The guest's stack (spec/conformance/guest.json STACK_BYTES).
-STACK_BYTES := 1048576
-# A program's stack (spec/program.json STACK_BYTES), which XPUTE_PROGRAM checks
-# as it boots.
-PROGRAM_STACK_BYTES := 1048576
+# The specs' numbers a link reads, as make variables: the conformance guest's
+# stack (`CONFORMANCE_STACK_BYTES`) and a program's (`PROGRAM_STACK_BYTES`),
+# which XPUTE_PROGRAM checks as it boots.
+include conformance/guest.spec.mk xpute/guest/program.spec.mk
 # A module guest's link, as xpute-guest wasm `link` prints it for a Rust
 # one: its memory imported and its stack first.
 MODULE_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first
 # The conformance guest's: its stack, and its exports, the entry the floor
 # names, `run`, beside the guest's own boot.
-WASM_LINK := $(MODULE_LINK) -Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=run
+WASM_LINK := $(MODULE_LINK) -Wl,-z,stack-size=$(CONFORMANCE_STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=run
 # The example's: a program's stack; XPUTE_PROGRAM exports its `boot` and `run`.
 EXAMPLE_LINK := $(MODULE_LINK) -Wl,-z,stack-size=$(PROGRAM_STACK_BYTES)
 
