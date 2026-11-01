@@ -74,8 +74,8 @@ export function tile_object(
 
 /**
  * A body still packed means the transport did not decode the stored
- * encoding: a browser that cannot, which the Worker cannot refuse, since
- * Cloudflare rewrites `accept-encoding` before the Worker sees it; or a
+ * encoding: a browser that offered zstd and did not decode it, the zone's
+ * rule refusing one that does not offer it before boot (web encoding.ts); or a
  * device whose own decode (ts/app/native/src/origin.ts) was skipped.
  */
 function packed(body: U8Array): boolean {

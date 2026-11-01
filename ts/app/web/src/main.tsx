@@ -16,6 +16,7 @@ import WorldPage from "@pxl/client/shell/world/page.tsx";
 import { Halt } from "@pxl/client/shell/halt.tsx";
 import { page } from "./bracket.ts";
 import * as webgpu from "./webgpu.ts";
+import * as encoding from "./encoding.ts";
 import "./document.css";
 
 if (import.meta.env.DEV) (await import("./remote-console.ts")).install();
@@ -25,7 +26,7 @@ bracket.set(page);
 try {
   // The shell's words first: whatever it shows, a halt among it, is in them.
   locale.boot();
-  const missing = await webgpu.missing();
+  const missing = (await webgpu.missing()) ?? (await encoding.missing());
   // The client, bottom up, where there is a GPU to boot it on; the shell
   // below reads where it stands.
   if (!missing) boot();

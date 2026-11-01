@@ -316,3 +316,25 @@ so brotli moves the gap to the React Native client rather than closing it. Only
 a gzip closes it everywhere — zopfli's 5.6 KB is a gzip stream and every stack
 reads one — and that is 30% more bytes than zstd -22, paid by the reader, since
 the bill does not count them. zstd stays.
+
+## 2026-11-01: a browser that does not offer zstd is refused
+
+The user's word: the web serves only a browser that reads zstd, as the
+09-22 section said ("pointed at another browser rather than served a second
+copy"); the app decodes its own. The 09-24 section found the second copy made
+and cached all the same, and the Worker unable to refuse, its
+`accept-encoding` the edge's. The refusal runs where the client's own header
+is intact: a WAF custom rule on the zone, ahead of the Worker, blocking
+
+```text
+starts_with(http.request.uri.path, "/tile/")
+and not any(lower(http.request.headers["accept-encoding"][*])[*] contains "zstd")
+```
+
+so no decoded copy is made or cached. The page asks once before anything
+starts, beside WebGPU, as `2b64cec57` settled a browser's checks to be: a
+refused declaration (`/tile/source`) is the browser's answer, and the halt is
+`halt.web.encoding`, the notice that commit took out when the edge still
+served a decoded copy (`ts/app/web/src/encoding.ts`). The app asks with
+`accept-encoding: zstd` and unpacks the body itself
+(`ts/app/native/src/origin.ts`), so the rule never meets it.

@@ -121,7 +121,9 @@ const CACHED_ENCODING = "pxl-content-encoding";
  * the way out, so what this code reads is the edge's own list and not the
  * browser's. Every variant was refused when it was tried, `*` and `zstd`
  * included. Whatever refuses a client for its encoding has to run where the
- * client's own header is still intact, which is not here. */
+ * client's own header is still intact, which is not here: the zone's WAF rule
+ * over the tile route refuses a client that does not offer zstd before this
+ * Worker runs (doc/minutes/20260913-compression-by-traffic.md, 2026-11-01). */
 function serve(
   body: ArrayBuffer | ReadableStream | null,
   from: Headers,
