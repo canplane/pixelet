@@ -29,7 +29,7 @@ const _: () = assert!(
 );
 
 pub struct DecorPass {
-    lit_pipeline: Pipeline,
+    lit: Pipeline,
     ghost: Pipeline,
     depth: Pipeline,
     uniforms: DrawUniforms,
@@ -48,7 +48,7 @@ fn put_mark(buf: &mut [u8], (_, u): &mark::Draw) {
 impl DecorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> DecorPass {
         DecorPass {
-            lit_pipeline: pipelines.build_world(g, PIPELINE_DECOR),
+            lit: pipelines.build_world(g, PIPELINE_DECOR),
             ghost: pipelines.build_world(g, PIPELINE_GHOST_DECOR),
             depth: pipelines.build_gated(
                 g,
@@ -122,7 +122,7 @@ impl DecorPass {
                 };
                 pass.set_bind_group(2, skin, &[]);
                 pass.set_bind_group(3, upload, &[]);
-                draw_model(pass, &self.lit_pipeline, model, vertex_cnt, idx_cnt, d[2]);
+                draw_model(pass, &self.lit, model, vertex_cnt, idx_cnt, d[2]);
             });
         }
     }
@@ -155,7 +155,7 @@ impl DecorPass {
         uploads: &Uploads,
     ) -> Option<(u32, u32, u32, u32)> {
         self.model(group, uploads, |image| {
-            skin_group(g, self.lit_pipeline.layouts[2], image)
+            skin_group(g, self.lit.layouts[2], image)
         })
     }
 
@@ -198,7 +198,7 @@ impl DecorPass {
         let cnt = (opaque.len() + ghost.len()) as u32;
         self.uniforms.write(
             g,
-            self.lit_pipeline.layouts[1],
+            self.lit.layouts[1],
             cnt,
             opaque.clone().chain(ghost.clone()),
             moved,
@@ -228,7 +228,7 @@ impl DecorPass {
 
     fn pipeline(&self, stage: Stage) -> u32 {
         match stage {
-            Stage::Lit => self.lit_pipeline.id,
+            Stage::Lit => self.lit.id,
             Stage::Depth => self.depth.id,
         }
     }
@@ -268,10 +268,10 @@ impl DecorPass {
         } else {
             0
         };
-        let lit_pipeline = self.lit_pipeline;
+        let lit = self.lit;
         draw_models(
             pass,
-            &lit_pipeline,
+            &lit,
             pipeline,
             frame,
             slots.skip(first),
@@ -308,7 +308,7 @@ impl DecorPass {
             };
             pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group)]);
             pass.set_bind_group(2, skin, &[]);
-            bind_mesh(pass, &self.lit_pipeline, model, vertex_cnt, idx_cnt);
+            bind_mesh(pass, &self.lit, model, vertex_cnt, idx_cnt);
             pass.draw_indexed_indirect(d.args, d.args_at(2 * group));
         }
     }

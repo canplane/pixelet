@@ -555,17 +555,17 @@ pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
 /// The asset `asset` at the node `n` as drawn from the origin `o`, in units
 /// from it (`bounds`, `fill_bounds`): the box `entry` asks a ray into, as
 /// the samples' boxes are drawn (`raster`).
-pub fn drawn_box(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
+pub fn asset_box(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
     fill_bounds(bounds(n, grid_of(o)), asset)
 }
 
 /// Where `ray` from the origin `o` enters the cell `asset` is in (an asset's word,
 /// `answer`) at the node `n`, and whether it does within its interval: its span
-/// in the cell as drawn from the origin (`drawn_box`, `spans`), and
+/// in the cell as drawn from the origin (`asset_box`, `spans`), and
 /// where that span begins (`entry_plane`). Only touched, at a face or an edge,
 /// is not entered, as the walk has it.
 pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, asset: u32) -> (f32, u32, bool) {
-    let (x, y, z) = spans(ray, drawn_box(o, n, asset), 0.0);
+    let (x, y, z) = spans(ray, asset_box(o, n, asset), 0.0);
     let (t0, t1) = (
         greater(greater(greater(0.0, x.0), y.0), z.0),
         lesser(lesser(lesser(ray.t_max, x.1), y.1), z.1),

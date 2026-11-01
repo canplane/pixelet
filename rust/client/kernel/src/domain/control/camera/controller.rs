@@ -223,11 +223,11 @@ pub fn pose() -> Option<ObserverPose> {
     let c = controllers();
     match (&c.tracker, c.base) {
         (Some(t), _) => {
-            let (mut camera_to_world, mut rot, mut off) = (mat4::new(), mat4::new(), [0.0; 3]);
+            let (mut camera_to_world, mut rot, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
             mat4::mul(&mut camera_to_world, &t.world_turn, &t.turn);
-            mat4::transform_point(&mut off, &t.world_turn, t.at[0], t.at[1], t.at[2]);
+            mat4::transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
             Some(ObserverPose {
-                eye: v3::add(&t.world_at, &off),
+                eye: v3::add(&t.world_at, &moved),
                 rot: *mat4::transpose(&mut rot, &camera_to_world),
             })
         }

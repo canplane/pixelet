@@ -48,8 +48,8 @@ pub struct ImpostorPass {
     group: u32,
     /// Center across, center up, half side, half depth.
     fit: [[f32; 4]; DECOR_GROUPS],
-    baked_keys: [Option<BakeKey>; DECOR_GROUPS],
-    wanted_keys: [Option<BakeKey>; DECOR_GROUPS],
+    baked: [Option<BakeKey>; DECOR_GROUPS],
+    wanted: [Option<BakeKey>; DECOR_GROUPS],
     marks: Marks,
 }
 
@@ -118,8 +118,8 @@ impl ImpostorPass {
             fits,
             group,
             fit: [[0.0; 4]; DECOR_GROUPS],
-            baked_keys: [None; DECOR_GROUPS],
-            wanted_keys: [None; DECOR_GROUPS],
+            baked: [None; DECOR_GROUPS],
+            wanted: [None; DECOR_GROUPS],
             marks: Marks::new(
                 g,
                 pipelines,
@@ -150,13 +150,7 @@ impl ImpostorPass {
     /// group whose layer is not drawn yet is not.
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
         self.marks.draw(pass, frames, |pass, d, upload| {
-            if self
-                .baked_keys
-                .get(d[1] as usize)
-                .copied()
-                .flatten()
-                .is_none()
-            {
+            if self.baked.get(d[1] as usize).copied().flatten().is_none() {
                 return;
             }
             pass.set_bind_group(2, self.group, &[]);
@@ -186,7 +180,7 @@ impl ImpostorPass {
 
     pub fn set_models(&mut self, groups: impl Iterator<Item = (u32, Option<u32>, Extent)>) {
         for (group, want) in groups.take(DECOR_GROUPS).enumerate() {
-            self.wanted_keys[group] = Some(want);
+            self.wanted[group] = Some(want);
         }
     }
 
@@ -197,8 +191,8 @@ impl ImpostorPass {
         // and this one bakes, writes and submits nothing for it.
         let (mut due, mut len) = ([(0, BakeKey::default(), (0, 0, 0, 0)); DECOR_GROUPS], 0);
         for k in 0..DECOR_GROUPS {
-            if let Some(w) = self.wanted_keys[k]
-                .filter(|w| w.0 != 0 && w.1.is_some() && self.baked_keys[k] != Some(*w))
+            if let Some(w) =
+                self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w))
             {
                 if let Some(model) = decor.model_of(g, k as u32, uploads) {
                     (due[len], len) = ((k, w, model), len + 1);
@@ -237,7 +231,7 @@ impl ImpostorPass {
             pass.end();
             release(layer);
             self.fit[k] = fit_of(w.2);
-            self.baked_keys[k] = Some(w);
+            self.baked[k] = Some(w);
         }
         g.write_buf(self.fits, 0, bytes(self.fit.as_flattened()));
         true
@@ -281,7 +275,7 @@ impl ImpostorPass {
             return;
         };
         draw_models(pass, &self.draw, self.draw.id, frame, slots, draws, |d| {
-            self.baked_keys.get(d[1] as usize).copied().flatten()?;
+            self.baked.get(d[1] as usize).copied().flatten()?;
             Some(ModelDraw {
                 groups: [self.group, uploads.group_of(d[0])?],
                 mesh: None,
@@ -306,7 +300,7 @@ impl ImpostorPass {
         pass.set_bind_group(2, self.group, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
         for group in 0..groups.min(DECOR_GROUPS as u32) {
-            if self.baked_keys[group as usize].is_none() {
+            if self.baked[group as usize].is_none() {
                 continue;
             }
             pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group + 1)]);

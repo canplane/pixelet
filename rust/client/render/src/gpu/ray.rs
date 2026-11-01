@@ -43,11 +43,11 @@ pub struct RaysPass {
     /// where the world's pass has no gate, every one (`Resolve::every`):
     /// their words and uniform, and how many tiles there are.
     rays_eye: [u32; 2],
-    claimed_tiles: (u32, u32),
+    claimed: (u32, u32),
     tiles: ((u32, u32), u32),
     /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
     /// until the renderer hands them.
-    lit_entries: Vec<Entry>,
+    lit: Vec<Entry>,
     looks: u32,
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
@@ -72,9 +72,9 @@ impl RaysPass {
             group: 0,
             bindings: [0; 4],
             rays_eye: [0; 2],
-            claimed_tiles: (0, 0),
+            claimed: (0, 0),
             tiles: ((0, 0), 0),
-            lit_entries: Vec::new(),
+            lit: Vec::new(),
             looks,
             ground: None,
             cast: None,
@@ -90,7 +90,7 @@ impl RaysPass {
     /// The lit pass's entries, handed again whenever one of its objects is
     /// made again: the group is made again over them when next drawn.
     pub fn set_lit(&mut self, entries: Vec<Entry>) {
-        self.lit_entries = entries;
+        self.lit = entries;
         self.bindings = [0; 4];
     }
 
@@ -98,7 +98,7 @@ impl RaysPass {
     /// them, handed before it prepares, which makes its groups again where
     /// they are others.
     pub fn set_tiles(&mut self, claimed: (u32, u32), drawn: (u32, u32), cnt: u32) {
-        self.claimed_tiles = claimed;
+        self.claimed = claimed;
         self.tiles = (drawn, cnt);
     }
 
@@ -109,11 +109,11 @@ impl RaysPass {
         self.rays_eye = [rays, eye];
         let ((changed_at, tiles), _) = self.tiles;
         let bindings = [rays, eye, changed_at, tiles];
-        if bindings == self.bindings || self.lit_entries.is_empty() || bindings.contains(&0) {
+        if bindings == self.bindings || self.lit.is_empty() || bindings.contains(&0) {
             return;
         }
         release(self.group);
-        let mut e = self.lit_entries.clone();
+        let mut e = self.lit.clone();
         e.push(view_entry(3, rays));
         e.push(buf_entry(20, self.looks));
         e.push(buf_entry(21, eye));

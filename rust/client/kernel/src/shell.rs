@@ -183,32 +183,32 @@ impl SnapshotMemo {
     }
 }
 
-/// The snapshot made of `inputs` into `out`; none where it does not fit.
-pub fn ui_snapshot(inputs: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
-    let tool = inputs.tool;
+/// The snapshot made of `shown` into `out`; none where it does not fit.
+pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
+    let tool = shown.tool;
     let snapshot = Snapshot {
         pivot: PivotState {
-            status: inputs.status,
-            is_off_center: inputs.is_off_center,
-            lon_lat: inputs.pivot.map(|c| {
+            status: shown.status,
+            is_off_center: shown.is_off_center,
+            lon_lat: shown.pivot.map(|c| {
                 let g = epsg4326::unproject(&c);
                 LonLat {
                     lon: g[0],
                     lat: g[1],
                 }
             }),
-            outside: inputs.pivot.is_some_and(|c| {
+            outside: shown.pivot.is_some_and(|c| {
                 source::past_at([i64::from(c[0]), i64::from(c[1])].map(q3::to_real))
             }),
         },
         location: LocationState {
-            status: inputs.location.0.status,
-            has_location: inputs.location.1,
-            err: inputs.location.0.err,
+            status: shown.location.0.status,
+            has_location: shown.location.1,
+            err: shown.location.0.err,
         },
         companion: CompanionState {
-            person_ready: inputs.companion[0],
-            pet_ready: inputs.companion[1],
+            person_ready: shown.companion[0],
+            pet_ready: shown.companion[1],
         },
         tool: ToolState {
             active: tool.active_tool,
@@ -218,24 +218,24 @@ pub fn ui_snapshot(inputs: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
             draft: write::marker_draft(),
         },
         orient: OrientationState {
-            status: inputs.orient.status,
-            err: inputs.orient.err,
+            status: shown.orient.status,
+            err: shown.orient.err,
         },
-        azimuth: inputs.azimuth,
-        is_follow_mode: inputs.is_follow_mode,
-        camera_busy: inputs.camera_busy,
-        zooming: inputs.zooming,
-        over_marker: inputs.over_marker,
-        settings: inputs.settings.as_ref().map_or(&[], |s| s),
-        m_per_px: m_per_px(inputs.u_per_px, inputs.pivot),
-        division: &|each| division_parts(inputs.division, inputs.u_per_px, each),
-        previews: &inputs.previews.0[..inputs.previews.1],
+        azimuth: shown.azimuth,
+        is_follow_mode: shown.is_follow_mode,
+        camera_busy: shown.camera_busy,
+        zooming: shown.zooming,
+        over_marker: shown.over_marker,
+        settings: shown.settings.as_ref().map_or(&[], |s| s),
+        m_per_px: m_per_px(shown.u_per_px, shown.pivot),
+        division: &|each| division_parts(shown.division, shown.u_per_px, each),
+        previews: &shown.previews.0[..shown.previews.1],
         refused_files: &|each| {
-            for (root, path) in &inputs.refused_files.0[..inputs.refused_files.1] {
+            for (root, path) in &shown.refused_files.0[..shown.refused_files.1] {
                 each(&RefusedFile { root: *root, path });
             }
         },
-        stall: inputs.stall,
+        stall: shown.stall,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);

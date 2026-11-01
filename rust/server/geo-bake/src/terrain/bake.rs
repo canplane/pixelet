@@ -39,12 +39,8 @@ pub(crate) fn assemble(tile: [i32; 2], surface: Surface, lines: Separation) -> T
     )
 }
 
-/// `way_ranges`: the ranges of the tile's ways its lines draw.
-pub(crate) fn bake_surface(
-    tile_idx: [i32; 2],
-    src: TileSource,
-    way_ranges: &[WayRange],
-) -> Surface {
+/// `drawn`: the ranges of the tile's ways its lines draw.
+pub(crate) fn bake_surface(tile_idx: [i32; 2], src: TileSource, drawn: &[WayRange]) -> Surface {
     let tile_min = epsg3857::get_tile_bbox(LEAF_ZOOM, tile_idx)[0];
     let mut feats: Vec<Feature> = Vec::new();
     feats.extend(
@@ -52,11 +48,7 @@ pub(crate) fn bake_surface(
             .iter()
             .flat_map(|row| buildings(row, tile_min)),
     );
-    feats.extend(
-        src.parts
-            .iter()
-            .flat_map(|row| ways(row, way_ranges, tile_min)),
-    );
+    feats.extend(src.parts.iter().flat_map(|row| ways(row, drawn, tile_min)));
     feats.extend(src.base_rows.iter().flat_map(|row| bases(row, tile_min)));
 
     let ground = bake_ground(&feats, &coast_of(&src.coast_rows, tile_min));

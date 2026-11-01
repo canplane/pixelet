@@ -102,7 +102,7 @@ pub const W_INHERITANCE: u32 = 4;
 pub const W_NODE: u32 = W_INHERITANCE + INHERITANCE_WORDS;
 /// What was handed it of what is placed, its `Inheritance`'s second word
 /// (`world::Inheritance::words`).
-pub const W_OBJECT: u32 = W_INHERITANCE + 1;
+pub const W_PLACED: u32 = W_INHERITANCE + 1;
 pub(crate) const ENTRY_WORDS: u32 = W_NODE + 4;
 
 /// The slots: no more than the tiles' entries were (8 roots and 2^16 tiles
@@ -272,8 +272,8 @@ pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
 /// a node beside the box holds a slot the write changed, and reads another
 /// node's what is placed after it.
 pub fn reads_written(placed: u32, first: u32) -> bool {
-    let node_slot = NodeSlot::of_word(placed);
-    node_slot.holds() && node_slot.slot().wrapping_sub(first) < overwrite::CHILDREN
+    let slot = NodeSlot::of_word(placed);
+    slot.holds() && slot.slot().wrapping_sub(first) < overwrite::CHILDREN
 }
 
 /// Whether the node of `zoom` at column `[x, y]` reads a brick that moved,

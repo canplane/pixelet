@@ -85,20 +85,20 @@ fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
 
 /// The floor `at` is drawn on in `world`: its own, or where its height is
 /// not known the finest ground's there; none where nothing is known.
-pub fn drawn_floor(world: World<'_>, at: &Q3) -> Option<f64> {
+pub fn floor_at(world: World<'_>, at: &Q3) -> Option<f64> {
     match standing(world, at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => Some(floor_of(&p)),
         _ => None,
     }
 }
 
-/// Where `at` is drawn; at `cur`'s height where nothing is known.
-pub fn resolve(at: &Q3, cur: V3) -> V3 {
+/// Where `at` is drawn; at `held`'s height where nothing is known.
+pub fn resolve(at: &Q3, held: V3) -> V3 {
     match standing(World::now(), at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => to_world(&p),
         Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => {
             let l = to_world(at);
-            [l[0], l[1], cur[2]]
+            [l[0], l[1], held[2]]
         }
     }
 }

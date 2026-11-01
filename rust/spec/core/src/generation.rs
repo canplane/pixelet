@@ -140,7 +140,7 @@ pub const fn generated_for(head: [u32; 3], q: [i32; 2]) -> bool {
 /// The boxes a frame's generation is asked over at most: the edits and cuts
 /// held (`overwrite::BOXES`), and each brick handed this frame, which
 /// reaches its clip level's zoom and every coarser one (`asks`'s vote).
-pub const BOX_CAP: u32 = overwrite::BOXES + clipmap::HAND_CAP;
+pub const BOX_CAP: u32 = overwrite::BOXES + clipmap::FILL_CAP;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
 /// finest clip level zoom whose candidates it reaches, `EVERY` for all.
 pub const BOX_WORDS: u32 = 5;
@@ -567,7 +567,7 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// stands at or finer, so it stands where one the ground generates of its
 /// size would. A generated one is asked at the zoom held where it stands
 /// (`held_at`), as a ray there draws. Each clip level generates what stands
-/// as itself at it (pxl-kernel domain/scene/decor/gpu.rs `shown_zooms`,
+/// as itself at it (pxl-kernel domain/scene/decor/gpu.rs `shown`,
 /// `stands_at`).
 pub fn drawn_at(at: Zoom, cell: Zoom, placed: bool) -> bool {
     if placed {

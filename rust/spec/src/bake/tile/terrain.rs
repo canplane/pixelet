@@ -275,7 +275,7 @@ fn record(
 }
 
 /// The clip level's brick at `place` (in bricks) of `tile`, handed into
-/// `fresh` (`record`) and filled into `column`, its spans into `span_scratch`, its
+/// `handed` (`record`) and filled into `column`, its spans into `kept`, its
 /// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-spec-core
 /// `fill::brick`): the most spans a column makes.
 pub(crate) fn brick_spans(
@@ -283,14 +283,14 @@ pub(crate) fn brick_spans(
     held: &TerrainTile,
     place: [u32; 2],
     scratch: &mut [(u32, u32)],
-    [fresh, column, span_scratch]: [&mut [u32]; 3],
+    [handed, column, kept]: [&mut [u32]; 3],
 ) -> u32 {
     use pxl_spec_core::clipmap::BRICK;
-    record(tile, held, place, scratch, fresh);
+    record(tile, held, place, scratch, handed);
     let cell = GROUND.cell_zoom(tile.zoom);
     let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * BRICK) as i32);
     let first = [pxl_spec_core::wrap_idx(cell, first[0]), first[1]];
-    fill::brick(fresh, column, span_scratch, place, cell, first)
+    fill::brick(handed, column, kept, place, cell, first)
 }
 
 /// The child groups the clip levels' trees take wherever the eye is, of the
@@ -300,12 +300,12 @@ pub(crate) fn brick_spans(
 /// takes before its fold gives child groups back (`taken`). A brick without
 /// ways takes none.
 pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
-    use pxl_spec_core::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FIRST_CELL, HAND_CAP};
+    use pxl_spec_core::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FILL_CAP, FIRST_CELL};
     let cells = FIRST_CELL..FIRST_CELL + EYE_CLIP_LEVELS;
     let most = cells.clone().map(&worst).max().unwrap_or(0);
     cells.map(worst).sum::<u64>()
         + u64::from(CLIP_LEVELS - EYE_CLIP_LEVELS) * most
-        + u64::from(HAND_CAP) * taken
+        + u64::from(FILL_CAP) * taken
 }
 
 /// `held` with only the lines it draws at `tile`'s zoom: each read alone,
@@ -446,9 +446,8 @@ pub fn fill_fit(
         if nodes > ROOT_NODES {
             return Err((place, Unfit::Nodes(nodes)));
         }
-        let [group_cnt, child_groups, root] =
-            fill::tree(&column, &span_scratch, cell, &mut pool, 1);
-        if group_cnt == u32::MAX {
+        let [taken, child_groups, root] = fill::tree(&column, &span_scratch, cell, &mut pool, 1);
+        if taken == u32::MAX {
             return Err((place, Unfit::ChildGroups));
         }
         each(
@@ -459,14 +458,14 @@ pub fn fill_fit(
                 cell,
                 pool: &pool,
                 root,
-                peak_group_cnt: group_cnt,
+                peak_group_cnt: taken,
                 group_cnt: child_groups,
             },
         );
         if child_groups > 0 {
             fit.bricks.push((k, child_groups));
         }
-        fit.peak_group_cnt = fit.peak_group_cnt.max(group_cnt);
+        fit.peak_group_cnt = fit.peak_group_cnt.max(taken);
     }
     Ok(fit)
 }

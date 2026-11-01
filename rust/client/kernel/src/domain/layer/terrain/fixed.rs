@@ -1,4 +1,4 @@
-// pxl-kernel/domain/layer/terrain/room.rs
+// pxl-kernel/domain/layer/terrain/fixed.rs
 
 //! `.fixed.terrain`: the room every resident terrain tile and every held
 //! brick lies in, and where a record's bytes are. A plane is one array of

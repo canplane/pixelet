@@ -93,7 +93,7 @@ fn companion_props() -> Option<CompanionProps> {
     let at = coord::to_world(&goal);
     Some(CompanionProps {
         pivot: [at[0], at[1]],
-        floor: companion::pivot_floor(goal, |w| support::drawn_floor(w, &goal)),
+        floor: companion::pivot_floor(goal, |w| support::floor_at(w, &goal)),
         azimuth: controller::azimuth(),
         dragging: input::dragging(),
         steered: input::steering(),
@@ -400,8 +400,8 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
 /// (domain/query/changes.rs). Taken after arrivals are admitted, before the
 /// layers observe.
 fn changes_step() {
-    static MOVED_TILES: Global<[Vec<Tile>; 3]> = Global::new();
-    let [places, earth, divisions] = MOVED_TILES.get(Default::default);
+    static MOVED: Global<[Vec<Tile>; 3]> = Global::new();
+    let [places, earth, divisions] = MOVED.get(Default::default);
     let shared = changes::take();
     gpu::note_edited(changes::written_boxes());
     PlaceTile::tile_cache().take_moved(places);

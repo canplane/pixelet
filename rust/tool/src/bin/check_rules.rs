@@ -162,7 +162,7 @@ fn screen_reached(text: &str) -> Vec<usize> {
 /// variants are not.
 const PARTICIPLE_ROOTS: [&str; 2] = ["rust/", "xpute/"];
 const TS_PARTICIPLE_ROOTS: [&str; 2] = ["xpute/ts/", "ts/client/src/"];
-const TS_UNCHECKED_ROOT: &str = "ts/client/src/shell/";
+const TS_UNCHECKED: &str = "ts/client/src/shell/";
 /// The irregular past participles and past tenses a type's name may not be alone. A word
 /// that is also a noun (`Hit`, `Set`, `Read`, `Run`, `Cut`, `Split`) is not
 /// among them.
@@ -417,7 +417,7 @@ fn out_of_order(
 /// `benches/` or `examples/`), and no `mod`, `#[path]` or `include!` in a
 /// file, nor a manifest's `path`, names it. Such a file compiles in nothing,
 /// so nothing checks it.
-fn unlinked_files(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
     use std::collections::BTreeSet;
     use std::path::{Component, Path, PathBuf};
     fn clean(p: &Path) -> PathBuf {
@@ -626,7 +626,7 @@ fn run() -> Result<Vec<String>, String> {
     }
     for f in files.iter() {
         let ts = TS_PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
-            && !f.starts_with(TS_UNCHECKED_ROOT)
+            && !f.starts_with(TS_UNCHECKED)
             && (f.ends_with(".ts") || f.ends_with(".tsx"));
         let rs = PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
             && (f.ends_with(".rs") || (f.ends_with(".wgsl") && !f.ends_with(".gen.wgsl")));
@@ -656,7 +656,7 @@ fn run() -> Result<Vec<String>, String> {
         }
     }
 
-    problems.extend(unlinked_files(&files, &read));
+    problems.extend(unlinked(&files, &read));
 
     // The generated shaders' stamp names the digest of the sources they were
     // made from (pxl-tool shader.rs `STAMP`); a set the tree has moved past is
@@ -716,7 +716,7 @@ mod spec;"
                 .to_string(),
             )
         };
-        let found = unlinked_files(&files, &read);
+        let found = unlinked(&files, &read);
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(found[0].starts_with("rust/a/src/stray.rs:"));
     }

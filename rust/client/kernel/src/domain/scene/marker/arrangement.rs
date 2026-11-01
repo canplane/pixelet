@@ -80,7 +80,7 @@ struct Arrangement {
     pins: Vec<pin::Pin>,
     places: Vec<place::Place>,
     /// What the sources show this run, its room kept.
-    source_instances: Vec<Instance>,
+    shown: Vec<Instance>,
     /// The drawn bricks `pins` and `places` were read from: a brick drawn
     /// still keeps what was read from it, so an eye move casts rays only in
     /// the bricks it enters.
@@ -95,18 +95,18 @@ struct Arrangement {
     /// The bricks this turn would read, by how far from the eye, with
     /// their columns.
     entering: Vec<(f64, Brick, Aabb)>,
-    sized_instances: Vec<Instance>,
-    /// Last turn's `sized_instances`, its buffer reused.
+    sized: Vec<Instance>,
+    /// Last turn's `sized`, its buffer reused.
     spare: Vec<Instance>,
     /// Designs not ready yet, kept to become so, each by the index in
-    /// `sized_instances` of the instance showing its old drawing meanwhile.
+    /// `sized` of the instance showing its old drawing meanwhile.
     pending: Vec<(u32, Design)>,
     /// What was drawn last by its holder's key, and the designs the markers
     /// keep: made each run, their room kept.
     before: FnvHashMap<Key, Design>,
     keep: FnvHashSet<Design>,
     /// What the marker set holds, and the buffer the next run lays out
-    /// into, swapped as `sized_instances` and `spare` are.
+    /// into, swapped as `sized` and `spare` are.
     instances: Vec<f32>,
     spare_instances: Vec<f32>,
     /// What the last run read, compared by value: equal, with nothing moved
@@ -125,7 +125,7 @@ struct Arrangement {
 struct Inputs {
     o: Observation,
     places: bool,
-    draft_key: Option<(EntryAt, u64)>,
+    drafted: Option<(EntryAt, u64)>,
     bubble: line::Bubble,
 }
 
@@ -225,7 +225,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     let seen = Inputs {
         o,
         places: settings_store().place,
-        draft_key: pin::draft_key(),
+        drafted: pin::draft_key(),
         bubble: line::bubble(o.eye),
     };
     if !p.waiting && !p.moved && p.last.as_ref() == Some(&seen) {
@@ -330,12 +330,12 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         p.now = p.found_for.replace(now).unwrap_or_default();
     }
     p.candidates.reset();
-    let drawn_before = core::mem::take(&mut p.sized_instances);
+    let drawn_before = core::mem::take(&mut p.sized);
     let mut sized = core::mem::take(&mut p.spare);
     sized.clear();
     p.pending.clear();
     // Each shown at the zoom the grid's cell at its own point is.
-    let mut shown = core::mem::take(&mut p.source_instances);
+    let mut shown = core::mem::take(&mut p.shown);
     shown.clear();
     pin::show(&mut pins, o.eye, &mut shown);
     place::show(&mut read_places, o.eye, &mut shown);
@@ -386,7 +386,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
             .chain(seen.bubble.design()),
     );
     let freed = design::retain(&p.keep);
-    (p.pins, p.places, p.source_instances) = (pins, read_places, shown);
+    (p.pins, p.places, p.shown) = (pins, read_places, shown);
     select_visible(&mut p.candidates, &mut p.visible);
     // A design held for an instance seen asks its slot now, after the slots
     // let go are freed, so it is painted at render. Where the atlas has no
@@ -466,7 +466,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         ctx.invalidate();
     }
     let drawn_instances = core::mem::replace(&mut p.instances, instances);
-    (p.sized_instances, p.spare, p.spare_instances) = (sized, drawn_before, drawn_instances);
+    (p.sized, p.spare, p.spare_instances) = (sized, drawn_before, drawn_instances);
 }
 
 /// The markers the last step laid out, into the frame's list.

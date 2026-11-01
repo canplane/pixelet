@@ -83,7 +83,7 @@ struct Program {
         sys.read(opened.fd, r.bytes_.span());
         files.close(sys, opened.fd);
         r.got_ = Read::Got::reading;
-        r.asked_turn_ = turn;
+        r.asked_ = turn;
         reading.push_back(&r);
     }
 
@@ -93,7 +93,7 @@ struct Program {
         turn++;
         std::erase_if(left, [this](const Left &l) { return turn > l.asked_turn; });
         std::erase_if(reading, [this](Read *r) {
-            if (turn <= r->asked_turn_) return false;
+            if (turn <= r->asked_) return false;
             r->ready(Errno::ok);
             return true;
         });
@@ -223,7 +223,7 @@ Read::~Read() {
         break;
     case Got::reading:
         std::erase(p.reading, this);
-        p.left.push_back(program_detail::Left{std::move(bytes_), asked_turn_});
+        p.left.push_back(program_detail::Left{std::move(bytes_), asked_});
         break;
     case Got::idle:
     case Got::done:

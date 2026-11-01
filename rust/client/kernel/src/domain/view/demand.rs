@@ -18,7 +18,7 @@ use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::Stream;
-use crate::sys::io::fetch::{answer_cnt, body, on_answer_settled, release, take_answer, Answer};
+use crate::sys::io::fetch::{answer_cnt, body, on_answer_settled, release, take_answer, Response};
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
@@ -482,7 +482,7 @@ pub fn admit_arrived(pass: &Pass) {
     let stat = pass.run(
         0..answer_cnt(&OF),
         |_| {
-            let Some(Answer {
+            let Some(Response {
                 key,
                 stream,
                 subject,

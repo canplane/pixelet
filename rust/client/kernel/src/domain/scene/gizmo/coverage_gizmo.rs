@@ -121,7 +121,7 @@ struct Outline {
 #[derive(Default)]
 struct Coverage {
     /// About where what is drawn is laid; none while hidden.
-    drawn_at: Option<V3>,
+    drawn: Option<V3>,
     /// The lines then the faces, and where the faces begin.
     vertices: (Vec<f32>, usize),
     /// Those laid this step, kept so their buffer is reused.
@@ -140,7 +140,7 @@ pub fn coverage_gizmo_step(show: bool) {
         return;
     };
     let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::top()) else {
-        if c.drawn_at.take().is_some() {
+        if c.drawn.take().is_some() {
             scene.coverage.set(draw, [0.0; 3], &[], 0);
             request_world_tick();
         }
@@ -170,9 +170,9 @@ pub fn coverage_gizmo_step(show: bool) {
     }
     c.next.0.clear();
     c.next.1 = lines.lay(&mut c.next.0, about, &World::now());
-    if c.drawn_at != Some(about) || c.next != c.vertices {
+    if c.drawn != Some(about) || c.next != c.vertices {
         scene.coverage.set(draw, about, &c.next.0, c.next.1);
-        c.drawn_at = Some(about);
+        c.drawn = Some(about);
         core::mem::swap(&mut c.next, &mut c.vertices);
         request_world_tick();
     }
@@ -260,7 +260,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
                         false => Mark::Drawn,
                     }
                 }
-                None => match tile_cache.line(tile).drawn_from {
+                None => match tile_cache.line(tile).finest_resident {
                     None => Mark::NoTile,
                     Some(s) if floor_only(s) => Mark::FloorOnly,
                     Some(_) => Mark::Unbuilt,

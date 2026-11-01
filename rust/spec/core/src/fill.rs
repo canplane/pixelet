@@ -185,13 +185,13 @@ fn head_word(s: &way::Spans, fits: bool) -> u32 {
 }
 
 /// Where the brick a frame hands `k`-th has its scratch in the frame's
-/// `scratch`, `clipmap::HAND_CAP` bricks' alike, each a `HAND_CAP`th of its
+/// `scratch`, `clipmap::FILL_CAP` bricks' alike, each a `FILL_CAP`th of its
 /// length (`way::tree::scratch_words`), which the renderer grows
 /// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow_scratch`): taken from
 /// the buffer, as the pool's free stack takes its own (pxl-shader `pop`).
 /// A one brick's scratch is the first's.
 pub fn scratch_at(scratch: &[u32], k: u32) -> u32 {
-    k * (scratch.len() as u32 / clipmap::HAND_CAP)
+    k * (scratch.len() as u32 / clipmap::FILL_CAP)
 }
 
 /// A brick being filled, as the ways' rule reads it (`clipmap::Brick`):
@@ -378,14 +378,14 @@ pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], mine: u32, i: u32) ->
 pub fn level(
     ground: &mut [u32],
     base: u32,
-    column_spans: &impl way::ColumnSpans,
+    kept: &impl way::ColumnSpans,
     cell: Zoom,
     j: u32,
     at: [u32; 2],
 ) {
     let w = if j == 0 {
         let top = column_top(column_of(ground, base, clipmap::idx_of(at)));
-        let lines = way::lined_hull(column_spans, [at[0] as i32, at[1] as i32], cell, top);
+        let lines = way::lined_hull(kept, [at[0] as i32, at[1] as i32], cell, top);
         ground::bounds_word([[top, top], lines])
     } else {
         let under: &[u32] = ground;
@@ -489,17 +489,17 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
     // brick's own zoom.
     let top = cell - clipmap::BRICK_SHIFT;
     let mut levels = [[0u32; 2]; clipmap::BRICK_SHIFT as usize + 1];
-    let (mut b, mut n, mut group_cnt) = (CHILDREN * from, CHILDREN, 1);
+    let (mut b, mut n, mut taken) = (CHILDREN * from, CHILDREN, 1);
     let mut zoom = top;
     while zoom < cell {
         levels[(zoom - top) as usize] = [b, n];
-        let flag_cnt = (b..b + n)
+        let flagged = (b..b + n)
             .filter(|&s| t::flag(&p, &brick, 0, cell, zoom, s))
             .count() as u32;
-        if room < from + group_cnt || !t::fits(room - from - group_cnt, group_cnt, flag_cnt) {
+        if room < from + taken || !t::fits(room - from - taken, taken, flagged) {
             return [u32::MAX; 3];
         }
-        let next = CHILDREN * (from + group_cnt);
+        let next = CHILDREN * (from + taken);
         let mut k = 0;
         for s in b..b + n {
             if t::flag(&p, &brick, 0, cell, zoom, s) {
@@ -509,7 +509,7 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
                 t::empty(&mut p, s);
             }
         }
-        (b, n, group_cnt, zoom) = (next, CHILDREN * flag_cnt, group_cnt + flag_cnt, zoom + 1);
+        (b, n, taken, zoom) = (next, CHILDREN * flagged, taken + flagged, zoom + 1);
     }
     for s in b..b + n {
         t::leaf(&mut p, &column_spans, cell, s);
@@ -524,7 +524,7 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
             }
         }
     }
-    [group_cnt, group_cnt - freed, t::root_word(from, z0)]
+    [taken, taken - freed, t::root_word(from, z0)]
 }
 
 #[cfg(test)]
@@ -613,19 +613,16 @@ mod tests {
                 }
             }
             let mut pool = vec![0u32; 16 * (tree::BRICK_CHILD_GROUPS as usize + 1)];
-            let [group_cnt, held, root] = tree(&lane, &scratch, cell, &mut pool, 1);
-            assert!(
-                group_cnt != u32::MAX && held <= group_cnt,
-                "round {round}: refused"
-            );
+            let [taken, held, root] = tree(&lane, &scratch, cell, &mut pool, 1);
+            assert!(taken != u32::MAX && held <= taken, "round {round}: refused");
             let p = Read(&pool);
             let s = 1i32 << (crate::LEAF_CELL - cell);
             for i in 0..BRICK_CELLS {
                 let [x, y] = clipmap::of_idx(i);
                 for z in (base_top - 60) / s..(base_top + 60) / s {
                     let at = [x as i32, y as i32, z];
-                    let node_slot = tree::cursor(&p, root, cell, cell, at);
-                    let got = tree::read(overwrite::val(&p, node_slot, Cut::NONE, cell, at));
+                    let slot = tree::cursor(&p, root, cell, cell, at);
+                    let got = tree::read(overwrite::val(&p, slot, Cut::NONE, cell, at));
                     let want = match way::way_cell(&column_spans, [at[0], at[1]], cell, z) {
                         way::NOTHING => ground::VOID,
                         v => v,

@@ -405,9 +405,9 @@ impl Program {
         self.turn += 1;
         let turn = self.turn;
         self.reads
-            .retain(|r| !(r.gone && turn > asked_turn_of(&r.got).unwrap_or(0)));
+            .retain(|r| !(r.gone && turn > asked_of(&r.got).unwrap_or(0)));
         for r in &mut self.reads {
-            if asked_turn_of(&r.got).is_some_and(|asked| turn > asked) {
+            if asked_of(&r.got).is_some_and(|asked| turn > asked) {
                 let Stage::Reading { bytes, .. } = core::mem::replace(&mut r.got, Stage::Opening)
                 else {
                     unreachable!()
@@ -425,7 +425,7 @@ impl Program {
     }
 }
 
-fn asked_turn_of(got: &Stage) -> Option<u32> {
+fn asked_of(got: &Stage) -> Option<u32> {
     match got {
         Stage::Reading { asked_turn, .. } => Some(*asked_turn),
         _ => None,

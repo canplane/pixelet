@@ -29,9 +29,9 @@ fn ran_out_says_what() {
 
 #[test]
 fn scratch_peak_unchanged() {
-    // 18.01 MiB, `HAND_CAP` bricks of `SCRATCH_WORDS`.
+    // 18.01 MiB, `FILL_CAP` bricks of `SCRATCH_WORDS`.
     assert_eq!(
         scratch_bytes(way::tree::BRICK_CHILD_GROUPS),
-        HAND_CAP * way::tree::SCRATCH_WORDS * 4
+        FILL_CAP * way::tree::SCRATCH_WORDS * 4
     );
 }

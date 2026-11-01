@@ -327,7 +327,7 @@ fn view() -> ViewSection {
         cell: zoom(cell),
         hit_kind,
         pick_zoom: zoom(picked.as_ref().map(|p| p.zoom())),
-        drawn_zoom: zoom(picked.as_ref().and_then(|p| p.drawn_zoom)),
+        ray_zoom: zoom(picked.as_ref().and_then(|p| p.ray_zoom)),
         folded: picked
             .as_ref()
             .map_or(f64::NAN, |p| f64::from(u8::from(p.is_folded()))),

@@ -8,7 +8,7 @@ use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec_core::clipmap::{FILL_WORDS, HAND_CAP};
+use pxl_spec_core::clipmap::{FILL_CAP, FILL_WORDS};
 use pxl_spec_core::eye;
 use pxl_spec_core::generation::GROUPS;
 use pxl_spec_core::light::{self, TILE as LIGHT_TILE};
@@ -24,7 +24,7 @@ use crate::frame::draw::uniform_of;
 use crate::frame::draw::{
     stats_slot, DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, PIPELINE_CAMERA_GRID, PIPELINE_DEBUG,
     PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_SKINNED_MESH,
+    PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_SKINNED,
     REWRITE_WORDS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
@@ -60,7 +60,7 @@ use crate::gpu::pass::mark::UploadCopies;
 use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::preview::Preview;
-use crate::gpu::pass::skinned_mesh::SkinnedMeshPass;
+use crate::gpu::pass::skinned_mesh::SkinnedPass;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::propagate::{self, Propagate};
 use crate::gpu::put::put_mat;
@@ -238,7 +238,7 @@ pub enum Resident<'a> {
 /// The read-backs a brick's cells and its ways' records come back in
 /// (gpu/ray/ground.rs `GroundBuffers::read_back`): two frames' fills, so one
 /// frame's mappings are still landing while the next is copied.
-pub const READS: u32 = 2 * HAND_CAP;
+pub const READS: u32 = 2 * FILL_CAP;
 
 /// The pool's records the renderer keeps on the heap at their worst, in
 /// the buddy's blocks: every read's room at a brick's most
@@ -474,7 +474,7 @@ pub struct Renderer {
     frame: Frame,
     sky_buf: u32,
     sky: [f32; SKY_FLOATS],
-    sky_pipeline: Pipeline,
+    sky_built: Pipeline,
     sky_group: u32,
     ghost: Pipeline,
     draws_buf: u32,
@@ -498,7 +498,7 @@ pub struct Renderer {
     moon: ImageMap,
     decor: DecorPass,
     impostor: ImpostorPass,
-    skinned_mesh: SkinnedMeshPass,
+    skinned_mesh: SkinnedPass,
     location: LocationPass,
     marker: MarkerPass,
     finish: Finish,
@@ -580,7 +580,7 @@ impl Renderer {
         let clouds = CloudPass::new(g, &mut pipelines, frame_buf, air);
         let mips = MipPass::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let pack = Pack::new(g);
-        let sky_pipeline = pipelines.build_world(g, PIPELINE_SKY);
+        let sky_built = pipelines.build_world(g, PIPELINE_SKY);
         let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);
         let mut sky_entries = vec![
             buf_entry(0, frame_buf),
@@ -589,7 +589,7 @@ impl Renderer {
             sampler_entry(3, moon.sampler),
         ];
         sky_entries.extend(air);
-        let sky_group = g.bind_group(sky_pipeline.layouts[0], &sky_entries);
+        let sky_group = g.bind_group(sky_built.layouts[0], &sky_entries);
         let draws_buf = g.buf(
             DRAWS_INIT * 4,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
@@ -611,7 +611,7 @@ impl Renderer {
             ghost: pipelines.build_world(g, PIPELINE_GHOST_BOX),
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
-            skinned_mesh: SkinnedMeshPass::new(g, &mut pipelines, device.align),
+            skinned_mesh: SkinnedPass::new(g, &mut pipelines, device.align),
             location: LocationPass::new(g, &mut pipelines, frame_buf, device.align),
             marker: MarkerPass::new(g, &mut pipelines, frame_buf, device.align),
             finish: Finish::new(g, &mut pipelines),
@@ -647,7 +647,7 @@ impl Renderer {
             frame: [0.0; FRAME_FLOATS],
             sky_buf,
             sky: [0.0; SKY_FLOATS],
-            sky_pipeline,
+            sky_built,
             sky_group,
             draws_buf,
             draws_bytes: DRAWS_INIT * 4,
@@ -873,7 +873,7 @@ impl Renderer {
     fn marks_read(&self, draws: &Draws) -> Vec<u32> {
         let mut out = Vec::new();
         self.skinned_mesh
-            .marks_read(draws.of(PIPELINE_SKINNED_MESH), &mut out);
+            .marks_read(draws.of(PIPELINE_SKINNED), &mut out);
         self.decor.marks_read(draws, &mut out);
         self.impostor
             .marks_read(draws.of(PIPELINE_IMPOSTOR), &mut out);
@@ -1091,7 +1091,7 @@ impl Renderer {
         self.impostor
             .prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
         self.skinned_mesh
-            .prepare(g, draws.of(PIPELINE_SKINNED_MESH), uniforms, lists_moved, b);
+            .prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
         self.location.prepare(g, &draws, uniforms, lists_moved, b);
         self.marker.prepare(
             g,
@@ -1207,14 +1207,9 @@ impl Renderer {
         let (screen_marking, casters_marking) = if gated {
             let k = &self.last_frame_uploads;
             let t = &touched;
-            let actors = self.skinned_mesh.prepare_marks(
-                g,
-                draws.of(PIPELINE_SKINNED_MESH),
-                uniforms,
-                t,
-                b,
-                k,
-            );
+            let actors =
+                self.skinned_mesh
+                    .prepare_marks(g, draws.of(PIPELINE_SKINNED), uniforms, t, b, k);
             let (decor, decor_casts) = self.decor.prepare_marks(g, &draws, uniforms, t, b, k);
             let impostors =
                 self.impostor
@@ -1410,7 +1405,7 @@ impl Renderer {
                 self.decor.draw(&mut pass, &draws, b, Stage::Depth, light);
                 self.skinned_mesh.draw(
                     &mut pass,
-                    draws.of(PIPELINE_SKINNED_MESH),
+                    draws.of(PIPELINE_SKINNED),
                     b,
                     Stage::Depth,
                     light,
@@ -1513,7 +1508,7 @@ impl Renderer {
             self.ao.apply(g, &mut pass, drawn, across * down);
         }
         // At the far plane after the opaque world, so only empty pixels run the sky shader.
-        pass.set_pipeline(self.sky_pipeline.id);
+        pass.set_pipeline(self.sky_built.id);
         pass.set_bind_group(0, self.sky_group, &[]);
         pass.draw(3, 1, 0, 0);
         self.stars.draw(&mut pass);
@@ -1523,7 +1518,7 @@ impl Renderer {
         let frame_group = self.models.frame;
         self.skinned_mesh.draw(
             &mut pass,
-            draws.of(PIPELINE_SKINNED_MESH),
+            draws.of(PIPELINE_SKINNED),
             b,
             Stage::Lit,
             frame_group,
@@ -1544,8 +1539,7 @@ impl Renderer {
         // What the listed draws were drawn with this frame, the frame's
         // words with them, kept for the next's marks where they were.
         self.frame_was = self.frame;
-        self.skinned_mesh
-            .keep(draws.of(PIPELINE_SKINNED_MESH), uniforms);
+        self.skinned_mesh.keep(draws.of(PIPELINE_SKINNED), uniforms);
         self.decor.keep(&draws, uniforms);
         self.impostor.keep(draws.of(PIPELINE_IMPOSTOR), uniforms);
         self.location.keep(&draws, uniforms);
@@ -1671,7 +1665,7 @@ impl Renderer {
     ) -> impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])> + 'a {
         previews.iter().filter_map(move |&(id, palette, image)| {
             surface(id).filter(|s| s.role == surface_role::PREVIEW)?;
-            let own = draws.of(PIPELINE_SKINNED_MESH).find(|d| d[1] == palette)?;
+            let own = draws.of(PIPELINE_SKINNED).find(|d| d[1] == palette)?;
             Some((id, own[2], image, own))
         })
     }
@@ -1741,7 +1735,7 @@ impl Renderer {
                 PIPELINE_GHOST_BOX => d[1] * BOX_VERTICES / 3,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
                 PIPELINE_IMPOSTOR => 2 * d[2],
-                PIPELINE_SKINNED_MESH => b.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3),
+                PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3),
                 PIPELINE_LOCATION_ZONE => BOX_VERTICES / 3 * d[1],
                 PIPELINE_LOCATION_BEACON => BEACON_VERTICES / 3,
                 PIPELINE_MARKER => 2 * d[1],

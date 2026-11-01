@@ -9,7 +9,7 @@
 
 pub const SHADER_BOX: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
-pub const SHADER_SKINNED_MESH: u32 = 2;
+pub const SHADER_SKINNED: u32 = 2;
 pub const SHADER_LOCATION_ZONE: u32 = 3;
 pub const SHADER_LOCATION_BEACON: u32 = 4;
 pub const SHADER_MARKER: u32 = 5;
@@ -157,7 +157,7 @@ pub const SHADER_LIGHT_GATE: u32 = 65;
 pub const SHADER_SCREEN_BOUND: u32 = 66;
 /// An actor where it was and where it is, its fragments marking their screen
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
-pub const SHADER_SKINNED_MESH_MARK: u32 = 67;
+pub const SHADER_SKINNED_MARK: u32 = 67;
 /// The tiles of the light's box the box slid onto, or whose eye moved past
 /// the margin of what their walks asked (pxl-spec-core `light::holds`): a
 /// compute entry.
@@ -211,7 +211,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     lit!["paint", "box"],
     // SHADER_DECOR
     lit!["place", "instance", "decor_place", "decor"],
-    // SHADER_SKINNED_MESH
+    // SHADER_SKINNED
     lit!["place", "skinned_place", "skinned_mesh"],
     // SHADER_LOCATION_ZONE
     &[
@@ -443,7 +443,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_SCREEN_BOUND
     &["tile_word", "screen_tiles", "screen_bound"],
-    // SHADER_SKINNED_MESH_MARK
+    // SHADER_SKINNED_MARK
     &["frame", "place", "skinned_place", "tile_mark"],
     // SHADER_LIGHT_DETAIL
     &["light_detail.gen"],

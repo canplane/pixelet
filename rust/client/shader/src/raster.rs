@@ -46,7 +46,7 @@ pub(crate) const NONE: u32 = u32::MAX;
 
 /// The sample at word `k` of `w`, numbered `sample`, written as a box for
 /// the raster's draw, the eye's and the light's alike: its box as the cast
-/// stops on it (`cast::drawn_box`) from `origin`, appended to `boxes`, counted
+/// stops on it (`cast::asset_box`) from `origin`, appended to `boxes`, counted
 /// in `args` (`raster::ARGS_INSTANCES`), its number and its axis,
 /// `raster::EYED` where it lies about the eye at the screen's tangents
 /// `tan` (`raster::is_eyed`), where `eyed` asks (the light's has none); none
@@ -74,7 +74,7 @@ pub(crate) fn write_box<W: Words + ?Sized>(
         return NONE;
     }
     let node = node_at(w, k + beam::SAMPLE_NODE);
-    let (lo, hi) = cast::drawn_box(origin, &node, w.word(k + beam::SAMPLE_ASSET));
+    let (lo, hi) = cast::asset_box(origin, &node, w.word(k + beam::SAMPLE_ASSET));
     let lacks = w.word(k + beam::SAMPLE_LACKS) != 0;
     let eyed = eyed && raster::is_eyed(lo, hi, tan);
     let box_at = add(args, raster::ARGS_INSTANCES, 1);

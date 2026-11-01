@@ -282,7 +282,7 @@ impl Figure {
     }
 
     /// Its actor and where it stands, once both are.
-    fn drawn_actor(&mut self) -> Option<(&mut Actor, Transform)> {
+    fn drawn(&mut self) -> Option<(&mut Actor, Transform)> {
         Some((&mut self.actor.as_mut()?.actor, self.transform?))
     }
 }
@@ -423,7 +423,7 @@ pub fn companion_animate(draw: &mut DrawList, models: &Models, frame: &Frame) ->
     for (actor, transform) in [&mut c.person, &mut c.pet]
         .into_iter()
         .flatten()
-        .filter_map(Figure::drawn_actor)
+        .filter_map(Figure::drawn)
     {
         moved |= actor.tick(draw, models, frame, &transform);
     }
@@ -436,7 +436,7 @@ pub fn companion_draw(draw: &mut DrawList, models: &Models, eye: V3) {
     for (actor, transform) in [&mut c.person, &mut c.pet]
         .into_iter()
         .flatten()
-        .filter_map(Figure::drawn_actor)
+        .filter_map(Figure::drawn)
     {
         actor.draw(draw, models, &transform, eye);
     }
@@ -487,10 +487,10 @@ fn walk_to(
 
 /// The floor `stands` as the eye's rays draw it under `at`: the world asked
 /// at the zoom the camera grid takes there from the eye, kept in
-/// `memo` while none of it moves. A coarser answer is taken where that zoom
+/// `asked` while none of it moves. A coarser answer is taken where that zoom
 /// is not held, as a ray draws the ground it has.
 fn drawn_floor(
-    memo: &mut Memo<([f64; 2], f64, Zoom), f64>,
+    asked: &mut Memo<([f64; 2], f64, Zoom), f64>,
     at: [f64; 2],
     stands: f64,
     p: &CompanionProps,
@@ -501,7 +501,7 @@ fn drawn_floor(
         .map(|k| (center[k] - eye[k]) * (center[k] - eye[k]))
         .sum();
     let zoom = GROUND.z_at(r2);
-    memo.of(World::now(), (at, stands, zoom), |w| {
+    asked.of(World::now(), (at, stands, zoom), |w| {
         w.floor_under(&world_to_canonical(&center), zoom)
             .val()
             .flatten()

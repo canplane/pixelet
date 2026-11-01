@@ -18,7 +18,7 @@ use crate::gpu::api::{
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::finish::Finish;
 use crate::gpu::pass::model::{frame_layout, FrameGroups, Stage};
-use crate::gpu::pass::skinned_mesh::SkinnedMeshPass;
+use crate::gpu::pass::skinned_mesh::SkinnedPass;
 use crate::gpu::pipeline::Pipelines;
 use crate::gpu::put::put_mat;
 use crate::gpu::read::Read;
@@ -30,7 +30,7 @@ use crate::gpu::upload::uploads;
 pub struct Preview {
     frame_buf: u32,
     frames: FrameGroups,
-    pub skinned_mesh: SkinnedMeshPass,
+    pub skinned_mesh: SkinnedPass,
     finish: Finish,
     /// What its picture is made of as last drawn: its frame words, its
     /// actor's draw and uniform, its skin and its surface; it stands, and
@@ -60,7 +60,7 @@ impl Preview {
         Preview {
             frame_buf,
             frames: FrameGroups::new(g, layout, frame_buf, shadow.blank_entries(1), air),
-            skinned_mesh: SkinnedMeshPass::new(g, pipelines, align),
+            skinned_mesh: SkinnedPass::new(g, pipelines, align),
             finish: Finish::new(g, pipelines),
             read: Read::default(),
         }

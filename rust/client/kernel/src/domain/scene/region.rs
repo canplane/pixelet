@@ -14,7 +14,7 @@ struct Region {
     /// The turn's keys as they are drawn, and those `take` last handed,
     /// which the renderer reads.
     now: Vec<u32>,
-    handed_keys: Vec<u32>,
+    handed: Vec<u32>,
     animated: bool,
 }
 
@@ -40,8 +40,8 @@ pub fn note_animation() {
 pub fn take() -> (&'static [u32], bool) {
     let b = region();
     let animated = core::mem::take(&mut b.animated);
-    core::mem::swap(&mut b.handed_keys, &mut b.now);
+    core::mem::swap(&mut b.handed, &mut b.now);
     b.now.clear();
     let b: &'static Region = b;
-    (&b.handed_keys, animated)
+    (&b.handed, animated)
 }

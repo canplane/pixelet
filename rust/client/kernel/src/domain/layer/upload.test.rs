@@ -27,7 +27,7 @@ fn keeps_at_most() {
             if record == 0 {
                 Uptake::Taken
             } else {
-                Uptake::Uploads
+                Uptake::Kept
             }
         },
         &|_| true,

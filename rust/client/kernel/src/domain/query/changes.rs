@@ -20,7 +20,7 @@ use xpute_guest::global::Global;
 #[derive(Default)]
 struct Changes {
     ground: Vec<Tile>,
-    written_boxes: Vec<Aabb>,
+    written: Vec<Aabb>,
 }
 
 static CHANGES: Global<Changes> = Global::new();
@@ -37,13 +37,13 @@ pub(crate) fn take() -> bool {
     TerrainTile::tile_cache().take_moved(&mut c.ground);
     c.ground.sort_unstable();
     c.ground.dedup();
-    store::take_written(&mut c.written_boxes);
-    !c.ground.is_empty() || !c.written_boxes.is_empty()
+    store::take_written(&mut c.written);
+    !c.ground.is_empty() || !c.written.is_empty()
 }
 
 /// Where the objects were written, as the last take found them.
 pub fn written_boxes() -> &'static [Aabb] {
-    &changes().written_boxes
+    &changes().written
 }
 
 /// Whether a ground change, or one of `layer`'s tiles a reader also reads
@@ -65,7 +65,7 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
         .iter()
         .chain(layer)
         .map(|t| t.region())
-        .chain(c.written_boxes.iter().copied());
+        .chain(c.written.iter().copied());
     regions.any(|r| nearest_box(&r, about).shares(columns))
 }
 

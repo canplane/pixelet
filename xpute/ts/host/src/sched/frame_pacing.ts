@@ -53,7 +53,7 @@ export interface FrameGrant extends Grant {
 
 export class FramePacing implements SchedulingPolicy<FrameGrant> {
   private readonly gaps = new Float64Array(FRAME_WINDOW).fill(FIRST_REFRESH_MS);
-  private readonly sorted_gaps = new Float64Array(FRAME_WINDOW);
+  private readonly sorted = new Float64Array(FRAME_WINDOW);
   private gap_at = 0;
   private overrun_ms = 0;
   private input_at = -Infinity;
@@ -94,9 +94,9 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
 
   /** The display's refresh, from the gaps. */
   refresh(): f64 {
-    this.sorted_gaps.set(this.gaps);
-    this.sorted_gaps.sort();
-    return this.sorted_gaps[FRAME_WINDOW / 4];
+    this.sorted.set(this.gaps);
+    this.sorted.sort();
+    return this.sorted[FRAME_WINDOW / 4];
   }
 
   /**

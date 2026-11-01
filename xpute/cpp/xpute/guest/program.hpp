@@ -247,7 +247,7 @@ class [[nodiscard]] Read {
     enum class Got : std::uint8_t {
         idle,
         opening,
-        // Filled by the host after the turn `asked_turn_` ends.
+        // Filled by the host after the turn `asked_` ends.
         reading,
         done,
     };
@@ -260,7 +260,7 @@ class [[nodiscard]] Read {
     Bytes path_;
     Fd fd_ = 0;
     Got got_ = Got::idle;
-    std::uint32_t asked_turn_ = 0;
+    std::uint32_t asked_ = 0;
     Errno err_ = Errno::ok;
     Bytes bytes_;
     Waker waker_;

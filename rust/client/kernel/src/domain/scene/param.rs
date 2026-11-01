@@ -62,10 +62,10 @@ pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
 /// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow`).
 pub const WAYS_SCRATCH_FIRST_BYTES: u32 = 4 << 20;
 const _: () = {
-    use pxl_spec_core::{clipmap::HAND_CAP, way::tree};
-    let least = HAND_CAP * tree::scratch_words(1) * 4;
+    use pxl_spec_core::{clipmap::FILL_CAP, way::tree};
+    let least = FILL_CAP * tree::scratch_words(1) * 4;
     assert!(
-        WAYS_SCRATCH_FIRST_BYTES <= HAND_CAP * tree::SCRATCH_WORDS * 4
+        WAYS_SCRATCH_FIRST_BYTES <= FILL_CAP * tree::SCRATCH_WORDS * 4
             && WAYS_SCRATCH_FIRST_BYTES >= least,
         "the scratch's first is no more than a brick's most, nor less than a child group a brick"
     );

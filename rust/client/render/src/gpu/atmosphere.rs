@@ -204,7 +204,7 @@ const EXPOSURE_READS: [Range<usize>; 3] =
 
 /// Each light's words as laid (atmos_medium.wgsl `laid`, `reaches`), the
 /// sun's first.
-const LAID_WORDS: [usize; 2] = [SUN_LAID, MOON_LAID];
+const LAID: [usize; 2] = [SUN_LAID, MOON_LAID];
 const REACHES: [usize; 2] = [SUN_REACHES, MOON_REACHES];
 
 /// A quantity a table is held at by a measured step: a light's height, the
@@ -217,7 +217,7 @@ struct TableInput {
     /// as its last landed slope says; none before.
     step: Option<f32>,
     /// Where its slope was last measured, and the sample it was taken over.
-    measured_at: Option<f32>,
+    measured: Option<f32>,
     sample: f32,
 }
 
@@ -234,7 +234,7 @@ impl TableInput {
 
     /// Left the sample its slope was taken over, or none was.
     fn left(&self, now: f32) -> bool {
-        self.measured_at
+        self.measured
             .is_none_or(|at| (now - at).abs() >= self.sample)
     }
 }
@@ -697,13 +697,13 @@ impl Atmosphere {
             let eye = l.alt.left(alt) && busy & Measure::Alt(k).bit() == 0;
             let base = (4 * LIGHT_WORDS * k) as u32;
             if height {
-                l.height.measured_at = Some(mu);
+                l.height.measured = Some(mu);
                 g.write_buf(self.slopes.0, base, bytes(&[0u32]));
                 g.write_buf(self.slopes.0, base + 8, bytes(&[0u32]));
                 self.pending |= Measure::Height(k).bit();
             }
             if eye {
-                (l.alt.measured_at, l.alt.sample) = (Some(alt), alt_sample(alt));
+                (l.alt.measured, l.alt.sample) = (Some(alt), alt_sample(alt));
                 g.write_buf(self.slopes.0, base + 4, bytes(&[0u32]));
                 self.pending |= Measure::Alt(k).bit();
             }
@@ -713,7 +713,7 @@ impl Atmosphere {
                 0,
                 bytes(&[k as f32, flag(height), flag(eye), 0.0]),
             );
-            self.words[LAID_WORDS[k]..LAID_WORDS[k] + 3].copy_from_slice(&laid(alt));
+            self.words[LAID[k]..LAID[k] + 3].copy_from_slice(&laid(alt));
         }
         let ground = self.words[LAND_ALT_KM];
         let e = &mut self.exposure_read;
@@ -727,7 +727,7 @@ impl Atmosphere {
             self.ground.at = Some(ground);
             let measure = self.ground.left(ground) && busy & Measure::Ground.bit() == 0;
             if measure {
-                self.ground.measured_at = Some(ground);
+                self.ground.measured = Some(ground);
                 self.pending |= Measure::Ground.bit();
             }
             let flag = f32::from(u8::from(measure));

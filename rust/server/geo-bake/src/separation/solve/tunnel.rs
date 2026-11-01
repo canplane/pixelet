@@ -408,7 +408,7 @@ fn road_bores(
                             p[1] + merc_from_u(dz as f64 * CELL_U),
                         ]
                     })
-                    .filter(|q| src.loaded_tiles.contains(&tile_of(*q)))
+                    .filter(|q| src.loaded.contains(&tile_of(*q)))
                     .collect();
                 sample_cells(&src.ground, &around).map_or(t, |v| v.into_iter().fold(t, i32::min))
             })

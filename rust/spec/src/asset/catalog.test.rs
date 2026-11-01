@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn catalog_bytes(slots: usize) -> Vec<u8> {
+fn laid(slots: usize) -> Vec<u8> {
     let mut bytes = (slots as u32).to_le_bytes().to_vec();
     for s in 0..slots {
         bytes.extend((s as u32 + 1).to_le_bytes());
@@ -17,7 +17,7 @@ fn catalog_bytes(slots: usize) -> Vec<u8> {
 
 #[test]
 fn reads_each_slot() {
-    let c = Catalog::read(&catalog_bytes(SLOTS)).expect("a catalog of the compiled slots");
+    let c = Catalog::read(&laid(SLOTS)).expect("a catalog of the compiled slots");
     let last = Slot(SLOTS as u16 - 1);
     assert_eq!(c.file(last), SLOTS as u32);
     assert_eq!(
@@ -28,8 +28,8 @@ fn reads_each_slot() {
 
 #[test]
 fn refuses_another_shape() {
-    assert!(Catalog::read(&catalog_bytes(SLOTS + 1)).is_none());
-    let mut short = catalog_bytes(SLOTS);
+    assert!(Catalog::read(&laid(SLOTS + 1)).is_none());
+    let mut short = laid(SLOTS);
     short.pop();
     assert!(Catalog::read(&short).is_none());
 }

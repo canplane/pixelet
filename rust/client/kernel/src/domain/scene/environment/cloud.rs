@@ -107,13 +107,13 @@ struct Clouds {
     models: [Option<u32>; VARIANTS.len()],
     patches: FnvHashMap<[i64; 2], Patch>,
     /// Kept so a settled turn asks the heap for nothing.
-    wanted_patches: Vec<[i64; 2]>,
+    wanted: Vec<[i64; 2]>,
     gone: Vec<[i64; 2]>,
     columns: [Vec<[f32; 5]>; VARIANTS.len()],
     impostors: Vec<u32>,
     /// How far from the eye the nearest patch drawn last turn stands; none
     /// drawn, infinite.
-    nearest_dist: f64,
+    seen: f64,
 }
 
 static CLOUDS: Global<Clouds> = Global::new();
@@ -156,7 +156,7 @@ fn layer_u() -> f64 {
 /// by up to that, an angle, the same on every screen. Infinite while none
 /// is drawn.
 pub fn drift_step_s() -> f64 {
-    lens::seen_step_s(clouds().nearest_dist, libm::hypot(WIND[0], WIND[1]))
+    lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
 }
 
 /// How much of the clouds shows, the cumulus and the sheets alike (the stage's
@@ -175,7 +175,7 @@ pub fn clouds_shown() -> f64 {
 /// of, and lists them.
 pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let c = clouds();
-    c.nearest_dist = f64::INFINITY;
+    c.seen = f64::INFINITY;
     for (slot, file) in c.models.iter_mut().zip(VARIANTS) {
         if slot.is_none() {
             *slot = model_of(file, None).map(|h| h.model);
@@ -212,7 +212,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         let [dx, dy] = [gap(x0, eye[0]), gap(corner[1], eye[1])];
         libm::sqrt(dx * dx + dy * dy + dz * dz)
     };
-    c.wanted_patches.clear();
+    c.wanted.clear();
     for y in span(1) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
@@ -223,17 +223,17 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                     decor_impostor_angle() as f32,
                 ) != drawn::CULLED
             {
-                c.wanted_patches.push([x, y]);
+                c.wanted.push([x, y]);
             }
         }
     }
-    c.wanted_patches.sort_unstable();
+    c.wanted.sort_unstable();
     c.gone.clear();
     c.gone.extend(
         c.patches
             .keys()
             .copied()
-            .filter(|k| c.wanted_patches.binary_search(k).is_err()),
+            .filter(|k| c.wanted.binary_search(k).is_err()),
     );
     for k in c.gone.drain(..) {
         if let Some(b) = c.patches.remove(&k) {
@@ -243,9 +243,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         }
     }
     let (patches, columns) = (&mut c.patches, &mut c.columns);
-    c.wanted_patches.retain(|k| !patches.contains_key(k));
+    c.wanted.retain(|k| !patches.contains_key(k));
     pass.run(
-        c.wanted_patches.iter().copied(),
+        c.wanted.iter().copied(),
         |key| match build(key, base, columns, draw) {
             Some(b) => {
                 patches.insert(key, b);
@@ -291,8 +291,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                         .abs()
                         - half[k]
                 });
-                c.nearest_dist = c
-                    .nearest_dist
+                c.seen = c
+                    .seen
                     .min(v3::len(&gap.map(|g| g.max(0.0))).max(param::NEAR));
             }
         }

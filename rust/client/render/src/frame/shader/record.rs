@@ -84,7 +84,7 @@ pub const PIPELINE_SCREEN_RAY: u32 = 27;
 /// Decor's and the actors' depth from the light, and the world's laid in
 /// before them, into the light's shadow map (gpu/shadow.rs).
 pub const PIPELINE_DECOR_DEPTH: u32 = 28;
-pub const PIPELINE_SKINNED_MESH_DEPTH: u32 = 29;
+pub const PIPELINE_SKINNED_DEPTH: u32 = 29;
 pub const PIPELINE_LIGHT_MAP: u32 = 30;
 /// The samples' boxes, the nearest face a pixel's ray enters kept with its
 /// sample (gpu/ray/raster.rs).
@@ -113,7 +113,7 @@ pub const PIPELINE_RASTER_GATE: u32 = 37;
 pub const PIPELINE_LIGHT_GATE: u32 = 38;
 /// An actor drawn where it was and where it is, its fragments setting their
 /// screen tiles' words (gpu/pass/skinned_mesh.rs `draw_marks`).
-pub const PIPELINE_SKINNED_MESH_MARK: u32 = 39;
+pub const PIPELINE_SKINNED_MARK: u32 = 39;
 /// The same of decor, an impostor, the location indicator's zone and its beacon
 /// (gpu/pass/mark.rs `Marks`).
 pub const PIPELINE_DECOR_MARK: u32 = 40;
@@ -176,7 +176,7 @@ pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) ->
 use crate::frame::draw::{
     PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
-    PIPELINE_SKINNED_MESH,
+    PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
 use pxl_spec_core::param::light;
@@ -205,7 +205,7 @@ struct Head {
 /// The shell holds the same list against the same numbers.
 pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
 
-const fn lit_head(shader: u32, cull: u32) -> Head {
+const fn lit(shader: u32, cull: u32) -> Head {
     Head {
         shader,
         fragment: true,
@@ -220,7 +220,7 @@ const fn lit_head(shader: u32, cull: u32) -> Head {
     }
 }
 
-const fn blended_head(shader: u32, cull: u32) -> Head {
+const fn blended(shader: u32, cull: u32) -> Head {
     Head {
         shader,
         fragment: true,
@@ -272,7 +272,7 @@ const fn screen(shader: u32) -> Head {
     Head {
         depth_compare: NO_DEPTH,
         blend: OPAQUE,
-        ..blended_head(shader, CULL_NONE)
+        ..blended(shader, CULL_NONE)
     }
 }
 
@@ -519,37 +519,33 @@ impl Descriptor {
 /// records, worked out as the crate is built, ask of each.
 const fn desc_of(id: u32) -> Descriptor {
     match id {
-        PIPELINE_DECOR => Descriptor::new(
-            lit_head(SHADER_DECOR, CULL_NONE),
-            &MODEL_BUFFERS,
-            &MODEL_GROUPS,
-        ),
+        PIPELINE_DECOR => {
+            Descriptor::new(lit(SHADER_DECOR, CULL_NONE), &MODEL_BUFFERS, &MODEL_GROUPS)
+        }
         // What is laid on the world's faces draws at its own depth: the
         // world's stands behind it (screen_ray.wgsl `behind`).
-        PIPELINE_GHOST_BOX => Descriptor::new(
-            blended_head(SHADER_BOX, CULL_BACK),
-            &BOX_BUFFERS,
-            &[&BOX_GROUP],
-        ),
+        PIPELINE_GHOST_BOX => {
+            Descriptor::new(blended(SHADER_BOX, CULL_BACK), &BOX_BUFFERS, &[&BOX_GROUP])
+        }
         PIPELINE_GHOST_DECOR => Descriptor::new(
-            blended_head(SHADER_DECOR, CULL_NONE),
+            blended(SHADER_DECOR, CULL_NONE),
             &MODEL_BUFFERS,
             &MODEL_GROUPS,
         ),
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
-        PIPELINE_SKINNED_MESH => Descriptor::new(
-            lit_head(SHADER_SKINNED_MESH, CULL_BACK),
+        PIPELINE_SKINNED => Descriptor::new(
+            lit(SHADER_SKINNED, CULL_BACK),
             &SKINNED_BUFFERS,
             &MODEL_GROUPS,
         ),
         PIPELINE_LOCATION_ZONE => Descriptor::new(
-            blended_head(SHADER_LOCATION_ZONE, CULL_NONE),
+            blended(SHADER_LOCATION_ZONE, CULL_NONE),
             &LOCATION_ZONE_BUFFERS,
             &[FRAME, &DRAW, &UPLOAD],
         ),
         PIPELINE_LOCATION_BEACON => Descriptor::new(
-            lit_head(SHADER_LOCATION_BEACON, CULL_BACK),
+            lit(SHADER_LOCATION_BEACON, CULL_BACK),
             &LOCATION_BEACON_BUFFERS,
             &[&LIT_FRAME, &DRAW],
         ),
@@ -557,7 +553,7 @@ const fn desc_of(id: u32) -> Descriptor {
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
-                ..blended_head(SHADER_MARKER, CULL_NONE)
+                ..blended(SHADER_MARKER, CULL_NONE)
             },
             &[],
             &[FRAME, &DRAW, MARKER_SPRITES, &SKIN],
@@ -568,7 +564,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 depth_write: true,
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
-                ..blended_head(SHADER_MARKER_REGION, CULL_NONE)
+                ..blended(SHADER_MARKER_REGION, CULL_NONE)
             },
             &[],
             &[FRAME, &DRAW, MARKER_REGIONS],
@@ -577,7 +573,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_DEBUG => Descriptor::new(
             Head {
                 blend: ALPHA,
-                ..blended_head(SHADER_DEBUG, CULL_NONE)
+                ..blended(SHADER_DEBUG, CULL_NONE)
             },
             &DEBUG_BUFFERS,
             &[FRAME, &DRAW],
@@ -599,7 +595,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_CAMERA_GRID => Descriptor::new(
             Head {
                 depth_compare: ALWAYS,
-                ..blended_head(SHADER_CAMERA_GRID, CULL_NONE)
+                ..blended(SHADER_CAMERA_GRID, CULL_NONE)
             },
             &[],
             &[&[[0, UNIFORM], [19, UNIFORM]]],
@@ -608,7 +604,7 @@ const fn desc_of(id: u32) -> Descriptor {
             Head {
                 depth_write: true,
                 blend: OPAQUE,
-                ..blended_head(SHADER_SCREEN_RAY, CULL_NONE)
+                ..blended(SHADER_SCREEN_RAY, CULL_NONE)
             },
             &[],
             &[&SCREEN_GROUP],
@@ -635,18 +631,14 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_DECOR_DEPTH => {
             Descriptor::new(depth_only(SHADER_DECOR), &MODEL_BUFFERS, &DEPTH_GROUPS)
         }
-        PIPELINE_SKINNED_MESH_DEPTH => Descriptor::new(
-            depth_only(SHADER_SKINNED_MESH),
-            &SKINNED_BUFFERS,
-            &DEPTH_GROUPS,
-        ),
+        PIPELINE_SKINNED_DEPTH => {
+            Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_BUFFERS, &DEPTH_GROUPS)
+        }
         // Its vertices as the depth pass lays them, its fragments writing
         // no color and testing no depth: they mark their tiles.
-        PIPELINE_SKINNED_MESH_MARK => Descriptor::new(
-            mark(SHADER_SKINNED_MESH_MARK),
-            &SKINNED_BUFFERS,
-            &MARK_GROUPS,
-        ),
+        PIPELINE_SKINNED_MARK => {
+            Descriptor::new(mark(SHADER_SKINNED_MARK), &SKINNED_BUFFERS, &MARK_GROUPS)
+        }
         PIPELINE_DECOR_MARK => {
             Descriptor::new(mark(SHADER_DECOR_MARK), &MODEL_BUFFERS, &MARK_GROUPS)
         }
@@ -716,7 +708,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 depth_write: true,
                 depth_compare: GREATER,
                 blend: OPAQUE,
-                ..blended_head(SHADER_RASTER, CULL_NONE)
+                ..blended(SHADER_RASTER, CULL_NONE)
             },
             &[],
             &[&[[0, UNIFORM], [1, STORAGE]]],
@@ -726,7 +718,7 @@ const fn desc_of(id: u32) -> Descriptor {
             Head {
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
-                ..blended_head(SHADER_SKY, CULL_NONE)
+                ..blended(SHADER_SKY, CULL_NONE)
             },
             &[],
             &[&SKY_GROUP],
@@ -792,7 +784,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_IMPOSTOR => Descriptor::new(
             Head {
                 topology: STRIP,
-                ..lit_head(SHADER_IMPOSTOR, CULL_NONE)
+                ..lit(SHADER_IMPOSTOR, CULL_NONE)
             },
             &[],
             &[
@@ -883,7 +875,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
                 blend: ADD,
-                ..blended_head(SHADER_STAR, CULL_NONE)
+                ..blended(SHADER_STAR, CULL_NONE)
             },
             &[],
             &[
@@ -892,9 +884,7 @@ const fn desc_of(id: u32) -> Descriptor {
             ],
         ),
         // The sheets' planes, against the world's depth: what stands before them hides them.
-        PIPELINE_CLOUD => {
-            Descriptor::new(blended_head(SHADER_CLOUD, CULL_NONE), &[], &[&CLOUD_GROUP])
-        }
+        PIPELINE_CLOUD => Descriptor::new(blended(SHADER_CLOUD, CULL_NONE), &[], &[&CLOUD_GROUP]),
         PIPELINE_CLOUD_FIELD => Descriptor::new(screen(SHADER_CLOUD_FIELD), &[], &[]),
         _ => panic!("a pipeline number with no descriptor"),
     }

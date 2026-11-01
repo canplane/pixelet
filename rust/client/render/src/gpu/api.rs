@@ -463,7 +463,7 @@ struct State {
     /// The images on their way into textures (`Gpu::image`).
     images: Vec<Arriving>,
     /// The images taken since `take_landed` last ran, on this device.
-    landed_images: Vec<u32>,
+    landed: Vec<u32>,
     /// The devices gone so far: what was handed to the GPU under another
     /// count is on none there is.
     generation: u32,
@@ -527,7 +527,7 @@ pub unsafe fn install(at: u32) -> u32 {
         gpu_busy_ms: 0.0,
         gpu_landed: None,
         images: Vec::new(),
-        landed_images: Vec::new(),
+        landed: Vec::new(),
         generation: 0,
     }));
     at
@@ -691,7 +691,7 @@ pub fn on_device_lost() {
         unsafe { core::ptr::write_bytes(core::ptr::from_mut(s.encoder), 0, 1) };
         (s.asked, s.device, s.stamps) = (false, None, None);
         s.images.clear();
-        s.landed_images.clear();
+        s.landed.clear();
         s.generation = s.generation.wrapping_add(1);
         for r in 0..READS {
             *head(read_at(r)) = 0;
@@ -711,7 +711,7 @@ pub fn gpu_publish() {
 /// the device is lost.
 pub fn take_landed(mut landed: impl FnMut(u32)) {
     if let Some(s) = STATE.get(|| None).as_mut() {
-        s.landed_images.drain(..).for_each(&mut landed);
+        s.landed.drain(..).for_each(&mut landed);
     }
 }
 
@@ -1304,7 +1304,7 @@ impl Gpu {
             if *s.images[k].word & DONE == 0 {
                 return None;
             }
-            s.landed_images.push(image);
+            s.landed.push(image);
             return Some(s.images.swap_remove(k).texture);
         }
         let (width, height) = asset::image_size(file)?;

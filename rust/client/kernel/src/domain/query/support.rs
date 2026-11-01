@@ -421,7 +421,7 @@ impl<'a> World<'a> {
         let cell = units(GROUND.cell());
         let mut c = Upright::new(self, to, LEAF_ZOOM, *lines);
         let mut z = c.lift(floor);
-        let z_to = if z > floor {
+        let moved = if z > floor {
             let mut left = Upright::new(self, from, LEAF_ZOOM, c.lines);
             let stopped = left.above(floor, z + cell).is_some();
             (*lines, c.lines) = (left.lines, left.lines);
@@ -434,6 +434,6 @@ impl<'a> World<'a> {
             Some(z)
         };
         *lines = c.lines;
-        c.answer(z_to).exact()
+        c.answer(moved).exact()
     }
 }

@@ -6,8 +6,8 @@
 //! (gpu/pass/mark.rs), its palette the upload it reads.
 
 use crate::frame::draw::uniform_of;
-use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED_MESH};
-use crate::frame::shader::record::{PIPELINE_SKINNED_MESH_DEPTH, PIPELINE_SKINNED_MESH_MARK};
+use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
+use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_MARK};
 
 use crate::gpu::api::{bytes, Format, Gpu, Image, Stencil, TrackedRenderPass};
 use crate::gpu::pass::mark::{Draw, Marks, UploadCopies};
@@ -17,8 +17,8 @@ use crate::gpu::pass::model::{
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
 
-pub struct SkinnedMeshPass {
-    lit_pipeline: Pipeline,
+pub struct SkinnedPass {
+    lit: Pipeline,
     depth: Pipeline,
     uniforms: DrawUniforms,
     /// Each model's skin image, as the frame hands them.
@@ -33,13 +33,13 @@ fn put_mark(buf: &mut [u8], (_, u): &Draw) {
     buf[24..DRAW_BYTES as usize].fill(0);
 }
 
-impl SkinnedMeshPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedMeshPass {
-        SkinnedMeshPass {
-            lit_pipeline: pipelines.build_world(g, PIPELINE_SKINNED_MESH),
+impl SkinnedPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedPass {
+        SkinnedPass {
+            lit: pipelines.build_world(g, PIPELINE_SKINNED),
             depth: pipelines.build_gated(
                 g,
-                PIPELINE_SKINNED_MESH_DEPTH,
+                PIPELINE_SKINNED_DEPTH,
                 Format::depth32float,
                 Stencil::Gated,
             ),
@@ -48,7 +48,7 @@ impl SkinnedMeshPass {
             marks: Marks::new(
                 g,
                 pipelines,
-                PIPELINE_SKINNED_MESH_MARK,
+                PIPELINE_SKINNED_MARK,
                 align,
                 (|d| d[1], put_mark),
             ),
@@ -88,7 +88,7 @@ impl SkinnedMeshPass {
             };
             pass.set_bind_group(2, skin, &[]);
             pass.set_bind_group(3, palette, &[]);
-            draw_model(pass, &self.lit_pipeline, mesh, vertex_cnt, idx_cnt, 1);
+            draw_model(pass, &self.lit, mesh, vertex_cnt, idx_cnt, 1);
         });
     }
 
@@ -137,7 +137,7 @@ impl SkinnedMeshPass {
     ) {
         self.uniforms.write(
             g,
-            self.lit_pipeline.layouts[1],
+            self.lit.layouts[1],
             draws.len() as u32,
             draws.clone(),
             moved,
@@ -151,7 +151,7 @@ impl SkinnedMeshPass {
         for d in draws {
             uploads.group(g, d[1]);
             if let Some(image) = self.image_of(d[2]) {
-                skin_group(g, self.lit_pipeline.layouts[2], image);
+                skin_group(g, self.lit.layouts[2], image);
             }
         }
     }
@@ -171,25 +171,17 @@ impl SkinnedMeshPass {
         };
         let pipeline = match stage {
             Stage::Depth => self.depth.id,
-            _ => self.lit_pipeline.id,
+            _ => self.lit.id,
         };
-        draw_models(
-            pass,
-            &self.lit_pipeline,
-            pipeline,
-            frame,
-            slots,
-            draws,
-            |d| {
-                let (mesh, vertex_cnt, idx_cnt) = uploads.get(d[0])?;
-                let skin = skin_made(self.image_of(d[2])?.0)?;
-                Some(ModelDraw {
-                    groups: [skin, uploads.group_of(d[1])?],
-                    mesh: Some((mesh, vertex_cnt, idx_cnt)),
-                    instances: 1,
-                })
-            },
-        );
+        draw_models(pass, &self.lit, pipeline, frame, slots, draws, |d| {
+            let (mesh, vertex_cnt, idx_cnt) = uploads.get(d[0])?;
+            let skin = skin_made(self.image_of(d[2])?.0)?;
+            Some(ModelDraw {
+                groups: [skin, uploads.group_of(d[1])?],
+                mesh: Some((mesh, vertex_cnt, idx_cnt)),
+                instances: 1,
+            })
+        });
     }
 
     pub fn release(mut self) {

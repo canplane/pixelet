@@ -112,7 +112,7 @@ pub struct Generator {
     zooms_read: Read,
     clipmap: Read,
     cuts: [u32; eye::CUTS],
-    placed_read: Read,
+    placed: Read,
     marking: bool,
     /// The boxes the slots they meet generate again in, held until a frame
     /// that marks by them is drawn: one dropped, or handed and never drawn,
@@ -122,7 +122,7 @@ pub struct Generator {
     holding: usize,
     /// How many of `pending_boxes` this frame marks by, and how many boxes it marks
     /// by in all, the bricks handed with them (`marked_boxes`).
-    marked_cnt: usize,
+    marked: usize,
     boxes: u32,
     /// Whether the slots' records were not kept, decor having been off: the
     /// next frame drawn with decor generates every slot.
@@ -202,13 +202,13 @@ impl Generator {
             zooms_read: Read::default(),
             clipmap: Read::default(),
             cuts: [0; eye::CUTS],
-            placed_read: Read::default(),
+            placed: Read::default(),
             count_read: Read::default(),
             counting: false,
             marking: false,
             pending_boxes: [[0; 4]; overwrite::BOXES as usize],
             holding: 0,
-            marked_cnt: 0,
+            marked: 0,
             boxes: 0,
             stale: true,
         }
@@ -257,7 +257,7 @@ impl Generator {
             self.instances_group =
                 g.bind_group(self.draw_layouts[1], &[buf_entry(0, self.instances)]);
             self.cap = need;
-            self.placed_read.forget();
+            self.placed.forget();
         }
         let regroup = grew || world != self.bindings;
         if regroup {
@@ -287,10 +287,10 @@ impl Generator {
         w.begin();
         w.read(generation.clipmap);
         let moved = !w.end();
-        self.marked_cnt = self.holding;
+        self.marked = self.holding;
         // A brick filled at any clip level generates decor there and coarser.
         let fresh = !generation.fresh.is_empty();
-        self.marking = self.stale || moved || fresh || self.marked_cnt != 0;
+        self.marking = self.stale || moved || fresh || self.marked != 0;
         self.boxes = 0;
         if self.marking {
             // The boxes held, at every zoom, then each brick handed, at
@@ -304,7 +304,7 @@ impl Generator {
                 ]);
                 (generation::brick_box(cell, q), cell)
             });
-            let pending_boxes = self.pending_boxes[..self.marked_cnt]
+            let pending_boxes = self.pending_boxes[..self.marked]
                 .iter()
                 .map(|&b| (b, generation::EVERY));
             let mut n = 0;
@@ -342,7 +342,7 @@ impl Generator {
                 bytes(&boxes[..n * generation::BOX_WORDS as usize]),
             );
         }
-        let p = &mut self.placed_read;
+        let p = &mut self.placed;
         p.begin();
         p.read(f.placed_records);
         let placed_moved = !p.end();
@@ -478,21 +478,20 @@ impl Generator {
     /// generation are done with.
     pub fn drawn_frame(&mut self) {
         if self.marking {
-            self.pending_boxes
-                .copy_within(self.marked_cnt..self.holding, 0);
-            self.holding -= self.marked_cnt;
+            self.pending_boxes.copy_within(self.marked..self.holding, 0);
+            self.holding -= self.marked;
             self.stale = false;
         }
-        self.marked_cnt = 0;
+        self.marked = 0;
     }
 
     /// The frame was dropped, nothing of it recorded: what it wrote is
     /// written again, the slots it marked marked again by the boxes still
     /// held, the clip level's table and the placed decor read anew.
     pub fn on_dropped(&mut self) {
-        self.marked_cnt = 0;
+        self.marked = 0;
         self.clipmap.forget();
-        self.placed_read.forget();
+        self.placed.forget();
         self.zooms_read.forget();
         self.count_read.forget();
     }

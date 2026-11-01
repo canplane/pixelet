@@ -38,12 +38,12 @@ use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 
 /// The device the last frame went to the screen on (`device_generation`).
-static DRAWN_DEVICE: Global<Option<u32>> = Global::new();
+static DRAWN: Global<Option<u32>> = Global::new();
 
 /// Whether the screen holds a frame of the world: one drawn on the device
 /// there is, as a device that went took what it drew.
 pub fn is_screen_drawn() -> bool {
-    *DRAWN_DEVICE.get(|| None) == Some(api::device_generation())
+    *DRAWN.get(|| None) == Some(api::device_generation())
 }
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
@@ -76,7 +76,7 @@ use pxl_spec::asset::sky::moon;
 use pxl_spec::object;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3;
-use pxl_spec_core::clipmap::HAND_CAP;
+use pxl_spec_core::clipmap::FILL_CAP;
 use pxl_spec_core::way::tree;
 
 const _: () = assert!(
@@ -200,7 +200,7 @@ pub fn stage_render(pace: Pace) {
             upload: &mut terrain_upload,
             on_resident: &mut on_resident,
             pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
-            scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HAND_CAP)),
+            scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * FILL_CAP)),
             records: param::WAYS_RECORDS_FIRST_BYTES,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
@@ -251,7 +251,7 @@ pub fn stage_render(pace: Pace) {
         );
         return;
     };
-    DRAWN_DEVICE.set(Some(api::device_generation()));
+    DRAWN.set(Some(api::device_generation()));
     let [draws, triangles] = stat
         .draws
         .iter()

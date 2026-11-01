@@ -81,7 +81,7 @@ static ARRIVAL_QUEUE: Global<List<Arrival, { MAX_CREDITS as usize }>> = Global::
 /// An answer, a body or the source's absence, kept for its owner to take:
 /// what it does with it (admits a tile, opens a group) is the owner's. The
 /// fetch stays out until the owner settles it.
-pub struct Answer {
+pub struct Response {
     pub key: u64,
     pub stream: Stream,
     pub subject: u64,
@@ -91,7 +91,7 @@ pub struct Answer {
 }
 
 /// No more are kept than fetches are out, each on its credit, oldest first.
-static ANSWERS: Global<List<Answer, { MAX_CREDITS as usize }>> = Global::new();
+static ANSWERS: Global<List<Response, { MAX_CREDITS as usize }>> = Global::new();
 
 /// How many answers of one of `of` are not yet taken.
 pub fn answer_cnt(of: &[Stream]) -> usize {
@@ -104,7 +104,7 @@ pub fn answer_cnt(of: &[Stream]) -> usize {
 
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
 /// fetches are out, so the scan is short.
-pub fn take_answer(of: &[Stream]) -> Option<Answer> {
+pub fn take_answer(of: &[Stream]) -> Option<Response> {
     let all = ANSWERS.get(List::new);
     let at = all.iter().position(|a| of.contains(&a.stream))?;
     Some(all.remove(at))
@@ -210,7 +210,7 @@ fn on_fetch_arrived(
         Receipt::Absent | Receipt::Read(Some(_)) => {
             // An asset loads through the loader (sys/io/loader.rs), never a fetch: nothing would take its answer.
             xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
-            ANSWERS.get(List::new).push(Answer {
+            ANSWERS.get(List::new).push(Response {
                 key,
                 stream,
                 subject,

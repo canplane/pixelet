@@ -36,7 +36,7 @@
 //!
 //! In a drawn frame a terrain packet is given back once no window wants
 //! one of its bricks absent (domain/layer/terrain/clipmap.rs `fill`): each frame
-//! hands `HAND_CAP` bricks only of tiles kept or void (`due`), a brick
+//! hands `FILL_CAP` bricks only of tiles kept or void (`due`), a brick
 //! handed is wanted no more, and a packet whose tile left or that no
 //! window wants is given back on that upload too, the stream full or not
 //! (domain/layer/kept.rs `send`). Tiles whose packets were freed are asked again

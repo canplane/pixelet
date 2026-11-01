@@ -220,7 +220,7 @@ pub struct LocationIndicator {
     /// The zone's instances drawn, ZONE_INSTANCE_FLOATS floats an instance,
     /// which `block` holds, so grounding it again to the same heights draws
     /// nothing anew.
-    zone_instances: Vec<f32>,
+    drawn: Vec<f32>,
     block: MirroredBlock,
     /// None where nothing is shown.
     zone: Option<Zone>,
@@ -279,9 +279,7 @@ impl LocationIndicator {
             &mut rise,
             &mut instances,
         );
-        if self.zone.as_ref().is_none_or(|z| z.center != center_pos)
-            || self.zone_instances != instances
-        {
+        if self.zone.as_ref().is_none_or(|z| z.center != center_pos) || self.drawn != instances {
             self.block.write(draw, bytes(&instances));
             match self.zone.as_mut() {
                 // Follows the center, so a whole-cell move does not play as a slide back.
@@ -306,7 +304,7 @@ impl LocationIndicator {
                     });
                 }
             }
-            core::mem::swap(&mut self.zone_instances, &mut instances);
+            core::mem::swap(&mut self.drawn, &mut instances);
             request_world_tick();
         }
         (self.instances, self.rise) = (instances, rise);
@@ -318,7 +316,7 @@ impl LocationIndicator {
             return;
         }
         self.block.free(draw);
-        self.zone_instances.clear();
+        self.drawn.clear();
         request_world_tick();
     }
 
@@ -377,7 +375,7 @@ impl LocationIndicator {
         // (pxl-render gpu/pass/mark.rs).
         let center = DrawList::translation(p.center, eye);
         if p.zone_drawn {
-            let cnt = (self.zone_instances.len() / ZONE_INSTANCE_FLOATS) as u32;
+            let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
             draw.draw_as(
                 PIPELINE_LOCATION_ZONE,
                 self.block.handle,

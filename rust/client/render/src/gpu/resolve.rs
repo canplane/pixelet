@@ -63,7 +63,7 @@ pub struct Resolve {
     /// The surface's histories it gathered into, and the frames gathered
     /// since they were made: none kept before.
     histories: [u32; 2],
-    gathered_cnt: u32,
+    gathered: u32,
     /// This frame's view, its view-projection about the eye and the eye's
     /// place (`prepare`), and the last drawn frame's.
     view: (Mat4, [f64; 3]),
@@ -101,7 +101,7 @@ impl Resolve {
             back_bindings: [[0; 2]; 2],
             turn: 0,
             histories: [0; 2],
-            gathered_cnt: 0,
+            gathered: 0,
             view: (mat4::new(), [0.0; 3]),
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
@@ -138,14 +138,14 @@ impl Resolve {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
-            (self.histories, self.gathered_cnt, self.turn) = (s.history_view, 0, 0);
+            (self.histories, self.gathered, self.turn) = (s.history_view, 0, 0);
         }
         let (k, was) = (self.turn, 1 - self.turn);
         // A square that changed this frame takes its share held no less than
         // `BLEND_LEAST`; one where only the jitter moved since, its even share
         // of the sequence's from the first still frame, off its age
         // (screen_resolve.wgsl).
-        let blend = match self.gathered_cnt {
+        let blend = match self.gathered {
             0 => 1.0,
             n => (1.0 / (n + 1) as f32).max(BLEND_LEAST),
         };
@@ -250,7 +250,7 @@ impl Resolve {
         if !gated {
             self.turn = 1 - self.turn;
         }
-        self.gathered_cnt = self.gathered_cnt.saturating_add(1);
+        self.gathered = self.gathered.saturating_add(1);
         self.last = self.view;
         if self.gathering() {
             self.phase = (self.phase + 1) % JITTERS;

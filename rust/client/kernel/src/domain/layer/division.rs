@@ -74,7 +74,7 @@ pub fn line(pivot: Option<Q3>) -> Option<Tile> {
 /// held over it, the held parent while the tile under it is on its way, and
 /// the cell in it. A tile's identity fixes what it names.
 pub fn naming(at: &Q3) -> Option<(Tile, u32)> {
-    let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().drawn_from(p))?;
+    let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().finest_resident(p))?;
     Some((from, GROUND.cell_of(from.zoom, at).idx()))
 }
 

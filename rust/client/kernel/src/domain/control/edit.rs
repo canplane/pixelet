@@ -154,7 +154,7 @@ fn resolve_target(hit: &Hit) -> Option<Target> {
 /// may be; none without an eye.
 pub(crate) struct Pick {
     pub hit: Hit,
-    pub drawn_zoom: Option<Zoom>,
+    pub ray_zoom: Option<Zoom>,
 }
 
 /// The cell what `hit` struck stands in: a decor's, whatever its box, else
@@ -175,7 +175,7 @@ impl Pick {
     /// Whether the rays draw coarser there than the cell struck: a summary,
     /// not what is held, so nothing in it is struck.
     pub(crate) fn is_folded(&self) -> bool {
-        self.drawn_zoom.is_some_and(|z| z < self.zoom())
+        self.ray_zoom.is_some_and(|z| z < self.zoom())
     }
 }
 
@@ -187,11 +187,11 @@ pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
     let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
     ray_of(pose, ndc_x, ndc_y, &mut origin, &mut dir);
     let hit = ray_pick(origin, dir)?;
-    let drawn_zoom = observation::eye().map(|eye| {
+    let ray_zoom = observation::eye().map(|eye| {
         let v = v3::sub(&cell_struck(&hit).center(), &eye);
         query::by_dist().at(v3::dot(&v, &v) as f32)
     });
-    Some(Pick { hit, drawn_zoom })
+    Some(Pick { hit, ray_zoom })
 }
 
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.

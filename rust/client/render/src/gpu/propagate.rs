@@ -73,7 +73,7 @@ pub struct Propagate {
     /// made again where what it binds is another.
     bounds: u32,
     bounds_size: [u32; 2],
-    bounds_pipeline: Pipeline,
+    bounds_built: Pipeline,
     bounds_group: u32,
     bounds_bindings: [u32; 4],
 }
@@ -94,7 +94,7 @@ impl Propagate {
             bindings: vec![[0; 7]; light::LEVELS as usize],
             bounds: 0,
             bounds_size: [0; 2],
-            bounds_pipeline: pipelines.build_compute(g, SHADER_SCREEN_BOUND, &BOUNDS_GROUP),
+            bounds_built: pipelines.build_compute(g, SHADER_SCREEN_BOUND, &BOUNDS_GROUP),
             bounds_group: 0,
             bounds_bindings: [0; 4],
         }
@@ -162,7 +162,7 @@ impl Propagate {
         if bindings != self.bounds_bindings {
             release(self.bounds_group);
             self.bounds_group = g.bind_group(
-                self.bounds_pipeline.layouts[0],
+                self.bounds_built.layouts[0],
                 &[
                     view_entry(0, depth),
                     buf_entry(1, self.bounds),
@@ -174,7 +174,7 @@ impl Propagate {
         }
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::resolve).pass());
         g.set_bind_group(pass, 0, self.bounds_group, &[]);
-        g.set_pipeline(pass, self.bounds_pipeline.id);
+        g.set_pipeline(pass, self.bounds_built.id);
         g.dispatch(pass, tiles[0], tiles[1], 1);
         g.end(pass);
     }

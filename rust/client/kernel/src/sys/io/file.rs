@@ -175,10 +175,10 @@ enum ReadState {
     /// The heap refused its room: opened again after the heap gives some
     /// back, never taken for a file that held nothing. No descriptor is kept.
     Refused(Refusal),
-    /// Filled from the turn after `asked_turn`.
+    /// Filled from the turn after `asked`.
     Reading {
         bytes: Vec<u8>,
-        asked_turn: u64,
+        asked: u64,
     },
     Read(StorageRead),
 }
@@ -214,7 +214,7 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
         Opened::Bytes(n) => match unsafe { read_whole(fd, n) } {
             Ok(bytes) => ReadState::Reading {
                 bytes,
-                asked_turn: turn(),
+                asked: turn(),
             },
             Err(refused) => ReadState::Refused(refused),
         },
@@ -239,7 +239,7 @@ pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
             file,
             ReadState::Reading {
                 bytes: bytes.to_vec(),
-                asked_turn: turn(),
+                asked: turn(),
             },
         ),
         Err(opened) => on_storage_opened(file, 0, opened),
@@ -257,7 +257,7 @@ pub fn take_storage(file: StorageFile) -> Option<StorageRead> {
             }
             None
         }
-        ReadState::Reading { asked_turn, .. } if turn() <= *asked_turn => None,
+        ReadState::Reading { asked, .. } if turn() <= *asked => None,
         _ => match slot.take()? {
             ReadState::Reading { bytes, .. } => Some(storage_of(file, bytes)),
             ReadState::Read(file) => Some(file),

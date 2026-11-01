@@ -10,7 +10,7 @@
 //! held below it down to the impostor's, and nothing below that, as decor
 //! smaller than that is none (`decor::gpu`).
 
-use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED_MESH};
+use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem;
@@ -274,7 +274,7 @@ impl Actor {
         }
         let t = DrawList::translation(transform.at, eye);
         draw.draw_scaled(
-            PIPELINE_SKINNED_MESH,
+            PIPELINE_SKINNED,
             m.handle(),
             self.palette_handle,
             self.model,
