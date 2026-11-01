@@ -5,8 +5,9 @@
 //! language, no CommonJS file, each generated shader made from the sources the
 //! tree holds now, the layers' order, where nothing names what is above it,
 //! the screen's pixels read only at the screen, each workgroup's size its
-//! constant, and each type's name a head noun, never a bare participle. A
-//! rule Rust alone keeps is clippy's (rust/clippy.toml).
+//! constant, each type's name a head noun, never a bare participle, and
+//! no Rust file outside a crate's module tree. A rule Rust alone keeps is
+//! clippy's (rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -555,6 +556,81 @@ fn ordered(
 /// laid out under a checkout's ignored target,
 /// every file under it but the builds' and the packages', which git there
 /// would list none of. Outside any checkout, an error.
+/// Each tracked `.rs` that no crate reaches: none of its own crate's roots
+/// (`lib.rs`, `main.rs`, `build.rs`, a file under `src/bin/`, `tests/`,
+/// `benches/` or `examples/`), and no `mod`, `#[path]` or `include!` in a
+/// file, nor a manifest's `path`, names it. Such a file compiles in nothing,
+/// so nothing checks it.
+fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+    use std::collections::BTreeSet;
+    use std::path::{Component, Path, PathBuf};
+    fn clean(p: &Path) -> PathBuf {
+        let mut out = PathBuf::new();
+        for c in p.components() {
+            match c {
+                Component::ParentDir => {
+                    out.pop();
+                }
+                Component::CurDir => {}
+                c => out.push(c),
+            }
+        }
+        out
+    }
+    let rust =
+        |f: &&&str| f.ends_with(".rs") && (f.starts_with("rust/") || f.starts_with("xpute/rust/"));
+    let module = Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;")
+        .expect("a module's pattern");
+    let path_attr = Regex::new(r#"#\[path\s*=\s*"([^"]+)"\]"#).expect("a path's pattern");
+    let include = Regex::new(r#"include!\(\s*"([^"]+\.rs)"\s*\)"#).expect("an include's pattern");
+    let manifest_path =
+        Regex::new(r#"(?m)^\s*path\s*=\s*"([^"]+\.rs)""#).expect("a manifest path's pattern");
+    let mut reached: BTreeSet<PathBuf> = BTreeSet::new();
+    for f in files.iter().filter(|f| f.ends_with("Cargo.toml")) {
+        let dir = Path::new(f).parent().unwrap_or(Path::new(""));
+        for c in manifest_path.captures_iter(&read(f).unwrap_or_default()) {
+            reached.insert(clean(&dir.join(&c[1])));
+        }
+    }
+    for f in files.iter().filter(rust) {
+        let file = Path::new(f);
+        let dir = file.parent().unwrap_or(Path::new(""));
+        let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        // A `mod` in a crate root or a `mod.rs` names files beside it; in any
+        // other file, files in the folder named as that file is.
+        let children = if ["lib", "main", "mod", "build"].contains(&stem) {
+            dir.to_path_buf()
+        } else {
+            dir.join(stem)
+        };
+        let text = read(f).unwrap_or_default();
+        for c in path_attr.captures_iter(&text) {
+            reached.insert(clean(&dir.join(&c[1])));
+        }
+        for c in include.captures_iter(&text) {
+            reached.insert(clean(&dir.join(&c[1])));
+        }
+        for c in module.captures_iter(&text) {
+            reached.insert(children.join(format!("{}.rs", &c[1])));
+            reached.insert(children.join(&c[1]).join("mod.rs"));
+        }
+    }
+    files
+        .iter()
+        .filter(rust)
+        .filter(|f| {
+            let p = Path::new(f);
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let rooted = ["lib.rs", "main.rs", "build.rs"].contains(&name)
+                || ["/src/bin/", "/tests/", "/benches/", "/examples/"]
+                    .iter()
+                    .any(|d| f.contains(d));
+            !rooted && !reached.contains(p)
+        })
+        .map(|f| format!("{f}: no crate reaches it: no `mod`, `#[path]`, `include!` or manifest `path` names it, so it compiles in nothing"))
+        .collect()
+}
+
 fn list_files(root: &std::path::Path) -> Result<String, String> {
     let top = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
@@ -741,6 +817,8 @@ fn run() -> Result<Vec<String>, String> {
         }
     }
 
+    problems.extend(unlinked(&files, &read));
+
     // The generated shaders' stamp names the digest of the sources they were
     // made from (pxl-tool shader.rs `STAMP`); a set the tree has moved past is
     // stale.
@@ -755,7 +833,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels, the workgroups' sizes and the types' head nouns hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels, the workgroups' sizes, the types' head nouns and the crates' module trees hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -772,6 +850,37 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unlinked_file_named() {
+        let files = [
+            "rust/a/src/lib.rs",
+            "rust/a/src/one.rs",
+            "rust/a/src/one/two.rs",
+            "rust/a/src/gen.spec.rs",
+            "rust/a/src/stray.rs",
+            "rust/a/Cargo.toml",
+            "rust/a/src/test_bin.rs",
+        ];
+        let read = |f: &str| {
+            Some(
+                match f {
+                    "rust/a/src/lib.rs" => {
+                        "mod one;
+#[path = \"gen.spec.rs\"]
+mod spec;"
+                    }
+                    "rust/a/src/one.rs" => "pub(crate) mod two;",
+                    "rust/a/Cargo.toml" => "[[test]]\npath = \"src/test_bin.rs\"",
+                    _ => "",
+                }
+                .to_string(),
+            )
+        };
+        let found = unlinked(&files, &read);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].starts_with("rust/a/src/stray.rs:"));
+    }
 
     #[test]
     fn screen_reach_any_name() {
