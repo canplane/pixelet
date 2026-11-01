@@ -9,7 +9,6 @@ path = "src/lib.rs"
 doctest = false
 
 [dependencies]
-base64.workspace = true
 fnv.workspace = true
 libm.workspace = true
 xpute-guest.workspace = true
@@ -25,6 +24,11 @@ pxl-render.workspace = true
 # the platform one for wasm brings wasm-bindgen.
 embassy-executor = { version = "0.10", default-features = false }
 critical-section = "1.1"
+
+[dev-dependencies]
+# The records a test holds the kernel to beside the client
+# (spec/golden/object/top.tsv).
+xpute-kit = { workspace = true, features = ["std", "golden"] }
 
 [features]
 # What a development build has and a published one does not: the settings

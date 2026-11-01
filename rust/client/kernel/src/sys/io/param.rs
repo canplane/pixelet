@@ -21,9 +21,9 @@ pub const MAX_CREDITS: u32 = 16;
 
 // ---- writes ----
 
-/// Most files written in one turn by number (sys/io/file.rs `write`), a
-/// shard's objects each (domain/layer/object/repository.rs); one past them
-/// waits for a later turn. Counted in the host stream's reserve
+/// Most files written in one turn by number (sys/io/file.rs `write`), an
+/// edit batch of the objects' each (domain/layer/object/repository.rs); one
+/// past them waits for a later turn. Counted in the host stream's reserve
 /// (sys/io/host.rs `RESERVE`).
 pub const WRITES_A_TURN: u32 = 8;
 

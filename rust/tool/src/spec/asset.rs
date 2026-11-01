@@ -458,6 +458,37 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     }
     ts.push("};".to_string());
 
+    // Which values a word names, for what folds the objects' tree beside the
+    // kernel: the client's source of placed objects
+    // (ts/client/src/driver/namespace/object_tree.ts).
+    let air = named(&object)
+        .find(|e| e.name == "air")
+        .ok_or(format!("{CUBE_JSON}: no object.air"))?;
+    let mut voxel = vec!["// @pxl/client/abi/voxel.spec.ts".to_string()];
+    voxel.extend(head.iter().cloned());
+    voxel.push(String::new());
+    if let Some(doc) = &air.doc {
+        voxel.extend(ts_doc(doc, ""));
+    }
+    voxel.extend([
+        format!("export const AIR = {};", air.val),
+        String::new(),
+        "/** Whether a value read into a word is a palette entry the palette gives out (pxl-spec-core `Ground::grounds`). */"
+            .to_string(),
+        "export function grounds(val: number): boolean {".to_string(),
+        format!("  return {};", ts_runs(named(&ground).map(|e| e.val))),
+        "}".to_string(),
+        String::new(),
+        "/** Whether a value read into a word is one of the object's colors (pxl-spec-core `Object::objects`). */"
+            .to_string(),
+        "export function objects(val: number): boolean {".to_string(),
+        format!(
+            "  return {};",
+            ts_runs(named(&object).filter(|e| is_color(e)).map(|e| e.val))
+        ),
+        "}".to_string(),
+    ]);
+
     // Rust
     let mut rs = vec!["// pxl-spec-core/cube.spec.rs".to_string()];
     rs.extend(head);
@@ -634,6 +665,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     ]);
     let mut out = vec![
         Output::new("ts/client/src/shell/catalog/asset/cube.spec.ts", file(&ts)),
+        Output::new("ts/client/src/abi/voxel.spec.ts", file(&voxel)),
         Output::new(
             "rust/spec/core/src/cube.spec.rs",
             file(&unwrapped(rs, "pub mod cubes {")),
@@ -641,6 +673,28 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     ];
     out.extend(modules);
     Ok(out)
+}
+
+/// Ascending values as a TypeScript test of `val`, each run of consecutive
+/// ones a range, as `runs` patterns them.
+fn ts_runs(vals: impl Iterator<Item = u32>) -> String {
+    let mut out: Vec<(u32, u32)> = Vec::new();
+    for v in vals {
+        match out.last_mut() {
+            Some((_, hi)) if *hi + 1 == v => *hi = v,
+            _ => out.push((v, v)),
+        }
+    }
+    out.into_iter()
+        .map(|(lo, hi)| {
+            if lo == hi {
+                format!("val === {lo}")
+            } else {
+                format!("(val >= {lo} && val <= {hi})")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" || ")
 }
 
 /// Ascending values as patterns, each run of consecutive ones a range.

@@ -3,7 +3,6 @@
 use super::*;
 use crate::sys;
 use crate::sys::io::host;
-use base64::engine::general_purpose;
 use xpute_kit::status::errno::Errno;
 
 fn storage_of(pairs: &[(u32, u32)]) -> Vec<u8> {
@@ -137,10 +136,9 @@ fn session_setting_not_stored() {
 
 /// What storage holds of the slot, as the host hands it over.
 fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
-    use base64::Engine;
     let mut bytes = vec![StorageFile::Settings.format()];
     bytes.extend(storage_of(pairs));
-    general_purpose::URL_SAFE_NO_PAD.encode(bytes).into_bytes()
+    bytes
 }
 
 /// The slot opened at boot, with nothing waiting and nothing to keep.

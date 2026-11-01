@@ -17,7 +17,7 @@ use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::{
     CompanionState, DivisionPart, GroundStatus, LangName, LocationState, LonLat, Message,
-    OrientationState, PivotState, Snapshot, ToolState,
+    OrientationState, PivotState, RefusedFile, Snapshot, ToolState,
 };
 use crate::domain::control::edit::write;
 use crate::domain::control::edit::{tool, Tool};
@@ -27,6 +27,7 @@ use crate::domain::control::sensor::reading::{
     device_location_store, device_orient_store, SensorState,
 };
 use crate::domain::layer::division::{each_division, naming};
+use crate::domain::layer::object::repository;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, PREVIEWS_MAX};
 use crate::domain::scene::stage::is_screen_drawn;
@@ -35,6 +36,7 @@ use crate::domain::view::observation;
 use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
 use crate::pointer;
 use crate::sys::io::file::{self, StorageFile};
+use crate::sys::io::host_spec::root;
 use crate::sys::io::request;
 use crate::sys::io::source;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -90,9 +92,14 @@ pub struct SnapshotInputs {
     previews: ([u32; PREVIEWS_MAX], usize),
     stall: Option<Message>,
     declared: bool,
-    /// The refused storage files, the first `.1` of them.
-    storage_refused: ([u32; StorageFile::ALL.len()], usize),
+    /// The refused files by root and number, the first `.1` of them.
+    refused: ([(u32, u64); REFUSED_SHOWN], usize),
 }
+
+/// The refused files a snapshot names at once: every storage file, and as
+/// many of the objects' as the view asks for at once; the rest are named as
+/// the host empties those.
+const REFUSED_SHOWN: usize = StorageFile::ALL.len() + repository::WANTS as usize;
 
 fn snapshot_inputs() -> SnapshotInputs {
     let (location, settings) = (device_location_store(), settings_store());
@@ -135,13 +142,15 @@ fn snapshot_inputs() -> SnapshotInputs {
         previews,
         stall: stall(),
         declared: source::top().is_some(),
-        storage_refused: {
-            let mut refused = ([0; StorageFile::ALL.len()], 0);
-            for file in StorageFile::ALL
+        refused: {
+            let stored = StorageFile::ALL
                 .into_iter()
                 .filter(|&k| file::is_refused(k))
-            {
-                refused.0[refused.1] = file.slot();
+                .map(|k| (root::STORAGE, u64::from(k.slot())));
+            let objects = repository::refused().iter().map(|&n| (root::OBJECT, n));
+            let mut refused = ([(0, 0); REFUSED_SHOWN], 0);
+            for (at, file) in refused.0.iter_mut().zip(stored.chain(objects)) {
+                *at = file;
                 refused.1 += 1;
             }
             refused
@@ -219,7 +228,11 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
         m_per_px: m_per_px(shown.u_per_px, shown.pivot),
         division: &|each| division_parts(shown.division, shown.u_per_px, each),
         previews: &shown.previews.0[..shown.previews.1],
-        storage_refused: &shown.storage_refused.0[..shown.storage_refused.1],
+        refused: &|each| {
+            for (root, path) in &shown.refused.0[..shown.refused.1] {
+                each(&RefusedFile { root: *root, path });
+            }
+        },
         stall: shown.stall,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);

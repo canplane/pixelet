@@ -50,9 +50,6 @@ libm = "=0.2.16"
 # the bake's among them, so an order read off one is the same on every run,
 # where std's hasher is seeded per process (clippy.toml).
 fnv = "1"
-# base64url without padding: the blob a placement set is kept under in the
-# shell's storage.
-base64 = "0.23"
 # What a test reads a golden packet's bytes back as.
 hex = "0.4"
 

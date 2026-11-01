@@ -1,7 +1,8 @@
 // pxl-kernel/sys/io/fetch.rs
 
 //! The world's reads. The kernel opens a tile as its bake's object by its
-//! subject, and a shard's objects below OBJECT by the shard's (sys/io/file.rs);
+//! subject, and a shard's objects below OBJECT by the shard's, their top by
+//! its own (sys/io/file.rs);
 //! a version, an address, a protocol or a storage key is the client's
 //! (ts/client/src/driver/namespace/tile.ts, object.ts). What an absent object
 //! means is decided here per stream.

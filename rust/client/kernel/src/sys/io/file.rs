@@ -6,17 +6,16 @@
 //!
 //! Every file is a root's object by number (host.json `root`): a tile by its
 //! subject, an asset by its load, a storage file by its slot, a shard's
-//! objects by the shard's subject. The number is the
-//! path's one name, in decimal; what it is and where, a version, a URL or a
-//! storage key, is what the host (ts/client/src/driver/namespace/) binds the root to,
-//! `@xpute/host` carrying the open there.
+//! objects by the shard's subject, their top and their edits by theirs. The
+//! number is the path's one name, in decimal; what it is and where, a
+//! version, a URL or a storage key, is what the host
+//! (ts/client/src/driver/namespace/) binds the root to, `@xpute/host`
+//! carrying the open there. A file is bytes: how a platform keeps them, as
+//! text or otherwise, is its backend's.
 
 use xpute_guest::abi::cmd::SysOpened;
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::sys::Fd;
-
-use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64;
-use base64::Engine;
 
 use crate::sys::io::failure::Failure;
 use crate::sys::io::fetch;
@@ -36,12 +35,12 @@ use xpute_kit::status::errno::Errno;
 /// record there follows from how many.
 ///
 /// A storage file is its slot's format byte (host.json `format`), then what its
-/// owner keeps, the whole in base64 as storage keeps text. One of another
-/// format, not base64, or larger than any heap a device is given (no build
-/// reads it) is refused: read as nothing and never written over,
-/// and named to the host (`is_refused`), whose it is to set the file aside and
-/// empty the slot (`on_emptied`). Which storage a slot is, and what an older
-/// file becomes, the kernel never says.
+/// owner keeps. One of another format, one its backend cannot read as bytes
+/// (EBADMSG), or one larger than any heap a device is given (no build reads
+/// it) is refused: read as nothing and never written over, and named to the
+/// host (`is_refused`), whose it is to set the file aside and empty the slot
+/// (`on_emptied`). Which storage a slot is, how it keeps the bytes, and what
+/// an older file becomes, the kernel never says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StorageFile {
     Settings,
@@ -144,19 +143,17 @@ pub fn on_emptied(file: StorageFile) {
     refusals()[file as usize] = false;
 }
 
-/// A storage file as storage held it, `text`: its owner's bytes where it is of
-/// its slot's format, refused where it is anything else.
-pub fn storage_of(file: StorageFile, text: &[u8]) -> StorageRead {
-    if text.is_empty() {
+/// A storage file as its backend read it, `bytes`: its owner's bytes where it
+/// is of its slot's format, refused where it is anything else.
+pub fn storage_of(file: StorageFile, mut bytes: Vec<u8>) -> StorageRead {
+    if bytes.is_empty() {
         return StorageRead::None;
     }
-    match BASE64.decode(text) {
-        Ok(mut bytes) if bytes.first() == Some(&file.format()) => {
-            bytes.remove(0);
-            StorageRead::Bytes(bytes)
-        }
-        _ => refuse(file),
+    if bytes.first() != Some(&file.format()) {
+        return refuse(file);
     }
+    bytes.remove(0);
+    StorageRead::Bytes(bytes)
 }
 
 /// Named to the host in the next snapshot, for it to set aside.
@@ -171,7 +168,7 @@ fn sealed(file: StorageFile, bytes: &[u8]) -> Vec<u8> {
     let mut whole = Vec::with_capacity(1 + bytes.len());
     whole.push(file.format());
     whole.extend_from_slice(bytes);
-    BASE64.encode(whole).into_bytes()
+    whole
 }
 
 enum ReadState {
@@ -223,8 +220,9 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
         },
         // Only its absence says nothing was kept.
         Opened::Absent => ReadState::Read(StorageRead::None),
+        // Too large for any heap, or there and not bytes to its backend.
         Opened::Failed {
-            errnum: Errno::EFBIG,
+            errnum: Errno::EFBIG | Errno::EBADMSG,
             ..
         } => ReadState::Read(refuse(file)),
         Opened::Failed { .. } => ReadState::Read(StorageRead::Unreadable),
@@ -232,15 +230,15 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
     set_read_state(file, read);
 }
 
-/// The host's answer to `open_storage`, for a test with none: `text`, read
+/// The host's answer to `open_storage`, for a test with none: `bytes`, read
 /// whole and taken from the next turn on, or an open that came to no bytes.
 #[cfg(test)]
 pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
     match answer {
-        Ok(text) => set_read_state(
+        Ok(bytes) => set_read_state(
             file,
             ReadState::Reading {
-                bytes: text.to_vec(),
+                bytes: bytes.to_vec(),
                 asked: turn(),
             },
         ),
@@ -261,7 +259,7 @@ pub fn take_storage(file: StorageFile) -> Option<StorageRead> {
         }
         ReadState::Reading { asked, .. } if turn() <= *asked => None,
         _ => match slot.take()? {
-            ReadState::Reading { bytes, .. } => Some(storage_of(file, &bytes)),
+            ReadState::Reading { bytes, .. } => Some(storage_of(file, bytes)),
             ReadState::Read(file) => Some(file),
             ReadState::Refused(_) => None,
         },

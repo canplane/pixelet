@@ -1,8 +1,8 @@
 // pxl-kernel/sys/io/dispatch.rs
 
 //! What the request scheduler started and stopped this turn, handed to the
-//! reader each is for: an asset's to `loader`, every other's, a tile's or a
-//! shard's objects, to `fetch`.
+//! reader each is for: an asset's to `loader`, every other's, a tile's, a
+//! shard's objects or their top, to `fetch`.
 
 use xpute_kit::collection::list::List;
 

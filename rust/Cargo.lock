@@ -2130,7 +2130,6 @@ dependencies = [
 name = "pxl-kernel"
 version = "0.0.0"
 dependencies = [
- "base64 0.23.1",
  "critical-section",
  "embassy-executor",
  "fnv",

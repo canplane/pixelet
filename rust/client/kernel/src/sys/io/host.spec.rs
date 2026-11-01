@@ -88,10 +88,12 @@ pub mod root {
     pub const STORAGE: u32 = 256;
     /// The shipped assets; a path is a load's number in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).
     pub const ASSET: u32 = 257;
-    /// The placed objects, a file a shard; a path is the shard's subject in decimal, as a bake's
-    /// tile is named (pxl-spec space/layer/tile.rs), the file its `format.OBJECT` first
-    /// (domain/layer/object/repository.rs). A shard with none has no file. What keeps the files,
-    /// the platform's storage or a server, is the host's.
+    /// The placed objects, their source's: a file a shard, read, its path the shard's subject in
+    /// decimal, as a bake's tile is named (pxl-spec space/layer/tile.rs), its `format.OBJECT`
+    /// first; the top of their tree, read (`object.TOP`); and their edits, written
+    /// (`object.EDITS`) (domain/layer/object/repository.rs). A shard with none has no file. The
+    /// source keeps the shards and the top and applies the edits; which source, the platform's
+    /// storage or a server, is the host's.
     pub const OBJECT: u32 = 258;
 }
 
@@ -106,6 +108,56 @@ pub const SPHERE: u32 = 0;
 /// its row in the asset ingest's table counted from 1 (spec/spec/asset/ingested.json).
 pub const CATALOG: u32 = 0;
 
+/// Below OBJECT, the files that are no shard's; any other number below it is a shard's
+/// subject, which is neither: a tile's key ends in a 1 within its high half, at bit 32 or
+/// above for a tile the pyramid holds.
+pub mod object {
+    /// The top of the tree, read: what each node at `SHARD_ZOOM` holding objects folds to
+    /// (`top`), so which shards hold any, its `format.OBJECT_TOP` first. Its source rebuilds
+    /// it from the shards as an edit lands; none is no shard holding any.
+    pub const TOP: u32 = 0;
+    /// Edits, written, never read: a batch of writes in the order they were made (`write`),
+    /// its `format.OBJECT_EDITS` first, which the source applies to its shards.
+    pub const EDITS: u32 = 1;
+}
+
+/// The zoom of the tile a shard below OBJECT is: pxl-spec-core's `SHARD_ZOOM`, which the
+/// kernel holds this to (domain/layer/object/repository.rs). A key's digits to it name the
+/// shard, and past it each zoom adds a digit on each of three axes (pxl-spec
+/// space/hierarchy/morton.rs).
+pub const SHARD_ZOOM: u32 = 8;
+
+/// The children of the tree packet a shard's file and an edit batch hold after their
+/// format byte, by index: each row a write `<key, id, ext>`, a leaf as the write that made
+/// it in a shard's file, in the order made in a batch, where VOID erases (pxl-kernel
+/// domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),
+/// its row and its fields as columns.
+pub mod write {
+    /// u64[]: each key's high half (pxl-spec space/hierarchy/morton.rs `key_of`, 3D).
+    pub const KEY_HI: u32 = 0;
+    /// u64[]: each key's low half.
+    pub const KEY_LO: u32 = 1;
+    /// u32[]: each catalog value.
+    pub const ID: u32 = 2;
+    /// u32[]: the rows a marker's text is for, a marker's each.
+    pub const TEXT_ROW: u32 = 3;
+    /// strs: those markers' texts.
+    pub const TEXT: u32 = 4;
+}
+
+/// The children of the tree packet `object.TOP` holds after its format byte, by index:
+/// each row a node at `SHARD_ZOOM` holding objects, which only shards' leaves are under;
+/// a shard has two, below sea level and above.
+pub mod top {
+    /// u64[]: the shard it is, by subject.
+    pub const SHARD: u32 = 0;
+    /// i32[]: its index on Z, -1 below sea level and 0 above.
+    pub const Z: u32 = 1;
+    /// u32[]: what its leaves fold to, its word in the objects' tree (pxl-spec-core
+    /// overwrite.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.
+    pub const FOLD: u32 = 2;
+}
+
 /// The files the kernel keeps below STORAGE, by slot. What a slot holds is its
 /// owner's, written whole, its slot's `format` first (pxl-kernel sys/io/file.rs).
 pub mod storage {
@@ -114,12 +166,14 @@ pub mod storage {
 }
 
 /// Each kept file's format, the first byte of what it holds: a storage slot's by its
-/// name, a shard's file below OBJECT as OBJECT. The kernel reads a file of its format and
-/// refuses any other, reading none of it and never writing over it, as a driver refuses
-/// a volume whose superblock it does not know; what to do with the file is the host's.
-/// Bump one whenever a change makes an older file mean something other than it meant
-/// when it was written.
+/// name, a shard's file below OBJECT as OBJECT, the top and an edit batch as theirs. The
+/// kernel reads a file of its format and refuses any other, reading none of it and never
+/// writing over it, as a driver refuses a volume whose superblock it does not know; what
+/// to do with the file is the host's. Bump one whenever a change makes an older file mean
+/// something other than it meant when it was written.
 pub mod format {
     pub const SETTINGS: u8 = 1;
     pub const OBJECT: u8 = 16;
+    pub const OBJECT_TOP: u8 = 17;
+    pub const OBJECT_EDITS: u8 = 18;
 }

@@ -15,6 +15,9 @@ import * as LAYOUT_ANSWER from "./host/layout_answer.spec.ts";
 import * as LINE from "./host/line.spec.ts";
 import * as RASTER from "./host/raster.spec.ts";
 import * as root from "./host/root.spec.ts";
+import * as object from "./host/object.spec.ts";
+import * as write from "./host/write.spec.ts";
+import * as top from "./host/top.spec.ts";
 import * as storage from "./host/storage.spec.ts";
 import * as format from "./host/format.spec.ts";
 
@@ -58,14 +61,37 @@ export const SPHERE: u32 = 0 as number;
  * its row in the asset ingest's table counted from 1 (spec/spec/asset/ingested.json). */
 export const CATALOG: u32 = 0 as number;
 
+/** Below OBJECT, the files that are no shard's; any other number below it is a shard's
+ * subject, which is neither: a tile's key ends in a 1 within its high half, at bit 32 or
+ * above for a tile the pyramid holds. */
+export { object };
+
+/** The zoom of the tile a shard below OBJECT is: pxl-spec-core's `SHARD_ZOOM`, which the
+ * kernel holds this to (domain/layer/object/repository.rs). A key's digits to it name the
+ * shard, and past it each zoom adds a digit on each of three axes (pxl-spec
+ * space/hierarchy/morton.rs). */
+export const SHARD_ZOOM: u32 = 8 as number;
+
+/** The children of the tree packet a shard's file and an edit batch hold after their
+ * format byte, by index: each row a write `<key, id, ext>`, a leaf as the write that made
+ * it in a shard's file, in the order made in a batch, where VOID erases (pxl-kernel
+ * domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),
+ * its row and its fields as columns. */
+export { write };
+
+/** The children of the tree packet `object.TOP` holds after its format byte, by index:
+ * each row a node at `SHARD_ZOOM` holding objects, which only shards' leaves are under;
+ * a shard has two, below sea level and above. */
+export { top };
+
 /** The files the kernel keeps below STORAGE, by slot. What a slot holds is its
  * owner's, written whole, its slot's `format` first (pxl-kernel sys/io/file.rs). */
 export { storage };
 
 /** Each kept file's format, the first byte of what it holds: a storage slot's by its
- * name, a shard's file below OBJECT as OBJECT. The kernel reads a file of its format and
- * refuses any other, reading none of it and never writing over it, as a driver refuses
- * a volume whose superblock it does not know; what to do with the file is the host's.
- * Bump one whenever a change makes an older file mean something other than it meant
- * when it was written. */
+ * name, a shard's file below OBJECT as OBJECT, the top and an edit batch as theirs. The
+ * kernel reads a file of its format and refuses any other, reading none of it and never
+ * writing over it, as a driver refuses a volume whose superblock it does not know; what
+ * to do with the file is the host's. Bump one whenever a change makes an older file mean
+ * something other than it meant when it was written. */
 export { format };

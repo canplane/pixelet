@@ -3,8 +3,18 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { storage as stored } from "@/abi/host.spec.ts";
-import { follow_refused, migrate, set_aside, type Storage } from "./storage.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { FileError } from "@xpute/host/ipc/sys.ts";
+
+import { root, storage as stored } from "@/abi/host.spec.ts";
+import { follow_refused, set_aside_by_root } from "./refused.ts";
+import {
+  commit_storage,
+  migrate,
+  open_storage,
+  set_aside,
+  type Storage,
+} from "./storage.ts";
 
 function storage(
   entries: Record<string, string> = {},
@@ -60,13 +70,37 @@ test("set_aside - storage that refuses the copy keeps the slot as it was", () =>
   assert.deepStrictEqual(set_aside(storage(), 99, 7), false);
 });
 
-test("follow_refused - each refused slot is set aside and emptied once", () => {
+test("open_storage - a file's bytes read back as committed, kept as text", () => {
+  const s = storage();
+  commit_storage(BigInt(stored.SETTINGS), new Uint8Array([1, 0, 255]), s);
+  assert.deepStrictEqual(s.map.get("pxl:kept:settings"), "AQD_");
+  assert.deepStrictEqual(
+    [...open_storage(BigInt(stored.SETTINGS), s)],
+    [1, 0, 255],
+  );
+});
+
+test("open_storage - text that keeps no bytes is no file of bytes", () => {
   const s = storage({ "pxl:kept:settings": '{"ao":"screen"}' });
-  const told: number[] = [];
-  follow_refused([stored.SETTINGS], (slot) => told.push(slot), s);
-  follow_refused([stored.SETTINGS], (slot) => told.push(slot), s);
-  assert.deepStrictEqual(told, [stored.SETTINGS]);
+  let errnum: number | undefined;
+  try {
+    open_storage(BigInt(stored.SETTINGS), s);
+  } catch (err) {
+    errnum = err instanceof FileError ? err.errnum : undefined;
+  }
+  assert.deepStrictEqual(errnum, Errno.EBADMSG);
+});
+
+test("follow_refused - each refused file is set aside and emptied once", () => {
+  const s = storage({ "pxl:kept:settings": '{"ao":"screen"}' });
+  const told: string[] = [];
+  const settings = { root: root.STORAGE, path: String(stored.SETTINGS) };
+  const tell = (f: { root: number; path: string }): void =>
+    void told.push(`${f.root}/${f.path}`);
+  follow_refused([settings], tell, set_aside_by_root(s));
+  follow_refused([settings], tell, set_aside_by_root(s));
+  assert.deepStrictEqual(told, [`${root.STORAGE}/${stored.SETTINGS}`]);
   assert.deepStrictEqual(s.map.get("pxl:kept:settings"), "");
-  follow_refused([], (slot) => told.push(slot), s);
-  assert.deepStrictEqual(told, [stored.SETTINGS]);
+  follow_refused([], tell, set_aside_by_root(s));
+  assert.deepStrictEqual(told.length, 1);
 });

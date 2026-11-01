@@ -129,6 +129,49 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         self.release(slot);
         self.data[slot] = val;
         self.touch(slot);
+        self.refold(&path, depth, fold);
+        true
+    }
+
+    /// Makes the node `depth` levels under the root holding `at` a branch
+    /// of `empty` leaves holding `val` as their fold: a node whose leaves
+    /// are not here, folded where they are. Each branch over it its child
+    /// group `fold` folds, given its depth. A write under it folds it from
+    /// what is there.
+    pub fn set_branch(
+        &mut self,
+        depth: u32,
+        at: [i32; D],
+        val: T,
+        empty: T,
+        fold: impl Fn(&Self, u32, u32) -> T,
+    ) {
+        xpute_kit::ensure!((1..=32).contains(&depth), EINVAL, depth);
+        let mut path = [0usize; 32];
+        let mut base = 0;
+        for d in 1..depth {
+            let slot = base + toward(at, depth - d);
+            if self.first_child[slot] == 0 {
+                let child_group = self.alloc(self.data[slot]);
+                self.first_child[slot] = child_group | BRANCH;
+                self.touch(slot);
+            }
+            path[d as usize] = slot;
+            base = (self.first_child[slot] & !BRANCH) as usize;
+        }
+        let slot = base + toward(at, 0);
+        self.release(slot);
+        let child_group = self.alloc(empty);
+        self.first_child[slot] = child_group | BRANCH;
+        self.data[slot] = val;
+        self.touch(slot);
+        self.refold(&path, depth, fold);
+    }
+
+    /// Each branch on `path` over a node `depth` levels down, from the
+    /// deepest: a child group of equal leaves joined into one, any other
+    /// folded by `fold`.
+    fn refold(&mut self, path: &[usize; 32], depth: u32, fold: impl Fn(&Self, u32, u32) -> T) {
         for d in (1..depth).rev() {
             let parent = path[d as usize];
             let child_group = (self.first_child[parent] & !BRANCH) as usize;
@@ -142,7 +185,6 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
             }
             self.touch(parent);
         }
-        true
     }
 
     /// What slot `slot` holds.

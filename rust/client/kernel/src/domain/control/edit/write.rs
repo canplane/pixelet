@@ -48,15 +48,17 @@ fn write_object_val(at: EntryAt, val: u32) {
     submit(Write::at(at, val));
 }
 
-/// A write is made here at once and sent to be kept, where the world takes
-/// an edit (`World::editable`); elsewhere it is refused.
+/// A write is made here at once and, where it changed what is placed, sent
+/// to be kept, where the world takes an edit (`World::editable`); elsewhere
+/// it is refused.
 fn submit(write: Write) {
     let (zoom, at) = morton::node_of::<3>(write.key);
     if !World::now().editable(&cube(zoom, at)) {
         return;
     }
-    repository::send(&write);
-    apply([write]);
+    if apply([write.clone()]) {
+        repository::send(write);
+    }
 }
 
 /// Whether a whole-cell pick of a palette entry only undoes a carve: the cell holds

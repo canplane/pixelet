@@ -127,20 +127,33 @@ the unknown past the shards baked give no surface. Heights are worked out on the
 GPU from the elevation and read back, never sent (`pxl-spec-core ground.rs`
 `height`).
 
-**Objects** are client-local: one sparse tree, each leaf an asset's id at its
-node and each branch its eight folded (`pxl-kernel
+**Objects** are placed, not baked: one sparse tree, each leaf an asset's id at
+its node and each branch its eight folded (`pxl-kernel
 domain/layer/object/store.rs`). A write splits leaves only on its path and joins
 eight equal leaves into one, so one picture has one tree. A leaf of `AIR` erases
 what a lower layer would show. A leaf may carry an **extension**, such as a
 marker's words, kept in a pool for its **class** of ids (`pxl-spec
 object/ext.rs` `class_of`), placed and erased with its leaf.
 
-Objects are kept and loaded a shard at a time, a file a shard below the `OBJECT`
-root, and a shard with none has no file (`pxl-kernel
-domain/layer/object/repository.rs`). A shard is read as a bake's tile is, the
-shards about the eye as the view asks the ground at the shard's zoom (Reads, and
-the one scheduler), and its leaves go into the one tree; a shard read stays. A
-write marks its shard, and each shard marked is written back whole.
+They come from the **objects' source**, below the `OBJECT` root, which keeps
+them a file a shard, a shard with none having no file, and keeps the **top** of
+the tree: what each node at the shard's zoom holding objects folds to
+(`host.json` `object.TOP`; `pxl-kernel domain/layer/object/repository.rs`). The
+top is read first, and its folds stand in the tree where their shards are not
+read, so a view from afar draws from it alone. A shard the top lists is read as
+a bake's tile is, the shards about the eye as the view asks the ground at the
+shard's zoom (Reads, and the one scheduler), and its leaves go into the one tree
+in place of its folds; a shard it does not list is empty without asking, and a
+shard read stays.
+
+Writes go up as **edits**: each batch the writes `<key, id, ext>` the tree took,
+in the order made (`object.EDITS`), sent a while after the first and no more
+than a turn allows. The objects' source applies them to its shards and rebuilds
+the top's rows of the shards they reach; the kernel writes no shard and no top.
+It folds as the tree does, a rule the client's `OBJECT` backend holds again
+(`ts/client/src/driver/namespace/object_tree.ts`), held to the store by one
+record both read (`rust/spec/golden/object/top.tsv`). Which source answers, the
+client's own storage or a server, the kernel cannot tell.
 
 **Places** are tiles named like the ground tiles under them, each holding what
 Carto draws there at that web map zoom (`pxl-spec bake/tile/place.rs`), by one
@@ -768,14 +781,15 @@ and the client binds each root to what answers it, once at boot
 (`ts/client/src/driver/namespace/namespace.ts` `namespace`). The roots are
 `spec/client/kernel/sys/io/host.json` `root`'s: the bakes and the assets
 read-only, `STORAGE` holding the kernel's own files, each a **storage file** on
-the device, and `OBJECT` the placed objects, a file a shard:
+the device, and `OBJECT` the placed objects' source, its shards and their top
+read and its edits written:
 
 | Root               | The kernel's path                                              | What the client binds it to                                                                                  |
 | ------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | each bake, by kind | a tile's number, its subject, in decimal; the Earth's `SPHERE` | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`namespace/tile.ts`) |
 | `ASSET`            | a load's number, in decimal                                    | the shipped asset that number is, by its hash (`namespace/asset.ts`)                                         |
 | `STORAGE`          | a storage file's number, in decimal (`storage`)                | the platform's storage, under a key it picks (`namespace/storage.ts`)                                        |
-| `OBJECT`           | a shard's number, its subject, in decimal                      | for now the platform's storage, under a key a shard (`namespace/object.ts`)                                  |
+| `OBJECT`           | a shard's subject, in decimal; `object.TOP`; `object.EDITS`    | for now a loopback over the platform's storage, which applies the edits (`namespace/object.ts`)              |
 
 So the kernel names no URL, version, storage key or platform: a path is a
 number, and where it leads is the client's. The client reads the declaration
@@ -809,11 +823,16 @@ Models and textures spend the same credits (`sys/io/loader.rs`), and so do the
 objects' shards, wanted as a layer's tiles are.
 
 `STORAGE` holds the settings, the one storage file, opened by its number
-(`sys/io/file.rs` `StorageFile`). A storage file begins with its slot's format
-byte, and a shard's file below `OBJECT` with `OBJECT`'s (`host.json` `format`);
-the kernel refuses one of another format, as a driver refuses a superblock it
-does not know, and never writes over it. A shard whose file is refused stays
-unread, and no edit stands in it.
+(`sys/io/file.rs` `StorageFile`). A file is bytes to the kernel; a backend over
+a platform that keeps text keeps their base64url (`namespace/storage.ts`
+`kept`). A storage file begins with its slot's format byte, and each file below
+`OBJECT` with its own (`host.json` `format`); the kernel refuses one of another
+format, one its backend cannot read as bytes, or one that does not decode, as a
+driver refuses a superblock it does not know, and never writes over it. It names
+each refused file in the snapshot (`refused`); the client sets it aside, empties
+it and says so (`FS_TRUNCATED`, `namespace/refused.ts`), and the kernel reads it
+again. A shard whose file is refused stays unread meanwhile, and no edit stands
+in it.
 
 ## When something goes wrong
 

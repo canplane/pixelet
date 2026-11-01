@@ -934,15 +934,23 @@
           "name": "FS_TRUNCATED",
           "val": 4866,
           "$doc": [
-            "A storage file the kernel refused (the snapshot's `storage_refused`) is empty now, what it held",
-            "set aside by the host: the kernel reads it again, and writes it from then on."
+            "A file the kernel refused (the snapshot's `refused`) is empty now, or its source's",
+            "own again, what it held set aside by the host: the kernel reads it again, and writes",
+            "a storage file from then on."
           ],
           "pkt": [
             {
-              "name": "slot",
+              "name": "root",
               "type": "u32",
               "$doc": [
-                "host.json's `storage`."
+                "host.json's `root`."
+              ]
+            },
+            {
+              "name": "path",
+              "type": "str",
+              "$doc": [
+                "Its number below the root in decimal, as the kernel opened it."
               ]
             }
           ]
@@ -1476,13 +1484,14 @@
           ]
         },
         {
-          "name": "storage_refused",
-          "type": "u32",
+          "name": "refused",
+          "type": "RefusedFile",
           "list": true,
           "$doc": [
-            "The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for",
-            "any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says",
-            "the slot is empty."
+            "The files the kernel refused, not of their format, not decoding, or too large for any",
+            "heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The",
+            "kernel read none of it and writes nothing over it until FS_TRUNCATED says it is",
+            "empty."
           ]
         },
         {
@@ -1660,6 +1669,22 @@
           "$doc": [
             "Held by an area the point is in; one without is the nearest found by its point."
           ]
+        }
+      ]
+    },
+    {
+      "name": "RefusedFile",
+      "$doc": ["A file the kernel refused, as it opened it."],
+      "fields": [
+        {
+          "name": "root",
+          "type": "u32",
+          "$doc": ["host.json's `root`."]
+        },
+        {
+          "name": "path",
+          "type": "str",
+          "$doc": ["Its number below the root in decimal."]
         }
       ]
     },

@@ -643,8 +643,9 @@ pub enum Command {
     /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
     FS_MOUNT = 0x1301,
-    /// A storage file the kernel refused (the snapshot's `storage_refused`) is empty now, what it held
-    /// set aside by the host: the kernel reads it again, and writes it from then on.
+    /// A file the kernel refused (the snapshot's `refused`) is empty now, or its source's
+    /// own again, what it held set aside by the host: the kernel reads it again, and writes
+    /// a storage file from then on.
     FS_TRUNCATED = 0x1302,
     /// A permission as the shell's prompt or the browser's change reported it.
     SENSOR_PERMISSION = 0x1206,
@@ -787,10 +788,11 @@ pub struct Snapshot<'a> {
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
-    /// The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for
-    /// any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says
-    /// the slot is empty.
-    pub storage_refused: &'a [u32],
+    /// The files the kernel refused, not of their format, not decoding, or too large for any
+    /// heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The
+    /// kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
+    /// empty.
+    pub refused: &'a dyn Fn(&mut dyn FnMut(&RefusedFile<'_>)),
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say.
     pub stall: Option<Message>,
 }
@@ -820,7 +822,13 @@ impl Snapshot<'_> {
             });
         });
         w.u32_array(Some(self.previews));
-        w.u32_array(Some(self.storage_refused));
+        let mut n = 0;
+        (self.refused)(&mut |_| n += 1);
+        w.branch(n, |w| {
+            (self.refused)(&mut |item| {
+                w.branch(RefusedFile::FIELDS, |w| item.write(w));
+            });
+        });
         w.u32(self.stall.map(|m| m as u32));
     }
 }
@@ -968,6 +976,24 @@ impl DivisionPart<'_> {
         });
         w.bool(Some(self.shown));
         w.bool(Some(self.area));
+    }
+}
+
+/// A file the kernel refused, as it opened it.
+pub struct RefusedFile<'a> {
+    /// host.json's `root`.
+    pub root: u32,
+    /// Its number below the root in decimal.
+    pub path: &'a dyn Display,
+}
+
+impl RefusedFile<'_> {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 2;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.root));
+        w.str_display(self.path);
     }
 }
 
@@ -1200,16 +1226,19 @@ impl<'a> FsMount<'a> {
 
 /// Command::FS_TRUNCATED's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct FsTruncated {
-    /// host.json's `storage`.
-    pub slot: u32,
+pub struct FsTruncated<'a> {
+    /// host.json's `root`.
+    pub root: u32,
+    /// Its number below the root in decimal, as the kernel opened it.
+    pub path: &'a str,
 }
 
-impl FsTruncated {
-    pub fn read(pkt: &[u8]) -> Result<FsTruncated, MarshalError> {
+impl<'a> FsTruncated<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<FsTruncated<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(FsTruncated {
-            slot: integer::<u32>(f.at(0)?.get_number()?)?,
+            root: integer::<u32>(f.at(0)?.get_number()?)?,
+            path: f.at(1)?.get_str_ref()?,
         })
     }
 }

@@ -15,6 +15,7 @@ use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, region};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec_core::area;
 
 const COVERAGE: &str = include_str!(concat!(env!("PXL_REPO"), "/infra/geo/coverage.json"));
 
@@ -124,8 +125,9 @@ impl Coverage {
         }
     }
 
+    /// The shard over a tile a shard or finer (pxl-spec-core `area::shard_over`).
     fn shard_of(zoom: Zoom, tile: [i32; 2]) -> Shard {
-        ancestor_of(tile, zoom - SHARD_ZOOM)
+        area::shard_over(zoom, tile).1
     }
 
     pub fn contains(&self, leaf: [i32; 2]) -> bool {

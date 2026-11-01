@@ -9,7 +9,9 @@
 //! each write up its path, read through the layer's query (`Query::cursor`,
 //! `Query::child`, `Store::value`). A leaf that carries a record is never
 //! joined, its handle its own, and is never split: a placement takes an
-//! empty cell and an erase takes the whole leaf.
+//! empty cell and an erase takes the whole leaf. A node at `SHARD_ZOOM`
+//! whose shard is not read holds what its source says it folds to, its
+//! children empty (`set_fold`), until the shard's leaves take its place.
 
 use xpute_guest::global::Global;
 
@@ -20,7 +22,7 @@ use pxl_spec::object::{is_decor, is_marker};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
-use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, CUBE_ZOOM};
+use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::SparseTree;
 use pxl_spec::space::hierarchy::tree::{child_of, region, slot_of, Node};
@@ -93,11 +95,13 @@ pub fn object() -> &'static mut Store {
     OBJECT.get(Store::default)
 }
 
-pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) {
+/// Applies every write (`Store::write`); whether any changed the store.
+pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) -> bool {
     let regions = object().write(writes);
     if !regions.is_empty() {
         note_written(&regions);
     }
+    !regions.is_empty()
 }
 
 static WRITTEN: Global<Vec<Aabb>> = Global::new();
@@ -476,6 +480,52 @@ impl Store {
                 self.ext.free(class, h);
             }
         }
+    }
+
+    /// The node `at` at `SHARD_ZOOM` held as `word`, what its leaves fold to
+    /// (pxl-spec-core `overwrite::fold_word`), they not here: a branch whose
+    /// children hold nothing, so it is drawn as its fold from where its zoom
+    /// or a coarser one is a cell, and nothing finer is met in it. Its cube.
+    pub(crate) fn set_fold(&mut self, at: [i32; 3], word: u32) -> Aabb {
+        self.tree.set_branch(
+            depth(SHARD_ZOOM),
+            path(SHARD_ZOOM, at),
+            word,
+            EMPTY.word(),
+            |tree, child_group, d| fold(tree, child_group, d - 1),
+        );
+        self.revision = self.revision.wrapping_add(1);
+        cube(SHARD_ZOOM, at)
+    }
+
+    /// The node `at` at `SHARD_ZOOM` emptied where `set_fold` held it, no
+    /// leaf under it; its cube where it changed.
+    pub(crate) fn clear_fold(&mut self, at: [i32; 3]) -> Option<Aabb> {
+        let held = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
+        if !held.is_folded() || held.zoom() != SHARD_ZOOM {
+            return None;
+        }
+        let mut leaf = false;
+        self.each_in(SHARD_ZOOM, at, held, &mut |_| leaf = true);
+        if leaf {
+            return None;
+        }
+        self.tree.set(
+            depth(SHARD_ZOOM),
+            path(SHARD_ZOOM, at),
+            EMPTY.word(),
+            |tree, child_group, d| fold(tree, child_group, d - 1),
+        );
+        self.revision = self.revision.wrapping_add(1);
+        Some(cube(SHARD_ZOOM, at))
+    }
+
+    /// The word the node `at` at `SHARD_ZOOM` holds in the tree: a leaf's,
+    /// or what its leaves fold to; none where nothing is under it.
+    #[cfg(test)]
+    pub(crate) fn word_at(&self, at: [i32; 3]) -> Option<u32> {
+        let held = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
+        (held.holds() && held.zoom() == SHARD_ZOOM).then(|| self.tree.data()[held.slot() as usize])
     }
 
     /// Empties the store; the cubes that held anything.

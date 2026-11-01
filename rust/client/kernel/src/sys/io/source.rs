@@ -116,8 +116,8 @@ impl Source {
     /// `p`'s node among `nodes`: itself, or past `SHARD_ZOOM` the one over
     /// it there, which every shard over it is over too (no shard is finer).
     fn node_over(&self, p: Tile) -> Option<u8> {
-        let z = p.zoom.min(SHARD_ZOOM);
-        node_of(z, Tile::over(z, p.first_leaf()).at).map(|i| self.nodes[i])
+        let (z, at) = area::shard_over(p.zoom, p.at);
+        node_of(z, at).map(|i| self.nodes[i])
     }
 
     /// A shard over `p`, or at or under it: one read.

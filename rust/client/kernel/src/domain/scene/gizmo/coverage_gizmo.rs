@@ -19,9 +19,10 @@ use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec_core::area;
 use pxl_spec_core::clipmap::{self, Entry, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
@@ -253,9 +254,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
             let mark = match drawn {
                 Some((c, at)) => {
                     out.tiles.push(tile);
-                    let s = pz.saturating_sub(SHARD_ZOOM);
-                    out.shards
-                        .push((pz.min(SHARD_ZOOM), [p[0] >> s, p[1] >> s]));
+                    out.shards.push(area::shard_over(pz, p));
                     match c < cell && floor_only(tile_of(c, at).0) {
                         true => Mark::DrawnFromFloor,
                         false => Mark::Drawn,

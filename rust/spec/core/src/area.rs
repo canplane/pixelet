@@ -48,6 +48,17 @@ pub const fn shard_key(c: [i32; 2]) -> u32 {
 /// No cell's key: a row off the world.
 pub const NO_KEY: u32 = u32::MAX;
 
+/// The shard over the node `(zoom, c)` of the ground's two axes: its cell at
+/// `SHARD_ZOOM` where the node is a shard or finer, else the node itself,
+/// which no one shard is over. X as the node names it.
+pub const fn shard_over(zoom: Zoom, c: [i32; 2]) -> (Zoom, [i32; 2]) {
+    if zoom <= SHARD_ZOOM {
+        return (zoom, c);
+    }
+    let s = zoom - SHARD_ZOOM;
+    (SHARD_ZOOM, [c[0] >> s, c[1] >> s])
+}
+
 /// Which of the nine cells at `SHARD_ZOOM` about `own` are served, as
 /// `served` says of each, bit `(dy + 1)·3 + (dx + 1)` for the cell `dx, dy`
 /// from it, its own among them, as `Shard::served` holds them: a cell's

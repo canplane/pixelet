@@ -94,9 +94,10 @@ impl ObservedLayer for Earth {
 pub struct Layer {
     pub stream: Stream,
     /// The most tiles it asks for at once: a base layer's tile cache's
-    /// slots, the objects' shards about the eye.
+    /// slots, the objects' shards about the eye or their top.
     pub slots: u32,
-    arrived: fn(Tile, Option<Block>, &mut Phases) -> Result<(), Failure>,
+    /// A want's file arrived, by its subject, or its absence.
+    arrived: fn(u64, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
 
 const fn layer<L: ObservedLayer>() -> Layer {
@@ -439,7 +440,8 @@ impl<L: ObservedLayer> Demand<L> {
 /// The object layer's tiles, its shards, from the live eye: every shard
 /// within the demand the view makes of the ground at the shard's zoom
 /// (`observation::demand_radius`), as many as `repository::WANTS` at most,
-/// seen and nearer first. The repository reads those it has not.
+/// seen and nearer first. The repository reads their top first, which a
+/// view from afar draws from, then those of them it lists and has not read.
 pub fn object_step() {
     let o = observation();
     let r = o.zip(source::top()).and_then(|(o, top)| {
@@ -486,14 +488,13 @@ pub fn admit_arrived(pass: &Pass) {
             else {
                 return false;
             };
-            let tile = Tile::of_subject(subject);
             // A key the request scheduler no longer holds is one a reset forgot.
             if attempt_of(key).is_none() {
                 release(block);
                 return false;
             }
             let result = match of_stream(stream) {
-                Some(l) => (l.arrived)(tile, block, &mut phases),
+                Some(l) => (l.arrived)(subject, block, &mut phases),
                 None => {
                     release(block);
                     Err(Errno::ENOTRECOVERABLE.into())
@@ -509,12 +510,13 @@ pub fn admit_arrived(pass: &Pass) {
     }
 }
 
-/// None is no object for `p`.
+/// None is no object for the tile `subject` names.
 fn on_arrived<L: ObservedLayer>(
-    p: Tile,
+    subject: u64,
     block: Option<Block>,
     phases: &mut Phases,
 ) -> Result<(), Failure> {
+    let p = Tile::of_subject(subject);
     let Some(b) = block else {
         L::demand().absent(p);
         return Ok(());

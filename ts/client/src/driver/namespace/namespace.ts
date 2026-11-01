@@ -16,7 +16,7 @@ import { FileError } from "@xpute/host/ipc/sys.ts";
 import { root } from "@/abi/host.spec.ts";
 import { BASE_LAYERS } from "./published.spec.ts";
 import { read_asset } from "@/driver/namespace/asset.ts";
-import { object_backend } from "@/driver/namespace/object.ts";
+import { OBJECTS } from "@/driver/namespace/object.ts";
 import { source_declared } from "@/driver/namespace/source.ts";
 import { commit_storage, open_storage } from "@/driver/namespace/storage.ts";
 import { read_object } from "@/driver/namespace/tile.ts";
@@ -42,7 +42,7 @@ function by_number(backend: Backend): Binding {
 }
 
 /** Each bake to its tiles at the edge, ASSET to the shipped assets, STORAGE
- * to the platform's storage, OBJECT to the shards' placed objects. */
+ * to the platform's storage, OBJECT to the placed objects' source. */
 export function namespace(): Namespace {
   const bound: [u32, Backend][] = [
     ...BASE_LAYERS.map((_, bake): [u32, Backend] => [
@@ -53,8 +53,20 @@ export function namespace(): Namespace {
       },
     ]),
     [root.ASSET, { open: read_asset }],
-    [root.STORAGE, { open: open_storage, commit: commit_storage }],
-    [root.OBJECT, object_backend()],
+    [
+      root.STORAGE,
+      {
+        open: (number) => open_storage(number),
+        commit: (number, bytes) => commit_storage(number, bytes),
+      },
+    ],
+    [
+      root.OBJECT,
+      {
+        open: (number) => OBJECTS.open(number),
+        commit: (number, bytes) => OBJECTS.commit(number, bytes),
+      },
+    ],
   ];
   return new Namespace(bound.map(([r, backend]) => [r, by_number(backend)]));
 }

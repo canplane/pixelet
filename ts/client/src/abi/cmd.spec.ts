@@ -193,10 +193,11 @@ export interface Snapshot {
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
-  /** The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for
-   * any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says
-   * the slot is empty. */
-  storage_refused: u32[];
+  /** The files the kernel refused, not of their format, not decoding, or too large for any
+   * heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The
+   * kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
+   * empty. */
+  refused: RefusedFile[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
   stall: Message | null;
 }
@@ -217,7 +218,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     m_per_px: b.at(11).get<f64>(),
     division: list(b.at_branch(12), read_division_part),
     previews: Array.from(b.at(13).get<U32Array>()),
-    storage_refused: Array.from(b.at(14).get<U32Array>()),
+    refused: list(b.at_branch(14), read_refused_file),
     stall: b.at(15).get<Message | null>(),
   };
 }
@@ -333,6 +334,18 @@ export function read_division_part(b: BranchCursor): DivisionPart {
     shown: b.at(3).get<boolean>(),
     area: b.at(4).get<boolean>(),
   };
+}
+
+/** A file the kernel refused, as it opened it. */
+export interface RefusedFile {
+  /** host.json's `root`. */
+  root: u32;
+  /** Its number below the root in decimal. */
+  path: string;
+}
+
+export function read_refused_file(b: BranchCursor): RefusedFile {
+  return { root: b.at(0).get<u32>(), path: b.at(1).get<string>() };
 }
 
 export interface LangName {
@@ -469,9 +482,14 @@ export function encode_fs_mount(
 
 /** Command.FS_TRUNCATED's packet, written in place into `to`.
  *
- * @param slot host.json's `storage`. */
-export function encode_fs_truncated(to: PacketRoom, slot: u32): PacketWriter {
-  return to.writer(1).u32(slot);
+ * @param root host.json's `root`.
+ * @param path Its number below the root in decimal, as the kernel opened it. */
+export function encode_fs_truncated(
+  to: PacketRoom,
+  root: u32,
+  path: string,
+): PacketWriter {
+  return to.writer(2).u32(root).str(path);
 }
 
 /** Command.SENSOR_PERMISSION's packet, written in place into `to`. */
