@@ -8,7 +8,6 @@
 //! zoom. The area runs on shards' edges, which no node a shard or finer
 //! straddles.
 
-use crate::cube::Ground;
 use crate::{idx_at, wrap_idx as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
 
 use crate::ground::{UNKNOWN, VOID};
@@ -226,28 +225,6 @@ pub const fn beside(k: u32) -> [i32; 2] {
     [(j % 3) as i32 - 1, (j / 3) as i32 - 1]
 }
 
-/// The leaf cells about the leaf cell holding the column `b` at `cell`, a
-/// leaf's or finer, that its eight neighbors lie in (`beside`'s bits). A
-/// column within its leaf cell touches none; one on a leaf's edge or corner,
-/// the cells across them; at the leaves, all eight. Whether the column has
-/// ground beside one gone (`laid`) is whether any of these is.
-pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
-    let m = (1 << (cell - LEAF_CELL)) - 1;
-    // Per axis, the leaf offsets its neighbors reach: 0 always, -1 at the
-    // leaf cell's low edge, +1 at its high one.
-    let offsets = |v: i32| 0b010 | ((v & m == 0) as u32) | ((v & m == m) as u32) << 2;
-    let (x, y) = (offsets(b[0]), offsets(b[1]));
-    // Bit `k` where it reaches `beside(k)` along both axes.
-    let mut r = 0;
-    let mut k = 0;
-    while k < 8 {
-        let d = beside(k);
-        r |= ((x >> (d[0] + 1)) & (y >> (d[1] + 1)) & 1) << k;
-        k += 1;
-    }
-    r
-}
-
 /// Which of the eight leaf cells about the leaf cell `l` are past the area
 /// (`beside`'s bits), off the nine bits of `shard`, the shard of `node`,
 /// none past in a shard known `inside`: what the fill lays a cell's edge by
@@ -281,22 +258,36 @@ pub fn gone_ring(shard: Shard, node: (Zoom, [i32; 2]), l: [i32; 2]) -> u32 {
     gone
 }
 
-/// The column `b` at `cell` of a cell laid as the fill lays it (`laid` low
+/// The leaf cells gone about the leaf cell holding the column `b` at `cell`,
+/// a leaf's or finer, off the area alone (`gone_ring`): what a column no
+/// brick holds is walled by, as `World::within` knows the wall before any
+/// ground arrives (pxl-kernel domain/query/limit.rs).
+pub fn gone_about(area: &impl Area, cell: Zoom, b: [i32; 2]) -> u32 {
+    let s = cell - LEAF_CELL;
+    let l = [b[0] >> s, b[1] >> s];
+    let node = (LEAF_ZOOM, tile_at(LEAF_CELL, l));
+    gone_ring(Shard::UNKNOWN.at(area, node), node, l)
+}
+
+/// A column at `cell` of a cell laid as the fill lays it (`laid` low
 /// byte its own palette index, high the leaf cells about it gone, `gone_ring`), with
 /// the area's edge laid, the one rule a column is read by (pxl-spec-core
 /// `clipmap::ground`) and the ways' fill walls one by
 /// (`way::Columns::is_walled`), on the CPU and a GPU alike: at a leaf's cells
-/// or finer, ground beside a gone leaf cell, of those the column touches
-/// (`ring`), is the wall, bedrock (`UNKNOWN`) up to its own face. A gone
+/// or finer, a column in a leaf cell beside a gone one is the wall, bedrock
+/// (`UNKNOWN`) up to its own face, open sea's void to sea level, the whole
+/// leaf column at every zoom, the
+/// columns `World::within` and `World::editable` refuse (pxl-kernel
+/// domain/query/limit.rs). A gone
 /// cell is bedrock already, its palette index `UNKNOWN` (gone is past), and its top
 /// the Earth's at sea level as its fill lays it (pxl-spec-core
 /// `fill::heights`): the wall at sea level, so a cell of it is the Earth's
-/// (`earth`). A column read off a brick coarser than a leaf's cells, a
-/// stand-in, has none gone about it, so no wall: the stand-in is the world
-/// at its zoom, and the wall is a fact of the leaves it does not hold.
-pub fn laid(laid: u32, cell: Zoom, b: [i32; 2]) -> u32 {
+/// (`earth`). A leaf's column or finer read off a stand-in, a brick coarser
+/// than a leaf's cells, or off none, is walled off the area (`gone_about`,
+/// `clipmap::ground`), as the open sea is, where no leaf's brick is baked.
+pub fn laid(laid: u32, cell: Zoom) -> u32 {
     let palette_idx = laid & 0xff;
-    if cell >= LEAF_CELL && Ground::grounds(palette_idx) && ring(cell, b) & laid >> 8 != 0 {
+    if cell >= LEAF_CELL && laid >> 8 != 0 {
         UNKNOWN
     } else {
         palette_idx

@@ -453,13 +453,11 @@ impl<Q: Brick> Columns for Q {
             (p[1] * BRICK) as f32 + c[1] as f32 + center,
         ]
     }
-    /// Off its cell as laid (`area::laid`), as a read of it walls it: a
-    /// brick's first cell lies on a leaf cell's first, so `c` places the
-    /// column in its leaf cell as its world index does. A ring column is
-    /// none of the brick's, never walled.
+    /// Off its cell as laid (`area::laid`), as a read of it walls it. A
+    /// ring column is none of the brick's, never walled.
     fn is_walled(&self, c: [i32; 2]) -> bool {
         let i = cell_idx(c);
-        i != BRICK_CELLS && area::laid(self.laid(i), Brick::cell(self), c) == UNKNOWN
+        i != BRICK_CELLS && area::laid(self.laid(i), Brick::cell(self)) == UNKNOWN
     }
     fn stations(&self) -> Stations {
         header_of(self).1
@@ -631,13 +629,19 @@ pub fn cell(w: &impl Bricks, place: Lookup, cell: Zoom, g: [i32; 2]) -> (u32, u3
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it, past
 /// the leaves a leaf's, stepped from `place`, where the column's own cells
 /// were found (`step`), with the area's edge laid on it off the cell as its
-/// fill laid it (`area::laid`); and where it is held.
+/// fill laid it (`area::laid`), or off the area where no leaf's brick holds
+/// it (`area::gone_about`); and where it is held.
 pub fn ground(w: &(impl Bricks + Area), place: Lookup, zoom: Zoom, b: [i32; 2]) -> (Cell, Lookup) {
     let read = held_to(zoom);
-    let (word, column, laid, f) = cell(w, place, read, cell_at(zoom, read, b));
+    let (word, column, mut laid, f) = cell(w, place, read, cell_at(zoom, read, b));
+    // A leaf's column or finer that no leaf's brick holds, read off a
+    // stand-in or none: its wall off the area alone, as the leaves' would be.
+    if zoom >= LEAF_CELL && (!f.here() || f.from() < LEAF_CELL) {
+        laid = laid_half(laid & 0xff, area::gone_about(w, zoom, b));
+    }
     let (top, part) = ground::top(zoom, column_top(column) as f32);
     let cell = Cell {
-        palette_idx: area::laid(laid, zoom, b),
+        palette_idx: area::laid(laid, zoom),
         top,
         part,
         fold: ground::palette_indices(word),
