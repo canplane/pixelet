@@ -41,8 +41,9 @@ For each, in turn:
    state or an event; a word someone else owns (WebGPU's in xpute's `gpu/`).
 4. Also a finding: a name that reads as another concept in the same scope,
    a type with no head noun, and a module or file named by a participle.
-   The module path is the qualifier: the same name in another module or enum
-   is no finding, and a name is never lengthened to tell it from one there.
+   A name is read where it stands: its module, its file and the lines about
+   it say which thing it is. The same name elsewhere is no finding, a name
+   its context makes plain is no finding, and no name is lengthened.
 
 ## Report
 
