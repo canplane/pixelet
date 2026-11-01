@@ -656,3 +656,15 @@ record (the closing round):
   whether any tile gathers from what it handed (`Tiles::claiming`), as the
   light decides whether to cast; a dropped frame is followed by one drawn
   whole, which marks every tile.
+
+## Not taken in the waste round (2026-11-02)
+
+- **The beam's corners resumed off a coarser level's lines** not taken by
+  the user. Counted (a47145e81, S1 turned and walked): neighboring corners
+  descend the same nodes from the root, 42.8k of the eye's 48k world asks a
+  cast in its beam and samples; the eye's `beam` 1.1-1.2 ms of a GPU frame
+  near 20 ms. Resuming each corner off the least coarser line about it, as
+  a cell's samples resume off its corners, takes at most half of that, and
+  adds a pass and lines a level, the levels' spacing, keep and radius in
+  `beam::Grid` and the light's layout, and a list and reach a level for the
+  light's dispatch (275972a85): more than it takes off.
