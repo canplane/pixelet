@@ -1203,8 +1203,8 @@ impl RaysPass {
                 g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             }
             // The tiles its receivers read marked, timed with the beam:
-            // where the eye's rays meet the world, a thread a brick of pixels
-            // `light::MARK` a side (`light_mark_cs`), and where the decor and
+            // where the eye's rays meet the world, a thread a drawn pixel
+            // (`light_mark_cs`), and where the decor and
             // the actors drawn stand, a thread each (`light_mark_drawn_cs`);
             // then those they read, a thread a tile (`light_propagate_cs`).
             if c.light_world {
@@ -1212,7 +1212,7 @@ impl RaysPass {
                 g.set_bind_group(pass, 0, c.light_groups[4], &[]);
                 g.set_pipeline(pass, c.light_mark_built.pipeline);
                 let w = compute::LIGHT_MARK_WORKGROUP;
-                let [x, y] = c.size.map(|v| v.div_ceil(light::MARK));
+                let [x, y] = c.size;
                 g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             }
             g.set_bind_group(pass, 0, c.light_groups[5], &[]);

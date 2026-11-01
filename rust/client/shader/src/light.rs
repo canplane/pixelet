@@ -766,10 +766,12 @@ fn tile_word(size: u32, first: u32, [i, j]: [i32; 2]) -> u32 {
 const NO_TILE: u32 = u32::MAX;
 
 /// Tile `tile` of the box marked stood on in the cast numbered `cast`
-/// (`light::stands_at`), none past the box.
+/// (`light::stands_at`), none past the box: written only where it does not
+/// hold that number yet, so of the many threads whose pixels stand on one
+/// tile the first alone writes it.
 pub(crate) fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
     let w = tile_word(size, pxl_spec_core::light::stands_at(size), tile);
-    if w != NO_TILE {
+    if w != NO_TILE && at(list, w) != cast {
         put(list, w, cast);
     }
 }

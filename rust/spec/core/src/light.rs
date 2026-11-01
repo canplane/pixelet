@@ -650,11 +650,6 @@ pub const fn tiles(size: u32) -> u32 {
     size / TILE
 }
 
-/// The drawn pixels a thread of the mark reads, a side (pxl-shader light.rs
-/// `light_mark_cs`): every pixel is read, as a run of them can span many
-/// tiles at an edge or a grazing face, and a run on one tile marks it once.
-pub const MARK: u32 = 4;
-
 /// The tiles across and down a pixel's footprint may span and be marked
 /// whole (pxl-shader light.rs `light_mark_cs`): between where its ray met
 /// the world and where its neighbor's did, which a jitter of under half a
