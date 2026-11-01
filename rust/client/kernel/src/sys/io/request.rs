@@ -352,6 +352,10 @@ impl<S: Serve> RequestScheduler<S> {
         } else {
             self.credits as usize
         };
+        // No credit free: nothing starts, so nothing is ranked.
+        if self.attempt.iter().flatten().count() >= room || self.free_slot().is_none() {
+            return;
+        }
         let mut ready = core::mem::take(&mut self.ready);
         ready.clear();
         for s in Stream::ALL {

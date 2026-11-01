@@ -270,27 +270,39 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     };
     let moved_places = &p.moved_places;
     let columns = |s: Brick| region(s, [BOUNDS.min[2], BOUNDS.max[2]]);
-    let drawn = |s: &Brick| now.drawn.binary_search(s).is_ok();
-    let stands = |&s: &Brick| {
-        let r = columns(s);
-        before.binary_search(&s).is_ok()
-            && !changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
-    };
+    // Whether each drawn brick stands, asked once a brick however many pins
+    // and places it holds.
+    let stood: Vec<bool> = now
+        .drawn
+        .iter()
+        .map(|&s| {
+            let r = columns(s);
+            before.binary_search(&s).is_ok()
+                && !changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
+        })
+        .collect();
+    let stands = |s: &Brick| now.drawn.binary_search(s).is_ok_and(|k| stood[k]);
     let (mut pins, mut read_places) =
         (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
-    pins.retain(|s| drawn(&s.brick) && stands(&s.brick));
-    read_places.retain(|s| drawn(&s.brick) && stands(&s.brick));
+    pins.retain(|s| stands(&s.brick));
+    read_places.retain(|s| stands(&s.brick));
     let entering = &mut p.entering;
     entering.clear();
-    entering.extend(now.drawn.iter().filter(|s| !stands(s)).map(|&s| {
-        let r = columns(s);
-        let middle = [(r.min[0] + r.max[0]) / 2.0, (r.min[1] + r.max[1]) / 2.0];
-        (
-            libm::hypot(middle[0] - o.eye[0], middle[1] - o.eye[1]),
-            s,
-            r,
-        )
-    }));
+    entering.extend(
+        now.drawn
+            .iter()
+            .zip(&stood)
+            .filter(|(_, &st)| !st)
+            .map(|(&s, _)| {
+                let r = columns(s);
+                let middle = [(r.min[0] + r.max[0]) / 2.0, (r.min[1] + r.max[1]) / 2.0];
+                (
+                    libm::hypot(middle[0] - o.eye[0], middle[1] - o.eye[1]),
+                    s,
+                    r,
+                )
+            }),
+    );
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
     let read = ctx
         .pass

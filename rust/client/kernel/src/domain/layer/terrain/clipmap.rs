@@ -372,7 +372,12 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             }
         }
     }
-    assign_slots(w, lost);
+    // The slots follow the entries' bricks and the device: where neither
+    // moved nor the heap woke a brick, every brick wanted holds its slot and
+    // each entry shows it as its fill and landing left it.
+    if released || changed.contains(&true) {
+        assign_slots(w, lost);
+    }
     // Tiles are asked again only as far as their packets could be kept,
     // in slot order, or they would come back only to be freed: while no
     // frame is drawn, so none gives a packet back, the rest are asked once

@@ -30,10 +30,13 @@ fn changed() -> &'static mut Changes {
 }
 
 /// The frame turn's changes, taken from the ground's tile cache and the
-/// object store in place of the last turn's; true where any moved.
+/// object store in place of the last turn's, each ground tile once, however
+/// many of its bricks or entries moved; true where any moved.
 pub(crate) fn take() -> bool {
     let c = changed();
     TerrainTile::tile_cache().take_moved(&mut c.ground);
+    c.ground.sort_unstable();
+    c.ground.dedup();
     store::take_written(&mut c.written);
     !c.ground.is_empty() || !c.written.is_empty()
 }
