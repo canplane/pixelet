@@ -54,6 +54,14 @@ asks for nothing is rung for nothing.
 What the guest cannot do itself — a file, a call to a GPU — it asks for in what
 its turn leaves, and the host takes every such request before it rings again.
 
+A file is asked for as POSIX's `openat` and io_uring's submission and completion
+name it: opened below a root the host bound, read and written by descriptor,
+each answered with a result or Linux's errno, its open's answer (`SYS_OPENED`) a
+turn later. WASI's calls look alike — an open, a read, an errno, a directory the
+host grants — but each returns before the guest goes on. Here nothing the guest
+asks returns within its turn but a hostcall run now: a guest waits a turn for
+what it asked, and never blocks.
+
 [ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped
 that way, and the contract either end must keep.
 
