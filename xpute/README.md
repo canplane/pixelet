@@ -164,9 +164,9 @@ XPUTE_PROGRAM(on<Command::SUM, sum>, on<Command::COUNT, count>) // sum: Result<i
 ```
 
 ```ts
-const guest = open(module, { answer: { [Hostcall.ASK]: () => HELD }, fs });
+const guest = open(module, { answer: { [Hostcall.ASK]: () => ANSWER }, fs });
 guest.on(SUMMED, (total) => console.log(total)); // 5
-guest.call(SUM, 2, 3); // 2 + 3 + HELD
+guest.call(SUM, 2, 3); // 2 + 3 + ANSWER
 guest.on(COUNTED, (res) => console.log(res)); // the file's bytes, or -errno
 guest.send(COUNT, "file.txt");
 ```

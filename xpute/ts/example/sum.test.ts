@@ -32,8 +32,8 @@ const GUESTS: Record<string, string> = {
   cpp: join(ROOT, "cpp/target/xpute_example.wasm"),
 };
 
-/** What the host holds and the guest asks for. */
-const HELD = 100;
+/** What the host answers the guest's hostcall `ASK` with. */
+const ANSWER = 100;
 
 /** The one file the host has. */
 const FILE = new TextEncoder().encode("a file the guest reads whole");
@@ -57,12 +57,14 @@ for (const [lang, path] of Object.entries(GUESTS)) {
     const module = () => new WebAssembly.Module(readFileSync(path));
 
     test("example - a command answered with what the guest asked its host", () => {
-      const guest = open(module(), { answer: { [Hostcall.ASK]: () => HELD } });
+      const guest = open(module(), {
+        answer: { [Hostcall.ASK]: () => ANSWER },
+      });
       let summed = -1;
       guest.on(SUMMED, (total) => {
         summed = total;
       });
-      assert.deepStrictEqual(guest.call(SUM, 2, 3), 2 + 3 + HELD);
+      assert.deepStrictEqual(guest.call(SUM, 2, 3), 2 + 3 + ANSWER);
       assert.deepStrictEqual(summed, 2 + 3);
     });
 
