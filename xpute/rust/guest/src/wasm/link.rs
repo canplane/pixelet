@@ -32,10 +32,10 @@ pub struct LinkConfig {
 }
 
 impl LinkConfig {
-    /// A 1 MiB stack and the linker's own placing: what `program!` assumes
-    /// unless told otherwise.
+    /// The program's stack (spec/program.json `STACK_BYTES`) and the linker's
+    /// own placing: what `program!` assumes unless told otherwise.
     pub const DEFAULT: LinkConfig = LinkConfig {
-        stack_bytes: 1 << 20,
+        stack_bytes: crate::program::spec::STACK_BYTES,
         global_base: None,
         init_bytes: None,
     };

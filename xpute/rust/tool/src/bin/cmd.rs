@@ -1,9 +1,10 @@
 // xpute-tool/bin/cmd.rs
 
-//! A program's own command table, generated for both ends:
+//! A program's own command table, generated for both ends, and for a C++
+//! guest where `--cpp` names its header and `--namespace` its namespace:
 //!
 //! ```sh
-//! cargo run -p xpute-tool --bin cmd -- cmd.json --ts host/cmd.spec.ts --rs guest/src/cmd.spec.rs [--write]
+//! cargo run -p xpute-tool --bin cmd -- cmd.json --ts host/cmd.spec.ts --rs guest/src/cmd.spec.rs [--cpp guest/cmd.spec.hpp --namespace my_program] [--write]
 //! ```
 //!
 //! Without `--write` it says which files are stale and fails, as `spec` does.
@@ -28,7 +29,23 @@ fn run() -> Result<(), String> {
         .filter(|a| !a.starts_with("--"))
         .ok_or("cmd: the table's path comes first")?;
     let (ts, rs) = (after("--ts")?, after("--rs")?);
-    let outputs = cmd::program_outputs(&abs(json), &abs(ts), &abs(rs), [json, ts, rs])?;
+    let cpp = if args.iter().any(|a| a == "--cpp") {
+        Some((abs(after("--cpp")?), after("--cpp")?, after("--namespace")?))
+    } else {
+        None
+    };
+    let cpp_out = cpp.as_ref().map(|(path, shown, namespace)| cmd::Cpp {
+        path,
+        shown,
+        namespace,
+    });
+    let outputs = cmd::program_outputs(
+        &abs(json),
+        &abs(ts),
+        &abs(rs),
+        [json, ts, rs],
+        cpp_out.as_ref(),
+    )?;
     apply(outputs, args.iter().any(|a| a == "--write"))
 }
 

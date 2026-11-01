@@ -1,17 +1,17 @@
 // @xpute/example/sum.test.ts
 
 /**
- * The smallest host, beside the smallest guest (rust/example): the guest's
- * module opened and mounted in one call (host/port.ts `open`), with an answer
- * to the one hostcall the guest makes, then one command called with its table's
- * writer and its event heard with its table's reader (cmd.spec.ts); and a file
- * the guest reads in a task, given by the host's `Fs`. Build the guest first
- * (`make build`).
+ * The smallest host, beside the smallest guest, in Rust (rust/example) and in
+ * C++ (cpp/example), each held to the same tests: the guest's module opened and
+ * mounted in one call (host/port.ts `open`), with an answer to the one hostcall
+ * the guest makes, then one command called with its table's writer and its
+ * event heard with its table's reader (cmd.spec.ts); and a file the guest reads
+ * in a task, given by the host's `Fs`. Build the guests first (`make build`).
  */
 
-import { test } from "vitest";
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,28 +26,18 @@ const CARGO_TARGET = resolve(
   join(ROOT, "rust"),
   process.env.CARGO_TARGET_DIR ?? "target",
 );
-const GUEST = join(
-  CARGO_TARGET,
-  "wasm32-unknown-unknown/debug/xpute_example.wasm",
-);
+/** Each guest's module. */
+const GUESTS: Record<string, string> = {
+  rust: join(CARGO_TARGET, "wasm32-unknown-unknown/debug/xpute_example.wasm"),
+  cpp: join(ROOT, "cpp/target/xpute_example.wasm"),
+};
 
-/** The hostcall the guest makes (rust/example/src/lib.rs `ASK`). */
+/** The hostcall the guest makes (rust/example/src/lib.rs, cpp/example/guest.cpp
+ * `ASK`). */
 const ASK = 1;
 
 /** What the host holds and the guest asks for. */
 const HELD = 100;
-
-test("example - a command answered with what the guest asked its host", () => {
-  const guest = open(new WebAssembly.Module(readFileSync(GUEST)), {
-    answer: { [ASK]: () => HELD },
-  });
-  let summed = -1;
-  guest.on(SUMMED, (total) => {
-    summed = total;
-  });
-  assert.deepStrictEqual(guest.call(SUM, 2, 3), 2 + 3 + HELD);
-  assert.deepStrictEqual(summed, 2 + 3);
-});
 
 /** The one file the host has. */
 const FILE = new TextEncoder().encode("a file the guest reads whole");
@@ -60,19 +50,41 @@ const fs: Fs = {
   commit: () => {},
 };
 
-/** What the next COUNTED carries, once the guest raises it. */
-function counted(path: string): Promise<number> {
-  const guest = open(new WebAssembly.Module(readFileSync(GUEST)), { fs });
-  return new Promise((resolve) => {
-    guest.on(COUNTED, resolve);
-    guest.send(COUNT, path);
+for (const [lang, path] of Object.entries(GUESTS)) {
+  // Rust's is built by `make build` wherever the example runs; C++'s needs the
+  // WASI SDK.
+  const built = lang === "rust" || existsSync(path);
+  const name = built
+    ? lang
+    : `${lang}: skipped, ${path} not built (make build)`;
+  describe.skipIf(!built)(name, () => {
+    const module = () => new WebAssembly.Module(readFileSync(path));
+
+    test("example - a command answered with what the guest asked its host", () => {
+      const guest = open(module(), { answer: { [ASK]: () => HELD } });
+      let summed = -1;
+      guest.on(SUMMED, (total) => {
+        summed = total;
+      });
+      assert.deepStrictEqual(guest.call(SUM, 2, 3), 2 + 3 + HELD);
+      assert.deepStrictEqual(summed, 2 + 3);
+    });
+
+    /** What the next COUNTED carries, once the guest raises it. */
+    function counted(file: string): Promise<number> {
+      const guest = open(module(), { fs });
+      return new Promise((resolve) => {
+        guest.on(COUNTED, resolve);
+        guest.send(COUNT, file);
+      });
+    }
+
+    test("example - a file read whole by a task, its size raised", async () => {
+      assert.deepStrictEqual(await counted("file.txt"), FILE.byteLength);
+    });
+
+    test("example - a file there is not refused with ENOENT", async () => {
+      assert.deepStrictEqual(await counted("none.txt"), Errno.ENOENT);
+    });
   });
 }
-
-test("example - a file read whole by a task, its size raised", async () => {
-  assert.deepStrictEqual(await counted("file.txt"), FILE.byteLength);
-});
-
-test("example - a file there is not refused with ENOENT", async () => {
-  assert.deepStrictEqual(await counted("none.txt"), Errno.ENOENT);
-});

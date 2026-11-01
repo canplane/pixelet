@@ -28,9 +28,12 @@ use crate::mem::section::PAGE_BYTES;
 use crate::sched::task::{self, Executor, Task};
 use crate::sched::wake::NO_WAKE;
 
+#[path = "program.spec.rs"]
+pub mod spec;
+
 /// The port a program's host speaks as unless it says otherwise, and the one
 /// a handler's events are raised for (@xpute/host port.ts `PROGRAM_PORT`).
-pub const PROGRAM_PORT: u32 = 1;
+pub const PROGRAM_PORT: u32 = spec::PORT;
 
 /// What the range holds, by count; the offsets follow from it.
 #[derive(Clone, Copy, Debug)]
@@ -49,10 +52,10 @@ pub struct Layout {
 
 impl Layout {
     pub const DEFAULT: Layout = Layout {
-        cap: 64,
-        slot_bytes: 1024,
-        sys_words: 4096,
-        most_events: 4,
+        cap: spec::CAP,
+        slot_bytes: spec::SLOT_BYTES,
+        sys_words: spec::SYS_WORDS,
+        most_events: spec::MOST_EVENTS,
     };
 
     const fn sq_at(&self) -> u32 {
@@ -88,7 +91,7 @@ pub const fn heap_at(layout: &Layout, data_end: u32) -> u32 {
 }
 
 /// The files a program may have open at once, each a read awaited.
-const MOST_FILES: usize = 64;
+const MOST_FILES: usize = spec::MOST_FILES as usize;
 
 struct Program {
     door: Door,

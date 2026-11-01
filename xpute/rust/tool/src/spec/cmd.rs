@@ -241,7 +241,7 @@ const TARGETS: [Target; 2] = [
         number: "xpute_guest::abi::number",
         program: Some("xpute_guest::program"),
         port: Some("@xpute/host/port.ts"),
-        cpp: None,
+        cpp: Some(("cpp/example/cmd.spec.hpp", "example")),
     },
 ];
 
@@ -266,8 +266,22 @@ pub struct Table<'a> {
     pub port: Option<&'a str>,
 }
 
+/// Where a program's C++ guest header is written (`cpp/xpute/guest/program.hpp`).
+pub struct Cpp<'a> {
+    pub path: &'a str,
+    /// As the generated header names it.
+    pub shown: &'a str,
+    /// The namespace its enums and structs are declared in.
+    pub namespace: &'a str,
+}
+
 /// `table`'s TypeScript and Rust.
 pub fn table_outputs(table: &Table) -> Result<Vec<Output>, String> {
+    outputs_of(table, None)
+}
+
+/// `table`'s TypeScript and Rust, and its C++ where `cpp_out` says.
+fn outputs_of(table: &Table, cpp_out: Option<&Cpp>) -> Result<Vec<Output>, String> {
     let keep = |s: &str| -> &'static str { Box::leak(s.to_string().into_boxed_str()) };
     let spec: Spec = read_as(table.json)?;
     check_numbers(&spec, table.json_shown)?;
@@ -284,19 +298,27 @@ pub fn table_outputs(table: &Table) -> Result<Vec<Output>, String> {
     };
     let mut out = ts::emit(&spec, &t)?;
     out.push(Output::new(t.rs, rs::emit(&spec, &t)?));
+    if let Some(c) = cpp_out {
+        out.push(Output::new(
+            c.path,
+            cpp::emit(&spec, &t, c.shown, c.namespace)?,
+        ));
+    }
     Ok(out)
 }
 
-/// A program's own table at `json`, its TypeScript at `ts` and its Rust at
-/// `rs`, for a guest built with `xpute_guest::program` and a host that sends
-/// through `@xpute/host`'s port; `shown` is each as the headers name it.
+/// A program's own table at `json`, its TypeScript at `ts`, its Rust at `rs`
+/// and, where `cpp_out` says, its C++, for a guest built with
+/// `xpute_guest::program!` or `XPUTE_PROGRAM` and a host that sends through
+/// `@xpute/host`'s port; `shown` is each as the headers name it.
 pub fn program_outputs(
     json: &str,
     ts: &str,
     rs: &str,
     shown: [&str; 3],
+    cpp_out: Option<&Cpp>,
 ) -> Result<Vec<Output>, String> {
-    table_outputs(&Table {
+    let table = Table {
         json,
         ts,
         rs,
@@ -306,7 +328,8 @@ pub fn program_outputs(
         number: "xpute_guest::abi::number",
         program: Some("xpute_guest::program"),
         port: Some("@xpute/host/port.ts"),
-    })
+    };
+    outputs_of(&table, cpp_out)
 }
 
 pub fn outputs() -> Result<Vec<Output>, String> {

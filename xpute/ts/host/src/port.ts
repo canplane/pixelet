@@ -27,6 +27,7 @@ import type {
 
 import { type Host, mount } from "./host.ts";
 import { op } from "./ipc/sys.spec.ts";
+import * as program from "./program.spec.ts";
 import type { Fs } from "./ipc/sys.ts";
 import { open_module } from "./module.ts";
 import { FixedQuota } from "./sched/fixed_quota.ts";
@@ -115,7 +116,7 @@ export function port<G extends Grant>(host: Host<G>, number: u32): Port<G> {
 }
 
 /** The port a program speaks as unless it says otherwise: any but the host's, 0. */
-export const PROGRAM_PORT: u32 = 1;
+export const PROGRAM_PORT: u32 = program.PORT;
 
 export interface Options<G extends Grant = Grant> {
   /** Its hostcalls of the program's own, by number (`PROGRAM` set or not):
@@ -135,10 +136,10 @@ export interface Options<G extends Grant = Grant> {
 }
 
 /**
- * A guest built with `xpute_guest::program!`, opened and mounted: its module
- * instantiated over a memory of its own, its `boot` asked where its toc lies,
- * its turns begun (stopped by `host.strobe.stop`), and the port the program
- * speaks as.
+ * A guest built with `xpute_guest::program!` or `XPUTE_PROGRAM`, opened and
+ * mounted: its module instantiated over a memory of its own, its `boot` asked
+ * where its toc lies, its turns begun (stopped by `host.strobe.stop`), and the
+ * port the program speaks as.
  */
 export function open(module: WebAssembly.Module, opts?: Options): Port;
 export function open<G extends Grant>(

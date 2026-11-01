@@ -83,7 +83,7 @@ ts/host                                     the host end in TypeScript, mounted 
 rust/host                                   the host end in Rust: a guest's memory by offset, and a guest linked in
 rust/gpu  ·  ts/gpu  ·  cpp/xpute/gpu       WebGPU's calls, which a guest writes and a host runs
 rust/conformance  ·  cpp/conformance        a guest in each, which the contract's traces drive
-rust/example  ·  ts/example                 the smallest guest, and the host that drives it
+rust/example  ·  cpp/example  ·  ts/example the smallest guest in each, and the host that drives both
 rust/tool                                   the repository's own Rust programs, run by cargo
 script                                      the repository's own scripts (Python)
 spec                                        the numbers every language's are generated from
@@ -91,17 +91,19 @@ spec                                        the numbers every language's are gen
 
 ## Embedding a guest
 
-The smallest program shows the whole of it: a guest that answers one command
-(`rust/example`) and the host that drives it (`ts/example/sum.test.ts`), which
-`make test` runs. Each end is one declaration. The guest names a function for
-each command it answers in `xpute_guest::program!`, which lays its range out (a
-page for the toc, then the two rings and their slots and the hostcalls' stream,
-then the heap), runs its turns and hands each command to its function: the
-function's result is the reply, and its errno the failure. The host opens it in
-one call (`@xpute/host/port.ts` `open`) and talks to it through a **port**, the
-number the guest sees as a command's sender. `send` puts a command on the rings
-for the next turn, `on` hears what the guest raises after the turn that raised
-it, and `call` rings the guest at once and returns its answer. A hostcall of the
+The smallest program shows the whole of it: a guest that answers one command, in
+Rust (`rust/example`) and in C++ (`cpp/example`), and the host that drives
+either (`ts/example/sum.test.ts`), which `make test` runs. Each end is one
+declaration. The guest names a function for each command it answers in
+`xpute_guest::program!`, or in C++ `XPUTE_PROGRAM`
+(`cpp/xpute/guest/program.hpp`), which lays its range out (a page for the toc,
+then the two rings and their slots and the hostcalls' stream, then the heap),
+runs its turns and hands each command to its function: the function's result is
+the reply, and its errno the failure. The host opens it in one call
+(`@xpute/host/port.ts` `open`) and talks to it through a **port**, the number
+the guest sees as a command's sender. `send` puts a command on the rings for the
+next turn, `on` hears what the guest raises after the turn that raised it, and
+`call` rings the guest at once and returns its answer. A hostcall of the
 program's own is answered by the function `open` was given for its number. What
 waits on the host runs as a task (`Turn::spawn`): a file is read whole by
 awaiting `xpute_guest::program::read`, opened on one turn, read on the turn its
@@ -116,6 +118,7 @@ generates reads a name at run time, so a bundle keeps the numbers alone.
 
 ```sh
 cargo run -p xpute-tool --bin cmd -- cmd.json --ts host/cmd.spec.ts --rs guest/src/cmd.spec.rs --write
+# and a C++ guest's header: --cpp guest/cmd.spec.hpp --namespace my_program
 ```
 
 ```rust
@@ -141,6 +144,23 @@ fn count(cx: &mut Turn<'_>, p: Count<'_>) -> Result<i32, Errno> {
     })?;
     Ok(0)
 }
+```
+
+In C++ a task is a coroutine (`Task<>`), and the read holds its own copy of the
+path, so the handler makes it and hands it over:
+
+```cpp
+Task<> count_bytes(Read file) {
+    Result<Bytes> bytes = co_await file;
+    raise(CountedEvent{.res = bytes ? int32_t(bytes->size()) : int32_t(bytes.error().errnum)});
+}
+
+Result<int32_t> count(Turn &cx, Count p) {
+    if (Result<void> s = cx.spawn(count_bytes(read(ROOT, p.path))); !s) return s.error();
+    return 0;
+}
+
+XPUTE_PROGRAM(on<Command::SUM, sum>, on<Command::COUNT, count>) // sum: Result<int32_t>(Turn &, Sum)
 ```
 
 ```ts

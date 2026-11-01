@@ -23,7 +23,7 @@ struct DataSpec {
     cpp: (&'static str, &'static str),
 }
 
-const DATA_SPECS: [DataSpec; 7] = [
+const DATA_SPECS: [DataSpec; 8] = [
     DataSpec {
         json: "spec/conformance/guest.json",
         ts: "ts/host/src/conformance.spec.ts",
@@ -58,6 +58,13 @@ const DATA_SPECS: [DataSpec; 7] = [
         rs: "rust/guest/src/ipc/sys.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/sys.spec.hpp", "xpute::sys"),
+    },
+    DataSpec {
+        json: "spec/program.json",
+        ts: "ts/host/src/program.spec.ts",
+        rs: "rust/guest/src/program.spec.rs",
+        enums: Enums::None,
+        cpp: ("cpp/xpute/guest/program.spec.hpp", "xpute::program"),
     },
     DataSpec {
         json: "spec/gpu/api.json",
