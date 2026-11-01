@@ -37,8 +37,9 @@ import { SYSTEM_CLEAR } from "@/shell/ui/text-field.tsx";
 import { Backing } from "@/shell/ui/backing.tsx";
 import { BackingPlace } from "@/shell/ui/backing.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
-import { THEME } from "./place_theme.spec.ts";
-import { PLACE_SYMBOLS } from "./place-symbol.ts";
+import { FILL, SYMBOL } from "./place_theme.spec.ts";
+import { PLACE_SYMBOLS, type PlaceSymbol } from "./place-symbol.ts";
+import { SEARCH_KIND } from "./search.spec.ts";
 import {
   assembleLabel,
   localName,
@@ -80,8 +81,9 @@ function ResultRow({
     (p) => p.subtype !== DIVISION_SUBTYPE.COUNTRY,
   );
   const where = within.length > 0 ? assembleLabel(within, lang) : "";
-  const theme = result.kind === "place" ? placeTheme(result.category) : null;
-  const symbol = theme?.symbol ? PLACE_SYMBOLS[theme.symbol] : undefined;
+  const theme =
+    result.kind === SEARCH_KIND.PLACE ? placeTheme(result.category) : null;
+  const symbol = theme?.symbol;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={styles.row}>
       {theme && (
@@ -127,7 +129,10 @@ function ResultRow({
 
 /** The country a result is in, or is; null for one no country holds, at sea or past the divisions. */
 function countryOf(result: SearchResult): Name | null {
-  if (result.kind === "division" && result.category === "country") {
+  if (
+    result.kind === SEARCH_KIND.DIVISION &&
+    result.category === DIVISION_SUBTYPE.COUNTRY
+  ) {
     return { name: result.name, names: result.common };
   }
   return (
@@ -460,13 +465,12 @@ const styles = StyleSheet.create({
  * (`place_theme.spec.ts`): its symbol in its fill, or a dot of the fill for
  * a kind with none; nothing for a kind Carto draws no point for. */
 function placeTheme(
-  category: string,
-): { fill: string; symbol?: string | null } | null {
-  return (
-    (THEME as Record<string, { fill: string; symbol?: string | null }>)[
-      category
-    ] ?? null
-  );
+  category: number,
+): { fill: string; symbol: PlaceSymbol | undefined } | null {
+  const fill = FILL[category - 1];
+  if (!fill) return null;
+  const path = SYMBOL[category - 1];
+  return { fill, symbol: path ? PLACE_SYMBOLS[path] : undefined };
 }
 
 const SYMBOL_SIZE = 18;

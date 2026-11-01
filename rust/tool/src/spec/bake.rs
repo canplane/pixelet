@@ -385,8 +385,55 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
             ))
         },
     )?;
-    Ok(vec![Output::new(
-        "rust/spec/src/bake/place_theme.spec.rs",
-        file(&rs),
-    )])
+    // The shell's: what it draws a search result's place as, by its number.
+    let mut ts = vec![
+        "// @pxl/client/shell/search/place_theme.spec.ts".to_string(),
+        "//".into(),
+        "// GENERATED from spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json"
+            .into(),
+        "//".into(),
+    ];
+    ts.extend(line_comments(
+        &theme.lines_at("$doc").unwrap_or_default(),
+        "",
+    ));
+    let fill = |k: &str| -> Result<String, String> {
+        match rows.get(k).and_then(|r| r.str_at("fill")) {
+            None => Ok(json_str("")),
+            Some(c) => packed(c).map(|n| json_str(&format!("#{n:06x}"))),
+        }
+    };
+    let symbol = |k: &str| -> Result<String, String> {
+        Ok(json_str(
+            rows.get(k)
+                .and_then(|r| r.str_at("symbol"))
+                .unwrap_or_default(),
+        ))
+    };
+    for (doc, name, each) in [
+        (
+            "A category's icon or dot fill as `#rrggbb`, \"\" where Carto draws no point for it",
+            "FILL",
+            &fill as &dyn Fn(&str) -> Result<String, String>,
+        ),
+        (
+            "A category's icon under Carto's `symbols/` (place-symbol.ts), \"\" for none",
+            "SYMBOL",
+            &symbol,
+        ),
+    ] {
+        ts.extend([
+            String::new(),
+            format!("/** {doc}, category k at `{name}[k - 1]`. */"),
+            format!("export const {name}: readonly string[] = ["),
+        ]);
+        for k in &categories {
+            ts.push(format!("  {},", each(k)?));
+        }
+        ts.push("];".into());
+    }
+    Ok(vec![
+        Output::new("rust/spec/src/bake/place_theme.spec.rs", file(&rs)),
+        Output::new("ts/client/src/shell/search/place_theme.spec.ts", file(&ts)),
+    ])
 }

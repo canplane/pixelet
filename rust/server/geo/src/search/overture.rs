@@ -7,7 +7,9 @@ use serde::Serialize;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::Row;
 
-use pxl_spec::division::DivisionPart;
+use pxl_spec::bake::tile::place::category_of;
+use pxl_spec::division::{DivisionPart, Subtype};
+use pxl_spec::search::SEARCH_KIND;
 use pxl_spec::space::coord::adapter::epsg4326;
 
 use crate::division;
@@ -91,12 +93,16 @@ const DIVISION_SEARCH_NEAR_SQL: &str = concat!(
 LIMIT $2"
 );
 
+/// Its kind and category by number (spec/spec/search.json): a name of
+/// Overture's taxonomy is never on the wire.
 #[derive(Serialize)]
 pub struct SearchResult {
     pub gers_id: String,
-    pub kind: &'static str,
+    /// `SEARCH_KIND`.
+    pub kind: u8,
     pub name: String,
-    pub category: String,
+    /// A place's category (`category_of`), a division's subtype.
+    pub category: u16,
     /// Null for a places: Places' `names.common` is ~0% populated for Korean.
     pub common: Option<serde_json::Value>,
     pub context: Vec<DivisionPart>,
@@ -193,12 +199,16 @@ pub async fn search(
 
     let mut division_results: Vec<SearchResult> = Vec::with_capacity(division_rows.len());
     for r in division_rows {
+        // A subtype newer than this tree has no number, as the division tiles skip it.
+        let Some(subtype) = Subtype::named(&r.subtype) else {
+            continue;
+        };
         let context = division::ancestors(pool, &r.gers_id).await?;
         division_results.push(SearchResult {
             gers_id: r.gers_id,
-            kind: "division",
+            kind: SEARCH_KIND::DIVISION,
             name: r.name,
-            category: r.subtype,
+            category: u16::from(subtype as u8),
             common: r.names_common,
             context,
             lon: r.lon,
@@ -220,8 +230,8 @@ pub async fn search(
         .map(|(r, context)| SearchResult {
             gers_id: r.gers_id,
             name: r.name,
-            kind: "place",
-            category: properties::category_of(&r.properties),
+            kind: SEARCH_KIND::PLACE,
+            category: category_of(&properties::category_of(&r.properties)),
             common: None,
             context,
             lon: r.lon,

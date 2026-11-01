@@ -10,9 +10,8 @@ use std::collections::BTreeMap;
 
 use crate::division_spec::DIVISION_SUBTYPE;
 
-/// Overture's subtypes, broadest first: spec/spec/division.json's numbers.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+/// Overture's subtypes, broadest first: spec/spec/division.json's numbers,
+/// which is also how it crosses as JSON.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Subtype {
@@ -72,6 +71,22 @@ impl Subtype {
     /// None for a word Overture has not given a subtype.
     pub fn named(word: &str) -> Option<Subtype> {
         Subtype::ALL.into_iter().find(|s| s.name() == word)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Subtype {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_u8(*self as u8)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Subtype {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde::de::Error as _;
+        let val = <u8 as serde::Deserialize>::deserialize(d)?;
+        Subtype::of(val).ok_or_else(|| D::Error::custom("no such subtype"))
     }
 }
 
