@@ -213,7 +213,11 @@ fn run() -> Result<(), String> {
     // and the catalog.
     write_formatted(
         &root.join("spec/spec/asset/ingested.json"),
-        &table::render_json(&rows, &laid),
+        &table::render_json(
+            &rows,
+            &laid,
+            &symbols.iter().map(|s| s.path.clone()).collect::<Vec<_>>(),
+        ),
     )?;
     spec::generate(true)?;
 

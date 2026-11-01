@@ -1,5 +1,6 @@
 // pxl-tool/spec/bake.rs
 
+use super::ingested::symbol_number;
 use super::{file, json_str, line_comments, packed, read, rs_doc, ts_doc, Output};
 
 pub fn published_outputs() -> Result<Vec<Output>, String> {
@@ -373,17 +374,17 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
         "INK",
         &|k| color(k, "text"),
     )?;
+    let symbol = |k: &str| -> Result<String, String> {
+        match rows.get(k).and_then(|r| r.str_at("symbol")) {
+            None | Some("") => Ok("0".into()),
+            Some(path) => symbol_number(path).map(|n| n.to_string()),
+        }
+    };
     list(
-        "A category's icon under Carto's `symbols/`, \"\" for none",
-        "&str",
+        "A category's icon, its symbol's number (asset/symbol.spec.rs), 0 for none",
+        "u16",
         "SYMBOL",
-        &|k| {
-            Ok(json_str(
-                rows.get(k)
-                    .and_then(|r| r.str_at("symbol"))
-                    .unwrap_or_default(),
-            ))
-        },
+        &symbol,
     )?;
     // The shell's: what it draws a search result's place as, by its number.
     let mut ts = vec![
@@ -403,29 +404,24 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
             Some(c) => packed(c).map(|n| json_str(&format!("#{n:06x}"))),
         }
     };
-    let symbol = |k: &str| -> Result<String, String> {
-        Ok(json_str(
-            rows.get(k)
-                .and_then(|r| r.str_at("symbol"))
-                .unwrap_or_default(),
-        ))
-    };
-    for (doc, name, each) in [
+    for (doc, name, ty, each) in [
         (
             "A category's icon or dot fill as `#rrggbb`, \"\" where Carto draws no point for it",
             "FILL",
+            "string",
             &fill as &dyn Fn(&str) -> Result<String, String>,
         ),
         (
-            "A category's icon under Carto's `symbols/` (place-symbol.ts), \"\" for none",
+            "A category's icon, its symbol's number (place-symbol.ts), 0 for none",
             "SYMBOL",
+            "number",
             &symbol,
         ),
     ] {
         ts.extend([
             String::new(),
             format!("/** {doc}, category k at `{name}[k - 1]`. */"),
-            format!("export const {name}: readonly string[] = ["),
+            format!("export const {name}: readonly {ty}[] = ["),
         ]);
         for k in &categories {
             ts.push(format!("  {},", each(k)?));

@@ -166,7 +166,7 @@ impl Sketch {
         ));
     }
 
-    /// Carto's `symbol`, by its place in `SYMBOLS`, centered at (cx, cy).
+    /// Carto's `symbol`, by its place among `SYMBOL_MASKS`, centered at (cx, cy).
     pub fn icon(&mut self, symbol: usize, color: u32, cx: f32, cy: f32) {
         self.icons.push(Icon {
             symbol,

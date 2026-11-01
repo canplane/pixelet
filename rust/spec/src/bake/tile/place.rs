@@ -12,7 +12,6 @@ use crate::space::layer::lattice::Cells;
 use fnv::FnvHashSet;
 
 use crate::asset::marker::MARK_STEPS;
-use crate::asset::symbol::SYMBOLS;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::space::coord::q3::Q3;
@@ -93,11 +92,12 @@ pub const fn shown(category: u16) -> Option<Zoom> {
     }
 }
 
-/// A category's Carto symbol, by its place in the shipped `SYMBOLS`; none for a
-/// category Carto draws no icon for.
+/// A category's Carto symbol, by its place among the masks
+/// (asset/symbol.spec.rs); none for a category Carto draws no icon for.
 pub fn symbol_of(category: u16) -> Option<u16> {
-    let path = SYMBOL.get(usize::from(category.checked_sub(1)?))?;
-    SYMBOLS.binary_search(path).ok().map(|i| i as u16)
+    SYMBOL
+        .get(usize::from(category.checked_sub(1)?))?
+        .checked_sub(1)
 }
 
 /// 0 where the category list has none.

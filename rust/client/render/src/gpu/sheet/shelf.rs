@@ -26,7 +26,7 @@ pub enum Paint {
         /// Its name as laid out, a line each; none where it is not named.
         lines: Vec<String>,
         icon: bool,
-        /// Carto's symbol for it, by its place in `SYMBOLS`; a disc where none.
+        /// Carto's symbol for it, by its place among `SYMBOL_MASKS`; a disc where none.
         symbol: Option<u16>,
         fill: u32,
         ink: u32,

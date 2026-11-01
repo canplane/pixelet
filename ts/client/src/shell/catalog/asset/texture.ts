@@ -17,5 +17,5 @@ const TOP_TILE = new Map<string, u32>(
 
 export function shippedTopTextureKey(cubeId: string): string | null {
   const n = TOP_TILE.get(cubeId);
-  return n === undefined ? null : (INGESTED[PACK.tiles[n]]?.key ?? null);
+  return n === undefined ? null : (INGESTED[PACK.tiles[n] - 1]?.key ?? null);
 }

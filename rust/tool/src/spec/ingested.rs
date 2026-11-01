@@ -2,9 +2,12 @@
 
 //! What the asset ingest wrote (`spec/spec/asset/ingested.json`), rendered:
 //! the host's table, which binds a file's number to its bucket key, and the
-//! texture pack's layout, which the renderer reads.
+//! texture pack's layout, which the renderer reads. A path is the specs' and
+//! the tools' name for a file; what is generated names it by its number
+//! (`file_number`), and Carto's symbols by theirs (`symbol_number`).
 
 use std::fmt::Write;
+use std::sync::OnceLock;
 
 use super::{file, read, Node, Output};
 
@@ -46,6 +49,45 @@ pub fn files() -> Result<Vec<File>, String> {
             })
         })
         .collect()
+}
+
+/// `path`'s number below the asset root, from 1.
+pub fn file_number(path: &str) -> Result<u32, String> {
+    static PATHS: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
+    let paths = PATHS
+        .get_or_init(|| Ok(files()?.into_iter().map(|f| f.path).collect()))
+        .as_ref()
+        .map_err(Clone::clone)?;
+    paths
+        .iter()
+        .position(|p| p == path)
+        .map(|i| i as u32 + 1)
+        .ok_or(format!(
+            "{path} is no file of {INGESTED_JSON}: run the asset ingest"
+        ))
+}
+
+/// The symbol at `path` (as Carto gives it), by its place among those the
+/// ingest rasterized, from 1.
+pub fn symbol_number(path: &str) -> Result<u16, String> {
+    static PATHS: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
+    let paths = PATHS
+        .get_or_init(|| {
+            read(INGESTED_JSON)?
+                .get("symbols")
+                .and_then(Node::arr)
+                .and_then(|s| s.iter().map(|p| p.str().map(str::to_string)).collect())
+                .ok_or(format!("{INGESTED_JSON}: no symbols"))
+        })
+        .as_ref()
+        .map_err(Clone::clone)?;
+    paths
+        .iter()
+        .position(|p| p == path)
+        .map(|i| i as u16 + 1)
+        .ok_or(format!(
+            "{path} is no symbol of {INGESTED_JSON}: run the asset ingest"
+        ))
 }
 
 struct Pack {
@@ -111,23 +153,23 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     Ok(vec![
         Output::new(
             "ts/client/src/driver/namespace/ingested.spec.ts",
-            render_ts(&rows, &pack),
+            render_ts(&rows, &pack)?,
         ),
         Output::new("rust/spec/src/asset/ingested.spec.rs", render_rs(&pack)?),
     ])
 }
 
-fn render_ts(rows: &[File], pack: &Pack) -> String {
+fn render_ts(rows: &[File], pack: &Pack) -> Result<String, String> {
     let mut out = String::with_capacity(rows.len() * 160);
     out.push_str(
         r#"// @pxl/client/driver/namespace/ingested.spec.ts
 //
 // GENERATED from spec/spec/asset/ingested.json
-// Every shipped asset by its path under asset/content/: the bucket key (the
-// SHA-256 of its bytes, which where it lies does not change), its size, and for a
-// model its extent in ENU world units, measured from the glb. A catalog names an
-// asset by its path and reads its key here; the bytes themselves are in the bucket.
-// Its order numbers each file below the asset root, from 1 (ts/client/src/driver/namespace/asset.ts).
+// Every shipped asset by its number below the asset root, file n at
+// `INGESTED[n - 1]` (ts/client/src/driver/namespace/asset.ts): the bucket key
+// (the SHA-256 of its bytes, which where it lies does not change), its size,
+// and for a model its extent in ENU world units, measured from the glb. The
+// bytes themselves are in the bucket.
 
 export interface IngestedFile {
   key: string;
@@ -136,7 +178,7 @@ export interface IngestedFile {
   extent?: readonly [number, number, number];
 }
 
-export const INGESTED: Readonly<Record<string, IngestedFile>> = {
+export const INGESTED: readonly IngestedFile[] = [
 "#,
     );
     for r in rows {
@@ -146,33 +188,33 @@ export const INGESTED: Readonly<Record<string, IngestedFile>> = {
         };
         let _ = writeln!(
             out,
-            "  \"{}\": {{ key: \"{}\", bytes: {}{} }},",
-            r.path, r.key, r.bytes, extent
+            "  {{ key: \"{}\", bytes: {}{} }},",
+            r.key, r.bytes, extent
         );
     }
     out.push_str(
-        r#"};
+        r#"];
 
-/** The texture pack as one image, the asset at `image`: `columns` tiles of
- * `cell` pixels per row, tile n at column n % columns and row n / columns,
- * `tiles` the asset path each holds, and `faces` the cube face — group,
- * type, face — each tile is. */
+/** The texture pack as one image, the file numbered `image`: `columns` tiles
+ * of `cell` pixels per row, tile n at column n % columns and row n / columns,
+ * `tiles` the number of the file each holds, and `faces` the cube face —
+ * group, type, face — each tile is. */
 export const PACK = {
 "#,
     );
-    let _ = writeln!(out, "  image: \"{}\",", pack.image);
+    let _ = writeln!(out, "  image: {},", file_number(&pack.image)?);
     let _ = writeln!(out, "  cell: {},", pack.cell);
     let _ = writeln!(out, "  columns: {},", pack.columns);
     out.push_str("  tiles: [\n");
     for t in &pack.tiles {
-        let _ = writeln!(out, "    \"{t}\",");
+        let _ = writeln!(out, "    {},", file_number(t)?);
     }
     out.push_str("  ],\n  faces: [\n");
     for (group, ty, face, tile) in &pack.faces {
         let _ = writeln!(out, "    [\"{group}\", \"{ty}\", \"{face}\", {tile}],");
     }
     out.push_str("  ],\n} as const;\n");
-    out
+    Ok(out)
 }
 
 fn render_rs(pack: &Pack) -> Result<String, String> {

@@ -11,6 +11,7 @@
 use std::cell::Cell;
 
 use super::catalog::{run_of, FILE};
+use super::ingested::file_number;
 use super::{
     align_star, casing_note, enum_name, file, generated, js_num, json_str, laid_out, line_comments,
     read, rgb_literal, rs_doc, rs_ident, snake, ts_doc, Node, Output,
@@ -426,6 +427,7 @@ pub fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
         Node::Bool(b) => b.to_string(),
         Node::Str(s) if ty == "u64" => format!("{s}n"),
         Node::Str(s) if ty == "rgb" => rgb_literal(s)?,
+        Node::Str(s) if ty == FILE => format!("{} as number", file_number(s)?),
         Node::Str(s) => json_str(s),
         Node::Arr(a) => format!(
             "[{}]",

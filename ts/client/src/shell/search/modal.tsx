@@ -469,8 +469,7 @@ function placeTheme(
 ): { fill: string; symbol: PlaceSymbol | undefined } | null {
   const fill = FILL[category - 1];
   if (!fill) return null;
-  const path = SYMBOL[category - 1];
-  return { fill, symbol: path ? PLACE_SYMBOLS[path] : undefined };
+  return { fill, symbol: PLACE_SYMBOLS[SYMBOL[category - 1] - 1] };
 }
 
 const SYMBOL_SIZE = 18;
