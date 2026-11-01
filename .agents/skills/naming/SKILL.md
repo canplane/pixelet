@@ -19,10 +19,15 @@ A rename is made where the name misstates the thing or gets in the way of
 understanding it, and the new one clearly does better; not because a name is
 this project's own.
 
-A part of the system, the commands' modules and what the kernel asks of its
-host, takes its word from Unix, Linux or Wayland; a device outside them keeps
-its platform's word. What the program alone does takes a plain word for what it
-does. A metaphor no field uses is not a name, however apt it reads.
+Where a word comes from follows the layer. The system — xpute, the commands'
+modules, what the kernel asks of its host — takes its word from Unix, Linux or
+Wayland; a device outside them keeps its platform's word. The application — the
+world, its drawing, its map, its UI — takes the word its own field uses
+(graphics, cartography, games). In either, a name for what the thing is beats
+one for what it looks like: where a field's metaphor and a plain word for the
+thing both fit, the plain word wins (`LocationIndicator`, not a map SDK's
+`puck`). What the program alone does takes a plain word for what it does. A
+metaphor no field uses is not a name, however apt it reads.
 
 ## What is named with the user
 
