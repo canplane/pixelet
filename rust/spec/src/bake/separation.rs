@@ -359,7 +359,7 @@ pub fn runs_within(points: &[[f64; 2]], margin: f64) -> Vec<[usize; 2]> {
 /// encoded, never cut here.
 pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separation {
     let tile = TILE_CELLS as i32 * POINT_SCALE as i32;
-    let mut folded = Folded::default();
+    let mut folded = Fold::default();
     for (k, child) in around.iter().enumerate() {
         let Some(child) = child else { continue };
         let q = [(k % 4) as i32 - 1, (k / 4) as i32 - 1].map(|q| q * tile);
@@ -420,14 +420,14 @@ const SEGMENTS: usize = usize::MAX - 1;
 
 /// A fold's segments, each once, and the one after and before each.
 #[derive(Default)]
-struct Folded {
+struct Fold {
     segments: Vec<Folding>,
     idx: fnv::FnvHashMap<Folding, usize>,
     next: Vec<usize>,
     prev: Vec<usize>,
 }
 
-impl Folded {
+impl Fold {
     fn intern(&mut self, s: Folding) -> usize {
         *self.idx.entry(s).or_insert_with(|| {
             self.segments.push(s);

@@ -1,7 +1,7 @@
 // xpute-kit/codec/json.rs
 
 //! JSON without a heap: a text is checked once against JSON's grammar, then
-//! read in place; nothing is built. `Quoted` writes a JSON string.
+//! read in place; nothing is built. `Quote` writes a JSON string.
 
 use crate::status::bug::OrBug;
 use crate::status::errno::Errno;
@@ -356,9 +356,9 @@ impl Iterator for JsonChars<'_> {
 
 /// `JSON.stringify(String(v))`.
 #[derive(Clone, Copy, Debug)]
-pub struct Quoted<T>(pub T);
+pub struct Quote<T>(pub T);
 
-impl<T: core::fmt::Display> core::fmt::Display for Quoted<T> {
+impl<T: core::fmt::Display> core::fmt::Display for Quote<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         use core::fmt::Write;
         f.write_char('"')?;

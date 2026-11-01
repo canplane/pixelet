@@ -90,14 +90,14 @@ pub fn past_at([x, y]: [f64; 2]) -> bool {
         .cell_of(LEAF_ZOOM, &world::point(x, y, 0.0))
         .tile()
         .at;
-    area::past(&Declared, leaf)
+    area::past(&ServiceArea, leaf)
 }
 
 /// The service area as pxl-spec-core's rules read it: the declared source's
 /// shards, and no end before one is declared.
-pub struct Declared;
+pub struct ServiceArea;
 
-impl Area for Declared {
+impl Area for ServiceArea {
     fn ends(&self) -> bool {
         declared().is_some()
     }

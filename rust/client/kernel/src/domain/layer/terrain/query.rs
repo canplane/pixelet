@@ -173,7 +173,7 @@ impl Query for TileCache<TerrainTile> {
         cell: Zoom,
     ) -> Answer<Option<Aabb>> {
         let node = (zoom, [at[0], at[1]]);
-        if Shard::UNKNOWN.at(&source::Declared, node).past() {
+        if Shard::UNKNOWN.at(&source::ServiceArea, node).past() {
             return Answer::Exact(None);
         }
         let whole = region((zoom, at));

@@ -62,7 +62,7 @@ use crate::separation::elevation::{sample_cells, tile_of};
 use crate::separation::piece::{piece_of, Piece};
 use crate::separation::source::{portals_in, ring, Store};
 use crate::separation::way::{Polyline, Way};
-use crate::separation::{Line, Reader, Solved, WayRange};
+use crate::separation::{Line, Reader, Solution, WayRange};
 use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
 
@@ -88,7 +88,7 @@ struct Ring {
     ways: BTreeMap<PartId, Way>,
     water: Vec<(Option<String>, String, Vec<[f64; 2]>)>,
     water_seen: FnvHashSet<Vec<u8>>,
-    pieces: BTreeMap<PartId, Sampled>,
+    pieces: BTreeMap<PartId, SampledPiece>,
     by_end: FnvHashMap<End, Vec<PartId>>,
     /// Every way by its two ends.
     way_ends: FnvHashMap<End, Vec<PartId>>,
@@ -97,7 +97,7 @@ struct Ring {
 }
 
 /// A piece, and once wanted its samples a cell apart along its way inside the ring.
-struct Sampled {
+struct SampledPiece {
     piece: Piece,
     n: usize,
     samples: Option<BTreeMap<usize, ([f64; 2], i32)>>,
@@ -159,7 +159,7 @@ fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2], range: [f64; 2]) ->
     )
 }
 
-pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, String> {
+pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution, String> {
     let tiles = ring(tile);
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
     for &p in &tiles {
@@ -220,7 +220,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
             }
         }
     }
-    let portal_near = |s: &Sampled| {
+    let portal_near = |s: &SampledPiece| {
         let p = &s.piece.way.points;
         is_road_tunnel(&s.piece)
             && [p[0], p[p.len() - 1]]
@@ -235,7 +235,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         .collect();
     // a tile no structure touches nor sinks into has nothing to solve
     if queue.is_empty() {
-        return Ok(Solved::default());
+        return Ok(Solution::default());
     }
     let radius = merc_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DIST_M) + 16) * CELL_U);
     // each piece is looked at once, against the pieces read so far; a piece a later read brings in
@@ -308,7 +308,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
     let decks = bridge::decks(&src, &stretches, [lo, hi], scale, &mut lines);
     tunnel::bores(&src, &stretches, &decks, scale, &mut lines);
-    let mut out = Solved::default();
+    let mut out = Solution::default();
     for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);
         out.drawn.push(drawn);
@@ -317,7 +317,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
 }
 
 /// Of a piece's samples, its cells in the ring.
-fn bbox_of(s: &Sampled) -> [[f64; 2]; 2] {
+fn bbox_of(s: &SampledPiece) -> [[f64; 2]; 2] {
     let mut b = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
     for (q, _) in s.samples.iter().flat_map(|m| m.values()) {
         for k in 0..2 {
@@ -365,7 +365,7 @@ impl Ring {
                 self.fresh.push(id.clone());
                 self.pieces.insert(
                     id,
-                    Sampled {
+                    SampledPiece {
                         piece,
                         n,
                         samples: None,

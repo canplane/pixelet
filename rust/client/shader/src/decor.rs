@@ -17,7 +17,7 @@ use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::scatter;
 use pxl_spec_core::support;
 use pxl_spec_core::clipmap::{self, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
-use pxl_spec_core::world::{self, Inherited};
+use pxl_spec_core::world::{self, Inheritance};
 use pxl_spec_core::{at, way, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::memory::{Scope, Semantics};
@@ -34,23 +34,23 @@ struct Generating<'a> {
 }
 
 /// The cast's world unplaced, nothing placed and no preview's cuts: the
-/// ground's alone, as decor generates on it (pxl-spec-core `world::Inherited::unplaced`).
-struct Unplaced<'w, 'a>(&'w mut World<'a, NoPalette>);
+/// ground's alone, as decor generates on it (pxl-spec-core `world::Inheritance::unplaced`).
+struct Ground<'w, 'a>(&'w mut World<'a, NoPalette>);
 
-impl Query for Unplaced<'_, '_> {
-    type At = Inherited;
+impl Query for Ground<'_, '_> {
+    type At = Inheritance;
 
-    fn root(&mut self, node: [i32; 3]) -> Inherited {
-        Inherited::unplaced((0, node))
+    fn root(&mut self, node: [i32; 3]) -> Inheritance {
+        Inheritance::unplaced((0, node))
     }
 
-    fn child(&mut self, at: &Inherited, zoom: u32, node: [i32; 3]) -> Inherited {
+    fn child(&mut self, at: &Inheritance, zoom: u32, node: [i32; 3]) -> Inheritance {
         at.child(&*self.0, &self.0.pool, (zoom, node))
     }
 
     fn node(
         &mut self,
-        at: &mut Inherited,
+        at: &mut Inheritance,
         zoom: u32,
         c: [i32; 3],
         asked: [u32; 2],
@@ -71,19 +71,19 @@ impl Query for Unplaced<'_, '_> {
 }
 
 /// The query's support on the cast's world (pxl-spec-core `support`): a
-/// column's surface of the world unplaced (`Unplaced`), its line
+/// column's surface of the world unplaced (`Ground`), its line
 /// kept, each asset about it asked off that line; a cell's edit asked of
 /// the world as edited down its own line; and what is placed in a box
 /// (`world::placed_in`).
 impl DecorQuery for Generating<'_> {
-    type ColumnSurface = support::ColumnSurface<Inherited>;
+    type ColumnSurface = support::ColumnSurface<Inheritance>;
 
     fn rows(&self) -> &[Decor] {
         self.rows
     }
 
     fn column_surface(&mut self, cell: u32, g: [i32; 2]) -> (Self::ColumnSurface, (i32, f32), bool) {
-        let f = support::column_surface(&mut Unplaced(&mut self.world), cell, g);
+        let f = support::column_surface(&mut Ground(&mut self.world), cell, g);
         let (top, met) = (f.top, f.ends == End::Hit);
         (f, top, met)
     }
@@ -99,7 +99,7 @@ impl DecorQuery for Generating<'_> {
     }
 
     fn asset(&mut self, f: &Self::ColumnSurface, zoom: u32, c: [i32; 3]) -> u32 {
-        support::asset(&mut Unplaced(&mut self.world), &f.line, zoom, c)
+        support::asset(&mut Ground(&mut self.world), &f.line, zoom, c)
     }
 
     fn is_edited(&mut self, zoom: u32, c: [i32; 3]) -> bool {
@@ -305,7 +305,7 @@ pub fn decor_thin_cs(
 /// candidate its cell holds (`scatter::candidate_at`), the cell it keeps
 /// generated or not; the rest stand. Only a decor shown at that zoom is listed
 /// (`decor_mark_cs`). What it generates on is the clip levels' bricks and the
-/// ways over them alone, what is placed left out (`Unplaced`); what is placed
+/// ways over them alone, what is placed left out (`Ground`); what is placed
 /// and the eye's cuts only take it away where they hold its box
 /// (`DecorQuery::is_edited`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_cs"))]

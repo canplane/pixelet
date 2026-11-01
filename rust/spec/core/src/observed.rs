@@ -28,7 +28,7 @@
 //! An entry is its key, which says it is held — the walk that wrote it, by
 //! its frame and its pass (`tag`), and the zooms it was asked at — then the
 //! answer's kind and asset, what was handed the node after it was asked
-//! (`world::Inherited::words`), and the node, its zoom and its index, which tell
+//! (`world::Inheritance::words`), and the node, its zoom and its index, which tell
 //! it from another node of the same slot (`forgets` reads its column). A
 //! walk writes a slot only once it has claimed it, its key swapped to
 //! `CLAIMED` in one compare-and-swap, and writes the key last; a writing
@@ -42,7 +42,7 @@ use crate::overwrite;
 use crate::overwrite::NodeSlot;
 use crate::overwrite::{cut_box, BOXES};
 use crate::tally;
-use crate::world::INHERITED_WORDS;
+use crate::world::INHERITANCE_WORDS;
 use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 
 /// The head's words: the frame's number, what this frame forgets
@@ -97,12 +97,12 @@ pub const FORGETS_MOVED: u32 = 2;
 pub const W_KEY: u32 = 0;
 pub const W_KIND: u32 = 1;
 pub const W_ASSET: u32 = 2;
-pub const W_INHERITED: u32 = 4;
+pub const W_INHERITANCE: u32 = 4;
 /// The node: its zoom, then its index on X, Y and Z.
-pub const W_NODE: u32 = W_INHERITED + INHERITED_WORDS;
-/// What was handed it of what is placed, its `Inherited`'s second word
-/// (`world::Inherited::words`).
-pub const W_PLACED: u32 = W_INHERITED + 1;
+pub const W_NODE: u32 = W_INHERITANCE + INHERITANCE_WORDS;
+/// What was handed it of what is placed, its `Inheritance`'s second word
+/// (`world::Inheritance::words`).
+pub const W_PLACED: u32 = W_INHERITANCE + 1;
 pub const ENTRY_WORDS: u32 = W_NODE + 4;
 
 /// The slots: no more than the tiles' entries were (8 roots and 2^16 tiles
@@ -272,7 +272,7 @@ pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
     across && b[1] < n[3] && b[3] > n[1]
 }
 
-/// Whether what was handed a node of what is placed, its `Inherited`'s word
+/// Whether what was handed a node of what is placed, its `Inheritance`'s word
 /// `placed` (`overwrite::NodeSlot`), answers from a slot of the child group written
 /// whose first slot is `first`. A write folds up its own path in place, and
 /// that path's nodes stand over its box (`over_box`); but where it splits a

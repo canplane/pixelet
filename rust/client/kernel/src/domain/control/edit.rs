@@ -152,7 +152,7 @@ fn resolve_target(hit: &Hit) -> Option<Target> {
 /// it struck, by the rule they are cast by (domain/query/ray.rs `by_dist`),
 /// which near the eye is finer than the ground's cells, as what is placed
 /// may be; none without an eye.
-pub(crate) struct Picked {
+pub(crate) struct Pick {
     pub hit: Hit,
     pub drawn: Option<Zoom>,
 }
@@ -166,7 +166,7 @@ fn cell_struck(hit: &Hit) -> Aabb {
     }
 }
 
-impl Picked {
+impl Pick {
     /// The zoom of the cell struck.
     pub fn zoom(&self) -> Zoom {
         of_side(cell_struck(&self.hit).extent()[0])
@@ -182,7 +182,7 @@ impl Picked {
 /// What the hover picks at `ndc_x`, `ndc_y`,
 /// from the pose as the camera holds it now, which a door event or a
 /// controller may have moved since the turn composed the view.
-pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
+pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
     let pose = controller::pose()?;
     let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
     ray_of(pose, ndc_x, ndc_y, &mut origin, &mut dir);
@@ -191,7 +191,7 @@ pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
         let v = v3::sub(&cell_struck(&hit).center(), &eye);
         query::by_dist().at(v3::dot(&v, &v) as f32)
     });
-    Some(Picked { hit, drawn })
+    Some(Pick { hit, drawn })
 }
 
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
@@ -199,7 +199,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     let ui = state().tool;
     state().pointed = Some([ndc_x, ndc_y]);
     let hover = &mut state().hover;
-    let Some(Picked { hit, .. }) = pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
+    let Some(Pick { hit, .. }) = pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
         *hover = Hover::default();
         return;
     };

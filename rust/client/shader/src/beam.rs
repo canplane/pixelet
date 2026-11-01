@@ -11,7 +11,7 @@
 //! in, every observer's.
 
 use pxl_spec_core::cast::{self, Detail, End, Trace, Query, Until};
-use pxl_spec_core::world::Inherited;
+use pxl_spec_core::world::Inheritance;
 use pxl_spec_core::{beam, observed, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
@@ -33,20 +33,20 @@ pub(crate) type Beams = spirv_std::RuntimeArray<u32>;
 
 /// A beam ray's line (pxl-spec-core `beam::LINE_WORDS`, at `base` of the
 /// words `W` hold: the eye's beam rays' buffer or the light's list) as a walk
-/// resumes from one: what was handed each node of it (`world::Inherited::words`),
+/// resumes from one: what was handed each node of it (`world::Inheritance::words`),
 /// its own at its zoom. A node's entry is its key's (`observed::entry_of`),
 /// so none is read off the line.
-pub(crate) struct Beamed<'a, W: ?Sized>(pub(crate) &'a W, pub(crate) u32);
+pub(crate) struct BeamLine<'a, W: ?Sized>(pub(crate) &'a W, pub(crate) u32);
 
-impl<W: ?Sized> Clone for Beamed<'_, W> {
+impl<W: ?Sized> Clone for BeamLine<'_, W> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<W: ?Sized> Copy for Beamed<'_, W> {}
+impl<W: ?Sized> Copy for BeamLine<'_, W> {}
 
-impl<W: Words + ?Sized> Beamed<'_, W> {
+impl<W: Words + ?Sized> BeamLine<'_, W> {
     /// The node the beam ray stopped at.
     pub(crate) fn node(self) -> cast::Node {
         node_at(self.0, self.1 + beam::LINE_NODE)
@@ -59,9 +59,9 @@ impl<W: Words + ?Sized> Beamed<'_, W> {
     }
 
     /// What was handed the line's node of `zoom`.
-    fn at(self, zoom: u32) -> Inherited {
+    fn at(self, zoom: u32) -> Inheritance {
         let (w, k) = (self.0, self.1 + beam::LINE_HANDED + beam::LINE_STEP * zoom);
-        Inherited::of_words([
+        Inheritance::of_words([
             w.word(k),
             w.word(k + 1),
             w.word(k + 2),
@@ -71,14 +71,14 @@ impl<W: Words + ?Sized> Beamed<'_, W> {
     }
 }
 
-impl<W: Words + ?Sized> cast::Over<u32> for Beamed<'_, W> {
+impl<W: Words + ?Sized> cast::Over<u32> for BeamLine<'_, W> {
     fn over(&self, _: u32) -> u32 {
         observed::NONE
     }
 }
 
-impl<W: Words + ?Sized> cast::Over<Inherited> for Beamed<'_, W> {
-    fn over(&self, zoom: u32) -> Inherited {
+impl<W: Words + ?Sized> cast::Over<Inheritance> for BeamLine<'_, W> {
+    fn over(&self, zoom: u32) -> Inheritance {
         self.at(zoom)
     }
 }
@@ -86,16 +86,16 @@ impl<W: Words + ?Sized> cast::Over<Inherited> for Beamed<'_, W> {
 /// A beam ray's line as a reader of the assets about a node near it reads
 /// it, in place (pxl-spec-core `support::Ancestors`): the node it stopped at,
 /// by its index from the eye's origin, and what was handed each node of it
-/// (`Beamed`), none of it copied. The eye's: its lines' nodes are held from
+/// (`BeamLine`), none of it copied. The eye's: its lines' nodes are held from
 /// the one origin its rays start at.
 pub(crate) struct BeamAncestors<'a, W: ?Sized> {
-    line: Beamed<'a, W>,
+    line: BeamLine<'a, W>,
     at: [i32; 3],
     zoom: u32,
 }
 
 impl<'a, W: Words + ?Sized> BeamAncestors<'a, W> {
-    pub(crate) fn of(line: Beamed<'a, W>, origin: [i32; 3]) -> BeamAncestors<'a, W> {
+    pub(crate) fn of(line: BeamLine<'a, W>, origin: [i32; 3]) -> BeamAncestors<'a, W> {
         let n = line.node();
         BeamAncestors {
             line,
@@ -105,7 +105,7 @@ impl<'a, W: Words + ?Sized> BeamAncestors<'a, W> {
     }
 }
 
-impl<W: Words + ?Sized> support::Ancestors<Inherited> for BeamAncestors<'_, W> {
+impl<W: Words + ?Sized> support::Ancestors<Inheritance> for BeamAncestors<'_, W> {
     fn at(&self) -> [i32; 3] {
         self.at
     }
@@ -114,7 +114,7 @@ impl<W: Words + ?Sized> support::Ancestors<Inherited> for BeamAncestors<'_, W> {
         self.zoom
     }
 
-    fn inherited(&self, z: u32) -> Inherited {
+    fn inherited(&self, z: u32) -> Inheritance {
         self.line.at(z)
     }
 }
@@ -229,20 +229,20 @@ pub(crate) fn resumed<'a, Q: Query, W: Words + ?Sized>(
     ray: &cast::Ray,
     detail: Detail,
     t: f32,
-    line: &Beamed<'a, W>,
+    line: &BeamLine<'a, W>,
     node: cast::Node,
     keep: &mut impl cast::Keep<Q::At>,
     told: &mut impl cast::Visitor,
 ) -> Trace<Q::At>
 where
-    Beamed<'a, W>: cast::Over<Q::At>,
+    BeamLine<'a, W>: cast::Over<Q::At>,
 {
     let (h, held) = node.over(cast::point_at(origin, ray, t));
     let h = cast::holding(origin, ray, h, t);
     let from = if held {
         (
             h,
-            <Beamed<'a, W> as cast::Over<Q::At>>::over(line, h.zoom),
+            <BeamLine<'a, W> as cast::Over<Q::At>>::over(line, h.zoom),
             t,
         )
     } else {
@@ -288,12 +288,12 @@ pub fn beam_cs(
 }
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
-/// words `W` hold at `base` (`beam::LINE_WORDS`), as `Beamed` reads it: the
+/// words `W` hold at `base` (`beam::LINE_WORDS`), as `BeamLine` reads it: the
 /// eye's beam rays' and the light's.
 pub(crate) struct Leaving<'a, W: ?Sized>(pub(crate) &'a mut W, pub(crate) u32);
 
-impl<W: Words + ?Sized> cast::Keep<Inherited> for Leaving<'_, W> {
-    fn keep(&mut self, met: &Trace<Inherited>, stack: &[Inherited; cast::DEPTH]) {
+impl<W: Words + ?Sized> cast::Keep<Inheritance> for Leaving<'_, W> {
+    fn keep(&mut self, met: &Trace<Inheritance>, stack: &[Inheritance; cast::DEPTH]) {
         let (n, live) = (&met.hit.node, met.hit.at);
         let base = self.1;
         let w = &mut *self.0;

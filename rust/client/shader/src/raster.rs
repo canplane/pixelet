@@ -11,7 +11,7 @@ use pxl_spec_core::{beam, cast, raster, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
-use crate::beam::{node_at, Beamed, Beams, BeamAncestors, Words};
+use crate::beam::{node_at, BeamLine, Beams, BeamAncestors, Words};
 use crate::pass_observer::PassObserver;
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::light::Head;
@@ -217,7 +217,7 @@ pub fn face_cs(
         let (origin, _) = eye_origin(eye);
         let node = node_at(w, w.word(a + beam::ASK_NODE));
         let (zoom, c) = (node.zoom, node.idx(origin));
-        let base = BeamAncestors::of(Beamed(w, w.word(a + beam::ASK_LINE)), origin);
+        let base = BeamAncestors::of(BeamLine(w, w.word(a + beam::ASK_LINE)), origin);
         let mut world = World {
             clipmap,
             ground,

@@ -270,11 +270,11 @@ fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
 // ---- road bridges (Arnis `BridgeStructureMap::build`) ----
 
 /// Decks resolved: by cell, the deck's height and layer.
-pub(super) type Laid = FnvHashMap<(i64, i64), (i32, i64)>;
+pub(super) type DeckCells = FnvHashMap<(i64, i64), (i32, i64)>;
 
 pub(super) struct Decks {
     pub(super) ys: Vec<(usize, Vec<i32>)>,
-    pub(super) laid: Laid,
+    pub(super) laid: DeckCells,
     /// The ways a bridge's ramp took, kept from a tunnel's approach.
     pub(super) ramp_ways: FnvHashSet<PartId>,
 }
@@ -763,7 +763,7 @@ fn road_decks(
             bridge_nodes.entry(e).or_default().push(q);
         }
     }
-    let mut laid: Laid = FnvHashMap::default();
+    let mut laid: DeckCells = FnvHashMap::default();
     let mut joints: FnvHashMap<End, i32> = FnvHashMap::default();
     let mut claimed: FnvHashSet<PartId> = FnvHashSet::default();
     let mut out = Vec::new();
@@ -1039,7 +1039,7 @@ fn road_decks(
 fn rail_decks(
     stretches: &[Stretch],
     obstacles: &Obstacles,
-    laid: &Laid,
+    laid: &DeckCells,
     scale: Scale,
 ) -> Vec<(usize, Vec<i32>)> {
     let rail: Vec<usize> = (0..stretches.len())

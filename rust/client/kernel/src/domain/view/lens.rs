@@ -2,7 +2,7 @@
 
 //! The camera grid through the screen: the cell a distance holds
 //! (`cell_there`), how long a motion takes to be seen there and a clock
-//! stepped by it (`seen_step_s`, `Stepped`), and what the GPU's cast of the
+//! stepped by it (`seen_step_s`, `SteppedClock`), and what the GPU's cast of the
 //! screen's rays reads (`gpu_cast`), a ray a drawn pixel, one rule wherever
 //! the eye is.
 
@@ -35,9 +35,9 @@ pub fn seen_step_s(dist: f64, speed: f64) -> f64 {
 /// once the source reaches the next step from there, or at once where the
 /// source went back or it never stepped. Its source is its reader's.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Stepped(Option<f64>);
+pub struct SteppedClock(Option<f64>);
 
-impl Stepped {
+impl SteppedClock {
     /// Its source at `t`, the next step from a reading `at` of it
     /// `next(at)`: what it shows, the reading it next steps at, and whether
     /// it stepped.

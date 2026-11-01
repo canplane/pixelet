@@ -26,7 +26,7 @@ fn marker_number(ii: u32) -> u32 {
   return u32(marker_before()) + ii + 1u;
 }
 
-struct Placed {
+struct Placement {
   clip: vec4f,
   // The twin's depth at this corner.
   upright_z: f32,
@@ -39,7 +39,7 @@ struct Placed {
 };
 
 // Corner `vi` of instance `ii`'s quad, as wide as its sprite or its region.
-fn placed(vi: u32, ii: u32, region: bool) -> Placed {
+fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   let k = ii * MARKER_INSTANCE_FLOATS;
   let anchor = vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + marker_translation();
   let sprite_w = instances[k + 3u];
@@ -58,7 +58,7 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placed {
   // the subpixel it falls on; on the edge it flickered as it moved.
   let corner = q * (size + vec2f(0.0, select(0.0, 2.0, region) * depth / marker_px_per_unit()));
 
-  var p: Placed;
+  var p: Placement;
   p.clip = marker_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
   p.across = q.x * size_px.x / sprite_w + 0.5;
   p.q = q;
@@ -82,7 +82,7 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placed {
 }
 
 // The pixel of a target `dims` large the anchor falls in; x < 0 off the screen.
-fn anchor_px(p: Placed, dims: vec2u) -> vec2i {
+fn anchor_px(p: Placement, dims: vec2u) -> vec2i {
   let at = marker_proj() * vec4f(p.anchor_view, 1.0);
   if (at.w <= 0.0) {
     return vec2i(-1);

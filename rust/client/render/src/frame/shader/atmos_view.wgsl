@@ -1,5 +1,5 @@
 // Where a point stands in the air and the lights there, and what the air
-// before it is (`Seen`), which every painter reads (atmos_air.wgsl
+// before it is (`Air`), which every painter reads (atmos_air.wgsl
 // `seen_from_eye`).
 
 
@@ -52,7 +52,7 @@ fn light_of(world_pos: vec3f) -> Light {
 // slowly across directions, which is what lets the air's volume hold it
 // (atmos_air.wgsl); the lights turn with a point's height, and are read
 // where it stands (`light_of`).
-struct Seen {
+struct Air {
   transmittance: f32,
   scattered: vec3f,
   light: Light,

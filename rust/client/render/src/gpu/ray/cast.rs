@@ -11,7 +11,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use super::raster::Raster;
-use super::tally::{self, Counted, RayCounts, Tally};
+use super::tally::{self, Counts, RayCounts, Tally};
 use super::{casts_px, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
@@ -26,7 +26,7 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
     RenderContext,
 };
-use crate::gpu::generated::{cut_boxes, hold, Generated, Generation, IndirectDraw};
+use crate::gpu::generated::{cut_boxes, hold, Generation, Generator, IndirectDraw};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::renderer::{next_frame, Cast, Overwrites};
@@ -214,7 +214,7 @@ pub(super) struct CastBuffers {
     overwrites: u32,
     overwrite_room: usize,
     overwrite_revision: Option<u32>,
-    generated: Generated,
+    generated: Generator,
     /// What the last cast read (`Read`) but the jitter, and whether this
     /// frame's is the same: the samples and the decor generated over them
     /// stand, and only the pixels are cast again where the jitter moved.
@@ -447,7 +447,7 @@ impl RaysPass {
             overwrites: 0,
             overwrite_room: 0,
             overwrite_revision: None,
-            generated: Generated::new(g, pipelines),
+            generated: Generator::new(g, pipelines),
             read: Read::default(),
             jitter: [0; 2],
             gated: false,
@@ -496,7 +496,7 @@ impl RaysPass {
         // The cast reads exactly this, all of it here: a field the frame hands
         // the cast fails to destructure until it is read. The overwrites'
         // contents are their revision's. The decor it generates reads its own
-        // (`Generated::prepare`), so a change to decor alone casts no ray again.
+        // (`Generator::prepare`), so a change to decor alone casts no ray again.
         let Cast {
             eye,
             clipmap,
@@ -1285,7 +1285,7 @@ impl RaysPass {
             g.dispatch_indirect(pass, c.light_misses, list);
             g.end(pass);
         }
-        let counted = Counted {
+        let counted = Counts {
             seen: c.seen,
             args: [c.marks, c.light_misses],
             boxes: [c.raster.args, c.raster.light.args],

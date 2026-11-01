@@ -25,7 +25,7 @@ mod world;
 
 pub use ray::{at_zoom, by_dist, cell_zoom_at, finest, zoom_range, Hit, HitKind, Ray};
 pub use support::{over, under, walks};
-pub use world::{Walked, World};
+pub use world::{ColumnWalk, World};
 
 #[cfg(test)]
 #[path = "query.test.rs"]

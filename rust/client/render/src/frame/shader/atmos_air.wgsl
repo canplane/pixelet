@@ -93,11 +93,11 @@ fn air_before(dir: vec3f, d: f32) -> vec4f {
 // are the point's own, read where it stands (atmos_view.wgsl `light_of`):
 // they turn with its height, and a froxel stands higher or lower than what
 // is drawn in it.
-fn seen_from_eye(world_pos: vec3f) -> Seen {
+fn seen_from_eye(world_pos: vec3f) -> Air {
   let to = world_pos - frame_camera_pos();
   let d = length(to);
   let air = air_before(to / max(d, 1e-6), d);
-  var s: Seen;
+  var s: Air;
   s.scattered = air.rgb;
   s.transmittance = air.a;
   s.light = light_of(world_pos);

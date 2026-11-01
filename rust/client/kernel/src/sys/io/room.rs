@@ -12,7 +12,7 @@ use crate::sys::boot::heap_stat;
 use crate::sys::io::body;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Refused(Room, u32);
+pub struct Refusal(Room, u32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Room {
@@ -32,20 +32,20 @@ impl Room {
     }
 }
 
-impl Refused {
+impl Refusal {
     /// By the heap.
-    pub fn now() -> Refused {
-        Refused(Room::Heap, Room::Heap.released())
+    pub fn now() -> Refusal {
+        Refusal(Room::Heap, Room::Heap.released())
     }
 
     /// By the body slots, every one out.
-    pub fn bodies() -> Refused {
-        Refused(Room::Bodies, Room::Bodies.released())
+    pub fn bodies() -> Refusal {
+        Refusal(Room::Bodies, Room::Bodies.released())
     }
 
     /// By the heap, for a run of body slots, every run held full.
-    pub fn run() -> Refused {
-        Refused(Room::Run, Room::Run.released())
+    pub fn run() -> Refusal {
+        Refusal(Room::Run, Room::Run.released())
     }
 
     /// Whether room has been given back since, so asking again may be served.

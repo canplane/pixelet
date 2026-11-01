@@ -37,8 +37,8 @@ use crate::domain::layer::terrain::mirror::{mirror, Mirror, Unlaid};
 use crate::domain::layer::terrain::tile;
 use crate::domain::layer::upload::Offered;
 use crate::domain::layer::Base;
-use crate::sys::io::room::Refused;
-use crate::sys::io::source::Declared;
+use crate::sys::io::room::Refusal;
+use crate::sys::io::source::ServiceArea;
 use crate::sys::mem::fixed::arr;
 use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::renderer::{BrickFill, CellsBack, Resident};
@@ -165,7 +165,7 @@ struct Clipmap {
     due: List<u32, { HANDED as usize }>,
     /// The heap as it was when it first refused a brick's child groups the
     /// mirror's room, while one waits on it (`WAITING`).
-    heap: Option<Refused>,
+    heap: Option<Refusal>,
 }
 
 static CLIPMAP: Global<Clipmap> = Global::new();
@@ -546,7 +546,7 @@ pub fn on_resident(b: u32, ticket: u32, resident: Resident) {
                 0
             }
             Err(Unlaid::Heap) => {
-                w.heap.get_or_insert_with(Refused::now);
+                w.heap.get_or_insert_with(Refusal::now);
                 WAITING
             }
             Err(Unlaid::Cap) => REFUSED,
@@ -790,7 +790,7 @@ pub fn fill(
             cells: off_of_slice(cells(b)) as u32,
             ticket: w.ticket,
         };
-        let shard = Shard::UNKNOWN.at(&Declared, (clipmap::bricks_zoom(cell), key));
+        let shard = Shard::UNKNOWN.at(&ServiceArea, (clipmap::bricks_zoom(cell), key));
         let taken = write(BrickFill {
             words: clipmap::fill_words(
                 b,
@@ -827,10 +827,10 @@ pub struct CpuClipmap;
 
 impl Area for CpuClipmap {
     fn ends(&self) -> bool {
-        Declared.ends()
+        ServiceArea.ends()
     }
     fn nine(&self, key: u32) -> u32 {
-        Declared.nine(key)
+        ServiceArea.nine(key)
     }
 }
 

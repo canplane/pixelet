@@ -10,7 +10,7 @@
 use core::cell::Cell;
 
 use xpute_guest::abi::handle::Table;
-use xpute_guest::ipc::door::{Applied, Door, Submission};
+use xpute_guest::ipc::door::{Door, Outcome, Submission};
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::frame;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
@@ -302,7 +302,7 @@ mod wasm {
     }
 }
 
-fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Applied {
+fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Outcome {
     let State {
         stream,
         sys,

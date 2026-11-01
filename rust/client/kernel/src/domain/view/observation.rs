@@ -20,7 +20,7 @@ use pxl_spec_core::clipmap::{bricks_zoom, BRICK_SHIFT};
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
 use crate::domain::query::changed;
-use crate::domain::query::{Walked, World};
+use crate::domain::query::{ColumnWalk, World};
 use crate::domain::view::above_ground::eye_height;
 use crate::domain::view::frame::pose::view;
 use crate::sys::io::source;
@@ -124,7 +124,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     stack.clear();
     stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
     // Depth first, so each brick's lines step from its neighbor's.
-    let (world, mut walked) = (World::now(), Walked::default());
+    let (world, mut walked) = (World::now(), ColumnWalk::default());
     while let Some((zoom, xy)) = stack.pop() {
         let (cell, d) = (zoom + BRICK_SHIFT, near(zoom, xy));
         if d > o.demand_dist {
@@ -181,7 +181,7 @@ impl ByEye {
 /// A layer's tile's order, from where anything stands in it as the grid's
 /// cells its own fold into read it, stepped from where `walked` last went:
 /// all of it where nothing is known or nothing stands.
-pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, walked: &mut Walked) -> Order {
+pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, walked: &mut ColumnWalk) -> Order {
     let stands = World::now().bounds(walked, p.node(), lattice.grid_zoom(p.zoom));
     Order::of(o, &stands.val().flatten().unwrap_or(p.region()))
 }

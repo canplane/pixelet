@@ -11,7 +11,7 @@ use pxl_spec_core::overwrite::{Cut, Columns};
 use pxl_spec_core::clipmap::{
     self, Bricks, Lookup, Presence, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL,
 };
-use pxl_spec_core::world::{self, Inherited};
+use pxl_spec_core::world::{self, Inheritance};
 use pxl_spec_core::{at, face, ground, support, way};
 use spirv_std::glam::IVec4;
 
@@ -217,13 +217,13 @@ impl<L: PaletteWords> ground::Resident for World<'_, L> {
 /// source holds it, and the four palette indices the ground's asset is drawn by
 /// (`world::node`'s second word), what the screen paints a hit with.
 impl<L: PaletteWords> Query for World<'_, L> {
-    type At = Inherited;
+    type At = Inheritance;
 
-    fn root(&mut self, node: [i32; 3]) -> Inherited {
-        Inherited::of(self, (0, node))
+    fn root(&mut self, node: [i32; 3]) -> Inheritance {
+        Inheritance::of(self, (0, node))
     }
 
-    fn child(&mut self, at: &Inherited, zoom: u32, node: [i32; 3]) -> Inherited {
+    fn child(&mut self, at: &Inheritance, zoom: u32, node: [i32; 3]) -> Inheritance {
         at.child(self, &self.pool, (zoom, node))
     }
 
@@ -231,7 +231,7 @@ impl<L: PaletteWords> Query for World<'_, L> {
     /// (pxl-spec-core `world::node`).
     fn node(
         &mut self,
-        at: &mut Inherited,
+        at: &mut Inheritance,
         zoom: u32,
         c: [i32; 3],
         asked: [u32; 2],
@@ -255,7 +255,7 @@ impl<L: PaletteWords> World<'_, L> {
         face: u32,
         zoom: u32,
         c: [i32; 3],
-        line: &impl support::Ancestors<Inherited>,
+        line: &impl support::Ancestors<Inheritance>,
     ) -> u32 {
         face::word(face, |d| {
             answer::whole(support::asset(self, line, zoom, face::beside(zoom, c, d)))

@@ -18,7 +18,7 @@ use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::Stream;
-use crate::sys::io::fetch::{answered, body, on_answer_settled, release, take_answered, Answered};
+use crate::sys::io::fetch::{answered, body, on_answer_settled, release, take_answered, Answer};
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
@@ -32,7 +32,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::tile_cache::{Lines, TileCache};
-use crate::domain::query::Walked;
+use crate::domain::query::ColumnWalk;
 use crate::domain::view::observation;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::io::demand::Order;
@@ -47,7 +47,7 @@ use pxl_spec::space::layer::demand::tiles_within;
 use pxl_spec::space::layer::lattice::GROUND;
 
 /// A layer as the view asks of it: its demand, held beside its records.
-pub trait Observed: Base {
+pub trait ObservedLayer: Base {
     fn demand() -> &'static mut Demand<Self>;
 
     /// How far from the eye the layer draws anything; past it nothing of it
@@ -62,25 +62,25 @@ static PLACE: Global<Demand<PlaceTile>> = Global::new();
 static EARTH: Global<Demand<Earth>> = Global::new();
 static DIVISION: Global<Demand<DivisionTile>> = Global::new();
 
-impl Observed for TerrainTile {
+impl ObservedLayer for TerrainTile {
     fn demand() -> &'static mut Demand<TerrainTile> {
         TERRAIN.get(Demand::default)
     }
 }
 
-impl Observed for PlaceTile {
+impl ObservedLayer for PlaceTile {
     fn demand() -> &'static mut Demand<PlaceTile> {
         PLACE.get(Demand::default)
     }
 }
 
-impl Observed for DivisionTile {
+impl ObservedLayer for DivisionTile {
     fn demand() -> &'static mut Demand<DivisionTile> {
         DIVISION.get(Demand::default)
     }
 }
 
-impl Observed for Earth {
+impl ObservedLayer for Earth {
     fn demand() -> &'static mut Demand<Earth> {
         EARTH.get(Demand::default)
     }
@@ -99,7 +99,7 @@ pub struct Layer {
     arrived: fn(Tile, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
 
-const fn layer<L: Observed>() -> Layer {
+const fn layer<L: ObservedLayer>() -> Layer {
     Layer {
         stream: L::STREAM,
         slots: TileCache::<L>::SLOTS,
@@ -134,7 +134,7 @@ struct Key {
     dst: Option<Tile>,
 }
 
-pub struct Demand<L: Observed> {
+pub struct Demand<L: ObservedLayer> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     wants: Vec<(u64, Ask)>,
@@ -155,7 +155,7 @@ pub struct Demand<L: Observed> {
     idled: Option<u32>,
 }
 
-impl<L: Observed> Default for Demand<L> {
+impl<L: ObservedLayer> Default for Demand<L> {
     fn default() -> Self {
         Demand {
             layer: core::marker::PhantomData,
@@ -175,7 +175,7 @@ impl<L: Observed> Default for Demand<L> {
     }
 }
 
-impl<L: Observed> Demand<L> {
+impl<L: ObservedLayer> Demand<L> {
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Tile> + Clone + '_ {
         self.floor.iter().copied()
@@ -199,7 +199,7 @@ impl<L: Observed> Demand<L> {
         // The tile last in view order goes, of two as late the greater.
         let o = self.observation.as_ref();
         let farthest = |tiles: &mut dyn Iterator<Item = Tile>| {
-            let mut walked = Walked::default();
+            let mut walked = ColumnWalk::default();
             tiles.max_by_key(|&t| {
                 (
                     o.map_or(Order::LAST, |o| {
@@ -228,7 +228,7 @@ impl<L: Observed> Demand<L> {
         };
         // One walk down the pyramid in key order, so each tile's line, its
         // own and the ground's it is ordered by, steps from its neighbor's.
-        let (mut lines, mut ground) = (Lines::default(), Walked::default());
+        let (mut lines, mut ground) = (Lines::default(), ColumnWalk::default());
         let mut order =
             |o: &Observation, p: Tile| observation::order_of_tile(o, L::LATTICE, p, &mut ground);
         if let Some(o) = o {
@@ -476,7 +476,7 @@ pub fn admit_arrived(pass: &Pass) {
     let stat = pass.run(
         0..answered(&OF),
         |_| {
-            let Some(Answered {
+            let Some(Answer {
                 key,
                 stream,
                 subject,
@@ -510,7 +510,7 @@ pub fn admit_arrived(pass: &Pass) {
 }
 
 /// None is no object for `p`.
-fn on_arrived<L: Observed>(
+fn on_arrived<L: ObservedLayer>(
     p: Tile,
     block: Option<Block>,
     phases: &mut Phases,

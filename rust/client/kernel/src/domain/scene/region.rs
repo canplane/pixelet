@@ -10,7 +10,7 @@
 use xpute_guest::global::Global;
 
 #[derive(Default)]
-struct Bounded {
+struct Region {
     /// The turn's keys as they are drawn, and those `take` last handed,
     /// which the renderer reads.
     now: Vec<u32>,
@@ -18,10 +18,10 @@ struct Bounded {
     animated: bool,
 }
 
-static BOUNDED: Global<Bounded> = Global::new();
+static BOUNDED: Global<Region> = Global::new();
 
-fn bounded() -> &'static mut Bounded {
-    BOUNDED.get(Bounded::default)
+fn bounded() -> &'static mut Region {
+    BOUNDED.get(Region::default)
 }
 
 /// A draw this turn the scene bounds, `key` the handle its record names.
@@ -42,6 +42,6 @@ pub fn take() -> (&'static [u32], bool) {
     let animated = core::mem::take(&mut b.animated);
     core::mem::swap(&mut b.handed, &mut b.now);
     b.now.clear();
-    let b: &'static Bounded = b;
+    let b: &'static Region = b;
     (&b.handed, animated)
 }

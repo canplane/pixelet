@@ -120,22 +120,22 @@ impl Columns for Nothing {
 }
 
 /// The world's one query over the clip levels, counting the nodes asked.
-struct Asked<'a> {
+struct Counter<'a> {
     w: Clipmap<'a>,
     nodes: u32,
 }
 
-impl Query for Asked<'_> {
-    type At = Inherited;
-    fn root(&mut self, node: [i32; 3]) -> Inherited {
-        Inherited::of(&Nothing, (0, node))
+impl Query for Counter<'_> {
+    type At = Inheritance;
+    fn root(&mut self, node: [i32; 3]) -> Inheritance {
+        Inheritance::of(&Nothing, (0, node))
     }
-    fn child(&mut self, at: &Inherited, zoom: Zoom, node: [i32; 3]) -> Inherited {
+    fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
         at.child(&Nothing, &Nothing, (zoom, node))
     }
     fn node(
         &mut self,
-        at: &mut Inherited,
+        at: &mut Inheritance,
         zoom: Zoom,
         c: [i32; 3],
         asked: [Zoom; 2],
@@ -317,7 +317,7 @@ fn partial_block_bounded() {
 fn footing_without_bound() {
     let (rows, ground) = clipmap();
     let (none, folded) = (folded(&rows, &ground, true), folded(&rows, &ground, false));
-    let world = |joined| Asked {
+    let world = |joined| Counter {
         w: Clipmap {
             rows: &rows,
             joined,

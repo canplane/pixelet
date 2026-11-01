@@ -70,7 +70,7 @@ pub struct Generation<'a> {
     pub eye: &'a [u32; eye::WORDS],
 }
 
-pub struct Generated {
+pub struct Generator {
     mark: Pipeline,
     thin: Pipeline,
     generate: Pipeline,
@@ -140,8 +140,8 @@ pub struct Generated {
 /// asks it.
 pub type World = [u32; 6];
 
-impl Generated {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Generated {
+impl Generator {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Generator {
         let buf = |size: u32, usage: u32| g.buf(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let rows = buf(size_of_val(&DECORS) as u32, storage);
@@ -157,7 +157,7 @@ impl Generated {
             word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize),
             storage | buffer_usage::UNIFORM,
         );
-        Generated {
+        Generator {
             mark: pipelines.build_compute(g, SHADER_GENERATED_MARK, &compute::DECOR_MARK_GROUP),
             thin: pipelines.build_compute(g, SHADER_GENERATED_THIN, &compute::DECOR_THIN_GROUP),
             generate: pipelines.build_compute(g, SHADER_GENERATED, &compute::DECOR_GROUP),
@@ -595,7 +595,7 @@ pub struct Instances {
     pub cap: u32,
 }
 
-/// The decor's instances as the draws read them (`Generated::drawn`): their
+/// The decor's instances as the draws read them (`Generator::drawn`): their
 /// group, the regions' indirect args and their draw uniforms' group.
 #[derive(Clone, Copy)]
 pub struct IndirectDraw {
@@ -617,7 +617,7 @@ impl IndirectDraw {
 }
 
 /// Box `b` held among the `holding` boxes of `held`, past the room joined
-/// into the last: what decor's generation (`Generated`) and the observed pyramid's
+/// into the last: what decor's generation (`Generator`) and the observed pyramid's
 /// forgetting (ray/cast.rs) are asked over.
 pub(crate) fn hold(held: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
     if *holding < held.len() {

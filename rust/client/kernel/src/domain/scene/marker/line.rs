@@ -15,20 +15,20 @@ use pxl_spec::space::coord::v3::V3;
 /// What the arrangement compares of the line, by value: its bubble while it is
 /// said, and where it hangs while it shows, seen from the eye.
 #[derive(Clone, PartialEq)]
-pub(super) struct Said {
+pub(super) struct Bubble {
     line: Option<Design>,
     hangs: Option<Q3>,
 }
 
 /// The line as it is now, seen from `eye`.
-pub(super) fn said(eye: V3) -> Said {
-    Said {
+pub(super) fn said(eye: V3) -> Bubble {
+    Bubble {
         line: shown_line(),
         hangs: line_hangs(eye),
     }
 }
 
-impl Said {
+impl Bubble {
     /// Its instance, where it shows.
     pub(super) fn shown(&self) -> Option<Instance> {
         let (design, stands) = (self.line.clone()?, self.hangs?);

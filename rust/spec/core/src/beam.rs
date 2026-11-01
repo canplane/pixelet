@@ -293,7 +293,7 @@ pub const NODE_WORDS: u32 = 7;
 /// the steps view counts into every walk resumed from it, then the node it
 /// stopped at
 /// (`NODE_WORDS`), then, for every node from the root to it, what was
-/// handed it (`world::Inherited::words`), `LINE_STEP` words a zoom, its own at its
+/// handed it (`world::Inheritance::words`), `LINE_STEP` words a zoom, its own at its
 /// zoom. A node's entry in the observed pyramid is its key's
 /// (`observed::entry_of`), so a line holds none. The light's beam rays leave
 /// the same, their origin after it (pxl-spec-core `light::LINE_ORIGIN`).
@@ -301,7 +301,7 @@ pub const LINE_T: u32 = 0;
 pub const LINE_VISITS: u32 = 1;
 pub const LINE_NODE: u32 = 2;
 pub const LINE_HANDED: u32 = LINE_NODE + NODE_WORDS;
-pub const LINE_STEP: u32 = world::INHERITED_WORDS;
+pub const LINE_STEP: u32 = world::INHERITANCE_WORDS;
 pub const LINE_WORDS: u32 = LINE_HANDED + LINE_STEP * cast::DEPTH as u32;
 
 /// What a cell hands its pixels, in words: where they start, f32 bits, and

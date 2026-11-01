@@ -67,8 +67,8 @@ fn host_paces_frames() {
 #[test]
 fn frame_ends_either_way() {
     let count = Arc::new(AtomicU32::new(0));
-    let called = Unfinished::count(&count);
-    let dropped = Unfinished::count(&count);
+    let called = FrameGuard::count(&count);
+    let dropped = FrameGuard::count(&count);
     assert_eq!(count.load(Ordering::Relaxed), 2);
     called();
     assert_eq!(count.load(Ordering::Relaxed), 1);

@@ -80,7 +80,7 @@ fn shows(k: u32, mu: f32, stops: f32) -> f32 {
 // own sampling where it stands, the eye's stops moving with it; moving over
 // it counts as a level at least. A light out of reach comes into it no
 // sooner than its step to `REACH` off that slope (gpu/atmosphere.rs
-// `Lit::step`).
+// `LightMemo::step`).
 fn reach(k: u32) {
   let now = lights_now();
   let mu = dot(light_dir(k), frame_up());

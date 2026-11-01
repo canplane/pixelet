@@ -65,7 +65,7 @@ fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&
 
 /// What the snapshot is made of, read off its owners: where the names are
 /// read (`division::naming`) rather than the names, and the waiting
-/// marker's text aside (`Sent`).
+/// marker's text aside (`SnapshotMemo`).
 #[derive(Clone, Copy, PartialEq)]
 pub struct SnapshotInputs {
     status: GroundStatus,
@@ -152,12 +152,12 @@ fn snapshot_inputs() -> SnapshotInputs {
 /// The snapshot last sent, which a new one is sent only where it moved
 /// from: its makings and the marker draft's text.
 #[derive(Default)]
-pub struct Sent {
+pub struct SnapshotMemo {
     shown: Option<SnapshotInputs>,
     text: String,
 }
 
-impl Sent {
+impl SnapshotMemo {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
     pub fn take_moved(&mut self) -> Option<SnapshotInputs> {

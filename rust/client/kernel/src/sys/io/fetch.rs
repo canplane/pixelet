@@ -21,7 +21,7 @@ use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::file::{self, Opened, Owner};
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::{attempt_of, settle, Credit};
-use crate::sys::io::room::Refused;
+use crate::sys::io::room::Refusal;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -65,7 +65,7 @@ enum Got {
     Absent,
     Failed(Failure),
     /// The body was refused room (sys/io/body.rs `take`).
-    Refused(Refused),
+    Refused(Refusal),
 }
 
 struct Arrival {
@@ -80,7 +80,7 @@ static ARRIVED: Global<List<Arrival, { MAX_CREDITS as usize }>> = Global::new();
 /// An answer, a body or the source's absence, kept for its owner to take:
 /// what it does with it (admits a tile, opens a group) is the owner's. The
 /// fetch stays out until the owner settles it.
-pub struct Answered {
+pub struct Answer {
     pub key: u64,
     pub stream: Stream,
     pub subject: u64,
@@ -90,7 +90,7 @@ pub struct Answered {
 }
 
 /// No more are kept than fetches are out, each on its credit, oldest first.
-static ANSWERED: Global<List<Answered, { MAX_CREDITS as usize }>> = Global::new();
+static ANSWERED: Global<List<Answer, { MAX_CREDITS as usize }>> = Global::new();
 
 /// How many answers of one of `of` are not yet taken.
 pub fn answered(of: &[Stream]) -> usize {
@@ -103,7 +103,7 @@ pub fn answered(of: &[Stream]) -> usize {
 
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
 /// fetches are out, so the scan is short.
-pub fn take_answered(of: &[Stream]) -> Option<Answered> {
+pub fn take_answered(of: &[Stream]) -> Option<Answer> {
     let all = ANSWERED.get(List::new);
     let at = all.iter().position(|a| of.contains(&a.stream))?;
     Some(all.remove(at))
@@ -203,7 +203,7 @@ fn on_fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         Got::Absent | Got::Read(Some(_)) => {
             // An asset loads through the loader (sys/io/loader.rs), never a fetch: nothing would take its answer.
             xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
-            ANSWERED.get(List::new).push(Answered {
+            ANSWERED.get(List::new).push(Answer {
                 key,
                 stream,
                 subject,

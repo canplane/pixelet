@@ -109,7 +109,7 @@ fn person_change_keeps_pivot() {
         }
     }
     // Under a tracker the change waits, and the base is left as it was.
-    controllers().tracked = Some(Tracked {
+    controllers().tracked = Some(TrackerSpace {
         world_turn: mat4::new(),
         world_at: [0.0; 3],
         turn: mat4::new(),

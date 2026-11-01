@@ -712,7 +712,7 @@ pub fn rooted<Q: Query>(
         detail,
         until,
         (Node::ROOT, at, 0.0),
-        &Rooted(at),
+        &Root(at),
         keep,
         told,
     )
@@ -728,9 +728,9 @@ pub trait Over<A: Copy> {
 /// Over a walk from the roots, nothing: no node is over a root, so it is
 /// never read.
 #[derive(Clone, Copy)]
-pub struct Rooted<A>(pub A);
+pub struct Root<A>(pub A);
 
-impl<A: Copy> Over<A> for Rooted<A> {
+impl<A: Copy> Over<A> for Root<A> {
     fn over(&self, _: Zoom) -> A {
         self.0
     }
@@ -1207,9 +1207,9 @@ mod tests {
     }
 
     /// Every split's content in the box `0` names, air at the leaves.
-    struct Boxed(BoxWords);
+    struct BoxQuery(BoxWords);
 
-    impl Query for Boxed {
+    impl Query for BoxQuery {
         type At = ();
         fn root(&mut self, _: [i32; 3]) {}
         fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
@@ -1251,7 +1251,7 @@ mod tests {
                 across: 0.0,
             },
         };
-        let walk = |b: BoxWords| first(&mut Boxed(b), o, &ray, detail, Until::Opaque);
+        let walk = |b: BoxWords| first(&mut BoxQuery(b), o, &ray, detail, Until::Opaque);
         // The origin lies in the root's lower half on every axis.
         for missed in [
             box_word([512, 0, 0], [1024; 3]),
@@ -1284,7 +1284,7 @@ mod tests {
                 ..detail
             };
             first(
-                &mut Boxed(box_word([0, 0, 1], [1024; 3])),
+                &mut BoxQuery(box_word([0, 0, 1], [1024; 3])),
                 o,
                 &ray,
                 detail,
@@ -1304,7 +1304,7 @@ mod tests {
             ..detail
         };
         let met = first(
-            &mut Boxed(box_word([0; 3], [1024, 1024, 1])),
+            &mut BoxQuery(box_word([0; 3], [1024, 1024, 1])),
             o,
             &ray,
             wide,

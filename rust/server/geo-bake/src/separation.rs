@@ -25,7 +25,7 @@ pub use solve::solve_tile;
 /// which the ground leaves unpainted. One solve makes both, so the road
 /// leaves the ground's paint exactly where its line begins.
 #[derive(Default)]
-pub struct Solved {
+pub struct Solution {
     pub lines: Vec<Line>,
     pub drawn: Vec<WayRange>,
 }

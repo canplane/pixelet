@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::sys;
-use crate::sys::io::room::Refused;
+use crate::sys::io::room::Refusal;
 use xpute_guest::mem;
 
 fn runs() -> usize {
@@ -161,7 +161,7 @@ fn slot_refusal_waits_slots() {
 #[test]
 fn run_refusal_waits_heap() {
     let _g = sys::serial();
-    let refused = Refused::run();
+    let refused = Refusal::run();
     assert!(!refused.over());
     let block = take(Some(Stream::terrain), 1).unwrap();
     // SAFETY: from `take`, given back once.

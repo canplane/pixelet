@@ -35,7 +35,7 @@ const FIT_BYTES: u32 = 16;
 /// glTF's across, up and deep.
 pub type Extent = [f32; 3];
 
-type Baked = (u32, Option<u32>, Extent);
+type BakeKey = (u32, Option<u32>, Extent);
 
 pub struct ImpostorPass {
     draw: Pipeline,
@@ -48,8 +48,8 @@ pub struct ImpostorPass {
     group: u32,
     /// Center across, center up, half side, half depth.
     fit: [[f32; 4]; DECOR_GROUPS],
-    baked: [Option<Baked>; DECOR_GROUPS],
-    wanted: [Option<Baked>; DECOR_GROUPS],
+    baked: [Option<BakeKey>; DECOR_GROUPS],
+    wanted: [Option<BakeKey>; DECOR_GROUPS],
     marks: Marks,
 }
 
@@ -189,7 +189,7 @@ impl ImpostorPass {
         // The groups whose model or extent moved since baked, each once, and
         // whose model has landed: one still landing is due on a later frame,
         // and this one bakes, writes and submits nothing for it.
-        let (mut due, mut len) = ([(0, Baked::default(), (0, 0, 0, 0)); DECOR_GROUPS], 0);
+        let (mut due, mut len) = ([(0, BakeKey::default(), (0, 0, 0, 0)); DECOR_GROUPS], 0);
         for k in 0..DECOR_GROUPS {
             if let Some(w) =
                 self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w))

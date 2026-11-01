@@ -100,7 +100,7 @@ struct Frame {
     /// What the drawing words were last made of, by value.
     seen: Option<Key>,
     /// The cell the placed decor was last walked about, and what it left out.
-    walked: Option<Walked>,
+    walked: Option<WalkKey>,
 }
 
 /// What the drawing words are made of: the unit the eye stands in (its
@@ -121,7 +121,7 @@ struct Key {
 /// where a write meets its box (`note_edited`): a traversal kept while the eye
 /// stays in its cell.
 #[derive(Clone, Copy, PartialEq)]
-struct Walked {
+struct WalkKey {
     zoom: Zoom,
     cell: [i32; 3],
     hide: Option<EntryAt>,
@@ -188,7 +188,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         min: [0, 1, 2].map(|k| (cell[k] - 1) as f64 * side),
         max: [0, 1, 2].map(|k| (cell[k] + 2) as f64 * side),
     };
-    let walked = Walked { zoom, cell, hide };
+    let walked = WalkKey { zoom, cell, hide };
     let met = h.edits[..h.edited].iter().any(|e| meets(e, &around));
     if h.walked == Some(walked) && !met {
         return;

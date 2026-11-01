@@ -18,7 +18,7 @@ use xpute_guest::mem;
 use crate::domain::scene::model;
 use crate::domain::scene::model::registry::Channel;
 use crate::sys::io::loader::{load_gltf, load_of};
-use crate::sys::io::room::Refused;
+use crate::sys::io::room::Refusal;
 use crate::sys::mem::section;
 use pxl_spec::asset::catalog::Slot;
 
@@ -36,7 +36,7 @@ const IDENTITY: [f32; 16] = [
 ];
 
 /// A model as registered, or as the heap refused it room.
-type Registration = Result<ModelHandle, Refused>;
+type Registration = Result<ModelHandle, Refusal>;
 
 /// Each file, by its number below the asset root, by the height it was
 /// asked at, its bits.
@@ -60,7 +60,7 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
         _ => {}
     }
     let gltf = load_gltf(load)?;
-    let entry = register_model(&gltf, height_u).ok_or_else(Refused::now);
+    let entry = register_model(&gltf, height_u).ok_or_else(Refusal::now);
     match at {
         Some(at) => registered[at].2 = entry.clone(),
         None => registered.push((file, key, entry.clone())),

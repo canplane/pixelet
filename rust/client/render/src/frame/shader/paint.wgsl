@@ -43,7 +43,7 @@ struct Surface {
   ddx: vec2f,
   ddy: vec2f,
   ao: f32,
-  seen: Seen,
+  seen: Air,
 };
 
 // A cell's face wears its own image for that face, at any depth: a cell

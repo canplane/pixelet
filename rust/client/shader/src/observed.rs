@@ -7,7 +7,7 @@
 use pxl_spec_core::answer::In;
 use pxl_spec_core::cast::Query;
 use pxl_spec_core::observed;
-use pxl_spec_core::world::Inherited;
+use pxl_spec_core::world::Inheritance;
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
@@ -131,7 +131,7 @@ fn is_node(seen: &Pyramid, w: u32, zoom: u32, c: [i32; 3]) -> bool {
 /// pass is still writing it (`tag`), taken where the key still stood once
 /// it was read; any other asked of the world's one query there and then,
 /// from what was handed it, and written where this walk claims the slot.
-/// A walk holds of a node what was handed it alone (`world::Inherited`), as the
+/// A walk holds of a node what was handed it alone (`world::Inheritance`), as the
 /// world's one query does: a node's slot is its key's (`observed::entry_of`),
 /// found again wherever the node is asked.
 pub(crate) struct Writing<'a, L> {
@@ -145,19 +145,19 @@ pub(crate) struct Writing<'a, L> {
 }
 
 impl<L: PaletteWords> Query for Writing<'_, L> {
-    type At = Inherited;
+    type At = Inheritance;
 
-    fn root(&mut self, node: [i32; 3]) -> Inherited {
+    fn root(&mut self, node: [i32; 3]) -> Inheritance {
         Query::root(&mut self.world, node)
     }
 
-    fn child(&mut self, parent: &Inherited, zoom: u32, node: [i32; 3]) -> Inherited {
+    fn child(&mut self, parent: &Inheritance, zoom: u32, node: [i32; 3]) -> Inheritance {
         Query::child(&mut self.world, parent, zoom, node)
     }
 
     fn node(
         &mut self,
-        n: &mut Inherited,
+        n: &mut Inheritance,
         zoom: u32,
         c: [i32; 3],
         asked: [u32; 2],
@@ -184,8 +184,8 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                             free = observed::NONE;
                             break;
                         }
-                        let a = w + observed::W_INHERITED;
-                        let at = Inherited::of_words([
+                        let a = w + observed::W_INHERITANCE;
+                        let at = Inheritance::of_words([
                             pyramid_at(self.seen, a),
                             pyramid_at(self.seen, a + 1),
                             pyramid_at(self.seen, a + 2),
@@ -241,7 +241,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
             pyramid_put(self.seen, w + observed::W_ASSET, answer.asset[0]);
             pyramid_put(self.seen, w + observed::W_ASSET + 1, answer.asset[1]);
             let words = n.words();
-            let a = w + observed::W_INHERITED;
+            let a = w + observed::W_INHERITANCE;
             pyramid_put(self.seen, a, words[0]);
             pyramid_put(self.seen, a + 1, words[1]);
             pyramid_put(self.seen, a + 2, words[2]);

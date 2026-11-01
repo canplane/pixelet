@@ -39,12 +39,12 @@ use pending::Pending;
 use surface::Surface;
 
 pub use configure::ConfigureAt;
-pub use open::{open, Ask, OpenError, Opened};
+pub use open::{open, Ask, OpenError, OpenedDevice};
 
 #[cfg(test)]
 use crate::spec::DONE;
 #[cfg(test)]
-use admit::Unfinished;
+use admit::FrameGuard;
 
 /// The program's numbers and choices, which the host runs by: none of them
 /// is the host's to pick.

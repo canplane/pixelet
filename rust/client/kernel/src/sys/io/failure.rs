@@ -7,7 +7,7 @@ use core::panic::Location;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
-use crate::sys::io::room::Refused;
+use crate::sys::io::room::Refusal;
 
 pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
 
@@ -51,8 +51,8 @@ pub enum Ended {
     Failed(Failure),
     /// Its body was refused room, by the heap or the body slots: no failure
     /// of the object's or the server's, and over once what refused it gives
-    /// some back (`Refused::over`).
-    Refused(Refused),
+    /// some back (`Refusal::over`).
+    Refused(Refusal),
 }
 
 impl Ended {

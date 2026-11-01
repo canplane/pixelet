@@ -33,7 +33,7 @@ impl World<'_> {
     /// (`Shard::at`). A walker comes to the wall's face and stands on none
     /// of it.
     pub fn within(&self, at: &Q3) -> bool {
-        within_in(&source::Declared, at)
+        within_in(&source::ServiceArea, at)
     }
 
     /// Whether `space` may hold an edit: every shard under it read, so a
@@ -50,7 +50,7 @@ impl World<'_> {
     /// a box that is not is bounded by the nodes about it, which only
     /// refuses more.
     pub fn editable(&self, space: &Aabb) -> bool {
-        repository::holds(space) && self.editable_in(&source::Declared, space)
+        repository::holds(space) && self.editable_in(&source::ServiceArea, space)
     }
 
     /// `editable` against the service area `area`, the shards aside.

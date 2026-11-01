@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use crate::cli::Flags;
 use crate::coverage::{src_of, Coverage, Node};
 use crate::pyramid::{
-    ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
+    ancestor, fold, unasked, write_manifest, Absent, Base, StagedSet, TileSet, FITS, MANIFEST,
 };
 use crate::source;
 use crate::util;
@@ -189,7 +189,7 @@ impl Stage {
             .collect();
         let leaves_gone = self.leaves_gone(&whole)?;
         changed.extend(leaves_gone.iter().copied());
-        let mut staged = Staged {
+        let mut staged = StagedSet {
             base: &self.set,
             stage: &self.stage,
             leaf: L::LEAF,
@@ -228,7 +228,7 @@ impl Stage {
             let tiles: FnvHashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
             let mut gone = self.leaves_gone(&whole)?;
             gone.extend(self.read_done(FOLD)?);
-            let view = Staged {
+            let view = StagedSet {
                 base: &self.set,
                 stage: &self.stage,
                 leaf: L::LEAF,

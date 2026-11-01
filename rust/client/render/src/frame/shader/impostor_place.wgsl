@@ -13,18 +13,18 @@ struct VertexIn {
 
 // Corner `k` of the quad: its world point, the way it faces and the corner
 // itself.
-struct Placed {
+struct Placement {
   world: vec3f,
   facing: vec3f,
   corner: vec2f,
 };
 
-fn placed(v: VertexIn) -> Placed {
+fn placed(v: VertexIn) -> Placement {
   let i = instances[draw_idx() + v.i];
   let base = vec3f(lane(0u, i), lane(1u, i), lane(2u, i)) + draw_translation();
   let scale = lane(4u, i);
   let fit = fits[draw_layer()];
-  var p: Placed;
+  var p: Placement;
   p.corner = vec2f(select(-1.0, 1.0, (v.k & 1u) != 0u), select(-1.0, 1.0, (v.k & 2u) != 0u));
   let up = vec3f(0.0, 0.0, 1.0);
   let to_eye = frame_camera_pos() - base;

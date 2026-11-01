@@ -68,11 +68,11 @@ pub(super) fn coarsest() -> Zoom {
 }
 
 /// A node as a descent reaches it, X on the asker's lap, and what its
-/// ancestors found, handed to its children (pxl-spec-core `world::Inherited`).
+/// ancestors found, handed to its children (pxl-spec-core `world::Inheritance`).
 #[derive(Clone, Copy)]
 pub(super) struct At {
     pub(super) node: Node<3>,
-    pub(super) inherited: world::Inherited,
+    pub(super) inherited: world::Inheritance,
 }
 
 impl World<'_> {
@@ -95,9 +95,9 @@ impl World<'_> {
         At {
             node,
             inherited: if self.unplaced {
-                world::Inherited::unplaced(node)
+                world::Inheritance::unplaced(node)
             } else {
-                world::Inherited::of(&self.object.columns(), node)
+                world::Inheritance::of(&self.object.columns(), node)
             },
         }
     }
@@ -219,10 +219,10 @@ impl<'r, 'a> Reading<'r, 'a> {
 
 impl Area for Reading<'_, '_> {
     fn ends(&self) -> bool {
-        source::Declared.ends()
+        source::ServiceArea.ends()
     }
     fn nine(&self, key: u32) -> u32 {
-        source::Declared.nine(key)
+        source::ServiceArea.nine(key)
     }
 }
 

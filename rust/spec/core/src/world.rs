@@ -30,7 +30,7 @@ use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 /// tree of the brick `ground` names (`way::tree`). The CPU's and a GPU's
 /// alike.
 #[derive(Clone, Copy)]
-pub struct Inherited {
+pub struct Inheritance {
     pub cave: Cave,
     pub placed: overwrite::NodeSlot,
     pub shard: Shard,
@@ -38,13 +38,13 @@ pub struct Inherited {
     pub ways: overwrite::NodeSlot,
 }
 
-/// An `Inherited`'s words, as a GPU holds one in storage (`Inherited::words`).
-pub const INHERITED_WORDS: u32 = 5;
+/// An `Inheritance`'s words, as a GPU holds one in storage (`Inheritance::words`).
+pub const INHERITANCE_WORDS: u32 = 5;
 
-impl Inherited {
+impl Inheritance {
     /// Its words: its caves, what is placed, its shard, where its ground's
     /// cells were held, its ways' cursor.
-    pub const fn words(&self) -> [u32; INHERITED_WORDS as usize] {
+    pub const fn words(&self) -> [u32; INHERITANCE_WORDS as usize] {
         [
             self.cave.word(),
             self.placed.word(),
@@ -54,9 +54,9 @@ impl Inherited {
         ]
     }
 
-    /// `words`'s `Inherited`.
-    pub const fn of_words(w: [u32; INHERITED_WORDS as usize]) -> Inherited {
-        Inherited {
+    /// `words`'s `Inheritance`.
+    pub const fn of_words(w: [u32; INHERITANCE_WORDS as usize]) -> Inheritance {
+        Inheritance {
             cave: Cave::of_word(w[0]),
             placed: overwrite::NodeSlot::of_word(w[1]),
             shard: Shard::of_word(w[2]),
@@ -68,8 +68,8 @@ impl Inherited {
     /// The node `c` at `zoom` with nothing handed down, a descent's root
     /// among them: each source found down its line from the top, what is
     /// placed off `columns`.
-    pub fn of(columns: &impl Columns, (zoom, c): (Zoom, [i32; 3])) -> Inherited {
-        Inherited {
+    pub fn of(columns: &impl Columns, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
+        Inheritance {
             cave: Cave::of(zoom, c),
             placed: overwrite::cursor(columns, PLACED, zoom, c),
             shard: Shard::UNKNOWN,
@@ -81,8 +81,8 @@ impl Inherited {
     /// `of` with nothing placed: the node as the world unplaced holds it,
     /// the ground's alone, which decor generates on (`generated::DecorQuery::column_surface`);
     /// nothing placed stays nothing down a descent (`overwrite::child`).
-    pub fn unplaced((zoom, c): (Zoom, [i32; 3])) -> Inherited {
-        Inherited {
+    pub fn unplaced((zoom, c): (Zoom, [i32; 3])) -> Inheritance {
+        Inheritance {
             cave: Cave::of(zoom, c),
             placed: overwrite::NodeSlot::NOTHING,
             shard: Shard::UNKNOWN,
@@ -98,8 +98,8 @@ impl Inherited {
         columns: &impl Columns,
         pool: &impl Columns,
         (zoom, c): (Zoom, [i32; 3]),
-    ) -> Inherited {
-        Inherited {
+    ) -> Inheritance {
+        Inheritance {
             cave: self.cave.child(zoom, c),
             placed: overwrite::child(columns, self.placed, zoom, c),
             shard: self.shard,
@@ -110,7 +110,7 @@ impl Inherited {
 }
 
 /// What is in the node `c` at `zoom`, asked from `far` to `near`, `at` what
-/// the node over it handed it (`Inherited`): its shard is found first, before any
+/// the node over it handed it (`Inheritance`): its shard is found first, before any
 /// layer answers, so a stop's shard is its own whichever layer stops it;
 /// where the ground's cells of a node over it were held becomes its own
 /// (`ground::node`), and the ways' cursor is stepped from its parent's where
@@ -149,7 +149,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     bricks: &W,
     columns: &L,
     pool: &P,
-    at: &mut Inherited,
+    at: &mut Inheritance,
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
     [carve, hide]: [Cut; 2],

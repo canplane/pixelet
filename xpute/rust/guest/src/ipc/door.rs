@@ -17,7 +17,7 @@ use crate::ipc::frame;
 use crate::ipc::ring::Ring;
 
 /// None for an unknown command, which replies ENOSYS.
-pub type Applied = Result<Option<i32>, MarshalError>;
+pub type Outcome = Result<Option<i32>, MarshalError>;
 
 /// What the door hands the program: an open the host completed, or a frame
 /// of the program's own, its number and its packet. A drain runs before any
@@ -120,7 +120,7 @@ impl Door {
     /// Applies submissions in order while there is room; the rest waits for
     /// the next turn. Replies only to `ACKREQ` and to failures. Returns how
     /// many completions it made.
-    pub fn drain(&self, mut handle: impl FnMut(Submission) -> Applied) -> u32 {
+    pub fn drain(&self, mut handle: impl FnMut(Submission) -> Outcome) -> u32 {
         let tail = self.cq.tail();
         self.keep(|s| s.sq_peak = s.sq_peak.max(self.sq.len()));
         while self.has_room() {
@@ -155,8 +155,8 @@ impl Door {
 fn applied(
     f: &frame::Frame,
     pkt: Option<&[u8]>,
-    handle: &mut impl FnMut(Submission) -> Applied,
-) -> Applied {
+    handle: &mut impl FnMut(Submission) -> Outcome,
+) -> Outcome {
     if frame::port_of(f.tag) != frame::HOST {
         return handle(Submission::Program(f.cmd, pkt));
     }

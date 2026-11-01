@@ -55,7 +55,7 @@ fn folded<const PLACE: bool>() -> Vec<Zoom> {
         )
         .unwrap();
     let whole: FnvHashSet<Tile> = [ancestor(leaf, SHARD_ZOOM)].into_iter().collect();
-    let mut staged = Staged {
+    let mut staged = StagedSet {
         base: &set,
         stage: &stage,
         leaf: LEAF_ZOOM,

@@ -13,10 +13,10 @@
 //! (pass_observer.rs `PassObserver`), so a pass is one module whichever casts it.
 
 use pxl_spec_core::cast::{self, Detail, Trace, Query, Until};
-use pxl_spec_core::world::Inherited;
+use pxl_spec_core::world::Inheritance;
 use pxl_spec_core::{beam, observed, raster, tally};
 
-use crate::beam::{resumed, sample_put, Beamed, Leaving, Words};
+use crate::beam::{resumed, sample_put, BeamLine, Leaving, Words};
 use crate::observed::{add_tally, pyramid_at, Pyramid, Writing};
 use crate::raster::{boxed, taken, NONE};
 use crate::world::{PaletteWords, World};
@@ -205,11 +205,11 @@ pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
     told: &mut impl cast::Visitor,
 ) -> (Trace<Q::At>, u32)
 where
-    Beamed<'a, W>: cast::Over<Q::At>,
+    BeamLine<'a, W>: cast::Over<Q::At>,
 {
     let at = o.cell_at(cell);
     let t = f32::from_bits(w.word(at + beam::CELL_T));
-    let line = Beamed(w, o.line(w.word(at + beam::CELL_CORNER)));
+    let line = BeamLine(w, o.line(w.word(at + beam::CELL_CORNER)));
     let node = if o.apart() {
         line.node().moved(o.origin_of(w, line.1), aim.origin)
     } else {
@@ -386,9 +386,9 @@ pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     seen: &mut Pyramid,
     w: &W,
     at: O::At,
-    keep: &mut impl cast::Keep<Inherited>,
+    keep: &mut impl cast::Keep<Inheritance>,
     told: &mut impl cast::Visitor,
-) -> (Aim, Trace<Inherited>, u32) {
+) -> (Aim, Trace<Inheritance>, u32) {
     let aim = o.aim(at);
     let tag = observed::tag(pyramid_at(seen, observed::FRAME), o.passes()[2]);
     let (met, before) = resume(

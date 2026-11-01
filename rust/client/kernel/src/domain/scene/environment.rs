@@ -17,7 +17,7 @@ use crate::domain::scene::frame::Frame;
 use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
-use crate::domain::view::lens::Stepped;
+use crate::domain::view::lens::SteppedClock;
 use crate::domain::view::observation;
 use crate::domain::view::setting::schema_spec::SkyTime;
 use crate::domain::view::setting::store::settings_store;
@@ -98,8 +98,8 @@ pub struct EnvironmentDraw {
     time: f64,
     /// Where the sky's hour and the clouds' wall clock last stepped, in
     /// Unix ms.
-    sky_at: Stepped,
-    clouds_at: Stepped,
+    sky_at: SteppedClock,
+    clouds_at: SteppedClock,
     first_ms: Option<f64>,
     pub out: [f32; ENV_FLOATS],
 }
@@ -118,8 +118,8 @@ impl Default for EnvironmentDraw {
             eased: 1.0,
             stars: 0.0,
             time: 0.0,
-            sky_at: Stepped::default(),
-            clouds_at: Stepped::default(),
+            sky_at: SteppedClock::default(),
+            clouds_at: SteppedClock::default(),
             first_ms: None,
             out: [0.0; ENV_FLOATS],
         }
@@ -165,7 +165,7 @@ impl EnvironmentDraw {
     /// moves; a light with no step landed yet asks the least, so every
     /// observation steps until one lands. The clouds' is the wind carrying them the
     /// seen step at the nearest (`cloud::drift_step_s`). Between steps their
-    /// words stand (`lens::Stepped`); before the sky starts, every
+    /// words stand (`lens::SteppedClock`); before the sky starts, every
     /// observation steps them. A clock set back before where a light last
     /// stepped steps it there at once. The sky's clock is the hour
     /// the `sky_time` setting shows (`shown`), which a held hour never steps;

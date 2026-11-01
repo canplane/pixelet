@@ -27,7 +27,7 @@
 //! which the query and the controls read, fills with no frame drawn.
 //!
 //! A body is refused a slot in two cases, and its want waits on what can
-//! end it (sys/io/room.rs `Refused`): one that came for a read since stopped,
+//! end it (sys/io/room.rs `Refusal`): one that came for a read since stopped,
 //! held a turn until it is dropped (sys/io/fetch.rs `fetch_task`), can find
 //! every slot out, and waits for one given back; and one that needs a run
 //! when the heap can give none waits for the heap's pages or a slot given
@@ -52,7 +52,7 @@ use xpute_guest::mem::section::PAGE_BYTES;
 
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param::{BODY_RUN_BYTES, BODY_SLOTS};
-use crate::sys::io::room::Refused;
+use crate::sys::io::room::Refusal;
 use crate::sys::sched::edge;
 
 /// The kinds whose bodies take a slot.
@@ -151,21 +151,21 @@ fn held() -> &'static mut Slots {
 /// scheduler still holds it; refused where every slot is out, or where the
 /// heap had no room for it or for a run of slots, each refusal waiting on
 /// what refused it.
-pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refused> {
+pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
     if !stream.is_some_and(is_slotted) || n > SLOT_BYTES {
-        return alloc(n).ok_or_else(Refused::now);
+        return alloc(n).ok_or_else(Refusal::now);
     }
     let s = held();
     if s.out >= BODY_SLOTS {
         s.waited = true;
-        return Err(Refused::bodies());
+        return Err(Refusal::bodies());
     }
     let i = match s.runs.iter().position(|r| r.out != FULL) {
         Some(i) => i,
         None => {
             let Some((at, _)) = alloc(BODY_RUN_BYTES) else {
                 s.waited = true;
-                return Err(Refused::run());
+                return Err(Refusal::run());
             };
             s.runs.push(Run { at, out: 0 });
             s.runs.len() - 1
@@ -214,7 +214,7 @@ pub unsafe fn give(block: Block) {
     }
 }
 
-/// Moves whenever a slot is given back: a body refused one (`Refused::bodies`)
+/// Moves whenever a slot is given back: a body refused one (`Refusal::bodies`)
 /// may be served once it has.
 pub fn releases() -> u32 {
     held().releases

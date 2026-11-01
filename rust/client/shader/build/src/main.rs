@@ -184,7 +184,7 @@ fn load_between(
     emits: &[(Statement, Span)],
     f: &Function,
     globals: &Arena<GlobalVariable>,
-) -> Option<Taken> {
+) -> Option<Triple> {
     let mut held = Vec::new();
     for (st, _) in emits {
         let Statement::Emit(r) = st else { return None };
@@ -225,7 +225,7 @@ fn load_between(
             )
     };
     held.sort();
-    held.iter().all(pure).then(|| Taken {
+    held.iter().all(pure).then(|| Triple {
         before: held.iter().copied().filter(|h| *h < load).collect(),
         load,
         pointer,
@@ -234,7 +234,7 @@ fn load_between(
 }
 
 /// A triple `load_between` takes.
-struct Taken {
+struct Triple {
     before: Vec<Handle<Expression>>,
     load: Handle<Expression>,
     pointer: Handle<Expression>,

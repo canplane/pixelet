@@ -109,7 +109,7 @@ fn far(l: vec4u) -> vec3f {
   return select(swatch(l), vec3f(unpack2x16unorm(l.z), unpack2x16unorm(l.w).x), frame_low_spec() < 0.5);
 }
 
-struct Drawn {
+struct Appearance {
   rgb: vec3f,
   layers: vec4f,
 };
@@ -119,18 +119,18 @@ struct Drawn {
 // in all four taps; coarser, one color as it reads from afar, the ground's
 // the mean of the four palette indices its cell folds where its face's own is among
 // them.
-fn drawn(c: vec3u) -> Drawn {
+fn drawn(c: vec3u) -> Appearance {
   let val = ray_val(c.x);
   let l = look(val);
   if (ray_zoom(c.x) >= GROUND_CELL) {
-    return Drawn(swatch(l), vec4f(f32(l.y >> 16u)));
+    return Appearance(swatch(l), vec4f(f32(l.y >> 16u)));
   }
   let fold = ray_palette_indices(c.z);
   if (any(fold == vec4u(val))) {
     let sum = far(look(fold.x)) + far(look(fold.y)) + far(look(fold.z)) + far(look(fold.w));
-    return Drawn(sum * 0.25, vec4f(NO_LAYER));
+    return Appearance(sum * 0.25, vec4f(NO_LAYER));
   }
-  return Drawn(far(l), vec4f(NO_LAYER));
+  return Appearance(far(l), vec4f(NO_LAYER));
 }
 
 // Along `axis`, how far the eye is past the start of the cell of side

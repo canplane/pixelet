@@ -126,7 +126,7 @@ struct Inputs {
     o: Observation,
     places: bool,
     drafted: Option<(EntryAt, u64)>,
-    said: line::Said,
+    said: line::Bubble,
 }
 
 /// The name a holder calls what it shows by, from one run to the next, and

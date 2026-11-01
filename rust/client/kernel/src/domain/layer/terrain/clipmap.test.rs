@@ -20,7 +20,7 @@ pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, Separation);
 /// What `hold` leaves held: the bricks' words up to their last that is
 /// not zero, the pool's child groups taken as records (pxl-spec-core
 /// `way::tree::lay`), the entries and the slots.
-struct Built {
+struct Levels {
     cells: Vec<u32>,
     records: Vec<u32>,
     entries: Vec<Entry>,
@@ -32,7 +32,7 @@ type Over = ([f64; 2], Vec<HeldTile>);
 
 /// The clip levels built this run, by what they were built over: the same are
 /// built once, and each `hold` after takes a copy.
-static BUILT: std::sync::Mutex<Vec<(Over, Built)>> = std::sync::Mutex::new(Vec::new());
+static BUILT: std::sync::Mutex<Vec<(Over, Levels)>> = std::sync::Mutex::new(Vec::new());
 
 const CELLS_WORDS: usize = (SLOTS * CELLS_ARR_BYTES / 4) as usize;
 const POOL_WORDS: usize = 16 * tree::POOL_CHILD_GROUPS as usize;
@@ -73,7 +73,7 @@ pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
             let upto = |words: &[u32]| {
                 words[..words.iter().rposition(|&w| w != 0).map_or(0, |i| i + 1)].to_vec()
             };
-            let b = Built {
+            let b = Levels {
                 cells: upto(planes().cells),
                 records,
                 entries: clipmap().entries.to_vec(),
@@ -483,7 +483,7 @@ fn heap_wait_rehanded() {
     let q = want(w, eye, 0);
     let b = slot_of(w, LEAF_CELL, q).unwrap();
     // As `on_resident` leaves it where the heap refused the mirror its chunk.
-    (w.slots[b as usize].ticket, w.heap) = (WAITING, Some(Refused::now()));
+    (w.slots[b as usize].ticket, w.heap) = (WAITING, Some(Refusal::now()));
     assert!(!wake(w), "no page given back: it waits");
     lay(w, leaf(CENTER), leaf(CENTER));
     assert_eq!(

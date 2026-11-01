@@ -187,7 +187,7 @@ pub enum Active {
 
 /// The tracker's space placed in the world as it was at takeover, and the
 /// camera in it now.
-struct Tracked {
+struct TrackerSpace {
     world_turn: Mat4,
     world_at: V3,
     turn: Mat4,
@@ -196,7 +196,7 @@ struct Tracked {
 
 struct Controllers {
     base: CameraMode,
-    tracked: Option<Tracked>,
+    tracked: Option<TrackerSpace>,
 }
 
 static CONTROLLERS: Global<Controllers> = Global::new();
@@ -381,7 +381,7 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
             mat4::transpose(&mut turn_back, &turn),
         );
         mat4::transform_point(&mut moved, &world_turn, at[0], at[1], at[2]);
-        c.tracked = Some(Tracked {
+        c.tracked = Some(TrackerSpace {
             world_turn,
             world_at: v3::sub(&now.eye, &moved),
             turn,

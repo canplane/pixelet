@@ -24,7 +24,7 @@ use crate::door::toc::key::GPU_STREAM;
 use crate::perf::record::perf_record_turn;
 use crate::perf::spec::Wake;
 use crate::shell;
-use crate::shell::Sent;
+use crate::shell::SnapshotMemo;
 use crate::sys::boot;
 use crate::sys::io::dispatch;
 use crate::sys::io::file;
@@ -54,7 +54,7 @@ use xpute_kit::wire::xtp::PacketWriter;
 
 struct State {
     /// The UI snapshot last posted; one is posted only where it moved.
-    sent: Sent,
+    sent: SnapshotMemo,
     /// A UI command was applied this turn, so its falling edge posts to the shell.
     asked: bool,
 }

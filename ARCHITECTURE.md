@@ -207,7 +207,7 @@ that box, the eye's, the sun's and the pointer's alike (`cast.rs` `entry`).
 ```
 
 A folded cell is a summary: nothing in it is struck, hidden, cut by a preview or
-pointed at (`pxl-kernel domain/control/edit.rs` `Picked`).
+pointed at (`pxl-kernel domain/control/edit.rs` `Pick`).
 
 ---
 
@@ -1016,7 +1016,7 @@ time (`pxl-geo-bake tile/shard.rs` `Stage`):
 1. `leaf` stages the named shards' leaves, each shard marked whole with the
    leaves it no longer makes.
 2. `fold` folds again what the whole shards change, reading the set as it will
-   be (`pyramid.rs` `Staged`).
+   be (`pyramid.rs` `StagedSet`).
 3. `commit`, only once folded, moves the staged tiles in and takes away what is
    gone.
 

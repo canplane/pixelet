@@ -207,7 +207,7 @@ fn heap_refusal_waits_release() {
     l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
-    l.settle(key, Ended::Refused(Refused::now()), None, 0.0);
+    l.settle(key, Ended::Refused(Refusal::now()), None, 0.0);
     for t in 0..5 {
         l.declare(Stream::terrain, &want, t as f64 * 10_000.0);
         l.pump(t as f64 * 10_000.0);
@@ -249,7 +249,7 @@ fn early_release_not_rewaited() {
     l.pump(0.0);
     let key = started(&mut l)[0];
     // Refused, then room given back before the refusal is settled.
-    let refused = Refused::now();
+    let refused = Refusal::now();
     RELEASES.fetch_add(1, Ordering::Relaxed);
     l.settle(key, Ended::Refused(refused), None, 0.0);
     l.declare(Stream::terrain, &want, 0.0);

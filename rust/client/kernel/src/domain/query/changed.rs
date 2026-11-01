@@ -18,15 +18,15 @@ use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
 #[derive(Default)]
-struct Changed {
+struct Changes {
     ground: Vec<Tile>,
     written: Vec<Aabb>,
 }
 
-static CHANGED: Global<Changed> = Global::new();
+static CHANGED: Global<Changes> = Global::new();
 
-fn changed() -> &'static mut Changed {
-    CHANGED.get(Changed::default)
+fn changed() -> &'static mut Changes {
+    CHANGED.get(Changes::default)
 }
 
 /// The frame turn's changes, taken from the ground's tile cache and the

@@ -40,7 +40,7 @@ pub fn way_cs(
 const LANES: u32 = 64;
 
 /// The workgroup's words, a lane's own: a scan's sums, a level's numbers.
-type Shared = [u32; LANES as usize];
+type LaneWords = [u32; LANES as usize];
 
 /// Thread `t`'s inclusive sum of the workgroup's `own`s, a step a doubling
 /// (Hillis and Steele 1986; GPU Gems 3, ch. 39): each sum adds the one `d`
@@ -50,7 +50,7 @@ type Shared = [u32; LANES as usize];
 /// takes only in uniform control flow; and two loads lie between them, a
 /// lane's own, so they are no one load every lane shares
 /// (pxl-shader-build's `workgroupUniformLoad`). `way_tree_cs`'s scan.
-fn scan(sums: &mut Shared, t: u32, own: u32) -> u32 {
+fn scan(sums: &mut LaneWords, t: u32, own: u32) -> u32 {
     let at = |v: u32| (v & (LANES - 1)) as usize;
     // SAFETY: every index is masked under the array's length.
     unsafe { *sums.index_unchecked_mut(at(t)) = own };
@@ -76,7 +76,7 @@ fn scan(sums: &mut Shared, t: u32, own: u32) -> u32 {
 /// Word `i` of the workgroup's `w` as every lane reads it alike: the
 /// barriers about the one load, which pxl-shader-build reads back as
 /// WGSL's `workgroupUniformLoad`, so a loop bound on it is uniform.
-fn load_shared(w: &Shared, i: u32) -> u32 {
+fn load_shared(w: &LaneWords, i: u32) -> u32 {
     spirv_std::arch::workgroup_memory_barrier_with_group_sync();
     // SAFETY: masked under the array's length.
     let v = unsafe { *w.index_unchecked((i & (LANES - 1)) as usize) };
@@ -85,13 +85,13 @@ fn load_shared(w: &Shared, i: u32) -> u32 {
 }
 
 /// Word `i` of the workgroup's `w`, as the lane that wrote it reads it.
-fn lane_word(w: &Shared, i: u32) -> u32 {
+fn lane_word(w: &LaneWords, i: u32) -> u32 {
     // SAFETY: masked under the array's length.
     unsafe { *w.index_unchecked((i & (LANES - 1)) as usize) }
 }
 
 /// Word `i` of the workgroup's `w` set to `v`, by lane 0 alone.
-fn set_shared(w: &mut Shared, t: u32, i: u32, v: u32) {
+fn set_shared(w: &mut LaneWords, t: u32, i: u32, v: u32) {
     if t == 0 {
         // SAFETY: masked under the array's length.
         unsafe { *w.index_unchecked_mut((i & (LANES - 1)) as usize) = v };
@@ -281,8 +281,8 @@ pub fn way_tree_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] pool: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] stack: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] scratch: &mut [u32],
-    #[spirv(workgroup)] sums: &mut Shared,
-    #[spirv(workgroup)] levels: &mut Shared,
+    #[spirv(workgroup)] sums: &mut LaneWords,
+    #[spirv(workgroup)] levels: &mut LaneWords,
 ) {
     let (k, t, lanes) = (group.z, lane.x, LANES);
     let base = brick_at(at(fresh, clipmap::handed_at(k) + clipmap::FILL_BRICK));

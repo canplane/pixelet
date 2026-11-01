@@ -28,7 +28,7 @@ pub struct World<'a> {
     /// through decor.
     pub(super) decor: bool,
     /// Whether it is unplaced, nothing placed asked of it: the ground's alone
-    /// (pxl-spec-core `world::Inherited::unplaced`).
+    /// (pxl-spec-core `world::Inheritance::unplaced`).
     pub(super) unplaced: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
@@ -119,7 +119,7 @@ impl<'a> World<'a> {
 /// the ground's lines and the objects' tree, each stepped down from where
 /// the last left off. Good while neither moves.
 #[derive(Default)]
-pub struct Walked {
+pub struct ColumnWalk {
     ground: Lines,
     object: Walk,
 }
@@ -127,7 +127,12 @@ pub struct Walked {
 impl World<'_> {
     /// Where the ground and what is placed stand in the node, as its cells
     /// at `cell` are read; each stepped from where `walked` last went.
-    pub fn bounds(&self, walked: &mut Walked, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
+    pub fn bounds(
+        &self,
+        walked: &mut ColumnWalk,
+        node: Node<2>,
+        cell: Zoom,
+    ) -> Answer<Option<Aabb>> {
         let object = self.object.column(&mut walked.object, node);
         self.terrain
             .bound_walked(&mut walked.ground, node, cell)

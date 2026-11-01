@@ -25,7 +25,7 @@ use crate::sys::io::host_spec::{format, root, storage};
 use crate::sys::io::loader;
 use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::request::Credit;
-use crate::sys::io::room::Refused;
+use crate::sys::io::room::Refusal;
 use crate::sys::mem::spec::MIN_HEAP_BYTES;
 use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::global::Global;
@@ -177,7 +177,7 @@ fn sealed(file: StorageFile, bytes: &[u8]) -> Vec<u8> {
 enum ReadState {
     /// The heap refused its room: opened again after the heap gives some
     /// back, never taken for a file that held nothing. No descriptor is kept.
-    Refused(Refused),
+    Refused(Refusal),
     /// Filled from the turn after `asked`.
     Reading {
         bytes: Vec<u8>,
@@ -281,13 +281,13 @@ pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
 
 /// An opened file of `bytes`, read whole and closed: one owner, so every
 /// file read whole waits on a refusal alike. Where the heap refuses its room
-/// the read is the owner's to ask again once `Refused::over`; no descriptor
+/// the read is the owner's to ask again once `Refusal::over`; no descriptor
 /// is kept meanwhile.
 ///
 /// # Safety
 /// The bytes are filled from the next turn on: as `read`, they are neither
 /// read nor dropped before then.
-pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refused> {
+pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refusal> {
     let mut held = Vec::new();
     let room = held.try_reserve_exact(bytes as usize);
     if room.is_ok() {
@@ -296,7 +296,7 @@ pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refused> {
         unsafe { read(fd, &mut held) };
     }
     close(fd);
-    room.map(|()| held).map_err(|_| Refused::now())
+    room.map(|()| held).map_err(|_| Refusal::now())
 }
 
 pub fn close(fd: Fd) {

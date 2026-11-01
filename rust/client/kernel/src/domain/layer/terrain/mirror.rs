@@ -35,7 +35,7 @@ static MIRROR: Global<Mirror> = Global::new();
 
 /// Why a brick's child groups were not laid: one lies past the pool's cap,
 /// which asking again never changes; or the heap refused a chunk, which a
-/// page given back may (sys/io/room.rs `Refused`).
+/// page given back may (sys/io/room.rs `Refusal`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unlaid {
     Cap,

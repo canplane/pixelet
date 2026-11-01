@@ -23,7 +23,7 @@ use crate::perf::task::TaskRow;
 use crate::sys::io::demand::{Ask, Phases, Stream};
 use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::policy::Policy;
-use crate::sys::io::room::Refused;
+use crate::sys::io::room::Refusal;
 use crate::sys::load::LOAD_FILES;
 use fnv::FnvHashMap;
 use xpute_guest::clock::now;
@@ -85,7 +85,7 @@ fn bounds_of(frames: impl Fn(Stream) -> u32) -> Bounds {
 
 /// A want, in its stream's run (`RequestScheduler::desired`).
 #[derive(Clone, Copy, Debug)]
-struct Wanted {
+struct Want {
     subject: u64,
     ask: Ask,
     /// First wanted, kept across re-declarations so the profiler measures the real wait.
@@ -93,8 +93,8 @@ struct Wanted {
     wait: Wait,
 }
 
-impl Wanted {
-    const NONE: Wanted = Wanted {
+impl Want {
+    const NONE: Want = Want {
         subject: 0,
         ask: Ask::PLAIN,
         enqueue_ms: 0.0,
@@ -109,7 +109,7 @@ enum Wait {
     Ready,
     /// Its body was refused room, the heap's or a body slot's: until that
     /// gives some back.
-    Room(Refused),
+    Room(Refusal),
     /// Its object failed: for as long as it is wanted.
     Object,
 }
@@ -158,11 +158,11 @@ pub struct RequestScheduler<S> {
     /// What is wanted: a stream's a run in a room its bound's wide, the
     /// streams' rooms in order (`first`), each run by subject and as long as
     /// `held` says.
-    desired: Box<[Wanted]>,
+    desired: Box<[Want]>,
     held: [usize; Stream::ALL.len()],
     /// Where `declare` lays a stream's run before the run takes its place:
     /// as wide as the widest room.
-    merged: Box<[Wanted]>,
+    merged: Box<[Want]>,
     /// A slot's index and generation are the key the host holds; a key is valid
     /// only while its attempt is out.
     attempt: [Option<Attempt>; MAX_CREDITS as usize],
@@ -207,10 +207,9 @@ impl<S: Serve> RequestScheduler<S> {
         RequestScheduler {
             bounds,
             serve,
-            desired: vec![Wanted::NONE; desired].into_boxed_slice(),
+            desired: vec![Want::NONE; desired].into_boxed_slice(),
             held: [0; Stream::ALL.len()],
-            merged: vec![Wanted::NONE; bounds.iter().copied().max().unwrap_or(0)]
-                .into_boxed_slice(),
+            merged: vec![Want::NONE; bounds.iter().copied().max().unwrap_or(0)].into_boxed_slice(),
             attempt: [None; MAX_CREDITS as usize],
             generation: [0; MAX_CREDITS as usize],
             credits: 0,
@@ -232,7 +231,7 @@ impl<S: Serve> RequestScheduler<S> {
         self.bounds[..stream as usize].iter().sum()
     }
 
-    fn run(&self, stream: Stream) -> &[Wanted] {
+    fn run(&self, stream: Stream) -> &[Want] {
         let first = self.first(stream);
         &self.desired[first..first + self.held[stream as usize]]
     }
@@ -286,8 +285,8 @@ impl<S: Serve> RequestScheduler<S> {
                 k += 1;
             }
             let w = match run.get(k) {
-                Some(&w) if w.subject == subject => Wanted { ask, ..w },
-                _ => Wanted {
+                Some(&w) if w.subject == subject => Want { ask, ..w },
+                _ => Want {
                     subject,
                     ask,
                     enqueue_ms: at,
@@ -324,7 +323,7 @@ impl<S: Serve> RequestScheduler<S> {
         (waiting, out)
     }
 
-    fn ready_of(&self, stream: Stream, w: &Wanted) -> Ready {
+    fn ready_of(&self, stream: Stream, w: &Want) -> Ready {
         Ready {
             rank: self.serve.rank(stream, w.subject, w.ask, w.enqueue_ms),
             stream,
@@ -380,7 +379,7 @@ impl<S: Serve> RequestScheduler<S> {
         (0..self.credits as usize).find(|&k| self.attempt[k].is_none())
     }
 
-    fn start(&mut self, slot: usize, stream: Stream, w: Wanted, rank: Rank, at: f64) {
+    fn start(&mut self, slot: usize, stream: Stream, w: Want, rank: Rank, at: f64) {
         self.attempt[slot] = Some(Attempt {
             stream,
             subject: w.subject,

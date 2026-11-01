@@ -243,7 +243,7 @@ impl TableInput {
 /// and the eye's altitude they are held at, whether the light reaches the
 /// air, and whether they hold it as last held.
 #[derive(Clone, Copy, Default)]
-struct Lit {
+struct LightMemo {
     height: TableInput,
     alt: TableInput,
     /// Whether it reaches the air by `REACH`, as the exposure last measured;
@@ -256,7 +256,7 @@ struct Lit {
     drawn: bool,
 }
 
-impl Lit {
+impl LightMemo {
     /// The height it moves before what it shows moves a display level: its
     /// sky's step where it reaches the air; out of reach, the height before
     /// it comes into reach; none before either has landed.
@@ -294,7 +294,7 @@ pub struct Atmosphere {
     exposure_words: u32,
     /// Each light's view and air, the sun's first, and the ground the
     /// exposure is held at.
-    lit: [Lit; 2],
+    lit: [LightMemo; 2],
     ground: TableInput,
     /// What the views and the exposure measured (`SLOPES`), and the buffer
     /// it is mapped back through.
@@ -434,7 +434,7 @@ impl Atmosphere {
                 g.write_buf(own, 0, bytes(&[0.0f32; 4]));
                 own
             },
-            lit: [Lit::default(); 2],
+            lit: [LightMemo::default(); 2],
             ground: TableInput::default(),
             slopes: (
                 g.buf(
@@ -669,7 +669,7 @@ impl Atmosphere {
         self.take_slopes();
         let fresh = !self.baked;
         if fresh {
-            (self.lit, self.ground) = ([Lit::default(); 2], TableInput::default());
+            (self.lit, self.ground) = ([LightMemo::default(); 2], TableInput::default());
         }
         let busy = self.pending | self.flying;
         let alt = self.words[CAMERA_ALT];
@@ -825,7 +825,7 @@ impl Atmosphere {
         (self.flying, self.landed_word) = (0, 0);
     }
 
-    /// Each light's step (`Lit::step`), the sun's first: in reach, the
+    /// Each light's step (`LightMemo::step`), the sun's first: in reach, the
     /// height over which its sky moves a display level; out of it, the height
     /// before it comes into reach; none, the least, 0, before either has
     /// landed.

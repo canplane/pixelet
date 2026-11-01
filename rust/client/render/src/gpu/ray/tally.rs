@@ -51,7 +51,7 @@ pub(super) struct Frame {
 /// Where the passes counted, an observer's each: the walks' in the observed
 /// pyramid's head (`seen`), the pixels' or slots' in their walk again's
 /// args (`args`), the boxes in the raster's draw (`boxes`).
-pub(super) struct Counted {
+pub(super) struct Counts {
     pub seen: u32,
     pub args: [u32; tally::OBSERVERS as usize],
     pub boxes: [u32; tally::OBSERVERS as usize],
@@ -120,7 +120,7 @@ impl Tally {
 
     /// The counts gathered into the array and copied where none are out,
     /// after the frame's dispatches: each observer's that cast.
-    pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &Counted) {
+    pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &Counts) {
         if !self.on || self.copied || self.mapped {
             return;
         }

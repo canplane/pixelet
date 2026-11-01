@@ -370,9 +370,9 @@ mod tests {
     type At = (Zoom, [i32; 3]);
 
     /// A walk's line where it ends (`cast::Keep`).
-    struct Kept(Option<Line<At>>, [i32; 3]);
+    struct KeptLine(Option<Line<At>>, [i32; 3]);
 
-    impl Keep<At> for Kept {
+    impl Keep<At> for KeptLine {
         fn keep(&mut self, met: &Trace<At>, stack: &[At; DEPTH]) {
             self.0 = Some(Line::kept(self.1, &met.hit.node, met.hit.at, stack));
         }
@@ -412,7 +412,7 @@ mod tests {
             spacing: cast::Spacing::NONE,
         };
         let beam = Ray::new([-0.45, 0.05, -1.0], 64.0);
-        let mut first = Kept(None, o);
+        let mut first = KeptLine(None, o);
         let met = cast::rooted(
             &mut Step,
             o,
@@ -445,7 +445,7 @@ mod tests {
                 } else {
                     (Node::ROOT, Step.root(Node::ROOT.idx(o)), t)
                 };
-                let mut kept = Kept(None, o);
+                let mut kept = KeptLine(None, o);
                 let resumed = cast::walk(
                     &mut Step,
                     o,

@@ -60,12 +60,12 @@ pub const READS: [&str; 3] = [AREAS_SQL, POINTS_SQL, RECORDS_SQL];
 
 /// Ids numbered as they are met.
 #[derive(Default)]
-struct Numbered {
+struct Numbering {
     list: Vec<String>,
     number: FnvHashMap<String, u32>,
 }
 
-impl Numbered {
+impl Numbering {
     fn of(&mut self, id: &str) -> u32 {
         if let Some(&k) = self.number.get(id) {
             return k;
@@ -93,7 +93,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     };
 
     // ---- the deepest area over each cell; ids numbered as they are met ----
-    let mut ids = Numbered::default();
+    let mut ids = Numbering::default();
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let mut areas: Vec<(i32, String, Vec<u8>)> = client
         .query(AREAS_SQL, &env)

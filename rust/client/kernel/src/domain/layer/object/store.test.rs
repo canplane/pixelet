@@ -96,12 +96,12 @@ fn some_node(rng: &mut Rng, radius: f64) -> Node<3> {
 
 /// What the objects' pyramid holds at a cell: its value and the eighths of
 /// its cube it keeps (pxl-spec-core `answer::eighths`).
-type Held = FnvHashMap<[i32; 3], (u32, u32)>;
+type Contents = FnvHashMap<[i32; 3], (u32, u32)>;
 
 /// Whole cells from a corner, and what the objects' pyramid holds at
 /// `zoom`'s cells, read through the store's query, where it keeps any, and
 /// the corner in that zoom's cells.
-fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Held, [i32; 2]) {
+fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {

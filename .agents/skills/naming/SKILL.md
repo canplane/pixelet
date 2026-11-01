@@ -1,6 +1,6 @@
 ---
 name: naming
-description: How a name in pixelet is chosen, judged and spelled — what the thing is before what the field calls it, and when a rename is worth making; what is named with the user and what takes a plain name; one word in two scopes; abbreviations by default and the words that stay whole; the names recorded as chosen with the user; case by language and kind; bindings abbreviated, types whole; plurals, units, and names someone else owns; and how a rename is carried out. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document.
+description: How a name in pixelet is chosen, judged and spelled — what the thing is before what the field calls it, and when a rename is worth making; what is named with the user and what takes a plain name; one word in two scopes; abbreviations by default and the words that stay whole; the names recorded as chosen with the user; case by language and kind; bindings abbreviated, types whole; a type's head noun; plurals, units, and names someone else owns; and how a rename is carried out. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document.
 ---
 
 # Naming
@@ -117,6 +117,16 @@ Abbreviate the binding, keep the type: `let idx: Index`, `let cfg: Config`,
 `SensorState { status: SensorStatus, err: Option<Message> }`. A name that
 follows a type's keeps its word: XTP's `u32_array` after `U32Array`. A field's
 term stays whole too: a GPU texture array, `texture_2d_array`.
+
+## A type's head noun
+
+A type's name has a head noun saying what it holds (`Key`, `Entry`, `Slot`,
+`Step`, `Span`, `Guard`, `Memo`, `Cache`), as short as its scope allows. A
+participle may modify a noun (`ResidentTile`) where two things in one scope
+need telling apart. A bare participle names only an enum variant for a state
+(`Ready`, `Pending`) or an event type, something that happened (`Closed`).
+`cargo check-rules` holds Rust's structs, type aliases and traits and WGSL's
+structs to it.
 
 ## Tests
 
