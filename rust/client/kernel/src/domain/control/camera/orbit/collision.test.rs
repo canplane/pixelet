@@ -1,13 +1,12 @@
 // pxl-kernel/domain/control/camera/orbit/collision.test.rs
 //
-// The climb, the pose drawn from the pose asked and the world, and the stop
-// gate's cells: flat ground at five, and a cube over it for the roof, a
-// tunnel's slab, or a block in the eye's way.
+// The dive under a roof and the zoom out held under it, and the climb beside
+// them: flat ground at five, and a cube over it for the roof, or a tunnel's
+// slab.
 
 use super::*;
 use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
-use crate::domain::query::over;
 use crate::domain::query::test::{flat_at_five, write};
 use crate::sys::serial;
 use pxl_spec::asset::cube::{self, cube_id, Cube};
@@ -33,6 +32,89 @@ fn roofed(roof: Option<f64>) -> (TileCache<TerrainTile>, Store, V3) {
         write(&mut store, [x, y, 5.0 + roof], OBJECT_COARSEST, red);
     }
     (tile_cache, store, [x + 0.5, y + 0.5, over(5.0)])
+}
+
+/// A zoom from 16 to `to` at the pitch the climb holds: where the eye dives
+/// to, if it does.
+fn dive_to(roof: Option<f64>, to: f64, polar: f64) -> Option<f64> {
+    let _g = serial();
+    let (tile_cache, store, pivot) = roofed(roof);
+    let access = World::new(&tile_cache, &store);
+    let to = pose(pivot, to, polar);
+    dive(&to, &to, &pose(pivot, 16.0, polar), &access).map(|p| p.dist)
+}
+
+/// A zoom out straight down from `from` to `to`: where it is held, if it is.
+fn held_at(roof: Option<f64>, from: f64, to: f64) -> Option<f64> {
+    let _g = serial();
+    let (tile_cache, store, pivot) = roofed(roof);
+    let access = World::new(&tile_cache, &store);
+    held_under(&pose(pivot, to, 0.0), &pose(pivot, from, 0.0), &access).map(|p| p.dist)
+}
+
+#[test]
+fn dives_under_roof() {
+    let under = 8.0 - over(5.0) - NEAR;
+    assert_eq!(dive_to(Some(3.0), 10.0, 0.0), Some(under));
+    // Asked nearer than the roof, it stands where it was asked.
+    assert_eq!(dive_to(Some(3.0), 2.2, 0.0), Some(2.2));
+}
+
+/// Short of straight down, wherever the climb stopped, it dives as well,
+/// on its own line.
+#[test]
+fn dives_slanted() {
+    let polar: f64 = 0.1;
+    let under = (8.0 - over(5.0)) / libm::cos(polar) - NEAR;
+    let dist = dive_to(Some(3.0), 10.0, polar).unwrap();
+    assert!((dist - under).abs() < 1e-6);
+}
+
+#[test]
+fn dive_held_back() {
+    // A zoom out.
+    assert_eq!(dive_to(Some(3.0), 20.0, 0.0), None);
+    // A line that passes the roof by.
+    assert_eq!(dive_to(Some(3.0), 10.0, 0.3), None);
+    // Nothing over the pivot.
+    assert_eq!(dive_to(None, 10.0, 0.0), None);
+    // The orbit's nearest past the roof's lowest cell.
+    assert_eq!(dive_to(Some(1.0), 10.0, 0.0), None);
+}
+
+/// A roof nearer the pivot than the orbit comes: the eye stands at the
+/// orbit's nearest, in the roof's lowest cell.
+#[test]
+fn dives_into_low_roof() {
+    // The roof's underside at 7, its lowest cell to 8; the pivot at 5.5.
+    assert_eq!(dive_to(Some(2.0), 10.0, 0.0), Some(MIN_DIST));
+}
+
+/// Under the roof, a zoom out goes as far as the roof leaves; from its
+/// lowest cell, nowhere; over it, as the climb takes it.
+#[test]
+fn zoom_out_held_under_roof() {
+    let under = 8.0 - over(5.0) - NEAR;
+    assert_eq!(held_at(Some(3.0), MIN_DIST, 10.0), Some(under));
+    assert_eq!(held_at(Some(2.0), MIN_DIST, 10.0), Some(MIN_DIST));
+    assert_eq!(held_at(Some(3.0), 16.0, 20.0), None);
+    assert_eq!(held_at(None, MIN_DIST, 10.0), None);
+}
+
+/// The roof's lowest cell holds the eye on its floor, not on its ceiling,
+/// where the walk takes the eye to be in the cell over it.
+#[test]
+fn under_half_open() {
+    let _g = serial();
+    let (tile_cache, store, pivot) = roofed(Some(2.0));
+    let access = World::new(&tile_cache, &store);
+    let at = pose(pivot, MIN_DIST, 0.0);
+    let roof = toward_eye(&at, 16.0, &access).unwrap();
+    // The underside at 7 and the cell's top at 8, the pivot at 5.5.
+    let to = |z: f64| z - pivot[2];
+    assert!(under(&roof, &at, to(7.0)));
+    assert!(under(&roof, &at, to(7.9)));
+    assert!(!under(&roof, &at, to(8.0)));
 }
 
 /// The eye may stand in the first cell of a roof or a wall, air under it or
@@ -81,9 +163,11 @@ fn wall_not_crossed() {
         polar: core::f64::consts::FRAC_PI_2,
         azimuth: -core::f64::consts::FRAC_PI_2,
     };
-    let in_solid = |p: &ViewPose| solid(p, ground_under(p, &access));
-    assert!(in_solid(&east(1.0)));
-    let crossed_to = |at: &ViewPose| crossed(in_solid(&east(1.0)), in_solid(at), at, &access);
+    assert!(in_solid(&east(1.0), &access));
+    let crossed_to = |at: &ViewPose| {
+        let solid = |p: &ViewPose| in_solid(p, &access);
+        crossed(solid(&east(1.0)), solid(at), at, &access)
+    };
     assert!(crossed_to(&east(2.0)));
     assert!(!crossed_to(&east(0.4)));
 }
@@ -109,48 +193,38 @@ fn tunnel(roof: f64, thick: u32) -> (TileCache<TerrainTile>, Store, V3) {
     (tile_cache, store, [x + 0.5, y + 0.5, over(5.0)])
 }
 
-/// `at` climbed over the world `(tile_cache, store)`.
-fn climb(world: &(TileCache<TerrainTile>, Store, V3), at: ViewPose) -> ViewPose {
-    climbed(at, &World::new(&world.0, &world.1))
-}
-
-/// Over open ground, with the eye a cell over it, what is drawn is what was
-/// asked.
+/// In the roof's lowest cell, where the eye may stand, the climb asks no
+/// rise: a tilt there is drawn as asked, not held straight down.
 #[test]
-fn open_ground_drawn_as_asked() {
+fn climb_stands_in_roof_cell() {
     let _g = serial();
-    let world = roofed(None);
-    let at = pose(world.2, 16.0, 0.8);
-    assert_eq!(climb(&world, at), at);
+    let (tile_cache, store, pivot) = tunnel(2.0, 1);
+    let access = World::new(&tile_cache, &store);
+    let (climbed, failed) = climb_pose(pose(pivot, MIN_DIST, 0.3), &access);
+    assert_eq!((climbed.polar, failed), (0.3, false));
 }
 
-/// Level with the pivot the eye rises to a cell over the floor under it,
-/// its pitch solved as `acos` of the rise, the distance kept.
+/// In a roof thicker than its lowest cell, straight down does not clear: the
+/// climb fails and keeps the pitch asked, on the way in as at rest.
 #[test]
-fn eye_kept_over_floor() {
+fn climb_fails_under_roof() {
     let _g = serial();
-    let world = roofed(None);
-    let at = ViewPose {
-        polar: core::f64::consts::FRAC_PI_2,
-        ..pose(world.2, 10.0, 0.0)
-    };
-    let drawn = climb(&world, at);
-    let rise = 5.0 + EYE_CLEARANCE_U - world.2[2];
-    assert_eq!(drawn.dist, 10.0);
-    assert!(
-        (drawn.polar - libm::acos(rise / 10.0)).abs() < 1e-9,
-        "{drawn:?}"
-    );
+    let (tile_cache, store, pivot) = tunnel(3.0, 2);
+    let access = World::new(&tile_cache, &store);
+    // The eye in the slab's upper cell, from 9 to 10.
+    let (climbed, failed) = climb_pose(pose(pivot, 3.8, 0.1), &access);
+    assert_eq!((climbed.polar, failed), (0.1, true));
 }
 
-/// A block three cells across and high east of the pivot, in the way of a
-/// zoom out: the eye climbs over it at the distance asked, the line from the
-/// pivot to it open, as far out as is asked.
+/// Over open ground the climb steepens as it did: a block three cells
+/// across and high round the eye, deeper than a first cell, lifts it to
+/// clear the block's top.
 #[test]
-fn zoom_out_climbs_over_block() {
+fn climb_clears_block() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
     let red = cube_id(Cube::Object(cube::Object::red));
+    // About the cell east of the pivot where the eye stands level with it 3 off.
     for dx in [1.5, 2.5, 3.5] {
         for dy in [-1.5, -0.5, 0.5] {
             for z in [5.0, 6.0, 7.0] {
@@ -163,59 +237,15 @@ fn zoom_out_climbs_over_block() {
             }
         }
     }
-    let world = (tile_cache, store, pivot);
-    let access = World::new(&world.0, &world.1);
-    for dist in [6.0, 12.0, 40.0] {
-        let at = ViewPose {
-            pivot,
-            dist,
-            polar: 1.3,
-            azimuth: -core::f64::consts::FRAC_PI_2,
-        };
-        assert!(toward_eye(&at, dist, &access).is_some());
-        let drawn = climb(&world, at);
-        assert_eq!(drawn.dist, dist);
-        assert!(drawn.polar < at.polar, "{drawn:?}");
-        assert!(toward_eye(&drawn, dist, &access).is_none(), "{drawn:?}");
-    }
-}
-
-/// A cube straight over the pivot is a roof: no pitch opens the line, and
-/// the eye stays on the line asked, `NEAR` short of the cube's underside,
-/// however far out is asked; under a roof nearer than the orbit comes, at
-/// `MIN_DIST`.
-#[test]
-fn cube_over_pivot_roofs() {
-    let _g = serial();
-    for (roof, held) in [(3.0, 8.0 - over(5.0) - NEAR), (2.0, MIN_DIST)] {
-        let world = roofed(Some(roof));
-        for dist in [10.0, 40.0] {
-            let at = pose(world.2, dist, 0.0);
-            assert_eq!(
-                climb(&world, at),
-                ViewPose { dist: held, ..at },
-                "roof {roof}, {dist}"
-            );
-        }
-    }
-}
-
-/// Under a tunnel's slab, tilted, the pitch asked is kept and the eye stays
-/// short of the slab on that line; asked nearer than the slab, as asked.
-#[test]
-fn tunnel_roofs_on_line_asked() {
-    let _g = serial();
-    let world = tunnel(3.0, 2);
-    let access = World::new(&world.0, &world.1);
-    let at = pose(world.2, 16.0, 0.1);
-    let roof = toward_eye(&at, 16.0, &access).unwrap();
-    assert_eq!(
-        climb(&world, at),
-        ViewPose {
-            dist: roof.t - NEAR,
-            ..at
-        }
-    );
-    let near = pose(world.2, 1.5, 0.1);
-    assert_eq!(climb(&world, near), near);
+    let access = World::new(&tile_cache, &store);
+    let at = ViewPose {
+        pivot,
+        dist: 3.0,
+        polar: core::f64::consts::FRAC_PI_2,
+        azimuth: -core::f64::consts::FRAC_PI_2,
+    };
+    let (climbed, failed) = climb_pose(at, &access);
+    assert!(!failed);
+    assert!(climbed.polar < at.polar, "{climbed:?}");
+    assert!(!in_solid(&climbed, &access), "{climbed:?}");
 }

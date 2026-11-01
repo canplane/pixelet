@@ -105,7 +105,7 @@ export const SETTING = {
     section: "camera",
     dev: true,
   },
-  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` draws the eye over what is in the way and short of a roof over the pivot (orbit/collision.rs `climbed`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
+  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
   orbit_obstacle: {
     key: 7 as number,
     kind: "choice",
