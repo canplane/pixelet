@@ -6,7 +6,9 @@
 //!
 //! 1. By layer, the order a view builds up (the user's order,
 //!    2026-09-26): terrain, then the catalog assets decor draws with, then
-//!    places. The objects' shards come after terrain, before the assets.
+//!    places. The objects' shards ride the ground's order: each of the
+//!    ground's shells, seen then unseen, is followed by the objects' of the
+//!    same shell, so what is placed in view comes before ground out of it.
 //! 2. Within a layer, seen before unseen and nearer first;
 //!    of tiles as near, the finer first, so the leaf under the eye is not
 //!    asked after the coarse tiles over it, which cost a fold where baked on demand.
@@ -27,9 +29,12 @@ use xpute_kit::status::errno::Errno;
 
 /// A layer's classes: seen or unseen.
 const SHELLS: u8 = 2;
+/// Terrain and the objects interleave by shell: a shell's terrain, then its
+/// objects (`GROUND_SHELL` apart).
 const TERRAIN: u8 = 0;
-const OBJECT: u8 = TERRAIN + SHELLS;
-const ASSET: u8 = OBJECT + SHELLS;
+const OBJECT: u8 = TERRAIN + 1;
+const GROUND_SHELL: u8 = 2;
+const ASSET: u8 = TERRAIN + SHELLS * GROUND_SHELL;
 const PLACE: u8 = ASSET + 1;
 const ASIDE: u8 = PLACE + SHELLS;
 
@@ -53,13 +58,14 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
             detail: 0,
         };
     }
-    let base = match layer {
-        Stream::terrain => TERRAIN,
-        Stream::object => OBJECT,
-        _ => PLACE,
+    let unseen = !ask.order.seen as u8;
+    let class = match layer {
+        Stream::terrain => TERRAIN + unseen * GROUND_SHELL,
+        Stream::object => OBJECT + unseen * GROUND_SHELL,
+        _ => PLACE + unseen,
     };
     Rank {
-        class: base + !ask.order.seen as u8,
+        class,
         dist: ask.order.near,
         // A zoom fits the rank's byte.
         detail: Tile::of_subject(subject).zoom as u8,
