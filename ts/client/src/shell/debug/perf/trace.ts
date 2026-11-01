@@ -77,14 +77,7 @@ function frameArgs(f: Frame): Args {
       continue;
     }
     const names = LIST_NAMES[name];
-    if (name === "census") {
-      f.census.forEach(([d, t], i) => {
-        args[`census_${names[i]}_draws`] = d;
-        args[`census_${names[i]}_tris`] = t;
-      });
-    } else {
-      f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
-    }
+    f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
   }
   // Vsync wait, compositor, GPU, GC, the shell's glue.
   return args;

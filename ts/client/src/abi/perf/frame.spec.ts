@@ -36,11 +36,9 @@ export const kind_name = 27 as number;
 
 export const wake_name = 28 as number;
 
-export const wake_in_ms = 29 as number;
+export const gpu_read = 29 as number;
 
-export const gpu_read = 30 as number;
-
-export const gpu_spans = 31 as number;
+export const gpu_spans = 30 as number;
 
 export const gpu_busy_ms = 57 as number;
 
@@ -48,84 +46,54 @@ export const gpu_px = 58 as number;
 
 export const scale = 59 as number;
 
-export const census = 60 as number;
+export const draws = 60 as number;
 
-export const gpu_frame = 80 as number;
+export const triangles = 61 as number;
+
+export const gpu_frame = 62 as number;
+
+export const light_moved = 63 as number;
+
+export const decor_boxes = 64 as number;
+
+export const eye_cast = 65 as number;
+
+export const eye_rays = 66 as number;
+
+export const eye_beam = 67 as number;
+
+export const eye_sample = 68 as number;
+
+export const eye_miss = 69 as number;
+
+export const eye_took = 70 as number;
+
+export const eye_walked = 71 as number;
+
+export const eye_boxes = 72 as number;
+
+export const light_cast = 73 as number;
+
+export const light_beam = 74 as number;
+
+export const light_sample = 75 as number;
+
+export const light_miss = 76 as number;
+
+export const light_took = 77 as number;
+
+export const light_walked = 78 as number;
+
+export const light_boxes = 79 as number;
+
+export const tiles_landed = 80 as number;
 
 export const uploads = 81 as number;
 
 export const uploads_bytes = 82 as number;
 
-export const depth_bytes = 83 as number;
+export const pack_bytes = 83 as number;
 
-export const pack_bytes = 84 as number;
+export const heap_used_bytes = 84 as number;
 
-export const gpu_objects = 85 as number;
-
-export const zoom_tiles = 96 as number;
-
-export const tiles_place = 120 as number;
-
-export const heap_used_bytes = 121 as number;
-
-export const heap_live_bytes = 122 as number;
-
-export const heap_run_bytes = 123 as number;
-
-export const heap_slot_bytes = 124 as number;
-
-export const heap_range_bytes = 125 as number;
-
-export const heap_largest_free_bytes = 126 as number;
-
-export const heap_refusals = 127 as number;
-
-export const ring_cq_peak = 128 as number;
-
-export const ring_sq_peak = 129 as number;
-
-export const ring_held_peak = 130 as number;
-
-export const body_slots_peak = 131 as number;
-
-export const waiting = 132 as number;
-
-export const out = 137 as number;
-
-export const cap_terrain_refused = 142 as number;
-
-export const rays_frames = 143 as number;
-
-export const eye_casts = 144 as number;
-
-export const eye_rays = 145 as number;
-
-export const eye_beam = 146 as number;
-
-export const eye_sample = 147 as number;
-
-export const eye_miss = 148 as number;
-
-export const eye_took = 149 as number;
-
-export const eye_walked = 150 as number;
-
-export const eye_boxes = 151 as number;
-
-export const light_casts = 152 as number;
-
-export const light_rays = 153 as number;
-
-export const light_beam = 154 as number;
-
-export const light_sample = 155 as number;
-
-export const light_miss = 156 as number;
-
-export const light_took = 157 as number;
-
-export const light_walked = 158 as number;
-
-export const light_boxes = 159 as number;
-
-export const WORDS = 160 as number;
+export const WORDS = 85 as number;

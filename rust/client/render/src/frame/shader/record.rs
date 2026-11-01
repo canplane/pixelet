@@ -641,9 +641,9 @@ const fn desc_of(id: u32) -> Descriptor {
             &[MARK_FRAME, &DRAW],
         ),
         // Every texel of the box the world's cast holds, whatever lies
-        // there, in the map's claimed tiles: its clipmap's words and the
-        // box's corner, before the casters drawn over it, into the depth
-        // alone (gpu/api.rs `pipeline`), its fragment the depth.
+        // there, over the whole map: its clipmap's words and the box's
+        // corner, before the casters drawn over it, into the depth alone
+        // (gpu/api.rs `pipeline`), its fragment the depth.
         PIPELINE_LIGHT_MAP => Descriptor::new(
             Head {
                 fragment: true,
@@ -653,13 +653,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 ..depth_only(SHADER_LIGHT_MAP)
             },
             &[],
-            &[&[
-                [0, TEXTURE_UINT_ARRAY],
-                [1, UNIFORM],
-                [30, STORAGE],
-                [31, UNIFORM],
-                [32, STORAGE],
-            ]],
+            &[&[[0, TEXTURE_UINT_ARRAY], [1, UNIFORM]]],
         ),
         // The same in the map's claimed tiles alone, a quad a tile of the
         // marks' box, raising their stencil (gpu/api.rs `Stencil::Gate`).

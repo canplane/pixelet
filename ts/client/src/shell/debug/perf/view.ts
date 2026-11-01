@@ -33,6 +33,10 @@ export interface PerfReport {
   recent: TaskRecord[];
   worst: Worst[];
   longs: LongFrame[];
+  /** What the frames held at the most or the least since the recording
+   * started, and where the view is as it is read. */
+  recording: Record<string, f64>;
+  view: Record<string, f64>;
 }
 
 /** Frames a second over a window: its intervals over its span, none under two frames. */
@@ -96,5 +100,7 @@ export function perfReportRead(): PerfReport {
     recent: perf_tasks(RECENT_TASKS),
     worst: perf_worst(),
     longs: longFramesSince(-Infinity),
+    recording: s.recording,
+    view: s.view,
   };
 }

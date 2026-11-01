@@ -168,11 +168,6 @@ pub struct MarkerPass {
 }
 
 impl MarkerPass {
-    /// Its regions' depth's bytes, one f32 a pixel.
-    pub fn depth_bytes(&self) -> f64 {
-        self.regions_size.0 as f64 * self.regions_size.1 as f64 * 4.0
-    }
-
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> MarkerPass {
         let sampler = g.sampler(
             FilterMode::nearest,

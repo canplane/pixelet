@@ -11,6 +11,7 @@ export const GPU_SPAN_NAMES = [
   "exposure",
   "ao",
   "world",
+  "world_rest",
   "resolve",
   "finish",
   "marker",
@@ -33,6 +34,13 @@ export const GPU_SPAN_NAMES = [
   "shadow",
   "face",
   "mark",
+] as const;
+
+export const LIGHT_MOVED = [
+  "content",
+  "detail",
+  "receivers",
+  "footprint",
 ] as const;
 
 export const FRAME_KINDS = [

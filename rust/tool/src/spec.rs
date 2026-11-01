@@ -330,9 +330,13 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
             return Ok(n);
         }
         let found = match t.split_once('.') {
+            // A list in a table is as wide as it is long: `FRAME_GROUP.rays`.
             Some((table, field)) => named(table)
                 .and_then(|n| n.get(field))
-                .and_then(|f| f.value().num()),
+                .and_then(|f| match f {
+                    Node::Arr(a) => Some(a.len() as f64),
+                    _ => f.value().num(),
+                }),
             None => named(t).and_then(|n| match n {
                 Node::Arr(a) => Some(a.len() as f64),
                 Node::Obj(_) if n.is_wrapper() => n.value().num(),

@@ -18,7 +18,6 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
 use crate::perf::frame::{DeviceSample, GpuSample, RaySample};
-use pxl_render::gpu::api::OBJECT_OPS;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
 use crate::domain::scene::character::companion::companion_skins;
@@ -32,7 +31,7 @@ use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::perf::report::{set_host_frame, set_rays, GpuRead};
+use crate::perf::report::{set_host_frame, GpuRead, RayRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -235,9 +234,6 @@ pub fn stage_render(pace: Pace) {
     }
     // An image whose texture the frame took needs its file no more.
     api::take_landed(loader::on_image_landed);
-    // What the renderer holds, drawn this frame or not.
-    let held = api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects());
-    let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));
     // The scale the world was drawn at, before a read can move the next one.
     let scale = resolution::drawn_scale();
     let gpu = out
@@ -253,36 +249,42 @@ pub fn stage_render(pace: Pace) {
                 scale,
                 ..GpuSample::default()
             },
-            DeviceSample {
-                objects,
-                ..DeviceSample::default()
-            },
+            DeviceSample::default(),
+            None,
             None,
         );
         return;
     };
     DRAWN.set(Some(api::device_generation()));
-    set_rays(RaySample::of(stat.rays));
+    let [draws, triangles] = stat
+        .census
+        .iter()
+        .fold([0.0; 2], |[d, t], c| [d + c[0], t + c[1]]);
     set_host_frame(
         out.kind,
         GpuSample {
             scale,
-            census: stat.census,
+            draws,
+            triangles,
             frame: stat.frame,
+            light_moved: stat.light_moved,
+            decor_boxes: stat.decor_boxes,
             ..GpuSample::default()
         },
         DeviceSample {
             uploads: stat.uploads,
             uploads_bytes: stat.upload_bytes,
-            depth_bytes: stat.depth_bytes,
             pack_bytes: stat.pack_bytes,
-            objects,
         },
         stat.gpu_read.then_some(GpuRead {
             frame: stat.gpu_frame,
             spans: stat.gpu_spans,
             busy_ms: stat.gpu_busy_ms,
             px: stat.gpu_px,
+        }),
+        stat.rays.map(|r| RayRead {
+            frame: r.frame,
+            rays: RaySample::of(r.counts),
         }),
     );
 }

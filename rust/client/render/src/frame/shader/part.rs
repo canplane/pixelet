@@ -146,8 +146,8 @@ pub const SHADER_SCREEN_WRITE_BACK: u32 = 62;
 /// The claimed tiles of the samples' raster set back to no sample at the far
 /// plane (raster_gate.wgsl).
 pub const SHADER_RASTER_GATE: u32 = 63;
-/// The screen's tiles the frame's marks cover, or every one, taking its
-/// number (screen_mark.wgsl): its one compute entry.
+/// The tiles the frame's one mark covers, or every one, taking its number
+/// (screen_mark.wgsl): its one compute entry.
 pub const SHADER_SCREEN_MARK: u32 = 64;
 /// The world's depth laid in the claimed tiles of the light's map, their
 /// stencil raised (light_gate.wgsl).
@@ -375,7 +375,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT
     &["light.gen"],
     // SHADER_LIGHT_MAP
-    &["light_word", "screen_tiles", "light_lay", "light_map"],
+    &["light_word", "light_lay", "light_map"],
     // SHADER_LIGHT_MISS
     &["light_miss.gen"],
     // SHADER_AO_APPLY

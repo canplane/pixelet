@@ -9,5 +9,3 @@ export const REASON_WORDS = 3 as number;
 export const STEP_SLOTS = 32 as number;
 
 export const WINDOW_MS = 60000 as number;
-
-export const ZOOMS = 24 as number;

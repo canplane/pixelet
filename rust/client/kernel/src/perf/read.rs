@@ -12,10 +12,10 @@ use crate::domain::query::Struck;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
-use crate::perf::frame::FrameSample;
 use crate::perf::frame::{is_missed, long, overran, unmeasured};
+use crate::perf::frame::{FrameSample, RaySample, GPU_SPANS};
 use crate::perf::record::{
-    perf_frames_since, perf_recording_state, perf_scratch, perf_tasks_since,
+    perf_frames_since, perf_recording_held, perf_recording_state, perf_scratch, perf_tasks_since,
 };
 use crate::perf::section::TASK_PHASES;
 use crate::perf::section::{
@@ -26,7 +26,6 @@ use crate::perf::task::TaskRow;
 use crate::perf::word::put;
 use crate::sys::io::failure::Outcome;
 use crate::sys::sched::tick::tick_step_stats;
-use pxl_render::gpu::renderer;
 use pxl_render::gpu::span_spec::FRAME_KINDS;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
@@ -54,7 +53,8 @@ fn read() -> &'static mut Read {
     })
 }
 
-fn spread(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Spread {
+/// `vals`' spread (perf.json SPREAD), and how many they are.
+fn spread_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Spread, usize) {
     let mut n = 0;
     for v in vals.take(scratch.len()) {
         scratch[n] = v;
@@ -62,18 +62,29 @@ fn spread(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Spread {
     }
     let sorted = &mut scratch[..n];
     sorted.sort_by(f64::total_cmp);
-    let pct = |q: f64| {
-        if n == 0 {
-            0.0
-        } else {
-            sorted[((n - 1) as f64 * q).floor() as usize]
-        }
-    };
-    Spread {
-        p50: pct(0.5),
-        p95: pct(0.95),
-        max: if n == 0 { 0.0 } else { sorted[n - 1] },
+    (
+        Spread {
+            p50: rank(sorted, 0.5),
+            p95: rank(sorted, 0.95),
+            max: sorted.last().copied().unwrap_or(0.0),
+        },
+        n,
+    )
+}
+
+fn spread(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Spread {
+    spread_n(scratch, vals).0
+}
+
+/// The nearest rank of `q` in `sorted`: the value at ceil(q × n) − 1, the
+/// least with no more than that share of the n above it; 0 for none.
+fn rank(sorted: &[f64], q: f64) -> f64 {
+    let n = sorted.len();
+    if n == 0 {
+        return 0.0;
     }
+    let at = ((q * n as f64).ceil() as usize).clamp(1, n) - 1;
+    sorted[at]
 }
 
 /// The window's statistics; no window is the whole recording.
@@ -92,6 +103,7 @@ pub fn perf_stats(window_ms: Option<f64>) -> &'static [f64] {
         &tasks(scratch, perf_tasks_since(since)),
     );
     put(out, STAT::steps::AT, &steps());
+    put(out, STAT::recording::AT, &perf_recording_held());
     out
 }
 
@@ -117,6 +129,11 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     // A span the frame did not run reads 0 and is left out.
     // The GPU's figures over the frames a read timed, each read once.
     let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
+    let spans: [(f64, f64); GPU_SPANS] = core::array::from_fn(|k| {
+        let ran = read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0);
+        let (s, n) = spread_n(scratch, ran);
+        (s.p95, n as f64)
+    });
     FramesSection {
         present: 1.0,
         n,
@@ -139,30 +156,28 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
             spread(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
         gpu_read: cnt(&|f| f.gpu.read != 0.0),
-        gpu: spread(scratch, read().map(|f| renderer::gpu_ms(&f.gpu.spans))),
         gpu_busy: spread(scratch, read().map(|f| f.gpu.busy_ms)),
         gpu_busy_kinds: {
-            let mut by = [0.0; 2 * FRAME_KINDS];
+            let mut by = [0.0; 3 * FRAME_KINDS];
             for k in 0..FRAME_KINDS {
                 let busy = read().filter(|f| f.kind == k as f64).map(|f| f.gpu.busy_ms);
-                let s = spread(scratch, busy);
-                (by[2 * k], by[2 * k + 1]) = (s.p50, s.p95);
+                let (s, n) = spread_n(scratch, busy);
+                by[3 * k..3 * k + 3].copy_from_slice(&[s.p50, s.p95, n as f64]);
             }
             by
         },
         phases_p95: core::array::from_fn(|k| {
             spread(scratch, frames.iter().map(|f| f.phases[k])).p95
         }),
-        gpu_spans_p95: core::array::from_fn(|k| {
-            spread(
-                scratch,
-                read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0),
-            )
-            .p95
-        }),
+        gpu_spans_p95: spans.map(|(p95, _)| p95),
+        gpu_spans_n: spans.map(|(_, n)| n),
         kinds: core::array::from_fn(|k| cnt(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| cnt(&|f| f.wake == k as f64)),
-        heap_used_delta_bytes: last.heap.used_bytes - first.heap.used_bytes,
+        gpu_px: read().next_back().map_or(0.0, |f| f.gpu.px),
+        rays: frames.iter().fold(RaySample::default(), |mut sum, f| {
+            sum.add(&f.rays);
+            sum
+        }),
         first: *first,
         last: *last,
     }

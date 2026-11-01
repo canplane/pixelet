@@ -190,9 +190,9 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
       <>
         {/* Over the frames a GPU read timed; none timed is no measure, not 0. */}
         <Row
-          k="gpu p95"
-          v={f.gpu_read > 0 ? `${n1(f.gpu.p95)} ms` : "no timestamps"}
-          warn={f.gpu_read > 0 && f.gpu.p95 > f.last.paced_ms}
+          k="gpu busy p95"
+          v={f.gpu_read > 0 ? `${n1(f.gpu_busy.p95)} ms` : "no timestamps"}
+          warn={f.gpu_read > 0 && f.gpu_busy.p95 > f.last.paced_ms}
         />
         {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => (
           <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />
@@ -200,32 +200,13 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
         <Row
           k="scale/drawn"
           v={`${fixed(f.last.scale, 2)}/${
-            f.last.gpu_read ? valueText("gpu_px", f.last.gpu_px) : "-"
+            f.gpu_px > 0 ? valueText("gpu_px", f.gpu_px) : "-"
           }`}
           warn={f.last.scale < 1}
         />
       </>
     ),
-    cap: null,
     rays: null,
-    eye: null,
-    light: null,
-    requests: failing.length > 0 && (
-      <>
-        {failing.map((t) => (
-          <Row
-            key={t.stream}
-            k={`${t.stream} failed`}
-            v={`${t.err} of ${t.n}${
-              t.reasons.length > 0
-                ? ` ${failText(t.reasons[0].fail, t.reasons[0].detail)}`
-                : ""
-            }`}
-            warn
-          />
-        ))}
-      </>
-    ),
     tiles: null,
     device: null,
     heap: f !== null && (
@@ -236,8 +217,6 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
         )}`}
       />
     ),
-    ring: null,
-    body: null,
   };
 
   return (
@@ -249,6 +228,23 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
           {sections[group]}
         </View>
       ))}
+      {failing.length > 0 && (
+        <View>
+          <Head>requests</Head>
+          {failing.map((t) => (
+            <Row
+              key={t.stream}
+              k={`${t.stream} failed`}
+              v={`${t.err} of ${t.n}${
+                t.reasons.length > 0
+                  ? ` ${failText(t.reasons[0].fail, t.reasons[0].detail)}`
+                  : ""
+              }`}
+              warn
+            />
+          ))}
+        </View>
+      )}
     </>
   );
 }

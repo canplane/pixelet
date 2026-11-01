@@ -10,18 +10,6 @@
     "for a read: the kernel writes numbers where they stay, and the words for them are",
     "the shell's."
   ],
-  "CENSUS_TAGS": [
-    "decor",
-    "ghost_box",
-    "ghost_decor",
-    "skinned",
-    "puck_zone",
-    "puck_beacon",
-    "marker",
-    "debug",
-    "impostor",
-    "camera_grid"
-  ],
   "WAKES": [
     "next",
     "timer",
@@ -35,15 +23,13 @@
     "$REASON_WORDS": "A reason's words: its fail, its detail and how many (STREAM_STAT.reasons).",
     "STEP_SLOTS": 32,
     "WINDOW_MS": 60000,
-    "$WINDOW_MS": "How far back the rings keep, the kernel's frames and tasks and the shell's long frames alike: the last minute.",
-    "ZOOMS": 24,
-    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z's tiles, past the leaves for the objects' finer cells (pxl-spec-core lattice.rs `Lattice::tile_zoom`)."
+    "$WINDOW_MS": "How far back the rings keep, the kernel's frames and tasks and the shell's long frames alike: the last minute."
   },
   "FRAME": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One frame turn and the interval it opened (perf/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (@xpute/host sched/frame_pacing.ts `FrameGrant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (perf/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (perf/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms`, `tasks_ms` and `perf_ms` are their parts, `stage_ms` the turn's pump, the stage's write and the render, and `perf_ms` what the profiler cost it, its own record of the frame and the shell's reads of it; what they leave of `busy_ms` is unmeasured. `effects` is each effect's time in the frame turn, in EFFECT_NAMES' order, `effects_ms` their sum. `gpu_read` is 1 where the GPU's read of this frame landed, which comes a frame or two later and is written back into this frame's record (`gpu_frame` the renderer's number of it, 0 where it drew none): its `gpu_spans` are then that read's, their sum (pxl-render gpu/renderer.rs `gpu_ms`), `gpu_busy_ms` the time they ran, those that overlap counted once, the frame's GPU time, which the sum overstates where passes overlap (pxl-render gpu/api.rs `Gpu::gpu_busy_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`); and 0 where nothing measured it (its read not landed yet or cut off by a stop, or the device keeps no timestamps), its spans, busy time and pixels 0 too. `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES; `census` pairs draws and triangles in CENSUS_TAGS' order, a tag each pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), so the frame's draws and triangles are its sums, `zoom_tiles` holds zoom z in slot z, `waiting` and `out` a stream's requests waiting for a credit and out on one in STREAM_NAMES' order (sys/io/request.rs `stream_counts`), and `gpu_objects` the GPU objects the renderer holds by the op that made them, op k + 1 in slot k (xpute spec/gpu/api.json `op`, from the first to DESTROY). `uploads` and `uploads_bytes` are the renderer's upload table, `depth_bytes` its depth targets and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), the heap's lanes are its allocator's figures by their own names (xpute-guest mem/heap.rs `HeapStat`), and `body_slots_peak` the most body slots out at once since the frame before (sys/io/body.rs `take_peak`); the ring lanes are the door's peaks since the frame before (xpute-guest ipc/door.rs `DoorStat`), `ring_held_peak` its `left_peak`. The rays, eye and light lanes are the `ray_counts` setting's, summed since boot over the frames whose counts were read back (pxl-render gpu/ray/tally.rs `RAY_SUMS`): the frames (`rays_frames`); then an observer's each, the eye's and the light's: of them those it cast in, its pixels or its map's slots in them, the nodes its beam rays, its samples and its walk again asked, its pixels or slots that took the visible sample and those that walked, and the boxes drawn (pxl-spec-core `tally`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names."
+      "One frame turn and the interval it opened (perf/frame.rs FrameSample): every figure of one turn, landed when the next frame turn closes the interval. `refresh_ms` is the display's refresh and `paced_ms` the interval the host paced the frame at, a whole number of refreshes, both as the host granted them (@xpute/host sched/frame_pacing.ts `FrameGrant`); a moving frame whose interval ran past `paced_ms` by more than half a refresh missed a vsync (perf/frame.rs `missed`). `settled` is 0 or 1; `turns` and `busy_ms` count every turn the interval held, the frame's and those without a host frame, rise to fall: what they ran past the interval is read off the two (perf/frame.rs `over_ms`). `effects_ms`, `tick_ms`, `stage_ms`, `tasks_ms` and `perf_ms` are their parts, `stage_ms` the turn's pump, the stage's write and the render, and `perf_ms` what the profiler cost it, its own record of the frame and the shell's reads of it; what they leave of `busy_ms` is unmeasured. `effects` is each effect's time in the frame turn, in EFFECT_NAMES' order, `effects_ms` their sum. `gpu_read` is 1 where the GPU's read of this frame landed, which comes a frame or two later and is written back into this frame's record (`gpu_frame` the renderer's number of it, 0 where it drew none): its `gpu_spans` are then that read's, `gpu_busy_ms` the time they ran, those that overlap counted once, the frame's GPU time, which the spans' sum overstates where passes overlap (pxl-render gpu/api.rs `Gpu::gpu_busy_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; and 0 where nothing measured it (its read not landed yet or cut off by a stop, or the device keeps no timestamps), its spans, busy time and pixels 0 too. `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-kernel domain/view/frame/resolution.rs `drawn_scale`). `kind_name` indexes the renderer's FRAME_KINDS and `wake_name` WAKES. `draws` and `triangles` are the frame's, every pipeline a draw names (pxl-render frame/draw.rs `DRAW_PIPELINES`), counted while the profiler records. `light_moved` says why the light's map cast in the frame, a bit each in LIGHT_MOVED's order (pxl-render gpu/ray/cast.rs `light_moved`), 0 where it did not cast; `decor_boxes` is how many boxes decor's slots were marked by to generate again in it, the bricks handed in it and the edits and cuts held (pxl-render gpu/generated.rs `prepare`), 0 where it marked none. The ray lanes are the `ray_counts` setting's, written into the frame they were counted in as the counts land a frame or two later, by the renderer's number of it as a GPU read is (pxl-render gpu/ray/tally.rs `RayCounts`), 0 where none landed: `eye_cast` and `light_cast` 1 where the eye cast in full or the light's map cast and its counts landed; then the eye's pixels (`eye_rays`), and an observer's each: the nodes its beam rays, its samples and its walk again asked, its pixels or slots that took the visible sample and those that walked, and the boxes drawn (pxl-spec-core `tally`). `tiles_landed` is how many terrain tiles the tile cache took in during the frame turn (pxl-kernel domain/layer/tile_cache.rs `take_landed`). `uploads` and `uploads_bytes` are the renderer's upload table and `pack_bytes` its texture pack (pxl-render gpu/renderer.rs `FrameStat`), and `heap_used_bytes` the heap's high-water mark (xpute-guest mem/heap.rs `HeapStat`). A lane's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names."
     ],
     "t": 1,
     "interval_ms": 1,
@@ -62,37 +48,17 @@
     "effects": "EFFECT_NAMES",
     "kind_name": 1,
     "wake_name": 1,
-    "wake_in_ms": 1,
     "gpu_read": 1,
     "gpu_spans": "GPU_SPAN_NAMES",
     "gpu_busy_ms": 1,
     "gpu_px": 1,
     "scale": 1,
-    "census": "2 * CENSUS_TAGS",
+    "draws": 1,
+    "triangles": 1,
     "gpu_frame": 1,
-    "uploads": 1,
-    "uploads_bytes": 1,
-    "depth_bytes": 1,
-    "pack_bytes": 1,
-    "gpu_objects": "op.DESTROY - 1",
-    "zoom_tiles": "LIMIT.ZOOMS",
-    "tiles_place": 1,
-    "heap_used_bytes": 1,
-    "heap_live_bytes": 1,
-    "heap_run_bytes": 1,
-    "heap_slot_bytes": 1,
-    "heap_range_bytes": 1,
-    "heap_largest_free_bytes": 1,
-    "heap_refusals": 1,
-    "ring_cq_peak": 1,
-    "ring_sq_peak": 1,
-    "ring_held_peak": 1,
-    "body_slots_peak": 1,
-    "waiting": "STREAM_NAMES",
-    "out": "STREAM_NAMES",
-    "cap_terrain_refused": 1,
-    "rays_frames": 1,
-    "eye_casts": 1,
+    "light_moved": 1,
+    "decor_boxes": 1,
+    "eye_cast": 1,
     "eye_rays": 1,
     "eye_beam": 1,
     "eye_sample": 1,
@@ -100,18 +66,22 @@
     "eye_took": 1,
     "eye_walked": 1,
     "eye_boxes": 1,
-    "light_casts": 1,
-    "light_rays": 1,
+    "light_cast": 1,
     "light_beam": 1,
     "light_sample": 1,
     "light_miss": 1,
     "light_took": 1,
     "light_walked": 1,
-    "light_boxes": 1
+    "light_boxes": 1,
+    "tiles_landed": 1,
+    "uploads": 1,
+    "uploads_bytes": 1,
+    "pack_bytes": 1,
+    "heap_used_bytes": 1
   },
   "FRAME_GROUP": {
     "$doc": [
-      "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it."
+      "FRAME's lanes in groups, every lane in one (lane.test.ts), in the order a reader asks in turn — where the time went, what was drawn and cast, what landed, and what it holds. The trace prints every lane by its group's order, so a lane the kernel adds is printed without a word written for it; the panel shows some groups, a few rows each, and the report its own lines. The `rays` group's lanes lie in FRAME in its order, which the window's sums of them (STAT.frames.rays) keep."
     ],
     "time": [
       "t",
@@ -134,8 +104,7 @@
     ],
     "frame": [
       "kind_name",
-      "wake_name",
-      "wake_in_ms"
+      "wake_name"
     ],
     "gpu": [
       "gpu_read",
@@ -143,28 +112,22 @@
       "gpu_busy_ms",
       "gpu_px",
       "scale",
-      "census",
-      "gpu_frame"
-    ],
-    "cap": [
-      "cap_terrain_refused"
+      "draws",
+      "triangles",
+      "gpu_frame",
+      "light_moved",
+      "decor_boxes"
     ],
     "rays": [
-      "rays_frames"
-    ],
-    "eye": [
-      "eye_casts",
+      "eye_cast",
       "eye_rays",
       "eye_beam",
       "eye_sample",
       "eye_miss",
       "eye_took",
       "eye_walked",
-      "eye_boxes"
-    ],
-    "light": [
-      "light_casts",
-      "light_rays",
+      "eye_boxes",
+      "light_cast",
       "light_beam",
       "light_sample",
       "light_miss",
@@ -172,37 +135,16 @@
       "light_walked",
       "light_boxes"
     ],
-    "requests": [
-      "waiting",
-      "out"
-    ],
     "tiles": [
-      "zoom_tiles",
-      "tiles_place"
+      "tiles_landed"
     ],
     "device": [
       "uploads",
       "uploads_bytes",
-      "depth_bytes",
-      "pack_bytes",
-      "gpu_objects"
+      "pack_bytes"
     ],
     "heap": [
-      "heap_used_bytes",
-      "heap_live_bytes",
-      "heap_run_bytes",
-      "heap_slot_bytes",
-      "heap_range_bytes",
-      "heap_largest_free_bytes",
-      "heap_refusals"
-    ],
-    "ring": [
-      "ring_cq_peak",
-      "ring_sq_peak",
-      "ring_held_peak"
-    ],
-    "body": [
-      "body_slots_peak"
+      "heap_used_bytes"
     ]
   },
   "TASK": {
@@ -231,15 +173,20 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One of the worst moving frames since the recording started, by its interval, and the frame before it, which is zero where `has_prev` is 0: a still interval is long on purpose and is never among them."
+      "One of the worst moving frames since the recording started, by its interval, and what changed from the frame before it: its uploads, their bytes and the heap's high-water mark, each this frame's less that one's, all 0 where `has_prev` is 0. A still interval is long on purpose and is never among them."
     ],
     "sample": "FRAME",
     "has_prev": 1,
-    "prev": "FRAME"
+    "uploads_delta": 1,
+    "uploads_delta_bytes": 1,
+    "heap_used_delta_bytes": 1
   },
   "SPREAD": {
     "$type": "u32",
     "$packed": true,
+    "$doc": [
+      "A value's spread over n values: p50 and p95 each the nearest rank, the least value at or above which lie no more than that share of the n (sorted, the value at ceil(q × n) − 1), and the most."
+    ],
     "p50": 1,
     "p95": 1,
     "max": 1
@@ -299,14 +246,15 @@
       "perf": "SPREAD",
       "rest": "SPREAD",
       "effects_p95": "EFFECT_NAMES",
-      "gpu": "SPREAD",
       "gpu_busy": "SPREAD",
-      "gpu_busy_kinds": "2 * FRAME_KINDS",
+      "gpu_busy_kinds": "3 * FRAME_KINDS",
       "phases_p95": "PHASES",
       "gpu_spans_p95": "GPU_SPAN_NAMES",
+      "gpu_spans_n": "GPU_SPAN_NAMES",
       "kinds": "FRAME_KINDS",
       "wakes": "WAKES",
-      "heap_used_delta_bytes": 1,
+      "gpu_px": 1,
+      "rays": "FRAME_GROUP.rays",
       "first": "FRAME",
       "last": "FRAME"
     },
@@ -316,6 +264,23 @@
     "steps": {
       "cnt": 1,
       "slots": "LIMIT.STEP_SLOTS * STEP_STAT"
+    },
+    "recording": {
+      "$doc": [
+        "What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame turn's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frame turns folded; the heap's figures by their allocator's names (xpute-guest mem/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the door's rings' peaks and the body slots' (xpute-guest ipc/door.rs `DoorStat`, sys/io/body.rs `take_peak`), `ring_held_peak` its `left_peak`; and `cap_terrain_refused` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded."
+      ],
+      "frames": 1,
+      "heap_live_max_bytes": 1,
+      "heap_run_max_bytes": 1,
+      "heap_slot_max_bytes": 1,
+      "heap_range_max_bytes": 1,
+      "heap_largest_free_min_bytes": 1,
+      "heap_refusals": 1,
+      "ring_cq_peak": 1,
+      "ring_sq_peak": 1,
+      "ring_held_peak": 1,
+      "body_slots_peak": 1,
+      "cap_terrain_refused": 1
     }
   },
   "NOW": {
@@ -383,7 +348,11 @@
     "at": 1,
     "cnt": 1
   },
-  "RING_NAMES": ["frames", "tasks", "worst"],
+  "RING_NAMES": [
+    "frames",
+    "tasks",
+    "worst"
+  ],
   "$RING_NAMES": "The rings the profiler keeps, each a RING's place in RINGS: the frames, the tasks, and the worst moving frames.",
   "RINGS": {
     "$type": "u32",

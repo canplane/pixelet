@@ -581,10 +581,6 @@ pub fn most_credits() -> u32 {
     sched().most_credits
 }
 
-pub fn stream_counts(stream: Stream) -> (u32, u32) {
-    sched().stream_counts(stream)
-}
-
 pub fn pump() {
     let s = sched();
     s.pump(now());

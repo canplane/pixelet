@@ -7,7 +7,7 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::perf::frame::{FrameSample, EFFECTS, GPU_SPANS};
+use crate::perf::frame::{FrameSample, RaySample, EFFECTS, GPU_SPANS};
 use crate::perf::spec::{FRAME, LIMIT, NOW, SPREAD, STAT, STEP_STAT, STREAM_STAT, WAKES};
 use crate::perf::word::{words, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
@@ -71,22 +71,26 @@ pub struct FramesSection {
     pub rest: Spread,
     /// Each effect's p95, in EFFECT_NAMES' order.
     pub effects_p95: [f64; EFFECTS],
-    /// The GPU's time, its spans' sum, and the time they ran, those that
-    /// overlap counted once, which the sum overstates where passes overlap.
-    pub gpu: Spread,
+    /// The GPU's time: the time its spans ran, those that overlap counted
+    /// once.
     pub gpu_busy: Spread,
     /// The busy time's p50 and p95 of the frames of each of the renderer's
-    /// FRAME_KINDS a read timed, a pair a kind, both 0 for a kind none was.
-    pub gpu_busy_kinds: [f64; 2 * FRAME_KINDS],
-    /// The p95 alone of each phase and each span: what is read of them.
+    /// FRAME_KINDS a read timed, and how many they are, three a kind, all 0
+    /// for a kind none was.
+    pub gpu_busy_kinds: [f64; 3 * FRAME_KINDS],
+    /// The p95 alone of each phase and each span: what is read of them; a
+    /// span's over the frames a read timed that ran it, as many as its n.
     pub phases_p95: [f64; PHASES],
     pub gpu_spans_p95: [f64; GPU_SPANS],
+    pub gpu_spans_n: [f64; GPU_SPANS],
     /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
     pub kinds: [f64; FRAME_KINDS],
     pub wakes: [f64; WAKES],
-    pub heap_used_delta_bytes: f64,
-    /// The window's first frame and its last: what is summed since boot is
-    /// the window's as the one less the other.
+    /// The world's pixels of the last frame a read timed.
+    pub gpu_px: f64,
+    /// The ray counts of the window's frames, summed lane by lane.
+    pub rays: RaySample,
+    /// The window's first frame and its last.
     pub first: FrameSample,
     pub last: FrameSample,
 }
@@ -105,11 +109,12 @@ words!(FramesSection, STAT::frames::WORDS,
     tick => STAT::frames::tick, effects => STAT::frames::effects,
     stage => STAT::frames::stage, tasks => STAT::frames::tasks,
     perf => STAT::frames::perf, rest => STAT::frames::rest,
-    effects_p95 => STAT::frames::effects_p95, gpu => STAT::frames::gpu, gpu_busy => STAT::frames::gpu_busy,
+    effects_p95 => STAT::frames::effects_p95, gpu_busy => STAT::frames::gpu_busy,
     gpu_busy_kinds => STAT::frames::gpu_busy_kinds,
     phases_p95 => STAT::frames::phases_p95, gpu_spans_p95 => STAT::frames::gpu_spans_p95,
+    gpu_spans_n => STAT::frames::gpu_spans_n,
     kinds => STAT::frames::kinds, wakes => STAT::frames::wakes,
-    heap_used_delta_bytes => STAT::frames::heap_used_delta_bytes,
+    gpu_px => STAT::frames::gpu_px, rays => STAT::frames::rays,
     first => STAT::frames::first, last => STAT::frames::last,
 );
 
@@ -208,3 +213,61 @@ pub struct StepsSection {
 }
 
 words!(StepsSection, STAT::steps::WORDS, cnt => STAT::steps::cnt, slots => STAT::steps::slots);
+
+/// What the frames held at the most or the least since the recording
+/// started (perf.json STAT.recording), each frame turn's folded in (`fold`).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RecordingSection {
+    pub frames: f64,
+    pub heap_live_max_bytes: f64,
+    pub heap_run_max_bytes: f64,
+    pub heap_slot_max_bytes: f64,
+    pub heap_range_max_bytes: f64,
+    pub heap_largest_free_min_bytes: f64,
+    pub heap_refusals: f64,
+    pub ring_cq_peak: f64,
+    pub ring_sq_peak: f64,
+    pub ring_held_peak: f64,
+    pub body_slots_peak: f64,
+    pub cap_terrain_refused: f64,
+}
+
+impl RecordingSection {
+    /// One frame turn's figures, `h`, folded in: each the most, the
+    /// largest free block the least, the refusals as they stand, the tiles
+    /// refused summed.
+    pub fn fold(&mut self, h: &RecordingSection) {
+        let first = self.frames == 0.0;
+        let max = |a: f64, b: f64| if first { b } else { a.max(b) };
+        *self = RecordingSection {
+            frames: self.frames + 1.0,
+            heap_live_max_bytes: max(self.heap_live_max_bytes, h.heap_live_max_bytes),
+            heap_run_max_bytes: max(self.heap_run_max_bytes, h.heap_run_max_bytes),
+            heap_slot_max_bytes: max(self.heap_slot_max_bytes, h.heap_slot_max_bytes),
+            heap_range_max_bytes: max(self.heap_range_max_bytes, h.heap_range_max_bytes),
+            heap_largest_free_min_bytes: if first {
+                h.heap_largest_free_min_bytes
+            } else {
+                self.heap_largest_free_min_bytes
+                    .min(h.heap_largest_free_min_bytes)
+            },
+            heap_refusals: h.heap_refusals,
+            ring_cq_peak: max(self.ring_cq_peak, h.ring_cq_peak),
+            ring_sq_peak: max(self.ring_sq_peak, h.ring_sq_peak),
+            ring_held_peak: max(self.ring_held_peak, h.ring_held_peak),
+            body_slots_peak: max(self.body_slots_peak, h.body_slots_peak),
+            cap_terrain_refused: self.cap_terrain_refused + h.cap_terrain_refused,
+        };
+    }
+}
+
+words!(RecordingSection, STAT::recording::WORDS,
+    frames => STAT::recording::frames, heap_live_max_bytes => STAT::recording::heap_live_max_bytes,
+    heap_run_max_bytes => STAT::recording::heap_run_max_bytes, heap_slot_max_bytes => STAT::recording::heap_slot_max_bytes,
+    heap_range_max_bytes => STAT::recording::heap_range_max_bytes,
+    heap_largest_free_min_bytes => STAT::recording::heap_largest_free_min_bytes,
+    heap_refusals => STAT::recording::heap_refusals, ring_cq_peak => STAT::recording::ring_cq_peak,
+    ring_sq_peak => STAT::recording::ring_sq_peak, ring_held_peak => STAT::recording::ring_held_peak,
+    body_slots_peak => STAT::recording::body_slots_peak, cap_terrain_refused => STAT::recording::cap_terrain_refused,
+);

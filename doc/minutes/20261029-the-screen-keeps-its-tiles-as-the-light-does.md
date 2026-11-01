@@ -646,3 +646,13 @@ record (the closing round):
   Built and measured: the frames a brick lands in cost the light what the
   rest do, before it and after, the light casting on every walking frame
   whatever landed; it measured no gain for the state it added.
+
+## Taken in the closing round's cleanup (2026-11-01)
+
+- **The reach's read-back taken out** by the user, replacing "the host reads
+  back whether the reach marked" (2026-10-30): step 6 part 3, a marking draw
+  counted as a mark by the host, made it redundant, as the reach runs only in
+  a frame whose casters mark the screen's tiles drawn. The host decides
+  whether any tile gathers from what it handed (`Tiles::claiming`), as the
+  light decides whether to cast; a dropped frame is followed by one drawn
+  whole, which marks every tile.

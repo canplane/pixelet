@@ -23,6 +23,7 @@ import {
 } from "@/abi/demand.spec.ts";
 import {
   FRAME,
+  FRAME_GROUP,
   LIMIT,
   NOW,
   RING,
@@ -70,18 +71,9 @@ const site = (file: u32, bytes: u32, line: u32) =>
     ? null
     : `${td.decode(new Uint8Array(HOST.guest.mem, file, bytes))}:${line}`;
 
-/** The lanes that are lists: a word a name, a census entry two (its draws and
- * triangles). The names are their owners', and shown by the shell. */
-export const LIST_LANES = [
-  "phases",
-  "effects",
-  "gpu_spans",
-  "census",
-  "zoom_tiles",
-  "gpu_objects",
-  "waiting",
-  "out",
-] as const;
+/** The lanes that are lists, a word a name. The names are their owners', and
+ * shown by the shell. */
+export const LIST_LANES = ["phases", "effects", "gpu_spans"] as const;
 export type ListLane = (typeof LIST_LANES)[number];
 export type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarLane = Exclude<FrameLane, ListLane>;
@@ -90,11 +82,6 @@ export type Frame = { [K in ScalarLane]: f64 } & {
   phases: f64[];
   effects: f64[];
   gpu_spans: f64[];
-  census: [f64, f64][];
-  zoom_tiles: f64[];
-  gpu_objects: f64[];
-  waiting: f64[];
-  out: f64[];
 };
 
 /** Each lane at its word, and the words it spans: to the next lane's, the last to FRAME's end. */
@@ -116,15 +103,10 @@ export const is_list = (lane: FrameLane): lane is ListLane => LISTS.has(lane);
 
 /** The FRAME record at word `o` of `words`. */
 export function frame_at(words: ArrayLike<f64>, o: u32): Frame {
-  const f: Record<string, f64 | f64[] | [f64, f64][]> = {};
+  const f: Record<string, f64 | f64[]> = {};
   for (const { name, at, width } of LANES) {
     const w = (k: u32) => words[o + at + k];
-    if (name === "census") {
-      f[name] = Array.from(
-        { length: width / 2 },
-        (_, k) => [w(2 * k), w(2 * k + 1)] as [f64, f64],
-      );
-    } else if (is_list(name)) {
+    if (is_list(name)) {
       f[name] = Array.from({ length: width }, (_, k) => w(k));
     } else f[name] = w(0);
   }
@@ -159,19 +141,24 @@ export interface FrameSummary {
   tasks: Spread;
   perf: Spread;
   rest: Spread;
-  /** The GPU's time, its spans' sum, and the time they ran, those that
-   * overlap counted once, which the sum overstates where passes overlap. */
-  gpu: Spread;
+  /** The GPU's time: the time its spans ran, those that overlap counted once. */
   gpu_busy: Spread;
-  /** The busy time's p50 and p95 of each kind's frames a read timed. */
-  gpu_busy_kinds: { name: string; p50: f64; p95: f64 }[];
-  /** Each phase's, each effect's and each span's p95: what is read of them. */
+  /** The busy time's p50 and p95 of each kind's frames a read timed, and how
+   * many they are. */
+  gpu_busy_kinds: { name: string; p50: f64; p95: f64; n: f64 }[];
+  /** Each phase's, each effect's and each span's p95: what is read of them; a
+   * span's over the n frames a read timed that ran it. */
   phases: { name: string; p95: f64 }[];
   effects_p95: { name: string; p95: f64 }[];
-  gpu_spans: { name: string; p95: f64 }[];
+  gpu_spans: { name: string; p95: f64; n: f64 }[];
   /** Frames by the renderer's kind, and the turns' last ask by wake. */
   kinds: { name: string; n: f64 }[];
   wakes: { name: string; n: f64 }[];
+  /** The world's pixels of the last frame a read timed. */
+  gpu_px: f64;
+  /** The ray counts of the window's frames summed, by FRAME's rays lanes. */
+  rays: Record<string, f64>;
+  /** The heap's high-water mark, the window's last frame's less its first's. */
   heap_used_delta_bytes: f64;
   /** The window's first frame and its last. */
   first: Frame;
@@ -212,18 +199,25 @@ export interface Step {
   max_ms: f64;
 }
 
-/** A worst frame the kernel kept, with the one before it where there was one. */
+/** A worst frame the kernel kept, and what changed from the one before it,
+ * null where there was none. */
 export interface Worst {
   sample: Frame;
-  prev: Frame | null;
+  delta: {
+    uploads: f64;
+    uploads_bytes: f64;
+    heap_used_bytes: f64;
+  } | null;
 }
 
-/** What PERF_STATS sums over its window, section by section. */
+/** What PERF_STATS sums over its window, section by section: `recording` is since
+ * the recording started, as the steps are, by STAT.recording's names. */
 export interface Summary {
   rec: { recording: boolean; elapsed_ms: f64; truncated: boolean };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
   steps: Step[];
+  recording: Record<string, f64>;
   view: Record<string, f64>;
 }
 
@@ -244,6 +238,8 @@ function frame_summary(s: F64Array): FrameSummary | null {
   const F = STAT.frames;
   const a = F.AT;
   if (s[a + F.present] === 0) return null;
+  const first = frame_at(s, a + F.first);
+  const last = frame_at(s, a + F.last);
   return {
     n: s[a + F.n],
     seconds: s[a + F.seconds],
@@ -262,12 +258,12 @@ function frame_summary(s: F64Array): FrameSummary | null {
     tasks: spread_at(s, a + F.tasks),
     perf: spread_at(s, a + F.perf),
     rest: spread_at(s, a + F.rest),
-    gpu: spread_at(s, a + F.gpu),
     gpu_busy: spread_at(s, a + F.gpu_busy),
     gpu_busy_kinds: FRAME_KINDS.map((name, k) => ({
       name,
-      p50: s[a + F.gpu_busy_kinds + 2 * k],
-      p95: s[a + F.gpu_busy_kinds + 2 * k + 1],
+      p50: s[a + F.gpu_busy_kinds + 3 * k],
+      p95: s[a + F.gpu_busy_kinds + 3 * k + 1],
+      n: s[a + F.gpu_busy_kinds + 3 * k + 2],
     })),
     phases: PHASES.map((name, k) => ({ name, p95: s[a + F.phases_p95 + k] })),
     effects_p95: EFFECT_NAMES.map((name, k) => ({
@@ -277,12 +273,17 @@ function frame_summary(s: F64Array): FrameSummary | null {
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({
       name,
       p95: s[a + F.gpu_spans_p95 + k],
+      n: s[a + F.gpu_spans_n + k],
     })),
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
-    heap_used_delta_bytes: s[a + F.heap_used_delta_bytes],
-    first: frame_at(s, a + F.first),
-    last: frame_at(s, a + F.last),
+    gpu_px: s[a + F.gpu_px],
+    rays: Object.fromEntries(
+      FRAME_GROUP.rays.map((name, k) => [name, s[a + F.rays + k]]),
+    ),
+    heap_used_delta_bytes: last.heap_used_bytes - first.heap_used_bytes,
+    first,
+    last,
   };
 }
 
@@ -366,6 +367,7 @@ export function perf_summary(window_ms: f64 | null): Summary {
     frames: frame_summary(s),
     tasks: task_summaries(s),
     steps: steps_at(s),
+    recording: section(s, STAT.recording),
     view: section(n, NOW.view),
   };
 }
@@ -445,7 +447,14 @@ export function perf_worst(): Worst[] {
     const o = i * WORST.WORDS;
     return {
       sample: frame_at(w, o + WORST.sample),
-      prev: w[o + WORST.has_prev] === 0 ? null : frame_at(w, o + WORST.prev),
+      delta:
+        w[o + WORST.has_prev] === 0
+          ? null
+          : {
+              uploads: w[o + WORST.uploads_delta],
+              uploads_bytes: w[o + WORST.uploads_delta_bytes],
+              heap_used_bytes: w[o + WORST.heap_used_delta_bytes],
+            },
     };
   });
 }

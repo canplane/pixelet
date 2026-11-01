@@ -5,105 +5,55 @@
 use core::mem::{offset_of, size_of};
 
 use crate::sys::sched::phase_spec::PHASES;
-use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec_core::tally;
 
-use crate::perf::spec::{CENSUS_TAGS, FRAME, LIMIT, WORST};
-use crate::perf::word::{words, Words};
-use crate::sys::io::demand_spec;
+use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
+use crate::perf::word::{as_words, as_words_mut, words, Words};
 use crate::sys::sched::tick;
 use crate::turn::spec;
-use pxl_render::frame::draw::{DrawCensus, DRAW_PIPELINES};
-use pxl_render::gpu::api::OBJECT_OPS;
 use pxl_render::gpu::ray;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
-use pxl_spec::space::layer::lattice;
-
-pub const CENSUS_LEN: usize = CENSUS_TAGS;
-
-/// A tag a draw pipeline, in the renderer's order (pxl-render frame/draw.rs
-/// `DRAW_PIPELINES`): a pipeline added without its tag does not compile.
-const _: () = assert!(
-    CENSUS_LEN == DRAW_PIPELINES.len(),
-    "a census tag for every pipeline a draw names"
-);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GpuSample {
     /// This frame's own read, written back as it lands a frame or two later
     /// (record.rs `perf_record_gpu`): where `read` is 1, its spans, the
-    /// time they ran, those that overlap counted once (`busy_ms`), the frame's
-    /// GPU time where its passes overlap, as the spans' sum is not
-    /// (pxl-render renderer.rs `gpu_ms`), and `px` the world's pixels the
-    /// frame drew, what the spans were measured over; where it is 0, nothing
-    /// measured this frame and all are 0.
+    /// time they ran, those that overlap counted once (`busy_ms`), the
+    /// frame's GPU time, which the spans' sum overstates where passes
+    /// overlap, and `px` the world's pixels the frame drew, what the spans
+    /// were measured over; where it is 0, nothing measured this frame and
+    /// all are 0.
     pub read: f64,
     pub spans: [f64; GPU_SPANS],
     pub busy_ms: f64,
     pub px: f64,
     /// The share of the display's pixels, each way, the world was drawn at.
     pub scale: f64,
-    /// Every draw by its pipeline: the frame's draws and triangles are its sums.
-    pub census: DrawCensus,
+    /// The frame's draws and their triangles, every pipeline a draw names
+    /// (pxl-render renderer.rs `FrameStat::census`, summed).
+    pub draws: f64,
+    pub triangles: f64,
     /// The renderer's number of this frame (pxl-render renderer.rs
     /// `FrameStat::frame`), which a read names as it lands; 0 where it drew
     /// none.
     pub frame: f64,
+    /// Why the light's map cast, a bit each in LIGHT_MOVED's order, 0 where
+    /// it did not; and the boxes decor's slots were marked by to generate
+    /// again (pxl-render renderer.rs `FrameStat`).
+    pub light_moved: f64,
+    pub decor_boxes: f64,
 }
 
+/// The renderer's upload table, its uploads and their bytes, and its
+/// texture layers' bytes: each as counted (pxl-render gpu/renderer.rs
+/// `FrameStat`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DeviceSample {
-    /// The renderer's upload table, its uploads and their bytes, and its depth
-    /// targets' and texture layers' bytes: each as counted (pxl-render
-    /// gpu/renderer.rs `FrameStat`).
     pub uploads: f64,
     pub uploads_bytes: f64,
-    pub depth_bytes: f64,
     pub pack_bytes: f64,
-    /// The GPU objects the renderer holds, by the op that made them, as its
-    /// encoder counts them (xpute-gpu encode `Gpu::objects`): op k + 1 in
-    /// slot k, as no op is 0.
-    pub objects: [f64; OBJECT_OPS - 1],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TileSample {
-    pub by_zoom: [f64; ZOOMS],
-    pub place: f64,
-}
-
-/// The heap as its allocator states it (xpute-guest mem/heap.rs `HeapStat`),
-/// by its names and in bytes as it counts them: each figure what it is, not
-/// a rounding of it.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct HeapSample {
-    /// The high-water mark: how far the heap has ever reached, never less.
-    pub used_bytes: f64,
-    /// Pages lent out, a carved run counted whole.
-    pub live_bytes: f64,
-    /// Of what is lent, what was carved into slots, and what is held in
-    /// slots; their difference is what the carving costs.
-    pub run_bytes: f64,
-    pub slot_bytes: f64,
-    pub range_bytes: f64,
-    pub largest_free_bytes: f64,
-    pub refusals: f64,
-}
-
-/// The rings' peaks since the frame before, as the door keeps them
-/// (xpute-guest ipc/door.rs `DoorStat`): the completion ring's length, the
-/// submission ring's as a drain started, and the most submissions a drain
-/// held back for lack of room (each answered a frame late).
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RingSample {
-    pub cq_peak: f64,
-    pub sq_peak: f64,
-    pub held_peak: f64,
 }
 
 /// One frame turn and the interval it opened (perf.json FRAME): every
@@ -142,81 +92,107 @@ pub struct FrameSample {
     /// The renderer's FRAME_KINDS and the edge's WAKES, by index.
     pub kind: f64,
     pub wake: f64,
-    pub wake_in_ms: f64,
     pub gpu: GpuSample,
-    pub device: DeviceSample,
-    pub tiles: TileSample,
-    pub heap: HeapSample,
-    pub rings: RingSample,
-    /// The most body slots out at once since the frame before
-    /// (sys/io/body.rs `take_peak`).
-    pub body_slots_peak: f64,
-    /// Requests waiting for a credit, and out on one, by stream.
-    pub waiting: [f64; STREAMS],
-    pub out: [f64; STREAMS],
-    pub terrain_refused: f64,
+    /// The ray counts of this frame, written back as they land
+    /// (record.rs `perf_record_rays`).
     pub rays: RaySample,
+    /// The terrain tiles the tile cache took in during the frame turn.
+    pub tiles_landed: f64,
+    pub device: DeviceSample,
+    /// The heap's high-water mark (xpute-guest mem/heap.rs `HeapStat`).
+    pub heap_used_bytes: f64,
 }
 
-/// The `ray_counts` setting's sums since boot, as the renderer keeps them
-/// (pxl-render gpu/ray/tally.rs `RAY_SUMS`), in perf.json FRAME's
-/// rays, eye and light lanes' order: the frames whose counts landed, then the
-/// eye's and the light's.
+/// The `ray_counts` setting's counts of one frame, as the renderer hands
+/// them (pxl-render gpu/ray/tally.rs `RayCounts`), in perf.json FRAME's
+/// `rays` group's order: whether the eye cast in full, its pixels and its
+/// lanes; whether the light's map cast, and its lanes (pxl-spec-core
+/// `tally`). The light's slots are its map's, the same every cast, and
+/// left out.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RaySample {
-    pub frames: f64,
-    pub eye: ObserverSample,
-    pub light: ObserverSample,
-}
-
-/// An observer's sums (pxl-render gpu/ray/tally.rs `sum_at`): the frames it
-/// cast in, its pixels or slots in them, then its lanes (pxl-spec-core
-/// `tally`).
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct ObserverSample {
-    pub casts: f64,
-    pub rays: f64,
-    pub beam: f64,
-    pub sample: f64,
-    pub miss: f64,
-    pub took: f64,
-    pub walked: f64,
-    pub boxes: f64,
+    pub eye_cast: f64,
+    pub eye_rays: f64,
+    pub eye_beam: f64,
+    pub eye_sample: f64,
+    pub eye_miss: f64,
+    pub eye_took: f64,
+    pub eye_walked: f64,
+    pub eye_boxes: f64,
+    pub light_cast: f64,
+    pub light_beam: f64,
+    pub light_sample: f64,
+    pub light_miss: f64,
+    pub light_took: f64,
+    pub light_walked: f64,
+    pub light_boxes: f64,
 }
 
 impl RaySample {
-    /// The renderer's sums (`RAY_SUMS`), in their order.
-    pub fn of(s: [f64; ray::RAY_SUMS]) -> RaySample {
-        let observer = |o: u32| {
-            let lane = |l: u32| s[ray::sum_at(o, ray::LANES_AT + l as usize)];
-            ObserverSample {
-                casts: s[ray::sum_at(o, ray::CASTS)],
-                rays: s[ray::sum_at(o, ray::RAYS)],
-                beam: lane(tally::BEAM),
-                sample: lane(tally::SAMPLE),
-                miss: lane(tally::MISS),
-                took: lane(tally::TOOK),
-                walked: lane(tally::WALKED),
-                boxes: lane(tally::BOXES),
-            }
-        };
+    /// The renderer's counts (`RAY_COUNTS`), in their order.
+    pub fn of(c: [f64; ray::RAY_COUNTS]) -> RaySample {
+        let at = |o: u32, k: usize| c[ray::count_at(o, k)];
+        let lane = |o: u32, l: u32| at(o, ray::LANES_AT + l as usize);
+        let (eye, light) = (tally::EYE, tally::LIGHT);
         RaySample {
-            frames: s[ray::FRAMES],
-            eye: observer(tally::EYE),
-            light: observer(tally::LIGHT),
+            eye_cast: at(eye, ray::CAST),
+            eye_rays: at(eye, ray::RAYS),
+            eye_beam: lane(eye, tally::BEAM),
+            eye_sample: lane(eye, tally::SAMPLE),
+            eye_miss: lane(eye, tally::MISS),
+            eye_took: lane(eye, tally::TOOK),
+            eye_walked: lane(eye, tally::WALKED),
+            eye_boxes: lane(eye, tally::BOXES),
+            light_cast: at(light, ray::CAST),
+            light_beam: lane(light, tally::BEAM),
+            light_sample: lane(light, tally::SAMPLE),
+            light_miss: lane(light, tally::MISS),
+            light_took: lane(light, tally::TOOK),
+            light_walked: lane(light, tally::WALKED),
+            light_boxes: lane(light, tally::BOXES),
+        }
+    }
+
+    /// `o`'s counts added to these, lane by lane.
+    pub fn add(&mut self, o: &RaySample) {
+        let (to, from) = (as_words_mut(self), as_words(o));
+        for (t, f) in to.iter_mut().zip(from) {
+            *t += f;
         }
     }
 }
 
-/// Kept with the frame before it, since geometry, textures and heap only mean anything as deltas.
+/// One of the worst frames, and what changed from the frame before it
+/// (perf.json WORST).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WorstFrame {
     pub sample: FrameSample,
     pub has_prev: f64,
-    pub prev: FrameSample,
+    pub uploads_delta: f64,
+    pub uploads_delta_bytes: f64,
+    pub heap_used_delta_bytes: f64,
+}
+
+impl WorstFrame {
+    /// `s`, and what changed from `prev`, the frame before it, where there
+    /// was one.
+    pub fn of(s: FrameSample, prev: Option<&FrameSample>) -> WorstFrame {
+        let Some(p) = prev else {
+            return WorstFrame {
+                sample: s,
+                ..WorstFrame::default()
+            };
+        };
+        WorstFrame {
+            sample: s,
+            has_prev: 1.0,
+            uploads_delta: s.device.uploads - p.device.uploads,
+            uploads_delta_bytes: s.device.uploads_bytes - p.device.uploads_bytes,
+            heap_used_delta_bytes: s.heap_used_bytes - p.heap_used_bytes,
+        }
+    }
 }
 
 words!(FrameSample, FRAME::WORDS,
@@ -224,49 +200,35 @@ words!(FrameSample, FRAME::WORDS,
     turns => FRAME::turns, busy_ms => FRAME::busy_ms, budget_ms => FRAME::budget_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     perf_ms => FRAME::perf_ms, effects => FRAME::effects,
-    kind => FRAME::kind_name, wake => FRAME::wake_name, wake_in_ms => FRAME::wake_in_ms,
+    kind => FRAME::kind_name, wake => FRAME::wake_name,
     gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.busy_ms => FRAME::gpu_busy_ms, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
-    gpu.census => FRAME::census, gpu.frame => FRAME::gpu_frame,
-    device.uploads => FRAME::uploads, device.uploads_bytes => FRAME::uploads_bytes,
-    device.depth_bytes => FRAME::depth_bytes, device.pack_bytes => FRAME::pack_bytes, device.objects => FRAME::gpu_objects,
-    tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
-    heap.used_bytes => FRAME::heap_used_bytes, heap.live_bytes => FRAME::heap_live_bytes, heap.run_bytes => FRAME::heap_run_bytes,
-    heap.slot_bytes => FRAME::heap_slot_bytes, heap.range_bytes => FRAME::heap_range_bytes,
-    heap.largest_free_bytes => FRAME::heap_largest_free_bytes, heap.refusals => FRAME::heap_refusals,
-    rings.cq_peak => FRAME::ring_cq_peak, rings.sq_peak => FRAME::ring_sq_peak, rings.held_peak => FRAME::ring_held_peak,
-    body_slots_peak => FRAME::body_slots_peak,
-    waiting => FRAME::waiting, out => FRAME::out,
-    terrain_refused => FRAME::cap_terrain_refused,
-    rays.frames => FRAME::rays_frames,
-    rays.eye.casts => FRAME::eye_casts,
-    rays.eye.rays => FRAME::eye_rays,
-    rays.eye.beam => FRAME::eye_beam,
-    rays.eye.sample => FRAME::eye_sample,
-    rays.eye.miss => FRAME::eye_miss,
-    rays.eye.took => FRAME::eye_took,
-    rays.eye.walked => FRAME::eye_walked,
-    rays.eye.boxes => FRAME::eye_boxes,
-    rays.light.casts => FRAME::light_casts,
-    rays.light.rays => FRAME::light_rays,
-    rays.light.beam => FRAME::light_beam,
-    rays.light.sample => FRAME::light_sample,
-    rays.light.miss => FRAME::light_miss,
-    rays.light.took => FRAME::light_took,
-    rays.light.walked => FRAME::light_walked,
-    rays.light.boxes => FRAME::light_boxes,
+    gpu.draws => FRAME::draws, gpu.triangles => FRAME::triangles, gpu.frame => FRAME::gpu_frame,
+    gpu.light_moved => FRAME::light_moved, gpu.decor_boxes => FRAME::decor_boxes,
+    rays => FRAME::eye_cast,
+    tiles_landed => FRAME::tiles_landed,
+    device.uploads => FRAME::uploads, device.uploads_bytes => FRAME::uploads_bytes, device.pack_bytes => FRAME::pack_bytes,
+    heap_used_bytes => FRAME::heap_used_bytes,
 );
 
-words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
+// The `rays` group's lanes, each where FRAME lays it, from the group's first.
+words!(RaySample, FRAME_GROUP::rays,
+    eye_cast => 0, eye_rays => FRAME::eye_rays - FRAME::eye_cast,
+    eye_beam => FRAME::eye_beam - FRAME::eye_cast, eye_sample => FRAME::eye_sample - FRAME::eye_cast,
+    eye_miss => FRAME::eye_miss - FRAME::eye_cast, eye_took => FRAME::eye_took - FRAME::eye_cast,
+    eye_walked => FRAME::eye_walked - FRAME::eye_cast, eye_boxes => FRAME::eye_boxes - FRAME::eye_cast,
+    light_cast => FRAME::light_cast - FRAME::eye_cast, light_beam => FRAME::light_beam - FRAME::eye_cast,
+    light_sample => FRAME::light_sample - FRAME::eye_cast, light_miss => FRAME::light_miss - FRAME::eye_cast,
+    light_took => FRAME::light_took - FRAME::eye_cast, light_walked => FRAME::light_walked - FRAME::eye_cast,
+    light_boxes => FRAME::light_boxes - FRAME::eye_cast,
+);
+
+words!(WorstFrame, WORST::WORDS,
+    sample => WORST::sample, has_prev => WORST::has_prev, uploads_delta => WORST::uploads_delta,
+    uploads_delta_bytes => WORST::uploads_delta_bytes, heap_used_delta_bytes => WORST::heap_used_delta_bytes,
+);
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
 pub const EFFECTS: usize = spec::EFFECT_NAMES;
-pub const STREAMS: usize = demand_spec::STREAM_NAMES;
-pub const ZOOMS: usize = LIMIT::ZOOMS as usize;
-
-const _: () = assert!(
-    lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,
-    "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
-);
 
 /// A frame that dropped a vsync while moving: its interval ran past the
 /// paced one by half a refresh or more, so it landed a refresh late at least.

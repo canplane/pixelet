@@ -81,6 +81,8 @@ pub struct TileCache<L: Base> {
     /// tile (`moved_at`), which holds nothing.
     revision: u32,
     refused: u32,
+    /// Tiles taken in since `take_landed`, the profiler's.
+    landed: u32,
 }
 
 /// What a layer's tile cache holds at once, from what it asks for. A layer
@@ -150,6 +152,7 @@ impl<L: Base> Default for TileCache<L> {
             moved: Vec::new(),
             revision: 0,
             refused: 0,
+            landed: 0,
         }
     }
 }
@@ -396,6 +399,12 @@ impl<L: Base> TileCache<L> {
         core::mem::take(&mut self.refused)
     }
 
+    /// The tiles taken in since the last call, in a slot or as an empty
+    /// tile, the profiler's (perf/report.rs `perf_frame`).
+    pub fn take_landed(&mut self) -> u32 {
+        core::mem::take(&mut self.landed)
+    }
+
     /// The slot is emptied first, so a body that fails to decode leaves it free
     /// rather than another tile reading half-overwritten bytes.
     /// `victim` picks which slot goes when one must, among the tiles of the
@@ -490,6 +499,7 @@ impl<L: Base> TileCache<L> {
         }
         self.moved.push(p);
         self.revision = self.revision.wrapping_add(1);
+        self.landed = self.landed.wrapping_add(1);
     }
 
     /// A slotted tile held is fetched once more, read meanwhile: what a

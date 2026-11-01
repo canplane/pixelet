@@ -11,10 +11,9 @@
 // tiles, none where it lies off every tile the frame's marks cover, as the
 // whole tile's slab is first; where any texel its shadow's taps read lies in a tile of the map
 // that changed this frame (gpu/tiles.rs), the screen tile takes this frame's
-// number, as a mark sets it (screen_mark.wgsl), and the frame's number is
-// kept in `reached` where it is the latest, which the host reads back to know
-// whether any tile gathers. Bounds that cover: a tile too many costs, one
-// missing is a failure.
+// number, as a mark sets it (screen_mark.wgsl). The host reads nothing back:
+// the frame it runs in is one whose drawn marks it counts. Bounds that
+// cover: a tile too many costs, one missing is a failure.
 
 struct Tiles {
   count: vec4u,
@@ -36,16 +35,14 @@ struct Reach {
 @group(0) @binding(3) var<uniform> light_tiles: Tiles;
 @group(0) @binding(4) var<storage, read_write> changed_at: array<u32>;
 @group(0) @binding(5) var<uniform> tiles: Tiles;
-// The number of the last frame the reach marked a tile in.
-@group(0) @binding(6) var<storage, read_write> reached: atomic<u32>;
 // Each square's least and most depth drawn, `BOUND_STEP` pixels a side, a
 // thread's of a screen tile's `BOUND_SQUARES` a side (constant.wgsl), as
 // the last frame's world's pass left them (screen_bound.wgsl).
-@group(0) @binding(7) var<storage, read> bounds: array<vec2f>;
+@group(0) @binding(6) var<storage, read> bounds: array<vec2f>;
 // The map's tiles the frame's marks cover, from the first across and down to
 // past the last, as the host handed them and the drawn marks widened them
 // (gpu/tiles.rs `Tiles::marks_box`, tile_mark.wgsl): none changed off them.
-@group(0) @binding(8) var<storage, read> marks_box: vec4u;
+@group(0) @binding(7) var<storage, read> marks_box: vec4u;
 
 // Whether tile `t` of the map changed this frame: claimed by its words.
 fn reach_changed(t: vec2i) -> bool {
@@ -207,6 +204,5 @@ fn screen_reach_cs(
   }
   if (hit) {
     changed_at[ti] = tiles.count.w;
-    atomicMax(&reached, tiles.count.w);
   }
 }

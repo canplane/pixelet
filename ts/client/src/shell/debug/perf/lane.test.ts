@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { FRAME_GROUP } from "@/abi/perf.spec.ts";
+import { FRAME, FRAME_GROUP } from "@/abi/perf.spec.ts";
 import { is_list, LANES } from "@/port/perf.ts";
 import { GROUPS, LIST_NAMES } from "./lane.ts";
 
@@ -15,15 +15,16 @@ test("FRAME_GROUP - every lane is printed, in one group", () => {
   );
 });
 
-test("LANES - a list lane spans a word a name, a census entry two", () => {
+test("LANES - a list lane spans a word a name", () => {
   for (const { name, width } of LANES) {
-    if (!is_list(name)) assert.deepStrictEqual(width, 1, name);
-    else {
-      assert.deepStrictEqual(
-        width,
-        LIST_NAMES[name].length * (name === "census" ? 2 : 1),
-        name,
-      );
-    }
+    const names = is_list(name) ? LIST_NAMES[name].length : 1;
+    assert.deepStrictEqual(width, names, name);
   }
+});
+
+test("FRAME_GROUP - the rays group lies in FRAME in its order", () => {
+  const first = FRAME[FRAME_GROUP.rays[0]];
+  FRAME_GROUP.rays.forEach((name, k) =>
+    assert.deepStrictEqual(FRAME[name], first + k, name),
+  );
 });

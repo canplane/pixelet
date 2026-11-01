@@ -120,8 +120,10 @@ pub struct Generated {
     /// Past `overwrite::BOXES`, the rest joined into the last.
     held: [[i32; 4]; overwrite::BOXES as usize],
     holding: usize,
-    /// How many of `held` this frame marks by.
+    /// How many of `held` this frame marks by, and how many boxes it marks
+    /// by in all, the bricks handed with them (`marked_boxes`).
     marked: usize,
+    boxes: u32,
     /// Whether the slots' records were not kept, decor having been off: the
     /// next frame drawn with decor generates every slot.
     stale: bool,
@@ -207,6 +209,7 @@ impl Generated {
             held: [[0; 4]; overwrite::BOXES as usize],
             holding: 0,
             marked: 0,
+            boxes: 0,
             stale: true,
         }
     }
@@ -287,6 +290,7 @@ impl Generated {
         // A brick filled at any window generates decor there and coarser.
         let fresh = !generation.fresh.is_empty();
         self.marking = self.stale || moved || fresh || self.marked != 0;
+        self.boxes = 0;
         if self.marking {
             // The boxes held, at every zoom, then each brick handed, at
             // its window's and coarser.
@@ -309,6 +313,7 @@ impl Generated {
                 boxes[at + 4] = zoom;
                 n += 1;
             }
+            self.boxes = n as u32;
             let (s, w) = (compute::DECOR_THIN_WORKGROUP, compute::DECOR_WORKGROUP);
             g.write_buf(
                 self.list,
@@ -461,6 +466,7 @@ impl Generated {
     /// every slot (`stale`).
     pub fn off(&mut self) {
         self.on = false;
+        self.boxes = 0;
         self.stale = true;
         self.counted.forget();
     }
@@ -544,6 +550,13 @@ impl Generated {
             g.set_bind_group(pass, 0, self.groups[3 + k], &[]);
             g.dispatch(pass, x, 1, 1);
         }
+    }
+
+    /// The boxes this frame marks slots by to generate again: the edits and
+    /// cuts held and the bricks handed, `generated::MARKED` at most; 0
+    /// where it marks none.
+    pub fn marked_boxes(&self) -> u32 {
+        self.boxes
     }
 
     /// Whether decor is compacted again this frame, so stands elsewhere.

@@ -225,7 +225,7 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
+  /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
   ray_counts: {
     key: 20 as number,
     kind: "toggle",

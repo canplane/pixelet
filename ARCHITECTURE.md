@@ -574,6 +574,17 @@ stream, which the page runs on WebGPU after the turn returns
 (`rust/client-bracket/native/src/surface.rs`). A frame where nothing it reads
 moved submits nothing, and the canvas keeps its frame.
 
+A frame where only the draws the kernel bounds moved is drawn again in the
+screen's **tiles** alone (`gpu/tiles.rs` `Tiles`), by the shape the light's cast
+casts by: what moved marks the tiles it covered and covers; the light's map is
+drawn again in the tiles its casters that moved mark, and the screen's tiles
+whose pixels read one of those are reached on the GPU (`gpu/reach.rs`); a tile
+stays claimed until its history has gathered the jitter's frames
+(`gpu/resolve.rs`). The host decides from what it handed whether a frame is
+drawn whole, through the tiles, or not at all, as the light decides whether to
+cast: the reach runs only in a frame whose casters mark the screen's tiles
+drawn, which the host counts as marked, so nothing it marks is read back.
+
 The compute entries are built by rust-gpu to WGSL and checked in beside the
 renderer's shaders (`frame/shader/*.gen.wgsl`, pxl-tool `shader.rs` `ENTRIES`);
 the renderer's build validates every shader with naga, and the web app's test

@@ -215,12 +215,7 @@ pub fn run(
         _ => Wake::timer,
     };
     let fell = now();
-    perf_record_turn(
-        fell - rise,
-        polled - drained,
-        f64::from(asked as u8),
-        wake.max(0.0),
-    );
+    perf_record_turn(fell - rise, polled - drained, f64::from(asked as u8));
     wake
 }
 

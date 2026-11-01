@@ -236,7 +236,7 @@ const DATA_SPECS: [DataSpec; 23] = [
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
         rs_also: &[],
         module: Some("span_spec"),
-        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS"]),
+        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_MOVED"]),
         ts_names: None,
     },
     DataSpec {
@@ -246,7 +246,6 @@ const DATA_SPECS: [DataSpec; 23] = [
             "spec/client/kernel/sys/io/demand.json",
             "spec/client/kernel/turn/step.json",
             "spec/client/render/gpu/span.json",
-            "xpute/spec/gpu/api.json",
         ],
         ts: Some("ts/client/src/abi/perf.spec.ts"),
         rs: Some("rust/client/kernel/src/perf/perf.spec.rs"),

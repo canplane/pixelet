@@ -17,7 +17,7 @@
     reason = "generated from the spec"
 )]
 
-pub const GPU_SPAN_NAMES: usize = 26;
+pub const GPU_SPAN_NAMES: usize = 27;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -25,37 +25,39 @@ pub enum GpuSpanName {
     exposure = 1,
     ao = 2,
     world = 3,
-    resolve = 4,
-    finish = 5,
-    marker = 6,
-    debug = 7,
-    preview = 8,
-    fill = 9,
-    cast = 10,
-    beam = 11,
-    cell = 12,
-    sample = 13,
-    sraster = 14,
-    px = 15,
-    miss = 16,
-    light_beam = 17,
-    light_sample = 18,
-    light_raster = 19,
-    light_slot = 20,
-    light_walk = 21,
-    generate = 22,
-    shadow = 23,
-    face = 24,
-    mark = 25,
+    world_rest = 4,
+    resolve = 5,
+    finish = 6,
+    marker = 7,
+    debug = 8,
+    preview = 9,
+    fill = 10,
+    cast = 11,
+    beam = 12,
+    cell = 13,
+    sample = 14,
+    sraster = 15,
+    px = 16,
+    miss = 17,
+    light_beam = 18,
+    light_sample = 19,
+    light_raster = 20,
+    light_slot = 21,
+    light_walk = 22,
+    generate = 23,
+    shadow = 24,
+    face = 25,
+    mark = 26,
 }
 
 impl GpuSpanName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [GpuSpanName; 26] = [
+    pub const ALL: [GpuSpanName; 27] = [
         GpuSpanName::air,
         GpuSpanName::exposure,
         GpuSpanName::ao,
         GpuSpanName::world,
+        GpuSpanName::world_rest,
         GpuSpanName::resolve,
         GpuSpanName::finish,
         GpuSpanName::marker,
@@ -84,6 +86,34 @@ impl GpuSpanName {
     /// give out.
     pub fn of(val: u8) -> Option<GpuSpanName> {
         GpuSpanName::ALL
+            .into_iter()
+            .find(|member| *member as u8 == val)
+    }
+}
+
+pub const LIGHT_MOVED: usize = 4;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum LightMoved {
+    content = 0,
+    detail = 1,
+    receivers = 2,
+    footprint = 3,
+}
+
+impl LightMoved {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [LightMoved; 4] = [
+        LightMoved::content,
+        LightMoved::detail,
+        LightMoved::receivers,
+        LightMoved::footprint,
+    ];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(val: u8) -> Option<LightMoved> {
+        LightMoved::ALL
             .into_iter()
             .find(|member| *member as u8 == val)
     }

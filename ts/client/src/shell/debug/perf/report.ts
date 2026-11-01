@@ -5,8 +5,14 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
 
-import type { Frame, Spread, TaskRecord, TaskSummary } from "@/port/perf.ts";
-import { drawn, gpuMs, n1, pct, phaseText, tris, valueText } from "./lane.ts";
+import type {
+  Frame,
+  Spread,
+  TaskRecord,
+  TaskSummary,
+  Worst,
+} from "@/port/perf.ts";
+import { n1, pct, phaseText, tris, valueText } from "./lane.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
@@ -25,69 +31,68 @@ const pastText = (f: Frame) =>
     : `off-turn ${n1(f.interval_ms - f.busy_ms)}`;
 const spread = (s: Spread) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
-/** The `ray_counts` setting's counts over the window: its sums since boot
- * (perf.json FRAME's rays, eye and light lanes) at its last frame less
- * those at its first, where any frame's counts were read back: an observer's line each where it cast — the nodes its
- * beam rays, its samples and its walk again asked a cast, its pixels or
- * slots that took the visible sample and that walked, the nodes its walk
- * again asked a walking one, and the boxes it drew a cast. */
-const raysText = (first: Frame, last: Frame) => {
-  const f = Object.fromEntries(
-    Object.keys(last)
-      .filter((k) => /^(rays_frames|eye_|sun_)/.test(k))
-      .map((k) => [
-        k,
-        (last[k as keyof Frame] as f64) - (first[k as keyof Frame] as f64),
-      ]),
-  ) as Record<string, f64>;
-  if (f.rays_frames === 0) return [];
-  const observer = (
-    name: string,
-    casts: number,
-    rays: number,
-    o: {
-      beam: number;
-      sample: number;
-      miss: number;
-      took: number;
-      walked: number;
-      boxes: number;
-    },
-  ) => {
+/** The `ray_counts` setting's counts over the window, the kernel's sums of
+ * its frames' (perf.json FRAME's rays lanes): an observer's line each where
+ * it cast — the nodes its beam rays, its samples and its walk again asked a
+ * cast, its pixels that took the visible sample and that walked (the eye's
+ * as a share of its pixels, the light's a cast), the nodes its walk again
+ * asked a walking one, and the boxes it drew a cast. */
+const raysText = (f: Record<string, f64>) => {
+  const observer = (name: "eye" | "light") => {
+    const at = (lane: string) => f[`${name}_${lane}`] ?? 0;
+    const casts = at("cast");
     if (casts === 0) return [];
     const perCast = (n: number) => n1(n / casts);
-    const share = (n: number) => `${fixed((100 * n) / Math.max(1, rays), 2)}%`;
+    const rays = name === "eye" ? at("rays") : 0;
+    const part = (n: number) =>
+      rays > 0 ? `${fixed((100 * n) / rays, 2)}%` : `${perCast(n)} a cast`;
     return [
-      `  ${name.padEnd(
-        7,
-      )} cast in ${casts} of ${f.rays_frames} frames   nodes a cast: beam ${perCast(
-        o.beam,
-      )}  sample ${perCast(o.sample)}  miss ${perCast(o.miss)}   took ${share(
-        o.took,
-      )}  walked ${share(o.walked)} (${n1(
-        o.miss / Math.max(1, o.walked),
-      )} nodes each)   boxes ${perCast(o.boxes)} a cast`,
+      `  ${name.padEnd(7)} cast in ${casts} frames   nodes a cast: beam ${perCast(
+        at("beam"),
+      )}  sample ${perCast(at("sample"))}  miss ${perCast(
+        at("miss"),
+      )}   took ${part(at("took"))}  walked ${part(at("walked"))} (${n1(
+        at("miss") / Math.max(1, at("walked")),
+      )} nodes each)   boxes ${perCast(at("boxes"))} a cast`,
     ];
   };
-  return [
-    ...observer("eye", f.eye_casts, f.eye_rays, {
-      beam: f.eye_beam,
-      sample: f.eye_sample,
-      miss: f.eye_miss,
-      took: f.eye_took,
-      walked: f.eye_walked,
-      boxes: f.eye_boxes,
-    }),
-    ...observer("light", f.light_casts, f.light_rays, {
-      beam: f.light_beam,
-      sample: f.light_sample,
-      miss: f.light_miss,
-      took: f.light_took,
-      walked: f.light_walked,
-      boxes: f.light_boxes,
-    }),
-  ];
+  return [...observer("eye"), ...observer("light")];
 };
+
+const deg = (rad: number) => (rad * 180) / Math.PI;
+
+/** Where the view was as the report was read, by the kernel's numbers
+ * (perf.json NOW.view), and the world's pixels of the last frame a read
+ * timed. */
+function viewText(v: Record<string, f64>, gpuPx: f64): string {
+  const pivot = Number.isNaN(v.pivot_lat)
+    ? "-"
+    : `${fixed(v.pivot_lat, 5)}°, ${fixed(v.pivot_lon, 5)}° ${n1(v.pivot_alt)} m`;
+  return `  view    pivot ${pivot}  distance ${n1(v.dist)} u  polar ${n1(
+    deg(v.polar),
+  )}°  azimuth ${n1(deg(v.azimuth))}°   drawn ${
+    gpuPx > 0 ? valueText("gpu_px", gpuPx) : "-"
+  }`;
+}
+
+/** What the frames held at the most or the least since the recording
+ * started (perf.json STAT.recording). */
+function recordingText(r: Record<string, f64>): string {
+  if (!r.frames) return "  since   no frame folded";
+  return `  since   heap max live ${bytes(r.heap_live_max_bytes)}  run ${bytes(
+    r.heap_run_max_bytes,
+  )}  slot ${bytes(r.heap_slot_max_bytes)}  range ${bytes(
+    r.heap_range_max_bytes,
+  )}   largest free min ${bytes(
+    r.heap_largest_free_min_bytes,
+  )}   refusals ${r.heap_refusals}   ring peak cq ${r.ring_cq_peak} sq ${
+    r.ring_sq_peak
+  } held ${r.ring_held_peak}   body slots peak ${
+    r.body_slots_peak
+  }   terrain refused ${r.cap_terrain_refused}   (over the ${
+    r.frames
+  } frames since the recording started)`;
+}
 
 export function failText(fail: u32, detail: u32): string {
   const name = strerror(fail as i32).split(":")[0];
@@ -128,15 +133,15 @@ const worstEffectText = (f: Frame) => {
     : "";
 };
 
-/** Geometry, textures and heap only mean anything as deltas from `prev`. */
-export function frameLine(s: Frame, prev: Frame | null): string {
-  const [draws, triangles] = drawn(s);
+/** Geometry, textures and heap only mean anything as what changed from the
+ * frame before. */
+export function frameLine({ sample: s, delta }: Worst): string {
   const d =
-    prev === null
+    delta === null
       ? ""
-      : `  Δuploads ${signed(s.uploads - prev.uploads)} Δuploads bytes ${signedBytes(
-          s.uploads_bytes - prev.uploads_bytes,
-        )} Δheap used ${signedBytes(s.heap_used_bytes - prev.heap_used_bytes)}`;
+      : `  Δuploads ${signed(delta.uploads)} Δuploads bytes ${signedBytes(
+          delta.uploads_bytes,
+        )} Δheap used ${signedBytes(delta.heap_used_bytes)}`;
   return `[${n1(s.t).padStart(9)}] ${valueText(
     "kind_name",
     s.kind_name,
@@ -146,9 +151,9 @@ export function frameLine(s: Frame, prev: Frame | null): string {
     s.budget_ms,
   )}${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  tasks ${n1(
     s.tasks_ms,
-  )}  perf ${n1(s.perf_ms)}  gpu ${
-    s.gpu_read ? n1(gpuMs(s)) : "-"
-  }  draws ${draws} tris ${tris(triangles)}  uploads ${s.uploads}  heap used ${bytes(
+  )}  perf ${n1(s.perf_ms)}  gpu busy ${
+    s.gpu_read ? n1(s.gpu_busy_ms) : "-"
+  }  draws ${s.draws} tris ${tris(s.triangles)}  uploads ${s.uploads}  heap used ${bytes(
     s.heap_used_bytes,
   )}${d}`;
 }
@@ -174,8 +179,8 @@ function windowSection(r: PerfReport): string[] {
   if (f === null) return ["frames n=0"];
   const last = f.last;
   const spans = f.gpu_spans
-    .filter((s) => s.p95 > 0)
-    .map((s) => `${s.name} ${n1(s.p95)}`)
+    .filter((s) => s.n > 0)
+    .map((s) => `${s.name} ${n1(s.p95)} (${s.n})`)
     .join("  ");
   const steps =
     r.steps.length === 0
@@ -231,21 +236,23 @@ function windowSection(r: PerfReport): string[] {
     f.gpu_read > 0
       ? `  gpu     ${spread(
           f.gpu_busy,
-        )} ms busy   ${spread(f.gpu)} ms the spans' sum   (over the ${f.gpu_read} frames a read timed)`
+        )} ms busy   (over the ${f.gpu_read} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  busy by kind  ${
       f.gpu_busy_kinds
-        .filter((r) => r.p50 > 0)
-        .map((r) => `${r.name} p50 ${n1(r.p50)} p95 ${n1(r.p95)}`)
+        .filter((r) => r.n > 0)
+        .map((r) => `${r.name} p50 ${n1(r.p50)} p95 ${n1(r.p95)} (${r.n})`)
         .join("  ") || "-"
-    } ms`,
-    `  spans   p95 ${spans || "-"} ms   (over the frames that ran each)`,
-    ...raysText(f.first, last),
+    } ms   (n: the kind's frames a read timed)`,
+    `  spans   p95 ${spans || "-"} ms   (n: the frames a read timed that ran each)`,
+    ...raysText(f.rays),
+    viewText(r.view, f.gpu_px),
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms a run and max, since the recording started)`,
     `  heap used Δ ${signedBytes(
       f.heap_used_delta_bytes,
     )}   (the high-water mark)`,
+    recordingText(r.recording),
   ];
 }
 
@@ -292,7 +299,7 @@ export function perfReportText(r: PerfReport): string {
   }
   if (r.worst.length > 0) {
     out.push(`--- worst ${r.worst.length} moving frames since recording ---`);
-    for (const w of r.worst) out.push(frameLine(w.sample, w.prev));
+    for (const w of r.worst) out.push(frameLine(w));
   }
   if (r.longs.length > 0) {
     out.push("--- long frames ---");

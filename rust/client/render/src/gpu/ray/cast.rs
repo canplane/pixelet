@@ -11,7 +11,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use super::raster::Raster;
-use super::tally::{self, Counted, Tally};
+use super::tally::{self, Counted, RayCounts, Tally};
 use super::{casts_px, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
@@ -29,9 +29,9 @@ use crate::gpu::api::{
 use crate::gpu::generated::{cut_boxes, hold, Drawn, Generated, Generation};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
-use crate::gpu::renderer::{Cast, Overwrites};
+use crate::gpu::renderer::{next_frame, Cast, Overwrites};
 use crate::gpu::shadow;
-use crate::gpu::span_spec::{FrameKind, GpuSpanName};
+use crate::gpu::span_spec::{FrameKind, GpuSpanName, LightMoved};
 use pxl_spec_core::param::light::SAMPLE;
 
 /// What the GPU's cast reads; it writes the world surface's rays.
@@ -188,6 +188,9 @@ pub(super) struct CastBuffers {
     /// `light::HEAD_WORDS`).
     light_moved: u32,
     light_cast: bool,
+    /// Why the map cast this frame, a bit each in LIGHT_MOVED's order
+    /// (span.json); 0 where it did not.
+    light_why: u32,
     /// Whether the next cast marks where the eye's rays met the world
     /// (`light_mark_cs`): held until one does; and whether the marks of the
     /// frame the eye stands in, its pixels' footprints, are owed, as the
@@ -425,6 +428,7 @@ impl RaysPass {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             light_cast: false,
+            light_why: 0,
             light_world: false,
             light_footprint_owed: false,
             refold: false,
@@ -485,6 +489,7 @@ impl RaysPass {
                 c.read.forget();
                 c.light_content.forget();
                 c.light_cast = false;
+                c.light_why = 0;
             }
             return;
         };
@@ -754,12 +759,22 @@ impl RaysPass {
         // The first frame the eye stands in after it moved marks again, with
         // the footprints the jitter's frames after it stand on.
         let footprint_owed = c.light_footprint_owed && kind != FrameKind::cast;
-        let light_moved = !held || !detail_held || !l.end() || footprint_owed;
+        let receivers_held = l.end();
+        let why = [!held, !detail_held, !receivers_held, footprint_owed];
+        let light_moved = why.contains(&true);
         c.light_detail_moved = held && !detail_held;
         if !c.light_ready {
             c.light_content.forget();
         }
         c.light_cast = shadows && light_moved && c.light_ready;
+        c.light_why = if c.light_cast {
+            LightMoved::ALL
+                .iter()
+                .filter(|&&m| why[m as usize])
+                .fold(0, |bits, &m| bits | 1 << m as u32)
+        } else {
+            0
+        };
         // The world's receivers stand where the eye's rays met it: marked
         // again by the next cast after the rays were cast anew, or where an
         // epoch begins. Else what they stood on stands, marked in the epoch
@@ -870,6 +885,7 @@ impl RaysPass {
             c.sent = None;
         }
         let frame = tally::Frame {
+            number: next_frame(),
             // A full cast's alone, so what a cast asks is not shared out
             // over the frames that cast only the pixels.
             casts: [self.kind == FrameKind::cast, c.light_cast],
@@ -1302,13 +1318,25 @@ impl RaysPass {
         }
     }
 
-    /// The counts' sums since boot (ray/tally.rs `RAY_SUMS`).
-    pub fn tally_sums(&self) -> [f64; tally::RAY_SUMS] {
-        Tally::sums()
+    /// The counts that landed since last taken (`Tally::take`).
+    pub fn take_counts(&mut self) -> Option<RayCounts> {
+        self.cast.as_mut().and_then(|c| c.tally.take())
     }
 
     pub fn light_casts(&self) -> bool {
         self.cast.as_ref().is_some_and(|c| c.light_cast)
+    }
+
+    /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
+    /// order (span.json `LIGHT_MOVED`); 0 where it did not.
+    pub fn light_why(&self) -> u32 {
+        self.cast.as_ref().map_or(0, |c| c.light_why)
+    }
+
+    /// The boxes decor's slots are marked by to generate again this frame
+    /// (gpu/generated.rs `marked_boxes`).
+    pub fn decor_boxes(&self) -> u32 {
+        self.cast.as_ref().map_or(0, |c| c.generated.marked_boxes())
     }
 
     pub fn generates(&self) -> bool {

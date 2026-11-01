@@ -277,9 +277,8 @@ fn box_uv(h: Hit) -> vec2f {
 
 // This px's ray, through its middle, as the cast formed it, and what it
 // met: its aim, once, for the ray and for the face's step across a px;
-// the ray's words; and the face it stopped on. One reading for the lit
-// pass and the depth the screen's occlusion is drawn off (screen_lit.wgsl,
-// screen_depth.wgsl), so the two cannot disagree on a px.
+// the ray's words; and the face it stopped on, as the lit pass reads it
+// (screen_lit.wgsl).
 struct Pixel {
   a: vec3f,
   size: vec2f,

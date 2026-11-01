@@ -62,7 +62,7 @@ use crate::gpu::pass::puck::{PuckPass, BEACON_VERTICES};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::{RaysPass, RAY_SUMS};
+use crate::gpu::ray::{RayCounts, RaysPass};
 use crate::gpu::reach::{self, Reach};
 use crate::gpu::read::Read;
 use crate::gpu::resolve::Resolve;
@@ -175,12 +175,6 @@ fn least_height(alt_km: f64) -> f64 {
     let r = BOTTOM_RADIUS_KM;
     -libm::sin(libm::acos(r / (r + alt_km.max(0.0))) + SUN_ANGULAR_RADIUS)
 }
-
-/// The numbers a gated frame writes into its claimed tiles' stencil, 1 on,
-/// the stencil's eight bits but 0, which a frame drawn whole leaves: one
-/// coming round clears it first, so no tile holds this frame's number but
-/// those it claims (`Stencil`).
-const GATE_NUMBERS: u32 = 255;
 
 /// The world's draws that mark no tiles: any of theirs the kernel does not
 /// bound (`FrameInput::bounded`) that moved draws the frame whole.
@@ -353,25 +347,24 @@ pub struct FrameStat {
     /// This frame's number, from 1, a frame the renderer encoded each; 0
     /// where it stood and drew nothing.
     pub frame: f64,
-    /// The upload table's uploads and their bytes, the depth targets' bytes
-    /// and the texture pack's: each as counted, in bytes.
+    /// The upload table's uploads and their bytes, and the texture pack's:
+    /// each as counted, in bytes.
     pub uploads: f64,
     pub upload_bytes: f64,
-    pub depth_bytes: f64,
     pub pack_bytes: f64,
     /// Every draw's, counted only while `counted`: its sums are the frame's
     /// draws and triangles.
     pub census: DrawCensus,
     pub gpu_spans: [f64; GPU_SPAN_NAMES],
-    /// The eye's cast's and the sun's counts, summed since boot
-    /// (gpu/ray/tally.rs `RAY_SUMS`).
-    pub rays: [f64; RAY_SUMS],
-}
-
-/// A frame's GPU time: its spans' sum, the passes timed. The span from the
-/// first to the last would count what lies between submits.
-pub fn gpu_ms(spans: &[f64]) -> f64 {
-    spans.iter().sum()
+    /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
+    /// order (gpu/ray/cast.rs `light_why`), and the boxes decor's slots were
+    /// marked by to generate again (gpu/generated.rs `marked_boxes`): 0
+    /// where it cast none or marked none.
+    pub light_moved: f64,
+    pub decor_boxes: f64,
+    /// The eye's cast's and the light's counts of an earlier frame, landed
+    /// with this one, by that frame's number (gpu/ray/tally.rs `RayCounts`).
+    pub rays: Option<RayCounts>,
 }
 
 /// The passes drawn at the world's own pixels, whose cost goes with them:
@@ -379,9 +372,10 @@ pub fn gpu_ms(spans: &[f64]) -> f64 {
 /// air's
 /// tables, the fill and the decor's generation, the thumbnails, markers and debug
 /// cost what they cost at any resolution.
-const PER_PX: [GpuSpanName; 10] = [
+const PER_PX: [GpuSpanName; 11] = [
     GpuSpanName::ao,
     GpuSpanName::world,
+    GpuSpanName::world_rest,
     GpuSpanName::resolve,
     GpuSpanName::cast,
     GpuSpanName::beam,
@@ -438,6 +432,13 @@ static REDRAW: Global<bool> = Global::new();
 /// (`FrameStat::frame`): beside the renderer, so a lost device's next
 /// renderer numbers on.
 static DRAWN_FRAMES: Global<f64> = Global::new();
+
+/// The number the frame being made takes as it is encoded, which a pass
+/// that counts it names its counts by (gpu/ray/tally.rs `Frame`): a frame
+/// that stands takes none, and none counts.
+pub(crate) fn next_frame() -> f64 {
+    *DRAWN_FRAMES.get(|| 0.0) + 1.0
+}
 
 pub fn on_gpu_lost() {
     RENDERER.set(None);
@@ -527,16 +528,10 @@ pub struct Renderer {
     gate: Built,
     gate_group: u32,
     gate_bound: (u32, u32),
-    /// The number the last frame drawn gated wrote into the claimed tiles'
-    /// stencil, 0 where it was drawn whole (`GATE_NUMBERS`).
-    gate_number: u32,
     /// The light's map's tiles, the light's cast's tiles' side (pxl-spec-core
     /// `light::TILE`), claimed the frame they changed alone, as the
-    /// map gathers nothing (gpu/tiles.rs); and the number the last map drawn
-    /// through its gate wrote into its claimed tiles' stencil, as
-    /// `gate_number`.
+    /// map gathers nothing (gpu/tiles.rs).
     light_tiles: Tiles,
-    light_gate_number: u32,
     /// The uploads the draws that mark read, as the last frame drew them
     /// (gpu/pass/mark.rs).
     kept: UploadCopies,
@@ -631,9 +626,7 @@ impl Renderer {
             gate: pipelines.build_gate(g, PIPELINE_SCREEN_GATE),
             gate_group: 0,
             gate_bound: (0, 0),
-            gate_number: 0,
             light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1),
-            light_gate_number: 0,
             kept: UploadCopies::default(),
             frame_was: [0.0; FRAME_FLOATS],
             frame_was_buf: g.buf(
@@ -1042,11 +1035,11 @@ impl Renderer {
             r.read(self.clouds.words());
             !r.end()
         };
-        let sheets =
-            clouds_moved.then(|| self.sheets_mark(input.environment, world.width, world.height));
-        let marks: Vec<Mark> = sheets.flatten().into_iter().collect();
+        let sheets = clouds_moved
+            .then(|| self.sheets_mark(input.environment, world.width, world.height))
+            .flatten();
         // The sheets seen moving draw a frame however still the rest.
-        let clouds_drawn = sheets.flatten().is_some();
+        let clouds_drawn = sheets.is_some();
         let ao_remade = self.screen_ao
             && self
                 .ao
@@ -1123,17 +1116,12 @@ impl Renderer {
         // gathering since they last changed stay claimed; the cast takes
         // them, its pixels cast there alone.
         let partial = read.same() && !beside_moved;
-        let marks: &[Mark] = if partial { &marks } else { &[] };
         // The tiles of this size, before anything binds them: the claimed
         // the pixels' cast casts and its samples' raster draws, and those the
         // rays' screen pass draws, every one where the world's pass has no
         // gate.
         self.resolve.tiles.size(g, [world.width, world.height]);
-        let drawn = if g.gates() {
-            self.resolve.tiles.bound()
-        } else {
-            self.resolve.tiles.every()
-        };
+        let drawn = self.resolve.tiles.drawn();
         let [across, down] = self.resolve.tiles.squares();
         self.screen
             .set_tiles(self.resolve.tiles.bound(), drawn, across * down);
@@ -1174,7 +1162,6 @@ impl Renderer {
         }
         self.atmosphere.read_back(g);
         self.screen.read_back(g, &mut input.ground);
-        self.reach.back(g, &mut self.resolve.tiles);
         self.screen.tally_back(g);
         if clouds_moved {
             self.clouds.write(g);
@@ -1199,9 +1186,10 @@ impl Renderer {
         // show.
         if quiet && !self.screen.casts_px() && !self.screen.light_casts() {
             self.frame_read = read;
-            let mut stat = self.stat(draws.records, world, input.counted, [0.0; GPU_SPAN_NAMES]);
+            let mut stat = self.stat(draws.records, input.counted, [0.0; GPU_SPAN_NAMES]);
             // Nothing drawn, so no number a read could name.
             stat.frame = 0.0;
+            stat.rays = self.screen.take_counts();
             self.order = order;
             return (FrameKind::stood, stat);
         }
@@ -1234,15 +1222,19 @@ impl Renderer {
         // the device has no stencil. Which tiles they set the GPU alone
         // knows, so the map draws its claimed tiles among those of the box
         // they cover, which the GPU keeps and counts (`Tiles::box_args`).
+        // No mark is handed: through the gate the casters mark drawn, and a
+        // map drawn whole claims every tile by its uniform, its stamp read
+        // by no frame while the map's `claimed_for` is 1 (`Tiles::mark`).
         let cast = self.screen.kind != FrameKind::plain;
         let map_gated = gated && cast && !self.screen.light_casts() && g.gates();
         self.light_tiles.size(g, [shadow::SIZE; 2]);
         self.light_tiles
-            .mark(g, [shadow::SIZE; 2], (map_gated, false), &[]);
+            .mark(g, [shadow::SIZE; 2], (map_gated, false), None);
         let map_drawn = self.shadows && (!map_gated || casters_marking);
         // Where the map's tiles changed through its gate, the screen's tiles
-        // whose pixels read them are reached on the GPU (gpu/reach.rs), what
-        // it marked read back.
+        // whose pixels read them are reached on the GPU (gpu/reach.rs): only
+        // where a caster marks, which marks the screen's tiles too
+        // (`screen_marking`), so the host counts the frame as marked.
         let reaching = map_drawn && map_gated;
         if reaching {
             let spread = reach::spread(SHADOW_MARGIN as f32);
@@ -1256,7 +1248,7 @@ impl Renderer {
         // the resolve and the finish draw.
         self.resolve
             .tiles
-            .mark(g, [world.width, world.height], (gated, quiet), marks);
+            .mark(g, [world.width, world.height], (gated, quiet), sheets);
         if screen_marking {
             let now = self.resolve.tiles.now();
             self.resolve.tiles.marked_in(now);
@@ -1373,9 +1365,8 @@ impl Renderer {
         // it; through its gate where `map_gated`, its stencil numbered as the
         // world's pass's.
         if map_drawn {
-            let number = map_gated.then(|| self.light_gate_number % GATE_NUMBERS + 1);
-            self.light_gate_number = number.unwrap_or(0);
-            let mut pass = self.shadow.begin(&mut ctx, cast, &self.light_tiles, number);
+            let tiles = &mut self.light_tiles;
+            let mut pass = self.shadow.begin(&mut ctx, cast, tiles, map_gated);
             let light = self.shadow.light_group;
             self.decor
                 .draw_generated(&mut pass, self.screen.generated(), b, Stage::Depth, light);
@@ -1431,16 +1422,10 @@ impl Renderer {
             0.0,
             ctx.stamp(GpuSpanName::world).pass(),
         );
-        let number = if gating {
-            self.gate_number % GATE_NUMBERS + 1
-        } else {
-            0
-        };
-        let desc = if number > 1 { desc.kept() } else { desc };
-        self.gate_number = number;
+        let (desc, number) = self.resolve.tiles.gate(desc, gating);
         let pass = g.pass(encoder, &desc);
         let mut pass = TrackedRenderPass::new(g, pass);
-        if gating {
+        if let Some(number) = number {
             pass.set_stencil_reference(number);
             let tiles = self.resolve.tiles.bound();
             if tiles != self.gate_bound {
@@ -1479,18 +1464,13 @@ impl Renderer {
                 world.depth_view,
                 Load::Load,
                 0.0,
-                ctx.stamp(GpuSpanName::world).pass(),
+                ctx.stamp(GpuSpanName::world_rest).pass(),
             );
             pass = TrackedRenderPass::new(g, g.pass(ctx.encoder, &desc));
         }
         // Its map over the color in the tiles drawn again, as the tiles'
         // quads, before what the kernel animates is drawn.
         if self.screen_ao {
-            let drawn = if g.gates() {
-                self.resolve.tiles.bound()
-            } else {
-                self.resolve.tiles.every()
-            };
             let [across, down] = self.resolve.tiles.squares();
             self.ao.apply(g, &mut pass, drawn, across * down);
         }
@@ -1521,13 +1501,6 @@ impl Renderer {
         self.decor
             .draw_ghosts(&mut pass, &draws, b, self.models.frame);
         pass.end();
-        // The depth's bound the reach reads, in the tiles the world's pass
-        // drew: the claimed, or every one without the stencil.
-        let drawn = if g.gates() {
-            self.resolve.tiles.bound()
-        } else {
-            self.resolve.tiles.every()
-        };
         let size = [world.width, world.height];
         let squares = self.resolve.tiles.squares();
         // What the listed draws were drawn with this frame, the frame's
@@ -1538,8 +1511,15 @@ impl Renderer {
         self.impostor.keep(draws.of(PIPELINE_IMPOSTOR), uniforms);
         self.puck.keep(&draws, uniforms);
         self.kept.keep(g, ctx.encoder, &read_uploads, &touched, b);
-        self.reach
-            .set_bounds(&mut ctx, world.depth_only_view, size, drawn, squares);
+        // The depth's bound the reach reads, in the tiles the world's pass
+        // drew: the claimed, or every one without the stencil. None without
+        // the shadows, which the reach runs with alone: the frame they come
+        // on in moves the frame's words (`SHADOW_STRENGTH`), so it is drawn
+        // whole and sets every square before a frame reaches.
+        if self.shadows {
+            self.reach
+                .set_bounds(&mut ctx, world.depth_only_view, size, drawn, squares);
+        }
         let gathered = self.resolve.draw(&mut ctx, self.frame_buf, world, gated);
         // At the canvas's size, its own span. A frame not drawn whole
         // finishes again only its claimed tiles (screen_tiles.wgsl); not
@@ -1603,9 +1583,8 @@ impl Renderer {
             self.ao_read.forget();
             // The stencil holds what the last drawn frame left: the next
             // gated frame clears it.
-            self.gate_number = GATE_NUMBERS;
-            self.light_gate_number = GATE_NUMBERS;
-            self.reach.on_dropped(self.resolve.tiles.now());
+            self.resolve.tiles.on_dropped();
+            self.light_tiles.on_dropped();
             self.kept.forget();
         } else {
             self.resolve.on_drawn(gated);
@@ -1631,11 +1610,12 @@ impl Renderer {
         } else {
             self.screen.kind
         };
-        let mut stat = self.stat(draws.records, world, input.counted, gpu_spans);
+        let mut stat = self.stat(draws.records, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
         stat.gpu_busy_ms = gpu_busy_ms;
         stat.gpu_px = gpu_px;
         stat.gpu_frame = gpu_frame;
+        stat.rays = self.screen.take_counts();
         self.order = order;
         (kind, stat)
     }
@@ -1709,7 +1689,6 @@ impl Renderer {
     fn stat(
         &self,
         draws: &[[u32; DRAW_WORDS]],
-        world: &Surface,
         counted: bool,
         gpu_spans: [f64; GPU_SPAN_NAMES],
     ) -> FrameStat {
@@ -1733,7 +1712,6 @@ impl Renderer {
             c[0] += 1.0;
             c[1] += tris as f64;
         }
-        let px = world.width as f64 * world.height as f64;
         FrameStat {
             gpu_read: false,
             gpu_busy_ms: 0.0,
@@ -1742,15 +1720,12 @@ impl Renderer {
             frame: *DRAWN_FRAMES.get(|| 0.0),
             uploads: b.cnt as f64,
             upload_bytes: b.bytes as f64,
-            // The depth targets: the world's own and the canvas's, one f32 a
-            // pixel, and the markers' regions'.
-            depth_bytes: px * 4.0
-                + f64::from(world.screen.0) * f64::from(world.screen.1) * 4.0
-                + self.marker.depth_bytes(),
             pack_bytes: self.pack.bytes as f64,
             census,
             gpu_spans,
-            rays: self.screen.tally_sums(),
+            light_moved: f64::from(self.screen.light_why()),
+            decor_boxes: f64::from(self.screen.decor_boxes()),
+            rays: None,
         }
     }
 }

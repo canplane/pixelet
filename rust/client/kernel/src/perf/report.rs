@@ -1,36 +1,36 @@
 // pxl-kernel/perf/report.rs
 
 //! A frame turn's record: what the turn measured of itself, what the renderer
-//! made of its frame, and the layers' tile caches, taken once its frame is
-//! drawn, so every figure in it is that one turn's.
+//! made of its frame, and the terrain tiles it took in, taken once its frame
+//! is drawn, so every figure in it is that one turn's.
 
 use pxl_render::gpu::span_spec::FrameKind;
-use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
+use xpute_guest::mem::heap::HeapStat;
 use xpute_guest::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
 use crate::door;
-use crate::perf::frame::{
-    DeviceSample, FrameSample, GpuSample, HeapSample, RaySample, RingSample, TileSample, GPU_SPANS,
+use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample, GPU_SPANS};
+use crate::perf::record::{
+    perf_fold_recording, perf_record_frame, perf_record_gpu, perf_record_rays, perf_recording,
 };
-use crate::perf::record::{perf_record_frame, perf_record_gpu, perf_recording};
+use crate::perf::section::RecordingSection;
 use crate::sys::boot;
 use crate::sys::io::body;
-use crate::sys::io::demand::Stream;
-use crate::sys::io::request::stream_counts;
 use crate::turn;
 
 /// What the renderer made of this turn's frame (domain/scene/stage.rs
-/// `stage_render`), and the GPU's read of an earlier frame, landed now.
+/// `stage_render`), and the reads of earlier frames, landed now.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct HostFrame {
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
     landed: Option<GpuRead>,
+    rays: Option<RayRead>,
 }
 
 /// A GPU read as it lands: the renderer's number of the frame it timed, its
@@ -43,6 +43,14 @@ pub struct GpuRead {
     pub px: f64,
 }
 
+/// A frame's ray counts as they land: the renderer's number of the frame
+/// that counted them, and the counts.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RayRead {
+    pub frame: f64,
+    pub rays: RaySample,
+}
+
 impl Default for HostFrame {
     fn default() -> Self {
         HostFrame {
@@ -50,6 +58,7 @@ impl Default for HostFrame {
             gpu: GpuSample::default(),
             device: DeviceSample::default(),
             landed: None,
+            rays: None,
         }
     }
 }
@@ -57,52 +66,43 @@ impl Default for HostFrame {
 static HOST: Global<HostFrame> = Global::new();
 
 /// The renderer's answer for this turn's frame, its figures zero where it
-/// drew none, and the GPU's read of an earlier frame, landed now.
+/// drew none, and the reads of earlier frames, landed now.
 pub fn set_host_frame(
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
     landed: Option<GpuRead>,
+    rays: Option<RayRead>,
 ) {
     HOST.set(HostFrame {
         kind,
         gpu,
         device,
         landed,
+        rays,
     });
 }
 
-/// The heap as its allocator states it, in its own bytes.
-fn heap_sample() -> HeapSample {
-    let h = boot::heap_stat();
-    HeapSample {
-        used_bytes: h.used as f64,
-        live_bytes: h.live as f64,
-        run_bytes: h.run as f64,
-        slot_bytes: h.slot as f64,
-        range_bytes: h.range as f64,
-        largest_free_bytes: h.largest_free as f64,
-        refusals: h.refusals as f64,
+/// What this frame turn held, folded into the recording's extremes: the heap as
+/// its allocator states it, the rings' and body slots' peaks since the frame
+/// before, which taking them starts again, and the terrain tiles refused a
+/// slot since then.
+fn held_now(h: &HeapStat) -> RecordingSection {
+    let rings = door::take_stat();
+    RecordingSection {
+        frames: 1.0,
+        heap_live_max_bytes: h.live as f64,
+        heap_run_max_bytes: h.run as f64,
+        heap_slot_max_bytes: h.slot as f64,
+        heap_range_max_bytes: h.range as f64,
+        heap_largest_free_min_bytes: h.largest_free as f64,
+        heap_refusals: f64::from(h.refusals),
+        ring_cq_peak: f64::from(rings.cq_peak),
+        ring_sq_peak: f64::from(rings.sq_peak),
+        ring_held_peak: f64::from(rings.left_peak),
+        body_slots_peak: f64::from(body::take_peak()),
+        cap_terrain_refused: TerrainTile::tile_cache().take_refusals() as f64,
     }
-}
-
-/// The rings as the door states them since the frame before, which taking
-/// them starts again.
-fn ring_sample() -> RingSample {
-    let s = door::take_stat();
-    RingSample {
-        cq_peak: f64::from(s.cq_peak),
-        sq_peak: f64::from(s.sq_peak),
-        held_peak: f64::from(s.left_peak),
-    }
-}
-
-/// The renderer's ray counts as it last stated them: sums since boot, so
-/// kept, not taken, by a turn that draws none.
-static RAYS: Global<RaySample> = Global::new();
-
-pub fn set_rays(s: RaySample) {
-    RAYS.set(s);
 }
 
 /// A frame turn's own measures (turn.rs `world_frame`).
@@ -127,9 +127,9 @@ pub struct FrameTurn {
 pub fn perf_frame(t: FrameTurn) {
     let at = now();
     // Taken whether or not recording, so a recording starts from now.
-    let rings = ring_sample();
-    let body_slots_peak = f64::from(body::take_peak());
-    let terrain_refused = TerrainTile::tile_cache().take_refusals() as f64;
+    let heap = boot::heap_stat();
+    let held = held_now(&heap);
+    let tiles_landed = f64::from(TerrainTile::tile_cache().take_landed());
     let host = core::mem::take(HOST.get(HostFrame::default));
     if !perf_recording() {
         return;
@@ -137,12 +137,10 @@ pub fn perf_frame(t: FrameTurn) {
     if let Some(r) = host.landed {
         perf_record_gpu(r);
     }
-    let mut tiles = TileSample::default();
-    for (p, _) in TerrainTile::tile_cache().held() {
-        tiles.by_zoom[p.zoom as usize] += 1.0;
+    if let Some(r) = host.rays {
+        perf_record_rays(r);
     }
-    tiles.place = PlaceTile::tile_cache().held().count() as f64;
-    let counts = Stream::ALL.map(stream_counts);
+    perf_fold_recording(&held);
     let record = FrameSample {
         // As the stage ended, before the record is taken.
         t: at,
@@ -157,15 +155,9 @@ pub fn perf_frame(t: FrameTurn) {
         effects: turn::effect_times(),
         kind: f64::from(host.kind as u8),
         gpu: host.gpu,
+        tiles_landed,
         device: host.device,
-        tiles,
-        heap: heap_sample(),
-        rings,
-        body_slots_peak,
-        waiting: counts.map(|c| f64::from(c.0)),
-        out: counts.map(|c| f64::from(c.1)),
-        terrain_refused,
-        rays: *RAYS.get(RaySample::default),
+        heap_used_bytes: heap.used as f64,
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()
     };

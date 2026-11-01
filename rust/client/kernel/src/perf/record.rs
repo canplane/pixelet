@@ -13,9 +13,9 @@ use core::mem::size_of;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-use crate::perf::frame::{FrameSample, GpuSample, WorstFrame};
-use crate::perf::report::GpuRead;
-use crate::perf::section::RecSection;
+use crate::perf::frame::{FrameSample, WorstFrame};
+use crate::perf::report::{GpuRead, RayRead};
+use crate::perf::section::{RecSection, RecordingSection};
 use crate::perf::spec::LIMIT;
 use crate::perf::task::TaskRow;
 
@@ -115,6 +115,9 @@ struct Perf {
     stopped_at: Option<f64>,
     worst: Box<[WorstFrame]>,
     worst_len: usize,
+    /// What the frames held at the most or the least since the recording
+    /// started (`perf_fold_recording`).
+    held: RecordingSection,
     /// The read's, where it sorts what it spreads (read.rs).
     scratch: Box<[f64]>,
     /// The interval in progress: the last frame turn's record, which every
@@ -144,6 +147,7 @@ fn perf() -> &'static mut Perf {
         stopped_at: None,
         worst: Box::default(),
         worst_len: 0,
+        held: RecordingSection::default(),
         scratch: Box::default(),
         open: None,
         frame_task_ms: 0.0,
@@ -183,6 +187,7 @@ pub fn perf_recording_start() -> bool {
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
     (l.task_head, l.frame_head) = (0, 0);
     l.open = None;
+    l.held = RecordingSection::default();
     l.truncated = false;
     l.started_at = now();
     l.stopped_at = None;
@@ -266,39 +271,71 @@ pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool, frame_
     }
 }
 
-/// The GPU's read `r` of the frame the renderer numbered `r.frame`, as it lands a
-/// frame or two after it: written into that frame's record, the one in
-/// progress or one landed, and into a worst frame's that holds it.
-pub fn perf_record_gpu(r: GpuRead) {
-    let l = perf();
-    if !l.recording || r.frame == 0.0 {
+/// `write` into the record of the frame the renderer numbered `frame`, as
+/// a read of it lands a frame or two after it: the one in progress or one
+/// landed, however late, and a worst frame's that holds it.
+fn at_frame(l: &mut Perf, frame: f64, write: impl Fn(&mut FrameSample)) {
+    if frame == 0.0 {
         return;
     }
-    let read = |g: &mut GpuSample| {
-        if g.frame == r.frame {
-            (g.read, g.spans, g.busy_ms, g.px) = (1.0, r.spans, r.busy_ms, r.px);
+    let of = |f: &mut FrameSample| {
+        if f.gpu.frame == frame {
+            write(f);
         }
     };
     if let Some(f) = l.open.as_mut() {
-        read(&mut f.gpu);
+        of(f);
     }
-    // Back from the newest to the frame it timed, however late it landed.
+    // Back from the newest to the frame it names.
     for f in l.frame_ring[l.frame_head..l.frame_len].iter_mut().rev() {
-        read(&mut f.gpu);
-        if f.gpu.frame != 0.0 && f.gpu.frame <= r.frame {
+        of(f);
+        if f.gpu.frame != 0.0 && f.gpu.frame <= frame {
             break;
         }
     }
     for w in &mut l.worst[..l.worst_len] {
-        read(&mut w.sample.gpu);
-        read(&mut w.prev.gpu);
+        of(&mut w.sample);
     }
+}
+
+/// The GPU's read `r` of the frame the renderer numbered `r.frame`, written
+/// into that frame's record.
+pub fn perf_record_gpu(r: GpuRead) {
+    let l = perf();
+    if !l.recording {
+        return;
+    }
+    at_frame(l, r.frame, |f| {
+        (f.gpu.read, f.gpu.spans, f.gpu.busy_ms, f.gpu.px) = (1.0, r.spans, r.busy_ms, r.px);
+    });
+}
+
+/// The ray counts `r` of the frame the renderer numbered `r.frame`, written
+/// into that frame's record.
+pub fn perf_record_rays(r: RayRead) {
+    let l = perf();
+    if !l.recording {
+        return;
+    }
+    at_frame(l, r.frame, |f| f.rays = r.rays);
+}
+
+/// What a frame turn held, `held`, folded into the recording's extremes.
+pub fn perf_fold_recording(held: &RecordingSection) {
+    let l = perf();
+    if l.recording {
+        l.held.fold(held);
+    }
+}
+
+pub fn perf_recording_held() -> RecordingSection {
+    perf().held
 }
 
 /// A turn's end, frame turn or not: its time into the interval in progress,
 /// rise to fall, its tasks' part, and what it asked as it fell, unless the
 /// turn served the shell's read of the profiler.
-pub fn perf_record_turn(turn_ms: f64, poll_ms: f64, wake: f64, wake_in_ms: f64) {
+pub fn perf_record_turn(turn_ms: f64, poll_ms: f64, wake: f64) {
     let l = perf();
     let frame_task_ms = core::mem::take(&mut l.frame_task_ms);
     let read_turn = core::mem::take(&mut l.read_turn);
@@ -310,7 +347,7 @@ pub fn perf_record_turn(turn_ms: f64, poll_ms: f64, wake: f64, wake_in_ms: f64) 
     // The frame task runs inside the poll, so this is never negative.
     f.tasks_ms += poll_ms - frame_task_ms;
     if !read_turn {
-        (f.wake, f.wake_in_ms) = (wake, wake_in_ms);
+        f.wake = wake;
     }
 }
 
@@ -329,14 +366,9 @@ pub fn perf_record_read(ms: f64) {
 fn land(l: &mut Perf, s: FrameSample) {
     let at = l.worst[..l.worst_len].partition_point(|w| w.sample.interval_ms >= s.interval_ms);
     if s.settled == 0.0 && at < l.worst.len() {
-        let prev = l.frame_ring[..l.frame_len].last().copied();
         let kept = l.worst_len.min(l.worst.len() - 1);
         l.worst.copy_within(at..kept, at + 1);
-        l.worst[at] = WorstFrame {
-            sample: s,
-            has_prev: if prev.is_some() { 1.0 } else { 0.0 },
-            prev: prev.unwrap_or_default(),
-        };
+        l.worst[at] = WorstFrame::of(s, l.frame_ring[..l.frame_len].last());
         l.worst_len = kept + 1;
     }
 
