@@ -68,11 +68,13 @@ fn shadow_level(q: f32) -> u32 {
 }
 
 // Where `p`, from the eye, lies in level `l`'s box, its NDC and depth: the
-// first level's turn, scaled by `2^-l` as the levels' boxes are, and the
-// level's own translation (gpu/shadow.rs `translation`).
+// first level's turn, scaled across by `2^-l` and deep by the first's depth
+// over the level's, as the levels' boxes are, and the level's own
+// translation (gpu/shadow.rs `level_clip`).
 fn shadow_level_clip(p: vec3f, l: u32) -> vec3f {
   let turned = (frame_light_view_proj() * vec4f(p, 0.0)).xyz;
-  return turned * exp2(-f32(l)) + frame_light_levels(l).xyz;
+  let at = frame_light_levels(l);
+  return vec3f(turned.xy * exp2(-f32(l)), turned.z * at.w) + at.xyz;
 }
 
 // Level `l`'s compare at `uv` against `depth`: the first's own map, the
@@ -98,20 +100,26 @@ fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
   if (l >= levels) {
     return 1.0;
   }
-  // A texel of its level along the normal so a surface does not shadow itself.
-  let ndc = shadow_level_clip(world_pos + n * frame_light_levels(l).w, l);
+  let size = select(vec2f(textureDimensions(shadow_levels)), vec2f(textureDimensions(shadow_map)), l == 0u);
+  // A texel of its level along the normal so a surface does not shadow
+  // itself: its share of the box's width, `2^l` of the first level's half-
+  // width, off the first's row across (gpu/shadow.rs `texel`).
+  let m = frame_light_view_proj();
+  let texel = 2.0 * exp2(f32(l)) / (size.x * length(vec3f(m[0].x, m[1].x, m[2].x)));
+  let ndc = shadow_level_clip(world_pos + n * texel, l);
   let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0)) || ndc.z > 1.0 || ndc.z < 0.0) {
     return 1.0;
   }
   let last = frame_shadow_radius_ndc() * exp2(f32(levels - 1u));
   let strength = frame_shadow_strength() * (1.0 - smoothstep(SHADOW_FADE_START * last, last, q));
-  let size = select(vec2f(textureDimensions(shadow_levels)), vec2f(textureDimensions(shadow_map)), l == 0u);
   // A tap a texel and a half off lies where the receiver's plane is that
   // much nearer the light or further: compared at its own depth there
   // (receiver-plane depth bias, Isidoro 2006), not the receiver's, so the
-  // casters' push need cover only the texels each tap filters.
-  let slope = light_slope(n, 2.0 / size.x) * LIGHT_SPREAD;
+  // casters' push need cover only the texels each tap filters. Off the
+  // first level's box, its share of the level's: `2^l` times as wide, its
+  // depth scaled (`shadow_level_clip`).
+  let slope = light_slope(n, 2.0 / size.x) * exp2(f32(l)) * frame_light_levels(l).w * LIGHT_SPREAD;
   var lit = 0.0;
   for (var y = -1; y <= 1; y++) {
     for (var x = -1; x <= 1; x++) {

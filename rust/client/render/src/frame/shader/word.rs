@@ -119,9 +119,9 @@ uniform! {
         /// `levels_for`): a receiver past the last's reach reads none.
         SHADOW_LEVELS: F32 = 55,
         /// Each level's translation, the last column of its frame, its turn
-        /// the first's scaled by `2^-l`, and its texel, the normal offset a
-        /// fragment takes there (gpu/shadow.rs `translation`, shadow.wgsl
-        /// `shadow_level_clip`).
+        /// the first's scaled across by `2^-l`, and the first's depth over
+        /// its own, the scale its depth takes (gpu/shadow.rs `level_clip`,
+        /// shadow.wgsl `shadow_level_clip`).
         LIGHT_LEVELS: Levels = 56,
         /// Where this frame's pixels sample the world, off their middles, in
         /// clip units, X right and Y up: pxl-spec-core `eye::JITTER`'s offset

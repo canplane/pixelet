@@ -287,9 +287,10 @@ pub mod shadow {
         /// The share of the box's depth its planes step along the sun by, on
         /// a grid fixed in the world as its texels are across: a step casts
         /// the world again, since every texel's ray starts on the near plane.
-        /// The box is as much deeper than the sphere of its reach, half a step
-        /// each side, so the sphere lies within it wherever the step leaves
-        /// it.
+        /// The box is as much deeper than what it holds, its receivers and
+        /// the casters' reach toward the sun past them (gpu/shadow.rs
+        /// `aim_level`), half a step each side, so they lie within it
+        /// wherever the step leaves it.
         DEPTH_STEP: f64 = 0.2;
     }
 }

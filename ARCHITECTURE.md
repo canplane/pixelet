@@ -541,7 +541,11 @@ a side,
 the least that keeps its texel no wider than the camera grid's cell at its
 near edge. The coarsest reaches as far as the eye draws at the pyramid's top.
 `gpu/shadow.rs` asserts all three. A receiver reads the finest level that holds
-it (`level_of`, `shadow.wgsl` `shadow_level`).
+it (`level_of`, `shadow.wgsl` `shadow_level`). A level's box holds its
+receivers a half-width either side of the eye along the light's rays, and
+toward the sun past them every caster that can shadow one: as far along the
+rays as they climb from the ground to the world's ceiling over it, no farther
+than the eye draws (`caster_reach`).
 
 Each texel is fixed in the world and held in its level's slot by its index
 modulo the level's side (`Light`). The sun is an observer as the eye is: one set

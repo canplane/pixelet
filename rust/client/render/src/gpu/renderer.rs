@@ -797,7 +797,7 @@ impl Renderer {
             for l in 0..light::LEVELS {
                 let at = LIGHT_LEVELS + 4 * l as usize;
                 let t = if l < self.shadow.level_cnt {
-                    self.shadow.translation(l)
+                    self.shadow.level_clip(l)
                 } else {
                     [0.0; 4]
                 };

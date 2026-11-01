@@ -310,11 +310,11 @@ impl Light {
     /// (`level_of`), in units of their reach: across the light's rays, or
     /// along them times the share of the half-width a receiver reads across
     /// (`shadow_radius_ndc`), whichever is more. A level's box holds a
-    /// receiver across within its reach and along within its half-width,
-    /// its planes that and a share more either side of the eye (pxl-render
-    /// gpu/shadow.rs `aim`); past them it reads the far plane, lit. Across
-    /// alone, a low light's receiver far along the rays read the first
-    /// level and lay past its planes.
+    /// receiver across within its reach and along within its half-width
+    /// either side of the eye, and toward the light past it every caster
+    /// that can shadow one (pxl-render gpu/shadow.rs `aim_level`,
+    /// `caster_reach`). Across alone, a low light's receiver far along the
+    /// rays read the first level and lay past its planes.
     pub fn level_dist(&self, v: [f32; 3]) -> f32 {
         let along = libm::fabsf(dot(v, self.dir));
         self.across_rays(v).max(along * self.shadow_radius_ndc)

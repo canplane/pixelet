@@ -719,3 +719,13 @@ no shadow coarser anywhere than it was.
   shadow.wgsl `shadow_dist`), the marks alike; a receiver within the first
   level's half-width along the rays reads it as before. Open: a receiver near a level's sunward plane keeps only what
   stands between it and that plane.
+- **A level's box toward the sun (2026-11-02).** A receiver near a level's
+  sunward plane kept only what stood between it and that plane. Each
+  level's box now reaches past its receivers toward the sun as far along the
+  rays as they climb from the ground to the world's ceiling over it
+  (`HEADROOM`), no farther than the eye draws at the pyramid's top
+  (pxl-render gpu/shadow.rs `caster_reach`), the same for every level; its
+  depth step's margin grows with it. The lit passes scale each level's depth
+  by the first's over its own (`level_clip`), its texel off the first's row
+  across. Level 0's texel and reach for receivers are as they were. Read in
+  the code, no GPU run.
