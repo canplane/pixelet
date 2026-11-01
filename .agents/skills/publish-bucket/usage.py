@@ -19,7 +19,7 @@ from pathlib import Path
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 WORKER = "pixelet"
-BUCKET = "pixelet-tiles"
+BUCKET = "pixelet-bucket"
 SERVER = "pixelet-prod"
 # Cloudflare's CLI, a program on the PATH as git and aws are.
 WRANGLER = ["wrangler"]

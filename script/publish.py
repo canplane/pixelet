@@ -34,7 +34,7 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parent.parent
-BUCKET = "pixelet-tiles"
+BUCKET = "pixelet-bucket"
 KINDS = ["terrain", "place", "division", "earth"]
 SOURCE = "source"
 # Beside a copy's tiles, what it is: never uploaded.

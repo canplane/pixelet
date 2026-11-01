@@ -51,8 +51,8 @@ declare global {
 type ExecutionContext = { waitUntil(p: Promise<unknown>): void };
 
 export type Env = {
-  /** Bucket holding the pre-baked tiles, one object per page_idx. */
-  TILES: R2Bucket;
+  /** The bucket: the baked pages, the assets and `source`. */
+  BUCKET: R2Bucket;
   /** Static asset binding, used only for the fallthrough below. */
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** The live API's own origin (infra/README.md) — an env var
@@ -146,7 +146,7 @@ function left(): Response {
  * a publish is seen by the next boot. A client whose copy is current gets 304.
  */
 async function declaration(request: Request, env: Env): Promise<Response> {
-  const object = await env.TILES.get(SOURCE_KEY, { onlyIf: request.headers });
+  const object = await env.BUCKET.get(SOURCE_KEY, { onlyIf: request.headers });
   if (object === null) return new Response("not found", { status: 404 });
   const headers = new Headers();
   object.writeHttpMetadata(headers);
@@ -233,7 +233,7 @@ export default {
       if (cached) return serve(cached.body, cached.headers);
     }
     if (request.method === "HEAD") {
-      const meta = await env.TILES.head(key);
+      const meta = await env.BUCKET.head(key);
       if (meta === null) return missing();
       const headers = new Headers();
       meta.writeHttpMetadata(headers);
@@ -262,7 +262,7 @@ export default {
     // So the encoding is kept where the cache cannot read it. `CACHED_ENCODING`
     // holds it while the entry is stored, the body goes in as the opaque
     // octets it is, and both paths out put it back on the way to the client.
-    const object = await env.TILES.get(key);
+    const object = await env.BUCKET.get(key);
     // Not cached: a version asked for before it is uploaded would answer empty for good.
     if (object === null) return missing();
 

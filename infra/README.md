@@ -171,8 +171,8 @@ Writes are outside it, and nothing configures a spending cap: a publish is a
 pyramid's worth of Class A operations, so the publish-bucket skill checks the
 month's count before one.
 
-The bucket, `pixelet-tiles`, holds everything the client fetches that is not the
-app itself:
+The bucket, `pixelet-bucket`, holds everything the client fetches that is not
+the app itself:
 
 | Prefix                  | Object                                          | Named by                 | Policy                                                           |
 | ----------------------- | ----------------------------------------------- | ------------------------ | ---------------------------------------------------------------- |

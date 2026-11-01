@@ -11,9 +11,13 @@
 # number first, then the servers, then the client; see deploy-web.
 #
 # Secrets this needs, all repository secrets:
-#   CLOUDFLARE_API_TOKEN   Workers + R2 write. Wrangler publishes the Worker
-#                          with it and reads/writes the build counter object.
-#   CLOUDFLARE_ACCOUNT_ID  Which account, since a token may reach more than one.
+#   CLOUDFLARE_API_TOKEN   Workers write (pixelet-worker-ci). Wrangler bundles
+#                          and publishes the Worker with it.
+#   CLOUDFLARE_ACCOUNT_ID  Which account, since a token may reach more than one;
+#                          also the bucket's S3 endpoint (script/r2.py).
+#   R2_ACCESS_KEY_ID /     The bucket's key, held to pixelet-bucket alone
+#   R2_SECRET_ACCESS_KEY   (pixelet-bucket-ci): the build counter, the build log
+#                          and the path tables, through the AWS CLI.
 #   VM_HOST / VM_USER      The Hetzner box the compose stack runs on.
 #   VM_SSH_KEY             A private key whose public half is in that user's
 #                          authorized_keys. Deploy-only; nothing else uses it.
@@ -115,8 +119,9 @@ jobs:
       - name: Take the next build number
         id: number
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: echo "value=$(./script/build-log.py --take)" >> "$GITHUB_OUTPUT"
 
   deploy-server:
@@ -216,6 +221,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           PXL_BUILD_NUMBER: ${{ needs.number.outputs.build_number }}
         # deploy.py says `published`: true once wrangler finishes, and where it
         # fails, whether the site serves this build all the same.
@@ -283,18 +290,11 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: ts/.tool-versions
-
-      # wrangler, Cloudflare's CLI, a program the steps call as any other.
-      - name: Install wrangler
-        run: npm install --global "wrangler@${WRANGLER_VERSION}"
-
       - name: Append this build to the log
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           ./script/build-log.py --record "${{ needs.number.outputs.build_number }}" \
             ${{ needs.deploy-web.outputs.published == 'true' && '--web' || '' }} \

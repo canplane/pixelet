@@ -1,31 +1,54 @@
-# One object of the bucket at a time, read or written through wrangler,
-# Cloudflare's CLI for it: the build counter, the build log and the deploy's
-# path tables. wrangler takes its credential as it does anywhere: CI's
-# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, or a machine's own login.
-# A whole set's upload is the AWS CLI's (publish.py), which syncs a directory.
+# One object of the bucket at a time, read or written through the AWS CLI on
+# R2's S3 endpoint: the build counter, the build log and the deploy's path
+# tables. A key held to this bucket alone: CI's `R2_ACCESS_KEY_ID` and
+# `R2_SECRET_ACCESS_KEY` handed in as AWS_ACCESS_KEY_ID and
+# AWS_SECRET_ACCESS_KEY, its endpoint from CLOUDFLARE_ACCOUNT_ID; or a
+# machine's `r2` profile and its endpoint_url (publish-bucket). A whole set's
+# upload is publish.py's, which syncs a directory.
 
 import os
 import subprocess
 import tempfile
 
-BUCKET = "pixelet-tiles"
-# Cloudflare's CLI, a program on the PATH as git and aws are.
-WRANGLER = ["wrangler"]
+BUCKET = "pixelet-bucket"
 
 
 class Unreachable(Exception):
-    """wrangler could not read or write the object."""
+    """The object could not be read or written."""
+
+
+def endpoint():
+    """The bucket's S3 endpoint: `$R2`, else the account's, else the `r2` profile's."""
+    if os.environ.get("R2"):
+        return os.environ["R2"]
+    if os.environ.get("CLOUDFLARE_ACCOUNT_ID"):
+        return f"https://{os.environ['CLOUDFLARE_ACCOUNT_ID']}.r2.cloudflarestorage.com"
+    got = subprocess.run(["aws", "configure", "get", "endpoint_url", "--profile", "r2"], capture_output=True, text=True)
+    if not got.stdout.strip():
+        raise Unreachable("no endpoint: set CLOUDFLARE_ACCOUNT_ID, $R2 or the `r2` profile's endpoint_url")
+    return got.stdout.strip()
+
+
+def s3api(*args):
+    # A key in the environment is CI's; else the machine's `r2` profile.
+    profile = [] if os.environ.get("AWS_ACCESS_KEY_ID") else ["--profile", "r2"]
+    # AWS CLI v2 sends checksum headers R2 refuses.
+    env = {**os.environ, "AWS_REQUEST_CHECKSUM_CALCULATION": "when_required", "AWS_DEFAULT_REGION": "auto"}
+    return subprocess.run(["aws", "s3api", *args, *profile, "--endpoint-url", endpoint()], env=env, capture_output=True)
 
 
 def get(key):
     """The object's bytes; None where there is no such object."""
-    run = subprocess.run([*WRANGLER, "r2", "object", "get", f"{BUCKET}/{key}", "--remote", "--pipe"], capture_output=True)
-    if run.returncode != 0:
-        err = run.stderr.decode(errors="replace")
-        if "does not exist" in err or "NoSuchKey" in err or "404" in err:
-            return None
-        raise Unreachable(f"get {key}: {err.strip()}")
-    return run.stdout
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "body")
+        run = s3api("get-object", "--bucket", BUCKET, "--key", key, out)
+        if run.returncode != 0:
+            err = run.stderr.decode(errors="replace")
+            if "NoSuchKey" in err or "404" in err:
+                return None
+            raise Unreachable(f"get {key}: {err.strip()}")
+        with open(out, "rb") as f:
+            return f.read()
 
 
 def put(key, body, content_type):
@@ -33,10 +56,7 @@ def put(key, body, content_type):
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(body)
     try:
-        run = subprocess.run(
-            [*WRANGLER, "r2", "object", "put", f"{BUCKET}/{key}", "--remote", "--file", f.name, "--content-type", content_type],
-            capture_output=True,
-        )
+        run = s3api("put-object", "--bucket", BUCKET, "--key", key, "--body", f.name, "--content-type", content_type)
     finally:
         os.unlink(f.name)
     if run.returncode != 0:
