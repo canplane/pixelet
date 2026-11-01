@@ -39,8 +39,10 @@ For each, in turn:
    `cached` or `seen` temporary); a short binding (`tmp`, `val`, `x`, `kept`,
    `held`) whose surrounding lines say what it holds; an enum variant naming a
    state or an event; a word someone else owns (WebGPU's in xpute's `gpu/`).
-4. Also a finding: a name that reads as another concept here, a type with no
-   head noun, and a module or file named by a participle.
+4. Also a finding: a name that reads as another concept in the same scope,
+   a type with no head noun, and a module or file named by a participle.
+   The module path is the qualifier: the same name in another module or enum
+   is no finding, and a name is never lengthened to tell it from one there.
 
 ## Report
 
