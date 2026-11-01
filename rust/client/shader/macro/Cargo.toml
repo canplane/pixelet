@@ -1,0 +1,14 @@
+# pxl-shader-macro: an entry's workgroup written off the constants its code
+# counts by (src/lib.rs `compute`), for pxl-shader, in its workspace.
+[package]
+name = "pxl-shader-macro"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+# The constants pxl-spec-core holds; pxl-shader's own it reads as a module.
+pxl-spec-core.workspace = true

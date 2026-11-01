@@ -12,17 +12,18 @@
 //! samples (`light_held_cs`) and lowered by its slots' walks
 //! (`light_miss_held_cs`).
 
+use pxl_shader_macro::compute;
 use pxl_spec_core::cast::{self, Detail, Margin};
 use pxl_spec_core::fill::put;
 use pxl_spec_core::light::{Light, Starts};
-use pxl_spec_core::{at, beam, observed, tally, way};
+use pxl_spec_core::{at, beam, observed, ray, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::{spirv, Image};
 
 use crate::beam::{Beams, Words};
-use crate::cast::{add_cnt, enlist, px_tan, Rays};
+use crate::cast::{add_cnt, enlist};
 use crate::decor::Instances;
-use crate::eye::{eye_origin, eye_ray, Eye};
+use crate::eye::{eye_origin, Eye};
 use crate::observed::Pyramid;
 use crate::observer::{self, Aim, Level, Observer, Take};
 use crate::world::World;
@@ -75,7 +76,7 @@ fn counts(m: &Head) -> bool {
 }
 
 /// The cast's number (`light::HEAD_CAST`).
-fn cast_number(m: &Head) -> u32 {
+pub(crate) fn cast_number(m: &Head) -> u32 {
     m.v[0].x as u32
 }
 
@@ -87,7 +88,7 @@ fn epoch(m: &Head) -> u32 {
 
 /// Whether the cast's marks take each pixel's footprint
 /// (`light::HEAD_FOOTPRINT`).
-fn footprint(m: &Head) -> bool {
+pub(crate) fn footprint(m: &Head) -> bool {
     m.v[1].z != 0
 }
 
@@ -157,7 +158,7 @@ fn world<'a>(
 }
 
 /// The light's cast off the eye's words (pxl-spec-core `light::Light::words`).
-fn light_of(eye: &Eye) -> Light {
+pub(crate) fn light_of(eye: &Eye) -> Light {
     let v3 = |v: Vec4| [v.x, v.y, v.z];
     let i = |v: Vec4| v.w.to_bits() as i32;
     Light {
@@ -524,7 +525,7 @@ pub fn light_cs(
 /// least margin of the nodes it asked, written over its place in the list
 /// (`light::miss_word`), which `light_miss_held_cs` lowers the tile's held
 /// words by. The list read and written plainly.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "light_miss_cs"))]
+#[compute(threads(ray::MISS_LANES), entry_point_name = "light_miss_cs")]
 #[allow(clippy::too_many_arguments)]
 pub fn light_miss_cs(
     #[spirv(workgroup_id)] group: UVec3,
@@ -544,7 +545,7 @@ pub fn light_miss_cs(
     let clipmap: &[IVec4] = clipmap;
     let m = Map::of(eye, head);
     let n = m.side();
-    let i = (group.y * pxl_spec_core::ray::MISS_ACROSS + group.x) * pxl_spec_core::ray::MISS_LANES
+    let i = (group.y * ray::MISS_ACROSS + group.x) * ray::MISS_LANES
         + lane.x;
     if i >= list.word(pxl_spec_core::light::misses_cnt(n)) {
         return;
@@ -567,7 +568,7 @@ pub fn light_miss_cs(
 /// tile's held words, a thread a slot as `light_miss_cs` lays them, after
 /// it: the one word a walk shares with others, so the one pass of the cast
 /// whose list is atomic. None where its walk asked nothing.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "light_miss_held_cs"))]
+#[compute(threads(ray::MISS_LANES), entry_point_name = "light_miss_held_cs")]
 pub fn light_miss_held_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
@@ -575,7 +576,7 @@ pub fn light_miss_held_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
 ) {
     let n = size(head);
-    let i = (group.y * pxl_spec_core::ray::MISS_ACROSS + group.x) * pxl_spec_core::ray::MISS_LANES
+    let i = (group.y * ray::MISS_ACROSS + group.x) * ray::MISS_LANES
         + lane.x;
     if i >= at(list, pxl_spec_core::light::misses_cnt(n)) {
         return;
@@ -728,107 +729,9 @@ pub fn light_held_cs(
     put(list, m.light.held(n, [id.x, id.y]) + l::HELD_MARGIN, least);
 }
 
-/// The world's receivers of the shadow map: the drawn pixels' rays (cast.rs
-/// `Rays`), a thread a square of them `light::MARK` a side, each read, the
-/// tile the point it met the world at lies on marked stood on
-/// (`light::stands_at`), a run on one tile once, and the tiles between it
-/// and where each pixel beside it met it, across, down and either diagonal,
-/// each pair of neighbors once, its footprint (`light::FOOTPRINT_TILES`), so
-/// a jittered ray stands on a tile marked whichever way it moves, where the
-/// head asks it (`light::HEAD_FOOTPRINT`), else its own tile alone; nothing
-/// where it met nothing. A word written alike by every thread it is marked
-/// by, so none needs an atomic. Run after the eye's rays, before the
-/// propagation (`light_propagate_cs`); the drawn receivers stand apart
-/// (`light_mark_drawn_cs`).
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "light_mark_cs"))]
-pub fn light_mark_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
-    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
-) {
-    let drawn: UVec3 = rays.query_size();
-    let m = pxl_spec_core::light::MARK;
-    if id.x * m >= drawn.x || id.y * m >= drawn.y {
-        return;
-    }
-    let (s, n) = (light_of(eye), size(head));
-    let (cast, footprint) = (cast_number(head), footprint(head));
-    // Each pixel's tile read once: the square's, and where the footprint is
-    // taken, a column past it across and a row past it down and one before
-    // it, which its neighbors take (`MARK_READ`); none where a pixel met
-    // nothing or lies past the drawn.
-    let (cols, rows) = (m + 1, m + 2);
-    let mut met = [0u32; MARK_READ];
-    let mut tiles = [[0i32; 2]; MARK_READ];
-    let mut k = 0;
-    while k < cols * rows {
-        let (x, y) = ((id.x * m + k % cols) as i32, (id.y * m + k / cols) as i32 - 1);
-        let own = k % cols < m && k / cols >= 1 && k / cols <= m;
-        if y >= 0 && (footprint || own) {
-            let (got, tile) = met_tile(eye, rays, &s, UVec3::new(x as u32, y as u32, 0), drawn);
-            met[k as usize] = u32::from(got);
-            tiles[k as usize] = tile;
-        }
-        k += 1;
-    }
-    // The tile last marked, so a run of pixels on one marks it once.
-    let mut last = [i32::MIN; 2];
-    let mut y = 0;
-    while y < m {
-        let mut x = 0;
-        while x < m {
-            let k = ((y + 1) * cols + x) as usize;
-            if met[k] != 0 {
-                let tile = tiles[k];
-                // [rust-gpu] By its words: an array's `!=` is an intrinsic
-                // it does not lower.
-                if tile[0] != last[0] || tile[1] != last[1] {
-                    stand(list, n, cast, tile);
-                    last = tile;
-                }
-                // The neighbors after it, so every pair of neighbors is taken
-                // once: across, down, and the two diagonals.
-                let mut j = 0;
-                while j < 4 && footprint {
-                    let (dx, dy) = ([1, 0, 1, 1][j], [0, 1, 1, -1][j]);
-                    let q = ((y as i32 + 1 + dy) as u32 * cols + x + dx) as usize;
-                    if met[q] != 0 {
-                        stand_between(list, n, cast, tile, tiles[q]);
-                    }
-                    j += 1;
-                }
-            }
-            x += 1;
-        }
-        y += 1;
-    }
-}
-
-/// The pixels a thread of the mark reads (`light_mark_cs`): its square,
-/// `light::MARK` a side, a column past it and a row either side.
-const MARK_READ: usize =
-    ((pxl_spec_core::light::MARK + 1) * (pxl_spec_core::light::MARK + 2)) as usize;
-
-/// Whether pixel `p`'s ray met the world, and the tile it met it on. A ray
-/// that met nothing leaves its first word zero (cast.rs `word`).
-fn met_tile(eye: &Eye, rays: &Rays, s: &Light, p: UVec3, drawn: UVec3) -> (bool, [i32; 2]) {
-    if p.x >= drawn.x || p.y >= drawn.y {
-        return (false, [0; 2]);
-    }
-    let first: u32 = rays.read(UVec3::new(p.x, p.y, 0));
-    if first == 0 || first == pxl_spec_core::ray::MISS {
-        return (false, [0; 2]);
-    }
-    let t = f32::from_bits(rays.read(UVec3::new(p.x, p.y, 1)));
-    let d = eye_ray(eye, px_tan(eye, p, drawn)).dir;
-    (true, s.tile_of([d[0] * t, d[1] * t, d[2] * t]))
-}
-
 /// The tiles between `a` and `b` marked stood on, where they lie within a
 /// footprint of each other (`light::FOOTPRINT_TILES`); none past it.
-fn stand_between(list: &mut [u32], size: u32, cast: u32, a: [i32; 2], b: [i32; 2]) {
+pub(crate) fn stand_between(list: &mut [u32], size: u32, cast: u32, a: [i32; 2], b: [i32; 2]) {
     let span = pxl_spec_core::light::FOOTPRINT_TILES;
     let (lo, hi) = (
         [a[0].min(b[0]), a[1].min(b[1])],
@@ -864,7 +767,7 @@ const NO_TILE: u32 = u32::MAX;
 
 /// Tile `tile` of the box marked stood on in the cast numbered `cast`
 /// (`light::stands_at`), none past the box.
-fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
+pub(crate) fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
     let w = tile_word(size, pxl_spec_core::light::stands_at(size), tile);
     if w != NO_TILE {
         put(list, w, cast);

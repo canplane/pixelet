@@ -5,7 +5,7 @@
 # needs either.
 [workspace]
 resolver = "2"
-members = [".", "build"]
+members = [".", "build", "macro"]
 
 # The one crate of the main workspace it compiles, by its path once.
 [workspace.dependencies]
@@ -40,4 +40,6 @@ crate-type = ["lib", "dylib"]
 spirv-std = "=0.10.0-alpha.1"
 # The one source, as pxl-spec takes it.
 pxl-spec-core.workspace = true
+# An entry's workgroup written off the constants its code counts by.
+pxl-shader-macro = { path = "macro" }
 

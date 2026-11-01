@@ -7,22 +7,21 @@
 //! (`hit_lead_cs`, raster.rs `face_cs`), and put at their pixels
 //! (`hit_faces_cs`).
 
+use pxl_shader_macro::compute;
 use pxl_spec_core::cast::{self, End, Trace};
 use pxl_spec_core::{beam, observed, raster, ray, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
 
+use super::Rays;
 use crate::beam::{node_put, Beams, Words};
 use crate::eye::{grid, Eye};
 use crate::observed::{pyramid_at, pyramid_put, Pyramid};
 use crate::observer::{self, Observer, Take};
+use crate::workgroup::CAST_SIDE;
 use crate::world::{face_of, unasked, World};
 use crate::{add, most, opens};
-
-/// The eye's rays, a drawn pixel each, a layer a word of the ray's (`word`;
-/// pxl-spec-core `ray`): the cast writes them.
-pub(crate) type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 /// The visible sample at each drawn pixel (pxl-render gpu/ray/raster.rs): its
 /// sample's number (pxl-spec-core `raster::id_of`), 0 where it kept none,
@@ -77,10 +76,6 @@ fn write_ray(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
     }
 }
 
-/// `cast_cs`'s workgroup a side, a square of pixels (pxl-tool check_rules.rs
-/// `WORKGROUPS`).
-const CAST_SIDE: u32 = 8;
-
 /// The tiles as a pass draws them (pxl-spec-core `screen::TILES_WORDS`): the
 /// tiles across and down, the frames a tile stays claimed once changed and
 /// this frame's number, then the world's drawn pixels and a quad's growth, which the cast
@@ -106,7 +101,7 @@ pub struct Tiles {
 /// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_CNT`),
 /// so no word of the pyramid is typed atomic here; one past the list's room
 /// has the walk over every pixel dispatched instead.
-#[spirv(compute(threads(8, 8, 1), entry_point_name = "cast_cs"))]
+#[compute(threads(CAST_SIDE, CAST_SIDE), entry_point_name = "cast_cs")]
 #[allow(clippy::too_many_arguments)]
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -372,7 +367,7 @@ pub fn miss_cs(
 /// rows the list filled (`ray::MISS_ARGS_LIST`), each past the count
 /// returning at once. The count is copied into the pyramid's buffer once
 /// `cast_cs` is done (`observed::MARKS_CNT`).
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "miss_list_cs"))]
+#[compute(threads(ray::MISS_LANES), entry_point_name = "miss_list_cs")]
 #[allow(clippy::too_many_arguments)]
 pub fn miss_list_cs(
     #[spirv(workgroup_id)] group: UVec3,
@@ -443,7 +438,7 @@ fn alike_hit(rays: &Rays, beams: &Beams, g: &beam::Grid, k: u32, x: u32, y: u32)
 /// walks wrote, and writes only its own hit's last word and its ask, so
 /// no thread reads what another writes; the pyramid's head, which it is
 /// dispatched off, it only reads.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "hit_lead_cs"))]
+#[compute(threads(beam::HIT_LANES), entry_point_name = "hit_lead_cs")]
 pub fn hit_lead_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
@@ -499,7 +494,7 @@ pub fn hit_lead_cs(
 /// (`beam::HIT_FOLLOWS`), a step left or up within the square each, so
 /// two of its sides at most; no pixel is left waiting past the cast's
 /// pass.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "hit_faces_cs"))]
+#[compute(threads(beam::HIT_LANES), entry_point_name = "hit_faces_cs")]
 pub fn hit_faces_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,

@@ -6,6 +6,7 @@
 //! reads each pixel's visible sample off; and what lies about each hit's
 //! face asked once a hit (`face_cs`), a box's and a missed pixel's alike.
 
+use pxl_shader_macro::compute;
 use pxl_spec_core::cast::End;
 use pxl_spec_core::{beam, cast, raster, support, way};
 use spirv_std::glam::{IVec4, UVec3};
@@ -191,7 +192,7 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
 /// `ray::MISS_ARGS_ROOM`), their faces left in the hits, which their pixels
 /// take (cast.rs `hit_faces_cs`). One pass for both, over the args it is
 /// bound to: where its asks lie (`raster::ARGS_ASKS`) and how many.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "face_cs"))]
+#[compute(threads(raster::FACES_LANES), entry_point_name = "face_cs")]
 #[allow(clippy::too_many_arguments)]
 pub fn face_cs(
     #[spirv(global_invocation_id)] id: UVec3,

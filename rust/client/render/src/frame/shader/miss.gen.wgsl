@@ -138,7 +138,7 @@ struct type_67 {
     member_2: f32,
 }
 
-struct type_70 {
+struct type_69 {
     member: bool,
     member_1: u32,
 }
@@ -1455,8 +1455,8 @@ fn function_() {
     var phi_11870_: type_66;
     var local_136: f32;
     var phi_11901_: type_66;
-    var phi_19804_: type_70;
-    var phi_19808_: type_70;
+    var phi_19804_: type_69;
+    var phi_19808_: type_69;
     var phi_19835_: f32;
     var phi_12089_: u32;
     var phi_12090_: u32;
@@ -9013,13 +9013,13 @@ fn function_() {
                         }
                         let _e7796 = !((_e7779.member == 0u));
                         if _e7796 {
-                            phi_19808_ = type_70(false, 0u);
+                            phi_19808_ = type_69(false, 0u);
                         } else {
                             let _e7799 = ((_e7779.member_1.member[0] >> bitcast<u32>(17u)) & 7u);
                             if (select(_e7799, 8u, (_e7799 == 0u)) < 8u) {
-                                phi_19804_ = type_70(false, 240u);
+                                phi_19804_ = type_69(false, 240u);
                             } else {
-                                phi_19804_ = type_70(true, 0u);
+                                phi_19804_ = type_69(true, 0u);
                             }
                             let _e7804 = phi_19804_;
                             phi_19808_ = _e7804;

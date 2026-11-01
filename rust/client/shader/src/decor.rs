@@ -8,6 +8,7 @@
 //! laid out and compacted into their draws' instances (`decor_cnt_cs`,
 //! `decor_args_cs`, `decor_compact_cs`).
 
+use pxl_shader_macro::compute;
 use pxl_spec_core::answer::{self, In};
 use pxl_spec_core::cast::{End, Query};
 use pxl_spec_core::decor::Decor;
@@ -24,6 +25,7 @@ use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
 use crate::eye::{eye_origin, Eye};
+use crate::workgroup::{DECOR_CELL_LANES, DECOR_RECORD_LANES};
 use crate::world::{Clipmap, NoPalette, World};
 
 /// The world as decor's generation asks it on the GPU (pxl-spec-core `scatter`):
@@ -227,9 +229,7 @@ pub fn decor_mark_cs(
     }
 }
 
-/// Lanes `decor_thin_cs`'s workgroup has: a clip level cell each.
-const CELL_LANES: u32 = 64;
-const _: () = assert!(BRICK_CELLS.is_multiple_of(CELL_LANES));
+const _: () = assert!(BRICK_CELLS.is_multiple_of(DECOR_CELL_LANES));
 
 /// The candidates of an entry `decor_mark_cs` listed, a clip level cell of its
 /// brick a thread: `x` the cell, `z` the entry and decor listed. Where its
@@ -240,7 +240,7 @@ const _: () = assert!(BRICK_CELLS.is_multiple_of(CELL_LANES));
 /// (`generated::cnt_at`), `RETAINED`, its cell and seed after it, for
 /// `decor_cs` to generate; none past the decor's room (`Decor::cap`). What
 /// it reads is the decor's hash alone, never the world.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_thin_cs"))]
+#[compute(threads(DECOR_CELL_LANES), entry_point_name = "decor_thin_cs")]
 pub fn decor_thin_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] clipmap: &[IVec4],
@@ -397,9 +397,6 @@ fn entry_word(rows: &[Decor], s: u32, k: u32, i: u32) -> u32 {
     generated::record_at(generated::entry_record(rows, s, k, i))
 }
 
-/// Lanes a decor pass's workgroup has (`decor_cnt_cs`, `decor_compact_cs`).
-const RECORD_LANES: u32 = 64;
-
 /// Whether workgroup `g` of a decor pass reads records: past the entries,
 /// placed decor's always; an entry's where the clip levels still hold the brick
 /// they were generated for (`generated::generated_for`).
@@ -456,7 +453,7 @@ fn run_of(records: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
 /// the decor left out; else sized for the screen (pxl-spec-core
 /// `generated::drawn`), a model where its group's extent spans `MODEL_ANGLE`
 /// at its distance, an impostor down to `IMPOSTOR_ANGLE`, else culled.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_cnt_cs"))]
+#[compute(threads(DECOR_RECORD_LANES), entry_point_name = "decor_cnt_cs")]
 pub fn decor_cnt_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
@@ -486,7 +483,7 @@ pub fn decor_cnt_cs(
             );
             n += 1;
         }
-        k += RECORD_LANES;
+        k += DECOR_RECORD_LANES;
     }
 }
 
@@ -597,7 +594,7 @@ pub fn decor_args_cs(
 /// box's base middle about the
 /// anchor, its heading and scale, in the lanes the decor and impostor
 /// shaders read, and the slot its own in the index list.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_compact_cs"))]
+#[compute(threads(DECOR_RECORD_LANES), entry_point_name = "decor_compact_cs")]
 pub fn decor_compact_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
@@ -626,7 +623,7 @@ pub fn decor_compact_cs(
             );
             n += 1;
         }
-        k += RECORD_LANES;
+        k += DECOR_RECORD_LANES;
     }
 }
 

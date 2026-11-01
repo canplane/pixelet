@@ -817,6 +817,7 @@ dependencies = [
 name = "pxl-shader"
 version = "0.0.0"
 dependencies = [
+ "pxl-shader-macro",
  "pxl-spec-core",
  "spirv-std",
 ]
@@ -828,6 +829,13 @@ dependencies = [
  "naga 30.0.0",
  "rustc_codegen_spirv",
  "spirv-builder",
+]
+
+[[package]]
+name = "pxl-shader-macro"
+version = "0.0.0"
+dependencies = [
+ "pxl-spec-core",
 ]
 
 [[package]]

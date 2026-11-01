@@ -4,10 +4,9 @@
 //! pointer casts in offset crates, each rounding half to even in every
 //! language, no CommonJS file, each generated shader made from the sources the
 //! tree holds now, the layers' order, where nothing names what is above it,
-//! the screen's pixels read only at the screen, each workgroup's size its
-//! constant, each type's name a head noun, never a bare participle, and
-//! no Rust file outside a crate's module tree. A rule Rust alone keeps is
-//! clippy's (rust/clippy.toml).
+//! the screen's pixels read only at the screen, each type's name a head
+//! noun, never a bare participle, and no Rust file outside a crate's module
+//! tree. A rule Rust alone keeps is clippy's (rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -151,151 +150,6 @@ fn screen_reached(text: &str) -> Vec<usize> {
         .collect();
     lines.dedup();
     lines
-}
-
-/// On the GPU the screen's size is the eye's rays' image's (pxl-shader
-/// cast.rs `Rays`), bound only to the passes that draw a pixel's ray or read
-/// the rays drawn: the cast and its walks again, the stops' faces put at their
-/// pixels, and the light's receivers. The beam, the cells, the samples, decor
-/// and the shadow map read the eye's angles alone.
-const SHADER: &str = "rust/client/shader/src/";
-const RAYS_ENTRIES: [&str; 6] = [
-    "cast_cs",
-    "miss_cs",
-    "miss_list_cs",
-    "hit_lead_cs",
-    "hit_faces_cs",
-    "light_mark_cs",
-];
-
-/// Every entry point in `text`, a shader's source, whose parameters bind
-/// the rays' image, by its name or a path to it, and is not one of
-/// `RAYS_ENTRIES`, each with its line: the parameters from its
-/// `entry_point_name` to the body's opening brace.
-fn rays_bound(text: &str) -> Vec<(usize, String)> {
-    let entry = Regex::new(r#"entry_point_name\s*=\s*"(\w+)""#).expect("an entry's pattern");
-    let rays = Regex::new(r"&\s*(?:\w+::)*Rays\b").expect("the rays' pattern");
-    let mut out = Vec::new();
-    for c in entry.captures_iter(text) {
-        let (at, name) = (c.get(0).map_or(0, |m| m.start()), &c[1]);
-        let end = text[at..].find(") {").map_or(text.len(), |k| at + k);
-        if rays.is_match(&text[at..end]) && !RAYS_ENTRIES.contains(&name) {
-            out.push((text[..at].matches('\n').count() + 1, name.to_string()));
-        }
-    }
-    out
-}
-
-/// A workgroup's size is a constant its shader's code also counts by: the
-/// lanes a scan or a stride steps across, the side a pyramid tiles by.
-/// rust-gpu's `threads` takes only literals, so each entry's is held here to
-/// its constant: the entry's file under `SHADER`, the entry, the constant's
-/// file under rust/ and its name, and how many of the size's sides it gives.
-const WORKGROUPS: [(&str, &str, &str, &str, usize); 12] = [
-    (
-        "cast.rs",
-        "hit_lead_cs",
-        "spec/core/src/beam.rs",
-        "HIT_LANES",
-        1,
-    ),
-    (
-        "cast.rs",
-        "hit_faces_cs",
-        "spec/core/src/beam.rs",
-        "HIT_LANES",
-        1,
-    ),
-    (
-        "raster.rs",
-        "face_cs",
-        "spec/core/src/raster.rs",
-        "FACES_LANES",
-        1,
-    ),
-    (
-        "cast.rs",
-        "cast_cs",
-        "client/shader/src/cast.rs",
-        "CAST_SIDE",
-        2,
-    ),
-    (
-        "way.rs",
-        "way_tree_cs",
-        "client/shader/src/way.rs",
-        "LANES",
-        1,
-    ),
-    (
-        "way.rs",
-        "way_freed_cs",
-        "client/shader/src/way.rs",
-        "LANES",
-        1,
-    ),
-    (
-        "decor.rs",
-        "decor_thin_cs",
-        "client/shader/src/decor.rs",
-        "CELL_LANES",
-        1,
-    ),
-    (
-        "decor.rs",
-        "decor_cnt_cs",
-        "client/shader/src/decor.rs",
-        "RECORD_LANES",
-        1,
-    ),
-    (
-        "decor.rs",
-        "decor_compact_cs",
-        "client/shader/src/decor.rs",
-        "RECORD_LANES",
-        1,
-    ),
-    (
-        "cast.rs",
-        "miss_list_cs",
-        "spec/core/src/ray.rs",
-        "MISS_LANES",
-        1,
-    ),
-    (
-        "light.rs",
-        "light_miss_cs",
-        "spec/core/src/ray.rs",
-        "MISS_LANES",
-        1,
-    ),
-    (
-        "light.rs",
-        "light_miss_held_cs",
-        "spec/core/src/ray.rs",
-        "MISS_LANES",
-        1,
-    ),
-];
-
-/// The workgroup size `text`, a shader's source, gives `entry`.
-fn threads(text: &str, entry: &str) -> Option<[u32; 3]> {
-    let pattern =
-        format!(r#"threads\((\d+),\s*(\d+),\s*(\d+)\),\s*entry_point_name\s*=\s*"{entry}""#);
-    let c = Regex::new(&pattern)
-        .expect("a workgroup's pattern")
-        .captures(text)?;
-    Some([1, 2, 3].map(|k| c[k].parse().unwrap_or(0)))
-}
-
-/// The value of `name`, a `u32` constant `text` writes as a literal.
-fn constant(text: &str, name: &str) -> Option<u32> {
-    let pattern = format!(r"const {name}: u32 = (\d+);");
-    Regex::new(&pattern)
-        .expect("a constant's pattern")
-        .captures(text)?[1]
-        .parse()
-        .ok()
 }
 
 /// A type's name has a head noun saying what it holds; a bare past participle
@@ -763,28 +617,6 @@ fn run() -> Result<Vec<String>, String> {
             ));
         }
     }
-    for f in files
-        .iter()
-        .filter(|f| f.starts_with(SHADER) && f.ends_with(".rs"))
-    {
-        for (line, name) in rays_bound(&read(f).unwrap_or_default()) {
-            problems.push(format!(
-                "{f}:{line}: `{name}` binds the rays' image, the screen's size, past the passes that draw a pixel; only RAYS_ENTRIES may (check_rules.rs)"
-            ));
-        }
-    }
-    for (file, entry, at, name, sides) in WORKGROUPS {
-        let size = threads(&read(&format!("{SHADER}{file}")).unwrap_or_default(), entry);
-        let val = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
-        let held = size
-            .zip(val)
-            .is_some_and(|(s, v)| s[..sides].iter().all(|&d| d == v));
-        if !held {
-            problems.push(format!(
-                "{SHADER}{file}: `{entry}`'s workgroup {size:?} is not `{name}` ({at}: {val:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
-            ));
-        }
-    }
     for f in files.iter() {
         let ts = TS_PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
             && !f.starts_with(TS_UNCHECKED)
@@ -833,7 +665,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels, the workgroups' sizes, the types' head nouns and the crates' module trees hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels, the types' head nouns and the crates' module trees hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -906,21 +738,6 @@ mod spec;"
     }
 
     #[test]
-    fn listed_entries_bind_rays() {
-        let entry = |name: &str, param: &str| {
-            format!("#[spirv(compute(threads(8, 8, 1), entry_point_name = \"{name}\"))]\npub fn {name}(\n    {param}\n) {{\n    let x = 1;\n}}\n")
-        };
-        let rays = "#[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,";
-        let pathed = "#[spirv(descriptor_set = 0, binding = 3)] rays: &crate::cast::Rays,";
-        assert!(rays_bound(&entry("cast_cs", rays)).is_empty());
-        assert_eq!(rays_bound(&entry("cell_cs", rays)).len(), 1);
-        assert_eq!(rays_bound(&entry("cell_cs", pathed)).len(), 1);
-        // A helper after an entry, or its body, is not the entry's binding.
-        let after = entry("cell_cs", "id: UVec3,") + "fn written(rays: &Rays) {}\n";
-        assert!(rays_bound(&after).is_empty());
-    }
-
-    #[test]
     fn bare_participle_type_refused() {
         for text in [
             "struct Seen {",
@@ -951,14 +768,5 @@ mod spec;"
             assert_eq!(participle_types(text, true).len(), 1, "{text}");
         }
         assert!(participle_types("export interface Binding {", true).is_empty());
-    }
-
-    #[test]
-    fn workgroup_vs_constant() {
-        let text = "const LANES: u32 = 64;\n#[spirv(compute(threads(64, 1, 1), entry_point_name = \"way_cs\"))]\n";
-        assert_eq!(threads(text, "way_cs"), Some([64, 1, 1]));
-        assert_eq!(threads(text, "way_free_cs"), None);
-        assert_eq!(constant(text, "LANES"), Some(64));
-        assert_eq!(constant(text, "SIDE"), None);
     }
 }

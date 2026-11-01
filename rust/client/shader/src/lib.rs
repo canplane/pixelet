@@ -5,9 +5,11 @@
 //! (eye.rs): the passes a cast takes, written once over the observer it
 //! casts for (observer.rs), a pass both observers take one entry
 //! (pass_observer.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
-//! observed pyramid (observed.rs), the world's depth from the light (light.rs),
+//! observed pyramid (observed.rs), their image bound only where rays.rs lets
+//! it be (cast.rs, light_mark.rs), the world's depth from the light (light.rs),
 //! each handed brick's ground (ground.rs) and ways (way.rs), and the decor
-//! the ground generates (decor.rs). An entry is named
+//! the ground generates (decor.rs), each workgroup a constant its code counts
+//! by (workgroup.rs). An entry is named
 //! by `entry_point_name`, never by its module's path, so each keeps the
 //! name pxl-tool shader.rs `ENTRIES` reads.
 
@@ -17,7 +19,7 @@
 #![deny(warnings)]
 
 mod beam;
-mod cast;
+mod rays;
 mod decor;
 mod pass_observer;
 mod eye;
@@ -27,7 +29,10 @@ mod observer;
 mod raster;
 mod light;
 mod way;
+mod workgroup;
 mod world;
+
+use rays::{cast, light_mark};
 
 pub use beam::{beam_cs, cell_cs, sample_cs};
 pub use cast::{cast_cs, miss_cs, miss_list_cs, hit_faces_cs, hit_lead_cs};
@@ -39,9 +44,10 @@ pub use ground::{bound_cs, height_cs, joined_cs};
 pub use observed::forget_cs;
 pub use raster::{face_cs, sample_box_cs};
 pub use light::{
-    light_beam_cs, light_cs, light_detail_cs, light_held_cs, light_mark_cs, light_mark_drawn_cs,
-    light_miss_cs, light_miss_held_cs, light_propagate_cs, light_sample_cs, Head,
+    light_beam_cs, light_cs, light_detail_cs, light_held_cs, light_mark_drawn_cs, light_miss_cs,
+    light_miss_held_cs, light_propagate_cs, light_sample_cs, Head,
 };
+pub use light_mark::light_mark_cs;
 pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
 pub use world::{PaletteWords, NoPalette, World};
 
