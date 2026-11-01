@@ -16,6 +16,7 @@
 // number's check unused.
 #![allow(
     non_camel_case_types,
+    clippy::upper_case_acronyms,
     clippy::type_complexity,
     clippy::absolute_paths,
     unused_imports,

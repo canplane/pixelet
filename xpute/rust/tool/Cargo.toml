@@ -13,6 +13,10 @@ path = "src/lib.rs"
 name = "spec"
 path = "src/bin/spec.rs"
 
+[[bin]]
+name = "cmd"
+path = "src/bin/cmd.rs"
+
 # No crate of the workspace's: it writes into them.
 [dependencies]
 serde = { version = "1", features = ["derive"] }

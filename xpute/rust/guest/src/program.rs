@@ -171,6 +171,26 @@ fn errnum(e: MarshalError) -> Errno {
     e.errnum
 }
 
+/// What a handler takes a command's packet as: the packet itself, or the
+/// struct its table generates for it (xpute-tool `spec/cmd`), read here, and
+/// EBADMSG where it does not read.
+pub trait FromPacket<'a>: Sized {
+    fn from_packet(pkt: Packet<'a>) -> Result<Self, Errno>;
+}
+
+impl<'a> FromPacket<'a> for Packet<'a> {
+    fn from_packet(pkt: Packet<'a>) -> Result<Self, Errno> {
+        Ok(pkt)
+    }
+}
+
+/// An event a table generates: its number and its fields.
+pub trait Event {
+    const NUMBER: u32;
+    const FIELDS: u32;
+    fn write(&self, w: &mut PacketWriter);
+}
+
 /// A turn as a handler sees it: the host to call, and events to raise.
 pub struct Turn<'a> {
     sys: &'a mut Sys,
@@ -190,9 +210,14 @@ impl Turn<'_> {
         self.sys.call(code | op::PROGRAM, args, bytes);
     }
 
-    /// An event for the program's port, heard after the turn: `cnt` fields,
-    /// which `f` writes.
-    pub fn raise(&self, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
+    /// An event for the program's port, heard after the turn.
+    pub fn raise<E: Event>(&self, event: &E) {
+        self.door
+            .raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, |w| event.write(w));
+    }
+
+    /// An event of no table's: `cmd`, and `cnt` fields, which `f` writes.
+    pub fn raise_packet(&self, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
         self.door.raise(PROGRAM_PORT, cmd, cnt, f);
     }
 }
@@ -227,9 +252,10 @@ pub fn turn(handlers: &[(u32, Handler)]) -> f64 {
 /// A guest built as a WebAssembly module, in one declaration: its layout
 /// (`Layout::DEFAULT` unless given), the stack it was linked with (as its
 /// build.rs's `wasm::link` was told; `LinkConfig::DEFAULT`'s unless given),
-/// and a handler for
-/// each command. It exports `run`, the turn, and `boot`, which lays the
-/// range out and answers where the toc lies (@xpute/host port.ts `open`).
+/// and a handler for each command, which takes its packet as `Packet` or as
+/// the struct its table generates (`FromPacket`). It exports `run`, the turn,
+/// and `boot`, which lays the range out and answers where the toc lies
+/// (@xpute/host port.ts `open`).
 #[macro_export]
 macro_rules! program {
     (layout: $layout:expr, stack_bytes: $stack:expr, $(on $cmd:expr => $handler:expr),* $(,)?) => {
@@ -249,7 +275,12 @@ macro_rules! program {
         }
 
         fn xpute_turn(_quota_ms: f64, _boot: fn() -> $crate::entry::BootInfo) -> f64 {
-            $crate::program::turn(&[$(($cmd, $handler as $crate::program::Handler)),*])
+            $crate::program::turn(&[$((
+                $cmd as u32,
+                (|cx: &mut $crate::program::Turn<'_>, pkt: $crate::program::Packet<'_>| {
+                    $handler(cx, $crate::program::FromPacket::from_packet(pkt)?)
+                }) as $crate::program::Handler,
+            )),*])
         }
     };
     ($(on $cmd:expr => $handler:expr),* $(,)?) => {

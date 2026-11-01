@@ -21,6 +21,8 @@ import type {
   BranchCursor,
   NodeValue,
   NodeView,
+  PacketRoom,
+  PacketWriter,
 } from "@xpute/kit/wire/xtp/mod.ts";
 
 import { type Host, mount } from "./host.ts";
@@ -36,14 +38,35 @@ export type Arg = NodeValue<NodeView>;
 /** What the guest raised, valid only inside the call. */
 export type Heard = (pkt: BranchCursor | null) => void;
 
+/** A command as its table generates it (xpute-tool `spec/cmd`): its number,
+ * and its packet's writer, which takes its fields by place, so a bundle keeps
+ * no field's name; none for a command with no packet. */
+export interface Sent<A extends unknown[]> {
+  readonly number: u32;
+  readonly write?: (to: PacketRoom, ...fields: A) => PacketWriter;
+}
+
+/** An event as its table generates it: its number, and its reader, which
+ * gives its fields by place. */
+export interface Raised<A extends unknown[]> {
+  readonly number: u32;
+  readonly read: (b: BranchCursor) => A;
+}
+
 export interface Port<G extends Grant = Grant> {
   /** The port's number, which the guest sees as the sender. */
   readonly number: u32;
   /** Applied on the next turn; its result, if it fails, is logged. */
+  send<A extends unknown[]>(cmd: Sent<A>, ...fields: A): void;
   send(cmd: u32, ...args: Arg[]): void;
   /** Applied now, the guest rung with no quota until it answers. */
+  call<A extends unknown[]>(cmd: Sent<A>, ...fields: A): i32;
   call(cmd: u32, ...args: Arg[]): i32;
-  /** What the guest raises as `cmd` for this port, until the returned call. */
+  /** What the guest raises for this port, until the returned call. */
+  on<A extends unknown[]>(
+    event: Raised<A>,
+    heard: (...fields: A) => void,
+  ): () => void;
   on(cmd: u32, heard: Heard): () => void;
   /** The mount underneath. */
   readonly host: Host<G>;
@@ -58,17 +81,34 @@ function answered(result: i32): i32 {
 export function port<G extends Grant>(host: Host<G>, number: u32): Port<G> {
   const hearing = new Map<u32, Heard>();
   host.doorbell.listen(number, (_tag, cmd, pkt) => hearing.get(cmd)?.(pkt));
+  const room: PacketRoom = host.doorbell;
+  // A table's command writes its own packet; a bare number's are lowered.
+  const packet = (cmd: u32 | Sent<unknown[]>, args: unknown[]) =>
+    typeof cmd === "number"
+      ? host.doorbell.lowered(args as Arg[])
+      : (cmd.write?.(room, ...args) ?? null);
+  const numbered = (cmd: u32 | { number: u32 }) =>
+    typeof cmd === "number" ? cmd : cmd.number;
   return {
     number,
     host,
-    send: (cmd, ...args) =>
-      host.send(number, cmd, host.doorbell.lowered(args) ?? undefined),
-    call: (cmd, ...args) =>
-      host.doorbell.call(number, cmd, host.doorbell.lowered(args), answered),
-    on(cmd, heard) {
-      hearing.set(cmd, heard);
+    send: (cmd: u32 | Sent<unknown[]>, ...args: unknown[]) =>
+      host.send(number, numbered(cmd), packet(cmd, args) ?? undefined),
+    call: (cmd: u32 | Sent<unknown[]>, ...args: unknown[]) =>
+      host.doorbell.call(number, numbered(cmd), packet(cmd, args), answered),
+    on(
+      cmd: u32 | Raised<unknown[]>,
+      heard: Heard | ((...fields: unknown[]) => void),
+    ) {
+      const key = numbered(cmd);
+      const fields = heard as (...fields: unknown[]) => void;
+      const take: Heard =
+        typeof cmd === "number"
+          ? (heard as Heard)
+          : (pkt) => fields(...(pkt ? cmd.read(pkt) : []));
+      hearing.set(key, take);
       return () => {
-        if (hearing.get(cmd) === heard) hearing.delete(cmd);
+        if (hearing.get(key) === take) hearing.delete(key);
       };
     },
   };

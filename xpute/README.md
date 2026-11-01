@@ -96,6 +96,16 @@ for the next turn, `on` hears what the guest raises after the turn that raised
 it, and `call` rings the guest at once and returns its answer. A hostcall of the
 program's own is answered by the function `open` was given for its number.
 
+The commands are the program's own table (`spec/example/cmd.json`), generated
+for both ends by xpute-tool's `cmd`: the guest's function takes its packet as
+the struct the table makes for it, and the host sends a command and hears an
+event by the constant the table makes for it, its fields by place. Nothing it
+generates reads a name at run time, so a bundle keeps the numbers alone.
+
+```sh
+cargo run -p xpute-tool --bin cmd -- cmd.json --ts host/cmd.spec.ts --rs guest/src/cmd.spec.rs --write
+```
+
 ```rust
 // build.rs, with xpute-guest as a build dependency
 fn main() {
@@ -104,12 +114,13 @@ fn main() {
 
 // lib.rs
 xpute_guest::program! {
-    on SUM => sum, // fn(&mut Turn, Packet) -> Result<i32, Errno>
+    on Command::SUM => sum, // fn(&mut Turn, Sum) -> Result<i32, Errno>
 }
 ```
 
 ```ts
 const guest = open(module, { answer: { [ASK]: () => HELD } });
+guest.on(SUMMED, (total) => console.log(total)); // 5
 guest.call(SUM, 2, 3); // 2 + 3 + HELD
 ```
 

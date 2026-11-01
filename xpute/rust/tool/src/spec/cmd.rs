@@ -180,6 +180,10 @@ fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
             }
         }
     }
+    // A table that names no majors numbers its commands as it likes.
+    if majors.is_empty() {
+        return Ok(());
+    }
     for c in cmds.into_iter().filter(|c| c.val != 0) {
         let major = majors
             .iter()
@@ -206,26 +210,84 @@ struct Target {
     rs_logical: &'static str,
     /// Where the number checks a packet's reader calls are.
     number: &'static str,
-    cpp: (&'static str, &'static str),
+    /// For a program's own table: the guest's `program` module, which each
+    /// packet is read for (`FromPacket`) and each event raised by (`Event`).
+    program: Option<&'static str>,
+    /// For a program's own table: the host's port module, whose `Sent` and
+    /// `Raised` each command's descriptor is, its fields by place.
+    port: Option<&'static str>,
+    cpp: Option<(&'static str, &'static str)>,
 }
 
-const TARGET: Target = Target {
-    json: "spec/abi/cmd.json",
-    ts: "ts/host/src/abi/cmd.spec.ts",
-    ts_logical: "@xpute/host/abi/cmd.spec.ts",
-    rs: "rust/guest/src/abi/cmd.spec.rs",
-    rs_logical: "xpute-guest/abi/cmd.spec.rs",
-    number: "crate::abi::number",
-    cpp: ("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi"),
-};
+const TARGETS: [Target; 2] = [
+    Target {
+        json: "spec/abi/cmd.json",
+        ts: "ts/host/src/abi/cmd.spec.ts",
+        ts_logical: "@xpute/host/abi/cmd.spec.ts",
+        rs: "rust/guest/src/abi/cmd.spec.rs",
+        rs_logical: "xpute-guest/abi/cmd.spec.rs",
+        number: "crate::abi::number",
+        program: None,
+        port: None,
+        cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
+    },
+    // The example's own table, as a program's is generated.
+    Target {
+        json: "spec/example/cmd.json",
+        ts: "ts/example/cmd.spec.ts",
+        ts_logical: "@xpute/example/cmd.spec.ts",
+        rs: "rust/example/src/cmd.spec.rs",
+        rs_logical: "xpute-example/cmd.spec.rs",
+        number: "xpute_guest::abi::number",
+        program: Some("xpute_guest::program"),
+        port: Some("@xpute/host/port.ts"),
+        cpp: None,
+    },
+];
+
+/// A program's own table at `json`, its TypeScript at `ts` (its enums' modules
+/// in the folder beside it) and its Rust at `rs`: the guest's packets read for
+/// `xpute_guest::program`, the host's commands sent through `@xpute/host`'s port.
+/// `shown` is each as its header names it: the paths as they were given.
+pub fn program_outputs(
+    json: &str,
+    ts: &str,
+    rs: &str,
+    shown: [&str; 3],
+) -> Result<Vec<Output>, String> {
+    let keep = |s: &str| -> &'static str { Box::leak(s.to_string().into_boxed_str()) };
+    let t = Target {
+        json: keep(json),
+        ts: keep(ts),
+        ts_logical: keep(shown[1]),
+        rs: keep(rs),
+        rs_logical: keep(shown[2]),
+        number: "xpute_guest::abi::number",
+        program: Some("xpute_guest::program"),
+        port: Some("@xpute/host/port.ts"),
+        cpp: None,
+    };
+    let spec: Spec = read_as(t.json)?;
+    check_numbers(&spec, shown[0])?;
+    let t = Target {
+        json: keep(shown[0]),
+        ..t
+    };
+    let mut out = ts::emit(&spec, &t)?;
+    out.push(Output::new(t.rs, rs::emit(&spec, &t)?));
+    Ok(out)
+}
 
 pub fn outputs() -> Result<Vec<Output>, String> {
-    let t = &TARGET;
-    let spec: Spec = read_as(t.json)?;
-    check_numbers(&spec, t.json)?;
-    let mut out = ts::emit(&spec, t)?;
-    out.push(Output::new(t.rs, rs::emit(&spec, t)?));
-    let (path, namespace) = t.cpp;
-    out.push(Output::new(path, cpp::emit(&spec, t, path, namespace)?));
+    let mut out = Vec::new();
+    for t in &TARGETS {
+        let spec: Spec = read_as(t.json)?;
+        check_numbers(&spec, t.json)?;
+        out.extend(ts::emit(&spec, t)?);
+        out.push(Output::new(t.rs, rs::emit(&spec, t)?));
+        if let Some((path, namespace)) = t.cpp {
+            out.push(Output::new(path, cpp::emit(&spec, t, path, namespace)?));
+        }
+    }
     Ok(out)
 }

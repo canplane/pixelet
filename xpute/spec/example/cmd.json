@@ -1,0 +1,32 @@
+{
+  "$doc": [
+    "The example's own commands (rust/example, ts/example/sum.test.ts): a program's",
+    "table, from which its guest's readers and its host's writers are generated."
+  ],
+  "extern": [],
+  "enums": [
+    {
+      "name": "Command",
+      "$doc": ["The example's commands."],
+      "format": "hex4",
+      "entries": [
+        {
+          "name": "SUM",
+          "val": 4097,
+          "$doc": ["Two numbers, answered with their sum and the number the host holds."],
+          "pkt": [
+            { "name": "a", "type": "u32" },
+            { "name": "b", "type": "u32" }
+          ]
+        },
+        {
+          "name": "SUMMED",
+          "val": 4098,
+          "$doc": ["Raised as SUM is answered: the two numbers' sum, before the host's is added."],
+          "event": [{ "name": "total", "type": "u32" }]
+        }
+      ]
+    }
+  ],
+  "records": []
+}
