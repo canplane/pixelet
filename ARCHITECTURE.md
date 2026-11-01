@@ -552,9 +552,12 @@ modulo the level's side (`Light`). The sun is an observer as the eye is: one set
 of passes, written once over an interface both implement
 (`pxl-shader observer.rs` `Observer`), asks the world at the eye's zooms, so a
 shadow has the detail of what it falls on. Each level is cast by those passes
-over its own head and list, deciding apart whether to cast. The marks of where
-receivers stand run once for every level, each receiver in the levels it is read
-at.
+over its own head, deciding apart whether to cast. A cast's working words, its
+beam rays, samples and misses (`pxl-spec-core light.rs` `list_words`), are
+written before they are read, so the levels share one list, each cast whole
+before the next; what outlives a cast, which tiles were read and what each holds
+by, is the level's own state (`reads_at`). The marks of where receivers stand
+run once for every level, each receiver in the levels it is read at.
 
 It casts only what a receiver reads:
 

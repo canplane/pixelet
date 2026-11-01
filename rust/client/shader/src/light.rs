@@ -150,8 +150,9 @@ const _: () = assert!(
         && pxl_spec_core::light::HEAD_FOOTPRINT == 6
         && pxl_spec_core::light::HEAD_LEVEL == 7
         && pxl_spec_core::light::HEAD_LEVELS % 4 == 1
-        && pxl_spec_core::light::HEAD_BASE == pxl_spec_core::light::HEAD_LEVELS + 1,
-    "the head's first two vec4s are read by their words, the levels and the base the actors' vec4's second and third"
+        && pxl_spec_core::light::HEAD_BASE == pxl_spec_core::light::HEAD_LEVELS + 1
+        && pxl_spec_core::light::HEAD_STATE == pxl_spec_core::light::HEAD_BASE + 1,
+    "the head's first two vec4s are read by their words, the levels, the base and the state the actors' vec4's second, third and fourth"
 );
 
 /// Where the rays start (`light::Starts`), off the head.
@@ -182,11 +183,25 @@ pub(crate) fn size(m: &Head) -> u32 {
     m.epoch.y
 }
 
+/// The first word of the level's state in the list's buffer
+/// (`light::HEAD_STATE`, `light::reads_at`).
+fn state(m: &Head) -> u32 {
+    vec4_of(m, pxl_spec_core::light::HEAD_STATE / 4).w as u32
+}
+
 /// Whether a tile from `lo` to `hi`, tiles across and down, is one the
-/// cast numbered `cast` casts (`light::reads_at`), none past the box: tile by
-/// tile where they are few, else by the squares they lie in
-/// (`light::coarse_at`), which may name a square for a tile of it alone.
-fn casts_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i32; 2]) -> bool {
+/// cast numbered `cast` casts (`light::reads_at`, in the level's state at
+/// `state`), none past the box: tile by tile where they are few, else by
+/// the squares they lie in (`light::coarse_at`, in the list), which may
+/// name a square for a tile of it alone.
+fn casts_in<W: Words + ?Sized>(
+    w: &W,
+    size: u32,
+    state: u32,
+    cast: u32,
+    lo: [i32; 2],
+    hi: [i32; 2],
+) -> bool {
     let n = pxl_spec_core::light::tiles(size) as i32;
     let (lo, hi) = (
         [lo[0].max(0), lo[1].max(0)],
@@ -197,7 +212,7 @@ fn casts_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i
     }
     let few = (hi[0] - lo[0] + 1) * (hi[1] - lo[1] + 1) <= 16;
     let (k, first, row) = if few {
-        (1, pxl_spec_core::light::reads_at(size), n)
+        (1, state + pxl_spec_core::light::reads_at(size), n)
     } else {
         (
             pxl_spec_core::light::COARSE as i32,
@@ -285,6 +300,9 @@ pub(crate) struct Map {
     /// Its epoch's (`light::HEAD_EPOCH`): where it is the cast's, the cast
     /// casts every tile read, its passes whole (`Observer::take`).
     epoch: u32,
+    /// The first word of its state in the list's buffer
+    /// (`light::HEAD_STATE`).
+    state: u32,
 }
 
 impl Map {
@@ -299,6 +317,7 @@ impl Map {
             detail: light.detail(detail),
             cast: cast_number(head),
             epoch: epoch(head),
+            state: state(head),
         }
     }
 
@@ -486,7 +505,7 @@ impl Observer for Map {
     /// tiles it feeds (`feeds`).
     fn needs<W: Words + ?Sized>(&self, w: &W, level: Level, at: [u32; 2]) -> bool {
         let (lo, hi) = self.feeds(level, at);
-        casts_in(w, self.size, self.cast, lo, hi)
+        casts_in(w, self.size, self.state, self.cast, lo, hi)
     }
 
     /// Each at its own place where the cast begins its epoch, its passes
@@ -806,7 +825,7 @@ pub fn light_miss_margin_cs(
     let w = at(list, pxl_spec_core::light::misses_at(n) + i);
     let (h, told) = pxl_spec_core::light::miss_hold(n, w);
     if told < Margin::NONE.0.to_bits() {
-        crate::least(list, h + pxl_spec_core::light::HOLD_MARGIN, told);
+        crate::least(list, state(head) + h + pxl_spec_core::light::HOLD_MARGIN, told);
     }
 }
 
@@ -904,7 +923,8 @@ pub fn light_margin_cs(
     if id.x >= tiles || id.y >= tiles {
         return;
     }
-    if at(list, l::reads_at(n) + id.y * tiles + id.x) != cast_number(head) {
+    let state = state(head);
+    if at(list, state + l::reads_at(n) + id.y * tiles + id.x) != cast_number(head) {
         return;
     }
     let m = Map::of(eye, head);
@@ -950,7 +970,7 @@ pub fn light_margin_cs(
         }
         b += 1;
     }
-    put(list, m.light.hold(n, [id.x, id.y]) + l::HOLD_MARGIN, least);
+    put(list, state + m.light.hold(n, [id.x, id.y]) + l::HOLD_MARGIN, least);
 }
 
 /// The tiles between `a` and `b` of the level `m` marked stood on, where
@@ -1139,12 +1159,13 @@ pub fn light_propagate_cs(
         k += 1;
     }
     // Read, and read first in the epoch: the cast's to cast.
-    let w = pxl_spec_core::light::reads_at(side) + id.y * n + id.x;
+    let state = state(head);
+    let w = state + pxl_spec_core::light::reads_at(side) + id.y * n + id.x;
     if read && at(list, w) < epoch {
         put(list, w, cast);
         // Where the eye stands as it is cast; its margin the walks that
         // feed it set (`light_margin_cs`, `light_miss_margin_cs`).
-        let h = s.hold(side, [id.x, id.y]);
+        let h = state + s.hold(side, [id.x, id.y]);
         let e = pxl_spec_core::light::HOLD_EYE;
         put(list, h + e, eye.origin.x as u32);
         put(list, h + e + 1, eye.origin.y as u32);
@@ -1191,7 +1212,8 @@ pub fn light_detail_cs(
     if id.x >= tiles || id.y >= tiles {
         return;
     }
-    let w = pxl_spec_core::light::reads_at(n) + id.y * tiles + id.x;
+    let state = state(head);
+    let w = state + pxl_spec_core::light::reads_at(n) + id.y * tiles + id.x;
     // Where the tile lay under the corner before: one the box slid onto
     // holds none of what it read.
     let was = vec4_of(head, 1);
@@ -1207,7 +1229,7 @@ pub fn light_detail_cs(
     if at(list, w) < epoch(head) {
         return;
     }
-    let h = s.hold(n, [id.x, id.y]);
+    let h = state + s.hold(n, [id.x, id.y]);
     let margin = f32::from_bits(at(list, h + pxl_spec_core::light::HOLD_MARGIN));
     let e = pxl_spec_core::light::HOLD_EYE;
     let stood = [

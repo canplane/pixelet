@@ -1597,6 +1597,11 @@ impl Gpu {
         call::copy_buffer_to_buffer(&mut self.s().stream, encoder, (from, at), (to, to_at), size);
     }
 
+    /// `size` bytes of `id` from `at` set to zero, on `encoder`.
+    pub fn clear_buf(&self, encoder: Id, (id, at): (Id, u32), size: u32) {
+        call::clear_buffer(&mut self.s().stream, encoder, id, at, Some(size));
+    }
+
     /// `length` bytes of `id`, a buffer made `MAP_READ | COPY_DST` and copied
     /// into on an encoder submitted before, mapped back from `offset` into
     /// the kernel's memory at `address`; `word`, the mapping's own, holds

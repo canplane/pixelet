@@ -18,7 +18,7 @@ struct type_13 {
     member: type_12,
 }
 
-struct type_18 {
+struct type_19 {
     member: array<atomic<u32>>,
 }
 
@@ -27,47 +27,46 @@ var<private> global_1: vec3<u32>;
 @group(0) @binding(11)
 var<uniform> global_2: type_13;
 @group(0) @binding(12)
-var<storage, read_write> global_3: type_18;
+var<storage, read_write> global_3: type_19;
 
 fn function_() {
-    var phi_184_: u32;
-    var phi_205_: u32;
+    var phi_170_: u32;
+    var phi_191_: u32;
 
-    let _e18 = global;
-    let _e19 = global_1;
-    let _e21 = arrayLength((&global_3.member));
-    let _e25 = global_2.member.member_1[1u];
-    let _e32 = ((((_e18.y * 64u) + _e18.x) * 64u) + _e19.x);
-    let _e33 = (_e25 / 4u);
-    let _e34 = (_e33 * _e33);
-    let _e35 = (_e25 / 8u);
-    let _e36 = (_e35 + 11u);
-    let _e39 = (_e35 * _e35);
-    let _e44 = (((((_e36 * _e36) * 178u) + (_e39 * 2u)) + (_e34 * 13u)) + _e34);
-    if (_e44 < _e21) {
-        let _e48 = atomicLoad((&global_3.member[_e44]));
-        phi_184_ = _e48;
+    let _e19 = global;
+    let _e20 = global_1;
+    let _e22 = arrayLength((&global_3.member));
+    let _e26 = global_2.member.member_1[1u];
+    let _e33 = ((((_e19.y * 64u) + _e19.x) * 64u) + _e20.x);
+    let _e34 = (_e26 / 4u);
+    let _e35 = (_e34 * _e34);
+    let _e36 = (_e26 / 8u);
+    let _e37 = (_e36 + 11u);
+    let _e40 = (_e36 * _e36);
+    let _e45 = (((((_e37 * _e37) * 178u) + (_e40 * 2u)) + (_e35 * 13u)) + _e35);
+    if (_e45 < _e22) {
+        let _e49 = atomicLoad((&global_3.member[_e45]));
+        phi_170_ = _e49;
     } else {
-        phi_184_ = 0u;
+        phi_170_ = 0u;
     }
-    let _e50 = phi_184_;
-    if (_e32 >= _e50) {
+    let _e51 = phi_170_;
+    if (_e33 >= _e51) {
     } else {
-        let _e52 = (_e44 + 1u);
-        let _e53 = (_e52 + _e32);
-        if (_e53 < _e21) {
-            let _e57 = atomicLoad((&global_3.member[_e53]));
-            phi_205_ = _e57;
+        let _e54 = ((_e45 + 1u) + _e33);
+        if (_e54 < _e22) {
+            let _e58 = atomicLoad((&global_3.member[_e54]));
+            phi_191_ = _e58;
         } else {
-            phi_205_ = 0u;
+            phi_191_ = 0u;
         }
-        let _e59 = phi_205_;
-        let _e63 = (_e35 / 8u);
-        let _e69 = ((((_e52 + (_e25 * _e25)) + _e39) + (_e63 * _e63)) + ((_e59 >> bitcast<u32>(16u)) * 4u));
-        let _e72 = ((_e59 & 65535u) << bitcast<u32>(16u));
-        if (_e72 < 1602224128u) {
-            if (_e69 < _e21) {
-                let _e77 = atomicMin((&global_3.member[_e69]), _e72);
+        let _e60 = phi_191_;
+        let _e67 = ((_e60 & 65535u) << bitcast<u32>(16u));
+        if (_e67 < 1602224128u) {
+            let _e72 = global_2.member.member_2[17u];
+            let _e75 = (bitcast<u32>(_e72.w) + (_e40 + ((_e60 >> bitcast<u32>(16u)) * 4u)));
+            if (_e75 < _e22) {
+                let _e79 = atomicMin((&global_3.member[_e75]), _e67);
             }
         }
     }

@@ -138,12 +138,20 @@ pub(super) struct CastBuffers {
     /// Whether all the light's cast is made (`light_made`): its list and its
     /// raster's buffers and targets; before then no shadow map is cast.
     light_ready: bool,
-    /// Every level's beam lines, samples and misses (pxl-spec-core
-    /// `light::list_words`), the first level's in a buffer of its own and the
-    /// rest's in one (`shadow::list_at`), made where shadows are first cast:
-    /// each level's passes bind its own.
-    light_lists: [u32; 2],
-    light_list_whole: bool,
+    /// The levels' beam lines, samples and misses, one list they share
+    /// (pxl-spec-core `light::list_words`), each level cast whole in it
+    /// before the next, then every level's state (`shadow::state_at`): one
+    /// buffer, made where shadows are first cast (`light_made`), none
+    /// before, which every level's passes bind whole.
+    light_list: u32,
+    /// The last cast's number, of any level (pxl-spec-core
+    /// `light::HEAD_CAST`): each level's cast takes the next, so a word of
+    /// the list another level's cast left names a number below it.
+    light_cast: u32,
+    /// The reads of a level whose box slid, as its cast before left them,
+    /// copied out to be copied back moved with it, the levels one after
+    /// another: the largest level's room.
+    light_reads_was: u32,
     /// Every level's stands (pxl-spec-core `light::stands`), one buffer a
     /// level's at `shadow::stands_at`: the marks bind them all, a level's
     /// propagation its own.
@@ -208,7 +216,8 @@ pub(super) struct CastBuffers {
 
 /// A level of the light's map as its cast holds it (pxl-spec-core
 /// `light::LEVELS`, pxl-render gpu/shadow.rs `Level`): each cast by the
-/// same passes over its own list and head, deciding apart whether to cast.
+/// same passes over its own head and state, in the list the levels share,
+/// deciding apart whether to cast.
 struct LightLevel {
     /// Its passes' groups (`light_groups`), and the buffers they bind:
     /// made again exactly when one of them is another.
@@ -217,8 +226,9 @@ struct LightLevel {
     /// The list, the light's visibility buffer and boxes the groups were
     /// made over, made again where one is another.
     grouped: [u32; 3],
-    /// Its casts so far, the number its marks are made with (pxl-spec-core
-    /// `light::HEAD_CAST`), never zero, which no tile holds marked.
+    /// Its last cast's number (`CastBuffers::light_cast`), the number its
+    /// marks are made with (pxl-spec-core `light::HEAD_CAST`), never zero,
+    /// which no tile holds marked.
     number: u32,
     /// The number of the cast since which only the eye's look moved
     /// (pxl-spec-core `light::HEAD_EPOCH`): a tile cast in it or after
@@ -247,9 +257,6 @@ struct LightLevel {
     detail_moved: bool,
     corner: [i32; 2],
     corner_was: [i32; 2],
-    /// The reads as the cast before left them, copied out where the box slid
-    /// to be copied back moved with it.
-    reads_was: u32,
     cast: bool,
     /// Why it cast this frame, a bit each in LIGHT_MOVED's order
     /// (span.json); 0 where it did not.
@@ -263,9 +270,7 @@ struct LightLevel {
 }
 
 impl LightLevel {
-    /// Level `l`'s, `shadow::size(l)` a side.
-    fn new(g: &Gpu, l: u32) -> LightLevel {
-        let n = light::tiles(shadow::size(l));
+    fn new(g: &Gpu) -> LightLevel {
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         LightLevel {
             groups: [0; 12],
@@ -286,10 +291,6 @@ impl LightLevel {
             detail_moved: false,
             corner: [0; 2],
             corner_was: [0; 2],
-            reads_was: g.buf(
-                word_bytes((n * n) as usize),
-                buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
-            ),
             cast: false,
             moved: 0,
             world: false,
@@ -306,17 +307,6 @@ pub struct CastLevel {
     pub generation: u32,
     pub starts: light::Starts,
     pub words: [u32; light::WORDS],
-}
-
-/// Level `l`'s list among the levels' buffers (`shadow::list_at`): which,
-/// and in bytes its first and how many (`light::list_words`).
-fn list_range(l: u32) -> (usize, u32, u32) {
-    let (k, at) = shadow::list_at(l);
-    (
-        k,
-        word_bytes(at as usize),
-        word_bytes(light::list_words(shadow::size(l)) as usize),
-    )
 }
 
 /// Level `l`'s head among the levels' one buffer, in bytes: its first and
@@ -503,8 +493,18 @@ impl RaysPass {
             light_miss_margin_built,
             light_none: buf(word_bytes(2 * generation::drawn::REGIONS as usize), storage),
             light_ready: false,
-            light_lists: [light_list(g, None), light_list(g, None)],
-            light_list_whole: false,
+            light_list: 0,
+            light_cast: 0,
+            light_reads_was: {
+                let n = (0..light::LEVELS)
+                    .map(|l| light::tiles(shadow::size(l)))
+                    .max();
+                let n = n.unwrap_or(0) as usize;
+                buf(
+                    word_bytes(n * n),
+                    buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
+                )
+            },
             light_stands: buf(
                 word_bytes(shadow::stands_at(light::LEVELS) as usize),
                 storage,
@@ -514,7 +514,7 @@ impl RaysPass {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             light_receivers: Read::default(),
-            light_levels: (0..light::LEVELS).map(|l| LightLevel::new(g, l)).collect(),
+            light_levels: (0..light::LEVELS).map(|_| LightLevel::new(g)).collect(),
             light_level_cnt: 0,
             light_marks: false,
             refold: false,
@@ -857,6 +857,7 @@ impl RaysPass {
         let footprint = kind != FrameKind::cast;
         c.light_level_cnt = light_map.len() as u32;
         let ready = c.light_ready;
+        let mut number = c.light_cast;
         for (k, v) in c.light_levels.iter_mut().enumerate() {
             let Some(m) = light_map.get(k) else {
                 v.content.forget();
@@ -905,7 +906,8 @@ impl RaysPass {
             // footprint, marked already where the eye stood when they were.
             v.world |= kind == FrameKind::cast || !held || footprint_owed;
             if v.cast {
-                v.number = v.number.wrapping_add(1).max(1);
+                number = number.wrapping_add(1).max(1);
+                v.number = number;
                 if !held {
                     v.epoch = v.number;
                 }
@@ -916,6 +918,7 @@ impl RaysPass {
                 }
             }
         }
+        c.light_cast = number;
         let casting = c.light_levels.iter().any(|v| v.cast);
         // The marks run, every level's receivers at once, where a level that
         // casts owes them; every level the map has its head written then, as
@@ -945,6 +948,7 @@ impl RaysPass {
                 head[at] = n as u32;
                 head[light::HEAD_LEVELS] = light_map.len() as u32;
                 head[light::HEAD_BASE] = shadow::stands_at(k as u32);
+                head[light::HEAD_STATE] = shadow::state_at(k as u32);
                 for (j, a) in cast.actors[..n].iter().enumerate() {
                     let w = at + 4 * (1 + j);
                     head[w..w + 3].copy_from_slice(&a.map(f32::to_bits));
@@ -954,13 +958,6 @@ impl RaysPass {
                     g.write_buf(v.misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
                     let n = shadow::size(k as u32);
                     g.write_buf(v.args, 0, bytes(&light_args(n)));
-                    // The lists of what feeds the tiles it claims empty
-                    // (`light::listed_at`).
-                    let (list, base) = shadow::list_at(k as u32);
-                    for which in 0..light::LISTS {
-                        let at = base + light::listed_at(n, which);
-                        g.write_buf(c.light_lists[list], word_bytes(at as usize), bytes(&[0u32]));
-                    }
                     c.raster.light_prepare(g, k as u32, &m.words, n);
                 }
             }
@@ -1109,7 +1106,7 @@ impl RaysPass {
         for (k, m) in light_map.iter().enumerate().filter(|_| c.light_ready) {
             let l = k as u32;
             let grouped = [
-                c.light_lists[shadow::list_at(l).0],
+                c.light_list,
                 c.raster.light_visibility(l),
                 c.raster.light.boxes,
             ];
@@ -1153,7 +1150,7 @@ impl RaysPass {
                         level: l,
                         pyramid: c.pyramid,
                         heads: c.light_heads,
-                        list: c.light_lists[shadow::list_at(l).0],
+                        list: c.light_list,
                         stands: c.light_stands,
                         boxes: c.raster.light.boxes,
                         visibility: c.raster.light_visibility(l),
@@ -1336,26 +1333,20 @@ impl RaysPass {
                 let shift = dy * n + dx;
                 let all = n * n;
                 if shift.abs() < all {
-                    let (list, base) = shadow::list_at(k as u32);
-                    let (list, base) = (c.light_lists[list], base as i32);
-                    let reads = base + light::reads_at(size) as i32;
+                    let list = c.light_list;
+                    let reads = (shadow::state_at(k as u32) + light::reads_at(size)) as i32;
                     let words = |w: i32| word_bytes(w as usize);
-                    let out = (v.reads_was, 0);
+                    let out = (c.light_reads_was, 0);
                     g.copy_buf(encoder, (list, words(reads)), out, words(all));
                     let (from, to) = if shift >= 0 { (shift, 0) } else { (0, -shift) };
                     g.copy_buf(
                         encoder,
-                        (v.reads_was, words(from)),
+                        (c.light_reads_was, words(from)),
                         (list, words(reads + to)),
                         words(all - shift.abs()),
                     );
                 }
             }
-            // The beam, the samples, their boxes drawn, the slots taking
-            // their visible sample, a workgroup a tile (pxl-spec-core
-            // `light::TILE`), and the rest walked off their list as the eye's
-            // missed pixels are: each a pass timed in its own span, every
-            // level that casts in it one after another.
             let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
             let pass = g.compute_pass(encoder, stamp);
             // The tiles each box slid onto, and those whose eye moved past
@@ -1375,9 +1366,7 @@ impl RaysPass {
             // level's at once, each receiver in the levels it is read at:
             // where the eye's rays meet the world, a thread a brick of pixels
             // `light::MARK` a side (`light_mark_cs`), and where the decor and
-            // the actors drawn stand, a thread each (`light_mark_draws_cs`);
-            // then those each level reads, a thread a tile
-            // (`light_propagate_cs`).
+            // the actors drawn stand, a thread each (`light_mark_draws_cs`).
             if c.light_marks {
                 for v in c.light_levels.iter_mut().filter(|v| v.cast) {
                     v.world = false;
@@ -1395,31 +1384,42 @@ impl RaysPass {
             let cap = c.generator.instances().map_or(0, |p| p.cap);
             let w = compute::LIGHT_MARK_DRAWS_WORKGROUP;
             g.dispatch(pass, (cap + light::ACTORS as u32).div_ceil(w[0]), 1, 1);
+            g.end(pass);
+            // Each level that casts, one after another, whole in the list
+            // the levels share before the next takes it (pxl-spec-core
+            // `light::list_words`): the lists of what feeds the tiles it
+            // claims emptied (`light::listed_at`); the tiles it reads, a
+            // thread a tile (`light_propagate_cs`); the beam, the samples,
+            // their boxes drawn, the slots taking their visible sample, a
+            // workgroup a tile (pxl-spec-core `light::TILE`), and the rest
+            // walked off their list as the eye's missed pixels are. Each a
+            // pass timed in its own span, which holds every level's.
             let args = |w: u32| word_bytes(w as usize);
             for (k, v) in c.light_levels.iter().enumerate().filter(|(_, v)| v.cast) {
+                let n = shadow::size(k as u32);
+                let tiles = light::tiles(n);
+                for which in 0..light::LISTS {
+                    let at = word_bytes(light::listed_at(n, which) as usize);
+                    g.clear_buf(encoder, (c.light_list, at), word_bytes(1));
+                }
+                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_beam).pass());
                 g.set_bind_group(pass, 0, v.groups[6], &[]);
                 g.set_pipeline(pass, c.light_propagate_built.id);
                 let w = compute::LIGHT_PROPAGATE_WORKGROUP;
-                let n = light::tiles(shadow::size(k as u32));
-                g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
-            }
-            // The beam by its entry of its own, which tells the margin of
-            // what its walks ask (`light_beam_cs`), then the cells' starts by
-            // the eye's pass over the light's world's group, which hands it
-            // the level's head. Each as many workgroups as the propagation
-            // left it (`light::ARGS_WORDS`).
-            for v in c.light_levels.iter().filter(|v| v.cast) {
+                g.dispatch(pass, tiles.div_ceil(w[0]), tiles.div_ceil(w[1]), 1);
+                // The beam by its entry of its own, which tells the margin of
+                // what its walks ask (`light_beam_cs`), then the cells' starts
+                // by the eye's pass over the light's world's group, which
+                // hands it the level's head. Each as many workgroups as the
+                // propagation left it (`light::ARGS_WORDS`).
                 g.set_bind_group(pass, 0, v.groups[8], &[]);
                 g.set_pipeline(pass, c.light_beam_built.id);
                 g.dispatch_indirect(pass, v.args, args(light::ARGS_BEAM));
                 g.set_bind_group(pass, 0, v.groups[1], &[]);
                 g.set_pipeline(pass, c.cells_built.id);
                 g.dispatch_indirect(pass, v.args, args(light::ARGS_CELLS));
-            }
-            g.end(pass);
-            let stamp = ctx.stamp(GpuSpanName::light_sample).pass();
-            let pass = g.compute_pass(encoder, stamp);
-            for (k, v) in c.light_levels.iter().enumerate().filter(|(_, v)| v.cast) {
+                g.end(pass);
+                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_sample).pass());
                 g.set_bind_group(pass, 0, v.groups[9], &[]);
                 g.set_pipeline(pass, c.light_sample_built.id);
                 g.dispatch_indirect(pass, v.args, args(light::ARGS_SAMPLE));
@@ -1429,13 +1429,10 @@ impl RaysPass {
                 g.set_bind_group(pass, 0, v.groups[10], &[]);
                 g.set_pipeline(pass, c.light_margin_built.id);
                 let w = compute::LIGHT_MARGIN_WORKGROUP;
-                let n = light::tiles(shadow::size(k as u32));
-                g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
-            }
-            g.end(pass);
-            // A level's boxes, drawn, and its slots, before the next level's
-            // boxes take the raster's buffers and targets.
-            for (k, v) in c.light_levels.iter().enumerate().filter(|(_, v)| v.cast) {
+                g.dispatch(pass, tiles.div_ceil(w[0]), tiles.div_ceil(w[1]), 1);
+                g.end(pass);
+                // Its boxes, drawn, and its slots, before the next level's
+                // boxes take the raster's buffers and targets.
                 let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_raster).pass());
                 g.set_bind_group(pass, 0, v.groups[2], &[]);
                 g.set_pipeline(pass, c.raster.boxes_built.id);
@@ -1448,20 +1445,14 @@ impl RaysPass {
                 g.dispatch_indirect(pass, v.args, args(light::ARGS_SLOT));
                 g.end(pass);
                 // Their count where their walk reads it.
-                let ((list, base), n) = (shadow::list_at(k as u32), shadow::size(k as u32));
                 g.copy_buf(
                     encoder,
                     (v.misses, word_bytes(ray::MISS_ARGS_CNT as usize)),
-                    (
-                        c.light_lists[list],
-                        word_bytes((base + light::misses_cnt(n)) as usize),
-                    ),
+                    (c.light_list, word_bytes(light::misses_cnt(n) as usize)),
                     4,
                 );
-            }
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_walk).pass());
-            let list = word_bytes(ray::MISS_ARGS_LIST as usize);
-            for v in c.light_levels.iter().filter(|v| v.cast) {
+                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_walk).pass());
+                let list = word_bytes(ray::MISS_ARGS_LIST as usize);
                 g.set_bind_group(pass, 0, v.groups[3], &[]);
                 g.set_pipeline(pass, c.light_miss_built.id);
                 g.dispatch_indirect(pass, v.misses, list);
@@ -1470,8 +1461,8 @@ impl RaysPass {
                 g.set_bind_group(pass, 0, v.groups[11], &[]);
                 g.set_pipeline(pass, c.light_miss_margin_built.id);
                 g.dispatch_indirect(pass, v.misses, list);
+                g.end(pass);
             }
-            g.end(pass);
         }
         // The light's counted off its first level that casts
         // (`counted_level`).
@@ -1492,7 +1483,7 @@ impl RaysPass {
     }
 
     /// The light's cast made where `wanted`, shadows first cast, before the
-    /// frame: its list grown (`light::list_words`) and its raster's buffers
+    /// frame: its list (`shadow::LIST_WORDS`) and its raster's buffers
     /// and targets (`Raster::light_made`), what only a map cast needs. Its
     /// passes are made with the eye's (`make`), the beam's, the cells' and
     /// the samples' the eye's own; ready once its buffers are (`light_ready`).
@@ -1501,13 +1492,10 @@ impl RaysPass {
         if !wanted || c.light_ready {
             return;
         }
-        if !c.light_list_whole {
-            for (k, list) in c.light_lists.iter_mut().enumerate() {
-                release(*list);
-                *list = light_list(g, Some(k));
-            }
-            c.light_list_whole = true;
-        }
+        c.light_list = g.buf(
+            word_bytes(shadow::LIST_WORDS as usize),
+            buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
+        );
         c.light_ready = c.raster.light_made(g, shadow::size);
     }
 
@@ -1719,27 +1707,9 @@ fn light_args(size: u32) -> [u32; light::ARGS_WORDS as usize] {
     args
 }
 
-/// One of the light's lists' buffers, a word before shadows are cast, or
-/// the `whole` of buffer `k` (`shadow::LIST_WORDS`): its levels' beam lines
-/// and cells' starts, raster's samples and misses past them
-/// (`light::list_words`), a level's at `light::level_words` apart.
-fn light_list(g: &Gpu, whole: Option<usize>) -> u32 {
-    let words = match whole {
-        Some(k) => shadow::LIST_WORDS[k] as usize,
-        None => 4,
-    };
-    g.buf(
-        word_bytes(words),
-        buffer_usage::STORAGE
-            | buffer_usage::COPY_DST
-            | buffer_usage::INDIRECT
-            | buffer_usage::COPY_SRC,
-    )
-}
-
 /// What a level's groups bind beside the world (`light_groups`): its
 /// number, the observed pyramid, the levels' heads and stands (each pass of
-/// the level its own, the marks all) and its list, the raster's boxes and
+/// the level its own, the marks all) and the list's buffer, the raster's boxes and
 /// visibility buffer, the level's raster args, its misses' dispatch and its
 /// casting passes' workgroups.
 struct LightBuffers {
@@ -1759,13 +1729,14 @@ struct LightBuffers {
 /// tiles' frames, the bricks' palette indices, the service area's index, the
 /// overwrites and the ways' pool, the cast's alone; the observed pyramid,
 /// which the light's walks read and write as the eye's do; its layer of the
-/// world; its head, the beam's lines, the samples and the misses (its
-/// list), the raster's boxes, visibility buffer and args, the misses'
+/// world; its head, the list's buffer, the beam's lines, the samples and
+/// the misses the levels share, and its state past them (the list's
+/// buffer, bound whole), the raster's boxes, visibility buffer and args, the misses'
 /// dispatch and the casting passes' workgroups (`light::ARGS_WORDS`), which
 /// the propagation writes; the eye's rays, which the mark reads, and the
 /// decor's drawing words, regions and instances, which the drawn mark reads.
 /// The slots', its world's (the cells' starts, the eye's pass, over
-/// `WORLD_GROUP`, its list where the eye's beam rays' buffer lies and its
+/// `WORLD_GROUP`, the list where the eye's beam rays' buffer lies and its
 /// head where the eye's), its boxes' (the eye's raster's pass), the misses'
 /// walk's, the two marks' (every level's heads and stands, `Heads`), the
 /// propagation's, the detail's, the beam's, the samples', the held margins'
@@ -1780,9 +1751,8 @@ fn light_groups(
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances] =
         bound;
     let (head_at, head_bytes) = head_range(b.level);
-    let (_, list_at, list_bytes) = list_range(b.level);
     let head = buf_range_entry(HEAD_BINDING, b.heads, head_at, head_bytes);
-    let list = |binding: u32| buf_range_entry(binding, b.list, list_at, list_bytes);
+    let list = |binding: u32| buf_entry(binding, b.list);
     let n = shadow::size(b.level);
     let stands = buf_range_entry(
         STANDS_BINDING,

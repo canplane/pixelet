@@ -123,27 +123,36 @@ const _: () = assert!(
     "the coarsest level reaches as far as the eye draws at the pyramid's top"
 );
 
-/// Where level `l`'s list lies (pxl-spec-core `light::list_words`): the
-/// first level's in a buffer of its own, the rest's in one, a level's at
-/// `light::level_words` apart; which, and its first word there.
-pub const fn list_at(l: u32) -> (usize, u32) {
-    if l == 0 {
-        (0, 0)
+/// The list the levels share (pxl-spec-core `light::list_words`), from the
+/// first word of the levels' one buffer: the largest level's words, each
+/// level cast whole in it before the next.
+pub const LIST_ROOM: u32 = {
+    let (first, rest) = (light::list_words(FIRST_SIZE), light::list_words(SIZE));
+    if first > rest {
+        first
     } else {
-        (1, (l - 1) * light::level_words(SIZE))
+        rest
     }
+};
+
+/// The first word of level `l`'s state past the list (pxl-spec-core
+/// `light::reads_at`, `light::HEAD_STATE`), and every level's past the last.
+pub const fn state_at(l: u32) -> u32 {
+    let mut at = LIST_ROOM;
+    let mut k = 0;
+    while k < l {
+        at += light::state_words(size(k));
+        k += 1;
+    }
+    at
 }
 
-/// The words of each of the two buffers the levels' lists lie in
-/// (`list_at`).
-pub const LIST_WORDS: [u32; 2] = [
-    light::list_words(FIRST_SIZE),
-    (light::LEVELS - 1) * light::level_words(SIZE),
-];
+/// The words of the levels' one buffer: the list, then every level's state.
+pub const LIST_WORDS: u32 = state_at(light::LEVELS);
 
 const _: () = assert!(
-    floor::fits(4 * LIST_WORDS[0] as u64, true) && floor::fits(4 * LIST_WORDS[1] as u64, true),
-    "each buffer of the levels' lists is one every device binds whole"
+    floor::fits(4 * LIST_WORDS as u64, true),
+    "the levels' list and states are one buffer every device binds whole"
 );
 
 /// The first word of level `l`'s stands among the levels' one buffer

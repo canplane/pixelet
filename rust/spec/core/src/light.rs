@@ -12,8 +12,10 @@
 //! as the one before, the coarsest reaching as far as the eye draws. A
 //! receiver reads the finest level that holds it (`level_of`). Each level is
 //! cast as the one map was, by the same passes, its own head (`HEAD_LEVEL`),
-//! side (`HEAD_SIZE`), list (`HEAD_BASE`) and words; how fine each level's
-//! texel is, is pxl-render gpu/shadow.rs's.
+//! side (`HEAD_SIZE`), stands (`HEAD_BASE`), state (`HEAD_STATE`) and
+//! words, over the one list the levels share (`list_words`), each level's
+//! cast whole before the next's; how fine each level's texel is, is
+//! pxl-render gpu/shadow.rs's.
 //!
 //! A level's depth is a clipmap: the light box's texels lie on a grid
 //! fixed in the world (`aim`'s snap), and each world texel is held in the
@@ -342,9 +344,10 @@ impl Light {
     }
 
     /// The first of the hold words (`hold_at`) of box tile `tile` of the map
-    /// `size` texels a side: its slots' tile's, fixed in the world as the
-    /// slots are, so the words hold where the box slides, its corner a whole
-    /// number of tiles (pxl-render gpu/shadow.rs `aim`).
+    /// `size` texels a side, in the level's state: its slots' tile's, fixed
+    /// in the world as the slots are, so the words hold where the box
+    /// slides, its corner a whole number of tiles (pxl-render gpu/shadow.rs
+    /// `aim`).
     pub fn hold(&self, size: u32, tile: [u32; 2]) -> u32 {
         let (t, n) = (TILE, tiles(size));
         let at = |k: usize| ((tile[k] * t) as i32).wrapping_add(self.corner[k]) as u32 & (size - 1);
@@ -406,8 +409,10 @@ pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
 /// A head's place in the levels' buffer: a binding's offset a multiple of
 /// 256 bytes, which every device takes.
 pub const HEAD_STRIDE: usize = HEAD_VEC4S.div_ceil(16) * 16;
-/// The cast's number, counted up from one each cast, which a tile stood on
-/// and read in it is marked with (`stands`, `reads_at`).
+/// The cast's number, counted up from one over every level's casts, so it
+/// is past every earlier cast's of any level, which a tile stood on and
+/// read in it is marked with (`stands`, `reads_at`), and what the list
+/// names a cast by (`coarse_at`, `listed_marks_at`).
 pub const HEAD_CAST: usize = 0;
 pub const HEAD_COUNTED: usize = 1;
 /// The number of the cast since which only what says which tiles are read
@@ -466,7 +471,8 @@ pub const STARTS_VEC4S: usize = 11;
 /// The actors the host draws, receivers of the shadow map as decor is
 /// (pxl-shader light.rs `light_mark_draws_cs`), past the starts: how many, the
 /// first word of a vec4, the levels the map has (`HEAD_LEVELS`), its second,
-/// and the level's stands' first word (`HEAD_BASE`), its third; then each
+/// the level's stands' first word (`HEAD_BASE`), its third, and its state's
+/// first word in the list's buffer (`HEAD_STATE`), its fourth; then each
 /// where it stands, units from the eye, a vec4 each, as many as `ACTORS`;
 /// any past them marks nothing.
 pub const ACTORS_AT: usize = STARTS_AT + STARTS_VEC4S;
@@ -477,6 +483,9 @@ pub const HEAD_LEVELS: usize = 4 * ACTORS_AT + 1;
 /// The first word of the level's stands among the levels' one buffer
 /// (`stands`), which the marks step to a level's by.
 pub const HEAD_BASE: usize = 4 * ACTORS_AT + 2;
+/// The first word of the level's state among the list's buffer (`reads_at`),
+/// past the list.
+pub const HEAD_STATE: usize = 4 * ACTORS_AT + 3;
 
 impl Starts {
     /// The start of the ray of world texel `w`, X across and Y down the
@@ -726,7 +735,7 @@ pub fn miss_word(size: u32, slot: [u32; 2], margin: f32) -> u32 {
 }
 
 /// The hold words (`hold_at`) of the tile a listed slot's walk told
-/// (`miss_word`), and the margin it told, f32 bits.
+/// (`miss_word`), in the level's state, and the margin it told, f32 bits.
 pub const fn miss_hold(size: u32, w: u32) -> (u32, u32) {
     (
         hold_at(size) + (w >> MISS_TILE_SHIFT) * HOLD_WORDS,
@@ -753,14 +762,18 @@ pub const fn stands(size: u32) -> u32 {
     tiles(size) * tiles(size)
 }
 
-/// The tiles a receiver reads, past the misses: the number of the
+/// A level's state, apart from the list the levels share: what outlives
+/// the level's cast, at its head's `HEAD_STATE` in the list's buffer. Its
+/// words, from the first: the reads, then the hold words (`state_words`).
+///
+/// The tiles a receiver reads: the number of the
 /// cast that first read one in its epoch (`HEAD_EPOCH`), read where it lies
 /// within its taps of the way up from a tile one stands on (`Light::up`;
 /// pxl-shader light.rs `light_propagate_cs`). A tile this cast's number names is
 /// the cast's to cast; one an earlier cast of its epoch names holds what
 /// that cast left; no receiver reads any other.
-pub const fn reads_at(size: u32) -> u32 {
-    misses_at(size) + size * size
+pub const fn reads_at(_size: u32) -> u32 {
+    0
 }
 
 pub const fn tiles(size: u32) -> u32 {
@@ -775,10 +788,11 @@ pub const fn tiles(size: u32) -> u32 {
 /// where the eye stands (`HEAD_FOOTPRINT`).
 pub const FOOTPRINT_TILES: i32 = 3;
 
-/// The reads by the square of `COARSE` tiles a side, past them, `coarse`
-/// a row: the cast's number where a tile in the square is the cast's to
-/// cast, read in place of the tiles where a span of them is asked
-/// (pxl-shader light.rs `Map::needs`).
+/// The reads by the square of `COARSE` tiles a side, in the list past the
+/// misses, `coarse` a row: the cast's number where a tile in the square is
+/// the cast's to cast, read in place of the tiles where a span of them is
+/// asked (pxl-shader light.rs `Map::needs`); a word this cast did not
+/// write names an earlier cast, of any level (`HEAD_CAST`).
 pub const COARSE: u32 = 8;
 
 pub const fn coarse(size: u32) -> u32 {
@@ -786,7 +800,7 @@ pub const fn coarse(size: u32) -> u32 {
 }
 
 pub const fn coarse_at(size: u32) -> u32 {
-    reads_at(size) + tiles(size) * tiles(size)
+    misses_at(size) + size * size
 }
 
 /// The word of the square tile `[i, j]` lies in, among the squares'
@@ -795,7 +809,7 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
     coarse_at(size) + (j / COARSE) * coarse(size) + i / COARSE
 }
 
-/// What a tile cast in its epoch holds by, past the squares, `HOLD_WORDS` a
+/// What a tile cast in its epoch holds by, past the reads, `HOLD_WORDS` a
 /// tile of slots (`Light::hold`): the least margin of every node the walks
 /// that fed it asked (`cast::Margin`), f32 bits, gathered once off the beam
 /// rays and the samples that feed it, each of which keeps its own
@@ -807,7 +821,7 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
 /// those walks asked is asked again, so the tile holds what it would be cast
 /// anew to (`holds`; `light_detail_cs`).
 pub const fn hold_at(size: u32) -> u32 {
-    coarse_at(size) + coarse(size) * coarse(size)
+    reads_at(size) + tiles(size) * tiles(size)
 }
 
 pub const HOLD_MARGIN: u32 = 0;
@@ -822,7 +836,8 @@ pub const HOLD_WORDS: u32 = 4;
 /// (`LISTED_FED`), and the tiles claimed, whose slots it casts
 /// (`LISTED_CLAIMED`). Each list's count, then its entries, a tile's `i |
 /// j << 16` each; before the lists, a word for every place of each, the
-/// last cast that listed it, so each is listed once a cast. The passes
+/// last cast that listed it, so each is listed once a cast
+/// (`listed_marks_at`). The passes
 /// that cast tiles take their threads off these (pxl-shader observer.rs
 /// `Observer::take`): `LIST_ACROSS` workgroups of `LISTED_LANES` a row, an
 /// entry `listed_per` of them. A cast that begins an epoch casts every
@@ -845,15 +860,21 @@ pub const fn listed_room(size: u32, which: u32) -> u32 {
     }
 }
 
-/// The first of list `which`'s marks, a word a place (`LISTED_CORNERS`).
+/// The first of list `which`'s marks, past the squares, a word a place
+/// (`LISTED_CORNERS`).
 pub const fn listed_marks_at(size: u32, which: u32) -> u32 {
-    let mut at = hold_at(size) + tiles(size) * tiles(size) * HOLD_WORDS;
+    let mut at = coarse_at(size) + coarse(size) * coarse(size);
     let mut k = 0;
     while k < which {
         at += listed_room(size, k);
         k += 1;
     }
     at
+}
+
+/// The level's state's words (`reads_at`).
+pub const fn state_words(size: u32) -> u32 {
+    hold_at(size) + tiles(size) * tiles(size) * HOLD_WORDS
 }
 
 /// List `which`'s count, its entries after it (`LISTED_CORNERS`).
@@ -874,17 +895,14 @@ pub const fn listed_per(side: u32) -> u32 {
     side * side
 }
 
-/// The list's buffer's words: the beam's, the samples, their margins, the
-/// misses, the reads, their squares, the hold words, the lists.
+/// The list's words, a map `size` texels a side: the beam's, the samples,
+/// their margins, the misses, the reads' squares, the lists' marks, the
+/// lists. What a level's cast reads of it, the cast wrote first
+/// (pxl-shader light.rs `light_margin_cs`), or it names an earlier cast,
+/// of any level, by a number below the cast's own (`HEAD_CAST`): so the
+/// levels share one, each cast whole before the next takes it, and only the level's state outlives its cast (`reads_at`).
 pub const fn list_words(size: u32) -> u32 {
     listed_at(size, LISTS)
-}
-
-/// A level's list's room in the levels' one buffer, a map `size` texels a
-/// side: its words, to a multiple of 256 bytes, which a binding's offset is
-/// on every device. Each level's passes bind its own.
-pub const fn level_words(size: u32) -> u32 {
-    list_words(size).div_ceil(64) * 64
 }
 
 /// Whether a tile whose walks' least margin is `margin` units, cast with the
