@@ -19,11 +19,11 @@ use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use pxl_spec_core::area::{Area, Shard};
 use pxl_spec_core::clipmap::{
-    self, Bricks, Entry, Presence, BRICK, BRICK_CELLS, BRICK_SHIFT, CLIP_LEVELS, ENTRIES,
+    self, Bricks, Entry, Lookup, Presence, BRICK, BRICK_CELLS, BRICK_SHIFT, CLIP_LEVELS, ENTRIES,
     EYE_CLIP_LEVELS, FILL_CAP, FIRST_CELL, LEVELS, SLOTS,
 };
 use pxl_spec_core::fill;
-use pxl_spec_core::ground::word;
+use pxl_spec_core::ground::{self, word};
 use pxl_spec_core::wrap_idx;
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
@@ -677,6 +677,59 @@ pub fn table() -> &'static [i32] {
     // SAFETY: an entry is four plain words in order (`Entry`), so the entries are
     // their rows' words.
     unsafe { core::slice::from_raw_parts(rows.as_ptr().cast::<i32>(), 4 * rows.len()) }
+}
+
+/// The lowest and highest the ground's faces and its ways reach over the
+/// rectangle `[[x0, y0], [x1, y1]]` of the world, in units, in leaf cells, at
+/// every zoom of cells the eye draws (pxl-spec-core `clipmap::bound_over`
+/// from `FIRST_CELL` to `LEAF_CELL`): what the eye's coarsest clip level
+/// holds of it, past which no clip level holds anything, read in nodes no
+/// wider than its bricks, which its edge does not cut. `ground::EMPTY`
+/// where it holds none of it; `ground::UNBOUNDED` where a brick it covers
+/// is held nowhere yet or nothing is laid out.
+pub fn relief_over([lo, hi]: [[f64; 2]; 2]) -> [i32; 2] {
+    let Some(first) = first_of(clipmap(), 0) else {
+        return ground::UNBOUNDED;
+    };
+    // The clip level's first leaf cell and its side in leaf cells.
+    let shift = LEAF_CELL - clipmap::bricks_zoom(FIRST_CELL);
+    let side = i64::from(clipmap::ACROSS) << shift;
+    let at = first.map(|v| i64::from(v) << shift);
+    let leaf = |v: f64| libm::floor(v / units(LEAF_CELL)) as i64;
+    // The rectangle off the clip level's first leaf cell, X the short way
+    // round, cut to what it holds.
+    let x0 = i64::from(wrap_idx(LEAF_CELL, (leaf(lo[0]) - at[0]) as i32));
+    let d = [
+        [x0, x0 + leaf(hi[0]) - leaf(lo[0])],
+        [leaf(lo[1]) - at[1], leaf(hi[1]) - at[1]],
+    ];
+    let d = d.map(|[a, b]| [a.max(0), b.min(side - 1)]);
+    if d[0][0] > d[0][1] || d[1][0] > d[1][1] {
+        return ground::EMPTY;
+    }
+    // Nodes as wide as the rectangle, two a side at most, or as wide as a
+    // brick of the clip level where it is wider.
+    let wide = (d[0][1] - d[0][0]).max(d[1][1] - d[1][0]) + 1;
+    let s = (64 - (wide - 1).leading_zeros()).min(shift);
+    let zoom = LEAF_CELL - s;
+    let mut b = [ground::EMPTY; 2];
+    for ny in (at[1] + d[1][0]) >> s..=(at[1] + d[1][1]) >> s {
+        for nx in (at[0] + d[0][0]) >> s..=(at[0] + d[0][1]) >> s {
+            let node = [wrap_idx(zoom, nx as i32), ny as i32];
+            let mut place = Lookup::NONE;
+            let (got, _, here) = clipmap::bound_over(
+                &CpuClipmap,
+                &mut place,
+                [FIRST_CELL, LEAF_CELL],
+                (zoom, node),
+            );
+            if !here {
+                return ground::UNBOUNDED;
+            }
+            b = ground::joined(b, got);
+        }
+    }
+    [b[0][0].min(b[1][0]), b[0][1].max(b[1][1])]
 }
 
 /// What a tile hands its bricks: its packet and the tile as it is held, its

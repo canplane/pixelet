@@ -544,8 +544,9 @@ near edge. The coarsest reaches as far as the eye draws at the pyramid's top.
 it (`level_of`, `shadow.wgsl` `shadow_level`). A level's box holds its
 receivers a half-width either side of the eye along the light's rays, and
 toward the sun past them every caster that can shadow one: as far along the
-rays as they climb from the ground to the world's ceiling over it, no farther
-than the eye draws (`caster_reach`).
+rays as they climb from the lowest ground under the box to the world's ceiling
+over the highest ground they cross, as the ground's clip levels bound it, no
+farther than the eye draws (`caster_reach`, `pxl-kernel` `relief_over`).
 
 Each texel is fixed in the world and held in its level's slot by its index
 modulo the level's side (`Light`). The sun is an observer as the eye is: one set

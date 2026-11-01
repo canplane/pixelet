@@ -173,21 +173,66 @@ pub fn levels_for(far: f64) -> u32 {
     (light::level_of(far as f32, reach(0) as f32) + 1).min(light::LEVELS)
 }
 
-/// How far toward the light along its rays a caster may lie from a
-/// receiver it shadows, in units, `rise` the sine of the light's height: as
-/// far as the rays climb from the ground to the world's ceiling over it
-/// (pxl-spec limit.rs `ceiling`), the tallest the world holds; no farther
-/// than the eye draws at the pyramid's top, as under a light at or below
-/// the horizon. Every level's box reaches it past the receivers read at the
-/// level (`Shadow::aim_level`).
-pub fn caster_reach(rise: f64) -> f64 {
-    let tallest = f64::from(ceiling(SEA_LEVEL) - SEA_LEVEL) * units(lattice::GROUND.cell());
+/// The lowest and highest the ground and its ways reach over a rectangle
+/// of the world, `[[x0, y0], [x1, y1]]` in units, in leaf cells, as the
+/// clip levels hold it: `ground::EMPTY` where they hold none of it,
+/// `ground::UNBOUNDED` where they do not yet bound it (pxl-kernel
+/// domain/layer/terrain/clipmap.rs `relief_over`).
+pub type Relief = fn([[f64; 2]; 2]) -> [i32; 2];
+
+/// How far toward the light along its rays past a box `half_width` about
+/// `at`, the eye's world X and Y, a caster may lie from a receiver in it, in
+/// units, cast from `from`: as far as the rays climb from the lowest ground
+/// under the box to the world's ceiling (pxl-spec limit.rs `ceiling`) over
+/// the highest ground or way they cross before it (`relief`), its height
+/// over that ground rounded up to a power of two of leaf cells, so the box
+/// moves with the world's relief only where that doubles or halves; no
+/// farther than the eye draws at the pyramid's top, as under a light at or
+/// below the horizon. Where nothing is held under the box, the ceiling over
+/// sea level. The same for every level (`Shadow::aim_level`).
+pub fn caster_reach(relief: Relief, at: [f64; 2], from: V3, half_width: f64) -> f64 {
     let held = lattice::draw_dist(lattice::GROUND, TOP_ZOOM);
-    if rise * held > tallest {
-        tallest / rise
-    } else {
-        held
+    // Across the light's rays the box's square, turned any way about them,
+    // and along them a half-width either side; then `r` on toward the light.
+    let half: [f64; 2] = core::array::from_fn(|k| {
+        let f = from[k];
+        half_width * (core::f64::consts::SQRT_2 * libm::sqrt(1.0 - f * f) + f.abs())
+    });
+    let rect = |r: f64| -> [[f64; 2]; 2] {
+        let on = [r * from[0], r * from[1]];
+        [
+            [
+                at[0] - half[0] + on[0].min(0.0),
+                at[1] - half[1] + on[1].min(0.0),
+            ],
+            [
+                at[0] + half[0] + on[0].max(0.0),
+                at[1] + half[1] + on[1].max(0.0),
+            ],
+        ]
+    };
+    let under = relief(rect(0.0));
+    let reach = |high: i32| {
+        let tallest = ceiling(high) - under[0];
+        let tallest = tallest.max(ceiling(SEA_LEVEL) - SEA_LEVEL) as u32;
+        let tallest = f64::from(tallest.next_power_of_two()) * units(lattice::GROUND.cell());
+        if from[2] * held > tallest {
+            tallest / from[2]
+        } else {
+            held
+        }
+    };
+    // The ground the rays cross reaches as far as they do: on until no
+    // higher ground lies within the reach it asks.
+    let mut r = reach(under[1]);
+    while r < held {
+        let next = reach(relief(rect(r))[1]);
+        if next <= r {
+            break;
+        }
+        r = next;
     }
+    r
 }
 
 /// An anchor of the rays' starts (`Shadow::starts`): its world texel, its
@@ -230,11 +275,11 @@ pub struct Level {
     /// The world's cast's words off it (pxl-spec-core `light::Light::words`).
     pub light_words: [u32; light::WORDS],
     /// The light's frame its clipmap's texels are cast in, numbered: moved
-    /// where the light the map is cast from, its box's place along the rays
-    /// or the depth step (`DEPTH_STEP`) moved, the rays' starts with it
-    /// (`starts`).
+    /// where the light the map is cast from, its box's depth, its place
+    /// along the rays or the depth step (`DEPTH_STEP`) moved, the rays'
+    /// starts with it (`starts`).
     pub generation: u32,
-    key: Option<(V3, i64)>,
+    key: Option<(V3, f64, i64)>,
     /// What the rays' starts are worked out off (`starts`): the box's
     /// corner and the light's inverse, as last aimed; and the anchors worked
     /// out in the light frame numbered first.
@@ -401,9 +446,10 @@ impl Shadow {
     }
 
     /// The levels as far as the eye draws `far` units out (`levels_for`),
-    /// each aimed about `target` (`aim_level`); `fixed` is a point that
-    /// stays put in the world as the eye moves, in the eye's frame.
-    pub fn aim(&mut self, sun_dir: &[f32], target: V3, far: f64, fixed: V3) {
+    /// each aimed about `target` (`aim_level`) over the ground `relief`
+    /// bounds; `fixed` is a point that stays put in the world as the eye
+    /// moves, in the eye's frame.
+    pub fn aim(&mut self, sun_dir: &[f32], target: V3, far: f64, fixed: V3, relief: Relief) {
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
         // the light goes, on purpose: the light read as moving. Turned on every
         // frame instead, the grid below snapped another way each time and a
@@ -419,16 +465,18 @@ impl Shadow {
         self.level_cnt = levels_for(far);
         self.eye_world = fixed.map(|v| -v);
         for l in 0..self.level_cnt {
-            self.aim_level(l, from, target, fixed);
+            self.aim_level(l, from, target, fixed, relief);
         }
     }
 
     /// Level `l`'s box, `half_width(l)` about `target` across the light's
-    /// rays and along them, and `caster_reach` past that toward the light,
-    /// cast from `from`.
-    fn aim_level(&mut self, l: u32, from: V3, target: V3, fixed: V3) {
+    /// rays and along them, and `caster_reach` past that toward the light
+    /// over the ground `relief` bounds, cast from `from`.
+    fn aim_level(&mut self, l: u32, from: V3, target: V3, fixed: V3, relief: Relief) {
         let half_width = half_width(l);
         let step = 2.0 / f64::from(size(l));
+        let at = [0, 1].map(|k| self.eye_world[k] + target[k]);
+        let reach = caster_reach(relief, at, from, half_width);
         let v = &mut self.levels[l as usize];
         // Its planes hold every receiver read at the level, a half-width
         // either side of the target along the light's rays (pxl-spec-core
@@ -436,7 +484,7 @@ impl Shadow {
         // toward the light past the sunward of them as `caster_reach`; and
         // a share past both each side, half a step (`DEPTH_STEP`), so they
         // hold wherever the step leaves them.
-        let up = half_width + caster_reach(from[2]);
+        let up = half_width + reach;
         let margin = (half_width + up) * DEPTH_STEP / (2.0 * (1.0 - DEPTH_STEP));
         v.depth = half_width + up + 2.0 * margin;
         let eye: V3 = core::array::from_fn(|k| target[k] + from[k] * (up + margin));
@@ -464,7 +512,7 @@ impl Shadow {
             cell[k] = n as i64;
         }
         let corner = [cell[0].wrapping_neg() as i32, cell[1] as i32];
-        let key = Some((from, cell[2]));
+        let key = Some((from, v.depth, cell[2]));
         if key != v.key {
             (v.generation, v.key) = (v.generation.wrapping_add(1), key);
         }

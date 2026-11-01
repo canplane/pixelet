@@ -217,6 +217,10 @@ pub struct GroundBricks<'a> {
     /// past a brick's records that outgrew it, up to
     /// `way::tree::RECORDS_BYTES` (`GroundBuffers::record_bytes`).
     pub records: u32,
+    /// The ground's and its ways' lowest and highest over a rectangle of the
+    /// world, as the clip levels hold it: what the shadow map's boxes reach
+    /// toward the light over (gpu/shadow.rs `caster_reach`).
+    pub relief: shadow::Relief,
 }
 
 /// How a brick's fill landed: its cells are back in every case.
@@ -700,6 +704,11 @@ impl Renderer {
     }
 
     /// `eye_far` how far the eye draws, in units; none without an eye.
+    /// `relief` bounds the ground the shadow map's boxes reach over.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the frame's values, each its own"
+    )]
     fn prepare(
         &mut self,
         g: &Gpu,
@@ -708,6 +717,7 @@ impl Renderer {
         screen: (u32, u32),
         env: &[f32],
         eye_far: f32,
+        relief: shadow::Relief,
     ) {
         let s = stage_lane();
         let (mut m, mut proj) = (mat4::new(), mat4::new());
@@ -790,7 +800,7 @@ impl Renderer {
         u[SHADOW_MOON] = if light.is_some_and(|l| l.1) { 1.0 } else { 0.0 };
         if let Some((dir, _)) = light {
             self.shadow
-                .aim(dir, eye, f64::from(eye_far), eye_world.map(|v| -v));
+                .aim(dir, eye, f64::from(eye_far), eye_world.map(|v| -v), relief);
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.levels[0].light_view_proj);
             u[SHADOW_RADIUS_NDC] = shadow::READ_SHARE;
             u[SHADOW_LEVELS] = self.shadow.level_cnt as f32;
@@ -1008,6 +1018,7 @@ impl Renderer {
             world.screen,
             input.environment,
             far,
+            input.ground.relief,
         );
         // Where each pixel's ray goes through it this frame, the cast's and
         // what is drawn over the world alike (gpu/resolve.rs), in clip units

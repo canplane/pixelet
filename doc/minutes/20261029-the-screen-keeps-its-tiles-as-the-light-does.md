@@ -729,3 +729,22 @@ no shadow coarser anywhere than it was.
   by the first's over its own (`level_clip`), its texel off the first's row
   across. Level 0's texel and reach for receivers are as they were. Read in
   the code, no GPU run.
+- **A level's box toward the sun over the world's relief (2026-11-02).**
+  On the user's word: a caster taller than the ceiling over the receiver's
+  own ground was left out, so a mountain more than `HEADROOM` over a
+  receiver at its foot cast nothing on it under a low sun. A level's reach
+  now runs from the lowest ground under its box to the ceiling over the
+  highest ground the rays cross before it, as the ground's clip levels
+  bound it, over the light's height (pxl-render gpu/shadow.rs
+  `caster_reach`, pxl-kernel domain/layer/terrain/clipmap.rs
+  `relief_over`), read on the CPU as each level is aimed: the box's
+  receivers first, then on toward the sun as far as the reach asks, until
+  no higher ground lies within it; no farther than the eye draws, the same
+  for every level. The height is rounded up to a power of two of leaf
+  cells, so the box moves only where it doubles or halves; the light's
+  frame is renumbered where a box's depth moves (`Level::generation`).
+  Where the clip levels do not yet bound the ground, as far as the eye
+  draws; where they hold none under the box, `HEADROOM` over sea level.
+  No texel is coarser and no reach shorter than before. Open: a receiver
+  dug below the ground's face keeps only the reach from that face. Read in
+  the code, no GPU run.

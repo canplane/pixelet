@@ -202,6 +202,7 @@ pub fn stage_render(pace: Pace) {
             pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
             scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * FILL_CAP)),
             records: param::WAYS_RECORDS_FIRST_BYTES,
+            relief: clipmap::relief_over,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
