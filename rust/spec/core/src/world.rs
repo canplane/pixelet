@@ -15,7 +15,7 @@ use crate::answer::{
 use crate::area::Shard;
 use crate::cave::Cave;
 use crate::clipmap::{Bricks, Found};
-use crate::ground::{self, Held, VOID};
+use crate::ground::{self, VOID};
 use crate::overwrite::{self, Columns, Cut, AIR, CELL, PLACED, SPLIT};
 use crate::way;
 use crate::way::tree;
@@ -144,7 +144,7 @@ impl Inherited {
     clippy::too_many_arguments,
     reason = "the world's four stores, where the node is, and the zooms and cuts it is asked at, each its own"
 )]
-pub fn node<H: Held, W: Bricks, L: Columns, P: Columns>(
+pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     held: &mut H,
     bricks: &W,
     columns: &L,

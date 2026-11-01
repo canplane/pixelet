@@ -34,7 +34,7 @@ type Over = ([f64; 2], Vec<HeldTile>);
 /// built once, and each `hold` after takes a copy.
 static BUILT: std::sync::Mutex<Vec<(Over, Built)>> = std::sync::Mutex::new(Vec::new());
 
-const CELLS_WORDS: usize = (SLOTS * CELLS_ARRAY_BYTES / 4) as usize;
+const CELLS_WORDS: usize = (SLOTS * CELLS_ARR_BYTES / 4) as usize;
 const POOL_WORDS: usize = 16 * tree::POOL_CHILD_GROUPS as usize;
 
 /// The pool's mirror holding `records`, a brick's most at a time.
@@ -85,9 +85,9 @@ pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
     };
     let b = &built[k].1;
     let of = |words: &[u32], len: usize| {
-        let mut array = vec![0; len];
-        array[..words.len()].copy_from_slice(words);
-        array.leak()
+        let mut arr = vec![0; len];
+        arr[..words.len()].copy_from_slice(words);
+        arr.leak()
     };
     PLANES.set(Planes {
         cells: of(&b.cells, CELLS_WORDS),
@@ -217,7 +217,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
         assert_ne!(taken, u32::MAX, "a brick's tree past the pool");
         back[clipmap::ROOT_AT as usize] = root;
         next += taken;
-        let at = (b * CELLS_ARRAY_BYTES / 4) as usize;
+        let at = (b * CELLS_ARR_BYTES / 4) as usize;
         planes().cells[at..at + clipmap::BACK_WORDS as usize].copy_from_slice(&back);
         w.slots[b as usize].present = true;
     }

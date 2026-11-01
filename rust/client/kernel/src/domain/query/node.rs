@@ -171,7 +171,7 @@ impl World<'_> {
     }
 }
 
-/// The ground as a node's reading holds it (pxl-spec-core `ground::Held`):
+/// The ground as a node's reading holds it (pxl-spec-core `ground::Resident`):
 /// the world's tile cache down the node's line, the lines its walk read,
 /// and the first tile it found lacked or only a coarser one standing in for.
 struct Reading<'r, 'a> {
@@ -226,9 +226,9 @@ impl Area for Reading<'_, '_> {
     }
 }
 
-impl ground::Held for Reading<'_, '_> {
+impl ground::Resident for Reading<'_, '_> {
     /// The bound over the node of the cells at `cell`, off the clip levels,
-    /// stepped from `place` (pxl-spec-core `Held::relief`); its line names the
+    /// stepped from `place` (pxl-spec-core `ground::Resident::relief`); its line names the
     /// tile a lack or a coarser clip level stands for; where it lacks, `EMPTY`
     /// and false.
     fn relief(

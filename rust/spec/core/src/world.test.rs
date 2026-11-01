@@ -89,7 +89,7 @@ impl Area for Clipmap<'_> {
     }
 }
 
-impl Held for Clipmap<'_> {
+impl ground::Resident for Clipmap<'_> {
     fn relief(
         &mut self,
         place: &mut Found,

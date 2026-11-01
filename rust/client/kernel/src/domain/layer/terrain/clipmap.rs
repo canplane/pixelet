@@ -32,14 +32,14 @@ use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::domain::layer::terrain::fixed::{cells_off, fill_off, CELLS_ARRAY_BYTES, RANGE};
+use crate::domain::layer::terrain::fixed::{cells_off, fill_off, CELLS_ARR_BYTES, RANGE};
 use crate::domain::layer::terrain::mirror::{mirror, Mirror, Unlaid};
 use crate::domain::layer::terrain::tile;
 use crate::domain::layer::upload::Offered;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refused;
 use crate::sys::io::source::Declared;
-use crate::sys::mem::fixed::array;
+use crate::sys::mem::fixed::arr;
 use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::renderer::{CellsBack, FreshBrick, Resident};
 
@@ -237,7 +237,7 @@ pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
 /// heap's (mirror.rs).
 pub(crate) struct Planes {
     /// Each brick's words as they came back, whole (`clipmap::BACK_WORDS`),
-    /// `CELLS_ARRAY_BYTES` apart.
+    /// `CELLS_ARR_BYTES` apart.
     pub cells: &'static mut [u32],
 }
 
@@ -250,7 +250,7 @@ fn planes() -> &'static mut Planes {
         // at boot.
         unsafe {
             Planes {
-                cells: array(r, cells_off(0), (SLOTS * CELLS_ARRAY_BYTES / 4) as usize),
+                cells: arr(r, cells_off(0), (SLOTS * CELLS_ARR_BYTES / 4) as usize),
             }
         }
     })
@@ -288,7 +288,7 @@ pub fn pool() -> &'static Mirror {
 /// Slot `b`'s words as they came back: a brick's words whole, from its
 /// first, which pxl-spec-core reads a brick's words by (`fill::column_of`).
 fn cells(b: u32) -> &'static [u32] {
-    let at = (b * CELLS_ARRAY_BYTES / 4) as usize;
+    let at = (b * CELLS_ARR_BYTES / 4) as usize;
     &planes().cells[at..at + clipmap::BACK_WORDS as usize]
 }
 
@@ -737,10 +737,10 @@ pub fn fill(
         // SAFETY: the fill's arrays are its alone, plain numbers, zeroed at boot.
         unsafe {
             Fill {
-                room: array(r, fill_off(0), PALETTE_COLUMN),
-                cut: array(r, fill_off(1), 4 * BRICK_CELLS as usize),
-                lines: array(r, fill_off(2), clipmap::LINES_WORDS as usize),
-                scratch: array(r, fill_off(3), clipmap::WAYS_BRICK_SEGMENTS as usize),
+                room: arr(r, fill_off(0), PALETTE_COLUMN),
+                cut: arr(r, fill_off(1), 4 * BRICK_CELLS as usize),
+                lines: arr(r, fill_off(2), clipmap::LINES_WORDS as usize),
+                scratch: arr(r, fill_off(3), clipmap::WAYS_BRICK_SEGMENTS as usize),
             }
         }
     });

@@ -168,10 +168,10 @@ impl<L: PaletteWords> Bricks for World<'_, L> {
 }
 
 /// The ground as the GPU holds it, for pxl-spec-core's one answer for a node.
-impl<L: PaletteWords> ground::Held for World<'_, L> {
+impl<L: PaletteWords> ground::Resident for World<'_, L> {
     /// The bound over the node of the clip level `cell` reads its cells from,
     /// the finest holding them present (`clipmap::bound_over`), as the CPU reads
-    /// it (pxl-spec-core `Held::relief`).
+    /// it (pxl-spec-core `ground::Resident::relief`).
     fn relief(
         &mut self,
         place: &mut Found,

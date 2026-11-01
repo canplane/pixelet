@@ -404,10 +404,10 @@ pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 /// The bound of no ground, lowest over highest: what joins as nothing.
 pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 
-/// How the ground is held where a node reads it: the clip levels, as the CPU
+/// The ground resident where a node reads it: the clip levels, as the CPU
 /// read them back or a GPU filled them, read the one way (`clipmap::ground`,
 /// `clipmap::bound_over`).
-pub trait Held: Area {
+pub trait Resident: Area {
     /// The lowest and highest the ground's cells at `cell` reach over the
     /// node `(zoom, c)`, and the ways' over them, apart (`Bounds`), off the
     /// finest held tile they are read from (`clipmap::bound_over`); bounds no
@@ -438,7 +438,7 @@ pub type Answer = In<[u32; 2]>;
 /// The ground's answer for a node, the one way a descent asks the ground,
 /// `cave` the caves there and `is_cell` whether it is asked at its own zoom:
 /// past the service area, the Earth's; else the node's own bound first, of
-/// each zoom's tile its cells are read from (`Held::relief`) — at its own zoom,
+/// each zoom's tile its cells are read from (`Resident::relief`) — at its own zoom,
 /// over it is air, else its column's asset (`Cell::asset`), its palette index; a
 /// coarser node no part of which lies where the ground may fill at the zooms asked (`slab`, `meets`) a cube of
 /// air its size, else split; where no tile over it is held, a node at its own
@@ -446,13 +446,13 @@ pub type Answer = In<[u32; 2]>;
 /// `shard` is what is known of the area at the node, known a shard or
 /// finer: its asker's, which asks it once at its entry (`Shard::at`).
 /// `place` is where the cells of a node over it were held
-/// (`Held::relief`), `NONE` where none were, and becomes the node's: where
+/// (`Resident::relief`), `NONE` where none were, and becomes the node's: where
 /// a cell's column was read, which the ways write over it are read at
 /// (pxl-spec-core `world::node`), and `NONE` past the area, where nothing
 /// is read. With the answer the column its cell was read off, none
 /// (`Cell::NONE`) for a coarser node; and the ways' bound read with its own
-/// (`Held::relief`), `EMPTY` where none was.
-pub fn node<H: Held>(
+/// (`Resident::relief`), `EMPTY` where none was.
+pub fn node<H: Resident>(
     held: &mut H,
     cave: Cave,
     shard: Shard,
@@ -499,7 +499,7 @@ pub fn node<H: Held>(
     // asked within it, from the coarsest to `near`: each zoom's cells are
     // its own tile's, whose face, its own samples' bicubic, no other zoom's
     // bounds, above or below, so the bound is every one's joined, read once
-    // a clip level (`Held::relief`).
+    // a clip level (`Resident::relief`).
     let first = coarsest(zoom, far);
     let cells = if is_cell {
         [zoom, zoom]

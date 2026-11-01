@@ -15,7 +15,7 @@ use pxl_spec::bake::tile::terrain::PALETTE_COLUMN;
 use pxl_spec_core::clipmap::{BACK_WORDS, BRICK_CELLS, LINES_WORDS, WAYS_BRICK_SEGMENTS};
 
 use crate::domain::layer::tile_cache::TileCache;
-use crate::sys::mem::fixed::array_bytes;
+use crate::sys::mem::fixed::arr_bytes;
 use crate::sys::mem::fixed::OwnedRange;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec_core::clipmap::SLOTS;
@@ -41,7 +41,7 @@ pub const SEPARATION_COLUMNS: [(usize, usize); 7] = [
 /// Separation column `k`'s bytes in a record.
 const fn separation_column_bytes(k: usize) -> u32 {
     let (cnt, size) = SEPARATION_COLUMNS[k];
-    array_bytes(cnt, size)
+    arr_bytes(cnt, size)
 }
 
 /// Where separation column `k`'s plane starts; past the last, where the planes end.
@@ -71,20 +71,20 @@ pub const SEPARATION_BYTES: u32 = separation_plane(SEPARATION_COLUMNS.len());
 /// a word a cell (its ground's top), then its levels, its cells as laid and
 /// its ways' tree's root (pxl-spec-core `clipmap::BACK_WORDS`).
 pub const CELLS_BYTES: u32 = BACK_WORDS * 4;
-pub const CELLS_ARRAY_BYTES: u32 = array_bytes(CELLS_BYTES as usize, 1);
+pub const CELLS_ARR_BYTES: u32 = arr_bytes(CELLS_BYTES as usize, 1);
 
 /// The room a fill works in (clipmap.rs `fill`), an array each in order: a
 /// tile's palette indices four a cell as handed, a brick's cut from them, its lines,
 /// and the pairs `brick_lines` lays them with.
 pub const FILL_ARRAY_BYTES: [u32; 4] = [
-    array_bytes(PALETTE_COLUMN, 1),
-    array_bytes(4 * BRICK_CELLS as usize, 1),
-    array_bytes(LINES_WORDS as usize, 4),
-    array_bytes(WAYS_BRICK_SEGMENTS as usize, 8),
+    arr_bytes(PALETTE_COLUMN, 1),
+    arr_bytes(4 * BRICK_CELLS as usize, 1),
+    arr_bytes(LINES_WORDS as usize, 4),
+    arr_bytes(WAYS_BRICK_SEGMENTS as usize, 8),
 ];
 
 /// Where the fill's room starts, on a cache line.
-const FILL_AT: u32 = array_bytes(cells_off(SLOTS) as usize, 1);
+const FILL_AT: u32 = arr_bytes(cells_off(SLOTS) as usize, 1);
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_ARRAY_BYTES);
 
@@ -97,7 +97,7 @@ pub const fn separation_column(record: u32, k: usize) -> (u32, u32) {
 /// Where slot `slot`'s cells come back to (domain/layer/terrain/clipmap.rs
 /// `Slot`), `SLOTS` of them.
 pub const fn cells_off(slot: u32) -> u32 {
-    SEPARATION_BYTES + slot * CELLS_ARRAY_BYTES
+    SEPARATION_BYTES + slot * CELLS_ARR_BYTES
 }
 
 pub const fn fill_off(idx: usize) -> u32 {
