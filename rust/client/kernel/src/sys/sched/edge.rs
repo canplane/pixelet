@@ -10,10 +10,11 @@ use xpute_guest::clock;
 use xpute_guest::global::Global;
 use xpute_guest::sched::task;
 
-/// The kernel's tasks: the three that run for good (`world_tasks`) and one for
+/// The kernel's tasks: the three that run for good (`world_tasks`), one for
 /// each file in flight, a slot's, the catalog's or the sphere's (sys/io/loader.rs
-/// `arrival`); an executor sizes its pool by it.
-pub const TASKS: usize = 3 + load::LOAD_FILES;
+/// `arrival`), and one for each model registering (domain/scene/model/asset.rs
+/// `registration`); an executor sizes its pool by it.
+pub const TASKS: usize = 3 + load::LOAD_FILES + load::REGISTRATIONS;
 
 /// The order the kernel's tasks ask of the executor, which may ignore it;
 /// nothing relies on it.

@@ -6,7 +6,6 @@
 
 use crate::domain::scene::model::asset::{model_of, registered};
 use crate::sys::io::loader::{load_image, load_of};
-use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec_core::generated;
 
@@ -14,13 +13,11 @@ use pxl_spec_core::generated;
 /// `GROUPS`): two variants naming one model reach one (`model_of`).
 pub const MODELS_MAX: usize = generated::GROUPS as usize;
 
-/// Asks for each variant's model, a turn's effect: registers the first one
-/// that has landed and is not registered yet, and asks another turn for the
-/// rest, so arrivals are registered a variant a turn.
+/// Asks for each variant's model, a turn's effect: each registers in its
+/// own task, sliced by the turn's quota (`model_of`).
 pub fn decor_models_step() {
-    let mut variants = DECORS.iter().flat_map(|decor| decor.variants.iter());
-    if variants.any(|v| registered(v.model, None).is_none() && model_of(v.model, None).is_some()) {
-        request_world_tick();
+    for v in DECORS.iter().flat_map(|decor| decor.variants.iter()) {
+        model_of(v.model, None);
     }
 }
 

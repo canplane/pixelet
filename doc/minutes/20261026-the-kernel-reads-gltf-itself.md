@@ -13,3 +13,6 @@ uploads waits on:
 3. **`register_model` sliced.** It lays out every vertex in one poll.
 4. **Materials and textures.** The parser reads neither, so an upload's own
    textures are not drawn.
+
+> Since 2026-11-02, 3 is taken: a registration runs in its own task and
+> yields between units (pxl-kernel `domain/scene/model/asset.rs` `registration`).

@@ -1,10 +1,11 @@
 // pxl-render/asset/gltf.rs
 
 //! A glTF 2.0 parser for what the shipped models use, output in the file's own
-//! frame. It awaits `pause` between units (an accessor slice, a node, a skin, a
-//! channel), so no decode runs long in one poll. The document is checked whole
-//! before the first pause, so that poll is bounded only by the file's size,
-//! which whatever accepts the file must bound.
+//! frame. It awaits `pause` between units (an accessor slice, a run of
+//! accessors' or buffer views' fields, a node, a skin, a channel), so no decode
+//! runs long in one poll. The document is checked whole before the first
+//! pause, so that poll is bounded only by the file's size, which whatever
+//! accepts the file must bound.
 //!
 //! The bytes are not trusted. A file that reaches past its buffers, names an
 //! index out of range, gives a node two parents or a cycle, would decode more
@@ -137,6 +138,9 @@ fn malformed() -> MarshalError {
 
 /// Bounds one accessor slice between pauses.
 const ELEMENTS_PER_PAUSE: usize = 1 << 12;
+
+/// Accessors or buffer views whose fields are looked up between pauses.
+const ENTRIES_PER_PAUSE: usize = 1 << 5;
 
 pub async fn parse_gltf<P: Future<Output = ()>>(
     bytes: &[u8],
@@ -446,12 +450,30 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     pause: &F,
     budget: usize,
 ) -> Result<Gltf, MarshalError> {
+    // A top-level lookup reads the document as far as its key, the whole of
+    // it for a key that is not there.
+    pause().await;
     if arr(json.get("extensionsRequired")).next().is_some() {
         return Err(MarshalError::new(Errno::ENOTSUP));
     }
+    pause().await;
+    let mut accessors = Vec::new();
+    for (k, a) in arr(json.get("accessors")).enumerate() {
+        if k % ENTRIES_PER_PAUSE == 0 {
+            pause().await;
+        }
+        accessors.push(AccessorFields::of(a));
+    }
+    let mut views = Vec::new();
+    for (k, v) in arr(json.get("bufferViews")).enumerate() {
+        if k % ENTRIES_PER_PAUSE == 0 {
+            pause().await;
+        }
+        views.push(ViewFields::of(v));
+    }
     let r = Reader {
-        accessors: arr(json.get("accessors")).map(AccessorFields::of).collect(),
-        views: arr(json.get("bufferViews")).map(ViewFields::of).collect(),
+        accessors,
+        views,
         buffers,
         pause,
         budget: Cell::new(budget),
