@@ -5,7 +5,7 @@
 //! sample, denoise twice, at half resolution), only where what it reads moved, and held;
 //! brought to the pixel and laid over the world's color in the claimed tiles each drawn frame
 //! (`apply`), as the tiles' quads, a draw of the world's pass, which ends about it only where
-//! the map is found again. About 6 bytes a pixel.
+//! the map is found again. About 3 bytes a pixel.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
@@ -93,7 +93,7 @@ impl ScreenAo {
             run,
             stride,
             sampler,
-            downsample: pipelines.build(g, PIPELINE_AO_DOWNSAMPLE, Format::rgba32float),
+            downsample: pipelines.build(g, PIPELINE_AO_DOWNSAMPLE, Format::r32float),
             sample: pipelines.build(g, PIPELINE_AO_SAMPLE, g.canvas()),
             blur: pipelines.build(g, PIPELINE_AO_BLUR, g.canvas()),
             apply: pipelines.build_world(g, PIPELINE_AO_APPLY),
@@ -148,7 +148,7 @@ impl ScreenAo {
         );
         let attach = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
         self.depth_view = depth_view;
-        self.half = g.texture(hw, hh, 1, Format::rgba32float, 1, attach);
+        self.half = g.texture(hw, hh, 1, Format::r32float, 1, attach);
         self.half_view = g.view(self.half, false, 0, 1, 0, 1);
         for k in 0..2 {
             self.ping[k] = g.texture(hw, hh, 1, g.canvas(), 1, attach);
@@ -179,8 +179,12 @@ impl ScreenAo {
         );
         let g1 = group(
             self.sample.layouts[0],
-            false,
-            &[view(1, self.half_view), view(2, self.noise_view)],
+            true,
+            &[
+                view(1, self.half_view),
+                view(2, self.noise_view),
+                view(3, self.depth_view),
+            ],
         );
         let blur = self.ping_view.map(|src| {
             group(

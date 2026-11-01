@@ -809,7 +809,13 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_AO_SAMPLE => Descriptor::new(
             screen(SHADER_AO_SAMPLE),
             &[],
-            &[&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [6, UNIFORM]]],
+            &[&[
+                [0, UNIFORM],
+                [1, TEXTURE_UNFILTERED],
+                [2, TEXTURE],
+                [3, DEPTH],
+                [6, UNIFORM],
+            ]],
         ),
         PIPELINE_AO_BLUR => Descriptor::new(
             screen(SHADER_AO_BLUR),

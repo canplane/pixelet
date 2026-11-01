@@ -40,11 +40,6 @@ Nothing now.
 
 ## P2
 
-- **What the occlusion's screen mode costs.** Busy with AO `screen` over
-  AO `corner` some 2 to 4 ms on both builds of the closing round; the
-  regression against the prepass was the `ao` span's, which reads the world
-  pass's first half with its own — [the tiles' baseline](./experiment/20261030-the-tiles-baseline.md),
-  "The closing round".
 - **The stencil and the early depth test on the devices.** Answered from
   the code and the vendors' records (the minutes' "Open"); left to a device
   in hand: the iPhone's hidden-surface removal for the boxes and the

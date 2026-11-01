@@ -240,7 +240,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_AO_DOWNSAMPLE
     &["frame", "ao_view", "ao_pass", "ao_downsample"],
     // SHADER_AO_SAMPLE
-    &["ao_view", "ao_pass", "ao_sample"],
+    &["frame", "ao_view", "ao_pass", "ao_sample"],
     // SHADER_AO_BLUR
     &["ao_view", "ao_pass", "ao_blur"],
     // SHADER_ATMOS_TRANSMITTANCE
