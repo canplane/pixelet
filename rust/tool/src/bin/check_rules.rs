@@ -163,10 +163,10 @@ fn screen_reached(text: &str) -> Vec<usize> {
 const PARTICIPLE_ROOTS: [&str; 2] = ["rust/", "xpute/"];
 const TS_PARTICIPLE_ROOTS: [&str; 2] = ["xpute/ts/", "ts/client/src/"];
 const TS_UNCHECKED_ROOT: &str = "ts/client/src/shell/";
-/// The irregular past participles a type's name may not be alone. A word
+/// The irregular past participles and past tenses a type's name may not be alone. A word
 /// that is also a noun (`Hit`, `Set`, `Read`, `Run`, `Cut`, `Split`) is not
 /// among them.
-const IRREGULAR_PARTICIPLES: [&str; 84] = [
+const IRREGULAR_PARTICIPLES: [&str; 85] = [
     "Held",
     "Kept",
     "Seen",
@@ -246,6 +246,7 @@ const IRREGULAR_PARTICIPLES: [&str; 84] = [
     "Lost",
     "Got",
     "Gotten",
+    "Forgot",
     "Forgotten",
     "Forgiven",
     "Withheld",

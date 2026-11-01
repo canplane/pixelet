@@ -306,7 +306,7 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 
 /// What the node `at` of `zoom` holding `node_slot` folds to, as a cell of its zoom
 /// is drawn: the leaf's value, or its fold's kind wherever any of it is
-/// filled, with what of its cube that fills (`filled`); `VOID` where nothing
+/// filled, with what of its cube that fills (`fill_share`); `VOID` where nothing
 /// that is a voxel is. How much of the cell is kept is the cell's, of
 /// every layer together (`answer::cover`, `answer::eighths`). `hide`, a
 /// preview's left-out leaf, is left out where it is the leaf itself.
@@ -416,7 +416,7 @@ pub const CELL: u32 = 2;
 
 /// What is placed answers for a node, before any layer under it: what it
 /// says, and as a cell its value and the share of its cube that fills, in
-/// `FULL`'s units (`filled`), whole for a leaf or a cut.
+/// `FULL`'s units (`fill_share`), whole for a leaf or a cut.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Over {
     pub says: u32,

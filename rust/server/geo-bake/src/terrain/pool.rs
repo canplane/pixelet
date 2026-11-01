@@ -30,7 +30,7 @@ const SIDE: u32 = TILE_CELLS / BRICK;
 #[derive(Default)]
 struct Tally {
     bricks: BTreeMap<Zoom, FnvHashMap<[i32; 2], u64>>,
-    peak_groups: u64,
+    peak_group_cnt: u64,
     /// Each tile's that takes anything, as the set will keep it.
     tiles: Vec<(Tile, String)>,
 }
@@ -55,7 +55,7 @@ pub(crate) fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, Str
     let mut all = Tally::default();
     for part in parts {
         let part = part?;
-        all.peak_groups = all.peak_groups.max(part.peak_groups);
+        all.peak_group_cnt = all.peak_group_cnt.max(part.peak_group_cnt);
         for (zoom, bricks) in part.bricks {
             all.bricks.entry(zoom).or_default().extend(bricks);
         }
@@ -66,7 +66,10 @@ pub(crate) fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, Str
         .iter()
         .map(|(&cell, bricks)| (cell, most(bricks)))
         .collect();
-    let needs = terrain::pool_needs(|cell| worst.get(&cell).map_or(0, |w| w.1), all.peak_groups);
+    let needs = terrain::pool_needs(
+        |cell| worst.get(&cell).map_or(0, |w| w.1),
+        all.peak_group_cnt,
+    );
     if needs <= u64::from(POOL_CHILD_GROUPS) {
         all.tiles.sort_unstable_by_key(|(p, _)| *p);
         return Ok(all.tiles);
@@ -96,7 +99,7 @@ pub(crate) fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, Str
         first[0],
         first[1],
         under.join(" "),
-        all.peak_groups
+        all.peak_group_cnt
     ))
 }
 
@@ -133,7 +136,7 @@ fn set_bricks(
             ];
             bricks.insert(at, u64::from(held));
         }
-        out.peak_groups = out.peak_groups.max(u64::from(fit.peak_groups));
+        out.peak_group_cnt = out.peak_group_cnt.max(u64::from(fit.peak_group_cnt));
         out.tiles.push((p, line(&fit)));
     }
     Ok(out)
@@ -142,7 +145,7 @@ fn set_bricks(
 /// What a tile takes as the set keeps it beside the tile: the most a brick
 /// takes, then each brick with ways as its index and the child groups it holds.
 pub fn line(fit: &Fit) -> String {
-    let mut out = fit.peak_groups.to_string();
+    let mut out = fit.peak_group_cnt.to_string();
     for (k, held) in &fit.bricks {
         out += &format!(" {k}:{held}");
     }
@@ -161,7 +164,7 @@ fn of_line(line: &str) -> Result<Fit, String> {
         .collect::<Result<_, String>>()?;
     Ok(Fit {
         bricks: held,
-        peak_groups: taken,
+        peak_group_cnt: taken,
     })
 }
 

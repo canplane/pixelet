@@ -223,7 +223,7 @@ pub const fn tag_of(key: u32) -> u32 {
     key & ((1 << TAG_BITS) - 1)
 }
 
-/// Whether a key says its entry holds the node asked at `asked`.
+/// Whether a key says its entry holds the node asked at the `[far, near]` zooms.
 pub const fn holds(key: u32, [far, near]: [Zoom; 2]) -> bool {
     key != 0
         && (key >> TAG_BITS) & ((1 << ZOOM_BITS) - 1) == far

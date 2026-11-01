@@ -243,7 +243,7 @@ fn laid<'a>(
 
 /// The clip level's brick at `place` (in bricks) of `tile` handed into
 /// `record` as a client hands it to a GPU's fill (pxl-spec-core clipmap.rs
-/// `HANDED_WORDS`): its palette indices four a cell (`handed`), its tile's padded
+/// `HANDED_WORDS`): its palette indices four a cell (`gpu_cells`), its tile's padded
 /// samples, and its lines (`brick_lines`, with `scratch`); the rest zero.
 fn record(
     tile: Tile,
@@ -373,7 +373,7 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Fit {
     pub bricks: Vec<(u32, u32)>,
-    pub peak_groups: u32,
+    pub peak_group_cnt: u32,
 }
 
 /// Why a brick does not fill as a client fills it (`fill_fit`).
@@ -398,8 +398,8 @@ pub struct FilledBrick<'a> {
     pub cell: Zoom,
     pub pool: &'a [u32],
     pub root: u32,
-    pub peak_groups: u32,
-    pub groups: u32,
+    pub peak_group_cnt: u32,
+    pub group_cnt: u32,
 }
 
 /// Each brick of `tile`'s clip levels filled (`brick_spans`) and its ways'
@@ -459,14 +459,14 @@ pub fn fill_fit(
                 cell,
                 pool: &pool,
                 root,
-                peak_groups: group_cnt,
-                groups: child_groups,
+                peak_group_cnt: group_cnt,
+                group_cnt: child_groups,
             },
         );
         if child_groups > 0 {
             fit.bricks.push((k, child_groups));
         }
-        fit.peak_groups = fit.peak_groups.max(group_cnt);
+        fit.peak_group_cnt = fit.peak_group_cnt.max(group_cnt);
     }
     Ok(fit)
 }

@@ -165,12 +165,12 @@ impl<'a> Query for Walker<'_, 'a> {
         // about its parent, while decor is struck there.
         if let Some((_, s)) = self.decor_ray.as_mut() {
             s.about.visit(&self.world.object.columns(), at.node);
-            if t0 < s.held_dist && s.about_zoom(zoom) == zoom {
+            if t0 < s.draw_dist && s.about_zoom(zoom) == zoom {
                 s.about.read_columns(self.world, (zoom, [c[0], c[1]]));
             }
         }
         if zoom == GROUND.cell() {
-            if let Some((ray, s)) = self.decor_ray.as_mut().filter(|(_, s)| t0 < s.held_dist) {
+            if let Some((ray, s)) = self.decor_ray.as_mut().filter(|(_, s)| t0 < s.draw_dist) {
                 self.world.intersect_near(s, ray, (zoom, c));
             }
         }
@@ -191,7 +191,7 @@ impl<'a> Query for Walker<'_, 'a> {
         self.answered = true;
         let decor = zoom < GROUND.cell()
             && self.decor_ray.as_ref().is_some_and(|(_, s)| {
-                t0 < s.held_dist && self.world.may_intersect(s, at.node, at.inheritance.shard)
+                t0 < s.draw_dist && self.world.may_intersect(s, at.node, at.inheritance.shard)
             });
         match answer.kind {
             // Air coarser than asked, gone into where decor may stand in it;

@@ -1,7 +1,7 @@
 // pxl-shader/decor.rs
 
 //! The decor the ground generates in the eye's clip levels (pxl-spec-core
-//! `scatter`, `generated`): the entries that generate again listed
+//! `scatter`, `generation`): the entries that generate again listed
 //! (`decor_mark_cs`), the candidates the cells under a brick hold that stand at
 //! its clip level and stand clear, a clip level cell at a time
 //! (`decor_thin_cs`), each generated (`decor_cs`), and the records counted,

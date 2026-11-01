@@ -4,7 +4,7 @@
 //! each landing brick's child groups laid at the ids the GPU gave them
 //! (clipmap.rs `on_resident`), which a cursor reads as the cast reads the GPU's.
 //! On the heap, a chunk at a time as the ids laid reach past it: the GPU's
-//! stack hands ids from the lowest up (pxl-shader `TAKEN`), so the mirror
+//! stack hands ids from the lowest up (pxl-shader `TAKEN_CNT`), so the mirror
 //! holds the child groups up to the most ever taken at once, a child group's sixteen
 //! words each, never past the pool's most (pxl-spec-core way/tree.rs `POOL_CHILD_GROUPS`).
 

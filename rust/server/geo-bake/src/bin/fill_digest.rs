@@ -167,8 +167,8 @@ fn line(name: &str, k: u32, b: &FilledBrick<'_>) -> String {
     format!(
         "{name} {k} levels={:016x} taken={} held={} sub={:016x}",
         levels.finish(),
-        b.peak_groups,
-        b.groups,
+        b.peak_group_cnt,
+        b.group_cnt,
         sub.finish()
     )
 }

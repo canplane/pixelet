@@ -88,7 +88,7 @@ pub struct GpuHost {
     admitted: bool,
     /// This host's own count, so another host's frames, or a gone device's,
     /// hold back none of its own.
-    unfinished_frames: Arc<AtomicU32>,
+    unfinished_cnt: Arc<AtomicU32>,
     frame_latency: u32,
     present_mode: wgpu::PresentMode,
     /// Every buffer write goes through the belt into `uploads`, submitted
@@ -140,7 +140,7 @@ impl GpuHost {
             scratch: Vec::new(),
             command_bufs: Vec::new(),
             admitted: false,
-            unfinished_frames: Arc::new(AtomicU32::new(0)),
+            unfinished_cnt: Arc::new(AtomicU32::new(0)),
             frame_latency: cfg.frame_latency,
             present_mode: cfg.present_mode,
             uploads: None,

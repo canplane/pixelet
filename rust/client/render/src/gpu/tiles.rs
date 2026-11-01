@@ -183,7 +183,7 @@ impl Tiles {
 
     /// The tiles of a target `size` pixels across and down, their words made
     /// anew where they were another size's, a frame that moves every one;
-    /// before anything this frame binds them (`bound`, `drawn`).
+    /// before anything this frame binds them (`this_frame`, `after_gate`).
     pub fn size(&mut self, g: &Gpu, size: [u32; 2]) {
         let squares = size.map(|v| v.div_ceil(self.side));
         if squares == self.squares {

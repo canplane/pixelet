@@ -153,7 +153,7 @@ pub fn want(asked: impl Iterator<Item = (Tile, Ask)>) {
 }
 
 /// A file below OBJECT arrived, the top's or a shard's, or its absence
-/// (`arrived`).
+/// (`admit`).
 pub fn on_arrived(number: u64, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
     let at = now();
     let result = admit(number, block.map(body));

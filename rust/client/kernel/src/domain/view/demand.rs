@@ -305,7 +305,7 @@ impl<L: ObservedLayer> Demand<L> {
                 <= if matches!(L::ASK_SCOPE, AskScope::Floor) {
                     0
                 } else {
-                    TileCache::<L>::DST_TILES + L::PINNED_CNT
+                    TileCache::<L>::DST_TILES + L::PIN_CAP
                 },
             ENOTRECOVERABLE,
             named
@@ -379,7 +379,7 @@ impl<L: ObservedLayer> Demand<L> {
     ///
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground; and `pinned`, the
-    /// tiles a reader that takes no coarser answer declares (`Base::PINNED_CNT`),
+    /// tiles a reader that takes no coarser answer declares (`Base::PIN_CAP`),
     /// as the destination is. A layer with a top of its own is observed out
     /// to its own reach.
     pub fn step(&mut self, dst: Option<Tile>, pinned: &[Tile]) {

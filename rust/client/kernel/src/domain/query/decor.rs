@@ -45,7 +45,7 @@ pub(super) struct DecorRay {
     pub(super) box_extent: f64,
     around: i32,
     /// How far along the ray decor is drawn as held.
-    pub(super) held_dist: f64,
+    pub(super) draw_dist: f64,
     /// The cell met last, whose neighbors are struck already.
     last: Option<[i32; 2]>,
     /// The nearest struck, where along the ray, and the axis it entered
@@ -315,18 +315,18 @@ impl<'a> World<'a> {
             return None;
         }
         // NodeSlot as it is out to where the view draws the leaves' tiles.
-        let held = match GROUND.z_at(0.0) {
+        let dist = match GROUND.z_at(0.0) {
             LEAF_ZOOM => draw_dist(GROUND, LEAF_ZOOM).min(ray.t_max),
             _ => return None,
         };
         let extent = box_extent();
         let around = extent.ceil() as i32;
-        let (za, zb) = (ray.at(0.0)[2], ray.at(held)[2]);
+        let (za, zb) = (ray.at(0.0)[2], ray.at(dist)[2]);
         let band = [za.min(zb) - extent, za.max(zb) + extent];
         Some(DecorRay {
             box_extent: extent,
             around,
-            held_dist: held,
+            draw_dist: dist,
             last: None,
             best: None,
             about: Around::new(),
@@ -429,7 +429,7 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
 }
 
 fn meet(s: &mut DecorRay, ray: &Ray, i: Instance) {
-    if let Some((t, axis)) = intersect(&i, ray.origin, ray.dir, s.best.map_or(s.held_dist, |b| b.0))
+    if let Some((t, axis)) = intersect(&i, ray.origin, ray.dir, s.best.map_or(s.draw_dist, |b| b.0))
     {
         s.best = Some((t, i, axis));
     }

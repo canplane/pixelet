@@ -118,9 +118,9 @@ pub struct Generator {
     /// that marks by them is drawn: one dropped, or handed and never drawn,
     /// hands them again, as generating a slot twice generates it the same.
     /// Past `overwrite::BOXES`, the rest joined into the last.
-    held_boxes: [[i32; 4]; overwrite::BOXES as usize],
+    pending_boxes: [[i32; 4]; overwrite::BOXES as usize],
     holding: usize,
-    /// How many of `held_boxes` this frame marks by, and how many boxes it marks
+    /// How many of `pending_boxes` this frame marks by, and how many boxes it marks
     /// by in all, the bricks handed with them (`marked_boxes`).
     marked_cnt: usize,
     boxes: u32,
@@ -206,7 +206,7 @@ impl Generator {
             count_read: Read::default(),
             counting: false,
             marking: false,
-            held_boxes: [[0; 4]; overwrite::BOXES as usize],
+            pending_boxes: [[0; 4]; overwrite::BOXES as usize],
             holding: 0,
             marked_cnt: 0,
             boxes: 0,
@@ -277,10 +277,10 @@ impl Generator {
         // cut that moved as it was and as it is, held with any a frame not
         // drawn handed.
         for &b in f.edits {
-            hold(&mut self.held_boxes, &mut self.holding, b);
+            hold(&mut self.pending_boxes, &mut self.holding, b);
         }
         cut_boxes(&self.cuts, generation.cuts, |b| {
-            hold(&mut self.held_boxes, &mut self.holding, b);
+            hold(&mut self.pending_boxes, &mut self.holding, b);
         });
         self.cuts = *generation.cuts;
         let w = &mut self.clipmap;
@@ -304,11 +304,14 @@ impl Generator {
                 ]);
                 (generation::brick_box(cell, q), cell)
             });
-            let held_boxes = self.held_boxes[..self.marked_cnt]
+            let pending_boxes = self.pending_boxes[..self.marked_cnt]
                 .iter()
                 .map(|&b| (b, generation::EVERY));
             let mut n = 0;
-            for (b, zoom) in held_boxes.chain(fresh).take(generation::BOX_CAP as usize) {
+            for (b, zoom) in pending_boxes
+                .chain(fresh)
+                .take(generation::BOX_CAP as usize)
+            {
                 let at = n * generation::BOX_WORDS as usize;
                 boxes[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
                 boxes[at + 4] = zoom;
@@ -475,7 +478,7 @@ impl Generator {
     /// generation are done with.
     pub fn drawn_frame(&mut self) {
         if self.marking {
-            self.held_boxes
+            self.pending_boxes
                 .copy_within(self.marked_cnt..self.holding, 0);
             self.holding -= self.marked_cnt;
             self.stale = false;
@@ -503,7 +506,7 @@ impl Generator {
     /// A frame's decor handed and never drawn: its edits held for the next.
     pub fn carry_edits(&mut self, edits: &[[i32; 4]]) {
         for &b in edits {
-            hold(&mut self.held_boxes, &mut self.holding, b);
+            hold(&mut self.pending_boxes, &mut self.holding, b);
         }
     }
 
@@ -618,15 +621,15 @@ impl IndirectDraw {
     }
 }
 
-/// Box `b` held among the `holding` boxes of `held_boxes`, past the room joined
+/// Box `b` held among the `holding` boxes of `pending_boxes`, past the room joined
 /// into the last: what decor's generation (`Generator`) and the observed pyramid's
 /// forgetting (ray/cast.rs) are asked over.
-pub(crate) fn hold(held_boxes: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
-    if *holding < held_boxes.len() {
-        held_boxes[*holding] = b;
+pub(crate) fn hold(pending_boxes: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
+    if *holding < pending_boxes.len() {
+        pending_boxes[*holding] = b;
         *holding += 1;
     } else {
-        let last = &mut held_boxes[*holding - 1];
+        let last = &mut pending_boxes[*holding - 1];
         *last = [
             last[0].min(b[0]),
             last[1].min(b[1]),

@@ -64,13 +64,13 @@ pub(super) struct CastBuffers {
     /// `ray::MISS_ARGS_WORDS`); the pyramid forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
     /// (`forget`), or the nodes over the eye's clip levels' entries that moved
-    /// (`moved`, a bit an entry, against the entries as `entries` last held them)
+    /// (`moved_words`, a bit an entry, against the entries as `entries` last held them)
     /// and over the boxes of what is placed or cut that changed (`boxes`,
     /// `holding` of them, as decor's generation holds them, gpu/generator.rs
     /// `hold`), and those handed a slot of a child group of what is placed that
-    /// was written (`written`, `writes` of them); as this frame's cast does
+    /// was written (`written_groups`, `writes` of them); as this frame's cast does
     /// (`forgets`, pxl-spec-core `pyramid::FORGETS`), and what it sent, put
-    /// back where its frame is dropped (`sent`). `frame` numbers the casts since it was last
+    /// back where its frame is dropped (`sent_forget`). `frame` numbers the casts since it was last
     /// forgotten whole, and `cuts` are the preview's cuts it was asked with.
     miss_pipeline: Pipeline,
     miss_list_pipeline: Pipeline,
@@ -96,7 +96,7 @@ pub(super) struct CastBuffers {
     holding: usize,
     written_groups: [u32; pyramid::WRITTEN_CAP as usize],
     writes: usize,
-    sent_forget: Option<Forgot>,
+    sent_forget: Option<ForgetHead>,
     entries: Vec<i32>,
     forgets: u32,
     cuts: [u32; eye::CUTS],
@@ -245,7 +245,7 @@ pub(super) struct CastBuffers {
 /// What a cast's head handed the pyramid's forgetting (pxl-spec-core
 /// `pyramid::HEAD_WORDS`): whether all of it, the entries that moved, the
 /// boxes and the child groups written; put back where its frame is dropped.
-struct Forgot {
+struct ForgetHead {
     all: bool,
     moved_words: [u32; pyramid::MOVED_WORDS as usize],
     boxes: [[i32; 4]; overwrite::BOXES as usize],
@@ -906,7 +906,7 @@ impl RaysPass {
                 word_bytes(ray::MISS_ARGS_ROOM as usize),
                 bytes(&asked),
             );
-            c.sent_forget = Some(Forgot {
+            c.sent_forget = Some(ForgetHead {
                 all: c.forgets == pyramid::FORGETS_ALL,
                 moved_words: c.moved_words,
                 boxes: c.boxes,

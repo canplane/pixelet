@@ -111,11 +111,11 @@ impl<L: Base> TileCache<L> {
     };
 
     /// Held hard apart from the view: the floor, a destination's line, and
-    /// what a reader that cannot take a coarser answer declares (`Base::PINNED_CNT`).
+    /// what a reader that cannot take a coarser answer declares (`Base::PIN_CAP`).
     const PINNED_TILES: u32 = match L::ASK_SCOPE {
         AskScope::Floor => floor::tiles(L::LATTICE),
-        AskScope::Line => Self::DST_TILES + L::PINNED_CNT,
-        AskScope::View => floor::tiles(L::LATTICE) + Self::DST_TILES + L::PINNED_CNT,
+        AskScope::Line => Self::DST_TILES + L::PIN_CAP,
+        AskScope::View => floor::tiles(L::LATTICE) + Self::DST_TILES + L::PIN_CAP,
     };
 
     /// What is held hard at most.

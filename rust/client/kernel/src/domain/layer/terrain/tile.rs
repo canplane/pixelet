@@ -40,7 +40,7 @@ impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
     /// The pivot's and a destination's clip levels' tiles.
-    const PINNED_CNT: u32 = clipmap::PINNED_TILES;
+    const PIN_CAP: u32 = clipmap::PINNED_TILES;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy

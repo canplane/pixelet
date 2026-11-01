@@ -118,7 +118,7 @@ pub(super) struct GroundBuffers {
 /// The ways' pool of `child_groups` on the GPU, in bytes: a slot two words,
 /// eight a child group. Its free stack is a word a child group: the count taken, then
 /// every child group's id but child group 0's, every child group free but child group 0 as WebGPU
-/// makes it, zeroed (pxl-shader `TAKEN`, `id`), so nothing is written to
+/// makes it, zeroed (pxl-shader `TAKEN_CNT`, `id`), so nothing is written to
 /// start it, nor to grow it.
 const fn pool_bytes(child_groups: u32) -> u32 {
     child_groups * way::tree::CHILD_GROUP_WORDS * 4
@@ -269,7 +269,7 @@ impl GroundBuffers {
     /// copied where they were, its data words to the new data's first, so
     /// every id a tree or a read in flight names holds what it held, and the
     /// stack's slots past the old hold the new child groups free (pxl-shader
-    /// `TAKEN`). Ahead of the turn's bricks, so their builds and the cast
+    /// `TAKEN_CNT`). Ahead of the turn's bricks, so their builds and the cast
     /// read the new one; the cast's groups follow its id (`prepare`).
     ///
     /// A known gap: a device out of memory may fail to make the doubled

@@ -516,7 +516,7 @@ pub struct Renderer {
     /// The jitter in the frame's words as the GPU holds them (`JITTER`).
     jitter_written: [f32; 2],
     /// The lists as the last frame drew them, apart from the rest of its
-    /// input: their records, uniforms and uploads (`listed`), and the
+    /// input: their records, uniforms and uploads (`lists_read`), and the
     /// records and uniforms of the draws the kernel does not bound, with
     /// whether an upload they read moved (`beside`, `BESIDE`).
     lists_read: Read,

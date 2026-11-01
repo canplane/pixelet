@@ -317,7 +317,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
             },
             None,
         )
-        .steps as usize;
+        .step_cnt as usize;
     let unread = entering.len() - read;
     // Not read, so not what they were read from.
     let later = &mut entering[read..];

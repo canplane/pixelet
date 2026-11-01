@@ -82,7 +82,7 @@ fn frame_ends_either_way() {
 fn lost_device_frames_released() {
     let (adapter, device, queue) = device();
     let mut h = host(&adapter, &device, &queue, 1);
-    let count = h.unfinished_frames.clone();
+    let count = h.unfinished_cnt.clone();
     assert!(h.admit());
     h.present();
     assert_eq!(

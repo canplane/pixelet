@@ -66,7 +66,7 @@ pub(super) struct Tally {
     on: bool,
     frame: Frame,
     copied_frame: Frame,
-    landed_words: Box<[u32; WORDS]>,
+    read_counts: Box<[u32; WORDS]>,
     mapping: Box<u32>,
     copied: bool,
     mapped: bool,
@@ -88,7 +88,7 @@ impl Tally {
             on: false,
             frame: Frame::default(),
             copied_frame: Frame::default(),
-            landed_words: Box::new([0; WORDS]),
+            read_counts: Box::new([0; WORDS]),
             mapping: Box::new(DONE),
             copied: false,
             mapped: false,
@@ -163,7 +163,7 @@ impl Tally {
     /// frame that copied them was submitted.
     pub(super) fn back(&mut self, g: &Gpu) {
         if self.mapped && *self.mapping & DONE != 0 {
-            let (l, f) = (&self.landed_words, self.copied_frame);
+            let (l, f) = (&self.read_counts, self.copied_frame);
             let mut counts = [0.0; RAY_COUNTS];
             for o in 0..tally::OBSERVERS {
                 if !f.casts[o as usize] {
@@ -183,7 +183,7 @@ impl Tally {
             self.mapped = false;
         }
         if self.copied && *self.mapping & DONE != 0 {
-            let addr = off_of(self.landed_words.as_ptr()) as u32;
+            let addr = off_of(self.read_counts.as_ptr()) as u32;
             g.map_read(self.read, 0, word_bytes(WORDS), addr, &mut self.mapping, 1);
             (self.copied, self.mapped) = (false, true);
         }
