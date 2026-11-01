@@ -18,6 +18,9 @@
     reason = "generated from the spec"
 )]
 
+/// The pin's name, the one every locale shows: an item has one name.
+pub const PIN_LABEL: &str = "Pin";
+
 /// The most a marker's text may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most.
 pub const MARKER_TEXT_CHARS: u32 = 40;
 

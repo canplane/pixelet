@@ -3,14 +3,14 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { allCubes, cubeHex, cubeId } from "./mod.ts";
+import { allCubes, cubeHex, cubeLabel } from "./mod.ts";
 
-test("ALL_CUBES - every cube is spelled once and has a color to swatch", () => {
-  const seen = new Set<string>();
+test("ALL_CUBES - every cube is listed once and has a color and a name", () => {
+  const seen = new Set<number>();
   for (const cube of allCubes) {
-    const id = cubeId(cube);
-    assert.ok(!seen.has(id), `a cube spelled twice: ${id}`);
-    seen.add(id);
-    assert.ok(cubeHex(cube) !== null, `no color for ${id}`);
+    assert.ok(!seen.has(cube), `a cube listed twice: ${cube}`);
+    seen.add(cube);
+    assert.ok(cubeHex(cube) !== null, `no color for ${cube}`);
+    assert.ok(cubeLabel(cube) !== "", `no name for ${cube}`);
   }
 });

@@ -35,12 +35,11 @@ import {
   useSwatchFlash,
 } from "./store.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
-import { type Cube, cubeId } from "@/shell/catalog/asset/mod.ts";
+import { type Cube, cubeLabel, decorLabel } from "@/shell/catalog/asset/mod.ts";
+import { PIN_LABEL } from "@/shell/catalog/asset/marker.spec.ts";
 import {
-  cubeLabel,
   CubeSwatch,
   decorGlyph,
-  decorLabel,
   heldRing,
 } from "@/shell/catalog/asset/swatch.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -164,7 +163,7 @@ function SwatchButton({
       ref={ref}
       {...handlers}
       accessibilityRole="button"
-      accessibilityLabel={cubeLabel(t, cube)}
+      accessibilityLabel={cubeLabel(cube)}
       style={[styles.slot, styles.swatchSlot]}
     >
       <Motion to={{ scale: selected ? 1.1 : 1 }} transition={SNAP}>
@@ -187,7 +186,7 @@ function DecorIconButton({ kind }: { kind: u8 }) {
     <Pressable
       onPress={() => selectDecor(kind)}
       accessibilityRole="button"
-      accessibilityLabel={decorLabel(t, kind)}
+      accessibilityLabel={decorLabel(kind)}
       style={styles.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
@@ -216,7 +215,7 @@ function MarkerButton() {
     <Pressable
       onPress={selectMarker}
       accessibilityRole="button"
-      accessibilityLabel={t("assets.pin")}
+      accessibilityLabel={PIN_LABEL}
       style={styles.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
@@ -313,11 +312,7 @@ export function Strip({
       >
         {recentPicks.map((pick) =>
           pick.tool === ActiveTool.Object ? (
-            <SwatchButton
-              key={cubeId(pick.cube)}
-              cube={pick.cube}
-              gesture={gesture}
-            />
+            <SwatchButton key={pick.cube} cube={pick.cube} gesture={gesture} />
           ) : pick.tool === ActiveTool.Decor ? (
             <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
           ) : (

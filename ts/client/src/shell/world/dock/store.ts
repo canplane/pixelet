@@ -6,7 +6,7 @@
 import { create } from "zustand";
 
 import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
-import { cube } from "@/shell/catalog/asset/cube.spec.ts";
+import { ground, object } from "@/shell/catalog/asset/cube.spec.ts";
 import { allCubes, type Cube, decorIds } from "@/shell/catalog/asset/mod.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
 import { kernel_snapshot } from "@/port/shell.ts";
@@ -87,13 +87,13 @@ interface SwatchFlash {
 
 // One per placeable genre, so a fresh hotbar hints at everything placeable; as many as the hotbar holds.
 const SEED: readonly RecentPick[] = [
-  { tool: ActiveTool.Object, cube: cube.object.white },
-  { tool: ActiveTool.Object, cube: cube.ground.land },
-  { tool: ActiveTool.Object, cube: cube.ground.water },
-  { tool: ActiveTool.Object, cube: cube.ground.building },
-  { tool: ActiveTool.Object, cube: cube.ground.residential_road },
-  { tool: ActiveTool.Object, cube: cube.object.red },
-  { tool: ActiveTool.Object, cube: cube.object.blue },
+  { tool: ActiveTool.Object, cube: object.white },
+  { tool: ActiveTool.Object, cube: ground.land },
+  { tool: ActiveTool.Object, cube: ground.water },
+  { tool: ActiveTool.Object, cube: ground.building },
+  { tool: ActiveTool.Object, cube: ground.residential_road },
+  { tool: ActiveTool.Object, cube: object.red },
+  { tool: ActiveTool.Object, cube: object.blue },
   { tool: ActiveTool.Decor, kind: decorIds[0] },
 ];
 

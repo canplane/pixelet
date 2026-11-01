@@ -30,11 +30,18 @@
 // stands: which variant of its decor, its heading in quarter turns (an odd
 // one swaps its box's sides) and its scale. The ground evaluates them from
 // its cell; a placed one's are the placement's.
-export const decor = {
-  tree: 1024,
-  boat: 1025,
-  car: 1026,
-  train: 1027,
-} as const satisfies Record<string, number>;
 
-export type DecorId = keyof typeof decor;
+import * as decor from "./decor/decor.spec.ts";
+
+export { decor };
+
+/** The decors, by number. */
+export const DECORS: readonly number[] = [1024, 1025, 1026, 1027];
+
+/** Each decor's name, the one every locale shows: an item has one name. */
+export const DECOR_LABEL: Readonly<Record<number, string>> = {
+  1024: "Tree",
+  1025: "Boat",
+  1026: "Car",
+  1027: "Train",
+};

@@ -9,6 +9,7 @@
 use std::fmt::Write;
 use std::sync::OnceLock;
 
+use super::asset::cube_number;
 use super::{file, read, Node, Output};
 
 pub const INGESTED_JSON: &str = "spec/spec/asset/ingested.json";
@@ -197,8 +198,8 @@ export const INGESTED: readonly IngestedFile[] = [
 
 /** The texture pack as one image, the file numbered `image`: `columns` tiles
  * of `cell` pixels per row, tile n at column n % columns and row n / columns,
- * `tiles` the number of the file each holds, and `faces` the cube face —
- * group, type, face — each tile is. */
+ * `tiles` the number of the file each holds, and `top` the tile each cube
+ * wears on top, by the cube's number. */
 export const PACK = {
 "#,
     );
@@ -209,11 +210,11 @@ export const PACK = {
     for t in &pack.tiles {
         let _ = writeln!(out, "    {},", file_number(t)?);
     }
-    out.push_str("  ],\n  faces: [\n");
-    for (group, ty, face, tile) in &pack.faces {
-        let _ = writeln!(out, "    [\"{group}\", \"{ty}\", \"{face}\", {tile}],");
+    out.push_str("  ],\n  top: {\n");
+    for (group, ty, _, tile) in pack.faces.iter().filter(|f| f.2 == "top") {
+        let _ = writeln!(out, "    {}: {tile},", cube_number(group, ty)?);
     }
-    out.push_str("  ],\n} as const;\n");
+    out.push_str("  } as Readonly<Record<number, number>>,\n} as const;\n");
     Ok(out)
 }
 

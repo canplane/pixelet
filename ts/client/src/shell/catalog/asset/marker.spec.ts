@@ -10,5 +10,8 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
+/** The pin's name, the one every locale shows: an item has one name. */
+export const PIN_LABEL = "Pin";
+
 /** The most a marker's text may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most. */
 export const MARKER_TEXT_CHARS: u32 = 40 as number;

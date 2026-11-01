@@ -8,30 +8,32 @@
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
 
 import * as Group from "./actor/group.spec.ts";
+import * as GENDER from "./actor/gender.spec.ts";
 
-/** The groups a character is of, each numbered, and in each its variants by
- * key, row for row with its models, the colormap its pack shares, how tall it
- * stands and which clip is its move. */
+/** The groups a character is of, each numbered, and in each its variants,
+ * each numbered by its row, row for row with its models, the colormap its pack
+ * shares, how tall it stands and which clip is its move. */
 export const groups = {
-  /** The people a player can be: the key the settings store persists, row for
-   * row with the model under asset/. One pack, so one colormap. */
+  /** The people a player can be, each by its row, the number the settings store
+   * persists. One pack, so one colormap. */
   person: {
     /** World units tall — one cell. */
     size: 1 as number,
-    keys: {
-      "female-1": 0 as number,
-      "female-2": 1 as number,
-      "female-3": 2 as number,
-      "female-4": 3 as number,
-      "female-5": 4 as number,
-      "female-6": 5 as number,
-      "male-1": 6 as number,
-      "male-2": 7 as number,
-      "male-3": 8 as number,
-      "male-4": 9 as number,
-      "male-5": 10 as number,
-      "male-6": 11 as number,
-    },
+    /** Each variant's gender (`GENDER`), row for row with its models. */
+    gender: [
+      0 as number,
+      0 as number,
+      0 as number,
+      0 as number,
+      0 as number,
+      0 as number,
+      1 as number,
+      1 as number,
+      1 as number,
+      1 as number,
+      1 as number,
+      1 as number,
+    ],
     models: [
       27 as number,
       28 as number,
@@ -52,36 +54,37 @@ export const groups = {
      * "walk" consistently: the person's is "sprint", the pet's "run". */
     move_clip: 3 as number,
   },
-  /** The pets, the same way. A pet's key is its model's name. */
+  /** The pets, the same way. */
   pet: {
     /** World units tall — a quarter cell, the step the object tiers also take. */
     size: 0.25 as number,
-    keys: {
-      beaver: 0 as number,
-      bee: 1 as number,
-      bunny: 2 as number,
-      cat: 3 as number,
-      caterpillar: 4 as number,
-      chick: 5 as number,
-      cow: 6 as number,
-      crab: 7 as number,
-      deer: 8 as number,
-      dog: 9 as number,
-      elephant: 10 as number,
-      fish: 11 as number,
-      fox: 12 as number,
-      giraffe: 13 as number,
-      hog: 14 as number,
-      koala: 15 as number,
-      lion: 16 as number,
-      monkey: 17 as number,
-      panda: 18 as number,
-      parrot: 19 as number,
-      penguin: 20 as number,
-      pig: 21 as number,
-      polar: 22 as number,
-      tiger: 23 as number,
-    },
+    /** Each pet's name, the one every locale shows (an item has one name), row for row with its models. */
+    label: [
+      "Beaver",
+      "Bee",
+      "Bunny",
+      "Cat",
+      "Caterpillar",
+      "Chick",
+      "Cow",
+      "Crab",
+      "Deer",
+      "Dog",
+      "Elephant",
+      "Fish",
+      "Fox",
+      "Giraffe",
+      "Wild Boar",
+      "Koala",
+      "Lion",
+      "Monkey",
+      "Panda",
+      "Parrot",
+      "Penguin",
+      "Pig",
+      "Polar Bear",
+      "Tiger",
+    ],
     models: [
       1 as number,
       2 as number,
@@ -118,9 +121,6 @@ export const groups = {
 
 export { Group };
 
-/** Split by gender, so the picker shows two rows; a person is shown by
- * its place in its row. */
-export const PERSON_GENDER_PREFIX = {
-  female: "female-",
-  male: "male-",
-} as const;
+/** A person's gender, which splits the picker into two rows; a person is
+ * shown by its place in its row. */
+export { GENDER };

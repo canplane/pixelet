@@ -31,6 +31,7 @@
   "decors": {
     "tree": {
       "val": 1024,
+      "label": "Tree",
       "$doc": [
         "Trees on green and bare land. Bare is the fallback type for untagged land",
         "and this pack draws it as grass; sports fields are left out as maintained,",
@@ -55,6 +56,7 @@
     },
     "boat": {
       "val": 1025,
+      "label": "Boat",
       "$doc": [
         "Boats on open river and lake water; wetland is too shallow. Rivers are a",
         "few cells wide, so the per-cell rate reads far denser than on land: cut to",
@@ -73,6 +75,7 @@
     },
     "car": {
       "val": 1026,
+      "label": "Car",
       "$doc": [
         "Cars on major roads only: neighborhood streets and pedestrian ways are",
         "where users build, and a car there reads as in the way. Aligned to the",
@@ -93,6 +96,7 @@
     },
     "train": {
       "val": 1027,
+      "label": "Train",
       "$doc": [
         "Trains on rail lines the ground shows (a tunnel's is not painted), aligned",
         "to the rail, since one lying across it reads as derailed. Very sparse:",

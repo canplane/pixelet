@@ -17,184 +17,21 @@ export type CubeSection =
   | "underground"
   | "colors";
 
-export const cube = {
-  sentinel: {
-    /** nothing painted: the ground before a bake writes it, and an object cell no leaf holds */
-    void: 0x00,
-    /** bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec limit.rs`); a cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, as is a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; nothing is placed on or taken from it */
-    unknown: 0xff,
-  },
-  // The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in
-  // the order Carto paints.
-  // `transport` marks a way: decor faces along it and no pier stands on it;
-  // every look stands at its sampled height. The byte's values: 1 to 63
-  // Carto's looks, in its paint order; from 64 pixelet's own, the
-  // underground, which Carto paints nothing of; 0 and 255 the sentinels.
-  ground: {
-    // ---- landcover ----
+import * as ground from "./cube/ground.spec.ts";
+import * as object from "./cube/object.spec.ts";
 
-    /** land no feature covers, and what Carto draws no fill for: Carto's background, @land-color */
-    land: 1,
-    /** bare rock, scree, shingle: Carto @bare_ground */
-    bare_ground: 2,
-    /** sand: Carto @sand */
-    sand: 3,
-    /** beach and shoal: Carto @beach */
-    beach: 4,
-    /** heath and bog: Carto @heath */
-    heath: 5,
-    /** scrub and mangrove: Carto @scrub */
-    scrub: 6,
-    /** grass, meadow, garden, village green, marsh, wet meadow: Carto @grass */
-    grass: 7,
-    /** park: Carto @park */
-    park: 8,
-    /** playground, recreation ground, stadium, sports center: Carto @leisure, lighten(@park, 5%) */
-    leisure: 9,
-    /** pitch and track: Carto @pitch */
-    pitch: 10,
-    /** forest, wood, swamp: Carto @forest */
-    forest: 11,
-    /** orchard, vineyard, plant nursery: Carto @orchard */
-    orchard: 12,
-    /** allotments: Carto @allotments */
-    allotments: 13,
-    /** farmland and greenhouses: Carto @farmland */
-    farmland: 14,
-    /** farmyard: Carto @farmyard */
-    farmyard: 15,
-    /** campsite and golf course: Carto @campsite */
-    campsite: 16,
-    /** cemetery and grave yard: Carto @cemetery */
-    cemetery: 17,
-    /** residential: Carto @residential */
-    residential: 18,
-    /** garages: Carto @garages */
-    garages: 19,
-    /** retail: Carto @retail */
-    retail: 20,
-    /** commercial: Carto @commercial */
-    commercial: 21,
-    /** industrial, railway, works: Carto @industrial */
-    industrial: 22,
-    /** power plant and substation: Carto @power, darken(@industrial, 5%) */
-    power: 23,
-    /** landfill: Carto's landuse_landfill, a value with no name */
-    landfill: 24,
-    /** quarry: Carto @quarry */
-    quarry: 25,
-    /** school, college, university, hospital, clinic: Carto @societal_amenities */
-    societal_amenities: 26,
-    /** a religious site: Carto @place_of_worship */
-    place_of_worship: 27,
-    /** aerodrome, bus station, ferry terminal: Carto @transportation-area */
-    transportation_area: 28,
-    /** parking: Carto @parking */
-    parking: 29,
-    /** apron: Carto @apron */
-    apron: 30,
+export { ground, object };
 
-    // ---- water ----
-
-    /** glacier: Carto @glacier, drawn with the water areas */
-    glacier: 31,
-    /** sea, lake, river, canal, any water: Carto @water-color */
-    water: 32,
-
-    // ---- water_features ----
-
-    /** dam: Carto @dam */
-    dam: 33,
-    /** breakwater, groyne, weir: Carto @breakwater-color, @weir-line */
-    breakwater: 34,
-
-    // ---- buildings ----
-
-    /** a building: Carto @building-fill */
-    building: 35,
-    /** a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16 */
-    building_major: 36,
-
-    // ---- roads ----
-
-    /** footway, steps, path: Carto @footway-fill, @steps-fill */
-    footway: 37,
-    /** cycleway: Carto @cycleway-fill */
-    cycleway: 38,
-    /** bridleway: Carto @bridleway-fill */
-    bridleway: 39,
-    /** track, an agricultural or forest way: Carto @track-fill */
-    track: 40,
-    /** pedestrian street: Carto @pedestrian-fill */
-    pedestrian: 41,
-    /** living street: Carto @living-street-fill */
-    living_street: 42,
-    /** tertiary, residential, unclassified and service, told apart by width: Carto @tertiary-fill, @residential-fill, @service-fill */
-    residential_road: 43,
-    /** a road of no known class: Carto @road-fill */
-    road: 44,
-    /** secondary: Carto @secondary-fill */
-    secondary: 45,
-    /** primary: Carto @primary-fill */
-    primary: 46,
-    /** trunk: Carto @trunk-fill */
-    trunk: 47,
-    /** motorway: Carto @motorway-fill */
-    motorway: 48,
-    /** platform: Carto @platform-fill */
-    platform: 49,
-    /** tram: Carto's railway_tram, a value with no name */
-    tram: 50,
-    /** light rail, narrow gauge, funicular: Carto's railway_light_rail, a value with no name */
-    light_rail: 51,
-    /** subway: Carto's railway_subway, a value with no name */
-    subway: 52,
-    /** monorail: Carto's railway_monorail, a value with no name */
-    monorail: 53,
-    /** rail: Carto's railway_rail, a value with no name */
-    rail: 54,
-
-    // ---- aeroways ----
-
-    /** runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill */
-    aeroway: 55,
-
-    // ---- underground ----
-
-    /** under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it */
-    soil: 64,
-    /** under sand's filler: Minecraft Beta's sandstone */
-    sandstone: 65,
-    /** under the filler: Minecraft Beta's stone */
-    stone: 66,
-  },
-  // What only an object can be: past a byte, so no ground cell holds it. An
-  // object's value is a u16 whose byte range is the ground's palette.
-  object: {
-    air: 256,
-
-    // ---- colors ----
-
-    white: 257,
-    grey: 258,
-    dark_grey: 259,
-    black: 260,
-    red: 261,
-    orange: 262,
-    brown: 263,
-    yellow: 264,
-    green: 265,
-    dark_green: 266,
-    cyan: 267,
-    blue: 268,
-    violet: 269,
-    magenta: 270,
-    pink: 271,
-  },
-} as const satisfies Record<string, Record<string, number>>;
+/** The placeable cubes: the placed colors first, then the looks in paint order. */
+export const CUBES: readonly number[] = [
+  257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 1,
+  2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+  23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
+  42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 64, 65, 66,
+];
 
 /** Each placeable cube's section, by its number. */
-export const cube_section: Readonly<Record<number, CubeSection>> = {
+export const CUBE_SECTION: Readonly<Record<number, CubeSection>> = {
   1: "landcover",
   2: "landcover",
   3: "landcover",
@@ -268,4 +105,81 @@ export const cube_section: Readonly<Record<number, CubeSection>> = {
   269: "colors",
   270: "colors",
   271: "colors",
+};
+
+/** Each placeable cube's name, the one every locale shows: an item has one name. */
+export const CUBE_LABEL: Readonly<Record<number, string>> = {
+  257: "White",
+  258: "Gray",
+  259: "Dark Gray",
+  260: "Black",
+  261: "Red",
+  262: "Orange",
+  263: "Brown",
+  264: "Yellow",
+  265: "Green",
+  266: "Dark Green",
+  267: "Cyan",
+  268: "Blue",
+  269: "Violet",
+  270: "Magenta",
+  271: "Pink",
+  1: "Land",
+  2: "Bare Ground",
+  3: "Sand",
+  4: "Beach",
+  5: "Heath",
+  6: "Scrub",
+  7: "Grass",
+  8: "Park",
+  9: "Leisure",
+  10: "Pitch",
+  11: "Forest",
+  12: "Orchard",
+  13: "Allotments",
+  14: "Farmland",
+  15: "Farmyard",
+  16: "Campsite",
+  17: "Cemetery",
+  18: "Residential",
+  19: "Garages",
+  20: "Retail",
+  21: "Commercial",
+  22: "Industrial",
+  23: "Power",
+  24: "Landfill",
+  25: "Quarry",
+  26: "Societal Amenities",
+  27: "Place of Worship",
+  28: "Transportation Area",
+  29: "Parking",
+  30: "Apron",
+  31: "Glacier",
+  32: "Water",
+  33: "Dam",
+  34: "Breakwater",
+  35: "Building",
+  36: "Major Building",
+  37: "Footway",
+  38: "Cycleway",
+  39: "Bridleway",
+  40: "Track",
+  41: "Pedestrian Street",
+  42: "Living Street",
+  43: "Residential Road",
+  44: "Road",
+  45: "Secondary Road",
+  46: "Primary Road",
+  47: "Trunk Road",
+  48: "Motorway",
+  49: "Platform",
+  50: "Tram",
+  51: "Light Rail",
+  52: "Subway",
+  53: "Monorail",
+  54: "Railway",
+  55: "Runway",
+  64: "Dirt",
+  65: "Sandstone",
+  66: "Stone",
 };

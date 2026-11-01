@@ -7,15 +7,15 @@
   ],
   "groups": {
     "$doc": [
-      "The groups a character is of, each numbered, and in each its variants by",
-      "key, row for row with its models, the colormap its pack shares, how tall it",
-      "stands and which clip is its move."
+      "The groups a character is of, each numbered, and in each its variants,",
+      "each numbered by its row, row for row with its models, the colormap its pack",
+      "shares, how tall it stands and which clip is its move."
     ],
     "person": {
       "$number": 0,
       "$doc": [
-        "The people a player can be: the key the settings store persists, row for",
-        "row with the model under asset/. One pack, so one colormap."
+        "The people a player can be, each by its row, the number the settings store",
+        "persists. One pack, so one colormap."
       ],
       "size": {
         "$val": 1.0,
@@ -23,20 +23,10 @@
           "World units tall — one cell."
         ]
       },
-      "keys": {
+      "gender": {
         "$type": "u8",
-        "female-1": 0,
-        "female-2": 1,
-        "female-3": 2,
-        "female-4": 3,
-        "female-5": 4,
-        "female-6": 5,
-        "male-1": 6,
-        "male-2": 7,
-        "male-3": 8,
-        "male-4": 9,
-        "male-5": 10,
-        "male-6": 11
+        "$doc": ["Each variant's gender (`GENDER`), row for row with its models."],
+        "$val": [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1]
       },
       "models": {
         "$type": "file",
@@ -72,7 +62,7 @@
     "pet": {
       "$number": 1,
       "$doc": [
-        "The pets, the same way. A pet's key is its model's name."
+        "The pets, the same way."
       ],
       "size": {
         "$val": 0.25,
@@ -80,32 +70,34 @@
           "World units tall — a quarter cell, the step the object tiers also take."
         ]
       },
-      "keys": {
-        "$type": "u8",
-        "beaver": 0,
-        "bee": 1,
-        "bunny": 2,
-        "cat": 3,
-        "caterpillar": 4,
-        "chick": 5,
-        "cow": 6,
-        "crab": 7,
-        "deer": 8,
-        "dog": 9,
-        "elephant": 10,
-        "fish": 11,
-        "fox": 12,
-        "giraffe": 13,
-        "hog": 14,
-        "koala": 15,
-        "lion": 16,
-        "monkey": 17,
-        "panda": 18,
-        "parrot": 19,
-        "penguin": 20,
-        "pig": 21,
-        "polar": 22,
-        "tiger": 23
+      "label": {
+        "$doc": ["Each pet's name, the one every locale shows (an item has one name), row for row with its models."],
+        "$val": [
+          "Beaver",
+          "Bee",
+          "Bunny",
+          "Cat",
+          "Caterpillar",
+          "Chick",
+          "Cow",
+          "Crab",
+          "Deer",
+          "Dog",
+          "Elephant",
+          "Fish",
+          "Fox",
+          "Giraffe",
+          "Wild Boar",
+          "Koala",
+          "Lion",
+          "Monkey",
+          "Panda",
+          "Parrot",
+          "Penguin",
+          "Pig",
+          "Polar Bear",
+          "Tiger"
+        ]
       },
       "models": {
         "$type": "file",
@@ -158,12 +150,13 @@
       "The clip a character stands in, \"idle\", by its index in both packs' animations."
     ]
   },
-  "PERSON_GENDER_PREFIX": {
+  "GENDER": {
+    "$type": "u8",
     "$doc": [
-      "Split by gender, so the picker shows two rows; a person is shown by",
-      "its place in its row."
+      "A person's gender, which splits the picker into two rows; a person is",
+      "shown by its place in its row."
     ],
-    "female": "female-",
-    "male": "male-"
+    "female": 0,
+    "male": 1
   }
 }

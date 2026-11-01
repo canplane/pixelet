@@ -6,6 +6,11 @@
     "pin is drawn as its own design (pxl-spec asset/marker.rs",
     "`marker_cell`). Per id where the kind comes to hold more than one shape."
   ],
+  "PIN_LABEL": {
+    "$val": "Pin",
+    "$doc": ["The pin's name, the one every locale shows: an item has one name."]
+  },
+
   "MARKER_TEXT_CHARS": {
     "$val": 40,
     "$type": "u32",

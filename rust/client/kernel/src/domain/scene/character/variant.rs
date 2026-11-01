@@ -20,7 +20,7 @@ pub struct CharacterVariant {
     pub move_clip: u32,
 }
 
-pub const CHARACTER_VARIANTS: usize = person::Key::ALL.len() + pet::Key::ALL.len();
+pub const CHARACTER_VARIANTS: usize = person::models.len() + pet::models.len();
 
 /// A variant's model, registered once at its own height, which a display
 /// preview's instance scales.
@@ -28,19 +28,18 @@ pub const MODELS_MAX: usize = CHARACTER_VARIANTS;
 
 pub fn character_variant(group: Group, number: u8) -> Option<CharacterVariant> {
     let (model, skin, height_u, move_clip) = match group {
-        Group::person => {
-            let row = person::Key::ALL.iter().position(|k| *k as u8 == number)?;
-            (
-                person::models[row],
-                person::skin,
-                person::size,
-                person::move_clip,
-            )
-        }
-        Group::pet => {
-            let row = pet::Key::ALL.iter().position(|k| *k as u8 == number)?;
-            (pet::models[row], pet::skin, pet::size, pet::move_clip)
-        }
+        Group::person => (
+            *person::models.get(usize::from(number))?,
+            person::skin,
+            person::size,
+            person::move_clip,
+        ),
+        Group::pet => (
+            *pet::models.get(usize::from(number))?,
+            pet::skin,
+            pet::size,
+            pet::move_clip,
+        ),
     };
     Some(CharacterVariant {
         group,

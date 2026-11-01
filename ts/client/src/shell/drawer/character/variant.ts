@@ -5,51 +5,52 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTING } from "@/shell/setting/schema.ts";
-import {
-  Group,
-  groups,
-  PERSON_GENDER_PREFIX,
-} from "@/shell/catalog/asset/actor.spec.ts";
+import { GENDER, Group, groups } from "@/shell/catalog/asset/actor.spec.ts";
 
 export interface CharacterVariant {
   group: u32;
-  /** What the kernel holds it as. */
+  /** What the kernel holds it as: its row in its group. */
   number: u32;
-  key: string;
 }
 
-function variantsOf(
-  group: u32,
-  keys: Readonly<Record<string, number>>,
-): readonly CharacterVariant[] {
-  return Object.entries(keys).map(([key, number]) => ({ group, number, key }));
+/** A pet, with its name. */
+export interface PetVariant extends CharacterVariant {
+  label: string;
 }
 
-const PERSON_VARIANTS = variantsOf(Group.person, groups.person.keys);
-export const PET_VARIANTS = variantsOf(Group.pet, groups.pet.keys);
+const PERSON_VARIANTS: readonly CharacterVariant[] = groups.person.models.map(
+  (_, number) => ({ group: Group.person, number }),
+);
+export const PET_VARIANTS: readonly PetVariant[] = groups.pet.label.map(
+  (label, number) => ({ group: Group.pet, number, label }),
+);
 
-export type Gender = keyof typeof PERSON_GENDER_PREFIX;
-export const GENDERS = Object.keys(PERSON_GENDER_PREFIX) as Gender[];
+/** A person's gender (actor.spec.ts `GENDER`). */
+export type Gender = number;
+export const GENDERS: readonly Gender[] = [GENDER.female, GENDER.male];
+
+/** Each gender's row title, the locale's key. */
+export const GENDER_LABEL_KEY: Readonly<Record<Gender, string>> = {
+  [GENDER.female]: "drawer.character.female_label",
+  [GENDER.male]: "drawer.character.male_label",
+};
 
 export function personVariantsOf(gender: Gender): readonly CharacterVariant[] {
-  return PERSON_VARIANTS.filter((v) =>
-    v.key.startsWith(PERSON_GENDER_PREFIX[gender]),
+  return PERSON_VARIANTS.filter(
+    (v) => groups.person.gender[v.number] === gender,
   );
 }
 
 export function genderOf(variant: CharacterVariant): Gender {
-  return (
-    GENDERS.find((g) => variant.key.startsWith(PERSON_GENDER_PREFIX[g])) ??
-    GENDERS[0]
-  );
+  return groups.person.gender[variant.number] ?? GENDERS[0];
 }
 
 /** The variant numbered `number`, else the setting's default. */
-function numbered(
-  variants: readonly CharacterVariant[],
+function numbered<V extends CharacterVariant>(
+  variants: readonly V[],
   number: number,
   fallback: number,
-): CharacterVariant {
+): V {
   return (
     variants.find((v) => v.number === number) ??
     variants.find((v) => v.number === fallback)!
@@ -60,6 +61,6 @@ export function personVariant(number: number): CharacterVariant {
   return numbered(PERSON_VARIANTS, number, SETTING.person.default);
 }
 
-export function petVariant(number: number): CharacterVariant {
+export function petVariant(number: number): PetVariant {
   return numbered(PET_VARIANTS, number, SETTING.pet.default);
 }

@@ -44,141 +44,141 @@
     "entries": [
       { "section": "landcover" },
       {
-        "name": "land",
+        "name": "land", "label": "Land",
         "val": 1,
         "$doc": [
           "land no feature covers, and what Carto draws no fill for: Carto's background, @land-color"
         ]
       },
       {
-        "name": "bare_ground",
+        "name": "bare_ground", "label": "Bare Ground",
         "val": 2,
         "$doc": ["bare rock, scree, shingle: Carto @bare_ground"]
       },
-      { "name": "sand", "val": 3, "$doc": ["sand: Carto @sand"] },
-      { "name": "beach", "val": 4, "$doc": ["beach and shoal: Carto @beach"] },
-      { "name": "heath", "val": 5, "$doc": ["heath and bog: Carto @heath"] },
-      { "name": "scrub", "val": 6, "$doc": ["scrub and mangrove: Carto @scrub"] },
+      { "name": "sand", "label": "Sand", "val": 3, "$doc": ["sand: Carto @sand"] },
+      { "name": "beach", "label": "Beach", "val": 4, "$doc": ["beach and shoal: Carto @beach"] },
+      { "name": "heath", "label": "Heath", "val": 5, "$doc": ["heath and bog: Carto @heath"] },
+      { "name": "scrub", "label": "Scrub", "val": 6, "$doc": ["scrub and mangrove: Carto @scrub"] },
       {
-        "name": "grass",
+        "name": "grass", "label": "Grass",
         "val": 7,
         "$doc": [
           "grass, meadow, garden, village green, marsh, wet meadow: Carto @grass"
         ]
       },
-      { "name": "park", "val": 8, "$doc": ["park: Carto @park"] },
+      { "name": "park", "label": "Park", "val": 8, "$doc": ["park: Carto @park"] },
       {
-        "name": "leisure",
+        "name": "leisure", "label": "Leisure",
         "val": 9,
         "$doc": [
           "playground, recreation ground, stadium, sports center: Carto @leisure, lighten(@park, 5%)"
         ]
       },
-      { "name": "pitch", "val": 10, "$doc": ["pitch and track: Carto @pitch"] },
+      { "name": "pitch", "label": "Pitch", "val": 10, "$doc": ["pitch and track: Carto @pitch"] },
       {
-        "name": "forest",
+        "name": "forest", "label": "Forest",
         "val": 11,
         "$doc": ["forest, wood, swamp: Carto @forest"]
       },
       {
-        "name": "orchard",
+        "name": "orchard", "label": "Orchard",
         "val": 12,
         "$doc": ["orchard, vineyard, plant nursery: Carto @orchard"]
       },
       {
-        "name": "allotments",
+        "name": "allotments", "label": "Allotments",
         "val": 13,
         "$doc": ["allotments: Carto @allotments"]
       },
       {
-        "name": "farmland",
+        "name": "farmland", "label": "Farmland",
         "val": 14,
         "$doc": ["farmland and greenhouses: Carto @farmland"]
       },
-      { "name": "farmyard", "val": 15, "$doc": ["farmyard: Carto @farmyard"] },
+      { "name": "farmyard", "label": "Farmyard", "val": 15, "$doc": ["farmyard: Carto @farmyard"] },
       {
-        "name": "campsite",
+        "name": "campsite", "label": "Campsite",
         "val": 16,
         "$doc": ["campsite and golf course: Carto @campsite"]
       },
       {
-        "name": "cemetery",
+        "name": "cemetery", "label": "Cemetery",
         "val": 17,
         "$doc": ["cemetery and grave yard: Carto @cemetery"]
       },
       {
-        "name": "residential",
+        "name": "residential", "label": "Residential",
         "val": 18,
         "$doc": ["residential: Carto @residential"]
       },
-      { "name": "garages", "val": 19, "$doc": ["garages: Carto @garages"] },
-      { "name": "retail", "val": 20, "$doc": ["retail: Carto @retail"] },
+      { "name": "garages", "label": "Garages", "val": 19, "$doc": ["garages: Carto @garages"] },
+      { "name": "retail", "label": "Retail", "val": 20, "$doc": ["retail: Carto @retail"] },
       {
-        "name": "commercial",
+        "name": "commercial", "label": "Commercial",
         "val": 21,
         "$doc": ["commercial: Carto @commercial"]
       },
       {
-        "name": "industrial",
+        "name": "industrial", "label": "Industrial",
         "val": 22,
         "$doc": ["industrial, railway, works: Carto @industrial"]
       },
       {
-        "name": "power",
+        "name": "power", "label": "Power",
         "val": 23,
         "$doc": ["power plant and substation: Carto @power, darken(@industrial, 5%)"]
       },
       {
-        "name": "landfill",
+        "name": "landfill", "label": "Landfill",
         "val": 24,
         "$doc": ["landfill: Carto's landuse_landfill, a value with no name"]
       },
-      { "name": "quarry", "val": 25, "$doc": ["quarry: Carto @quarry"] },
+      { "name": "quarry", "label": "Quarry", "val": 25, "$doc": ["quarry: Carto @quarry"] },
       {
-        "name": "societal_amenities",
+        "name": "societal_amenities", "label": "Societal Amenities",
         "val": 26,
         "$doc": [
           "school, college, university, hospital, clinic: Carto @societal_amenities"
         ]
       },
       {
-        "name": "place_of_worship",
+        "name": "place_of_worship", "label": "Place of Worship",
         "val": 27,
         "$doc": ["a religious site: Carto @place_of_worship"]
       },
       {
-        "name": "transportation_area",
+        "name": "transportation_area", "label": "Transportation Area",
         "val": 28,
         "$doc": ["aerodrome, bus station, ferry terminal: Carto @transportation-area"]
       },
-      { "name": "parking", "val": 29, "$doc": ["parking: Carto @parking"] },
-      { "name": "apron", "val": 30, "$doc": ["apron: Carto @apron"] },
+      { "name": "parking", "label": "Parking", "val": 29, "$doc": ["parking: Carto @parking"] },
+      { "name": "apron", "label": "Apron", "val": 30, "$doc": ["apron: Carto @apron"] },
       { "section": "water" },
-      { "name": "glacier", "val": 31, "$doc": ["glacier: Carto @glacier, drawn with the water areas"] },
+      { "name": "glacier", "label": "Glacier", "val": 31, "$doc": ["glacier: Carto @glacier, drawn with the water areas"] },
       {
-        "name": "water",
+        "name": "water", "label": "Water",
         "val": 32,
         "$doc": ["sea, lake, river, canal, any water: Carto @water-color"]
       },
       { "section": "water_features" },
       {
-        "name": "dam",
+        "name": "dam", "label": "Dam",
         "val": 33,
         "$doc": ["dam: Carto @dam"]
       },
       {
-        "name": "breakwater",
+        "name": "breakwater", "label": "Breakwater",
         "val": 34,
         "$doc": ["breakwater, groyne, weir: Carto @breakwater-color, @weir-line"]
       },
       { "section": "buildings" },
       {
-        "name": "building",
+        "name": "building", "label": "Building",
         "val": 35,
         "$doc": ["a building: Carto @building-fill"]
       },
       {
-        "name": "building_major",
+        "name": "building_major", "label": "Major Building",
         "val": 36,
         "$doc": [
           "a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16"
@@ -186,111 +186,111 @@
       },
       { "section": "roads", "$doc": ["by Carto's z"] },
       {
-        "name": "footway",
+        "name": "footway", "label": "Footway",
         "val": 37,
         "transport": true,
         "$doc": ["footway, steps, path: Carto @footway-fill, @steps-fill"]
       },
       {
-        "name": "cycleway",
+        "name": "cycleway", "label": "Cycleway",
         "val": 38,
         "transport": true,
         "$doc": ["cycleway: Carto @cycleway-fill"]
       },
       {
-        "name": "bridleway",
+        "name": "bridleway", "label": "Bridleway",
         "val": 39,
         "transport": true,
         "$doc": ["bridleway: Carto @bridleway-fill"]
       },
       {
-        "name": "track",
+        "name": "track", "label": "Track",
         "val": 40,
         "transport": true,
         "$doc": ["track, an agricultural or forest way: Carto @track-fill"]
       },
       {
-        "name": "pedestrian",
+        "name": "pedestrian", "label": "Pedestrian Street",
         "val": 41,
         "transport": true,
         "$doc": ["pedestrian street: Carto @pedestrian-fill"]
       },
       {
-        "name": "living_street",
+        "name": "living_street", "label": "Living Street",
         "val": 42,
         "transport": true,
         "$doc": ["living street: Carto @living-street-fill"]
       },
       {
-        "name": "residential_road",
+        "name": "residential_road", "label": "Residential Road",
         "val": 43,
         "transport": true,
         "$doc": ["tertiary, residential, unclassified and service, told apart by width: Carto @tertiary-fill, @residential-fill, @service-fill"]
       },
       {
-        "name": "road",
+        "name": "road", "label": "Road",
         "val": 44,
         "transport": true,
         "$doc": ["a road of no known class: Carto @road-fill"]
       },
       {
-        "name": "secondary",
+        "name": "secondary", "label": "Secondary Road",
         "val": 45,
         "transport": true,
         "$doc": ["secondary: Carto @secondary-fill"]
       },
       {
-        "name": "primary",
+        "name": "primary", "label": "Primary Road",
         "val": 46,
         "transport": true,
         "$doc": ["primary: Carto @primary-fill"]
       },
-      { "name": "trunk", "val": 47, "transport": true, "$doc": ["trunk: Carto @trunk-fill"] },
+      { "name": "trunk", "label": "Trunk Road", "val": 47, "transport": true, "$doc": ["trunk: Carto @trunk-fill"] },
       {
-        "name": "motorway",
+        "name": "motorway", "label": "Motorway",
         "val": 48,
         "transport": true,
         "$doc": ["motorway: Carto @motorway-fill"]
       },
       {
-        "name": "platform",
+        "name": "platform", "label": "Platform",
         "val": 49,
         "transport": true,
         "$doc": ["platform: Carto @platform-fill"]
       },
       {
-        "name": "tram",
+        "name": "tram", "label": "Tram",
         "val": 50,
         "transport": true,
         "$doc": ["tram: Carto's railway_tram, a value with no name"]
       },
       {
-        "name": "light_rail",
+        "name": "light_rail", "label": "Light Rail",
         "val": 51,
         "transport": true,
         "$doc": ["light rail, narrow gauge, funicular: Carto's railway_light_rail, a value with no name"]
       },
       {
-        "name": "subway",
+        "name": "subway", "label": "Subway",
         "val": 52,
         "transport": true,
         "$doc": ["subway: Carto's railway_subway, a value with no name"]
       },
       {
-        "name": "monorail",
+        "name": "monorail", "label": "Monorail",
         "val": 53,
         "transport": true,
         "$doc": ["monorail: Carto's railway_monorail, a value with no name"]
       },
       {
-        "name": "rail",
+        "name": "rail", "label": "Railway",
         "val": 54,
         "transport": true,
         "$doc": ["rail: Carto's railway_rail, a value with no name"]
       },
       { "section": "aeroways" },
       {
-        "name": "aeroway",
+        "name": "aeroway", "label": "Runway",
         "val": 55,
         "transport": true,
         "$doc": [
@@ -299,21 +299,21 @@
       },
       { "section": "underground" },
       {
-        "name": "soil",
+        "name": "soil", "label": "Dirt",
         "val": 64,
         "$doc": [
           "under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it"
         ]
       },
       {
-        "name": "sandstone",
+        "name": "sandstone", "label": "Sandstone",
         "val": 65,
         "$doc": [
           "under sand's filler: Minecraft Beta's sandstone"
         ]
       },
       {
-        "name": "stone",
+        "name": "stone", "label": "Stone",
         "val": 66,
         "$doc": [
           "under the filler: Minecraft Beta's stone"
@@ -335,21 +335,21 @@
         ]
       },
       { "section": "colors" },
-      { "name": "white", "val": 257 },
-      { "name": "grey", "val": 258 },
-      { "name": "dark_grey", "val": 259 },
-      { "name": "black", "val": 260 },
-      { "name": "red", "val": 261 },
-      { "name": "orange", "val": 262 },
-      { "name": "brown", "val": 263 },
-      { "name": "yellow", "val": 264 },
-      { "name": "green", "val": 265 },
-      { "name": "dark_green", "val": 266 },
-      { "name": "cyan", "val": 267 },
-      { "name": "blue", "val": 268 },
-      { "name": "violet", "val": 269 },
-      { "name": "magenta", "val": 270 },
-      { "name": "pink", "val": 271 }
+      { "name": "white", "label": "White", "val": 257 },
+      { "name": "grey", "label": "Gray", "val": 258 },
+      { "name": "dark_grey", "label": "Dark Gray", "val": 259 },
+      { "name": "black", "label": "Black", "val": 260 },
+      { "name": "red", "label": "Red", "val": 261 },
+      { "name": "orange", "label": "Orange", "val": 262 },
+      { "name": "brown", "label": "Brown", "val": 263 },
+      { "name": "yellow", "label": "Yellow", "val": 264 },
+      { "name": "green", "label": "Green", "val": 265 },
+      { "name": "dark_green", "label": "Dark Green", "val": 266 },
+      { "name": "cyan", "label": "Cyan", "val": 267 },
+      { "name": "blue", "label": "Blue", "val": 268 },
+      { "name": "violet", "label": "Violet", "val": 269 },
+      { "name": "magenta", "label": "Magenta", "val": 270 },
+      { "name": "pink", "label": "Pink", "val": 271 }
     ]
   }
 }

@@ -7,11 +7,13 @@ import type { f64, u8 } from "@xpute/kit/abi/word.ts";
 import {
   allCubes,
   type Cube,
-  cubeId,
+  cubeLabel,
   cubeSection,
   decorIds,
+  decorLabel,
   decorSection,
 } from "@/shell/catalog/asset/mod.ts";
+import { PIN_LABEL } from "@/shell/catalog/asset/marker.spec.ts";
 
 import {
   selectCube,
@@ -26,12 +28,7 @@ import { Glyph } from "@/shell/ui/glyph.tsx";
 import { chrome, color } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPicker } from "@/shell/drawer/character/picker.tsx";
-import {
-  cubeLabel,
-  CubeSwatch,
-  decorGlyph,
-  decorLabel,
-} from "@/shell/catalog/asset/swatch.tsx";
+import { CubeSwatch, decorGlyph } from "@/shell/catalog/asset/swatch.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 import { Grid, Item, itemOf, mark } from "./grid.tsx";
@@ -71,7 +68,7 @@ function CubeItem({
 
   return (
     <Item
-      label={cubeLabel(t, cube)}
+      label={cubeLabel(cube)}
       active={active}
       cell={cell}
       onPress={() => onPick(cube)}
@@ -100,7 +97,7 @@ function DecorItem({
 
   return (
     <Item
-      label={decorLabel(t, kind)}
+      label={decorLabel(kind)}
       active={active}
       cell={cell}
       onPress={() => onPick(kind)}
@@ -128,7 +125,7 @@ function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   const active = useKernel(({ tool: h }) => h.active === ActiveTool.Marker);
 
   return (
-    <Item label={t("assets.pin")} active={active} cell={cell} onPress={onPick}>
+    <Item label={PIN_LABEL} active={active} cell={cell} onPress={onPick}>
       <View
         style={[
           styles.decor,
@@ -195,7 +192,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                     {(cell) =>
                       cubes.map((cube) => (
                         <CubeItem
-                          key={cubeId(cube)}
+                          key={cube}
                           cube={cube}
                           cell={cell}
                           onPick={pickCube}

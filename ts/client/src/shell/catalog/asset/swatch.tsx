@@ -3,13 +3,8 @@
 import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
 import type { u8 } from "@xpute/kit/abi/word.ts";
-import type { DecorId } from "@/shell/catalog/asset/decor.spec.ts";
-import {
-  type Cube,
-  cubeHex,
-  cubeId,
-  decorName,
-} from "@/shell/catalog/asset/mod.ts";
+import { decor } from "@/shell/catalog/asset/decor.spec.ts";
+import { type Cube, cubeHex } from "@/shell/catalog/asset/mod.ts";
 import { shippedTopTextureKey } from "@/shell/catalog/asset/texture.ts";
 import type { GlyphName } from "@/shell/ui/icon.tsx";
 import { asset_url } from "@/port/shell.ts";
@@ -18,7 +13,7 @@ import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 
 function cubeTextureUrl(cube: Cube): string | null {
-  const key = shippedTopTextureKey(cubeId(cube));
+  const key = shippedTopTextureKey(cube);
   return key ? `${bracket.origin.url}${asset_url(key)}` : null;
 }
 
@@ -57,23 +52,15 @@ export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
   );
 }
 
-const DECOR_GLYPH: Record<DecorId, GlyphName> = {
-  tree: "tree",
-  boat: "sailboat",
-  car: "car",
-  train: "train.side.front.car",
+const DECOR_GLYPH: Readonly<Record<number, GlyphName>> = {
+  [decor.tree]: "tree",
+  [decor.boat]: "sailboat",
+  [decor.car]: "car",
+  [decor.train]: "train.side.front.car",
 };
 
 export function decorGlyph(kind: u8): GlyphName {
-  return DECOR_GLYPH[decorName(kind)];
-}
-
-export function cubeLabel(t: (key: string) => string, cube: Cube): string {
-  return t(`assets.cube.${cubeId(cube)}`);
-}
-
-export function decorLabel(t: (key: string) => string, kind: u8): string {
-  return t(`assets.decor.${decorName(kind)}`);
+  return DECOR_GLYPH[kind];
 }
 
 export function heldRing(ground: string, ink: string, width: number): string {

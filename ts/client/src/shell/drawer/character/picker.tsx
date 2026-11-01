@@ -20,6 +20,7 @@ import {
   type CharacterVariant,
   type Gender,
   genderOf,
+  GENDER_LABEL_KEY,
   GENDERS,
   personVariant,
   personVariantsOf,
@@ -123,7 +124,7 @@ function PersonPicker(props: PersonPickerProps) {
         {GENDERS.map((g) => (
           <Chip
             key={g}
-            label={t(`drawer.character.${g}_label`)}
+            label={t(GENDER_LABEL_KEY[g])}
             active={gender === g}
             onPress={() => onGenderChange(g)}
           />
@@ -133,7 +134,7 @@ function PersonPicker(props: PersonPickerProps) {
       <View style={styles.chips}>
         {variants.map((v, i) => (
           <Chip
-            key={v.key}
+            key={v.number}
             label={`${i + 1}`}
             active={v.number === selected.number}
             onPress={() => onSelect(v)}
@@ -158,8 +159,8 @@ function PetPicker(props: PetPickerProps) {
       <View style={styles.chips}>
         {PET_VARIANTS.map((v) => (
           <Chip
-            key={v.key}
-            label={t(`pets.${v.key}`)}
+            key={v.number}
+            label={v.label}
             active={v.number === selected.number}
             onPress={() => onSelect(v)}
           />

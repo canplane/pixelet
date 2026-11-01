@@ -78,7 +78,7 @@ const DATA_SPECS: [DataSpec; 23] = [
         rs_also: &[],
         module: Some("marker"),
         enums: Enums::None,
-        ts_names: Some(&["MARKER_TEXT_CHARS"]),
+        ts_names: Some(&["PIN_LABEL", "MARKER_TEXT_CHARS"]),
     },
     DataSpec {
         json: "spec/spec/asset/id.json",
@@ -138,7 +138,7 @@ const DATA_SPECS: [DataSpec; 23] = [
         rs_also: &[],
         module: Some("actor"),
         enums: Enums::All,
-        ts_names: Some(&["groups", "PERSON_GENDER_PREFIX"]),
+        ts_names: Some(&["groups", "GENDER"]),
     },
     DataSpec {
         json: "spec/spec/asset/sky.json",
