@@ -19,6 +19,11 @@ A rename is made where the name misstates the thing or gets in the way of
 understanding it, and the new one clearly does better; not because a name is
 this project's own.
 
+A part of the system, the commands' modules and what the kernel asks of its
+host, takes its word from Unix, Linux or Wayland; a device outside them keeps
+its platform's word. What the program alone does takes a plain word for what it
+does. A metaphor no field uses is not a name, however apt it reads.
+
 ## What is named with the user
 
 A new domain concept the project's parts share, or an alias of this project's

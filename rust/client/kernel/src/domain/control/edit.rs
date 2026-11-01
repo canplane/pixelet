@@ -69,7 +69,7 @@ pub struct Hover {
     pub approach: Option<Q3>,
 }
 
-struct Interaction {
+struct State {
     tool: Tool,
     hover: Hover,
     /// Where the pointer stands on the screen, in NDC, whatever it can strike:
@@ -77,10 +77,10 @@ struct Interaction {
     pointed: Option<[f64; 2]>,
 }
 
-static INTERACTION: Global<Interaction> = Global::new();
+static STATE: Global<State> = Global::new();
 
-fn interaction() -> &'static mut Interaction {
-    INTERACTION.get(|| Interaction {
+fn state() -> &'static mut State {
+    STATE.get(|| State {
         tool: Tool::default(),
         hover: Hover::default(),
         pointed: None,
@@ -88,37 +88,37 @@ fn interaction() -> &'static mut Interaction {
 }
 
 pub fn tool() -> Tool {
-    interaction().tool
+    state().tool
 }
 
 pub(crate) fn set_tool(tool: Tool) {
-    interaction().tool = tool;
+    state().tool = tool;
 }
 
 pub fn hover() -> Hover {
-    interaction().hover
+    state().hover
 }
 
 pub(crate) fn clear_hover() {
-    interaction().hover = Hover::default();
-    interaction().pointed = None;
+    state().hover = Hover::default();
+    state().pointed = None;
 }
 
 /// Where the pointer stands on the screen, in NDC, while it is over it.
 pub fn pointed() -> Option<[f64; 2]> {
-    interaction().pointed
+    state().pointed
 }
 
 /// The pointer stands at `ndc_x`, `ndc_y` over something the world's pick
 /// does not reach (pxl-kernel pointer.rs): nothing in the world is picked.
 pub(crate) fn point_at(ndc_x: f64, ndc_y: f64) {
-    interaction().pointed = Some([ndc_x, ndc_y]);
-    interaction().hover = Hover::default();
+    state().pointed = Some([ndc_x, ndc_y]);
+    state().hover = Hover::default();
 }
 
 /// A gesture under way points at nothing to place.
 pub(crate) fn clear_hover_coord() {
-    interaction().hover.coord = None;
+    state().hover.coord = None;
 }
 
 enum Struck {
@@ -196,9 +196,9 @@ pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
 
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
 pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
-    let ui = interaction().tool;
-    interaction().pointed = Some([ndc_x, ndc_y]);
-    let hover = &mut interaction().hover;
+    let ui = state().tool;
+    state().pointed = Some([ndc_x, ndc_y]);
+    let hover = &mut state().hover;
     let Some(Picked { hit, .. }) = pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
         *hover = Hover::default();
         return;
@@ -250,11 +250,11 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
 /// A tap at `ndc_x`, `ndc_y` with the tool held.
 pub fn tap(ndc_x: f64, ndc_y: f64) {
     hover_at(ndc_x, ndc_y);
-    let Some(hovered) = interaction().hover.coord else {
+    let Some(hovered) = state().hover.coord else {
         return;
     };
-    let ui = interaction().tool;
-    let hover = interaction().hover;
+    let ui = state().tool;
+    let hover = state().hover;
 
     match PlacementTool::of(&ui) {
         // The slot may have filled since the last hover update.

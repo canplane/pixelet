@@ -1,10 +1,10 @@
 // pxl-kernel/domain/scene/marker/design.rs
 
-//! What a marker paints, each its own design on the one sheet: words on a
+//! What a marker paints, each its own design on the one sheet: text on a
 //! pill, a place as Carto draws it, a line said in a bubble. A design is what
 //! is painted and nothing of who shows it, so two that paint alike are one:
 //! measured, given its slot and painted once, and shown only once painted
-//! (`ready`). Which words and colors a source paints are its own
+//! (`ready`). Which text and colors a source paints are its own
 //! (`place.rs`, `pin.rs` and `line.rs`).
 
 use std::rc::Rc;
@@ -25,8 +25,8 @@ use xpute_kit::status::errno::Errno;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Design {
-    /// Words on a pill in its `fill`, in its `ink`.
-    Pill { words: Rc<str>, fill: u32, ink: u32 },
+    /// Text on a pill in its `fill`, in its `ink`.
+    Pill { text: Rc<str>, fill: u32, ink: u32 },
     /// A place as Carto draws it: its symbol (`icon`), or a dot, in its
     /// category's `fill`, and under it its name, where it is named, in its
     /// category's text color, its `ink`, wrapped at `wrap` pixels
@@ -40,7 +40,7 @@ pub enum Design {
         ink: u32,
     },
     /// A line said in the chat.
-    Bubble { words: Rc<str> },
+    Bubble { text: Rc<str> },
 }
 
 impl Design {
@@ -65,7 +65,7 @@ impl Design {
 /// its slot, none until it is asked for (`slot`).
 struct Sticker {
     size: [f64; 3],
-    /// Its words as they were laid out when sized: the host's layouts are a
+    /// Its text as it was laid out when sized: the host's layouts are a
     /// cache it may let go.
     lines: Vec<String>,
     slot: i32,
@@ -98,7 +98,7 @@ pub fn retain(designs: &FnvHashSet<Design>) -> bool {
     dropped
 }
 
-/// Whether it becomes ready (`ready`) with nothing else moving: its words
+/// Whether it becomes ready (`ready`) with nothing else moving: its text
 /// asked of the host, answered by a later turn, or its slot given and
 /// painted at render. One the sheet has no room for becomes ready only once
 /// a slot is let go (`retain`), so it asks no turn of its own.
@@ -109,7 +109,7 @@ pub fn coming(design: &Design) -> bool {
 }
 
 /// Its width, height and where it stands down from its top; none where its
-/// words could not be laid out this turn.
+/// text could not be laid out this turn.
 pub fn size(design: &Design) -> Option<[f64; 3]> {
     if let Some(b) = stickers().get(design) {
         return Some(b.size);
@@ -122,7 +122,7 @@ pub fn size(design: &Design) -> Option<[f64; 3]> {
         ))
     };
     let (size, lines) = match design {
-        Design::Pill { words, .. } => (pill_size(text_width(PILL_FONT, words)?.ceil()), Vec::new()),
+        Design::Pill { text, .. } => (pill_size(text_width(PILL_FONT, text)?.ceil()), Vec::new()),
         Design::Point {
             name: None, icon, ..
         } => (point_size(*icon, None), Vec::new()),
@@ -135,8 +135,8 @@ pub fn size(design: &Design) -> Option<[f64; 3]> {
             let (w, lines) = laid(POINT_FONT, f64::from(*wrap), name)?;
             (point_size(*icon, Some((w, lines.len()))), lines)
         }
-        Design::Bubble { words } => {
-            let (w, lines) = laid(BUBBLE_FONT, BUBBLE_TEXT_W, words)?;
+        Design::Bubble { text } => {
+            let (w, lines) = laid(BUBBLE_FONT, BUBBLE_TEXT_W, text)?;
             (bubble_size(w, lines.len()), lines)
         }
     };
@@ -152,7 +152,7 @@ pub fn size(design: &Design) -> Option<[f64; 3]> {
 }
 
 /// Whether the design is laid out and painted, so drawing it shows its
-/// words. It asks the sheet for no slot, which `slot` does.
+/// text. It asks the sheet for no slot, which `slot` does.
 pub fn ready(design: &Design) -> bool {
     size(design).is_some()
         && stickers()
@@ -169,8 +169,8 @@ pub fn slot(design: &Design) -> i32 {
             w * SHEET_SCALE,
             h * SHEET_SCALE,
             match design {
-                Design::Pill { words, fill, ink } => Paint::Pill {
-                    words: words.to_string(),
+                Design::Pill { text, fill, ink } => Paint::Pill {
+                    text: text.to_string(),
                     fill: *fill,
                     ink: *ink,
                     logical_w: w,

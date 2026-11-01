@@ -17,7 +17,7 @@ use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{active, Active};
 use crate::domain::control::camera::gesture::{linear, Anchor};
 use crate::domain::control::camera::state::{camera_state, IntentPatch};
-use crate::domain::control::cmd::{InputRect, PointerType};
+use crate::domain::control::cmd::PointerType;
 use crate::domain::control::edit::{clear_hover, clear_hover_coord};
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
@@ -55,7 +55,9 @@ struct Input {
     did_drag: bool,
     pointer_x: f64,
     pointer_y: f64,
-    rect: Option<InputRect>,
+    /// The view's width and height in CSS pixels, the world surface's layout
+    /// box (`camera_view_resize`); none before it has one.
+    size: Option<(f64, f64)>,
     last_x: f64,
     last_y: f64,
     // Total displacement from pointerdown, not per-event deltas, decides tap vs drag.
@@ -70,8 +72,8 @@ struct Input {
     drag_pending: bool,
     pending_pan_dx: f64,
     pending_pan_dy: f64,
-    pending_client_x: f64,
-    pending_client_y: f64,
+    pending_view_x: f64,
+    pending_view_y: f64,
     // Summed before one exp(), which is exact.
     pending_wheel_delta_y: Option<f64>,
 
@@ -105,7 +107,7 @@ fn input() -> &'static mut Input {
         did_drag: false,
         pointer_x: 0.0,
         pointer_y: 0.0,
-        rect: None,
+        size: None,
         last_x: 0.0,
         last_y: 0.0,
         tap_start_x: 0.0,
@@ -115,8 +117,8 @@ fn input() -> &'static mut Input {
         drag_pending: false,
         pending_pan_dx: 0.0,
         pending_pan_dy: 0.0,
-        pending_client_x: 0.0,
-        pending_client_y: 0.0,
+        pending_view_x: 0.0,
+        pending_view_y: 0.0,
         pending_wheel_delta_y: None,
         keys: [0.0; 2],
         keys_at: 0.0,
@@ -137,19 +139,23 @@ fn tilt_gain() -> f64 {
     -core::f64::consts::PI / (TILT_SWEEP_FRACTION * size()[1])
 }
 
-pub fn camera_input_rect(rect: InputRect) {
-    input().rect = Some(rect);
+/// The world surface's size in CSS pixels (SURFACE_RESIZE): what a pointer's
+/// place is read against, and the view each frame is drawn at.
+pub fn camera_view_resize(width: f64, height: f64) {
+    input().size = Some((width, height));
 }
 
 /// The view's size, the canvas's as the shell last sent it; none before it has.
 pub fn camera_view_size() -> Option<(f64, f64)> {
-    input().rect.map(|r| (r.width, r.height))
+    input().size
 }
 
-fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
-    let Some(rect) = s.rect else { return };
-    s.pointer_x = ((client_x - rect.left) / rect.width) * 2.0 - 1.0;
-    s.pointer_y = -((client_y - rect.top) / rect.height) * 2.0 + 1.0;
+fn update_pointer(s: &mut Input, view_x: f64, view_y: f64) {
+    let Some((width, height)) = s.size else {
+        return;
+    };
+    s.pointer_x = (view_x / width) * 2.0 - 1.0;
+    s.pointer_y = -(view_y / height) * 2.0 + 1.0;
 }
 
 /// A pan puts the pivot by hand, so a pending destination is canceled;
@@ -169,10 +175,10 @@ fn do_pan(dx: f64, dy: f64) {
 /// fixed rate from the drag's start. The drag locks to whichever axis
 /// dominates past AXIS_LOCK_THRESHOLD_PX: an off-center vertical drag still
 /// sweeps an angle, which read as a spin once tilt saturated.
-fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
+fn do_rotate(s: &mut Input, view_x: f64, view_y: f64) {
     if s.rotate_axis_lock == RotateAxisLock::None {
-        let total_dx = client_x - s.rotate_drag_start_x;
-        let total_dy = client_y - s.rotate_drag_start_y;
+        let total_dx = view_x - s.rotate_drag_start_x;
+        let total_dy = view_y - s.rotate_drag_start_y;
         if libm::hypot(total_dx, total_dy) < AXIS_LOCK_THRESHOLD_PX {
             return;
         }
@@ -186,19 +192,21 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
     if s.rotate_axis_lock == RotateAxisLock::Tilt {
         // tilt_lock is an experiment toggle, not a decided product change.
         if !settings_store().tilt_lock {
-            let polar = s.rotate_tilt.ask(client_y, linear(tilt_gain()));
+            let polar = s.rotate_tilt.ask(view_y, linear(tilt_gain()));
             let took = controller::set_intent(IntentPatch {
                 polar: Some(polar),
                 ..Default::default()
             });
-            s.rotate_tilt.settle(polar, took.polar, client_y);
+            s.rotate_tilt.settle(polar, took.polar, view_y);
         }
         return;
     }
 
-    let Some(rect) = s.rect else { return };
-    let dx = client_x - (rect.left + rect.width / 2.0);
-    let dyc = client_y - (rect.top + rect.height / 2.0);
+    let Some((width, height)) = s.size else {
+        return;
+    };
+    let dx = view_x - width / 2.0;
+    let dyc = view_y - height / 2.0;
     // atan2 is unstable near the screen center: drop the anchor and re-anchor later.
     if libm::hypot(dx, dyc) < MIN_ROTATE_RADIUS_PX {
         s.rotate_turn = None;
@@ -282,8 +290,8 @@ pub fn camera_pointer_down(
     pointer_type: PointerType,
     pointer_id: i32,
     button: i32,
-    client_x: f64,
-    client_y: f64,
+    view_x: f64,
+    view_y: f64,
 ) {
     let s = input();
     let camera = camera_state();
@@ -292,8 +300,8 @@ pub fn camera_pointer_down(
         s.active_pointers.insert(
             pointer_id,
             PointerPos {
-                x: client_x,
-                y: client_y,
+                x: view_x,
+                y: view_y,
             },
         );
         set_following(false);
@@ -301,11 +309,11 @@ pub fn camera_pointer_down(
             1 => {
                 s.drag_mode = DragMode::Pan;
                 s.did_drag = false;
-                s.last_x = client_x;
-                s.last_y = client_y;
-                s.tap_start_x = client_x;
-                s.tap_start_y = client_y;
-                update_pointer(s, client_x, client_y);
+                s.last_x = view_x;
+                s.last_y = view_y;
+                s.tap_start_x = view_x;
+                s.tap_start_y = view_y;
+                update_pointer(s, view_x, view_y);
             }
             2 => begin_pinch(s),
             _ => {}
@@ -319,34 +327,29 @@ pub fn camera_pointer_down(
         _ => return,
     };
     s.did_drag = false;
-    s.last_x = client_x;
-    s.last_y = client_y;
-    s.tap_start_x = client_x;
-    s.tap_start_y = client_y;
+    s.last_x = view_x;
+    s.last_y = view_y;
+    s.tap_start_x = view_x;
+    s.tap_start_y = view_y;
     if s.drag_mode == DragMode::Rotate {
         // Anchored by do_rotate: the down position may be within MIN_ROTATE_RADIUS_PX.
         s.rotate_turn = None;
         s.rotate_axis_lock = RotateAxisLock::None;
-        s.rotate_drag_start_x = client_x;
-        s.rotate_drag_start_y = client_y;
-        s.rotate_tilt = Anchor::new(camera.intent.polar, client_y);
+        s.rotate_drag_start_x = view_x;
+        s.rotate_drag_start_y = view_y;
+        s.rotate_tilt = Anchor::new(camera.intent.polar, view_y);
     }
-    update_pointer(s, client_x, client_y);
+    update_pointer(s, view_x, view_y);
     set_following(false);
 }
 
-pub fn camera_pointer_move(
-    pointer_type: PointerType,
-    pointer_id: i32,
-    client_x: f64,
-    client_y: f64,
-) {
+pub fn camera_pointer_move(pointer_type: PointerType, pointer_id: i32, view_x: f64, view_y: f64) {
     let s = input();
     if pointer_type == PointerType::Touch {
         if let Some(pt) = s.active_pointers.get_mut(&pointer_id) {
             *pt = PointerPos {
-                x: client_x,
-                y: client_y,
+                x: view_x,
+                y: view_y,
             };
         }
         if s.drag_mode == DragMode::Pinch && s.active_pointers.len() >= 2 {
@@ -354,38 +357,36 @@ pub fn camera_pointer_move(
             return;
         }
         if s.drag_mode == DragMode::Pan && s.active_pointers.len() == 1 {
-            if libm::hypot(client_x - s.tap_start_x, client_y - s.tap_start_y)
-                > TAP_DRAG_THRESHOLD_PX
-            {
+            if libm::hypot(view_x - s.tap_start_x, view_y - s.tap_start_y) > TAP_DRAG_THRESHOLD_PX {
                 s.did_drag = true;
             }
-            s.pending_pan_dx += client_x - s.last_x;
-            s.pending_pan_dy += client_y - s.last_y;
-            s.last_x = client_x;
-            s.last_y = client_y;
+            s.pending_pan_dx += view_x - s.last_x;
+            s.pending_pan_dy += view_y - s.last_y;
+            s.last_x = view_x;
+            s.last_y = view_y;
             s.drag_pending = true;
         }
         return;
     }
 
-    update_pointer(s, client_x, client_y);
+    update_pointer(s, view_x, view_y);
     if s.drag_mode == DragMode::None {
         s.hovering = true;
         s.hover_pending = true;
         return;
     }
 
-    if libm::hypot(client_x - s.tap_start_x, client_y - s.tap_start_y) > TAP_DRAG_THRESHOLD_PX {
+    if libm::hypot(view_x - s.tap_start_x, view_y - s.tap_start_y) > TAP_DRAG_THRESHOLD_PX {
         s.did_drag = true;
     }
     if s.drag_mode == DragMode::Pan {
-        s.pending_pan_dx += client_x - s.last_x;
-        s.pending_pan_dy += client_y - s.last_y;
+        s.pending_pan_dx += view_x - s.last_x;
+        s.pending_pan_dy += view_y - s.last_y;
     }
-    s.last_x = client_x;
-    s.last_y = client_y;
-    s.pending_client_x = client_x;
-    s.pending_client_y = client_y;
+    s.last_x = view_x;
+    s.last_y = view_y;
+    s.pending_view_x = view_x;
+    s.pending_view_y = view_y;
     s.drag_pending = true;
 }
 
@@ -486,7 +487,7 @@ pub fn camera_input_step() {
         match s.drag_mode {
             DragMode::Pan => do_pan(s.pending_pan_dx, s.pending_pan_dy),
             DragMode::Rotate => {
-                let (x, y) = (s.pending_client_x, s.pending_client_y);
+                let (x, y) = (s.pending_view_x, s.pending_view_y);
                 do_rotate(s, x, y);
             }
             DragMode::Pinch => update_pinch(s),

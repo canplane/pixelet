@@ -364,6 +364,8 @@ fn take_mode(want: CameraMode) -> bool {
 /// `q` (x, y, z, w) turns the camera's axes to the tracker's. The first of a
 /// run places the tracker's space so the camera stays where it is; before
 /// the camera stands anywhere there is nowhere to place it.
+/// No client sends it yet (`INPUT_XR_POSE`): it waits for an immersive mode's
+/// head pose.
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let mut turn = mat4::new();
     mat4::rot_quat(&mut turn, q);

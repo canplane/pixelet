@@ -149,7 +149,8 @@ async function open(): Promise<void> {
     pkt,
     (result) => result,
   );
-  if (booted < 0) throw new Error(`SYS_BOOT refused: ${strerror(booted)}`);
+  if (booted < 0)
+    throw new Error(`the kernel refused its boot: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
   void declare_source();
 }

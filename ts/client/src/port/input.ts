@@ -9,7 +9,6 @@ import {
   Command,
   encode_input_move,
   encode_input_pointer,
-  encode_input_rect,
   encode_input_wheel,
   PointerPhase,
   PointerType,
@@ -48,19 +47,6 @@ export function kernel_wheel(delta_y: f64): void {
 
 export function kernel_keys(x: i32, y: i32): void {
   send_input(Command.INPUT_MOVE, encode_input_move(HOST.doorbell, x, y));
-}
-
-export function kernel_rect(
-  left: f64,
-  top: f64,
-  width: f64,
-  height: f64,
-): void {
-  HOST.doorbell.send(
-    port.SHELL,
-    Command.INPUT_RECT,
-    encode_input_rect(HOST.doorbell, left, top, width, height),
-  );
 }
 
 export function kernel_open(): () => void {

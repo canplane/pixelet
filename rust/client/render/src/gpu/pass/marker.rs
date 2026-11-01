@@ -81,9 +81,9 @@ fn point(
     }
 }
 
-fn pill(p: &mut Sketch, words: &str, fill: u32, ink: u32, logical_w: f32) {
+fn pill(p: &mut Sketch, text: &str, fill: u32, ink: u32, logical_w: f32) {
     p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, fill);
-    p.text(PILL_FONT, ink, words, logical_w / 2.0, PILL_H / 2.0 + 1.0);
+    p.text(PILL_FONT, ink, text, logical_w / 2.0, PILL_H / 2.0 + 1.0);
     anchor_dot(p, logical_w);
 }
 
@@ -254,11 +254,11 @@ impl MarkerPass {
             let mut p = Sketch::default();
             match paint {
                 Paint::Pill {
-                    words,
+                    text,
                     fill,
                     ink,
                     logical_w,
-                } => pill(&mut p, words, *fill, *ink, *logical_w as f32),
+                } => pill(&mut p, text, *fill, *ink, *logical_w as f32),
                 Paint::Point {
                     lines,
                     icon,

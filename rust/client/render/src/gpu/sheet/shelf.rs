@@ -13,9 +13,9 @@ pub const NO_SLOT: i32 = -1;
 /// What a sticker paints, in logical pixels before the render scale.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Paint {
-    /// Words alone on a pill in its fill and text colors (`ink`).
+    /// Text alone on a pill in its fill and text colors (`ink`).
     Pill {
-        words: String,
+        text: String,
         fill: u32,
         ink: u32,
         logical_w: f64,
@@ -32,7 +32,7 @@ pub enum Paint {
         ink: u32,
         logical_w: f64,
     },
-    /// A speech bubble over its tail, its words a line each.
+    /// A speech bubble over its tail, its text in lines.
     Bubble { lines: Vec<String>, box_w: f64 },
 }
 

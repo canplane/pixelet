@@ -57,9 +57,8 @@ export const enum SysMinor {
   SLEEP = 0x02,
 }
 
-/** The input's: the canvas's rect, the pointer, the wheel, the held movement, a tracker's pose. */
+/** The input's: the pointer, the wheel, the held movement, a tracker's pose. */
 export const enum InputMinor {
-  RECT = 0x01,
   POINTER = 0x02,
   WHEEL = 0x03,
   MOVE = 0x06,
@@ -274,7 +273,7 @@ export const enum Command {
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
    * its events on the completion ring, drawn by the kernel. It carries the host's alone:
    * the turn's pacing, the network's credits and the clock; the view it is drawn at is the
-   * shell's (INPUT_RECT). */
+   * world surface's (SURFACE_RESIZE). */
   SURFACE_FRAME = 0x1504,
   /** The platform about to stop the process, or waking it: the page or the app hidden or
    * shown. The host rings the doorbell for it at once, since a hidden page gets no frame and
@@ -296,10 +295,8 @@ export const enum Command {
 
   // ---- the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI ----
 
-  /** The canvas's client rect, in CSS pixels, sent whenever it moves: where a pointer lands,
-   * and the view's size each frame is drawn at. */
-  INPUT_RECT = 0x1101,
-  /** A pointer event on the canvas, in client pixels. */
+  /** A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
+   * (transforms aside), as the world surface's size is (SURFACE_RESIZE). */
   INPUT_POINTER = 0x1102,
   /** The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
   EDIT_TOOL = 0x1a01,
@@ -340,7 +337,9 @@ export const enum Command {
   /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
    * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
    * first of a run is taken to be where the camera already is, so nothing moves as
-   * it begins; the camera follows the tracker from there until POSE_END. */
+   * it begins; the camera follows the tracker from there until POSE_END.
+   * Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive
+   * the camera, sent by the device app's driver. */
   INPUT_XR_POSE = 0x1109,
   /** The tracker let the camera go: back to the controller it had. */
   INPUT_XR_POSE_END = 0x110a,
@@ -683,17 +682,6 @@ export function encode_sensor_permission(
   answer: PermissionAnswer,
 ): PacketWriter {
   return to.writer(2).u32(sensor).u32(answer);
-}
-
-/** Command.INPUT_RECT's packet, written in place into `to`. */
-export function encode_input_rect(
-  to: PacketRoom,
-  left: f64,
-  top: f64,
-  width: f64,
-  height: f64,
-): PacketWriter {
-  return to.writer(4).f64(left).f64(top).f64(width).f64(height);
 }
 
 /** Command.INPUT_POINTER's packet, written in place into `to`. */

@@ -1,11 +1,10 @@
 // pxl-kernel/door/apply/input.rs
 
-//! INPUT: the input's: the canvas's rect, the pointer, the wheel, the held movement, a tracker's pose.
+//! INPUT: the input's: the pointer, the wheel, the held movement, a tracker's pose.
 
 use super::State;
 use super::{ask_turn, given, refuse_unless};
 use crate::domain::control::camera::controller;
-use crate::domain::control::camera::input::camera_input_rect;
 use crate::domain::control::camera::input::camera_keys;
 use crate::domain::control::camera::input::camera_pointer_down;
 use crate::domain::control::camera::input::camera_pointer_move;
@@ -23,12 +22,6 @@ pub(super) fn apply(
     pkt: &Option<&[u8]>,
 ) -> Result<Option<i32>, MarshalError> {
     match cmd {
-        Command::INPUT_RECT => {
-            let p = abi::InputRect::read(given(pkt)?)?;
-            refuse_unless(p.width >= 0.0 && p.height >= 0.0, Errno::EINVAL)?;
-            camera_input_rect(p);
-            Ok(Some(0))
-        }
         Command::INPUT_POINTER => {
             let p = abi::InputPointer::read(given(pkt)?)?;
             match p.phase {

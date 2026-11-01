@@ -64,7 +64,7 @@ fn pill(text: &str) -> Design {
         shown.push('…');
     }
     Design::Pill {
-        words: shown.into(),
+        text: shown.into(),
         fill: PILL_FILL,
         ink: PILL_INK,
     }
@@ -74,7 +74,7 @@ fn pill(text: &str) -> Design {
 /// count's colors.
 fn cnt(n: usize) -> Design {
     Design::Pill {
-        words: n.to_string().into(),
+        text: n.to_string().into(),
         fill: CNT_FILL,
         ink: CNT_INK,
     }

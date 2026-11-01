@@ -8,7 +8,6 @@ import { bracket, type InputDriver } from "@/bracket.tsx";
 import {
   kernel_frame,
   kernel_open,
-  kernel_rect,
   kernel_wheel,
   POINTER_KIND,
   POINTER_PHASE,
@@ -42,7 +41,6 @@ const WORLD = surface_driver(surface_role.WORLD);
  * to the kernel, and a moved box's turn to the strobe. */
 const INPUT: InputDriver = {
   open: kernel_open,
-  rect: kernel_rect,
   pointer: (phase, kind, id, button, x, y) =>
     worldPointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
   wheel: kernel_wheel,

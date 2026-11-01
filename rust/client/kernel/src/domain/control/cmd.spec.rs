@@ -99,11 +99,10 @@ impl SysMinor {
     }
 }
 
-/// The input's: the canvas's rect, the pointer, the wheel, the held movement, a tracker's pose.
+/// The input's: the pointer, the wheel, the held movement, a tracker's pose.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InputMinor {
-    RECT = 0x01,
     POINTER = 0x02,
     WHEEL = 0x03,
     MOVE = 0x06,
@@ -112,8 +111,7 @@ pub enum InputMinor {
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 6] = [
-        InputMinor::RECT,
+    pub const ALL: [InputMinor; 5] = [
         InputMinor::POINTER,
         InputMinor::WHEEL,
         InputMinor::MOVE,
@@ -631,7 +629,7 @@ pub enum Command {
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
     /// its events on the completion ring, drawn by the kernel. It carries the host's alone:
     /// the turn's pacing, the network's credits and the clock; the view it is drawn at is the
-    /// shell's (INPUT_RECT).
+    /// world surface's (SURFACE_RESIZE).
     SURFACE_FRAME = 0x1504,
     /// The platform about to stop the process, or waking it: the page or the app hidden or
     /// shown. The host rings the doorbell for it at once, since a hidden page gets no frame and
@@ -652,10 +650,8 @@ pub enum Command {
     GPU_READY = 0x1401,
 
     // ---- the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI ----
-    /// The canvas's client rect, in CSS pixels, sent whenever it moves: where a pointer lands,
-    /// and the view's size each frame is drawn at.
-    INPUT_RECT = 0x1101,
-    /// A pointer event on the canvas, in client pixels.
+    /// A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
+    /// (transforms aside), as the world surface's size is (SURFACE_RESIZE).
     INPUT_POINTER = 0x1102,
     /// The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
     EDIT_TOOL = 0x1a01,
@@ -697,6 +693,8 @@ pub enum Command {
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
     /// first of a run is taken to be where the camera already is, so nothing moves as
     /// it begins; the camera follows the tracker from there until POSE_END.
+    /// Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive
+    /// the camera, sent by the device app's driver.
     INPUT_XR_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
     INPUT_XR_POSE_END = 0x110a,
@@ -716,7 +714,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 38] = [
+    pub const ALL: [Command; 37] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::SENSOR_POS,
@@ -729,7 +727,6 @@ impl Command {
         Command::FS_TRUNCATED,
         Command::SENSOR_PERMISSION,
         Command::GPU_READY,
-        Command::INPUT_RECT,
         Command::INPUT_POINTER,
         Command::EDIT_TOOL,
         Command::EDIT_MARKER_TEXT,
@@ -1229,27 +1226,6 @@ impl SensorPermission {
             sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             answer: PermissionAnswer::of(integer::<u32>(f.at(1)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
-        })
-    }
-}
-
-/// Command::INPUT_RECT's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct InputRect {
-    pub left: f64,
-    pub top: f64,
-    pub width: f64,
-    pub height: f64,
-}
-
-impl InputRect {
-    pub fn read(pkt: &[u8]) -> Result<InputRect, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputRect {
-            left: finite(f.at(0)?.get_number()?)?,
-            top: finite(f.at(1)?.get_number()?)?,
-            width: finite(f.at(2)?.get_number()?)?,
-            height: finite(f.at(3)?.get_number()?)?,
         })
     }
 }

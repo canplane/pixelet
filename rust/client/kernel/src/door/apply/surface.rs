@@ -4,6 +4,7 @@
 
 use super::State;
 use super::{given, or_refuse, refuse_unless};
+use crate::domain::control::camera::input::camera_view_resize;
 use crate::domain::control::cmd::{self as abi, Command};
 use crate::domain::control::sensor;
 use crate::domain::view::frame::resolution;
@@ -69,6 +70,13 @@ pub(super) fn apply(
                 surface::surface_resize(p.surface, p.width, p.height, p.device_pixel_ratio, ratio),
                 Errno::EBADF,
             )?;
+            // The world's view is its surface's layout box, in CSS pixels.
+            if role == surface_role::WORLD {
+                camera_view_resize(
+                    f64::from(p.width) / p.device_pixel_ratio,
+                    f64::from(p.height) / p.device_pixel_ratio,
+                );
+            }
             request_world_tick();
             Ok(Some(0))
         }

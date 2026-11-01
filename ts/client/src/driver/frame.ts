@@ -2,7 +2,7 @@
 
 /** What each turn the strobe grants submits before it rings: the host's alone,
  * the turn's pacing, whether it is interactive, the reads allowed out and the
- * clock. The view it is drawn at is the shell's (port/input.ts `kernel_rect`).
+ * clock. The view it is drawn at is the world surface's (SURFACE_RESIZE).
  * The strobe runs only while the world's view is open, so every turn it grants
  * is one the view draws. */
 
