@@ -272,20 +272,22 @@ struct Climb {
 /// change touched what it read (`Memo`).
 static CLIMB_PITCH: Global<Memo<Climb, f64>> = Global::new();
 
-/// `at` climbed, and whether the climb failed: steepened, the eye is still in
-/// something solid it may not stand in. It may stand in the first cell of a
-/// wall or a roof (`embedded`) only where it is `cramped`, with no room even
-/// at the orbit's nearest; with room there, at any distance it climbs out of
-/// a wall rather than into it. Over ground alone, straight down clears it;
-/// what does not is a roof over the pivot, a tunnel's or a cave's, and there
-/// the pitch is the one asked, for a zoom in to go under it on that line
-/// (`dive`).
+/// `at` climbed, and whether it is under a roof over the pivot: steepened as
+/// the floor under the eye asks (`steepened`), the pitch kept however far
+/// that got; failed only where even straight down the eye at `at`'s distance
+/// is in something solid it may not stand in, a tunnel's roof or a cave's,
+/// and there the pitch is the one asked, for a zoom in to go under it on
+/// that line (`dive`). Ground alone never roofs the pivot. The eye may stand
+/// in the first cell of a wall or a roof (`embedded`) only where it is
+/// `cramped`, with no room even at the orbit's nearest; with room there, at
+/// any distance it climbs out of a wall rather than into it.
 fn climb_pose(at: ViewPose, access: &World) -> (ViewPose, bool) {
     let cramped = cramped(&at, access);
+    let stands = |p: &ViewPose| !in_solid(p, access) || (cramped && embedded(&eye(p).1, access));
     let climbed = steepened(at, access, cramped);
-    match in_solid(&climbed, access) && !(cramped && embedded(&eye(&climbed).1, access)) {
-        true => (at, true),
-        false => (climbed, false),
+    match stands(&climbed) || stands(&ViewPose { polar: 0.0, ..at }) {
+        true => (climbed, false),
+        false => (at, true),
     }
 }
 

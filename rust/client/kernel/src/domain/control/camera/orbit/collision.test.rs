@@ -317,3 +317,37 @@ fn climb_rises_under_eye() {
     let rise = climb_rise(&at, &access, false).expect("a rise under the eye");
     assert!(rise > 0.0, "{rise}");
 }
+
+/// Ground that two passes do not climb out of is no roof: the pitch climbed
+/// is kept, not the one asked. Level with the pivot, 40 out, the eye in
+/// ground that rises a cell for each cell toward the pivot: each pass's
+/// steepening draws the eye in over higher ground, and two do not clear it,
+/// yet straight down does.
+#[test]
+fn slope_keeps_pitch_climbed() {
+    let _g = serial();
+    let (tile_cache, mut store, pivot) = roofed(None);
+    let red = cube_id(Cube::Object(cube::Object::red));
+    // From 20 cells east to 40, a column 60 less its distance high.
+    for dx in 20..=40 {
+        for z in 0..60 - dx {
+            write(
+                &mut store,
+                [pivot[0] + f64::from(dx), pivot[1] - 0.5, 5.0 + f64::from(z)],
+                OBJECT_COARSEST,
+                red,
+            );
+        }
+    }
+    let access = World::new(&tile_cache, &store);
+    let at = ViewPose {
+        pivot,
+        dist: 40.0,
+        polar: core::f64::consts::FRAC_PI_2,
+        azimuth: -core::f64::consts::FRAC_PI_2,
+    };
+    assert!(in_solid(&at, &access));
+    let (climbed, failed) = climb_pose(at, &access);
+    assert!(!failed, "{climbed:?}");
+    assert!(climbed.polar < at.polar, "{climbed:?}");
+}
