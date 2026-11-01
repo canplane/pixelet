@@ -23,12 +23,13 @@ Nothing now.
 
 ## P2
 
-- **The stencil and the early depth test on the devices.** Answered from
-  the code and the vendors' records (the minutes' "Open"); left to a device
-  in hand: the iPhone's hidden-surface removal for the boxes and the
-  impostors, which discard and write depth, and what a given Android
-  driver offers (`Device.depth32float_stencil8`), taken with the device
-  builds.
+- **The stencil and the early depth test on an Android phone.** Answered
+  from the code and the vendors' records (the minutes' "Open"); the Apple
+  GPU's hidden-surface removal for the boxes and the impostors, which
+  discard and write depth, is the one every measurement here ran on (this
+  Mac's Chrome on Metal, the iPhone's GPU family). Left to a phone in hand:
+  what its driver offers (`Device.depth32float_stencil8`), asked of the
+  adapter in its Chrome.
 
 ## Parked, with the reason on file
 
