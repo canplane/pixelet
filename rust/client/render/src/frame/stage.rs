@@ -37,9 +37,8 @@ pub mod STAGE_AT {
     pub const CORNER_AO: usize = SCREEN_AO + 1;
     /// How much of the clouds shows, none to all.
     pub const CLOUDS: usize = CORNER_AO + 1;
-    /// How far from the eye the sun's shadows are cast, in units: as far as
-    /// the camera grid asks the ground's leaf cells or finer, where the
-    /// casters are drawn whole; none where the shadows are off.
+    /// Whether the shadows are cast, 1, or off, 0: as far as the eye draws,
+    /// the map's levels as many as that takes (gpu/shadow.rs `levels_for`).
     pub const SHADOWS: usize = CLOUDS + 1;
 }
 

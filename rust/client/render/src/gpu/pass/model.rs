@@ -20,10 +20,11 @@ fn frame_group(
     g: &Gpu,
     layout: u32,
     frame: u32,
-    shadow: [Entry; 2],
+    shadow: [Entry; 3],
     air: [Entry; AIR_ENTRIES],
 ) -> u32 {
-    let mut e = vec![buf_entry(0, frame), shadow[0], shadow[1]];
+    let mut e = vec![buf_entry(0, frame)];
+    e.extend(shadow);
     e.extend(air);
     g.bind_group(layout, &e)
 }
@@ -110,7 +111,7 @@ impl FrameGroups {
         g: &Gpu,
         layout: u32,
         frame_buf: u32,
-        shadow: [Entry; 2],
+        shadow: [Entry; 3],
         air: [Entry; AIR_ENTRIES],
     ) -> FrameGroups {
         FrameGroups {

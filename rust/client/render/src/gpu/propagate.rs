@@ -23,7 +23,8 @@
 //! the GPU keeps (`Tiles::marks_box`).
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
-use pxl_spec_core::param::light;
+use pxl_spec_core::light;
+use pxl_spec_core::param::light as light_param;
 
 use crate::frame::shader::floor::MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP;
 use crate::frame::shader::part::{SHADER_SCREEN_BOUND, SHADER_SCREEN_PROPAGATE};
@@ -60,10 +61,13 @@ const UNIFORM_FLOATS: usize = 36;
 
 pub struct Propagate {
     pipeline: Pipeline,
-    uniform: u32,
-    /// Its group and what it was made over, made again where one is another.
-    group: u32,
-    bindings: [u32; 7],
+    /// A level's of the light's map each (pxl-spec-core `light::LEVELS`):
+    /// its uniform, its group and what that was made over, made again where
+    /// one is another. A pixel is taken into every level whose tiles changed,
+    /// read there or not, a tile too many at worst.
+    uniform: Vec<u32>,
+    group: Vec<u32>,
+    bindings: Vec<[u32; 7]>,
     /// The depth's bound (screen_bound.wgsl `bounds`), two floats a square,
     /// the squares across and down it was made for, and its pass and group,
     /// made again where what it binds is another.
@@ -78,12 +82,16 @@ impl Propagate {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Propagate {
         Propagate {
             pipeline: pipelines.build_compute(g, SHADER_SCREEN_PROPAGATE, &GROUP),
-            uniform: g.buf(
-                word_bytes(UNIFORM_FLOATS),
-                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-            ),
-            group: 0,
-            bindings: [0; 7],
+            uniform: (0..light::LEVELS)
+                .map(|_| {
+                    g.buf(
+                        word_bytes(UNIFORM_FLOATS),
+                        buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+                    )
+                })
+                .collect(),
+            group: vec![0; light::LEVELS as usize],
+            bindings: vec![[0; 7]; light::LEVELS as usize],
             bounds: 0,
             bounds_size: [0; 2],
             bounds_pipeline: pipelines.build_compute(g, SHADER_SCREEN_BOUND, &BOUNDS_GROUP),
@@ -93,17 +101,22 @@ impl Propagate {
     }
 
     pub fn release(self) {
-        for id in [self.uniform, self.group, self.bounds, self.bounds_group] {
+        for id in self.uniform.into_iter().chain(self.group) {
+            release(id);
+        }
+        for id in [self.bounds, self.bounds_group] {
             release(id);
         }
     }
 
-    /// This frame's views: the eye's view-projection `view_proj` and the
-    /// light's `light_view_proj`, both off units from the eye; a receiver's
-    /// taps `spread` texels each way of a map `side` texels a side.
+    /// This frame's views for level `l`: the eye's view-projection
+    /// `view_proj` and the level's `light_view_proj`, both off units from
+    /// the eye; a receiver's taps `spread` texels each way of a map `side`
+    /// texels a side.
     pub fn prepare(
         &self,
         g: &Gpu,
+        l: u32,
         view_proj: &Mat4,
         light_view_proj: &Mat4,
         spread: f32,
@@ -120,7 +133,7 @@ impl Propagate {
         }
         u[32] = spread;
         u[33] = side as f32;
-        g.write_buf(self.uniform, 0, bytes(&u));
+        g.write_buf(self.uniform[l as usize], 0, bytes(&u));
     }
 
     /// The depth's bound set in the tiles the world's pass drew this frame,
@@ -166,21 +179,29 @@ impl Propagate {
         g.end(pass);
     }
 
-    /// The map's `light` tiles that changed this frame propagated to the
-    /// `screen`'s, over the depth's bound and, where a square's spans past a
-    /// few tiles, the world's depth `depth`, both as the last frame left
-    /// them, off the tiles the frame's marks cover (`Tiles::marks_box`).
-    pub fn dispatch(&mut self, ctx: &mut RenderContext, depth: u32, light: &Tiles, screen: &Tiles) {
+    /// Level `level`'s `light` tiles that changed this frame propagated to
+    /// the `screen`'s, over the depth's bound and, where a square's spans
+    /// past a few tiles, the world's depth `depth`, both as the last frame
+    /// left them, off the tiles the frame's marks cover (`Tiles::marks_box`).
+    pub fn dispatch(
+        &mut self,
+        ctx: &mut RenderContext,
+        level: u32,
+        depth: u32,
+        light: &Tiles,
+        screen: &Tiles,
+    ) {
         let g = ctx.g;
+        let k = level as usize;
         let (l, s) = (light.this_frame(), screen.this_frame());
         let bindings = [depth, l.0, l.1, s.0, s.1, self.bounds, light.marks_box()];
-        if bindings != self.bindings {
-            release(self.group);
-            self.group = g.bind_group(
+        if bindings != self.bindings[k] {
+            release(self.group[k]);
+            self.group[k] = g.bind_group(
                 self.pipeline.layouts[0],
                 &[
                     view_entry(0, depth),
-                    buf_entry(1, self.uniform),
+                    buf_entry(1, self.uniform[k]),
                     buf_entry(2, l.0),
                     buf_entry(3, l.1),
                     buf_entry(4, s.0),
@@ -189,11 +210,11 @@ impl Propagate {
                     buf_entry(7, light.marks_box()),
                 ],
             );
-            self.bindings = bindings;
+            self.bindings[k] = bindings;
         }
         let [across, down] = screen.squares();
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
-        g.set_bind_group(pass, 0, self.group, &[]);
+        g.set_bind_group(pass, 0, self.group[k], &[]);
         g.set_pipeline(pass, self.pipeline.id);
         g.dispatch(pass, across, down, 1);
         g.end(pass);
@@ -204,5 +225,5 @@ impl Propagate {
 /// the normal's offset, with `margin` texels of room (shadow.wgsl
 /// `shadow_visibility`).
 pub fn spread(margin: f32) -> f32 {
-    light::SPREAD + margin
+    light_param::SPREAD + margin
 }

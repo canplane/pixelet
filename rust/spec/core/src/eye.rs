@@ -38,23 +38,13 @@ pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// buffer read it here, none works it out again.
 pub const GRID: usize = HIDE + CUT_WORDS;
 pub const GRID_WORDS: usize = beam::GRID_WORDS;
-/// The light's cast into the shadow map, its frame's constants off the light
-/// box (pxl-spec-core `light::Light`, its `words`): texel (0, 0)'s ray's start
-/// and every ray's reach, the step to the next texel across and down, the
-/// rays' direction, and a hit's push in depth by its face's axis, a vec4
-/// each, f32 bits, the last four's fourth words the clipmap's corners
-/// (`light::CORNER`, `light::KEPT`). All zero where no shadow is cast. The renderer writes
-/// them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the kernel
-/// leaves them zero.
-pub const LIGHT: usize = GRID + GRID_WORDS;
-pub const LIGHT_WORDS: usize = 20;
 /// Where each pixel's ray goes through it this frame, its offset from the
 /// pixel's middle in drawn pixels, X right and Y down, f32 bits; then two
 /// words unused, as the eye is laid out in fours. The renderer's to write;
 /// the kernel leaves it zero.
 /// What the beams, cells and samples cast is the camera grid's and reads none
 /// of it.
-pub const JITTER: usize = LIGHT + LIGHT_WORDS;
+pub const JITTER: usize = GRID + GRID_WORDS;
 pub(crate) const JITTER_WORDS: usize = 4;
 /// Every word, the jitter last.
 pub const WORDS: usize = JITTER + JITTER_WORDS;
@@ -67,7 +57,6 @@ const _: () = assert!(
         && CARVE == RANGE + 2
         && HIDE == CARVE + CUT_WORDS
         && GRID.is_multiple_of(4)
-        && LIGHT.is_multiple_of(4)
         && JITTER.is_multiple_of(4)
 );
 

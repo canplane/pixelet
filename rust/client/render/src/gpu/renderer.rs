@@ -11,7 +11,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec_core::clipmap::{FILL_WORDS, HAND_CAP};
 use pxl_spec_core::eye;
 use pxl_spec_core::generation::GROUPS;
-use pxl_spec_core::light::TILE as LIGHT_TILE;
+use pxl_spec_core::light::{self, TILE as LIGHT_TILE};
 use pxl_spec_core::ray;
 use pxl_spec_core::way;
 use xpute_guest::abi::handle::handle_slot;
@@ -29,9 +29,9 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, JITTER, LIGHT_VIEW_PROJ,
-    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_RADIUS_NDC, SHADOW_STRENGTH,
-    SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
+    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, JITTER, LIGHT_LEVELS,
+    LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_LEVELS, SHADOW_MOON,
+    SHADOW_RADIUS_NDC, SHADOW_STRENGTH, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
     clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
@@ -64,7 +64,7 @@ use crate::gpu::pass::skinned_mesh::SkinnedMeshPass;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::propagate::{self, Propagate};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::{RayCounts, RaysPass};
+use crate::gpu::ray::{CastLevel, RayCounts, RaysPass};
 use crate::gpu::read::Read;
 use crate::gpu::resolve::Resolve;
 use crate::gpu::shadow::{self, Shadow};
@@ -528,10 +528,10 @@ pub struct Renderer {
     gate: Pipeline,
     gate_group: u32,
     gate_bound: (u32, u32),
-    /// The light's map's tiles, the light's cast's tiles' side (pxl-spec-core
-    /// `light::TILE`), claimed the frame they changed alone, as the
-    /// map gathers nothing (gpu/tiles.rs).
-    light_tiles: Tiles,
+    /// The light's map's tiles, a level's each, the light's cast's tiles'
+    /// side (pxl-spec-core `light::TILE`), claimed the frame they changed
+    /// alone, as the map gathers nothing (gpu/tiles.rs).
+    light_tiles: Vec<Tiles>,
     /// The uploads the draws that mark read, as the last frame drew them
     /// (gpu/pass/mark.rs).
     last_frame_uploads: UploadCopies,
@@ -546,9 +546,10 @@ pub struct Renderer {
     /// what they were made over.
     mark_frame_groups: [u32; 2],
     mark_frame_bound: [u32; 5],
-    /// The same from the light, over the light's frame and the map's tiles.
-    light_mark_group: u32,
-    light_mark_bound: [u32; 4],
+    /// The same from the light, a level's each, over its frame and its
+    /// tiles.
+    light_mark_group: Vec<u32>,
+    light_mark_bound: Vec<[u32; 4]>,
     /// The eye's view-projection as `prepare` took it, which the sheets are
     /// seen through (`sheets_mark`) and the propagation reads.
     view_proj: Mat4,
@@ -626,7 +627,9 @@ impl Renderer {
             gate: pipelines.build_gate(g, PIPELINE_SCREEN_GATE),
             gate_group: 0,
             gate_bound: (0, 0),
-            light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1),
+            light_tiles: (0..light::LEVELS)
+                .map(|_| Tiles::new(g, &mut pipelines, LIGHT_TILE, 1))
+                .collect(),
             last_frame_uploads: UploadCopies::default(),
             frame_was: [0.0; FRAME_FLOATS],
             frame_was_buf: g.buf(
@@ -635,8 +638,8 @@ impl Renderer {
             ),
             mark_frame_groups: [0; 2],
             mark_frame_bound: [0; 5],
-            light_mark_group: 0,
-            light_mark_bound: [0; 4],
+            light_mark_group: vec![0; light::LEVELS as usize],
+            light_mark_bound: vec![[0; 4]; light::LEVELS as usize],
             view_proj: mat4::new(),
             ao_read: Read::default(),
             pipelines,
@@ -672,11 +675,12 @@ impl Renderer {
     /// (paint.wgsl): the frame, the sun's shadow, the texture pack, the occlusion
     /// and the air.
     fn lit_entries(&self, frame: u32) -> Vec<Entry> {
-        let [map, sampler] = self.shadow.entries(1);
+        let [map, sampler, levels] = self.shadow.entries(1);
         let mut e = vec![
             buf_entry(0, frame),
             map,
             sampler,
+            levels,
             view_entry(4, self.pack.view),
             buf_entry(5, self.pack.table),
             sampler_entry(6, self.pack.sampler),
@@ -765,12 +769,12 @@ impl Renderer {
             (eye_world[1] / MERCATOR_RADIUS_U) as f32,
             MERCATOR_RADIUS_U as f32,
         ]);
-        // The shadow map, as wide as the casters reach, cast from the sun
-        // where it still reaches the land, else from the moon where it does;
-        // none where the shadows are off, or where neither reaches it, as
-        // only their direct light reads the map (atmos_light.wgsl
+        // The shadow map, its levels as far as the eye draws, cast from the
+        // sun where it still reaches the land, else from the moon where it
+        // does; none where the shadows are off, or where neither reaches it,
+        // as only their direct light reads the map (atmos_light.wgsl
         // `surface_light_in`) and a shadow would show nowhere.
-        let far = s[STAGE_AT::SHADOWS];
+        let on = s[STAGE_AT::SHADOWS] > 0.0;
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 3]);
         let low = least_height(f64::from(env[ENV_AIR]));
         let light = if f64::from(sun[2]) > low {
@@ -780,25 +784,25 @@ impl Renderer {
         } else {
             None
         };
-        let light = light.filter(|_| far > 0.0);
+        let light = light.filter(|_| on);
         self.shadows = light.is_some();
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_MOON] = if light.is_some_and(|l| l.1) { 1.0 } else { 0.0 };
         if let Some((dir, _)) = light {
-            // Up to a power of two, so the snap grid and the texel move only in steps;
-            // the shadows fade by the casters' own reach.
-            let half_width = libm::exp2(libm::ceil(libm::log2(far)));
-            let shadow_radius_ndc = (far / half_width) as f32;
-            self.shadow.aim(
-                dir,
-                eye,
-                half_width,
-                shadow_radius_ndc,
-                eye_world.map(|v| -v),
-            );
-            put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
-            u[SHADOW_TEXEL] = self.shadow.texel as f32;
-            u[SHADOW_RADIUS_NDC] = shadow_radius_ndc;
+            self.shadow
+                .aim(dir, eye, f64::from(eye_far), eye_world.map(|v| -v));
+            put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.levels[0].light_view_proj);
+            u[SHADOW_RADIUS_NDC] = shadow::READ_SHARE;
+            u[SHADOW_LEVELS] = self.shadow.level_cnt as f32;
+            for l in 0..light::LEVELS {
+                let at = LIGHT_LEVELS + 4 * l as usize;
+                let t = if l < self.shadow.level_cnt {
+                    self.shadow.translation(l)
+                } else {
+                    [0.0; 4]
+                };
+                u[at..at + 4].copy_from_slice(&t);
+            }
         }
 
         self.atmosphere.prepare(g, env, eye_far);
@@ -1005,16 +1009,6 @@ impl Renderer {
             input.environment,
             far,
         );
-        // The light box the world is cast from, as the map is aimed; none
-        // where no shadow is cast.
-        if let Some(c) = cast.as_mut() {
-            let sun = if self.shadows {
-                self.shadow.light_words
-            } else {
-                [0; eye::LIGHT_WORDS]
-            };
-            c.eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&sun);
-        }
         // Where each pixel's ray goes through it this frame, the cast's and
         // what is drawn over the world alike (gpu/resolve.rs), in clip units
         // in the frame's words.
@@ -1124,16 +1118,27 @@ impl Renderer {
         let [across, down] = self.resolve.tiles.squares();
         self.screen
             .set_tiles(self.resolve.tiles.this_frame(), drawn, across * down);
+        // The levels of the map the world is cast into, as the map is aimed;
+        // none where no shadow is cast.
+        let level_cnt = if self.shadows {
+            self.shadow.level_cnt
+        } else {
+            0
+        };
+        let light_map: Vec<CastLevel> = (0..level_cnt)
+            .map(|l| CastLevel {
+                world: self.shadow.levels[l as usize].world,
+                generation: self.shadow.levels[l as usize].generation,
+                starts: self.shadow.starts(l),
+                words: self.shadow.levels[l as usize].light_words,
+            })
+            .collect();
         self.screen.prepare(
             g,
             cast,
             &meshes,
             (world.rays_view, [world.width, world.height]),
-            (
-                self.shadow.world,
-                self.shadow.generation,
-                self.shadow.starts(),
-            ),
+            &light_map,
             partial,
         );
         // The frame draws the decor generated, so it reads whether that is on:
@@ -1235,9 +1240,14 @@ impl Renderer {
         // by no frame while the map's `claimed_for` is 1 (`Tiles::mark`).
         let cast = self.screen.kind != FrameKind::plain;
         let map_gated = gated && cast && !self.screen.light_casts() && g.gates();
-        self.light_tiles.size(g, [shadow::SIZE; 2]);
-        self.light_tiles
-            .mark(g, [shadow::SIZE; 2], (map_gated, false), None);
+        for (l, tiles) in self.light_tiles[..level_cnt as usize]
+            .iter_mut()
+            .enumerate()
+        {
+            let n = shadow::size(l as u32);
+            tiles.size(g, [n; 2]);
+            tiles.mark(g, [n; 2], (map_gated, false), None);
+        }
         let map_drawn = self.shadows && (!map_gated || casters_marking);
         // Where the map's tiles changed through its gate, the screen's tiles
         // whose pixels read them are propagated to on the GPU
@@ -1247,9 +1257,11 @@ impl Renderer {
         let propagating = map_drawn && map_gated;
         if propagating {
             let spread = propagate::spread(SHADOW_MARGIN as f32);
-            let light = &self.shadow.light_view_proj;
-            self.propagate
-                .prepare(g, &self.view_proj, light, spread, shadow::SIZE);
+            for l in 0..level_cnt {
+                let light = &self.shadow.levels[l as usize].light_view_proj;
+                self.propagate
+                    .prepare(g, l, &self.view_proj, light, spread, shadow::size(l));
+            }
         }
         // The tiles marked by what moved where only the listed draws that
         // mark did, however much of the screen they and the tiles still
@@ -1272,7 +1284,9 @@ impl Renderer {
         // dropped leaves them as they were, and the next is drawn whole.
         self.resolve.tiles.dispatch_marks(&mut ctx);
         if map_drawn {
-            self.light_tiles.dispatch_marks(&mut ctx);
+            for tiles in &mut self.light_tiles[..level_cnt as usize] {
+                tiles.dispatch_marks(&mut ctx);
+            }
         }
         if screen_marking {
             // A draw as it is marked by this frame's words, as it was by the
@@ -1326,47 +1340,55 @@ impl Renderer {
         // the map's tiles the casters' shadows change, their words set by
         // their drawn selves, which the propagation reads.
         if propagating {
-            let (light_frame, map) = self.shadow.frame_and_map();
-            let tiles = &self.light_tiles;
-            let (words, uniform) = tiles.this_frame();
-            let bound = [light_frame, words, uniform, tiles.marks_box()];
-            if bound != self.light_mark_bound {
-                release(self.light_mark_group);
-                self.light_mark_group = g.bind_group(
-                    self.skinned_mesh.mark_layout(),
-                    &[
-                        buf_entry(0, bound[0]),
-                        buf_entry(30, bound[1]),
-                        buf_entry(31, bound[2]),
-                        buf_entry(32, bound[3]),
-                    ],
-                );
-                self.light_mark_bound = bound;
+            for l in 0..level_cnt {
+                let k = l as usize;
+                let (light_frame, map) = self.shadow.frame_and_map(l);
+                let tiles = &self.light_tiles[k];
+                let (words, uniform) = tiles.this_frame();
+                let bound = [light_frame, words, uniform, tiles.marks_box()];
+                if bound != self.light_mark_bound[k] {
+                    release(self.light_mark_group[k]);
+                    self.light_mark_group[k] = g.bind_group(
+                        self.skinned_mesh.mark_layout(),
+                        &[
+                            buf_entry(0, bound[0]),
+                            buf_entry(30, bound[1]),
+                            buf_entry(31, bound[2]),
+                            buf_entry(32, bound[3]),
+                        ],
+                    );
+                    self.light_mark_bound[k] = bound;
+                }
+                let desc = pass_desc(
+                    0,
+                    Load::Clear,
+                    map,
+                    Load::ReadOnly,
+                    1.0,
+                    ctx.stamp(GpuSpanName::mark).pass(),
+                )
+                .load_stencil();
+                let pass = g.pass(ctx.encoder, &desc);
+                let mut pass = TrackedRenderPass::new(g, pass);
+                // The light's frame has no jitter, and stands in a frame whose
+                // map is drawn through its gate: as a draw is and as it was, one.
+                let frames = [self.light_mark_group[k]; 2];
+                self.skinned_mesh.draw_marks(&mut pass, frames, b);
+                self.decor.draw_marks(&mut pass, frames, b, true);
+                pass.end();
+                // The box they cover counted into the gate's draw.
+                self.light_tiles[k].dispatch_box_args(&mut ctx);
             }
-            let desc = pass_desc(
-                0,
-                Load::Clear,
-                map,
-                Load::ReadOnly,
-                1.0,
-                ctx.stamp(GpuSpanName::mark).pass(),
-            )
-            .load_stencil();
-            let pass = g.pass(ctx.encoder, &desc);
-            let mut pass = TrackedRenderPass::new(g, pass);
-            // The light's frame has no jitter, and stands in a frame whose
-            // map is drawn through its gate: as a draw is and as it was, one.
-            let frames = [self.light_mark_group; 2];
-            self.skinned_mesh.draw_marks(&mut pass, frames, b);
-            self.decor.draw_marks(&mut pass, frames, b, true);
-            pass.end();
-            // The box they cover counted into the gate's draw.
-            self.light_tiles.dispatch_box_args(&mut ctx);
-        }
-        if propagating {
             let depth = world.depth_only_view;
-            self.propagate
-                .dispatch(&mut ctx, depth, &self.light_tiles, &self.resolve.tiles);
+            for l in 0..level_cnt {
+                self.propagate.dispatch(
+                    &mut ctx,
+                    l,
+                    depth,
+                    &self.light_tiles[l as usize],
+                    &self.resolve.tiles,
+                );
+            }
         }
         self.screen.dispatch(&mut ctx);
         // The shadow map: the world's depth from the sun, where the rays hold
@@ -1374,20 +1396,27 @@ impl Renderer {
         // it; through its gate where `map_gated`, its stencil numbered as the
         // world's pass's.
         if map_drawn {
-            let tiles = &mut self.light_tiles;
-            let mut pass = self.shadow.begin(&mut ctx, cast, tiles, map_gated);
-            let light = self.shadow.light_group;
-            self.decor
-                .draw_generated(&mut pass, self.screen.generated(), b, Stage::Depth, light);
-            self.decor.draw(&mut pass, &draws, b, Stage::Depth, light);
-            self.skinned_mesh.draw(
-                &mut pass,
-                draws.of(PIPELINE_SKINNED_MESH),
-                b,
-                Stage::Depth,
-                light,
-            );
-            pass.end();
+            for l in 0..level_cnt {
+                let tiles = &mut self.light_tiles[l as usize];
+                let mut pass = self.shadow.begin(&mut ctx, l, cast, tiles, map_gated);
+                let light = self.shadow.levels[l as usize].light_group;
+                self.decor.draw_generated(
+                    &mut pass,
+                    self.screen.generated(),
+                    b,
+                    Stage::Depth,
+                    light,
+                );
+                self.decor.draw(&mut pass, &draws, b, Stage::Depth, light);
+                self.skinned_mesh.draw(
+                    &mut pass,
+                    draws.of(PIPELINE_SKINNED_MESH),
+                    b,
+                    Stage::Depth,
+                    light,
+                );
+                pass.end();
+            }
         }
         let canvas_view = g.cur(world.handle);
         // The occlusion, a field over the screen as the light's map is over
@@ -1595,7 +1624,9 @@ impl Renderer {
             // The stencil holds what the last drawn frame left: the next
             // gated frame clears it.
             self.resolve.tiles.on_dropped();
-            self.light_tiles.on_dropped();
+            for tiles in &mut self.light_tiles {
+                tiles.on_dropped();
+            }
             self.last_frame_uploads.forget();
         } else {
             self.resolve.on_drawn(gated);

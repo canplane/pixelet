@@ -238,11 +238,11 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MIP
     &["mip"],
     // SHADER_AO_DOWNSAMPLE
-    &["frame", "ao_view", "ao_pass", "ao_downsample"],
+    &["lattice", "frame", "ao_view", "ao_pass", "ao_downsample"],
     // SHADER_AO_SAMPLE
-    &["frame", "ao_view", "ao_pass", "ao_sample"],
+    &["lattice", "frame", "ao_view", "ao_pass", "ao_sample"],
     // SHADER_AO_BLUR
-    &["ao_view", "ao_pass", "ao_blur"],
+    &["lattice", "ao_view", "ao_pass", "ao_blur"],
     // SHADER_ATMOS_TRANSMITTANCE
     &["atmos_medium", "atmos_pass", "atmos_transmittance"],
     // SHADER_ATMOS_MULTISCATTER
@@ -385,7 +385,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_MISS
     &["light_miss.gen"],
     // SHADER_AO_APPLY
-    &["tile_word", "screen_tiles", "ao_view", "ao_apply"],
+    &[
+        "lattice",
+        "tile_word",
+        "screen_tiles",
+        "ao_view",
+        "ao_apply",
+    ],
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "debug_look", "camera_grid"],
     // SHADER_SAMPLE_BOX

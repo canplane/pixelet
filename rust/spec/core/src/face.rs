@@ -5,8 +5,9 @@
 //! face's four edges, the air, the next cell of a flat run, or a cell
 //! rising in front of the face; and at each of its four corners, a cell
 //! rising there alone. Asked of the world's one query, at the cell's own
-//! zoom, of the cells beside it (pxl-shader `faced`), once where a
-//! sample stops and handed with its hit to every pixel that shows that
+//! zoom, of the cells beside it (pxl-shader `ask_face`), by what each keeps
+//! of its cube against what the cell keeps of its own, a leaf's and a
+//! coarse cell's alike (`answer::hides`), once where a sample stops and handed with its hit to every pixel that shows that
 //! cell: so every pixel of a cell is painted by the same bits in a frame,
 //! whatever the screen shows about it.
 //!
@@ -34,17 +35,31 @@ pub const LINE_SHIFT: u32 = EDGES;
 pub const CORNER_SHIFT: u32 = 2 * EDGES;
 pub const BITS: u32 = 3 * EDGES;
 
-/// The bits of a face of a cell kept short of its cube
-/// (`answer::fill_eighths`), a box inset in it apart from every cell about it:
-/// every edge meets the air, and nothing rises across one. Beside it, it is
-/// no cell that hides for a face's bits (`answer::whole`).
-pub const BOX: u32 = ((1 << EDGES) - 1) << LINE_SHIFT;
+/// What a hit's faces are asked off, a word (pxl-shader `ask_face`): the face
+/// its ray entered under `HIT_FILL_SHIFT`, and over it the hit's fill, the
+/// eighths of its cube its cell keeps (`answer::fill_eighths`), which a cell
+/// beside it hides by (`answer::hides`): a leaf's all eight, a coarse
+/// cell's its fold's share.
+pub const HIT_FILL_SHIFT: u32 = 3;
+
+pub const fn ask_word(face: u32, hit_fill: u32) -> u32 {
+    face | hit_fill << HIT_FILL_SHIFT
+}
+
+/// The face an ask's word (`ask_word`) names, and the hit's fill.
+pub const fn ask_face(w: u32) -> u32 {
+    w & ((1 << HIT_FILL_SHIFT) - 1)
+}
+
+pub const fn ask_hit_fill(w: u32) -> u32 {
+    w >> HIT_FILL_SHIFT
+}
 
 /// The bits of face `face` (a ray's: 2·axis, plus one where its outward
 /// normal points down the axis) of a cell, `hides(d)` whether the cell
-/// `d` cells from it hides its cube whole (`answer::whole`): bit `i` answers the
-/// `i`th cell asked, and a cell is not asked where a bit already set
-/// decides it. One place asks, as a shader inlines each.
+/// `d` cells from it hides the cell's box (`answer::hides`): bit `i`
+/// answers the `i`th cell asked, and a cell is not asked where a bit
+/// already set decides it. One place asks, as a shader inlines each.
 pub fn word(face: u32, mut hides: impl FnMut([i32; 3]) -> bool) -> u32 {
     let axis = face / 2;
     let n = unit(axis, 1 - 2 * (face & 1) as i32);

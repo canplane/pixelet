@@ -74,6 +74,9 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
 /// The screen's ambient occlusion (the passes frame/shader/ao_*.wgsl).
 pub mod ao {
     params! {
+        /// The reach and the falloff, in sides of the cell drawn where the
+        /// pixel lies (ao_view.wgsl `ao_cell`): a leaf's, a unit, near the
+        /// eye, and as coarse as the cells farther off.
         RADIUS: f32 = 1.5;
         DIST_FALLOFF: f32 = 1.0;
         INTENSITY: f32 = 1.2;

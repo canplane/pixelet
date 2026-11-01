@@ -23,8 +23,8 @@ use crate::frame::shader::record::{
 };
 use crate::gpu::api;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
-    RenderContext,
+    buf_entry, buf_range_entry, buffer_usage, bytes, release, view_entry, word_bytes,
+    write_buffer_bytes, Gpu, RenderContext,
 };
 use crate::gpu::generator::{cut_boxes, hold, Generation, Generator, IndirectDraw};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
@@ -132,71 +132,38 @@ pub(super) struct CastBuffers {
     /// (`light_miss_margin_cs`).
     light_margin_pipeline: Pipeline,
     light_miss_margin_pipeline: Pipeline,
-    /// The light's cast's groups (`light_groups`), and the buffers they bind:
-    /// made again exactly when one of them is another.
-    light_groups: [u32; 12],
-    light_bound: [u32; 12],
     /// A word bound where decor is off, the decor's buffers the drawn mark
     /// reads none (`light_mark_draws_cs`).
     light_none: u32,
-    /// The light's casts so far, the number its marks are made with
-    /// (pxl-spec-core `light::HEAD_CAST`), never zero, which no tile holds
-    /// marked.
-    light_number: u32,
-    /// The number of the cast since which only the eye's look moved
-    /// (pxl-spec-core `light::HEAD_EPOCH`): a tile cast in it or after
-    /// stands.
-    light_epoch: u32,
     /// Whether all the light's cast is made (`light_made`): its list and its
     /// raster's buffers and targets; before then no shadow map is cast.
     light_ready: bool,
-    /// The beam's lines, the samples and the misses (pxl-spec-core
-    /// `light::list_words`), made where shadows are first cast.
-    light_list: u32,
+    /// Every level's beam lines, samples and misses (pxl-spec-core
+    /// `light::list_words`), the first level's in a buffer of its own and the
+    /// rest's in one (`shadow::list_at`), made where shadows are first cast:
+    /// each level's passes bind its own.
+    light_lists: [u32; 2],
     light_list_whole: bool,
-    /// The misses' walk's dispatch and count, as the eye's are
-    /// (pxl-spec-core `ray::MISS_ARGS_WORDS`).
-    light_misses: u32,
-    /// The workgroups of the passes that cast its tiles (pxl-spec-core
-    /// `light::ARGS_WORDS`): none, or each whole where a tile is claimed.
-    light_args: u32,
-    /// What a tile of the shadow map holds follows, as the light's cast last
-    /// read it (`Read`): the light's frame (`Shadow::generation`), whether
-    /// shadows are cast, the eye's zooms, and whether the world under it
-    /// moved; one moving begins an epoch (`light_epoch`).
-    light_content: Read,
-    /// The eye's place and the light box, which follows it, as it last read
-    /// them: the zooms the walks ask follow the one, and what each tile of
-    /// the box holds moves with the other's corner. One moving alone moves
-    /// the reads with the box and casts the tiles the box slid onto or whose
-    /// eye moved past the margin of what their walks asked
-    /// (`light_detail_cs`, pxl-spec-core `light::holds`), and those read
-    /// anew; whether this frame's cast asks which first, and the corner the
-    /// cast before was cast under (`light::HEAD_CORNER_WAS`).
-    light_detail: Read,
-    light_detail_moved: bool,
-    light_corner: [i32; 2],
-    light_corner_was: [i32; 2],
-    /// The reads as the cast before left them, copied out where the box slid
-    /// to be copied back moved with it.
-    light_reads_was: u32,
+    /// Every level's stands (pxl-spec-core `light::stands`), one buffer a
+    /// level's at `shadow::stands_at`: the marks bind them all, a level's
+    /// propagation its own.
+    light_stands: u32,
+    /// What every level is handed beside the eye's words (pxl-spec-core
+    /// `light::HEAD_WORDS`), one buffer a level's head at
+    /// `light::HEAD_STRIDE` apart: each level's passes bind its own, the
+    /// marks all (pxl-shader light.rs `Heads`).
+    light_heads: u32,
     /// Which tiles the receivers read, as it last read it: the eye's look,
     /// the actors' places, decor placed again. One moving alone casts only
     /// the tiles read anew.
     light_receivers: Read,
-    /// What it is handed beside the eye's words (pxl-spec-core
-    /// `light::HEAD_WORDS`).
-    light_head: u32,
-    light_cast: bool,
-    /// Why the map cast this frame, a bit each in LIGHT_MOVED's order
-    /// (span.json); 0 where it did not.
-    light_moved: u32,
-    /// Whether the next cast marks where the eye's rays met the world
-    /// (`light_mark_cs`): held until one does; and whether the marks of the
-    /// frame the eye stands in, its pixels' footprints, are owed, as the
-    /// marks while it moved took none (`light::HEAD_FOOTPRINT`).
-    light_world: bool,
-    light_footprint_owed: bool,
+    /// The levels as their casts hold them (`LightLevel`), and how many the
+    /// map has this frame.
+    light_levels: Vec<LightLevel>,
+    light_level_cnt: u32,
+    /// Whether the marks run this frame (`light_mark_cs`), every level's
+    /// receivers at once: where a level that casts owes them.
+    light_marks: bool,
     refold: bool,
     /// Its group 0, and the buffers it binds (`cast_group`): made again
     /// exactly when one of them is another.
@@ -237,9 +204,136 @@ pub(super) struct CastBuffers {
     /// What the light's cast and the eye's recast, counted where the setting
     /// asks (ray/tally.rs).
     tally: Tally,
-    /// The list, the light's visibility buffer and its boxes the light's groups
-    /// were made over, made again where one is another.
-    light_grouped: [u32; 3],
+}
+
+/// A level of the light's map as its cast holds it (pxl-spec-core
+/// `light::LEVELS`, pxl-render gpu/shadow.rs `Level`): each cast by the
+/// same passes over its own list and head, deciding apart whether to cast.
+struct LightLevel {
+    /// Its passes' groups (`light_groups`), and the buffers they bind:
+    /// made again exactly when one of them is another.
+    groups: [u32; 12],
+    bound: [u32; 12],
+    /// The list, the light's visibility buffer and boxes the groups were
+    /// made over, made again where one is another.
+    grouped: [u32; 3],
+    /// Its casts so far, the number its marks are made with (pxl-spec-core
+    /// `light::HEAD_CAST`), never zero, which no tile holds marked.
+    number: u32,
+    /// The number of the cast since which only the eye's look moved
+    /// (pxl-spec-core `light::HEAD_EPOCH`): a tile cast in it or after
+    /// stands.
+    epoch: u32,
+    /// Its misses' walk's dispatch and count, as the eye's are
+    /// (pxl-spec-core `ray::MISS_ARGS_WORDS`).
+    misses: u32,
+    /// The workgroups of the passes that cast its tiles (pxl-spec-core
+    /// `light::ARGS_WORDS`): none, or each whole where a tile is claimed.
+    args: u32,
+    /// What a tile holds follows, as its cast last read it (`Read`): its
+    /// light frame (`Level::generation`), whether shadows are cast, the
+    /// eye's zooms, and whether the world under it moved; one moving begins
+    /// an epoch (`epoch`).
+    content: Read,
+    /// The eye's place and its box, which follows it, as it last read
+    /// them: the zooms the walks ask follow the one, and what each tile of
+    /// the box holds moves with the other's corner. One moving alone moves
+    /// the reads with the box and casts the tiles the box slid onto or whose
+    /// eye moved past the margin of what their walks asked
+    /// (`light_detail_cs`, pxl-spec-core `light::holds`), and those read
+    /// anew; whether this frame's cast asks which first, and the corner the
+    /// cast before was cast under (`light::HEAD_CORNER_WAS`).
+    detail: Read,
+    detail_moved: bool,
+    corner: [i32; 2],
+    corner_was: [i32; 2],
+    /// The reads as the cast before left them, copied out where the box slid
+    /// to be copied back moved with it.
+    reads_was: u32,
+    cast: bool,
+    /// Why it cast this frame, a bit each in LIGHT_MOVED's order
+    /// (span.json); 0 where it did not.
+    moved: u32,
+    /// Whether its next cast marks where the eye's rays met the world
+    /// (`light_mark_cs`): held until one does; and whether the marks of the
+    /// frame the eye stands in, its pixels' footprints, are owed, as the
+    /// marks while it moved took none (`light::HEAD_FOOTPRINT`).
+    world: bool,
+    footprint_owed: bool,
+}
+
+impl LightLevel {
+    /// Level `l`'s, `shadow::size(l)` a side.
+    fn new(g: &Gpu, l: u32) -> LightLevel {
+        let n = light::tiles(shadow::size(l));
+        let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
+        LightLevel {
+            groups: [0; 12],
+            bound: [0; 12],
+            grouped: [0; 3],
+            number: 0,
+            epoch: 0,
+            misses: g.buf(
+                word_bytes(ray::MISS_ARGS_WORDS),
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
+            ),
+            args: g.buf(
+                word_bytes(light::ARGS_WORDS as usize),
+                storage | buffer_usage::INDIRECT,
+            ),
+            content: Read::default(),
+            detail: Read::default(),
+            detail_moved: false,
+            corner: [0; 2],
+            corner_was: [0; 2],
+            reads_was: g.buf(
+                word_bytes((n * n) as usize),
+                buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
+            ),
+            cast: false,
+            moved: 0,
+            world: false,
+            footprint_owed: false,
+        }
+    }
+}
+
+/// A level of the light's map as the frame hands it to the cast
+/// (gpu/shadow.rs `Level`): its layer of the world, its light frame's number,
+/// where its rays start and its words.
+pub struct CastLevel {
+    pub world: u32,
+    pub generation: u32,
+    pub starts: light::Starts,
+    pub words: [u32; light::WORDS],
+}
+
+/// Level `l`'s list among the levels' buffers (`shadow::list_at`): which,
+/// and in bytes its first and how many (`light::list_words`).
+fn list_range(l: u32) -> (usize, u32, u32) {
+    let (k, at) = shadow::list_at(l);
+    (
+        k,
+        word_bytes(at as usize),
+        word_bytes(light::list_words(shadow::size(l)) as usize),
+    )
+}
+
+/// Level `l`'s head among the levels' one buffer, in bytes: its first and
+/// how many (`light::HEAD_STRIDE`).
+fn head_range(l: u32) -> (u32, u32) {
+    (
+        word_bytes(4 * l as usize * light::HEAD_STRIDE),
+        word_bytes(light::HEAD_WORDS),
+    )
+}
+
+impl CastBuffers {
+    /// The level whose casting the tally counts for the light: its first
+    /// that casts this frame.
+    fn counted_level(&self) -> Option<usize> {
+        self.light_levels.iter().position(|v| v.cast)
+    }
 }
 
 /// What a cast's head handed the pyramid's forgetting (pxl-spec-core
@@ -268,9 +362,17 @@ fn note(written: &mut [u32], writes: &mut usize, first: u32) -> bool {
     true
 }
 
-/// The binding of a pass's head (pxl-shader light.rs `Head`): the light's
-/// map's, or the eye's, which names none.
+/// The binding of a pass's head (pxl-shader light.rs `Head`): a level's of
+/// the light's map, or the eye's, which names none.
 pub(super) const HEAD_BINDING: u32 = 11;
+
+/// The binding of every level's head, which the marks read (pxl-shader
+/// light.rs `Heads`).
+const HEADS_BINDING: u32 = 22;
+
+/// The binding of the stands (pxl-spec-core `light::stands`): every level's
+/// for the marks, a level's own for its propagation.
+const STANDS_BINDING: u32 = 23;
 
 /// The cast's world's group, every kernel's over it bar the light's own and
 /// the pixels': the one the missed pixels' cast binds, and the head the
@@ -400,40 +502,22 @@ impl RaysPass {
             light_sample_pipeline,
             light_margin_pipeline,
             light_miss_margin_pipeline,
-            light_groups: [0; 12],
-            light_bound: [0; 12],
             light_none: buf(word_bytes(2 * generation::drawn::REGIONS as usize), storage),
-            light_number: 0,
-            light_epoch: 0,
             light_ready: false,
-            light_list: light_list(g, false),
+            light_lists: [light_list(g, None), light_list(g, None)],
             light_list_whole: false,
-            light_misses: buf(
-                word_bytes(ray::MISS_ARGS_WORDS),
-                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
+            light_stands: buf(
+                word_bytes(shadow::stands_at(light::LEVELS) as usize),
+                storage,
             ),
-            light_args: buf(
-                word_bytes(light::ARGS_WORDS as usize),
-                storage | buffer_usage::INDIRECT,
-            ),
-            light_content: Read::default(),
-            light_detail: Read::default(),
-            light_detail_moved: false,
-            light_corner: [0; 2],
-            light_corner_was: [0; 2],
-            light_reads_was: buf(
-                word_bytes((light::tiles(shadow::SIZE) * light::tiles(shadow::SIZE)) as usize),
-                buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
-            ),
-            light_receivers: Read::default(),
-            light_head: buf(
-                word_bytes(light::HEAD_WORDS),
+            light_heads: buf(
+                word_bytes(4 * light::HEAD_STRIDE * light::LEVELS as usize),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            light_cast: false,
-            light_moved: 0,
-            light_world: false,
-            light_footprint_owed: false,
+            light_receivers: Read::default(),
+            light_levels: (0..light::LEVELS).map(|l| LightLevel::new(g, l)).collect(),
+            light_level_cnt: 0,
+            light_marks: false,
             refold: false,
             group: 0,
             bindings: [0; 11],
@@ -459,7 +543,6 @@ impl RaysPass {
             px_group: 0,
             px_bound: [0; 7],
             tally,
-            light_grouped: [0; 3],
         };
         self.cast = Some(c);
     }
@@ -474,7 +557,7 @@ impl RaysPass {
         cast: Option<Cast>,
         meshes: &[u32; GROUPS as usize],
         rays: (u32, [u32; 2]),
-        light_map: (u32, u32, light::Starts),
+        light_map: &[CastLevel],
         gated: bool,
     ) {
         // No cast, no world: no ray cast, none drawn and no decor generated.
@@ -490,9 +573,10 @@ impl RaysPass {
             if let Some(c) = self.cast.as_mut() {
                 c.generator.off();
                 c.read.forget();
-                c.light_content.forget();
-                c.light_cast = false;
-                c.light_moved = 0;
+                for v in &mut c.light_levels {
+                    v.content.forget();
+                    (v.cast, v.moved) = (false, 0);
+                }
             }
             return;
         };
@@ -522,8 +606,8 @@ impl RaysPass {
         let ray_counts = *ray_counts;
         let r = &mut c.read;
         r.begin();
-        // The light's words are its cast's alone (below).
-        let eye_moved = r.read(&eye[..eye::LIGHT]);
+        // The jitter apart (below).
+        let eye_moved = r.read(&eye[..eye::JITTER]);
         let clipmap_moved = r.read(clipmap);
         let shards_moved = r.read(shards);
         // A surface made again holds no rays.
@@ -746,9 +830,9 @@ impl RaysPass {
         };
         c.generator
             .prepare(g, cast.decor, generation, meshes, world);
-        // The shadow map is cast, every slot a receiver reads, as the eye's
-        // rays are (pxl-spec-core `light`), where what it reads moved: the
-        // light's frame or box, the eye's place or zooms, which the
+        // Each level of the shadow map is cast, every slot a receiver reads,
+        // as the eye's rays are (pxl-spec-core `light`), where what it reads
+        // moved: its light frame or box, the eye's place or zooms, which the
         // zooms its rays ask follow, or the world under it; and where what
         // says which tiles are read moved, the look, the actors' places and
         // decor placed again (`light_mark_cs`, `light_mark_draws_cs`). A
@@ -756,105 +840,133 @@ impl RaysPass {
         // cast since anything else last did stands, and only the tiles read
         // anew are cast (`light::HEAD_EPOCH`). None where no shadow is cast,
         // nor before all its cast is made (`light_made`), its read let go
-        // until then.
-        let shadows = cast.eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
-            .iter()
-            .any(|&w| w != 0);
-        // All it reads but the look, then the look.
-        let r = &mut c.light_content;
-        r.begin();
-        r.read(&[light_map.1, u32::from(shadows)]);
-        r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
-        r.mark(world_moved);
-        let held = r.end();
-        // The eye's place, which the zooms the walks ask follow, and the box,
-        // off the eye: a tile cast in the epoch holds while the one moved
-        // less than the margin of what its walks asked and the other slid
-        // off none of its slots (`light_detail_cs`).
-        let d = &mut c.light_detail;
-        d.begin();
-        d.read(&cast.eye[eye::ORIGIN..eye::STEPS]);
-        d.read(&cast.eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]);
-        let detail_held = d.end();
+        // until then. The levels past those the map has this frame cast
+        // none.
+        let shadows = !light_map.is_empty();
         // The look, where the actors stand and decor compacted again: which
-        // tiles are read, not what a tile holds. Not the jitter: a pixel's
-        // marks hold its footprint (`light_mark_cs`).
+        // tiles are read, not what a tile holds, every level's alike. Not the
+        // jitter: a pixel's marks hold its footprint (`light_mark_cs`).
         let l = &mut c.light_receivers;
         l.begin();
         l.read(&cast.eye[eye::FORWARD..eye::TAN + 2]);
         l.read(cast.actors);
         l.mark(c.generator.counts());
-        // The first frame the eye stands in after it moved marks again, with
-        // the footprints the jitter's frames after it stand on.
-        let footprint_owed = c.light_footprint_owed && kind != FrameKind::cast;
         let receivers_held = l.end();
-        let moved = LightMoved::ALL
-            .into_iter()
-            .filter(|m| match m {
-                LightMoved::content => !held,
-                LightMoved::detail => !detail_held,
-                LightMoved::receivers => !receivers_held,
-                LightMoved::footprint => footprint_owed,
-            })
-            .fold(0, |bits, m| bits | 1 << m as u32);
-        c.light_detail_moved = held && !detail_held;
-        if !c.light_ready {
-            c.light_content.forget();
+        // The footprints taken where the eye stands; while it moves, the
+        // next frame's rays mark again, and the frame it stands in owes
+        // them.
+        let footprint = kind != FrameKind::cast;
+        c.light_level_cnt = light_map.len() as u32;
+        let ready = c.light_ready;
+        for (k, v) in c.light_levels.iter_mut().enumerate() {
+            let Some(m) = light_map.get(k) else {
+                v.content.forget();
+                (v.cast, v.moved) = (false, 0);
+                continue;
+            };
+            // All it reads but the look.
+            let r = &mut v.content;
+            r.begin();
+            r.read(&[m.generation, u32::from(shadows)]);
+            r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
+            r.mark(world_moved);
+            let held = r.end();
+            // The eye's place, which the zooms the walks ask follow, and the
+            // box, off the eye: a tile cast in the epoch holds while the one
+            // moved less than the margin of what its walks asked and the
+            // other slid off none of its slots (`light_detail_cs`).
+            let d = &mut v.detail;
+            d.begin();
+            d.read(&cast.eye[eye::ORIGIN..eye::STEPS]);
+            d.read(&m.words);
+            let detail_held = d.end();
+            // The first frame the eye stands in after it moved marks again,
+            // with the footprints the jitter's frames after it stand on.
+            let footprint_owed = v.footprint_owed && kind != FrameKind::cast;
+            let moved = LightMoved::ALL
+                .into_iter()
+                .filter(|m| match m {
+                    LightMoved::content => !held,
+                    LightMoved::detail => !detail_held,
+                    LightMoved::receivers => !receivers_held,
+                    LightMoved::footprint => footprint_owed,
+                })
+                .fold(0, |bits, m| bits | 1 << m as u32);
+            v.detail_moved = held && !detail_held;
+            if !ready {
+                v.content.forget();
+            }
+            v.cast = moved != 0 && ready;
+            v.moved = if v.cast { moved } else { 0 };
+            // The world's receivers stand where the eye's rays met it: marked
+            // again by the next cast after the rays were cast anew, or where
+            // an epoch begins. Else what they stood on stands, marked in the
+            // epoch already, so none of it is the cast's to cast anew
+            // (`light_propagate_cs`); the jitter's casts move a ray within its
+            // footprint, marked already where the eye stood when they were.
+            v.world |= kind == FrameKind::cast || !held || footprint_owed;
+            if v.cast {
+                v.number = v.number.wrapping_add(1).max(1);
+                if !held {
+                    v.epoch = v.number;
+                }
+                let corner = light::CORNER.map(|k| m.words[k] as i32);
+                v.corner_was = core::mem::replace(&mut v.corner, corner);
+                if v.world {
+                    v.footprint_owed = !footprint;
+                }
+            }
         }
-        c.light_cast = shadows && moved != 0 && c.light_ready;
-        c.light_moved = if c.light_cast { moved } else { 0 };
-        // The world's receivers stand where the eye's rays met it: marked
-        // again by the next cast after the rays were cast anew, or where an
-        // epoch begins. Else what they stood on stands, marked in the epoch
-        // already, so none of it is the cast's to cast anew
-        // (`light_propagate_cs`); the jitter's casts move a ray within its
-        // footprint, marked already where the eye stood when they were.
-        c.light_world |= kind == FrameKind::cast || !held || footprint_owed;
-        if c.light_cast {
-            // The head (pxl-spec-core `light::HEAD_WORDS`).
-            let mut head = [0u32; light::HEAD_WORDS];
-            c.light_number = c.light_number.wrapping_add(1).max(1);
-            if !held {
-                c.light_epoch = c.light_number;
+        let casting = c.light_levels.iter().any(|v| v.cast);
+        // The marks run, every level's receivers at once, where a level that
+        // casts owes them; every level the map has its head written then, as
+        // the marks read each, a level that casts none marking by a number
+        // its next cast passes by.
+        c.light_marks = casting && c.light_levels.iter().any(|v| v.cast && v.world);
+        if casting {
+            for (k, (v, m)) in c.light_levels.iter_mut().zip(light_map).enumerate() {
+                // The head (pxl-spec-core `light::HEAD_WORDS`).
+                let mut head = [0u32; light::HEAD_WORDS];
+                head[light::HEAD_CAST] = v.number;
+                head[light::HEAD_EPOCH] = v.epoch;
+                head[light::HEAD_COUNTED] = u32::from(ray_counts);
+                head[light::HEAD_SIZE] = shadow::size(k as u32);
+                head[light::HEAD_CORNER_WAS] = v.corner_was[0] as u32;
+                head[light::HEAD_CORNER_WAS + 1] = v.corner_was[1] as u32;
+                head[light::HEAD_FOOTPRINT] = u32::from(footprint);
+                head[light::HEAD_LEVEL] = k as u32;
+                let at = 4 * light::HEAD_LIGHT;
+                head[at..at + light::WORDS].copy_from_slice(&m.words);
+                let at = 4 * light::STARTS_AT;
+                head[at..at + 4 * light::STARTS_VEC4S].copy_from_slice(&m.starts.words());
+                // The actors drawn, receivers as decor is
+                // (`light_mark_draws_cs`), and the levels the map has.
+                let at = 4 * light::ACTORS_AT;
+                let n = cast.actors.len().min(light::ACTORS);
+                head[at] = n as u32;
+                head[light::HEAD_LEVELS] = light_map.len() as u32;
+                head[light::HEAD_BASE] = shadow::stands_at(k as u32);
+                for (j, a) in cast.actors[..n].iter().enumerate() {
+                    let w = at + 4 * (1 + j);
+                    head[w..w + 3].copy_from_slice(&a.map(f32::to_bits));
+                }
+                g.write_buf(c.light_heads, head_range(k as u32).0, bytes(&head));
+                if v.cast {
+                    g.write_buf(v.misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
+                    let n = shadow::size(k as u32);
+                    g.write_buf(v.args, 0, bytes(&light_args(n)));
+                    // The lists of what feeds the tiles it claims empty
+                    // (`light::listed_at`).
+                    let (list, base) = shadow::list_at(k as u32);
+                    for which in 0..light::LISTS {
+                        let at = base + light::listed_at(n, which);
+                        g.write_buf(c.light_lists[list], word_bytes(at as usize), bytes(&[0u32]));
+                    }
+                    c.raster.light_prepare(g, k as u32, &m.words, n);
+                }
             }
-            head[light::HEAD_CAST] = c.light_number;
-            head[light::HEAD_EPOCH] = c.light_epoch;
-            head[light::HEAD_COUNTED] = u32::from(ray_counts);
-            head[light::HEAD_SIZE] = shadow::SIZE;
-            let corner = light::CORNER.map(|k| cast.eye[eye::LIGHT + k] as i32);
-            c.light_corner_was = core::mem::replace(&mut c.light_corner, corner);
-            head[light::HEAD_CORNER_WAS] = c.light_corner_was[0] as u32;
-            head[light::HEAD_CORNER_WAS + 1] = c.light_corner_was[1] as u32;
-            // The footprints taken where the eye stands; while it moves, the
-            // next frame's rays mark again, and the frame it stands in owes
-            // them.
-            let footprint = kind != FrameKind::cast;
-            head[light::HEAD_FOOTPRINT] = u32::from(footprint);
-            if c.light_world {
-                c.light_footprint_owed = !footprint;
-            }
-            let at = 4 * light::STARTS_AT;
-            head[at..at + 4 * light::STARTS_VEC4S].copy_from_slice(&light_map.2.words());
-            // The actors drawn, receivers as decor is (`light_mark_draws_cs`).
-            let at = 4 * light::ACTORS_AT;
-            let n = cast.actors.len().min(light::ACTORS);
-            head[at] = n as u32;
-            for (k, a) in cast.actors[..n].iter().enumerate() {
-                let w = at + 4 * (1 + k);
-                head[w..w + 3].copy_from_slice(&a.map(f32::to_bits));
-            }
-            g.write_buf(c.light_head, 0, bytes(&head));
-            g.write_buf(c.light_misses, 0, bytes(&ray::MISS_ARGS_EMPTY));
-            g.write_buf(c.light_args, 0, bytes(&light_args()));
-            // The lists of what feeds the tiles it claims empty
-            // (`light::listed_at`).
-            for which in 0..light::LISTS {
-                let at = light::listed_at(shadow::SIZE, which);
-                g.write_buf(c.light_list, word_bytes(at as usize), bytes(&[0u32]));
-            }
-            c.raster.light_prepare(g, &cast.eye, shadow::SIZE);
         }
-        if eye_moved || jittered || c.light_cast {
+        if eye_moved || jittered {
             g.write_buf(c.eye, 0, bytes(&cast.eye));
         }
         // The samples' raster through its gate where only the kernel's
@@ -922,9 +1034,13 @@ impl RaysPass {
         let frame = tally::Frame {
             number: next_frame(),
             // A full cast's alone, so what a cast asks is not shared out
-            // over the frames that cast only the pixels.
-            casts: [self.kind == FrameKind::cast, c.light_cast],
-            rays: [c.size[0] * c.size[1], shadow::SIZE * shadow::SIZE],
+            // over the frames that cast only the pixels; the light's, its
+            // first level that casts (`counted_level`).
+            casts: [self.kind == FrameKind::cast, c.counted_level().is_some()],
+            rays: [c.size[0] * c.size[1], {
+                let n = shadow::size(c.counted_level().unwrap_or(0) as u32);
+                n * n
+            }],
         };
         c.tally.begin(g, ray_counts, c.pyramid, frame);
         let bindings = [
@@ -992,59 +1108,64 @@ impl RaysPass {
             .generator
             .instances()
             .map_or([c.light_none; 3], |p| [p.drawing, p.regions, p.instances]);
-        let light_bound = [
-            c.eye,
-            c.clipmap,
-            ground,
-            palette_indices,
-            c.shards,
-            c.overwrites,
-            pool,
-            light_map.0,
-            rays.0,
-            drawing,
-            regions,
-            instances,
-        ];
-        let grouped = [
-            c.light_list,
-            c.raster.light_visibility(),
-            c.raster.light.boxes,
-        ];
-        if light_bound != c.light_bound || grouped != c.light_grouped {
-            for group in c.light_groups {
-                release(group);
+        for (k, m) in light_map.iter().enumerate().filter(|_| c.light_ready) {
+            let l = k as u32;
+            let grouped = [
+                c.light_lists[shadow::list_at(l).0],
+                c.raster.light_visibility(l),
+                c.raster.light.boxes,
+            ];
+            let v = &mut c.light_levels[k];
+            let bound = [
+                c.eye,
+                c.clipmap,
+                ground,
+                palette_indices,
+                c.shards,
+                c.overwrites,
+                pool,
+                m.world,
+                rays.0,
+                drawing,
+                regions,
+                instances,
+            ];
+            if bound != v.bound || grouped != v.grouped {
+                for group in v.groups {
+                    release(group);
+                }
+                v.groups = light_groups(
+                    g,
+                    [
+                        &c.light_pipeline,
+                        &c.miss_pipeline,
+                        &c.raster.boxes_pipeline,
+                        &c.light_miss_pipeline,
+                        &c.light_mark_pipeline,
+                        &c.light_mark_draws_pipeline,
+                        &c.light_propagate_pipeline,
+                        &c.light_detail_pipeline,
+                        &c.light_beam_pipeline,
+                        &c.light_sample_pipeline,
+                        &c.light_margin_pipeline,
+                        &c.light_miss_margin_pipeline,
+                    ],
+                    bound,
+                    LightBuffers {
+                        level: l,
+                        pyramid: c.pyramid,
+                        heads: c.light_heads,
+                        list: c.light_lists[shadow::list_at(l).0],
+                        stands: c.light_stands,
+                        boxes: c.raster.light.boxes,
+                        visibility: c.raster.light_visibility(l),
+                        args: c.raster.light.levels.get(k).map_or(0, |r| r.args),
+                        misses: v.misses,
+                        light_args: v.args,
+                    },
+                );
+                (v.bound, v.grouped) = (bound, grouped);
             }
-            c.light_grouped = grouped;
-            c.light_groups = light_groups(
-                g,
-                [
-                    &c.light_pipeline,
-                    &c.miss_pipeline,
-                    &c.raster.boxes_pipeline,
-                    &c.light_miss_pipeline,
-                    &c.light_mark_pipeline,
-                    &c.light_mark_draws_pipeline,
-                    &c.light_propagate_pipeline,
-                    &c.light_detail_pipeline,
-                    &c.light_beam_pipeline,
-                    &c.light_sample_pipeline,
-                    &c.light_margin_pipeline,
-                    &c.light_miss_margin_pipeline,
-                ],
-                light_bound,
-                [
-                    c.pyramid,
-                    c.light_head,
-                    c.light_list,
-                    c.raster.light.boxes,
-                    c.raster.light_visibility(),
-                    c.raster.light.args,
-                    c.light_misses,
-                    c.light_args,
-                ],
-            );
-            c.light_bound = light_bound;
         }
         let eye = c.eye;
         self.regroup(g, [rays.0, eye]);
@@ -1199,29 +1320,35 @@ impl RaysPass {
             c.generator.dispatch(g, pass);
             g.end(pass);
         }
-        if c.light_cast {
-            // The reads moved with the box, a tile of it at a time: each
-            // tile's word the word of the tile that held its world texels
-            // under the corner before, copied out and back in, which the
-            // detail's pass then sets to none where the box slid onto it
+        if c.light_levels.iter().any(|v| v.cast) {
+            // Each level's reads moved with its box, a tile of it at a time:
+            // each tile's word the word of the tile that held its world
+            // texels under the corner before, copied out and back in, which
+            // the detail's pass then sets to none where the box slid onto it
             // (`light_detail_cs`).
-            if c.light_detail_moved && c.light_corner != c.light_corner_was {
-                let n = light::tiles(shadow::SIZE) as i32;
+            for (k, v) in c.light_levels.iter().enumerate() {
+                if !(v.cast && v.detail_moved && v.corner != v.corner_was) {
+                    continue;
+                }
+                let size = shadow::size(k as u32);
+                let n = light::tiles(size) as i32;
                 let t = light::TILE as i32;
-                let dx = (c.light_corner[0] - c.light_corner_was[0]) / t;
-                let dy = (c.light_corner[1] - c.light_corner_was[1]) / t;
+                let dx = (v.corner[0] - v.corner_was[0]) / t;
+                let dy = (v.corner[1] - v.corner_was[1]) / t;
                 let shift = dy * n + dx;
                 let all = n * n;
                 if shift.abs() < all {
-                    let reads = light::reads_at(shadow::SIZE) as i32;
+                    let (list, base) = shadow::list_at(k as u32);
+                    let (list, base) = (c.light_lists[list], base as i32);
+                    let reads = base + light::reads_at(size) as i32;
                     let words = |w: i32| word_bytes(w as usize);
-                    let out = (c.light_reads_was, 0);
-                    g.copy_buf(encoder, (c.light_list, words(reads)), out, words(all));
+                    let out = (v.reads_was, 0);
+                    g.copy_buf(encoder, (list, words(reads)), out, words(all));
                     let (from, to) = if shift >= 0 { (shift, 0) } else { (0, -shift) };
                     g.copy_buf(
                         encoder,
-                        (c.light_reads_was, words(from)),
-                        (c.light_list, words(reads + to)),
+                        (v.reads_was, words(from)),
+                        (list, words(reads + to)),
                         words(all - shift.abs()),
                     );
                 }
@@ -1229,106 +1356,139 @@ impl RaysPass {
             // The beam, the samples, their boxes drawn, the slots taking
             // their visible sample, a workgroup a tile (pxl-spec-core
             // `light::TILE`), and the rest walked off their list as the eye's
-            // missed pixels are: each a pass timed in its own span.
+            // missed pixels are: each a pass timed in its own span, every
+            // level that casts in it one after another.
             let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
             let pass = g.compute_pass(encoder, stamp);
-            // The tiles the box slid onto, and those whose eye moved past the
-            // margin of what their walks asked, set back to be read anew
+            // The tiles each box slid onto, and those whose eye moved past
+            // the margin of what their walks asked, set back to be read anew
             // first, a thread a tile (`light_detail_cs`).
-            if c.light_detail_moved {
-                let n = light::tiles(shadow::SIZE);
+            for (k, v) in c.light_levels.iter().enumerate() {
+                if !(v.cast && v.detail_moved) {
+                    continue;
+                }
+                let n = light::tiles(shadow::size(k as u32));
                 let w = compute::LIGHT_DETAIL_WORKGROUP;
-                g.set_bind_group(pass, 0, c.light_groups[7], &[]);
+                g.set_bind_group(pass, 0, v.groups[7], &[]);
                 g.set_pipeline(pass, c.light_detail_pipeline.id);
                 g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             }
-            // The tiles its receivers read marked, timed with the beam:
-            // where the eye's rays meet the world, a thread a drawn pixel
-            // (`light_mark_cs`), and where the decor and
+            // The tiles its receivers read marked, timed with the beam, every
+            // level's at once, each receiver in the levels it is read at:
+            // where the eye's rays meet the world, a thread a brick of pixels
+            // `light::MARK` a side (`light_mark_cs`), and where the decor and
             // the actors drawn stand, a thread each (`light_mark_draws_cs`);
-            // then those they read, a thread a tile (`light_propagate_cs`).
-            if c.light_world {
-                c.light_world = false;
-                g.set_bind_group(pass, 0, c.light_groups[4], &[]);
+            // then those each level reads, a thread a tile
+            // (`light_propagate_cs`).
+            if c.light_marks {
+                for v in c.light_levels.iter_mut().filter(|v| v.cast) {
+                    v.world = false;
+                }
+                let first = &c.light_levels[0];
+                g.set_bind_group(pass, 0, first.groups[4], &[]);
                 g.set_pipeline(pass, c.light_mark_pipeline.id);
                 let w = compute::LIGHT_MARK_WORKGROUP;
                 let [x, y] = c.size;
                 g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
             }
-            g.set_bind_group(pass, 0, c.light_groups[5], &[]);
+            let first = &c.light_levels[0];
+            g.set_bind_group(pass, 0, first.groups[5], &[]);
             g.set_pipeline(pass, c.light_mark_draws_pipeline.id);
             let cap = c.generator.instances().map_or(0, |p| p.cap);
             let w = compute::LIGHT_MARK_DRAWS_WORKGROUP;
             g.dispatch(pass, (cap + light::ACTORS as u32).div_ceil(w[0]), 1, 1);
-            g.set_bind_group(pass, 0, c.light_groups[6], &[]);
-            g.set_pipeline(pass, c.light_propagate_pipeline.id);
-            let w = compute::LIGHT_PROPAGATE_WORKGROUP;
-            let n = light::tiles(shadow::SIZE);
-            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            let args = |w: u32| word_bytes(w as usize);
+            for (k, v) in c.light_levels.iter().enumerate().filter(|(_, v)| v.cast) {
+                g.set_bind_group(pass, 0, v.groups[6], &[]);
+                g.set_pipeline(pass, c.light_propagate_pipeline.id);
+                let w = compute::LIGHT_PROPAGATE_WORKGROUP;
+                let n = light::tiles(shadow::size(k as u32));
+                g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            }
             // The beam by its entry of its own, which tells the margin of
             // what its walks ask (`light_beam_cs`), then the cells' starts by
             // the eye's pass over the light's world's group, which hands it
-            // the light's head. Each as many workgroups as the propagation left it
-            // (`light::ARGS_WORDS`).
-            let args = |w: u32| word_bytes(w as usize);
-            g.set_bind_group(pass, 0, c.light_groups[8], &[]);
-            g.set_pipeline(pass, c.light_beam_pipeline.id);
-            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_BEAM));
-            g.set_bind_group(pass, 0, c.light_groups[1], &[]);
-            g.set_pipeline(pass, c.cells_pipeline.id);
-            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_CELLS));
+            // the level's head. Each as many workgroups as the propagation
+            // left it (`light::ARGS_WORDS`).
+            for v in c.light_levels.iter().filter(|v| v.cast) {
+                g.set_bind_group(pass, 0, v.groups[8], &[]);
+                g.set_pipeline(pass, c.light_beam_pipeline.id);
+                g.dispatch_indirect(pass, v.args, args(light::ARGS_BEAM));
+                g.set_bind_group(pass, 0, v.groups[1], &[]);
+                g.set_pipeline(pass, c.cells_pipeline.id);
+                g.dispatch_indirect(pass, v.args, args(light::ARGS_CELLS));
+            }
             g.end(pass);
             let stamp = ctx.stamp(GpuSpanName::light_sample).pass();
             let pass = g.compute_pass(encoder, stamp);
-            g.set_bind_group(pass, 0, c.light_groups[9], &[]);
-            g.set_pipeline(pass, c.light_sample_pipeline.id);
-            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SAMPLE));
-            // What each tile cast holds by, gathered once off the beam rays
-            // and the samples that feed it, a thread a tile
-            // (`light_margin_cs`).
-            g.set_bind_group(pass, 0, c.light_groups[10], &[]);
-            g.set_pipeline(pass, c.light_margin_pipeline.id);
-            let w = compute::LIGHT_MARGIN_WORKGROUP;
-            let n = light::tiles(shadow::SIZE);
-            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            for (k, v) in c.light_levels.iter().enumerate().filter(|(_, v)| v.cast) {
+                g.set_bind_group(pass, 0, v.groups[9], &[]);
+                g.set_pipeline(pass, c.light_sample_pipeline.id);
+                g.dispatch_indirect(pass, v.args, args(light::ARGS_SAMPLE));
+                // What each tile cast holds by, gathered once off the beam
+                // rays and the samples that feed it, a thread a tile
+                // (`light_margin_cs`).
+                g.set_bind_group(pass, 0, v.groups[10], &[]);
+                g.set_pipeline(pass, c.light_margin_pipeline.id);
+                let w = compute::LIGHT_MARGIN_WORKGROUP;
+                let n = light::tiles(shadow::size(k as u32));
+                g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
+            }
             g.end(pass);
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_raster).pass());
-            g.set_bind_group(pass, 0, c.light_groups[2], &[]);
-            g.set_pipeline(pass, c.raster.boxes_pipeline.id);
-            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SAMPLE_BOX));
-            g.end(pass);
-            c.raster.light_draw(ctx);
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_slot).pass());
-            g.set_bind_group(pass, 0, c.light_groups[0], &[]);
-            g.set_pipeline(pass, c.light_pipeline.id);
-            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SLOT));
-            g.end(pass);
-            // Their count where their walk reads it, then that walk.
-            g.copy_buf(
-                encoder,
-                (c.light_misses, word_bytes(ray::MISS_ARGS_CNT as usize)),
-                (
-                    c.light_list,
-                    word_bytes(light::misses_cnt(shadow::SIZE) as usize),
-                ),
-                4,
-            );
+            // A level's boxes, drawn, and its slots, before the next level's
+            // boxes take the raster's buffers and targets.
+            for (k, v) in c.light_levels.iter().enumerate().filter(|(_, v)| v.cast) {
+                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_raster).pass());
+                g.set_bind_group(pass, 0, v.groups[2], &[]);
+                g.set_pipeline(pass, c.raster.boxes_pipeline.id);
+                g.dispatch_indirect(pass, v.args, args(light::ARGS_SAMPLE_BOX));
+                g.end(pass);
+                c.raster.light_draw(ctx, k as u32);
+                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_slot).pass());
+                g.set_bind_group(pass, 0, v.groups[0], &[]);
+                g.set_pipeline(pass, c.light_pipeline.id);
+                g.dispatch_indirect(pass, v.args, args(light::ARGS_SLOT));
+                g.end(pass);
+                // Their count where their walk reads it.
+                let ((list, base), n) = (shadow::list_at(k as u32), shadow::size(k as u32));
+                g.copy_buf(
+                    encoder,
+                    (v.misses, word_bytes(ray::MISS_ARGS_CNT as usize)),
+                    (
+                        c.light_lists[list],
+                        word_bytes((base + light::misses_cnt(n)) as usize),
+                    ),
+                    4,
+                );
+            }
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_walk).pass());
-            g.set_bind_group(pass, 0, c.light_groups[3], &[]);
-            g.set_pipeline(pass, c.light_miss_pipeline.id);
             let list = word_bytes(ray::MISS_ARGS_LIST as usize);
-            g.dispatch_indirect(pass, c.light_misses, list);
-            // Each walk's margin lowered into its tile's hold words, over
-            // the same list (`light_miss_margin_cs`).
-            g.set_bind_group(pass, 0, c.light_groups[11], &[]);
-            g.set_pipeline(pass, c.light_miss_margin_pipeline.id);
-            g.dispatch_indirect(pass, c.light_misses, list);
+            for v in c.light_levels.iter().filter(|v| v.cast) {
+                g.set_bind_group(pass, 0, v.groups[3], &[]);
+                g.set_pipeline(pass, c.light_miss_pipeline.id);
+                g.dispatch_indirect(pass, v.misses, list);
+                // Each walk's margin lowered into its tile's held words, over
+                // the same list (`light_miss_margin_cs`).
+                g.set_bind_group(pass, 0, v.groups[11], &[]);
+                g.set_pipeline(pass, c.light_miss_margin_pipeline.id);
+                g.dispatch_indirect(pass, v.misses, list);
+            }
             g.end(pass);
         }
+        // The light's counted off its first level that casts
+        // (`counted_level`).
+        let counted_level = c.counted_level().unwrap_or(0);
         let counted = Counts {
             pyramid: c.pyramid,
-            args: [c.marks, c.light_misses],
-            boxes: [c.raster.args, c.raster.light.args],
+            args: [c.marks, c.light_levels[counted_level].misses],
+            boxes: [
+                c.raster.args,
+                c.raster
+                    .light
+                    .levels
+                    .get(counted_level)
+                    .map_or(0, |r| r.args),
+            ],
         };
         c.tally.copy(g, encoder, &counted);
     }
@@ -1344,11 +1504,13 @@ impl RaysPass {
             return;
         }
         if !c.light_list_whole {
-            release(c.light_list);
-            c.light_list = light_list(g, true);
+            for (k, list) in c.light_lists.iter_mut().enumerate() {
+                release(*list);
+                *list = light_list(g, Some(k));
+            }
             c.light_list_whole = true;
         }
-        c.light_ready = c.raster.light_made(g, shadow::SIZE);
+        c.light_ready = c.raster.light_made(g, shadow::size);
     }
 
     /// The counts copied last frame mapped back (`Tally::back`).
@@ -1364,13 +1526,17 @@ impl RaysPass {
     }
 
     pub fn light_casts(&self) -> bool {
-        self.cast.as_ref().is_some_and(|c| c.light_cast)
+        self.cast
+            .as_ref()
+            .is_some_and(|c| c.light_levels.iter().any(|v| v.cast))
     }
 
     /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
     /// order (span.json `LIGHT_MOVED`); 0 where it did not.
     pub fn light_moved(&self) -> u32 {
-        self.cast.as_ref().map_or(0, |c| c.light_moved)
+        self.cast.as_ref().map_or(0, |c| {
+            c.light_levels.iter().fold(0, |bits, v| bits | v.moved)
+        })
     }
 
     /// The boxes decor's slots are marked by to generate again this frame
@@ -1407,7 +1573,9 @@ impl RaysPass {
                 }
             }
             c.read.forget();
-            c.light_content.forget();
+            for v in &mut c.light_levels {
+                v.content.forget();
+            }
             c.generator.on_dropped();
             c.tally.on_dropped();
         }
@@ -1506,17 +1674,18 @@ fn px_group(g: &Gpu, pipeline: &Pipeline, bindings: [u32; 7], marks: u32) -> u32
 }
 
 const _: () = assert!(
-    light::tiles(shadow::SIZE).is_multiple_of(light::COARSE),
+    light::tiles(shadow::FIRST_SIZE).is_multiple_of(light::COARSE)
+        && light::tiles(shadow::SIZE).is_multiple_of(light::COARSE),
     "the map's tiles are a whole number of squares a side (`light::coarse_square`)"
 );
 
 /// The workgroups of the passes that cast the light's tiles as a cast starts:
 /// none, a list's row across and no row, then each whole
-/// (`light::ARGS_WORDS`).
-fn light_args() -> [u32; light::ARGS_WORDS as usize] {
+/// (`light::ARGS_WORDS`), a level `size` texels a side.
+fn light_args(size: u32) -> [u32; light::ARGS_WORDS as usize] {
     let across = |n: u32, w: [u32; 3]| [n.div_ceil(w[0]), n.div_ceil(w[1]), 1];
-    let samples = shadow::SIZE / SAMPLE;
-    let tiles = shadow::SIZE / light::TILE;
+    let samples = size / SAMPLE;
+    let tiles = size / light::TILE;
     let mut args = [0; light::ARGS_WORDS as usize];
     for w in [
         light::ARGS_BEAM,
@@ -1530,11 +1699,11 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
     for (w, whole) in [
         (
             light::ARGS_BEAM,
-            across(light::beam_across(shadow::SIZE), compute::BEAM_WORKGROUP),
+            across(light::beam_across(size), compute::BEAM_WORKGROUP),
         ),
         (
             light::ARGS_CELLS,
-            across(light::cells_across(shadow::SIZE), compute::CELL_WORKGROUP),
+            across(light::cells_across(size), compute::CELL_WORKGROUP),
         ),
         (
             light::ARGS_SAMPLE,
@@ -1552,14 +1721,14 @@ fn light_args() -> [u32; light::ARGS_WORDS as usize] {
     args
 }
 
-/// The light's list, a word before shadows are cast, or `whole`: the beam's
-/// lines and the cells' starts, the raster's samples and the misses past
-/// them (`light::list_words`).
-fn light_list(g: &Gpu, whole: bool) -> u32 {
-    let words = if whole {
-        light::list_words(shadow::SIZE) as usize
-    } else {
-        4
+/// One of the light's lists' buffers, a word before shadows are cast, or
+/// the `whole` of buffer `k` (`shadow::LIST_WORDS`): its levels' beam lines
+/// and cells' starts, raster's samples and misses past them
+/// (`light::list_words`), a level's at `light::level_words` apart.
+fn light_list(g: &Gpu, whole: Option<usize>) -> u32 {
+    let words = match whole {
+        Some(k) => shadow::LIST_WORDS[k] as usize,
+        None => 4,
     };
     g.buf(
         word_bytes(words),
@@ -1570,29 +1739,59 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
     )
 }
 
-/// The light's cast's groups 0, over `bindings`: the eye, the clip level, the
+/// What a level's groups bind beside the world (`light_groups`): its
+/// number, the observed pyramid, the levels' heads and stands (each pass of
+/// the level its own, the marks all) and its list, the raster's boxes and
+/// visibility buffer, the level's raster args, its misses' dispatch and its
+/// casting passes' workgroups.
+struct LightBuffers {
+    level: u32,
+    pyramid: u32,
+    heads: u32,
+    list: u32,
+    stands: u32,
+    boxes: u32,
+    visibility: u32,
+    args: u32,
+    misses: u32,
+    light_args: u32,
+}
+
+/// A level's cast's groups 0, over `bound`: the eye, the clip level, the
 /// tiles' frames, the bricks' palette indices, the service area's index, the
 /// overwrites and the ways' pool, the cast's alone; the observed pyramid,
-/// which the light's walks read and write as the eye's do; the clipmap; its
-/// head, the beam's lines, the samples and the misses (`list`),
-/// the raster's boxes, visibility buffer and args, the misses' dispatch and
-/// the casting passes' workgroups (`light::ARGS_WORDS`), which the
-/// propagation writes; the eye's rays, which the mark reads, and the decor's drawing
-/// words, regions and instances, which the drawn mark reads. The slots',
-/// its world's (the cells' starts, the eye's pass, over `WORLD_GROUP`, its
-/// list where the eye's beam rays' buffer lies and its head where the
-/// eye's), its boxes' (the eye's raster's pass), the misses' walk's, the two
-/// marks', the propagation's, the detail's, the beam's, the samples', the
-/// margins' gather's and the misses' margins'; the boxes' none before its
-/// raster's buffers are made.
+/// which the light's walks read and write as the eye's do; its layer of the
+/// world; its head, the beam's lines, the samples and the misses (its
+/// list), the raster's boxes, visibility buffer and args, the misses'
+/// dispatch and the casting passes' workgroups (`light::ARGS_WORDS`), which
+/// the propagation writes; the eye's rays, which the mark reads, and the
+/// decor's drawing words, regions and instances, which the drawn mark reads.
+/// The slots', its world's (the cells' starts, the eye's pass, over
+/// `WORLD_GROUP`, its list where the eye's beam rays' buffer lies and its
+/// head where the eye's), its boxes' (the eye's raster's pass), the misses'
+/// walk's, the two marks' (every level's heads and stands, `Heads`), the
+/// propagation's, the detail's, the beam's, the samples', the held margins'
+/// gather's and the misses' margins'; the boxes' none before its raster's
+/// buffers are made.
 fn light_groups(
     g: &Gpu,
     [walk, world, boxes_pipeline, miss, mark, mark_draws, propagate, detail, beam, sample, margin, miss_margin]: [&Pipeline; 12],
-    bindings: [u32; 12],
-    [pyramid, head, list, boxes, visibility, args, misses, light_args]: [u32; 8],
+    bound: [u32; 12],
+    b: LightBuffers,
 ) -> [u32; 12] {
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances] =
-        bindings;
+        bound;
+    let (head_at, head_bytes) = head_range(b.level);
+    let (_, list_at, list_bytes) = list_range(b.level);
+    let head = buf_range_entry(HEAD_BINDING, b.heads, head_at, head_bytes);
+    let list = |binding: u32| buf_range_entry(binding, b.list, list_at, list_bytes);
+    let n = shadow::size(b.level);
+    let stands = buf_range_entry(
+        STANDS_BINDING,
+        b.stands,
+        word_bytes(shadow::stands_at(b.level) as usize),
+        word_bytes(light::stands(n) as usize),
+    );
     let entries = [
         (0, buf_entry(0, eye)),
         (1, buf_entry(1, clipmap)),
@@ -1602,18 +1801,19 @@ fn light_groups(
         (5, buf_entry(5, shards)),
         (6, buf_entry(6, overwrites)),
         (7, buf_entry(7, pool)),
-        (9, buf_entry(9, pyramid)),
+        (9, buf_entry(9, b.pyramid)),
         (10, view_entry(10, light)),
-        (HEAD_BINDING, buf_entry(HEAD_BINDING, head)),
-        (12, buf_entry(12, list)),
-        (14, buf_entry(14, boxes)),
-        (15, view_entry(15, visibility)),
-        (16, buf_entry(16, args)),
-        (17, buf_entry(17, misses)),
+        (HEAD_BINDING, head),
+        (12, list(12)),
+        (14, buf_entry(14, b.boxes)),
+        (15, view_entry(15, b.visibility)),
+        (16, buf_entry(16, b.args)),
+        (17, buf_entry(17, b.misses)),
         (18, buf_entry(18, drawing)),
         (19, buf_entry(19, regions)),
         (20, buf_entry(20, instances)),
-        (21, buf_entry(21, light_args)),
+        (21, buf_entry(21, b.light_args)),
+        (STANDS_BINDING, stands),
     ];
     // Each the entries its layout declares (build.rs `compute`).
     let of = |declared: &[u32]| {
@@ -1623,43 +1823,56 @@ fn light_groups(
             .map(|&(_, e)| e)
             .collect::<Vec<_>>()
     };
+    // The marks', over every level's heads and stands.
+    let all = |declared: &[u32]| {
+        let mut e = of(declared);
+        for x in &mut e {
+            if x.binding == STANDS_BINDING {
+                *x = buf_entry(STANDS_BINDING, b.stands);
+            }
+        }
+        if declared.chunks(3).any(|d| d[0] == HEADS_BINDING) {
+            e.push(buf_entry(HEADS_BINDING, b.heads));
+        }
+        e
+    };
+    let world_entries = [
+        buf_entry(0, eye),
+        buf_entry(1, clipmap),
+        buf_entry(2, ground),
+        view_entry(3, rays),
+        buf_entry(4, palette_indices),
+        buf_entry(5, shards),
+        buf_entry(6, overwrites),
+        buf_entry(7, pool),
+        list(8),
+        buf_entry(9, b.pyramid),
+        head,
+    ];
     [
         g.bind_group(walk.layouts[0], &of(&compute::LIGHT_GROUP)),
-        cast_group(
-            g,
-            world,
-            [
-                eye,
-                clipmap,
-                ground,
-                rays,
-                palette_indices,
-                shards,
-                overwrites,
-                pool,
-                list,
-                pyramid,
-                head,
-            ],
-        ),
+        g.bind_group(world.layouts[0], &world_entries),
         // The raster's once its buffers are made.
-        if boxes == 0 {
+        if b.boxes == 0 {
             0
         } else {
             g.bind_group(
                 boxes_pipeline.layouts[0],
                 &[
                     buf_entry(0, eye),
-                    buf_entry(8, list),
-                    buf_entry(HEAD_BINDING, head),
-                    buf_entry(14, boxes),
-                    buf_entry(16, args),
+                    list(8),
+                    head,
+                    buf_entry(14, b.boxes),
+                    buf_entry(16, b.args),
                 ],
             )
         },
         g.bind_group(miss.layouts[0], &of(&compute::LIGHT_MISS_GROUP)),
-        g.bind_group(mark.layouts[0], &of(&compute::LIGHT_MARK_GROUP)),
-        g.bind_group(mark_draws.layouts[0], &of(&compute::LIGHT_MARK_DRAWS_GROUP)),
+        g.bind_group(mark.layouts[0], &all(&compute::LIGHT_MARK_GROUP)),
+        g.bind_group(
+            mark_draws.layouts[0],
+            &all(&compute::LIGHT_MARK_DRAWS_GROUP),
+        ),
         g.bind_group(propagate.layouts[0], &of(&compute::LIGHT_PROPAGATE_GROUP)),
         g.bind_group(detail.layouts[0], &of(&compute::LIGHT_DETAIL_GROUP)),
         g.bind_group(beam.layouts[0], &of(&compute::LIGHT_BEAM_GROUP)),

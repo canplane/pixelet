@@ -813,6 +813,7 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
         record::TEXTURE => texture(TextureSampleType::float, TextureViewDimension::_2d),
         record::TEXTURE_ARRAY => texture(TextureSampleType::float, TextureViewDimension::_2d_array),
         record::DEPTH => texture(TextureSampleType::depth, TextureViewDimension::_2d),
+        record::DEPTH_ARRAY => texture(TextureSampleType::depth, TextureViewDimension::_2d_array),
         record::TEXTURE_UNFILTERED => texture(
             TextureSampleType::unfilterable_float,
             TextureViewDimension::_2d,
@@ -1019,6 +1020,23 @@ impl Gpu {
                 aspect: Some(TextureAspect::depth_only),
                 mips: Some(1),
                 layers: Some(1),
+                ..Default::default()
+            },
+        ))
+    }
+
+    /// The depth alone of `layers` layers of a depth target that carries a
+    /// stencil, an array, as a binding reads them (`depth_only_view`).
+    pub fn depth_only_array_view(&self, texture: Id, layers: u32) -> Id {
+        let s = self.s();
+        handle_of(s.encoder.view(
+            &mut s.stream,
+            texture,
+            &encode::ViewDescriptor {
+                dimension: Some(TextureViewDimension::_2d_array),
+                aspect: Some(TextureAspect::depth_only),
+                mips: Some(1),
+                layers: Some(layers),
                 ..Default::default()
             },
         ))

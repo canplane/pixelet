@@ -14,7 +14,6 @@ use pxl_render::gpu::renderer::{
 };
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
-use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
 use crate::perf::frame::{DeviceSample, GpuSample, RaySample};
@@ -126,12 +125,9 @@ pub fn stage_write() {
         0.0
     };
     s[STAGE_AT::CLOUDS] = cloud::clouds_shown();
-    // Out to where the grid's cells one zoom coarser than the ground's leaf begin.
-    s[STAGE_AT::SHADOWS] = if settings.shadows {
-        grid::split_dist(GROUND.cell() - 1)
-    } else {
-        0.0
-    };
+    // As far as the eye draws, the map's levels as many as that takes
+    // (pxl-render gpu/shadow.rs `levels_for`).
+    s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
 }
 
 /// `pace` is the frame as the turn paced it, which the world's drawn

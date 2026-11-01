@@ -8,7 +8,14 @@
 //! depth it leaves, as a raster caster's would be (pxl-render gpu/shadow.rs,
 //! where the decor and the actors are drawn into the same map).
 //!
-//! The world's depth is a clipmap: the light box's texels lie on a grid
+//! The map is `LEVELS` clip levels about the eye, each a box twice as wide
+//! as the one before, the coarsest reaching as far as the eye draws. A
+//! receiver reads the finest level that holds it (`level_of`). Each level is
+//! cast as the one map was, by the same passes, its own head (`HEAD_LEVEL`),
+//! side (`HEAD_SIZE`), list (`HEAD_BASE`) and words; how fine each level's
+//! texel is, is pxl-render gpu/shadow.rs's.
+//!
+//! A level's depth is a clipmap: the light box's texels lie on a grid
 //! fixed in the world (`aim`'s snap), and each world texel is held in the
 //! slot its index names modulo the map's side. A slot holds its depth
 //! (`word`). A tile of slots cast in an epoch holds while the eye stays
@@ -20,23 +27,22 @@ use crate::beam;
 use crate::cast;
 use crate::cast::Spacing;
 use crate::cast::{Detail, End, Ray, Trace};
-use crate::eye;
 use crate::generation;
 use crate::param::light;
 use crate::param::light::{SAMPLE, SPREAD};
 use crate::{axis, FRAC_W};
 use core::f32::consts::SQRT_2;
 
-/// The light's cast as the eye's words hold it (`eye::LIGHT`), a frame's
-/// constants worked out once off the light box (`Light::of`), each a vec4's
-/// first three words: where texel (0, 0)'s ray starts, from the eye, in
-/// units, and how far every ray reaches (the fourth word); the step to the
-/// next texel across and down; the rays' one direction; and how far a hit
-/// on a face across each axis is pushed back in depth. Their fourth words
-/// hold the clipmap's: the world texel index of the box's texel (0, 0),
+/// A level's cast as its head holds it (`HEAD_LIGHT`), a frame's constants
+/// worked out once off its light box (`Light::of`), each a vec4's first
+/// three words: where texel (0, 0)'s ray starts, from the eye, in units,
+/// and how far every ray reaches (the fourth word); the step to the next
+/// texel across and down; the rays' one direction; and how far a hit on a
+/// face across each axis is pushed back in depth. Their fourth words hold
+/// the clipmap's: the world texel index of the box's texel (0, 0),
 /// `corner`, X then Y, Y counted down the rows; and the share of the box's
-/// half-width a receiver reads the map within, `shadow_radius_ndc`
-/// (`Light::read`).
+/// half-width a receiver reads the level within about the eye,
+/// `shadow_radius_ndc` (`Light::read`, `read_share`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
     pub first: [f32; 3],
@@ -49,12 +55,73 @@ pub struct Light {
     pub shadow_radius_ndc: f32,
 }
 
-/// The word of `eye::LIGHT` the shadow's radius lies in.
+/// A level's words (`Light::words`): five vec4s.
+pub const WORDS: usize = 20;
+
+/// The word of a level's words the shadow's radius lies in.
 pub const SHADOW_RADIUS_NDC: usize = 15;
 
-/// The words of `eye::LIGHT` the corner lies in, X then Y, which the map is
-/// laid in off.
+/// The words of a level's words the corner lies in, X then Y, which the map
+/// is laid in off.
 pub const CORNER: [usize; 2] = [7, 11];
+
+/// The light's clip levels (`level_of`): enough that the coarsest reaches
+/// as far as the eye draws at the pyramid's top (pxl-render gpu/shadow.rs
+/// asserts it).
+pub const LEVELS: u32 = 12;
+
+/// The share of a level's half-width a receiver reads it within about the
+/// eye, a map `size` texels a side: all of it but a tile and a tap's reach
+/// at its edge, as the box's middle lies within half a tile of the eye
+/// (pxl-render gpu/shadow.rs `aim`'s snap) and a receiver's taps and its
+/// normal's offset reach `READ_PAD` and a texel past it.
+pub const fn read_share(size: u32) -> f32 {
+    1.0 - 2.0 * (TILE as f32 + READ_PAD) / size as f32
+}
+
+/// The level a receiver `q` units from the eye across the light's rays
+/// reads, `reach` the first level's reach in units (`Light::reach`): the
+/// finest whose reach holds it, each twice the one before; `LEVELS` past
+/// the last. The power of two is the float's own exponent, as
+/// `grid::cell_zoom_at` takes its bands, so the lit passes' port of it
+/// (pxl-render shadow.wgsl `shadow_level`) splits where this does.
+pub fn level_of(q: f32, reach: f32) -> u32 {
+    let x = q / reach;
+    if x <= 1.0 {
+        return 0;
+    }
+    let bits = x.to_bits();
+    let e = ((bits >> 23) & 0xff) as i32 - 127;
+    let up = e + i32::from(bits & 0x7f_ffff != 0);
+    if up >= LEVELS as i32 {
+        LEVELS
+    } else {
+        up as u32
+    }
+}
+
+/// How far across the light's rays a point of a drawn receiver may lie from
+/// where it stands, in units: half the widest decor and the tallest's
+/// height (pxl-shader light.rs `light_mark_draws_cs`).
+pub fn draw_reach() -> f32 {
+    let (w, h) = (generation::WIDEST as f32 / 2.0, generation::TALLEST as f32);
+    libm::sqrtf(w * w + h * h)
+}
+
+/// How far either side of a level's split a receiver is taken as in both
+/// levels, a share of its distance (`level_range`): past any rounding the
+/// two sides of the split take apart.
+pub const LEVEL_SLACK: f32 = 1.0 / 64.0;
+
+/// The levels a receiver `q` units from the eye across the light's rays
+/// may be read at, `reach` the first level's (`level_of`): the first and
+/// the last, the same but within `LEVEL_SLACK` of a split.
+pub fn level_range(q: f32, reach: f32) -> [u32; 2] {
+    [
+        level_of(q * (1.0 - LEVEL_SLACK), reach),
+        level_of(q * (1.0 + LEVEL_SLACK), reach),
+    ]
+}
 
 /// A slot's word: its depth, a 24-bit share of the box's depth as a
 /// depth24 map holds it (`word`).
@@ -215,14 +282,27 @@ impl Light {
 
     /// Whether box texel `p` of the map `size` a side lies where a receiver
     /// may read it, grown by `pad` texels: within `shadow_radius_ndc` of the
-    /// box's half-width about its middle, where the eye stands, as past it a
-    /// shadow has faded to nothing (pxl-render shadow.wgsl
-    /// `shadow_visibility`).
+    /// box's half-width about the eye, as no receiver past it reads this
+    /// level (`level_of`; pxl-render shadow.wgsl `shadow_visibility`).
     pub fn read(&self, size: u32, p: [i32; 2], pad: f32) -> bool {
-        let half = size as f32 / 2.0;
-        let (x, y) = (p[0] as f32 + 0.5 - half, p[1] as f32 + 0.5 - half);
-        let r = self.shadow_radius_ndc * half + pad;
+        let e = self.texel_at([0.0; 3]);
+        let (x, y) = (p[0] as f32 - e[0], p[1] as f32 - e[1]);
+        let r = self.shadow_radius_ndc * size as f32 / 2.0 + pad;
         x * x + y * y <= r * r
+    }
+
+    /// How far from the eye across the light's rays a receiver reads this
+    /// level, in units, the map `size` texels a side: `shadow_radius_ndc`
+    /// of its half-width.
+    pub fn reach(&self, size: u32) -> f32 {
+        self.shadow_radius_ndc * size as f32 / 2.0 * length(self.across)
+    }
+
+    /// How far `v`, units from the eye, lies from it across the light's
+    /// rays, in units: along the box's axes, which are square to the rays.
+    pub fn across_rays(&self, v: [f32; 3]) -> f32 {
+        let (a, d) = (dot(v, self.across), dot(v, self.down));
+        libm::sqrtf(a * a / dot(self.across, self.across) + d * d / dot(self.down, self.down))
     }
 
     /// `detail`, the eye's zooms at every point as the eye asks them
@@ -257,7 +337,7 @@ impl Light {
     }
 
     /// The light its words lay (`words`).
-    pub fn of_words(w: &[u32; eye::LIGHT_WORDS]) -> Light {
+    pub fn of_words(w: &[u32; WORDS]) -> Light {
         let v = |k: usize| {
             [
                 f32::from_bits(w[k]),
@@ -277,8 +357,8 @@ impl Light {
         }
     }
 
-    /// Its words, as `eye::LIGHT` lays them.
-    pub fn words(&self) -> [u32; eye::LIGHT_WORDS] {
+    /// Its words, as a head lays them (`HEAD_LIGHT`).
+    pub fn words(&self) -> [u32; WORDS] {
         let v = |a: [f32; 3], w: u32| [a[0].to_bits(), a[1].to_bits(), a[2].to_bits(), w];
         let c = [
             v(self.first, self.t_max.to_bits()),
@@ -287,7 +367,7 @@ impl Light {
             v(self.dir, self.shadow_radius_ndc.to_bits()),
             v(self.bias, 0),
         ];
-        let mut out = [0; eye::LIGHT_WORDS];
+        let mut out = [0; WORDS];
         let mut k = 0;
         while k < out.len() {
             out[k] = c[k / 4][k % 4];
@@ -297,16 +377,22 @@ impl Light {
     }
 }
 
-/// What the light's cast is handed beside the eye's words, a uniform: a head
+/// What a level's cast is handed beside the eye's words, a uniform: a head
 /// of `HEAD_VEC4S` vec4s, the cast's number, whether it is counted, its
 /// epoch and the map's side (`HEAD_CAST` to `HEAD_SIZE`), the corner of the
 /// cast before (`HEAD_CORNER_WAS`), whether its marks take each pixel's
-/// footprint (`HEAD_FOOTPRINT`), then the rays' starts (`Starts`, from
-/// `STARTS_AT`), then the actors (`ACTORS_AT`).
+/// footprint (`HEAD_FOOTPRINT`), its level (`HEAD_LEVEL`), then its light
+/// (`HEAD_LIGHT`), the rays' starts (`Starts`, from `STARTS_AT`), then the
+/// actors and the levels cast (`ACTORS_AT`). The levels' heads lie in one
+/// buffer `HEAD_STRIDE` vec4s apart, each bound at its own by the passes of
+/// its level and all of them by the marks (pxl-shader light.rs `Heads`).
 pub const HEAD_VEC4S: usize = ACTORS_AT + 1 + ACTORS;
 pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
+/// A head's place in the levels' buffer: a binding's offset a multiple of
+/// 256 bytes, which every device takes.
+pub const HEAD_STRIDE: usize = HEAD_VEC4S.div_ceil(16) * 16;
 /// The cast's number, counted up from one each cast, which a tile stood on
-/// and read in it is marked with (`stands_at`, `reads_at`).
+/// and read in it is marked with (`stands`, `reads_at`).
 pub const HEAD_CAST: usize = 0;
 pub const HEAD_COUNTED: usize = 1;
 /// The number of the cast since which only what says which tiles are read
@@ -328,6 +414,11 @@ pub const HEAD_CORNER_WAS: usize = 4;
 /// frame's rays mark again, and in the first frame it stands, which the
 /// jitter's frames after it stand on (pxl-shader light.rs `light_mark_cs`).
 pub const HEAD_FOOTPRINT: usize = 6;
+/// The level the head casts, the second vec4's last word.
+pub const HEAD_LEVEL: usize = 7;
+/// The level's light, its words (`Light::words`), `WORDS / 4` vec4s from
+/// the third.
+pub const HEAD_LIGHT: usize = 2;
 
 /// Where a texel's ray starts, the same point of the world in every frame
 /// cast in one light frame (pxl-render gpu/shadow.rs `aim`): off anchors
@@ -354,15 +445,23 @@ pub const ANCHOR: i32 = 2048;
 /// The starts' words in the cast's head (`HEAD_VEC4S`), a
 /// vec4 each from `STARTS_AT`: the base, the steps across and down, the
 /// anchors, their remainders.
-pub const STARTS_AT: usize = 2;
+pub const STARTS_AT: usize = HEAD_LIGHT + WORDS / 4;
 pub const STARTS_VEC4S: usize = 11;
 
 /// The actors the host draws, receivers of the shadow map as decor is
 /// (pxl-shader light.rs `light_mark_draws_cs`), past the starts: how many, the
-/// first word of a vec4, then each where it stands, units from the eye, a
-/// vec4 each, as many as `ACTORS`; any past them marks nothing.
+/// first word of a vec4, the levels the map has (`HEAD_LEVELS`), its second,
+/// and the level's stands' first word (`HEAD_BASE`), its third; then each
+/// where it stands, units from the eye, a vec4 each, as many as `ACTORS`;
+/// any past them marks nothing.
 pub const ACTORS_AT: usize = STARTS_AT + STARTS_VEC4S;
 pub const ACTORS: usize = 32;
+/// The levels the map has, as far as the eye draws (`level_of`): a
+/// receiver past the last reads none.
+pub const HEAD_LEVELS: usize = 4 * ACTORS_AT + 1;
+/// The first word of the level's stands among the levels' one buffer
+/// (`stands`), which the marks step to a level's by.
+pub const HEAD_BASE: usize = 4 * ACTORS_AT + 2;
 
 impl Starts {
     /// The start of the ray of world texel `w`, X across and Y down the
@@ -627,23 +726,26 @@ pub const MISS_TILE_SHIFT: u32 = 16;
 /// The tiles a map's miss words number at most (`miss_word`).
 pub const MISSED_TILES: u32 = 1 << (u32::BITS - MISS_TILE_SHIFT);
 
-/// The tiles of the box a receiver stands on in a cast, past the misses: a
-/// word a tile (`TILE` texels a side), `tiles` a row, the number of the
-/// last cast a receiver stood on it in (`HEAD_CAST`; pxl-shader light.rs
-/// `light_mark_cs`, `light_mark_draws_cs`): where the eye's pixels meet the
-/// world, and where the decor and the actors drawn stand.
-pub const fn stands_at(size: u32) -> u32 {
-    misses_at(size) + size * size
+/// The tiles of the box a receiver stands on in a cast, apart from the
+/// list, every level's in one buffer, a level's at its head's `HEAD_BASE`,
+/// as the marks write every level's at once: a word a tile (`TILE` texels a
+/// side), `tiles` a row, the number of the last cast a receiver stood on it
+/// in (`HEAD_CAST`; pxl-shader light.rs `light_mark_cs`,
+/// `light_mark_draws_cs`): where the eye's pixels meet the world, and where
+/// the decor and the actors drawn stand. A level's words, a map `size`
+/// texels a side.
+pub const fn stands(size: u32) -> u32 {
+    tiles(size) * tiles(size)
 }
 
-/// The tiles a receiver reads, past the stands, as many: the number of the
+/// The tiles a receiver reads, past the misses: the number of the
 /// cast that first read one in its epoch (`HEAD_EPOCH`), read where it lies
 /// within its taps of the way up from a tile one stands on (`Light::up`;
 /// pxl-shader light.rs `light_propagate_cs`). A tile this cast's number names is
 /// the cast's to cast; one an earlier cast of its epoch names holds what
 /// that cast left; no receiver reads any other.
 pub const fn reads_at(size: u32) -> u32 {
-    stands_at(size) + tiles(size) * tiles(size)
+    misses_at(size) + size * size
 }
 
 pub const fn tiles(size: u32) -> u32 {
@@ -758,9 +860,16 @@ pub const fn listed_per(side: u32) -> u32 {
 }
 
 /// The list's buffer's words: the beam's, the samples, their margins, the
-/// misses, the stands, the reads, their squares, the hold words, the lists.
+/// misses, the reads, their squares, the hold words, the lists.
 pub const fn list_words(size: u32) -> u32 {
     listed_at(size, LISTS)
+}
+
+/// A level's list's room in the levels' one buffer, a map `size` texels a
+/// side: its words, to a multiple of 256 bytes, which a binding's offset is
+/// on every device. Each level's passes bind its own.
+pub const fn level_words(size: u32) -> u32 {
+    list_words(size).div_ceil(64) * 64
 }
 
 /// Whether a tile whose walks' least margin is `margin` units, cast with the
@@ -1115,20 +1224,46 @@ mod tests {
         }
     }
 
-    /// A receiver reads the disk of `shadow_radius_ndc` about the box's
-    /// middle, and a pass past it its pad.
+    /// A receiver reads the disk of `shadow_radius_ndc` about the eye, and
+    /// a pass past it its pad.
     #[test]
     fn receiver_reads_disk() {
-        let s = Light {
-            shadow_radius_ndc: 0.5,
-            ..down()
-        };
-        // A box 16 texels a side: its middle is 8, the disk 4 texels out.
+        // A box 4 units a side in 16 texels, the eye at its middle, 7.5
+        // texels from texel (0, 0)'s: the disk 4 texels out.
+        let s = Light::of(
+            [
+                [2.0, 0.0, 0.0],
+                [0.0, 2.0, 0.0],
+                [0.0, 0.0, -8.0],
+                [0.0, 0.0, 4.0],
+            ],
+            16,
+            [0, 0],
+            0.5,
+        );
         assert!(s.read(16, [8, 8], 0.0));
         assert!(s.read(16, [11, 7], 0.0));
         assert!(!s.read(16, [13, 7], 0.0));
         assert!(s.read(16, [13, 7], 2.0));
         assert!(!s.read(16, [0, 0], 2.0));
+        // Its reach in units: 4 texels of a quarter unit.
+        assert!((s.reach(16) - 1.0).abs() < 1e-6);
+        assert!((s.across_rays([0.6, -0.8, 3.0]) - 1.0).abs() < 1e-6);
+    }
+
+    /// A receiver reads the finest level whose reach holds it, each twice
+    /// the last's, and within the slack of a split both.
+    #[test]
+    fn level_by_reach() {
+        assert_eq!(level_of(0.0, 10.0), 0);
+        assert_eq!(level_of(10.0, 10.0), 0);
+        assert_eq!(level_of(10.5, 10.0), 1);
+        assert_eq!(level_of(20.0, 10.0), 1);
+        assert_eq!(level_of(20.5, 10.0), 2);
+        assert_eq!(level_of(1e9, 10.0), LEVELS);
+        assert_eq!(level_range(15.0, 10.0), [1, 1]);
+        assert_eq!(level_range(20.1, 10.0), [1, 2]);
+        assert_eq!(level_range(19.9, 10.0), [1, 2]);
     }
 
     #[test]

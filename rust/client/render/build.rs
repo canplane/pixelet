@@ -49,12 +49,16 @@ fn main() {
     }
     // A unit's zoom, a unit's fraction bits in Q3 and the ground's cell, from
     // pxl-spec-core, where the cast reads them: a ray is painted by its
-    // cell's zoom against these, its cell placed off the eye's Q3 steps.
+    // cell's zoom against these, its cell placed off the eye's Q3 steps; and
+    // the sides of its cell a zoom's cell begins to be drawn at
+    // (pxl-spec-core grid.rs `cell_zoom_at`), which a pass reading no ray
+    // takes the cell drawn at a distance off (ao_view.wgsl `ao_cell`).
     let lattice = format!(
-        "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
+        "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\nconst GRID_SPLIT: f32 = {:?};\n",
         pxl_spec_core::UNIT_ZOOM,
         pxl_spec_core::FRAC_W,
-        lattice::GROUND.cell()
+        lattice::GROUND.cell(),
+        grid::CELLS_A_RAD / grid::SPANS
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
     // A ray's first word, its fields as the cast writes them (pxl-spec-core
@@ -448,6 +452,13 @@ fn accessors(text: &str) -> String {
                     "mat3x3f",
                     format!("mat3x3f({}, {}, {})", column(0), column(1), column(2)),
                 ),
+                Kind::Levels => {
+                    out += &format!(
+                        "fn {uniform}_{}(l: u32) -> vec4f {{ return {words}[{row}u + l]; }}\n",
+                        f.name.to_lowercase()
+                    );
+                    continue;
+                }
                 Kind::Mat4 => (
                     "mat4x4f",
                     format!(

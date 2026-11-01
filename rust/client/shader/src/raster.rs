@@ -7,7 +7,6 @@
 //! face asked once a hit (`face_cs`), a box's and a missed pixel's alike.
 
 use pxl_shader_macro::compute;
-use pxl_spec_core::cast::End;
 use pxl_spec_core::{beam, cast, raster, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
@@ -17,7 +16,7 @@ use crate::pass_observer::PassObserver;
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::light::Head;
 use crate::observer::{self, Level, Observer};
-use crate::world::{face_of, unasked_face, NoPalette, World};
+use crate::world::{face_ask, NoPalette, World};
 use crate::{add, opens};
 
 /// Whether samples at words `a` and `b` stopped on the same box, alike in
@@ -149,28 +148,24 @@ pub fn sample_box_cs(
 }
 
 /// What lies about the face sample `s` entered, the screen's, whose box is
-/// at `place` among the boxes: told at once where it needs no asking
-/// (`world::unasked_face`, a lack none), left in its words (`beam::SAMPLE_FACES`)
-/// where its pixels read it (cast.rs `cast_cs`); else its ask at `place`
-/// (`beam::Grid::ask_at`), off the line its cell's rays resumed from, for
-/// the faces' pass (`face_cs`), its faces to be left there.
+/// at `place` among the boxes: none where its node lacks, left in its words
+/// (`beam::SAMPLE_FACES`) where its pixels read it (cast.rs `cast_cs`);
+/// else its ask at `place` (`beam::Grid::ask_at`), off the line its cell's
+/// rays resumed from, for the faces' pass (`face_cs`), its faces to be left
+/// there.
 fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
     let g = grid(eye);
     let k = g.sample_at(s);
     let a = g.ask_at(place);
-    let (asks, faces) = if beams.word(k + beam::SAMPLE_LACKS) != 0 {
-        (false, 0)
-    } else {
-        unasked_face(End::Hit, beams.word(k + beam::SAMPLE_ASSET))
-    };
-    if !asks {
-        beams.set(k + beam::SAMPLE_FACES, faces);
+    if beams.word(k + beam::SAMPLE_LACKS) != 0 {
+        beams.set(k + beam::SAMPLE_FACES, 0);
         beams.set(a + beam::ASK_TO, beam::ASK_NONE);
         return;
     }
-    let face = face_of(
+    let face = face_ask(
         &eye_ray(eye, g.sample(s)),
         beams.word(k + beam::SAMPLE_AXIS),
+        beams.word(k + beam::SAMPLE_ASSET),
     );
     let corner = beams.word(g.cell_at(g.sample_cell(s)) + beam::CELL_CORNER);
     beams.set(a + beam::ASK_NODE, k + beam::SAMPLE_NODE);

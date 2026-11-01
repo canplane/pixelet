@@ -1,11 +1,16 @@
 // The shadow map (gpu/shadow.rs), cast from the moon where the sun is
-// down (`shadow_light`): 3x3 PCF with a texel of normal
-// offset, each tap compared at the depth the receiver's own plane has
-// where it lies; 1 where the map does not reach, and fading out toward the
-// casters' reach, so the shadows end where they do with no edge. A pass
-// drawing the map binds a blank one here and reads as lit.
+// down (`shadow_light`), a layer a level: read at the finest level that
+// holds the receiver (`shadow_level`), by one computation at every level,
+// 3x3 PCF with a texel of the level's of normal offset, each tap compared at
+// the depth the receiver's own plane has where it lies; 1 past the last
+// level, fading out toward its reach, where the eye stops drawing, so the
+// shadows end there with no edge. A pass drawing the map binds a blank one
+// here and reads as lit.
 
+// The first level, and the rest a layer each, a side of their own
+// (gpu/shadow.rs `size`).
 @group(0) @binding(1) var shadow_map: texture_depth_2d;
+@group(0) @binding(23) var shadow_levels: texture_depth_2d_array;
 @group(0) @binding(2) var shadow_sampler: sampler_comparison;
 
 // How much the depth of a plane with normal `n` changes a texel across and
@@ -33,6 +38,37 @@ fn shadow_light() -> vec3f {
   return select(atmos_sun_dir(), atmos_moon_dir(), frame_shadow_moon() > 0.0);
 }
 
+// The level a receiver `q` from the eye across the light's rays reads, in
+// the first level's half-widths: the finest whose reach holds it, each
+// twice the last's, the power of two the float's own exponent, as
+// pxl-spec-core `light::level_of` splits them, which the marks read.
+fn shadow_level(q: f32) -> u32 {
+  let x = q / frame_shadow_radius_ndc();
+  if (x <= 1.0) {
+    return 0u;
+  }
+  let bits = bitcast<u32>(x);
+  let e = i32((bits >> 23u) & 0xffu) - 127;
+  return u32(e + select(0, 1, (bits & 0x7fffffu) != 0u));
+}
+
+// Where `p`, from the eye, lies in level `l`'s box, its NDC and depth: the
+// first level's turn, scaled by `2^-l` as the levels' boxes are, and the
+// level's own translation (gpu/shadow.rs `translation`).
+fn shadow_level_clip(p: vec3f, l: u32) -> vec3f {
+  let turned = (frame_light_view_proj() * vec4f(p, 0.0)).xyz;
+  return turned * exp2(-f32(l)) + frame_light_levels(l).xyz;
+}
+
+// Level `l`'s compare at `uv` against `depth`: the first's own map, the
+// rest's layer of theirs.
+fn shadow_tap(l: u32, uv: vec2f, depth: f32) -> f32 {
+  if (l == 0u) {
+    return textureSampleCompareLevel(shadow_map, shadow_sampler, uv, depth);
+  }
+  return textureSampleCompareLevel(shadow_levels, shadow_sampler, uv, l - 1u, depth);
+}
+
 fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
   // shade.wgsl weighs the light by the same facing, so the taps would be multiplied by zero.
   if (dot(n, shadow_light()) <= 0.0) {
@@ -41,16 +77,21 @@ fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
   if (frame_shadow_strength() <= 0.0) {
     return 1.0;
   }
-  // A texel along the normal so a surface does not shadow itself.
-  let p = frame_light_view_proj() * vec4f(world_pos + n * frame_shadow_texel(), 1.0);
-  let ndc = p.xyz / p.w;
+  let q = length((frame_light_view_proj() * vec4f(world_pos, 0.0)).xy);
+  let l = shadow_level(q);
+  let levels = u32(frame_shadow_levels());
+  if (l >= levels) {
+    return 1.0;
+  }
+  // A texel of its level along the normal so a surface does not shadow itself.
+  let ndc = shadow_level_clip(world_pos + n * frame_light_levels(l).w, l);
   let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0)) || ndc.z > 1.0 || ndc.z < 0.0) {
     return 1.0;
   }
-  let shadow_radius_ndc = frame_shadow_radius_ndc();
-  let strength = frame_shadow_strength() * (1.0 - smoothstep(SHADOW_FADE_START * shadow_radius_ndc, shadow_radius_ndc, length(ndc.xy)));
-  let size = vec2f(textureDimensions(shadow_map));
+  let last = frame_shadow_radius_ndc() * exp2(f32(levels - 1u));
+  let strength = frame_shadow_strength() * (1.0 - smoothstep(SHADOW_FADE_START * last, last, q));
+  let size = select(vec2f(textureDimensions(shadow_levels)), vec2f(textureDimensions(shadow_map)), l == 0u);
   // A tap a texel and a half off lies where the receiver's plane is that
   // much nearer the light or further: compared at its own depth there
   // (receiver-plane depth bias, Isidoro 2006), not the receiver's, so the
@@ -60,7 +101,7 @@ fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
   for (var y = -1; y <= 1; y++) {
     for (var x = -1; x <= 1; x++) {
       let o = vec2f(f32(x), f32(y));
-      lit += textureSampleCompareLevel(shadow_map, shadow_sampler, uv + o * LIGHT_SPREAD / size, ndc.z + dot(slope, o));
+      lit += shadow_tap(l, uv + o * LIGHT_SPREAD / size, ndc.z + dot(slope, o));
     }
   }
   return mix(1.0, lit / 9.0, strength);

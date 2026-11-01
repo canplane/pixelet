@@ -85,7 +85,8 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let tangent = normalize(cross(helper, normal));
   let bitangent = cross(normal, tangent);
   let tbn = mat3x3f(tangent, bitangent, normal) * rot_z(noise.r * TAU);
-  let falloff = AO_RADIUS * AO_DIST_FALLOFF * AO_FALLOFF_SHARE;
+  let radius = AO_RADIUS * ao_cell(pos);
+  let falloff = radius * AO_DIST_FALLOFF * AO_FALLOFF_SHARE;
   var occluded = 0.0;
   var total = 0.0;
   var off_move = noise.g;
@@ -95,7 +96,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     let dir = tbn * hemisphere[k];
     let move_amount = fract(off_move);
     off_move += off_step;
-    let sample_pos = pos + AO_RADIUS * move_amount * dir;
+    let sample_pos = pos + radius * move_amount * dir;
     let o = ao_proj() * vec4f(sample_pos, 1.0);
     let ndc = o.xyz / o.w;
     let s = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);

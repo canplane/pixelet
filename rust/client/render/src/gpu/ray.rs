@@ -19,6 +19,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
+pub use cast::CastLevel;
 use ground::GroundBuffers;
 pub use tally::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 

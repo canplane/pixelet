@@ -292,10 +292,19 @@ const AIR: [[u32; 2]; 11] = [
     [22, TEXTURE_3D],
 ];
 
-/// The light's shadow map and its comparing sampler (shadow.wgsl), read where
-/// a lit fragment is shaded.
-const SHADOW: [[u32; 2]; 2] = [[1, DEPTH], [2, SAMPLER_COMPARISON]];
-const LIT_FRAME: [[u32; 2]; 14] = {
+/// The binding the light's levels past the first are read at, beside its
+/// first and its sampler (shadow.wgsl `shadow_levels`, gpu/shadow.rs
+/// `Shadow::entries`).
+pub const SHADOW_LEVELS_BINDING: u32 = 23;
+
+/// The light's shadow map, its first level, its comparing sampler and the
+/// rest of its levels (shadow.wgsl), read where a lit fragment is shaded.
+const SHADOW: [[u32; 2]; 3] = [
+    [1, DEPTH],
+    [2, SAMPLER_COMPARISON],
+    [SHADOW_LEVELS_BINDING, DEPTH_ARRAY],
+];
+const LIT_FRAME: [[u32; 2]; 15] = {
     // The air in the vertex stage, where each point's lights and veil are
     // worked out; a fragment reads its words and the eye's texel, whose white
     // it shows by (atmos_eye.wgsl). The sky's views and the Earth's picture
@@ -304,6 +313,7 @@ const LIT_FRAME: [[u32; 2]; 14] = {
         [0, UNIFORM],
         SHADOW[0],
         SHADOW[1],
+        SHADOW[2],
         AIR[0],
         AIR[1],
         AIR[2],
@@ -329,7 +339,7 @@ const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 /// The lit pass's frame, shadow, air and layers, all read where
 /// a pixel is painted; then the rays, the looks and the eye's words: the
 /// most entries any group has (`GROUP_ENTRIES`).
-const SCREEN_GROUP: [[u32; 2]; 22] = and(
+const SCREEN_GROUP: [[u32; 2]; 23] = and(
     LIT_FRAME,
     [
         [3, TEXTURE_UINT_ARRAY],
@@ -429,7 +439,7 @@ const fn and<const N: usize, const M: usize, const R: usize>(
 
 type Group = &'static [[u32; 2]];
 const FRAME: Group = &[[0, UNIFORM]];
-const BOX_GROUP: [[u32; 2]; 18] = and(
+const BOX_GROUP: [[u32; 2]; 19] = and(
     LIT_FRAME,
     [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]],
 );

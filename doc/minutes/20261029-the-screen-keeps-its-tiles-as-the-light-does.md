@@ -668,3 +668,45 @@ record (the closing round):
   adds a pass and lines a level, the levels' spacing, keep and radius in
   `beam::Grid` and the light's layout, and a list and reach a level for the
   light's dispatch (275972a85): more than it takes off.
+## Taken in the closing round: effects alike across zooms (2026-11-02)
+
+The user's word: every effect a drawn surface takes applies at every zoom by
+one computation from what the hit gives at its zoom; one whose reads are
+missing at a zoom stops at one boundary stated from that and fades as the
+others do; none vanishes by accident. Then: shadows show at coarse zooms
+too, the map reaching as far as the eye draws by the light's own mechanism,
+no shadow coarser anywhere than it was.
+
+- **Face bits.** A neighbor hides a face where it keeps as much of its cube
+  as the hit does (`answer::hides(asset, hit_fill)`, the fill handed in the
+  ask's word, `face::ask_word`). It was `answer::whole`, and a hit short of its
+  cube asked nothing (`face::BOX`), so creases, corners and lines went at
+  coarse cells.
+- **The screen's occlusion.** Its radius and falloffs are in sides of the
+  cell drawn at the pixel's distance (`ao_cell`); within the leaf's band, as
+  before.
+- **Shadows.** The map is 12 clip levels, each twice as wide as the last.
+  The first, 2048 texels of 1/8 unit, is the map as it stood, reaching 122
+  units where it read 96. The rest are 512 texels a side, the least that
+  keeps a texel no wider than the camera grid's cell at the level's near
+  edge, to the pyramid top's draw distance (`gpu/shadow.rs` asserts each).
+  The `split_dist` boundary is gone. Each level casts by the same passes
+  over its own head and list; the marks run once for all of them, the
+  stands their own buffer. The memory, from the sizes, over the map as it
+  stood: the levels past the first's layers, 13.75 MiB at 5 bytes a texel;
+  their world words, 11 MiB; the raster's 512 targets, 2 MiB; their lists,
+  11 × 1,549,184 words, 65.0 MiB; the stands, 0.4 MiB, of which the first
+  level's 0.25 MiB left its list. About 92 MiB added to the 150 MiB the map
+  took.
+- **What stays as it was.** A line's width in units, the rim and the air,
+  each one computation at every zoom.
+- **Open: one list for every level's transient words.** The lines, samples
+  and misses (65.0 MiB of the above) are needed only while their level
+  casts. Sharing one asks each level cast whole before the next, which folds
+  the light's spans into each other.
+- **Images stay as they were**, on the user's word: a cell coarser than the
+  ground's leaf keeps its far colors.
+- Looked at once in the app, near to far at noon and 07:00. Creases and
+  lines show on the coarse folds; no tree's shadow showed near the eye at
+  07:00, which was not set beside main's before the GPU was given back.
+  Open. No timing runs, on the user's word.

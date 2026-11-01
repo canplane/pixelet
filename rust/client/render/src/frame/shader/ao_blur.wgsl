@@ -41,7 +41,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let c = cos(angle);
   let s = sin(angle);
   let spin = mat2x2f(c, -s, s, c);
-  let falloff = AO_RADIUS * AO_DIST_FALLOFF * AO_FALLOFF_SHARE;
+  let falloff = AO_RADIUS * ao_cell(pos) * AO_DIST_FALLOFF * AO_FALLOFF_SHARE;
   var occlusion = data.r;
   var cnt = 1.0;
   var disc = DISC;
