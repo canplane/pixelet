@@ -9,8 +9,9 @@
 //! answers whether a state puts the eye in the ground
 //! (orbit/collision.rs `allowed_view`), and the camera setting decides
 //! what follows: through ignores the ground, stop takes a control as far as
-//! it gets, and climb raises the drawn pitch instead (`climb_polar`); where a
-//! roof over the pivot holds the climb, a zoom in goes under it (`dive`).
+//! it gets, and climb keeps what was asked and draws it climbed
+//! (`climbed_view`): the pitch raised over what stands in the way, and
+//! under a roof over the pivot the eye short of it.
 
 pub mod collision;
 
@@ -36,7 +37,7 @@ use crate::domain::control::param::{MAX_DIST, MIN_DIST};
 use crate::domain::param::POS_DAMP;
 use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
-use collision::{allowed_view, climb_polar};
+use collision::{allowed_view, climbed_view};
 use xpute_guest::global::Global;
 
 pub struct OrbitState {
@@ -67,14 +68,25 @@ pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_state();
     let mut asked = c.with_patch(partial);
     if partial.polar.is_some() && settings_store().orbit_obstacle == OrbitObstacleMode::climb {
-        asked.polar = climb_polar(asked.dist, asked.polar, asked.azimuth);
+        asked.polar = climbed_view(asked).polar;
     }
     c.commit_intent(allowed_view(asked, c.intent));
     c.intent
 }
 
+/// Against what is drawn for the distance asked, which a roof may hold short
+/// of it (`climbed_view`).
 pub fn zoom_settling() -> bool {
-    (camera_state().intent.dist - orbit().dist).abs() > ORBIT_DIST_EPS
+    (drawn(camera_state().intent).dist - orbit().dist).abs() > ORBIT_DIST_EPS
+}
+
+/// What the orbit is drawn toward for `view`, asked: in `climb` climbed
+/// (`climbed_view`), else as asked.
+fn drawn(view: Intent) -> Intent {
+    match settings_store().orbit_obstacle {
+        OrbitObstacleMode::climb => climbed_view(view),
+        _ => view,
+    }
 }
 
 /// `delta_y` in CSS pixels.
@@ -131,16 +143,14 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     let to = resolve_to(&mut o.to, drawn_pivot);
     let (at, mut moving) = smooth_vec(drawn_pivot, to, POS_DAMP, delta, ORBIT_PIVOT_EPS);
 
-    let ([dist], m) = smooth_vec([o.dist], [vs.dist], CAM_DAMP, delta, ORBIT_DIST_EPS);
+    // `climb` pitches the facing toward straight down over what is in the
+    // way, rising fast and relaxing slowly, and holds the distance short of a
+    // roof over the pivot.
+    let to_draw = drawn(vs);
+    let ([dist], m) = smooth_vec([o.dist], [to_draw.dist], CAM_DAMP, delta, ORBIT_DIST_EPS);
     o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
-
-    // `climb` pitches the facing toward straight down instead of shortening
-    // dist: rising fast and relaxing slowly while the ground bounds it.
-    let polar = match settings_store().orbit_obstacle {
-        OrbitObstacleMode::climb => climb_polar(o.dist, vs.polar, vs.azimuth),
-        _ => vs.polar,
-    };
+    let polar = to_draw.polar;
     let rate = match (polar < vs.polar, polar < cam.polar) {
         (true, true) => CLIMB_RISE_DAMP,
         (true, false) => CLIMB_RELAX_DAMP,

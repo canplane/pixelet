@@ -1,7 +1,9 @@
 // pxl-kernel/domain/control/camera/orbit/collision.rs
 
 //! How far the orbit gets toward what the controls ask before terrain is in
-//! the way. The controls keep what was asked; the drawn orbit stops short.
+//! the way. The controls keep what was asked; the drawn orbit stops short
+//! (`stop`), or in `climb` is drawn from what was asked and the world alone
+//! (`climbed`).
 
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::{self, V3};
@@ -16,11 +18,11 @@ use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST};
 use crate::domain::query::changes::Memo;
-use crate::domain::query::{finest, over, Hit, Ray, World};
+use crate::domain::query::{finest, Hit, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
-use pxl_spec::space::coord::zoom::{idx_of, units};
+use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The pivot is part of the pose: the eye is `pivot + offset`, and a gate
@@ -49,33 +51,6 @@ fn ground_under(at: &ViewPose, access: &World) -> Option<f64> {
     access.floor_under(&eye(at).1, LEAF_ZOOM).val().flatten()
 }
 
-/// Rise to the ground under the eye, reached by a step-slide at the eye's
-/// height that climbs and does not fall; none where it is slid short, or
-/// where the eye may stand as it is (`embedded`), as the gate lets it.
-fn climb_rise(at: &ViewPose, access: &World) -> Option<f64> {
-    let (_, eye) = eye(at);
-    if embedded(&eye, access) {
-        return None;
-    }
-    let pivot = world_to_canonical(&at.pivot);
-    let floor = idx_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
-    let from = world::at(
-        i64::from(pivot[0]),
-        i64::from(pivot[1]),
-        q3::from_real(over(floor)),
-    );
-    // Near, the eye's way walks the leaves; far, it is a map and goes through.
-    // Where the leaf under the pivot, or a map's under the eye, is not held, the ground under the eye.
-    let walked = access
-        .step_slide(&from, &eye, &eye, false, false)
-        .unwrap_or(eye);
-    if i64::from(walked[0]) != i64::from(eye[0]) || i64::from(walked[1]) != i64::from(eye[1]) {
-        return None;
-    }
-    let ground = access.floor_under(&walked, LEAF_ZOOM).val().flatten()?;
-    Some(ground + EYE_CLEARANCE_U - at.pivot[2])
-}
-
 /// Positive inside the terrain, off the ground under its eye
 /// (`ground_under`).
 fn penetration(at: &ViewPose, ground: Option<f64>) -> Option<f64> {
@@ -97,23 +72,9 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the floor's walk.
     match settings_store().orbit_obstacle {
         OrbitObstacleMode::through => return *to,
-        // A climb that would pass through something solid (a tunnel's roof to the
-        // surface over it) is held as `stop` holds it, but for a zoom in that
-        // goes through what blocks it (`dive`) and a zoom out held short of it
-        // (`held_under`).
-        OrbitObstacleMode::climb => {
-            let access = World::now();
-            let (climbed, failed) = climb_pose(*to, &access);
-            if path_clear(from, &climbed) {
-                return *to;
-            }
-            // Through only where the climb itself failed (`climb_pose`); where only
-            // the way there is blocked, it stops.
-            let dived = failed.then(|| dive(to, &climbed, from, &access)).flatten();
-            if let Some(reached) = dived.or_else(|| held_under(to, from, &access)) {
-                return reached;
-            }
-        }
+        // What is drawn is the asked pose climbed (`climbed`), so nothing asked
+        // is held back.
+        OrbitObstacleMode::climb => return *to,
         OrbitObstacleMode::stop => {}
     }
 
@@ -161,10 +122,6 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
     }
 }
 
-fn in_solid(at: &ViewPose, access: &World) -> bool {
-    solid(at, ground_under(at, access))
-}
-
 /// Whether `at`'s eye is under the top of the ground under it (`ground_under`).
 fn solid(at: &ViewPose, ground: Option<f64>) -> bool {
     ground.is_some_and(|top| top > eye(at).0[2])
@@ -175,7 +132,7 @@ fn solid(at: &ViewPose, ground: Option<f64>) -> bool {
 /// may stand embedded, as the eye's rays do not meet the cell they start in
 /// (pxl-spec-core `cast::walk`). Not a cell with air only over it, so over
 /// open ground the eye keeps its height (`EYE_CLEARANCE_U`). A point is in
-/// something solid as `in_solid` asks it, a cell's side away; where that is
+/// something solid as `solid` asks it, a cell's side away; where that is
 /// not known, not embedded.
 fn embedded(eye: &Q3, access: &World) -> bool {
     let side = q3::from_real(units(GROUND.cell()));
@@ -199,61 +156,9 @@ fn embedded(eye: &Q3, access: &World) -> bool {
 /// where it does not see the pivot: through a wall it stood in the first cell
 /// of (`embedded`) to the wall's far side, which a wall one or two cells
 /// thick would otherwise let it reach; `last_solid` and `at_solid` whether
-/// each is in something solid (`in_solid`), as the sampling loop holds them.
+/// each is in something solid (`solid`), as the sampling loop holds them.
 fn crossed(last_solid: bool, at_solid: bool, at: &ViewPose, access: &World) -> bool {
     last_solid && !at_solid && toward_eye(at, at.dist, access).is_some()
-}
-
-/// What lies between the eye and the pivot is not asked: that hides the
-/// pivot but is not the eye running into anything, save where the eye
-/// comes out of a wall to its far side (`crossed`). The first cell of a wall
-/// or a roof is no obstacle (`embedded`).
-fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
-    let access = World::now();
-    let mut last_solid = in_solid(from, &access);
-    (1..=COLLISION_STEP_SAMPLES).all(|i| {
-        let at = between(from, to, i as f64 / COLLISION_STEP_SAMPLES as f64);
-        let at_solid = in_solid(&at, &access);
-        let clear = (!at_solid || embedded(&eye(&at).1, &access))
-            && !crossed(last_solid, at_solid, &at, &access);
-        last_solid = at_solid;
-        clear
-    })
-}
-
-/// A zoom in where the climb failed (`climb_pose`), at the pitch asked, blocked
-/// by what lies between the pivot and the eye (a tunnel's roof, a cave's):
-/// the eye goes through it to the pivot's side on that line, as far
-/// from the pivot as the zoom asked or the roof leaves, and eases there
-/// through it. Where the roof is nearer the pivot than the orbit comes
-/// (`MIN_DIST`), the eye stands at `MIN_DIST` in the roof's lowest cell,
-/// which its rays do not meet (pxl-spec-core `cast::walk`): it sees the
-/// pivot as from under the roof. Only a zoom in: a zoom out goes no farther
-/// than the roof leaves (`held_under`). None where nothing on the line roofs
-/// the pivot, or `MIN_DIST` is past the roof's lowest cell.
-fn dive(to: &ViewPose, climbed: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose> {
-    if to.dist >= from.dist {
-        return None;
-    }
-    let roof = toward_eye(climbed, from.dist, access)?;
-    // Under it, the near plane's own distance, so the near plane never cuts it.
-    let dist = to.dist.min(roof.t - NEAR).max(MIN_DIST);
-    under(&roof, climbed, dist).then_some(ViewPose { dist, ..*climbed })
-}
-
-/// A zoom out from under a roof between the pivot and the eye, where a dive
-/// left the eye: as far as the roof leaves (`dive`) and no farther, so the
-/// eye does not go back through the roof it came through, whether it stands
-/// short of the roof or in its lowest cell. None where it is not under one.
-fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose> {
-    if to.dist <= from.dist {
-        return None;
-    }
-    let roof = toward_eye(from, to.dist, access)?;
-    under(&roof, from, from.dist).then(|| ViewPose {
-        dist: to.dist.min(from.dist.max(roof.t - NEAR)),
-        ..*to
-    })
 }
 
 /// What `at`'s pivot meets toward its eye within `t_max`: a roof, where the
@@ -266,15 +171,6 @@ fn toward_eye(at: &ViewPose, t_max: f64, access: &World) -> Option<Hit> {
         t_max,
     };
     access.first_hit(&ray, finest()).exact().flatten()
-}
-
-/// Whether the eye `dist` from `at`'s pivot is under `roof`: short of it, or
-/// in its lowest cell, which the eye's rays do not meet (pxl-spec-core
-/// `cast::walk`), on its floor and not its ceiling as the walk's `inside` is.
-fn under(roof: &Hit, at: &ViewPose, dist: f64) -> bool {
-    let eye = v3::add(&at.pivot, &orbit_eye_off(dist, at.polar, at.azimuth));
-    let b = roof.cube;
-    dist < roof.t || (0..3).all(|k| b.min[k] <= eye[k] && eye[k] < b.max[k])
 }
 
 /// How far toward `to` the orbit gets from `from`, as the controls ask it.
@@ -290,27 +186,29 @@ pub fn allowed_view(to: Intent, from: Intent) -> Intent {
     }
 }
 
-/// The shallowest pitch that clears terrain, solved as `acos(h / dist)`
-/// rather than scanned: a scan's fixed angles made the camera judder on flat
-/// ground.
-///
-/// It stands while what it is made of stands: the pose, where its pivot is
-/// on the world, and the ground its walks read (`Columns`).
-pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    let Some(at) = pose(Intent {
-        dist,
-        polar,
-        azimuth,
-    }) else {
-        return polar;
+/// The pose the orbit draws for `view`, asked, in `climb` (`climbed`), kept
+/// while what it is made of stands: the pose, where its pivot is on the
+/// world, and what its rays and floors read (`Memo`). `view` where the
+/// camera stands nowhere.
+pub fn climbed_view(view: Intent) -> Intent {
+    let Some(at) = pose(view) else {
+        return view;
     };
     let climb = Climb {
         at,
         pivot: world_to_canonical(&at.pivot),
     };
-    let last = CLIMB_PITCH.get(|| Memo::NONE);
+    let last = CLIMBED.get(|| Memo::NONE);
     last.forget_touched();
-    last.of(World::now(), climb, |w| climb_pose(at, &w).0.polar)
+    let (dist, polar) = last.of(World::now(), climb, |w| {
+        let c = climbed(at, &w);
+        (c.dist, c.polar)
+    });
+    Intent {
+        dist,
+        polar,
+        ..view
+    }
 }
 
 /// What a climb is made of, by value.
@@ -320,29 +218,75 @@ struct Climb {
     pivot: Q3,
 }
 
-/// The last climb's pitch, kept while what it is made of stands and no
-/// change touched what it read (`Memo`).
-static CLIMB_PITCH: Global<Memo<Climb, f64>> = Global::new();
+/// The last climb's distance and pitch, kept while what it is made of
+/// stands and no change touched what it read (`Memo`).
+static CLIMBED: Global<Memo<Climb, (f64, f64)>> = Global::new();
 
-/// `at` climbed, and whether the climb failed: steepened, the eye is still in
-/// something solid it may not stand in (`embedded`). Over ground alone,
-/// straight down clears it; what does not is a roof over the pivot, a
-/// tunnel's or a cave's, and there the pitch is the one asked, for a zoom
-/// in to go under it on that line (`dive`).
-fn climb_pose(at: ViewPose, access: &World) -> (ViewPose, bool) {
+/// `at` as the orbit draws it: at the distance asked, its pitch raised,
+/// never lowered, until the line from the pivot to the eye is open and the
+/// eye is a cell over the floor under it (`EYE_CLEARANCE_U`), whatever
+/// stands in the way, ground or what is placed; each pass's pitch solved
+/// from what it met (`pitch_over`, `acos` of the floor's rise), not scanned,
+/// so the eye does not judder. Where even straight down does not open the
+/// line, a roof is over the pivot, a tunnel's, a cave's or a cube's: the eye
+/// stays on the line asked, `NEAR` short of the roof and no nearer than
+/// `MIN_DIST`. Of the pose asked and the world alone, so no pose drawn
+/// before holds the eye where it was.
+fn climbed(at: ViewPose, access: &World) -> ViewPose {
     let mut climbed = at;
     for _ in 0..CLIMB_PASSES {
-        let Some(rise) = climb_rise(&climbed, access).filter(|r| *r > 0.0) else {
+        let mut polar = climbed.polar;
+        if let Some(met) = toward_eye(&climbed, climbed.dist, access) {
+            match pitch_over(&met, &climbed) {
+                Some(over) => polar = polar.min(over),
+                None => break,
+            }
+        }
+        let height = climbed.dist * libm::cos(climbed.polar);
+        if let Some(rise) = ground_under(&climbed, access)
+            .map(|g| g + EYE_CLEARANCE_U - climbed.pivot[2])
+            .filter(|&rise| rise > height)
+        {
+            polar = polar.min(libm::acos((rise / climbed.dist).min(1.0)));
+        }
+        if polar == climbed.polar {
             break;
-        };
-        // Only ever steepens.
-        let solved = libm::acos((rise / climbed.dist).min(1.0));
-        climbed.polar = climbed.polar.min(solved);
+        }
+        climbed.polar = polar;
     }
-    match in_solid(&climbed, access) && !embedded(&eye(&climbed).1, access) {
-        true => (at, true),
-        false => (climbed, false),
+    if toward_eye(&climbed, climbed.dist, access).is_none() {
+        return climbed;
     }
+    match toward_eye(&at, at.dist, access) {
+        Some(roof) => ViewPose {
+            dist: (roof.t - NEAR).max(MIN_DIST).min(at.dist),
+            ..at
+        },
+        None => at,
+    }
+}
+
+/// The pitch whose line from `at`'s pivot, on its heading, passes a cell
+/// over the top of what it `met` (`EYE_CLEARANCE_U`): the line rises from
+/// the pivot, so it is lowest at the nearest of `met`'s box along the
+/// heading. None where the line is straight down already, or `met` is not
+/// over the pivot's height.
+fn pitch_over(met: &Hit, at: &ViewPose) -> Option<f64> {
+    let off = orbit_eye_off(1.0, at.polar, at.azimuth);
+    let len = libm::hypot(off[0], off[1]);
+    if len <= f64::EPSILON {
+        return None;
+    }
+    let heading = [off[0] / len, off[1] / len];
+    let b = met.cube;
+    let nearest = [b.min[0], b.max[0]]
+        .into_iter()
+        .flat_map(|x| [b.min[1], b.max[1]].map(|y| [x, y]))
+        .map(|c| (c[0] - at.pivot[0]) * heading[0] + (c[1] - at.pivot[1]) * heading[1])
+        .fold(f64::INFINITY, f64::min)
+        .max(0.0);
+    let rise = b.max[2] + EYE_CLEARANCE_U - at.pivot[2];
+    (rise > 0.0).then(|| libm::atan2(nearest, rise))
 }
 
 #[cfg(test)]
