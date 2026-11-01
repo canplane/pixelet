@@ -46,6 +46,10 @@ macro_rules! float {
             fn fract(self) -> $t {
                 <$t>::fract(self)
             }
+            #[expect(
+                clippy::disallowed_methods,
+                reason = "round_half_away and round_half_up, the variants a library offers"
+            )]
             fn round_away(self) -> $t {
                 <$t>::round(self)
             }

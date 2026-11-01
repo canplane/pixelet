@@ -1,12 +1,13 @@
 // pxl-tool/bin/check_rules.rs
 
 //! Holds the tree to what a reader cannot see and the code must keep: no raw
-//! pointer casts in offset crates, each rounding half to even in every
-//! language, no CommonJS file, each generated shader made from the sources the
-//! tree holds now, the layers' order, where nothing names what is above it,
-//! the screen's pixels read only at the screen, each type's name a head
-//! noun, never a bare participle, and no Rust file outside a crate's module
-//! tree. A rule Rust alone keeps is clippy's (rust/clippy.toml).
+//! pointer casts in offset crates, each rounding half to even where clippy
+//! does not see it, no CommonJS file, each generated shader made from the
+//! sources the tree holds now, the layers' order, where nothing names what is
+//! above it, the screen's pixels read only at the screen, each type's name a
+//! head noun, never a bare participle, and no Rust file outside a crate's
+//! module tree. A rule Rust alone keeps is clippy's (rust/clippy.toml,
+//! xpute/rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -27,29 +28,29 @@ const OFF_CRATES: [&str; 6] = [
     "rust/client-bracket/native/src/",
 ];
 
-/// One rounding: half to even (ARCHITECTURE.md, Terrain). A call that rounds
-/// otherwise, or a floor of a half added, is refused in pixelet's code and
-/// xpute's; xpute's scalar keeps its named variants, round_half_up and
-/// round_half_away, as options a library offers.
+/// One rounding: half to even (xpute ARCHITECTURE.md, `math/scalar`). A call
+/// that rounds otherwise, in TypeScript, WGSL or C++, or a floor of a half
+/// added in any of them or in Rust, is refused in pixelet's code and xpute's;
+/// Rust's calls are clippy's (`disallowed-methods`). xpute's scalar keeps its
+/// named variants, round_half_up and round_half_away, as options a library
+/// offers.
 const ROUNDING_ROOTS: [&str; 3] = ["rust/", "ts/", "xpute/"];
-const ROUNDING_NAMED: [&str; 6] = [
-    "xpute/rust/kit/src/math/scalar.rs",
-    "xpute/rust/kit/src/math/scalar.test.rs",
+const ROUNDING_NAMED: [&str; 4] = [
     "xpute/ts/kit/src/math/scalar.ts",
     "xpute/ts/kit/src/math/scalar.test.ts",
     "xpute/cpp/xpute/kit/math/scalar.hpp",
     "xpute/cpp/xpute/kit/math/scalar.test.cpp",
 ];
-const NOT_EVEN: [&str; 9] = [
-    r"\.round\(\)",
-    r"\bf(?:32|64)::round\b",
-    r"\blibm::roundf?\(",
+const NOT_EVEN: [&str; 4] = [
     r"\bMath\.round\(",
     r"\bstd::round\b",
     // A number's text rounds its last place half up: `fixed` (ts/client shell/fixed.ts) rounds it half to even.
     r"\.toFixed\(",
     r"\.toPrecision\(",
-    // A half added inside a floor's own parentheses, or before `.floor()`.
+];
+/// A half added inside a floor's own parentheses, or before `.floor()`: no
+/// call clippy can name, so Rust's are refused here too.
+const HALF_FLOORED: [&str; 2] = [
     r"\bfloor\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\+\s*0\.5\s*\)",
     r"\([^()]*\+\s*0\.5\s*\)\.floor\(\)",
 ];
@@ -558,10 +559,12 @@ fn run() -> Result<Vec<String>, String> {
         }
     }
 
-    let not_even: Vec<Regex> = NOT_EVEN
-        .iter()
-        .map(|p| Regex::new(p).expect("a rounding's pattern"))
-        .collect();
+    let patterns = |ps: &[&str]| -> Vec<Regex> {
+        ps.iter()
+            .map(|p| Regex::new(p).expect("a rounding's pattern"))
+            .collect()
+    };
+    let (not_even, half_floored) = (patterns(&NOT_EVEN), patterns(&HALF_FLOORED));
     let rounded = Regex::new(r"\.(rs|tsx?|wgsl|hpp|cpp)$").expect("the extensions' pattern");
     for f in files.iter().filter(|f| {
         ROUNDING_ROOTS.iter().any(|r| f.starts_with(r))
@@ -569,8 +572,11 @@ fn run() -> Result<Vec<String>, String> {
             && rounded.is_match(f)
             && !f.ends_with(".gen.wgsl")
     }) {
+        let calls = !f.ends_with(".rs");
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
-            if not_even.iter().any(|r| r.is_match(line)) {
+            if (calls && not_even.iter().any(|r| r.is_match(line)))
+                || half_floored.iter().any(|r| r.is_match(line))
+            {
                 problems.push(format!(
                     "{f}:{}: rounds other than half to even: {}",
                     n + 1,
