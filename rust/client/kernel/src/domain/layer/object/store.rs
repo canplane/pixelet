@@ -32,7 +32,7 @@ use crate::domain::layer::{Answer, Query};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::object::ext::class_of;
 use pxl_spec::object::volume::fold;
-use pxl_spec_core::overwrite::{self, path, Held};
+use pxl_spec_core::overwrite::{self, path, NodeSlot};
 
 /// The asset a placed cell holds, by its kind.
 #[derive(Clone, Debug, PartialEq)]
@@ -291,7 +291,7 @@ impl Store {
 
     /// `descend` under the node `at` of `zoom` that holds `held`, by the step
     /// every descent of the tree takes (`overwrite::child`).
-    fn walk(&self, held: Held, zoom: Zoom, at: [i32; 3], about: f64, enter: &mut Enter) {
+    fn walk(&self, held: NodeSlot, zoom: Zoom, at: [i32; 3], about: f64, enter: &mut Enter) {
         if !held.holds() {
             return;
         }
@@ -336,13 +336,13 @@ impl Store {
     }
 
     /// `entries_in`, from the nodes `from` names, each with what the tree holds
-    /// there (`overwrite::Held`, a descent's), none under another and
+    /// there (`overwrite::NodeSlot`, a descent's), none under another and
     /// `query` within them: each walked from its slot, so what is found and
     /// the order it is found in are the walk's from the roots, taken in the
     /// tree's own order (`tree_key`).
     pub fn entries_under(
         &self,
-        from: &[(Node<3>, Held)],
+        from: &[(Node<3>, NodeSlot)],
         query: &Aabb,
         visit: &mut dyn FnMut(&Entry),
     ) {
@@ -368,7 +368,7 @@ impl Store {
     /// Every leaf meeting the cube at `zoom` that holds `held`, X in the
     /// cube's frame: walked from the slot the cursor names, the node's own or
     /// the leaf over it.
-    fn each_in(&self, zoom: Zoom, at: [i32; 3], held: Held, visit: &mut dyn FnMut(&Entry)) {
+    fn each_in(&self, zoom: Zoom, at: [i32; 3], held: NodeSlot, visit: &mut dyn FnMut(&Entry)) {
         if !held.holds() {
             return;
         }
@@ -389,7 +389,7 @@ impl Store {
 
     /// The value placed at exactly the node `at` of `zoom`, if one is, read
     /// off the cursor a descent holds there (`Query::cursor`, `Query::child`).
-    pub(crate) fn placed(&self, zoom: Zoom, at: [i32; 3], held: Held) -> Option<Entry> {
+    pub(crate) fn placed(&self, zoom: Zoom, at: [i32; 3], held: NodeSlot) -> Option<Entry> {
         (held.holds() && !held.is_folded() && held.zoom() == zoom)
             .then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[held.slot() as usize])))
     }
@@ -532,9 +532,9 @@ impl Cells<'_> {
 impl Query for Store {
     /// What a cube holds, its parent's handed down (pxl-spec-core `overwrite`);
     /// a node over the ground's two axes is read under it.
-    type Cursor = Held;
+    type Cursor = NodeSlot;
 
-    fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> Held {
+    fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> NodeSlot {
         match D {
             3 => overwrite::cursor(
                 &self.columns(),
@@ -542,11 +542,11 @@ impl Query for Store {
                 zoom,
                 [at[0], at[1], at[2]],
             ),
-            _ => Held::branch(0, zoom),
+            _ => NodeSlot::branch(0, zoom),
         }
     }
 
-    fn child<const D: usize>(&self, parent: &Held, (zoom, at): Node<D>, _: Zoom) -> Held {
+    fn child<const D: usize>(&self, parent: &NodeSlot, (zoom, at): Node<D>, _: Zoom) -> NodeSlot {
         match D {
             3 => overwrite::child(&self.columns(), *parent, zoom, [at[0], at[1], at[2]]),
             _ => *parent,
@@ -558,7 +558,12 @@ impl Query for Store {
     /// holds, and a column (a node over the ground's two axes) the cubes of
     /// it that hold (`column`). Its readers tell apart no finer than the
     /// node (pxl-kernel domain/view/observation.rs `bricks`, `order_of_tile`).
-    fn bound<const D: usize>(&self, held: &Held, node: Node<D>, _: Zoom) -> Answer<Option<Aabb>> {
+    fn bound<const D: usize>(
+        &self,
+        held: &NodeSlot,
+        node: Node<D>,
+        _: Zoom,
+    ) -> Answer<Option<Aabb>> {
         Answer::Exact(match D {
             3 => held.holds().then(|| region(node)),
             _ => self.column(&mut Walk::default(), (node.0, [node.1[0], node.1[1]])),
@@ -576,7 +581,7 @@ impl Query for Store {
 #[derive(Default)]
 pub struct Walk {
     at: Vec<Stood>,
-    held: Vec<([i32; 3], Held)>,
+    held: Vec<([i32; 3], NodeSlot)>,
 }
 
 #[derive(Clone, Copy)]
@@ -624,7 +629,7 @@ impl Store {
             let k = walk.at.len();
             let c = column(k);
             let mut leaves = k.checked_sub(1).and_then(|o| walk.at[o].leaves);
-            let mut met = |held: &mut Vec<([i32; 3], Held)>, at: [i32; 3], h: Held| {
+            let mut met = |held: &mut Vec<([i32; 3], NodeSlot)>, at: [i32; 3], h: NodeSlot| {
                 if h.is_folded() {
                     held.push((at, h));
                 } else if h.holds() {

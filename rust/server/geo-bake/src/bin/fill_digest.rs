@@ -29,7 +29,7 @@ use pxl_geo_bake::pyramid::{Base, TileSet};
 use pxl_spec::bake::tile::terrain::{self, Built, TerrainTile};
 use pxl_spec::directory;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec_core::overwrite::{self, Columns, Held};
+use pxl_spec_core::overwrite::{self, Columns, NodeSlot};
 use pxl_spec_core::way::tree::{self, Read};
 use pxl_spec_core::{clipmap, fill};
 
@@ -114,7 +114,13 @@ fn key(root: &Path, set: &Path) -> Result<String, String> {
 
 /// The node `at` of `zoom` and every node under it a reader steps to, into
 /// `h`: its zoom, whether it holds, whether folded, and its word.
-fn walk(l: &impl Columns, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], h: &mut FnvHasher) {
+fn walk(
+    l: &impl Columns,
+    held: NodeSlot,
+    (zoom, cell): (Zoom, Zoom),
+    at: [i32; 3],
+    h: &mut FnvHasher,
+) {
     h.write_u32(zoom);
     if !held.holds() {
         h.write_u32(0);

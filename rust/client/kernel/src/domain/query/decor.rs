@@ -37,7 +37,7 @@ use crate::domain::query::decor::intersect::{box_extent, intersect};
 use pxl_spec_core::area::{self, Shard};
 use pxl_spec_core::cast;
 use pxl_spec_core::clipmap::Found;
-use pxl_spec_core::overwrite::{self, Held};
+use pxl_spec_core::overwrite::{self, NodeSlot};
 
 /// One ray's decor tests, carried along its ground walk.
 pub(super) struct DecorRay {
@@ -86,14 +86,14 @@ fn finest(fits: impl Fn(f64) -> bool) -> Zoom {
 
 /// What is placed in the 27 nodes about the node a striking walk is at, at
 /// each zoom it went through: the objects' tree's cursors there
-/// (pxl-spec-core `overwrite::Held`), each zoom's the children of the zoom
+/// (pxl-spec-core `overwrite::NodeSlot`), each zoom's the children of the zoom
 /// over's, as a node's neighbors are its parent's neighbors' children
 /// (Samet 1989, neighbor finding). A walk enters a node through its
 /// parent, so each zoom's is stepped from the one over in 27 `child` reads,
 /// never walked from the roots.
 pub(super) struct Around {
     at: [[i32; 3]; cast::DEPTH],
-    held: [[Held; 27]; cast::DEPTH],
+    held: [[NodeSlot; 27]; cast::DEPTH],
     /// The 3 × 3 columns about it, a zoom each, as the ground's relief reads
     /// them (`columns`).
     columns_at: [[i32; 2]; cast::DEPTH],
@@ -114,7 +114,7 @@ impl Around {
     pub(super) fn new() -> Around {
         Around {
             at: [[i32::MIN; 3]; cast::DEPTH],
-            held: [[Held::NOTHING; 27]; cast::DEPTH],
+            held: [[NodeSlot::NOTHING; 27]; cast::DEPTH],
             columns_at: [[i32::MIN; 2]; cast::DEPTH],
             columns: [[None; 9]; cast::DEPTH],
         }
@@ -154,7 +154,7 @@ impl Around {
                 if inside {
                     overwrite::cursor(lanes, overwrite::PLACED, zoom, n)
                 } else {
-                    Held::NOTHING
+                    NodeSlot::NOTHING
                 }
             };
         }
@@ -214,12 +214,12 @@ impl Around {
     /// and in the tree's order (`tree_key`), and how many: what a walk from
     /// the roots pruned to a box within them enters first
     /// (`Store::entries_under`). None where the walk did not go through `a`.
-    fn under(&self, (zoom, a): Node<3>) -> Option<([(Node<3>, Held); 27], usize)> {
+    fn under(&self, (zoom, a): Node<3>) -> Option<([(Node<3>, NodeSlot); 27], usize)> {
         let z = zoom as usize;
         if self.at[z] != a {
             return None;
         }
-        let (mut out, mut n) = ([((0, [0; 3]), Held::NOTHING); 27], 0);
+        let (mut out, mut n) = ([((0, [0; 3]), NodeSlot::NOTHING); 27], 0);
         for (k, &held) in self.held[z].iter().enumerate() {
             if !held.holds() {
                 continue;
@@ -310,7 +310,7 @@ impl<'a> World<'a> {
         if !self.decor {
             return None;
         }
-        // Held as it is out to where the view draws the leaves' tiles.
+        // NodeSlot as it is out to where the view draws the leaves' tiles.
         let held = match GROUND.z_at(0.0) {
             LEAF_ZOOM => draw_dist(GROUND, LEAF_ZOOM).min(ray.t_max),
             _ => return None,

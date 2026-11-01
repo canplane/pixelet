@@ -37,7 +37,7 @@
 use crate::clipmap;
 use crate::clipmap::{Bricks, BRICK_SHIFT};
 use crate::fill;
-use crate::overwrite::{self, Columns, Held, AIR as PLACED_AIR, BRANCH};
+use crate::overwrite::{self, Columns, NodeSlot, AIR as PLACED_AIR, BRANCH};
 use crate::{ground, Zoom, LEAF_CELL};
 
 /// The tree's columns as its builder writes them, a word a slot.
@@ -143,15 +143,15 @@ pub fn span([lo, hi]: [i32; 2], cell: Zoom) -> (i32, u32) {
 /// (`overwrite::down`), as `overwrite::cursor` steps; nothing where the root
 /// holds no node there. A descent asks this once, where it finds the
 /// brick (pxl-spec-core world.rs `node`).
-pub fn cursor(columns: &impl Columns, root: u32, cell: Zoom, zoom: Zoom, at: [i32; 3]) -> Held {
+pub fn cursor(columns: &impl Columns, root: u32, cell: Zoom, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
     let (first, z0) = root_slot(root);
     let top = cell - BRICK_SHIFT;
     if root == 0 || zoom < top {
-        return Held::NOTHING;
+        return NodeSlot::NOTHING;
     }
     let k = (at[2] >> (zoom - top)) - z0;
     if k < 0 || k >= ROOT_NODES as i32 {
-        return Held::NOTHING;
+        return NodeSlot::NOTHING;
     }
     overwrite::down(columns, first + k as u32, top, zoom, at)
 }

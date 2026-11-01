@@ -39,7 +39,7 @@
 use crate::answer::Kind;
 use crate::clipmap::{self, eye_cell, ACROSS, BRICK_SHIFT, EYE_CLIP_LEVELS};
 use crate::overwrite;
-use crate::overwrite::Held;
+use crate::overwrite::NodeSlot;
 use crate::overwrite::{cut_box, BOXES};
 use crate::tally;
 use crate::world::INHERITED_WORDS;
@@ -273,14 +273,14 @@ pub fn over_box(zoom: Zoom, [x, y]: [i32; 2], b: [i32; 4]) -> bool {
 }
 
 /// Whether what was handed a node of what is placed, its `Inherited`'s word
-/// `placed` (`overwrite::Held`), answers from a slot of the child group written
+/// `placed` (`overwrite::NodeSlot`), answers from a slot of the child group written
 /// whose first slot is `first`. A write folds up its own path in place, and
 /// that path's nodes stand over its box (`over_box`); but where it splits a
 /// leaf that covered wider than the box, or takes a child group a join let go of,
 /// a node beside the box holds a slot the write changed, and reads another
 /// node's what is placed after it.
 pub fn reads_written(placed: u32, first: u32) -> bool {
-    let held = Held::of_word(placed);
+    let held = NodeSlot::of_word(placed);
     held.holds() && held.slot().wrapping_sub(first) < overwrite::CHILDREN
 }
 
@@ -371,12 +371,12 @@ mod tests {
     /// one of that child group's slots, and not where it holds nothing.
     #[test]
     fn node_reads_child_groups() {
-        use crate::overwrite::{Held, CHILDREN};
-        let held = |slot: u32| Held::branch(slot, 9).word();
+        use crate::overwrite::{NodeSlot, CHILDREN};
+        let held = |slot: u32| NodeSlot::branch(slot, 9).word();
         assert!(reads_written(held(40), 40));
         assert!(reads_written(held(40 + CHILDREN - 1), 40));
         assert!(!reads_written(held(40 + CHILDREN), 40));
         assert!(!reads_written(held(39), 40));
-        assert!(!reads_written(Held::NOTHING.word(), 0));
+        assert!(!reads_written(NodeSlot::NOTHING.word(), 0));
     }
 }

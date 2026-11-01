@@ -497,7 +497,7 @@ impl<Q: Brick> Columns for Q {
 /// Where a node's cells at `cell`, a brick's or fewer, are held, as `step`
 /// finds them: the zoom they were asked at, the clip level holding them present
 /// (its zoom `from`, at `cell` or coarser, and the slot), or none; one word,
-/// as a descent carries it down beside what is placed (`overwrite::Held`).
+/// as a descent carries it down beside what is placed (`overwrite::NodeSlot`).
 /// `step` reads only the brick at `cell` holding them and the bricks over
 /// it, so every node whose cells lie in that brick has this answer: a
 /// descent hands it from a node to the nodes under it (`step`). `NONE` was

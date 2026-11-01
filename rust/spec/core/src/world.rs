@@ -23,7 +23,7 @@ use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 
 /// What a node is handed by the node over it, each source's own, so a
 /// descent asks each node's sources once rather than again from the top:
-/// its caves (`Cave`), what is placed (`overwrite::Held`, its cursor in the
+/// its caves (`Cave`), what is placed (`overwrite::NodeSlot`, its cursor in the
 /// objects' tree), what is known of the service area at its shard
 /// (`area::Shard`), where the clip levels held the ground's cells of a node
 /// over it (`clipmap::Found`, `clipmap::step`), and the ways' cursor in the
@@ -32,10 +32,10 @@ use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 #[derive(Clone, Copy)]
 pub struct Inherited {
     pub cave: Cave,
-    pub placed: overwrite::Held,
+    pub placed: overwrite::NodeSlot,
     pub shard: Shard,
     pub ground: Found,
-    pub ways: overwrite::Held,
+    pub ways: overwrite::NodeSlot,
 }
 
 /// An `Inherited`'s words, as a GPU holds one in storage (`Inherited::words`).
@@ -58,10 +58,10 @@ impl Inherited {
     pub const fn of_words(w: [u32; INHERITED_WORDS as usize]) -> Inherited {
         Inherited {
             cave: Cave::of_word(w[0]),
-            placed: overwrite::Held::of_word(w[1]),
+            placed: overwrite::NodeSlot::of_word(w[1]),
             shard: Shard::of_word(w[2]),
             ground: Found::of_word(w[3]),
-            ways: overwrite::Held::of_word(w[4]),
+            ways: overwrite::NodeSlot::of_word(w[4]),
         }
     }
 
@@ -74,7 +74,7 @@ impl Inherited {
             placed: overwrite::cursor(columns, PLACED, zoom, c),
             shard: Shard::UNKNOWN,
             ground: Found::NONE,
-            ways: overwrite::Held::NOTHING,
+            ways: overwrite::NodeSlot::NOTHING,
         }
     }
 
@@ -84,10 +84,10 @@ impl Inherited {
     pub fn unplaced((zoom, c): (Zoom, [i32; 3])) -> Inherited {
         Inherited {
             cave: Cave::of(zoom, c),
-            placed: overwrite::Held::NOTHING,
+            placed: overwrite::NodeSlot::NOTHING,
             shard: Shard::UNKNOWN,
             ground: Found::NONE,
-            ways: overwrite::Held::NOTHING,
+            ways: overwrite::NodeSlot::NOTHING,
         }
     }
 
@@ -211,7 +211,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
                 c,
             )
         } else {
-            overwrite::Held::NOTHING
+            overwrite::NodeSlot::NOTHING
         };
     }
     // The ways where the cell's column was read: their leaf or fold over it.
@@ -342,7 +342,7 @@ pub struct Placed {
     first: [i32; 3],
     /// The nodes gone into, a level each, the child each is at, and the
     /// level at; none gone into at 0.
-    held: [overwrite::Held; PLACED_LEVELS + 1],
+    held: [overwrite::NodeSlot; PLACED_LEVELS + 1],
     idx: [[i32; 3]; PLACED_LEVELS + 1],
     next: [u32; PLACED_LEVELS + 1],
     depth: usize,
@@ -355,7 +355,7 @@ pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> Placed {
         lo,
         hi,
         first: [lo[0] >> s, lo[1] >> s, lo[2] >> s],
-        held: [overwrite::Held::NOTHING; PLACED_LEVELS + 1],
+        held: [overwrite::NodeSlot::NOTHING; PLACED_LEVELS + 1],
         idx: [[0; 3]; PLACED_LEVELS + 1],
         next: [0; PLACED_LEVELS + 1],
         depth: 0,
@@ -413,7 +413,7 @@ impl Placed {
             let h = if meets {
                 overwrite::child(columns, self.held[d - 1], z, c)
             } else {
-                overwrite::Held::NOTHING
+                overwrite::NodeSlot::NOTHING
             };
             if h.holds() && h.is_folded() && d < PLACED_LEVELS {
                 (self.held[d], self.idx[d], self.next[d + 1]) = (h, c, 0);
