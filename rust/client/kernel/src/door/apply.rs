@@ -1,32 +1,23 @@
 // pxl-kernel/door/apply.rs
 
-//! The shell's commands, applied.
+//! The shell's commands, applied: each major's by its own module beside.
+
+mod camera;
+mod edit;
+mod fs;
+mod gpu;
+mod input;
+mod perf;
+mod scene;
+mod sensor;
+mod setting;
+mod shell;
+mod surface;
+mod sys;
 
 use super::State;
-use crate::domain::control::camera::controller;
-use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::cmd::{self as abi, Command};
-use crate::domain::control::interaction::edit;
-use crate::domain::control::navigation::follow_mode;
-use crate::domain::layer::object::repository;
-use crate::domain::scene::character::preview;
-use crate::domain::scene::marker;
-use crate::domain::view::frame::resolution;
-use crate::domain::view::setting::store;
-use crate::pointer;
-use crate::profiler::read;
-use crate::profiler::record;
-use crate::sys::io::source;
-use crate::sys::sched::clock;
 use crate::sys::sched::edge;
-use crate::turn;
-use crate::turn::HostFrame;
-use crate::turn::Platform;
-use pxl_render::gpu::api;
-use pxl_render::gpu::surface;
-use xpute_guest::clock::now;
-use xpute_guest::global::Global;
-use xpute_guest::mem::{off_of, off_of_slice};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
@@ -62,419 +53,31 @@ fn ask_turn(s: &mut State) -> Result<Option<i32>, MarshalError> {
     Ok(Some(0))
 }
 
-/// Applies one submission. None (replied as ENOSYS) for an unknown command
-/// or an event submitted as one.
+/// Applies one submission, by its major's module. None (replied as ENOSYS)
+/// for an unknown command or an event submitted as one.
 pub(super) fn apply(
     s: &mut State,
     number: u32,
     pkt: &Option<&[u8]>,
 ) -> Result<Option<i32>, MarshalError> {
-    use crate::domain::control::camera::input::{
-        camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move,
-        camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel,
-    };
-    use crate::domain::control::interaction::{hold, holding};
-    use crate::domain::control::sensor::{device_orientation, geolocation};
-    use crate::domain::view::setting::store::{
-        are_settings_loaded, settings_open, settings_store, SettingKey,
-    };
-    use crate::profiler::window::{profiler_follow, profiler_window_start, profiler_window_stop};
-    use crate::shell as ui;
-    use crate::sys::sched::edge::request_world_tick;
-    use crate::turn::world_platform;
-
     let Some(cmd) = Command::of(number) else {
         return Ok(None);
     };
-    match cmd {
-        Command::WORLD_FRAME => {
-            let p = abi::WorldFrame::read(given(pkt)?)?;
-            refuse_unless(
-                p.refresh_ms >= 0.0 && p.paced_ms >= 0.0 && p.unix_ms.is_finite(),
-                Errno::EINVAL,
-            )?;
-            // The step is the one clock's change since the last frame: none on
-            // the first, and none where the clock was set back.
-            let last = clock::wall_now();
-            let delta = if last > 0.0 {
-                ((p.unix_ms - last) / 1000.0).max(0.0)
-            } else {
-                0.0
-            };
-            turn::on_world_frame_asked(HostFrame {
-                delta,
-                refresh_ms: p.refresh_ms,
-                paced_ms: p.paced_ms,
-                interactive: p.interactive,
-                credits: p.credits,
-            });
-            clock::set_wall_now(p.unix_ms);
-            Ok(Some(0))
-        }
-        Command::WORLD_BOOT => {
-            let p = abi::WorldBoot::read(given(pkt)?)?;
-            super::on_host_attached(s);
-            store::set_development(p.development);
-            turn::set_world_platform(Platform {
-                geolocation: p.geolocation,
-                orient: device_orientation::OrientationPlatform {
-                    supported: p.orient,
-                    needs_permission: p.orient_permission,
-                    silence_is_loss: p.orient_silence_is_loss,
-                },
-            });
-            // Both kept slots, read from a turn on: what waits on the settings,
-            // the profiler and the snapshot's, starts once they are in (turn.rs).
-            settings_open();
-            repository::open();
-            // The shell holds the kernel's state from its first render on.
-            ask_turn(s)
-        }
-        Command::WORLD_SOURCE => {
-            let p = abi::WorldSource::read(given(pkt)?)?;
-            refuse_unless(
-                source::declare(p.top_zoom, p.format, p.shard.iter()).is_ok(),
-                Errno::EINVAL,
-            )?;
-            Ok(Some(0))
-        }
-        Command::WORLD_KEPT_EMPTIED => {
-            use crate::sys::io::file::{self, Kept};
-            let p = abi::WorldKeptEmptied::read(given(pkt)?)?;
-            let kept = or_refuse(
-                Kept::of_slot(p.slot).filter(|&k| file::is_refused(k)),
-                Errno::EINVAL,
-            )?;
-            file::on_emptied(kept);
-            // The settings write what they hold from the next keep on; the
-            // objects are read again, empty, and saved from then on.
-            match kept {
-                Kept::Settings => store::on_settings_emptied(),
-                Kept::Objects => repository::open(),
-            }
-            Ok(Some(0))
-        }
-        Command::INPUT_RECT => {
-            let p = abi::InputRect::read(given(pkt)?)?;
-            refuse_unless(p.width >= 0.0 && p.height >= 0.0, Errno::EINVAL)?;
-            camera_input_rect(p);
-            Ok(Some(0))
-        }
-        Command::INPUT_POINTER => {
-            let p = abi::InputPointer::read(given(pkt)?)?;
-            match p.phase {
-                abi::PointerPhase::Down => {
-                    camera_pointer_down(p.pointer_type, p.id, p.button, p.x, p.y);
-                }
-                abi::PointerPhase::Move => camera_pointer_move(p.pointer_type, p.id, p.x, p.y),
-                abi::PointerPhase::Up => {
-                    if let Some([x, y]) = camera_pointer_up(p.pointer_type, p.id) {
-                        pointer::tap(x, y);
-                    }
-                }
-                abi::PointerPhase::Out => camera_pointer_out(),
-                abi::PointerPhase::Cancel => {
-                    camera_pointer_up(p.pointer_type, p.id);
-                }
-            }
-            Ok(Some(0))
-        }
-        Command::INPUT_HOLD => {
-            use pxl_spec::asset::cube::cube_of;
-            use pxl_spec::asset::DecorId;
-            let p = abi::InputHold::read(given(pkt)?)?;
-            let mut holding = holding();
-            holding.active_tool = p.tool;
-            holding.object_tier = p.tier;
-            match p.tool {
-                abi::ActiveTool::Object => {
-                    holding.object_cube = or_refuse(cube_of(p.val), Errno::EINVAL)?;
-                }
-                abi::ActiveTool::Decor => {
-                    holding.decor_id = or_refuse(
-                        u16::try_from(p.val).ok().and_then(DecorId::of),
-                        Errno::EINVAL,
-                    )?;
-                }
-                abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
-            }
-            hold(holding);
-            camera_rehover();
-            Ok(Some(0))
-        }
-        Command::INPUT_MARKER_WORDS => {
-            let text = abi::InputMarkerWords::read(given(pkt)?)?.text;
-            or_refuse(edit::draft_words(text).ok(), Errno::EMSGSIZE)?;
-            Ok(Some(0))
-        }
-        Command::INPUT_MARKER_PUT => {
-            edit::put_marker();
-            Ok(Some(0))
-        }
-        Command::INPUT_MARKER_CANCEL => {
-            edit::cancel_marker();
-            Ok(Some(0))
-        }
-        Command::INPUT_WHEEL => {
-            camera_wheel(abi::InputWheel::read(given(pkt)?)?.delta_y);
-            Ok(Some(0))
-        }
-        Command::INPUT_KEYS => {
-            let p = abi::InputKeys::read(given(pkt)?)?;
-            camera_keys(p.x, p.y);
-            Ok(Some(0))
-        }
-        Command::INPUT_TRACKING => {
-            ui::tracking_action(abi::InputTracking::read(given(pkt)?)?.tracking);
-            request_world_tick();
-            Ok(Some(0))
-        }
-        Command::INPUT_COMPASS_RESET => {
-            // Following the heading would turn it straight back.
-            if !follow_mode::following() {
-                controller::reset_azimuth();
-            }
-            ask_turn(s)
-        }
-        Command::INPUT_GOTO => {
-            let p = abi::InputGoto::read(given(pkt)?)?;
-            refuse_unless(on_earth(p.lon, p.lat), Errno::EINVAL)?;
-            ui::go_to_deg(
-                p.lon,
-                p.lat,
-                IntentPatch {
-                    dist: p.dist,
-                    azimuth: p.azimuth,
-                    polar: p.polar,
-                },
-            );
-            ask_turn(s)
-        }
-        Command::INPUT_XR_POSE => {
-            let p = abi::InputXrPose::read(given(pkt)?)?;
-            // A unit quaternion by the protocol; one of no length turns nothing.
-            refuse_unless(
-                p.qx * p.qx + p.qy * p.qy + p.qz * p.qz + p.qw * p.qw > 0.0,
-                Errno::EINVAL,
-            )?;
-            controller::tracked_pose([p.x, p.y, p.z], [p.qx, p.qy, p.qz, p.qw]);
-            ask_turn(s)
-        }
-        Command::INPUT_XR_POSE_END => {
-            controller::tracked_end();
-            ask_turn(s)
-        }
-        Command::SENSOR_POS => {
-            let p = abi::SensorPos::read(given(pkt)?)?;
-            refuse_unless(
-                on_earth(p.lon, p.lat) && p.accuracy.is_none_or(|a| a >= 0.0) && bearing(p.course),
-                Errno::EINVAL,
-            )?;
-            // An accuracy the device does not give is no accuracy at all.
-            geolocation::geolocation_fix(
-                p.lon,
-                p.lat,
-                p.alt,
-                p.accuracy.unwrap_or(f64::INFINITY),
-                p.course,
-            );
-            Ok(Some(0))
-        }
-        Command::SENSOR_FAILED => {
-            let p = abi::SensorFailed::read(given(pkt)?)?;
-            match p.sensor {
-                // A failure the platform named no cause for is Other's.
-                abi::Sensor::Geolocation => {
-                    geolocation::geolocation_err(
-                        p.code.unwrap_or(abi::GeolocationErrorCode::Other),
-                    );
-                }
-                abi::Sensor::Orientation => device_orientation::on_orient_lost(),
-            }
-            Ok(Some(0))
-        }
-        Command::SENSOR_ORIENT => {
-            let p = abi::SensorOrient::read(given(pkt)?)?;
-            // DeviceOrientationEvent's ranges, closed: a reading at an end is still one.
-            let within = |v: Option<f64>, half: f64| v.is_none_or(|v| (-half..=half).contains(&v));
-            refuse_unless(
-                bearing(p.webkit_compass_heading)
-                    && bearing(p.alpha)
-                    && within(p.beta, 180.0)
-                    && within(p.gamma, 90.0),
-                Errno::EINVAL,
-            )?;
-            device_orientation::orient_event(p.webkit_compass_heading, p.alpha, p.beta, p.gamma);
-            Ok(Some(0))
-        }
-        Command::SENSOR_PERMISSION => {
-            let p = abi::SensorPermission::read(given(pkt)?)?;
-            match p.sensor {
-                abi::Sensor::Geolocation => {
-                    if p.answer == abi::PermissionAnswer::Granted {
-                        geolocation::on_geolocation_permission_granted(
-                            world_platform().geolocation,
-                        );
-                    }
-                }
-                abi::Sensor::Orientation => {
-                    device_orientation::orient_permission(p.answer, world_platform().orient);
-                }
-            }
-            Ok(Some(0))
-        }
-        Command::WORLD_VISIBILITY => {
-            let visible = abi::WorldVisibility::read(given(pkt)?)?.visible;
-            geolocation::geolocation_visibility(visible, world_platform().geolocation);
-            if visible {
-                device_orientation::orient_visible();
-            } else {
-                repository::flush();
-            }
-            Ok(Some(0))
-        }
-        Command::INPUT_LOCATE => {
-            ui::location_enable();
-            ask_turn(s)
-        }
-        Command::WORLD_VIEW => {
-            if abi::WorldView::read(given(pkt)?)?.shown {
-                ui::sensors_open();
-            } else {
-                ui::sensors_close();
-            }
-            ask_turn(s)
-        }
-        Command::GPU_READY => {
-            api::on_device_answered();
-            request_world_tick();
-            Ok(Some(0))
-        }
-        Command::SURFACE_OPEN => {
-            let handle = surface::surface_open(abi::SurfaceOpen::read(given(pkt)?)?.role);
-            if handle != 0 {
-                request_world_tick();
-            }
-            Ok(Some(handle as i32))
-        }
-        Command::SURFACE_RESIZE => {
-            let p = abi::SurfaceResize::read(given(pkt)?)?;
-            refuse_unless(p.device_pixel_ratio > 0.0, Errno::EINVAL)?;
-            let role = surface::surface(p.surface).map_or(0, |s| s.role);
-            let ratio = resolution::surface_ratio(role, [p.width, p.height], p.device_pixel_ratio);
-            refuse_unless(
-                surface::surface_resize(p.surface, p.width, p.height, p.device_pixel_ratio, ratio),
-                Errno::EBADF,
-            )?;
-            request_world_tick();
-            Ok(Some(0))
-        }
-        Command::SURFACE_CLOSE => {
-            let surface = abi::SurfaceClose::read(given(pkt)?)?.surface;
-            refuse_unless(surface::surface(surface).is_some(), Errno::EBADF)?;
-            super::close_surface(surface);
-            Ok(Some(0))
-        }
-        Command::SETTING_SET => {
-            let p = abi::SettingSet::read(given(pkt)?)?;
-            // A change before the slot is read would be read over.
-            refuse_unless(are_settings_loaded(), Errno::EAGAIN)?;
-            let changed = settings_store().set_setting(p.key, p.value);
-            refuse_unless(changed.is_some(), Errno::EINVAL)?;
-            if changed == Some(true) && p.key == SettingKey::profiler {
-                profiler_follow(p.value == 1);
-            }
-            ask_turn(s)
-        }
-        Command::CHAT_SEND => {
-            marker::append_chat_line(abi::ChatSend::read(given(pkt)?)?.text);
-            ask_turn(s)
-        }
-        Command::PREVIEW_OPEN => {
-            let p = abi::PreviewOpen::read(given(pkt)?)?;
-            refuse_unless(surface::surface(p.surface).is_some(), Errno::EBADF)?;
-            refuse_unless(
-                preview::preview_open(p.surface, p.group, p.number),
-                Errno::EINVAL,
-            )?;
-            ask_turn(s)
-        }
-        Command::PREVIEW_CLOSE => {
-            refuse_unless(
-                preview::preview_close(abi::PreviewClose::read(given(pkt)?)?.surface),
-                Errno::EBADF,
-            )?;
-            ask_turn(s)
-        }
-        // Records only while the profiler setting is on: a window opened with the
-        // panel off would record with nothing to show or stop it.
-        Command::PROFILER_START => {
-            refuse_unless(settings_store().profiler, Errno::EPERM)?;
-            refuse_unless(profiler_window_start(), Errno::ENOMEM)?;
-            ask_turn(s)
-        }
-        Command::PROFILER_STOP => {
-            profiler_window_stop();
-            ask_turn(s)
-        }
-        // Memory is at most 1 GiB, so an address fits an i32.
-        Command::PROFILER_READ => {
-            let window_ms = abi::ProfilerRead::read(given(pkt)?)?.window_ms;
-            Ok(Some(read_timed(|| profiler_read(window_ms)) as i32))
-        }
-        Command::PROFILER_RINGS => Ok(Some(read_timed(profiler_rings) as i32)),
-        Command::WORLD_SNAPSHOT | Command::SENSOR_START | Command::SENSOR_STOP => Ok(None),
+    match abi::Major::of(number >> 8) {
+        Some(abi::Major::SYS) => sys::apply(s, cmd, pkt),
+        Some(abi::Major::INPUT) => input::apply(s, cmd, pkt),
+        Some(abi::Major::SENSOR) => sensor::apply(s, cmd, pkt),
+        Some(abi::Major::FS) => fs::apply(s, cmd, pkt),
+        Some(abi::Major::GPU) => gpu::apply(s, cmd, pkt),
+        Some(abi::Major::SURFACE) => surface::apply(s, cmd, pkt),
+        Some(abi::Major::SETTING) => setting::apply(s, cmd, pkt),
+        Some(abi::Major::SCENE) => scene::apply(s, cmd, pkt),
+        Some(abi::Major::CAMERA) => camera::apply(s, cmd, pkt),
+        Some(abi::Major::PERF) => perf::apply(s, cmd, pkt),
+        Some(abi::Major::EDIT) => edit::apply(s, cmd, pkt),
+        Some(abi::Major::SHELL) => shell::apply(s, cmd, pkt),
+        None => Ok(None),
     }
-}
-
-/// A read of the profiler, its time the profiler's cost to the interval
-/// (profiler/record.rs `profiler_record_read`).
-fn read_timed(read: impl FnOnce() -> u32) -> u32 {
-    let at = now();
-    let addr = read();
-    record::profiler_record_read(now() - at);
-    addr
-}
-
-/// The address of READ's words (profiler.json): the statistics over
-/// `window_ms`, and what holds now. Read in place rather than posted: `Door::post` asserts on a
-/// full completion ring, and reading allocates nothing in the heap being
-/// measured. Valid until the next turn.
-fn profiler_read(window_ms: Option<f64>) -> u32 {
-    use crate::profiler::spec::READ;
-    // On the heap, not a static: a native build's statics are outside the shell-readable memory.
-    static WORDS: Global<Box<[u32; READ::WORDS as usize]>> = Global::new();
-    let stats = read::profiler_stats(window_ms);
-    let now = read::profiler_now();
-    let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
-    w[READ::stats_at as usize] = off_of_slice(&raw const *stats) as u32;
-    w[READ::stats_words as usize] = stats.len() as u32;
-    w[READ::now_at as usize] = off_of_slice(&raw const *now) as u32;
-    w[READ::now_words as usize] = now.len() as u32;
-    off_of(w.as_ptr()) as u32
-}
-
-/// The address of RINGS's words: the three rings as they lie, which a
-/// reader of every record asks without the statistics it would not read.
-fn profiler_rings() -> u32 {
-    use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
-    use crate::profiler::spec::{RING, RINGS, RING_NAMES};
-    // On the heap, as READ's words are.
-    static WORDS: Global<Box<[u32; RINGS::WORDS as usize]>> = Global::new();
-    let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
-    let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
-    // In RING_NAMES' order: frames, tasks, worst.
-    let rings: [(usize, usize); RING_NAMES] = [
-        (off_of_slice(&raw const *frames), frames.len()),
-        (off_of_slice(&raw const *tasks), tasks.len()),
-        (off_of_slice(&raw const *worst), worst.len()),
-    ];
-    for (k, (at, cnt)) in rings.into_iter().enumerate() {
-        let slot = (RINGS::slots + k as u32 * RING::WORDS) as usize;
-        w[slot + RING::at as usize] = at as u32;
-        w[slot + RING::cnt as usize] = cnt as u32;
-    }
-    off_of(w.as_ptr()) as u32
 }
 
 #[cfg(test)]

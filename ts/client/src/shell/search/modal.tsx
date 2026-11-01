@@ -26,9 +26,11 @@ import {
   weight,
 } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
-import { Command, encode_input_goto, SensorStatus } from "@/abi/cmd.spec.ts";
+import { SensorStatus } from "@/abi/cmd.spec.ts";
 import { statusColor } from "@/shell/world/top/sensor-icons.tsx";
-import { kernel_command, kernel_room, kernel_snapshot } from "@/port/shell.ts";
+import { kernel_snapshot } from "@/port/shell.ts";
+import { kernel_goto } from "@/port/camera.ts";
+import { kernel_locate } from "@/port/sensor.ts";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@/shell/ui/text-field.tsx";
@@ -172,7 +174,7 @@ function LocateCard() {
         style={styles.locateCard}
       >
         <Pressable
-          onPress={() => kernel_command(Command.INPUT_LOCATE)}
+          onPress={kernel_locate}
           accessibilityRole="button"
           style={styles.locateRow}
         >
@@ -273,10 +275,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }, [q]);
 
   function select(result: SearchResult) {
-    kernel_command(
-      Command.INPUT_GOTO,
-      encode_input_goto(kernel_room, result.lon, result.lat, null, null, null),
-    );
+    kernel_goto(result.lon, result.lat);
     onClose();
   }
 
@@ -457,7 +456,7 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
 });
 
-/** What Carto draws a place's kind as, as the map does
+/** What Carto draws a place's kind as, as the world does
  * (`place_theme.spec.ts`): its symbol in its fill, or a dot of the fill for
  * a kind with none; nothing for a kind Carto draws no point for. */
 function placeTheme(

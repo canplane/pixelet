@@ -1,8 +1,10 @@
 // @pxl/client/port/shell.ts
 
-/** The kernel as the shell reaches it, and what the drivers below it show the
- * UI. The shell names no host and no driver (AGENTS.md), so a function here
- * that only forwards to one is that boundary, not a rename. */
+/** The kernel as the shell reaches it, beside each major's own commands
+ * (input.ts, edit.ts, camera.ts, scene.ts, setting.ts, sensor.ts, surface.ts,
+ * perf.ts, snapshot.ts), and what the drivers below it show the UI. The shell
+ * names no host and no driver (AGENTS.md), so a function here that only
+ * forwards to one is that boundary, not a rename. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type {
@@ -11,19 +13,11 @@ import type {
   PacketRoom,
   PacketWriter,
 } from "@xpute/kit/wire/xtp/mod.ts";
-import {
-  Command,
-  encode_input_tracking,
-  encode_setting_set,
-  Tracking,
-} from "@/abi/cmd.spec.ts";
+import type { Command } from "@/abi/cmd.spec.ts";
 import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
-import { bracket } from "@/bracket.tsx";
-import { send_input } from "./input.ts";
 
 export { kernel_snapshot } from "@/port/snapshot.ts";
-export { kernel_hold, kernel_keys } from "./input.ts";
 
 // Where the client's boot stands, and the stop code of a kernel that stopped.
 export { boot_state, watch_boot } from "@/abi/boot.ts";
@@ -42,29 +36,9 @@ export { asset_url } from "@/driver/namespace/route.ts";
 export { SEARCH_URL } from "@/driver/namespace/route.spec.ts";
 export { INGESTED, PACK } from "@/driver/namespace/ingested.spec.ts";
 
-/** iOS Safari's compass prompt runs here, inside the press. */
-export async function kernel_tracking(tracking: Tracking): Promise<void> {
-  if (tracking === Tracking.Follow && !(await bracket.sensor.orient.permit())) {
-    console.error("[orientation] could not start the sensor.");
-    return;
-  }
-  send_input(
-    Command.INPUT_TRACKING,
-    encode_input_tracking(HOST.doorbell, tracking),
-  );
-}
-
 /** A command of the kernel's, rung at once with no quota. */
 export function kernel_command(cmd: Command, pkt?: PacketWriter): void {
   HOST.now(port.SHELL, cmd, pkt);
-}
-
-export function kernel_setting(key: u32, value: u32): void {
-  HOST.now(
-    port.SHELL,
-    Command.SETTING_SET,
-    encode_setting_set(HOST.doorbell, key, value),
-  );
 }
 
 /** Where the shell writes a command's packet (`encode_*`), in place: the

@@ -399,8 +399,8 @@ impl Store {
         self.ext.get(class_of(e.state)?, e.ext)
     }
 
-    /// A marker's words, as put up; none for anything else.
-    pub fn words(&self, e: &Entry) -> Option<&str> {
+    /// A marker's text, as put up; none for anything else.
+    pub fn text(&self, e: &Entry) -> Option<&str> {
         match self.ext(e)? {
             Ext::MarkerText(t) => Some(t),
         }
@@ -409,7 +409,7 @@ impl Store {
     /// Applies every write; the cubes that changed. A write whose record its
     /// pool has no room for is left out, as if never sent. A write with a
     /// record changes its cube whatever its word: the record it replaces is
-    /// freed first, so its slot is the one kept, and new words under the old
+    /// freed first, so its slot is the one kept, and new text under the old
     /// handle leave the word as it was.
     pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<Aabb> {
         let mut changed = Vec::new();

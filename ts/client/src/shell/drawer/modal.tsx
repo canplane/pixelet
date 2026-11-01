@@ -125,7 +125,7 @@ function DecorItem({
 /** A temporary way in: one marker, its words not kept yet. */
 function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   const { t } = useTranslation();
-  const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Marker);
+  const active = useKernel(({ tool: h }) => h.active === ActiveTool.Marker);
 
   return (
     <Item label={t("assets.pin")} active={active} cell={cell} onPress={onPick}>

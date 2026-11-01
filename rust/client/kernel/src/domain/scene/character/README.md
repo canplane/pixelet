@@ -14,8 +14,8 @@ An actor's instance is held by its holder, which stands it where it is (its
 - the companion, the person and the pet at the pivot, each a figure the walk
   moves (`companion.rs` `Figure`, `FIGURES`), placed each tick in the
   interaction phase (`../../../turn.rs` `companion_tick`);
-- the variant picker's display cases, a character idling in its case's own
-  canvas (`preview.rs`, `CASES_MAX`).
+- the variant picker's previews, a character idling in its preview's own
+  canvas (`preview.rs`, `PREVIEWS_MAX`).
 
 Where an actor stands is the kernel's, never the shell's. Its clips advance in
 the scene's own tick (`../../scene.rs`).

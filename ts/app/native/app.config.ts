@@ -30,7 +30,7 @@ export default {
         "expo-horizon-location",
         {
           locationWhenInUsePermission:
-            "pixelet shows you where you are on the map, and what you build stands there.",
+            "pixelet shows you where you are in the world, and what you build stands there.",
         },
       ],
       "./plugin/prebuilt-flavor.ts",

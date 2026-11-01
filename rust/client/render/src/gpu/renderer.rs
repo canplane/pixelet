@@ -51,13 +51,13 @@ use crate::gpu::generated::DecorFrame;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::mip::MipPass;
 use crate::gpu::pack::Pack;
-use crate::gpu::pass::case::Case;
 use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::{Extent, ImpostorPass};
 use crate::gpu::pass::mark::UploadCopies;
 use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
+use crate::gpu::pass::preview::Preview;
 use crate::gpu::pass::puck::{PuckPass, BEACON_VERTICES};
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -95,9 +95,9 @@ pub struct FrameInput<'a> {
     /// 0 while it loads.
     pub decor: &'a [(u32, Option<Image>, Extent)],
     pub skins: &'a [(u32, Image)],
-    /// Each display case: its surface, its actor's palette, which names its
+    /// Each preview: its surface, its actor's palette, which names its
     /// draw, and the skin.
-    pub cases: &'a [(u32, u32, Image)],
+    pub previews: &'a [(u32, u32, Image)],
     /// The texture pack's image; none while it loads.
     pub pack: fn() -> Option<Image>,
     pub moon: fn() -> Option<Image>,
@@ -330,7 +330,7 @@ pub type TerrainWrite<'a> = dyn FnMut(FreshBrick<'_>) -> bool + 'a;
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
 pub struct FrameOutput {
-    /// What the frame turn made: decided where each case is (no device or
+    /// What the frame turn made: decided where each preview is (no device or
     /// surface, not admitted, dropped from the stream, and the cast's kind).
     pub kind: FrameKind,
     /// A surface waits on a size to settle, so another turn is wanted.
@@ -453,8 +453,8 @@ pub fn on_surface_closed(s: Surface) {
     }
     let slot = handle_slot(s.handle) as usize;
     if let Some(r) = RENDERER.get(|| None).as_mut() {
-        if let Some(case) = r.cases[slot].take() {
-            case.release();
+        if let Some(preview) = r.previews[slot].take() {
+            preview.release();
         }
     }
 }
@@ -509,7 +509,7 @@ pub struct Renderer {
     /// The frame's whole input as the last frame drew it (stage 2): the
     /// frame's words but the jitter, the sky's and the stars' words, the
     /// air's, the surface's textures, the draws and the uploads they read,
-    /// the markers' sheet, the clouds' words and the cases, and what came or
+    /// the markers' sheet, the clouds' words and the previews, and what came or
     /// was drawn again without words.
     frame_read: Read,
     /// The jitter in the frame's words as the GPU holds them (`JITTER`).
@@ -562,7 +562,7 @@ pub struct Renderer {
     /// static opaque draws lay. The frame is drawn again for more than
     /// these, and the occlusion found again only where they moved.
     ao_read: Read,
-    cases: [Option<Case>; SURFACES],
+    previews: [Option<Preview>; SURFACES],
     order: Vec<u32>,
 }
 
@@ -668,7 +668,7 @@ impl Renderer {
             mips,
             pack,
             moon,
-            cases: [const { None }; SURFACES],
+            previews: [const { None }; SURFACES],
             order: Vec::new(),
         };
         r.box_groups(g);
@@ -997,7 +997,7 @@ impl Renderer {
         let lists_moved = l.read(records) | uniforms_moved;
         let listed_same = l.end();
         let beside_moved = self.beside_moved(records, uniforms, &touched, input.bounded);
-        read.read(input.cases);
+        read.read(input.previews);
 
         targets(g, world);
         let animated = input.animated;
@@ -1153,7 +1153,7 @@ impl Renderer {
         // decor turned off generates nothing and casts no ray again, yet the
         // frame stands without it.
         read.read(&[u32::from(self.screen.generated().is_some())]);
-        self.prepare_cases(g, &draws, uniforms, input.cases, lists_moved);
+        self.prepare_previews(g, &draws, uniforms, input.previews, lists_moved);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
         let mut stamps: [Stamp; GPU_SPAN_NAMES] = core::array::from_fn(|span| Stamp::of(q, span));
@@ -1560,7 +1560,7 @@ impl Renderer {
                 .draw(&mut ctx, canvas_view, world.screen_depth_view, &draws, b);
         self.draw_cases(
             &mut ctx,
-            Self::cases(&draws, input.cases),
+            Self::previews(&draws, input.previews),
             uniforms,
             uploads_moved || tables || exposed,
         );
@@ -1594,8 +1594,8 @@ impl Renderer {
         if skipped {
             REDRAW.set(true);
             self.screen.on_dropped();
-            for case in self.cases.iter_mut().flatten() {
-                case.read.forget();
+            for preview in self.previews.iter_mut().flatten() {
+                preview.read.forget();
             }
             read.forget();
             self.listed.forget();
@@ -1640,36 +1640,36 @@ impl Renderer {
         (kind, stat)
     }
 
-    /// The cases drawn this frame: a surface still a case, its actor's model
-    /// and its draw, found by the palette that is the case's alone, since
+    /// The previews drawn this frame: a surface still a preview, its actor's model
+    /// and its draw, found by the palette that is the preview's alone, since
     /// another actor may play the same model.
-    fn cases<'a, 'd>(
+    fn previews<'a, 'd>(
         draws: &'a Draws<'d>,
-        cases: &'a [(u32, u32, Image)],
+        previews: &'a [(u32, u32, Image)],
     ) -> impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])> + 'a {
-        cases.iter().filter_map(move |&(id, palette, image)| {
-            surface(id).filter(|s| s.role == surface_role::CASE)?;
+        previews.iter().filter_map(move |&(id, palette, image)| {
+            surface(id).filter(|s| s.role == surface_role::PREVIEW)?;
             let own = draws.of(PIPELINE_SKINNED).find(|d| d[1] == palette)?;
             Some((id, own[2], image, own))
         })
     }
 
-    /// Each case's targets, passes and skin, made here so drawing makes nothing
+    /// Each preview's targets, passes and skin, made here so drawing makes nothing
     /// that outlives its frame.
-    fn prepare_cases(
+    fn prepare_previews(
         &mut self,
         g: &Gpu,
         draws: &Draws,
         uniforms: &[f32],
-        cases: &[(u32, u32, Image)],
+        previews: &[(u32, u32, Image)],
         moved: bool,
     ) {
-        for (id, model, image, own) in Self::cases(draws, cases) {
+        for (id, model, image, own) in Self::previews(draws, previews) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
             let slot = handle_slot(id) as usize;
-            if self.cases[slot].is_none() {
-                self.cases[slot] = Some(Case::new(
+            if self.previews[slot].is_none() {
+                self.previews[slot] = Some(Preview::new(
                     g,
                     &mut self.pipelines,
                     &self.shadow,
@@ -1677,28 +1677,29 @@ impl Renderer {
                     self.align,
                 ));
             }
-            let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
-            case.skinned.set_skins(&[(model, image)]);
-            case.skinned
+            let preview = self.previews[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
+            preview.skinned.set_skins(&[(model, image)]);
+            preview
+                .skinned
                 .prepare(g, core::iter::once(own), uniforms, moved, uploads());
         }
     }
 
-    /// Each case whose picture's makings moved, `moved` what moved without
+    /// Each preview whose picture's makings moved, `moved` what moved without
     /// words: the models' uploads, the air's tables or its exposure.
     fn draw_cases<'d>(
         &mut self,
         ctx: &mut RenderContext,
-        cases: impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])>,
+        previews: impl Iterator<Item = (u32, u32, Image, &'d [u32; DRAW_WORDS])>,
         uniforms: &[f32],
         moved: bool,
     ) {
-        for (id, model, image, own) in cases {
+        for (id, model, image, own) in previews {
             let Some(s) = surface(id) else { continue };
-            let Some(case) = self.cases[handle_slot(id) as usize].as_mut() else {
+            let Some(preview) = self.previews[handle_slot(id) as usize].as_mut() else {
                 continue;
             };
-            case.draw(ctx, s, self.frame, own, uniforms, model, image, moved);
+            preview.draw(ctx, s, self.frame, own, uniforms, model, image, moved);
         }
     }
 

@@ -11,7 +11,7 @@ import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 
 /**
- * On a desktop, the chrome dims and takes no clicks while the map is dragged:
+ * On a desktop, the chrome dims and takes no clicks while the world is dragged:
  * releasing a drag over a control clicks it. A handheld's finger cannot do
  * that, so it is left alone.
  */

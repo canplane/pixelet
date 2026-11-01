@@ -2,7 +2,7 @@
   "$doc": [
     "Every setting the app has, declared once: its default, its kind, and",
     "where it is shown, its `section`: one of the settings sheet's, or",
-    "`profiler`, the profiler panel's own. The store reads the defaults from",
+    "`perf`, the profiler panel's own. The store reads the defaults from",
     "here and the sheet renders rows from here, so adding a setting to the",
     "sheet is one entry in SETTING plus its two strings in the locale catalog",
     "under `settings.<section>.<key>`. A choice may carry `costs` beside its",
@@ -270,14 +270,14 @@
     },
     "view": {
       "number": 13,
-      "$doc": ["Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section)."],
+      "$doc": ["Where the camera and the pointer are, read live (perf/read.rs, NOW's view section)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
-    "profiler": {
+    "perf": {
       "number": 14,
-      "$doc": ["The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`)."],
+      "$doc": ["The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
@@ -318,7 +318,7 @@
       ],
       "kind": "toggle",
       "default": false,
-      "section": "profiler",
+      "section": "perf",
       "dev": true
     },
     "sky_time": {

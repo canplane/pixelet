@@ -2,7 +2,7 @@
 
 //! The ghost, half transparent: a box the box shader unfolds
 //! (pxl-render `mesh::ghost`), or one decor instance drawn by decor's. What it
-//! shows is the tool's (`domain/control/interaction/ghost.rs`), handed over as
+//! shows is the tool's (`domain/control/edit/ghost.rs`), handed over as
 //! an instance in the pointer's frame (`Ghost`); how each kind of it is drawn
 //! is decided here: a box's color and texture, and the box that stands in for
 //! a decor until it can be drawn as itself.

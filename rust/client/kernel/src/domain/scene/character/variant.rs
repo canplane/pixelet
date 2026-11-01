@@ -23,7 +23,7 @@ pub struct CharacterVariant {
 pub const CHARACTER_VARIANTS: usize = person::Key::ALL.len() + pet::Key::ALL.len();
 
 /// A variant's model, registered once at its own height, which a display
-/// case's instance scales.
+/// preview's instance scales.
 pub const MODELS_MAX: usize = CHARACTER_VARIANTS;
 
 pub fn character_variant(group: Group, number: u8) -> Option<CharacterVariant> {

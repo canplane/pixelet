@@ -7,7 +7,7 @@ import {
   ActiveTool,
   GroundStatus,
   read_snapshot,
-  read_world_snapshot,
+  read_shell_snapshot,
   SensorStatus,
   type Snapshot,
 } from "@/abi/cmd.spec.ts";
@@ -22,13 +22,12 @@ const INIT: Snapshot = {
   },
   location: { status: SensorStatus.Idle, has_location: false, err: null },
   companion: { person_ready: false, pet_ready: false },
-  holding: {
-    tool: ActiveTool.Pointer,
+  tool: {
+    active: ActiveTool.Pointer,
     cube: 0,
     decor: 0,
     tier: 0,
-    marker: false,
-    words: "",
+    draft: null,
   },
   orient: { status: SensorStatus.Idle, err: null },
   azimuth: 0,
@@ -53,10 +52,10 @@ export function set_snapshot(bytes: U8Array): void {
   listeners.notify();
 }
 
-/** The kernel's WORLD_SNAPSHOT: too large for a ring frame, so it names where
+/** The kernel's SHELL_SNAPSHOT: too large for a ring frame, so it names where
  * the snapshot lies in the guest's memory, valid until the next, a turn away. */
 export function snapshot_posted(f: BranchCursor): void {
-  const { at, len } = read_world_snapshot(f);
+  const { at, len } = read_shell_snapshot(f);
   set_snapshot(new Uint8Array(HOST.guest.mem, at, len));
 }
 

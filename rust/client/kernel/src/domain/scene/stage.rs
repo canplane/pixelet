@@ -17,7 +17,7 @@ use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-use crate::profiler::frame::{DeviceSample, GpuSample, RaySample};
+use crate::perf::frame::{DeviceSample, GpuSample, RaySample};
 use pxl_render::gpu::api::OBJECT_OPS;
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
@@ -32,7 +32,7 @@ use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::profiler::report::{set_host_frame, set_rays, GpuRead};
+use crate::perf::report::{set_host_frame, set_rays, GpuRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -168,11 +168,11 @@ pub fn stage_render(pace: Pace) {
         *slot = row;
         skin_cnt += 1;
     }
-    let mut cases = [(0u32, 0u32, none); SURFACES];
-    let mut case_cnt = 0;
-    for (slot, row) in cases.iter_mut().zip(preview_rows()) {
+    let mut previews = [(0u32, 0u32, none); SURFACES];
+    let mut preview_cnt = 0;
+    for (slot, row) in previews.iter_mut().zip(preview_rows()) {
         *slot = row;
-        case_cnt += 1;
+        preview_cnt += 1;
     }
     let on = api::device_generation();
     let (window, layers) = earth_window(Earth::demand().floor(), on);
@@ -192,7 +192,7 @@ pub fn stage_render(pace: Pace) {
         environment: &scene().environment.out,
         decor: &decor,
         skins: &skins[..skin_cnt],
-        cases: &cases[..case_cnt],
+        previews: &previews[..preview_cnt],
         pack: || load_of(pack).and_then(load_image),
         moon: || load_of(moon::picture).and_then(load_image),
         earth: || load_image(EARTH),
@@ -221,7 +221,7 @@ pub fn stage_render(pace: Pace) {
         sheet: sheet(),
         admit: boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
-        counted: settings_store().profiler,
+        counted: settings_store().perf,
         bounded,
         animated,
     });

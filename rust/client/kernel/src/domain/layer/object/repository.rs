@@ -36,7 +36,7 @@ fn store_state() -> &'static mut State {
 
 // Kept as one blob of every leaf as the write that made it, `<key, id, ext>`:
 // [key_hi u64[], key_lo u64[], id u32[]], then a class's records, each its
-// leaf's row and its fields as lanes: a marker's words [row u32[], text strs].
+// leaf's row and its fields as lanes: a marker's text [row u32[], text strs].
 // The layout's version is its kept slot's format (host.json `format.OBJECTS`),
 // checked as the slot is read (sys/io/file.rs `Kept`); a blob of another layout is
 // never read.

@@ -25,51 +25,23 @@
 // is not the program's or no program answers. xpute's own calls go in the stream alone.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
+import * as op from "./sys/op.spec.ts";
+import * as args from "./sys/args.spec.ts";
+import * as abort from "./sys/abort.spec.ts";
+import * as flag from "./sys/flag.spec.ts";
 
 /** Words before the first record: END, then a word kept at 0. */
 export const HEAD: u32 = 2 as number;
 
 /** A record's call, then its arguments. */
-export const op = {
-  /** fd, root, flags, then the path's bytes: the file at `path` below `root` opened as `fd`,
-   * answered by SYS_OPENED with its size or -errno. */
-  OPENAT: 1 as number,
-  /** fd, at, len: the opened file's first `len` bytes copied to `at`. */
-  READ: 2 as number,
-  /** fd, at, len: the `len` bytes at `at` added to what the file opened for writing holds. */
-  WRITE: 3 as number,
-  /** fd: the descriptor ended. A file opened for writing is replaced by what was written; an
-   * open not yet answered is canceled, and never answered. */
-  CLOSE: 4 as number,
-  /** errno, line, column, a (low, high word), b (low, high word), then the file's bytes:
-   * the broken invariant the guest reports before it stops (xpute-kit status/bug.rs). */
-  ABORT: 5 as number,
-  /** The bit every call a program numbers for itself carries. */
-  PROGRAM: 2147483648 as number,
-} as const;
+export { op };
 
 /** How many words of arguments each call's record takes, as its `op` lists them; OPENAT's
  * and ABORT's end in bytes after them. */
-export const args = {
-  OPENAT: 3 as number,
-  READ: 3 as number,
-  WRITE: 3 as number,
-  CLOSE: 1 as number,
-  ABORT: 7 as number,
-} as const;
+export { args };
 
 /** Where ABORT's two values lie among its arguments, each low word then high. */
-export const abort = {
-  /** a. */
-  A: 3 as number,
-  /** b. */
-  B: 5 as number,
-} as const;
+export { abort };
 
 /** How OPENAT opens. */
-export const flag = {
-  /** To read, whole. */
-  O_RDONLY: 0 as number,
-  /** To write: created where it is not, and replaced whole at CLOSE (O_CREAT | O_TRUNC). */
-  O_WRONLY: 1 as number,
-} as const;
+export { flag };

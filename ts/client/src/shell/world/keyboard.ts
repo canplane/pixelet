@@ -12,13 +12,13 @@
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
-import { kernel_keys } from "@/port/shell.ts";
+import { kernel_keys } from "@/port/input.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
 import {
   DockMode,
   dockMode,
   flashSwatch,
-  holdTool,
+  selectTool,
   RECENT_PICKS,
   recentPick,
   selectCube,
@@ -94,7 +94,7 @@ export function keyDown(
   }
   if (inField) return false;
   if (code in TOOL) {
-    holdTool(TOOL[code]);
+    selectTool(TOOL[code]);
     return true;
   }
   if (code === DRAWER) {

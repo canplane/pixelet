@@ -20,7 +20,7 @@ import {
 } from "react-native";
 
 import type {
-  CaseSurfaceProps,
+  PreviewSurfaceProps,
   PointerPhase,
   SurfaceDriver,
   Viewport,
@@ -130,7 +130,11 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
   );
 }
 
-export function Case({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
+export function Preview({
+  surface: driver,
+  onOpen,
+  openKey,
+}: PreviewSurfaceProps) {
   const { props } = useSurface(driver, openKey, onOpen);
   return <SurfaceView {...props} style={StyleSheet.absoluteFill} />;
 }

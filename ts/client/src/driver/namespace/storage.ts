@@ -19,7 +19,7 @@ import {
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
-import { Command, encode_world_kept_emptied } from "@/abi/cmd.spec.ts";
+import { Command, encode_fs_truncated } from "@/abi/cmd.spec.ts";
 import { kept } from "@/abi/host.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
@@ -119,14 +119,14 @@ export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
  * twice. */
 const emptying = new Set<u32>();
 
-/** The kernel told a slot is empty (WORLD_KEPT_EMPTIED), after the completion
+/** The kernel told a slot is empty (FS_TRUNCATED), after the completion
  * ring is read: the doorbell refuses a write while it reads. */
 function kept_emptied(slot: u32): void {
   queueMicrotask(() =>
     HOST.send(
       port.SHELL,
-      Command.WORLD_KEPT_EMPTIED,
-      encode_world_kept_emptied(HOST.doorbell, slot),
+      Command.FS_TRUNCATED,
+      encode_fs_truncated(HOST.doorbell, slot),
     ),
   );
 }

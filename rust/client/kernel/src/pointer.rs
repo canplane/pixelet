@@ -9,25 +9,25 @@
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::Q3;
 
-use crate::domain::control::interaction::{self, ActiveTool};
+use crate::domain::control::edit::{self, ActiveTool};
 use crate::domain::control::navigation::destination;
-use crate::domain::scene::marker::{self, Went};
+use crate::domain::scene::marker::{self, MarkerHit};
 
-/// What a tap on a marker does with the tool held.
+/// What a tap on a scene marker does with the tool held.
 enum MarkerTap {
     Go(Q3),
     Remove(EntryAt),
-    Wait(EntryAt),
+    Draft(EntryAt),
 }
 
-/// The marker at `x`, `y` a tap would act on with the tool held: the pointer
-/// goes to any, the eraser takes away a pin someone put up, the marker tool
-/// has the waiting pin stand there. A place's marker is no eraser's.
+/// The scene marker at `x`, `y` a tap would act on with the tool held: the
+/// pointer goes to any, the eraser takes away a pin someone put up, the marker
+/// tool opens that pin's draft. A place's scene marker is no eraser's.
 fn marker_at(x: f64, y: f64) -> Option<MarkerTap> {
-    match (interaction::holding().active_tool, marker::tap(x, y)?) {
-        (ActiveTool::Pointer, Went::To(at) | Went::Pin(_, at)) => Some(MarkerTap::Go(at)),
-        (ActiveTool::Eraser, Went::Pin(e, _)) => Some(MarkerTap::Remove(e)),
-        (ActiveTool::Marker, Went::Pin(e, _)) => Some(MarkerTap::Wait(e)),
+    match (edit::tool().active_tool, marker::tap(x, y)?) {
+        (ActiveTool::Pointer, MarkerHit::To(at) | MarkerHit::Pin(_, at)) => Some(MarkerTap::Go(at)),
+        (ActiveTool::Eraser, MarkerHit::Pin(e, _)) => Some(MarkerTap::Remove(e)),
+        (ActiveTool::Marker, MarkerHit::Pin(e, _)) => Some(MarkerTap::Draft(e)),
         _ => None,
     }
 }
@@ -35,22 +35,22 @@ fn marker_at(x: f64, y: f64) -> Option<MarkerTap> {
 /// The pointer stands at `x`, `y`.
 pub fn hover(x: f64, y: f64) {
     match marker_at(x, y) {
-        Some(_) => interaction::point_at(x, y),
-        None => interaction::hover_at(x, y),
+        Some(_) => edit::point_at(x, y),
+        None => edit::hover_at(x, y),
     }
 }
 
 /// Whether the pointer is over a marker a tap would act on.
 pub fn over_marker() -> bool {
-    interaction::pointed().is_some_and(|[x, y]| marker_at(x, y).is_some())
+    edit::pointed().is_some_and(|[x, y]| marker_at(x, y).is_some())
 }
 
 /// A tap at `x`, `y`.
 pub fn tap(x: f64, y: f64) {
     match marker_at(x, y) {
         Some(MarkerTap::Go(at)) => destination::go_to_place(at),
-        Some(MarkerTap::Remove(e)) => interaction::edit::remove(e),
-        Some(MarkerTap::Wait(e)) => interaction::edit::wait_at(e),
-        None => interaction::tap(x, y),
+        Some(MarkerTap::Remove(e)) => edit::write::remove(e),
+        Some(MarkerTap::Draft(e)) => edit::write::draft_at(e),
+        None => edit::tap(x, y),
     }
 }

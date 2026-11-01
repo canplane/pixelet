@@ -88,7 +88,7 @@
         "label": "View",
         "description": "Shows where the camera and the pointer are: the camera's distance and angles, and the coordinates of the point under the pointer."
       },
-      "profiler": {
+      "perf": {
         "label": "Profiler",
         "description": "Shows how long each frame takes and how much GPU, network and memory it uses, and records them while on."
       },

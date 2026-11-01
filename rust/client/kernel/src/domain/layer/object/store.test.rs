@@ -267,7 +267,7 @@ fn column_reach() {
     }
 }
 
-fn words(text: &str) -> Option<Ext> {
+fn marker_text(text: &str) -> Option<Ext> {
     Some(Ext::MarkerText(text.to_string()))
 }
 
@@ -279,7 +279,7 @@ fn leaf_words_freed_on_erase() {
     store.write([Write {
         key: key(zoom, at),
         id: MARKER,
-        ext: words("cafe"),
+        ext: marker_text("cafe"),
     }]);
     let e = store.read((zoom, at)).placed().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
@@ -293,7 +293,7 @@ fn leaf_words_freed_on_erase() {
     store.write([Write {
         key: key(zoom, at),
         id: MARKER,
-        ext: words("bar"),
+        ext: marker_text("bar"),
     }]);
     let e = store.read((zoom, at)).placed().expect("placed again");
     assert_eq!(e.ext, 1);
@@ -301,7 +301,7 @@ fn leaf_words_freed_on_erase() {
 }
 
 #[test]
-fn marker_words_change_cube() {
+fn marker_text_change_cube() {
     use pxl_spec::asset::marker::MARKER;
     let mut store = Store::default();
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
@@ -309,7 +309,7 @@ fn marker_words_change_cube() {
         store.write([Write {
             key: key(zoom, at),
             id: MARKER,
-            ext: words(text),
+            ext: marker_text(text),
         }])
     };
     assert_eq!(put(&mut store, "cafe").len(), 1);
@@ -328,7 +328,7 @@ fn eight_markers_stay() {
         .map(|k| Write {
             key: key(OBJECT_COARSEST + 1, child_cube(OBJECT_COARSEST, parent, k)),
             id: MARKER,
-            ext: words(&format!("m{k}")),
+            ext: marker_text(&format!("m{k}")),
         })
         .collect();
     store.write(writes);

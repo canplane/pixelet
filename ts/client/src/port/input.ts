@@ -3,17 +3,14 @@
 /** Input as the kernel's commands, from the place's words (`POINTER_PHASE`,
  * `POINTER_KIND`), and the world's view opened and closed. */
 
-import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import type { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import {
-  type ActiveTool,
   Command,
-  encode_input_hold,
-  encode_input_keys,
+  encode_input_move,
   encode_input_pointer,
   encode_input_rect,
   encode_input_wheel,
-  encode_world_view,
   PointerPhase,
   PointerType,
 } from "@/abi/cmd.spec.ts";
@@ -50,7 +47,7 @@ export function kernel_wheel(delta_y: f64): void {
 }
 
 export function kernel_keys(x: i32, y: i32): void {
-  send_input(Command.INPUT_KEYS, encode_input_keys(HOST.doorbell, x, y));
+  send_input(Command.INPUT_MOVE, encode_input_move(HOST.doorbell, x, y));
 }
 
 export function kernel_rect(
@@ -66,29 +63,12 @@ export function kernel_rect(
   );
 }
 
-export function kernel_hold(tool: ActiveTool, val: u32, tier: u32): void {
-  send_input(
-    Command.INPUT_HOLD,
-    encode_input_hold(HOST.doorbell, tool, val, tier),
-  );
-}
-
 export function kernel_open(): () => void {
-  HOST.now(
-    port.SHELL,
-    Command.WORLD_VIEW,
-    encode_world_view(HOST.doorbell, true),
-  );
   set_view_open(true);
   const unfollow = bracket.sensor.follow();
   return () => {
     unfollow();
     set_view_open(false);
-    HOST.now(
-      port.SHELL,
-      Command.WORLD_VIEW,
-      encode_world_view(HOST.doorbell, false),
-    );
   };
 }
 

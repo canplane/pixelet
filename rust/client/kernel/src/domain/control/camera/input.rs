@@ -18,7 +18,7 @@ use crate::domain::control::camera::controller::{active, Active};
 use crate::domain::control::camera::gesture::{linear, Anchor};
 use crate::domain::control::camera::state::{camera_state, IntentPatch};
 use crate::domain::control::cmd::{InputRect, PointerType};
-use crate::domain::control::interaction::{clear_hover, clear_hover_coord};
+use crate::domain::control::edit::{clear_hover, clear_hover_coord};
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
 use crate::domain::view::frame::screen::size;

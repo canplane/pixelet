@@ -41,7 +41,7 @@ export function ButtonStack({
       {items.map((item) => (
         <Pressable
           key={item.label}
-          // Disabled still takes the touch: no tap through to the map.
+          // Disabled still takes the touch: no tap through to the world.
           onPress={item.disabled ? undefined : item.onPress}
           accessibilityRole="button"
           accessibilityLabel={item.label}

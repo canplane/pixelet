@@ -9,7 +9,7 @@
 
 use std::rc::Rc;
 
-use super::arrangement::{cell_zoom, surface, Brick, Instance, Key, Went};
+use super::arrangement::{cell_zoom, surface, Brick, Instance, Key, MarkerHit};
 use crate::domain::layer::place::carto_zoom;
 use crate::domain::query::{cell_zoom_at, World};
 use crate::domain::scene::marker::design::Design;
@@ -108,7 +108,7 @@ pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
             key: p.key,
             design,
             stands,
-            tap: Some(Went::To(stands)),
+            tap: Some(MarkerHit::To(stands)),
         });
     }
 }

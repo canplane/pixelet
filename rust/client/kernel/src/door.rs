@@ -16,12 +16,12 @@ pub mod port;
 #[path = "door/toc.spec.rs"]
 pub mod toc;
 
-use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, WorldSnapshotEvent};
+use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, ShellSnapshotEvent};
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
 use crate::door::toc::key::GPU_STREAM;
-use crate::profiler::record::profiler_record_turn;
-use crate::profiler::spec::Wake;
+use crate::perf::record::perf_record_turn;
+use crate::perf::spec::Wake;
 use crate::shell;
 use crate::shell::Sent;
 use crate::sys::boot;
@@ -68,8 +68,8 @@ fn door() -> &'static Door {
     })
 }
 
-/// The rings' peaks since the last take, the profiler's (profiler/report.rs
-/// `profiler_frame`).
+/// The rings' peaks since the last take, the profiler's (perf/report.rs
+/// `perf_frame`).
 pub(crate) fn take_stat() -> DoorStat {
     door().take_stat()
 }
@@ -124,7 +124,7 @@ fn on_host_attached(s: &mut State) {
     for handle in open {
         close_surface(handle);
     }
-    shell::sensors_close();
+    crate::domain::control::sensor::sensors_close();
     text::text_forget();
     s.sent = Default::default();
 }
@@ -214,7 +214,7 @@ pub fn run(
         _ => Wake::timer,
     };
     let fell = now();
-    profiler_record_turn(
+    perf_record_turn(
         fell - rise,
         polled - drained,
         f64::from(asked as u8),
@@ -262,14 +262,14 @@ fn post_shell(s: &mut State) {
             let room = (buf.len() * 2).max(PAGE_BYTES as usize);
             buf.resize(room, 0);
         };
-        let event = WorldSnapshotEvent {
+        let event = ShellSnapshotEvent {
             at: off_of_slice(&raw const buf[..]) as u32,
             len,
         };
         raise(
             port::SHELL,
-            Command::WORLD_SNAPSHOT,
-            WorldSnapshotEvent::FIELDS,
+            Command::SHELL_SNAPSHOT,
+            ShellSnapshotEvent::FIELDS,
             |w| {
                 event.write(w);
             },

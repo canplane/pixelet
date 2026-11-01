@@ -4,7 +4,7 @@
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
-// `profiler`, the profiler panel's own. The store reads the defaults from
+// `perf`, the profiler panel's own. The store reads the defaults from
 // here and the sheet renders rows from here, so adding a setting to the
 // sheet is one entry in SETTING plus its two strings in the locale catalog
 // under `settings.<section>.<key>`. A choice may carry `costs` beside its
@@ -178,15 +178,15 @@ export const SETTING = {
     },
     section: "display",
   },
-  /** Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section). */
+  /** Where the camera and the pointer are, read live (perf/read.rs, NOW's view section). */
   view: {
     key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
-  profiler: {
+  /** The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`). */
+  perf: {
     key: 14 as number,
     kind: "toggle",
     default: false,
@@ -230,7 +230,7 @@ export const SETTING = {
     key: 20 as number,
     kind: "toggle",
     default: false,
-    section: "profiler",
+    section: "perf",
     dev: true,
   },
   /** The hour the sky is drawn at; SKY_TIMES says each. */
@@ -385,15 +385,15 @@ export const SETTING_SHIPPED = {
     },
     section: "display",
   },
-  /** Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section). */
+  /** Where the camera and the pointer are, read live (perf/read.rs, NOW's view section). */
   view: {
     key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
-  profiler: {
+  /** The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`). */
+  perf: {
     key: 14 as number,
     kind: "toggle",
     default: false,

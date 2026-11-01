@@ -5,7 +5,7 @@
  * the guest the place opens; xpute's host mounted on it with pixelet's drivers
  * (the roots, the program's calls, the stop report, each turn's submission) and
  * the frame pacing; the place told where to report what its sensors, its GPU,
- * its network and its visibility hear; then the kernel, by `WORLD_BOOT`. The
+ * its network and its visibility hear; then the kernel, by `SYS_BOOT`. The
  * shell is no part of it: it reads where the boot stands through the port
  * (port/shell.ts), and what the kernel shows it once it has started.
  */
@@ -17,7 +17,7 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { FramePacing } from "@xpute/host/sched/frame_pacing.ts";
-import { Command, encode_world_boot } from "@/abi/cmd.spec.ts";
+import { Command, encode_sys_boot } from "@/abi/cmd.spec.ts";
 import { declare_source } from "@/driver/namespace/source.ts";
 import { namespace } from "@/driver/namespace/namespace.ts";
 import { follow_refused, migrate } from "@/driver/namespace/storage.ts";
@@ -38,7 +38,7 @@ import { abort } from "@/driver/stop.ts";
 import { text_call } from "@/driver/text.ts";
 import { bracket, type Config } from "@/bracket.tsx";
 import { GPU_STATE, set_gpu } from "@/driver/gpu.ts";
-import { world_visible } from "@/driver/visibility.ts";
+import { world_visible } from "@/driver/sys.ts";
 import { Boot } from "@/abi/state.ts";
 import { set_online } from "@/driver/namespace/online.ts";
 import { kernel_snapshot, snapshot_posted } from "@/port/snapshot.ts";
@@ -62,7 +62,7 @@ export const watch_boot = listeners.watch;
 /** What the shell hears the kernel raise: the snapshot it reads, and the kept
  * slots it names refused; the sensors the drivers start and stop. */
 const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
-  [Command.WORLD_SNAPSHOT]: (f) => {
+  [Command.SHELL_SNAPSHOT]: (f) => {
     snapshot_posted(f);
     follow_refused(kernel_snapshot().kept_refused);
   },
@@ -133,9 +133,9 @@ async function open(): Promise<void> {
   });
   bracket.online.watch(set_online);
   bracket.visibility.watch(world_visible);
-  // Before the kernel opens its kept slots, which it does from WORLD_BOOT on.
+  // Before the kernel opens its kept slots, which it does from SYS_BOOT on.
   migrate();
-  const pkt = encode_world_boot(
+  const pkt = encode_sys_boot(
     HOST.doorbell,
     __IS_DEV__,
     bracket.sensor.geo.has,
@@ -145,11 +145,11 @@ async function open(): Promise<void> {
   );
   const booted = HOST.doorbell.call(
     port.SHELL,
-    Command.WORLD_BOOT,
+    Command.SYS_BOOT,
     pkt,
     (result) => result,
   );
-  if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
+  if (booted < 0) throw new Error(`SYS_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
   void declare_source();
 }

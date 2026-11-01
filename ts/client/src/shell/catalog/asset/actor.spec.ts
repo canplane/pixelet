@@ -7,6 +7,8 @@
 // asset/content/, how tall it stands and which clip is its move. What a
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
 
+import * as Group from "./actor/group.spec.ts";
+
 /** The groups a character is of, each numbered, and in each its variants by
  * key, row for row with its models, the colormap its pack shares, how tall it
  * stands and which clip is its move. */
@@ -114,10 +116,7 @@ export const groups = {
   },
 } as const;
 
-export const Group = {
-  person: 0,
-  pet: 1,
-} as const;
+export { Group };
 
 /** Split by gender, so the picker shows two rows; a person is shown by
  * its place in its row. */

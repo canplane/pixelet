@@ -48,7 +48,7 @@ pub const PIPELINE_IMPOSTOR: u32 = 8;
 pub const PIPELINE_CAMERA_GRID: u32 = 9;
 
 /// Every pipeline a draw record names, in the order a frame's census counts
-/// them (pxl-kernel profiler.json CENSUS_TAGS): what the list draws is these.
+/// them (pxl-kernel perf.json CENSUS_TAGS): what the list draws is these.
 pub const DRAW_PIPELINES: [u32; 10] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,

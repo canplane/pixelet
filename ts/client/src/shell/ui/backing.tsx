@@ -47,7 +47,7 @@ export const SYSTEM_BACKING: boolean = false;
 
 /**
  * A see-through fill blurs what is behind on a page. Android cannot blur the
- * map, which is a SurfaceView, and an unblurred see-through fill is
+ * world, which is a SurfaceView, and an unblurred see-through fill is
  * unreadable, so it takes the fill solid.
  */
 function backdrop(fill: string, m: Material): ViewStyle {

@@ -16,10 +16,10 @@
     reason = "generated from the spec"
 )]
 
-/// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case.
+/// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing previewed alone.
 pub mod surface_role {
     pub const WORLD: u32 = 0;
-    pub const CASE: u32 = 1;
+    pub const PREVIEW: u32 = 1;
 }
 
 /// The one place the renderer's calls cross (gpu/api.rs): a stream

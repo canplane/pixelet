@@ -143,7 +143,7 @@ function SearchStrip() {
   );
 }
 
-/** A scrim so white reads over a bright map without a blur: flat over
+/** A scrim so white reads over a bright world without a blur: flat over
  * SCRIM_WIDTH, then smoothstep fades, since a straight fade's end reads as an edge. */
 const SCRIM_OPACITY = 0.45;
 const SCRIM_WIDTH = 560;

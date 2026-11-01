@@ -15,13 +15,13 @@ import {
   RayStepsLegend,
   WorldGizmoLegend,
 } from "./legend.tsx";
-import { ProfilerPanel } from "./profiler.tsx";
+import { PerfPanel } from "./perf.tsx";
 import { ViewPanel } from "./view.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 
 const PANEL = {
   view: ViewPanel,
-  profiler: ProfilerPanel,
+  perf: PerfPanel,
   world_gizmo: WorldGizmoLegend,
   camera_gizmo: CameraGizmoLegend,
   ray_steps: RayStepsLegend,

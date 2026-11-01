@@ -5,8 +5,8 @@ import { useTranslation } from "react-i18next";
 import { type GlyphName, Spinner } from "@/shell/ui/icon.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
-import { Command, SensorStatus, Tracking } from "@/abi/cmd.spec.ts";
-import { kernel_command, kernel_tracking } from "@/port/shell.ts";
+import { SensorStatus, Tracking } from "@/abi/cmd.spec.ts";
+import { kernel_north_up, kernel_tracking } from "@/port/camera.ts";
 import { CompassFace } from "./compass.tsx";
 import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
@@ -74,7 +74,7 @@ export function LocationStack() {
         },
         {
           label: t("world.controls.reset_orientation"),
-          onPress: () => kernel_command(Command.INPUT_COMPASS_RESET),
+          onPress: kernel_north_up,
           disabled: following,
           face: <CompassFace />,
         },

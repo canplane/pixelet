@@ -61,7 +61,7 @@ the same way. The check-rules tool holds the order (pxl-tool
         mem/         the core memory's sections
         boot · load · stop   bringing it up, what it loads, its end
 
-  beside   profiler/: reads anything; no decision reads it
+  beside   perf/: reads anything; no decision reads it
 ```
 
 The parts follow that order. **The world** is what the kernel carries: sizes,
@@ -199,7 +199,7 @@ that box, the eye's, the sun's and the pointer's alike (`cast.rs` `entry`).
 ```
 
 A folded cell is a summary: nothing in it is struck, hidden, cut by a preview or
-pointed at (`pxl-kernel domain/control/interaction.rs` `Picked`).
+pointed at (`pxl-kernel domain/control/edit.rs` `Picked`).
 
 ---
 
@@ -546,7 +546,7 @@ it.
 
 The kernel stages the frame (`domain/scene/stage.rs`) and calls the renderer
 (`gpu/renderer.rs` `render_frame`), which draws every open surface, the world
-and the character picker's display cases, and reports what the frame cost and
+and the character picker's previews, and reports what the frame cost and
 whether it wants another turn. Its passes are modules by what they draw
 (`gpu/ray/`, `gpu/pass/`):
 
@@ -565,7 +565,7 @@ occlusion   N8AO found at half resolution off the depth the world pass laid
             and begins again; held where not, the pass drawn as one
             (`gpu/ao.rs`)
 finish      the world's color encoded onto the canvas once
-over        markers → debug lines → display cases
+over        markers → debug lines → previews
 ```
 
 The calls are WebGPU's, written through xpute's encoder (`gpu/api.rs`) into one
@@ -670,7 +670,7 @@ host** is `ts/client/src/host/`, over the app's bracket: the TypeScript one each
 app hands the client once, of what its platform gives
 (`ts/client/src/bracket.tsx` `Bracket`), apart from the kernel's. The host
 mounts `@xpute/host` on the guest the bracket opened (`host/mount.ts`
-`open_host`) and names none of pixelet's numbers: what a `WORLD_FRAME` carries,
+`open_host`) and names none of pixelet's numbers: what a `SURFACE_FRAME` carries,
 what an open or a write means and what the stop report says are handed it by the
 client's boot (`ts/client/src/abi/boot.ts`). The kernel's two ABIs stand apart
 in the client, as a display stack's do: what the shell holds, the commands for
@@ -690,8 +690,12 @@ kernel's own, is the number such a thread would name to reach it
 (`spec/client/kernel/door/port.json`). The **commands** are
 `spec/client/kernel/domain/control/cmd.json`'s, from which both sides' readers
 and writers are generated, each packet an XTP tree, xpute's relocatable binary
-tree. The kernel also posts **events** nobody asked for, such as a sensor to
-watch or a new snapshot, each for the port that hears it.
+tree. A command's major is the module it is for (`SYS`, `FS`, `INPUT`,
+`SENSOR`, `GPU`, `SURFACE`, `SETTING`, `SCENE`, `CAMERA`, `EDIT`, `PERF`,
+`SHELL`): the door applies each major's in its own file (`door/apply/`), and
+the client sends each from its major's file in `port/` or `driver/`. The kernel
+also posts **events** nobody asked for, such as a sensor to watch or a new
+snapshot, each for the port that hears it.
 
 The **shell** (`ts/client/src/shell/`) is the UI: React over the kernel's
 **snapshot**, where every control is a command. The snapshot is replaced whole
@@ -729,7 +733,7 @@ What crosses each edge:
 | Edge                          | Down                                                                                                                      | Up                                                                                                       |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | shell and kernel, `port/`     | a command for each control and the input it routes (`INPUT_*`), the surfaces it lends (`SURFACE_*`), the profiler's reads | the snapshot, replaced whole when it moved, and the events it is told by                                 |
-| kernel and devices, `driver/` | opens and writes, text by hostcall, a sensor started or stopped, the GPU's calls                                          | a file read whole, a sensor's reading, the GPU's state, the page's visibility, each turn's `WORLD_FRAME` |
+| kernel and devices, `driver/` | opens and writes, text by hostcall, a sensor started or stopped, the GPU's calls                                          | a file read whole, a sensor's reading, the GPU's state, the page's visibility, each turn's `SURFACE_FRAME` |
 | host and guest, xpute         | a turn with its quota, the memory once, the clock and the GPU's admit; the commands on the rings, the host's own as port 0 | completions and events, hostcalls and the GPU stream's records, the last words if it stops              |
 
 ## Reads, and the one scheduler
@@ -751,7 +755,7 @@ own files, each a **kept slot** on the device:
 So the kernel names no URL, version, storage key or platform: a path is a
 number, and where it leads is the client's. The client reads the declaration
 (The query, the only seam) once at boot, hands the kernel the top zoom, each
-kind's format and the shards it serves (`WORLD_SOURCE`, `sys/io/source.rs`), and
+kind's format and the shards it serves (`FS_MOUNT`, `sys/io/source.rs`), and
 keeps the versions; the world's floor and its service area follow from it.
 
 An open answers that the file is there and how long, that there is none, or that
@@ -762,7 +766,7 @@ owner decides: no ground tile means the parent's ground stands
 releases unless a store keeps it.
 
 How many reads are out at once is bounded by **credits**, which each
-`WORLD_FRAME` carries, as many as the platform's network runs at once and at
+`SURFACE_FRAME` carries, as many as the platform's network runs at once and at
 most `MAX_CREDITS`. One **request scheduler** spends them (`sys/io/request.rs`),
 and it promises that a camera that has just moved can always state its demand,
 however much old work is still draining. That follows from its shape:
@@ -823,7 +827,7 @@ turn.
                         the falling edge  ──▶  wake_ms
 ```
 
-Before each turn the client submits one `WORLD_FRAME` on the kernel's rings,
+Before each turn the client submits one `SURFACE_FRAME` on the kernel's rings,
 with the host's alone: the turn's pacing, the reads allowed out and
 the clock (`ts/client/src/driver/frame.ts` `submit_frame`); a turn rung for a
 command alone carries none and draws nothing. The view each frame is drawn at

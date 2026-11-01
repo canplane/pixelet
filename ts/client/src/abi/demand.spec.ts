@@ -4,7 +4,7 @@
 //
 // A request's vocabulary, the kernel's and the shell's: what stream it is in, how
 // its run came to an end, and the phases a run reports its time in. The profiler
-// records and reports them by these names (spec/client/kernel/profiler/profiler.json).
+// records and reports them by these names (spec/client/kernel/perf/perf.json).
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 

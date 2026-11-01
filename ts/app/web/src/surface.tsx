@@ -10,7 +10,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
 import type {
-  CaseSurfaceProps,
+  PreviewSurfaceProps,
   InputDriver,
   PointerKind,
   PointerPhase,
@@ -237,7 +237,11 @@ export function World({
   );
 }
 
-export function Case({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
+export function Preview({
+  surface: driver,
+  onOpen,
+  openKey,
+}: PreviewSurfaceProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const open = useRef(onOpen);
   open.current = onOpen;

@@ -3,7 +3,7 @@
 import { chrome } from "@/shell/ui/theme.ts";
 import { bracket } from "@/bracket.tsx";
 
-/** Where the map's top row of controls stands. */
+/** Where the world's top row of controls stands. */
 export function useChromeTop(): number {
   return (
     chrome.inset +

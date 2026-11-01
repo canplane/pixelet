@@ -8,7 +8,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   Command,
-  encode_sensor_failed,
+  encode_sensor_err,
   encode_sensor_orient,
   encode_sensor_permission,
   encode_sensor_pos,
@@ -51,8 +51,8 @@ function kernel_pos(
 function kernel_pos_err(code: GeolocationErrorCode): void {
   HOST.send(
     port.SHELL,
-    Command.SENSOR_FAILED,
-    encode_sensor_failed(HOST.doorbell, Sensor.Geolocation, code),
+    Command.SENSOR_ERR,
+    encode_sensor_err(HOST.doorbell, Sensor.Geolocation, code),
   );
 }
 
@@ -79,8 +79,8 @@ function kernel_orient(
 function kernel_orient_lost(): void {
   HOST.now(
     port.SHELL,
-    Command.SENSOR_FAILED,
-    encode_sensor_failed(HOST.doorbell, Sensor.Orientation, null),
+    Command.SENSOR_ERR,
+    encode_sensor_err(HOST.doorbell, Sensor.Orientation, null),
   );
 }
 

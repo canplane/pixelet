@@ -18,8 +18,8 @@
 
 use core::cmp::Ordering;
 
-use crate::profiler::record::profiler_record;
-use crate::profiler::task::TaskRow;
+use crate::perf::record::perf_record;
+use crate::perf::task::TaskRow;
 use crate::sys::io::demand::{Ask, Phases, Stream};
 use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::policy::Policy;
@@ -508,7 +508,7 @@ impl<S: Serve> RequestScheduler<S> {
 }
 
 fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
-    profiler_record(|| {
+    perf_record(|| {
         let mut row = TaskRow {
             stream: a.stream as u32 as f64,
             subject: a.subject,

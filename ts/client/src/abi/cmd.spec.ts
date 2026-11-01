@@ -7,8 +7,8 @@
  * and the packet each carries — an XTP branch whose children are its fields, in
  * order. A command with no fields carries no packet. The kernel is the process; the
  * JavaScript around it is two things to it, its host, which holds the devices and
- * the turns, and its shell, the UI. The commands are grouped by which of them a
- * command is between.
+ * the turns, and its shell, the UI. A command's major is the module it is for, and
+ * the sections say which of the two it is between.
  *
  * The same number is a command on the submission ring and an event on the
  * completion ring (its `RES` clear). The direction is the ring: `pkt` is
@@ -35,93 +35,106 @@ import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/kit/abi/word.ts";
 import { SequenceType } from "@xpute/kit/wire/xtp/mod.ts";
 
-/** What a command is about. */
+/** The module a command is for: the kernel's, or the device's that sends it. */
 export const enum Major {
-  WORLD = 0x10,
+  SYS = 0x10,
   INPUT = 0x11,
   SENSOR = 0x12,
+  FS = 0x13,
   GPU = 0x14,
   SURFACE = 0x15,
   SETTING = 0x16,
-  CHAT = 0x17,
-  PREVIEW = 0x18,
-  PROFILER = 0x19,
+  SCENE = 0x17,
+  CAMERA = 0x18,
+  PERF = 0x19,
+  EDIT = 0x1a,
+  SHELL = 0x1b,
 }
 
-/** The world's verbs. */
-export const enum WorldMinor {
+/** The system's: the kernel's start, and the platform's sleep and wake. */
+export const enum SysMinor {
   BOOT = 0x01,
-  FRAME = 0x02,
-  VISIBILITY = 0x03,
-  SNAPSHOT = 0x04,
-  SOURCE = 0x05,
-  KEPT_EMPTIED = 0x06,
-  VIEW = 0x07,
+  SLEEP = 0x02,
 }
 
-/** The input's verbs: the canvas, the pointer, the camera controls. */
+/** The input's: the canvas's rect, the pointer, the wheel, the held movement, a tracker's pose. */
 export const enum InputMinor {
   RECT = 0x01,
   POINTER = 0x02,
   WHEEL = 0x03,
-  KEYS = 0x06,
-  TRACKING = 0x04,
-  VIEW = 0x05,
-  COMPASS_RESET = 0x07,
-  GOTO = 0x08,
+  MOVE = 0x06,
   XR_POSE = 0x09,
   XR_POSE_END = 0x0a,
-  HOLD = 0x0b,
-  MARKER_WORDS = 0x0c,
-  MARKER_CANCEL = 0x0d,
-  MARKER_PUT = 0x0e,
-  LOCATE = 0x0f,
 }
 
-/** The device sensors' verbs. */
+/** The device sensors'. */
 export const enum SensorMinor {
   START = 0x01,
   POS = 0x02,
   STOP = 0x03,
   ORIENT = 0x05,
   PERMISSION = 0x06,
-  FAILED = 0x0b,
+  ERR = 0x0b,
+  LOCATE = 0x0c,
 }
 
-/** The GPU's verbs. */
+/** The kernel's files: a root mounted, a kept slot truncated. */
+export const enum FsMinor {
+  MOUNT = 0x01,
+  TRUNCATED = 0x02,
+}
+
+/** The GPU's. */
 export const enum GpuMinor {
   READY = 0x01,
 }
 
-/** A surface's verbs. */
+/** A surface's: opened, resized, closed, and the frame drawn into the surfaces. */
 export const enum SurfaceMinor {
   OPEN = 0x01,
   RESIZE = 0x02,
   CLOSE = 0x03,
+  FRAME = 0x04,
 }
 
-/** A setting's verbs. */
+/** A setting's. */
 export const enum SettingMinor {
   SET = 0x01,
 }
 
-/** The chat's verbs. */
-export const enum ChatMinor {
-  SEND = 0x01,
+/** The scene's: a character drawn alone into a surface, a line said. */
+export const enum SceneMinor {
+  PREVIEW_OPEN = 0x01,
+  PREVIEW_CLOSE = 0x02,
+  CHAT = 0x03,
 }
 
-/** A preview's verbs. */
-export const enum PreviewMinor {
-  OPEN = 0x01,
-  CLOSE = 0x02,
+/** The camera's: the tracking button, the compass, a search result. */
+export const enum CameraMinor {
+  TRACKING = 0x01,
+  NORTH_UP = 0x02,
+  GOTO = 0x04,
 }
 
-/** The profiler's verbs. */
-export const enum ProfilerMinor {
+/** The profiler's. */
+export const enum PerfMinor {
   START = 0x01,
   STOP = 0x02,
-  READ = 0x03,
+  STATS = 0x03,
   RINGS = 0x04,
+}
+
+/** The edit's: the tool and what it takes, and a marker's draft. */
+export const enum EditMinor {
+  TOOL = 0x01,
+  MARKER_TEXT = 0x02,
+  MARKER_CANCEL = 0x03,
+  MARKER_COMMIT = 0x04,
+}
+
+/** What the kernel shows the shell. */
+export const enum ShellMinor {
+  SNAPSHOT = 0x01,
 }
 
 /** Where a pointer event is in its gesture. */
@@ -249,32 +262,33 @@ export const enum Command {
   /** An orientation event; a field is absent where the browser gave none. */
   SENSOR_ORIENT = 0x1205,
   /** A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
-   * or cut off; the compass's, where the platform says so (WORLD_BOOT's
+   * or cut off; the compass's, where the platform says so (SYS_BOOT's
    * orient_silence_is_loss). */
-  SENSOR_FAILED = 0x120b,
+  SENSOR_ERR = 0x120b,
 
   // ---- the host tells the process: its start, its turn, its window and its devices ----
 
   /** The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root. */
-  WORLD_BOOT = 0x1001,
+  SYS_BOOT = 0x1001,
   /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
    * its events on the completion ring, drawn by the kernel. It carries the host's alone:
    * the turn's pacing, the network's credits and the clock; the view it is drawn at is the
    * shell's (INPUT_RECT). */
-  WORLD_FRAME = 0x1002,
-  /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
-   * page gets no frame and hiding is the save's last sure moment. */
-  WORLD_VISIBILITY = 0x1003,
+  SURFACE_FRAME = 0x1504,
+  /** The platform about to stop the process, or waking it: the page or the app hidden or
+   * shown. The host rings the doorbell for it at once, since a hidden page gets no frame and
+   * hiding is the save's last sure moment. */
+  SYS_SLEEP = 0x1002,
   /** What the tile source declares of itself, once the client has it: the tile root's
    * `source`, the published one out of the bucket or the dev tile server's, read by the
    * client (ts/client/src/driver/namespace/source.ts) and handed over as numbers and names.
    * Until it comes nothing is observed: the floor is held at the zoom it names, and no
    * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
-  WORLD_SOURCE = 0x1005,
+  FS_MOUNT = 0x1301,
   /** A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
    * set aside by the host: the kernel reads it again, and writes it from then on. */
-  WORLD_KEPT_EMPTIED = 0x1006,
+  FS_TRUNCATED = 0x1302,
   /** A permission as the shell's prompt or the browser's change reported it. */
   SENSOR_PERMISSION = 0x1206,
   /** A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge. */
@@ -287,17 +301,17 @@ export const enum Command {
   INPUT_RECT = 0x1101,
   /** A pointer event on the canvas, in client pixels. */
   INPUT_POINTER = 0x1102,
-  /** What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
-  INPUT_HOLD = 0x110b,
-  /** The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec object/ext.json) are refused whole, never cut. */
-  INPUT_MARKER_WORDS = 0x110c,
-  /** The marker the tool left waiting is let go, nothing put up. */
-  INPUT_MARKER_CANCEL = 0x110d,
-  /** The waiting marker is put up with its words, if its place is still free or still a marker, and nothing waits after. */
-  INPUT_MARKER_PUT = 0x110e,
+  /** The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
+  EDIT_TOOL = 0x1a01,
+  /** The draft's text (ToolState.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut. */
+  EDIT_MARKER_TEXT = 0x1a02,
+  /** The marker's draft dropped, nothing committed. */
+  EDIT_MARKER_CANCEL = 0x1a03,
+  /** The marker's draft committed with its text, where its place is still free or still a marker, and closed. */
+  EDIT_MARKER_COMMIT = 0x1a04,
   INPUT_WHEEL = 0x1103,
   /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
-  INPUT_KEYS = 0x1106,
+  INPUT_MOVE = 0x1106,
   /** A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. */
   SURFACE_OPEN = 0x1501,
   /** The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's. */
@@ -305,24 +319,24 @@ export const enum Command {
   /** A call: the canvas is going, and what it held on the device is let go before the call returns. */
   SURFACE_CLOSE = 0x1503,
   /** A character drawn alone into a surface the shell handed over, as the picker shows it. */
-  PREVIEW_OPEN = 0x1801,
-  PREVIEW_CLOSE = 0x1802,
+  SCENE_PREVIEW_OPEN = 0x1701,
+  SCENE_PREVIEW_CLOSE = 0x1702,
   /** A setting set from the sheet or the character picker; EAGAIN until the kernel has read the
    * kept settings, which would be read over it. */
   SETTING_SET = 0x1601,
   /** A line the player said, shown over the character. */
-  CHAT_SEND = 0x1701,
+  SCENE_CHAT = 0x1703,
   /** The tracking button's press, as the button showed it. */
-  INPUT_TRACKING = 0x1104,
+  CAMERA_TRACKING = 0x1801,
   /** The compass's press: north up. */
-  INPUT_COMPASS_RESET = 0x1107,
+  CAMERA_NORTH_UP = 0x1802,
   /** The search panel's location card's press: the location asked for. The compass is
    * asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
    * reads it without the location. */
-  INPUT_LOCATE = 0x110f,
+  SENSOR_LOCATE = 0x120c,
   /** A search result: the pivot moved there, and the view asked with it at once, as the
    * controls ask it where the camera stands; a view field absent keeps what the view has. */
-  INPUT_GOTO = 0x1108,
+  CAMERA_GOTO = 0x1804,
   /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
    * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
    * first of a run is taken to be where the camera already is, so nothing moves as
@@ -330,23 +344,19 @@ export const enum Command {
   INPUT_XR_POSE = 0x1109,
   /** The tracker let the camera go: back to the controller it had. */
   INPUT_XR_POSE_END = 0x110a,
-  /** The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.
-   * The kernel watches a sensor only while both hold, the page visible and the world view
-   * shown; which sensors it watches then is its own (SENSOR_START). */
-  WORLD_VIEW = 0x1007,
   /** A fresh recording window. */
-  PROFILER_START = 0x1901,
+  PERF_START = 0x1901,
   /** The window frozen, so what is exported holds still. */
-  PROFILER_STOP = 0x1902,
-  /** The profiler's statistics and what it holds now, where they lie: the reply is the address of READ's words (profiler.json), the statistics
+  PERF_STOP = 0x1902,
+  /** The profiler's statistics and what it holds now, where they lie: the reply is the address of STATS's words (perf.json), the statistics
    * over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
    * number past the door is finite, so no window is infinite. */
-  PROFILER_READ = 0x1903,
-  /** The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn. */
-  PROFILER_RINGS = 0x1904,
+  PERF_STATS = 0x1903,
+  /** The rings where they lie, nothing reduced: the reply is the address of RINGS's words (perf.json), good until the next turn. */
+  PERF_RINGS = 0x1904,
   /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
    * block the kernel holds, valid until the next snapshot. */
-  WORLD_SNAPSHOT = 0x1004,
+  SHELL_SNAPSHOT = 0x1b01,
 }
 
 /** A branch of records, each read by `read`. */
@@ -365,7 +375,7 @@ export interface Snapshot {
   pivot: PivotState;
   location: LocationState;
   companion: CompanionState;
-  holding: HoldingState;
+  tool: ToolState;
   orient: OrientationState;
   /** The view's azimuth. */
   azimuth: f64;
@@ -373,7 +383,7 @@ export interface Snapshot {
   camera_busy: boolean;
   /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
   zooming: boolean;
-  /** The pointer is over a marker a tap would act on with the tool held: a place to go to, or a pin to erase or word. */
+  /** The pointer is over a scene marker a tap would act on with the tool held: a place to go to, or a pin to erase or draft. */
   over_marker: boolean;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
    * has read its kept slot, a few turns from boot. */
@@ -386,7 +396,7 @@ export interface Snapshot {
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
   /** The kept slots (host.json's `kept`) whose file is not of the slot's format, or too large for
-   * any heap: the kernel read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says
+   * any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says
    * the slot is empty. */
   kept_refused: u32[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
@@ -398,7 +408,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     pivot: read_pivot_state(b.at_branch(0)),
     location: read_location_state(b.at_branch(1)),
     companion: read_companion_state(b.at_branch(2)),
-    holding: read_holding_state(b.at_branch(3)),
+    tool: read_tool_state(b.at_branch(3)),
     orient: read_orientation_state(b.at_branch(4)),
     azimuth: b.at(5).get<f64>(),
     is_follow_mode: b.at(6).get<boolean>(),
@@ -468,27 +478,24 @@ export function read_companion_state(b: BranchCursor): CompanionState {
   };
 }
 
-/** What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held; and a marker the tool left waiting for its words. */
-export interface HoldingState {
-  tool: ActiveTool;
-  /** The held cube, by its number in the catalog's one value space. */
+/** The tool and what it takes, as EDIT_TOOL set it: the cube and the decor are each remembered whichever tool is active; and a marker's draft. */
+export interface ToolState {
+  active: ActiveTool;
+  /** The cube the tool takes, by its number in the catalog's one value space. */
   cube: u32;
   decor: u32;
   tier: u32;
-  /** Whether a marker the tool left waits for its words, which INPUT_MARKER_PUT or INPUT_MARKER_CANCEL ends. */
-  marker: boolean;
-  /** The waiting marker's words, which the shell takes up when it starts waiting: the marker's own where one stands there, none where it is new. */
-  words: string;
+  /** A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL. */
+  draft: string | null;
 }
 
-export function read_holding_state(b: BranchCursor): HoldingState {
+export function read_tool_state(b: BranchCursor): ToolState {
   return {
-    tool: b.at(0).get<ActiveTool>(),
+    active: b.at(0).get<ActiveTool>(),
     cube: b.at(1).get<u32>(),
     decor: b.at(2).get<u32>(),
     tier: b.at(3).get<u32>(),
-    marker: b.at(4).get<boolean>(),
-    words: b.at(5).get<string>(),
+    draft: b.at(4).get<string | null>(),
   };
 }
 
@@ -585,10 +592,10 @@ export function encode_sensor_orient(
     .f64(gamma);
 }
 
-/** Command.SENSOR_FAILED's packet, written in place into `to`.
+/** Command.SENSOR_ERR's packet, written in place into `to`.
  *
  * @param code Geolocation's; orientation gives none today. */
-export function encode_sensor_failed(
+export function encode_sensor_err(
   to: PacketRoom,
   sensor: Sensor,
   code: GeolocationErrorCode | null,
@@ -596,12 +603,12 @@ export function encode_sensor_failed(
   return to.writer(2).u32(sensor).u32(code);
 }
 
-/** Command.WORLD_BOOT's packet, written in place into `to`.
+/** Command.SYS_BOOT's packet, written in place into `to`.
  *
  * @param development A development build, which offers the settings schema.json marks `dev`.
  * @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
- * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_FAILED). */
-export function encode_world_boot(
+ * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ERR). */
+export function encode_sys_boot(
   to: PacketRoom,
   development: boolean,
   geolocation: boolean,
@@ -618,11 +625,11 @@ export function encode_world_boot(
     .bool(orient_silence_is_loss);
 }
 
-/** Command.WORLD_FRAME's packet, written in place into `to`.
+/** Command.SURFACE_FRAME's packet, written in place into `to`.
  *
  * @param refresh_ms The display's refresh, as the host measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
  * @param unix_ms The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and the step the tick takes, its change since the last frame. */
-export function encode_world_frame(
+export function encode_surface_frame(
   to: PacketRoom,
   refresh_ms: f64,
   paced_ms: f64,
@@ -639,20 +646,17 @@ export function encode_world_frame(
     .f64(unix_ms);
 }
 
-/** Command.WORLD_VISIBILITY's packet, written in place into `to`. */
-export function encode_world_visibility(
-  to: PacketRoom,
-  visible: boolean,
-): PacketWriter {
-  return to.writer(1).bool(visible);
+/** Command.SYS_SLEEP's packet, written in place into `to`. */
+export function encode_sys_sleep(to: PacketRoom, awake: boolean): PacketWriter {
+  return to.writer(1).bool(awake);
 }
 
-/** Command.WORLD_SOURCE's packet, written in place into `to`.
+/** Command.FS_MOUNT's packet, written in place into `to`.
  *
  * @param top_zoom The coarsest zoom the source supplies whole.
  * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/published.spec.rs).
  * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
-export function encode_world_source(
+export function encode_fs_mount(
   to: PacketRoom,
   top_zoom: u32,
   format: u32[],
@@ -665,13 +669,10 @@ export function encode_world_source(
     .strs(shard);
 }
 
-/** Command.WORLD_KEPT_EMPTIED's packet, written in place into `to`.
+/** Command.FS_TRUNCATED's packet, written in place into `to`.
  *
  * @param slot host.json's `kept`. */
-export function encode_world_kept_emptied(
-  to: PacketRoom,
-  slot: u32,
-): PacketWriter {
+export function encode_fs_truncated(to: PacketRoom, slot: u32): PacketWriter {
   return to.writer(1).u32(slot);
 }
 
@@ -715,11 +716,11 @@ export function encode_input_pointer(
     .f64(y);
 }
 
-/** Command.INPUT_HOLD's packet, written in place into `to`.
+/** Command.EDIT_TOOL's packet, written in place into `to`.
  *
- * @param val The held cube or decor kind, by its number in the catalog's one value space (cube.json).
+ * @param val The cube or decor kind the tool takes, by its number in the catalog's one value space (cube.json).
  * @param tier The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
-export function encode_input_hold(
+export function encode_edit_tool(
   to: PacketRoom,
   tool: ActiveTool,
   val: u32,
@@ -728,8 +729,8 @@ export function encode_input_hold(
   return to.writer(3).u32(tool).u32(val).u32(tier);
 }
 
-/** Command.INPUT_MARKER_WORDS's packet, written in place into `to`. */
-export function encode_input_marker_words(
+/** Command.EDIT_MARKER_TEXT's packet, written in place into `to`. */
+export function encode_edit_marker_text(
   to: PacketRoom,
   text: string,
 ): PacketWriter {
@@ -741,8 +742,8 @@ export function encode_input_wheel(to: PacketRoom, delta_y: f64): PacketWriter {
   return to.writer(1).f64(delta_y);
 }
 
-/** Command.INPUT_KEYS's packet, written in place into `to`. */
-export function encode_input_keys(
+/** Command.INPUT_MOVE's packet, written in place into `to`. */
+export function encode_input_move(
   to: PacketRoom,
   x: i32,
   y: i32,
@@ -781,8 +782,8 @@ export function encode_surface_close(
   return to.writer(1).u32(surface);
 }
 
-/** Command.PREVIEW_OPEN's packet, written in place into `to`. */
-export function encode_preview_open(
+/** Command.SCENE_PREVIEW_OPEN's packet, written in place into `to`. */
+export function encode_scene_preview_open(
   to: PacketRoom,
   surface: u32,
   group: u32,
@@ -791,8 +792,8 @@ export function encode_preview_open(
   return to.writer(3).u32(surface).u32(group).u8(number);
 }
 
-/** Command.PREVIEW_CLOSE's packet, written in place into `to`. */
-export function encode_preview_close(
+/** Command.SCENE_PREVIEW_CLOSE's packet, written in place into `to`. */
+export function encode_scene_preview_close(
   to: PacketRoom,
   surface: u32,
 ): PacketWriter {
@@ -810,25 +811,25 @@ export function encode_setting_set(
   return to.writer(2).u32(key).u32(value);
 }
 
-/** Command.CHAT_SEND's packet, written in place into `to`. */
-export function encode_chat_send(to: PacketRoom, text: string): PacketWriter {
+/** Command.SCENE_CHAT's packet, written in place into `to`. */
+export function encode_scene_chat(to: PacketRoom, text: string): PacketWriter {
   return to.writer(1).str(text);
 }
 
-/** Command.INPUT_TRACKING's packet, written in place into `to`. */
-export function encode_input_tracking(
+/** Command.CAMERA_TRACKING's packet, written in place into `to`. */
+export function encode_camera_tracking(
   to: PacketRoom,
   tracking: Tracking,
 ): PacketWriter {
   return to.writer(1).u32(tracking);
 }
 
-/** Command.INPUT_GOTO's packet, written in place into `to`.
+/** Command.CAMERA_GOTO's packet, written in place into `to`.
  *
  * @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
  * @param azimuth The heading about Z in radians, wrapped.
  * @param polar The angle down from vertical in radians, clamped. */
-export function encode_input_goto(
+export function encode_camera_goto(
   to: PacketRoom,
   lon: f64,
   lat: f64,
@@ -853,28 +854,20 @@ export function encode_input_xr_pose(
   return to.writer(7).f64(x).f64(y).f64(z).f64(qx).f64(qy).f64(qz).f64(qw);
 }
 
-/** Command.WORLD_VIEW's packet, written in place into `to`. */
-export function encode_world_view(
-  to: PacketRoom,
-  shown: boolean,
-): PacketWriter {
-  return to.writer(1).bool(shown);
-}
-
-/** Command.PROFILER_READ's packet, written in place into `to`. */
-export function encode_profiler_read(
+/** Command.PERF_STATS's packet, written in place into `to`. */
+export function encode_perf_stats(
   to: PacketRoom,
   window_ms: f64 | null,
 ): PacketWriter {
   return to.writer(1).f64(window_ms);
 }
 
-/** Command.WORLD_SNAPSHOT's event. */
-export interface WorldSnapshotEvent {
+/** Command.SHELL_SNAPSHOT's event. */
+export interface ShellSnapshotEvent {
   at: u32;
   len: u32;
 }
 
-export function read_world_snapshot(b: BranchCursor): WorldSnapshotEvent {
+export function read_shell_snapshot(b: BranchCursor): ShellSnapshotEvent {
   return { at: b.at(0).get<u32>(), len: b.at(1).get<u32>() };
 }

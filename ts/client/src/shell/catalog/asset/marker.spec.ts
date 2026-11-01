@@ -3,12 +3,12 @@
 // GENERATED from spec/spec/asset/marker.json
 //
 // How the marker kind is shown: its one shape, the pin, the marker someone
-// puts up at a place (id.json). A marker's cell is the camera grid's at its
+// puts up at a place (id.json). A pin's cell is the camera grid's at its
 // scale, as a place's icon is, its own apart from the places' since a
-// marker is drawn as its own design (pxl-spec asset/marker.rs
+// pin is drawn as its own design (pxl-spec asset/marker.rs
 // `marker_cell`). Per id where the kind comes to hold more than one shape.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
-/** The most a marker's words may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most. */
+/** The most a marker's text may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most. */
 export const MARKER_TEXT_CHARS: u32 = 40 as number;

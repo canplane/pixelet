@@ -6,6 +6,7 @@
 //! altitude picks the floor nearest it; with none, the surface. A place
 //! named with its own height is put as it is (`go_to`).
 
+use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -13,6 +14,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{put_pivot, Motion};
+use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::navigation::support::{exact, is_unknown, nearest, unknown_z};
 use crate::sys::sched::edge;
@@ -80,4 +82,12 @@ pub(crate) fn go_on_ground(to: Q3, motion: Motion) {
 pub fn go_to_place(to: Q3) {
     go_on_ground(to, Motion::Smooth);
     controller::come_in_to_default();
+}
+
+/// A search's place and the view asked with it: a view far out comes in,
+/// and the view is asked after, so a dist asked wins over the coming in.
+pub fn go_to_deg(lon: f64, lat: f64, view: IntentPatch) {
+    go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
+    controller::come_in_to_default();
+    controller::set_intent(view);
 }

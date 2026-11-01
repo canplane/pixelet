@@ -42,9 +42,9 @@ impl<'a> World<'a> {
         finest
     }
 
-    /// A marker's words, as put up; none for anything else.
-    pub fn words(&self, e: &Entry) -> Option<&'a str> {
-        self.object.words(e)
+    /// A marker's text, as put up; none for anything else.
+    pub fn text(&self, e: &Entry) -> Option<&'a str> {
+        self.object.text(e)
     }
 
     /// What is placed whose own room shares `space`, air left out, that

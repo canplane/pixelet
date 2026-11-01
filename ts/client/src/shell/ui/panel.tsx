@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
 });
 
 /**
- * A panel on a page and on Android: a bottom sheet over a dimmed map, dragged by its header only. Always laid
+ * A panel on a page and on Android: a bottom sheet over a dimmed world, dragged by its header only. Always laid
  * out full height and slid down to show half, so drags animate transform
  * only. Max width 540, an iPad form sheet's.
  */
@@ -202,7 +202,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   const responder = useRef(
     PanResponder.create({
       // Claimed at the press: a drag up leaves the sheet, and its moves would go
-      // to the map. The handle is no button, which would take its drags too.
+      // to the world. The handle is no button, which would take its drags too.
       onStartShouldSetPanResponder: (e) =>
         e.nativeEvent.pageY - live.current.top < PANEL_HEAD_HEIGHT,
       onPanResponderTerminationRequest: () => false,

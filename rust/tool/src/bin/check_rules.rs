@@ -73,7 +73,7 @@ const KERNEL_ORDER: [(&str, u8); 12] = [
     ("sys", 0),
 ];
 const KERNEL_HEADS: [&str; 2] = ["scene", "control"];
-const KERNEL_BESIDE: [&str; 1] = ["profiler"];
+const KERNEL_BESIDE: [&str; 1] = ["perf"];
 
 /// pxl-spec-core's order: what every part speaks, the layers' storage and
 /// the world's fields, the query over them (ARCHITECTURE.md, "The query, the

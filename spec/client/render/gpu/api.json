@@ -6,9 +6,9 @@
   ],
   "surface_role": {
     "$type": "u32",
-    "$doc": ["What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case."],
+    "$doc": ["What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing previewed alone."],
     "WORLD": 0,
-    "CASE": 1
+    "PREVIEW": 1
   },
   "stream": {
     "$type": "u32",

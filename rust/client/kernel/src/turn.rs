@@ -27,7 +27,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::input;
-use crate::domain::control::interaction::edit;
+use crate::domain::control::edit::write;
 use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::navigation::support;
@@ -56,9 +56,9 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::frame::resolution::Pace;
 use crate::domain::view::observation;
 use crate::domain::view::setting::store;
+use crate::perf::report::{perf_frame, FrameTurn};
+use crate::perf::window::perf_follow;
 use crate::pointer;
-use crate::profiler::report::{profiler_frame, FrameTurn};
-use crate::profiler::window::profiler_follow;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch;
 use crate::sys::io::loader;
@@ -105,7 +105,7 @@ fn companion_props() -> Option<CompanionProps> {
 /// The edit the pointer would make, of what it is over where the camera now
 /// stands (`camera_tick`), so the scene draws it this turn, not the next.
 fn edit_tick(_: &mut TickContext) {
-    let edits = edit::pending_step();
+    let edits = write::pending_step();
     // A new preview moves the world as drawn where it was and where it is.
     if preview::set(edits).is_some() {
         request_world_tick();
@@ -114,7 +114,7 @@ fn edit_tick(_: &mut TickContext) {
 
 /// The tool's ghost of that edit, drawn by the scene.
 fn ghost_tick(_: &mut TickContext) {
-    use crate::domain::control::interaction::ghost::ghost;
+    use crate::domain::control::edit::ghost::ghost;
     if section::map().is_some_and(|_| scene().ghost.set(draw_list(), &ghost())) {
         request_world_tick();
     }
@@ -253,7 +253,7 @@ pub fn world_turn() -> f64 {
     // First, so the turn they are read in is the first to see them.
     effect!(times, settings, {
         if store::settings_load_step() {
-            profiler_follow(store::settings_store().profiler);
+            perf_follow(store::settings_store().perf);
         }
     });
     effect!(times, navigation, off_center_step());
@@ -376,7 +376,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
         moving: interactive,
     });
     let done = now();
-    profiler_frame(FrameTurn {
+    perf_frame(FrameTurn {
         tick: report,
         interval_ms: delta * 1000.0,
         refresh_ms,

@@ -1,6 +1,6 @@
 // @pxl/client/shell/world/dock/message.tsx
 
-/** The message's card: a line for the chat, or a waiting marker's words, typed and sent. */
+/** The message's card: a line for the chat, or a marker draft's text, typed and sent. */
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,78 +15,52 @@ import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { TextField } from "@/shell/ui/text-field.tsx";
 import { chrome, color, disabledContent } from "@/shell/ui/theme.ts";
+import { kernel_snapshot } from "@/port/shell.ts";
 import {
-  Command,
-  encode_chat_send,
-  encode_input_marker_words,
-} from "@/abi/cmd.spec.ts";
-import {
-  kernel_command,
-  kernel_fits,
-  kernel_room,
-  kernel_snapshot,
-} from "@/port/shell.ts";
+  kernel_marker_cancel,
+  kernel_marker_commit,
+  kernel_marker_text,
+} from "@/port/edit.ts";
+import { kernel_chat_fits } from "@/port/scene.ts";
 import { MARKER_TEXT_CHARS } from "@/shell/catalog/asset/marker.spec.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 import { appendChatLine, DockMode, setDockMode } from "./store.ts";
 import { SLOT } from "./strip.tsx";
 
-/** A line too long to send is refused whole, never cut. */
-function chatFits(text: string): boolean {
-  return kernel_fits(encode_chat_send(kernel_room, text));
-}
-
-/** The waiting marker's words as typed, which it is drawn with. */
-function draftMarkerWords(text: string): void {
-  kernel_command(
-    Command.INPUT_MARKER_WORDS,
-    encode_input_marker_words(kernel_room, text),
-  );
-}
-
-/** The waiting marker put up with its words. */
-function putMarker(): void {
-  kernel_command(Command.INPUT_MARKER_PUT);
-}
-
-/** The waiting marker is let go. */
-function cancelMarker(): void {
-  kernel_command(Command.INPUT_MARKER_CANCEL);
-}
-
-/** Words past the cap are refused whole, never cut. */
+/** Text past the cap is refused whole, never cut. */
 function markerTextFits(text: string): boolean {
   return [...text].length <= MARKER_TEXT_CHARS;
 }
 
 /** The field's words and its sending, kept by the dock whether or not its cards are drawn yet. */
 export function useMessage(mode: DockMode) {
-  // A marker waiting for its words turns the message card to wording it.
-  const wording = useKernel((s) => s.holding.marker);
+  // A marker's draft turns the message card to writing it.
+  const drafting = useKernel((s) => s.tool.draft !== null);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
 
   // The message mode is typing: the keyboard comes and goes with it, and a
-  // marker waiting for its words lives only inside it.
+  // marker's draft lives only inside it.
   useEffect(() => {
     if (mode === DockMode.Message) inputRef.current?.focus();
     else {
       putKeyboardAway();
-      if (wording) cancelMarker();
+      if (drafting) kernel_marker_cancel();
     }
   }, [mode]);
 
-  // A marker starts waiting: the message comes up with its words, which from
-  // then on are the field's, sent as typed; done, the field is the chat's again.
+  // A draft opens: the message comes up with its text, which from
+  // then on is the field's, sent as typed; done, the field is the chat's again.
   useEffect(() => {
-    setMessageText(wording ? kernel_snapshot().holding.words : "");
-    if (wording) setDockMode(DockMode.Message);
-  }, [wording]);
+    setMessageText(drafting ? (kernel_snapshot().tool.draft ?? "") : "");
+    if (drafting) setDockMode(DockMode.Message);
+  }, [drafting]);
 
   function changeText(text: string) {
     setMessageText(text);
-    if (wording && markerTextFits(text.trim())) draftMarkerWords(text.trim());
+    if (drafting && markerTextFits(text.trim()))
+      kernel_marker_text(text.trim());
   }
 
   function sendMessage() {
@@ -96,12 +70,12 @@ export function useMessage(mode: DockMode) {
     setTimeout(() => {
       setMessageText("");
       setIsSending(false);
-      if (!wording) {
+      if (!drafting) {
         appendChatLine(text);
         inputRef.current?.focus();
         return;
       }
-      putMarker();
+      kernel_marker_commit();
       // Put up, the palette comes back for the next.
       setDockMode(DockMode.Palette);
     }, FADE.durationMs);
@@ -109,12 +83,12 @@ export function useMessage(mode: DockMode) {
 
   const canSend = messageText.trim() !== "";
   // A line too long for the kernel is refused whole, never cut.
-  const fits = wording
+  const fits = drafting
     ? markerTextFits(messageText.trim())
-    : chatFits(messageText.trim());
+    : kernel_chat_fits(messageText.trim());
 
   return {
-    wording,
+    drafting,
     messageText,
     isSending,
     inputRef,
@@ -134,7 +108,7 @@ export function Message({
 }) {
   const { t } = useTranslation();
   const {
-    wording,
+    drafting,
     messageText,
     isSending,
     inputRef,
@@ -160,7 +134,7 @@ export function Message({
           onChangeText={changeText}
           onSubmit={sendMessage}
           placeholder={
-            wording
+            drafting
               ? t("world.dock.pin_placeholder")
               : t("world.dock.message_placeholder")
           }
@@ -180,17 +154,17 @@ export function Message({
           disabled={isSending || !fits}
           accessibilityRole="button"
           accessibilityLabel={
-            wording ? t("world.dock.pin_done") : t("world.dock.send")
+            drafting ? t("world.dock.pin_done") : t("world.dock.send")
           }
           style={({ pressed }) => [
             styles.send,
-            wording && styles.confirm,
+            drafting && styles.confirm,
             pressed && styles.sendPressed,
             !fits && styles.sendRefused,
           ]}
         >
           <Glyph
-            glyph={wording ? "checkmark" : "arrow.up"}
+            glyph={drafting ? "checkmark" : "arrow.up"}
             size={chrome.glyph}
             weight="bold"
             color={color.white}

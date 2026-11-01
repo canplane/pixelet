@@ -8,13 +8,10 @@ import { create } from "zustand";
 import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
 import { cube } from "@/shell/catalog/asset/cube.spec.ts";
 import { allCubes, type Cube, decorIds } from "@/shell/catalog/asset/mod.ts";
-import { ActiveTool, Command, encode_chat_send } from "@/abi/cmd.spec.ts";
-import {
-  kernel_command,
-  kernel_hold,
-  kernel_room,
-  kernel_snapshot,
-} from "@/port/shell.ts";
+import { ActiveTool } from "@/abi/cmd.spec.ts";
+import { kernel_snapshot } from "@/port/shell.ts";
+import { kernel_tool } from "@/port/edit.ts";
+import { kernel_chat } from "@/port/scene.ts";
 import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -137,18 +134,18 @@ function save(s: DockState): void {
   );
 }
 
-/** What is held stays as the tool or the tier changes. */
-function hold(tool: ActiveTool, tier: u32): void {
-  const h = kernel_snapshot().holding;
-  kernel_hold(tool, tool === ActiveTool.Decor ? h.decor : h.cube, tier);
+/** The cube and the decor stay as the tool or the tier changes. */
+function sendTool(tool: ActiveTool, tier: u32): void {
+  const h = kernel_snapshot().tool;
+  kernel_tool(tool, tool === ActiveTool.Decor ? h.decor : h.cube, tier);
 }
 
-export function holdTool(tool: ActiveTool): void {
-  hold(tool, kernel_snapshot().holding.tier);
+export function selectTool(tool: ActiveTool): void {
+  sendTool(tool, kernel_snapshot().tool.tier);
 }
 
-export function holdTier(tier: u32): void {
-  hold(kernel_snapshot().holding.tool, tier);
+export function selectTier(tier: u32): void {
+  sendTool(kernel_snapshot().tool.active, tier);
 }
 
 const store = create<DockState>()(() => ({
@@ -202,17 +199,17 @@ function touch(pick: RecentPick): void {
 }
 
 export function selectCube(cube: Cube): void {
-  kernel_hold(ActiveTool.Object, cube, kernel_snapshot().holding.tier);
+  kernel_tool(ActiveTool.Object, cube, kernel_snapshot().tool.tier);
   touch({ tool: ActiveTool.Object, cube });
 }
 
 export function selectDecor(kind: u16): void {
-  kernel_hold(ActiveTool.Decor, kind, kernel_snapshot().holding.tier);
+  kernel_tool(ActiveTool.Decor, kind, kernel_snapshot().tool.tier);
   touch({ tool: ActiveTool.Decor, kind });
 }
 
 export function selectMarker(): void {
-  holdTool(ActiveTool.Marker);
+  selectTool(ActiveTool.Marker);
   touch({ tool: ActiveTool.Marker });
 }
 
@@ -234,9 +231,9 @@ export function flashSwatch(cube: Cube, open: boolean): void {
 }
 
 export function stepSize(delta: i32): void {
-  const h = kernel_snapshot().holding;
-  if (h.tool !== ActiveTool.Object) return;
-  holdTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
+  const h = kernel_snapshot().tool;
+  if (h.active !== ActiveTool.Object) return;
+  selectTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
   flashSwatch(h.cube, true);
 }
 
@@ -246,17 +243,17 @@ export function appendChatLine(text: string): void {
       -MAX_CHAT_LINES,
     ),
   }));
-  kernel_command(Command.CHAT_SEND, encode_chat_send(kernel_room, text));
+  kernel_chat(text);
 }
 
 export function useInHand(pick: RecentPick): boolean {
-  return useKernel(({ holding: h }) => {
+  return useKernel(({ tool: h }) => {
     if (pick.tool === ActiveTool.Object) {
-      return h.tool === ActiveTool.Object && h.cube === pick.cube;
+      return h.active === ActiveTool.Object && h.cube === pick.cube;
     }
     if (pick.tool === ActiveTool.Decor) {
-      return h.tool === ActiveTool.Decor && h.decor === pick.kind;
+      return h.active === ActiveTool.Decor && h.decor === pick.kind;
     }
-    return h.tool === ActiveTool.Marker;
+    return h.active === ActiveTool.Marker;
   });
 }

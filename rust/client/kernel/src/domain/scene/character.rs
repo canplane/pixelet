@@ -1,6 +1,6 @@
 // pxl-kernel/domain/scene/character.rs
 
-//! The companion at the pivot and the picker's display cases.
+//! The companion at the pivot and the picker's previews.
 
 pub mod companion;
 pub mod param;

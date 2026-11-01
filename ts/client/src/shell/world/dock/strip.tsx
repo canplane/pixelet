@@ -26,7 +26,7 @@ import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { alpha, chrome, color } from "@/shell/ui/theme.ts";
 import { openModal } from "@/shell/modal.tsx";
 import {
-  holdTool,
+  selectTool,
   selectCube,
   selectDecor,
   selectMarker,
@@ -282,7 +282,7 @@ export function Strip({
   gesture: Omit<SizeGesture, "press">;
 }) {
   const { t } = useTranslation();
-  const activeTool = useKernel((s) => s.holding.tool);
+  const activeTool = useKernel((s) => s.tool.active);
   const recentPicks = useRecentPicks();
 
   return (
@@ -292,13 +292,13 @@ export function Strip({
           label={t("world.dock.pointer")}
           glyph="hand.point.up.left"
           active={activeTool === ActiveTool.Pointer}
-          onPress={() => holdTool(ActiveTool.Pointer)}
+          onPress={() => selectTool(ActiveTool.Pointer)}
         />
         <ToolButton
           label={t("world.dock.eraser")}
           glyph="eraser"
           active={activeTool === ActiveTool.Eraser}
-          onPress={() => holdTool(ActiveTool.Eraser)}
+          onPress={() => selectTool(ActiveTool.Eraser)}
         />
       </View>
 

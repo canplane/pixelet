@@ -67,9 +67,9 @@ export const color = {
   send: CORAL.base,
   /** A marker's words set, apart from a chat line sent. */
   confirm: SYSTEM.blue,
-  /** Who said a line, over the map on its own dark edge: the mark's coral, not one darkened for the light ground. */
+  /** Who said a line, over the world on its own dark edge: the mark's coral, not one darkened for the light ground. */
   self: CORAL.mark,
-  /** The status hues lightened toward white, for a sensor glyph over the map. */
+  /** The status hues lightened toward white, for a sensor glyph over the world. */
   pendingGlyph: tint(SYSTEM.orange, 0.6),
   alarmGlyph: tint(SYSTEM.red, 0.6),
 
@@ -85,8 +85,8 @@ export const color = {
   costMedium: SYSTEM.orange,
   costHigh: SYSTEM.red,
   dev: SYSTEM.purple,
-  profilerGo: SYSTEM.green,
-  profilerHalt: SYSTEM.yellow,
+  perfGo: SYSTEM.green,
+  perfHalt: SYSTEM.yellow,
 } as const;
 
 /** Colors an iPhone draws on its system glass and other platforms as a
@@ -134,7 +134,7 @@ export const haloRings: readonly number[] = Array.from(
 
 export const hairline = alpha(color.labelGray, 0.1);
 
-/** Apple's text styles, a step smaller, since the chrome floats over a map. */
+/** Apple's text styles, a step smaller, since the chrome floats over the world. */
 export const weight = {
   regular: "400",
   medium: "500",
@@ -202,7 +202,7 @@ export const sectionTitle = {
   textTransform: "uppercase",
 } as const;
 
-/** The map screen's layers, back to front: the dock and toasts, the scrim, the top chrome, the debug panels, a sheet. */
+/** The world screen's layers, back to front: the dock and toasts, the scrim, the top chrome, the debug panels, a sheet. */
 export const layer = {
   bottom: 40,
   scrim: 49,

@@ -74,7 +74,7 @@ struct Arrangement {
     set: Set,
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, and where a tap on it goes.
-    hits: Vec<([f64; 4], Went)>,
+    hits: Vec<([f64; 4], MarkerHit)>,
     /// Kept so a settled turn asks the heap for nothing; a brick's in a
     /// run, as each source reads it (`pin.rs`, `place.rs`).
     pins: Vec<pin::Pin>,
@@ -149,7 +149,7 @@ pub(super) struct Instance {
     pub(super) key: Key,
     pub(super) design: Design,
     pub(super) stands: Q3,
-    pub(super) tap: Option<Went>,
+    pub(super) tap: Option<MarkerHit>,
 }
 
 static ARRANGEMENT: Global<Arrangement> = Global::new();
@@ -462,15 +462,15 @@ pub fn draw(draw: &mut DrawList, eye: V3) {
     ARRANGEMENT.get(Arrangement::default).set.draw(draw, eye);
 }
 
-/// Where a tap on a marker goes: to its place; a pin is its entry's, which the tool held decides what to do with.
+/// What a tap on a scene marker hit: a place to go to; a pin, its entry's, which the tool held decides what to do with.
 #[derive(Clone, Copy)]
-pub enum Went {
+pub enum MarkerHit {
     To(Q3),
     Pin(EntryAt, Q3),
 }
 
 /// `ndc` in [−1, 1], y up. The marker that took the tap, if any.
-pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
+pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<MarkerHit> {
     let [x, y] = ndc_to_px([ndc_x, ndc_y]);
     let hits = &ARRANGEMENT.get(Arrangement::default).hits;
     hits.iter()

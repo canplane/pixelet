@@ -4,7 +4,7 @@
 //
 // A request's vocabulary, the kernel's and the shell's: what stream it is in, how
 // its run came to an end, and the phases a run reports its time in. The profiler
-// records and reports them by these names (spec/client/kernel/profiler/profiler.json).
+// records and reports them by these names (spec/client/kernel/perf/perf.json).
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.

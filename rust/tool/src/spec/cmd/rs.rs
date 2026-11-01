@@ -129,11 +129,9 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
             rs_record(spec, &f.ty, "'_")?
         ));
     }
+    // An optional str is borrowed as it stands; a present one may be any Display.
     if f.optional && kind == Kind::Str {
-        return Err(format!(
-            "cmd.json: an optional str ({}) is not written",
-            f.name
-        ));
+        return Ok("Option<&'a str>".to_string());
     }
     let one = match kind {
         Kind::Number => f.ty.clone(),
@@ -172,6 +170,7 @@ fn rs_write(spec: &Spec, f: &Field) -> Result<Vec<String>, String> {
     Ok(vec![match kind {
         Kind::Record if f.optional => format!("match &{v} {{ Some(r) => w.branch({fields}, |w| r.write(w)), None => w.no_branch() }};"),
         Kind::Record => format!("w.branch({fields}, |w| {v}.write(w));"),
+        Kind::Str if f.optional => format!("w.str({v});"),
         Kind::Str => format!("w.str_display({v});"),
         Kind::Enum | Kind::Extern if f.optional => format!("w.u32({v}.map(|m| m as u32));"),
         Kind::Enum | Kind::Extern => format!("w.u32(Some({v} as u32));"),

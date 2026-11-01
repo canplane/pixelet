@@ -1,16 +1,17 @@
 // pxl-kernel/domain/scene/marker/pin.rs
 
-//! The pins someone put up, as the object store holds them: each its words
+//! The marker kind's pins someone put up, as the object store holds them,
+//! drawn as scene markers: each its text
 //! on a pill at its own cell, or where more than one stands in a pin's cell
 //! (`marker_cell`), their count at the cell's middle on a pin's pill in its
-//! colors turned over, the pins' own rule (`asset/marker.json`); the one
-//! waiting for its words wherever it is. A pin is read with the brick it
+//! colors turned over, the pins' own rule (`asset/marker.json`); the draft
+//! wherever it is. A pin is read with the brick it
 //! stands in and shown at the camera grid's cell where it stands, its own
 //! point's, so it shows and is counted as the zoom drawn there says.
 
 use core::hash::Hasher;
 
-use super::arrangement::{surface, Brick, Instance, Key, Went};
+use super::arrangement::{surface, Brick, Instance, Key, MarkerHit};
 use crate::domain::layer::object::preview::draft;
 use crate::domain::query::{cell_zoom_at, World};
 use crate::domain::scene::marker::design::Design;
@@ -56,10 +57,10 @@ pub(super) struct Pin {
 /// Code points, so a non-BMP character is never cut in half.
 const SHOWN_CHARS: usize = 12;
 
-/// A pin's words, cut to `SHOWN_CHARS`, on its pill.
-fn pill(words: &str) -> Design {
-    let mut shown: String = words.chars().take(SHOWN_CHARS).collect();
-    if words.chars().count() > SHOWN_CHARS {
+/// A pin's text, cut to `SHOWN_CHARS`, on its pill.
+fn pill(text: &str) -> Design {
+    let mut shown: String = text.chars().take(SHOWN_CHARS).collect();
+    if text.chars().count() > SHOWN_CHARS {
         shown.push('…');
     }
     Design::Pill {
@@ -86,7 +87,7 @@ fn one(at: EntryAt, design: Design, stands: Q3) -> Instance {
         key: Key::Pin(Held::One(at)),
         design,
         stands,
-        tap: Some(Went::Pin(at, stands)),
+        tap: Some(MarkerHit::Pin(at, stands)),
     }
 }
 
@@ -103,7 +104,7 @@ pub(super) fn read(brick: Brick, columns: &Aabb, pins: &mut Vec<Pin>) {
             pins.push(Pin {
                 brick,
                 at: e.id(),
-                design: pill(world.words(e).unwrap_or_default()),
+                design: pill(world.text(e).unwrap_or_default()),
                 stands,
                 base,
                 grid: 0,
@@ -114,15 +115,15 @@ pub(super) fn read(brick: Brick, columns: &Aabb, pins: &mut Vec<Pin>) {
     });
 }
 
-/// What `pins` show seen from `eye`, into `out`: the one waiting
-/// for its words, wherever it is, then each pin where its own point's cell
+/// What `pins` show seen from `eye`, into `out`: the draft,
+/// wherever it is, then each pin where its own point's cell
 /// shows a marker (`marker_shows`), a pin's cell's pins but that one
 /// together: one is itself, more their count, which a tap takes to where it
 /// stands. A cell lies in its brick, finer than it, so a brick's pins are
 /// counted among themselves.
 pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
     let drafted = draft().map(|d| d.at);
-    out.extend(draft().map(|d| one(d.at, pill(&d.words), pin_at(d.at).0)));
+    out.extend(draft().map(|d| one(d.at, pill(&d.text), pin_at(d.at).0)));
     for p in pins.iter_mut() {
         p.grid = cell_zoom_at(eye, p.base);
         p.cell = marker_shows(p.grid).then(|| marker_cell_of(p.grid, p.at));
@@ -147,17 +148,17 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
             key: Key::Pin(Held::Cell(cell)),
             design: cnt(n),
             stands: at,
-            tap: Some(Went::To(at)),
+            tap: Some(MarkerHit::To(at)),
         });
     }
 }
 
-/// The one waiting for its words, as `Seen` compares it: its entry and its
-/// words by their hash, so a settled turn asks the heap for nothing.
+/// The draft, as `Seen` compares it: its entry and its
+/// text by its hash, so a settled turn asks the heap for nothing.
 pub(super) fn drafted() -> Option<(EntryAt, u64)> {
     draft().map(|d| {
         let mut h = fnv::FnvHasher::default();
-        h.write(d.words.as_bytes());
+        h.write(d.text.as_bytes());
         (d.at, h.finish())
     })
 }

@@ -14,7 +14,7 @@ import { useKernel } from "@/shell/store/watch.ts";
 
 /** A sensor's status as a color: `tone.pending` while its reading is asked
  * for, `tone.failed` where it failed, else `base`. Each surface gives its own
- * tones, the map's glyphs paler than a sheet's. */
+ * tones, the world's glyphs paler than a sheet's. */
 export function statusColor(
   status: SensorStatus,
   base: string,

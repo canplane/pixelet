@@ -113,7 +113,7 @@ export interface WorldSurfaceProps {
   overMarker: boolean;
 }
 
-export interface CaseSurfaceProps {
+export interface PreviewSurfaceProps {
   surface: SurfaceDriver;
   onOpen: (surface: u32) => () => void;
   openKey: string;
@@ -210,7 +210,7 @@ export interface Bracket {
   /** The world's surface, and the place's input driver. */
   surface: {
     World: ComponentType<WorldSurfaceProps>;
-    Case: ComponentType<CaseSurfaceProps>;
+    Preview: ComponentType<PreviewSurfaceProps>;
   };
 }
 

@@ -2,8 +2,8 @@
 
 //! An edit not yet made, as what it changes in what is drawn: the pointer
 //! decides it, the world as drawn composes it (`World::previewing`); the
-//! ghost it shows under the pointer (`Ghost`); and a marker waiting for its
-//! words, drawn with the words it has so far.
+//! ghost it shows under the pointer (`Ghost`); and a marker's draft, drawn
+//! with the text it has so far.
 
 use crate::domain::layer::object::store;
 use crate::sys::sched::edge::request_world_tick;
@@ -47,7 +47,7 @@ pub fn cur() -> RenderEdits {
 
 /// What the pointer's tool would show where it is: nothing, a decor
 /// instance, or a box, an instance in the pointer's frame. The tool decides
-/// it (pxl-kernel domain/control/interaction/ghost.rs `ghost`), and the scene
+/// it (pxl-kernel domain/control/edit/ghost.rs `ghost`), and the scene
 /// draws it half transparent as its kind is drawn
 /// (domain/scene/indicator/ghost.rs `GhostDraw::set`).
 #[derive(Clone, Copy)]
@@ -78,33 +78,33 @@ pub struct GhostBox {
     pub erase: bool,
 }
 
-/// A marker the tool left waiting for its words, at a place free or holding
-/// a marker: put up there with them, it is the marker that stands there.
+/// A marker's draft: its place, free or holding a marker, and its text so
+/// far; committed, it is the marker that stands there.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Draft {
     pub at: EntryAt,
-    pub words: String,
+    pub text: String,
 }
 
 static DRAFT: Global<Option<Draft>> = Global::new();
 
-/// The words a marker at `at` shows: the waiting one's so far, else those
-/// put up there; none where no marker stands or waits.
-pub fn words_at(at: EntryAt) -> Option<&'static str> {
+/// The text a marker at `at` shows: the draft's so far, else the one
+/// committed there; none where no marker stands or is drafted.
+pub fn text_at(at: EntryAt) -> Option<&'static str> {
     if let Some(d) = draft().filter(|d| d.at == at) {
-        return Some(&d.words);
+        return Some(&d.text);
     }
     let object = store::object();
-    object.words(&object.read((at.zoom(), at.at())).placed()?)
+    object.text(&object.read((at.zoom(), at.at())).placed()?)
 }
 
-/// The one waiting, which the markers draw.
+/// The draft, which the markers draw.
 pub fn draft() -> Option<&'static Draft> {
     DRAFT.get(|| None).as_ref()
 }
 
-/// The one waiting, for the tool to change, which the next world turn draws.
-pub fn redraft() -> &'static mut Option<Draft> {
+/// The draft, for the tool to change, which the next world turn draws.
+pub fn draft_mut() -> &'static mut Option<Draft> {
     request_world_tick();
     DRAFT.get(|| None)
 }

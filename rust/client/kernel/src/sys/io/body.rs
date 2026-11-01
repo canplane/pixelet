@@ -221,7 +221,7 @@ pub fn releases() -> u32 {
 }
 
 /// The most slots out at once since the last call, the profiler's
-/// (profiler/report.rs `profiler_frame`): what `BODY_SLOTS` is measured by.
+/// (perf/report.rs `perf_frame`): what `BODY_SLOTS` is measured by.
 pub fn take_peak() -> u32 {
     let s = held();
     core::mem::replace(&mut s.peak, s.out)
