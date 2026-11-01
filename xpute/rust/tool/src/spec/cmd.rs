@@ -245,37 +245,68 @@ const TARGETS: [Target; 2] = [
     },
 ];
 
-/// A program's own table at `json`, its TypeScript at `ts` (its enums' modules
-/// in the folder beside it) and its Rust at `rs`: the guest's packets read for
-/// `xpute_guest::program`, the host's commands sent through `@xpute/host`'s port.
-/// `shown` is each as its header names it: the paths as they were given.
+/// A command table and where its code goes, given by whoever owns it: xpute
+/// reads it and writes nothing of the owner's own.
+pub struct Table<'a> {
+    /// Where the table is read from.
+    pub json: &'a str,
+    /// Where each output is written, its enums' modules in the folder beside
+    /// the TypeScript.
+    pub ts: &'a str,
+    pub rs: &'a str,
+    /// Each as the generated files' headers name it.
+    pub json_shown: &'a str,
+    pub ts_shown: &'a str,
+    pub rs_shown: &'a str,
+    /// Where the number checks a packet's reader calls are.
+    pub number: &'a str,
+    /// For a guest built with `program!`: its `program` module.
+    pub program: Option<&'a str>,
+    /// For a host that sends through a port: its port module.
+    pub port: Option<&'a str>,
+}
+
+/// `table`'s TypeScript and Rust.
+pub fn table_outputs(table: &Table) -> Result<Vec<Output>, String> {
+    let keep = |s: &str| -> &'static str { Box::leak(s.to_string().into_boxed_str()) };
+    let spec: Spec = read_as(table.json)?;
+    check_numbers(&spec, table.json_shown)?;
+    let t = Target {
+        json: keep(table.json_shown),
+        ts: keep(table.ts),
+        ts_logical: keep(table.ts_shown),
+        rs: keep(table.rs),
+        rs_logical: keep(table.rs_shown),
+        number: keep(table.number),
+        program: table.program.map(keep),
+        port: table.port.map(keep),
+        cpp: None,
+    };
+    let mut out = ts::emit(&spec, &t)?;
+    out.push(Output::new(t.rs, rs::emit(&spec, &t)?));
+    Ok(out)
+}
+
+/// A program's own table at `json`, its TypeScript at `ts` and its Rust at
+/// `rs`, for a guest built with `xpute_guest::program` and a host that sends
+/// through `@xpute/host`'s port; `shown` is each as the headers name it.
 pub fn program_outputs(
     json: &str,
     ts: &str,
     rs: &str,
     shown: [&str; 3],
 ) -> Result<Vec<Output>, String> {
-    let keep = |s: &str| -> &'static str { Box::leak(s.to_string().into_boxed_str()) };
-    let t = Target {
-        json: keep(json),
-        ts: keep(ts),
-        ts_logical: keep(shown[1]),
-        rs: keep(rs),
-        rs_logical: keep(shown[2]),
+    table_outputs(&Table {
+        json,
+        ts,
+        rs,
+        json_shown: shown[0],
+        ts_shown: shown[1],
+        rs_shown: shown[2],
         number: "xpute_guest::abi::number",
         program: Some("xpute_guest::program"),
         port: Some("@xpute/host/port.ts"),
-        cpp: None,
-    };
-    let spec: Spec = read_as(t.json)?;
-    check_numbers(&spec, shown[0])?;
-    let t = Target {
-        json: keep(shown[0]),
-        ..t
-    };
-    let mut out = ts::emit(&spec, &t)?;
-    out.push(Output::new(t.rs, rs::emit(&spec, &t)?));
-    Ok(out)
+    })
 }
 
 pub fn outputs() -> Result<Vec<Output>, String> {

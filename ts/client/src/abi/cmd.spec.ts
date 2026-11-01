@@ -34,329 +34,128 @@ import type {
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/kit/abi/word.ts";
 import { SequenceType } from "@xpute/kit/wire/xtp/mod.ts";
+import * as Major from "./cmd/major.spec.ts";
+import * as SysMinor from "./cmd/sys_minor.spec.ts";
+import * as InputMinor from "./cmd/input_minor.spec.ts";
+import * as SensorMinor from "./cmd/sensor_minor.spec.ts";
+import * as FsMinor from "./cmd/fs_minor.spec.ts";
+import * as GpuMinor from "./cmd/gpu_minor.spec.ts";
+import * as SurfaceMinor from "./cmd/surface_minor.spec.ts";
+import * as SettingMinor from "./cmd/setting_minor.spec.ts";
+import * as SceneMinor from "./cmd/scene_minor.spec.ts";
+import * as CameraMinor from "./cmd/camera_minor.spec.ts";
+import * as PerfMinor from "./cmd/perf_minor.spec.ts";
+import * as EditMinor from "./cmd/edit_minor.spec.ts";
+import * as ShellMinor from "./cmd/shell_minor.spec.ts";
+import * as PointerPhase from "./cmd/pointer_phase.spec.ts";
+import * as PointerType from "./cmd/pointer_type.spec.ts";
+import * as ActiveTool from "./cmd/active_tool.spec.ts";
+import * as Tracking from "./cmd/tracking.spec.ts";
+import * as GeolocationErrorCode from "./cmd/geolocation_error_code.spec.ts";
+import * as Sensor from "./cmd/sensor.spec.ts";
+import * as PermissionAnswer from "./cmd/permission_answer.spec.ts";
+import * as GroundStatus from "./cmd/ground_status.spec.ts";
+import * as SensorStatus from "./cmd/sensor_status.spec.ts";
+import * as Message from "./cmd/message.spec.ts";
+import * as Command from "./cmd/command.spec.ts";
 
-/** The module a command is for: the kernel's, or the device's that sends it. */
-export const enum Major {
-  SYS = 0x10,
-  INPUT = 0x11,
-  SENSOR = 0x12,
-  FS = 0x13,
-  GPU = 0x14,
-  SURFACE = 0x15,
-  SETTING = 0x16,
-  SCENE = 0x17,
-  CAMERA = 0x18,
-  PERF = 0x19,
-  EDIT = 0x1a,
-  SHELL = 0x1b,
-}
+/** One of Major's, as its enum was a type. */
+type Major = (typeof Major)[keyof typeof Major];
+export { Major };
 
-/** The system's: the kernel's start, and the platform's sleep and wake. */
-export const enum SysMinor {
-  BOOT = 0x01,
-  SLEEP = 0x02,
-}
+/** One of SysMinor's, as its enum was a type. */
+type SysMinor = (typeof SysMinor)[keyof typeof SysMinor];
+export { SysMinor };
 
-/** The input's: the pointer, the wheel, the held movement, a tracker's pose. */
-export const enum InputMinor {
-  POINTER = 0x02,
-  WHEEL = 0x03,
-  MOVE = 0x06,
-  XR_POSE = 0x09,
-  XR_POSE_END = 0x0a,
-}
+/** One of InputMinor's, as its enum was a type. */
+type InputMinor = (typeof InputMinor)[keyof typeof InputMinor];
+export { InputMinor };
 
-/** The device sensors'. */
-export const enum SensorMinor {
-  START = 0x01,
-  POS = 0x02,
-  STOP = 0x03,
-  ORIENT = 0x05,
-  PERMISSION = 0x06,
-  ERR = 0x0b,
-  LOCATE = 0x0c,
-}
+/** One of SensorMinor's, as its enum was a type. */
+type SensorMinor = (typeof SensorMinor)[keyof typeof SensorMinor];
+export { SensorMinor };
 
-/** The kernel's files: a root mounted, a kept slot truncated. */
-export const enum FsMinor {
-  MOUNT = 0x01,
-  TRUNCATED = 0x02,
-}
+/** One of FsMinor's, as its enum was a type. */
+type FsMinor = (typeof FsMinor)[keyof typeof FsMinor];
+export { FsMinor };
 
-/** The GPU's. */
-export const enum GpuMinor {
-  READY = 0x01,
-}
+/** One of GpuMinor's, as its enum was a type. */
+type GpuMinor = (typeof GpuMinor)[keyof typeof GpuMinor];
+export { GpuMinor };
 
-/** A surface's: opened, resized, closed, and the frame drawn into the surfaces. */
-export const enum SurfaceMinor {
-  OPEN = 0x01,
-  RESIZE = 0x02,
-  CLOSE = 0x03,
-  FRAME = 0x04,
-}
+/** One of SurfaceMinor's, as its enum was a type. */
+type SurfaceMinor = (typeof SurfaceMinor)[keyof typeof SurfaceMinor];
+export { SurfaceMinor };
 
-/** A setting's. */
-export const enum SettingMinor {
-  SET = 0x01,
-}
+/** One of SettingMinor's, as its enum was a type. */
+type SettingMinor = (typeof SettingMinor)[keyof typeof SettingMinor];
+export { SettingMinor };
 
-/** The scene's: a character drawn alone into a surface, a line said. */
-export const enum SceneMinor {
-  PREVIEW_OPEN = 0x01,
-  PREVIEW_CLOSE = 0x02,
-  CHAT = 0x03,
-}
+/** One of SceneMinor's, as its enum was a type. */
+type SceneMinor = (typeof SceneMinor)[keyof typeof SceneMinor];
+export { SceneMinor };
 
-/** The camera's: the tracking button, the compass, a search result. */
-export const enum CameraMinor {
-  TRACKING = 0x01,
-  NORTH_UP = 0x02,
-  GOTO = 0x04,
-}
+/** One of CameraMinor's, as its enum was a type. */
+type CameraMinor = (typeof CameraMinor)[keyof typeof CameraMinor];
+export { CameraMinor };
 
-/** The profiler's. */
-export const enum PerfMinor {
-  START = 0x01,
-  STOP = 0x02,
-  STATS = 0x03,
-  RINGS = 0x04,
-}
+/** One of PerfMinor's, as its enum was a type. */
+type PerfMinor = (typeof PerfMinor)[keyof typeof PerfMinor];
+export { PerfMinor };
 
-/** The edit's: the tool and what it takes, and a marker's draft. */
-export const enum EditMinor {
-  TOOL = 0x01,
-  MARKER_TEXT = 0x02,
-  MARKER_CANCEL = 0x03,
-  MARKER_COMMIT = 0x04,
-}
+/** One of EditMinor's, as its enum was a type. */
+type EditMinor = (typeof EditMinor)[keyof typeof EditMinor];
+export { EditMinor };
 
-/** What the kernel shows the shell. */
-export const enum ShellMinor {
-  SNAPSHOT = 0x01,
-}
+/** One of ShellMinor's, as its enum was a type. */
+type ShellMinor = (typeof ShellMinor)[keyof typeof ShellMinor];
+export { ShellMinor };
 
-/** Where a pointer event is in its gesture. */
-export const enum PointerPhase {
-  Down = 0,
-  Move = 1,
-  Up = 2,
-  Out = 3,
-  /** The pointer's gesture ends with no tap: the platform took it, or the shell spent it on something of its own. */
-  Cancel = 4,
-}
+/** One of PointerPhase's, as its enum was a type. */
+type PointerPhase = (typeof PointerPhase)[keyof typeof PointerPhase];
+export { PointerPhase };
 
-/** What the pointer is, as the browser's `pointerType` says. */
-export const enum PointerType {
-  Mouse = 0,
-  Touch = 1,
-  Pen = 2,
-}
+/** One of PointerType's, as its enum was a type. */
+type PointerType = (typeof PointerType)[keyof typeof PointerType];
+export { PointerType };
 
-/** What the pointer holds. */
-export const enum ActiveTool {
-  Pointer = 0,
-  Object = 1,
-  Decor = 2,
-  Eraser = 3,
-  Marker = 4,
-}
+/** One of ActiveTool's, as its enum was a type. */
+type ActiveTool = (typeof ActiveTool)[keyof typeof ActiveTool];
+export { ActiveTool };
 
-/** What the tracking button did, as the button showed it. */
-export const enum Tracking {
-  /** Back to the device. */
-  Recenter = 0,
-  /** Follow mode on, where the compass is listened to. */
-  Follow = 1,
-  /** Follow mode off, north up again. */
-  Unfollow = 2,
-}
+/** One of Tracking's, as its enum was a type. */
+type Tracking = (typeof Tracking)[keyof typeof Tracking];
+export { Tracking };
 
-/** The browser's PositionError codes. */
-export const enum GeolocationErrorCode {
-  Other = 0,
-  PermissionDenied = 1,
-  PositionUnavailable = 2,
-  Timeout = 3,
-}
+/** One of GeolocationErrorCode's, as its enum was a type. */
+type GeolocationErrorCode =
+  (typeof GeolocationErrorCode)[keyof typeof GeolocationErrorCode];
+export { GeolocationErrorCode };
 
-/** Which of the device's sensors. */
-export const enum Sensor {
-  Geolocation = 0,
-  Orientation = 1,
-}
+/** One of Sensor's, as its enum was a type. */
+type Sensor = (typeof Sensor)[keyof typeof Sensor];
+export { Sensor };
 
-/** A sensor permission, as the shell's prompt or the browser's change reported it. */
-export const enum PermissionAnswer {
-  /** The shell's prompt is up. */
-  Asking = 0,
-  Granted = 1,
-  Denied = 2,
-  /** The prompt itself threw. */
-  Failed = 3,
-}
+/** One of PermissionAnswer's, as its enum was a type. */
+type PermissionAnswer =
+  (typeof PermissionAnswer)[keyof typeof PermissionAnswer];
+export { PermissionAnswer };
 
-/** Whether the screen shows the world: Success once a frame that drew ground went
- * to it, or one went over a view whose tiles all answered with nothing to draw;
- * Loading until then, on a first load, after a jump or a lost device; Idle before
- * there is a view. */
-export const enum GroundStatus {
-  Idle = 0,
-  Loading = 1,
-  Success = 2,
-}
+/** One of GroundStatus's, as its enum was a type. */
+type GroundStatus = (typeof GroundStatus)[keyof typeof GroundStatus];
+export { GroundStatus };
 
-/** Where a sensor's reading is: none asked for, asked for, arriving, failed, or none to be had, the device having no such sensor. */
-export const enum SensorStatus {
-  Idle = 0,
-  Loading = 1,
-  Ready = 2,
-  Error = 3,
-  Unavailable = 4,
-}
+/** One of SensorStatus's, as its enum was a type. */
+type SensorStatus = (typeof SensorStatus)[keyof typeof SensorStatus];
+export { SensorStatus };
 
-/** A message the kernel raises and the shell shows.
- *
- * The kernel decides which message a state calls for and carries the number.
- * It never carries the words: a string that exists to be read has no reason
- * to sit in the kernel's memory, and the shell has the locale files already
- * (ts/client/src/locale) — the same split `strerror` is on the other side of.
- *
- * The number is the name here, and a band is what a message is about. */
-export const enum Message {
-  // ---- 0x02 where the device says it is ----
+/** One of Message's, as its enum was a type. */
+type Message = (typeof Message)[keyof typeof Message];
+export { Message };
 
-  GeolocationUnsupported = 0x0203,
-  GeolocationPermissionDenied = 0x0204,
-  GeolocationPositionUnavailable = 0x0205,
-  GeolocationTimeout = 0x0206,
-  GeolocationGenericError = 0x0207,
-
-  // ---- 0x03 which way the device is facing ----
-
-  OrientationPermissionError = 0x0302,
-  OrientationPermissionDenied = 0x0303,
-  OrientationSignalLost = 0x0304,
-
-  // ---- 0x04 why the server does not answer the world's reads ----
-
-  /** Reads reach the server and fail; they are tried again. */
-  WorldReadFailing = 0x0403,
-  /** Reads failed past every retry; the world is not coming. */
-  WorldUnavailable = 0x0404,
-}
-
-export const enum Command {
-  // ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json) ----
-
-  /** Start watching. */
-  SENSOR_START = 0x1201,
-  /** Stop watching. */
-  SENSOR_STOP = 0x1203,
-
-  // ---- the host answers: an I/O the process started, done ----
-
-  /** A GPS fix; a field is absent where the browser gave none. */
-  SENSOR_POS = 0x1202,
-  /** An orientation event; a field is absent where the browser gave none. */
-  SENSOR_ORIENT = 0x1205,
-  /** A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
-   * or cut off; the compass's, where the platform says so (SYS_BOOT's
-   * orient_silence_is_loss). */
-  SENSOR_ERR = 0x120b,
-
-  // ---- the host tells the process: its start, its turn, its window and its devices ----
-
-  /** The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root. */
-  SYS_BOOT = 0x1001,
-  /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
-   * phases on what is left of the quota, the fetches within the credits. The turn leaves
-   * its events on the completion ring, drawn by the kernel. It carries the host's alone:
-   * the turn's pacing, the network's credits and the clock; the view it is drawn at is the
-   * world surface's (SURFACE_RESIZE). */
-  SURFACE_FRAME = 0x1504,
-  /** The platform about to stop the process, or waking it: the page or the app hidden or
-   * shown. The host rings the doorbell for it at once, since a hidden page gets no frame and
-   * hiding is the save's last sure moment. */
-  SYS_SLEEP = 0x1002,
-  /** What the tile source declares of itself, once the client has it: the tile root's
-   * `source`, the published one out of the bucket or the dev tile server's, read by the
-   * client (ts/client/src/driver/namespace/source.ts) and handed over as numbers and names.
-   * Until it comes nothing is observed: the floor is held at the zoom it names, and no
-   * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
-  FS_MOUNT = 0x1301,
-  /** A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
-   * set aside by the host: the kernel reads it again, and writes it from then on. */
-  FS_TRUNCATED = 0x1302,
-  /** A permission as the shell's prompt or the browser's change reported it. */
-  SENSOR_PERMISSION = 0x1206,
-  /** A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge. */
-  GPU_READY = 0x1401,
-
-  // ---- the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI ----
-
-  /** A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
-   * (transforms aside), as the world surface's size is (SURFACE_RESIZE). */
-  INPUT_POINTER = 0x1102,
-  /** The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
-  EDIT_TOOL = 0x1a01,
-  /** The draft's text (ToolState.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut. */
-  EDIT_MARKER_TEXT = 0x1a02,
-  /** The marker's draft dropped, nothing committed. */
-  EDIT_MARKER_CANCEL = 0x1a03,
-  /** The marker's draft committed with its text, where its place is still free or still a marker, and closed. */
-  EDIT_MARKER_COMMIT = 0x1a04,
-  INPUT_WHEEL = 0x1103,
-  /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
-  INPUT_MOVE = 0x1106,
-  /** A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. */
-  SURFACE_OPEN = 0x1501,
-  /** The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's. */
-  SURFACE_RESIZE = 0x1502,
-  /** A call: the canvas is going, and what it held on the device is let go before the call returns. */
-  SURFACE_CLOSE = 0x1503,
-  /** A character drawn alone into a surface the shell handed over, as the picker shows it. */
-  SCENE_PREVIEW_OPEN = 0x1701,
-  SCENE_PREVIEW_CLOSE = 0x1702,
-  /** A setting set from the sheet or the character picker; EAGAIN until the kernel has read the
-   * kept settings, which would be read over it. */
-  SETTING_SET = 0x1601,
-  /** A line the player said, shown over the character. */
-  SCENE_CHAT = 0x1703,
-  /** The tracking button's press, as the button showed it. */
-  CAMERA_TRACKING = 0x1801,
-  /** The compass's press: north up. */
-  CAMERA_NORTH_UP = 0x1802,
-  /** The search panel's location card's press: the location asked for. The compass is
-   * asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
-   * reads it without the location. */
-  SENSOR_LOCATE = 0x120c,
-  /** A search result: the pivot moved there, and the view asked with it at once, as the
-   * controls ask it where the camera stands; a view field absent keeps what the view has. */
-  CAMERA_GOTO = 0x1804,
-  /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
-   * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
-   * first of a run is taken to be where the camera already is, so nothing moves as
-   * it begins; the camera follows the tracker from there until POSE_END.
-   * Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive
-   * the camera, sent by the device app's driver. */
-  INPUT_XR_POSE = 0x1109,
-  /** The tracker let the camera go: back to the controller it had. */
-  INPUT_XR_POSE_END = 0x110a,
-  /** A fresh recording window. */
-  PERF_START = 0x1901,
-  /** The window frozen, so what is exported holds still. */
-  PERF_STOP = 0x1902,
-  /** The profiler's statistics and what it holds now, where they lie: the reply is the address of STATS's words (perf.json), the statistics
-   * over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
-   * number past the door is finite, so no window is infinite. */
-  PERF_STATS = 0x1903,
-  /** The rings where they lie, nothing reduced: the reply is the address of RINGS's words (perf.json), good until the next turn. */
-  PERF_RINGS = 0x1904,
-  /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
-   * block the kernel holds, valid until the next snapshot. */
-  SHELL_SNAPSHOT = 0x1b01,
-}
+/** One of Command's, as its enum was a type. */
+type Command = (typeof Command)[keyof typeof Command];
+export { Command };
 
 /** A branch of records, each read by `read`. */
 function list<T>(b: BranchCursor, read: (b: BranchCursor) => T): T[] {

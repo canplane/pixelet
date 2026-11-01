@@ -26,12 +26,12 @@ let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
 export type RecentPick =
-  | { tool: ActiveTool.Object; cube: Cube }
+  | { tool: typeof ActiveTool.Object; cube: Cube }
   | {
-      tool: ActiveTool.Decor;
+      tool: typeof ActiveTool.Decor;
       kind: u16;
     }
-  | { tool: ActiveTool.Marker };
+  | { tool: typeof ActiveTool.Marker };
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
   if (a.tool === ActiveTool.Object) {
