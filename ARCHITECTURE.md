@@ -393,8 +393,11 @@ eye's windows' bricks.
 Decor is generated on the GPU from the same windows the rays read (`pxl-render
 gpu/generated.rs`). The leaf cells under a window's brick are read off the hash
 a window cell a thread, each candidate that stands at the window and stands
-clear is generated on a thread of its own, and a brick's decor is generated
-again, whole, only where what its brick reads changed. Every frame each
+clear is generated on a thread of its own. A brick's decor is thinned and
+generated whole only where its window holds another brick there; elsewhere
+its candidates, its hash's alone, stand, and a record is generated again
+only where what its own candidate reads changed: an edit, a cut, or a brick
+filled at its window's zoom or finer within reach of it. Every frame each
 generated record is taken where the rays ask the zoom it was generated at and
 compacted into the instances, a model down to its own size on screen, an
 impostor below it and culled below that. Placed decor is handed in as records
@@ -518,7 +521,11 @@ their bands' edges (`pxl-spec-core cast.rs` `Asked`, `Detail::margin`); the
 tile keeps the least of them and where the eye stood, and is cast again once
 the eye has moved that far (`light_detail_cs`, `light.rs` `holds`). The light's
 beam rays and samples take entries of their own for it (`light_beam_cs`,
-`light_sample_cs`), so the eye's walks tell nothing.
+`light_sample_cs`), so the eye's walks tell nothing. Each keeps its own least
+margin, and each tile cast gathers once those of the beam rays and samples that
+feed it (`light_held_cs`); a slot walked apart writes its own over its place in
+the list, and those alone are lowered into their tiles' with an atomic
+(`light_told_cs`), so the passes that walk read the list plainly.
 
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and
@@ -549,12 +556,14 @@ ahead       impostor atlases, fresh bricks filled, the atmosphere's
 cast        the screen's rays; decor generated; the shadow map
 world pass  generated decor → rays at their depth → generated impostors,
             each toned into the world's color, linear → the occlusion's
-            map multiplied into the color, as the claimed tiles' quads →
+            half-resolution map brought to each pixel and multiplied into
+            the color, as the claimed tiles' quads →
             sky and stars at the far plane → listed actors, cumulus,
             impostors → high cloud planes → puck, ghosts
-occlusion   N8AO found off the depth the world pass laid before its map,
-            where what it reads moved: the pass ends there and begins
-            again; held where not, the pass drawn as one (`gpu/ao.rs`)
+occlusion   N8AO found at half resolution off the depth the world pass laid
+            before its map, where what it reads moved: the pass ends there
+            and begins again; held where not, the pass drawn as one
+            (`gpu/ao.rs`)
 finish      the world's color encoded onto the canvas once
 over        markers → debug lines → display cases
 ```

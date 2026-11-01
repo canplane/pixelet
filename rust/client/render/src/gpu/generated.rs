@@ -4,7 +4,8 @@
 //! ground generates in the eye's windows over the cast's world (`decor_cs`),
 //! placed decor handed as records beside it — a candidate generated again
 //! only where what it reads changed (`decor_mark_cs`, `Generation`), its
-//! record standing otherwise; then each frame each
+//! record standing otherwise, and a brick thinned again only where it is
+//! another; then each frame each
 //! record taken where the rays ask the leaf cell's zoom or finer and sized
 //! for the screen, counted a draw region (`decor_cnt_cs`), the regions laid
 //! out with their indirect args (`decor_args_cs`), and each record drawn
@@ -51,9 +52,9 @@ pub struct DecorFrame<'a> {
 /// What decor's generation reads besides the frame's decor, none of it the
 /// eye's place: the windows' table, a preview's cuts, and the bricks filled
 /// this frame. A slot generates whole where its brick is another; else it
-/// generates again only where a box meets what its brick reads
-/// (`generated::brick_reads`): an edit, a cut as it was or is, or a brick
-/// filled at its window's zoom or finer. The overwrites' every write names its
+/// generates again only the records a box reaches, each by what its own
+/// candidate reads (`generated::reaches`): an edit, a cut as it was or is,
+/// or a brick filled at its window's zoom or finer. The overwrites' every write names its
 /// box (the frame's `edits`), and the service area's index is made once,
 /// before any brick is held, so neither generates a slot by itself. A brick
 /// filled reaches its own window's zoom and every coarser one: a coarser

@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 pub const DIR: &str = "rust/client/render/src/frame/shader";
 
 /// Each entry and the file it is checked in as, in `DIR`.
-pub const ENTRIES: [(&str, &str); 32] = [
+pub const ENTRIES: [(&str, &str); 34] = [
     ("beam_cs", "beam.gen.wgsl"),
     ("cell_cs", "cell.gen.wgsl"),
     ("sample_cs", "sample.gen.wgsl"),
@@ -29,6 +29,8 @@ pub const ENTRIES: [(&str, &str); 32] = [
     ("light_detail_cs", "light_detail.gen.wgsl"),
     ("light_beam_cs", "light_beam.gen.wgsl"),
     ("light_sample_cs", "light_sample.gen.wgsl"),
+    ("light_held_cs", "light_held.gen.wgsl"),
+    ("light_told_cs", "light_told.gen.wgsl"),
     ("miss_cs", "miss.gen.wgsl"),
     ("miss_list_cs", "miss_list.gen.wgsl"),
     ("sample_box_cs", "sample_box.gen.wgsl"),

@@ -30,18 +30,6 @@ pub(crate) fn seen_put(w: &mut Seen, i: u32, v: u32) {
     unsafe { *w.index_mut(i as usize) = v }
 }
 
-/// Word `i` lowered to `v` where it is more, whoever else lowers it.
-pub(crate) fn seen_least(w: &mut Seen, i: u32, v: u32) {
-    // SAFETY: as `seen_at`.
-    unsafe {
-        spirv_std::arch::atomic_u_min::<
-            u32,
-            { Scope::QueueFamily as u32 },
-            { Semantics::NONE.bits() },
-        >(w.index_mut(i as usize), v);
-    }
-}
-
 /// `v` added to word `i`, whoever else adds to it: what it held.
 pub(crate) fn seen_add(w: &mut Seen, i: u32, v: u32) -> u32 {
     // SAFETY: as `seen_at`.

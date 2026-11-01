@@ -1232,19 +1232,13 @@ impl Renderer {
         // over the world the sun's cast left as it was, through its gate,
         // the tiles the casters that changed set, or none of it; whole where
         // the device has no stencil. Which tiles they set the GPU alone
-        // knows, so the map draws its claimed tiles among all of them, as
-        // the screen does (`Tiles::beside`).
+        // knows, so the map draws its claimed tiles among those of the box
+        // they cover, which the GPU keeps and counts (`Tiles::box_args`).
         let cast = self.screen.kind != FrameKind::plain;
         let map_gated = gated && cast && !self.screen.light_casts() && g.gates();
-        let every: &[Mark] = &[[0, 0, shadow::SIZE, shadow::SIZE]];
-        let beside = if map_gated && casters_marking {
-            every
-        } else {
-            &[]
-        };
         self.light_tiles.size(g, [shadow::SIZE; 2]);
         self.light_tiles
-            .mark(g, [shadow::SIZE; 2], (map_gated, false), &[], beside);
+            .mark(g, [shadow::SIZE; 2], (map_gated, false), &[]);
         let map_drawn = self.shadows && (!map_gated || casters_marking);
         // Where the map's tiles changed through its gate, the screen's tiles
         // whose pixels read them are reached on the GPU (gpu/reach.rs), what
@@ -1262,7 +1256,7 @@ impl Renderer {
         // the resolve and the finish draw.
         self.resolve
             .tiles
-            .mark(g, [world.width, world.height], (gated, quiet), marks, &[]);
+            .mark(g, [world.width, world.height], (gated, quiet), marks);
         if screen_marking {
             let now = self.resolve.tiles.now();
             self.resolve.tiles.marked_in(now);
@@ -1365,6 +1359,8 @@ impl Renderer {
             self.skinned.draw_marks(&mut pass, frames, b);
             self.decor.draw_marks(&mut pass, frames, b, true);
             pass.end();
+            // The box they cover counted into the gate's draw.
+            self.light_tiles.dispatch_box_args(&mut ctx);
         }
         if reaching {
             let depth = world.depth_only_view;

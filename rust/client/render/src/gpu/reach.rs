@@ -25,8 +25,8 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec_core::param::light;
 use xpute_guest::mem::off_of;
 
-use crate::frame::shader::part::{SHADER_SCREEN_BOUND, SHADER_SCREEN_REACH};
 use crate::frame::shader::floor::MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP;
+use crate::frame::shader::part::{SHADER_SCREEN_BOUND, SHADER_SCREEN_REACH};
 use crate::frame::shader::record::{COMPUTE, DEPTH, STORAGE, STORAGE_RW, UNIFORM};
 use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP};
 use crate::gpu::api::{

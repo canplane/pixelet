@@ -118,22 +118,20 @@ fn shown_at(shown: &[u32], j: u32, cell: u32) -> bool {
     cell <= LEAF_CELL && at(shown, j) >> (cell - FIRST_CELL) & 1 != 0
 }
 
-/// Whether a box of the frame's (pxl-spec-core `generated::BOXES_AT`) meets
-/// the leaf cells `reads` of the window at `cell` (`generated::meets`): one
-/// at every zoom, or at `cell`'s or finer, whose cells a vote at the leaves'
-/// reads where they are the finest held (`generated::asks`).
-fn is_changed(list: &[u32], cell: u32, reads: [i32; 4]) -> bool {
+/// Whether a box of the frame's (pxl-spec-core `generated::BOXES_AT`)
+/// reaches what a candidate in `cells`, leaf cells of the window at `cell`,
+/// reads (`generated::reaches`): a brick's, or one candidate's own cell.
+fn is_changed(list: &[u32], cell: u32, cells: [i32; 4]) -> bool {
     let mut k = 0;
     while k < at(list, generated::LIST_BOXES) {
         let b = generated::BOXES_AT + generated::BOX_WORDS * k;
-        let zoom = at(list, b + 4);
         let edit = [
             at(list, b) as i32,
             at(list, b + 1) as i32,
             at(list, b + 2) as i32,
             at(list, b + 3) as i32,
         ];
-        if (zoom == generated::EVERY || zoom >= cell) && generated::meets(reads, edit) {
+        if generated::reaches(edit, at(list, b + 4), cell, cells) {
             return true;
         }
         k += 1;
@@ -146,9 +144,13 @@ fn is_changed(list: &[u32], cell: u32, reads: [i32; 4]) -> bool {
 /// `decor_cs` (pxl-spec-core `generated::LIST_AT`), the decors the catalog's
 /// rows as handed (`rows`), its count the dispatch's. An entry generates whole
 /// where every one does, decor having been off, or its records were not
-/// generated for its brick (`generated::generated_for`), its head then laid anew;
-/// else where a box of the frame's meets what it reads (`is_changed`). Each
-/// decor listed lays its records anew, none laid yet (`generated::cnt_at`).
+/// generated for its brick (`generated::generated_for`), its head then laid
+/// anew, each decor listed laying its records anew, none laid yet
+/// (`generated::cnt_at`), for `decor_thin_cs` and `decor_cs`. Else, where a
+/// box of the frame's reaches what its brick reads (`is_changed`), it
+/// generates in part: its candidates are its brick's hash's alone, so the
+/// records each decor laid stand, listed from the list's end
+/// (`generated::part_at`) for `decor_cs` alone.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_mark_cs"))]
 pub fn decor_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -173,7 +175,7 @@ pub fn decor_mark_cs(
     );
     let head = [at(records, h), at(records, h + 1), at(records, h + 2)];
     let whole = at(list, generated::LIST_EVERY) != 0 || !generated::generated_for(head, q);
-    if !whole && !is_changed(list, cell, generated::brick_reads(cell, q)) {
+    if !whole && !is_changed(list, cell, generated::brick_box(cell, q)) {
         return;
     }
     if whole {
@@ -190,14 +192,21 @@ pub fn decor_mark_cs(
     let mut j = 0;
     while j < decors {
         if shown_at(shown, j, cell) {
-            put(records, generated::cnt_at(s, j), 0);
-            // SAFETY: atomic adds on the list's count, each dispatch's z.
+            // The pairs whole counted as `decor_thin_cs`'s z, those in part
+            // apart, every one as `decor_cs`'s z.
+            let counted = if whole {
+                put(records, generated::cnt_at(s, j), 0);
+                generated::THIN_ARGS + 2
+            } else {
+                generated::LIST_PARTS
+            };
+            // SAFETY: atomic adds on the list's counts.
             let n = unsafe {
                 spirv_std::arch::atomic_i_add::<
                     u32,
                     { Scope::QueueFamily as u32 },
                     { Semantics::NONE.bits() },
-                >(&mut list[(generated::THIN_ARGS + 2) as usize], 1)
+                >(&mut list[counted as usize], 1)
             };
             // SAFETY: as above.
             unsafe {
@@ -207,7 +216,12 @@ pub fn decor_mark_cs(
                     { Semantics::NONE.bits() },
                 >(&mut list[(generated::GENERATE_ARGS + 2) as usize], 1)
             };
-            put(list, generated::LIST_AT + n, s | j << 16);
+            let w = if whole {
+                generated::LIST_AT + n
+            } else {
+                generated::part_at(n)
+            };
+            put(list, w, s | j << 16);
         }
         j += 1;
     }
@@ -234,7 +248,7 @@ pub fn decor_thin_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] rows: &[Decor],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] list: &[u32],
 ) {
-    let (brick, j) = listed(list, id.z);
+    let (brick, j, _) = listed(list, id.z);
     let (i, cell) = (id.x, window::eye_cell(brick / ENTRIES));
     if i >= BRICK_CELLS {
         return;
@@ -286,7 +300,10 @@ pub fn decor_thin_cs(
 /// thread a record: `x` its place among the decor's records, `z` the entry
 /// and decor listed, as `decor_thin_cs` laid them. Each record
 /// `RETAINED` is generated on its cell (`generated::generated`), naming the
-/// entry's window zoom; else it is `UNGENERATED`. Only a decor shown at that
+/// entry's window zoom; else it is `UNGENERATED`. Of a pair listed in part,
+/// each record a box of the frame's reaches (`is_changed`) is generated
+/// again on the candidate its cell holds (`scatter::candidate_at`), the cell
+/// it keeps generated or not; the rest stand. Only a decor shown at that
 /// zoom is listed (`decor_mark_cs`). What it generates on is the windows' bricks and the ways
 /// over them alone, what is placed left out (`Unplaced`); what is placed
 /// and the eye's cuts only take it away where they hold its box
@@ -304,22 +321,33 @@ pub fn decor_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] list: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] pool: &[u32],
 ) {
-    let (brick, j) = listed(list, id.z);
+    let (brick, j, part) = listed(list, id.z);
     // As many as the decor laid, no more than its room.
     let (cnt, cap) = (at(out, generated::cnt_at(brick, j)), rows[j as usize].cap());
     if id.x >= cnt || id.x >= cap {
         return;
     }
     let r = entry_word(rows, brick, j, id.x) as usize;
-    if r + 4 >= out.len() || out[r] != generated::RETAINED {
+    if r + 4 >= out.len() {
         return;
     }
-    let c = scatter::Candidate {
-        cell: [out[r + 1] as i32, out[r + 2] as i32],
-        draw: 0,
-        seed: out[r + 3],
-    };
     let cell = window::eye_cell(brick / ENTRIES);
+    let leaf = [out[r + 1] as i32, out[r + 2] as i32];
+    let seed = if part {
+        if !is_changed(list, cell, [leaf[0], leaf[1], leaf[0] + 1, leaf[1] + 1]) {
+            return;
+        }
+        scatter::candidate_at(&rows[j as usize], leaf).0.seed
+    } else if out[r] == generated::RETAINED {
+        out[r + 3]
+    } else {
+        return;
+    };
+    let c = scatter::Candidate {
+        cell: leaf,
+        draw: 0,
+        seed,
+    };
     let mut world = Generating {
         world: World {
             window,
@@ -346,10 +374,21 @@ pub fn decor_cs(
 }
 
 /// The `z`-th entry and decor `decor_mark_cs` listed (pxl-spec-core
-/// `generated::LIST_AT`).
-fn listed(list: &[u32], z: u32) -> (u32, u32) {
-    let w = at(list, generated::LIST_AT + z);
-    (w & 0xffff, w >> 16 & 0xff)
+/// `generated::LIST_AT`), and whether it generates in part: the pairs
+/// generated whole first, as many as `decor_thin_cs` is dispatched over,
+/// then those in part (`generated::part_at`).
+fn listed(list: &[u32], z: u32) -> (u32, u32, bool) {
+    let whole = at(list, generated::THIN_ARGS + 2);
+    let part = z >= whole;
+    let w = at(
+        list,
+        if part {
+            generated::part_at(z - whole)
+        } else {
+            generated::LIST_AT + z
+        },
+    );
+    (w & 0xffff, w >> 16 & 0xff, part)
 }
 
 /// The first word of entry `s`'s `i`-th record of decor `k` (pxl-spec-core

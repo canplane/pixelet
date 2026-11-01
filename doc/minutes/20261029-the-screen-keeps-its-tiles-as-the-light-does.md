@@ -522,14 +522,25 @@ directly, step 4 being done.
 ## Open
 
 - The stencil's format on the iPhone, the Quest and Android, and whether
-  the raster's gate of depth rejects early there.
-- Part 4 of step 3 costs about 1.2 ms over parts 1–3 at the baseline's
-  quiet view, not yet explained against what the structure predicts. At the
-  afternoon's real hour, a busier window, step 3 whole is 4.6 ms under step
-  2 at the p50 (the baseline's record); the quiet view, 7:00, night, the clouds, zoomed out
-  and other scales are still to be taken against the baseline.
-- Whether the mark from the kernel's spheres already meets the invariants,
-  leaving step 6 unneeded.
+  the raster's gate of depth rejects early there. Answered from the code and
+  the vendors' records (2026-11-01): the device app asks
+  `depth32float-stencil8` of wgpu, Metal on the iPhone, Vulkan on Android and
+  the Quest, and without it draws the world's pass whole, the stencil unused
+  (gpu/api.rs `gated_depth`, pipeline.rs `build_gated`). Every Apple GPU
+  offers it, the Quest 3 and 3S (Adreno 740) do, and Android some nine in ten
+  of the devices reported in a year (Adreno 7xx and the recent Malis always,
+  Adreno 6xx and older Malis by driver). No fragment drawn under either gate
+  writes storage; the boxes' and the impostors' discard and write depth
+  through the attachment, which keeps the early test on Adreno and Mali
+  (Mesa's turnip and panfrost as models of them); the iPhone's hidden-surface
+  removal for them is the one thing left to a device in hand.
+- Part 4 of step 3 cost about 1.2 ms over parts 1–3 at the baseline's quiet
+  view. The build it was read on is gone under steps 4 to 6 and the rounds
+  since; the quiet view, 7:00, night, the clouds and the other scales were
+  taken against `0567c0059` (the baseline's record, the closing round), the
+  quiet view some 8 ms a frame, every frame gated.
+- Whether the mark from the kernel's spheres already met the invariants,
+  leaving step 6 unneeded: step 6 part 2 took the spheres out.
 
 ## Proposed after the steps (2026-10-31)
 
@@ -597,5 +608,41 @@ the user (2026-11-01); measured in the tiles' baseline's record (the backlog's r
 - **A draw marks the tiles it covered at the frame it was drawn in**, the
   "as it was" marks drawn with that frame's own words (`frame_was`), its
   jitter among them.
-- **The screen's rays are not moved to the new view**: parked, the reasons
-  in the backlog.
+- **The screen's rays are not moved to the new view**, nor the light's
+  marks kept to where the eye cast anew, which needed it: built and
+  measured, dearer and the picture wrong. A moved ray is proven only by the
+  walk it was to save: the samples, the only witness of what is nearer, are
+  missing at the pixels it answers, and no ray's word names its node; as a
+  start it would skip what it uncovers (a proxy only starts the ray). Parked
+  by the user (2026-11-01), then dropped by the user from the backlog
+  (2026-11-01).
+
+
+## Taken in the closing round (2026-11-01)
+
+The user's word to empty the backlog; measured in the tiles' baseline's
+record (the closing round):
+
+- **The missed pixels' faces are asked once a square of alike stops**, a
+  stop following its left or upper neighbor within `beam::STOP_RUN`, where
+  they were asked once a row's run.
+- **The light's list is read plainly**: each beam ray and sample keeps its
+  own margin, a pass gathers a tile's least from those that feed it
+  (`light_held_cs`), and the walks' margins are put once a slot
+  (`light_told_cs`), the list atomic there alone.
+- **The light map's gate is one indirect draw over the box its marks
+  cover**, a tile marked once (`Tiles::box_args`), where a gated frame drew
+  every tile twice.
+- **Decor is generated again only where a landed brick reaches**, the
+  entries that still hold their brick in part, their candidates kept.
+- **The exposure is a compute pass**, its span its own time.
+- **The occlusion's upsample is folded into its apply**, the half map read
+  where the world pass lays it.
+- **Not taken: a sample on a beam's ray copying the beam's stop**; it
+  measured no gain for the words it added to each line.
+- **Not taken: the light's map cast again only where the world's change
+  reaches** (a landed brick, an edit or a cut laid along the light as a
+  rectangle of tiles, in place of every tile whenever the world moved).
+  Built and measured: the frames a brick lands in cost the light what the
+  rest do, before it and after, the light casting on every walking frame
+  whatever landed; it measured no gain for the state it added.

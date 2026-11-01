@@ -37,25 +37,62 @@ var<storage> global_3: type_4;
 var<storage> global_4: type_4;
 
 fn function_() {
-    var phi_243_: u32;
+    var phi_237_: u32;
+    var phi_240_: u32;
+    var phi_259_: u32;
+    var phi_260_: u32;
+    var phi_238_: u32;
+    var phi_241_: u32;
+    var phi_261_: bool;
+    var local: u32;
 
-    let _e19 = global;
-    let _e23 = global_3.member[118u];
-    if (_e19.x >= select(_e23, 524288u, (524288u < _e23))) {
+    let _e23 = global;
+    let _e27 = global_3.member[118u];
+    if (_e23.x >= select(_e27, 524288u, (524288u < _e27))) {
     } else {
-        let _e31 = global_1.member.member_8[3u][2u];
-        let _e33 = (_e31 + (_e19.x * 10u));
-        let _e37 = global_4.member[(_e33 + 8u)];
-        let _e41 = global_4.member[(_e33 + 9u)];
-        if ((_e41 & 2147483648u) == 0u) {
-            phi_243_ = _e41;
-        } else {
-            let _e50 = global_4.member[((_e31 + ((_e41 & 2147483647u) * 10u)) + 9u)];
-            phi_243_ = _e50;
+        let _e35 = global_1.member.member_8[3u][2u];
+        let _e37 = (_e35 + (_e23.x * 10u));
+        let _e41 = global_4.member[(_e37 + 8u)];
+        let _e45 = global_4.member[(_e37 + 9u)];
+        phi_237_ = _e45;
+        phi_240_ = 0u;
+        loop {
+            let _e47 = phi_237_;
+            let _e49 = phi_240_;
+            local = _e47;
+            if ((_e47 & 2147483648u) == 0u) {
+                phi_238_ = u32();
+                phi_241_ = u32();
+                phi_261_ = false;
+            } else {
+                let _e52 = (_e49 < 32u);
+                if _e52 {
+                    let _e59 = global_4.member[((_e35 + ((_e47 & 2147483647u) * 10u)) + 9u)];
+                    phi_259_ = _e59;
+                    phi_260_ = (_e49 + 1u);
+                } else {
+                    phi_259_ = u32();
+                    phi_260_ = u32();
+                }
+                let _e62 = phi_259_;
+                let _e64 = phi_260_;
+                phi_238_ = _e62;
+                phi_241_ = _e64;
+                phi_261_ = _e52;
+            }
+            let _e66 = phi_238_;
+            let _e68 = phi_241_;
+            let _e70 = phi_261_;
+            continue;
+            continuing {
+                phi_237_ = _e66;
+                phi_240_ = _e68;
+                break if !(_e70);
+            }
         }
-        let _e52 = phi_243_;
-        let _e56 = vec3<u32>((_e37 & 65535u), (_e37 >> bitcast<u32>(16i)), 3u);
-        textureStore(global_2, vec2<u32>(_e56.x, _e56.y), i32(_e56.z), vec4(_e52));
+        let _e75 = vec3<u32>((_e41 & 65535u), (_e41 >> bitcast<u32>(16i)), 3u);
+        let _e82 = local;
+        textureStore(global_2, vec2<u32>(_e75.x, _e75.y), i32(_e75.z), vec4(_e82));
     }
     return;
 }

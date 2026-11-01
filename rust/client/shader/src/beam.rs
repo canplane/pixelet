@@ -18,7 +18,7 @@ use spirv_std::spirv;
 
 use crate::either::Either;
 use crate::eye::Eye;
-use crate::observed::{seen_add, seen_at, seen_least, seen_most, seen_put, Seen};
+use crate::observed::{seen_add, seen_at, seen_most, seen_put, Seen};
 use crate::observer::{self, Observer};
 use crate::light::Head;
 use crate::world::World;
@@ -126,9 +126,6 @@ impl<W: Words + ?Sized> support::Lineage<Handed> for Laid<'_, W> {
 pub(crate) trait Words {
     fn word(&self, k: u32) -> u32;
     fn set(&mut self, k: u32, v: u32);
-    /// Word `k` lowered to `v` where it is more, whoever else lowers it
-    /// (pxl-spec-core `light::held_at`).
-    fn least(&mut self, k: u32, v: u32);
     /// `v` added to word `k`, whoever else adds to it: what it held.
     fn add(&mut self, k: u32, v: u32) -> u32;
     /// Word `k` raised to `v` where it is less, whoever else raises it.
@@ -142,10 +139,6 @@ impl Words for Beams {
 
     fn set(&mut self, k: u32, v: u32) {
         seen_put(self, k, v)
-    }
-
-    fn least(&mut self, k: u32, v: u32) {
-        seen_least(self, k, v)
     }
 
     fn add(&mut self, k: u32, v: u32) -> u32 {
@@ -164,10 +157,6 @@ impl Words for [u32] {
 
     fn set(&mut self, k: u32, v: u32) {
         pxl_spec_core::fill::put(self, k, v)
-    }
-
-    fn least(&mut self, k: u32, v: u32) {
-        crate::least(self, k, v)
     }
 
     fn add(&mut self, k: u32, v: u32) -> u32 {

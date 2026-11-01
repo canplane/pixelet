@@ -1,6 +1,9 @@
 // The eye's exposure, in stops, for the lights as the words say them
 // (atmos_light.wgsl `eye_stops`), and beside it the table's white, which the
-// passes after it read here (atmos_eye.wgsl): the first texel. Where its
+// passes after it read here (atmos_eye.wgsl): the first texel. A compute
+// pass, a texel a thread, so its span is its own time: a render pass's begin
+// is stamped before the passes it waits on have finished
+// (gpu/atmosphere.rs `exposure`). Where its
 // ground's slope is to be measured again, measured with it (`ground`). The
 // next two, the sun's and the moon's, each how far its light reaches the air
 // at this exposure and how fast that moves with its height (`reach`).
@@ -10,6 +13,7 @@
 // 1 where the ground's slope is measured with this drawing
 // (gpu/atmosphere.rs `lay_out`).
 @group(0) @binding(14) var<uniform> own: vec4f;
+@group(0) @binding(1) var exposure_out: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(20) var<storage, read_write> slopes: array<atomic<u32>, SLOPE_WORDS>;
 
 // How far the radius moves over one row of the transmittance table, which
@@ -87,15 +91,16 @@ fn reach(k: u32) {
   atomicStore(&slopes[LIGHT_SLOPES * k + 4u], bitcast<u32>(max(abs(shown1 - shown0), 1.0) / max(h, 1e-6)));
 }
 
-@fragment
-fn fs(v: TableOut) -> @location(0) vec4f {
-  let x = u32(v.clip.x);
+@compute @workgroup_size(3)
+fn exposure_cs(@builtin(local_invocation_index) x: u32) {
+  var texel = vec4f(0.0);
   if (x == 0u) {
     if (own.y > 0.5) {
       ground();
     }
-    return vec4f(eye_stops(lights_now()), table_white());
+    texel = vec4f(eye_stops(lights_now()), table_white());
+  } else {
+    reach(x - 1u);
   }
-  reach(x - 1u);
-  return vec4f(0.0);
+  textureStore(exposure_out, vec2u(x, 0u), texel);
 }

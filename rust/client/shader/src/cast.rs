@@ -411,20 +411,37 @@ fn stops(seen: &Seen) -> u32 {
     seen_at(seen, observed::STOPS_CNT).min(beam::STOPS)
 }
 
+/// The number of the stop pixel (`x`, `y`) waits for, where it is one
+/// alike the stop at words `k` (`alike`); `beam::STOPS` where not.
+fn waits_alike(rays: &Rays, beams: &Beams, g: &beam::Grid, k: u32, x: u32, y: u32) -> u32 {
+    let w: u32 = rays.read(UVec3::new(x, y, ray::FACES));
+    if w & beam::STOP_WAITS == 0 {
+        return beam::STOPS;
+    }
+    let r = w & !beam::STOP_WAITS;
+    if r >= beam::STOPS || !alike(beams, g.stop_at(r), k) {
+        return beam::STOPS;
+    }
+    r
+}
+
 /// Each stop the walks again kept (`stop`), a thread each,
 /// `beam::STOP_LANES` a workgroup, dispatched off their count
 /// (`observed::STOPS_ARGS`): the one that asks what lies about its face is
-/// the first on its row of a run of stops alike (`alike`), or of every
-/// `beam::STOP_RUN` columns of one, so a run is asked once and not once a
-/// pixel, which of them asks a function of the pixels alone. It is listed
-/// with its ask (`beam::Grid::stop_ask_at`) for the faces' pass as a box is
+/// one whose pixel's neighbors to the left and above wait for no stop alike
+/// (`alike`) within its square of `beam::STOP_RUN` a side, so a patch of
+/// stops alike is asked once a square, not once a pixel or a row, and
+/// which of them asks is a function of the pixels alone. It is listed with
+/// its ask (`beam::Grid::stop_ask_at`) for the faces' pass as a box is
 /// (raster.rs `face_cs`; `ray::MISS_ARGS_ASKED` of the walk again's words,
 /// its count, and its dispatch raised by the place that opens a
 /// workgroup), off the line its cell's rays resumed from. Any other is told
-/// the one that asks for it (`beam::STOP_FOLLOWS`). It reads the stops and
-/// its row's last ray words, which the walks wrote, and writes only its own
-/// stop's last word and its ask, so no thread reads what another writes;
-/// the pyramid's head, which it is dispatched off, it only reads.
+/// the neighbor's stop it takes them from, the left before the one above
+/// (`beam::STOP_FOLLOWS`), which `stop_faces_cs` follows to the one that
+/// asks. It reads the stops and its neighbors' last ray words, which the
+/// walks wrote, and writes only its own stop's last word and its ask, so
+/// no thread reads what another writes; the pyramid's head, which it is
+/// dispatched off, it only reads.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "stop_lead_cs"))]
 pub fn stop_lead_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -441,22 +458,17 @@ pub fn stop_lead_cs(
     let k = g.stop_at(id.x);
     let px = beams.word(k + beam::STOP_PX);
     let (x, y) = (px & 0xffff, px >> 16);
-    // The first of its run on its row: back while the pixel before waits
-    // for a stop alike, no further than a column `STOP_RUN` divides.
-    let (mut lead, mut at) = (id.x, x);
-    while at % beam::STOP_RUN != 0 {
-        let before: u32 = rays.read(UVec3::new(at - 1, y, ray::FACES));
-        if before & beam::STOP_WAITS == 0 {
-            break;
-        }
-        let r = before & !beam::STOP_WAITS;
-        if r >= beam::STOPS || !alike(beams, g.stop_at(r), k) {
-            break;
-        }
-        (lead, at) = (r, at - 1);
+    // The neighbor it takes its faces from: the left, else the one above,
+    // each where its pixel waits for a stop alike within the square.
+    let mut from = beam::STOPS;
+    if x % beam::STOP_RUN != 0 {
+        from = waits_alike(rays, beams, &g, k, x - 1, y);
     }
-    if lead != id.x {
-        beams.set(k + beam::STOP_OUT, beam::STOP_FOLLOWS | lead);
+    if from == beam::STOPS && y % beam::STOP_RUN != 0 {
+        from = waits_alike(rays, beams, &g, k, x, y - 1);
+    }
+    if from != beam::STOPS {
+        beams.set(k + beam::STOP_OUT, beam::STOP_FOLLOWS | from);
         return;
     }
     let asked = ray::MISS_ARGS_ASKED;
@@ -479,11 +491,13 @@ pub fn stop_lead_cs(
 }
 
 /// Each stop the walks again kept, a thread each as `stop_lead_cs`, once
-/// the faces' pass asked what lies about each run's face (raster.rs
+/// the faces' pass asked what lies about each patch's face (raster.rs
 /// `face_cs`): those faces put at its pixel as its last ray word
 /// (`ray::FACES`), its own where it asked them, else those of the stop that
-/// asked for it (`beam::STOP_FOLLOWS`), so no pixel is left waiting past
-/// the cast's pass.
+/// asked for it, reached through the neighbors each was told
+/// (`beam::STOP_FOLLOWS`), a step left or up within the square each, so
+/// two of its sides at most; no pixel is left waiting past the cast's
+/// pass.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "stop_faces_cs"))]
 pub fn stop_faces_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -499,8 +513,10 @@ pub fn stop_faces_cs(
     let k = g.stop_at(id.x);
     let px = beams.word(k + beam::STOP_PX);
     let mut faces = beams.word(k + beam::STOP_OUT);
-    if faces & beam::STOP_FOLLOWS != 0 {
+    let mut steps = 0;
+    while faces & beam::STOP_FOLLOWS != 0 && steps < 2 * beam::STOP_RUN {
         faces = beams.word(g.stop_at(faces & !beam::STOP_FOLLOWS) + beam::STOP_OUT);
+        steps += 1;
     }
     // SAFETY: a pixel the walk again wrote, within the rays.
     unsafe { rays.write(UVec3::new(px & 0xffff, px >> 16, ray::FACES), faces) };

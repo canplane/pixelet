@@ -475,8 +475,11 @@ const _: () = assert!(
 /// (`beam::LINE_T`, `beam::LINE_NODE`, `beam::LINE_HANDED`), how far a cell's
 /// texels may start from it in its first word, then its origin
 /// (`LINE_ORIGIN`), which its nodes are held from (`cast::Node::moved`), as
-/// every light ray starts apart.
+/// every light ray starts apart; then the least margin of the nodes its walk
+/// asked (`LINE_MARGIN`, `cast::Margin`), f32 bits, which the tiles it feeds
+/// gather (pxl-shader light.rs `light_held_cs`).
 pub const LINE_ORIGIN: u32 = beam::LINE_WORDS;
+pub const LINE_MARGIN: u32 = LINE_ORIGIN + 3;
 
 /// How far past the disk a receiver reads the map reaches, in texels, at
 /// worst (pxl-render shadow.wgsl `shadow_visibility`): its corner tap `SPREAD`
@@ -492,7 +495,7 @@ const FILTER: f32 = 1.0;
 /// the slot's tile, from the first to the last: a tap reads that far
 /// (pxl-shader light.rs `light_reach_cs`).
 pub const READ_TILES: [i32; 2] = [-2, 1];
-pub const LINE_WORDS: u32 = LINE_ORIGIN + 3;
+pub const LINE_WORDS: u32 = LINE_MARGIN + 1;
 /// What a cell hands its texels: their start, f32 bits, and the beam ray
 /// whose line they resume from, by its index (`line`).
 pub const CELL_T: u32 = 0;
@@ -568,6 +571,13 @@ pub const fn sample_words(size: u32) -> u32 {
     sample(size, (size / SAMPLE) * (size / SAMPLE))
 }
 
+/// The least margin of the nodes each sample's walk asked (`cast::Margin`),
+/// f32 bits, a word a sample by its index, past the samples' words: what
+/// the tiles it feeds gather (pxl-shader light.rs `light_held_cs`).
+pub const fn sample_margin(size: u32, idx: u32) -> u32 {
+    sample_words(size) + idx
+}
+
 /// The slots whose ray took no visible sample, listed for their walk
 /// (pxl-shader `light_miss_cs`) apart from the slots that took theirs
 /// (`light_cs`), as the eye's missed pixels are walked apart from the pixels
@@ -575,14 +585,35 @@ pub const fn sample_words(size: u32) -> u32 {
 /// (pxl-shader cast.rs `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
-/// (`observed::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
+/// (`observed::MARKS_CNT`), then a slot each, its X and its Y over 16 bits,
+/// which its walk writes over with what it tells its tile (`missed`).
 pub const fn misses_cnt(size: u32) -> u32 {
-    sample_words(size)
+    sample_margin(size, (size / SAMPLE) * (size / SAMPLE))
 }
 
 pub const fn misses_at(size: u32) -> u32 {
     misses_cnt(size) + 1
 }
+
+/// What a listed slot's walk tells its tile (pxl-shader light.rs
+/// `light_miss_cs`, `light_told_cs`), in its place in the list: the slot's
+/// tile, `j · tiles + i` (`Light::held`'s order, fixed in the world), over
+/// the high 16 bits of the least margin of the nodes it asked
+/// (`cast::Margin`), its low bits dropped, which only lowers it. A map's
+/// tiles no more than 16 bits number (`MISSED_TILES`).
+pub fn missed(size: u32, slot: [u32; 2], margin: f32) -> u32 {
+    let tile = (slot[1] / TILE) * tiles(size) + slot[0] / TILE;
+    tile << 16 | margin.to_bits() >> 16
+}
+
+/// The held words (`held_at`) of the tile a listed slot's walk told
+/// (`missed`), and the margin it told, f32 bits.
+pub const fn missed_told(size: u32, w: u32) -> (u32, u32) {
+    (held_at(size) + (w >> 16) * HELD_WORDS, (w & 0xffff) << 16)
+}
+
+/// The tiles a map's told words number at most (`missed`).
+pub const MISSED_TILES: u32 = 1 << 16;
 
 /// The tiles of the box a receiver stands on in a cast, past the misses: a
 /// word a tile (`TILE` texels a side), `tiles` a row, the number of the
@@ -642,15 +673,15 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
 
 /// What a tile cast in its epoch holds by, past the squares, `HELD_WORDS` a
 /// tile of slots (`Light::held`): the least margin of every node the walks
-/// that fed it asked (`cast::Margin`), f32 bits, lowered by each of them as
-/// it ends (pxl-shader light.rs `light_beam_cs`, `light_sample_cs`,
-/// `light_miss_cs`); then where the eye stood, Q3, X, Y and Z, when the cast
-/// that cast it claimed it, its margin set to none then (`light_reach_cs`).
+/// that fed it asked (`cast::Margin`), f32 bits, gathered once off the beam
+/// rays and the samples that feed it, each of which keeps its own
+/// (`LINE_MARGIN`, `sample_margin`; pxl-shader light.rs `light_held_cs`),
+/// then lowered by each listed slot's walk (`missed`, `light_told_cs`);
+/// then where the eye stood, Q3, X, Y and Z, when the cast that cast it
+/// claimed it (`light_reach_cs`).
 /// While the eye stands nearer than the margin to where it stood, every zoom
 /// those walks asked is asked again, so the tile holds what it would be cast
-/// anew to (`holds`; `light_detail_cs`). In the list, as the walks that
-/// lower it bind the world's storage buffers, the pyramid and the list, as
-/// many as every device binds.
+/// anew to (`holds`; `light_detail_cs`).
 pub const fn held_at(size: u32) -> u32 {
     coarse_at(size) + coarse(size) * coarse(size)
 }
@@ -659,8 +690,8 @@ pub const HELD_MARGIN: u32 = 0;
 pub const HELD_EYE: u32 = 1;
 pub const HELD_WORDS: u32 = 4;
 
-/// The list's buffer's words: the beam's, the samples, the misses, the
-/// stands, the reads, their squares, the held words.
+/// The list's buffer's words: the beam's, the samples, their margins, the
+/// misses, the stands, the reads, their squares, the held words.
 pub const fn list_words(size: u32) -> u32 {
     held_at(size) + tiles(size) * tiles(size) * HELD_WORDS
 }

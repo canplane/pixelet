@@ -21,9 +21,9 @@ use pxl_spec_core::HEIGHT_BITS;
 use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{
-    COMPUTE, PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER,
-    PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_FROXEL,
-    STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
+    COMPUTE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW,
+    PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER, SHADER_ATMOS_EXPOSURE, SHADER_ATMOS_FROXEL, STORAGE_RW,
+    STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, TEXTURE_ARRAY, UNIFORM,
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
@@ -84,6 +84,50 @@ const FROXEL_GROUP: [u32; 18] = [
     14,
     COMPUTE,
     UNIFORM,
+];
+
+/// What the exposure's maker binds: the texel it writes, the frame's words,
+/// the air but the texel and the volume, its own words and what it measures.
+const EXPOSURE_GROUP: [u32; 39] = [
+    1,
+    COMPUTE,
+    STORAGE_TEXTURE_2D,
+    0,
+    COMPUTE,
+    UNIFORM,
+    8,
+    COMPUTE,
+    UNIFORM,
+    9,
+    COMPUTE,
+    TEXTURE,
+    10,
+    COMPUTE,
+    TEXTURE,
+    11,
+    COMPUTE,
+    SAMPLER,
+    12,
+    COMPUTE,
+    TEXTURE,
+    15,
+    COMPUTE,
+    TEXTURE,
+    16,
+    COMPUTE,
+    TEXTURE_ARRAY,
+    17,
+    COMPUTE,
+    TEXTURE_ARRAY,
+    18,
+    COMPUTE,
+    TEXTURE,
+    14,
+    COMPUTE,
+    UNIFORM,
+    20,
+    COMPUTE,
+    STORAGE_RW,
 ];
 
 /// A layer for each tile the earth layer's floor holds at once: its tile cache's slots.
@@ -236,7 +280,10 @@ pub struct Atmosphere {
     words: [f32; ATMOS_FLOATS],
     sampler: u32,
     views: [u32; TABLES],
-    passes: [Built; 5],
+    /// The tables' render pipelines (`pass_of`), and the exposure's maker,
+    /// a compute pass so its span is its own time.
+    passes: [Built; 4],
+    exposure_maker: Built,
     groups: [u32; TABLES],
     baked: bool,
     /// Each light's own words (atmos_skyview.wgsl `light`): which light, and
@@ -338,13 +385,18 @@ impl Atmosphere {
         let mut views = [0; TABLES];
         for k in 0..TABLES {
             let (w, h) = SIZES[k];
+            let written = if k == EXPOSURE_TEXEL {
+                texture_usage::STORAGE_BINDING
+            } else {
+                texture_usage::RENDER_ATTACHMENT
+            };
             textures[k] = g.texture(
                 w,
                 h,
                 1,
                 Format::rgba16float,
                 1,
-                texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
+                texture_usage::TEXTURE_BINDING | written,
             );
             views[k] = g.view(textures[k], false, 0, 1, 0, 1);
         }
@@ -352,7 +404,6 @@ impl Atmosphere {
             PIPELINE_ATMOS_TRANSMITTANCE,
             PIPELINE_ATMOS_MULTISCATTER,
             PIPELINE_ATMOS_SKY_VIEW,
-            PIPELINE_ATMOS_EXPOSURE,
             PIPELINE_ATMOS_IRRADIANCE,
         ]
         .map(|id| pipelines.build(g, id, Format::rgba16float));
@@ -370,6 +421,7 @@ impl Atmosphere {
             sampler,
             views,
             passes,
+            exposure_maker: pipelines.build_compute(g, SHADER_ATMOS_EXPOSURE, &EXPOSURE_GROUP),
             groups: [0; TABLES],
             baked: false,
             lights: [0.0f32, 1.0].map(|which| {
@@ -471,6 +523,7 @@ impl Atmosphere {
                 of(
                     &unexposed,
                     &[
+                        view_entry(1, views[EXPOSURE_TEXEL]),
                         frame,
                         buf_entry(14, atmosphere.exposure_words),
                         buf_entry(20, atmosphere.slopes.0),
@@ -479,7 +532,12 @@ impl Atmosphere {
             ),
         ];
         for (k, entries) in reads {
-            atmosphere.groups[k] = g.bind_group(atmosphere.passes[pass_of(k)].layouts[0], &entries);
+            let layout = if k == EXPOSURE_TEXEL {
+                atmosphere.exposure_maker.layouts[0]
+            } else {
+                atmosphere.passes[pass_of(k)].layouts[0]
+            };
+            atmosphere.groups[k] = g.bind_group(layout, &entries);
         }
         for k in 0..2 {
             let froxel = of(&[8, 9, 11, 12], &[view_entry(1, volume), light(k)]);
@@ -515,6 +573,20 @@ impl Atmosphere {
         g.set_bind_group(pass, 0, self.froxel_groups[k], &[]);
         // A column of froxels a workgroup (atmos_froxel.wgsl).
         g.dispatch(pass, AIR_FROXELS, AIR_FROXELS, 1);
+        g.end(pass);
+    }
+
+    /// The exposure texel and how far each light reaches the air, a texel a
+    /// thread (atmos_exposure.wgsl): a compute pass, as a render pass's
+    /// begin is stamped before the passes it waits on have finished, so its
+    /// span would take theirs in.
+    fn exposure(&self, ctx: &mut RenderContext) {
+        let (g, encoder) = (ctx.g, ctx.encoder);
+        let stamp = ctx.stamp(GpuSpanName::exposure);
+        let pass = g.compute_pass(encoder, stamp.pass());
+        g.set_pipeline(pass, self.exposure_maker.pipeline);
+        g.set_bind_group(pass, 0, self.groups[EXPOSURE_TEXEL], &[]);
+        g.dispatch(pass, 1, 1, 1);
         g.end(pass);
     }
 
@@ -686,7 +758,7 @@ impl Atmosphere {
         }
         let exposed = self.plan.exposure;
         if exposed {
-            self.table(ctx, EXPOSURE_TEXEL, GpuSpanName::exposure);
+            self.exposure(ctx);
         }
         let copied = self.pending != 0 && self.flying == 0 && self.landed_word == 0;
         if copied {
@@ -778,12 +850,15 @@ impl Atmosphere {
     }
 }
 
-/// The moonlit sky is drawn by the sky view's pass.
+/// A table's render pipeline among `passes`: the moonlit sky is drawn by
+/// the sky view's; the exposure has its maker apart.
 fn pass_of(table: usize) -> usize {
-    if table == MOON_VIEW {
-        SKY_VIEW
-    } else {
-        table
+    match table {
+        TRANSMITTANCE => 0,
+        MULTISCATTER => 1,
+        SKY_VIEW | MOON_VIEW => 2,
+        IRRADIANCE => 3,
+        _ => xpute_kit::bug!(EINVAL, table),
     }
 }
 

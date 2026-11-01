@@ -74,8 +74,10 @@ pub mod device {
 /// texture's layers read and written in place, the one format family WebGPU
 /// lets a shader do both to; TEXTURE_3D a filtered volume (the air's,
 /// gpu/atmosphere.rs); STORAGE_TEXTURE_3D an rgba16float volume a compute
-/// pass writes; SAMPLER_COMPARISON a sampler that compares a depth texture's
-/// texels against a reference (the sun's shadow map, gpu/shadow.rs).
+/// pass writes, STORAGE_TEXTURE_2D an rgba16float texture one writes (the
+/// exposure's texel, gpu/atmosphere.rs); SAMPLER_COMPARISON a sampler that
+/// compares a depth texture's texels against a reference (the sun's shadow
+/// map, gpu/shadow.rs).
 pub mod record {
     pub const HEAD: u32 = 10;
     pub const TRIANGLES: u32 = 0;
@@ -114,4 +116,5 @@ pub mod record {
     pub const STORAGE_TEXTURE_RW: u32 = 11;
     pub const TEXTURE_3D: u32 = 12;
     pub const STORAGE_TEXTURE_3D: u32 = 13;
+    pub const STORAGE_TEXTURE_2D: u32 = 14;
 }

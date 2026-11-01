@@ -166,6 +166,17 @@ function siteUrl(): Plugin {
   };
 }
 
+/** index.html's comments are for its source: a build serves it without
+ * them. Vite's `minify` takes the bundle, never the HTML. */
+function stripHtmlComments(): Plugin {
+  return {
+    name: "pxl-strip-html-comments",
+    apply: "build",
+    transformIndexHtml: (html) =>
+      html.replace(/[ \t]*<!--[\s\S]*?-->[ \t]*\n?/g, ""),
+  };
+}
+
 function buildStamp(): Plugin {
   const id = "virtual:pxl-build";
   const resolved = "\0" + id;
@@ -577,6 +588,7 @@ export default defineConfig(({ mode }) => {
 
     plugins: [
       siteUrl(),
+      stripHtmlComments(),
       buildStamp(),
       remoteConsole(),
       constEnum([

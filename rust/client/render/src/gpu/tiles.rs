@@ -8,16 +8,19 @@
 //! what changed, a mark each (`mark_of`), and a pass sets the words of the
 //! tiles they cover, a thread a tile of each mark's, one mark of every tile
 //! where the frame is drawn whole (screen_mark.wgsl), before anything reads
-//! them; the draws that changed set theirs drawn (gpu/pass/mark.rs). A tile
-//! is claimed while it
+//! them; the draws that changed set theirs drawn (gpu/pass/mark.rs), each
+//! tile once. A tile is claimed while it
 //! changed fewer than `claimed_for` frames ago, each by its role: the screen
 //! until its history has gathered the jitter's sequence, the map the frame
 //! it changed alone; every one where the frame is drawn whole. What draws
-//! them reads the words and the uniform (`Tiles`, screen_tiles.wgsl).
+//! them reads the words and the uniform (`Tiles`, screen_tiles.wgsl): a quad
+//! a tile of every one, or, where a tile is claimed the frame it changed
+//! alone, of the box the frame's marks cover, its count the GPU's
+//! (`box_args`).
 
 use pxl_spec_core::screen::{self, TILES_WORDS};
 
-use crate::frame::shader::part::SHADER_SCREEN_MARK;
+use crate::frame::shader::part::{SHADER_BOX_ARGS, SHADER_SCREEN_MARK};
 use crate::frame::shader::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, RenderContext};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -63,6 +66,10 @@ const MARK_GROUP: [u32; 9] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE_RW,
 ];
 
+/// What the box's args' pass binds (box_args.wgsl): the marks' box and the
+/// args.
+const BOX_ARGS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
+
 /// The marks its buffer first has room for, each a vec4's tiles.
 const MARK_ROOM: usize = 64;
 
@@ -92,17 +99,18 @@ pub struct Tiles {
     marks: u32,
     mark_room: usize,
     marking: bool,
-    /// The marks this frame hands, those whose words the marks' pass sets
-    /// first, and the most tiles one of those holds; the tiles each of the
-    /// rest holds, whose words a pass beside sets.
-    mark_cnt: u32,
+    /// The marks this frame hands, and the most tiles one holds.
     set_cnt: u32,
     mark_most: u32,
-    beside_tiles: Vec<u32>,
     /// The tiles the frame's marks cover, from the first to past the last,
     /// four words the GPU's: those handed, widened by the draws that mark
     /// (tile_mark.wgsl).
     marks_box: u32,
+    /// The indirect args of a quad a tile of `marks_box`, set from it on the
+    /// GPU once the marks are made, by a pass over its group (`box_args`).
+    box_args: u32,
+    box_pass: Built,
+    box_group: u32,
     /// Whether a pass beside may have set tiles the host has not seen yet
     /// (gpu/reach.rs).
     unseen: bool,
@@ -118,6 +126,19 @@ impl Tiles {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             )
         };
+        let marks_box = g.buf(
+            word_bytes(4),
+            buffer_usage::STORAGE | buffer_usage::COPY_DST,
+        );
+        let box_args = g.buf(
+            word_bytes(4),
+            buffer_usage::STORAGE | buffer_usage::INDIRECT,
+        );
+        let box_pass = pipelines.build_compute(g, SHADER_BOX_ARGS, &BOX_ARGS_GROUP);
+        let box_group = g.bind_group(
+            box_pass.layouts[0],
+            &[buf_entry(0, marks_box), buf_entry(1, box_args)],
+        );
         Tiles {
             side,
             claimed_for,
@@ -140,14 +161,12 @@ impl Tiles {
             ),
             mark_room: MARK_ROOM,
             marking: false,
-            mark_cnt: 0,
             set_cnt: 0,
             mark_most: 0,
-            beside_tiles: Vec::new(),
-            marks_box: g.buf(
-                word_bytes(4),
-                buffer_usage::STORAGE | buffer_usage::COPY_DST,
-            ),
+            marks_box,
+            box_args,
+            box_pass,
+            box_group,
             unseen: false,
         }
     }
@@ -161,6 +180,8 @@ impl Tiles {
             self.mark_head,
             self.marks,
             self.marks_box,
+            self.box_args,
+            self.box_group,
         ] {
             release(id);
         }
@@ -186,27 +207,21 @@ impl Tiles {
 
     /// The marks this frame hands, of a target `size` pixels across and
     /// down, the frame numbered anew: where it is drawn through the gate
-    /// (`gated`), the tiles each of `marks` covers (`mark_of`), and those
-    /// of `beside`, which a pass beside sets the words of and the frame draws
-    /// the claimed of (`beside`); else none where nothing it draws moved
-    /// (`quiet`), one of every tile where anything did.
+    /// (`gated`), the tiles each of `marks` covers (`mark_of`); else none
+    /// where nothing it draws moved (`quiet`), one of every tile where
+    /// anything did.
     /// The tiles the frame draws: the claimed alone where it is gated, else
     /// every one. Set on the GPU, before anything reads them, by
     /// `dispatch_marks`.
-    pub fn mark(
-        &mut self,
-        g: &Gpu,
-        size: [u32; 2],
-        (gated, quiet): (bool, bool),
-        marks: &[Mark],
-        beside: &[Mark],
-    ) {
+    pub fn mark(&mut self, g: &Gpu, size: [u32; 2], (gated, quiet): (bool, bool), marks: &[Mark]) {
         let squares = self.squares;
         self.now = self.now.wrapping_add(1);
         let whole = !gated && !quiet;
         let every = [0, 0, squares[0], squares[1]];
         let side = self.side;
-        let tiles_of = |marks: &[Mark]| -> Vec<[u32; 4]> {
+        let tiles: Vec<[u32; 4]> = if whole {
+            vec![every]
+        } else {
             marks
                 .iter()
                 .filter(|_| gated)
@@ -219,10 +234,6 @@ impl Tiles {
                 .filter(|t| t[2] > t[0] && t[3] > t[1])
                 .collect()
         };
-        let mut tiles = tiles_of(marks);
-        if whole {
-            tiles = vec![every];
-        }
         self.marking = !tiles.is_empty();
         self.set_cnt = tiles.len() as u32;
         self.mark_most = tiles
@@ -242,12 +253,6 @@ impl Tiles {
             ]
         });
         g.write_buf(self.marks_box, 0, bytes(&marks_box));
-        let beside = if whole { Vec::new() } else { tiles_of(beside) };
-        self.beside_tiles.clear();
-        self.beside_tiles
-            .extend(beside.iter().map(|t| (t[2] - t[0]) * (t[3] - t[1])));
-        tiles.extend(beside);
-        self.mark_cnt = tiles.len() as u32;
         if self.marking {
             self.marked_at = self.now;
         }
@@ -314,21 +319,11 @@ impl Tiles {
     }
 
     /// The marks this frame handed, each its tiles from the first to past
-    /// the last (screen_tiles.wgsl `marks`), and how many of them the frame
-    /// claims the tiles of exactly: what a pass that draws the tiles changed
-    /// this frame draws, a quad a mark, with `beside`.
+    /// the last (screen_tiles.wgsl `marks`), and how many: what a pass that
+    /// draws the tiles changed this frame draws, a quad a mark, where the
+    /// frame claims their tiles exactly.
     pub fn marks(&self) -> (u32, u32) {
         (self.marks, self.set_cnt)
-    }
-
-    /// The marks past those, whose words a pass beside sets: the first
-    /// instance and the instances a draw of each takes, a tile of its tiles
-    /// each, the claimed alone drawn (screen_tiles.wgsl `mark_clip`).
-    pub fn beside(&self) -> impl Iterator<Item = (u32, u32)> + '_ {
-        let every = self.squares[0] * self.squares[1];
-        (self.set_cnt..self.mark_cnt)
-            .zip(&self.beside_tiles)
-            .map(move |(m, &n)| (every * (m + 1), n))
     }
 
     /// The tiles this frame's marks cover, from the first across and down to
@@ -336,6 +331,26 @@ impl Tiles {
     /// draws that mark (tile_mark.wgsl), none changed off them.
     pub fn marks_box(&self) -> u32 {
         self.marks_box
+    }
+
+    /// The marks' box's args set from it on the GPU, after every pass that
+    /// marks this frame and before a draw reads them, timed in the span
+    /// `mark` (box_args.wgsl).
+    pub fn dispatch_box_args(&self, ctx: &mut RenderContext) {
+        let g = ctx.g;
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
+        g.set_bind_group(pass, 0, self.box_group, &[]);
+        g.set_pipeline(pass, self.box_pass.pipeline);
+        g.dispatch(pass, 1, 1, 1);
+        g.end(pass);
+    }
+
+    /// The indirect args of a quad a tile of the marks' box
+    /// (screen_tiles.wgsl `box_clip`), as `dispatch_box_args` set them: the
+    /// claimed tiles alone drawn where a tile is claimed the frame it
+    /// changed alone, as the map's is.
+    pub fn box_args(&self) -> u32 {
+        self.box_args
     }
 
     /// The tiles across and down.

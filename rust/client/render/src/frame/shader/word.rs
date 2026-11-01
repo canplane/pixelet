@@ -5,6 +5,8 @@
 //! (constant.wgsl's tail), a uniform's floats as its vec4s, and each
 //! uniform's fields as their accessors to the part that binds it.
 
+use pxl_spec_core::screen;
+
 /// A draw's uniform (frame/draw.rs): its translation and what its pipeline
 /// reads past it.
 pub const DRAW_FLOATS: usize = 8;
@@ -263,8 +265,8 @@ pub const STAR_RECORD_FLOATS: usize = 8;
 pub const RASTER_FLOATS: usize = 24;
 
 /// The occlusion's passes' resolution, the screen's over this (gpu/ao.rs):
-/// the downsample keeps one depth of each 2×2 and the upsample blends the 2×2
-/// about each pixel (ao_downsample.wgsl, ao_upsample.wgsl), so it is two.
+/// the downsample keeps one depth of each 2×2 and the apply blends the 2×2
+/// about each pixel (ao_downsample.wgsl, ao_apply.wgsl), so it is two.
 pub const AO_DOWNSCALE: u32 = 2;
 
 /// N8AO's blue noise a side (gpu/ao.rs), which a pixel reads tiled.
@@ -276,9 +278,9 @@ pub const BOUND_STEP: u32 = 4;
 /// A screen tile's squares a side (pxl-spec-core `screen::TILE`), a thread
 /// each of the workgroup a tile both passes take: every square of a tile is
 /// set and read whatever its side.
-pub const BOUND_SQUARES: u32 = pxl_spec_core::screen::TILE / BOUND_STEP;
+pub const BOUND_SQUARES: u32 = screen::TILE / BOUND_STEP;
 const _: () = assert!(
-    pxl_spec_core::screen::TILE.is_multiple_of(BOUND_STEP),
+    screen::TILE.is_multiple_of(BOUND_STEP),
     "a screen tile is whole squares of the depth's bound"
 );
 

@@ -8,6 +8,7 @@ use pxl_spec_core::grid;
 use pxl_spec_core::ground;
 use pxl_spec_core::lattice;
 use pxl_spec_core::param::light;
+use pxl_spec_core::screen;
 use std::path::Path;
 
 #[path = "src/frame/shader/debug_look.spec.rs"]
@@ -359,7 +360,7 @@ fn words() -> String {
         // `screen::JITTERS`, screen_resolve.wgsl).
         format!(
             "const BOUND_STEP: u32 = {BOUND_STEP}u;\nconst BOUND_SQUARES: u32 = {BOUND_SQUARES}u;\nconst TILE_JITTERS: u32 = {}u;\n",
-            pxl_spec_core::screen::JITTERS
+            screen::JITTERS
         ),
         [
             ("TRANSMITTANCE_SIZE", TRANSMITTANCE_SIZE),

@@ -16,9 +16,10 @@ use super::{casts_px, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FORGET, SHADER_JOINED,
-    SHADER_LIGHT, SHADER_LIGHT_BEAM, SHADER_LIGHT_DETAIL, SHADER_LIGHT_MARK,
+    SHADER_LIGHT, SHADER_LIGHT_BEAM, SHADER_LIGHT_DETAIL, SHADER_LIGHT_HELD, SHADER_LIGHT_MARK,
     SHADER_LIGHT_MARK_DRAWN, SHADER_LIGHT_MISS, SHADER_LIGHT_REACH, SHADER_LIGHT_SAMPLE,
-    SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_STOP_FACES, SHADER_STOP_LEAD, UNIFORM,
+    SHADER_LIGHT_TOLD, SHADER_MISS, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_STOP_FACES,
+    SHADER_STOP_LEAD, UNIFORM,
 };
 use crate::gpu::api;
 use crate::gpu::api::{
@@ -122,13 +123,18 @@ pub(super) struct CastBuffers {
     /// before the reach.
     light_detail_built: Built,
     /// The light's beam rays and samples, the eye's passes in entries of
-    /// their own, which tell the margin of what their walks ask
-    /// (`light_beam_cs`, `light_sample_cs`); its misses' walk tells its own.
+    /// their own, which keep the margin of what their walks ask
+    /// (`light_beam_cs`, `light_sample_cs`); its misses' walk keeps its own.
     light_beam_built: Built,
     light_sample_built: Built,
+    /// What each tile cast holds by: gathered off its beam rays and samples
+    /// (`light_held_cs`), lowered by its listed slots' walks
+    /// (`light_told_cs`).
+    light_held_built: Built,
+    light_told_built: Built,
     /// The light's cast's groups (`light_groups`), and the buffers they bind:
     /// made again exactly when one of them is another.
-    light_groups: [u32; 10],
+    light_groups: [u32; 12],
     light_bound: [u32; 12],
     /// A word bound where decor is off, the decor's buffers the drawn mark
     /// reads none (`light_mark_drawn_cs`).
@@ -331,6 +337,10 @@ impl RaysPass {
             pipelines.build_compute(g, SHADER_LIGHT_BEAM, &compute::LIGHT_BEAM_GROUP);
         let light_sample_built =
             pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, &compute::LIGHT_SAMPLE_GROUP);
+        let light_held_built =
+            pipelines.build_compute(g, SHADER_LIGHT_HELD, &compute::LIGHT_HELD_GROUP);
+        let light_told_built =
+            pipelines.build_compute(g, SHADER_LIGHT_TOLD, &compute::LIGHT_TOLD_GROUP);
         let raster = Raster::new(g, pipelines);
         let tally = Tally::new(g);
         let buf = |size: u32, usage: u32| g.buf(size, usage);
@@ -382,7 +392,9 @@ impl RaysPass {
             light_detail_built,
             light_beam_built,
             light_sample_built,
-            light_groups: [0; 10],
+            light_held_built,
+            light_told_built,
+            light_groups: [0; 12],
             light_bound: [0; 12],
             light_none: buf(word_bytes(2 * generated::drawn::REGIONS as usize), storage),
             light_number: 0,
@@ -966,6 +978,8 @@ impl RaysPass {
                     &c.light_detail_built,
                     &c.light_beam_built,
                     &c.light_sample_built,
+                    &c.light_held_built,
+                    &c.light_told_built,
                 ],
                 light_bound,
                 [
@@ -1213,6 +1227,14 @@ impl RaysPass {
             g.set_bind_group(pass, 0, c.light_groups[9], &[]);
             g.set_pipeline(pass, c.light_sample_built.pipeline);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SAMPLE));
+            // What each tile cast holds by, gathered once off the beam rays
+            // and the samples that feed it, a thread a tile
+            // (`light_held_cs`).
+            g.set_bind_group(pass, 0, c.light_groups[10], &[]);
+            g.set_pipeline(pass, c.light_held_built.pipeline);
+            let w = compute::LIGHT_HELD_WORKGROUP;
+            let n = light::tiles(shadow::SIZE);
+            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.end(pass);
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_raster).pass());
             g.set_bind_group(pass, 0, c.light_groups[2], &[]);
@@ -1239,6 +1261,11 @@ impl RaysPass {
             g.set_bind_group(pass, 0, c.light_groups[3], &[]);
             g.set_pipeline(pass, c.light_miss_built.pipeline);
             let list = word_bytes(ray::MISS_ARGS_LIST as usize);
+            g.dispatch_indirect(pass, c.light_misses, list);
+            // Each walk's margin lowered into its tile's held words, over
+            // the same list (`light_told_cs`).
+            g.set_bind_group(pass, 0, c.light_groups[11], &[]);
+            g.set_pipeline(pass, c.light_told_built.pipeline);
             g.dispatch_indirect(pass, c.light_misses, list);
             g.end(pass);
         }
@@ -1476,14 +1503,15 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
 /// its world's (the cells' starts, the eye's pass, over `WORLD_GROUP`, its
 /// list where the eye's beam rays' buffer lies and its head where the
 /// eye's), its boxes' (the eye's raster's pass), the misses' walk's, the two
-/// marks', the reach's, the detail's, the beam's and the samples'; the
-/// boxes' none before its raster's buffers are made.
+/// marks', the reach's, the detail's, the beam's, the samples', the held
+/// margins' gather's and the misses' margins'; the boxes' none before its
+/// raster's buffers are made.
 fn light_groups(
     g: &Gpu,
-    [walk, world, boxes_built, miss, mark, mark_drawn, reach, detail, beam, sample]: [&Built; 10],
+    [walk, world, boxes_built, miss, mark, mark_drawn, reach, detail, beam, sample, held, told]: [&Built; 12],
     bound: [u32; 12],
     [seen, head, list, boxes, visibility, args, misses, light_args]: [u32; 8],
-) -> [u32; 10] {
+) -> [u32; 12] {
     let [eye, window, ground, looks, shards, overwrites, pool, light, rays, drawing, regions, instances] =
         bound;
     let entries = [
@@ -1547,5 +1575,7 @@ fn light_groups(
         g.bind_group(detail.layouts[0], &of(&compute::LIGHT_DETAIL_GROUP)),
         g.bind_group(beam.layouts[0], &of(&compute::LIGHT_BEAM_GROUP)),
         g.bind_group(sample.layouts[0], &of(&compute::LIGHT_SAMPLE_GROUP)),
+        g.bind_group(held.layouts[0], &of(&compute::LIGHT_HELD_GROUP)),
+        g.bind_group(told.layouts[0], &of(&compute::LIGHT_TOLD_GROUP)),
     ]
 }

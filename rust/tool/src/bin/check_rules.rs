@@ -153,11 +153,18 @@ fn screen_reached(text: &str) -> Vec<usize> {
 
 /// On the GPU the screen's size is the eye's rays' image's (pxl-shader
 /// cast.rs `Rays`), bound only to the passes that draw a pixel's ray or read
-/// the rays drawn: the cast and its walks again, and the light's receivers. The
-/// beam, the cells, the samples, decor and the shadow map read the eye's
-/// angles alone.
+/// the rays drawn: the cast and its walks again, the stops' faces put at their
+/// pixels, and the light's receivers. The beam, the cells, the samples, decor
+/// and the shadow map read the eye's angles alone.
 const SHADER: &str = "rust/client/shader/src/";
-const RAYS_ENTRIES: [&str; 4] = ["cast_cs", "miss_cs", "miss_list_cs", "light_mark_cs"];
+const RAYS_ENTRIES: [&str; 6] = [
+    "cast_cs",
+    "miss_cs",
+    "miss_list_cs",
+    "stop_lead_cs",
+    "stop_faces_cs",
+    "light_mark_cs",
+];
 
 /// Every entry point in `text`, a shader's source, whose parameters bind
 /// the rays' image, by its name or a path to it, and is not one of
@@ -182,7 +189,7 @@ fn rays_bound(text: &str) -> Vec<(usize, String)> {
 /// rust-gpu's `threads` takes only literals, so each entry's is held here to
 /// its constant: the entry's file under `SHADER`, the entry, the constant's
 /// file under rust/ and its name, and how many of the size's sides it gives.
-const WORKGROUPS: [(&str, &str, &str, &str, usize); 11] = [
+const WORKGROUPS: [(&str, &str, &str, &str, usize); 12] = [
     (
         "cast.rs",
         "stop_lead_cs",
@@ -256,6 +263,13 @@ const WORKGROUPS: [(&str, &str, &str, &str, usize); 11] = [
     (
         "light.rs",
         "light_miss_cs",
+        "spec/core/src/ray.rs",
+        "MISS_LANES",
+        1,
+    ),
+    (
+        "light.rs",
+        "light_told_cs",
         "spec/core/src/ray.rs",
         "MISS_LANES",
         1,

@@ -359,8 +359,9 @@ pub const ASK_NONE: u32 = u32::MAX;
 /// walks take them, in words: its node (`NODE_WORDS`), the face its ray
 /// entered, its pixel, its row over its column, and what it is told
 /// (`STOP_OUT`): its faces where it asks them, else `STOP_FOLLOWS` and the
-/// number of the stop alike that asks them for it, the nearest before it
-/// on its row in a run of stops alike, at most `STOP_RUN` back. Its pixel's
+/// number of the stop alike it takes them from, its pixel's left
+/// neighbor's, else the one above's, within its square of `STOP_RUN` a
+/// side, the pixels' columns and rows `STOP_RUN` divides. Its pixel's
 /// last ray word holds `STOP_WAITS` and its number until its faces are put
 /// there (`ray::FACES`), in the walk's own pass. A pixel past `STOPS`
 /// asks none.

@@ -509,9 +509,8 @@ one the other end could catch being broken.
    returns its offset, and the host finds everything from the one offset it
    learns outside. A key appears at most once, an unknown key is passed over,
    and an unknown magic or version is refused.
-1. **The core memory.** It never moves or grows while the guest lives, and every
-   address that crosses is an offset into it. Offset 0 names nothing, and
-   nothing that crosses lies there.
+1. **The core memory.** Every address that crosses is an offset into it.
+   Offset 0 names nothing, and nothing that crosses lies there.
 2. **The turn.** The guest runs only inside `run`, and the two sides never run
    at once: the host touches nothing a turn writes until it has returned, but
    what a hostcall run now names while it runs (rule 8). The quota is advice,

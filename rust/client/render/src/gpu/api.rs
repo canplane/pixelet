@@ -790,6 +790,11 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
             format: TextureFormat::rgba16float,
             dimension: TextureViewDimension::_3d,
         },
+        record::STORAGE_TEXTURE_2D => L::StorageTexture {
+            access: StorageTextureAccess::write_only,
+            format: TextureFormat::rgba16float,
+            dimension: TextureViewDimension::_2d,
+        },
         record::SAMPLER_COMPARISON => L::Sampler(SamplerBindingType::comparison),
         _ => L::Sampler(SamplerBindingType::filtering),
     }
