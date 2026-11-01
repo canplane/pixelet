@@ -40,6 +40,19 @@ Nothing now.
 
 ## P2
 
+- **Every beam ray walks from the root.** Counted (a47145e81, S1 turned
+  and walked, `ray_counts`, 9.6M pixels): the eye's beam 797k nodes a cast,
+  38 a corner over its 20.8k corners, `beam` 1.1-1.2 ms; the light's 610k
+  over its 71k. Neighboring corners descend the same nodes from the root
+  until they part, and a node first asked in a pass is asked of the world
+  again by every walk of that pass that meets it (the eye's walks 42.8k such
+  asks a cast, of 48k in its beam and samples). The fix: the beam's lattice
+  walked a level at a time from the coarsest, each corner resumed off the
+  least of the coarser lines about it as a cell's samples resume off its
+  corners (observer.rs `cell`, `resume`), both observers alike; it adds a
+  pass and lines a level, so it waits on what it would take off `beam`
+  (at most its 1.2 ms) against the passes' cost.
+
 - **The stencil and the early depth test on the devices.** Answered from
   the code and the vendors' records (the minutes' "Open"); left to a device
   in hand: the iPhone's hidden-surface removal for the boxes and the
