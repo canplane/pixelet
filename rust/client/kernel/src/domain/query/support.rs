@@ -27,7 +27,7 @@ use super::world::World;
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::*;
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::cast::Detail;
+use pxl_spec_core::cast::{fill_bounds, Detail};
 
 /// The center's height over a floor whose top is `top`: half a cell up, as a
 /// cell's center stands over its ground.
@@ -115,13 +115,9 @@ impl<'w, 'a> CellColumns<'w, 'a> {
     /// Column `k`'s ray, with what the world held of the way: a ray that
     /// meets nothing before a lack tells nothing past it.
     fn meet(&mut self, k: u32, z: f64, to: f64, until: Until) -> Answer<Option<Aabb>> {
-        let middle = |i: u32, c: f64| c + (f64::from(i) + 0.5) * self.side;
+        let [x, y] = self.middle(k);
         let ray = Ray {
-            origin: [
-                middle(k % self.across, self.corner[0]),
-                middle(k / self.across, self.corner[1]),
-                z,
-            ],
+            origin: [x, y, z],
             dir: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             t_max: (to - z).abs(),
         };
@@ -134,12 +130,39 @@ impl<'w, 'a> CellColumns<'w, 'a> {
         answer.map(|h| h.map(|h| h.cube))
     }
 
+    /// Column `k`'s middle on the ground's two axes.
+    fn middle(&self, k: u32) -> [f64; 2] {
+        let at = |i: u32, c: f64| c + (f64::from(i) + 0.5) * self.side;
+        [
+            at(k % self.across, self.corner[0]),
+            at(k / self.across, self.corner[1]),
+        ]
+    }
+
+    /// The top of column `k`'s cell under the height `open`, at the zoom its
+    /// rays read, as it is drawn (pxl-spec-core `cast::top`): its cube's top
+    /// where it keeps its cube whole, else its fill box's; `open` where what
+    /// it holds is not known.
+    fn top_under(&mut self, k: u32, open: f64) -> f64 {
+        let zoom = self.detail.range[1];
+        let side = units(zoom);
+        let [x, y] = self.middle(k);
+        let cell = [x, y, open - side / 2.0].map(|v| libm::floor(v / side) as i32);
+        let answer = self.world.asset((zoom, cell));
+        if let Some(l) = answer.lack() {
+            self.lack.get_or_insert(l);
+        }
+        answer.val().map_or(open, |asset| {
+            let (_, hi) = fill_bounds(([0.0; 3], [1.0; 3]), asset);
+            (f64::from(cell[2]) + f64::from(hi[2])) * side
+        })
+    }
+
     /// The top of what fills at the height `z` in any column: out of each
     /// one's fill in turn, until none fills where the walker stands. A
-    /// column's fill tops at the bottom of its first cell that does not
-    /// fill from `z` up, `z` where its own does not, and the cell under that
-    /// at the top of the box it is drawn as where it is kept short of its
-    /// cube, as `below` meets it; filled to the reach's top only where the
+    /// column's fill tops where its first cell that does not fill from `z`
+    /// up begins, at the drawn top of the cell under it (`top_under`), `z`
+    /// where its own does not fill; filled to the reach's top only where the
     /// world holds it so: a way into tiles not held fills nothing, as what a
     /// zoom does not hold is absent there.
     fn lift(&mut self, mut z: f64) -> f64 {
@@ -148,21 +171,10 @@ impl<'w, 'a> CellColumns<'w, 'a> {
                 .map(
                     |k| match self.meet(k, z, BOUNDS.max[2], Until::Transparent) {
                         Answer::Exact(None) => BOUNDS.max[2],
-                        Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => {
-                            let open = b.min[2].max(z);
-                            // Down from the open cell's middle, which a ray
-                            // does not meet, onto the cell under it: met
-                            // nowhere over `z`, the fill tops there.
-                            if open > z {
-                                self.meet(k, open + self.side / 2.0, z, Until::Opaque)
-                                    .val()
-                                    .flatten()
-                                    .map_or(z, |c| c.max[2].min(open).max(z))
-                            } else {
-                                open
-                            }
+                        Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) if b.min[2] > z => {
+                            self.top_under(k, b.min[2]).max(z)
                         }
-                        Answer::Coarser(None, _) | Answer::Nothing(_) => z,
+                        _ => z,
                     },
                 )
                 .fold(z, f64::max);
