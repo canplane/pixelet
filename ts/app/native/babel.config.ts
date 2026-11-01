@@ -11,6 +11,14 @@
 import * as path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import type {
+  ConfigAPI,
+  PluginObj,
+  PluginPass,
+  TransformOptions,
+  types as BabelTypes,
+} from "@babel/core";
+import type { Members } from "@pxl/build/const-enum.ts";
 import { enumAt, readEnums, stale as staleIn } from "@pxl/build/const-enum.ts";
 import { REPO, WORKSPACE } from "@pxl/build/paths.ts";
 
@@ -37,13 +45,24 @@ const { exported: EXPORTED, local: LOCAL } = TABLE;
  * here, it stops the build with what to do. */
 const stale = (what: string) => staleIn(what, "restart Metro with --clear");
 
+/** What a plugin is handed of Babel. */
+type Babel = { types: typeof BabelTypes };
+
+/** What `inlineEnums` keeps of a file while it walks it. */
+interface EnumState extends PluginPass {
+  enums: Map<BabelTypes.Identifier, Members>;
+  own: Map<string, Members>;
+  imports: Map<string, Members>;
+  names: Set<string>;
+}
+
 /** Replaces each `Enum.Member` with its value and strikes the declarations,
  * so the import that named the enum is left with no use and goes with the
  * TypeScript transform's other type-only imports. A file's own enums are
  * replaced in that file only. An enum that is not const, or a use of one as a
  * value that is left — `Command[x]`, the enum handed on whole — is a build
  * error, never a bundle that reaches a device and throws or carries a name. */
-const inlineEnums = ({ types: t }) => ({
+const inlineEnums = ({ types: t }: Babel): PluginObj<EnumState> => ({
   visitor: {
     MemberExpression(p, state) {
       const { object, property, computed } = p.node;
@@ -90,8 +109,9 @@ const inlineEnums = ({ types: t }) => ({
       // uses below it, and a struck path answers no question about itself.
       enter(p, state) {
         state.enums = new Map();
-        const local = LOCAL.get(state.filename) ?? new Map();
-        const exported = EXPORTED.get(state.filename) ?? new Map();
+        const file = state.filename ?? "";
+        const local = LOCAL.get(file) ?? new Map();
+        const exported = EXPORTED.get(file) ?? new Map();
         p.traverse({
           TSEnumDeclaration(d) {
             if (!d.node.const) return;
@@ -108,11 +128,12 @@ const inlineEnums = ({ types: t }) => ({
         state.imports = new Map();
         p.traverse({
           ImportSpecifier(s) {
+            const { imported } = s.node;
             const members = enumAt(
               TABLE,
-              state.filename,
-              s.parentPath.node.source.value,
-              s.node.imported.name ?? s.node.imported.value,
+              file,
+              (s.parentPath.node as BabelTypes.ImportDeclaration).source.value,
+              t.isIdentifier(imported) ? imported.name : imported.value,
             );
             if (members) state.imports.set(s.node.local.name, members);
           },
@@ -149,7 +170,7 @@ const inlineEnums = ({ types: t }) => ({
   },
 });
 
-export default (api) => {
+export default (api: ConfigAPI): TransformOptions => {
   const production = process.env.NODE_ENV === "production";
   api.cache.using(() => process.env.NODE_ENV);
 
@@ -161,7 +182,7 @@ export default (api) => {
   };
 
   /** Replaces each free name above with its value. */
-  const define = ({ types: t }) => ({
+  const define = ({ types: t }: Babel): PluginObj => ({
     visitor: {
       Identifier(p) {
         const name = p.node.name;
@@ -171,7 +192,7 @@ export default (api) => {
           p.scope.hasBinding(name)
         )
           return;
-        p.replaceWith(t.valueToNode(DEFINE[name]));
+        p.replaceWith(t.valueToNode(DEFINE[name as keyof typeof DEFINE]));
       },
     },
   });

@@ -20,6 +20,7 @@
  */
 
 import { withPodfile } from "expo/config-plugins";
+import type { ConfigPlugin } from "expo/config-plugins";
 
 const MARK = "# pxl: React Native's prebuilt parts, of no configuration";
 
@@ -31,7 +32,7 @@ const STEP = `
     end
 `;
 
-export default (config) =>
+const plugin: ConfigPlugin = (config) =>
   withPodfile(config, (config) => {
     const podfile = config.modResults.contents;
     if (!podfile.includes(MARK)) {
@@ -45,3 +46,5 @@ export default (config) =>
     }
     return config;
   });
+
+export default plugin;

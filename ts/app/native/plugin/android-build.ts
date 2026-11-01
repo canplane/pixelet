@@ -29,6 +29,7 @@ import {
   withDangerousMod,
   withGradleProperties,
 } from "expo/config-plugins";
+import type { ConfigPlugin } from "expo/config-plugins";
 
 const PROPERTIES = {
   reactNativeArchitectures: "arm64-v8a",
@@ -43,7 +44,7 @@ const DEBUGGABLE = FLAVORS.flatMap((flavor) => [
 const MARK = "// pxl: the flavors' debug builds (plugin/android-build.ts)";
 const DAEMON_JAVA = "17";
 
-export default (config) => {
+const plugin: ConfigPlugin = (config) => {
   config = withGradleProperties(config, (config) => {
     const items = config.modResults.filter(
       (item) => !(item.type === "property" && item.key in PROPERTIES),
@@ -87,3 +88,5 @@ export default (config) => {
     return config;
   });
 };
+
+export default plugin;

@@ -97,13 +97,13 @@ function ownPlatform(
   return file;
 }
 
-const config = getDefaultConfig(here);
+const base = getDefaultConfig(here);
 
-// The shell's files, xpute's and pnpm's store are all outside this app's
-// directory; the bundle reads nothing else.
-config.watchFolders = [WORKSPACE, path.join(REPO, "xpute/ts")];
-
-config.resolver.resolveRequest = (context, name, platform) => {
+const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
+  context,
+  name,
+  platform,
+) => {
   if (SINGLETONS.some((s) => name === s || name.startsWith(`${s}/`))) {
     return context.resolveRequest(
       { ...context, originModulePath: FROM_APP },
@@ -132,4 +132,10 @@ config.resolver.resolveRequest = (context, name, platform) => {
   return context.resolveRequest(context, name, platform);
 };
 
-export default config;
+export default {
+  ...base,
+  // The shell's files, xpute's and pnpm's store are all outside this app's
+  // directory; the bundle reads nothing else.
+  watchFolders: [WORKSPACE, path.join(REPO, "xpute/ts")],
+  resolver: { ...base.resolver, resolveRequest },
+};

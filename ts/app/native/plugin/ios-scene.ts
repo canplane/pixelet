@@ -8,6 +8,7 @@
  */
 
 import { withAppDelegate, withInfoPlist } from "expo/config-plugins";
+import type { ConfigPlugin } from "expo/config-plugins";
 
 const SCENE_DELEGATE = "EXExpoAppSceneDelegate";
 
@@ -21,7 +22,7 @@ const WINDOW_START = `#if os(iOS) || os(tvOS)
 #endif
 `;
 
-export default (config) => {
+const plugin: ConfigPlugin = (config) => {
   config = withInfoPlist(config, (config) => {
     config.modResults.UIApplicationSceneManifest = {
       UIApplicationSupportsMultipleScenes: false,
@@ -54,3 +55,5 @@ export default (config) => {
     return config;
   });
 };
+
+export default plugin;

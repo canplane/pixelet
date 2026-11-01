@@ -235,7 +235,7 @@ const TARGETS: [Target; 2] = [
     Target {
         json: "spec/example/cmd.json",
         ts: "ts/example/cmd.spec.ts",
-        ts_logical: "@xpute/example/cmd.spec.ts",
+        ts_logical: "ts/example/cmd.spec.ts",
         rs: "rust/example/src/cmd.spec.rs",
         rs_logical: "xpute-example/cmd.spec.rs",
         number: "xpute_guest::abi::number",
