@@ -142,7 +142,7 @@ pub struct Place<'a> {
 /// A place a tile holds: what a source gave, the zoom it is shown from, and
 /// the ground leaf cell it stands in, as an offset in the tile.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PlaceEntry<'a> {
+pub struct Placed<'a> {
     pub place: Place<'a>,
     pub from: Zoom,
     pub at: [u32; 2],
@@ -169,9 +169,9 @@ impl PlaceTile {
         self.categories.is_empty()
     }
 
-    pub fn get(&self, i: u32) -> PlaceEntry<'_> {
+    pub fn get(&self, i: u32) -> Placed<'_> {
         let k = i as usize;
-        PlaceEntry {
+        Placed {
             place: Place {
                 name: self.names.get(i),
                 category: self.categories[k],
@@ -182,11 +182,11 @@ impl PlaceTile {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (u32, PlaceEntry<'_>)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (u32, Placed<'_>)> + '_ {
         (0..self.len()).map(|i| (i, self.get(i)))
     }
 
-    fn push(&mut self, h: &PlaceEntry) {
+    fn push(&mut self, h: &Placed) {
         self.at.push(h.at.map(|v| v as u16));
         self.categories.push(h.place.category);
         // The record keeps a zoom in a byte.
@@ -232,7 +232,7 @@ impl PlaceTile {
         }
         let placed = (0..names.len()).filter_map(|p| {
             let (cell, _, name, place) = &names[p];
-            Some(PlaceEntry {
+            Some(Placed {
                 place: Place {
                     name: name.as_str(),
                     ..*place
@@ -270,7 +270,7 @@ pub fn fold(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
             child
                 .iter()
                 .filter(|(_, h)| h.from <= p.zoom)
-                .map(|(_, h)| PlaceEntry {
+                .map(|(_, h)| Placed {
                     at: [cx * side + h.at[0], cy * side + h.at[1]],
                     ..h
                 }),
@@ -280,11 +280,8 @@ pub fn fold(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
 }
 
 /// Places ascending by where they stand.
-fn tile_of<'a>(
-    placed: impl IntoIterator<Item = PlaceEntry<'a>>,
-    occupancy: Occupancy,
-) -> PlaceTile {
-    let mut placed: Vec<PlaceEntry> = placed.into_iter().collect();
+fn tile_of<'a>(placed: impl IntoIterator<Item = Placed<'a>>, occupancy: Occupancy) -> PlaceTile {
+    let mut placed: Vec<Placed> = placed.into_iter().collect();
     placed.sort_by_key(|h| [h.at[1], h.at[0]]);
     let mut tile = PlaceTile {
         occupancy,
@@ -352,7 +349,7 @@ pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
         ..PlaceTile::default()
     };
     for i in 0..n {
-        tile.push(&PlaceEntry {
+        tile.push(&Placed {
             place: Place {
                 name: names.get(i as u32).ok_or_else(malformed)?,
                 category: categories[i],
@@ -374,7 +371,7 @@ fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
         .at
         .windows(2)
         .all(|w| [w[0][1], w[0][0]] < [w[1][1], w[1][0]]);
-    let bad = |(_, h): (u32, PlaceEntry)| {
+    let bad = |(_, h): (u32, Placed)| {
         let shows = first_zoom(h.place.category);
         shows.is_none_or(|z| h.from < z || h.from > PLACE_LAST)
             || h.place.name.chars().nth(NAME_CHARS).is_some()

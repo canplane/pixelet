@@ -88,7 +88,7 @@ struct Ring {
     ways: BTreeMap<PartId, Way>,
     water: Vec<(Option<String>, String, Vec<[f64; 2]>)>,
     water_seen: FnvHashSet<Vec<u8>>,
-    pieces: BTreeMap<PartId, SampledPiece>,
+    pieces: BTreeMap<PartId, Sampled>,
     by_end: FnvHashMap<End, Vec<PartId>>,
     /// Every way by its two ends.
     way_ends: FnvHashMap<End, Vec<PartId>>,
@@ -97,7 +97,7 @@ struct Ring {
 }
 
 /// A piece, and once wanted its samples a cell apart along its way inside the ring.
-struct SampledPiece {
+struct Sampled {
     piece: Piece,
     n: usize,
     samples: Option<BTreeMap<usize, ([f64; 2], i32)>>,
@@ -225,7 +225,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
             }
         }
     }
-    let portal_near = |s: &SampledPiece| {
+    let portal_near = |s: &Sampled| {
         let p = &s.piece.way.points;
         is_road_tunnel(&s.piece)
             && [p[0], p[p.len() - 1]]
@@ -322,7 +322,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
 }
 
 /// Of a piece's samples, its cells in the ring.
-fn bbox_of(s: &SampledPiece) -> [[f64; 2]; 2] {
+fn bbox_of(s: &Sampled) -> [[f64; 2]; 2] {
     let mut b = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
     for (q, _) in s.samples.iter().flat_map(|m| m.values()) {
         for k in 0..2 {
@@ -370,7 +370,7 @@ impl Ring {
                 self.fresh.push(id.clone());
                 self.pieces.insert(
                     id,
-                    SampledPiece {
+                    Sampled {
                         piece,
                         n,
                         samples: None,

@@ -143,7 +143,7 @@ fn boot(b: BootInfo, panic_hook: Option<PanicHook>, admit: Admit) {
     let entries: [Entry; TOC_ENTRIES] = [
         (key::SQ, door().sq().at() as u32),
         (key::CQ, door().cq().at() as u32),
-        (key::SYS, layout::range(layout::FixedRange::Host).off),
+        (key::SYS, layout::range(layout::Fixed::Host).off),
         (GPU_STREAM, gpu_stream),
     ];
     // SAFETY: the page at TOC_AT, kept clear of the rings and the

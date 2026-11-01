@@ -28,7 +28,7 @@ use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_step;
 use crate::domain::scene::marker::atlas;
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
-use crate::domain::view::demand::ObservedLayer as _;
+use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
 use crate::perf::report::{set_host_frame, GpuRead, RayRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};

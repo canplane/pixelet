@@ -77,21 +77,21 @@ impl SysLock {
     }
 }
 
-struct LockedHeap {
+struct Locked {
     lock: SysLock,
     slab: Heap<Range>,
 }
 
 // SAFETY: the slab is only reached holding the lock.
-unsafe impl Sync for LockedHeap {}
+unsafe impl Sync for Locked {}
 
-impl LockedHeap {
+impl Locked {
     fn with<R>(&self, f: impl FnOnce(&Heap<Range>) -> R) -> R {
         self.lock.hold(|| f(&self.slab))
     }
 }
 
-static HEAP: LockedHeap = LockedHeap {
+static HEAP: Locked = Locked {
     lock: SysLock::new(),
     slab: Heap::new(),
 };

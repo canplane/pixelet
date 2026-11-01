@@ -47,7 +47,7 @@ use pxl_spec::space::layer::demand::tiles_within;
 use pxl_spec::space::layer::lattice::GROUND;
 
 /// A layer as the view asks of it: its demand, held beside its records.
-pub trait ObservedLayer: Base {
+pub trait Observed: Base {
     fn demand() -> &'static mut Demand<Self>;
 
     /// How far from the eye the layer draws anything; past it nothing of it
@@ -62,25 +62,25 @@ static PLACE: Global<Demand<PlaceTile>> = Global::new();
 static EARTH: Global<Demand<Earth>> = Global::new();
 static DIVISION: Global<Demand<DivisionTile>> = Global::new();
 
-impl ObservedLayer for TerrainTile {
+impl Observed for TerrainTile {
     fn demand() -> &'static mut Demand<TerrainTile> {
         TERRAIN.get(Demand::default)
     }
 }
 
-impl ObservedLayer for PlaceTile {
+impl Observed for PlaceTile {
     fn demand() -> &'static mut Demand<PlaceTile> {
         PLACE.get(Demand::default)
     }
 }
 
-impl ObservedLayer for DivisionTile {
+impl Observed for DivisionTile {
     fn demand() -> &'static mut Demand<DivisionTile> {
         DIVISION.get(Demand::default)
     }
 }
 
-impl ObservedLayer for Earth {
+impl Observed for Earth {
     fn demand() -> &'static mut Demand<Earth> {
         EARTH.get(Demand::default)
     }
@@ -100,7 +100,7 @@ pub struct Layer {
     on_arrival: fn(u64, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
 
-const fn layer<L: ObservedLayer>() -> Layer {
+const fn layer<L: Observed>() -> Layer {
     Layer {
         stream: L::STREAM,
         slots: TileCache::<L>::SLOTS,
@@ -135,7 +135,7 @@ struct Key {
     dst: Option<Tile>,
 }
 
-pub struct Demand<L: ObservedLayer> {
+pub struct Demand<L: Observed> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     wants: Vec<(u64, Ask)>,
@@ -161,7 +161,7 @@ pub struct Demand<L: ObservedLayer> {
     idle_revision: Option<u32>,
 }
 
-impl<L: ObservedLayer> Default for Demand<L> {
+impl<L: Observed> Default for Demand<L> {
     fn default() -> Self {
         Demand {
             layer: core::marker::PhantomData,
@@ -182,7 +182,7 @@ impl<L: ObservedLayer> Default for Demand<L> {
     }
 }
 
-impl<L: ObservedLayer> Demand<L> {
+impl<L: Observed> Demand<L> {
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Tile> + Clone + '_ {
         self.floor.iter().copied()
@@ -515,7 +515,7 @@ pub fn admit_arrived(pass: &Pass) {
 }
 
 /// None is no object for the tile `subject` names.
-fn on_arrived<L: ObservedLayer>(
+fn on_arrived<L: Observed>(
     subject: u64,
     block: Option<Block>,
     phases: &mut Phases,

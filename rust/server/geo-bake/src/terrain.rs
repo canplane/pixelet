@@ -9,7 +9,7 @@ pub mod repository;
 pub(crate) mod source;
 
 use crate::pyramid::Base;
-use crate::pyramid::StagedSet;
+use crate::pyramid::Staged;
 use pxl_spec::bake::fold::fold_terrain;
 use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
@@ -70,10 +70,7 @@ impl Base for TerrainTile {
 
     /// Refused where the set's ways' trees would not fit the client's pool
     /// wherever the eye is (`pool::fits`).
-    fn fits_set(
-        set: &StagedSet<'_>,
-        workers: usize,
-    ) -> Result<Option<Vec<(Tile, String)>>, String> {
+    fn fits_set(set: &Staged<'_>, workers: usize) -> Result<Option<Vec<(Tile, String)>>, String> {
         pool::fits(set, workers).map(Some)
     }
 }

@@ -54,7 +54,7 @@ const _: () = assert!(
 
 /// A record of decor the GPU draws: its first word (`record_word`), then
 /// its box's min corner in leaf cells, then how far its base sinks under
-/// it (`GeneratedDecor::sink`).
+/// it (`Generated::sink`).
 pub const RECORD_WORDS: u32 = 5;
 
 /// The eye's clip levels' bricks, an entry each: what the GPU generates decor
@@ -377,15 +377,15 @@ pub trait DecorQuery {
 /// column surface's top kept short of its cube (`cast::top`), so it stands on the
 /// top as drawn, not its cube's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct GeneratedDecor {
+pub struct Generated {
     pub variant: u32,
     pub turn: u32,
     pub at: [i32; 3],
     pub sink: u32,
 }
 
-impl GeneratedDecor {
-    pub const NONE: GeneratedDecor = GeneratedDecor {
+impl Generated {
+    pub const NONE: Generated = Generated {
         variant: 0,
         turn: 0,
         at: [0; 3],
@@ -412,7 +412,7 @@ pub fn placement(
     cell: Zoom,
     c: &Candidate,
     boxed: bool,
-) -> (GeneratedDecor, bool, bool) {
+) -> (Generated, bool, bool) {
     let s = LEAF_CELL - cell;
     let zoom = q.finest(cell, c.cell);
     // Its clip level's column surface, then the finest's where that is
@@ -424,14 +424,14 @@ pub fn placement(
         let t = LEAF_CELL - z;
         let (f, top, here) = q.column_surface(z, [c.cell[0] >> t, c.cell[1] >> t]);
         if k == 0 && !here {
-            return (GeneratedDecor::NONE, false, false);
+            return (Generated::NONE, false, false);
         }
         if k == 0 {
             first = top;
         }
         if k == 1 || zoom == cell {
             let (floor, rise) = first;
-            let g = GeneratedDecor {
+            let g = Generated {
                 variant: 0,
                 turn: 0,
                 at: [c.cell[0], c.cell[1], (floor + 1) * (1 << s)],
@@ -467,9 +467,9 @@ fn asks<Q: DecorQuery>(
     decor: &Decor,
     (zoom, base): (Zoom, i32),
     seed: u32,
-    mut g: GeneratedDecor,
+    mut g: Generated,
     boxed: bool,
-) -> (GeneratedDecor, bool) {
+) -> (Generated, bool) {
     let s = LEAF_CELL - zoom;
     let (mut flip, mut voting) = (0, 0);
     let mut draws = SplitMix32::new(seed);

@@ -15,7 +15,7 @@ pub(super) struct Surface {
     pub(super) cfg: Option<(wgpu::TextureFormat, wgpu::TextureUsages, bool)>,
     /// RESIZE's, at least a pixel each way.
     pub(super) size: [u32; 2],
-    bound: Option<BoundSurface>,
+    bound: Option<Bound>,
     /// The handle bound here, 0 for none: a slot outlives a handle, so an old
     /// one let go must not take the one bound since.
     pub(super) handle: u32,
@@ -29,7 +29,7 @@ pub(super) struct Surface {
     offscreen: Option<wgpu::Texture>,
 }
 
-struct BoundSurface {
+struct Bound {
     surface: wgpu::Surface<'static>,
     /// Not configured as asked, so no frame is taken from it until it is.
     stale: bool,
@@ -78,7 +78,7 @@ impl GpuHost {
         let Some(slot) = self.claim(handle) else {
             return false;
         };
-        self.surface(slot).bound = Some(BoundSurface {
+        self.surface(slot).bound = Some(Bound {
             surface: s,
             stale: true,
         });

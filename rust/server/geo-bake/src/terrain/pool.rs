@@ -19,7 +19,7 @@ use pxl_spec::space::layer::tile::Tile;
 use pxl_spec_core::clipmap::{ACROSS, BRICK};
 use pxl_spec_core::way::tree::POOL_CHILD_GROUPS;
 
-use crate::pyramid::StagedSet;
+use crate::pyramid::Staged;
 use crate::terrain::unfit;
 
 /// The bricks a tile is a side.
@@ -38,7 +38,7 @@ struct Tally {
 /// The set's ways' trees fit the pool, and what it will keep of each tile
 /// that takes anything; where they do not, the window that holds the most
 /// at the zoom that needs it, its first brick and its tiles named.
-pub(crate) fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, String)>, String> {
+pub(crate) fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, String> {
     let tiles: Vec<Tile> = set.tiles()?.into_values().flatten().collect();
     let base = set.base.fits()?;
     let base = base.as_ref();
@@ -107,7 +107,7 @@ pub(crate) fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, Str
 /// tile kept them, or made again from the tile where the set as it is
 /// keeps nothing (`base` none, a set baked before it did).
 fn set_bricks(
-    set: &StagedSet<'_>,
+    set: &Staged<'_>,
     base: Option<&FnvHashMap<Tile, String>>,
     tiles: &[Tile],
 ) -> Result<Tally, String> {

@@ -100,7 +100,7 @@ fn beacon_holds_on_stall() {
             night: false,
             time: 0.0,
             run: 0.0,
-            clock: SteppedClock::default(),
+            clock: Stepped::default(),
             visible: false,
             zone_drawn: false,
         }),

@@ -15,7 +15,7 @@ use std::sync::OnceLock;
 use xpute_guest::global::Global;
 use xpute_host::native::Guest;
 
-use super::{Ask, Config, ConfigureAt, GpuHost, OpenedDevice};
+use super::{Ask, Config, ConfigureAt, GpuHost, Opened};
 
 struct Device {
     /// What each window's surface is made with.
@@ -97,7 +97,7 @@ pub fn open(guest: Guest, ask: &Ask, cfg: Config) -> bool {
         if device().is_some() {
             return true;
         }
-        let Ok(OpenedDevice {
+        let Ok(Opened {
             instance,
             adapter,
             device,

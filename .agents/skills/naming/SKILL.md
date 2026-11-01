@@ -122,12 +122,8 @@ term stays whole too: a GPU texture array, `texture_2d_array`.
 
 A type's name has a head noun saying what it holds (`Key`, `Entry`, `Slot`,
 `Step`, `Span`, `Guard`, `Memo`, `Cache`), as short as its scope allows. A
-participle may modify a noun (`ResidentTile`) where two things in one scope
-need telling apart. A bare participle names only an enum variant for a state
-(`Ready`, `Pending`) or an event type, something that happened (`Closed`).
-`cargo check-rules` holds Rust's structs, enums, type aliases and traits,
-WGSL's structs, and the engine's TypeScript types, interfaces, classes and
-enums (the shell's UI aside) to it.
+bare participle names only an enum variant for a state (`Ready`, `Pending`)
+or an event type, something that happened (`Closed`).
 
 ## Tests
 

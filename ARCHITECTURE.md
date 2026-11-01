@@ -1080,7 +1080,7 @@ time (`pxl-geo-bake tile/shard.rs` `Stage`):
 1. `leaf` stages the named shards' leaves, each shard marked whole with the
    leaves it no longer makes.
 2. `fold` folds again what the whole shards change, reading the set as it will
-   be (`pyramid.rs` `StagedSet`).
+   be (`pyramid.rs` `Staged`).
 3. `commit`, only once folded, moves the staged tiles in and takes away what is
    gone.
 

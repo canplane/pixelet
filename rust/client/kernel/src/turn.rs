@@ -50,7 +50,7 @@ use crate::domain::scene::scene;
 use crate::domain::scene::stage;
 use crate::domain::scene::stage::visible_step;
 use crate::domain::view::demand;
-use crate::domain::view::demand::ObservedLayer as _;
+use crate::domain::view::demand::Observed as _;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::resolution::Pace;

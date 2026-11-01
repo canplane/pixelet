@@ -63,10 +63,7 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// anything, of what each tile's `encode_stored` kept; `workers` tiles at
     /// once. What the set will keep of its tiles (`FITS`), where the kind keeps
     /// anything; none for most kinds.
-    fn fits_set(
-        _set: &StagedSet<'_>,
-        _workers: usize,
-    ) -> Result<Option<Vec<(Tile, String)>>, String> {
+    fn fits_set(_set: &Staged<'_>, _workers: usize) -> Result<Option<Vec<(Tile, String)>>, String> {
         Ok(None)
     }
 }
@@ -251,7 +248,7 @@ pub(crate) fn fold_stored<L: Base>(
 /// A set with a change staged beside it, read as the set it will be: a
 /// staged tile first, then none where the change takes one away, then the
 /// set's own. A staged leaf counts only once its shard is staged whole.
-pub struct StagedSet<'a> {
+pub struct Staged<'a> {
     pub base: &'a TileSet,
     pub stage: &'a TileSet,
     pub leaf: Zoom,
@@ -259,7 +256,7 @@ pub struct StagedSet<'a> {
     pub(crate) gone: FnvHashSet<Tile>,
 }
 
-impl StagedSet<'_> {
+impl Staged<'_> {
     pub fn content(&self, p: Tile) -> Result<Option<Vec<u8>>, String> {
         if p.zoom != self.leaf || self.whole.contains(&ancestor(p, SHARD_ZOOM)) {
             if let Some(c) = self.stage.content(p)? {
@@ -329,7 +326,7 @@ pub fn ancestor(mut p: Tile, zoom: Zoom) -> Tile {
 /// `changed` may hold tiles of any zoom, each taken up at its own: one with
 /// no object is changed when what its absence is has.
 pub fn fold<L: Base>(
-    set: &mut StagedSet<'_>,
+    set: &mut Staged<'_>,
     mut changed: FnvHashSet<Tile>,
     absent: &impl Absent<L>,
     workers: usize,
@@ -431,7 +428,7 @@ fn readers<L: Base>(below: &[Tile]) -> Vec<Tile> {
 /// Folds `targets`, a zoom's parents in rows; returns those staged and those
 /// gone. Each worker keeps only the child rows its current parent row reads.
 fn fold_zoom<L: Base>(
-    set: &StagedSet<'_>,
+    set: &Staged<'_>,
     targets: &[Tile],
     absent: &impl Absent<L>,
     workers: usize,
@@ -458,7 +455,7 @@ fn fold_zoom<L: Base>(
 }
 
 fn fold_band<L: Base>(
-    set: &StagedSet<'_>,
+    set: &Staged<'_>,
     rows: &[&[Tile]],
     absent: &impl Absent<L>,
 ) -> Result<(Vec<Tile>, Vec<Tile>), String> {

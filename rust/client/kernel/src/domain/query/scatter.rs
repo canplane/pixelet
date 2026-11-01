@@ -13,7 +13,7 @@ use pxl_spec::asset::decor::Decor;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec_core::generation::{self, DecorQuery, GeneratedDecor};
+use pxl_spec_core::generation::{self, DecorQuery, Generated};
 use pxl_spec_core::support::ColumnSurface;
 use pxl_spec_core::world::PlacedCursor;
 use pxl_spec_core::FRAC_W;
@@ -105,8 +105,8 @@ pub(super) fn generated_at(
 }
 
 /// Decor standing as `g`, as an instance: its box's min corner a leaf
-/// cell's, a unit, its base sunk under it as the GPU draws it (`GeneratedDecor::sink`).
-pub(super) fn instance(decor: &Decor, g: &GeneratedDecor) -> Instance {
+/// cell's, a unit, its base sunk under it as the GPU draws it (`Generated::sink`).
+pub(super) fn instance(decor: &Decor, g: &Generated) -> Instance {
     let [x, y, z] = g.at;
     let base = f64::from(z) - f64::from(g.sink) / f64::from(1u32 << FRAC_W);
     let (at, meta) = decor.stand([f64::from(x), f64::from(y), base], g.variant, g.turn, 1.0);

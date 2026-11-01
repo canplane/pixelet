@@ -20,7 +20,7 @@ use crate::domain::scene::decor::gpu::{decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::registry::{blend, Models};
 use crate::domain::scene::region;
-use crate::domain::view::lens::{cell_there, seen_step_s, SteppedClock};
+use crate::domain::view::lens::{cell_there, seen_step_s, Stepped};
 use crate::sys::sched::edge::wake_at;
 use xpute_guest::clock::now;
 
@@ -63,8 +63,8 @@ pub struct Actor {
     run: f64,
     last: f64,
     /// Its clip's clock as drawn: `run` stepped a seen step at a time
-    /// (`lens::SteppedClock`), and the reading its clip last took (`clip_time`).
-    clock: SteppedClock,
+    /// (`lens::Stepped`), and the reading its clip last took (`clip_time`).
+    clock: Stepped,
     clip_time: f64,
 }
 
@@ -105,7 +105,7 @@ impl Actor {
             drawn: false,
             run: 0.0,
             last: 0.0,
-            clock: SteppedClock::default(),
+            clock: Stepped::default(),
             clip_time: 0.0,
         })
     }

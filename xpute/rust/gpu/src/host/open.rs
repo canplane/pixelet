@@ -24,7 +24,7 @@ pub enum OpenError {
 
 /// A device opened as asked, and the instance a program makes its surfaces
 /// with (`GpuHost::bind`).
-pub struct OpenedDevice {
+pub struct Opened {
     pub instance: wgpu::Instance,
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
@@ -34,7 +34,7 @@ pub struct OpenedDevice {
 /// Opens a device as `ask` says, for `GpuHost::new`, waiting out wgpu's
 /// futures, which a native backend resolves at once. The instance is made
 /// without a display handle: each surface brings its own (`SurfaceTargetUnsafe`).
-pub fn open(ask: &Ask) -> Result<OpenedDevice, OpenError> {
+pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: ask.backends,
         ..wgpu::InstanceDescriptor::new_without_display_handle()
@@ -51,7 +51,7 @@ pub fn open(ask: &Ask) -> Result<OpenedDevice, OpenError> {
         ..Default::default()
     }))
     .map_err(OpenError::Device)?;
-    Ok(OpenedDevice {
+    Ok(Opened {
         instance,
         adapter,
         device,

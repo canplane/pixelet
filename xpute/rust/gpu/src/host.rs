@@ -39,7 +39,7 @@ use pending::Pending;
 use surface::Surface;
 
 pub use configure::ConfigureAt;
-pub use open::{open, Ask, OpenError, OpenedDevice};
+pub use open::{open, Ask, OpenError, Opened};
 
 #[cfg(test)]
 use crate::spec::DONE;

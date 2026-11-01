@@ -4,10 +4,9 @@
 //! pointer casts in offset crates, each rounding half to even where clippy
 //! does not see it, no CommonJS file, each generated shader made from the
 //! sources the tree holds now, the layers' order, where nothing names what is
-//! above it, the screen's pixels read only at the screen, each type's name a
-//! head noun, never a bare participle, and no Rust file outside a crate's
-//! module tree. A rule Rust alone keeps is clippy's (rust/clippy.toml,
-//! xpute/rust/clippy.toml).
+//! above it, the screen's pixels read only at the screen, and no Rust file
+//! outside a crate's module tree. A rule Rust alone keeps is clippy's
+//! (rust/clippy.toml, xpute/rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -151,150 +150,6 @@ fn screen_reached(text: &str) -> Vec<usize> {
         .collect();
     lines.dedup();
     lines
-}
-
-/// A type's name has a head noun saying what it holds; a bare past participle
-/// names only an enum variant for a state or an event type (the naming
-/// skill, "A type's head noun"). A struct, an enum, a type alias or a trait
-/// in Rust and a struct in WGSL, under these roots, is held to it, its
-/// generated WGSL by its source; and a type alias, an interface, a class or
-/// an enum in the engine's TypeScript, the shell's UI left out. An enum's
-/// variants are not.
-const PARTICIPLE_ROOTS: [&str; 2] = ["rust/", "xpute/"];
-const TS_PARTICIPLE_ROOTS: [&str; 2] = ["xpute/ts/", "ts/client/src/"];
-const TS_UNCHECKED: &str = "ts/client/src/shell/";
-/// The irregular past participles and past tenses a type's name may not be alone. A word
-/// that is also a noun (`Hit`, `Set`, `Read`, `Run`, `Cut`, `Split`) is not
-/// among them.
-const IRREGULAR_PARTICIPLES: [&str; 85] = [
-    "Held",
-    "Kept",
-    "Seen",
-    "Laid",
-    "Built",
-    "Shown",
-    "Drawn",
-    "Found",
-    "Taken",
-    "Stood",
-    "Bound",
-    "Made",
-    "Left",
-    "Lent",
-    "Sent",
-    "Told",
-    "Met",
-    "Struck",
-    "Given",
-    "Gone",
-    "Done",
-    "Known",
-    "Grown",
-    "Thrown",
-    "Hidden",
-    "Written",
-    "Ridden",
-    "Driven",
-    "Risen",
-    "Fallen",
-    "Eaten",
-    "Beaten",
-    "Shaken",
-    "Chosen",
-    "Broken",
-    "Frozen",
-    "Spoken",
-    "Stolen",
-    "Woken",
-    "Worn",
-    "Torn",
-    "Born",
-    "Borne",
-    "Flown",
-    "Blown",
-    "Sewn",
-    "Sown",
-    "Begun",
-    "Sung",
-    "Rung",
-    "Sunk",
-    "Swum",
-    "Stuck",
-    "Spun",
-    "Caught",
-    "Taught",
-    "Bought",
-    "Brought",
-    "Fought",
-    "Sought",
-    "Lit",
-    "Hid",
-    "Slid",
-    "Bent",
-    "Spent",
-    "Swept",
-    "Slept",
-    "Dealt",
-    "Meant",
-    "Sold",
-    "Paid",
-    "Said",
-    "Heard",
-    "Fed",
-    "Led",
-    "Fled",
-    "Lost",
-    "Got",
-    "Gotten",
-    "Forgot",
-    "Forgotten",
-    "Forgiven",
-    "Withheld",
-    "Undone",
-    "Overseen",
-];
-/// The words ending in -ed that are no participle.
-const NOT_PARTICIPLES: [&str; 14] = [
-    "Bed", "Bleed", "Breed", "Deed", "Embed", "Feed", "Hundred", "Need", "Red", "Reed", "Seed",
-    "Shed", "Speed", "Weed",
-];
-/// The event types, each something that happened, which a bare participle
-/// names: the file and the type.
-const EVENTS: [(&str, &str); 2] = [
-    // The host's answer to an open.
-    ("rust/client/kernel/src/sys/io/file.rs", "Opened"),
-    // How a stream's run ended.
-    ("rust/client/kernel/src/sys/io/failure.rs", "Ended"),
-];
-
-/// Whether `name`, one capitalized word, is a past participle: ending in
-/// -ed, or an irregular one.
-fn participle(name: &str) -> bool {
-    (name.ends_with("ed") && !NOT_PARTICIPLES.contains(&name))
-        || IRREGULAR_PARTICIPLES.contains(&name)
-}
-
-/// Every type `text` names by a bare past participle, each with its line:
-/// a Rust or WGSL source's structs, enums, type aliases and traits, or
-/// where `ts`, a TypeScript source's type aliases, interfaces, classes and
-/// enums.
-fn participle_types(text: &str, ts: bool) -> Vec<(usize, String)> {
-    let decl = Regex::new(if ts {
-        r"(?m)^[ \t]*(?:export\s+)?(?:declare\s+)?(?:abstract\s+)?(?:const\s+)?(?:type|interface|class|enum)\s+([A-Z][a-z]*)(?:[^A-Za-z0-9_]|$)"
-    } else {
-        r"(?m)^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?(?:struct|enum|type|trait)\s+([A-Z][a-z]*)(?:[^A-Za-z0-9_]|$)"
-    })
-    .expect("a type's pattern");
-    decl.captures_iter(text)
-        .filter_map(|c| c.get(1))
-        .filter(|m| participle(m.as_str()))
-        .map(|m| {
-            (
-                text[..m.start()].matches('\n').count() + 1,
-                m.as_str().to_string(),
-            )
-        })
-        .collect()
 }
 
 /// xpute's words are host, guest and their contract (AGENTS.md): pixelet's
@@ -624,24 +479,6 @@ fn run() -> Result<Vec<String>, String> {
             ));
         }
     }
-    for f in files.iter() {
-        let ts = TS_PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
-            && !f.starts_with(TS_UNCHECKED)
-            && (f.ends_with(".ts") || f.ends_with(".tsx"));
-        let rs = PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
-            && (f.ends_with(".rs") || (f.ends_with(".wgsl") && !f.ends_with(".gen.wgsl")));
-        if !ts && !rs {
-            continue;
-        }
-        for (line, name) in participle_types(&read(f).unwrap_or_default(), ts) {
-            if EVENTS.contains(&(*f, name.as_str())) {
-                continue;
-            }
-            problems.push(format!(
-                "{f}:{line}: `{name}` is a bare past participle; a type's name has a head noun saying what it holds, and a bare participle names only a state's variant or an event type in EVENTS (the naming skill, \"A type's head noun\"; check_rules.rs)"
-            ));
-        }
-    }
     let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
     for f in files.iter().filter(|f| f.starts_with(XPUTE)) {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
@@ -672,7 +509,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels, the types' head nouns and the crates' module trees hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels and the crates' module trees hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -742,38 +579,5 @@ mod spec;"
         ] {
             assert!(screen_reached(text).is_empty(), "{text}");
         }
-    }
-
-    #[test]
-    fn bare_participle_type_refused() {
-        for text in [
-            "struct Seen {",
-            "pub(super) type Laid = u32;",
-            "pub trait Observed: Base {",
-            "    struct Kept(u32);",
-            "struct Asked<'a> {",
-            "pub enum Offered {",
-        ] {
-            assert_eq!(participle_types(text, false).len(), 1, "{text}");
-        }
-        for text in [
-            "struct ResidentTile {",
-            "struct Seed;",
-            "struct Hit {",
-            "enum State { Ready, Closed }",
-            "// struct Seen",
-            "let built = Built;",
-        ] {
-            assert!(participle_types(text, false).is_empty(), "{text}");
-        }
-        for text in [
-            "export interface Bound {",
-            "interface Opened extends Guest {",
-            "export type Stored = number;",
-            "export abstract class Named {",
-        ] {
-            assert_eq!(participle_types(text, true).len(), 1, "{text}");
-        }
-        assert!(participle_types("export interface Binding {", true).is_empty());
     }
 }

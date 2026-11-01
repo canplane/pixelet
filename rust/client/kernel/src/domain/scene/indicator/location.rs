@@ -26,7 +26,7 @@ use crate::domain::scene::region;
 use crate::domain::scene::scene;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
-use crate::domain::view::lens::{seen_step_s, SteppedClock};
+use crate::domain::view::lens::{seen_step_s, Stepped};
 use crate::sys::mem::section;
 use crate::sys::sched::edge::{request_world_tick, wake_at};
 use pxl_render::frame::shader::word;
@@ -188,12 +188,12 @@ struct Zone {
     beacon_at: Option<[f64; 2]>,
     night: bool,
     /// The bob's and the spin's clock as drawn, in seconds: stepped a seen
-    /// step at a time (`lens::SteppedClock`) off `run`, which runs by the turn's
+    /// step at a time (`lens::Stepped`) off `run`, which runs by the turn's
     /// step, held past a stall (`frame.delta_s`), while the bob spans a
     /// camera cell.
     time: f64,
     run: f64,
-    clock: SteppedClock,
+    clock: Stepped,
     visible: bool,
     /// Whether the ground under the zone is drawn in its own cells, a leaf's
     /// (`GROUND`), or finer: where it is drawn coarser, the zone's cells are
@@ -298,7 +298,7 @@ impl LocationIndicator {
                         night: false,
                         time: 0.0,
                         run: 0.0,
-                        clock: SteppedClock::default(),
+                        clock: Stepped::default(),
                         visible: false,
                         zone_drawn: false,
                     });
@@ -326,7 +326,7 @@ impl LocationIndicator {
     /// under it is drawn in its own cells (`zone_drawn`); and its beacon slides to its
     /// target, a frame a step, only where the slide spans one. Its bob and
     /// spin are stepped a seen step at a time where the bob spans one, the
-    /// turn woken for the next (`lens::SteppedClock`); else they hold.
+    /// turn woken for the next (`lens::Stepped`); else they hold.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         let Some(p) = self.zone.as_mut() else {
             return false;
