@@ -97,23 +97,7 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the floor's walk.
     match settings_store().orbit_obstacle {
         OrbitObstacleMode::through => return *to,
-        // A climb that would pass through something solid (a tunnel's roof to the
-        // surface over it) is held as `stop` holds it, but for a zoom in that
-        // goes through what blocks it (`dive`) and a zoom out held short of it
-        // (`held_under`).
-        OrbitObstacleMode::climb => {
-            let access = World::now();
-            let (climbed, failed) = climb_pose(*to, &access);
-            if path_clear(from, &climbed) {
-                return *to;
-            }
-            // Through only where the climb itself failed (`climb_pose`); where only
-            // the way there is blocked, it stops.
-            let dived = failed.then(|| dive(to, &climbed, from, &access)).flatten();
-            if let Some(reached) = dived.or_else(|| held_under(to, from, &access)) {
-                return reached;
-            }
-        }
+        OrbitObstacleMode::climb => return climb_step(to, from, &World::now()),
         OrbitObstacleMode::stop => {}
     }
 
@@ -204,23 +188,6 @@ fn crossed(last_solid: bool, at_solid: bool, at: &ViewPose, access: &World) -> b
     last_solid && !at_solid && toward_eye(at, at.dist, access).is_some()
 }
 
-/// What lies between the eye and the pivot is not asked: that hides the
-/// pivot but is not the eye running into anything, save where the eye
-/// comes out of a wall to its far side (`crossed`). The first cell of a wall
-/// or a roof is no obstacle (`embedded`).
-fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
-    let access = World::now();
-    let mut last_solid = in_solid(from, &access);
-    (1..=COLLISION_STEP_SAMPLES).all(|i| {
-        let at = between(from, to, i as f64 / COLLISION_STEP_SAMPLES as f64);
-        let at_solid = in_solid(&at, &access);
-        let clear = (!at_solid || embedded(&eye(&at).1, &access))
-            && !crossed(last_solid, at_solid, &at, &access);
-        last_solid = at_solid;
-        clear
-    })
-}
-
 /// A zoom in where the climb failed (`climb_pose`), at the pitch asked, blocked
 /// by what lies between the pivot and the eye (a tunnel's roof, a cave's):
 /// the eye goes through it to the pivot's side on that line, as far
@@ -228,9 +195,9 @@ fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
 /// through it. Where the roof is nearer the pivot than the orbit comes
 /// (`MIN_DIST`), the eye stands at `MIN_DIST` in the roof's lowest cell,
 /// which its rays do not meet (pxl-spec-core `cast::walk`): it sees the
-/// pivot as from under the roof. Only a zoom in: a zoom out goes no farther
-/// than the roof leaves (`held_under`). None where nothing on the line roofs
-/// the pivot, or `MIN_DIST` is past the roof's lowest cell.
+/// pivot as from under the roof. Only a zoom in: a zoom out goes through
+/// (`climb_step`). None where nothing on the line roofs the pivot, or
+/// `MIN_DIST` is past the roof's lowest cell.
 fn dive(to: &ViewPose, climbed: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose> {
     if to.dist >= from.dist {
         return None;
@@ -241,19 +208,16 @@ fn dive(to: &ViewPose, climbed: &ViewPose, from: &ViewPose, access: &World) -> O
     under(&roof, climbed, dist).then_some(ViewPose { dist, ..*climbed })
 }
 
-/// A zoom out from under a roof between the pivot and the eye, where a dive
-/// left the eye: as far as the roof leaves (`dive`) and no farther, so the
-/// eye does not go back through the roof it came through, whether it stands
-/// short of the roof or in its lowest cell. None where it is not under one.
-fn held_under(to: &ViewPose, from: &ViewPose, access: &World) -> Option<ViewPose> {
-    if to.dist <= from.dist {
-        return None;
+/// In `climb`, how far toward `to` the orbit gets from `from`: all the way,
+/// the drawn pitch climbing over what is in the way (`climb_polar`), but
+/// for a zoom in where the climb fails, under a roof over the pivot, which
+/// goes under the roof on its line (`dive`). A zoom out is never held: under
+/// a roof it goes through it, as a zoom in does.
+fn climb_step(to: &ViewPose, from: &ViewPose, access: &World) -> ViewPose {
+    match climb_pose(*to, access) {
+        (climbed, true) => dive(to, &climbed, from, access).unwrap_or(*to),
+        _ => *to,
     }
-    let roof = toward_eye(from, to.dist, access)?;
-    under(&roof, from, from.dist).then(|| ViewPose {
-        dist: to.dist.min(from.dist.max(roof.t - NEAR)),
-        ..*to
-    })
 }
 
 /// What `at`'s pivot meets toward its eye within `t_max`: a roof, where the

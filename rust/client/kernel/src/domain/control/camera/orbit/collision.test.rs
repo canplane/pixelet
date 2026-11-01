@@ -44,12 +44,12 @@ fn dive_to(roof: Option<f64>, to: f64, polar: f64) -> Option<f64> {
     dive(&to, &to, &pose(pivot, 16.0, polar), &access).map(|p| p.dist)
 }
 
-/// A zoom out straight down from `from` to `to`: where it is held, if it is.
-fn held_at(roof: Option<f64>, from: f64, to: f64) -> Option<f64> {
+/// A zoom straight down from `from` to `to` in `climb`: where it gets.
+fn climbed_to(roof: Option<f64>, from: f64, to: f64) -> f64 {
     let _g = serial();
     let (tile_cache, store, pivot) = roofed(roof);
     let access = World::new(&tile_cache, &store);
-    held_under(&pose(pivot, to, 0.0), &pose(pivot, from, 0.0), &access).map(|p| p.dist)
+    climb_step(&pose(pivot, to, 0.0), &pose(pivot, from, 0.0), &access).dist
 }
 
 #[test]
@@ -90,15 +90,21 @@ fn dives_into_low_roof() {
     assert_eq!(dive_to(Some(2.0), 10.0, 0.0), Some(MIN_DIST));
 }
 
-/// Under the roof, a zoom out goes as far as the roof leaves; from its
-/// lowest cell, nowhere; over it, as the climb takes it.
+/// A zoom out is never held: under a roof, from its lowest cell, over it or
+/// with nothing over the pivot, it gets where it is asked; a zoom in into a
+/// roof the climb fails in goes under it.
 #[test]
-fn zoom_out_held_under_roof() {
-    let under = 8.0 - over(5.0) - NEAR;
-    assert_eq!(held_at(Some(3.0), MIN_DIST, 10.0), Some(under));
-    assert_eq!(held_at(Some(2.0), MIN_DIST, 10.0), Some(MIN_DIST));
-    assert_eq!(held_at(Some(3.0), 16.0, 20.0), None);
-    assert_eq!(held_at(None, MIN_DIST, 10.0), None);
+fn zoom_out_not_held() {
+    assert_eq!(climbed_to(Some(3.0), MIN_DIST, 10.0), 10.0);
+    assert_eq!(climbed_to(Some(2.0), MIN_DIST, 10.0), 10.0);
+    assert_eq!(climbed_to(Some(3.0), 16.0, 20.0), 20.0);
+    assert_eq!(climbed_to(None, MIN_DIST, 10.0), 10.0);
+    // Into a slab two cells thick, which the climb fails in: under it.
+    let _g = serial();
+    let (tile_cache, store, pivot) = tunnel(3.0, 2);
+    let access = World::new(&tile_cache, &store);
+    let to = climb_step(&pose(pivot, 3.8, 0.0), &pose(pivot, 16.0, 0.0), &access);
+    assert_eq!(to.dist, 8.0 - over(5.0) - NEAR);
 }
 
 /// The roof's lowest cell holds the eye on its floor, not on its ceiling,

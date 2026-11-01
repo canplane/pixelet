@@ -10,7 +10,8 @@
 //! (orbit/collision.rs `allowed_view`), and the camera setting decides
 //! what follows: through ignores the ground, stop takes a control as far as
 //! it gets, and climb raises the drawn pitch instead (`climb_polar`); where a
-//! roof over the pivot holds the climb, a zoom in goes under it (`dive`).
+//! roof over the pivot holds the climb, a zoom in goes under it (`dive`) and
+//! a zoom out through it: climb holds back no zoom (`climb_step`).
 
 pub mod collision;
 
