@@ -18,9 +18,9 @@
     reason = "generated from the spec"
 )]
 
-/// The groups a character is of, each numbered, and in each its variants by
-/// key, row for row with its models, the colormap its pack shares, how tall it
-/// stands and which clip is its move.
+/// The groups a character is of, each numbered, and in each its variants,
+/// each numbered by its row, row for row with its models, the colormap its pack
+/// shares, how tall it stands and which clip is its move.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Group {
@@ -40,66 +40,13 @@ impl Group {
 }
 
 pub mod groups {
-    /// The people a player can be: the key the settings store persists, row for
-    /// row with the model under asset/. One pack, so one colormap.
+    /// The people a player can be, each by its row, the number the settings store
+    /// persists. One pack, so one colormap.
     pub mod person {
         /// World units tall — one cell.
         pub const size: f64 = 1.0;
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-        #[repr(u8)]
-        pub enum Key {
-            female_1 = 0,
-            female_2 = 1,
-            female_3 = 2,
-            female_4 = 3,
-            female_5 = 4,
-            female_6 = 5,
-            male_1 = 6,
-            male_2 = 7,
-            male_3 = 8,
-            male_4 = 9,
-            male_5 = 10,
-            male_6 = 11,
-        }
-
-        impl Key {
-            /// Every member, in the JSON's own order.
-            pub const ALL: [Key; 12] = [
-                Key::female_1,
-                Key::female_2,
-                Key::female_3,
-                Key::female_4,
-                Key::female_5,
-                Key::female_6,
-                Key::male_1,
-                Key::male_2,
-                Key::male_3,
-                Key::male_4,
-                Key::male_5,
-                Key::male_6,
-            ];
-
-            /// The member a number names, or none for a number the set does not
-            /// give out.
-            pub fn of(val: u8) -> Option<Key> {
-                Key::ALL.into_iter().find(|member| *member as u8 == val)
-            }
-        }
-
-        pub mod keys {
-            pub const female_1: u8 = 0;
-            pub const female_2: u8 = 1;
-            pub const female_3: u8 = 2;
-            pub const female_4: u8 = 3;
-            pub const female_5: u8 = 4;
-            pub const female_6: u8 = 5;
-            pub const male_1: u8 = 6;
-            pub const male_2: u8 = 7;
-            pub const male_3: u8 = 8;
-            pub const male_4: u8 = 9;
-            pub const male_5: u8 = 10;
-            pub const male_6: u8 = 11;
-        }
+        /// Each variant's gender (`GENDER`), row for row with its models.
+        pub const gender: [u8; 12] = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1];
         pub const models: [crate::asset::catalog::Slot; 12] = [
             crate::asset::catalog::Slot(45),
             crate::asset::catalog::Slot(46),
@@ -120,101 +67,12 @@ pub mod groups {
         /// "walk" consistently: the person's is "sprint", the pet's "run".
         pub const move_clip: u32 = 3;
     }
-    /// The pets, the same way. A pet's key is its model's name.
+    /// The pets, the same way.
     pub mod pet {
         /// World units tall — a quarter cell, the step the object tiers also take.
         pub const size: f64 = 0.25;
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-        #[repr(u8)]
-        pub enum Key {
-            beaver = 0,
-            bee = 1,
-            bunny = 2,
-            cat = 3,
-            caterpillar = 4,
-            chick = 5,
-            cow = 6,
-            crab = 7,
-            deer = 8,
-            dog = 9,
-            elephant = 10,
-            fish = 11,
-            fox = 12,
-            giraffe = 13,
-            hog = 14,
-            koala = 15,
-            lion = 16,
-            monkey = 17,
-            panda = 18,
-            parrot = 19,
-            penguin = 20,
-            pig = 21,
-            polar = 22,
-            tiger = 23,
-        }
-
-        impl Key {
-            /// Every member, in the JSON's own order.
-            pub const ALL: [Key; 24] = [
-                Key::beaver,
-                Key::bee,
-                Key::bunny,
-                Key::cat,
-                Key::caterpillar,
-                Key::chick,
-                Key::cow,
-                Key::crab,
-                Key::deer,
-                Key::dog,
-                Key::elephant,
-                Key::fish,
-                Key::fox,
-                Key::giraffe,
-                Key::hog,
-                Key::koala,
-                Key::lion,
-                Key::monkey,
-                Key::panda,
-                Key::parrot,
-                Key::penguin,
-                Key::pig,
-                Key::polar,
-                Key::tiger,
-            ];
-
-            /// The member a number names, or none for a number the set does not
-            /// give out.
-            pub fn of(val: u8) -> Option<Key> {
-                Key::ALL.into_iter().find(|member| *member as u8 == val)
-            }
-        }
-
-        pub mod keys {
-            pub const beaver: u8 = 0;
-            pub const bee: u8 = 1;
-            pub const bunny: u8 = 2;
-            pub const cat: u8 = 3;
-            pub const caterpillar: u8 = 4;
-            pub const chick: u8 = 5;
-            pub const cow: u8 = 6;
-            pub const crab: u8 = 7;
-            pub const deer: u8 = 8;
-            pub const dog: u8 = 9;
-            pub const elephant: u8 = 10;
-            pub const fish: u8 = 11;
-            pub const fox: u8 = 12;
-            pub const giraffe: u8 = 13;
-            pub const hog: u8 = 14;
-            pub const koala: u8 = 15;
-            pub const lion: u8 = 16;
-            pub const monkey: u8 = 17;
-            pub const panda: u8 = 18;
-            pub const parrot: u8 = 19;
-            pub const penguin: u8 = 20;
-            pub const pig: u8 = 21;
-            pub const polar: u8 = 22;
-            pub const tiger: u8 = 23;
-        }
+        /// Each pet's name, the one every locale shows (an item has one name), row for row with its models.
+        pub const label: usize = 24;
         pub const models: [crate::asset::catalog::Slot; 24] = [
             crate::asset::catalog::Slot(58),
             crate::asset::catalog::Slot(59),
@@ -252,9 +110,27 @@ pub mod groups {
 /// The clip a character stands in, "idle", by its index in both packs' animations.
 pub const IDLE_CLIP: u32 = 1;
 
-/// Split by gender, so the picker shows two rows; a person is shown by
-/// its place in its row.
-pub mod PERSON_GENDER_PREFIX {
-    pub const female: &str = "female-";
-    pub const male: &str = "male-";
+/// A person's gender, which splits the picker into two rows; a person is
+/// shown by its place in its row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum Gender {
+    female = 0,
+    male = 1,
+}
+
+impl Gender {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [Gender; 2] = [Gender::female, Gender::male];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(val: u8) -> Option<Gender> {
+        Gender::ALL.into_iter().find(|member| *member as u8 == val)
+    }
+}
+
+pub mod GENDER {
+    pub const female: u8 = 0;
+    pub const male: u8 = 1;
 }

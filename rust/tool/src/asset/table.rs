@@ -88,7 +88,7 @@ pub fn faces(
 /// The table as `spec/spec/asset/ingested.json`, which `cargo spec`
 /// renders into the host's table, the pack's layout and the catalog
 /// (pxl-tool spec/ingested.rs, spec/catalog.rs).
-pub fn render_json(rows: &[Row], pack: &Pack) -> String {
+pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
     let string = |s: &str| format!("{s:?}");
     let mut out = String::with_capacity(rows.len() * 160);
     out.push_str(
@@ -102,7 +102,9 @@ pub fn render_json(rows: &[Row], pack: &Pack) -> String {
     "texture pack, a file of the table: `columns` tiles of `cell` pixels per row,",
     "tile n at column n % columns and row n / columns, `tiles` the path each",
     "holds, `means` each one's mean color in linear light, and `faces` the cube",
-    "face — group, type, face — each tile is."
+    "face — group, type, face — each tile is. Then Carto's place symbols, which",
+    "the client carries in its binary: each by its path as Carto gives it, in the",
+    "order of their masks, which numbers each from 1."
   ],
   "files": [
 "#,
@@ -152,6 +154,12 @@ pub fn render_json(rows: &[Row], pack: &Pack) -> String {
         })
         .collect();
     let _ = writeln!(out, "    \"faces\": [\n{}\n    ]", faces.join(",\n"));
-    out.push_str("  }\n}\n");
+    out.push_str("  },\n  \"symbols\": [\n");
+    let symbols: Vec<String> = symbols
+        .iter()
+        .map(|s| format!("    {}", string(s)))
+        .collect();
+    out.push_str(&symbols.join(",\n"));
+    out.push_str("\n  ]\n}\n");
     out
 }

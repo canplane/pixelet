@@ -10,7 +10,7 @@ use pxl_spec::object::ext::Class;
 /// One record, in its class's shape.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Ext {
-    /// A marker's words, within `MARKER_TEXT_CHARS`.
+    /// A marker's text, within `MARKER_TEXT_CHARS`.
     MarkerText(String),
 }
 

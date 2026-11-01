@@ -12,11 +12,11 @@ use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
 use crate::beam::{node_at, Beamed, Beams, Laid, Words};
-use crate::either::Either;
+use crate::pass_observer::PassObserver;
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::light::Head;
 use crate::observer::{self, Observer};
-use crate::world::{face_of, unasked, Unlooked, World};
+use crate::world::{face_of, unasked, NoPalette, World};
 use crate::{add, opens};
 
 /// Whether samples at words `a` and `b` stopped on the same box, alike in
@@ -103,14 +103,14 @@ pub(crate) fn taken<W: Words + ?Sized>(
     k: u32,
     origin: [i32; 3],
     ray: &cast::Ray,
-) -> (cast::Stop<u32>, bool) {
+) -> (cast::Hit<u32>, bool) {
     let node = node_at(w, k + beam::SAMPLE_NODE);
     let asset = [
         w.word(k + beam::SAMPLE_ASSET),
         w.word(k + beam::SAMPLE_ASSET + 1),
     ];
     let (enter, axis, enters) = cast::entry(origin, ray, &node, asset[0]);
-    let stop = cast::Stop {
+    let stop = cast::Hit {
         t: enter,
         axis,
         node,
@@ -122,7 +122,7 @@ pub(crate) fn taken<W: Words + ?Sized>(
 
 /// Each sample of its observer's lattice, a thread each: written as a box
 /// for the raster's draw (observer.rs `sample_box`), the screen's or the
-/// shadow map's as its head names (either.rs `Either`); and, the screen's,
+/// shadow map's as its head names (pass_observer.rs `PassObserver`); and, the screen's,
 /// what lies about its face asked once a box (`ask`), as its pixels draw
 /// the face.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_box_cs"))]
@@ -134,7 +134,7 @@ pub fn sample_box_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] boxes: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &mut [u32],
 ) {
-    let o = Either::of(eye, head);
+    let o = PassObserver::of(eye, head);
     let [across, down] = o.samples();
     if id.x >= across || id.y >= down {
         return;
@@ -159,7 +159,7 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
     let (asks, faces) = if beams.word(k + beam::SAMPLE_LACKS) != 0 {
         (false, 0)
     } else {
-        unasked(End::Stop, beams.word(k + beam::SAMPLE_ASSET))
+        unasked(End::Hit, beams.word(k + beam::SAMPLE_ASSET))
     };
     if !asks {
         beams.set(k + beam::SAMPLE_FACES, faces);
@@ -183,7 +183,7 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
 /// about the face its ray entered (`World::faced`), asked of the world's
 /// query once a stop rather than once a ray, off the line down to it from
 /// the deepest node of its cell's beam ray's line over it, that line read
-/// in place (`support::off`, beam.rs `Laid`), and left in the word its ask
+/// in place (`support::sub_line`, beam.rs `Laid`), and left in the word its ask
 /// names (`beam::ASK_TO`). The boxes' asks (`beam::Grid::ask_at`), their
 /// faces left in their samples' words, which the pixels read (cast.rs
 /// `cast_cs`); and the missed pixels' stops' (`beam::Grid::stop_ask_at`;
@@ -221,14 +221,14 @@ pub fn face_cs(
         let mut world = World {
             window,
             ground,
-            looks: Unlooked(0),
+            palette_indices: NoPalette(0),
             shards,
             overwrites,
             eye,
             pool: way::tree::Read(pool),
         };
-        let below = support::off(&mut world, &base, zoom, c);
-        world.faced(w.word(a + beam::ASK_FACE), zoom, c, &below.off(&base))
+        let below = support::sub_line(&mut world, &base, zoom, c);
+        world.faced(w.word(a + beam::ASK_FACE), zoom, c, &below.joined(&base))
     };
     beams.set(to, faces);
 }

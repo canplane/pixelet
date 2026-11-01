@@ -83,7 +83,7 @@ pub mod RASTER {
 /// tile's version and URL, a storage key, is what the host (ts/client/src/driver/namespace/)
 /// binds the root to, `@xpute/host` carrying the open there.
 pub mod root {
-    /// The platform's storage; a path is a kept slot's number in decimal (`kept`); where the platform holds a slot is the host's choice.
+    /// The platform's storage; a path is a storage file's number in decimal (`storage`); where the platform holds a slot is the host's choice.
     pub const STORAGE: u32 = 256;
     /// The shipped assets; a path is a load's number in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).
     pub const ASSET: u32 = 257;
@@ -102,7 +102,7 @@ pub const CATALOG: u32 = 0;
 
 /// The files the kernel keeps below STORAGE, by slot. What a slot holds is its
 /// owner's, written whole, its slot's `format` first (pxl-kernel sys/io/file.rs).
-pub mod kept {
+pub mod storage {
     /// The settings' overrides (domain/view/setting/store.rs).
     pub const SETTINGS: u32 = 0;
     /// The placed objects (domain/layer/object/repository.rs).

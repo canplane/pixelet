@@ -12,12 +12,12 @@ use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
 use crate::domain::layer::terrain::mirror;
+use crate::domain::scene::character;
 use crate::domain::scene::character::companion;
 use crate::domain::scene::character::preview;
-use crate::domain::scene::character::variant;
 use crate::domain::scene::decor::asset;
 use crate::domain::scene::environment::cloud;
-use crate::profiler::record;
+use crate::perf::record;
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::host;
@@ -116,15 +116,15 @@ pub enum Fixed {
 }
 
 /// None is let go.
-const MODELS_MAX: usize = variant::MODELS_MAX + asset::MODELS_MAX + cloud::MODELS_MAX;
+const MODELS_MAX: usize = character::MODELS_MAX + asset::MODELS_MAX + cloud::MODELS_MAX;
 
-/// The ghost's, the puck's zone, the two debug line sets' (the gizmo's and the
+/// The ghost's, the location indicator's zone, the two debug line sets' (the gizmo's and the
 /// coverage's, `domain/scene.rs` `debug` and `coverage`) and the markers'.
 const SINGLE_UPLOADS: usize = 5;
 
 /// An actor's palette, one for each frame that holds one: the companion's
-/// figures and the display cases.
-const ACTOR_UPLOADS: usize = companion::FIGURES + preview::CASES_MAX;
+/// figures and the previews.
+const ACTOR_UPLOADS: usize = companion::FIGURES + preview::PREVIEWS_MAX;
 
 /// Each owner's bound summed, so the table cannot fill: every bound is a
 /// count the structure fixes (the models the catalogs can name, the clouds'
@@ -172,10 +172,10 @@ const fn body_block(stream: Stream) -> u64 {
 /// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
 /// (sys/io/body.rs), and a body on every credit in the buddy's block for the
 /// longest other kind, each freed as it is decoded; the ways' pool's
-/// mirror at its most (domain/layer/terrain/mirror.rs, pxl-spec-core way/tree.rs `POOL_FAMILIES`),
+/// mirror at its most (domain/layer/terrain/mirror.rs, pxl-spec-core way/tree.rs `POOL_CHILD_GROUPS`),
 /// the renderer's rooms for the bricks' records, every read's at a
 /// brick's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
-/// the profiler's lanes while its setting is on (profiler/record.rs), each
+/// the profiler's lanes while its setting is on (perf/record.rs), each
 /// in the buddy's blocks, a power of two. Each is refused past its cap, and
 /// waits or stays absent where the heap refuses it. The rest of the heap
 /// is workspace, which asks first.
@@ -191,10 +191,7 @@ const HEAP_FLOWS_BYTES: u64 = {
         k += 1;
     }
     let ways = mirror::MIRROR_BYTES + renderer::RECORD_ROOMS_BYTES;
-    slots_bytes(param::BODY_SLOTS)
-        + param::MAX_CREDITS as u64 * longest
-        + ways
-        + record::PROFILER_BYTES
+    slots_bytes(param::BODY_SLOTS) + param::MAX_CREDITS as u64 * longest + ways + record::PERF_BYTES
 };
 
 const _: () = assert!(

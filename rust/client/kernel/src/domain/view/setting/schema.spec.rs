@@ -4,7 +4,7 @@
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
-// `profiler`, the profiler panel's own. The store reads the defaults from
+// `perf`, the profiler panel's own. The store reads the defaults from
 // here and the sheet renders rows from here, so adding a setting to the
 // sheet is one entry in SETTING plus its two strings in the locale catalog
 // under `settings.<section>.<key>`. A choice may carry `costs` beside its
@@ -12,7 +12,7 @@
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTING_SHIPPED,
-// the table without them, in SETTING's place. A setting whose `kept` is
+// the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
 //
@@ -228,7 +228,7 @@ pub enum SettingKey {
     camera_mode = 5,
     /// The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck.
     surface_follow = 6,
-    /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/terrain_gate.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
+    /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
     orbit_obstacle = 7,
     /// Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
@@ -250,10 +250,10 @@ pub enum SettingKey {
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RES_MODES says each.
     res = 12,
-    /// Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section).
+    /// Where the camera and the pointer are, read live (perf/read.rs, NOW's view section).
     view = 13,
-    /// The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`).
-    profiler = 14,
+    /// The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`).
+    perf = 14,
     /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs).
     world_gizmo = 15,
     /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell a face shows the eye (domain/scene/gizmo/camera_gizmo.rs), in the looks debug_look.json gives them.
@@ -262,7 +262,7 @@ pub enum SettingKey {
     pet = 18,
     /// Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl).
     ray_steps = 19,
-    /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
+    /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
     ray_counts = 20,
     /// The hour the sky is drawn at; SKY_TIMES says each.
     sky_time = 21,
@@ -284,7 +284,7 @@ impl SettingKey {
         SettingKey::shadows,
         SettingKey::res,
         SettingKey::view,
-        SettingKey::profiler,
+        SettingKey::perf,
         SettingKey::world_gizmo,
         SettingKey::camera_gizmo,
         SettingKey::person,
@@ -321,7 +321,7 @@ impl SettingKey {
             SettingKey::shadows => SettingKind::Toggle,
             SettingKey::res => SettingKind::Choice,
             SettingKey::view => SettingKind::Toggle,
-            SettingKey::profiler => SettingKind::Toggle,
+            SettingKey::perf => SettingKind::Toggle,
             SettingKey::world_gizmo => SettingKind::Toggle,
             SettingKey::camera_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
@@ -332,9 +332,9 @@ impl SettingKey {
         }
     }
 
-    /// Written to the settings' kept slot and read from it; one schema.json
-    /// marks `kept` false is held for the session alone.
-    pub fn is_kept(self) -> bool {
+    /// Written to the settings' storage file and read from it; one schema.json
+    /// marks `stored` false is held for the session alone.
+    pub fn is_stored(self) -> bool {
         !matches!(
             self,
             SettingKey::place
@@ -378,7 +378,7 @@ pub struct Settings {
     pub shadows: bool,
     pub res: ResMode,
     pub view: bool,
-    pub profiler: bool,
+    pub perf: bool,
     pub world_gizmo: bool,
     pub camera_gizmo: bool,
     pub person: u8,
@@ -405,7 +405,7 @@ impl Settings {
         shadows: false,
         res: ResMode::auto,
         view: false,
-        profiler: false,
+        perf: false,
         world_gizmo: false,
         camera_gizmo: false,
         person: 1,
@@ -433,7 +433,7 @@ impl Settings {
             SettingKey::shadows => self.shadows as u32,
             SettingKey::res => self.res as u32,
             SettingKey::view => self.view as u32,
-            SettingKey::profiler => self.profiler as u32,
+            SettingKey::perf => self.perf as u32,
             SettingKey::world_gizmo => self.world_gizmo as u32,
             SettingKey::camera_gizmo => self.camera_gizmo as u32,
             SettingKey::person => self.person as u32,
@@ -474,7 +474,7 @@ impl Settings {
                 None => return false,
             },
             SettingKey::view if val <= 1 => self.view = val == 1,
-            SettingKey::profiler if val <= 1 => self.profiler = val == 1,
+            SettingKey::perf if val <= 1 => self.perf = val == 1,
             SettingKey::world_gizmo if val <= 1 => self.world_gizmo = val == 1,
             SettingKey::camera_gizmo if val <= 1 => self.camera_gizmo = val == 1,
             SettingKey::person => match u8::try_from(val) {

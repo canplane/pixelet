@@ -9,10 +9,10 @@
 //! which may differ at its edges.
 //!
 //! Under it, beside the catalog (spec/spec/asset/decor.json), a decor
-//! thing struck as the box it claims (`strike`); their models as they arrive
+//! thing struck as the box it claims (`intersect`); their models as they arrive
 //! are what the scene draws (domain/scene/decor/asset.rs).
 
-pub mod strike;
+pub mod intersect;
 
 use pxl_spec::space::layer::lattice::Cells;
 
@@ -33,43 +33,43 @@ use crate::domain::layer::object::meta::placed;
 use crate::domain::layer::object::store::tree_key;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::layer::tile_cache::Line;
-use crate::domain::query::decor::strike::{reach, strike};
+use crate::domain::query::decor::intersect::{box_extent, intersect};
 use pxl_spec_core::area::{self, Shard};
 use pxl_spec_core::cast;
+use pxl_spec_core::clipmap::Found;
 use pxl_spec_core::overwrite::{self, Held};
-use pxl_spec_core::window::Found;
 
-/// One ray's decor strike, carried along its ground walk.
-pub(super) struct Strike {
-    /// How far any decor reaches from where it stands, and in leaf cells.
-    pub(super) reach: f64,
+/// One ray's decor tests, carried along its ground walk.
+pub(super) struct DecorRay {
+    /// How far any decor extent's from where it stands, and in leaf cells.
+    pub(super) box_extent: f64,
     around: i32,
     /// How far along the ray decor is drawn as held.
     pub(super) held: f64,
     /// The cell met last, whose neighbors are struck already.
     last: Option<[i32; 2]>,
     /// The nearest struck, where along the ray, and the axis it entered
-    /// its box across (`strike`).
+    /// its box across (`intersect`).
     pub(super) best: Option<(f64, Instance, usize)>,
     /// What is placed about the nodes the walk went through (`Around`).
     pub(super) about: Around,
-    /// The finest zoom whose nodes are as wide as the reach: a node finer
+    /// The finest zoom whose nodes are as wide as the extent: a node finer
     /// is looked about at it (`about_zoom`).
-    reach_zoom: Zoom,
+    extent_zoom: Zoom,
     /// Where placed decor may stand along z for the ray: its height over
-    /// the held span, widened by the reach; and the finest zoom whose nodes
+    /// the held span, widened by the extent; and the finest zoom whose nodes
     /// are wider than a leaf cell's box about it, the band's or the
-    /// reach's, which the cell's box lies strictly within the 27 of
-    /// (`strike_near`). Each the strike's own, the same at every cell.
+    /// extent's, which the cell's box lies strictly within the 27 of
+    /// (`intersect_near`). Each the ray's own, the same at every cell.
     band: [f64; 2],
     box_zoom: Zoom,
 }
 
-impl Strike {
+impl DecorRay {
     /// The zoom a node at `zoom` is looked about at: its own, or the finest
-    /// whose nodes are as wide as the reach.
+    /// whose nodes are as wide as the extent.
     pub(super) fn about_zoom(&self, zoom: Zoom) -> Zoom {
-        zoom.min(self.reach_zoom)
+        zoom.min(self.extent_zoom)
     }
 }
 
@@ -102,7 +102,7 @@ pub(super) struct Around {
 
 /// A column about a striking walk's node, at its zoom, as its relief read
 /// it: the ground's line its cells are read on, where they were found, and
-/// the highest its relief reaches, none where it lacks.
+/// the highest its relief extent's, none where it lacks.
 #[derive(Clone, Copy)]
 struct Column {
     line: Line,
@@ -122,7 +122,7 @@ impl Around {
 
     /// The node `(zoom, c)` entered: its 27, off its parent's where they are
     /// the ones held, else each down from the roots.
-    pub(super) fn visit(&mut self, lanes: &impl overwrite::Lanes, (zoom, c): Node<3>) {
+    pub(super) fn visit(&mut self, lanes: &impl overwrite::Columns, (zoom, c): Node<3>) {
         let z = zoom as usize;
         if self.at[z] == c {
             return;
@@ -163,7 +163,7 @@ impl Around {
 
     /// The 3 × 3 columns about `(zoom, c)` read at its tile's cells: each
     /// column's line off its parent column's (`line_under`), its cells found
-    /// from where its parent column's were (pxl-spec-core `window::step`),
+    /// from where its parent column's were (pxl-spec-core `clipmap::step`),
     /// and its relief's highest, read once for every node under it. A walk
     /// enters a node through its parent, so each zoom's is stepped from the
     /// one over's, never walked from the top.
@@ -197,7 +197,7 @@ impl Around {
         self.columns_at[z] = c;
     }
 
-    /// The highest the relief reaches in each of the 3 × 3 columns about
+    /// The highest the relief extent's in each of the 3 × 3 columns about
     /// `(zoom, a)`, none where it lacks: the walk read them entering `a`
     /// (`read_columns`), the last it entered at `zoom`.
     fn reliefs(&self, (zoom, a): (Zoom, [i32; 2])) -> [Option<i32>; 9] {
@@ -253,7 +253,7 @@ impl Around {
 impl<'a> World<'a> {
     /// What the ground generates on the leaf `cell`, each decor's, handed to
     /// `each` until `each` says it has what it wants: each on its column's
-    /// footing in the world unplaced (`World::footing`), with, where
+    /// column surface in the world unplaced (`World::column_surface`), with, where
     /// `boxed`, whether it generates
     /// there as the frame drawing it draws it (`generated_at`), true where not.
     /// Nothing where the world does not hold the column.
@@ -270,10 +270,10 @@ impl<'a> World<'a> {
     }
 
     /// Every decor the ground's scatter generates on the leaves whose box
-    /// shares room with `space`, whether or not its footing is there now: what
+    /// shares room with `space`, whether or not its column surface is there now: what
     /// an erase took away included.
     pub fn generated_over(&self, space: &Aabb) -> Vec<Instance> {
-        let (r, unit) = (reach(), units(GROUND.cell()));
+        let (r, unit) = (box_extent(), units(GROUND.cell()));
         let cells = |k: usize| {
             libm::floor((space.min[k] - r) / unit) as i32..libm::ceil(space.max[k] / unit) as i32
         };
@@ -304,8 +304,8 @@ impl<'a> World<'a> {
         met
     }
 
-    /// The strike a ray carries, where decor is struck at all.
-    pub(super) fn strike(&self, ray: &Ray) -> Option<Strike> {
+    /// The decor tests a ray carries, where decor is struck at all.
+    pub(super) fn decor_ray(&self, ray: &Ray) -> Option<DecorRay> {
         if !self.decor {
             return None;
         }
@@ -314,18 +314,18 @@ impl<'a> World<'a> {
             LEAF_ZOOM => draw_reach(GROUND, LEAF_ZOOM).min(ray.reach),
             _ => return None,
         };
-        let reach = reach();
-        let around = reach.ceil() as i32;
+        let extent = box_extent();
+        let around = extent.ceil() as i32;
         let (za, zb) = (ray.at(0.0)[2], ray.at(held)[2]);
-        let band = [za.min(zb) - reach, za.max(zb) + reach];
-        Some(Strike {
-            reach,
+        let band = [za.min(zb) - extent, za.max(zb) + extent];
+        Some(DecorRay {
+            box_extent: extent,
             around,
             held,
             last: None,
             best: None,
             about: Around::new(),
-            reach_zoom: finest(|side| side >= reach),
+            extent_zoom: finest(|side| side >= extent),
             band,
             box_zoom: finest(|side| side > f64::from(around + 1).max(band[1] - band[0])),
         })
@@ -333,11 +333,11 @@ impl<'a> World<'a> {
 
     /// Strikes the decor standing near the leaf cell `cell` the walk is in:
     /// those not near the cell met before it, since a walk only moves on.
-    pub(super) fn strike_near(&self, s: &mut Strike, ray: &Ray, (zoom, at): Node<3>) {
+    pub(super) fn intersect_near(&self, s: &mut DecorRay, ray: &Ray, (zoom, at): Node<3>) {
         let cell = [at[0], at[1]];
         let (r, last) = (s.around, s.last.replace(cell));
         let near = |a: [i32; 2], b: [i32; 2]| (a[0] - b[0]).abs() <= r && (a[1] - b[1]).abs() <= r;
-        // Placed decor stands where the ray's height over the held span, widened by the reach, can meet it.
+        // Placed decor stands where the ray's height over the held span, widened by the extent, can meet it.
         let [z0, z1] = s.band;
         let fresh = |xy: [i32; 2]| !last.is_some_and(|l| near(xy, l));
         for y in cell[1] - r..=cell[1] + r {
@@ -374,23 +374,22 @@ impl<'a> World<'a> {
 
     /// Whether decor `s` strikes may reach into the node `(zoom, c)`, X on
     /// the asker's lap, where no cell under it fills: decor stands on the
-    /// ground or where something is placed, and reaches no farther than its
-    /// reach from there, so a node is out of it where, about it and as wide
-    /// as the reach, the windows' relief holds no top over its bottom less the
-    /// reach and the objects' pyramid no record, past the area none, as
+    /// ground or where something is placed, and extent's no farther than its    /// extent from there, so a node is out of it where, about it and as wide
+    /// as the extent, the windows' relief holds no top over its bottom less the
+    /// extent and the objects' pyramid no record, past the area none, as
     /// `shard`, what the descent established at the node, says. What is not
     /// held may.
     ///
     /// Read off what the walk holds about the node's ancestor at the zoom it
-    /// is looked about at (`Strike::about_zoom`, `Around`), its last entered
+    /// is looked about at (`DecorRay::about_zoom`, `Around`), its last entered
     /// there: the walk enters every node through its parent, an ancestor
     /// before its children and no later along the ray, so under the held
     /// span as they are; and it entered no other node at that zoom since,
     /// a node it comes back to being as fine or finer.
-    pub(super) fn may_strike(&self, s: &Strike, (zoom, c): Node<3>, shard: Shard) -> bool {
+    pub(super) fn may_intersect(&self, s: &DecorRay, (zoom, c): Node<3>, shard: Shard) -> bool {
         let z = s.about_zoom(zoom);
         let a = c.map(|v| v >> (zoom - z));
-        let low = cube(zoom, c).min[2] - s.reach;
+        let low = cube(zoom, c).min[2] - s.box_extent;
         let leaf = units(GROUND.cell());
         let node = (zoom, [c[0], c[1]]);
         let read = s.about.reliefs((z, [a[0], a[1]]));
@@ -408,7 +407,7 @@ impl<'a> World<'a> {
         ground || s.about.holds((z, a))
     }
 
-    fn generated_near(&self, s: &mut Strike, ray: &Ray, cell: [i32; 2]) {
+    fn generated_near(&self, s: &mut DecorRay, ray: &Ray, cell: [i32; 2]) {
         self.generated_in(cell, true, |_, i, generates| {
             if generates {
                 meet(s, ray, i);
@@ -423,8 +422,8 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
     Some(Decor::of(DecorId::of(i.id)?).claim(i.at, &i.meta))
 }
 
-fn meet(s: &mut Strike, ray: &Ray, i: Instance) {
-    if let Some((t, axis)) = strike(&i, ray.origin, ray.dir, s.best.map_or(s.held, |b| b.0)) {
+fn meet(s: &mut DecorRay, ray: &Ray, i: Instance) {
+    if let Some((t, axis)) = intersect(&i, ray.origin, ray.dir, s.best.map_or(s.held, |b| b.0)) {
         s.best = Some((t, i, axis));
     }
 }

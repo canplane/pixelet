@@ -16,41 +16,41 @@ use pxl_spec_core::generated::{self, drawn, DecorQuery};
 use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::scatter;
 use pxl_spec_core::support;
-use pxl_spec_core::window::{self, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
-use pxl_spec_core::world::{self, Handed};
+use pxl_spec_core::clipmap::{self, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
+use pxl_spec_core::world::{self, Inherited};
 use pxl_spec_core::{at, way, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
 use crate::eye::{eye_origin, Eye};
-use crate::world::{Unlooked, World};
+use crate::world::{NoPalette, World};
 
 /// The world as decor's generation asks it on the GPU (pxl-spec-core `scatter`):
 /// the cast's, and the catalog's rows as handed.
 struct Generating<'a> {
-    world: World<'a, Unlooked>,
+    world: World<'a, NoPalette>,
     rows: &'a [Decor],
 }
 
 /// The cast's world unplaced, nothing placed and no preview's cuts: the
-/// ground's alone, as decor generates on it (pxl-spec-core `world::Handed::unplaced`).
-struct Unplaced<'w, 'a>(&'w mut World<'a, Unlooked>);
+/// ground's alone, as decor generates on it (pxl-spec-core `world::Inherited::unplaced`).
+struct Unplaced<'w, 'a>(&'w mut World<'a, NoPalette>);
 
 impl Query for Unplaced<'_, '_> {
-    type At = Handed;
+    type At = Inherited;
 
-    fn root(&mut self, node: [i32; 3]) -> Handed {
-        Handed::unplaced((0, node))
+    fn root(&mut self, node: [i32; 3]) -> Inherited {
+        Inherited::unplaced((0, node))
     }
 
-    fn child(&mut self, at: &Handed, zoom: u32, node: [i32; 3]) -> Handed {
+    fn child(&mut self, at: &Inherited, zoom: u32, node: [i32; 3]) -> Inherited {
         at.child(&*self.0, &self.0.pool, (zoom, node))
     }
 
     fn node(
         &mut self,
-        at: &mut Handed,
+        at: &mut Inherited,
         zoom: u32,
         c: [i32; 3],
         asked: [u32; 2],
@@ -71,26 +71,26 @@ impl Query for Unplaced<'_, '_> {
 }
 
 /// The query's support on the cast's world (pxl-spec-core `support`): a
-/// column's footing of the world unplaced (`Unplaced`), its line
+/// column's surface of the world unplaced (`Unplaced`), its line
 /// kept, each asset about it asked off that line; a cell's edit asked of
 /// the world as edited down its own line; and what is placed in a box
 /// (`world::placed_in`).
 impl DecorQuery for Generating<'_> {
-    type Footing = support::Footing<Handed>;
+    type ColumnSurface = support::ColumnSurface<Inherited>;
 
     fn rows(&self) -> &[Decor] {
         self.rows
     }
 
-    fn footing(&mut self, cell: u32, g: [i32; 2]) -> (Self::Footing, (i32, f32), bool) {
-        let f = support::footing(&mut Unplaced(&mut self.world), cell, g);
-        let (top, met) = (f.top, f.ends == End::Stop);
+    fn column_surface(&mut self, cell: u32, g: [i32; 2]) -> (Self::ColumnSurface, (i32, f32), bool) {
+        let f = support::column_surface(&mut Unplaced(&mut self.world), cell, g);
+        let (top, met) = (f.top, f.ends == End::Hit);
         (f, top, met)
     }
 
-    /// The finest window holding the leaf column present (`window::step`).
+    /// The finest window holding the leaf column present (`clipmap::step`).
     fn finest(&mut self, cell: u32, g: [i32; 2]) -> u32 {
-        let (f, _) = window::step(&self.world, window::Found::NONE, LEAF_CELL, g);
+        let (f, _) = clipmap::step(&self.world, clipmap::Found::NONE, LEAF_CELL, g);
         if f.here() && f.from() > cell {
             f.from()
         } else {
@@ -98,7 +98,7 @@ impl DecorQuery for Generating<'_> {
         }
     }
 
-    fn asset(&mut self, f: &Self::Footing, zoom: u32, c: [i32; 3]) -> u32 {
+    fn asset(&mut self, f: &Self::ColumnSurface, zoom: u32, c: [i32; 3]) -> u32 {
         support::asset(&mut Unplaced(&mut self.world), &f.line, zoom, c)
     }
 
@@ -169,7 +169,7 @@ pub fn decor_mark_cs(
         return;
     }
     let (cell, q, h) = (
-        window::eye_cell(s / ENTRIES),
+        clipmap::eye_cell(s / ENTRIES),
         [held.x, held.y],
         generated::head_at(s),
     );
@@ -249,7 +249,7 @@ pub fn decor_thin_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] list: &[u32],
 ) {
     let (brick, j, _) = listed(list, id.z);
-    let (i, cell) = (id.x, window::eye_cell(brick / ENTRIES));
+    let (i, cell) = (id.x, clipmap::eye_cell(brick / ENTRIES));
     if i >= BRICK_CELLS {
         return;
     }
@@ -331,7 +331,7 @@ pub fn decor_cs(
     if r + 4 >= out.len() {
         return;
     }
-    let cell = window::eye_cell(brick / ENTRIES);
+    let cell = clipmap::eye_cell(brick / ENTRIES);
     let leaf = [out[r + 1] as i32, out[r + 2] as i32];
     let seed = if part {
         if !is_changed(list, cell, [leaf[0], leaf[1], leaf[0] + 1, leaf[1] + 1]) {
@@ -352,7 +352,7 @@ pub fn decor_cs(
         world: World {
             window,
             ground,
-            looks: Unlooked(0),
+            palette_indices: NoPalette(0),
             shards,
             overwrites,
             eye,
@@ -647,14 +647,14 @@ fn compact_one(
     };
     let (decor, variant, turn, _) = generated::record_of(w);
     let [across, deep, _] = rows[decor as usize].cells(variant, turn);
-    let cap = instances.len() as u32 / (drawn::LANES + 1);
+    let cap = instances.len() as u32 / (drawn::COLUMNS + 1);
     if slot >= cap {
         return;
     }
     // [rust-gpu] Each by a call, not a closure over a binding's slice.
     let x = from_anchor(drawing, records, i, 0) + across as f32 / 2.0;
     let y = from_anchor(drawing, records, i, 1) + deep as f32 / 2.0;
-    // Its base as drawn: under its box's corner by its footing's kept top.
+    // Its base as drawn: under its box's corner by its column surface's kept top.
     let sink = records[i + 4] as f32 / (1 << pxl_spec_core::FRAC_W) as f32;
     let z = from_anchor(drawing, records, i, 2) - sink;
     let (cap, slot) = (cap as usize, slot as usize);
@@ -663,7 +663,7 @@ fn compact_one(
     instances[2 * cap + slot] = z.to_bits();
     instances[3 * cap + slot] = ((turn % 4) as f32 * core::f32::consts::FRAC_PI_2).to_bits();
     instances[4 * cap + slot] = 1.0f32.to_bits();
-    instances[drawn::LANES as usize * cap + slot] = slot as u32;
+    instances[drawn::COLUMNS as usize * cap + slot] = slot as u32;
 }
 
 /// The corner of the record at word `i` on `axis` about the anchor, in
@@ -706,7 +706,7 @@ pub(crate) struct Instances<'a> {
 impl Instances<'_> {
     /// The slots the instances hold.
     fn cap(&self) -> u32 {
-        self.instances.len() as u32 / (drawn::LANES + 1)
+        self.instances.len() as u32 / (drawn::COLUMNS + 1)
     }
 
     /// How many are placed: the last region's end once placed, the regions

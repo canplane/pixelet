@@ -17,8 +17,6 @@ import { INGESTED } from "@/driver/namespace/ingested.spec.ts";
 import { asset_url } from "@/driver/namespace/route.ts";
 import { get } from "@/driver/namespace/read.ts";
 
-const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
-
 /** A load number: the catalog's, or a file's row in the ingest's table from 1. */
 export function read_asset(
   load: bigint,
@@ -27,7 +25,7 @@ export function read_asset(
   if (load === BigInt(CATALOG)) {
     return Promise.resolve(hex_to_bytes(CATALOG_HEX));
   }
-  const key = KEYS[Number(load) - 1];
+  const key = INGESTED[Number(load) - 1]?.key;
   if (key === undefined) return Promise.reject(new FileError(Errno.ENOENT));
   return get(asset_url(key), key, signal);
 }

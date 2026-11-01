@@ -3,7 +3,7 @@
 //! The actor kind's behavior: an instance of a registered model that plays
 //! its clips. What is its own alone is its clips' times and its joint
 //! palette, in a block of its own; where it stands is its holder's, a
-//! figure or a case, which hands its stance in (`Stance`). Each tick
+//! figure or a case, which hands its transform in (`Transform`). Each tick
 //! advances its clips, cross-fades as three's mixer did, and writes the
 //! palette into its block. It is drawn by decor's tiers, by how much of a
 //! camera cell it spans: posed as it plays down to the model's edge, its pose
@@ -33,7 +33,7 @@ struct Playing {
 /// How its holder stands an actor: where, in units, its turn about Z, and
 /// the scale its model is drawn at.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Stance {
+pub struct Transform {
     pub at: V3,
     pub rot_z: f32,
     pub scale: f32,
@@ -138,20 +138,20 @@ impl Actor {
         unsafe { free((self.palette_at, self.palette_bytes)) };
     }
 
-    /// Its clock advanced, standing at `stance`; true where the eye can see it
+    /// Its clock advanced, standing at `transform`; true where the eye can see it
     /// move: in the view and a cell of the camera grid across or more, as
     /// the rays observe nothing smaller, and fading from one clip into the
     /// next. So a frame is asked only for what can be seen to change. A clip
     /// moving it less than a cell holds its time and its pose until the eye
     /// comes close enough to see it move. One moving it a cell or more steps
     /// a seen step of its fastest point at a time and asks no frame: the
-    /// turn is woken for the next step and draws it, as the puck's bob is.
+    /// turn is woken for the next step and draws it, as the location indicator's bob is.
     pub fn tick(
         &mut self,
         draw: &mut DrawList,
         models: &Models,
         frame: &Frame,
-        stance: &Stance,
+        transform: &Transform,
     ) -> bool {
         let mut dt = frame.delta_s as f32;
         let Some(m) = models.get(self.model) else {
@@ -159,8 +159,8 @@ impl Actor {
         };
         let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
         let (about, r) = (
-            v3::sub(&stance.at, &frame.anchor),
-            f64::from(m.reach(self.cur.map(|p| p.clip)) * stance.scale),
+            v3::sub(&transform.at, &frame.anchor),
+            f64::from(m.reach(self.cur.map(|p| p.clip)) * transform.scale),
         );
         // What spans the model's edge at the actor's distance is observed, as a
         // decor's model is; what spans the impostor's is drawn, posed or not,
@@ -175,12 +175,12 @@ impl Actor {
         let mut moves = seen
             && (self.previous.is_some()
                 || playing
-                    .is_some_and(|p| f64::from(m.motion(p.clip) * stance.scale) >= cell_there));
+                    .is_some_and(|p| f64::from(m.motion(p.clip) * transform.scale) >= cell_there));
         let mut asks = moves;
         // A clip alone, seen to move, steps a seen step at a time; a fade
         // runs a frame a step.
         if let Some(p) = playing.filter(|_| moves && self.previous.is_none()) {
-            let step = seen_step_s(dist, f64::from(m.speed(p.clip) * stance.scale));
+            let step = seen_step_s(dist, f64::from(m.speed(p.clip) * transform.scale));
             let wall = now();
             let since = if self.last > 0.0 {
                 (wall - self.last) / 1000.0
@@ -261,27 +261,27 @@ impl Actor {
         asks
     }
 
-    /// Into the frame's list, standing at `stance`, and where it stands with
+    /// Into the frame's list, standing at `transform`, and where it stands with
     /// it (`DrawList::stand`): every actor drawn is a receiver of the sun's
     /// map, which reads the ones the eye sees. None where it spans less than
     /// the impostor's edge (`tick`).
-    pub fn draw(&self, draw: &mut DrawList, models: &Models, stance: &Stance, eye: V3) {
+    pub fn draw(&self, draw: &mut DrawList, models: &Models, transform: &Transform, eye: V3) {
         let Some(m) = models.get(self.model).filter(|_| self.drawn) else {
             return;
         };
         if m.handle() == 0 {
             return;
         }
-        let t = DrawList::translation(stance.at, eye);
+        let t = DrawList::translation(transform.at, eye);
         draw.draw_scaled(
             PIPELINE_SKINNED,
             m.handle(),
             self.palette_handle,
             self.model,
             t,
-            stance.rot_z,
+            transform.rot_z,
             1.0,
-            stance.scale,
+            transform.scale,
         );
         draw.stand(t);
     }

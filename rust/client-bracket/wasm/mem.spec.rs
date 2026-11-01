@@ -49,7 +49,7 @@ pub const THREAD_STACK_BYTES: u32 = 8388608;
 /// the shell rings with no quota until there is room (@xpute/host/ipc/doorbell.ts
 /// `writer`, `submit`). And small because every slot ends up resident: a
 /// position only grows, so each slot is written in turn, and a slot is a page
-/// since a WORLD_SOURCE's or a CHAT_SEND's packet can come near one.
+/// since a FS_MOUNT's or a SCENE_CHAT's packet can come near one.
 pub const SQ_CAP: u32 = 512;
 
 /// Frames the completion ring holds: everything one turn leaves, since the
@@ -107,7 +107,7 @@ pub const GLOBAL_BASE: u32 = 8388608;
 /// the buddy's block for a division's, the ways' pool's mirror at its cap
 /// and every read's room for a brick's records at its most, and the
 /// profiler's lanes while its setting is on, each in the buddy's blocks,
-/// a power of two, 204.58 MiB.
+/// a power of two, 200.56 MiB.
 ///
 /// Each figure here in MiB to two places is held to the code by a test
 /// (door/layout.test.rs); the data's end is a build's, and read off one.

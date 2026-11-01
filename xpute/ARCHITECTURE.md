@@ -570,21 +570,32 @@ decides what must match.
   nothing facing it is whole.
 - **Guest ends are symmetric with each other.** Rust (`rust/guest`) and C++
   (`cpp/xpute/guest`) are the same end, either plugged into any host, so what
-  one gives a program the other gives too.
+  one gives a program the other gives too. Both give a guest in one
+  declaration (`xpute-guest/program.rs` `program!`,
+  `cpp/xpute/guest/program.hpp` `XPUTE_PROGRAM`), which lays the range out by
+  the same numbers (`spec/program.json`), runs the turns and hands each command
+  to a function the program names, and runs as tasks what waits on the host, a
+  file read whole awaited across turns (`read`: a future in Rust, a coroutine's
+  awaitable in C++); and both give the parts it composes. One example, in each
+  language (`rust/example`, `cpp/example`), is held to the same host's tests.
 - **Host ends hold what their platform needs.** TypeScript's (`ts/host`)
   reserves a module's memory and opens the module over it (`module.ts`), and
   mounts the doorbell, the hostcalls' end and the strobe on any guest its
   platform opened, in one call (`@xpute/host/host.ts` `mount`), which runs the
   hostcall stream as each turn returns. `mount` reads the toc as it is called,
-  so the turn or the boot call that writes it has run by then. Rust's
+  so the turn or the boot call that writes it has run by then. Over any mount a
+  **port** (`port.ts`) speaks as one sender, with a verb for each way a message
+  crosses: `send` and `on` by the rings, a turn later, and `call` directly,
+  answered before it returns; `open` opens a module built with `program!` or
+  `XPUTE_PROGRAM`, mounts on it and gives that port in one call. Rust's
   (`rust/host`) reads a guest's memory by offset on every platform (`mem`), and
   on a unix one hosts a guest linked into the host's own native process
-  (`native`). There it reserves the memory, and runs every call into the guest
-  on the guest's own thread, since the guest keeps its module-wide values in
-  `Global`s (`xpute-guest/global.rs`), statics sound on one thread alone,
-  handing each hostcall back to the caller that waits. It also provides the
-  allocator that keeps the guest's blocks in its memory and every other thread's
-  out of it.
+  (`native`). There it reserves
+  the memory, and runs every call into the guest on the guest's own thread,
+  since the guest keeps its module-wide values in `Global`s
+  (`xpute-guest/global.rs`), statics sound on one thread alone, handing each
+  hostcall back to the caller that waits. It also provides the allocator that
+  keeps the guest's blocks in its memory and every other thread's out of it.
 - **The GPU's calls follow the same split.** Each guest language writes them
   (`rust/gpu`, `cpp/xpute/gpu`). The GPU hosts run them in TypeScript on WebGPU
   (`ts/gpu`), and in Rust on wgpu behind the `host` feature.
@@ -593,7 +604,7 @@ decides what must match.
   traps; its stack's size and any front it keeps below the linker's data are its
   own numbers. Rust's build script prints the flags (`xpute-guest/wasm/link.rs`
   `link`), and the C++ guest is linked with the same (`cpp/Makefile`
-  `WASM_LINK`).
+  `MODULE_LINK`).
 
 `kit` asks nothing of a program: link it and call it. `guest` and `host` ask it
 to run xpute's way — memory granted once, work in turns, I/O by asking.

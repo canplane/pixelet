@@ -27,7 +27,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::input;
-use crate::domain::control::interaction::edit;
+use crate::domain::control::edit::write;
 use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::navigation::support;
@@ -35,7 +35,7 @@ use crate::domain::layer::division;
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::preview;
 use crate::domain::layer::object::repository;
-use crate::domain::layer::terrain::window;
+use crate::domain::layer::terrain::clipmap;
 use crate::domain::query::changed;
 use crate::domain::scene::character::companion;
 use crate::domain::scene::character::companion::{companion_step, CompanionProps};
@@ -43,7 +43,7 @@ use crate::domain::scene::character::preview::preview_step;
 use crate::domain::scene::decor::asset::decor_models_step;
 use crate::domain::scene::decor::drawn;
 use crate::domain::scene::environment::environment_step;
-use crate::domain::scene::indicator::location_puck::location_puck_step;
+use crate::domain::scene::indicator::location::location_step;
 use crate::domain::scene::marker;
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
@@ -56,9 +56,9 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::frame::resolution::Pace;
 use crate::domain::view::observation;
 use crate::domain::view::setting::store;
+use crate::perf::report::{perf_frame, FrameTurn};
+use crate::perf::window::perf_follow;
 use crate::pointer;
-use crate::profiler::report::{profiler_frame, FrameTurn};
-use crate::profiler::window::profiler_follow;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch;
 use crate::sys::io::loader;
@@ -105,7 +105,7 @@ fn companion_props() -> Option<CompanionProps> {
 /// The edit the pointer would make, of what it is over where the camera now
 /// stands (`camera_tick`), so the scene draws it this turn, not the next.
 fn edit_tick(_: &mut TickContext) {
-    let edits = edit::pending_step();
+    let edits = write::pending_step();
     // A new preview moves the world as drawn where it was and where it is.
     if preview::set(edits).is_some() {
         request_world_tick();
@@ -114,7 +114,7 @@ fn edit_tick(_: &mut TickContext) {
 
 /// The tool's ghost of that edit, drawn by the scene.
 fn ghost_tick(_: &mut TickContext) {
-    use crate::domain::control::interaction::ghost::ghost;
+    use crate::domain::control::edit::ghost::ghost;
     if section::map().is_some_and(|_| scene().ghost.set(draw_list(), &ghost())) {
         request_world_tick();
     }
@@ -128,7 +128,7 @@ fn companion_tick(ctx: &mut TickContext) {
 fn demand_tick(ctx: &mut TickContext) {
     // The ground's windows where their centers now stand, before what arrives fills them.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
-    let pinned = window::step(
+    let pinned = clipmap::step(
         [
             observation::eye().map(|e| [e[0], e[1]]),
             controller::pivot().map(at),
@@ -141,7 +141,7 @@ fn demand_tick(ctx: &mut TickContext) {
     }
     demand::admit_arrived(&ctx.pass);
     changes_step();
-    TerrainTile::demand().step(destination::tile(), window::pinned());
+    TerrainTile::demand().step(destination::tile(), clipmap::pinned());
     // Nothing is fetched while places are hidden.
     match store::settings_store().place {
         true => PlaceTile::demand().step(None, &[]),
@@ -253,7 +253,7 @@ pub fn world_turn() -> f64 {
     // First, so the turn they are read in is the first to see them.
     effect!(times, settings, {
         if store::settings_load_step() {
-            profiler_follow(store::settings_store().profiler);
+            perf_follow(store::settings_store().perf);
         }
     });
     effect!(times, navigation, off_center_step());
@@ -267,8 +267,8 @@ pub fn world_turn() -> f64 {
     });
     effect!(times, decor, decor_models_step());
     effect!(times, objects, repository::step());
-    // device_coord is not gated like pivot: the puck keeps its last coordinate across a transient none.
-    effect!(times, puck, location_puck_step(off_center().device_coord));
+    // device_coord is not gated like pivot: the location indicator keeps its last coordinate across a transient none.
+    effect!(times, location, location_step(off_center().device_coord));
     effect!(times, settings, store::settings_keep_step());
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times;
     now() - at
@@ -376,7 +376,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
         moving: interactive,
     });
     let done = now();
-    profiler_frame(FrameTurn {
+    perf_frame(FrameTurn {
         tick: report,
         interval_ms: delta * 1000.0,
         refresh_ms,

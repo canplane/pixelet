@@ -37,7 +37,7 @@ struct Entry {
     style: Style,
 }
 
-/// The ground's looks: each a top, and some a side and a bottom.
+/// The ground's palette entries: each a top, and some a side and a bottom.
 #[derive(Deserialize)]
 struct Ground {
     top: BTreeMap<String, Entry>,
@@ -237,9 +237,9 @@ pub fn flatten_alpha(data: &mut [u8], palette_hex: Option<&str>) {
 
 const QUALITY: f32 = 92.0;
 
-/// How far a top's mean may stay from its look's Carto color, in CIE76 ΔE:
-/// the painted look kept up close, the map still Carto's from afar, where a
-/// textured look is drawn as its tile's mean (pxl-render mesh/paint/palette.rs).
+/// How far a top's mean may stay from its palette entry's Carto color, in CIE76 ΔE:
+/// the painted palette entry kept up close, the map still Carto's from afar, where a
+/// textured palette entry is drawn as its tile's mean (pxl-render mesh/paint/palette.rs).
 pub const TOWARD_CARTO: f64 = 20.0;
 
 /// sRGB bytes to CIE L*a*b* (D65), through linear light.
@@ -281,7 +281,7 @@ fn rgb_of([l, a, b]: [f64; 3]) -> [u8; 3] {
     .map(|c| linear_to_srgb(c.clamp(0.0, 1.0)))
 }
 
-/// A top as it ships: its PNG with its colors drawn toward its look's, so the
+/// A top as it ships: its PNG with its colors drawn toward its palette entry's, so the
 /// pack and every other reader of the tile show one image.
 pub fn toward_carto_png(png: &[u8], carto: u32) -> Result<Vec<u8>, String> {
     let mut img = image::load_from_memory(png)

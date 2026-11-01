@@ -7,7 +7,7 @@
 
 use super::{
     align_star, casing_note, enum_name, file, generated, js_num, json_str, line_comments, read,
-    rs_doc, rs_ident, ts_doc, Node, Output,
+    rs_doc, rs_ident, snake, ts_doc, Node, Output,
 };
 
 enum Enums {
@@ -21,15 +21,19 @@ struct DataSpec {
     rs: &'static str,
     enums: Enums,
     cpp: (&'static str, &'static str),
+    /// For a spec a Makefile reads: where its numbers are written as make
+    /// variables, and the prefix each takes.
+    mk: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 7] = [
+const DATA_SPECS: [DataSpec; 8] = [
     DataSpec {
         json: "spec/conformance/guest.json",
         ts: "ts/host/src/conformance.spec.ts",
         rs: "rust/conformance/src/guest.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/conformance/guest.spec.hpp", "xpute::conformance"),
+        mk: Some(("cpp/conformance/guest.spec.mk", "CONFORMANCE_")),
     },
     DataSpec {
         json: "spec/ipc/toc.json",
@@ -37,6 +41,7 @@ const DATA_SPECS: [DataSpec; 7] = [
         rs: "rust/guest/src/ipc/toc.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/toc.spec.hpp", "xpute::toc"),
+        mk: None,
     },
     DataSpec {
         json: "spec/ipc/frame.json",
@@ -44,6 +49,7 @@ const DATA_SPECS: [DataSpec; 7] = [
         rs: "rust/guest/src/ipc/frame.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/frame.spec.hpp", "xpute::frame"),
+        mk: None,
     },
     DataSpec {
         json: "spec/ipc/ring.json",
@@ -51,6 +57,7 @@ const DATA_SPECS: [DataSpec; 7] = [
         rs: "rust/guest/src/ipc/ring.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/ring.spec.hpp", "xpute::ring"),
+        mk: None,
     },
     DataSpec {
         json: "spec/ipc/sys.json",
@@ -58,6 +65,15 @@ const DATA_SPECS: [DataSpec; 7] = [
         rs: "rust/guest/src/ipc/sys.spec.rs",
         enums: Enums::None,
         cpp: ("cpp/xpute/guest/ipc/sys.spec.hpp", "xpute::sys"),
+        mk: None,
+    },
+    DataSpec {
+        json: "spec/program.json",
+        ts: "ts/host/src/program.spec.ts",
+        rs: "rust/guest/src/program.spec.rs",
+        enums: Enums::None,
+        cpp: ("cpp/xpute/guest/program.spec.hpp", "xpute::program"),
+        mk: Some(("cpp/xpute/guest/program.spec.mk", "PROGRAM_")),
     },
     DataSpec {
         json: "spec/gpu/api.json",
@@ -65,6 +81,7 @@ const DATA_SPECS: [DataSpec; 7] = [
         rs: "rust/gpu/src/api.spec.rs",
         enums: Enums::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
         cpp: ("cpp/xpute/gpu/api.spec.hpp", "xpute::gpu"),
+        mk: None,
     },
     DataSpec {
         json: "spec/gpu/enum.json",
@@ -100,6 +117,7 @@ const DATA_SPECS: [DataSpec; 7] = [
             "LIMIT_NAME",
         ]),
         cpp: ("cpp/xpute/gpu/enum.spec.hpp", "xpute::gpu"),
+        mk: None,
     },
 ];
 
@@ -125,6 +143,101 @@ fn is_ts_ident(k: &str) -> bool {
     c.next()
         .is_some_and(|f| f.is_ascii_alphabetic() || f == '_' || f == '$')
         && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '$')
+}
+
+/// What a module cannot export a constant as.
+const TS_RESERVED: [&str; 46] = [
+    "await",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "implements",
+    "import",
+    "in",
+    "instanceof",
+    "interface",
+    "let",
+    "new",
+    "null",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "return",
+    "static",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+];
+
+/// A group each of whose members is a number, by a name a module can export:
+/// its members, written as a module of constants beside the group's file.
+fn numbers(n: &Node) -> Option<Vec<(&str, &Node)>> {
+    let entries: Vec<(&str, &Node)> = n.is_obj().then(|| n.named().collect())?;
+    (!entries.is_empty()
+        && entries.iter().all(|(k, v)| {
+            is_ts_ident(k)
+                && !TS_RESERVED.contains(k)
+                && matches!(if v.is_wrapper() { v.value() } else { v }, Node::Num(_))
+        }))
+    .then_some(entries)
+}
+
+/// A group's module beside `ts_path`, `<its stem>/<the group>.spec.ts`: the
+/// path, and what the file beside it imports it from.
+fn beside(ts_path: &str, group: &str) -> (String, String) {
+    let stem = ts_path.strip_suffix(".spec.ts").unwrap_or(ts_path);
+    let file_stem = stem.rsplit('/').next().unwrap_or(stem);
+    let module = format!("{}.spec.ts", snake(group));
+    (
+        format!("{stem}/{module}"),
+        format!("./{file_stem}/{module}"),
+    )
+}
+
+/// A group as a module of its members' constants, read as a namespace of the
+/// group's name: a bundle inlines each member and carries none of their names.
+fn constants(logical: &str, json: &str, members: &[(&str, String, Option<Vec<String>>)]) -> String {
+    let mut out = vec![format!("// {logical}"), "//".into(), generated(json)];
+    for (k, lit, doc) in members {
+        out.push(String::new());
+        if let Some(doc) = doc {
+            out.extend(ts_doc(doc, "").into_iter().enumerate().map(|(i, l)| {
+                if i == 0 {
+                    l
+                } else {
+                    align_star(l, "")
+                }
+            }));
+        }
+        out.push(format!("export const {k} = {lit};"));
+    }
+    file(&out)
 }
 
 fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
@@ -412,6 +525,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
         let mut body: Vec<String> = Vec::new();
         let mut words: Vec<String> = Vec::new();
+        let mut modules: Vec<String> = Vec::new();
         for name in names.iter().copied() {
             let n = spec.get(name).ok_or("a name it listed")?;
             body.push(String::new());
@@ -438,6 +552,26 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     annot.map(|a| format!(": {a}")).unwrap_or_default(),
                     ts_literal(n, t, "")?
                 ));
+            } else if let Some(entries) = numbers(n) {
+                let t = type_of(n, "f64");
+                let members = entries
+                    .iter()
+                    .map(|(k, v)| {
+                        let doc = v.is_obj().then(|| v.lines_at("$doc")).flatten();
+                        ts_literal(v, t, "").map(|lit| (*k, lit, doc))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let (path, from) = beside(ts_path, name);
+                let module_logical = TS_LAYOUT
+                    .iter()
+                    .find_map(|(dir, n)| path.strip_prefix(dir).map(|p| format!("{n}{p}")))
+                    .unwrap_or(path.clone());
+                outputs.push(Output::new(
+                    &path,
+                    constants(&module_logical, d.json, &members),
+                ));
+                modules.push(format!("import * as {name} from \"{from}\";"));
+                body.push(format!("export {{ {name} }};"));
             } else {
                 body.push(format!(
                     "export const {name} = {} as const;",
@@ -454,6 +588,12 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     words.join(", ")
                 ),
             ]);
+        }
+        if !modules.is_empty() {
+            if words.is_empty() {
+                ts.push(String::new());
+            }
+            ts.extend(modules);
         }
         ts.extend(body);
         outputs.push(Output::new(ts_path, file(&ts)));
@@ -551,6 +691,21 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
         cpp.extend([String::new(), format!("}} // namespace {namespace}")]);
         outputs.push(Output::new(cpp_path, file(&cpp)));
+        if let Some((mk_path, prefix)) = d.mk {
+            // Each whole number at the top, a make variable a link reads.
+            let mut mk = vec![
+                format!("# {mk_path}"),
+                "#".into(),
+                format!("# GENERATED from {}", d.json),
+            ];
+            for name in &names {
+                let val = spec.get(name).map(Node::value).and_then(Node::num);
+                if let Some(v) = val.filter(|v| v.fract() == 0.0 && *v >= 0.0) {
+                    mk.push(format!("{prefix}{name} := {v}"));
+                }
+            }
+            outputs.push(Output::new(mk_path, file(&mk)));
+        }
     }
     Ok(outputs)
 }

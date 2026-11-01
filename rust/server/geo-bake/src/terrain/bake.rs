@@ -21,18 +21,18 @@ pub struct Surface {
     pub ground: Ground,
 }
 
-/// The approaches' looks laid into its cells (pxl-spec bake/way.rs `lay`),
+/// The approaches' palette indices laid into its cells (pxl-spec bake/way.rs `lay`),
 /// then its lines those it draws (pxl-spec bake/tile/terrain.rs `drawn`).
 pub fn assemble(tile: [i32; 2], surface: Surface, lines: Separation) -> TerrainTile {
-    let mut looks = surface.ground.cells.into_owned();
+    let mut palette_indices = surface.ground.cells.into_owned();
     let tile = Tile::new(LEAF_ZOOM, tile);
-    lay(&lines, Frame::of(tile), &mut looks);
+    lay(&lines, Frame::of(tile), &mut palette_indices);
     terrain::drawn(
         tile,
         TerrainTile::leaf(
             surface.ele,
             Ground {
-                cells: looks.into(),
+                cells: palette_indices.into(),
             },
             lines,
         ),

@@ -6,8 +6,8 @@
 //! and the packet each carries — an XTP branch whose children are its fields, in
 //! order. A command with no fields carries no packet. The kernel is the process; the
 //! JavaScript around it is two things to it, its host, which holds the devices and
-//! the turns, and its shell, the UI. The commands are grouped by which of them a
-//! command is between.
+//! the turns, and its shell, the UI. A command's major is the module it is for, and
+//! the sections say which of the two it is between.
 //!
 //! The same number is a command on the submission ring and an event on the
 //! completion ring (its `RES` clear). The direction is the ring: `pkt` is
@@ -29,6 +29,7 @@
 // number's check unused.
 #![allow(
     non_camel_case_types,
+    clippy::upper_case_acronyms,
     clippy::type_complexity,
     clippy::absolute_paths,
     unused_imports,
@@ -42,32 +43,38 @@ use xpute_guest::abi::number::{finite, integer, unknown};
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{PacketWriter, Strs, TreeReader};
 
-/// What a command is about.
+/// The module a command is for: the kernel's, or the device's that sends it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Major {
-    WORLD = 0x10,
+    SYS = 0x10,
     INPUT = 0x11,
     SENSOR = 0x12,
+    FS = 0x13,
     GPU = 0x14,
     SURFACE = 0x15,
     SETTING = 0x16,
-    CHAT = 0x17,
-    PREVIEW = 0x18,
-    PROFILER = 0x19,
+    SCENE = 0x17,
+    CAMERA = 0x18,
+    PERF = 0x19,
+    EDIT = 0x1a,
+    SHELL = 0x1b,
 }
 
 impl Major {
-    pub const ALL: [Major; 9] = [
-        Major::WORLD,
+    pub const ALL: [Major; 12] = [
+        Major::SYS,
         Major::INPUT,
         Major::SENSOR,
+        Major::FS,
         Major::GPU,
         Major::SURFACE,
         Major::SETTING,
-        Major::CHAT,
-        Major::PREVIEW,
-        Major::PROFILER,
+        Major::SCENE,
+        Major::CAMERA,
+        Major::PERF,
+        Major::EDIT,
+        Major::SHELL,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -76,74 +83,41 @@ impl Major {
     }
 }
 
-/// The world's verbs.
+/// The system's: the kernel's start, and the platform's sleep and wake.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum WorldMinor {
+pub enum SysMinor {
     BOOT = 0x01,
-    FRAME = 0x02,
-    VISIBILITY = 0x03,
-    SNAPSHOT = 0x04,
-    SOURCE = 0x05,
-    KEPT_EMPTIED = 0x06,
-    VIEW = 0x07,
+    SLEEP = 0x02,
 }
 
-impl WorldMinor {
-    pub const ALL: [WorldMinor; 7] = [
-        WorldMinor::BOOT,
-        WorldMinor::FRAME,
-        WorldMinor::VISIBILITY,
-        WorldMinor::SNAPSHOT,
-        WorldMinor::SOURCE,
-        WorldMinor::KEPT_EMPTIED,
-        WorldMinor::VIEW,
-    ];
+impl SysMinor {
+    pub const ALL: [SysMinor; 2] = [SysMinor::BOOT, SysMinor::SLEEP];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<WorldMinor> {
-        WorldMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<SysMinor> {
+        SysMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
-/// The input's verbs: the canvas, the pointer, the camera controls.
+/// The input's: the pointer, the wheel, the held movement, a tracker's pose.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InputMinor {
-    RECT = 0x01,
     POINTER = 0x02,
     WHEEL = 0x03,
-    KEYS = 0x06,
-    TRACKING = 0x04,
-    VIEW = 0x05,
-    COMPASS_RESET = 0x07,
-    GOTO = 0x08,
+    MOVE = 0x06,
     XR_POSE = 0x09,
     XR_POSE_END = 0x0a,
-    HOLD = 0x0b,
-    MARKER_WORDS = 0x0c,
-    MARKER_CANCEL = 0x0d,
-    MARKER_PUT = 0x0e,
-    LOCATE = 0x0f,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 15] = [
-        InputMinor::RECT,
+    pub const ALL: [InputMinor; 5] = [
         InputMinor::POINTER,
         InputMinor::WHEEL,
-        InputMinor::KEYS,
-        InputMinor::TRACKING,
-        InputMinor::VIEW,
-        InputMinor::COMPASS_RESET,
-        InputMinor::GOTO,
+        InputMinor::MOVE,
         InputMinor::XR_POSE,
         InputMinor::XR_POSE_END,
-        InputMinor::HOLD,
-        InputMinor::MARKER_WORDS,
-        InputMinor::MARKER_CANCEL,
-        InputMinor::MARKER_PUT,
-        InputMinor::LOCATE,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -152,7 +126,7 @@ impl InputMinor {
     }
 }
 
-/// The device sensors' verbs.
+/// The device sensors'.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SensorMinor {
@@ -161,17 +135,19 @@ pub enum SensorMinor {
     STOP = 0x03,
     ORIENT = 0x05,
     PERMISSION = 0x06,
-    FAILED = 0x0b,
+    ERR = 0x0b,
+    LOCATE = 0x0c,
 }
 
 impl SensorMinor {
-    pub const ALL: [SensorMinor; 6] = [
+    pub const ALL: [SensorMinor; 7] = [
         SensorMinor::START,
         SensorMinor::POS,
         SensorMinor::STOP,
         SensorMinor::ORIENT,
         SensorMinor::PERMISSION,
-        SensorMinor::FAILED,
+        SensorMinor::ERR,
+        SensorMinor::LOCATE,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -180,7 +156,24 @@ impl SensorMinor {
     }
 }
 
-/// The GPU's verbs.
+/// The kernel's files: a root mounted, a storage file truncated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum FsMinor {
+    MOUNT = 0x01,
+    TRUNCATED = 0x02,
+}
+
+impl FsMinor {
+    pub const ALL: [FsMinor; 2] = [FsMinor::MOUNT, FsMinor::TRUNCATED];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<FsMinor> {
+        FsMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// The GPU's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum GpuMinor {
@@ -196,20 +189,22 @@ impl GpuMinor {
     }
 }
 
-/// A surface's verbs.
+/// A surface's: opened, resized, closed, and the frame drawn into the surfaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SurfaceMinor {
     OPEN = 0x01,
     RESIZE = 0x02,
     CLOSE = 0x03,
+    FRAME = 0x04,
 }
 
 impl SurfaceMinor {
-    pub const ALL: [SurfaceMinor; 3] = [
+    pub const ALL: [SurfaceMinor; 4] = [
         SurfaceMinor::OPEN,
         SurfaceMinor::RESIZE,
         SurfaceMinor::CLOSE,
+        SurfaceMinor::FRAME,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -218,7 +213,7 @@ impl SurfaceMinor {
     }
 }
 
-/// A setting's verbs.
+/// A setting's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SettingMinor {
@@ -234,60 +229,111 @@ impl SettingMinor {
     }
 }
 
-/// The chat's verbs.
+/// The scene's: a character drawn alone into a surface, a line said.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum ChatMinor {
-    SEND = 0x01,
+pub enum SceneMinor {
+    PREVIEW_OPEN = 0x01,
+    PREVIEW_CLOSE = 0x02,
+    CHAT = 0x03,
 }
 
-impl ChatMinor {
-    pub const ALL: [ChatMinor; 1] = [ChatMinor::SEND];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<ChatMinor> {
-        ChatMinor::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// A preview's verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum PreviewMinor {
-    OPEN = 0x01,
-    CLOSE = 0x02,
-}
-
-impl PreviewMinor {
-    pub const ALL: [PreviewMinor; 2] = [PreviewMinor::OPEN, PreviewMinor::CLOSE];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<PreviewMinor> {
-        PreviewMinor::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// The profiler's verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ProfilerMinor {
-    START = 0x01,
-    STOP = 0x02,
-    READ = 0x03,
-    RINGS = 0x04,
-}
-
-impl ProfilerMinor {
-    pub const ALL: [ProfilerMinor; 4] = [
-        ProfilerMinor::START,
-        ProfilerMinor::STOP,
-        ProfilerMinor::READ,
-        ProfilerMinor::RINGS,
+impl SceneMinor {
+    pub const ALL: [SceneMinor; 3] = [
+        SceneMinor::PREVIEW_OPEN,
+        SceneMinor::PREVIEW_CLOSE,
+        SceneMinor::CHAT,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<ProfilerMinor> {
-        ProfilerMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<SceneMinor> {
+        SceneMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// The camera's: the tracking button, the compass, a search result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum CameraMinor {
+    TRACKING = 0x01,
+    NORTH_UP = 0x02,
+    GOTO = 0x04,
+}
+
+impl CameraMinor {
+    pub const ALL: [CameraMinor; 3] = [
+        CameraMinor::TRACKING,
+        CameraMinor::NORTH_UP,
+        CameraMinor::GOTO,
+    ];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<CameraMinor> {
+        CameraMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// The profiler's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum PerfMinor {
+    START = 0x01,
+    STOP = 0x02,
+    STATS = 0x03,
+    RINGS = 0x04,
+}
+
+impl PerfMinor {
+    pub const ALL: [PerfMinor; 4] = [
+        PerfMinor::START,
+        PerfMinor::STOP,
+        PerfMinor::STATS,
+        PerfMinor::RINGS,
+    ];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<PerfMinor> {
+        PerfMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// The edit's: the tool and what it takes, and a marker's draft.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum EditMinor {
+    TOOL = 0x01,
+    MARKER_TEXT = 0x02,
+    MARKER_CANCEL = 0x03,
+    MARKER_COMMIT = 0x04,
+}
+
+impl EditMinor {
+    pub const ALL: [EditMinor; 4] = [
+        EditMinor::TOOL,
+        EditMinor::MARKER_TEXT,
+        EditMinor::MARKER_CANCEL,
+        EditMinor::MARKER_COMMIT,
+    ];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<EditMinor> {
+        EditMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// What the kernel shows the shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ShellMinor {
+    SNAPSHOT = 0x01,
+}
+
+impl ShellMinor {
+    pub const ALL: [ShellMinor; 1] = [ShellMinor::SNAPSHOT];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<ShellMinor> {
+        ShellMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -573,53 +619,52 @@ pub enum Command {
     /// An orientation event; a field is absent where the browser gave none.
     SENSOR_ORIENT = 0x1205,
     /// A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
-    /// or cut off; the compass's, where the platform says so (WORLD_BOOT's
+    /// or cut off; the compass's, where the platform says so (SYS_BOOT's
     /// orient_silence_is_loss).
-    SENSOR_FAILED = 0x120b,
+    SENSOR_ERR = 0x120b,
 
     // ---- the host tells the process: its start, its turn, its window and its devices ----
-    /// The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root.
-    WORLD_BOOT = 0x1001,
+    /// The kernel's start: what the platform is. Its storage files it opens itself, on the storage root.
+    SYS_BOOT = 0x1001,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
     /// its events on the completion ring, drawn by the kernel. It carries the host's alone:
     /// the turn's pacing, the network's credits and the clock; the view it is drawn at is the
-    /// shell's (INPUT_RECT).
-    WORLD_FRAME = 0x1002,
-    /// The tab's visibility; the host rings the doorbell for it at once, since a hidden
-    /// page gets no frame and hiding is the save's last sure moment.
-    WORLD_VISIBILITY = 0x1003,
+    /// world surface's (SURFACE_RESIZE).
+    SURFACE_FRAME = 0x1504,
+    /// The platform about to stop the process, or waking it: the page or the app hidden or
+    /// shown. The host rings the doorbell for it at once, since a hidden page gets no frame and
+    /// hiding is the save's last sure moment.
+    SYS_SLEEP = 0x1002,
     /// What the tile source declares of itself, once the client has it: the tile root's
     /// `source`, the published one out of the bucket or the dev tile server's, read by the
     /// client (ts/client/src/driver/namespace/source.ts) and handed over as numbers and names.
     /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
-    WORLD_SOURCE = 0x1005,
-    /// A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held
+    FS_MOUNT = 0x1301,
+    /// A storage file the kernel refused (the snapshot's `storage_refused`) is empty now, what it held
     /// set aside by the host: the kernel reads it again, and writes it from then on.
-    WORLD_KEPT_EMPTIED = 0x1006,
+    FS_TRUNCATED = 0x1302,
     /// A permission as the shell's prompt or the browser's change reported it.
     SENSOR_PERMISSION = 0x1206,
     /// A device answered: the kernel asks its block (xpute DEVICE) and makes the renderer on it once the block is in (rust/client/render/src/gpu/api.rs). Its loss is the block's to say (xpute STATUS.LOST, written by the host's GpuHost), read at the turn's edge.
     GPU_READY = 0x1401,
 
     // ---- the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI ----
-    /// The canvas's client rect, in CSS pixels, sent whenever it moves: where a pointer lands,
-    /// and the view's size each frame is drawn at.
-    INPUT_RECT = 0x1101,
-    /// A pointer event on the canvas, in client pixels.
+    /// A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
+    /// (transforms aside), as the world surface's size is (SURFACE_RESIZE).
     INPUT_POINTER = 0x1102,
-    /// What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
-    INPUT_HOLD = 0x110b,
-    /// The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec object/ext.json) are refused whole, never cut.
-    INPUT_MARKER_WORDS = 0x110c,
-    /// The marker the tool left waiting is let go, nothing put up.
-    INPUT_MARKER_CANCEL = 0x110d,
-    /// The waiting marker is put up with its words, if its place is still free or still a marker, and nothing waits after.
-    INPUT_MARKER_PUT = 0x110e,
+    /// The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
+    EDIT_TOOL = 0x1a01,
+    /// The draft's text (ToolState.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut.
+    EDIT_MARKER_TEXT = 0x1a02,
+    /// The marker's draft dropped, nothing committed.
+    EDIT_MARKER_CANCEL = 0x1a03,
+    /// The marker's draft committed with its text, where its place is still free or still a marker, and closed.
+    EDIT_MARKER_COMMIT = 0x1a04,
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
-    INPUT_KEYS = 0x1106,
+    INPUT_MOVE = 0x1106,
     /// A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on.
     SURFACE_OPEN = 0x1501,
     /// The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's.
@@ -627,91 +672,87 @@ pub enum Command {
     /// A call: the canvas is going, and what it held on the device is let go before the call returns.
     SURFACE_CLOSE = 0x1503,
     /// A character drawn alone into a surface the shell handed over, as the picker shows it.
-    PREVIEW_OPEN = 0x1801,
-    PREVIEW_CLOSE = 0x1802,
+    SCENE_PREVIEW_OPEN = 0x1701,
+    SCENE_PREVIEW_CLOSE = 0x1702,
     /// A setting set from the sheet or the character picker; EAGAIN until the kernel has read the
     /// kept settings, which would be read over it.
     SETTING_SET = 0x1601,
     /// A line the player said, shown over the character.
-    CHAT_SEND = 0x1701,
+    SCENE_CHAT = 0x1703,
     /// The tracking button's press, as the button showed it.
-    INPUT_TRACKING = 0x1104,
+    CAMERA_TRACKING = 0x1801,
     /// The compass's press: north up.
-    INPUT_COMPASS_RESET = 0x1107,
+    CAMERA_NORTH_UP = 0x1802,
     /// The search panel's location card's press: the location asked for. The compass is
     /// asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
     /// reads it without the location.
-    INPUT_LOCATE = 0x110f,
+    SENSOR_LOCATE = 0x120c,
     /// A search result: the pivot moved there, and the view asked with it at once, as the
     /// controls ask it where the camera stands; a view field absent keeps what the view has.
-    INPUT_GOTO = 0x1108,
+    CAMERA_GOTO = 0x1804,
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
     /// first of a run is taken to be where the camera already is, so nothing moves as
     /// it begins; the camera follows the tracker from there until POSE_END.
+    /// Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive
+    /// the camera, sent by the device app's driver.
     INPUT_XR_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
     INPUT_XR_POSE_END = 0x110a,
-    /// The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.
-    /// The kernel watches a sensor only while both hold, the page visible and the world view
-    /// shown; which sensors it watches then is its own (SENSOR_START).
-    WORLD_VIEW = 0x1007,
     /// A fresh recording window.
-    PROFILER_START = 0x1901,
+    PERF_START = 0x1901,
     /// The window frozen, so what is exported holds still.
-    PROFILER_STOP = 0x1902,
-    /// The profiler's statistics and what it holds now, where they lie: the reply is the address of READ's words (profiler.json), the statistics
+    PERF_STOP = 0x1902,
+    /// The profiler's statistics and what it holds now, where they lie: the reply is the address of STATS's words (perf.json), the statistics
     /// over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
     /// number past the door is finite, so no window is infinite.
-    PROFILER_READ = 0x1903,
-    /// The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn.
-    PROFILER_RINGS = 0x1904,
+    PERF_STATS = 0x1903,
+    /// The rings where they lie, nothing reduced: the reply is the address of RINGS's words (perf.json), good until the next turn.
+    PERF_RINGS = 0x1904,
     /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
     /// block the kernel holds, valid until the next snapshot.
-    WORLD_SNAPSHOT = 0x1004,
+    SHELL_SNAPSHOT = 0x1b01,
 }
 
 impl Command {
-    pub const ALL: [Command; 39] = [
+    pub const ALL: [Command; 37] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
-        Command::SENSOR_FAILED,
-        Command::WORLD_BOOT,
-        Command::WORLD_FRAME,
-        Command::WORLD_VISIBILITY,
-        Command::WORLD_SOURCE,
-        Command::WORLD_KEPT_EMPTIED,
+        Command::SENSOR_ERR,
+        Command::SYS_BOOT,
+        Command::SURFACE_FRAME,
+        Command::SYS_SLEEP,
+        Command::FS_MOUNT,
+        Command::FS_TRUNCATED,
         Command::SENSOR_PERMISSION,
         Command::GPU_READY,
-        Command::INPUT_RECT,
         Command::INPUT_POINTER,
-        Command::INPUT_HOLD,
-        Command::INPUT_MARKER_WORDS,
-        Command::INPUT_MARKER_CANCEL,
-        Command::INPUT_MARKER_PUT,
+        Command::EDIT_TOOL,
+        Command::EDIT_MARKER_TEXT,
+        Command::EDIT_MARKER_CANCEL,
+        Command::EDIT_MARKER_COMMIT,
         Command::INPUT_WHEEL,
-        Command::INPUT_KEYS,
+        Command::INPUT_MOVE,
         Command::SURFACE_OPEN,
         Command::SURFACE_RESIZE,
         Command::SURFACE_CLOSE,
-        Command::PREVIEW_OPEN,
-        Command::PREVIEW_CLOSE,
+        Command::SCENE_PREVIEW_OPEN,
+        Command::SCENE_PREVIEW_CLOSE,
         Command::SETTING_SET,
-        Command::CHAT_SEND,
-        Command::INPUT_TRACKING,
-        Command::INPUT_COMPASS_RESET,
-        Command::INPUT_LOCATE,
-        Command::INPUT_GOTO,
+        Command::SCENE_CHAT,
+        Command::CAMERA_TRACKING,
+        Command::CAMERA_NORTH_UP,
+        Command::SENSOR_LOCATE,
+        Command::CAMERA_GOTO,
         Command::INPUT_XR_POSE,
         Command::INPUT_XR_POSE_END,
-        Command::WORLD_VIEW,
-        Command::PROFILER_START,
-        Command::PROFILER_STOP,
-        Command::PROFILER_READ,
-        Command::PROFILER_RINGS,
-        Command::WORLD_SNAPSHOT,
+        Command::PERF_START,
+        Command::PERF_STOP,
+        Command::PERF_STATS,
+        Command::PERF_RINGS,
+        Command::SHELL_SNAPSHOT,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -725,7 +766,7 @@ pub struct Snapshot<'a> {
     pub pivot: PivotState,
     pub location: LocationState,
     pub companion: CompanionState,
-    pub holding: HoldingState<'a>,
+    pub tool: ToolState<'a>,
     pub orient: OrientationState,
     /// The view's azimuth.
     pub azimuth: f64,
@@ -733,10 +774,10 @@ pub struct Snapshot<'a> {
     pub camera_busy: bool,
     /// A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is.
     pub zooming: bool,
-    /// The pointer is over a marker a tap would act on with the tool held: a place to go to, or a pin to erase or word.
+    /// The pointer is over a scene marker a tap would act on with the tool held: a place to go to, or a pin to erase or draft.
     pub over_marker: bool,
     /// Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel
-    /// has read its kept slot, a few turns from boot.
+    /// has read its storage file, a few turns from boot.
     pub settings: &'a [u32],
     /// The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the shell's to make of it; which division names show, the kernel's (`DivisionPart.shown`).
     pub m_per_px: f64,
@@ -745,10 +786,10 @@ pub struct Snapshot<'a> {
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
-    /// The kept slots (host.json's `kept`) whose file is not of the slot's format, or too large for
-    /// any heap: the kernel read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says
+    /// The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for
+    /// any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says
     /// the slot is empty.
-    pub kept_refused: &'a [u32],
+    pub storage_refused: &'a [u32],
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say.
     pub stall: Option<Message>,
 }
@@ -761,7 +802,7 @@ impl Snapshot<'_> {
         w.branch(PivotState::FIELDS, |w| self.pivot.write(w));
         w.branch(LocationState::FIELDS, |w| self.location.write(w));
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
-        w.branch(HoldingState::FIELDS, |w| self.holding.write(w));
+        w.branch(ToolState::FIELDS, |w| self.tool.write(w));
         w.branch(OrientationState::FIELDS, |w| self.orient.write(w));
         w.f64(Some(self.azimuth));
         w.bool(Some(self.is_follow_mode));
@@ -778,7 +819,7 @@ impl Snapshot<'_> {
             });
         });
         w.u32_array(Some(self.previews));
-        w.u32_array(Some(self.kept_refused));
+        w.u32_array(Some(self.storage_refused));
         w.u32(self.stall.map(|m| m as u32));
     }
 }
@@ -855,30 +896,27 @@ impl CompanionState {
     }
 }
 
-/// What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held; and a marker the tool left waiting for its words.
-pub struct HoldingState<'a> {
-    pub tool: ActiveTool,
-    /// The held cube, by its number in the catalog's one value space.
+/// The tool and what it takes, as EDIT_TOOL set it: the cube and the decor are each remembered whichever tool is active; and a marker's draft.
+pub struct ToolState<'a> {
+    pub active: ActiveTool,
+    /// The cube the tool takes, by its number in the catalog's one value space.
     pub cube: u32,
     pub decor: u32,
     pub tier: u32,
-    /// Whether a marker the tool left waits for its words, which INPUT_MARKER_PUT or INPUT_MARKER_CANCEL ends.
-    pub marker: bool,
-    /// The waiting marker's words, which the shell takes up when it starts waiting: the marker's own where one stands there, none where it is new.
-    pub words: &'a dyn Display,
+    /// A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL.
+    pub draft: Option<&'a str>,
 }
 
-impl HoldingState<'_> {
+impl ToolState<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 6;
+    pub const FIELDS: u32 = 5;
 
     pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.tool as u32));
+        w.u32(Some(self.active as u32));
         w.u32(Some(self.cube));
         w.u32(Some(self.decor));
         w.u32(Some(self.tier));
-        w.bool(Some(self.marker));
-        w.str_display(self.words);
+        w.str(self.draft);
     }
 }
 
@@ -1040,18 +1078,18 @@ impl SensorOrient {
     }
 }
 
-/// Command::SENSOR_FAILED's packet.
+/// Command::SENSOR_ERR's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct SensorFailed {
+pub struct SensorErr {
     pub sensor: Sensor,
     /// Geolocation's; orientation gives none today.
     pub code: Option<GeolocationErrorCode>,
 }
 
-impl SensorFailed {
-    pub fn read(pkt: &[u8]) -> Result<SensorFailed, MarshalError> {
+impl SensorErr {
+    pub fn read(pkt: &[u8]) -> Result<SensorErr, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorFailed {
+        Ok(SensorErr {
             sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             code: match f.at(1)?.opt() {
                 Some(c) => Some(
@@ -1064,9 +1102,9 @@ impl SensorFailed {
     }
 }
 
-/// Command::WORLD_BOOT's packet.
+/// Command::SYS_BOOT's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldBoot {
+pub struct SysBoot {
     /// A development build, which offers the settings schema.json marks `dev`.
     pub development: bool,
     pub geolocation: bool,
@@ -1075,14 +1113,14 @@ pub struct WorldBoot {
     pub orient_permission: bool,
     /// A browser's compass talks while the device is still and cannot say it stopped, so
     /// silence is the only sign of loss; a device's speaks only when the heading turns and
-    /// reports a failure itself (SENSOR_FAILED).
+    /// reports a failure itself (SENSOR_ERR).
     pub orient_silence_is_loss: bool,
 }
 
-impl WorldBoot {
-    pub fn read(pkt: &[u8]) -> Result<WorldBoot, MarshalError> {
+impl SysBoot {
+    pub fn read(pkt: &[u8]) -> Result<SysBoot, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldBoot {
+        Ok(SysBoot {
             development: f.at(0)?.get_bool()?,
             geolocation: f.at(1)?.get_bool()?,
             orient: f.at(2)?.get_bool()?,
@@ -1092,9 +1130,9 @@ impl WorldBoot {
     }
 }
 
-/// Command::WORLD_FRAME's packet.
+/// Command::SURFACE_FRAME's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldFrame {
+pub struct SurfaceFrame {
     /// The display's refresh, as the host measures it from the animation frames it is handed,
     /// and the interval it paces turns at, a whole number of refreshes (the pacing the client
     /// boots it with, @xpute/host sched/frame_pacing.ts `FrameGrant`): the frame's budget.
@@ -1107,10 +1145,10 @@ pub struct WorldFrame {
     pub unix_ms: f64,
 }
 
-impl WorldFrame {
-    pub fn read(pkt: &[u8]) -> Result<WorldFrame, MarshalError> {
+impl SurfaceFrame {
+    pub fn read(pkt: &[u8]) -> Result<SurfaceFrame, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldFrame {
+        Ok(SurfaceFrame {
             refresh_ms: finite(f.at(0)?.get_number()?)?,
             paced_ms: finite(f.at(1)?.get_number()?)?,
             interactive: f.at(2)?.get_bool()?,
@@ -1120,24 +1158,24 @@ impl WorldFrame {
     }
 }
 
-/// Command::WORLD_VISIBILITY's packet.
+/// Command::SYS_SLEEP's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldVisibility {
-    pub visible: bool,
+pub struct SysSleep {
+    pub awake: bool,
 }
 
-impl WorldVisibility {
-    pub fn read(pkt: &[u8]) -> Result<WorldVisibility, MarshalError> {
+impl SysSleep {
+    pub fn read(pkt: &[u8]) -> Result<SysSleep, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldVisibility {
-            visible: f.at(0)?.get_bool()?,
+        Ok(SysSleep {
+            awake: f.at(0)?.get_bool()?,
         })
     }
 }
 
-/// Command::WORLD_SOURCE's packet.
+/// Command::FS_MOUNT's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldSource<'a> {
+pub struct FsMount<'a> {
     /// The coarsest zoom the source supplies whole.
     pub top_zoom: u32,
     /// Each kind's format, one a kind, indexed by its bake's number
@@ -1148,10 +1186,10 @@ pub struct WorldSource<'a> {
     pub shard: Strs<'a>,
 }
 
-impl<'a> WorldSource<'a> {
-    pub fn read(pkt: &'a [u8]) -> Result<WorldSource<'a>, MarshalError> {
+impl<'a> FsMount<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<FsMount<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldSource {
+        Ok(FsMount {
             top_zoom: integer::<u32>(f.at(0)?.get_number()?)?,
             format: f.at(1)?.get_array::<u32>()?,
             shard: f.at(2)?.get_strs()?,
@@ -1159,17 +1197,17 @@ impl<'a> WorldSource<'a> {
     }
 }
 
-/// Command::WORLD_KEPT_EMPTIED's packet.
+/// Command::FS_TRUNCATED's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldKeptEmptied {
-    /// host.json's `kept`.
+pub struct FsTruncated {
+    /// host.json's `storage`.
     pub slot: u32,
 }
 
-impl WorldKeptEmptied {
-    pub fn read(pkt: &[u8]) -> Result<WorldKeptEmptied, MarshalError> {
+impl FsTruncated {
+    pub fn read(pkt: &[u8]) -> Result<FsTruncated, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldKeptEmptied {
+        Ok(FsTruncated {
             slot: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
@@ -1189,27 +1227,6 @@ impl SensorPermission {
             sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             answer: PermissionAnswer::of(integer::<u32>(f.at(1)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
-        })
-    }
-}
-
-/// Command::INPUT_RECT's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct InputRect {
-    pub left: f64,
-    pub top: f64,
-    pub width: f64,
-    pub height: f64,
-}
-
-impl InputRect {
-    pub fn read(pkt: &[u8]) -> Result<InputRect, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputRect {
-            left: finite(f.at(0)?.get_number()?)?,
-            top: finite(f.at(1)?.get_number()?)?,
-            width: finite(f.at(2)?.get_number()?)?,
-            height: finite(f.at(3)?.get_number()?)?,
         })
     }
 }
@@ -1241,20 +1258,20 @@ impl InputPointer {
     }
 }
 
-/// Command::INPUT_HOLD's packet.
+/// Command::EDIT_TOOL's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputHold {
+pub struct EditTool {
     pub tool: ActiveTool,
-    /// The held cube or decor kind, by its number in the catalog's one value space (cube.json).
+    /// The cube or decor kind the tool takes, by its number in the catalog's one value space (cube.json).
     pub val: u32,
     /// The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs).
     pub tier: u32,
 }
 
-impl InputHold {
-    pub fn read(pkt: &[u8]) -> Result<InputHold, MarshalError> {
+impl EditTool {
+    pub fn read(pkt: &[u8]) -> Result<EditTool, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputHold {
+        Ok(EditTool {
             tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
             val: integer::<u32>(f.at(1)?.get_number()?)?,
@@ -1263,16 +1280,16 @@ impl InputHold {
     }
 }
 
-/// Command::INPUT_MARKER_WORDS's packet.
+/// Command::EDIT_MARKER_TEXT's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputMarkerWords<'a> {
+pub struct EditMarkerText<'a> {
     pub text: &'a str,
 }
 
-impl<'a> InputMarkerWords<'a> {
-    pub fn read(pkt: &'a [u8]) -> Result<InputMarkerWords<'a>, MarshalError> {
+impl<'a> EditMarkerText<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<EditMarkerText<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputMarkerWords {
+        Ok(EditMarkerText {
             text: f.at(0)?.get_str_ref()?,
         })
     }
@@ -1293,17 +1310,17 @@ impl InputWheel {
     }
 }
 
-/// Command::INPUT_KEYS's packet.
+/// Command::INPUT_MOVE's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputKeys {
+pub struct InputMove {
     pub x: i32,
     pub y: i32,
 }
 
-impl InputKeys {
-    pub fn read(pkt: &[u8]) -> Result<InputKeys, MarshalError> {
+impl InputMove {
+    pub fn read(pkt: &[u8]) -> Result<InputMove, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputKeys {
+        Ok(InputMove {
             x: integer::<i32>(f.at(0)?.get_number()?)?,
             y: integer::<i32>(f.at(1)?.get_number()?)?,
         })
@@ -1362,18 +1379,18 @@ impl SurfaceClose {
     }
 }
 
-/// Command::PREVIEW_OPEN's packet.
+/// Command::SCENE_PREVIEW_OPEN's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct PreviewOpen {
+pub struct ScenePreviewOpen {
     pub surface: u32,
     pub group: pxl_spec::asset::actor::Group,
     pub number: u8,
 }
 
-impl PreviewOpen {
-    pub fn read(pkt: &[u8]) -> Result<PreviewOpen, MarshalError> {
+impl ScenePreviewOpen {
+    pub fn read(pkt: &[u8]) -> Result<ScenePreviewOpen, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(PreviewOpen {
+        Ok(ScenePreviewOpen {
             surface: integer::<u32>(f.at(0)?.get_number()?)?,
             group: pxl_spec::asset::actor::Group::of(integer::<u8>(f.at(1)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
@@ -1382,16 +1399,16 @@ impl PreviewOpen {
     }
 }
 
-/// Command::PREVIEW_CLOSE's packet.
+/// Command::SCENE_PREVIEW_CLOSE's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct PreviewClose {
+pub struct ScenePreviewClose {
     pub surface: u32,
 }
 
-impl PreviewClose {
-    pub fn read(pkt: &[u8]) -> Result<PreviewClose, MarshalError> {
+impl ScenePreviewClose {
+    pub fn read(pkt: &[u8]) -> Result<ScenePreviewClose, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(PreviewClose {
+        Ok(ScenePreviewClose {
             surface: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
@@ -1418,40 +1435,40 @@ impl SettingSet {
     }
 }
 
-/// Command::CHAT_SEND's packet.
+/// Command::SCENE_CHAT's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct ChatSend<'a> {
+pub struct SceneChat<'a> {
     pub text: &'a str,
 }
 
-impl<'a> ChatSend<'a> {
-    pub fn read(pkt: &'a [u8]) -> Result<ChatSend<'a>, MarshalError> {
+impl<'a> SceneChat<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<SceneChat<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(ChatSend {
+        Ok(SceneChat {
             text: f.at(0)?.get_str_ref()?,
         })
     }
 }
 
-/// Command::INPUT_TRACKING's packet.
+/// Command::CAMERA_TRACKING's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputTracking {
+pub struct CameraTracking {
     pub tracking: Tracking,
 }
 
-impl InputTracking {
-    pub fn read(pkt: &[u8]) -> Result<InputTracking, MarshalError> {
+impl CameraTracking {
+    pub fn read(pkt: &[u8]) -> Result<CameraTracking, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputTracking {
+        Ok(CameraTracking {
             tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
         })
     }
 }
 
-/// Command::INPUT_GOTO's packet.
+/// Command::CAMERA_GOTO's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputGoto {
+pub struct CameraGoto {
     pub lon: f64,
     pub lat: f64,
     /// The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
@@ -1462,10 +1479,10 @@ pub struct InputGoto {
     pub polar: Option<f64>,
 }
 
-impl InputGoto {
-    pub fn read(pkt: &[u8]) -> Result<InputGoto, MarshalError> {
+impl CameraGoto {
+    pub fn read(pkt: &[u8]) -> Result<CameraGoto, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputGoto {
+        Ok(CameraGoto {
             lon: finite(f.at(0)?.get_number()?)?,
             lat: finite(f.at(1)?.get_number()?)?,
             dist: match f.at(2)?.opt() {
@@ -1511,31 +1528,16 @@ impl InputXrPose {
     }
 }
 
-/// Command::WORLD_VIEW's packet.
+/// Command::PERF_STATS's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldView {
-    pub shown: bool,
-}
-
-impl WorldView {
-    pub fn read(pkt: &[u8]) -> Result<WorldView, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldView {
-            shown: f.at(0)?.get_bool()?,
-        })
-    }
-}
-
-/// Command::PROFILER_READ's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct ProfilerRead {
+pub struct PerfStats {
     pub window_ms: Option<f64>,
 }
 
-impl ProfilerRead {
-    pub fn read(pkt: &[u8]) -> Result<ProfilerRead, MarshalError> {
+impl PerfStats {
+    pub fn read(pkt: &[u8]) -> Result<PerfStats, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(ProfilerRead {
+        Ok(PerfStats {
             window_ms: match f.at(0)?.opt() {
                 Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
@@ -1544,13 +1546,13 @@ impl ProfilerRead {
     }
 }
 
-/// Command::WORLD_SNAPSHOT's event.
-pub struct WorldSnapshotEvent {
+/// Command::SHELL_SNAPSHOT's event.
+pub struct ShellSnapshotEvent {
     pub at: u32,
     pub len: u32,
 }
 
-impl WorldSnapshotEvent {
+impl ShellSnapshotEvent {
     /// The children it is written as.
     pub const FIELDS: u32 = 2;
 

@@ -8,8 +8,8 @@
 //! cells there is built once and drawn moved, each instance a model, an
 //! impostor or nothing by its size on the screen (`present_patch`), by the
 //! tiers the GPU draws decor by, one rule (pxl-spec-core scatter.rs
-//! `drawn::tier`). A patch is laid in the lanes the decor and impostor
-//! shaders read (domain/scene/lane.rs).
+//! `drawn::tier`). A patch is laid in the columns the decor and impostor
+//! shaders read (domain/scene/column.rs).
 
 use fnv::FnvHashMap;
 
@@ -28,12 +28,12 @@ use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::pass::Pass;
 
+use crate::domain::scene::column::{self, GroupColumns};
 use crate::domain::scene::decor::drawn::{cull_dist_u, decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
 };
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::lane::{self, GroupLanes};
 use crate::domain::scene::model;
 use crate::domain::scene::model::asset::model_of;
 use crate::domain::scene::region;
@@ -109,7 +109,7 @@ struct Clouds {
     /// Kept so a settled turn asks the heap for nothing.
     wanted: Vec<[i64; 2]>,
     gone: Vec<[i64; 2]>,
-    lanes: [Vec<[f32; 5]>; VARIANTS.len()],
+    columns: [Vec<[f32; 5]>; VARIANTS.len()],
     impostors: Vec<u32>,
     /// How far from the eye the nearest patch drawn last turn stands; none
     /// drawn, infinite.
@@ -240,11 +240,11 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             unsafe { free((b.at as usize, b.bytes)) };
         }
     }
-    let (patches, lanes) = (&mut c.patches, &mut c.lanes);
+    let (patches, columns) = (&mut c.patches, &mut c.columns);
     c.wanted.retain(|k| !patches.contains_key(k));
     pass.run(
         c.wanted.iter().copied(),
-        |key| match build(key, base, lanes, draw) {
+        |key| match build(key, base, columns, draw) {
             Some(b) => {
                 patches.insert(key, b);
                 true
@@ -372,22 +372,22 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
         })
 }
 
-/// The patch's clouds as `build` laid them, read off its lanes: each one's
+/// The patch's clouds as `build` laid them, read off its columns: each one's
 /// middle about the patch's corner, its height over the datum, and its half
 /// extent. The field's hash is asked once a patch, where it is built.
 fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     // SAFETY: the patch's bytes, held until it goes, which is after this turn reads them.
     let words: &[u32] =
         unsafe { core::slice::from_raw_parts(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
-    lane::groups(words)
+    column::groups(words)
         .zip(VARIANTS)
         .flat_map(move |((first, n), file)| {
-            let lane = GroupLanes {
+            let column = GroupColumns {
                 first: first as usize,
                 cnt: n as usize,
             };
             (0..n as usize).map(move |i| {
-                let at = |k: usize| f64::from(f32::from_bits(words[lane.f32_at(k, i)]));
+                let at = |k: usize| f64::from(f32::from_bits(words[column.f32_at(k, i)]));
                 let scale = at(4);
                 let side = widest(file) * scale / 2.0;
                 (
@@ -398,15 +398,15 @@ fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
         })
 }
 
-/// The patch's clouds on the field's map, as decor's lanes about its corner;
+/// The patch's clouds on the field's map, as decor's columns about its corner;
 /// none where the heap refused.
 fn build(
     key: [i64; 2],
     base: f64,
-    lanes: &mut [Vec<[f32; 5]>; VARIANTS.len()],
+    columns: &mut [Vec<[f32; 5]>; VARIANTS.len()],
     draw: &mut DrawList,
 ) -> Option<Patch> {
-    for l in lanes.iter_mut() {
+    for l in columns.iter_mut() {
         l.clear();
     }
     let mut heights = [f32::INFINITY, f32::NEG_INFINITY];
@@ -415,7 +415,7 @@ fn build(
             heights[0].min((c.z - c.width / 2.0) as f32),
             heights[1].max((c.z + c.width / 2.0) as f32),
         ];
-        lanes[c.variant].push([
+        columns[c.variant].push([
             c.local[0] as f32,
             c.local[1] as f32,
             c.z as f32,
@@ -423,33 +423,33 @@ fn build(
             c.scale as f32,
         ]);
     }
-    let instances: usize = lanes.iter().map(Vec::len).sum();
-    let header = 1 + lanes.len();
+    let instances: usize = columns.iter().map(Vec::len).sum();
+    let header = 1 + columns.len();
     let words = header
-        + lanes
+        + columns
             .iter()
-            .map(|l| GroupLanes::words(l.len()))
+            .map(|l| GroupColumns::words(l.len()))
             .sum::<usize>();
     let idx = (words * 4) as u32;
     let (at, bytes) = alloc(idx + instances as u32 * 4)?;
     // SAFETY: a heap block of the bytes asked for, this patch's until given back.
     let out: &mut [u32] =
         unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), bytes as usize / 4) };
-    out[0] = lanes.len() as u32;
+    out[0] = columns.len() as u32;
     let mut first = header;
-    for (g, l) in lanes.iter().enumerate() {
+    for (g, l) in columns.iter().enumerate() {
         out[1 + g] = l.len() as u32;
-        let lane = GroupLanes {
+        let column = GroupColumns {
             first,
             cnt: l.len(),
         };
         for (i, v) in l.iter().enumerate() {
             for (k, &w) in v.iter().enumerate() {
-                out[lane.f32_at(k, i)] = w.to_bits();
+                out[column.f32_at(k, i)] = w.to_bits();
             }
         }
-        out[lane.flags()..lane.flags() + l.len().div_ceil(4)].fill(0);
-        first += GroupLanes::words(l.len());
+        out[column.flags()..column.flags() + l.len().div_ceil(4)].fill(0);
+        first += GroupColumns::words(l.len());
     }
     let handle = draw.upload(at as u32, bytes, 0, 0);
     Some(Patch {
@@ -461,7 +461,7 @@ fn build(
     })
 }
 
-/// A patch of the clouds' lanes as `present_patch` reads it: its square's corner
+/// A patch of the clouds' columns as `present_patch` reads it: its square's corner
 /// about the eye's lap, its side, and the heights its instances stand between.
 struct Shown {
     handle: u32,
@@ -509,12 +509,12 @@ fn present_patch(
     let words: &mut [u32] = unsafe {
         core::slice::from_raw_parts_mut(mem::at::<u32>(b.at as usize), b.bytes as usize / 4)
     };
-    let (lanes_of, list) = words.split_at_mut(b.idx as usize / 4);
+    let (columns_of, list) = words.split_at_mut(b.idx as usize / 4);
     // A patch all within THIN_FROM shows every cloud, and asks none.
     let thin = farthest > THIN_FROM;
     let (mut at, mut changed) = (0usize, false);
-    for ((off, cnt), (group, (extent, [least, most]))) in lane::groups(lanes_of).zip(groups) {
-        let lane = GroupLanes {
+    for ((off, cnt), (group, (extent, [least, most]))) in column::groups(columns_of).zip(groups) {
+        let column = GroupColumns {
             first: off as usize,
             cnt: cnt as usize,
         };
@@ -523,10 +523,10 @@ fn present_patch(
         let culled = tier(extent * most / nearest) == drawn::CULLED;
         let modeled = tier(extent * least / farthest) == drawn::MODEL;
         for i in 0..if culled { 0 } else { cnt as usize } {
-            if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
+            if (columns_of[column.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
             }
-            let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;
+            let f = |l: usize| f32::from_bits(columns_of[column.f32_at(l, i)]) as f64;
             let gap = [x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]];
             let d2 = if thin || !modeled {
                 v3::dot(&gap, &gap)

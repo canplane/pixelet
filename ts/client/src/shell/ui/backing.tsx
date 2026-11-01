@@ -17,7 +17,7 @@ import {
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP, type Transition } from "@/shell/ui/motion/transition.ts";
-import { useVeil } from "@/shell/ui/motion/veil.ts";
+import { useDim } from "@/shell/ui/motion/dim.ts";
 import { alpha, type Material } from "@/shell/ui/theme.ts";
 
 /** Decides the iPhone's glass style: clear `OnSheet`, regular (frosted)
@@ -47,7 +47,7 @@ export const SYSTEM_BACKING: boolean = false;
 
 /**
  * A see-through fill blurs what is behind on a page. Android cannot blur the
- * map, which is a SurfaceView, and an unblurred see-through fill is
+ * world, which is a SurfaceView, and an unblurred see-through fill is
  * unreadable, so it takes the fill solid.
  */
 function backdrop(fill: string, m: Material): ViewStyle {
@@ -68,10 +68,10 @@ export function Backing({
   style,
   children,
 }: BackingProps) {
-  const veil = useVeil(fade, transition, fadeFrom);
+  const dim = useDim(fade, transition, fadeFrom);
   return (
     <Motion
-      {...veil.motion}
+      {...dim.motion}
       style={[
         style,
         material

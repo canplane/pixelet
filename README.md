@@ -171,7 +171,7 @@ each source's ingest ([infra/geo/README.md](./infra/geo/README.md)).
 A development page puts two things in the browser console
 (`ts/client/src/shell/debug/console.ts`): `xpute.cmd(command, ...args)`, which
 sends the kernel any command by its number
-(`spec/client/kernel/domain/control/cmd.json`), and `pxl.profiler`, the profiler
+(`spec/client/kernel/domain/control/cmd.json`), and `pxl.perf`, the profiler
 panel's `report()` and `trace()`.
 
 The agent instructions are [AGENTS.md](./AGENTS.md) and the procedures

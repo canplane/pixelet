@@ -6,11 +6,11 @@
 // the renderer writes through xpute's encoder (gpu/api.rs): the stream it writes
 // them into, its pipeline records' codes, and what a surface shows.
 
-/** What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case. */
-export const surface_role = {
-  WORLD: 0 as number,
-  CASE: 1 as number,
-} as const;
+import * as surface_role from "./gpu/surface_role.spec.ts";
+import * as stream from "./gpu/stream.spec.ts";
+
+/** What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing previewed alone. */
+export { surface_role };
 
 /** The one place the renderer's calls cross (gpu/api.rs): a stream
  * (xpute-guest ipc/stream.rs) in a range of the kernel's memory, which the
@@ -21,16 +21,4 @@ export const surface_role = {
  * kernel: the device's block (xpute DEVICE) and the timed spans' read: its
  * word, then each span's begin and end ticks (gpu/api.rs lays them out and
  * holds this number to it). */
-export const stream = {
-  HEAD: 141 as number,
-  /** The range's size: the stream, what one turn may send the device, then at
-   * its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
-   * empty one of. A product number, said rather than derived: a turn's uploads
-   * wait (`room`) only when a burst of them comes at once. */
-  BYTES: 4194304 as number,
-  /** What an upload leaves of the range. The records a turn cannot put off — a
-   * frame's passes and draws, the shaders the first frame makes — are never
-   * refused, so an upload, which can wait a turn, is taken only while this much
-   * is left after it. */
-  RESERVE: 1048576 as number,
-} as const;
+export { stream };

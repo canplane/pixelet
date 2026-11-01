@@ -12,7 +12,7 @@ import { create } from "zustand";
 
 import { cornerPanel } from "@/shell/ui/corner-card.ts";
 import { alpha, color } from "@/shell/ui/theme.ts";
-import { gauge } from "./profiler/gauge.tsx";
+import { gauge } from "./perf/gauge.tsx";
 import type { PanelName } from "./window.tsx";
 
 /** The panel open, by its name (window.tsx `PANEL`). */

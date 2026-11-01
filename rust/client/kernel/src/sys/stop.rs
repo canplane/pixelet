@@ -1,7 +1,7 @@
 // pxl-kernel/sys/stop.rs
 
 //! How the kernel stops: a broken invariant (`bug!`) or a panic, published to
-//! the host (sys/io/host.rs `abort`) and told to the bracket's last words.
+//! the host (sys/io/host.rs `abort`) and told to the bracket's panic hook.
 
 use core::panic::Location;
 
@@ -22,20 +22,20 @@ pub enum Stop<'a> {
     Panic(&'a std::panic::PanicHookInfo<'a>),
 }
 
-pub type LastWords = fn(Stop<'_>);
+pub type PanicHook = fn(Stop<'_>);
 
-static LAST_WORDS: Global<Option<LastWords>> = Global::new();
+static PANIC_HOOK: Global<Option<PanicHook>> = Global::new();
 
 static STOPPED: Global<bool> = Global::new();
 
-/// Installs the bug reporter and the panic hook, once at boot. Both are
+/// Installs the bug reporter and std's panic hook, once at boot. Both are
 /// process-wide, and on a device the app's other threads fail through them
-/// too: such a panic is not the kernel's, and is told by the bracket's last
-/// words where it has them, else by the hook this one replaced, never by
-/// both; a bug there is not reported, and is told as the panic it then is
-/// (xpute_guest::global `off_marked_thread`).
-pub fn install(last_words: Option<LastWords>) {
-    LAST_WORDS.set(last_words);
+/// too: such a panic is not the kernel's, and is told by the bracket's
+/// `PanicHook` where it has one, else by the std hook this one replaced,
+/// never by both; a bug there is not reported, and is told as the panic it
+/// then is (xpute_guest::global `off_marked_thread`).
+pub fn install(panic_hook: Option<PanicHook>) {
+    PANIC_HOOK.set(panic_hook);
     bug::set_report(|errnum, at, a, b| {
         if !off_marked_thread() {
             bug(errnum, at, a, b);
@@ -44,7 +44,7 @@ pub fn install(last_words: Option<LastWords>) {
     let theirs = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         if off_marked_thread() {
-            match last_words {
+            match panic_hook {
                 Some(say) => say(Stop::Panic(info)),
                 None => theirs(info),
             }
@@ -75,7 +75,7 @@ fn is_stopped() -> bool {
 }
 
 fn say(stop: Stop<'_>) {
-    if let Some(say) = *LAST_WORDS.get(|| None) {
+    if let Some(say) = *PANIC_HOOK.get(|| None) {
         say(stop);
     }
 }

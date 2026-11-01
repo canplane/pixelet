@@ -30,7 +30,7 @@ xpute_guest::wasm_abi!(
 );
 
 /// The kernel's turn (pxl_kernel::door::run). A page outlives the kernel,
-/// so it has no last words to say; the browser paces its frames, so every
+/// so it has no panic hook to tell; the browser paces its frames, so every
 /// one is admitted (xpute_gpu::admit).
 fn kernel(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     door::run(quota_ms, boot_info, None, admit::every)

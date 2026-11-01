@@ -1,5 +1,6 @@
 // pxl-tool/spec/bake.rs
 
+use super::ingested::symbol_number;
 use super::{file, json_str, line_comments, packed, read, rs_doc, ts_doc, Output};
 
 pub fn published_outputs() -> Result<Vec<Output>, String> {
@@ -373,20 +374,62 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
         "INK",
         &|k| color(k, "text"),
     )?;
+    let symbol = |k: &str| -> Result<String, String> {
+        match rows.get(k).and_then(|r| r.str_at("symbol")) {
+            None | Some("") => Ok("0".into()),
+            Some(path) => symbol_number(path).map(|n| n.to_string()),
+        }
+    };
     list(
-        "A category's icon under Carto's `symbols/`, \"\" for none",
-        "&str",
+        "A category's icon, its symbol's number (asset/symbol.spec.rs), 0 for none",
+        "u16",
         "SYMBOL",
-        &|k| {
-            Ok(json_str(
-                rows.get(k)
-                    .and_then(|r| r.str_at("symbol"))
-                    .unwrap_or_default(),
-            ))
-        },
+        &symbol,
     )?;
-    Ok(vec![Output::new(
-        "rust/spec/src/bake/place_theme.spec.rs",
-        file(&rs),
-    )])
+    // The shell's: what it draws a search result's place as, by its number.
+    let mut ts = vec![
+        "// @pxl/client/shell/search/place_theme.spec.ts".to_string(),
+        "//".into(),
+        "// GENERATED from spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json"
+            .into(),
+        "//".into(),
+    ];
+    ts.extend(line_comments(
+        &theme.lines_at("$doc").unwrap_or_default(),
+        "",
+    ));
+    let fill = |k: &str| -> Result<String, String> {
+        match rows.get(k).and_then(|r| r.str_at("fill")) {
+            None => Ok(json_str("")),
+            Some(c) => packed(c).map(|n| json_str(&format!("#{n:06x}"))),
+        }
+    };
+    for (doc, name, ty, each) in [
+        (
+            "A category's icon or dot fill as `#rrggbb`, \"\" where Carto draws no point for it",
+            "FILL",
+            "string",
+            &fill as &dyn Fn(&str) -> Result<String, String>,
+        ),
+        (
+            "A category's icon, its symbol's number (place-symbol.ts), 0 for none",
+            "SYMBOL",
+            "number",
+            &symbol,
+        ),
+    ] {
+        ts.extend([
+            String::new(),
+            format!("/** {doc}, category k at `{name}[k - 1]`. */"),
+            format!("export const {name}: readonly {ty}[] = ["),
+        ]);
+        for k in &categories {
+            ts.push(format!("  {},", each(k)?));
+        }
+        ts.push("];".into());
+    }
+    Ok(vec![
+        Output::new("rust/spec/src/bake/place_theme.spec.rs", file(&rs)),
+        Output::new("ts/client/src/shell/search/place_theme.spec.ts", file(&ts)),
+    ])
 }

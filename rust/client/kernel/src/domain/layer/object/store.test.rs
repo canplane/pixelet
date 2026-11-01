@@ -34,7 +34,7 @@ fn write_undo_round_trip() {
                 let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
                 held.holds()
                     && !held.is_folded()
-                    && overwrite::val(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
+                    && overwrite::val(&store.columns(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"
         );
@@ -116,8 +116,8 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Held, [i32; 2]) {
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
-                let v = overwrite::val(&store.lanes(), held, Cut::NONE, target, [x, y, z]);
-                let kept = answer::eighths(overwrite::filled(&store.lanes(), held));
+                let v = overwrite::val(&store.columns(), held, Cut::NONE, target, [x, y, z]);
+                let kept = answer::eighths(overwrite::filled(&store.columns(), held));
                 if v != VOID && kept > 0 {
                     out.insert([x, y, z], (v, kept));
                 }
@@ -267,7 +267,7 @@ fn column_reach() {
     }
 }
 
-fn words(text: &str) -> Option<Ext> {
+fn marker_text(text: &str) -> Option<Ext> {
     Some(Ext::MarkerText(text.to_string()))
 }
 
@@ -279,7 +279,7 @@ fn leaf_words_freed_on_erase() {
     store.write([Write {
         key: key(zoom, at),
         id: MARKER,
-        ext: words("cafe"),
+        ext: marker_text("cafe"),
     }]);
     let e = store.read((zoom, at)).placed().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
@@ -293,7 +293,7 @@ fn leaf_words_freed_on_erase() {
     store.write([Write {
         key: key(zoom, at),
         id: MARKER,
-        ext: words("bar"),
+        ext: marker_text("bar"),
     }]);
     let e = store.read((zoom, at)).placed().expect("placed again");
     assert_eq!(e.ext, 1);
@@ -301,7 +301,7 @@ fn leaf_words_freed_on_erase() {
 }
 
 #[test]
-fn marker_words_change_cube() {
+fn marker_text_change_cube() {
     use pxl_spec::asset::marker::MARKER;
     let mut store = Store::default();
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
@@ -309,7 +309,7 @@ fn marker_words_change_cube() {
         store.write([Write {
             key: key(zoom, at),
             id: MARKER,
-            ext: words(text),
+            ext: marker_text(text),
         }])
     };
     assert_eq!(put(&mut store, "cafe").len(), 1);
@@ -328,7 +328,7 @@ fn eight_markers_stay() {
         .map(|k| Write {
             key: key(OBJECT_COARSEST + 1, child_cube(OBJECT_COARSEST, parent, k)),
             id: MARKER,
-            ext: words(&format!("m{k}")),
+            ext: marker_text(&format!("m{k}")),
         })
         .collect();
     store.write(writes);

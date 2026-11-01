@@ -29,4 +29,9 @@ void bug(Errno errnum, std::uint64_t a, std::uint64_t b, std::source_location at
 void std::__libcpp_verbose_abort(char const *, ...) noexcept {
     xpute::bug(xpute::Errno::enotrecoverable);
 }
+
+// libc++abi's, which an abstract class's table names, prints the same way.
+extern "C" void __cxa_pure_virtual() {
+    xpute::bug(xpute::Errno::enotrecoverable);
+}
 #endif

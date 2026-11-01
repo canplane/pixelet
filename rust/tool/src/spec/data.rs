@@ -11,9 +11,10 @@
 use std::cell::Cell;
 
 use super::catalog::{run_of, FILE};
+use super::ingested::file_number;
 use super::{
     align_star, casing_note, enum_name, file, generated, js_num, json_str, laid_out, line_comments,
-    read, rgb_literal, rs_doc, rs_ident, ts_doc, Node, Output,
+    read, rgb_literal, rs_doc, rs_ident, snake, ts_doc, Node, Output,
 };
 
 enum Enums {
@@ -77,7 +78,7 @@ const DATA_SPECS: [DataSpec; 23] = [
         rs_also: &[],
         module: Some("marker"),
         enums: Enums::None,
-        ts_names: Some(&["MARKER_TEXT_CHARS"]),
+        ts_names: Some(&["PIN_LABEL", "MARKER_TEXT_CHARS"]),
     },
     DataSpec {
         json: "spec/spec/asset/id.json",
@@ -120,12 +121,12 @@ const DATA_SPECS: [DataSpec; 23] = [
         ts_names: None,
     },
     DataSpec {
-        json: "spec/spec/bake/place_theme.json",
+        json: "spec/spec/search.json",
         uses: &[],
-        ts: Some("ts/client/src/shell/search/place_theme.spec.ts"),
-        rs: None,
+        ts: Some("ts/client/src/shell/search/search.spec.ts"),
+        rs: Some("rust/spec/src/search.spec.rs"),
         rs_also: &[],
-        module: None,
+        module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
     },
@@ -137,7 +138,7 @@ const DATA_SPECS: [DataSpec; 23] = [
         rs_also: &[],
         module: Some("actor"),
         enums: Enums::All,
-        ts_names: Some(&["groups", "PERSON_GENDER_PREFIX"]),
+        ts_names: Some(&["groups", "GENDER"]),
     },
     DataSpec {
         json: "spec/spec/asset/sky.json",
@@ -236,20 +237,19 @@ const DATA_SPECS: [DataSpec; 23] = [
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
         rs_also: &[],
         module: Some("span_spec"),
-        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS"]),
+        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_MOVED"]),
         ts_names: None,
     },
     DataSpec {
-        json: "spec/client/kernel/profiler/profiler.json",
+        json: "spec/client/kernel/perf/perf.json",
         uses: &[
             "spec/client/kernel/sys/sched/phase.json",
             "spec/client/kernel/sys/io/demand.json",
             "spec/client/kernel/turn/step.json",
             "spec/client/render/gpu/span.json",
-            "xpute/spec/gpu/api.json",
         ],
-        ts: Some("ts/client/src/abi/profiler.spec.ts"),
-        rs: Some("rust/client/kernel/src/profiler/profiler.spec.rs"),
+        ts: Some("ts/client/src/abi/perf.spec.ts"),
+        rs: Some("rust/client/kernel/src/perf/perf.spec.rs"),
         rs_also: &[],
         module: Some("spec"),
         enums: Enums::Named(&["WAKES"]),
@@ -314,6 +314,110 @@ fn is_ts_ident(k: &str) -> bool {
         && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '$')
 }
 
+/// What a module cannot export a constant as.
+const TS_RESERVED: [&str; 46] = [
+    "await",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "implements",
+    "import",
+    "in",
+    "instanceof",
+    "interface",
+    "let",
+    "new",
+    "null",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "return",
+    "static",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+];
+
+/// A group each of whose members is a number, by a name a module can export:
+/// its members, written as a module of constants beside the group's file.
+fn numbers(n: &Node) -> Option<Vec<(&str, &Node)>> {
+    let entries: Vec<(&str, &Node)> = n.is_obj().then(|| n.named().collect())?;
+    (!entries.is_empty()
+        && entries.iter().all(|(k, v)| {
+            is_ts_ident(k)
+                && !TS_RESERVED.contains(k)
+                && matches!(if v.is_wrapper() { v.value() } else { v }, Node::Num(_))
+        }))
+    .then_some(entries)
+}
+
+/// A group's module beside `ts_path`, `<its stem>/<the group>.spec.ts`: the
+/// path, and what the file beside it imports it from.
+fn beside(ts_path: &str, group: &str) -> (String, String) {
+    let stem = ts_path.strip_suffix(".spec.ts").unwrap_or(ts_path);
+    let file_stem = stem.rsplit('/').next().unwrap_or(stem);
+    let module = format!("{}.spec.ts", snake(group));
+    (
+        format!("{stem}/{module}"),
+        format!("./{file_stem}/{module}"),
+    )
+}
+
+/// A group as a module of its members' constants, read as a namespace of the
+/// group's name: a bundle inlines each member and carries none of their names.
+fn constants(
+    logical: &str,
+    json: &str,
+    doc: Option<&[String]>,
+    members: &[(&str, String, Option<Vec<String>>)],
+) -> String {
+    let mut out = vec![format!("// {logical}"), "//".into(), generated(json)];
+    if let Some(doc) = doc {
+        out.push("//".into());
+        out.extend(line_comments(doc, ""));
+    }
+    for (k, lit, doc) in members {
+        out.push(String::new());
+        if let Some(doc) = doc {
+            out.extend(ts_doc(doc, "").into_iter().enumerate().map(|(i, l)| {
+                if i == 0 {
+                    l
+                } else {
+                    align_star(l, "")
+                }
+            }));
+        }
+        out.push(format!("export const {k} = {lit};"));
+    }
+    file(&out)
+}
+
 pub fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
     if n.is_wrapper() {
         return ts_literal(n.value(), type_of(n, ty), indent);
@@ -323,6 +427,7 @@ pub fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
         Node::Bool(b) => b.to_string(),
         Node::Str(s) if ty == "u64" => format!("{s}n"),
         Node::Str(s) if ty == "rgb" => rgb_literal(s)?,
+        Node::Str(s) if ty == FILE => format!("{} as number", file_number(s)?),
         Node::Str(s) => json_str(s),
         Node::Arr(a) => format!(
             "[{}]",
@@ -664,6 +769,13 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             }
             let mut body: Vec<String> = Vec::new();
             let mut words: Vec<String> = Vec::new();
+            let mut modules: Vec<String> = Vec::new();
+            let module_logical = |path: &str| {
+                TS_LAYOUT
+                    .iter()
+                    .find_map(|(dir, name)| path.strip_prefix(dir).map(|p| format!("{name}{p}")))
+                    .unwrap_or(path.to_string())
+            };
             if let Some(listed) = d.ts_names {
                 let unknown: Vec<&str> = listed
                     .iter()
@@ -709,6 +821,22 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                         annot.map(|a| format!(": {a}")).unwrap_or_default(),
                         ts_literal(n, t, "")?
                     ));
+                } else if let Some(entries) = numbers(n) {
+                    let t = type_of(n, "f64");
+                    let members = entries
+                        .iter()
+                        .map(|(k, v)| {
+                            let doc = v.is_obj().then(|| v.lines_at("$doc")).flatten();
+                            ts_literal(v, t, "").map(|lit| (*k, lit, doc))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let (path, from) = beside(ts_path, name);
+                    outputs.push(Output::new(
+                        &path,
+                        constants(&module_logical(&path), d.json, None, &members),
+                    ));
+                    modules.push(format!("import * as {name} from \"{from}\";"));
+                    body.push(format!("export {{ {name} }};"));
                 } else {
                     body.push(format!(
                         "export const {name} = {} as const;",
@@ -725,17 +853,37 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                             v.is_obj() && v.get("$number").and_then(Node::num).is_some()
                         })
                     {
-                        body.extend([
-                            String::new(),
-                            format!("export const {} = {{", enum_name(name)),
-                        ]);
-                        body.extend(entries.iter().map(|(k, v)| {
-                            format!(
-                                "  {k}: {},",
-                                js_num(v.get("$number").and_then(Node::num).unwrap_or_default())
-                            )
-                        }));
-                        body.push("} as const;".into());
+                        let e = enum_name(name);
+                        if entries
+                            .iter()
+                            .all(|(k, _)| is_ts_ident(k) && !TS_RESERVED.contains(k))
+                        {
+                            let members: Vec<(&str, String, Option<Vec<String>>)> = entries
+                                .iter()
+                                .map(|(k, v)| {
+                                    let num = v.get("$number").and_then(Node::num);
+                                    (*k, js_num(num.unwrap_or_default()), None)
+                                })
+                                .collect();
+                            let (path, from) = beside(ts_path, &e);
+                            outputs.push(Output::new(
+                                &path,
+                                constants(&module_logical(&path), d.json, None, &members),
+                            ));
+                            modules.push(format!("import * as {e} from \"{from}\";"));
+                            body.extend([String::new(), format!("export {{ {e} }};")]);
+                        } else {
+                            body.extend([String::new(), format!("export const {e} = {{")]);
+                            body.extend(entries.iter().map(|(k, v)| {
+                                format!(
+                                    "  {k}: {},",
+                                    js_num(
+                                        v.get("$number").and_then(Node::num).unwrap_or_default()
+                                    )
+                                )
+                            }));
+                            body.push("} as const;".into());
+                        }
                     }
                 }
             }
@@ -748,6 +896,12 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                         words.join(", ")
                     ),
                 ]);
+            }
+            if !modules.is_empty() {
+                if words.is_empty() {
+                    ts.push(String::new());
+                }
+                ts.extend(modules);
             }
             ts.extend(body);
             outputs.push(Output::new(ts_path, file(&ts)));

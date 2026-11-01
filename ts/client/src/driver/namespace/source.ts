@@ -4,7 +4,7 @@
  * The tile source's declaration (the bucket's, which script/publish.py writes,
  * or a dev tile server's), asked until it answers and read once. The kernel is
  * handed its own part, the top zoom, the formats and the shards
- * (WORLD_SOURCE), and observes nothing before; the versions stay here, for the
+ * (FS_MOUNT), and observes nothing before; the versions stay here, for the
  * bakes' objects (tile.ts) and the settings.
  */
 
@@ -16,7 +16,7 @@ import {
   type BaseLayer,
   VERSION_BYTES,
 } from "./published.spec.ts";
-import { Command, encode_world_source } from "@/abi/cmd.spec.ts";
+import { Command, encode_fs_mount } from "@/abi/cmd.spec.ts";
 import { Source } from "@/abi/state.ts";
 import { bracket } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
@@ -140,7 +140,7 @@ async function asked(): Promise<string | null> {
   }
 }
 
-/** Hands the kernel its part of the declaration (WORLD_SOURCE); false where
+/** Hands the kernel its part of the declaration (FS_MOUNT); false where
  * it is more than a command carries. */
 export type SendSource = (
   top_zoom: number,
@@ -153,9 +153,9 @@ function send_source(
   formats: number[],
   shards: string[],
 ): boolean {
-  const pkt = encode_world_source(HOST.doorbell, top_zoom, formats, shards);
+  const pkt = encode_fs_mount(HOST.doorbell, top_zoom, formats, shards);
   if (!HOST.doorbell.fits(pkt)) return false;
-  HOST.send(port.SHELL, Command.WORLD_SOURCE, pkt);
+  HOST.send(port.SHELL, Command.FS_MOUNT, pkt);
   return true;
 }
 

@@ -12,39 +12,31 @@ use pxl_spec::space::coord::zoom::units;
 use xpute_kit::wire::xtp::PacketWriter;
 
 use crate::domain::control::camera::controller;
-use crate::domain::control::camera::controller::{dist, Motion};
+use crate::domain::control::camera::controller::dist;
 use crate::domain::control::camera::input::dragging;
-use crate::domain::control::camera::state::{camera_state, IntentPatch};
-use crate::domain::control::cmd::Tracking;
+use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::{
-    CompanionState, DivisionPart, GroundStatus, HoldingState, LangName, LocationState, LonLat,
-    Message, OrientationState, PivotState, Snapshot,
+    CompanionState, DivisionPart, GroundStatus, LangName, LocationState, LonLat, Message,
+    OrientationState, PivotState, Snapshot, ToolState,
 };
-use crate::domain::control::interaction::edit;
-use crate::domain::control::interaction::{holding, Holding};
-use crate::domain::control::navigation::destination;
-use crate::domain::control::navigation::destination::go_to_ground;
-use crate::domain::control::navigation::follow_mode::{following, set_following};
+use crate::domain::control::edit::write;
+use crate::domain::control::edit::{tool, Tool};
+use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::navigation::off_center::off_center;
-use crate::domain::control::sensor::device_orientation::{orient_close, request_orient};
-use crate::domain::control::sensor::geolocation::{
-    geolocation_close, geolocation_open, start_watching,
-};
 use crate::domain::control::sensor::reading::{
     device_location_store, device_orient_store, SensorState,
 };
 use crate::domain::layer::division::{each_division, naming};
 use crate::domain::scene::character::companion::companion_ready;
-use crate::domain::scene::character::preview::{preview_rows, CASES_MAX};
+use crate::domain::scene::character::preview::{preview_rows, PREVIEWS_MAX};
 use crate::domain::scene::stage::is_screen_drawn;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::domain::view::observation;
 use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
 use crate::pointer;
-use crate::sys::io::file::{self, Kept};
+use crate::sys::io::file::{self, StorageFile};
 use crate::sys::io::request;
 use crate::sys::io::source;
-use crate::turn::world_platform;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::status::errno::Errno;
@@ -73,7 +65,7 @@ fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&
 
 /// What the snapshot is made of, read off its owners: where the names are
 /// read (`division::naming`) rather than the names, and the waiting
-/// marker's words aside (`Sent`).
+/// marker's text aside (`Sent`).
 #[derive(Clone, Copy, PartialEq)]
 pub struct Shown {
     status: GroundStatus,
@@ -81,8 +73,8 @@ pub struct Shown {
     pivot: Option<Q3>,
     location: (SensorState, bool),
     companion: [bool; 2],
-    holding: Holding,
-    marker: bool,
+    tool: Tool,
+    drafting: bool,
     orient: SensorState,
     azimuth: f64,
     is_follow_mode: bool,
@@ -95,17 +87,17 @@ pub struct Shown {
     /// The view's scale at the pivot, as the units a logical pixel spans.
     u_per_px: f64,
     division: Option<(Tile, u32)>,
-    previews: ([u32; CASES_MAX], usize),
+    previews: ([u32; PREVIEWS_MAX], usize),
     stall: Option<Message>,
     declared: bool,
-    /// The refused kept slots, the first `.1` of them.
-    kept_refused: ([u32; Kept::ALL.len()], usize),
+    /// The refused storage files, the first `.1` of them.
+    storage_refused: ([u32; StorageFile::ALL.len()], usize),
 }
 
 fn shown() -> Shown {
     let (location, settings) = (device_location_store(), settings_store());
     let pivot = controller::pivot();
-    let mut previews = ([0u32; CASES_MAX], 0);
+    let mut previews = ([0u32; PREVIEWS_MAX], 0);
     for (slot, (surface, _, _)) in previews.0.iter_mut().zip(preview_rows()) {
         *slot = surface;
         previews.1 += 1;
@@ -123,8 +115,8 @@ fn shown() -> Shown {
         pivot,
         location: (location.state, location.location.is_some()),
         companion: companion_ready(),
-        holding: holding(),
-        marker: edit::marker_waiting().0,
+        tool: tool(),
+        drafting: write::marker_draft().is_some(),
         orient: device_orient_store().state,
         azimuth: camera_state().intent.azimuth,
         is_follow_mode: following(),
@@ -143,10 +135,13 @@ fn shown() -> Shown {
         previews,
         stall: stall(),
         declared: source::top().is_some(),
-        kept_refused: {
-            let mut refused = ([0; Kept::ALL.len()], 0);
-            for kept in Kept::ALL.into_iter().filter(|&k| file::is_refused(k)) {
-                refused.0[refused.1] = kept.slot();
+        storage_refused: {
+            let mut refused = ([0; StorageFile::ALL.len()], 0);
+            for file in StorageFile::ALL
+                .into_iter()
+                .filter(|&k| file::is_refused(k))
+            {
+                refused.0[refused.1] = file.slot();
                 refused.1 += 1;
             }
             refused
@@ -155,32 +150,31 @@ fn shown() -> Shown {
 }
 
 /// The snapshot last sent, which a new one is sent only where it moved
-/// from: its makings and the waiting marker's words.
+/// from: its makings and the marker draft's text.
 #[derive(Default)]
 pub struct Sent {
     shown: Option<Shown>,
-    words: String,
+    text: String,
 }
 
 impl Sent {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
     pub fn take_moved(&mut self) -> Option<Shown> {
-        let (now, (_, words)) = (shown(), edit::marker_waiting());
-        if self.shown == Some(now) && self.words == words {
+        let (now, text) = (shown(), write::marker_draft().unwrap_or_default());
+        if self.shown == Some(now) && self.text == text {
             return None;
         }
         self.shown = Some(now);
-        self.words.clear();
-        self.words.push_str(words);
+        self.text.clear();
+        self.text.push_str(text);
         Some(now)
     }
 }
 
 /// The snapshot made of `shown` into `out`; none where it does not fit.
 pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
-    let (_, words) = edit::marker_waiting();
-    let held = shown.holding;
+    let tool = shown.tool;
     let snapshot = Snapshot {
         pivot: PivotState {
             status: shown.status,
@@ -205,13 +199,12 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
             person_ready: shown.companion[0],
             pet_ready: shown.companion[1],
         },
-        holding: HoldingState {
-            tool: held.active_tool,
-            cube: cube_id(held.object_cube),
-            decor: decor_num_id(held.decor_id),
-            tier: held.object_tier,
-            marker: shown.marker,
-            words: &words,
+        tool: ToolState {
+            active: tool.active_tool,
+            cube: cube_id(tool.object_cube),
+            decor: decor_num_id(tool.decor_id),
+            tier: tool.object_tier,
+            draft: write::marker_draft(),
         },
         orient: OrientationState {
             status: shown.orient.status,
@@ -226,61 +219,12 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         m_per_px: m_per_px(shown.u_per_px, shown.pivot),
         division: &|each| division_parts(shown.division, shown.u_per_px, each),
         previews: &shown.previews.0[..shown.previews.1],
-        kept_refused: &shown.kept_refused.0[..shown.kept_refused.1],
+        storage_refused: &shown.storage_refused.0[..shown.storage_refused.1],
         stall: shown.stall,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);
     w.fitted()
-}
-
-/// The shell decides which of the three from the state it drew the button
-/// in, so the press means what the user saw.
-pub fn tracking_action(tracking: Tracking) {
-    match tracking {
-        Tracking::Recenter => {
-            // On the floor nearest the fix's altitude, or the surface where it has
-            // none; the distance is kept.
-            if let Some(device) = off_center().device_coord {
-                go_to_ground(device, Motion::Snap);
-            }
-            set_following(false);
-        }
-        Tracking::Follow => {
-            // The heading is asked for, and the view turns with it once it comes;
-            // where there is none, following is where one is alone.
-            request_orient(world_platform().orient);
-            set_following(true);
-        }
-        Tracking::Unfollow => {
-            set_following(false);
-            controller::reset_azimuth();
-        }
-    }
-}
-
-/// A search's place and the view asked with it: a view far out comes in,
-/// and the view is asked after, so a dist asked wins over the coming in.
-pub fn go_to_deg(lon: f64, lat: f64, view: IntentPatch) {
-    destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
-    controller::come_in_to_default();
-    controller::set_intent(view);
-}
-
-/// The compass is asked for where it is used (`tracking_action`).
-pub fn location_enable() {
-    start_watching(world_platform().geolocation);
-}
-
-pub fn sensors_open() {
-    let platform = world_platform();
-    geolocation_open(platform.geolocation);
-    request_orient(platform.orient);
-}
-
-pub fn sensors_close() {
-    geolocation_close();
-    orient_close();
 }
 
 /// Why the server does not answer the world's reads now: failing, or given up.

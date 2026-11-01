@@ -21,12 +21,12 @@ use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
 use crate::sys::mem::fixed;
-use crate::sys::mem::fixed::Held;
+use crate::sys::mem::fixed::OwnedRange;
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 
 /// `.fixed.division`, handed in at boot.
-pub static RANGE: Held = Held::new();
+pub static RANGE: OwnedRange = OwnedRange::new();
 
 /// A record's cells, a word each, on a whole cache line.
 const RECORD_BYTES: u32 = fixed::lane_bytes(CELLS, 4);

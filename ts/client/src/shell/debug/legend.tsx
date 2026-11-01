@@ -11,7 +11,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Defs, LinearGradient, Rect, Stop, Svg } from "react-native-svg";
 
 import { SETTING } from "@/shell/setting/schema.ts";
-import { gauge, Head } from "./profiler/gauge.tsx";
+import { gauge, Head } from "./perf/gauge.tsx";
 import { Accordion } from "./accordion.tsx";
 import { coverage, frame } from "@/abi/gizmo.spec.ts";
 import { grid, share, steps } from "@/abi/debug_look.spec.ts";

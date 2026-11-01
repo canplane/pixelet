@@ -19,7 +19,7 @@
 use crate::beam;
 use crate::cast;
 use crate::cast::Spacing;
-use crate::cast::{Detail, End, Met, Ray};
+use crate::cast::{Detail, End, Ray, Trace};
 use crate::eye;
 use crate::generated;
 use crate::param::light;
@@ -315,7 +315,7 @@ pub const HEAD_COUNTED: usize = 1;
 pub const HEAD_EPOCH: usize = 2;
 /// The map's side, which the slots' lattice is laid by. A pass the eye's
 /// rays and the shadow map share is handed the eye's own head, all zero, in
-/// its place (pxl-shader either.rs `Either`): a head naming no map is the
+/// its place (pxl-shader pass_observer.rs `PassObserver`): a head naming no map is the
 /// eye's.
 pub const HEAD_SIZE: usize = 3;
 /// The clipmap's corner the cast before was cast under, X and Y, the first
@@ -738,11 +738,11 @@ pub fn ray(eye: [i32; 3], s: &Light, starts: &Starts, p: [u32; 2]) -> ([i32; 3],
 /// The depth a texel's walk `met` leaves in the map: where it stopped
 /// along its ray, as a share of the box's depth, pushed back as its face's
 /// axis is (`Light::bias`); the far plane, 1, where it stopped at nothing.
-pub fn depth<A>(s: &Light, met: &Met<A>) -> f32 {
-    if met.ends != End::Stop {
+pub fn depth<A>(s: &Light, met: &Trace<A>) -> f32 {
+    if met.ends != End::Hit {
         return 1.0;
     }
-    let d = met.stop.t / s.t_max + axis(s.bias, met.stop.axis);
+    let d = met.hit.t / s.t_max + axis(s.bias, met.hit.axis);
     if d < 1.0 {
         d
     } else {
@@ -753,8 +753,8 @@ pub fn depth<A>(s: &Light, met: &Met<A>) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cast::Hit;
     use crate::cast::Node;
-    use crate::cast::Stop;
     use crate::param::light;
 
     /// Starts as a host lays them for the eye at Q3 `eye`, off the light's
@@ -815,11 +815,11 @@ mod tests {
     }
 
     /// A walk that stopped `t` along its ray on a face across `axis`, or went on.
-    fn met(ends: End, t: f32, axis: u32) -> Met<()> {
+    fn met(ends: End, t: f32, axis: u32) -> Trace<()> {
         let node = Node::ROOT;
-        Met {
+        Trace {
             ends,
-            stop: Stop {
+            hit: Hit {
                 t,
                 axis,
                 node,
@@ -849,8 +849,8 @@ mod tests {
     #[test]
     fn square_face_no_slope() {
         let s = down();
-        assert_eq!(depth(&s, &met(End::Stop, 2.0, 2)), 0.25);
-        assert_eq!(depth(&s, &met(End::On, 8.0, 0)), 1.0);
+        assert_eq!(depth(&s, &met(End::Hit, 2.0, 2)), 0.25);
+        assert_eq!(depth(&s, &met(End::Miss, 8.0, 0)), 1.0);
         assert_eq!(depth(&s, &met(End::Lacks, 2.0, 2)), 1.0);
     }
 
@@ -871,7 +871,7 @@ mod tests {
             1.0,
         );
         let texel = 4.0 / 2048.0;
-        let d = depth(&s, &met(End::Stop, 2.0, 2));
+        let d = depth(&s, &met(End::Hit, 2.0, 2));
         assert!(
             (d - (0.25 + light::SLOPE_BIAS * texel / 8.0)).abs() < 1e-6,
             "{d}"

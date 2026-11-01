@@ -6,9 +6,9 @@
   ],
   "surface_role": {
     "$type": "u32",
-    "$doc": ["What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case."],
+    "$doc": ["What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing previewed alone."],
     "WORLD": 0,
-    "CASE": 1
+    "PREVIEW": 1
   },
   "stream": {
     "$type": "u32",
@@ -23,7 +23,7 @@
       "word, then each span's begin and end ticks (gpu/api.rs lays them out and",
       "holds this number to it)."
     ],
-    "HEAD": 141,
+    "HEAD": 145,
     "BYTES": {
       "$val": 4194304,
       "$doc": [

@@ -1,24 +1,24 @@
 // @xpute/example/sum.test.ts
 
 /**
- * The smallest host, beside the smallest guest (rust/example): the guest's
- * module opened over a memory of its own, the host mounted on it with a
- * policy for a host with no display and an answer to the one hostcall the
- * guest makes, then one command sent and its reply read. Build the guest
- * first (`make build`).
+ * The smallest host, beside the smallest guest, in Rust (rust/example) and in
+ * C++ (cpp/example), each held to the same tests: the guest's module opened and
+ * mounted in one call (host/port.ts `open`), with an answer to the one hostcall
+ * the guest makes, then one command called with its table's writer and its
+ * event heard with its table's reader (cmd.spec.ts); and a file the guest reads
+ * in a task, given by the host's `Fs`. Build the guests first (`make build`).
  */
 
-import { test } from "vitest";
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { mount } from "@xpute/host/host.ts";
-import { op } from "@xpute/host/ipc/sys.spec.ts";
-import { open_module } from "@xpute/host/module.ts";
-import { FixedQuota } from "@xpute/host/sched/fixed_quota.ts";
+import { FileError, type Fs } from "@xpute/host/ipc/sys.ts";
+import { open } from "@xpute/host/port.ts";
+import { COUNT, COUNTED, Hostcall, SUM, SUMMED } from "./cmd.spec.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 /** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
@@ -26,41 +26,63 @@ const CARGO_TARGET = resolve(
   join(ROOT, "rust"),
   process.env.CARGO_TARGET_DIR ?? "target",
 );
-const GUEST = join(
-  CARGO_TARGET,
-  "wasm32-unknown-unknown/debug/xpute_example.wasm",
-);
+/** Each guest's module. */
+const GUESTS: Record<string, string> = {
+  rust: join(CARGO_TARGET, "wasm32-unknown-unknown/debug/xpute_example.wasm"),
+  cpp: join(ROOT, "cpp/target/xpute_example.wasm"),
+};
 
-// The guest's numbers (rust/example/src/lib.rs).
-const SUM = 0x1001;
-const ASK = (op.PROGRAM | 1) >>> 0;
+/** What the host answers the guest's hostcall `ASK` with. */
+const ANSWER = 100;
 
-/** What the host holds and the guest asks for. */
-const HELD = 100;
+/** The one file the host has. */
+const FILE = new TextEncoder().encode("a file the guest reads whole");
 
-/** The port the program sends as: any but the host's, 0. */
-const SENDER = 1;
+const fs: Fs = {
+  open: (_root, path) => {
+    if (path !== "file.txt") throw new FileError(Errno.ENOENT);
+    return FILE;
+  },
+  commit: () => {},
+};
 
-test("example - a command answered with what the guest asked its host", () => {
-  // Two MiB, never grown: the guest's stack, its data, its range and its heap.
-  const memory = new WebAssembly.Memory({ initial: 32, maximum: 32 });
-  const guest = open_module(
-    new WebAssembly.Module(readFileSync(GUEST)),
-    memory,
-  );
-  const boot = guest.instance.exports.boot as () => number;
-  const host = mount(guest, {
-    toc_at: boot() >>> 0,
-    sys: { program: (code) => (code === ASK ? HELD : Errno.ENOSYS) },
-    policy: new FixedQuota(4),
-    submit: () => {},
+for (const [lang, path] of Object.entries(GUESTS)) {
+  // Rust's is built by `make build` wherever the example runs; C++'s needs the
+  // WASI SDK.
+  const built = lang === "rust" || existsSync(path);
+  const name = built
+    ? lang
+    : `${lang}: skipped, ${path} not built (make build)`;
+  describe.skipIf(!built)(name, () => {
+    const module = () => new WebAssembly.Module(readFileSync(path));
+
+    test("example - a command answered with what the guest asked its host", () => {
+      const guest = open(module(), {
+        answer: { [Hostcall.ASK]: () => ANSWER },
+      });
+      let summed = -1;
+      guest.on(SUMMED, (total) => {
+        summed = total;
+      });
+      assert.deepStrictEqual(guest.call(SUM, 2, 3), 2 + 3 + ANSWER);
+      assert.deepStrictEqual(summed, 2 + 3);
+    });
+
+    /** What the next COUNTED carries, once the guest raises it. */
+    function counted(file: string): Promise<number> {
+      const guest = open(module(), { fs });
+      return new Promise((resolve) => {
+        guest.on(COUNTED, resolve);
+        guest.send(COUNT, file);
+      });
+    }
+
+    test("example - a file read whole by a task, its size raised", async () => {
+      assert.deepStrictEqual(await counted("file.txt"), FILE.byteLength);
+    });
+
+    test("example - a file there is not refused with ENOENT", async () => {
+      assert.deepStrictEqual(await counted("none.txt"), Errno.ENOENT);
+    });
   });
-
-  const pkt = host.doorbell.writer(2);
-  pkt.u32(2);
-  pkt.u32(3);
-  assert.deepStrictEqual(
-    host.doorbell.call(SENDER, SUM, pkt, (result) => result),
-    2 + 3 + HELD,
-  );
-});
+}

@@ -22,7 +22,7 @@ use crate::domain::view::frame::screen::{ndc_to_px, units_per_px_at};
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::mem::section;
 use crate::sys::sched::tick::TickContext;
-use pxl_render::gpu::sheet::shelf::NO_SLOT;
+use pxl_render::gpu::atlas::shelf::NO_SLOT;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::global::Global;
@@ -45,7 +45,7 @@ use pxl_spec::space::coord::world::REACH;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::window::BRICK_SHIFT;
+use pxl_spec_core::clipmap::BRICK_SHIFT;
 
 /// A brick of the eye's windows the markers are read over, by its zoom
 /// and place, X running on round the world as the view's frame does
@@ -74,7 +74,7 @@ struct Arrangement {
     set: Set,
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, and where a tap on it goes.
-    hits: Vec<([f64; 4], Went)>,
+    hits: Vec<([f64; 4], MarkerHit)>,
     /// Kept so a settled turn asks the heap for nothing; a brick's in a
     /// run, as each source reads it (`pin.rs`, `place.rs`).
     pins: Vec<pin::Pin>,
@@ -131,13 +131,13 @@ struct Seen {
 
 /// The name a holder calls what it shows by, from one run to the next, and
 /// none of what is painted (`design.rs`): a pin by its own
-/// (`pin::Held`), a place by its tile and its index there, the chat's line
+/// (`pin::Holder`), a place by its tile and its index there, the chat's line
 /// by its speaker, of whom there is one. The arrangement only tells one from
 /// another, to keep an instance's old drawing until its new one is painted;
 /// where a tap goes is the instance's own (`Instance::tap`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Key {
-    Pin(pin::Held),
+    Pin(pin::Holder),
     Place(Tile, u32),
     Line,
 }
@@ -149,7 +149,7 @@ pub(super) struct Instance {
     pub(super) key: Key,
     pub(super) design: Design,
     pub(super) stands: Q3,
-    pub(super) tap: Option<Went>,
+    pub(super) tap: Option<MarkerHit>,
 }
 
 static ARRANGEMENT: Global<Arrangement> = Global::new();
@@ -346,7 +346,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
             }
             _ => (design, None),
         };
-        // Its words are laid out by a later turn.
+        // Its text is laid out by a later turn.
         let Some([width, height, anchor]) = design::size(&design) else {
             unlaid = true;
             continue;
@@ -377,11 +377,11 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     (p.pins, p.places, p.shown) = (pins, read_places, shown);
     select_visible(&mut p.candidates, &mut p.kept);
     // A design held for an instance seen asks its slot now, after the slots
-    // let go are freed, so it is painted at render. Where the sheet has no
+    // let go are freed, so it is painted at render. Where the atlas has no
     // room for it, the hold is let go: the instance shows the new design,
     // which waits, and the next run frees the old one's slot and asks again.
-    // One whose words are not laid out yet stays held and asks nothing: it
-    // asks the turn its words come (`design::coming`).
+    // One whose text is not laid out yet stays held and asks nothing: it
+    // asks the turn its text comes (`design::coming`).
     let mut refused = false;
     for &i in &p.kept {
         let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else {
@@ -462,15 +462,15 @@ pub fn draw(draw: &mut DrawList, eye: V3) {
     ARRANGEMENT.get(Arrangement::default).set.draw(draw, eye);
 }
 
-/// Where a tap on a marker goes: to its place; a pin is its entry's, which the tool held decides what to do with.
+/// What a tap on a scene marker hit: a place to go to; a pin, its entry's, which the tool held decides what to do with.
 #[derive(Clone, Copy)]
-pub enum Went {
+pub enum MarkerHit {
     To(Q3),
     Pin(EntryAt, Q3),
 }
 
 /// `ndc` in [−1, 1], y up. The marker that took the tap, if any.
-pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
+pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<MarkerHit> {
     let [x, y] = ndc_to_px([ndc_x, ndc_y]);
     let hits = &ARRANGEMENT.get(Arrangement::default).hits;
     hits.iter()

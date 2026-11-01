@@ -5,7 +5,7 @@ description: Upload baked tiles, ingested models and textures to the R2 bucket t
 
 # Publishing the bucket
 
-How a tile set or an asset gets into the bucket `pixelet-tiles`, and how to
+How a tile set or an asset gets into the bucket `pixelet-bucket`, and how to
 confirm it arrived. What the bucket holds and how the Worker serves it is
 [infra/README.md](../../../infra/README.md) §4; building a set is
 [bake-tiles](../bake-tiles/SKILL.md).
@@ -88,7 +88,7 @@ make ingest-asset
 #    what the spec generates from it (the host's table, the catalog, the pack's layout)
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
-  AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-tiles/asset \
+  AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-bucket/asset \
     --profile r2 \
     --exclude "*" --include "*.${t%%:*}" \
     --content-type ${t#*:} --cache-control "public, max-age=31536000, immutable"
@@ -103,8 +103,8 @@ and upload before deploying.**
 ```bash
 # a tile: expect the manifest's ContentEncoding;
 # a glb: expect ContentType model/gltf-binary and no ContentEncoding
-aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<name> --profile r2
-aws s3api head-object --bucket pixelet-tiles --key asset/<sha256>.<ext> --profile r2
+aws s3api head-object --bucket pixelet-bucket --key terrain/<version>/<name> --profile r2
+aws s3api head-object --bucket pixelet-bucket --key asset/<sha256>.<ext> --profile r2
 ```
 
 ## Verify what is served

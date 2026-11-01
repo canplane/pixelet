@@ -4,7 +4,7 @@
 //! the world as the GPU holds it (world.rs) and the eye it is cast from
 //! (eye.rs): the passes a cast takes, written once over the observer it
 //! casts for (observer.rs), a pass both observers take one entry
-//! (either.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
+//! (pass_observer.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
 //! observed pyramid (observed.rs), the world's depth from the light (light.rs),
 //! each handed brick's ground (ground.rs) and ways (way.rs), and the decor
 //! the ground generates (decor.rs). An entry is named
@@ -19,7 +19,7 @@
 mod beam;
 mod cast;
 mod decor;
-mod either;
+mod pass_observer;
 mod eye;
 mod ground;
 mod observed;
@@ -43,7 +43,7 @@ pub use light::{
     light_miss_cs, light_reach_cs, light_sample_cs, light_told_cs, Head,
 };
 pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
-pub use world::{Looks, Unlooked, World};
+pub use world::{PaletteWords, NoPalette, World};
 
 use spirv_std::memory::{Scope, Semantics};
 

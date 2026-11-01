@@ -75,15 +75,15 @@ fn main() {
     let sides: String = (1..answer::EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
         .collect();
-    let kept = format!(
-        "fn kept_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
+    let fill = format!(
+        "fn fill_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
-    // A coarse cell's four looks, its ray's third word, as a cell's word
-    // holds them (pxl-spec-core ground.rs `looks`).
-    let b = ground::LOOK_BITS;
+    // A coarse cell's four palette indices, its ray's third word, as a cell's word
+    // holds them (pxl-spec-core ground.rs `palette_indices`).
+    let b = ground::PALETTE_BITS;
     let m = (1u32 << b) - 1;
-    let looks = format!(
-        "fn ray_looks(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
+    let palette_indices = format!(
+        "fn ray_palette_indices(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
         2 * b,
         3 * b
     );
@@ -91,10 +91,10 @@ fn main() {
         field("val", 0, VAL_BITS),
         field("face", FACE_SHIFT, FACE_BITS),
         field("zoom", ZOOM_SHIFT, ZOOM_BITS),
-        field("kept", KEPT_SHIFT, KEPT_BITS),
-        kept,
+        field("fill", FILL_SHIFT, FILL_BITS),
+        fill,
         faces,
-        looks,
+        palette_indices,
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // How the samples' boxes lie in their buffer (pxl-spec-core raster.rs),
@@ -351,7 +351,7 @@ fn words() -> String {
         vec4s("AO", AO_FLOATS),
         vec4s("MARKER", MARKER_FLOATS),
         vec4s("STAR_RECORD", STAR_RECORD_FLOATS),
-        format!("const MARKER_INSTANCE_FLOATS: u32 = {MARKER_INSTANCE_FLOATS}u;\nconst PUCK_ZONE_INSTANCE_FLOATS: u32 = {PUCK_ZONE_INSTANCE_FLOATS}u;\n"),
+        format!("const MARKER_INSTANCE_FLOATS: u32 = {MARKER_INSTANCE_FLOATS}u;\nconst LOCATION_ZONE_INSTANCE_FLOATS: u32 = {LOCATION_ZONE_INSTANCE_FLOATS}u;\n"),
         format!("const AO_DOWNSCALE: u32 = {AO_DOWNSCALE}u;\nconst AO_NOISE_SIDE: u32 = {AO_NOISE_SIDE}u;\nconst DECOR_GROUPS: u32 = {DECOR_GROUPS}u;\n"),
         // The depth's bound's square and a screen tile's squares a side, the
         // workgroup its passes take a tile by (screen_bound.wgsl,
@@ -370,7 +370,7 @@ fn words() -> String {
         ]
         .map(|(name, (w, h))| format!("const {name}: vec2f = vec2f({w}.0, {h}.0);\n"))
         .concat(),
-        format!("const SHEET_FILL: u32 = {SHEET_FILL}u;\nconst SHEET_STROKE: u32 = {SHEET_STROKE}u;\nconst SHEET_TRIANGLE: u32 = {SHEET_TRIANGLE}u;\nconst SHEET_TEXT: u32 = {SHEET_TEXT}u;\nconst SHEET_HALO: u32 = {SHEET_HALO}u;\n"),
+        format!("const ATLAS_FILL: u32 = {ATLAS_FILL}u;\nconst ATLAS_STROKE: u32 = {ATLAS_STROKE}u;\nconst ATLAS_TRIANGLE: u32 = {ATLAS_TRIANGLE}u;\nconst ATLAS_TEXT: u32 = {ATLAS_TEXT}u;\nconst ATLAS_HALO: u32 = {ATLAS_HALO}u;\n"),
         format!("const BOX_XY_STEPS: u32 = {BOX_XY_STEPS}u;\nconst BOX_VERTICES: u32 = {BOX_VERTICES}u;\n"),
         format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\nconst HALF_STEP: f32 = {HALF_STEP:?};\n"),
         format!("const MOON_ANGULAR_RADIUS: f32 = {MOON_ANGULAR_RADIUS:?};\nconst MOON_ALBEDO: f32 = {MOON_ALBEDO:?};\nconst MOON_MAP_MEAN: f32 = {MOON_MAP_MEAN:?};\n"),

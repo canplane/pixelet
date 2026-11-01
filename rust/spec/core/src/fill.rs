@@ -1,12 +1,12 @@
 // pxl-spec-core/fill.rs
 
 //! gpu-portable: a brick's fill, a thread at a time, off its record in the
-//! frame's fresh list (`window::HANDED_WORDS`, its words, looks, samples and
+//! frame's fresh list (`clipmap::HANDED_WORDS`, its words, palette indices, samples and
 //! lines) into the buffer its words lie in from `base`
-//! (`window::BRICK_WORDS`): each column's ground top off its tile's
+//! (`clipmap::BRICK_WORDS`): each column's ground top off its tile's
 //! samples and its cell as laid (`heights`), its ways' spans off its lines,
 //! each column's once, into its scratch, the frame's (`spans`,
-//! `window::SPANS_AT`), and off them its levels, level 0 each column's own
+//! `clipmap::SPANS_AT`), and off them its levels, level 0 each column's own
 //! (`level`), and its ways' tree (`way::tree`). A GPU runs each pass a
 //! thread a column or entry (pxl-shader `height_cs`, `way_cs`,
 //! `bound_cs`); a bake runs its columns' passes in order over one brick
@@ -16,10 +16,10 @@
 use crate::answer;
 use crate::area;
 use crate::area::Shard;
-use crate::window::{
+use crate::clipmap::{
     self, column_top, handed_at, Bricks, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT,
     FRESH_BRICK, FRESH_CELL, FRESH_FIRST, FRESH_PLACE, FRESH_SHARD, FRESH_WORDS, LAID_AT,
-    LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT, LOOKS_AT, ROOT_AT, SPANS_ACROSS, SPANS_AT,
+    LEVELS_AT, LEVEL_ENTRY_WORDS, LINES_AT, PALETTE_AT, ROOT_AT, SPANS_ACROSS, SPANS_AT,
     SPANS_COLUMNS, SPANS_COLUMN_WORDS,
 };
 use crate::{at, ground, way, Zoom};
@@ -33,24 +33,24 @@ pub fn put(s: &mut [u32], i: u32, v: u32) {
     }
 }
 
-/// Column word `i` off the brick at `base` (`window::COLUMN_WORDS`).
+/// Column word `i` off the brick at `base` (`clipmap::COLUMN_WORDS`).
 pub fn column_of(ground: &[u32], base: u32, i: u32) -> u32 {
     at(ground, base + COLUMNS_AT + i)
 }
 
 /// Entry `at` of level `j` off the brick at `base`, its two bound words
-/// (`window::LEVEL_ENTRY_WORDS`).
+/// (`clipmap::LEVEL_ENTRY_WORDS`).
 pub fn level_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
-    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_idx(j, [x, y]);
+    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * clipmap::level_idx(j, [x, y]);
     [at(ground, e) as i32, at(ground, e + 1) as i32]
 }
 
-/// Cell `i` as laid off the brick at `base` (`window::LAID_WORDS`).
+/// Cell `i` as laid off the brick at `base` (`clipmap::LAID_WORDS`).
 pub fn laid_of(ground: &[u32], base: u32, i: u32) -> u32 {
-    window::laid_at(at(ground, base + LAID_AT + i / 2), i)
+    clipmap::laid_at(at(ground, base + LAID_AT + i / 2), i)
 }
 
-/// The root of the ways' tree off the brick at `base` (`window::ROOT_AT`).
+/// The root of the ways' tree off the brick at `base` (`clipmap::ROOT_AT`).
 pub fn root_of(ground: &[u32], base: u32) -> u32 {
     at(ground, base + ROOT_AT)
 }
@@ -71,7 +71,7 @@ fn handed(fresh: &[u32], k: u32) -> (u32, u32, [u32; 2], Zoom) {
     (
         rec,
         at(fresh, rec + FRESH_BRICK) * BRICK_WORDS,
-        window::place_of(at(fresh, rec + FRESH_PLACE)),
+        clipmap::place_of(at(fresh, rec + FRESH_PLACE)),
         at(fresh, rec + FRESH_CELL),
     )
 }
@@ -85,7 +85,7 @@ pub fn cell_of(fresh: &[u32], k: u32) -> Zoom {
 /// `cell`, off its levels' whole bound (`way::tree::span`): what its ways'
 /// tree's root holds, the first one's Z and how many.
 pub fn root_span(ground: &[u32], base: u32, cell: Zoom) -> (i32, u32) {
-    let ways = ground::bounds_of(level_of(ground, base, window::LEVELS, [0, 0]))[1];
+    let ways = ground::bounds_of(level_of(ground, base, clipmap::LEVELS, [0, 0]))[1];
     way::tree::span(ways, cell)
 }
 
@@ -103,14 +103,14 @@ impl Bricks for Fresh<'_> {
     fn brick(&self, _: u32, _: u32) -> ([i32; 2], bool) {
         ([0; 2], false)
     }
-    fn joined(&self, _: u32, _: u32) -> [u32; window::JOINED_WORDS as usize] {
-        [0; window::JOINED_WORDS as usize]
+    fn joined(&self, _: u32, _: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
+        [0; clipmap::JOINED_WORDS as usize]
     }
     fn origin(&self, _: u32) -> ([i32; 2], bool) {
         ([0; 2], false)
     }
-    /// Its own look four times: what `level` folds reads no look.
-    fn look(&self, _: u32, _: u32, i: u32) -> u32 {
+    /// Its own palette index four times: what `level` folds reads no palette index.
+    fn palette_word(&self, _: u32, _: u32, i: u32) -> u32 {
         ground::word([laid_of(self.ground, self.base, i) & 0xff; 4])
     }
     fn column(&self, _: u32, _: u32, i: u32) -> u32 {
@@ -127,7 +127,7 @@ impl Bricks for Fresh<'_> {
     }
 }
 
-/// A handed brick's spans in its scratch from `at` (`window::SPANS_AT`),
+/// A handed brick's spans in its scratch from `at` (`clipmap::SPANS_AT`),
 /// as its fill kept them (`spans`): what its levels and its ways' tree
 /// read its cells off.
 pub struct Scratch<'a> {
@@ -166,12 +166,12 @@ impl way::Kept for Scratch<'_> {
     }
 }
 
-/// A column's spans' head word's count (`window::SPANS_COLUMN_WORDS`); the
+/// A column's spans' head word's count (`clipmap::SPANS_COLUMN_WORDS`); the
 /// bit over it, where they did not fit.
 const SPANS_CNT: u32 = SPANS_PAST - 1;
 const SPANS_PAST: u32 = 0x8000;
 
-/// The head word of a column's spans (`window::SPANS_COLUMN_WORDS`).
+/// The head word of a column's spans (`clipmap::SPANS_COLUMN_WORDS`).
 fn head_word(s: &way::Spans, fits: bool) -> u32 {
     let face = if s.face == i32::MIN {
         i16::MIN as i32
@@ -182,18 +182,18 @@ fn head_word(s: &way::Spans, fits: bool) -> u32 {
 }
 
 /// Where the brick a frame hands `k`-th has its scratch in the frame's
-/// `scratch`, `window::HANDED` bricks' alike, each a `HANDED`th of its
+/// `scratch`, `clipmap::HANDED` bricks' alike, each a `HANDED`th of its
 /// length (`way::tree::scratch_words`), which the renderer grows
 /// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow_scratch`): taken from
 /// the buffer, as the pool's free stack takes its own (pxl-shader `pop`).
 /// A one brick's scratch is the first's.
 pub fn scratch_at(scratch: &[u32], k: u32) -> u32 {
-    k * (scratch.len() as u32 / window::HANDED)
+    k * (scratch.len() as u32 / clipmap::HANDED)
 }
 
-/// A brick being filled, as the ways' rule reads it (`window::Brick`):
+/// A brick being filled, as the ways' rule reads it (`clipmap::Brick`):
 /// its laid cells in its lane, its lines and samples in its record, and
-/// where it is as handed (`window::FRESH_WORDS`).
+/// where it is as handed (`clipmap::FRESH_WORDS`).
 struct Filling<'a> {
     ground: &'a [u32],
     base: u32,
@@ -203,7 +203,7 @@ struct Filling<'a> {
     place: [u32; 2],
 }
 
-impl window::Brick for Filling<'_> {
+impl clipmap::Brick for Filling<'_> {
     fn cell(&self) -> u32 {
         self.cell
     }
@@ -226,7 +226,7 @@ impl window::Brick for Filling<'_> {
             return column_top(column_of(
                 self.ground,
                 self.base,
-                window::idx_of([c[0] as u32, c[1] as u32]),
+                clipmap::idx_of([c[0] as u32, c[1] as u32]),
             ));
         }
         let first = [
@@ -242,10 +242,10 @@ impl window::Brick for Filling<'_> {
 
 /// Column `[x, y]` of the brick a frame hands `k`-th in `fresh`: its
 /// ground's top (`ground::height`) off its tile's samples, a gone cell's
-/// (its own look `UNKNOWN`, past the area) the Earth's at sea level, so it
+/// (its own palette index `UNKNOWN`, past the area) the Earth's at sea level, so it
 /// reads as the Earth (`area::laid`); and, a column of an even `x`, its
-/// cell and the next as laid, the word they share (`window::LAID_WORDS`),
-/// so each word has one writer: its own look off its four at the brick's
+/// cell and the next as laid, the word they share (`clipmap::LAID_WORDS`),
+/// so each word has one writer: its own palette index off its four at the brick's
 /// zoom (`ground::own`), and at a leaf's cells or finer, which of the leaf
 /// cells about its own are past the area (`area::gone_ring`), off the
 /// brick's shard.
@@ -258,8 +258,8 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
         ],
         Shard::of_word(at(fresh, rec + FRESH_SHARD)),
     );
-    let i = window::idx_of([x, y]);
-    let own = ground::own(at(fresh, rec + LOOKS_AT + i), cell);
+    let i = clipmap::idx_of([x, y]);
+    let own = ground::own(at(fresh, rec + PALETTE_AT + i), cell);
     let top = if own == ground::UNKNOWN {
         crate::SEA_LEVEL
     } else {
@@ -288,30 +288,30 @@ pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
     } else {
         gone0
     };
-    let next = ground::own(at(fresh, rec + LOOKS_AT + i + 1), cell);
+    let next = ground::own(at(fresh, rec + PALETTE_AT + i + 1), cell);
     put(
         ground,
         base + LAID_AT + i / 2,
-        window::laid_half(own, gone0) | window::laid_half(next, gone1) << 16,
+        clipmap::laid_half(own, gone0) | clipmap::laid_half(next, gone1) << 16,
     );
 }
 
-/// Cell `[x, y]`'s four looks of the brick a frame hands `k`-th in
-/// `fresh`, as handed (`LOOKS_AT`), into `looks`, a word a cell,
+/// Cell `[x, y]`'s four palette indices of the brick a frame hands `k`-th in
+/// `fresh`, as handed (`PALETTE_AT`), into `palette_indices`, a word a cell,
 /// `BRICK_CELLS` a brick in the bricks' order: what a ray's hit is
 /// drawn by (`ground::Cell::four`), the one read of them past the fill.
-pub fn look(looks: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
+pub fn put_palette_word(palette_indices: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
     let rec = handed_at(k);
-    let i = window::idx_of([x, y]);
+    let i = clipmap::idx_of([x, y]);
     put(
-        looks,
+        palette_indices,
         at(fresh, rec + FRESH_BRICK) * BRICK_CELLS + i,
-        at(fresh, rec + LOOKS_AT + i),
+        at(fresh, rec + PALETTE_AT + i),
     );
 }
 
 /// The spans of column `i` of the brick handed `k`-th and its ring
-/// (`window::SPANS_COLUMNS`) into its scratch (`keep`): each column's
+/// (`clipmap::SPANS_COLUMNS`) into its scratch (`keep`): each column's
 /// worked out once, before its levels and its ways' tree read them and its
 /// neighbors': the most it makes (`keep`).
 pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32) -> u32 {
@@ -329,11 +329,11 @@ pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32)
 }
 
 /// Column `i` of brick `sq` and its ring, row by row from the ring's
-/// first (`window::SPANS_COLUMNS`), its spans off its lines and its face
-/// (`way::column`) into the scratch from `mine` (`window::SPANS_AT`); a
+/// first (`clipmap::SPANS_COLUMNS`), its spans off its lines and its face
+/// (`way::column`) into the scratch from `mine` (`clipmap::SPANS_AT`); a
 /// corner of the ring, beside no column of the brick, none. The most
 /// spans it makes, `u32::MAX` where they do not fit `way::SPANS`.
-pub fn keep(sq: &impl window::Brick, scratch: &mut [u32], mine: u32, i: u32) -> u32 {
+pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], mine: u32, i: u32) -> u32 {
     if i >= SPANS_COLUMNS {
         return 0;
     }
@@ -366,7 +366,7 @@ pub fn keep(sq: &impl window::Brick, scratch: &mut [u32], mine: u32, i: u32) -> 
 /// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
 /// the ways write in it off the spans its fill kept (`way::bound`;
 /// `ground::Bounds`); a higher one over the level under it, written before
-/// (`window::join`). A bore's air counts as far as the column's top, as the
+/// (`clipmap::join`). A bore's air counts as far as the column's top, as the
 /// ways write it: the cells of the brick's ways tree under it lie in the
 /// bound (`way::tree`), and a node it splits more holds only air or void
 /// there. Over the top it is air whatever writes it; a bound reaching up
@@ -381,12 +381,12 @@ pub fn level(
     at: [u32; 2],
 ) {
     let w = if j == 0 {
-        let top = column_top(column_of(ground, base, window::idx_of(at)));
+        let top = column_top(column_of(ground, base, clipmap::idx_of(at)));
         let lines = way::bound(kept, [at[0] as i32, at[1] as i32], cell, top);
         ground::bounds_word([[top, top], lines])
     } else {
         let under: &[u32] = ground;
-        window::join(
+        clipmap::join(
             &Fresh {
                 ground: under,
                 base,
@@ -397,14 +397,14 @@ pub fn level(
             at,
         )
     };
-    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * window::level_idx(j, at);
+    let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * clipmap::level_idx(j, at);
     put(ground, e, w[0] as u32);
     put(ground, e + 1, w[1] as u32);
 }
 
 /// A brick filled whole, its passes in a GPU's order (pxl-render
-/// gpu/ray/ground.rs `grids`): `fresh` its record (`window::HANDED_WORDS`),
-/// its looks, samples and lines as handed, its words laid here; `lane` its
+/// gpu/ray/ground.rs `grids`): `fresh` its record (`clipmap::HANDED_WORDS`),
+/// its palette indices, samples and lines as handed, its words laid here; `lane` its
 /// words, and `scratch` its scratch (`way::tree::SCRATCH_WORDS`); its cells
 /// at `cell`, lying at `place` in its tile, its first cell `first`; its
 /// columns, its spans and levels; inside the area, so no wall cuts its ways
@@ -419,9 +419,9 @@ pub fn brick(
     cell: Zoom,
     first: [i32; 2],
 ) -> u32 {
-    fresh[..FRESH_WORDS as usize].copy_from_slice(&window::fresh(
+    fresh[..FRESH_WORDS as usize].copy_from_slice(&clipmap::fresh(
         0,
-        window::place_word(place),
+        clipmap::place_word(place),
         cell,
         first,
         Shard::INSIDE,
@@ -440,7 +440,7 @@ pub fn brick(
         words: scratch,
         at: 0,
     };
-    for j in 0..=window::LEVELS {
+    for j in 0..=clipmap::LEVELS {
         let side = BRICK >> j;
         for k in 0..side * side {
             level(lane, 0, &kept, cell, j, [k % side, k / side]);
@@ -450,18 +450,18 @@ pub fn brick(
 }
 
 /// The brick filled into `lane` and its spans into `scratch` (`brick`),
-/// its cells at `cell`, its ways' tree built into `pool`, its heap words
+/// its cells at `cell`, its ways' tree built into `pool`, its child pointers
 /// then its data words, a level at a time as a GPU's workgroup builds it
 /// (pxl-shader `way_tree_cs`, `way::tree`), from the brick's own nodes
-/// along z down, its families taken in order from family `from`, its
-/// root's, family 0 being none's: the families it took, those it holds once
+/// along z down, its child groups taken in order from child group `from`, its
+/// root's, child group 0 being none's: the child groups it took, those it holds once
 /// folded, and its root word (`way::tree::root_word`), none taken and 0
 /// where it has no ways; `u32::MAX` all three where `pool` has too few, it
-/// takes more than `way::tree::BRICK_FAMILIES`, or its ways span more
+/// takes more than `way::tree::BRICK_CHILD_GROUPS`, or its ways span more
 /// than `way::tree::ROOT_NODES` of its nodes along z.
 pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u32) -> [u32; 3] {
-    use crate::overwrite::FAMILY;
-    use way::tree::{self as t, Lane};
+    use crate::overwrite::CHILDREN;
+    use way::tree::{self as t, Column};
     let (brick, kept) = (
         Fresh {
             ground: lane,
@@ -476,17 +476,17 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
     if nodes == 0 {
         return [0, 0, 0];
     }
-    let room = pool.len() as u32 / t::FAMILY_WORDS;
+    let room = pool.len() as u32 / t::CHILD_GROUP_WORDS;
     if nodes > t::ROOT_NODES || room <= from {
         return [u32::MAX; 3];
     }
-    let mut p = Lane(pool);
-    t::root(&mut p, z0, FAMILY * from);
-    // Each level's candidates, the families the level over it took, from the
+    let mut p = Column(pool);
+    t::root(&mut p, z0, CHILDREN * from);
+    // Each level's candidates, the child groups the level over it took, from the
     // brick's own zoom.
-    let top = cell - window::BRICK_SHIFT;
-    let mut levels = [[0u32; 2]; window::BRICK_SHIFT as usize + 1];
-    let (mut b, mut n, mut taken) = (FAMILY * from, FAMILY, 1);
+    let top = cell - clipmap::BRICK_SHIFT;
+    let mut levels = [[0u32; 2]; clipmap::BRICK_SHIFT as usize + 1];
+    let (mut b, mut n, mut taken) = (CHILDREN * from, CHILDREN, 1);
     let mut zoom = top;
     while zoom < cell {
         levels[(zoom - top) as usize] = [b, n];
@@ -496,17 +496,17 @@ pub fn tree(lane: &[u32], scratch: &[u32], cell: Zoom, pool: &mut [u32], from: u
         if room < from + taken || !t::fits(room - from - taken, taken, flagged) {
             return [u32::MAX; 3];
         }
-        let next = FAMILY * (from + taken);
+        let next = CHILDREN * (from + taken);
         let mut k = 0;
         for s in b..b + n {
             if t::flag(&p, &brick, 0, cell, zoom, s) {
-                t::branch(&mut p, s, next + FAMILY * k);
+                t::branch(&mut p, s, next + CHILDREN * k);
                 k += 1;
             } else {
                 t::empty(&mut p, s);
             }
         }
-        (b, n, taken, zoom) = (next, FAMILY * flagged, taken + flagged, zoom + 1);
+        (b, n, taken, zoom) = (next, CHILDREN * flagged, taken + flagged, zoom + 1);
     }
     for s in b..b + n {
         t::leaf(&mut p, &kept, cell, s);
@@ -559,7 +559,7 @@ mod tests {
                 .map(|_| base_top + next(9) as i32 - 4)
                 .collect();
             for i in 0..BRICK_CELLS {
-                let [x, y] = window::of_idx(i);
+                let [x, y] = clipmap::of_idx(i);
                 let ring = ((y + 1) * SPANS_ACROSS + x + 1) as usize;
                 put(&mut lane, COLUMNS_AT + i, tops[ring] as u32 & 0xffff);
             }
@@ -603,19 +603,19 @@ mod tests {
                 words: &scratch,
                 at: 0,
             };
-            for j in 0..=window::LEVELS {
+            for j in 0..=clipmap::LEVELS {
                 let side = BRICK >> j;
                 for k in 0..side * side {
                     level(&mut lane, 0, &kept, cell, j, [k % side, k / side]);
                 }
             }
-            let mut pool = vec![0u32; 16 * (tree::BRICK_FAMILIES as usize + 1)];
+            let mut pool = vec![0u32; 16 * (tree::BRICK_CHILD_GROUPS as usize + 1)];
             let [taken, held, root] = tree(&lane, &scratch, cell, &mut pool, 1);
             assert!(taken != u32::MAX && held <= taken, "round {round}: refused");
             let p = Read(&pool);
             let s = 1i32 << (crate::LEAF_CELL - cell);
             for i in 0..BRICK_CELLS {
-                let [x, y] = window::of_idx(i);
+                let [x, y] = clipmap::of_idx(i);
                 for z in (base_top - 60) / s..(base_top + 60) / s {
                     let at = [x as i32, y as i32, z];
                     let held = tree::cursor(&p, root, cell, cell, at);

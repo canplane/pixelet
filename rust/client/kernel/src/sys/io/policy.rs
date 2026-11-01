@@ -20,7 +20,7 @@ use crate::sys::io::demand::Order;
 use crate::sys::io::demand::{Ask, Stream};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::param;
-use crate::sys::io::request::{Blame, Rank, Serve};
+use crate::sys::io::request::{Fault, Rank, Serve};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
 use xpute_kit::status::errno::Errno;
@@ -89,32 +89,32 @@ impl Serve for Policy {
     /// As the client's read classes them (`ts/client/src/driver/namespace/read.ts`). An object's
     /// failure comes back the same however often it is asked: the bytes are
     /// fixed by the key within a version.
-    fn blame(&self, failure: Failure) -> Blame {
+    fn fault(&self, failure: Failure) -> Fault {
         match failure.errnum {
             // The browser says it is offline.
-            Errno::ENETUNREACH => Blame::Network,
+            Errno::ENETUNREACH => Fault::Network,
             // Any other status but 204 and 404, or no response while online. The
             // Worker answers only 200, 204 and 404, so this is the platform under
             // it: R2's internal error, a Cloudflare incident (R2 down 59 minutes
             // on 2025-02-06), the free plan's daily cap failing closed, an edge
             // refusing the connection.
-            Errno::EACCES | Errno::EIO => Blame::Server,
+            Errno::EACCES | Errno::EIO => Fault::Server,
             // ENXIO: 404, a key that names nothing. EBADMSG: a body empty, still
             // packed in an encoding this browser does not undo, or not decoding.
             // EFBIG: larger than the heap takes, or than its kind's packet can be.
-            _ => Blame::Object,
+            _ => Fault::Object,
         }
     }
 
     /// Exponential because the server is shared, so every client's retries add up
     /// on it; AWS's "full jitter", uniform up to the capped exponential, so
     /// clients one outage failed together do not return together.
-    fn backoff(&self, strikes: u32, seed: u64) -> Option<f64> {
-        if strikes > param::RETRY_ATTEMPTS {
+    fn backoff(&self, failures: u32, seed: u64) -> Option<f64> {
+        if failures > param::RETRY_ATTEMPTS {
             return None;
         }
         let ceiling =
-            (param::RETRY_BASE_MS * libm::exp2(f64::from(strikes - 1))).min(param::RETRY_CAP_MS);
+            (param::RETRY_BASE_MS * libm::exp2(f64::from(failures - 1))).min(param::RETRY_CAP_MS);
         Some(ceiling * u32_to_unit(SplitMix64::new(seed).next_u32()))
     }
 }

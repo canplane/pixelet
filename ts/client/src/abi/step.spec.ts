@@ -4,7 +4,7 @@
 //
 // The turn's vocabulary, the kernel's and the shell's: the steps a tick runs, as turn.rs
 // registers them, and the effects a turn runs around them. The profiler records and
-// reports them by these names (spec/client/kernel/profiler/profiler.json).
+// reports them by these names (spec/client/kernel/perf/perf.json).
 
 export const STEP_NAMES = [
   "controller",
@@ -27,6 +27,6 @@ export const EFFECT_NAMES = [
   "dst",
   "decor",
   "objects",
-  "puck",
+  "location",
   "settings",
 ] as const;

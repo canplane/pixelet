@@ -4,11 +4,11 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { b64url_to_bytes, bytes_to_b64url } from "@xpute/kit/codec/encoding.ts";
 
-import { format, kept } from "@/abi/host.spec.ts";
+import { format, storage as stored } from "@/abi/host.spec.ts";
 import {
   follow_refused,
   formatted,
-  kept_key,
+  storage_key,
   migrate,
   set_aside,
   type Storage,
@@ -31,7 +31,7 @@ const PKT = bytes_to_b64url(new Uint8Array([0x58, 0x54, 0x50, 0, 1, 2, 3]));
 test("migrate - the objects carry over with their format before them, and stay where they were", () => {
   const s = storage({ "pxl:object:v15": PKT });
   migrate(s);
-  const slot = b64url_to_bytes(s.map.get(kept_key(kept.OBJECTS)!)!);
+  const slot = b64url_to_bytes(s.map.get(storage_key(stored.OBJECTS)!)!);
   assert.deepStrictEqual([...slot], [15, 0x58, 0x54, 0x50, 0, 1, 2, 3]);
   assert.deepStrictEqual(format.OBJECTS, 15);
   assert.deepStrictEqual(s.map.get("pxl:object:v15"), PKT);
@@ -68,7 +68,7 @@ test("set_aside - a refused file is copied, read back, then its slot emptied", (
     "pxl:kept:objects": "AAAA",
     "pxl:kept:objects:aside:7": "older",
   });
-  assert.deepStrictEqual(set_aside(s, kept.OBJECTS, 7), true);
+  assert.deepStrictEqual(set_aside(s, stored.OBJECTS, 7), true);
   assert.deepStrictEqual(s.map.get("pxl:kept:objects"), "");
   assert.deepStrictEqual(s.map.get("pxl:kept:objects:aside:7"), "older");
   assert.deepStrictEqual(s.map.get("pxl:kept:objects:aside:7-1"), "AAAA");
@@ -76,7 +76,7 @@ test("set_aside - a refused file is copied, read back, then its slot emptied", (
 
 test("set_aside - storage that refuses the copy keeps the slot as it was", () => {
   const s = storage({ "pxl:kept:objects": "AAAA" }, true);
-  assert.deepStrictEqual(set_aside(s, kept.OBJECTS, 7), false);
+  assert.deepStrictEqual(set_aside(s, stored.OBJECTS, 7), false);
   assert.deepStrictEqual(s.map.get("pxl:kept:objects"), "AAAA");
   assert.deepStrictEqual(set_aside(storage(), 99, 7), false);
 });
@@ -84,10 +84,10 @@ test("set_aside - storage that refuses the copy keeps the slot as it was", () =>
 test("follow_refused - each refused slot is set aside and emptied once", () => {
   const s = storage({ "pxl:kept:settings": '{"ao":"screen"}' });
   const told: number[] = [];
-  follow_refused([kept.SETTINGS], (slot) => told.push(slot), s);
-  follow_refused([kept.SETTINGS], (slot) => told.push(slot), s);
-  assert.deepStrictEqual(told, [kept.SETTINGS]);
+  follow_refused([stored.SETTINGS], (slot) => told.push(slot), s);
+  follow_refused([stored.SETTINGS], (slot) => told.push(slot), s);
+  assert.deepStrictEqual(told, [stored.SETTINGS]);
   assert.deepStrictEqual(s.map.get("pxl:kept:settings"), "");
   follow_refused([], (slot) => told.push(slot), s);
-  assert.deepStrictEqual(told, [kept.SETTINGS]);
+  assert.deepStrictEqual(told, [stored.SETTINGS]);
 });

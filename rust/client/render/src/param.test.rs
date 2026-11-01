@@ -19,8 +19,8 @@ fn settings_modules_written() {
 fn linear_color_is_hex() {
     // Written to six places, as the shaders read them.
     for (hex, linear) in [
-        (0xff1493, puck::beacon::DAY),
-        (0x00f2ff, puck::beacon::NIGHT),
+        (0xff1493, location::beacon::DAY),
+        (0x00f2ff, location::beacon::NIGHT),
     ] {
         for (want, got) in linear_rgb(hex).into_iter().zip(linear) {
             assert!(

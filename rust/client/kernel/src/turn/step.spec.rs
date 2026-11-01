@@ -4,7 +4,7 @@
 //
 // The turn's vocabulary, the kernel's and the shell's: the steps a tick runs, as turn.rs
 // registers them, and the effects a turn runs around them. The profiler records and
-// reports them by these names (spec/client/kernel/profiler/profiler.json).
+// reports them by these names (spec/client/kernel/perf/perf.json).
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
@@ -68,7 +68,7 @@ pub enum EffectName {
     dst = 4,
     decor = 5,
     objects = 6,
-    puck = 7,
+    location = 7,
     settings = 8,
 }
 
@@ -82,7 +82,7 @@ impl EffectName {
         EffectName::dst,
         EffectName::decor,
         EffectName::objects,
-        EffectName::puck,
+        EffectName::location,
         EffectName::settings,
     ];
 

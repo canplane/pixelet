@@ -25,6 +25,9 @@ from pathlib import Path
 
 import r2
 
+# Cloudflare's CLI, a program on the PATH as git and aws are.
+WRANGLER = ["wrangler"]
+
 REPO = Path(__file__).resolve().parent.parent
 EDGE = REPO / "ts/server/edge"
 WEB = REPO / "ts/app/web"
@@ -94,7 +97,7 @@ if NUMBER:
         sys.exit(1)
 
 print("[deploy] publish", flush=True)
-published = subprocess.run([*r2.WRANGLER, "deploy"], cwd=EDGE).returncode
+published = subprocess.run([*WRANGLER, "deploy"], cwd=EDGE).returncode
 if published != 0:
     # wrangler can fail after the Worker went out (a route, a domain), so what
     # landed is read off the site, not off its exit.

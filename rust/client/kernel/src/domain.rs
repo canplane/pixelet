@@ -5,10 +5,10 @@
 //! the view, the query and the layers, and neither names the other. Every
 //! edge points down, and nothing here names the turn, the door or the shell.
 
-pub mod approach;
 pub mod control;
 pub mod layer;
 pub mod param;
 pub mod query;
 pub mod scene;
+pub mod smooth;
 pub mod view;

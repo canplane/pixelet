@@ -19,6 +19,11 @@ A rename is made where the name misstates the thing or gets in the way of
 understanding it, and the new one clearly does better; not because a name is
 this project's own.
 
+A part of the system, the commands' modules and what the kernel asks of its
+host, takes its word from Unix, Linux or Wayland; a device outside them keeps
+its platform's word. What the program alone does takes a plain word for what it
+does. A metaphor no field uses is not a name, however apt it reads.
+
 ## What is named with the user
 
 A new domain concept the project's parts share, or an alias of this project's
@@ -60,7 +65,7 @@ tile's bytes).
 - `size` in pixelet, GPU texture sizes included; `sz` in xpute (`HDR_SZ`,
   `WORD_SZ`).
 - `environment`.
-- `source` as a source of data (`WORLD_SOURCE`, `of_source`).
+- `source` as a source of data (`FS_MOUNT`, `of_source`).
 - `encode`, `decode`.
 
 ## Names chosen with the user
@@ -98,7 +103,7 @@ whole words for the names it makes, and reads a kernel or spec name as it is
 
 **Spec JSON:** keys, field `name`s and list entries follow the snake and
 SCREAMING rules (`"val"`, `"pkt"`, `"err"`, `SENSOR_POS`, `XR_POSE`,
-`INPUT_GOTO`). `$doc` prose is not. A generated type follows its enum's name
+`CAMERA_GOTO`). `$doc` prose is not. A generated type follows its enum's name
 (`RES_MODES` → `ResMode`).
 
 ## Bindings and types

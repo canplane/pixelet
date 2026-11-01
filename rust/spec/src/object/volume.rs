@@ -8,9 +8,12 @@ use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::sparse_tree::{Slot, SparseTree};
 use pxl_spec_core::overwrite;
 
-/// A branch of `tree` at `zoom`, its family's eight folded, as its word.
-pub fn fold(tree: &SparseTree<u32, 3>, family: u32, zoom: Zoom) -> u32 {
-    overwrite::fold(core::array::from_fn(|k| share(tree.child(family, k))), zoom)
+/// A branch of `tree` at `zoom`, its child group's eight folded, as its word.
+pub fn fold(tree: &SparseTree<u32, 3>, child_group: u32, zoom: Zoom) -> u32 {
+    overwrite::fold(
+        core::array::from_fn(|k| share(tree.child(child_group, k))),
+        zoom,
+    )
 }
 
 /// A child's fold word in its parent's fold (pxl-spec-core

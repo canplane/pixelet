@@ -4,7 +4,7 @@
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
-// `profiler`, the profiler panel's own. The store reads the defaults from
+// `perf`, the profiler panel's own. The store reads the defaults from
 // here and the sheet renders rows from here, so adding a setting to the
 // sheet is one entry in SETTING plus its two strings in the locale catalog
 // under `settings.<section>.<key>`. A choice may carry `costs` beside its
@@ -12,7 +12,7 @@
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTING_SHIPPED,
-// the table without them, in SETTING's place. A setting whose `kept` is
+// the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
 //
@@ -71,7 +71,7 @@ export const SETTING = {
     default: false,
     section: "world",
     cost: "low",
-    kept: false,
+    stored: false,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a view from above is expected to
@@ -95,7 +95,7 @@ export const SETTING = {
       first_person: 1 as number,
     },
     section: "world",
-    kept: false,
+    stored: false,
   },
   /** The pivot stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck. */
   surface_follow: {
@@ -105,7 +105,7 @@ export const SETTING = {
     section: "camera",
     dev: true,
   },
-  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/terrain_gate.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
+  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
   orbit_obstacle: {
     key: 7 as number,
     kind: "choice",
@@ -117,7 +117,7 @@ export const SETTING = {
     },
     section: "camera",
     dev: true,
-    kept: false,
+    stored: false,
   },
   /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
@@ -178,15 +178,15 @@ export const SETTING = {
     },
     section: "display",
   },
-  /** Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section). */
+  /** Where the camera and the pointer are, read live (perf/read.rs, NOW's view section). */
   view: {
     key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
-  profiler: {
+  /** The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`). */
+  perf: {
     key: 14 as number,
     kind: "toggle",
     default: false,
@@ -225,12 +225,12 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and summed since boot into the profiler's eye and sun lanes (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
+  /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
   ray_counts: {
     key: 20 as number,
     kind: "toggle",
     default: false,
-    section: "profiler",
+    section: "perf",
     dev: true,
   },
   /** The hour the sky is drawn at; SKY_TIMES says each. */
@@ -248,7 +248,7 @@ export const SETTING = {
     },
     section: "debug",
     dev: true,
-    kept: false,
+    stored: false,
   },
 } as const;
 
@@ -300,7 +300,7 @@ export const SETTING_SHIPPED = {
     default: false,
     section: "world",
     cost: "low",
-    kept: false,
+    stored: false,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a view from above is expected to
@@ -324,7 +324,7 @@ export const SETTING_SHIPPED = {
       first_person: 1 as number,
     },
     section: "world",
-    kept: false,
+    stored: false,
   },
   /** Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
@@ -385,15 +385,15 @@ export const SETTING_SHIPPED = {
     },
     section: "display",
   },
-  /** Where the camera and the pointer are, read live (profiler/read.rs, NOW's view section). */
+  /** Where the camera and the pointer are, read live (perf/read.rs, NOW's view section). */
   view: {
     key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (profiler/window.rs `profiler_follow`). */
-  profiler: {
+  /** The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`). */
+  perf: {
     key: 14 as number,
     kind: "toggle",
     default: false,

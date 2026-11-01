@@ -20,7 +20,7 @@ use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 use ground::GroundBuffers;
-pub use tally::{sum_at, CASTS, FRAMES, LANES_AT, RAYS, RAY_SUMS};
+pub use tally::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 
 /// Whether a frame of `kind` casts the pixels' rays, whole or off the
 /// samples that stand: the rays, their depth and where they met the world

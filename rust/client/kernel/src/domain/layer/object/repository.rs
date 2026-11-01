@@ -15,7 +15,7 @@ use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, Tr
 use super::store::object;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::store::{apply, note_written, Write};
-use crate::sys::io::file::{self, Kept, KeptFile};
+use crate::sys::io::file::{self, StorageFile, StorageRead};
 use crate::sys::sched::edge::wake_at;
 use pxl_spec::object::ext::{class_of, Class};
 
@@ -34,11 +34,11 @@ fn store_state() -> &'static mut State {
     })
 }
 
-// Kept as one blob of every leaf as the write that made it, `<key, id, ext>`:
+// StorageFile as one blob of every leaf as the write that made it, `<key, id, ext>`:
 // [key_hi u64[], key_lo u64[], id u32[]], then a class's records, each its
-// leaf's row and its fields as lanes: a marker's words [row u32[], text strs].
-// The layout's version is its kept slot's format (host.json `format.OBJECTS`),
-// checked as the slot is read (sys/io/file.rs `Kept`); a blob of another layout is
+// leaf's row and its fields as lanes: a marker's text [row u32[], text strs].
+// The layout's version is its storage file's format (host.json `format.OBJECTS`),
+// checked as the slot is read (sys/io/file.rs `StorageFile`); a blob of another layout is
 // never read.
 
 fn encode() -> Result<Vec<u8>, MarshalError> {
@@ -106,13 +106,13 @@ fn decode(bytes: &[u8]) -> Result<(), MarshalError> {
 
 /// Asks for the layer's records.
 pub fn open() {
-    file::open_kept(Kept::Objects);
+    file::open_storage(StorageFile::Objects);
 }
 
-/// The whole store as one blob in the page's storage (`Kept::Objects`), so
+/// The whole store as one blob in the page's storage (`StorageFile::Objects`), so
 /// one open asks for every leaf at once.
 fn keep(blob: Vec<u8>) {
-    file::write_kept(Kept::Objects, &blob);
+    file::write_storage(StorageFile::Objects, &blob);
 }
 
 /// A missing blob starts the world empty. One that cannot be read or decoded
@@ -125,13 +125,13 @@ fn load() {
     if st.loaded {
         return;
     }
-    let blob = match file::take_kept(Kept::Objects) {
-        None | Some(KeptFile::Unreadable) => return,
-        Some(KeptFile::None) => {
+    let blob = match file::take_storage(StorageFile::Objects) {
+        None | Some(StorageRead::Unreadable) => return,
+        Some(StorageRead::None) => {
             st.loaded = true;
             return;
         }
-        Some(KeptFile::Bytes(blob)) => blob,
+        Some(StorageRead::Bytes(blob)) => blob,
     };
     if decode(&blob).is_err() {
         // What decoded before the failure was already read; the blob stays unsaved over.

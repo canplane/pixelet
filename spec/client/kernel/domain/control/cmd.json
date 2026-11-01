@@ -4,8 +4,8 @@
     "and the packet each carries — an XTP branch whose children are its fields, in",
     "order. A command with no fields carries no packet. The kernel is the process; the",
     "JavaScript around it is two things to it, its host, which holds the devices and",
-    "the turns, and its shell, the UI. The commands are grouped by which of them a",
-    "command is between.",
+    "the turns, and its shell, the UI. A command's major is the module it is for, and",
+    "the sections say which of the two it is between.",
     "",
     "The same number is a command on the submission ring and an event on the",
     "completion ring (its `RES` clear). The direction is the ring: `pkt` is",
@@ -49,12 +49,12 @@
     {
       "name": "Major",
       "$doc": [
-        "What a command is about."
+        "The module a command is for: the kernel's, or the device's that sends it."
       ],
       "format": "hex2",
       "entries": [
         {
-          "name": "WORLD",
+          "name": "SYS",
           "val": 16
         },
         {
@@ -64,6 +64,10 @@
         {
           "name": "SENSOR",
           "val": 18
+        },
+        {
+          "name": "FS",
+          "val": 19
         },
         {
           "name": "GPU",
@@ -78,23 +82,31 @@
           "val": 22
         },
         {
-          "name": "CHAT",
+          "name": "SCENE",
           "val": 23
         },
         {
-          "name": "PREVIEW",
+          "name": "CAMERA",
           "val": 24
         },
         {
-          "name": "PROFILER",
+          "name": "PERF",
           "val": 25
+        },
+        {
+          "name": "EDIT",
+          "val": 26
+        },
+        {
+          "name": "SHELL",
+          "val": 27
         }
       ]
     },
     {
-      "name": "WorldMinor",
+      "name": "SysMinor",
       "$doc": [
-        "The world's verbs."
+        "The system's: the kernel's start, and the platform's sleep and wake."
       ],
       "format": "hex2",
       "entries": [
@@ -103,42 +115,18 @@
           "val": 1
         },
         {
-          "name": "FRAME",
+          "name": "SLEEP",
           "val": 2
-        },
-        {
-          "name": "VISIBILITY",
-          "val": 3
-        },
-        {
-          "name": "SNAPSHOT",
-          "val": 4
-        },
-        {
-          "name": "SOURCE",
-          "val": 5
-        },
-        {
-          "name": "KEPT_EMPTIED",
-          "val": 6
-        },
-        {
-          "name": "VIEW",
-          "val": 7
         }
       ]
     },
     {
       "name": "InputMinor",
       "$doc": [
-        "The input's verbs: the canvas, the pointer, the camera controls."
+        "The input's: the pointer, the wheel, the held movement, a tracker's pose."
       ],
       "format": "hex2",
       "entries": [
-        {
-          "name": "RECT",
-          "val": 1
-        },
         {
           "name": "POINTER",
           "val": 2
@@ -148,24 +136,8 @@
           "val": 3
         },
         {
-          "name": "KEYS",
+          "name": "MOVE",
           "val": 6
-        },
-        {
-          "name": "TRACKING",
-          "val": 4
-        },
-        {
-          "name": "VIEW",
-          "val": 5
-        },
-        {
-          "name": "COMPASS_RESET",
-          "val": 7
-        },
-        {
-          "name": "GOTO",
-          "val": 8
         },
         {
           "name": "XR_POSE",
@@ -174,33 +146,13 @@
         {
           "name": "XR_POSE_END",
           "val": 10
-        },
-        {
-          "name": "HOLD",
-          "val": 11
-        },
-        {
-          "name": "MARKER_WORDS",
-          "val": 12
-        },
-        {
-          "name": "MARKER_CANCEL",
-          "val": 13
-        },
-        {
-          "name": "MARKER_PUT",
-          "val": 14
-        },
-        {
-          "name": "LOCATE",
-          "val": 15
         }
       ]
     },
     {
       "name": "SensorMinor",
       "$doc": [
-        "The device sensors' verbs."
+        "The device sensors'."
       ],
       "format": "hex2",
       "entries": [
@@ -225,15 +177,36 @@
           "val": 6
         },
         {
-          "name": "FAILED",
+          "name": "ERR",
           "val": 11
+        },
+        {
+          "name": "LOCATE",
+          "val": 12
+        }
+      ]
+    },
+    {
+      "name": "FsMinor",
+      "$doc": [
+        "The kernel's files: a root mounted, a storage file truncated."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "MOUNT",
+          "val": 1
+        },
+        {
+          "name": "TRUNCATED",
+          "val": 2
         }
       ]
     },
     {
       "name": "GpuMinor",
       "$doc": [
-        "The GPU's verbs."
+        "The GPU's."
       ],
       "format": "hex2",
       "entries": [
@@ -246,7 +219,7 @@
     {
       "name": "SurfaceMinor",
       "$doc": [
-        "A surface's verbs."
+        "A surface's: opened, resized, closed, and the frame drawn into the surfaces."
       ],
       "format": "hex2",
       "entries": [
@@ -261,13 +234,17 @@
         {
           "name": "CLOSE",
           "val": 3
+        },
+        {
+          "name": "FRAME",
+          "val": 4
         }
       ]
     },
     {
       "name": "SettingMinor",
       "$doc": [
-        "A setting's verbs."
+        "A setting's."
       ],
       "format": "hex2",
       "entries": [
@@ -278,39 +255,51 @@
       ]
     },
     {
-      "name": "ChatMinor",
+      "name": "SceneMinor",
       "$doc": [
-        "The chat's verbs."
+        "The scene's: a character drawn alone into a surface, a line said."
       ],
       "format": "hex2",
       "entries": [
         {
-          "name": "SEND",
-          "val": 1
-        }
-      ]
-    },
-    {
-      "name": "PreviewMinor",
-      "$doc": [
-        "A preview's verbs."
-      ],
-      "format": "hex2",
-      "entries": [
-        {
-          "name": "OPEN",
+          "name": "PREVIEW_OPEN",
           "val": 1
         },
         {
-          "name": "CLOSE",
+          "name": "PREVIEW_CLOSE",
           "val": 2
+        },
+        {
+          "name": "CHAT",
+          "val": 3
         }
       ]
     },
     {
-      "name": "ProfilerMinor",
+      "name": "CameraMinor",
       "$doc": [
-        "The profiler's verbs."
+        "The camera's: the tracking button, the compass, a search result."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "TRACKING",
+          "val": 1
+        },
+        {
+          "name": "NORTH_UP",
+          "val": 2
+        },
+        {
+          "name": "GOTO",
+          "val": 4
+        }
+      ]
+    },
+    {
+      "name": "PerfMinor",
+      "$doc": [
+        "The profiler's."
       ],
       "format": "hex2",
       "entries": [
@@ -323,12 +312,50 @@
           "val": 2
         },
         {
-          "name": "READ",
+          "name": "STATS",
           "val": 3
         },
         {
           "name": "RINGS",
           "val": 4
+        }
+      ]
+    },
+    {
+      "name": "EditMinor",
+      "$doc": [
+        "The edit's: the tool and what it takes, and a marker's draft."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "TOOL",
+          "val": 1
+        },
+        {
+          "name": "MARKER_TEXT",
+          "val": 2
+        },
+        {
+          "name": "MARKER_CANCEL",
+          "val": 3
+        },
+        {
+          "name": "MARKER_COMMIT",
+          "val": 4
+        }
+      ]
+    },
+    {
+      "name": "ShellMinor",
+      "$doc": [
+        "What the kernel shows the shell."
+      ],
+      "format": "hex2",
+      "entries": [
+        {
+          "name": "SNAPSHOT",
+          "val": 1
         }
       ]
     },
@@ -743,11 +770,11 @@
           ]
         },
         {
-          "name": "SENSOR_FAILED",
+          "name": "SENSOR_ERR",
           "val": 4619,
           "$doc": [
             "A watch that ended in failure and was stopped, refused from the start (PermissionDenied)",
-            "or cut off; the compass's, where the platform says so (WORLD_BOOT's",
+            "or cut off; the compass's, where the platform says so (SYS_BOOT's",
             "orient_silence_is_loss)."
           ],
           "pkt": [
@@ -769,10 +796,10 @@
           "section": "the host tells the process: its start, its turn, its window and its devices"
         },
         {
-          "name": "WORLD_BOOT",
+          "name": "SYS_BOOT",
           "val": 4097,
           "$doc": [
-            "The kernel's start: what the platform is. Its kept slots it opens itself, on the storage root."
+            "The kernel's start: what the platform is. Its storage files it opens itself, on the storage root."
           ],
           "pkt": [
             {
@@ -803,20 +830,20 @@
               "$doc": [
                 "A browser's compass talks while the device is still and cannot say it stopped, so",
                 "silence is the only sign of loss; a device's speaks only when the heading turns and",
-                "reports a failure itself (SENSOR_FAILED)."
+                "reports a failure itself (SENSOR_ERR)."
               ]
             }
           ]
         },
         {
-          "name": "WORLD_FRAME",
-          "val": 4098,
+          "name": "SURFACE_FRAME",
+          "val": 5380,
           "$doc": [
             "The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's",
             "phases on what is left of the quota, the fetches within the credits. The turn leaves",
             "its events on the completion ring, drawn by the kernel. It carries the host's alone:",
             "the turn's pacing, the network's credits and the clock; the view it is drawn at is the",
-            "shell's (INPUT_RECT)."
+            "world surface's (SURFACE_RESIZE)."
           ],
           "pkt": [
             {
@@ -851,22 +878,23 @@
           ]
         },
         {
-          "name": "WORLD_VISIBILITY",
-          "val": 4099,
+          "name": "SYS_SLEEP",
+          "val": 4098,
           "$doc": [
-            "The tab's visibility; the host rings the doorbell for it at once, since a hidden",
-            "page gets no frame and hiding is the save's last sure moment."
+            "The platform about to stop the process, or waking it: the page or the app hidden or",
+            "shown. The host rings the doorbell for it at once, since a hidden page gets no frame and",
+            "hiding is the save's last sure moment."
           ],
           "pkt": [
             {
-              "name": "visible",
+              "name": "awake",
               "type": "bool"
             }
           ]
         },
         {
-          "name": "WORLD_SOURCE",
-          "val": 4101,
+          "name": "FS_MOUNT",
+          "val": 4865,
           "$doc": [
             "What the tile source declares of itself, once the client has it: the tile root's",
             "`source`, the published one out of the bucket or the dev tile server's, read by the",
@@ -903,10 +931,10 @@
           ]
         },
         {
-          "name": "WORLD_KEPT_EMPTIED",
-          "val": 4102,
+          "name": "FS_TRUNCATED",
+          "val": 4866,
           "$doc": [
-            "A kept slot the kernel refused (the snapshot's `kept_refused`) is empty now, what it held",
+            "A storage file the kernel refused (the snapshot's `storage_refused`) is empty now, what it held",
             "set aside by the host: the kernel reads it again, and writes it from then on."
           ],
           "pkt": [
@@ -914,7 +942,7 @@
               "name": "slot",
               "type": "u32",
               "$doc": [
-                "host.json's `kept`."
+                "host.json's `storage`."
               ]
             }
           ]
@@ -947,36 +975,11 @@
           "section": "the shell and the process: what the UI asks of it, the input it routes, and what it shows the UI"
         },
         {
-          "name": "INPUT_RECT",
-          "val": 4353,
-          "$doc": [
-            "The canvas's client rect, in CSS pixels, sent whenever it moves: where a pointer lands,",
-            "and the view's size each frame is drawn at."
-          ],
-          "pkt": [
-            {
-              "name": "left",
-              "type": "f64"
-            },
-            {
-              "name": "top",
-              "type": "f64"
-            },
-            {
-              "name": "width",
-              "type": "f64"
-            },
-            {
-              "name": "height",
-              "type": "f64"
-            }
-          ]
-        },
-        {
           "name": "INPUT_POINTER",
           "val": 4354,
           "$doc": [
-            "A pointer event on the canvas, in client pixels."
+            "A pointer event on the world's canvas, in CSS pixels from the top left of its layout box",
+            "(transforms aside), as the world surface's size is (SURFACE_RESIZE)."
           ],
           "pkt": [
             {
@@ -1006,10 +1009,10 @@
           ]
         },
         {
-          "name": "INPUT_HOLD",
-          "val": 4363,
+          "name": "EDIT_TOOL",
+          "val": 6657,
           "$doc": [
-            "What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer."
+            "The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer."
           ],
           "pkt": [
             {
@@ -1020,7 +1023,7 @@
               "name": "val",
               "type": "u32",
               "$doc": [
-                "The held cube or decor kind, by its number in the catalog's one value space (cube.json)."
+                "The cube or decor kind the tool takes, by its number in the catalog's one value space (cube.json)."
               ]
             },
             {
@@ -1033,10 +1036,10 @@
           ]
         },
         {
-          "name": "INPUT_MARKER_WORDS",
-          "val": 4364,
+          "name": "EDIT_MARKER_TEXT",
+          "val": 6658,
           "$doc": [
-            "The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec object/ext.json) are refused whole, never cut."
+            "The draft's text (ToolState.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut."
           ],
           "pkt": [
             {
@@ -1046,17 +1049,17 @@
           ]
         },
         {
-          "name": "INPUT_MARKER_CANCEL",
-          "val": 4365,
+          "name": "EDIT_MARKER_CANCEL",
+          "val": 6659,
           "$doc": [
-            "The marker the tool left waiting is let go, nothing put up."
+            "The marker's draft dropped, nothing committed."
           ]
         },
         {
-          "name": "INPUT_MARKER_PUT",
-          "val": 4366,
+          "name": "EDIT_MARKER_COMMIT",
+          "val": 6660,
           "$doc": [
-            "The waiting marker is put up with its words, if its place is still free or still a marker, and nothing waits after."
+            "The marker's draft committed with its text, where its place is still free or still a marker, and closed."
           ]
         },
         {
@@ -1070,7 +1073,7 @@
           ]
         },
         {
-          "name": "INPUT_KEYS",
+          "name": "INPUT_MOVE",
           "val": 4358,
           "$doc": [
             "The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down."
@@ -1141,8 +1144,8 @@
           ]
         },
         {
-          "name": "PREVIEW_OPEN",
-          "val": 6145,
+          "name": "SCENE_PREVIEW_OPEN",
+          "val": 5889,
           "$doc": [
             "A character drawn alone into a surface the shell handed over, as the picker shows it."
           ],
@@ -1162,8 +1165,8 @@
           ]
         },
         {
-          "name": "PREVIEW_CLOSE",
-          "val": 6146,
+          "name": "SCENE_PREVIEW_CLOSE",
+          "val": 5890,
           "pkt": [
             {
               "name": "surface",
@@ -1193,8 +1196,8 @@
           ]
         },
         {
-          "name": "CHAT_SEND",
-          "val": 5889,
+          "name": "SCENE_CHAT",
+          "val": 5891,
           "$doc": [
             "A line the player said, shown over the character."
           ],
@@ -1206,8 +1209,8 @@
           ]
         },
         {
-          "name": "INPUT_TRACKING",
-          "val": 4356,
+          "name": "CAMERA_TRACKING",
+          "val": 6145,
           "$doc": [
             "The tracking button's press, as the button showed it."
           ],
@@ -1219,15 +1222,15 @@
           ]
         },
         {
-          "name": "INPUT_COMPASS_RESET",
-          "val": 4359,
+          "name": "CAMERA_NORTH_UP",
+          "val": 6146,
           "$doc": [
             "The compass's press: north up."
           ]
         },
         {
-          "name": "INPUT_LOCATE",
-          "val": 4367,
+          "name": "SENSOR_LOCATE",
+          "val": 4620,
           "$doc": [
             "The search panel's location card's press: the location asked for. The compass is",
             "asked for where it is used, entering follow mode (TRACKING), and never alone: nothing",
@@ -1235,8 +1238,8 @@
           ]
         },
         {
-          "name": "INPUT_GOTO",
-          "val": 4360,
+          "name": "CAMERA_GOTO",
+          "val": 6148,
           "$doc": [
             "A search result: the pivot moved there, and the view asked with it at once, as the",
             "controls ask it where the camera stands; a view field absent keeps what the view has."
@@ -1283,7 +1286,9 @@
             "A tracked pose: where a tracker has the camera, and its turn as a unit quaternion",
             "(x, y, z, w) from the camera's axes to the tracker's, in the world's units. The",
             "first of a run is taken to be where the camera already is, so nothing moves as",
-            "it begins; the camera follows the tracker from there until POSE_END."
+            "it begins; the camera follows the tracker from there until POSE_END.",
+            "Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive",
+            "the camera, sent by the device app's driver."
           ],
           "pkt": [
             {
@@ -1324,39 +1329,24 @@
           ]
         },
         {
-          "name": "WORLD_VIEW",
-          "val": 4103,
-          "$doc": [
-            "The shell's world view, up or down: the pair of VISIBILITY, whether the page is seen.",
-            "The kernel watches a sensor only while both hold, the page visible and the world view",
-            "shown; which sensors it watches then is its own (SENSOR_START)."
-          ],
-          "pkt": [
-            {
-              "name": "shown",
-              "type": "bool"
-            }
-          ]
-        },
-        {
-          "name": "PROFILER_START",
+          "name": "PERF_START",
           "val": 6401,
           "$doc": [
             "A fresh recording window."
           ]
         },
         {
-          "name": "PROFILER_STOP",
+          "name": "PERF_STOP",
           "val": 6402,
           "$doc": [
             "The window frozen, so what is exported holds still."
           ]
         },
         {
-          "name": "PROFILER_READ",
+          "name": "PERF_STATS",
           "val": 6403,
           "$doc": [
-            "The profiler's statistics and what it holds now, where they lie: the reply is the address of READ's words (profiler.json), the statistics",
+            "The profiler's statistics and what it holds now, where they lie: the reply is the address of STATS's words (perf.json), the statistics",
             "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
             "number past the door is finite, so no window is infinite."
           ],
@@ -1369,15 +1359,15 @@
           ]
         },
         {
-          "name": "PROFILER_RINGS",
+          "name": "PERF_RINGS",
           "val": 6404,
           "$doc": [
-            "The rings where they lie, nothing reduced: the reply is the address of RINGS's words (profiler.json), good until the next turn."
+            "The rings where they lie, nothing reduced: the reply is the address of RINGS's words (perf.json), good until the next turn."
           ]
         },
         {
-          "name": "WORLD_SNAPSHOT",
-          "val": 4100,
+          "name": "SHELL_SNAPSHOT",
+          "val": 6913,
           "$doc": [
             "The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a",
             "block the kernel holds, valid until the next snapshot."
@@ -1416,8 +1406,8 @@
           "type": "CompanionState"
         },
         {
-          "name": "holding",
-          "type": "HoldingState"
+          "name": "tool",
+          "type": "ToolState"
         },
         {
           "name": "orient",
@@ -1449,7 +1439,7 @@
           "name": "over_marker",
           "type": "bool",
           "$doc": [
-            "The pointer is over a marker a tap would act on with the tool held: a place to go to, or a pin to erase or word."
+            "The pointer is over a scene marker a tap would act on with the tool held: a place to go to, or a pin to erase or draft."
           ]
         },
         {
@@ -1458,7 +1448,7 @@
           "list": true,
           "$doc": [
             "Every setting's value by its SettingKey, as SETTING_SET carries one; none until the kernel",
-            "has read its kept slot, a few turns from boot."
+            "has read its storage file, a few turns from boot."
           ]
         },
         {
@@ -1486,12 +1476,12 @@
           ]
         },
         {
-          "name": "kept_refused",
+          "name": "storage_refused",
           "type": "u32",
           "list": true,
           "$doc": [
-            "The kept slots (host.json's `kept`) whose file is not of the slot's format, or too large for",
-            "any heap: the kernel read none of it and writes nothing over it until WORLD_KEPT_EMPTIED says",
+            "The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for",
+            "any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says",
             "the slot is empty."
           ]
         },
@@ -1581,20 +1571,20 @@
       ]
     },
     {
-      "name": "HoldingState",
+      "name": "ToolState",
       "$doc": [
-        "What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held; and a marker the tool left waiting for its words."
+        "The tool and what it takes, as EDIT_TOOL set it: the cube and the decor are each remembered whichever tool is active; and a marker's draft."
       ],
       "fields": [
         {
-          "name": "tool",
+          "name": "active",
           "type": "ActiveTool"
         },
         {
           "name": "cube",
           "type": "u32",
           "$doc": [
-            "The held cube, by its number in the catalog's one value space."
+            "The cube the tool takes, by its number in the catalog's one value space."
           ]
         },
         {
@@ -1606,17 +1596,11 @@
           "type": "u32"
         },
         {
-          "name": "marker",
-          "type": "bool",
-          "$doc": [
-            "Whether a marker the tool left waits for its words, which INPUT_MARKER_PUT or INPUT_MARKER_CANCEL ends."
-          ]
-        },
-        {
-          "name": "words",
+          "name": "draft",
           "type": "str",
+          "optional": true,
           "$doc": [
-            "The waiting marker's words, which the shell takes up when it starts waiting: the marker's own where one stands there, none where it is new."
+            "A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL."
           ]
         }
       ]

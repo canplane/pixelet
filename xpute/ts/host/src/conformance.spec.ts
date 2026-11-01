@@ -12,6 +12,9 @@
 // can make a turn's output outgrow its room without knowing how a guest reserves it.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
+import * as key from "./conformance/key.spec.ts";
+import * as hostcall from "./conformance/hostcall.spec.ts";
+import * as cmd from "./conformance/cmd.spec.ts";
 
 /** The room a guest's shared range asks for: the toc, both rings, the two streams
  * and the gaps LAYOUTS draws between them, then its own state and heap. Where the range
@@ -59,17 +62,10 @@ export const HANDLES: u32 = 16 as number;
 export const MOST_RAISE: u32 = 32 as number;
 
 /** The guest's own entry in its toc, past xpute's PROGRAM bit. */
-export const key = {
-  /** Where the stream is, run by the host after every turn. */
-  STREAM: 2147483649 as number,
-} as const;
+export { key };
 
 /** The guest's own hostcall, past xpute's PROGRAM bit. */
-export const hostcall = {
-  /** A number and an offset: the host writes the number plus one at the offset and answers 0,
-   * before the hostcall returns; a number of 0 it refuses with EINVAL, writing nothing. */
-  ANSWER: 2147483649 as number,
-} as const;
+export { hostcall };
 
 /** The port a trace sends the guest's own commands as, and the one the guest raises
  * its events for (ipc/frame.json PORT_SHIFT). */
@@ -77,33 +73,4 @@ export const SENDER: u32 = 1 as number;
 
 /** The guest's own commands, `major << 8 | minor`, which a trace sends as SENDER. A packet,
  * where one is taken, is a branch whose first child is a number. */
-export const cmd = {
-  /** Succeeds; replies 0. */
-  OK: 4097 as number,
-  /** Fails with EINVAL. */
-  FAIL: 4098 as number,
-  /** Raises the packet's number of EVENTs, tagged 0 up, then replies with that number. */
-  RAISE: 4099 as number,
-  /** Writes one record to the stream, its op the packet's number and no words; replies 0. */
-  RECORD: 4100 as number,
-  /** Takes a handle from the guest's table and replies with it. */
-  ISSUE: 4101 as number,
-  /** Gives back the packet's handle; fails with EBADF for one that is not live. */
-  RELEASE: 4102 as number,
-  /** Replies 0 for a live handle; fails with EBADF for any other, 0 among them. */
-  USE: 4103 as number,
-  /** Reads the host's clock and keeps the reading; replies 0. */
-  MARK: 4104 as number,
-  /** Reads the host's clock and replies with the whole milliseconds since the last MARK. */
-  SINCE: 4105 as number,
-  /** Opens a file for the packet's number, its owner, and replies with the descriptor; the host's answer (SYS_OPENED) raises OPENED for that owner while the descriptor is open. */
-  OPEN: 4106 as number,
-  /** Closes the packet's descriptor, answered or not; fails with EBADF for one not open. */
-  CLOSE: 4107 as number,
-  /** Zeroes a word of its own, makes the hostcall ANSWER of the packet's number and the word's offset, and replies with the word as it then reads it; fails with the host's errno where the host refused. */
-  HOSTCALL: 4108 as number,
-  /** What RAISE raises. */
-  EVENT: 4353 as number,
-  /** An open answered: tagged with its owner, its result the host's. */
-  OPENED: 4354 as number,
-} as const;
+export { cmd };

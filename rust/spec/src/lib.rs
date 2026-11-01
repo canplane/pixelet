@@ -15,4 +15,6 @@ pub mod param;
 pub mod procedural;
 #[path = "route.spec.rs"]
 pub mod route;
+#[path = "search.spec.rs"]
+pub mod search;
 pub mod space;

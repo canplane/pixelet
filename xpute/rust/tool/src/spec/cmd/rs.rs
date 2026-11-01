@@ -129,11 +129,9 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
             rs_record(spec, &f.ty, "'_")?
         ));
     }
+    // An optional str is borrowed as it stands; a present one may be any Display.
     if f.optional && kind == Kind::Str {
-        return Err(format!(
-            "cmd.json: an optional str ({}) is not written",
-            f.name
-        ));
+        return Ok("Option<&'a str>".to_string());
     }
     let one = match kind {
         Kind::Number => f.ty.clone(),
@@ -172,6 +170,7 @@ fn rs_write(spec: &Spec, f: &Field) -> Result<Vec<String>, String> {
     Ok(vec![match kind {
         Kind::Record if f.optional => format!("match &{v} {{ Some(r) => w.branch({fields}, |w| r.write(w)), None => w.no_branch() }};"),
         Kind::Record => format!("w.branch({fields}, |w| {v}.write(w));"),
+        Kind::Str if f.optional => format!("w.str({v});"),
         Kind::Str => format!("w.str_display({v});"),
         Kind::Enum | Kind::Extern if f.optional => format!("w.u32({v}.map(|m| m as u32));"),
         Kind::Enum | Kind::Extern => format!("w.u32(Some({v} as u32));"),
@@ -246,7 +245,7 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
             "// type is long to spell and is spelled once, here, for each. A table",
             "// with no event or no enum read off the wire leaves a writer or a",
             "// number's check unused.",
-            "#![allow(non_camel_case_types, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, reason = \"generated from the spec\")]",
+            "#![allow(non_camel_case_types, clippy::upper_case_acronyms, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, reason = \"generated from the spec\")]",
             "",
             "use core::fmt::Display;",
             "",
@@ -265,6 +264,9 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         if strs { "Strs, " } else { "" }
     ));
     out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
+    if t.program.is_some() {
+        out.push("use xpute_kit::status::errno::Errno;".into());
+    }
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
         out.push(String::new());
@@ -358,10 +360,33 @@ pub fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
                 "    }".to_string(),
                 "}".to_string(),
             ]);
+            if let Some(program) = t.program {
+                out.extend([
+                    String::new(),
+                    format!("impl<'a> {program}::FromPacket<'a> for {name}{lt} {{"),
+                    format!("    fn from_packet(pkt: {program}::Packet<'a>) -> Result<Self, Errno> {{"),
+                    format!("        {name}::read(pkt.bytes().ok_or(Errno::EBADMSG)?).map_err(|e| e.errnum)"),
+                    "    }".to_string(),
+                    "}".to_string(),
+                ]);
+            }
         }
         if let Some(event) = &c.event {
             let doc = [format!("Command::{}'s event.", c.name)];
             rs_writer(spec, &mut out, &format!("{name}Event"), Some(&doc), event)?;
+            if let Some(program) = t.program {
+                let lt = if rs_borrows(spec, event)? { "<'_>" } else { "" };
+                out.extend([
+                    String::new(),
+                    format!("impl {program}::Event for {name}Event{lt} {{"),
+                    format!("    const NUMBER: u32 = {};", c.val),
+                    format!("    const FIELDS: u32 = {};", event.len()),
+                    "    fn write(&self, w: &mut PacketWriter) {".to_string(),
+                    format!("        {name}Event::write(self, w);"),
+                    "    }".to_string(),
+                    "}".to_string(),
+                ]);
+            }
         }
     }
     Ok(file(&out))

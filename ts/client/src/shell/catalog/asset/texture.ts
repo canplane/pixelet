@@ -1,21 +1,16 @@
 // @pxl/client/shell/catalog/asset/texture.ts
 
 /**
- * The texture pack: which image a cube type wears on top, by bucket key. A
- * type without one draws as its color.
+ * The texture pack: which image a cube wears on top, by bucket key. A cube
+ * without one draws as its color.
  */
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
 import { INGESTED, PACK } from "@/port/shell.ts";
+import type { Cube } from "@/shell/catalog/asset/mod.ts";
 
-/** By a cube's id, its group and type (`ground.land`). */
-const TOP_TILE = new Map<string, u32>(
-  PACK.faces
-    .filter(([, , face]) => face === "top")
-    .map(([group, type, , n]) => [`${group}.${type}`, n]),
-);
-
-export function shippedTopTextureKey(cubeId: string): string | null {
-  const n = TOP_TILE.get(cubeId);
-  return n === undefined ? null : (INGESTED[PACK.tiles[n]]?.key ?? null);
+export function shippedTopTextureKey(cube: Cube): string | null {
+  const tile = PACK.top[cube];
+  return tile === undefined
+    ? null
+    : (INGESTED[PACK.tiles[tile] - 1]?.key ?? null);
 }

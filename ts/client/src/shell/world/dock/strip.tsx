@@ -26,7 +26,7 @@ import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { alpha, chrome, color } from "@/shell/ui/theme.ts";
 import { openModal } from "@/shell/modal.tsx";
 import {
-  holdTool,
+  selectTool,
   selectCube,
   selectDecor,
   selectMarker,
@@ -35,12 +35,11 @@ import {
   useSwatchFlash,
 } from "./store.ts";
 import { ActiveTool } from "@/abi/cmd.spec.ts";
-import { type Cube, cubeId } from "@/shell/catalog/asset/mod.ts";
+import { type Cube, cubeLabel, decorLabel } from "@/shell/catalog/asset/mod.ts";
+import { PIN_LABEL } from "@/shell/catalog/asset/marker.spec.ts";
 import {
-  cubeLabel,
   CubeSwatch,
   decorGlyph,
-  decorLabel,
   heldRing,
 } from "@/shell/catalog/asset/swatch.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
@@ -140,7 +139,6 @@ function SwatchButton({
   cube: Cube;
   gesture: Omit<SizeGesture, "press">;
 }) {
-  const { t } = useTranslation();
   const selected = useInHand({ tool: ActiveTool.Object, cube });
   const ref = useRef<View | null>(null);
   const swatchFlash = useSwatchFlash();
@@ -164,7 +162,7 @@ function SwatchButton({
       ref={ref}
       {...handlers}
       accessibilityRole="button"
-      accessibilityLabel={cubeLabel(t, cube)}
+      accessibilityLabel={cubeLabel(cube)}
       style={[styles.slot, styles.swatchSlot]}
     >
       <Motion to={{ scale: selected ? 1.1 : 1 }} transition={SNAP}>
@@ -180,14 +178,13 @@ function SwatchButton({
 }
 
 function DecorIconButton({ kind }: { kind: u8 }) {
-  const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Decor, kind });
 
   return (
     <Pressable
       onPress={() => selectDecor(kind)}
       accessibilityRole="button"
-      accessibilityLabel={decorLabel(t, kind)}
+      accessibilityLabel={decorLabel(kind)}
       style={styles.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
@@ -209,14 +206,13 @@ function DecorIconButton({ kind }: { kind: u8 }) {
 }
 
 function MarkerButton() {
-  const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Marker });
 
   return (
     <Pressable
       onPress={selectMarker}
       accessibilityRole="button"
-      accessibilityLabel={t("assets.pin")}
+      accessibilityLabel={PIN_LABEL}
       style={styles.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
@@ -282,7 +278,7 @@ export function Strip({
   gesture: Omit<SizeGesture, "press">;
 }) {
   const { t } = useTranslation();
-  const activeTool = useKernel((s) => s.holding.tool);
+  const activeTool = useKernel((s) => s.tool.active);
   const recentPicks = useRecentPicks();
 
   return (
@@ -292,13 +288,13 @@ export function Strip({
           label={t("world.dock.pointer")}
           glyph="hand.point.up.left"
           active={activeTool === ActiveTool.Pointer}
-          onPress={() => holdTool(ActiveTool.Pointer)}
+          onPress={() => selectTool(ActiveTool.Pointer)}
         />
         <ToolButton
           label={t("world.dock.eraser")}
           glyph="eraser"
           active={activeTool === ActiveTool.Eraser}
-          onPress={() => holdTool(ActiveTool.Eraser)}
+          onPress={() => selectTool(ActiveTool.Eraser)}
         />
       </View>
 
@@ -313,11 +309,7 @@ export function Strip({
       >
         {recentPicks.map((pick) =>
           pick.tool === ActiveTool.Object ? (
-            <SwatchButton
-              key={cubeId(pick.cube)}
-              cube={pick.cube}
-              gesture={gesture}
-            />
+            <SwatchButton key={pick.cube} cube={pick.cube} gesture={gesture} />
           ) : pick.tool === ActiveTool.Decor ? (
             <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
           ) : (

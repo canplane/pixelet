@@ -147,7 +147,7 @@ pub fn orient_visible() {
 /// the silence since the last event would be a loss; an event before then
 /// moves that deadline, so a talking sensor is never polled. A heading is
 /// asked for when the sensors open and again when the user follows
-/// (pxl-kernel shell.rs `tracking_action`), never on a timer.
+/// (navigation/follow_mode.rs `tracking_action`), never on a timer.
 pub fn orient_watchdog_step(platform: OrientationPlatform) {
     if !platform.silence_is_loss || !device_orient_store().is_tracking_orient {
         return;

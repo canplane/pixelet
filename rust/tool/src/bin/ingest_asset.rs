@@ -79,9 +79,9 @@ fn run() -> Result<(), String> {
     walk(&asset_dir, &asset_dir, &mut files)?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
-    // A Carto look's top, one its entry paints to a Carto color, ships drawn
-    // toward that color; the underground's looks are no Carto's, and a side,
-    // a bottom and a color are not looks.
+    // A Carto palette entry's top, one its entry paints to a Carto color, ships drawn
+    // toward that color; the underground's palette entries are no Carto's, and a side,
+    // a bottom and a color are not palette entries.
     let slots = pack::load(&raw_dir.join("cube"), &asset_dir.join("cube"))?;
     let carto = asset::ground_colors()?;
     let toward: BTreeMap<String, u32> = slots
@@ -213,7 +213,11 @@ fn run() -> Result<(), String> {
     // and the catalog.
     write_formatted(
         &root.join("spec/spec/asset/ingested.json"),
-        &table::render_json(&rows, &laid),
+        &table::render_json(
+            &rows,
+            &laid,
+            &symbols.iter().map(|s| s.path.clone()).collect::<Vec<_>>(),
+        ),
     )?;
     spec::generate(true)?;
 

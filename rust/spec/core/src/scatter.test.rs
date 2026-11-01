@@ -4,7 +4,7 @@ extern crate std;
 
 use super::*;
 use crate::answer::{eighths, FULL};
-use crate::window::FIRST_CELL;
+use crate::clipmap::FIRST_CELL;
 use std::vec::Vec;
 
 /// A decor's cells hold one at its chance: over a square of leaf cells, the

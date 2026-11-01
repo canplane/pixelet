@@ -13,7 +13,7 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";
 import { alpha, chrome, material, shadow } from "@/shell/ui/theme.ts";
-import { holdTier } from "./store.ts";
+import { selectTier } from "./store.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
 import { DOCK_HEIGHT } from "./card.tsx";
@@ -120,7 +120,7 @@ export function usePopover(bar: React.RefObject<View | null>): {
     },
     release: (x, y) => {
       const tier = popover?.open ? tierAt(popover, x, y) : null;
-      if (tier !== null) holdTier(tier);
+      if (tier !== null) selectTier(tier);
     },
     end: () => {
       pressing.current = false;
@@ -158,7 +158,7 @@ export function SizePopover({ popover }: { popover: Popover }) {
 /** The sizes open, a mark a tier. */
 function SizeMarks({ highlighted }: { highlighted: u32 | null }) {
   const { t } = useTranslation();
-  const objectTier = useKernel((s) => s.holding.tier);
+  const objectTier = useKernel((s) => s.tool.tier);
 
   return (
     <Backing
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     width: POPOVER_WIDTH,
     zIndex: 10,
   },
-  // Takes the pointer whole, so the map under it draws no hover.
+  // Takes the pointer whole, so the world under it draws no hover.
   popoverTakes: { pointerEvents: "box-only" },
   seed: {
     alignSelf: "center",

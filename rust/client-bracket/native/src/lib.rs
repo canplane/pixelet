@@ -6,7 +6,7 @@
 //! What is pixelet's here: its numbers (mem.json's and the thread's), the
 //! kernel's door (pxl_kernel::door) as the guest's entry, the device the
 //! renderer's calls are run on and what the views hand it to draw into, on
-//! xpute's GPU host (surface.rs), the last words, and the transport's
+//! xpute's GPU host (surface.rs), the panic hook, and the transport's
 //! decoder (unpack.rs).
 //!
 //! Called from the app through the C ABI (include/pxl_native.h), one call at
@@ -53,7 +53,7 @@ xpute_host::native_abi!(
 /// The process's error stream, or Android's log where that stream goes
 /// nowhere: the kernel stops with the app, before the shell could run the
 /// report's record.
-fn last_words(stop: Stop<'_>) {
+fn panic_hook(stop: Stop<'_>) {
     let line = match stop {
         Stop::Bug { errnum, at, a, b } => format!(
             "[pxl] {errnum:?} at {}:{}:{} ({a}, {b})",
@@ -80,12 +80,12 @@ fn view() -> Memory<'static> {
 
 /// The doorbell's turn (pxl_kernel::door::run), on the kernel's thread: a
 /// turn of `quota_ms`, and when the kernel wants the next. The first lays
-/// the memory out, on what the host hands it and with the last words.
+/// the memory out, on what the host hands it and with the panic hook.
 /// Around it, the GPU's host: what the device answered written in before,
 /// the turn's calls run on it after (surface.rs), and the frames it admits.
 fn turn(quota_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     surface::before_turn(&mut view());
-    let wake = door::run(quota_ms, boot_info, Some(last_words), surface::admit);
+    let wake = door::run(quota_ms, boot_info, Some(panic_hook), surface::admit);
     surface::after_turn(&mut view());
     wake
 }

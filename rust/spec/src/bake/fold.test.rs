@@ -20,7 +20,7 @@ fn area_majority_fold() {
     assert_eq!(majority([7, 7, 1, 1], GROUND.cell() - 2), 1);
 }
 
-/// A leaf whose cell is `f` of it, its own four looks.
+/// A leaf whose cell is `f` of it, its own four palette indices.
 fn plane(f: impl Fn(usize, usize) -> u8) -> Ground {
     Ground {
         cells: (0..SPAN * SPAN)
@@ -30,7 +30,7 @@ fn plane(f: impl Fn(usize, usize) -> u8) -> Ground {
     }
 }
 
-/// Each parent cell's own look, as the zoom of the parent reads it.
+/// Each parent cell's own palette index, as the zoom of the parent reads it.
 fn fold(children: [&Ground; 4], zoom: Zoom) -> Vec<u8> {
     let four = fold_ground(children, zoom).cells.to_vec();
     four.chunks(4)

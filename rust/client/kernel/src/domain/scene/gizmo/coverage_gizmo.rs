@@ -2,7 +2,7 @@
 
 //! The coverage gizmo (the `world_gizmo` setting, beside the frame's), as
 //! translucent debug lines over the ground: the eye's windows' bricks
-//! (domain/layer/terrain/window.rs), each where the eye reads it at its zoom,
+//! (domain/layer/terrain/clipmap.rs), each where the eye reads it at its zoom,
 //! marked by how it stands, and the drawn ones' tiles and shards, each
 //! colored as its `Mark` says (`gizmo_spec::coverage`).
 //! Every line is cut at each edge's ends on it, and each stretch drawn once
@@ -22,11 +22,11 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
-use pxl_spec_core::window::{self, Entry, ENTRIES, EYE_WINDOWS, FIRST_CELL};
+use pxl_spec_core::clipmap::{self, Entry, ENTRIES, EYE_WINDOWS, FIRST_CELL};
 use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
-use crate::domain::layer::terrain::window::{eye_entries, tile_of};
+use crate::domain::layer::terrain::clipmap::{eye_entries, tile_of};
 use crate::domain::layer::Base as _;
 use crate::domain::query::World;
 use crate::domain::scene::gizmo::gizmo_spec;
@@ -195,14 +195,14 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
 /// window's bricks, which are read there instead; none coarser than the
 /// source's top, which nothing asks for. A piece is drawn where its brick is present, or where a coarser
 /// window's brick is, which the cast reads in its place (pxl-spec-core
-/// `window::step`): from the floor where that brick's tile is the floor's
+/// `clipmap::step`): from the floor where that brick's tile is the floor's
 /// alone. One not drawn is marked by its line: no tile on it, only the
 /// floor's, or a tile and its brick not yet filled.
 fn outline(o: &Observation, top: Zoom) -> Outline {
     let held: [Option<[Entry; ENTRIES as usize]>; EYE_WINDOWS as usize] =
-        core::array::from_fn(|w| eye_entries(window::eye_cell(w as u32)));
+        core::array::from_fn(|w| eye_entries(clipmap::eye_cell(w as u32)));
     let present = |cell: Zoom, q: [i32; 2]| {
-        held[(cell - FIRST_CELL) as usize].is_some_and(|s| s[window::entry(q) as usize].holds(q))
+        held[(cell - FIRST_CELL) as usize].is_some_and(|s| s[clipmap::entry(q) as usize].holds(q))
     };
     let over = (o.eye[2] - o.ground).max(0.0);
     let near = |(x0, y0, side): (f64, f64, f64)| {
@@ -231,7 +231,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
         let Some(entries) = held[(cell - FIRST_CELL) as usize] else {
             continue;
         };
-        let pz = window::bricks_zoom(cell);
+        let pz = clipmap::bricks_zoom(cell);
         for entry in entries {
             let p = entry.brick;
             let tile = tile_of(cell, p).0;

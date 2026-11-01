@@ -15,7 +15,7 @@ import { StyleSheet, View, type ViewProps } from "react-native";
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
-import { useVeil } from "@/shell/ui/motion/veil.ts";
+import { useDim } from "@/shell/ui/motion/dim.ts";
 import { BackingPlace, type BackingProps } from "@/shell/ui/backing.tsx";
 import { alpha } from "@/shell/ui/theme.ts";
 import { Backing as Fill } from "./backing.tsx";
@@ -48,9 +48,9 @@ export function Backing({
   style,
   children,
 }: BackingProps) {
-  const veil = useVeil(fade, transition, fadeFrom);
+  const dim = useDim(fade, transition, fadeFrom);
 
-  const target = effectAt(veil.level, place);
+  const target = effectAt(dim.level, place);
   const [shown, setShown] = useState<Effect>(
     fadeFrom === undefined ? target : effectAt(fadeFrom, place),
   );
@@ -59,7 +59,7 @@ export function Backing({
   const [laidOut, setLaidOut] = useState(false);
   useEffect(() => {
     if (!laidOut || shown === target) return;
-    const delay = veil.motion.transition.delayMs ?? 0;
+    const delay = dim.motion.transition.delayMs ?? 0;
     if (delay === 0) return setShown(target);
     const timer = setTimeout(() => setShown(target), delay);
     return () => clearTimeout(timer);
@@ -72,7 +72,7 @@ export function Backing({
     const { borderRadius } = StyleSheet.flatten(style) ?? {};
     const round = { borderRadius, overflow: "hidden" as const };
     return (
-      <Motion {...veil.motion} style={style}>
+      <Motion {...dim.motion} style={style}>
         <Blur style={[StyleSheet.absoluteFill, round]} />
         <View
           style={[
@@ -122,13 +122,13 @@ export function Backing({
       glassEffectStyle={{
         style: shown,
         animate: true,
-        animationDuration: veil.motion.transition.durationMs / 1000,
+        animationDuration: dim.motion.transition.durationMs / 1000,
       }}
       tintColor={tint}
       isInteractive={interactive}
     >
       <Motion
-        {...veil.motion}
+        {...dim.motion}
         style={[
           styles.layout,
           {

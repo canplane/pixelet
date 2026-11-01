@@ -17,12 +17,12 @@ use tile_cache::TileCache;
 pub mod division;
 pub mod earth;
 pub mod instance;
-pub mod kept;
 pub mod object;
 pub mod place;
 mod query;
 pub mod terrain;
 pub mod tile_cache;
+pub mod upload;
 
 use crate::sys::io::fetch;
 use crate::sys::io::source;
@@ -84,7 +84,7 @@ pub trait Base: Clone + 'static {
 
     /// The packet a tile came in, once the slot `record` took the tile or
     /// none did: freed, or kept where the GPU takes the tile off it
-    /// (`kept::Kept`).
+    /// (`upload::Uploads`).
     fn keep(_record: Option<u32>, block: Block) {
         fetch::release(Some(block));
     }

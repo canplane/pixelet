@@ -9,7 +9,7 @@ pub mod camera;
 /// `xpute_guest::abi`'s.
 #[path = "control/cmd.spec.rs"]
 pub mod cmd;
-pub mod interaction;
+pub mod edit;
 pub mod navigation;
 pub mod param;
 pub mod sensor;

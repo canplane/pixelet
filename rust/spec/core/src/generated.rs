@@ -2,7 +2,7 @@
 
 //! gpu-portable: the decor the ground holds (`scatter`) generated on the
 //! world as either side holds it: where a candidate stands, which way it
-//! faces and whether its footing holds (`generated`, over `DecorQuery`), what
+//! faces and whether its column surface holds (`generated`, over `DecorQuery`), what
 //! placed decor claims (`overlaps_placed`), and how the GPU lays, lists and
 //! draws what it generates in a window's bricks.
 
@@ -11,13 +11,13 @@ use xpute_kit::math::rng::SplitMix32;
 use crate::answer::val;
 use crate::cast::Detail;
 use crate::cave::node_seed;
+use crate::clipmap;
+use crate::clipmap::{BRICK, BRICK_SHIFT, ENTRIES, EYE_WINDOWS, FIRST_CELL};
 use crate::cube::{sentinel, Ground};
 use crate::decor::{Decor, Orientation, DECORS};
 use crate::overwrite;
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
 use crate::scatter::{mul_hi, root, stands_at, variant_of, Candidate};
-use crate::window;
-use crate::window::{BRICK, BRICK_SHIFT, ENTRIES, EYE_WINDOWS, FIRST_CELL};
 use crate::world::{placed_in, Placed};
 use crate::{wrap_idx, Zoom, FRAC_W, LEAF_CELL, UNIT_ZOOM};
 
@@ -141,7 +141,7 @@ pub const fn generated_for(head: [u32; 3], q: [i32; 2]) -> bool {
 /// The boxes a frame's generation is asked over at most: the edits and cuts
 /// held (`overwrite::BOXES`), and each brick handed this frame, which
 /// reaches its window's zoom and every coarser one (`asks`'s vote).
-pub const MARKED: u32 = overwrite::BOXES + window::HANDED;
+pub const MARKED: u32 = overwrite::BOXES + clipmap::HANDED;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
 /// finest window zoom whose candidates it reaches, `EVERY` for all.
 pub const BOX_WORDS: u32 = 5;
@@ -193,7 +193,7 @@ pub const fn brick_box(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
 /// `cell`: a brick's (`brick_box`), or one candidate's own. A candidate reads
 /// the world at its window's zoom and finer, each a cell within `READ_REACH`
 /// of its own at that zoom; a brick filled at `zoom` answers a read at
-/// `zoom` or finer alone (`window::step`), so it reaches the windows at
+/// `zoom` or finer alone (`clipmap::step`), so it reaches the windows at
 /// `zoom` and coarser, within `READ_REACH` of its cells, not of theirs; an
 /// edit or a cut (`EVERY`) is read at every zoom, so within `READ_REACH` of
 /// the window's own cells.
@@ -275,8 +275,8 @@ pub fn first_group(rows: &[Decor], decor: u32) -> u32 {
 /// How the GPU draws what it generates: each record sized for the screen, a
 /// model or an impostor, into its group's region, models at `2·group` and
 /// impostors past it; the regions laid end to end in the decor's instances, in the
-/// layout the decor and impostor shaders read (lanes x, y, z, spin, scale,
-/// `drawn::LANES` a slot, then the index list), each region's draw a set of
+/// layout the decor and impostor shaders read (columns x, y, z, spin, scale,
+/// `drawn::COLUMNS` a slot, then the index list), each region's draw a set of
 /// indirect args.
 pub mod drawn {
     use super::GROUPS;
@@ -287,7 +287,7 @@ pub mod drawn {
     /// What a record's first word holds past its decor, variant and turn:
     /// its region, once sized.
     pub const REGION_SHIFT: u32 = super::CELL_SHIFT + crate::ZOOM_BITS;
-    pub const LANES: u32 = 5;
+    pub const COLUMNS: u32 = 5;
     /// Each region's indirect args, `ARGS_WORDS` a region: a model's
     /// indexed, an impostor's a strip of four corners an instance; its first
     /// instance 0, which a device without `indirect-first-instance` holds
@@ -295,7 +295,7 @@ pub mod drawn {
     pub const ARGS_WORDS: u32 = 5;
     /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFF_BYTES`, every
     /// device's dynamic offset alignment), its index list's first slot at
-    /// `UNIFORM_IDX` within it: the lanes' base, to which the args pass adds
+    /// `UNIFORM_IDX` within it: the columns' base, to which the args pass adds
     /// the region's first slot once the regions are laid out.
     pub const UNIFORM_WORDS: u32 = OFF_BYTES / 4;
     /// The dynamic offset alignment every WebGPU device meets: its
@@ -304,7 +304,7 @@ pub mod drawn {
     pub const UNIFORM_IDX: u32 = 7;
     /// The drawing words, what a frame's decor is drawn by: the model's and
     /// the impostor's floors, each an angle about the eye in radians, the
-    /// anchor the lanes' positions are about (unit cells, X wrapping), the
+    /// anchor the columns' positions are about (unit cells, X wrapping), the
     /// left-out decor's corner and whether there is one, then each group's
     /// extent.
     pub const MODEL_ANGLE: u32 = 0;
@@ -337,28 +337,32 @@ pub mod drawn {
 }
 
 /// What generating decor asks of the world, as either side holds it: of the
-/// world unplaced (`world::Handed::unplaced`), the ground's alone, its
-/// column's footing and the assets about it; of the world as edited, whether
+/// world unplaced (`world::Inherited::unplaced`), the ground's alone, its
+/// column's surface and the assets about it; of the world as edited, whether
 /// an edit holds a cell and what is placed in a box; and the catalog's rows
 /// where it reads them.
 pub trait DecorQuery {
-    /// A footing as this side keeps it: what its assets are asked off.
-    type Footing: Copy;
+    /// A column surface as this side keeps it: what its assets are asked off.
+    type ColumnSurface: Copy;
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer, never a table it copies.
     fn rows(&self) -> &[Decor];
-    /// The footing down column `g` at `cell` of the world unplaced,
-    /// what is placed left out: the query's support (`support::footing`) as
+    /// The column surface down column `g` at `cell` of the world unplaced,
+    /// what is placed left out: the query's support (`support::column_surface`) as
     /// this side asks it; its top (`cast::top`), false where nothing fills
     /// there or the world lacks it.
-    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Self::Footing, (i32, f32), bool);
+    fn column_surface(
+        &mut self,
+        cell: Zoom,
+        g: [i32; 2],
+    ) -> (Self::ColumnSurface, (i32, f32), bool);
     /// The finest zoom, `cell` or finer, this side holds the ground's leaf
     /// column `g` at: where a candidate there is asked whether it stands and
     /// which way it faces (`generated`), the same whatever window asks.
     fn finest(&mut self, cell: Zoom, g: [i32; 2]) -> Zoom;
-    /// What is in the cell `c` of `zoom` about the footing `f`, the world
+    /// What is in the cell `c` of `zoom` about the column_surface `f`, the world
     /// unplaced's answer (`support::asset`): `void` or the ground's value.
-    fn asset(&mut self, f: &Self::Footing, zoom: Zoom, c: [i32; 3]) -> u32;
+    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> u32;
     /// Whether an edit holds the cell `c` of `zoom` in the world as edited,
     /// something placed or air (`answer::is_placed`).
     fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
@@ -369,8 +373,8 @@ pub trait DecorQuery {
 
 /// Decor the ground generates, where it stands: its variant, its heading in
 /// quarter turns, its box's min corner, in leaf cells, the cell over its
-/// footing's, and how far its base lies under that corner, in Q3 steps: the
-/// footing's top kept short of its cube (`cast::top`), so it stands on the
+/// column surface's, and how far its base lies under that corner, in Q3 steps: the
+/// column surface's top kept short of its cube (`cast::top`), so it stands on the
 /// top as drawn, not its cube's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Generated {
@@ -389,18 +393,18 @@ impl Generated {
     };
 }
 
-/// Where candidate `c` of `decor` stands at `cell`: on its column's footing
+/// Where candidate `c` of `decor` stands at `cell`: on its column's surface
 /// in the world unplaced, the ground's alone, so no edit moves it or takes
 /// it from under it; facing as the cells beside it vote (`asks`); then,
 /// where `boxed`, whether it generates there: every cell of its box void and
-/// every one under its base a look it generates on, as the ground holds
+/// every one under its base a palette entry it generates on, as the ground holds
 /// them; no edit in its box, air included (`DecorQuery::is_edited`); and no
 /// placed decor's box overlaps its own (`overlaps_placed`). It stands at its
-/// window's footing, and the vote and its box are asked at the finest zoom
+/// window's column surface, and the vote and its box are asked at the finest zoom
 /// the world holds its leaf column at (`DecorQuery::finest`), about that
-/// zoom's footing, so a candidate faces and generates alike at every window
+/// zoom's column surface, so a candidate faces and generates alike at every window
 /// it is generated at. Its pose stands as itself only at a window its size
-/// does (`stands_at`). Where it stands, whether its footing is found, and
+/// does (`stands_at`). Where it stands, whether its column surface is found, and
 /// whether it generates there, true where not `boxed` and it stands.
 pub fn generated(
     q: &mut impl DecorQuery,
@@ -411,7 +415,7 @@ pub fn generated(
 ) -> (Generated, bool, bool) {
     let s = LEAF_CELL - cell;
     let at = [c.cell[0] >> s, c.cell[1] >> s];
-    let (f, (floor, rise), here) = q.footing(cell, at);
+    let (f, (floor, rise), here) = q.column_surface(cell, at);
     if !here {
         return (Generated::NONE, false, false);
     }
@@ -426,7 +430,7 @@ pub fn generated(
         (f, floor, true)
     } else {
         let s = LEAF_CELL - zoom;
-        let (about, (base, _), held) = q.footing(zoom, [c.cell[0] >> s, c.cell[1] >> s]);
+        let (about, (base, _), held) = q.column_surface(zoom, [c.cell[0] >> s, c.cell[1] >> s]);
         (about, base, held)
     };
     let (g, generates) = asks(q, &about, decor, (zoom, base), c.seed, g, boxed);
@@ -439,9 +443,9 @@ pub fn generated(
 
 /// Every cell generating decor asks of the world, at one place, as a GPU
 /// inlines a call once a place it is called from: a candidate posed by its
-/// `seed`, the cells about its footing its pose votes on, then, where
+/// `seed`, the cells about its column surface its pose votes on, then, where
 /// `boxed`, the box of `g` as that pose turned it (`generated`'s rule), each
-/// a cell at `zoom` about the footing `about`, whose top cell is `base`.
+/// a cell at `zoom` about the column_surface `about`, whose top cell is `base`.
 /// The pose is the candidate's variant and its heading in quarter turns,
 /// its seed's draws in order: along transport, a plurality vote of the
 /// cells a way runs on, by their offset from the candidate's, along each
@@ -451,7 +455,7 @@ pub fn generated(
 /// over. What stands, and whether it generates there.
 fn asks<Q: DecorQuery>(
     q: &mut Q,
-    about: &Q::Footing,
+    about: &Q::ColumnSurface,
     decor: &Decor,
     (zoom, base): (Zoom, i32),
     seed: u32,

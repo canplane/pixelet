@@ -8,11 +8,11 @@
 //! the asset root, and its extent (pxl-spec asset/catalog.rs reads the
 //! layout). The host serves it, as hex in TypeScript.
 
-use super::ingested::{files, INGESTED_JSON};
+use super::ingested::{file_number, files};
 use super::{file, read, Node, Output};
 
 /// A data spec's `$type` for a file reference: in Rust its slot, in
-/// TypeScript its path.
+/// TypeScript its number below the asset root.
 pub const FILE: &str = "file";
 
 pub const CUBE_JSON: &str = "spec/spec/asset/cube.json";
@@ -88,11 +88,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let mut bytes = (slots.len() as u32).to_le_bytes().to_vec();
     let mut extents = Vec::with_capacity(slots.len() * 24);
     for path in &slots {
-        let row = files.iter().position(|f| f.path == *path).ok_or(format!(
-            "{path}, a slot's file, is no file of {INGESTED_JSON}: run the asset ingest"
-        ))?;
-        bytes.extend((row as u32 + 1).to_le_bytes());
-        for e in files[row].extent.unwrap_or([0.0; 3]) {
+        let number = file_number(path)?;
+        bytes.extend(number.to_le_bytes());
+        for e in files[number as usize - 1].extent.unwrap_or([0.0; 3]) {
             extents.extend(e.to_le_bytes());
         }
     }

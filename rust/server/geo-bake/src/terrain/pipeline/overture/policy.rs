@@ -1,9 +1,9 @@
 // pxl-geo-bake/terrain/pipeline/overture/policy.rs
 
 //! Overture Buildings, Transportation and Base rows to the OpenStreetMap
-//! Carto look each paints (gravitystorm/openstreetmap-carto 1cc4b89). An
+//! Carto palette entry each paints (gravitystorm/openstreetmap-carto 1cc4b89). An
 //! Overture class is the value of the OSM tag it comes from, so it takes the
-//! look, the layer and the `feature` Carto gives that tag (`landcover.mss`,
+//! palette entry, the layer and the `feature` Carto gives that tag (`landcover.mss`,
 //! `water.mss`, `buildings.mss`, `roads.mss`, `project.mml`); a class Carto
 //! draws no fill for paints nothing, and the land under it shows.
 
@@ -20,8 +20,8 @@ use crate::terrain::pipeline::overture::width::{carto_u, width_u};
 use crate::terrain::repository::{BaseRow, BuildingRow};
 use crate::wkb::wkb_to_geometries;
 
-/// A way's look: Carto's `highway` and `railway` values, its white roads one
-/// look told apart by width, `path` and `steps` footways.
+/// A way's palette entry: Carto's `highway` and `railway` values, its white roads one
+/// palette entry told apart by width, `path` and `steps` footways.
 pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundId {
     let c = class.unwrap_or("");
     if subtype == "rail" {
@@ -63,7 +63,7 @@ const MAJOR_BUILDING_CLASSES: [&str; 9] = [
     "train_station",
 ];
 
-/// What a Base row paints: its look, Carto's layer, and Carto's `feature`.
+/// What a Base row paints: its palette entry, Carto's layer, and Carto's `feature`.
 type Paint = (GroundId, Layer, &'static str);
 
 /// `landuse`, `leisure`, `amenity` and the like, as Overture's land use
@@ -270,13 +270,13 @@ pub const INFRASTRUCTURE: &[(&str, Paint)] = {
 const LINE_ONLY: [&str; 2] = ["weir", "cutline"];
 
 fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
-    let &(_, (look, layer, feat)) = INFRASTRUCTURE.iter().find(|(c, _)| *c == class)?;
+    let &(_, (palette_idx, layer, feat)) = INFRASTRUCTURE.iter().find(|(c, _)| *c == class)?;
     if closed && LINE_ONLY.contains(&class) {
         return None;
     }
     Some((
-        look,
-        if look == g::aeroway && !closed {
+        palette_idx,
+        if palette_idx == g::aeroway && !closed {
             Layer::Aeroway
         } else {
             layer
@@ -316,7 +316,7 @@ pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
         .as_deref()
         .or(row.subtype.as_deref())
         .unwrap_or("");
-    let look = if MAJOR_BUILDING_CLASSES.contains(&kind) {
+    let palette_idx = if MAJOR_BUILDING_CLASSES.contains(&kind) {
         g::building_major
     } else {
         g::building
@@ -324,7 +324,7 @@ pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
     let rank = Rank::by_area(Layer::Building, row.way_area, "", &row.gers_id);
     wkb_to_geometries(&row.geom_wkb)
         .iter()
-        .filter_map(|geom| Feature::of(geom, tile_min, look, rank.clone()))
+        .filter_map(|geom| Feature::of(geom, tile_min, palette_idx, rank.clone()))
         .collect()
 }
 
@@ -351,7 +351,7 @@ pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
             .collect(),
         0.0,
     );
-    let look = segment_type(&row.subtype, row.class.as_deref());
+    let palette_idx = segment_type(&row.subtype, row.class.as_deref());
     let rank = Rank::new(
         Layer::Road,
         paint_order(&row.subtype, row.class.as_deref(), row.tags.role),
@@ -359,7 +359,7 @@ pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
         &row.gers_id,
     );
     let paint = |points: &[G3857], [a, b]: [f64; 2]| {
-        let mut f = Feature::line(points, tile_min, look, rank.clone())?;
+        let mut f = Feature::line(points, tile_min, palette_idx, rank.clone())?;
         f.width = width_u(&row.subtype, row.class.as_deref(), row.tags.role);
         // square where the segment is cut, round at its own ends
         f.cut = [a > 0.0 || a0 > 0.0, b < 1.0 || b0 < 1.0];
@@ -388,7 +388,7 @@ pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
         .iter()
         .filter_map(|geom| {
             let closed = closes(geom);
-            let (look, layer, feat) = match src {
+            let (palette_idx, layer, feat) = match src {
                 "water" => water_paint(subtype, class, closed),
                 "land" => land_paint(class),
                 "infrastructure" => infrastructure_paint(class, closed),
@@ -407,7 +407,7 @@ pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
                 }
                 _ => Rank::by_area(layer, row.way_area, feat, &row.gers_id),
             };
-            let mut f = Feature::of(geom, tile_min, look, rank)?;
+            let mut f = Feature::of(geom, tile_min, palette_idx, rank)?;
             if !closed {
                 f.width = line_width(src, class);
             }

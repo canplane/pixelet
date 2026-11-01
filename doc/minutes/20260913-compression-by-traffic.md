@@ -316,3 +316,17 @@ so brotli moves the gap to the React Native client rather than closing it. Only
 a gzip closes it everywhere — zopfli's 5.6 KB is a gzip stream and every stack
 reads one — and that is 30% more bytes than zstd -22, paid by the reader, since
 the bill does not count them. zstd stays.
+
+## 2026-11-01: zstd stays, and a browser that cannot read it is left as it is
+
+The user's word. zstd stays the baked objects' one encoding: the 09-22 sizes
+put it level with Brotli, it unpacks in half the time, and the app unpacks it
+itself (`ts/app/native/src/origin.ts`), so the 09-24 reason against Brotli,
+OkHttp, no longer decides and none other does. A browser that does not offer
+zstd is not refused: the edge serves it the copy it decodes, as the 09-24
+section found, and that copy's transfer and cache room are accepted. This
+replaces the 09-22 line that such a browser is pointed at another. Refusing
+it would take a WAF rule on the zone, ahead of the Worker, where the client's
+own `accept-encoding` is still intact: a setting outside the tree, which
+would also refuse a capable browser behind a proxy that rewrites the header,
+for a saving the bill does not count.

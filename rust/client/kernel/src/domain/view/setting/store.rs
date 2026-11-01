@@ -5,22 +5,22 @@
 //! default would be a decision nobody made, and changing it in source would
 //! then reach only people with empty storage. It keeps them by number, a
 //! setting's and its value as it crosses (a choice's option by its number),
-//! each pair two unsigned LEB128s, in its kept slot (sys/io/file.rs `Kept`, which
+//! each pair two unsigned LEB128s, in its storage file (sys/io/file.rs `StorageFile`, which
 //! checks the slot's format). schema.json gives a number out once, so what
 //! was kept never reads as another setting. A setting schema.json marks
-//! `kept` false is the session's: neither written nor read, so it starts at
+//! `stored` false is the session's: neither written nor read, so it starts at
 //! its default.
 
 pub use crate::domain::view::setting::schema_spec::{
     AoMode, CameraMode, OrbitObstacleMode, ResMode, SettingKey, SettingKind, Settings,
 };
-use crate::sys::io::file::{self, Kept, KeptFile};
+use crate::sys::io::file::{self, StorageFile, StorageRead};
 use xpute_guest::global::Global;
 
 static DEVELOPMENT: Global<bool> = Global::new();
 
 /// Development builds offer the settings schema.json marks `dev`, as the
-/// shell's boot says (`WORLD_BOOT`).
+/// shell's boot says (`SYS_BOOT`).
 pub fn set_development(development: bool) {
     DEVELOPMENT.set(development);
 }
@@ -50,17 +50,17 @@ impl Settings {
         if !self.set(key, val) {
             return None;
         }
-        if key.is_kept() {
+        if key.is_stored() {
             *UNKEPT.get(|| false) = true;
         }
         Some(true)
     }
 
-    fn kept(&self) -> Vec<u8> {
+    fn stored(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         for key in SettingKey::ALL {
             let val = self.get(key);
-            if !key.is_kept() || !is_offered(key, val) || val == Settings::DEFAULT.get(key) {
+            if !key.is_stored() || !is_offered(key, val) || val == Settings::DEFAULT.get(key) {
                 continue;
             }
             leb(&mut bytes, key as u32);
@@ -100,7 +100,7 @@ static SETTINGS_STORE: Global<Settings> = Global::new();
 /// of changes costs the host stream one file, whatever their number.
 static UNKEPT: Global<bool> = Global::new();
 
-/// The store against its kept slot, opened on the storage root as the
+/// The store against its storage file, opened on the storage root as the
 /// objects' is (domain/layer/object/repository.rs). Until the slot is read
 /// the store holds the defaults and nothing is written over it.
 #[derive(Clone, Copy, PartialEq)]
@@ -125,7 +125,7 @@ fn load() -> &'static mut Load {
 /// Asks for the slot, at boot.
 pub fn settings_open() {
     *load() = Load::Asked;
-    file::open_kept(Kept::Settings);
+    file::open_storage(StorageFile::Settings);
 }
 
 /// The slot was read, whatever it held: from here the store is what this
@@ -140,16 +140,16 @@ pub fn settings_load_step() -> bool {
     if are_settings_loaded() {
         return false;
     }
-    let Some(kept) = file::take_kept(Kept::Settings) else {
+    let Some(file) = file::take_storage(StorageFile::Settings) else {
         return false;
     };
-    let (s, now) = match kept {
-        KeptFile::Bytes(bytes) => (read_kept(&bytes), Load::Loaded),
-        KeptFile::None => (Settings::DEFAULT, Load::Loaded),
-        KeptFile::Unreadable if file::is_refused(Kept::Settings) => {
+    let (s, now) = match file {
+        StorageRead::Bytes(bytes) => (read_stored(&bytes), Load::Loaded),
+        StorageRead::None => (Settings::DEFAULT, Load::Loaded),
+        StorageRead::Unreadable if file::is_refused(StorageFile::Settings) => {
             (Settings::DEFAULT, Load::Refused)
         }
-        KeptFile::Unreadable => (Settings::DEFAULT, Load::Unreadable),
+        StorageRead::Unreadable => (Settings::DEFAULT, Load::Unreadable),
     };
     SETTINGS_STORE.set(s);
     UNKEPT.set(false);
@@ -168,18 +168,18 @@ pub fn on_settings_emptied() {
 /// Only a slot read is written; a refused or unreadable one holds its changes.
 pub fn settings_keep_step() {
     if *load() == Load::Loaded && core::mem::take(UNKEPT.get(|| false)) {
-        file::write_kept(Kept::Settings, &settings_store().kept());
+        file::write_storage(StorageFile::Settings, &settings_store().stored());
     }
 }
 
 /// A number no setting has is passed over, as is a session's setting and a
 /// value its setting cannot hold, and a pair cut short ends it.
-fn read_kept(bytes: &[u8]) -> Settings {
+fn read_stored(bytes: &[u8]) -> Settings {
     let mut s = Settings::DEFAULT;
     let mut at = 0;
     while let (Some(number), Some(val)) = (unleb(bytes, &mut at), unleb(bytes, &mut at)) {
         if let Some(key) =
-            SettingKey::of(number).filter(|&key| key.is_kept() && is_offered(key, val))
+            SettingKey::of(number).filter(|&key| key.is_stored() && is_offered(key, val))
         {
             s.set(key, val);
         }

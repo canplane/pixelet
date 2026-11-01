@@ -10,8 +10,8 @@
 //!
 //! - the ground: its column off the windows, as the GPU drew it and the CPU
 //!   read it back, and the area's edge laid on it; the ways off the tree the
-//!   GPU built of its brick, its families read back into the pool's mirror,
-//!   read as the GPU reads them (pxl-spec-core `window::ground`,
+//!   GPU built of its brick, its child groups read back into the pool's mirror,
+//!   read as the GPU reads them (pxl-spec-core `clipmap::ground`,
 //!   `way::tree`);
 //! - the caves: the hash pyramid's node at that zoom, its value
 //!   (`procedural.rs` `Cave`);
@@ -50,14 +50,14 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
 use pxl_spec_core::answer::{In, Kind};
 use pxl_spec_core::area::Area;
+use pxl_spec_core::clipmap::{self, Found};
 use pxl_spec_core::ground::VOID;
 use pxl_spec_core::ground::{self, Cell};
 use pxl_spec_core::overwrite::Cut;
-use pxl_spec_core::window::{self, Found};
 use pxl_spec_core::world;
 
 use super::world::World;
-use crate::domain::layer::terrain::window::{pool, Windowed};
+use crate::domain::layer::terrain::clipmap::{pool, Windowed};
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::Answer;
 use crate::sys::io::source;
@@ -68,11 +68,11 @@ pub(super) fn coarsest() -> Zoom {
 }
 
 /// A node as a descent reaches it, X on the asker's lap, and what its
-/// ancestors found, handed to its children (pxl-spec-core `world::Handed`).
+/// ancestors found, handed to its children (pxl-spec-core `world::Inherited`).
 #[derive(Clone, Copy)]
 pub(super) struct At {
     pub(super) node: Node<3>,
-    pub(super) handed: world::Handed,
+    pub(super) inherited: world::Inherited,
 }
 
 impl World<'_> {
@@ -94,10 +94,10 @@ impl World<'_> {
     pub(super) fn start(&self, node: Node<3>) -> At {
         At {
             node,
-            handed: if self.unplaced {
-                world::Handed::unplaced(node)
+            inherited: if self.unplaced {
+                world::Inherited::unplaced(node)
             } else {
-                world::Handed::of(&self.object.lanes(), node)
+                world::Inherited::of(&self.object.columns(), node)
             },
         }
     }
@@ -132,7 +132,7 @@ impl World<'_> {
         let node = (zoom + 1, child_of(c, k));
         At {
             node,
-            handed: at.handed.child(&self.object.lanes(), pool(), node),
+            inherited: at.inherited.child(&self.object.columns(), pool(), node),
         }
     }
 
@@ -143,7 +143,7 @@ impl World<'_> {
     /// (`Reading`). Its answer (pxl-spec-core `answer`): a split and its
     /// box in its own steps; the asset of a cell at the zoom asked, void for air; or,
     /// coarser than asked and nothing under it filling, air its size, which
-    /// its zoom against `asked` tells. The four looks a cell is drawn by are the GPU's to
+    /// its zoom against `asked` tells. The four palette indices a cell is drawn by are the GPU's to
     /// draw. `lines` are the ground's lines the walk asking it read, which
     /// its own steps from (`walk_line`).
     pub(super) fn node(
@@ -153,7 +153,7 @@ impl World<'_> {
         lines: &mut Lines,
     ) -> Answer<In<[u32; 2]>> {
         let (lanes, cuts) = (
-            self.object.lanes(),
+            self.object.columns(),
             [self.cut(self.carve), self.cut(self.hide)],
         );
         let mut reading = Reading::new(self, lines);
@@ -162,7 +162,7 @@ impl World<'_> {
             &Windowed,
             &lanes,
             pool(),
-            &mut at.handed,
+            &mut at.inherited,
             at.node,
             asked,
             cuts,
@@ -252,9 +252,9 @@ impl ground::Held for Reading<'_, '_> {
     }
 
     /// The cell's column off the windows, the area's edge laid on it, as
-    /// the GPU reads it (pxl-spec-core `window::ground`), stepped from where
+    /// the GPU reads it (pxl-spec-core `clipmap::ground`), stepped from where
     /// its relief found its cells.
     fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
-        window::ground(&Windowed, place, zoom, [c[0], c[1]]).0
+        clipmap::ground(&Windowed, place, zoom, [c[0], c[1]]).0
     }
 }

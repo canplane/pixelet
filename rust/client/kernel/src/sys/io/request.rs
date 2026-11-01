@@ -18,8 +18,8 @@
 
 use core::cmp::Ordering;
 
-use crate::profiler::record::profiler_record;
-use crate::profiler::task::TaskRow;
+use crate::perf::record::perf_record;
+use crate::perf::task::TaskRow;
 use crate::sys::io::demand::{Ask, Phases, Stream};
 use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::policy::Policy;
@@ -50,16 +50,16 @@ pub trait Serve {
 
     fn intake(&self) -> u32;
 
-    fn blame(&self, failure: Failure) -> Blame;
+    fn fault(&self, failure: Failure) -> Fault;
 
-    /// The wait after the server's `strikes`th failure in a row, none once
+    /// The wait after the server's `failures`th failure in a row, none once
     /// it is given up; `seed` differs per failure.
-    fn backoff(&self, strikes: u32, seed: u64) -> Option<f64>;
+    fn backoff(&self, failures: u32, seed: u64) -> Option<f64>;
 }
 
 /// Whose a failure is, which decides what waits on it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Blame {
+pub enum Fault {
     /// The object's own: asking again brings the same.
     Object,
     /// No way to the server: waited on, never given up.
@@ -174,7 +174,7 @@ pub struct RequestScheduler<S> {
     failing: Option<Errno>,
     /// The server's failures since the last answer, one an outage's wait:
     /// what was already out when one was counted fails with it.
-    strikes: u32,
+    failures: u32,
     struck_ms: f64,
     /// No attempt starts before it.
     held_until: f64,
@@ -216,7 +216,7 @@ impl<S: Serve> RequestScheduler<S> {
             stops: Vec::new(),
             ready: Vec::with_capacity(desired),
             failing: None,
-            strikes: 0,
+            failures: 0,
             struck_ms: f64::NEG_INFINITY,
             held_until: f64::NEG_INFINITY,
             given_up: false,
@@ -457,28 +457,28 @@ impl<S: Serve> RequestScheduler<S> {
     /// The server answered: whatever held it back is over.
     fn on_answered(&mut self) {
         self.failing = None;
-        self.strikes = 0;
+        self.failures = 0;
         self.struck_ms = f64::NEG_INFINITY;
         self.held_until = f64::NEG_INFINITY;
     }
 
     fn on_failed(&mut self, want: Option<usize>, failure: Failure, started_ms: f64, at: f64) {
-        let seed = derive_seed_u64(self.strikes as u64, at.to_bits());
-        let wait = match self.serve.blame(failure) {
-            Blame::Object => Wait::Object,
-            Blame::Network => {
+        let seed = derive_seed_u64(self.failures as u64, at.to_bits());
+        let wait = match self.serve.fault(failure) {
+            Fault::Object => Wait::Object,
+            Fault::Network => {
                 self.failing = Some(failure.errnum);
                 self.held_until = at + self.serve.backoff(1, seed).unwrap_or(0.0);
                 return;
             }
-            Blame::Server => {
+            Fault::Server => {
                 self.failing = Some(failure.errnum);
                 if started_ms <= self.struck_ms {
                     return;
                 }
                 self.struck_ms = at;
-                self.strikes += 1;
-                match self.serve.backoff(self.strikes, seed) {
+                self.failures += 1;
+                match self.serve.backoff(self.failures, seed) {
                     Some(wait) => self.held_until = at + wait,
                     None => self.given_up = true,
                 }
@@ -508,7 +508,7 @@ impl<S: Serve> RequestScheduler<S> {
 }
 
 fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
-    profiler_record(|| {
+    perf_record(|| {
         let mut row = TaskRow {
             stream: a.stream as u32 as f64,
             subject: a.subject,
@@ -579,10 +579,6 @@ pub fn set_credits(credits: u32) {
 /// after a grant of fewer.
 pub fn most_credits() -> u32 {
     sched().most_credits
-}
-
-pub fn stream_counts(stream: Stream) -> (u32, u32) {
-    sched().stream_counts(stream)
 }
 
 pub fn pump() {

@@ -10,15 +10,14 @@ use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::renderer::{
-    render_frame, Cast, EarthTiles, FrameInput, GroundBricks, Landing,
+    render_frame, Cast, EarthTiles, FrameInput, GroundBricks, Resident,
 };
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-use crate::profiler::frame::{DeviceSample, GpuSample, RaySample};
-use pxl_render::gpu::api::OBJECT_OPS;
+use crate::perf::frame::{DeviceSample, GpuSample, RaySample};
 
 use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
 use crate::domain::scene::character::companion::companion_skins;
@@ -27,12 +26,12 @@ use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::environment::cloud::cloud_groups;
 use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_step;
 use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_step;
-use crate::domain::scene::marker::sheet;
+use crate::domain::scene::marker::atlas;
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::scene;
 use crate::domain::view::demand::Observed as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
-use crate::profiler::report::{set_host_frame, set_rays, GpuRead};
+use crate::perf::report::{set_host_frame, GpuRead, RayRead};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::io::text::text_raster;
 use crate::sys::load::Load;
@@ -54,7 +53,7 @@ pub fn is_screen_drawn() -> bool {
 const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::object::preview;
-use crate::domain::layer::terrain::window;
+use crate::domain::layer::terrain::clipmap;
 use crate::domain::scene::cast;
 use crate::domain::scene::decor::drawn;
 use crate::domain::scene::environment::cloud;
@@ -78,8 +77,8 @@ use pxl_spec::asset::sky::moon;
 use pxl_spec::object;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3;
+use pxl_spec_core::clipmap::HANDED;
 use pxl_spec_core::way::tree;
-use pxl_spec_core::window::HANDED;
 
 const _: () = assert!(
     EARTH_SLOTS == EARTH_LAYERS,
@@ -168,11 +167,11 @@ pub fn stage_render(pace: Pace) {
         *slot = row;
         skin_cnt += 1;
     }
-    let mut cases = [(0u32, 0u32, none); SURFACES];
-    let mut case_cnt = 0;
-    for (slot, row) in cases.iter_mut().zip(preview_rows()) {
+    let mut previews = [(0u32, 0u32, none); SURFACES];
+    let mut preview_cnt = 0;
+    for (slot, row) in previews.iter_mut().zip(preview_rows()) {
         *slot = row;
-        case_cnt += 1;
+        preview_cnt += 1;
     }
     let on = api::device_generation();
     let (window, layers) = earth_window(Earth::demand().floor(), on);
@@ -181,9 +180,9 @@ pub fn stage_render(pace: Pace) {
     let eye = o.as_ref().and_then(cast::eye);
     let mut terrain_upload = cast::upload;
     let landed = core::cell::Cell::new(false);
-    let mut terrain_landed = |b: u32, ticket: u32, landing: Landing<'_>| {
+    let mut terrain_landed = |b: u32, ticket: u32, resident: Resident<'_>| {
         landed.set(true);
-        window::on_landed(b, ticket, landing);
+        clipmap::on_resident(b, ticket, resident);
     };
     // The draws the scene bounds, and whether what it animates stepped.
     let (bounded, animated) = region::take();
@@ -192,7 +191,7 @@ pub fn stage_render(pace: Pace) {
         environment: &scene().environment.out,
         decor: &decor,
         skins: &skins[..skin_cnt],
-        cases: &cases[..case_cnt],
+        previews: &previews[..preview_cnt],
         pack: || load_of(pack).and_then(load_image),
         moon: || load_of(moon::picture).and_then(load_image),
         earth: || load_image(EARTH),
@@ -204,13 +203,13 @@ pub fn stage_render(pace: Pace) {
         ground: GroundBricks {
             upload: &mut terrain_upload,
             landed: &mut terrain_landed,
-            pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::FAMILY_WORDS),
-            scratch: tree::scratch_families(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HANDED)),
+            pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
+            scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HANDED)),
             records: param::WAYS_RECORDS_FIRST_BYTES,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
-            window: window::table(),
+            window: clipmap::table(),
             shards: cast::shards(),
             overwrites: cast::overwrites(),
             decor: drawn::frame(),
@@ -218,26 +217,23 @@ pub fn stage_render(pace: Pace) {
             ray_counts: settings_store().ray_counts,
         }),
         text: text_raster,
-        sheet: sheet(),
+        atlas: atlas(),
         admit: boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
-        counted: settings_store().profiler,
+        counted: settings_store().perf,
         bounded,
         animated,
     });
     // What landed, folded once after all of it, before anything reads a
-    // bound again (domain/layer/terrain/window.rs `refold`).
+    // bound again (domain/layer/terrain/clipmap.rs `refold`).
     if landed.get() {
-        window::refold();
+        clipmap::refold();
     }
     if out.redraw {
         request_world_tick();
     }
     // An image whose texture the frame took needs its file no more.
     api::take_landed(loader::on_image_landed);
-    // What the renderer holds, drawn this frame or not.
-    let held = api::gpu().map_or([0; OBJECT_OPS], |g| *g.objects());
-    let objects: [f64; OBJECT_OPS - 1] = core::array::from_fn(|k| f64::from(held[k + 1]));
     // The scale the world was drawn at, before a read can move the next one.
     let scale = resolution::drawn_scale();
     let gpu = out
@@ -253,36 +249,42 @@ pub fn stage_render(pace: Pace) {
                 scale,
                 ..GpuSample::default()
             },
-            DeviceSample {
-                objects,
-                ..DeviceSample::default()
-            },
+            DeviceSample::default(),
+            None,
             None,
         );
         return;
     };
     DRAWN.set(Some(api::device_generation()));
-    set_rays(RaySample::of(stat.rays));
+    let [draws, triangles] = stat
+        .draws
+        .iter()
+        .fold([0.0; 2], |[d, t], c| [d + c[0], t + c[1]]);
     set_host_frame(
         out.kind,
         GpuSample {
             scale,
-            census: stat.census,
+            draws,
+            triangles,
             frame: stat.frame,
+            light_moved: stat.light_moved,
+            decor_boxes: stat.decor_boxes,
             ..GpuSample::default()
         },
         DeviceSample {
             uploads: stat.uploads,
             uploads_bytes: stat.upload_bytes,
-            depth_bytes: stat.depth_bytes,
             pack_bytes: stat.pack_bytes,
-            objects,
         },
         stat.gpu_read.then_some(GpuRead {
             frame: stat.gpu_frame,
             spans: stat.gpu_spans,
             busy_ms: stat.gpu_busy_ms,
             px: stat.gpu_px,
+        }),
+        stat.rays.map(|r| RayRead {
+            frame: r.frame,
+            rays: RaySample::of(r.counts),
         }),
     );
 }

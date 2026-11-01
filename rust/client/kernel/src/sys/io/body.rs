@@ -1,7 +1,7 @@
 // pxl-kernel/sys/io/body.rs
 
 //! The blocks bodies are read into. Terrain's and the Earth's packets run
-//! just past a mebibyte (a tile's looks and the Earth's texels are one
+//! just past a mebibyte (a tile's palette indices and the Earth's texels are one
 //! each, pxl-spec `bake::tile::max_pkt_bytes`), where the buddy would
 //! give each body a block of two. Their bodies take slots instead, each
 //! their longest packet in pages, carved from a run the heap gives whole
@@ -17,11 +17,11 @@
 //!
 //! The slots never stop the reads, drawn or not. A body on a credit needs
 //! no other to be decoded (domain/view/demand.rs `admit_arrived`, one a pass at
-//! least), and is then freed or kept. Kept packets are given back only by
+//! least), and is then freed or kept. Uploads packets are given back only by
 //! a drawn frame (domain/scene/cast.rs `upload`, domain/layer/earth.rs `earth_upload`),
 //! so they are bounded apart from it: the Earth's by its frames, terrain's
 //! by the slots less one for the most credits granted and every Earth
-//! frame (domain/layer/terrain/tile.rs `most_kept`), a packet past it, or one no
+//! frame (domain/layer/terrain/tile.rs `most_pending`), a packet past it, or one no
 //! window wants a brick of, freed once decoded. The kept thus leave a
 //! slot for every credit, and a body on one finds one: the tile cache,
 //! which the query and the controls read, fills with no frame drawn.
@@ -35,7 +35,7 @@
 //! which the want is asked again.
 //!
 //! In a drawn frame a terrain packet is given back once no window wants
-//! one of its bricks absent (domain/layer/terrain/window.rs `fill`): each frame
+//! one of its bricks absent (domain/layer/terrain/clipmap.rs `fill`): each frame
 //! hands `HANDED` bricks only of tiles kept or void (`due`), a brick
 //! handed is wanted no more, and a packet whose tile left or that no
 //! window wants is given back on that upload too, the stream full or not
@@ -221,7 +221,7 @@ pub fn releases() -> u32 {
 }
 
 /// The most slots out at once since the last call, the profiler's
-/// (profiler/report.rs `profiler_frame`): what `BODY_SLOTS` is measured by.
+/// (perf/report.rs `perf_frame`): what `BODY_SLOTS` is measured by.
 pub fn take_peak() -> u32 {
     let s = held();
     core::mem::replace(&mut s.peak, s.out)

@@ -10,7 +10,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
 import type {
-  CaseSurfaceProps,
+  PreviewSurfaceProps,
   InputDriver,
   PointerKind,
   PointerPhase,
@@ -106,9 +106,11 @@ function pointerKind(e: PointerEvent): PointerKind {
 
 function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const { keyDown, keyUp, releaseKeys, releasePointers } = input;
-  const sendRect = () => {
-    const r = canvas.getBoundingClientRect();
-    input.rect(r.left, r.top, r.width, r.height);
+  // Where the canvas is drawn on the page, transforms and all: a pointer's
+  // client place is read against it into the layout box's CSS pixels.
+  let drawn = canvas.getBoundingClientRect();
+  const place = () => {
+    drawn = canvas.getBoundingClientRect();
   };
   const pointer = (phase: PointerPhase) => (e: PointerEvent) =>
     input.pointer(
@@ -116,8 +118,8 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
       pointerKind(e),
       e.pointerId,
       e.button,
-      e.clientX,
-      e.clientY,
+      ((e.clientX - drawn.left) * canvas.clientWidth) / (drawn.width || 1),
+      ((e.clientY - drawn.top) * canvas.clientHeight) / (drawn.height || 1),
     );
   const onMove = pointer("move");
   const onUp = pointer("up");
@@ -125,7 +127,7 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const onLeave = pointer("out");
   const down = pointer("down");
   const onDown = (e: PointerEvent) => {
-    sendRect();
+    place();
     down(e);
   };
   const onWheel = (e: WheelEvent) => {
@@ -140,7 +142,7 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   };
   const onContextMenu = (e: MouseEvent) => e.preventDefault();
   const onResize = () => {
-    sendRect();
+    place();
     input.requestFrame();
   };
   // A composed or shortcut key is the IME's or the browser's; Tab switches the dock mid-word too.
@@ -182,8 +184,6 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const observer = new ResizeObserver(onResize);
   observer.observe(canvas);
 
-  // Before the world opens, so its first frame is drawn at the canvas's size.
-  sendRect();
   const close = input.open();
 
   return () => {
@@ -237,7 +237,11 @@ export function World({
   );
 }
 
-export function Case({ surface: driver, onOpen, openKey }: CaseSurfaceProps) {
+export function Preview({
+  surface: driver,
+  onOpen,
+  openKey,
+}: PreviewSurfaceProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const open = useRef(onOpen);
   open.current = onOpen;

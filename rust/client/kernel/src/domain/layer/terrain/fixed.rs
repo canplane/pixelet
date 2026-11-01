@@ -11,17 +11,17 @@
 //! `GroundBuffers::room`).
 
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
-use pxl_spec::bake::tile::terrain::LOOK_LANE;
-use pxl_spec_core::window::{BACK_WORDS, BRICK_CELLS, LINES_WORDS, WAYS_BRICK_SEGMENTS};
+use pxl_spec::bake::tile::terrain::PALETTE_COLUMN;
+use pxl_spec_core::clipmap::{BACK_WORDS, BRICK_CELLS, LINES_WORDS, WAYS_BRICK_SEGMENTS};
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::mem::fixed::lane_bytes;
-use crate::sys::mem::fixed::Held;
+use crate::sys::mem::fixed::OwnedRange;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec_core::window::SLOTS;
+use pxl_spec_core::clipmap::SLOTS;
 
 /// `.fixed.terrain`, handed in at boot.
-pub static RANGE: Held = Held::new();
+pub static RANGE: OwnedRange = OwnedRange::new();
 
 const TILE_SLOTS: u32 = TileCache::<TerrainTile>::SLOTS;
 
@@ -69,15 +69,15 @@ pub const SEPARATION_BYTES: u32 = separation_plane(SEPARATION_LANES.len());
 
 /// One brick's cells as the GPU drew them, read back whole: its columns,
 /// a word a cell (its ground's top), then its levels, its cells as laid and
-/// its ways' tree's root (pxl-spec-core `window::BACK_WORDS`).
+/// its ways' tree's root (pxl-spec-core `clipmap::BACK_WORDS`).
 pub const CELLS_BYTES: u32 = BACK_WORDS * 4;
 pub const CELLS_LANE_BYTES: u32 = lane_bytes(CELLS_BYTES as usize, 1);
 
-/// The room a fill works in (window.rs `fill`), a lane each in order: a
-/// tile's looks four a cell as handed, a brick's cut from them, its lines,
+/// The room a fill works in (clipmap.rs `fill`), a lane each in order: a
+/// tile's palette indices four a cell as handed, a brick's cut from them, its lines,
 /// and the pairs `brick_lines` lays them with.
 pub const FILL_LANE_BYTES: [u32; 4] = [
-    lane_bytes(LOOK_LANE, 1),
+    lane_bytes(PALETTE_COLUMN, 1),
     lane_bytes(4 * BRICK_CELLS as usize, 1),
     lane_bytes(LINES_WORDS as usize, 4),
     lane_bytes(WAYS_BRICK_SEGMENTS as usize, 8),
@@ -94,7 +94,7 @@ pub const fn separation_lane(record: u32, k: usize) -> (u32, u32) {
     (separation_plane(k) + record * bytes, bytes)
 }
 
-/// Where slot `slot`'s cells come back to (domain/layer/terrain/window.rs
+/// Where slot `slot`'s cells come back to (domain/layer/terrain/clipmap.rs
 /// `Slot`), `SLOTS` of them.
 pub const fn cells_off(slot: u32) -> u32 {
     SEPARATION_BYTES + slot * CELLS_LANE_BYTES

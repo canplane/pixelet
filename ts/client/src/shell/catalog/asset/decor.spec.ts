@@ -11,7 +11,7 @@
 // generates it on its own. A decor's `seed` names its scatter, so changing it
 // reshuffles every one the ground generates; `density` is the chance a cell of
 // its holds one, the mean of a tree of hashes of the cells (pxl-spec-core
-// scatter.rs); `on` the looks it may stand on; `orientation` a random
+// scatter.rs); `on` the palette entries it may stand on; `orientation` a random
 // heading, or along the road or rail its cell lies on. A variant's
 // skin is its pack's colormap, kept outside the glb.
 //
@@ -23,18 +23,25 @@
 // decor's cell is a unit, a z24 cell, `scale_steps` zooms coarser (finer
 // where negative, as a marker's, marker.json), one for every variant,
 // since a placement lands on the cell before its variant is drawn. The
-// ground generates a decor only on its own looks, and no two decors share one, so
+// ground generates a decor only on its own palette entries, and no two decors share one, so
 // two decors' boxes never meet.
 //
 // A decor thing carries `meta`, the fields its id gives it beside where it
 // stands: which variant of its decor, its heading in quarter turns (an odd
 // one swaps its box's sides) and its scale. The ground evaluates them from
 // its cell; a placed one's are the placement's.
-export const decor = {
-  tree: 1024,
-  boat: 1025,
-  car: 1026,
-  train: 1027,
-} as const satisfies Record<string, number>;
 
-export type DecorId = keyof typeof decor;
+import * as decor from "./decor/decor.spec.ts";
+
+export { decor };
+
+/** The decors, by number. */
+export const DECORS: readonly number[] = [1024, 1025, 1026, 1027];
+
+/** Each decor's name, the one every locale shows: an item has one name. */
+export const DECOR_LABEL: Readonly<Record<number, string>> = {
+  1024: "Tree",
+  1025: "Boat",
+  1026: "Car",
+  1027: "Train",
+};

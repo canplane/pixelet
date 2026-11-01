@@ -15,7 +15,7 @@
 
 use pxl_spec_core::decor::DECORS;
 use pxl_spec_core::generated::{self, drawn, GROUPS};
-use pxl_spec_core::{eye, overwrite, window};
+use pxl_spec_core::{clipmap, eye, overwrite};
 
 use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
@@ -63,8 +63,8 @@ pub struct DecorFrame<'a> {
 pub struct Generation<'a> {
     pub window: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
-    /// The bricks handed this frame (pxl-spec-core `window::FRESH_WORDS`).
-    pub fresh: &'a [[u32; window::FRESH_WORDS as usize]],
+    /// The bricks handed this frame (pxl-spec-core `clipmap::FRESH_WORDS`).
+    pub fresh: &'a [[u32; clipmap::FRESH_WORDS as usize]],
     /// The eye as the cast's (pxl-spec-core `eye`), of which the count pass
     /// reads its place and the zooms it asks (`ORIGIN`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
@@ -91,7 +91,7 @@ pub struct Generated {
     /// decor and impostor shaders read one, its index set by the args pass.
     uniforms: u32,
     /// The records, laid by slot (`generated::record_at`); then the decor's
-    /// instances, `drawn::LANES` lanes and the index list, `cap` slots each.
+    /// instances, `drawn::COLUMNS` lanes and the index list, `cap` slots each.
     records: u32,
     instances: u32,
     /// The draws' bind groups over the uniforms, a region's at a dynamic
@@ -120,8 +120,10 @@ pub struct Generated {
     /// Past `overwrite::BOXES`, the rest joined into the last.
     held: [[i32; 4]; overwrite::BOXES as usize],
     holding: usize,
-    /// How many of `held` this frame marks by.
+    /// How many of `held` this frame marks by, and how many boxes it marks
+    /// by in all, the bricks handed with them (`marked_boxes`).
     marked: usize,
+    boxes: u32,
     /// Whether the slots' records were not kept, decor having been off: the
     /// next frame drawn with decor generates every slot.
     stale: bool,
@@ -207,6 +209,7 @@ impl Generated {
             held: [[0; 4]; overwrite::BOXES as usize],
             holding: 0,
             marked: 0,
+            boxes: 0,
             stale: true,
         }
     }
@@ -234,7 +237,7 @@ impl Generated {
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
             self.instances = g.buf(
-                word_bytes(((drawn::LANES + 1) * need) as usize),
+                word_bytes(((drawn::COLUMNS + 1) * need) as usize),
                 buffer_usage::STORAGE,
             );
             if records != 0 {
@@ -287,15 +290,16 @@ impl Generated {
         // A brick filled at any window generates decor there and coarser.
         let fresh = !generation.fresh.is_empty();
         self.marking = self.stale || moved || fresh || self.marked != 0;
+        self.boxes = 0;
         if self.marking {
             // The boxes held, at every zoom, then each brick handed, at
             // its window's and coarser.
             let mut boxes = [0u32; (generated::MARKED * generated::BOX_WORDS) as usize];
             let fresh = generation.fresh.iter().map(|f| {
-                let cell = f[window::FRESH_CELL as usize];
-                let q = window::fresh_brick([
-                    f[window::FRESH_FIRST as usize],
-                    f[window::FRESH_FIRST as usize + 1],
+                let cell = f[clipmap::FRESH_CELL as usize];
+                let q = clipmap::fresh_brick([
+                    f[clipmap::FRESH_FIRST as usize],
+                    f[clipmap::FRESH_FIRST as usize + 1],
                 ]);
                 (generated::brick_box(cell, q), cell)
             });
@@ -309,12 +313,13 @@ impl Generated {
                 boxes[at + 4] = zoom;
                 n += 1;
             }
+            self.boxes = n as u32;
             let (s, w) = (compute::DECOR_THIN_WORKGROUP, compute::DECOR_WORKGROUP);
             g.write_buf(
                 self.list,
                 0,
                 bytes(&[
-                    window::BRICK_CELLS.div_ceil(s[0]),
+                    clipmap::BRICK_CELLS.div_ceil(s[0]),
                     1,
                     0,
                     0,
@@ -389,7 +394,7 @@ impl Generated {
                 self.cap,
                 1.0f32.to_bits(),
                 layer,
-                drawn::LANES * self.cap,
+                drawn::COLUMNS * self.cap,
             ]);
         }
         g.write_buf(self.uniforms, 0, bytes(&uniforms));
@@ -461,6 +466,7 @@ impl Generated {
     /// every slot (`stale`).
     pub fn off(&mut self) {
         self.on = false;
+        self.boxes = 0;
         self.stale = true;
         self.counted.forget();
     }
@@ -544,6 +550,13 @@ impl Generated {
             g.set_bind_group(pass, 0, self.groups[3 + k], &[]);
             g.dispatch(pass, x, 1, 1);
         }
+    }
+
+    /// The boxes this frame marks slots by to generate again: the edits and
+    /// cuts held and the bricks handed, `generated::MARKED` at most; 0
+    /// where it marks none.
+    pub fn marked_boxes(&self) -> u32 {
+        self.boxes
     }
 
     /// Whether decor is compacted again this frame, so stands elsewhere.

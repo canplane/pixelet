@@ -10,7 +10,7 @@ use crate::cube::{object, sentinel};
 
 /// A cube filled whole, as a share counts it: a share is in 2⁻¹⁵ of its
 /// cube, floored at each fold, so eighths stay exact `FULL_FOLDS` folds deep.
-pub const FULL: u32 = 1 << (KEPT_BITS * FULL_FOLDS);
+pub const FULL: u32 = 1 << (FILL_BITS * FULL_FOLDS);
 
 /// The folds a share's eighths stay exact through.
 const FULL_FOLDS: u32 = 5;
@@ -36,7 +36,7 @@ pub struct In<B> {
     pub asset: B,
 }
 
-/// A cell nothing fills: void, no looks.
+/// A cell nothing fills: void, no palette indices.
 pub const AIR: [u32; 2] = [sentinel::void as u32, 0];
 
 /// The bits an asset's value takes at the foot of its word.
@@ -44,11 +44,11 @@ pub const VAL_BITS: u32 = 16;
 
 /// An asset's word where what is placed answered it, over its value: the
 /// source control tells an edit by (`is_placed`), which nothing drawn reads.
-/// Over it, the share of its cube the cell keeps (`KEPT_SHIFT`).
+/// Over it, the share of its cube the cell keeps (`FILL_SHIFT`).
 pub const PLACED_ASSET: u32 = 1 << VAL_BITS;
 
 /// An asset's value, without whether what is placed holds it
-/// (`PLACED_ASSET`) or what of its cube it keeps: a look reads the same
+/// (`PLACED_ASSET`) or what of its cube it keeps: a palette index reads the same
 /// whichever layer holds it.
 pub const fn val(asset: u32) -> u32 {
     asset & (PLACED_ASSET - 1)
@@ -162,7 +162,7 @@ pub fn transparent(val: u32) -> bool {
 }
 
 /// Whether an asset is matter, taking its share of its cell as the
-/// layers compose its volume (`cover`) and drawn by its looks: anything but
+/// layers compose its volume (`cover`) and drawn by its palette indices: anything but
 /// what nothing is painted on and what is placed as nothing. A question of
 /// matter, not of light (`transparent`): matter a ray sees through would
 /// still fill, so this is not `!transparent`.
@@ -171,17 +171,17 @@ pub fn fills(val: u32) -> bool {
     v != sentinel::void as u32 && v != object::air as u32
 }
 
-/// A cell's kept share over its asset's value and `PLACED_ASSET`: the eighths of
-/// its cube it keeps of what fills it (`kept`), 0 for all eight, so a leaf's
+/// A cell's fill share over its asset's value and `PLACED_ASSET`: the eighths of
+/// its cube it keeps of what fills it (`fill_eighths`), 0 for all eight, so a leaf's
 /// word, and every cell's whole, sets no bit of it.
-pub const KEPT_SHIFT: u32 = VAL_BITS + 1;
-pub const KEPT_BITS: u32 = EIGHTHS.trailing_zeros();
+pub const FILL_SHIFT: u32 = VAL_BITS + 1;
+pub const FILL_BITS: u32 = EIGHTHS.trailing_zeros();
 /// A cube's eighths: its children, what a share is kept in.
 pub const EIGHTHS: u32 = 8;
 
 /// The eighths of a cube kept of `fill` of it, in `FULL`'s units:
 /// floored, so a trace too small to fill one child keeps none and nothing is
-/// drawn there. The one rule a cell's kept share is, the ground's top
+/// drawn there. The one rule a cell's fill share is, the ground's top
 /// (`ground::top`) and a cell of every layer together (`cover`) alike.
 pub const fn eighths(fill: u32) -> u32 {
     let k = fill / (FULL / EIGHTHS);
@@ -193,11 +193,11 @@ pub const fn eighths(fill: u32) -> u32 {
 }
 
 /// What of a cell's cube fills, and whether an overwrite's kind is its
-/// look: the ground filling `ground` of it, under an overwrite — what is
+/// palette index: the ground filling `ground` of it, under an overwrite — what is
 /// placed, or the ways — of `kind` filling `over` of it, each in
 /// `FULL`'s units. A kind that fills lies beside the ground, as
 /// a thing stands on it, so their shares add; air lies in it, as a cut or a
-/// bore, so it takes its share from the ground's. The look is the kind most
+/// bore, so it takes its share from the ground's. The palette index is the kind most
 /// of the fill is: the overwrite's where it fills at least as much as the
 /// ground, the ground's where air is what is written.
 #[expect(
@@ -213,15 +213,15 @@ pub fn cover(ground: u32, kind: u32, over: u32) -> (u32, bool) {
     }
 }
 
-/// `asset` keeping `k` eighths of its cube (`KEPT_SHIFT`).
-pub const fn kept_word(asset: u32, k: u32) -> u32 {
-    asset & !(((1 << KEPT_BITS) - 1) << KEPT_SHIFT) | (k % EIGHTHS) << KEPT_SHIFT
+/// `asset` keeping `k` eighths of its cube (`FILL_SHIFT`).
+pub const fn fill_word(asset: u32, k: u32) -> u32 {
+    asset & !(((1 << FILL_BITS) - 1) << FILL_SHIFT) | (k % EIGHTHS) << FILL_SHIFT
 }
 
 /// The eighths of its cube an asset's word keeps, all eight where it sets
-/// none (`KEPT_SHIFT`).
-pub const fn kept(asset: u32) -> u32 {
-    let k = asset >> KEPT_SHIFT & ((1 << KEPT_BITS) - 1);
+/// none (`FILL_SHIFT`).
+pub const fn fill_eighths(asset: u32) -> u32 {
+    let k = asset >> FILL_SHIFT & ((1 << FILL_BITS) - 1);
     if k == 0 {
         EIGHTHS
     } else {
@@ -247,9 +247,9 @@ pub const fn side(k: u32) -> f32 {
 }
 
 /// Whether an asset hides its cube whole: it is not transparent and keeps
-/// all of it (`kept`). A cell beside a box closes in none of its edges.
+/// all of it (`fill_eighths`). A cell beside a box closes in none of its edges.
 pub fn whole(asset: u32) -> bool {
-    !transparent(asset) && kept(asset) == EIGHTHS
+    !transparent(asset) && fill_eighths(asset) == EIGHTHS
 }
 
 /// Whether what is placed holds an asset's value (`PLACED_ASSET`).

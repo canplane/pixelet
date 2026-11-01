@@ -82,9 +82,16 @@ ownership and lifetime.
   deployment, so the server needs the network (outside the sandbox).
 - A new origin has no location permission: place the view by the search.
 - Turn the profiler on (Settings, debug, profiler); it records only while on.
-  In the page's console, `pxl.profiler.report()` is its window as text (frames
-  by kind, GPU p50 and p95, each span's p95 over the frames that ran it), and
-  `pxl.profiler.trace()` saves the window for ui.perfetto.dev, a download.
+  In the page's console, `pxl.perf.report()` is its window as text: frames
+  by kind; the GPU's busy time, p50 and p95, whole and by kind, each over the
+  n frames a read timed; each span's p95 over the n frames that ran it; the
+  ray counts summed, where the `ray_counts` setting is on; the view's pivot,
+  distance and angles and the world's pixels; and the heap's, rings' and
+  body slots' extremes since the recording started. A p95 is the nearest
+  rank (perf.json `PERCENTILES`). `pxl.perf.trace()` saves the window for
+  ui.perfetto.dev, a download, with every lane of every frame: which frames
+  took terrain tiles in (`tiles_landed`), why the light's map cast
+  (`light_moved`), and the ray counts of the frame they were counted in.
 - An A/B is one change apart, the baseline built from the same tree with that
   change undone, the dev server rebuilding the guest: the same place, zoom,
   moves and window length on both. A span runs only on the frames that need it

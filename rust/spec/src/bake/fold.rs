@@ -1,7 +1,7 @@
 // pxl-spec/bake/fold.rs
 
 //! One zoom coarser: a parent tile from the tiles under it. A cell holds the
-//! four looks under it, each child cell's own (pxl-spec-core `ground::own`,
+//! four palette indices under it, each child cell's own (pxl-spec-core `ground::own`,
 //! their majority, as Earth Engine's `MODE` pyramiding, so a feature
 //! narrower than half a cell rounds away at the zoom that reads it).
 //! Elevation is the box average of the samples, which preserves a column's
@@ -16,12 +16,12 @@ use xpute_kit::math::scalar::round;
 
 use super::constant::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use super::separation::fold_separation;
-use super::tile::terrain::{Ground, TerrainTile, ELE_LANE};
+use super::tile::terrain::{Ground, TerrainTile, ELE_COLUMN};
 use super::tile::Occupancy;
 use crate::space::coord::zoom::Zoom;
 use pxl_spec_core::ground::own;
 
-/// The four looks of each parent cell: the own look of each child cell
+/// The four palette indices of each parent cell: the own palette index of each child cell
 /// under it, `dx + 2·dy`, as the zoom under the parent's reads it.
 pub fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {
     let under = GROUND.cell_zoom(zoom) + 1;
@@ -88,7 +88,7 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
 pub fn fold_terrain(around: [Option<&TerrainTile>; 16], zoom: Zoom) -> Option<TerrainTile> {
     let child = |q: usize| around[CHILDREN[q]];
     let children = [child(0)?, child(1)?, child(2)?, child(3)?];
-    let mut ele = vec![0i16; ELE_LANE];
+    let mut ele = vec![0i16; ELE_COLUMN];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
     Some(TerrainTile::of(
         ele,

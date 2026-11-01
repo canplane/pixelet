@@ -8,7 +8,7 @@ import { openModal } from "@/shell/modal.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { Presence } from "@/shell/ui/motion/presence.tsx";
 import { LEAVE, SETTLE, SNAP } from "@/shell/ui/motion/transition.ts";
-import { useVeil } from "@/shell/ui/motion/veil.ts";
+import { useDim } from "@/shell/ui/motion/dim.ts";
 import { haloGap, HaloIcon } from "./halo.tsx";
 import { chrome, color, layer } from "@/shell/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
@@ -105,9 +105,9 @@ export function TopOverlays() {
 function SearchStrip() {
   const { t } = useTranslation();
   const zooming = useKernel((s) => s.zooming);
-  const veil = useVeil(1, SNAP);
+  const dim = useDim(1, SNAP);
   return (
-    <Motion {...veil.motion} style={styles.fill}>
+    <Motion {...dim.motion} style={styles.fill}>
       <Pressable
         onPress={() => openModal("search")}
         accessibilityRole="button"
@@ -143,7 +143,7 @@ function SearchStrip() {
   );
 }
 
-/** A scrim so white reads over a bright map without a blur: flat over
+/** A scrim so white reads over a bright world without a blur: flat over
  * SCRIM_WIDTH, then smoothstep fades, since a straight fade's end reads as an edge. */
 const SCRIM_OPACITY = 0.45;
 const SCRIM_WIDTH = 560;

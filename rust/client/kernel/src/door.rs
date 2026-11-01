@@ -16,12 +16,13 @@ pub mod port;
 #[path = "door/toc.spec.rs"]
 pub mod toc;
 
-use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, WorldSnapshotEvent};
+use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, ShellSnapshotEvent};
+use crate::domain::control::sensor;
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
 use crate::door::toc::key::GPU_STREAM;
-use crate::profiler::record::profiler_record_turn;
-use crate::profiler::spec::Wake;
+use crate::perf::record::perf_record_turn;
+use crate::perf::spec::Wake;
 use crate::shell;
 use crate::shell::Sent;
 use crate::sys::boot;
@@ -35,7 +36,7 @@ use crate::sys::mem::section;
 use crate::sys::mem::spec;
 use crate::sys::sched::edge;
 use crate::sys::stop;
-use crate::sys::stop::LastWords;
+use crate::sys::stop::PanicHook;
 use crate::turn;
 use pxl_render::gpu::api;
 use pxl_render::gpu::renderer;
@@ -68,8 +69,8 @@ fn door() -> &'static Door {
     })
 }
 
-/// The rings' peaks since the last take, the profiler's (profiler/report.rs
-/// `profiler_frame`).
+/// The rings' peaks since the last take, the profiler's (perf/report.rs
+/// `perf_frame`).
 pub(crate) fn take_stat() -> DoorStat {
     door().take_stat()
 }
@@ -124,17 +125,17 @@ fn on_host_attached(s: &mut State) {
     for handle in open {
         close_surface(handle);
     }
-    shell::sensors_close();
+    sensor::sensors_close();
     text::text_forget();
     s.sent = Default::default();
 }
 
 /// First turn: lays out memory and writes the toc at TOC_AT.
-fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
+fn boot(b: BootInfo, panic_hook: Option<PanicHook>, admit: Admit) {
     boot::set(b);
     boot::set_admit(admit);
     executor::install();
-    stop::install(last_words);
+    stop::install(panic_hook);
     let gpu_stream = layout::install(&b);
     // A layer asks for no more tiles than its tile cache's slots.
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slots));
@@ -157,22 +158,22 @@ fn boot(b: BootInfo, last_words: Option<LastWords>, admit: Admit) {
     };
 }
 
-/// The entry (xpute_guest::entry `Entry`, with the bracket's last words and
+/// The entry (xpute_guest::entry `Entry`, with the bracket's panic hook and
 /// its GPU host's admission): a turn applies waiting submissions, polls tasks
 /// on the quota, and returns when to wake next, in ms (0 for the next frame,
 /// NO_WAKE for none). The first turn boots, on what its host's form hands it
-/// (`boot_info`). `last_words` is where a bracket whose process dies with the
+/// (`boot_info`). `panic_hook` is where a bracket whose process dies with the
 /// kernel reports why: no host is left to run the record, and a panic's text
 /// is not in its numbers. None where the host outlives the kernel (a page).
 pub fn run(
     quota_ms: f64,
     boot_info: fn() -> BootInfo,
-    last_words: Option<LastWords>,
+    panic_hook: Option<PanicHook>,
     admit: Admit,
 ) -> f64 {
     use crate::turn::{take_world_drawn, world_frame_waiting};
     if section::map().is_none() {
-        boot(boot_info(), last_words, admit);
+        boot(boot_info(), panic_hook, admit);
     }
     let s = state();
     let rise = now();
@@ -214,12 +215,7 @@ pub fn run(
         _ => Wake::timer,
     };
     let fell = now();
-    profiler_record_turn(
-        fell - rise,
-        polled - drained,
-        f64::from(asked as u8),
-        wake.max(0.0),
-    );
+    perf_record_turn(fell - rise, polled - drained, f64::from(asked as u8));
     wake
 }
 
@@ -262,14 +258,14 @@ fn post_shell(s: &mut State) {
             let room = (buf.len() * 2).max(PAGE_BYTES as usize);
             buf.resize(room, 0);
         };
-        let event = WorldSnapshotEvent {
+        let event = ShellSnapshotEvent {
             at: off_of_slice(&raw const buf[..]) as u32,
             len,
         };
         raise(
             port::SHELL,
-            Command::WORLD_SNAPSHOT,
-            WorldSnapshotEvent::FIELDS,
+            Command::SHELL_SNAPSHOT,
+            ShellSnapshotEvent::FIELDS,
             |w| {
                 event.write(w);
             },

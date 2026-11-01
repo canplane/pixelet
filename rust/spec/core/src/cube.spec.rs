@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/spec/asset/cube.json
 //
-// One value space: a ground cell is a byte, a Carto look numbered in the
+// One value space: a ground cell is a byte, a Carto palette entry numbered in the
 // order Carto paints, and an object's value a u16 whose byte range is
 // that palette and whose range past it is what only an object can be.
 
@@ -20,11 +20,11 @@ pub mod sentinel {
     pub const unknown: u8 = 0xff;
 }
 
-// The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in
+// The ground: one byte a cell, a palette entry from OpenStreetMap Carto, numbered in
 // the order Carto paints.
 // `transport` marks a way: decor faces along it and no pier stands on it;
-// every look stands at its sampled height. The byte's values: 1 to 63
-// Carto's looks, in its paint order; from 64 pixelet's own, the
+// every palette entry stands at its sampled height. The byte's values: 1 to 63
+// Carto's palette entries, in its paint order; from 64 pixelet's own, the
 // underground, which Carto paints nothing of; 0 and 255 the sentinels.
 pub mod ground {
 
@@ -255,7 +255,7 @@ pub mod object {
     pub const pink: u16 = 271;
 }
 
-/// A look, by its number.
+/// A palette entry, by its number.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Ground {
@@ -320,7 +320,7 @@ pub enum Ground {
 }
 
 impl Ground {
-    /// Every look, in paint order.
+    /// Every palette entry, in paint order.
     pub const ALL: [Ground; 58] = [
         Ground::land,
         Ground::bare_ground,
@@ -382,7 +382,7 @@ impl Ground {
         Ground::stone,
     ];
 
-    /// The look a byte names; none for a sentinel or a number the palette does not give out.
+    /// The palette entry a byte names; none for a sentinel or a number the palette does not give out.
     pub const fn of(val: u8) -> Option<Ground> {
         match val {
             1 => Some(Ground::land),
@@ -447,7 +447,7 @@ impl Ground {
         }
     }
 
-    /// Whether a look read into a word, as a GPU has it with no byte, is one `of`
+    /// Whether a palette entry read into a word, as a GPU has it with no byte, is one `of`
     /// names.
     pub const fn grounds(val: u32) -> bool {
         matches!(val, 1..=55 | 64..=66)
@@ -458,7 +458,7 @@ impl Ground {
         Ground::transports(self as u32)
     }
 
-    /// Whether a look read into a word is a way (`transport`).
+    /// Whether a palette entry read into a word is a way (`transport`).
     pub const fn transports(val: u32) -> bool {
         matches!(val, 37..=55)
     }

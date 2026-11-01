@@ -3,9 +3,9 @@
 //! Markers in two passes after the world, as billboards: their regions,
 //! each as its marker's number, into a target of their own, then the markers whose
 //! number is the one at their anchor, with the world's depth attached
-//! read-only (marker.wgsl). The sheet is premultiplied so its mips
+//! read-only (marker.wgsl). The atlas is premultiplied so its mips
 //! filter without a dark fringe; without mips a marker minified slightly against
-//! the supersampled sheet crawls with every camera micro-movement.
+//! the supersampled atlas crawls with every camera micro-movement.
 
 use crate::frame::draw::{uniform_of, PIPELINE_MARKER};
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
@@ -16,11 +16,11 @@ use crate::gpu::api::{
     buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
     Format, Gpu, Load, RenderContext,
 };
+use crate::gpu::atlas::shelf::{Atlas, Paint, SlotSet};
+use crate::gpu::atlas::{AtlasPainter, DisplayList, ATLAS_SCALE};
 use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pass::model::DrawUniforms;
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::sheet::shelf::{Paint, Sheet, SlotSet};
-use crate::gpu::sheet::{SheetPainter, Sketch, SHEET_SCALE};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{Draws, Uploads};
@@ -33,7 +33,7 @@ use crate::look::marker::{
 
 const SETS: usize = 32;
 
-fn anchor_dot(p: &mut Sketch, logical_w: f32) {
+fn anchor_dot(p: &mut DisplayList, logical_w: f32) {
     p.circle(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_FILL);
     p.ring(
         logical_w / 2.0,
@@ -45,7 +45,7 @@ fn anchor_dot(p: &mut Sketch, logical_w: f32) {
 }
 
 fn point(
-    p: &mut Sketch,
+    p: &mut DisplayList,
     lines: &[String],
     icon: bool,
     symbol: Option<u16>,
@@ -68,7 +68,7 @@ fn point(
         cx,
         cy,
         r - POINT_RIM,
-        1.0 / SHEET_SCALE as f32,
+        1.0 / ATLAS_SCALE as f32,
         POINT_SHADE,
         fill,
     );
@@ -81,20 +81,20 @@ fn point(
     }
 }
 
-fn pill(p: &mut Sketch, words: &str, fill: u32, ink: u32, logical_w: f32) {
+fn pill(p: &mut DisplayList, text: &str, fill: u32, ink: u32, logical_w: f32) {
     p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, fill);
-    p.text(PILL_FONT, ink, words, logical_w / 2.0, PILL_H / 2.0 + 1.0);
+    p.text(PILL_FONT, ink, text, logical_w / 2.0, PILL_H / 2.0 + 1.0);
     anchor_dot(p, logical_w);
 }
 
 /// The uncovered corners read as a pixel-art rounded corner; a real arc would
 /// anti-alias against nearest sampling.
-fn notched_rect(p: &mut Sketch, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
+fn notched_rect(p: &mut DisplayList, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.rect(x + notch, y, (w - notch * 2.0).max(0.0), h, fill);
     p.rect(x, y + notch, w, (h - notch * 2.0).max(0.0), fill);
 }
 
-fn bubble(p: &mut Sketch, lines: &[String], box_w: f32) {
+fn bubble(p: &mut DisplayList, lines: &[String], box_w: f32) {
     let box_h = bubble_box_h(lines.len());
     notched_rect(p, 0.0, 0.0, box_w, box_h, NOTCH, BLACK);
     notched_rect(
@@ -150,11 +150,11 @@ pub struct MarkerPass {
     regions: u32,
     regions_view: u32,
     regions_size: (u32, u32),
-    painter: SheetPainter,
+    painter: AtlasPainter,
     sampler: u32,
-    sheet: u32,
-    sheet_view: u32,
-    sheet_group: u32,
+    atlas: u32,
+    atlas_view: u32,
+    atlas_group: u32,
     levels: u32,
     generation: u32,
     sets: [Set; SETS],
@@ -168,11 +168,6 @@ pub struct MarkerPass {
 }
 
 impl MarkerPass {
-    /// Its regions' depth's bytes, one f32 a pixel.
-    pub fn depth_bytes(&self) -> f64 {
-        self.regions_size.0 as f64 * self.regions_size.1 as f64 * 4.0
-    }
-
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> MarkerPass {
         let sampler = g.sampler(
             FilterMode::nearest,
@@ -193,11 +188,11 @@ impl MarkerPass {
             regions_view: 0,
             regions_size: (0, 0),
             frame_group,
-            painter: SheetPainter::new(g, pipelines),
+            painter: AtlasPainter::new(g, pipelines),
             sampler,
-            sheet: 0,
-            sheet_view: 0,
-            sheet_group: 0,
+            atlas: 0,
+            atlas_view: 0,
+            atlas_group: 0,
             levels: 1,
             generation: u32::MAX,
             sets: [Set::default(); SETS],
@@ -209,20 +204,20 @@ impl MarkerPass {
         }
     }
 
-    /// A sticker whose text is not drawn yet is left for a later frame.
-    /// Whether the sheet changed: made again, or a sticker drawn on it.
-    pub fn sync_sheet(&mut self, g: &Gpu, mips: &MipPass, sheet: &mut Sheet, text: TextOf) -> bool {
-        let flush = sheet.flush(self.generation, &mut self.dirty);
+    /// A sprite whose text is not drawn yet is left for a later frame.
+    /// Whether the atlas changed: made again, or a sprite drawn on it.
+    pub fn sync_atlas(&mut self, g: &Gpu, mips: &MipPass, atlas: &mut Atlas, text: TextOf) -> bool {
+        let flush = atlas.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
         if flush.whole {
             if flush.size == 0 {
                 return false;
             }
-            for id in [self.sheet_group, self.sheet_view, self.sheet] {
+            for id in [self.atlas_group, self.atlas_view, self.atlas] {
                 release(id);
             }
             self.levels = mip_levels(flush.size, flush.size);
-            self.sheet = g.texture(
+            self.atlas = g.texture(
                 flush.size,
                 flush.size,
                 1,
@@ -232,33 +227,33 @@ impl MarkerPass {
                     | texture_usage::COPY_DST
                     | texture_usage::RENDER_ATTACHMENT,
             );
-            self.sheet_view = g.view(self.sheet, false, 0, self.levels, 0, 1);
-            self.sheet_group = g.bind_group(
+            self.atlas_view = g.view(self.atlas, false, 0, self.levels, 0, 1);
+            self.atlas_group = g.bind_group(
                 self.built.layouts[3],
                 &[
-                    view_entry(0, self.sheet_view),
+                    view_entry(0, self.atlas_view),
                     sampler_entry(1, self.sampler),
                 ],
             );
         }
-        if self.dirty.is_empty() || self.sheet == 0 {
+        if self.dirty.is_empty() || self.atlas == 0 {
             return flush.whole;
         }
         // Only the slots whose text the host has drawn: one still on its way
         // waits for its landing, with no encoder made for it.
         let mut ready = Vec::new();
         for slot in self.dirty.iter() {
-            let Some(paint) = sheet.slot_paint(slot) else {
+            let Some(paint) = atlas.slot_paint(slot) else {
                 continue;
             };
-            let mut p = Sketch::default();
+            let mut p = DisplayList::default();
             match paint {
                 Paint::Pill {
-                    words,
+                    text,
                     fill,
                     ink,
                     logical_w,
-                } => pill(&mut p, words, *fill, *ink, *logical_w as f32),
+                } => pill(&mut p, text, *fill, *ink, *logical_w as f32),
                 Paint::Point {
                     lines,
                     icon,
@@ -277,9 +272,9 @@ impl MarkerPass {
                 ),
                 Paint::Bubble { lines, box_w } => bubble(&mut p, lines, *box_w as f32),
             }
-            match SheetPainter::rasters(&p, text) {
+            match AtlasPainter::rasters(&p, text) {
                 Some(r) => ready.push((slot, p, r)),
-                None => sheet.mark_dirty(slot),
+                None => atlas.mark_dirty(slot),
             }
         }
         if ready.is_empty() {
@@ -291,13 +286,13 @@ impl MarkerPass {
         for (slot, p, rasters) in ready {
             let painted =
                 self.painter
-                    .paint(g, encoder, self.sheet, sheet.slot_rect(slot), &p, rasters);
+                    .paint(g, encoder, self.atlas, atlas.slot_rect(slot), &p, rasters);
             match painted {
                 Some(ids) => {
                     made.extend(ids);
                     drawn = true;
                 }
-                None => sheet.mark_dirty(slot),
+                None => atlas.mark_dirty(slot),
             }
         }
         g.submit(encoder);
@@ -306,7 +301,7 @@ impl MarkerPass {
             release(id);
         }
         if drawn {
-            mips.build(g, self.sheet, self.levels, 0, 1);
+            mips.build(g, self.atlas, self.levels, 0, 1);
         }
         flush.whole || drawn
     }
@@ -322,7 +317,7 @@ impl MarkerPass {
         uniforms: &[f32],
         uploads: &Uploads,
     ) {
-        if self.sheet_group == 0 {
+        if self.atlas_group == 0 {
             return;
         }
         if self.regions_size != size {
@@ -409,7 +404,7 @@ impl MarkerPass {
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::marker);
-        if self.sheet_group == 0 {
+        if self.atlas_group == 0 {
             return;
         }
         let placed = || {
@@ -451,7 +446,7 @@ impl MarkerPass {
         );
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
-        g.set_bind_group(pass, 3, self.sheet_group, &[]);
+        g.set_bind_group(pass, 3, self.atlas_group, &[]);
         for (k, (set, d)) in self.sets.iter().zip(placed()).enumerate() {
             let (group, off) = slots.at(k as u32);
             g.set_bind_group(pass, 1, group, &[off]);

@@ -9,11 +9,12 @@
     "exposure",
     "ao",
     "world",
+    "world_rest",
     "resolve",
     "finish",
     "marker",
     "debug",
-    "case",
+    "preview",
     "fill",
     "cast",
     "beam",
@@ -32,6 +33,14 @@
     "face",
     "mark"
   ],
+  "$GPU_SPAN_NAMES": "`world` is the world's pass as it lays the opaque world, and `world_rest` the pass that goes on after the occlusion is found between them (`ao`), drawing over it the occlusion's map, the sky and what the kernel animates; where the occlusion is not found again the one pass draws it all, timed as `world`, and `world_rest` runs none.",
+  "LIGHT_MOVED": [
+    "content",
+    "detail",
+    "receivers",
+    "footprint"
+  ],
+  "$LIGHT_MOVED": "Why the light's map cast, a bit each, bit k the k-th (pxl-render gpu/ray/cast.rs `light_moved`): what it reads moved, the light's frame or box, the world under it or the shadows' setting (`content`); the eye's place or the zooms its walks ask (`detail`); which tiles the receivers read, the look, the actors' places or decor compacted again (`receivers`); or the footprints owed the first frame the eye stands in after it moved (`footprint`).",
   "FRAME_KINDS": [
     "none",
     "unready",

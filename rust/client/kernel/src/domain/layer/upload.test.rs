@@ -1,0 +1,80 @@
+// pxl-kernel/domain/layer/upload.test.rs
+
+use super::*;
+use xpute_guest::mem::heap::alloc;
+
+fn block() -> Block {
+    alloc(64).unwrap()
+}
+
+#[test]
+fn keeps_at_most() {
+    let mut k = Uploads::new(4);
+    for record in 0..3 {
+        k.keep(Some(record), block(), 2);
+    }
+    assert_eq!(k.cnt(), 2);
+    assert!(
+        k.waiting(0) && k.waiting(1) && !k.waiting(2),
+        "the third is past the bound"
+    );
+    assert_eq!(k.sent_on(2), None);
+    k.keep(Some(0), block(), 2);
+    assert_eq!(k.cnt(), 2, "a frame's packet replaced is still one");
+    k.send(
+        7,
+        &mut |record, _| {
+            if record == 0 {
+                Offered::Taken
+            } else {
+                Offered::Uploads
+            }
+        },
+        &|_| true,
+    );
+    assert_eq!(
+        (k.cnt(), k.sent_on(0)),
+        (1, Some(7)),
+        "taken whole: freed, and sent"
+    );
+    k.keep(Some(3), block(), 2);
+    assert_eq!(k.cnt(), 2, "room again once one is taken");
+    k.send(7, &mut |_, _| Offered::Taken, &|_| true);
+    assert_eq!(k.cnt(), 0);
+}
+
+#[test]
+fn full_stream_frees_unwanted() {
+    let mut k = Uploads::new(4);
+    for record in 0..4 {
+        k.keep(Some(record), block(), 4);
+    }
+    let mut offered = Vec::new();
+    k.send(
+        3,
+        &mut |record, _| {
+            offered.push(record);
+            Offered::Full
+        },
+        &|record| record == 2,
+    );
+    assert_eq!(offered, [0], "nothing offered past the stream's end");
+    assert!(
+        k.waiting(0) && k.waiting(2),
+        "the one offered and the one still wanted are kept"
+    );
+    assert!(
+        !k.waiting(1) && !k.waiting(3) && k.sent_on(1).is_none(),
+        "the rest freed, and not sent"
+    );
+    assert_eq!(k.cnt(), 2);
+}
+
+#[test]
+fn forgotten_frame_empty() {
+    let mut k = Uploads::new(2);
+    k.keep(Some(0), block(), 2);
+    k.forget(0);
+    k.forget(1);
+    assert!(!k.waiting(0) && k.cnt() == 0);
+}

@@ -4,19 +4,19 @@
 //! (`beam_cs`), where each cell's rays start off them (`cell_cs`), and the
 //! samples walked from those starts (`sample_cs`), each its pass's entry,
 //! cast for the eye's camera grid, and the cells' for the shadow map too, as
-//! the head it is handed names (either.rs `Either`); the shadow map's beam
+//! the head it is handed names (pass_observer.rs `PassObserver`); the shadow map's beam
 //! rays and samples take entries of their own over the same passes, which
 //! tell what their walks ask of (light.rs `light_beam_cs`,
 //! `light_sample_cs`); and the words a line, a node and a sample are held
 //! in, every observer's.
 
-use pxl_spec_core::cast::{self, Detail, End, Met, Query, Until};
-use pxl_spec_core::world::Handed;
+use pxl_spec_core::cast::{self, Detail, End, Trace, Query, Until};
+use pxl_spec_core::world::Inherited;
 use pxl_spec_core::{beam, observed, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
-use crate::either::Either;
+use crate::pass_observer::PassObserver;
 use crate::eye::Eye;
 use crate::observed::{seen_add, seen_at, seen_most, seen_put, Seen};
 use crate::observer::{self, Observer};
@@ -33,7 +33,7 @@ pub(crate) type Beams = spirv_std::RuntimeArray<u32>;
 
 /// A beam ray's line (pxl-spec-core `beam::LINE_WORDS`, at `base` of the
 /// words `W` hold: the eye's beam rays' buffer or the light's list) as a walk
-/// resumes from one: what was handed each node of it (`world::Handed::words`),
+/// resumes from one: what was handed each node of it (`world::Inherited::words`),
 /// its own at its zoom. A node's entry is its key's (`observed::entry_of`),
 /// so none is read off the line.
 pub(crate) struct Beamed<'a, W: ?Sized>(pub(crate) &'a W, pub(crate) u32);
@@ -59,9 +59,9 @@ impl<W: Words + ?Sized> Beamed<'_, W> {
     }
 
     /// What was handed the line's node of `zoom`.
-    fn at(self, zoom: u32) -> Handed {
+    fn at(self, zoom: u32) -> Inherited {
         let (w, k) = (self.0, self.1 + beam::LINE_HANDED + beam::LINE_STEP * zoom);
-        Handed::of_words([
+        Inherited::of_words([
             w.word(k),
             w.word(k + 1),
             w.word(k + 2),
@@ -77,14 +77,14 @@ impl<W: Words + ?Sized> cast::Over<u32> for Beamed<'_, W> {
     }
 }
 
-impl<W: Words + ?Sized> cast::Over<Handed> for Beamed<'_, W> {
-    fn over(&self, zoom: u32) -> Handed {
+impl<W: Words + ?Sized> cast::Over<Inherited> for Beamed<'_, W> {
+    fn over(&self, zoom: u32) -> Inherited {
         self.at(zoom)
     }
 }
 
 /// A beam ray's line as a reader of the assets about a node near it reads
-/// it, in place (pxl-spec-core `support::Lineage`): the node it stopped at,
+/// it, in place (pxl-spec-core `support::Ancestors`): the node it stopped at,
 /// by its index from the eye's origin, and what was handed each node of it
 /// (`Beamed`), none of it copied. The eye's: its lines' nodes are held from
 /// the one origin its rays start at.
@@ -105,7 +105,7 @@ impl<'a, W: Words + ?Sized> Laid<'a, W> {
     }
 }
 
-impl<W: Words + ?Sized> support::Lineage<Handed> for Laid<'_, W> {
+impl<W: Words + ?Sized> support::Ancestors<Inherited> for Laid<'_, W> {
     fn at(&self) -> [i32; 3] {
         self.at
     }
@@ -114,7 +114,7 @@ impl<W: Words + ?Sized> support::Lineage<Handed> for Laid<'_, W> {
         self.zoom
     }
 
-    fn handed(&self, z: u32) -> Handed {
+    fn inherited(&self, z: u32) -> Inherited {
         self.line.at(z)
     }
 }
@@ -203,10 +203,10 @@ pub(crate) fn node_put<W: Words + ?Sized>(w: &mut W, k: u32, n: &cast::Node) {
 /// whether what it stopped at lacks, and the axis it entered across; what
 /// lies about that face is the eye's box's, asked once a box (raster.rs
 /// `face_cs`).
-pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Met<A>) {
-    let stop = &met.stop;
+pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Trace<A>) {
+    let stop = &met.hit;
     node_put(w, base + beam::SAMPLE_NODE, &stop.node);
-    if met.ends == End::On {
+    if met.ends == End::Miss {
         w.set(
             base + beam::SAMPLE_NODE + beam::NODE_ZOOM,
             beam::SAMPLE_NONE,
@@ -233,7 +233,7 @@ pub(crate) fn resumed<'a, Q: Query, W: Words + ?Sized>(
     node: cast::Node,
     keep: &mut impl cast::Keep<Q::At>,
     told: &mut impl cast::Asked,
-) -> Met<Q::At>
+) -> Trace<Q::At>
 where
     Beamed<'a, W>: cast::Over<Q::At>,
 {
@@ -252,8 +252,8 @@ where
 }
 
 /// Each beam ray of the camera grid, a thread a corner (pxl-spec-core
-/// `beam::Grid::corners`; observer.rs `beam`), off the eye's head (either.rs
-/// `Either`).
+/// `beam::Grid::corners`; observer.rs `beam`), off the eye's head (pass_observer.rs
+/// `PassObserver`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "beam_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(
@@ -261,7 +261,7 @@ pub fn beam_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
@@ -270,7 +270,7 @@ pub fn beam_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
     let window: &[IVec4] = window;
-    let o = Either::of(eye, head);
+    let o = PassObserver::of(eye, head);
     let [across, down] = o.corners();
     if id.x >= across || id.y >= down {
         return;
@@ -278,7 +278,7 @@ pub fn beam_cs(
     let world = World {
         window,
         ground,
-        looks,
+        palette_indices,
         shards,
         overwrites,
         eye,
@@ -292,9 +292,9 @@ pub fn beam_cs(
 /// eye's beam rays' and the light's.
 pub(crate) struct Leaving<'a, W: ?Sized>(pub(crate) &'a mut W, pub(crate) u32);
 
-impl<W: Words + ?Sized> cast::Keep<Handed> for Leaving<'_, W> {
-    fn keep(&mut self, met: &Met<Handed>, stack: &[Handed; cast::DEPTH]) {
-        let (n, live) = (&met.stop.node, met.stop.at);
+impl<W: Words + ?Sized> cast::Keep<Inherited> for Leaving<'_, W> {
+    fn keep(&mut self, met: &Trace<Inherited>, stack: &[Inherited; cast::DEPTH]) {
+        let (n, live) = (&met.hit.node, met.hit.at);
         let base = self.1;
         let w = &mut *self.0;
         node_put(w, base + beam::LINE_NODE, n);
@@ -324,7 +324,7 @@ pub fn cell_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
-    let o = Either::of(eye, head);
+    let o = PassObserver::of(eye, head);
     let [across, down] = o.cells();
     if id.x >= across || id.y >= down {
         return;
@@ -333,8 +333,8 @@ pub fn cell_cs(
 }
 
 /// Each sample of the camera grid, a thread each (observer.rs `sample`;
-/// pxl-spec-core `beam::Grid::samples`), off the eye's head (either.rs
-/// `Either`). The node and asset it stopped at left for
+/// pxl-spec-core `beam::Grid::samples`), off the eye's head (pass_observer.rs
+/// `PassObserver`). The node and asset it stopped at left for
 /// the raster (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where
 /// it went on to its reach, and whether what it stopped at lacks. What lies
 /// about the face it entered is asked only of a sample that draws a box,
@@ -346,7 +346,7 @@ pub fn sample_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
@@ -355,7 +355,7 @@ pub fn sample_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
     let window: &[IVec4] = window;
-    let o = Either::of(eye, head);
+    let o = PassObserver::of(eye, head);
     let [across, down] = o.samples();
     if id.x >= across || id.y >= down {
         return;
@@ -363,7 +363,7 @@ pub fn sample_cs(
     let world = World {
         window,
         ground,
-        looks,
+        palette_indices,
         shards,
         overwrites,
         eye,

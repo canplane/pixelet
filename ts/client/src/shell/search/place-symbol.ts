@@ -3,16 +3,16 @@
 // Written by `make ingest-asset` from asset/raw/place/symbol/ — do not edit.
 //
 // Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,
-// by the path Carto gives each: its box, and each shape's path data and
-// whether it fills even-odd.
+// symbol n at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`): its box,
+// and each shape's path data and whether it fills even-odd.
 
 export interface PlaceSymbol {
   box: readonly [number, number];
   shapes: readonly (readonly [string, boolean])[];
 }
 
-export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
-  "symbols/amenity/aerodrome.svg": {
+export const PLACE_SYMBOLS: readonly PlaceSymbol[] = [
+  {
     box: [12, 12],
     shapes: [
       [
@@ -21,7 +21,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/arts_centre.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -30,7 +30,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/atm.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -39,7 +39,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/bank.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -48,7 +48,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/bar.svg": {
+  {
     box: [12, 12],
     shapes: [
       [
@@ -57,7 +57,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/cafe.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -66,7 +66,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/casino.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -75,7 +75,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/charging_station.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -84,7 +84,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/cinema.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -93,7 +93,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/community_centre.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -102,7 +102,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/courthouse.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -111,7 +111,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/dentist.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -120,7 +120,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/doctors.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -129,7 +129,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/fast_food.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -138,7 +138,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/firestation.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -147,7 +147,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/fuel.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -156,7 +156,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/hospital.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -165,7 +165,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/library.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -174,7 +174,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/nightclub.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -183,7 +183,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/parking.svg": {
+  {
     box: [12, 12],
     shapes: [
       [
@@ -192,7 +192,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/pharmacy.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -201,7 +201,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/place_of_worship.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -210,7 +210,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/police.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -219,7 +219,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/prison.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -228,7 +228,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/restaurant.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -237,7 +237,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/social_facility.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -246,7 +246,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/taxi.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -255,7 +255,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/theatre.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -264,7 +264,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/amenity/toilets.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -273,7 +273,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/barrier/toll_booth.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -282,7 +282,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/historic/castle.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -291,7 +291,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/historic/fort.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -300,7 +300,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/historic/memorial.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -309,7 +309,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/historic/monument.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -318,7 +318,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/leisure/amusement_arcade.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -327,7 +327,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/leisure/fitness.svg": {
+  {
     box: [14.933333, 14.933333],
     shapes: [
       [
@@ -336,7 +336,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/leisure/golf.svg": {
+  {
     box: [20, 20],
     shapes: [
       [
@@ -345,7 +345,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/leisure/playground.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -354,7 +354,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/man_made/lighthouse.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -363,11 +363,8 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/natural/peak.svg": {
-    box: [8, 8],
-    shapes: [["M4 1L0 8L8 8Z", false]],
-  },
-  "symbols/natural/waterfall.svg": {
+  { box: [8, 8], shapes: [["M4 1L0 8L8 8Z", false]] },
+  {
     box: [14, 14],
     shapes: [
       [
@@ -376,7 +373,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/office/embassy.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -385,7 +382,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/religion/buddhist.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -394,7 +391,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/religion/christian.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -403,7 +400,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/religion/hinduist.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -412,7 +409,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/religion/jewish.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -421,7 +418,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/religion/muslim.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -430,7 +427,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/art.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -439,7 +436,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/beauty.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -448,7 +445,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/clothes.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -457,7 +454,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/convenience.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -466,7 +463,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/copyshop.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -475,7 +472,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/department_store.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -484,7 +481,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/diy.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -493,7 +490,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/laundry.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -502,7 +499,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/marketplace.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -511,7 +508,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/perfumery.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -520,7 +517,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/pet.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -529,7 +526,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/sports.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -538,7 +535,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/supermarket.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -547,7 +544,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/shop/trade.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -556,7 +553,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/tourism/apartment.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -567,7 +564,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ["M0 12L14 12L14 14L0 14Z", false],
     ],
   },
-  "symbols/tourism/artwork.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -576,13 +573,13 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/tourism/camping.svg": {
+  {
     box: [14, 14],
     shapes: [
       ["M14 14L8 3L9 0L8 0L7 2L6 0L5 0L6 3L0 14ZM7 7L10 13L4 13Z", false],
     ],
   },
-  "symbols/tourism/caravan_park.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -591,7 +588,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/tourism/guest_house.svg": {
+  {
     box: [14, 14],
     shapes: [
       ["M7 0.853L1 5L3 5L3 13L6 13L6 8L8 8L8 13L11 13L11 5L13 5Z", false],
@@ -601,7 +598,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/tourism/hotel.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -610,7 +607,7 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-  "symbols/tourism/museum.svg": {
+  {
     box: [14, 14],
     shapes: [
       [
@@ -619,4 +616,4 @@ export const PLACE_SYMBOLS: Record<string, PlaceSymbol> = {
       ],
     ],
   },
-};
+];

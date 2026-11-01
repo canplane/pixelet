@@ -24,13 +24,13 @@ pub const MAX_CREDITS: u32 = 16;
 /// The most terrain and Earth bodies out at once, in slots of the heap's
 /// runs (sys/io/body.rs): those on a credit until their decode, and the packets
 /// kept past it, a terrain tile's while a window wants one of its bricks
-/// still absent (domain/layer/terrain/window.rs `fill`), the Earth's until its
+/// still absent (domain/layer/terrain/clipmap.rs `fill`), the Earth's until its
 /// texels are taken. Sized to a moving eye, not to the worst.
 ///
 /// Each frame grants six credits at most (the place's, the client's
 /// `bracket.origin.credits`: six on a page and on iOS, five on Android), and
 /// the Earth keeps four frames at most. A window is a tile's cells a side
-/// (pxl-spec-core `window::WINDOW`), so it wants four tiles at most, and
+/// (pxl-spec-core `clipmap::WINDOW`), so it wants four tiles at most, and
 /// the fill hands `HANDED` bricks a frame, about a row of one window's: an
 /// eye that moves keeps the tiles of the few windows refilling at once,
 /// four windows' four. 6 + 4 + 16 is 26, and 28 is four whole runs of

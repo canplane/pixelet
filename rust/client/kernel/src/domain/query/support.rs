@@ -161,8 +161,8 @@ impl<'w, 'a> Upright<'w, 'a> {
     }
 
     /// The top of the highest solid in any column, within the reach: each
-    /// column's footing at its zoom, the one support every reader asks
-    /// (`World::footing`, pxl-spec-core `support::footing`).
+    /// column's surface at its zoom, the one support every reader asks
+    /// (`World::column_surface`, pxl-spec-core `support::column_surface`).
     fn highest(&mut self) -> Option<f64> {
         let cell = self.detail.range[0];
         let unit = units(cell);
@@ -174,7 +174,7 @@ impl<'w, 'a> Upright<'w, 'a> {
                 middle(k / self.across, self.corner[1]),
             ]
             .map(|v| libm::floor(v / unit) as i32);
-            let (answer, _) = self.world.footing(cell, g);
+            let (answer, _) = self.world.column_surface(cell, g);
             if let Some(l) = answer.lack() {
                 self.lack.get_or_insert(l);
             }

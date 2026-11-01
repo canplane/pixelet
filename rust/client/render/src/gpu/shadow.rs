@@ -7,7 +7,7 @@
 //! rays are, off samples and the visible sample (pxl-shader `light_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
 //! texel each frame it is cast (pxl-spec-core `light`); laid into the map
-//! each frame in the box's own order
+//! each frame in the box's own order, one triangle over it
 //! (`PIPELINE_LIGHT_MAP`), and decor and the actors, which move every frame,
 //! drawn over it depth only, from the light's frame. The lit passes read
 //! the map as a plain light box. 16 MB each at 2048. Where only the listed
@@ -73,16 +73,15 @@ pub struct Shadow {
     /// `PIPELINE_LIGHT_MAP` lays it into the map off the box's corner,
     /// `corner`'s words.
     pub world: u32,
-    /// The world laid in, its group over the world, the corner, the map's
-    /// tiles' words and uniform and their marks (`Tiles::marks`); and the
+    /// The world laid in, its group over the world and the corner; and the
     /// map's gate, which lays it in the claimed tiles alone, its group over
-    /// the same and the marks' box (`Tiles::marks_box`); both made again
-    /// where those are others.
+    /// the same, the map's tiles' words and uniform and the marks' box
+    /// (`Tiles::marks_box`), made again where those are others.
     lay: Built,
     lay_group: u32,
-    lay_bound: (u32, u32, u32, u32),
     gate: Built,
     gate_group: u32,
+    gate_bound: (u32, u32, u32),
     corner: u32,
     /// Group 0 of the casters' depth pipelines: the light's frame.
     pub light_group: u32,
@@ -171,6 +170,10 @@ impl Shadow {
             pipelines.build(g, PIPELINE_DECOR_DEPTH, g.canvas()).layouts[0],
             &[buf_entry(0, light_frame)],
         );
+        let lay_group = g.bind_group(
+            lay.layouts[0],
+            &[view_entry(0, world), buf_entry(1, corner)],
+        );
         Shadow {
             map_view,
             map_depth_view,
@@ -179,10 +182,10 @@ impl Shadow {
             blank_sampler,
             world,
             lay,
-            lay_group: 0,
-            lay_bound: (0, 0, 0, 0),
+            lay_group,
             gate,
             gate_group: 0,
+            gate_bound: (0, 0, 0),
             corner,
             light_group,
             light_frame,
@@ -390,75 +393,57 @@ impl Shadow {
     }
 
     /// The map's pass, timed in the span `shadow`, the world's depth laid in first
-    /// where `cast` (its cast holds this frame's world); else cleared to the
-    /// far plane, as nothing is cast there. In the claimed tiles of `tiles`
-    /// alone where it is drawn through its gate, its number `number` (the
-    /// world's pass's `GATE_NUMBERS`), a frame that casts, the rest kept as
-    /// the last frame left it: the gate lays the world there and raises
-    /// their stencil, a quad a tile of the box the frame's marks cover, the
-    /// unclaimed collapsed, as many as the GPU counted
-    /// (`Tiles::box_args`). The casters are drawn into it next, through
-    /// the stencil, then it ends.
+    /// where `cast` (its cast holds this frame's world), one triangle over
+    /// the whole map; else cleared to the far plane, as nothing is cast
+    /// there. In the claimed tiles of `tiles` alone where it is drawn through
+    /// its gate (`gated`, its stencil numbered by `Tiles::gate`), a frame
+    /// that casts, the rest kept as the last frame left it: the gate lays
+    /// the world there and raises their stencil, a quad a tile of the box
+    /// the frame's marks cover, the unclaimed collapsed, as many as the GPU
+    /// counted (`Tiles::box_args`). The casters are drawn into it next,
+    /// through the stencil, then it ends.
     pub fn begin<'a>(
         &mut self,
         ctx: &mut RenderContext<'a>,
         cast: bool,
-        tiles: &Tiles,
-        number: Option<u32>,
+        tiles: &mut Tiles,
+        gated: bool,
     ) -> TrackedRenderPass<'a> {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::shadow);
-        let load = if number.is_some() {
-            Load::Load
-        } else {
-            Load::Clear
-        };
+        let load = if gated { Load::Load } else { Load::Clear };
         let desc = pass_desc(0, Load::Clear, self.map_view, load, 1.0, stamp.pass());
-        let desc = if number.is_some_and(|n| n > 1) {
-            desc.kept()
-        } else {
-            desc
-        };
+        let (desc, number) = tiles.gate(desc, gated);
         let pass = g.pass(encoder, &desc);
         let mut pass = TrackedRenderPass::new(g, pass);
-        let (marks, cnt) = tiles.marks();
-        let (words, uniform) = tiles.bound();
-        let bound = (uniform, marks, words, tiles.marks_box());
-        if bound != self.lay_bound {
-            release(self.lay_group);
-            release(self.gate_group);
-            self.lay_group = g.bind_group(
-                self.lay.layouts[0],
-                &[
-                    view_entry(0, self.world),
-                    buf_entry(1, self.corner),
-                    buf_entry(30, words),
-                    buf_entry(31, bound.0),
-                    buf_entry(32, bound.1),
-                ],
-            );
-            self.gate_group = g.bind_group(
-                self.gate.layouts[0],
-                &[
-                    view_entry(0, self.world),
-                    buf_entry(1, self.corner),
-                    buf_entry(30, words),
-                    buf_entry(31, bound.0),
-                    buf_entry(33, bound.3),
-                ],
-            );
-            self.lay_bound = bound;
-        }
         if let Some(n) = number {
             xpute_kit::ensure!(cast, EINVAL, n);
+            let (words, uniform) = tiles.bound();
+            let bound = (words, uniform, tiles.marks_box());
+            if bound != self.gate_bound {
+                release(self.gate_group);
+                self.gate_group = g.bind_group(
+                    self.gate.layouts[0],
+                    &[
+                        view_entry(0, self.world),
+                        buf_entry(1, self.corner),
+                        buf_entry(30, words),
+                        buf_entry(31, uniform),
+                        buf_entry(33, bound.2),
+                    ],
+                );
+                self.gate_bound = bound;
+            }
             pass.set_stencil_reference(n);
             pass.set_pipeline(self.gate.pipeline);
             pass.set_bind_group(0, self.gate_group, &[]);
-            pass.draw_indirect(tiles.box_args(), 0);
+            if let Some(args) = tiles.box_args() {
+                pass.draw_indirect(args, 0);
+            }
         } else if cast {
             pass.set_pipeline(self.lay.pipeline);
             pass.set_bind_group(0, self.lay_group, &[]);
-            pass.draw(6, cnt, 0, 0);
+            pass.draw(3, 1, 0, 0);
         }
         pass
     }

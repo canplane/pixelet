@@ -9,7 +9,7 @@
 //! each visit of a line its own crossing: the run of its segments, one
 //! after another, that are over the column. A column's visits make its
 //! spans once (`column`), what a cell of it holds is read off them (`at`),
-//! and ground beside the air they leave takes that way's look, read off the
+//! and ground beside the air they leave takes that way's palette index, read off the
 //! spans of the columns beside it as its fill builds its tree (`lined`), so
 //! a reader reads a cell's own column alone. What is under half a cell in any dimension at a
 //! zoom is absent there, as the fold drops a line under half a cell wide: a
@@ -110,7 +110,7 @@ pub fn slab_depth(per_m: f32) -> i32 {
 }
 
 /// One segment of a line, in its tile's cells: from `a` to `b`, its road
-/// surface `tops` there in leaf cells, its width in cells, the look it shows,
+/// surface `tops` there in leaf cells, its width in cells, the palette index it shows,
 /// its form, its tunnel's clear height in leaf cells, whether it is its
 /// line's first or last, where the line ends square, and whether the one
 /// stored before it is its line's one before it.
@@ -203,7 +203,7 @@ pub struct Stations {
 /// A bent's spacing for the narrow beam (`w` 0) and the wide (1), meters.
 pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVAL_M];
 
-/// What a brick's lines open with (pxl-spec-core window.rs `LINES_*`): its
+/// What a brick's lines open with (pxl-spec-core clipmap.rs `LINES_*`): its
 /// tile's leaf cells a ground meter (pxl-spec `Frame::per_m`), then its
 /// stations, step, phase and leaf, each a float's bits.
 pub const HEADER_WORDS: u32 = 8;
@@ -456,9 +456,9 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupancy {
     }
 }
 
-/// The columns a brick's fill reads its ways off (`window::Brick`): each
+/// The columns a brick's fill reads its ways off (`clipmap::Brick`): each
 /// one's segments, in its own tile's cells, with its center there and the
-/// tile's stations, and its ground — its look as read, and its face's height
+/// tile's stations, and its ground — its palette index as read, and its face's height
 /// in leaf cells. A column the brick does not hold has no segment.
 pub trait Columns {
     /// The cells' zoom, and leaf cells a ground meter over the ground.
@@ -470,7 +470,7 @@ pub trait Columns {
     /// The column's center in its tile's cells, a cell a side.
     fn center(&self, c: [i32; 2]) -> [f32; 2];
     fn stations(&self) -> Stations;
-    fn look(&self, c: [i32; 2]) -> u32;
+    fn palette_idx(&self, c: [i32; 2]) -> u32;
     /// Whether the area's edge walls the column: ground beside cells past
     /// the area (pxl-spec-core `area::laid`), where no way writes, as none
     /// does past it.
@@ -575,8 +575,8 @@ fn pier_stands<C: Columns>(
     ground: i32,
     per_m: f32,
 ) -> [i32; 2] {
-    let (none, look) = ([0, 0], cols.look(c));
-    if !Ground::grounds(look) || Ground::transports(look) {
+    let (none, palette_idx) = ([0, 0], cols.palette_idx(c));
+    if !Ground::grounds(palette_idx) || Ground::transports(palette_idx) {
         return none;
     }
     let surface = pier[1] + slab_depth(per_m);
@@ -598,12 +598,12 @@ fn pier_stands<C: Columns>(
     pier
 }
 
-/// What a span's value marks as a bore's air, over the look of its way.
+/// What a span's value marks as a bore's air, over the palette index of its way.
 pub(crate) const AIR_OF: u32 = 0x80;
 
 /// What one visit writes in its column, in leaf cells: a deck's slab or an
-/// embankment (its way's look), or a bore's or a cutting's air (`AIR_OF`
-/// over its way's look), over `run`; and a pier (`PIER`) over `pier`,
+/// embankment (its way's palette index), or a bore's or a cutting's air (`AIR_OF`
+/// over its way's palette index), over `run`; and a pier (`PIER`) over `pier`,
 /// empty where none stands. `NOTHING` where it writes none.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Write {
@@ -621,7 +621,7 @@ impl Write {
 }
 
 /// What the visit from the `k`-th segment over column `c` writes, and where
-/// the next visit starts: a visit of a look that grounds, as what it
+/// the next visit starts: a visit of a palette index that grounds, as what it
 /// occupies over the column's face `face`, `per_m` leaf cells a meter, its
 /// pier where one stands.
 fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Write, u32) {
@@ -645,7 +645,7 @@ fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) 
                 pier_stands(cols, c, o.pier, face, per_m)
             },
         },
-        // An approach's look, laid into the cells by the bake (pxl-spec bake/way.rs `lay`).
+        // An approach's palette index, laid into the cells by the bake (pxl-spec bake/way.rs `lay`).
         Occupy::Grade => Write::NONE,
     };
     (w, next)
@@ -658,8 +658,8 @@ fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) 
 pub const SPANS: usize = 10;
 
 /// A column's spans, in leaf cells, in the order its visits come: each a
-/// deck's slab or an embankment (its way's look), a pier (`PIER`), or a
-/// bore's or a cutting's air (`AIR_OF` over its way's look); `n` of them.
+/// deck's slab or an embankment (its way's palette index), a pier (`PIER`), or a
+/// bore's or a cutting's air (`AIR_OF` over its way's palette index); `n` of them.
 /// And its face cell (`ground::face_cell`), under which a bore's air
 /// beside it lines it (`lined`), `i32::MIN` where the area's edge walls it
 /// or it is past the area, where nothing does. What its cells are read
@@ -700,7 +700,7 @@ impl Spans {
 /// it does over the ground's face — and whether they all fit `SPANS`.
 pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
     let (mut spans, mut fits) = (Spans::NONE, true);
-    if cols.look(c) == ground::UNKNOWN || cols.is_walled(c) {
+    if cols.palette_idx(c) == ground::UNKNOWN || cols.is_walled(c) {
         return (spans, fits);
     }
     // The column's face and the tile's scale, read once for all its visits.
@@ -733,9 +733,9 @@ pub trait Kept {
 /// What the ways write in cell `z` at zoom `cell` of column `c`, its `n` spans
 /// kept in `k`: a deck's slab or its pier, the highest of those over it
 /// keeping what two share, a slab before its pier; else the first air over
-/// it (`AIR_OF` over its way's look); else `NOTHING`.
+/// it (`AIR_OF` over its way's palette index); else `NOTHING`.
 fn at(k: &impl Kept, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
-    let (mut best, mut look, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
+    let (mut best, mut palette_idx, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
     let mut j = 0;
     while j < n {
         let (run, v) = k.span(c, j);
@@ -745,13 +745,13 @@ fn at(k: &impl Kept, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
                     air = v;
                 }
             } else if at_or_after(run, best) {
-                (best, look) = (run, v);
+                (best, palette_idx) = (run, v);
             }
         }
         j += 1;
     }
-    if look != NOTHING {
-        look
+    if palette_idx != NOTHING {
+        palette_idx
     } else {
         air
     }
@@ -818,7 +818,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 /// What the ways write in cell `z` of column `c` at zoom `cell`, its spans and
 /// those beside it kept in `k` (`at` of its own): a deck's slab or its
 /// pier, else a bore's air (`AIR`); else, under its face cell, where a
-/// cave may take it (`ground::face_cell`), the way's look where a bore's
+/// cave may take it (`ground::face_cell`), the way's palette index where a bore's
 /// air is beside it — under or over it, or across one of its four faces,
 /// the first in `near`'s order — so a cave never opens into a way, whatever
 /// carves the ground; else `NOTHING`. Read off the spans in place, the

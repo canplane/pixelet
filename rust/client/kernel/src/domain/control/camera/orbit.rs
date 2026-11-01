@@ -2,24 +2,23 @@
 
 //! The orbit camera: the eye moves over a sphere about the pivot, the
 //! radius being the zoom. The controls write its `to`; `turn` brings what
-//! is drawn to it (domain/approach.rs). Everything that reads the world reads the
+//! is drawn to it (domain/smooth.rs). Everything that reads the world reads the
 //! drawn state.
 //!
 //! The controls are written through one funnel (`ask`), where terrain
 //! answers whether a state puts the eye in the ground
-//! (orbit/terrain_gate.rs `allowed_view`), and the camera setting decides
+//! (orbit/collision.rs `allowed_view`), and the camera setting decides
 //! what follows: through ignores the ground, stop takes a control as far as
 //! it gets, and climb raises the drawn pitch instead (`climb_polar`); where a
 //! roof over the pivot holds the climb, a zoom in goes under it (`dive`).
 
-pub mod terrain_gate;
+pub mod collision;
 
 use pxl_spec::space::coord::q3::Q3;
 
 use pxl_spec::space::coord::v3::{self, V3};
 use xpute_kit::math::scalar::clamp;
 
-use crate::domain::approach::{approach_angle, approach_vec};
 use crate::domain::control::camera::controller::{
     camera, facing_dir, facing_domain, pivot, pivot_world, set_eye_world,
 };
@@ -35,8 +34,9 @@ use crate::domain::control::param::{
 };
 use crate::domain::control::param::{MAX_DIST, MIN_DIST};
 use crate::domain::param::POS_DAMP;
+use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
-use terrain_gate::{allowed_view, climb_polar};
+use collision::{allowed_view, climb_polar};
 use xpute_guest::global::Global;
 
 pub struct OrbitState {
@@ -129,9 +129,9 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     let was = (drawn_pivot, o.dist, cam.polar, cam.azimuth);
 
     let to = resolve_to(&mut o.to, drawn_pivot);
-    let (at, mut moving) = approach_vec(drawn_pivot, to, POS_DAMP, delta, ORBIT_PIVOT_EPS);
+    let (at, mut moving) = smooth_vec(drawn_pivot, to, POS_DAMP, delta, ORBIT_PIVOT_EPS);
 
-    let ([dist], m) = approach_vec([o.dist], [vs.dist], CAM_DAMP, delta, ORBIT_DIST_EPS);
+    let ([dist], m) = smooth_vec([o.dist], [vs.dist], CAM_DAMP, delta, ORBIT_DIST_EPS);
     o.dist = clamp(dist, MIN_DIST, MAX_DIST);
     moving |= m;
 
@@ -146,9 +146,9 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         (true, false) => CLIMB_RELAX_DAMP,
         (false, _) => CAM_DAMP,
     };
-    let ([polar], m) = approach_vec([cam.polar], [polar], rate, delta, ORBIT_POLAR_EPS);
+    let ([polar], m) = smooth_vec([cam.polar], [polar], rate, delta, ORBIT_POLAR_EPS);
     moving |= m;
-    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, ORBIT_AZIMUTH_EPS);
+    let (azimuth, m) = smooth_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, ORBIT_AZIMUTH_EPS);
     moving |= m;
     (cam.polar, cam.azimuth) = facing_domain(polar, azimuth);
 

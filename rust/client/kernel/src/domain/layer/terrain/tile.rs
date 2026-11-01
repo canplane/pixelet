@@ -3,14 +3,14 @@
 //! Terrain as a layer of the pyramid; a tile's record is a room in
 //! `.fixed.terrain` for what is read of it whole, its lines, decoded into
 //! straight from the packet. Its cells are its
-//! windows' (domain/layer/terrain/window.rs), filled off the packet, which is kept
-//! only until the GPU has what they want of it (`kept`). A tile the bake
+//! windows' (domain/layer/terrain/clipmap.rs), filled off the packet, which is kept
+//! only until the GPU has what they want of it (`uploads`). A tile the bake
 //! left as no object is drawn from the tile over it, whose cells there are
 //! open water; at the source's top, it is void.
 
 use crate::domain::layer::earth::Earth;
-use crate::domain::layer::kept::Kept;
 use crate::domain::layer::tile_cache::TileCache;
+use crate::domain::layer::upload::Uploads;
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::bake::separation;
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
@@ -23,9 +23,9 @@ use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::failure::Failure;
 
+use crate::domain::layer::terrain::clipmap;
 use crate::domain::layer::terrain::fixed::RANGE;
 use crate::domain::layer::terrain::fixed::{separation_lane, SEPARATION_LANES};
-use crate::domain::layer::terrain::window;
 use crate::domain::layer::Base;
 use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::sys::io::fetch;
@@ -40,7 +40,7 @@ impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
     /// The pivot's and a destination's windows' tiles.
-    const PINNED: u32 = window::PINNED_TILES;
+    const PINNED: u32 = clipmap::PINNED_TILES;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy
@@ -71,19 +71,19 @@ impl Base for TerrainTile {
 
     /// What its windows want of it is the GPU's, off the packet: kept only
     /// where a window wants one of its bricks, so an ancestor's or another
-    /// zoom's packet no window reads takes no place of `most_kept`.
+    /// zoom's packet no window reads takes no place of `most_pending`.
     fn keep(record: Option<u32>, block: Block) {
         let wanted = |r: &u32| {
             TerrainTile::tile_cache()
                 .in_slot(*r)
-                .is_some_and(window::is_tile_wanted)
+                .is_some_and(clipmap::is_tile_wanted)
         };
         match record {
             Some(r) if !wanted(&r) => {
-                kept().forget(r);
+                uploads().forget(r);
                 fetch::release(Some(block));
             }
-            _ => kept().keep(record, block, most_kept()),
+            _ => uploads().keep(record, block, most_pending()),
         }
     }
 }
@@ -94,8 +94,8 @@ impl Base for TerrainTile {
 /// so the packets kept, which only a drawn frame gives back, never take the
 /// slots a read needs to arrive into (sys/io/body.rs). A packet past it is
 /// freed once decoded, and its tile asked again when one could be kept
-/// (`again_room`, domain/layer/terrain/window.rs `step`).
-pub fn most_kept() -> u32 {
+/// (`again_room`, domain/layer/terrain/clipmap.rs `step`).
+pub fn most_pending() -> u32 {
     let credits = request::most_credits().max(1);
     BODY_SLOTS.saturating_sub(credits + TileCache::<Earth>::SLOTS)
 }
@@ -107,26 +107,26 @@ const _: () = assert!(
 
 /// How many tiles may be asked again for their packets now: as many as
 /// could still be kept, less those asked again and not yet come, so none
-/// is fetched only to be freed past `most_kept`.
+/// is fetched only to be freed past `most_pending`.
 pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
     let coming = TerrainTile::tile_cache()
         .asked_again(|p| !request::has_object_failed(Stream::terrain, p.subject()));
-    most_kept().saturating_sub(kept().cnt() + coming)
+    most_pending().saturating_sub(uploads().cnt() + coming)
 }
 
 /// The tiles whose bricks the windows want filled, off their packets.
-static KEPT: Global<Kept> = Global::new();
+static UPLOADS: Global<Uploads> = Global::new();
 
-pub fn kept() -> &'static mut Kept {
-    KEPT.get(|| Kept::new(TileCache::<TerrainTile>::SLOTS))
+pub fn uploads() -> &'static mut Uploads {
+    UPLOADS.get(|| Uploads::new(TileCache::<TerrainTile>::SLOTS))
 }
 
 /// Whether `tile`'s packet is kept, its bricks still to be handed.
-pub fn kept_for(tile: Tile) -> bool {
+pub fn pending_for(tile: Tile) -> bool {
     TerrainTile::tile_cache()
         .slot(tile)
-        .is_some_and(|f| kept().waiting(f))
+        .is_some_and(|f| uploads().waiting(f))
 }
 
 /// # Safety

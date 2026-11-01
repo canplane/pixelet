@@ -16,10 +16,10 @@
     reason = "generated from the spec"
 )]
 
-/// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case.
+/// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing previewed alone.
 pub mod surface_role {
     pub const WORLD: u32 = 0;
-    pub const CASE: u32 = 1;
+    pub const PREVIEW: u32 = 1;
 }
 
 /// The one place the renderer's calls cross (gpu/api.rs): a stream
@@ -32,7 +32,7 @@ pub mod surface_role {
 /// word, then each span's begin and end ticks (gpu/api.rs lays them out and
 /// holds this number to it).
 pub mod stream {
-    pub const HEAD: u32 = 141;
+    pub const HEAD: u32 = 145;
     /// The range's size: the stream, what one turn may send the device, then at
     /// its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
     /// empty one of. A product number, said rather than derived: a turn's uploads

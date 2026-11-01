@@ -65,7 +65,7 @@ const KERNEL_ORDER: [(&str, u8); 12] = [
     ("pointer", 6),
     ("scene", 5),
     ("control", 5),
-    ("approach", 4),
+    ("smooth", 4),
     ("param", 4),
     ("view", 3),
     ("query", 2),
@@ -73,7 +73,7 @@ const KERNEL_ORDER: [(&str, u8); 12] = [
     ("sys", 0),
 ];
 const KERNEL_HEADS: [&str; 2] = ["scene", "control"];
-const KERNEL_BESIDE: [&str; 1] = ["profiler"];
+const KERNEL_BESIDE: [&str; 1] = ["perf"];
 
 /// pxl-spec-core's order: what every part speaks, the layers' storage and
 /// the world's fields, the query over them (ARCHITECTURE.md, "The query, the
@@ -93,7 +93,7 @@ const SPEC_CORE_ORDER: [(&str, u8); 28] = [
     ("scatter", 1),
     ("cloud", 1),
     ("ground", 1),
-    ("window", 1),
+    ("clipmap", 1),
     ("way", 1),
     ("fill", 1),
     ("overwrite", 1),

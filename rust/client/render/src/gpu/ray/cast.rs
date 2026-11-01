@@ -4,14 +4,14 @@
 //! world's depth from the light cast with them, and the decor generated over the
 //! world (gpu/generated.rs): what each reads, made once, and their dispatches.
 
+use pxl_spec_core::clipmap::{self, FRESH_CELL, FRESH_FIRST};
 use pxl_spec_core::generated::{self, GROUPS};
-use pxl_spec_core::window::{self, FRESH_CELL, FRESH_FIRST};
 use pxl_spec_core::{beam, eye, light, observed, overwrite, raster, ray};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use super::raster::Raster;
-use super::tally::{self, Counted, Tally};
+use super::tally::{self, Counted, RayCounts, Tally};
 use super::{casts_px, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
@@ -29,9 +29,9 @@ use crate::gpu::api::{
 use crate::gpu::generated::{cut_boxes, hold, Drawn, Generated, Generation};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::read::Read;
-use crate::gpu::renderer::{Cast, Overwrites};
+use crate::gpu::renderer::{next_frame, Cast, Overwrites};
 use crate::gpu::shadow;
-use crate::gpu::span_spec::{FrameKind, GpuSpanName};
+use crate::gpu::span_spec::{FrameKind, GpuSpanName, LightMoved};
 use pxl_spec_core::param::light::SAMPLE;
 
 /// What the GPU's cast reads; it writes the world surface's rays.
@@ -67,7 +67,7 @@ pub(super) struct CastBuffers {
     /// (`moved`, a bit an entry, against the entries as `entries` last held them)
     /// and over the boxes of what is placed or cut that changed (`boxes`,
     /// `holding` of them, as decor's generation holds them, gpu/generated.rs
-    /// `hold`), and those handed a slot of a family of what is placed that
+    /// `hold`), and those handed a slot of a child group of what is placed that
     /// was written (`written`, `writes` of them); as this frame's cast does
     /// (`forgets`, pxl-spec-core `observed::FORGETS`), and what it sent, put
     /// back where its frame is dropped (`sent`). `frame` numbers the casts since it was last
@@ -102,9 +102,9 @@ pub(super) struct CastBuffers {
     cuts: [u32; eye::CUTS],
     /// The eye's windows folded over their bricks (`joined_cs`), over its
     /// group, the window buffer's rows past their entry table
-    /// (`window::JOINED_AT`), written where the windows' entries moved
+    /// (`clipmap::JOINED_AT`), written where the windows' entries moved
     /// (`refold`). The CPU folds its own over the bricks it holds
-    /// (pxl-kernel domain/layer/terrain/window.rs `fold`).
+    /// (pxl-kernel domain/layer/terrain/clipmap.rs `fold`).
     joined_built: Built,
     /// The world's depth from the light, a texel of the shadow map each
     /// (`light_cs`), cast with the eye's rays where the shadows are on.
@@ -188,6 +188,9 @@ pub(super) struct CastBuffers {
     /// `light::HEAD_WORDS`).
     light_moved: u32,
     light_cast: bool,
+    /// Why the map cast this frame, a bit each in LIGHT_MOVED's order
+    /// (span.json); 0 where it did not.
+    light_why: u32,
     /// Whether the next cast marks where the eye's rays met the world
     /// (`light_mark_cs`): held until one does; and whether the marks of the
     /// frame the eye stands in, its pixels' footprints, are owed, as the
@@ -206,7 +209,7 @@ pub(super) struct CastBuffers {
     shard_room: usize,
     /// The drawn pixels it casts, a ray each: the world surface's.
     size: [u32; 2],
-    /// The overwrites' heap lane then their data lane, each `overwrite_room`
+    /// The overwrites' child pointer lane then their data lane, each `overwrite_room`
     /// words, the lanes' own room; the revision it holds, none at first.
     overwrites: u32,
     overwrite_room: usize,
@@ -241,7 +244,7 @@ pub(super) struct CastBuffers {
 
 /// What a cast's head handed the pyramid's forgetting (pxl-spec-core
 /// `observed::HEAD_WORDS`): whether all of it, the entries that moved, the
-/// boxes and the families written; put back where its frame is dropped.
+/// boxes and the child groups written; put back where its frame is dropped.
 struct Forgot {
     all: bool,
     moved: [u32; observed::MOVED_WORDS as usize],
@@ -251,7 +254,7 @@ struct Forgot {
     writes: usize,
 }
 
-/// Family `first` of what is placed noted written among the `writes` of
+/// Child group `first` of what is placed noted written among the `writes` of
 /// `written`, once; whether it found room.
 fn note(written: &mut [u32], writes: &mut usize, first: u32) -> bool {
     if written[..*writes].contains(&first) {
@@ -425,6 +428,7 @@ impl RaysPass {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             light_cast: false,
+            light_why: 0,
             light_world: false,
             light_footprint_owed: false,
             refold: false,
@@ -435,7 +439,7 @@ impl RaysPass {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             window: buf(
-                word_bytes((4 * window::JOINED_AT + window::EYE_JOINED_WORDS) as usize),
+                word_bytes((4 * clipmap::JOINED_AT + clipmap::EYE_JOINED_WORDS) as usize),
                 storage | buffer_usage::COPY_SRC,
             ),
             shards: 0,
@@ -473,11 +477,11 @@ impl RaysPass {
         // No cast, no world: no ray cast, none drawn and no decor generated.
         // What the cast reads stands for the next: the ground it binds is
         // made once.
-        let (Some(cast), Some((ground, looks, pool))) = (
+        let (Some(cast), Some((ground, palette_indices, pool))) = (
             cast,
             self.ground
                 .as_ref()
-                .map(|gb| (gb.ground, gb.looks, gb.pool)),
+                .map(|gb| (gb.ground, gb.palette_indices, gb.pool)),
         ) else {
             self.kind = FrameKind::plain;
             if let Some(c) = self.cast.as_mut() {
@@ -485,6 +489,7 @@ impl RaysPass {
                 c.read.forget();
                 c.light_content.forget();
                 c.light_cast = false;
+                c.light_why = 0;
             }
             return;
         };
@@ -499,7 +504,7 @@ impl RaysPass {
             shards,
             overwrites:
                 Overwrites {
-                    heap: _,
+                    first_child: _,
                     data: _,
                     room,
                     revision,
@@ -533,7 +538,7 @@ impl RaysPass {
         };
         let (kind, casts) = (self.kind, casts_px(self.kind));
         xpute_kit::ensure!(
-            cast.window.len() == (4 * window::JOINED_AT) as usize,
+            cast.window.len() == (4 * clipmap::JOINED_AT) as usize,
             ENOTRECOVERABLE,
             cast.window.len()
         );
@@ -598,13 +603,13 @@ impl RaysPass {
         }
         let overwrites_moved = c.overwrite_revision != Some(o.revision);
         if overwrites_moved {
-            // Held at `since`: the families written after it alone, a record
+            // Held at `since`: the child groups written after it alone, a record
             // each, where the stream has room for them all; else both lanes
             // whole, read where they live, two records however large.
-            fn family(lane: &[u32], first: u32) -> &[u32] {
-                &lane[first as usize..(first + overwrite::FAMILY) as usize]
+            fn child_group(lane: &[u32], first: u32) -> &[u32] {
+                &lane[first as usize..(first + overwrite::CHILDREN) as usize]
             }
-            // The families written since the revision the pyramid was asked
+            // The child groups written since the revision the pyramid was asked
             // at, which the nodes handed one of their slots read again; past
             // the room, or where revisions went by unseen, all of it.
             if c.overwrite_revision == Some(o.since) {
@@ -617,30 +622,32 @@ impl RaysPass {
             let listed = |lane: &[u32]| {
                 o.written
                     .iter()
-                    .map(|&f| write_buffer_bytes(bytes(family(lane, f))))
+                    .map(|&f| write_buffer_bytes(bytes(child_group(lane, f))))
                     .sum::<usize>()
             };
-            if c.overwrite_revision == Some(o.since) && api::room(listed(o.heap) + listed(o.data)) {
+            if c.overwrite_revision == Some(o.since)
+                && api::room(listed(o.first_child) + listed(o.data))
+            {
                 for &first in o.written {
                     g.write_buf(
                         c.overwrites,
                         word_bytes(first as usize),
-                        bytes(family(o.heap, first)),
+                        bytes(child_group(o.first_child, first)),
                     );
                     g.write_buf(
                         c.overwrites,
                         word_bytes(o.room + first as usize),
-                        bytes(family(o.data, first)),
+                        bytes(child_group(o.data, first)),
                     );
                 }
             } else {
-                g.upload_buf(c.overwrites, 0, bytes(o.heap));
+                g.upload_buf(c.overwrites, 0, bytes(o.first_child));
                 g.upload_buf(c.overwrites, word_bytes(o.room), bytes(o.data));
             }
             c.overwrite_revision = Some(o.revision);
         }
         // What the world's query reads moved: the windows, the bricks the
-        // turn handed (their cells, looks and ways), the service area, what
+        // turn handed (their cells, palette indices and ways), the service area, what
         // is placed, a preview's cuts. What the observed pyramid kept is
         // forgotten; so it is once its frames would outrun a key's tag.
         let cuts: [u32; eye::CUTS] = cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
@@ -669,7 +676,7 @@ impl RaysPass {
         // The eye's windows' entries that hold another brick, or whose brick
         // the turn handed: what is over them is asked again.
         c.cuts = cuts;
-        let eye_rows = (window::EYE_WINDOWS * window::ENTRIES) as usize;
+        let eye_rows = (clipmap::EYE_WINDOWS * clipmap::ENTRIES) as usize;
         if window_moved {
             let rows = &cast.window[..4 * eye_rows];
             for k in 0..eye_rows {
@@ -687,12 +694,12 @@ impl RaysPass {
             for f in &gb.handed[..fresh as usize] {
                 let (cell, q) = (
                     f[FRESH_CELL as usize],
-                    window::fresh_brick([f[FRESH_FIRST as usize], f[FRESH_FIRST as usize + 1]]),
+                    clipmap::fresh_brick([f[FRESH_FIRST as usize], f[FRESH_FIRST as usize + 1]]),
                 );
-                let w = cell.wrapping_sub(window::FIRST_CELL);
-                let k = (w * window::ENTRIES + window::entry(q)) as usize;
+                let w = cell.wrapping_sub(clipmap::FIRST_CELL);
+                let k = (w * clipmap::ENTRIES + clipmap::entry(q)) as usize;
                 let row = &cast.window[4 * k..4 * k + 4];
-                if w < window::EYE_WINDOWS && [row[0], row[1]] == q {
+                if w < clipmap::EYE_WINDOWS && [row[0], row[1]] == q {
                     c.moved[k / 32] |= 1 << (k % 32);
                 }
             }
@@ -754,12 +761,22 @@ impl RaysPass {
         // The first frame the eye stands in after it moved marks again, with
         // the footprints the jitter's frames after it stand on.
         let footprint_owed = c.light_footprint_owed && kind != FrameKind::cast;
-        let light_moved = !held || !detail_held || !l.end() || footprint_owed;
+        let receivers_held = l.end();
+        let why = [!held, !detail_held, !receivers_held, footprint_owed];
+        let light_moved = why.contains(&true);
         c.light_detail_moved = held && !detail_held;
         if !c.light_ready {
             c.light_content.forget();
         }
         c.light_cast = shadows && light_moved && c.light_ready;
+        c.light_why = if c.light_cast {
+            LightMoved::ALL
+                .iter()
+                .filter(|&&m| why[m as usize])
+                .fold(0, |bits, &m| bits | 1 << m as u32)
+        } else {
+            0
+        };
         // The world's receivers stand where the eye's rays met it: marked
         // again by the next cast after the rays were cast anew, or where an
         // epoch begins. Else what they stood on stands, marked in the epoch
@@ -870,6 +887,7 @@ impl RaysPass {
             c.sent = None;
         }
         let frame = tally::Frame {
+            number: next_frame(),
             // A full cast's alone, so what a cast asks is not shared out
             // over the frames that cast only the pixels.
             casts: [self.kind == FrameKind::cast, c.light_cast],
@@ -881,7 +899,7 @@ impl RaysPass {
             c.window,
             ground,
             rays.0,
-            looks,
+            palette_indices,
             c.shards,
             c.overwrites,
             pool,
@@ -945,7 +963,7 @@ impl RaysPass {
             c.eye,
             c.window,
             ground,
-            looks,
+            palette_indices,
             c.shards,
             c.overwrites,
             pool,
@@ -1019,11 +1037,11 @@ impl RaysPass {
         g.set_pipeline(pass, c.joined_built.pipeline);
         // A level a dispatch, each over the one under it, its level the
         // dispatch's depth (`joined_cs`).
-        for l in 1..=window::JOINED_LEVELS {
-            let blocks = (window::ACROSS >> l) * (window::ACROSS >> l);
+        for l in 1..=clipmap::JOINED_LEVELS {
+            let blocks = (clipmap::ACROSS >> l) * (clipmap::ACROSS >> l);
             g.dispatch(
                 pass,
-                (blocks * window::EYE_WINDOWS).div_ceil(compute::JOINED_WORKGROUP[0]),
+                (blocks * clipmap::EYE_WINDOWS).div_ceil(compute::JOINED_WORKGROUP[0]),
                 1,
                 l,
             );
@@ -1302,13 +1320,25 @@ impl RaysPass {
         }
     }
 
-    /// The counts' sums since boot (ray/tally.rs `RAY_SUMS`).
-    pub fn tally_sums(&self) -> [f64; tally::RAY_SUMS] {
-        Tally::sums()
+    /// The counts that landed since last taken (`Tally::take`).
+    pub fn take_counts(&mut self) -> Option<RayCounts> {
+        self.cast.as_mut().and_then(|c| c.tally.take())
     }
 
     pub fn light_casts(&self) -> bool {
         self.cast.as_ref().is_some_and(|c| c.light_cast)
+    }
+
+    /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
+    /// order (span.json `LIGHT_MOVED`); 0 where it did not.
+    pub fn light_why(&self) -> u32 {
+        self.cast.as_ref().map_or(0, |c| c.light_why)
+    }
+
+    /// The boxes decor's slots are marked by to generate again this frame
+    /// (gpu/generated.rs `marked_boxes`).
+    pub fn decor_boxes(&self) -> u32 {
+        self.cast.as_ref().map_or(0, |c| c.generated.marked_boxes())
     }
 
     pub fn generates(&self) -> bool {
@@ -1324,7 +1354,7 @@ impl RaysPass {
     pub fn on_dropped(&mut self) {
         if let Some(c) = self.cast.as_mut() {
             // What it was to forget, it did not: the next cast forgets it
-            // too, every box and family as sent, as decor's generation holds
+            // too, every box and child group as sent, as decor's generation holds
             // its edits again (`carry_edits`).
             if let Some(f) = c.sent.take() {
                 c.forget |= f.all;
@@ -1366,18 +1396,19 @@ impl RaysPass {
 
 /// The cast's group 0 over `bound`: the eye, the window and its fold
 /// (`joined_cs` writes it, the cast reads it), the tiles' frames, the
-/// surface's rays, the bricks' looks, the service area's index, the
+/// surface's rays, the bricks' palette indices, the service area's index, the
 /// overwrites, the ways' pool, the beam rays' lines and the cells' starts,
 /// the observed pyramid, and the head (`WORLD_GROUP`): the eye's, or, over
 /// the light's list and head, the shadow map's (`light_groups`).
 fn cast_group(g: &Gpu, built: &Built, bound: [u32; 11]) -> u32 {
-    let [eye, window, ground, rays, looks, shards, overwrites, pool, beams, seen, head] = bound;
+    let [eye, window, ground, rays, palette_indices, shards, overwrites, pool, beams, seen, head] =
+        bound;
     let entries = [
         buf_entry(0, eye),
         buf_entry(1, window),
         buf_entry(2, ground),
         view_entry(3, rays),
-        buf_entry(4, looks),
+        buf_entry(4, palette_indices),
         buf_entry(5, shards),
         buf_entry(6, overwrites),
         buf_entry(7, pool),
@@ -1492,7 +1523,7 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
 }
 
 /// The light's cast's groups 0, over `bound`: the eye, the window, the
-/// tiles' frames, the bricks' looks, the service area's index, the
+/// tiles' frames, the bricks' palette indices, the service area's index, the
 /// overwrites and the ways' pool, the cast's alone; the observed pyramid,
 /// which the light's walks read and write as the eye's do; the clipmap; its
 /// head, the beam's lines, the samples and the misses (`list`),
@@ -1512,14 +1543,14 @@ fn light_groups(
     bound: [u32; 12],
     [seen, head, list, boxes, visibility, args, misses, light_args]: [u32; 8],
 ) -> [u32; 12] {
-    let [eye, window, ground, looks, shards, overwrites, pool, light, rays, drawing, regions, instances] =
+    let [eye, window, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances] =
         bound;
     let entries = [
         (0, buf_entry(0, eye)),
         (1, buf_entry(1, window)),
         (2, buf_entry(2, ground)),
         (3, view_entry(3, rays)),
-        (4, buf_entry(4, looks)),
+        (4, buf_entry(4, palette_indices)),
         (5, buf_entry(5, shards)),
         (6, buf_entry(6, overwrites)),
         (7, buf_entry(7, pool)),
@@ -1550,7 +1581,17 @@ fn light_groups(
             g,
             world,
             [
-                eye, window, ground, rays, looks, shards, overwrites, pool, list, seen, head,
+                eye,
+                window,
+                ground,
+                rays,
+                palette_indices,
+                shards,
+                overwrites,
+                pool,
+                list,
+                seen,
+                head,
             ],
         ),
         // The raster's once its buffers are made.

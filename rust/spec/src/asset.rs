@@ -81,14 +81,14 @@ impl decor::Decor {
 
     /// How far any variant's box reaches from its min corner however it
     /// turns, in units.
-    pub fn reach(&self) -> f64 {
+    pub fn box_extent(&self) -> f64 {
         let cell = units(self.row.cell_zoom());
-        let reach = |size: &[u32; 3]| {
+        let extent = |size: &[u32; 3]| {
             let [x, y, z] = size.map(|n| f64::from(n) * cell);
             let across = x.max(y);
             libm::sqrt(2.0 * across * across + z * z)
         };
-        self.row.sizes.iter().map(reach).fold(0.0, largest)
+        self.row.sizes.iter().map(extent).fold(0.0, largest)
     }
 
     /// The sides of `variant`'s box turned `turn`, in units.

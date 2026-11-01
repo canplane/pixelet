@@ -62,8 +62,8 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
     light::ALL,
     night::ALL,
     noise::ALL,
-    puck::zone::ALL,
-    puck::beacon::ALL,
+    location::zone::ALL,
+    location::beacon::ALL,
     shadow::ALL,
     sky::ALL,
     sky::sun::ALL,
@@ -241,9 +241,9 @@ pub mod noise {
     }
 }
 
-/// The location puck's look in the world (gpu/pass/puck.rs).
-pub mod puck {
-    /// The zone of unit boxes about it (frame/shader/puck_zone.wgsl): half
+/// The location indicator's look in the world (gpu/pass/location.rs).
+pub mod location {
+    /// The zone of unit boxes about it (frame/shader/location_zone.wgsl): half
     /// transparent, so it reads as an indicator rather than a surface.
     pub mod zone {
         params! {
@@ -252,7 +252,7 @@ pub mod puck {
         }
     }
 
-    /// The octahedron over it (frame/shader/puck_beacon.wgsl).
+    /// The octahedron over it (frame/shader/location_beacon.wgsl).
     pub mod beacon {
         params! {
             RADIUS: f32 = 0.3;

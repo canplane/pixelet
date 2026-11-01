@@ -4,8 +4,8 @@
 //! of each decor's seed (the catalog's, spec/spec/asset/decor.json) and the
 //! world as its one query answers it, so a cell generates the same wherever
 //! it is read. Where it stands, which way it faces and whether it generates are
-//! the world unplaced, the ground's alone, its column's footing
-//! and the cells about it (`World::footing`); only an edit in its box, asked
+//! the world unplaced, the ground's alone, its column's surface
+//! and the cells about it (`World::column_surface`); only an edit in its box, asked
 //! of the world as edited, takes it away (pxl-spec-core `generated::generated`).
 
 use pxl_spec::asset::cube::sentinel;
@@ -14,7 +14,7 @@ use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec_core::generated::{self, DecorQuery, Generated};
-use pxl_spec_core::support::Footing;
+use pxl_spec_core::support::ColumnSurface;
 use pxl_spec_core::world::Placed;
 use pxl_spec_core::FRAC_W;
 
@@ -32,7 +32,7 @@ use pxl_spec_core::decor;
 pub(super) struct Asked<'a, 'w> {
     world: &'a World<'w>,
     unplaced: World<'w>,
-    lanes: store::Lanes<'a>,
+    lanes: store::Columns<'a>,
 }
 
 impl<'a, 'w> Asked<'a, 'w> {
@@ -40,17 +40,17 @@ impl<'a, 'w> Asked<'a, 'w> {
         Asked {
             world,
             unplaced: world.unplaced(),
-            lanes: world.object.lanes(),
+            lanes: world.object.columns(),
         }
     }
 }
 
 /// The world's one query on the CPU, each ask answered with what its tiles
-/// lacked: a column's footing with its line (`World::footing`) and each cell
+/// lacked: a column's surface with its line (`World::column_surface`) and each cell
 /// about it asked off that line (`World::asset_about`), of the world
 /// unplaced; a cell's edit asked of the world as edited (`World::asset`).
 impl DecorQuery for Asked<'_, '_> {
-    type Footing = Footing<At>;
+    type ColumnSurface = ColumnSurface<At>;
 
     fn rows(&self) -> &[decor::Decor] {
         &decor::DECORS
@@ -58,8 +58,8 @@ impl DecorQuery for Asked<'_, '_> {
 
     /// None where the world lacked a tile on the way: decor generates on what
     /// is held as its tiles say.
-    fn footing(&mut self, cell: Zoom, g: [i32; 2]) -> (Footing<At>, (i32, f32), bool) {
-        let (answer, f) = self.unplaced.footing(cell, g);
+    fn column_surface(&mut self, cell: Zoom, g: [i32; 2]) -> (ColumnSurface<At>, (i32, f32), bool) {
+        let (answer, f) = self.unplaced.column_surface(cell, g);
         match answer {
             Answer::Exact(Some(top)) => (f, top, true),
             _ => (f, (0, 0.0), false),
@@ -73,7 +73,7 @@ impl DecorQuery for Asked<'_, '_> {
     }
 
     /// Void where the world holds nothing there.
-    fn asset(&mut self, f: &Footing<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
+    fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
         self.unplaced
             .asset_about(&f.line, zoom, c)
             .val()
@@ -96,7 +96,7 @@ impl DecorQuery for Asked<'_, '_> {
 /// What the ground generates of `decor` in the leaf `cell`, the leaf's ground
 /// read about it (`World::generated_in`): the leaf scatter, cell by cell, which
 /// a region generates the same (pxl-spec procedural.test.rs); and, where
-/// `boxed`, whether it generates there, its box asked about the same footing
+/// `boxed`, whether it generates there, its box asked about the same column surface
 /// (pxl-spec-core `generated::generated`), true where not.
 pub(super) fn generated_at(
     asked: &mut Asked,

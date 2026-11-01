@@ -9,16 +9,16 @@
 
 use crate::answer;
 use crate::answer::{
-    box_join, box_none, cover, eighths, fills, kept_word, In, Kind, BOX_NONE, BOX_WHOLE, FULL,
+    box_join, box_none, cover, eighths, fill_word, fills, In, Kind, BOX_NONE, BOX_WHOLE, FULL,
     PLACED_ASSET,
 };
 use crate::area::Shard;
 use crate::cave::Cave;
+use crate::clipmap::{Bricks, Found};
 use crate::ground::{self, Held, VOID};
-use crate::overwrite::{self, Cut, Lanes, AIR, CELL, PLACED, SPLIT};
+use crate::overwrite::{self, Columns, Cut, AIR, CELL, PLACED, SPLIT};
 use crate::way;
 use crate::way::tree;
-use crate::window::{Bricks, Found};
 use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 
 /// What a node is handed by the node over it, each source's own, so a
@@ -26,11 +26,11 @@ use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 /// its caves (`Cave`), what is placed (`overwrite::Held`, its cursor in the
 /// objects' tree), what is known of the service area at its shard
 /// (`area::Shard`), where the windows held the ground's cells of a node
-/// over it (`window::Found`, `window::step`), and the ways' cursor in the
+/// over it (`clipmap::Found`, `clipmap::step`), and the ways' cursor in the
 /// tree of the brick `ground` names (`way::tree`). The CPU's and a GPU's
 /// alike.
 #[derive(Clone, Copy)]
-pub struct Handed {
+pub struct Inherited {
     pub cave: Cave,
     pub placed: overwrite::Held,
     pub shard: Shard,
@@ -38,13 +38,13 @@ pub struct Handed {
     pub ways: overwrite::Held,
 }
 
-/// A `Handed`'s words, as a GPU holds one in storage (`Handed::words`).
-pub const HANDED_WORDS: u32 = 5;
+/// An `Inherited`'s words, as a GPU holds one in storage (`Inherited::words`).
+pub const INHERITED_WORDS: u32 = 5;
 
-impl Handed {
+impl Inherited {
     /// Its words: its caves, what is placed, its shard, where its ground's
     /// cells were held, its ways' cursor.
-    pub const fn words(&self) -> [u32; HANDED_WORDS as usize] {
+    pub const fn words(&self) -> [u32; INHERITED_WORDS as usize] {
         [
             self.cave.word(),
             self.placed.word(),
@@ -54,9 +54,9 @@ impl Handed {
         ]
     }
 
-    /// `words`'s `Handed`.
-    pub const fn of_words(w: [u32; HANDED_WORDS as usize]) -> Handed {
-        Handed {
+    /// `words`'s `Inherited`.
+    pub const fn of_words(w: [u32; INHERITED_WORDS as usize]) -> Inherited {
+        Inherited {
             cave: Cave::of_word(w[0]),
             placed: overwrite::Held::of_word(w[1]),
             shard: Shard::of_word(w[2]),
@@ -67,11 +67,11 @@ impl Handed {
 
     /// The node `c` at `zoom` with nothing handed down, a descent's root
     /// among them: each source found down its line from the top, what is
-    /// placed off `lanes`.
-    pub fn of(lanes: &impl Lanes, (zoom, c): (Zoom, [i32; 3])) -> Handed {
-        Handed {
+    /// placed off `columns`.
+    pub fn of(columns: &impl Columns, (zoom, c): (Zoom, [i32; 3])) -> Inherited {
+        Inherited {
             cave: Cave::of(zoom, c),
-            placed: overwrite::cursor(lanes, PLACED, zoom, c),
+            placed: overwrite::cursor(columns, PLACED, zoom, c),
             shard: Shard::UNKNOWN,
             ground: Found::NONE,
             ways: overwrite::Held::NOTHING,
@@ -79,10 +79,10 @@ impl Handed {
     }
 
     /// `of` with nothing placed: the node as the world unplaced holds it,
-    /// the ground's alone, which decor generates on (`generated::DecorQuery::footing`);
+    /// the ground's alone, which decor generates on (`generated::DecorQuery::column_surface`);
     /// nothing placed stays nothing down a descent (`overwrite::child`).
-    pub fn unplaced((zoom, c): (Zoom, [i32; 3])) -> Handed {
-        Handed {
+    pub fn unplaced((zoom, c): (Zoom, [i32; 3])) -> Inherited {
+        Inherited {
             cave: Cave::of(zoom, c),
             placed: overwrite::Held::NOTHING,
             shard: Shard::UNKNOWN,
@@ -92,16 +92,16 @@ impl Handed {
     }
 
     /// What its child `c` at `zoom` is handed: each source stepped a zoom
-    /// down, what is placed off `lanes` and the ways off `pool`.
+    /// down, what is placed off `columns` and the ways off `pool`.
     pub fn child(
         &self,
-        lanes: &impl Lanes,
-        pool: &impl Lanes,
+        columns: &impl Columns,
+        pool: &impl Columns,
         (zoom, c): (Zoom, [i32; 3]),
-    ) -> Handed {
-        Handed {
+    ) -> Inherited {
+        Inherited {
             cave: self.cave.child(zoom, c),
-            placed: overwrite::child(lanes, self.placed, zoom, c),
+            placed: overwrite::child(columns, self.placed, zoom, c),
             shard: self.shard,
             ground: self.ground,
             ways: overwrite::child(pool, self.ways, zoom, c),
@@ -110,12 +110,12 @@ impl Handed {
 }
 
 /// What is in the node `c` at `zoom`, asked from `far` to `near`, `at` what
-/// the node over it handed it (`Handed`): its shard is found first, before any
+/// the node over it handed it (`Inherited`): its shard is found first, before any
 /// layer answers, so a stop's shard is its own whichever layer stops it;
 /// where the ground's cells of a node over it were held becomes its own
 /// (`ground::node`), and the ways' cursor is stepped from its parent's where
 /// that names the same brick, found from that brick's root where it names
-/// another, as the cells' place itself is found again (`window::step`). A
+/// another, as the cells' place itself is found again (`clipmap::step`). A
 /// preview's `carve` and `hide` (`overwrite::Cut`) are read with what is
 /// placed.
 ///
@@ -127,9 +127,9 @@ impl Handed {
 /// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
 /// `way::tree::read`), one value whichever source holds it, keeping the
 /// eighths of its cube they fill together over it (`answer::cover`,
-/// `answer::eighths`, `answer::KEPT_SHIFT`), air where that is none;
+/// `answer::eighths`, `answer::FILL_SHIFT`), air where that is none;
 /// `PLACED_ASSET` over a placed value, the source control tells an edit by,
-/// which nothing drawn reads. Its second word is the four looks the ground's
+/// which nothing drawn reads. Its second word is the four palette indices the ground's
 /// asset is drawn by (`ground::Cell::four`, `ground::word`), none for any
 /// other. Coarser, a split where any layer may fill under it at a zoom asked,
 /// each by its own bound — what is placed (`overwrite::over`), the ground's
@@ -144,12 +144,12 @@ impl Handed {
     clippy::too_many_arguments,
     reason = "the world's four stores, where the node is, and the zooms and cuts it is asked at, each its own"
 )]
-pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
+pub fn node<H: Held, W: Bricks, L: Columns, P: Columns>(
     held: &mut H,
     bricks: &W,
-    lanes: &L,
+    columns: &L,
     pool: &P,
-    at: &mut Handed,
+    at: &mut Inherited,
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
     [carve, hide]: [Cut; 2],
@@ -159,7 +159,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
     let (place, trail) = (&mut at.ground, &mut at.ways);
     let is_cell = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
     let over = overwrite::over(
-        lanes,
+        columns,
         put,
         carve,
         hide,
@@ -167,12 +167,12 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
         c,
         if is_cell { zoom } else { near },
     );
-    // The four looks a filling asset of what is placed is drawn by, a byte
-    // each (`ground::word`): only the ground's looks, a placed cube of a
-    // look, fit; one past a byte, an object's, is drawn by its value.
+    // The four palette indices a filling asset of what is placed is drawn by, a byte
+    // each (`ground::word`): only the ground's palette indices, a placed cube of a
+    // palette index, fit; one past a byte, an object's, is drawn by its value.
     let laid = || {
         let four = if fills(over.asset) {
-            overwrite::looks(lanes, put, hide, zoom, c, over.asset)
+            overwrite::palette_indices(columns, put, hide, zoom, c, over.asset)
         } else {
             [0; 4]
         };
@@ -192,7 +192,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
     }
     // Where what is placed splits the node, the box it may fill.
     let (placed, splits) = if over.says == SPLIT {
-        (overwrite::bound(lanes, put, zoom), true)
+        (overwrite::bound(columns, put, zoom), true)
     } else {
         (BOX_NONE, false)
     };
@@ -231,10 +231,10 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
             return lacks;
         }
         // The ground's asset, the share of its cube it fills and its four
-        // looks; then what each layer writes over it, the ways and what is
+        // palette indices; then what each layer writes over it, the ways and what is
         // placed, its share kept with the ground's (`answer::cover`): the
         // cell keeps the eighths of its cube all of them fill
-        // (`answer::eighths`), its look the kind most of that is.
+        // (`answer::eighths`), its palette index the kind most of that is.
         let mut val = if i.kind == Kind::Cell {
             i.asset[0]
         } else {
@@ -247,7 +247,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
             0
         };
         if way != VOID {
-            // A way's look four times where one wrote it, whatever its value.
+            // A way's palette index four times where one wrote it, whatever its value.
             let w = tree::read(way);
             let (f, theirs) = cover(fill, w, overwrite::filled(pool, *trail));
             if theirs || !fills(val) {
@@ -277,7 +277,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
                 0,
             ]
         } else {
-            [kept_word(val, kept), four]
+            [fill_word(val, kept), four]
         };
         return In {
             kind: Kind::Cell,
@@ -325,7 +325,7 @@ pub fn node<H: Held, W: Bricks, L: Lanes, P: Lanes>(
 }
 
 /// The zoom a box's placed leaves are first asked at: 8 unit cells a side,
-/// so a box with nothing placed near it is told so in a few looks.
+/// so a box with nothing placed near it is told so in a few palette indices.
 const PLACED_FIRST: Zoom = UNIT_ZOOM - 3;
 const PLACED_LEVELS: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
 
@@ -364,9 +364,9 @@ pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> Placed {
 
 impl Placed {
     /// The next leaf placed at a unit cell of the box, its cell and its
-    /// word (`Lanes::data`); false past the last. One descent of the tree's
+    /// word (`Columns::data`); false past the last. One descent of the tree's
     /// branches meeting the box, each child stepped once from its parent.
-    pub fn next(&mut self, lanes: &impl Lanes) -> ([i32; 3], u32, bool) {
+    pub fn next(&mut self, columns: &impl Columns) -> ([i32; 3], u32, bool) {
         let s = UNIT_ZOOM - PLACED_FIRST;
         loop {
             if self.depth == 0 {
@@ -383,7 +383,7 @@ impl Placed {
                         self.first[2] += 1;
                     }
                 }
-                let node = overwrite::cursor(lanes, PLACED, PLACED_FIRST, n);
+                let node = overwrite::cursor(columns, PLACED, PLACED_FIRST, n);
                 if node.holds() {
                     (self.held[0], self.idx[0], self.next[1]) = (node, n, 0);
                     self.depth = 1;
@@ -411,7 +411,7 @@ impl Placed {
                 && c[2] << t <= self.hi[2]
                 && (c[2] + 1) << t > self.lo[2];
             let h = if meets {
-                overwrite::child(lanes, self.held[d - 1], z, c)
+                overwrite::child(columns, self.held[d - 1], z, c)
             } else {
                 overwrite::Held::NOTHING
             };
@@ -422,7 +422,7 @@ impl Placed {
             }
             self.next[d] += 1;
             if d == PLACED_LEVELS && h.holds() && !h.is_folded() && h.zoom() == UNIT_ZOOM {
-                return (c, lanes.data(h.slot()), true);
+                return (c, columns.data(h.slot()), true);
             }
         }
     }

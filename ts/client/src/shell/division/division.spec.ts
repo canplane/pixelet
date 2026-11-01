@@ -7,17 +7,6 @@
 // how deep to read it. The numbers are stored, so a subtype is appended,
 // never inserted.
 
-export const DIVISION_SUBTYPE = {
-  COUNTRY: 0 as number,
-  DEPENDENCY: 1 as number,
-  MACROREGION: 2 as number,
-  REGION: 3 as number,
-  MACROCOUNTY: 4 as number,
-  COUNTY: 5 as number,
-  LOCALADMIN: 6 as number,
-  LOCALITY: 7 as number,
-  BOROUGH: 8 as number,
-  MACROHOOD: 9 as number,
-  NEIGHBORHOOD: 10 as number,
-  MICROHOOD: 11 as number,
-} as const;
+import * as DIVISION_SUBTYPE from "./division/division_subtype.spec.ts";
+
+export { DIVISION_SUBTYPE };

@@ -5,19 +5,22 @@ import { SEARCH_URL } from "@/port/shell.ts";
 import type { Name, NamePart } from "@/shell/division/label.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { bracket } from "@/bracket.tsx";
+import type { SEARCH_KIND } from "./search.spec.ts";
 
-/** A part as the API writes it: Overture's subtype by its word, and `approx` where no area holds the point. */
+/** A part as the API writes it: its subtype's number, and `approx` where no area holds the point. */
 interface WirePart extends Name {
-  subtype: string;
+  subtype: number;
   approx?: boolean;
 }
 
+/** What the API answers, its kind and category by number (search.spec.ts). */
 export interface SearchResult {
   gers_id: string;
-  kind: "place" | "division";
+  kind: (typeof SEARCH_KIND)[keyof typeof SEARCH_KIND];
   name: string;
-  category: string;
-  /** Only for `kind: 'division'`; null for places. */
+  /** A place's category (place_theme.spec.ts, from 1, 0 for none), a division's subtype. */
+  category: number;
+  /** Only for a division; null for places. */
   common: Record<string, string> | null;
   /** Tells same-named results apart; replaced an address field that could name another city. */
   context: NamePart[];
@@ -50,12 +53,10 @@ export async function fetchSearch(
   return results.map((r) => ({ ...r, context: r.context.flatMap(namePart) }));
 }
 
-/** None for a subtype newer than this client. */
+/** None for a subtype newer than this client: subtypes are appended, so one
+ * past the last it knows. */
 function namePart({ subtype, approx, ...named }: WirePart): NamePart[] {
-  const number = (DIVISION_SUBTYPE as Record<string, number>)[
-    subtype.toUpperCase()
-  ];
-  return number === undefined
+  return subtype > DIVISION_SUBTYPE.MICROHOOD
     ? []
-    : [{ ...named, subtype: number, area: !approx }];
+    : [{ ...named, subtype, area: !approx }];
 }

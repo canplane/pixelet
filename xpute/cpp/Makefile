@@ -4,7 +4,8 @@
 # guest as a WebAssembly module with the WASI SDK's clang ($WASI_SDK_PATH,
 # or /opt/wasi-sdk). The library is xpute/, included from this directory by
 # its root ("xpute/kit/status/bug.hpp"); conformance/ is the guest the
-# traces drive, beside it and never shipped. Output goes under
+# traces drive, and example/ the program ts/example drives, a module only,
+# each beside it and never shipped. Output goes under
 # target/, where the traces look for the guests; the tests open their
 # golden records from the tree's root. GNU Make 3.81, as macOS ships it, is
 # enough. Run it from cpp/: the paths below are this directory's.
@@ -36,14 +37,20 @@ FLAGS := -std=c++20 -fno-exceptions -fno-rtti -ffp-contract=off -Wall -Wextra -W
 # named as a source or found under -I . as a header; the amalgamation names
 # its own two files, as a program that compiles them would.
 PREFIX_MAP := -fmacro-prefix-map=./=cpp/ $(foreach d,xpute conformance,-fmacro-prefix-map=$(d)/=cpp/$(d)/)
-AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OUT)/conformance/=cpp/conformance/
-# The guest's stack (spec/conformance/guest.json STACK_BYTES).
-STACK_BYTES := 1048576
+AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OUT)/conformance/=cpp/conformance/ \
+	-fmacro-prefix-map=$(OUT)/example/=cpp/example/
+# The specs' numbers a link reads, as make variables: the conformance guest's
+# stack (`CONFORMANCE_STACK_BYTES`) and a program's (`PROGRAM_STACK_BYTES`),
+# which XPUTE_PROGRAM checks as it boots.
+include conformance/guest.spec.mk xpute/guest/program.spec.mk
 # A module guest's link, as xpute-guest wasm `link` prints it for a Rust
-# one: its memory imported and its stack first; and its exports, the entry
-# the floor names, `run`, beside the guest's own boot.
-WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first \
-	-Wl,-z,stack-size=$(STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=run
+# one: its memory imported and its stack first.
+MODULE_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first
+# The conformance guest's: its stack, and its exports, the entry the floor
+# names, `run`, beside the guest's own boot.
+WASM_LINK := $(MODULE_LINK) -Wl,-z,stack-size=$(CONFORMANCE_STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=run
+# The example's: a program's stack; XPUTE_PROGRAM exports its `boot` and `run`.
+EXAMPLE_LINK := $(MODULE_LINK) -Wl,-z,stack-size=$(PROGRAM_STACK_BYTES)
 
 SOURCES := $(sort $(shell find xpute conformance -name '*.cpp'))
 # What only the tests build: their own files, the runner and the golden reader.
@@ -72,6 +79,9 @@ TEST_OBJECTS := $(SOURCES:%.cpp=$(OUT)/test/%.o)
 # its includes of the library made one of xpute.hpp.
 GUEST_OBJECTS := $(OUT)/guest/xpute.o $(OUT)/guest/conformance.o
 WASM_OBJECTS := $(OUT)/wasm/xpute.o $(OUT)/wasm/conformance.o
+# The example: the amalgamation, and its own source and table with their
+# includes of the library made one of xpute.hpp.
+EXAMPLE_OBJECTS := $(OUT)/wasm/xpute.o $(OUT)/wasm/example.o
 
 .PHONY: check test guest wasm wasi amalgamation
 
@@ -86,8 +96,8 @@ test: $(OUT)/test/xpute-test guest wasm
 guest: $(OUT)/$(LIBRARY)
 	@echo "cpp: cpp/target/$(LIBRARY)"
 
-wasm: wasi $(OUT)/xpute_conformance.wasm
-	@echo "cpp: cpp/target/xpute_conformance.wasm"
+wasm: wasi $(OUT)/xpute_conformance.wasm $(OUT)/xpute_example.wasm
+	@echo "cpp: cpp/target/xpute_conformance.wasm, xpute_example.wasm"
 
 amalgamation: $(AMALGAMATION)/xpute.hpp $(AMALGAMATION)/xpute.cpp
 	@echo "cpp: cpp/target/amalgamation/xpute.hpp, xpute.cpp"
@@ -104,6 +114,9 @@ $(OUT)/$(LIBRARY): $(GUEST_OBJECTS)
 $(OUT)/xpute_conformance.wasm: $(WASM_OBJECTS)
 	@"$(WASI_CXX)" $(WASM_LINK) $^ -o $@
 
+$(OUT)/xpute_example.wasm: $(EXAMPLE_OBJECTS)
+	@"$(WASI_CXX)" $(EXAMPLE_LINK) $^ -o $@
+
 # Each written whole under a name of its own and then moved, so a make that
 # reads it, or another writing it at once, never sees half of one.
 $(AMALGAMATION)/xpute.hpp: amalgamation.awk $(LIBRARY_HEADERS) Makefile
@@ -115,6 +128,10 @@ $(AMALGAMATION)/xpute.cpp: amalgamation.awk $(LIBRARY_HEADERS) $(LIBRARY_SOURCES
 	@awk -f amalgamation.awk -v part=cpp $(LIBRARY_HEADERS) $(LIBRARY_SOURCES) > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
 
 $(OUT)/conformance/guest.cpp: conformance/guest.cpp amalgamation.awk $(LIBRARY_HEADERS) Makefile
+	@mkdir -p $(@D)
+	@awk -f amalgamation.awk -v part=program $(LIBRARY_HEADERS) $< > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
+
+$(OUT)/example/%: example/% amalgamation.awk $(LIBRARY_HEADERS) Makefile
 	@mkdir -p $(@D)
 	@awk -f amalgamation.awk -v part=program $(LIBRARY_HEADERS) $< > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
 
@@ -145,4 +162,8 @@ $(OUT)/wasm/conformance.o: $(OUT)/conformance/guest.cpp $(AMALGAMATION)/xpute.hp
 	@mkdir -p $(@D)
 	@"$(WASI_CXX)" $(FLAGS) -iquote conformance -iquote $(AMALGAMATION) $(AMALGAMATION_MAP) --target=wasm32-wasip1 -MMD -MP -c $< -o $@
 
--include $(TEST_OBJECTS:.o=.d) $(GUEST_OBJECTS:.o=.d) $(WASM_OBJECTS:.o=.d)
+$(OUT)/wasm/example.o: $(OUT)/example/guest.cpp $(OUT)/example/cmd.spec.hpp $(AMALGAMATION)/xpute.hpp Makefile $(COMPILERS) | wasi
+	@mkdir -p $(@D)
+	@"$(WASI_CXX)" $(FLAGS) -iquote $(AMALGAMATION) $(AMALGAMATION_MAP) --target=wasm32-wasip1 -MMD -MP -c $< -o $@
+
+-include $(TEST_OBJECTS:.o=.d) $(GUEST_OBJECTS:.o=.d) $(WASM_OBJECTS:.o=.d) $(EXAMPLE_OBJECTS:.o=.d)

@@ -13,6 +13,7 @@
 // a toc that grows an entry is still read by a host that predates it.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
+import * as key from "./toc/key.spec.ts";
 
 /** "XPUT" as four bytes read little-endian: what tells a toc from memory nothing wrote. */
 export const MAGIC: u32 = 1414877272 as number;
@@ -26,14 +27,4 @@ export const HEAD: u32 = 4 as number;
 /** What an entry's value is. 3 to 5 are retired and given to nothing else: they were the
  * numbers of a host's scheduling policy, which the program now injects when the host
  * boots (the host's sched/policy.ts). */
-export const key = {
-  /** Where the submission ring's words begin. */
-  SQ: 1 as number,
-  /** Where the completion ring's words begin. */
-  CQ: 2 as number,
-  /** Where the hostcall stream's words begin (ipc/sys.json). */
-  SYS: 6 as number,
-  /** The bit every key a program numbers for itself carries: xpute gives none of
-   * them a meaning, and a host that is not the program's passes over them. */
-  PROGRAM: 2147483648 as number,
-} as const;
+export { key };

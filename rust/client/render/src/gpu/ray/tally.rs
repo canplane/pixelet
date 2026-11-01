@@ -4,38 +4,46 @@
 //! `ray_counts` setting asks (pxl-spec-core `tally`): where each pass
 //! counts cleared each counted frame, gathered into one array after the
 //! frame's dispatches where no mapping of it is out (`copied`), mapped back
-//! (`mapped`), and summed as it lands with what the host knew of the frame
-//! that counted it (`Frame`), since boot.
+//! (`mapped`), and handed on as it lands with what the host knew of the
+//! frame that counted it (`Frame`), by the renderer's number of that frame
+//! (`RayCounts`), as a GPU read is.
 
 use pxl_spec_core::{observed, raster, ray, tally};
 use xpute_guest::mem::off_of;
 
 use crate::gpu::api::{buffer_usage, bytes, word_bytes, Gpu, DONE};
-use xpute_guest::global::Global;
 
 const WORDS: usize = tally::WORDS as usize;
 
-/// What the profiler is handed (`Tally::sums`), summed since boot, by
-/// index: the frames whose counts landed (`FRAMES`); then an observer's
-/// each (`sum_at`): of them, those it cast in (`CASTS`), its pixels or
-/// slots in them (`RAYS`), and its lanes (pxl-spec-core `tally`, from
-/// `LANES_AT`).
-pub const FRAMES: usize = 0;
-pub const CASTS: usize = 0;
+/// A counted frame's counts, by index, an observer's each (`count_at`):
+/// whether it cast, 1 or 0 (`CAST`), its pixels or slots (`RAYS`), and its
+/// lanes (pxl-spec-core `tally`, from `LANES_AT`).
+pub const CAST: usize = 0;
 pub const RAYS: usize = 1;
 pub const LANES_AT: usize = 2;
-const OBSERVER_SUMS: usize = LANES_AT + tally::LANES as usize;
-pub const RAY_SUMS: usize = 1 + tally::OBSERVERS as usize * OBSERVER_SUMS;
+const OBSERVER_COUNTS: usize = LANES_AT + tally::LANES as usize;
+pub const RAY_COUNTS: usize = tally::OBSERVERS as usize * OBSERVER_COUNTS;
 
-/// Where `observer`'s sum `k` is.
-pub const fn sum_at(observer: u32, k: usize) -> usize {
-    1 + observer as usize * OBSERVER_SUMS + k
+/// Where `observer`'s count `k` is.
+pub const fn count_at(observer: u32, k: usize) -> usize {
+    observer as usize * OBSERVER_COUNTS + k
 }
 
-/// What the host knew of a counted frame, an observer's each: whether it
-/// cast, and its pixels or slots.
+/// One frame's counts as they land, a frame or two after it: the renderer's
+/// number of it (renderer.rs `FrameStat::frame`) and its counts
+/// (`count_at`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RayCounts {
+    pub frame: f64,
+    pub counts: [f64; RAY_COUNTS],
+}
+
+/// What the host knew of a counted frame: the renderer's number it will
+/// take (renderer.rs `FrameStat::frame`), and an observer's each, whether it
+/// cast and its pixels or slots.
 #[derive(Clone, Copy, Default)]
 pub(super) struct Frame {
+    pub number: f64,
     pub casts: [bool; tally::OBSERVERS as usize],
     pub rays: [u32; tally::OBSERVERS as usize],
 }
@@ -49,8 +57,9 @@ pub(super) struct Counted {
     pub boxes: [u32; tally::OBSERVERS as usize],
 }
 
-/// The array and its readback; whether this frame counts (`on`) and what
-/// the host knew of the frame copied (`copied_frame`).
+/// The array and its readback; whether this frame counts (`on`), what
+/// the host knew of the frame copied (`copied_frame`), and the counts that
+/// landed, until taken (`take`).
 pub(super) struct Tally {
     counts: u32,
     read: u32,
@@ -61,11 +70,8 @@ pub(super) struct Tally {
     mapping: Box<u32>,
     copied: bool,
     mapped: bool,
+    counted: Option<RayCounts>,
 }
-
-/// The sums since boot (`Tally::sums`): beside the tally, so a lost device's
-/// next cast sums on.
-static SUMS: Global<[f64; RAY_SUMS]> = Global::new();
 
 impl Tally {
     /// Its buffers, made with the cast's: a few words.
@@ -86,6 +92,7 @@ impl Tally {
             mapping: Box::new(DONE),
             copied: false,
             mapped: false,
+            counted: None,
         }
     }
 
@@ -148,24 +155,27 @@ impl Tally {
     }
 
     /// The counts copied last frame mapped back, and those that landed
-    /// summed with what the host knew of their frame: after the frame that
-    /// copied them was submitted.
+    /// kept with what the host knew of their frame, until taken: after the
+    /// frame that copied them was submitted.
     pub(super) fn back(&mut self, g: &Gpu) {
         if self.mapped && *self.mapping & DONE != 0 {
             let (l, f) = (&self.landed, self.copied_frame);
-            let s = SUMS.get(|| [0.0; RAY_SUMS]);
-            s[FRAMES] += 1.0;
+            let mut counts = [0.0; RAY_COUNTS];
             for o in 0..tally::OBSERVERS {
                 if !f.casts[o as usize] {
                     continue;
                 }
-                s[sum_at(o, CASTS)] += 1.0;
-                s[sum_at(o, RAYS)] += f64::from(f.rays[o as usize]);
+                counts[count_at(o, CAST)] = 1.0;
+                counts[count_at(o, RAYS)] = f64::from(f.rays[o as usize]);
                 for lane in 0..tally::LANES {
                     let c = f64::from(l[tally::at(o, lane) as usize]);
-                    s[sum_at(o, LANES_AT + lane as usize)] += c;
+                    counts[count_at(o, LANES_AT + lane as usize)] = c;
                 }
             }
+            self.counted = Some(RayCounts {
+                frame: f.number,
+                counts,
+            });
             self.mapped = false;
         }
         if self.copied && *self.mapping & DONE != 0 {
@@ -175,9 +185,9 @@ impl Tally {
         }
     }
 
-    /// Its sums since boot (`RAY_SUMS`).
-    pub(super) fn sums() -> [f64; RAY_SUMS] {
-        *SUMS.get(|| [0.0; RAY_SUMS])
+    /// The counts that landed since last taken.
+    pub(super) fn take(&mut self) -> Option<RayCounts> {
+        self.counted.take()
     }
 
     /// The frame its copy was encoded in was dropped.

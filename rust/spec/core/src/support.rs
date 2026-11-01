@@ -2,16 +2,16 @@
 
 //! gpu-portable: where something stands, asked of the world's one query
 //! (pxl-kernel domain/query/support.rs, a walker's support): a column's
-//! footing, the first cell a ray down it from the world's top cannot see
-//! through at a cell zoom, its top as drawn (`footing`); and the query's
+//! column surface, the first cell a ray down it from the world's top cannot see
+//! through at a cell zoom, its top as drawn (`column_surface`); and the query's
 //! cursor (ARCHITECTURE.md "The query, the only seam"): a descent's line
-//! (`Line`), a footing's or one straight down to a node (`line`), and a
+//! (`Line`), a column_surface's or one straight down to a node (`line`), and a
 //! asset about it asked from the deepest node of that line holding it and
 //! stepped down by what each parent hands its child, never again from the
 //! top (`asset`). The CPU's and a GPU's alike, each over its own reading of
 //! the world (`cast::Query`).
 
-use crate::cast::{self, Detail, End, Keep, Met, Node, Query, Ray, Until, DEPTH};
+use crate::cast::{self, Detail, End, Keep, Node, Query, Ray, Trace, Until, DEPTH};
 use crate::{Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS};
 
 /// A descent's line: the node it ended at, by its index at its zoom, what
@@ -24,12 +24,12 @@ pub struct Line<A> {
     stack: [A; DEPTH],
 }
 
-/// A column's footing: its top as drawn at its cell zoom (`cast::top`),
-/// how the ray down ended — met (`End::Stop`), nothing it cannot see
-/// through (`On`) or a node not held (`Lacks`) — and the line it
+/// A column's surface: its top as drawn at its cell zoom (`cast::top`),
+/// how the ray down ended — met (`End::Hit`), nothing it cannot see
+/// through (`Miss`) or a node not held (`Lacks`) — and the line it
 /// descended.
 #[derive(Clone, Copy)]
-pub struct Footing<A> {
+pub struct ColumnSurface<A> {
     pub top: (i32, f32),
     pub ends: End,
     pub line: Line<A>,
@@ -50,23 +50,23 @@ impl<A: Copy> Line<A> {
     }
 }
 
-impl<A: Copy> Keep<A> for Footing<A> {
-    fn keep(&mut self, met: &Met<A>, stack: &[A; DEPTH]) {
-        self.line = Line::kept(self.origin, &met.stop.node, met.stop.at, stack);
+impl<A: Copy> Keep<A> for ColumnSurface<A> {
+    fn keep(&mut self, met: &Trace<A>, stack: &[A; DEPTH]) {
+        self.line = Line::kept(self.origin, &met.hit.node, met.hit.at, stack);
     }
 }
 
-/// The footing down column `g` at `cell`: the first cell that fills on the
+/// The column surface down column `g` at `cell`: the first cell that fills on the
 /// world's one ray straight down the column's middle, at the cells of `cell`
 /// alone, from the top of the world (`HEIGHT_BITS`), whichever layer holds
 /// it; its line kept for the assets asked about it (`asset`).
-pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
+pub fn column_surface<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ColumnSurface<Q::At> {
     let (o, ray, detail) = down(cell, g);
     let at = Node::ROOT.idx(o);
     let root = q.root(at);
-    let mut f = Footing {
+    let mut f = ColumnSurface {
         top: (0, 0.0),
-        ends: End::On,
+        ends: End::Miss,
         line: Line {
             at,
             zoom: 0,
@@ -77,7 +77,7 @@ pub fn footing<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> Footing<Q::At> {
     };
     let met = cast::rooted(q, o, &ray, detail, Until::Opaque, &mut f, &mut ());
     f.ends = met.ends;
-    f.top = cast::top(o, &met.stop.node, met.stop.asset[0]);
+    f.top = cast::top(o, &met.hit.node, met.hit.asset[0]);
     f
 }
 
@@ -115,15 +115,15 @@ fn same(a: [i32; 3], b: [i32; 3]) -> bool {
 /// A line as a reader of the assets about its node reads it (`asset`), in
 /// place: its node, by its index at its zoom, and what was handed it and
 /// each node over it, by zoom. A descent's own (`Line`), or one a reader
-/// holds elsewhere, read where it lies (`Off`; pxl-shader a beam ray's).
-pub trait Lineage<A: Copy> {
+/// holds elsewhere, read where it lies (`JoinedLine`; pxl-shader a beam ray's).
+pub trait Ancestors<A: Copy> {
     fn at(&self) -> [i32; 3];
     fn zoom(&self) -> Zoom;
     /// What was handed its node over its own at `z`, its own at its zoom.
-    fn handed(&self, z: Zoom) -> A;
+    fn inherited(&self, z: Zoom) -> A;
 }
 
-impl<A: Copy> Lineage<A> for Line<A> {
+impl<A: Copy> Ancestors<A> for Line<A> {
     fn at(&self) -> [i32; 3] {
         self.at
     }
@@ -132,7 +132,7 @@ impl<A: Copy> Lineage<A> for Line<A> {
         self.zoom
     }
 
-    fn handed(&self, z: Zoom) -> A {
+    fn inherited(&self, z: Zoom) -> A {
         if z == self.zoom {
             self.live
         } else {
@@ -141,44 +141,44 @@ impl<A: Copy> Lineage<A> for Line<A> {
     }
 }
 
-/// A line down to a node off another (`off`): its own descent from `low`,
+/// A line down to a node off another (`joined`): its own descent from `low`,
 /// the zoom of the deepest node of the other over it, down.
-pub struct Below<A> {
+pub struct SubLine<A> {
     low: Zoom,
     line: Line<A>,
 }
 
 /// A line down to a node read with the line it was descended off
-/// (`Below::off`): over `low`, the other's, read where it lies; from `low`
+/// (`SubLine::joined`): over `low`, the other's, read where it lies; from `low`
 /// down, its own descent's. [rust-gpu] Two references and no array of its
 /// own: naga refuses a pointer in a value a shader keeps whole, as one with
 /// an array is kept.
-pub struct Off<'a, L, A> {
+pub struct JoinedLine<'a, L, A> {
     base: &'a L,
-    below: &'a Below<A>,
+    sub: &'a SubLine<A>,
 }
 
-impl<A: Copy> Below<A> {
+impl<A: Copy> SubLine<A> {
     /// It read with `base`, the line it was descended off.
-    pub fn off<'a, L: Lineage<A>>(&'a self, base: &'a L) -> Off<'a, L, A> {
-        Off { base, below: self }
+    pub fn joined<'a, L: Ancestors<A>>(&'a self, base: &'a L) -> JoinedLine<'a, L, A> {
+        JoinedLine { base, sub: self }
     }
 }
 
-impl<A: Copy, L: Lineage<A>> Lineage<A> for Off<'_, L, A> {
+impl<A: Copy, L: Ancestors<A>> Ancestors<A> for JoinedLine<'_, L, A> {
     fn at(&self) -> [i32; 3] {
-        self.below.line.at
+        self.sub.line.at
     }
 
     fn zoom(&self) -> Zoom {
-        self.below.line.zoom
+        self.sub.line.zoom
     }
 
-    fn handed(&self, z: Zoom) -> A {
-        if z < self.below.low {
-            self.base.handed(z)
+    fn inherited(&self, z: Zoom) -> A {
+        if z < self.sub.low {
+            self.base.inherited(z)
         } else {
-            self.below.line.handed(z)
+            self.sub.line.inherited(z)
         }
     }
 }
@@ -186,7 +186,7 @@ impl<A: Copy, L: Lineage<A>> Lineage<A> for Off<'_, L, A> {
 /// The deepest zoom at which the line `l` and node `c` of `zoom` share a
 /// node, no finer than either, and whether they share one at all: none
 /// where they lie in two roots.
-fn shared<A: Copy>(l: &impl Lineage<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
+fn shared<A: Copy>(l: &impl Ancestors<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
     let (line, lz) = (l.at(), l.zoom());
     let mut z = if zoom < lz { zoom } else { lz };
     while z > 0 && !same(over(line, lz, z), over(c, zoom, z)) {
@@ -230,25 +230,25 @@ pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
 }
 
 /// The line down to node `c` of `zoom` off the line `base`, its own part
-/// (`Below`, read with `base` by `Below::off`): from the deepest node of
+/// (`SubLine`, read with `base` by `SubLine::joined`): from the deepest node of
 /// `base` over it, each node under it handed down by its parent; from its
 /// own root where no node of `base` is over it. What `line` asks from the
 /// top, asked from where `base` already holds it.
-pub fn off<Q: Query>(
+pub fn sub_line<Q: Query>(
     q: &mut Q,
-    base: &impl Lineage<Q::At>,
+    base: &impl Ancestors<Q::At>,
     zoom: Zoom,
     c: [i32; 3],
-) -> Below<Q::At> {
+) -> SubLine<Q::At> {
     let (z, held) = shared(base, zoom, c);
     let (from, low) = if held {
-        (base.handed(z), z)
+        (base.inherited(z), z)
     } else {
         (q.root(over(c, zoom, 0)), 0)
     };
     let mut stack = [from; DEPTH];
     let live = descend(q, from, low, zoom, c, &mut stack);
-    Below {
+    SubLine {
         low,
         line: Line {
             at: c,
@@ -264,10 +264,10 @@ pub fn off<Q: Query>(
 /// from the deepest node of the line holding it, each node under that
 /// handed down by its parent (`Query::child`), and from its own root where
 /// no node of the line holds it.
-pub fn asset<Q: Query>(q: &mut Q, l: &impl Lineage<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
+pub fn asset<Q: Query>(q: &mut Q, l: &impl Ancestors<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
     let (mut z, held) = shared(l, zoom, c);
     let mut at = if held {
-        l.handed(z)
+        l.inherited(z)
     } else {
         z = 0;
         q.root(over(c, zoom, 0))
@@ -346,13 +346,13 @@ mod tests {
         }
     }
 
-    /// The footing stands on the step's top, and every asset about it,
+    /// The column surface stands on the step's top, and every asset about it,
     /// asked off its line, is what the world holds there; one in another
     /// root is asked from that root.
     #[test]
     fn footing_asset_is_worlds() {
-        let f = footing(&mut Step, UNIT_ZOOM, [6, 3]);
-        assert_eq!(f.ends, End::Stop);
+        let f = column_surface(&mut Step, UNIT_ZOOM, [6, 3]);
+        assert_eq!(f.ends, End::Hit);
         assert_eq!(f.top.0, -1, "the top of the cell under z = 0");
         for x in 2..10 {
             for y in 0..7 {
@@ -373,8 +373,8 @@ mod tests {
     struct Kept(Option<Line<At>>, [i32; 3]);
 
     impl Keep<At> for Kept {
-        fn keep(&mut self, met: &Met<At>, stack: &[At; DEPTH]) {
-            self.0 = Some(Line::kept(self.1, &met.stop.node, met.stop.at, stack));
+        fn keep(&mut self, met: &Trace<At>, stack: &[At; DEPTH]) {
+            self.0 = Some(Line::kept(self.1, &met.hit.node, met.hit.at, stack));
         }
     }
 
@@ -422,7 +422,7 @@ mod tests {
             &mut first,
             &mut (),
         );
-        assert_eq!(met.ends, End::Stop);
+        assert_eq!(met.ends, End::Hit);
         let first = first.0.unwrap();
         same(&first, &line(&mut Step, first.zoom, first.at));
         for d in [
@@ -437,8 +437,8 @@ mod tests {
         ] {
             for share in [0.2, 0.5, 0.9] {
                 let ray = Ray::new([d[0], d[1], -1.0], 64.0);
-                let t = met.stop.t * share;
-                let (h, held) = met.stop.node.over(cast::point_at(o, &ray, t));
+                let t = met.hit.t * share;
+                let (h, held) = met.hit.node.over(cast::point_at(o, &ray, t));
                 let h = cast::holding(o, &ray, h, t);
                 let from = if held {
                     (h, cast::Over::over(&Along(&first), h.zoom), t)
@@ -457,7 +457,7 @@ mod tests {
                     &mut kept,
                     &mut (),
                 );
-                assert_eq!(resumed.ends, End::Stop, "{d:?} {share}");
+                assert_eq!(resumed.ends, End::Hit, "{d:?} {share}");
                 let kept = kept.0.unwrap();
                 let walked = line(&mut Step, kept.zoom, kept.at);
                 same(&kept, &walked);

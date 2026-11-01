@@ -64,13 +64,13 @@ pub struct TileCache<L: Base> {
     /// The tile each slot holds: the slots' side of `Held::slot`, one
     /// association read both ways — a tile's slot by every reader of a
     /// tile (`slot`, `is_slotted`; domain/layer/earth.rs `earth_window`,
-    /// domain/layer/terrain/tile.rs `kept_for`, domain/layer/terrain/window.rs `voids`),
+    /// domain/layer/terrain/tile.rs `pending_for`, domain/layer/terrain/clipmap.rs `voids`),
     /// a slot's tile by the GPU's hand-offs, which walk the slots
     /// (domain/scene/cast.rs `upload`, domain/layer/earth.rs `earth_upload`). Written only
     /// where a slot is taken or given up (`put`, `remove`).
     in_slot: Vec<Option<Tile>>,
     free: Vec<u32>,
-    /// Kept so `ask` allocates nothing.
+    /// Uploads so `ask` allocates nothing.
     going: Vec<Tile>,
     /// Tiles whose answer moved since `take_moved`: held or let go, answered
     /// from above or no longer. A tile's content is fixed by its identity, so
@@ -81,6 +81,8 @@ pub struct TileCache<L: Base> {
     /// tile (`moved_at`), which holds nothing.
     revision: u32,
     refused: u32,
+    /// Tiles taken in since `take_landed`, the profiler's.
+    landed: u32,
 }
 
 /// What a layer's tile cache holds at once, from what it asks for. A layer
@@ -150,6 +152,7 @@ impl<L: Base> Default for TileCache<L> {
             moved: Vec::new(),
             revision: 0,
             refused: 0,
+            landed: 0,
         }
     }
 }
@@ -396,6 +399,12 @@ impl<L: Base> TileCache<L> {
         core::mem::take(&mut self.refused)
     }
 
+    /// The tiles taken in since the last call, in a slot or as an empty
+    /// tile, the profiler's (perf/report.rs `perf_frame`).
+    pub fn take_landed(&mut self) -> u32 {
+        core::mem::take(&mut self.landed)
+    }
+
     /// The slot is emptied first, so a body that fails to decode leaves it free
     /// rather than another tile reading half-overwritten bytes.
     /// `victim` picks which slot goes when one must, among the tiles of the
@@ -490,6 +499,7 @@ impl<L: Base> TileCache<L> {
         }
         self.moved.push(p);
         self.revision = self.revision.wrapping_add(1);
+        self.landed = self.landed.wrapping_add(1);
     }
 
     /// A slotted tile held is fetched once more, read meanwhile: what a

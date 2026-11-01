@@ -9,13 +9,13 @@
 import { SETTING } from "@/shell/setting/schema.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { Accordion } from "./accordion.tsx";
-import { ProfilerView } from "./profiler/gauge.tsx";
-import { useProfilerView } from "./profiler/poll.ts";
+import { PerfView } from "./perf/gauge.tsx";
+import { usePerfView } from "./perf/poll.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 export function ViewPanel() {
   const show = useKernel((s) => s.settings[SETTING.view.key] === 1);
-  const v = useProfilerView(show);
+  const v = usePerfView(show);
 
   if (!show) return null;
   const note =
@@ -24,7 +24,7 @@ export function ViewPanel() {
       : `${fixed(v.pivot_lat, 5)}°, ${fixed(v.pivot_lon, 5)}°`;
   return (
     <Accordion name="view" title="View" note={note}>
-      {v !== null && <ProfilerView v={v} />}
+      {v !== null && <PerfView v={v} />}
     </Accordion>
   );
 }

@@ -1,7 +1,7 @@
 // pxl-geo-bake/terrain/pool.rs
 
 //! Whether a set's ways' trees fit the client's pool wherever the eye is
-//! (pxl-spec-core `way::tree::POOL_FAMILIES`): a fact of the set, not of a
+//! (pxl-spec-core `way::tree::POOL_CHILD_GROUPS`): a fact of the set, not of a
 //! tile, as a window is a fixed grid of bricks about the eye laid at any
 //! brick, across tiles. Each brick's tree is built as a GPU builds it
 //! (pxl-spec `terrain::fill_fit`), once, as its tile is made, and what it
@@ -16,8 +16,8 @@ use pxl_spec::bake::tile::terrain::{self, Fit, TerrainTile};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::way::tree::POOL_FAMILIES;
-use pxl_spec_core::window::{ACROSS, BRICK};
+use pxl_spec_core::clipmap::{ACROSS, BRICK};
+use pxl_spec_core::way::tree::POOL_CHILD_GROUPS;
 
 use crate::pyramid::Staged;
 use crate::terrain::unfit;
@@ -25,7 +25,7 @@ use crate::terrain::unfit;
 /// The bricks a tile is a side.
 const SIDE: u32 = TILE_CELLS / BRICK;
 
-/// A zoom's bricks, each the families its tree holds, by its index at its
+/// A zoom's bricks, each the child groups its tree holds, by its index at its
 /// cells; and the most a brick takes before its fold.
 #[derive(Default)]
 struct Held {
@@ -67,7 +67,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, Str
         .map(|(&cell, bricks)| (cell, most(bricks)))
         .collect();
     let needs = terrain::pool_needs(|cell| worst.get(&cell).map_or(0, |w| w.1), all.taken);
-    if needs <= u64::from(POOL_FAMILIES) {
+    if needs <= u64::from(POOL_CHILD_GROUPS) {
         all.kept.sort_unstable_by_key(|(p, _)| *p);
         return Ok(all.kept);
     }
@@ -92,7 +92,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, Str
     under.sort_unstable();
     under.dedup();
     Err(format!(
-        "its ways' trees need {needs} of the pool's {POOL_FAMILIES} families: the window at cells {cell} from brick ({}, {}) holds {n}, over tiles {}, and a brick takes {} before its fold",
+        "its ways' trees need {needs} of the pool's {POOL_CHILD_GROUPS} child groups: the window at cells {cell} from brick ({}, {}) holds {n}, over tiles {}, and a brick takes {} before its fold",
         first[0],
         first[1],
         under.join(" "),
@@ -100,7 +100,7 @@ pub fn fits(set: &Staged<'_>, workers: usize) -> Result<Vec<(Tile, String)>, Str
     ))
 }
 
-/// The bricks of `tiles` the set holds, each its tree's families: as each
+/// The bricks of `tiles` the set holds, each its tree's child groups: as each
 /// tile kept them, or made again from the tile where the set as it is
 /// keeps nothing (`base` none, a set baked before it did).
 fn held(
@@ -140,7 +140,7 @@ fn held(
 }
 
 /// What a tile takes as the set keeps it beside the tile: the most a brick
-/// takes, then each brick with ways as its index and the families it holds.
+/// takes, then each brick with ways as its index and the child groups it holds.
 pub fn line(fit: &Fit) -> String {
     let mut out = fit.taken.to_string();
     for (k, held) in &fit.held {

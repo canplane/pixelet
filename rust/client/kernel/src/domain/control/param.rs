@@ -48,7 +48,7 @@ pub const ORBIT_POLAR_EPS: f64 = 0.0001;
 pub const ORBIT_AZIMUTH_EPS: f64 = 0.0001;
 /// Testing only where a step lands lets the camera tunnel, since the orbit's
 /// step damps through everything between.
-pub const GATE_STEP_SAMPLES: u32 = 16;
+pub const COLLISION_STEP_SAMPLES: u32 = 16;
 /// Steepening moves the eye and so the ground under it; two passes settle it,
 /// the remainder being smaller than a cell.
 pub const CLIMB_PASSES: u32 = 2;

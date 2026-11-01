@@ -35,8 +35,8 @@ pub const MODEL_VERTEX_WORDS: u32 = 16;
 pub const PIPELINE_SKINNED: u32 = 3;
 /// Zone: (zone upload handle, instance count, 0, uniform, pipeline). Beacon:
 /// (0, night, 0, uniform, pipeline), uniform float 4 its spin.
-pub const PIPELINE_PUCK_ZONE: u32 = 4;
-pub const PIPELINE_PUCK_BEACON: u32 = 5;
+pub const PIPELINE_LOCATION_ZONE: u32 = 4;
+pub const PIPELINE_LOCATION_BEACON: u32 = 5;
 /// (upload handle, count, 0, uniform, pipeline).
 pub const PIPELINE_MARKER: u32 = 6;
 /// Line segments: handle, line vertex count, face vertex count.
@@ -47,15 +47,15 @@ pub const PIPELINE_IMPOSTOR: u32 = 8;
 /// pipeline). Listed, it also tints the rays' cells (`frame_gizmo`).
 pub const PIPELINE_CAMERA_GRID: u32 = 9;
 
-/// Every pipeline a draw record names, in the order a frame's census counts
-/// them (pxl-kernel profiler.json CENSUS_TAGS): what the list draws is these.
+/// Every pipeline a draw record names, in the order a frame's draw stats count
+/// them (gpu/renderer.rs `FrameStat::draws`): what the list draws is these.
 pub const DRAW_PIPELINES: [u32; 10] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_DECOR,
     PIPELINE_SKINNED,
-    PIPELINE_PUCK_ZONE,
-    PIPELINE_PUCK_BEACON,
+    PIPELINE_LOCATION_ZONE,
+    PIPELINE_LOCATION_BEACON,
     PIPELINE_MARKER,
     PIPELINE_DEBUG,
     PIPELINE_IMPOSTOR,
@@ -63,10 +63,10 @@ pub const DRAW_PIPELINES: [u32; 10] = [
 ];
 
 /// A draw record's (draws, triangles), by its pipeline's place in `DRAW_PIPELINES`.
-pub type DrawCensus = [[f64; 2]; DRAW_PIPELINES.len()];
+pub type DrawStats = [[f64; 2]; DRAW_PIPELINES.len()];
 
 /// `pipeline`'s place in `DRAW_PIPELINES`; a draw naming another is a bug.
-pub fn census_slot(pipeline: u32) -> usize {
+pub fn stats_slot(pipeline: u32) -> usize {
     use xpute_kit::status::bug::OrBug;
     DRAW_PIPELINES
         .iter()
@@ -378,13 +378,13 @@ impl DrawList {
 /// A heap block the renderer mirrors, written whole each time and grown to the
 /// next power of two so a small wobble in count does not reallocate.
 #[derive(Default)]
-pub struct Held {
+pub struct MirroredBlock {
     pub at: usize,
     pub bytes: u32,
     pub handle: u32,
 }
 
-impl Held {
+impl MirroredBlock {
     /// False when the heap refused; the block is then gone.
     pub fn write(&mut self, draw: &mut DrawList, lane: &[u8]) -> bool {
         let need = (lane.len() as u32).max(4);

@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/screen_tiles.wgsl
 
 // The tiles as a pass over the whole screen or map draws them (gpu/tiles.rs
-// `Resolve::mark`): a quad each, drawn instanced, an unclaimed one collapsed, so the
+// `Tiles`): a quad each, drawn instanced, an unclaimed one collapsed, so the
 // pass touches the claimed tiles alone; or a thread each, an unclaimed one
 // returning at once. A tile is claimed where it changed
 // this frame or has not yet run through the jitter's sequence since, or every
@@ -22,9 +22,6 @@ struct Tiles {
 // (gpu/tiles.rs `Tiles::mark`).
 @group(0) @binding(30) var<storage, read> changed_at: array<u32>;
 @group(0) @binding(31) var<uniform> tiles: Tiles;
-// The frame's marks, each its tiles from the first across and down to past
-// the last, one of every tile where the target is drawn whole (`Tiles::marks`).
-@group(0) @binding(32) var<storage, read> marks: array<vec4u>;
 // The tiles the frame's marks cover, from the first across and down to past
 // the last, as the GPU leaves them once the frame's marks are made
 // (`Tiles::marks_box`, tile_mark.wgsl).
@@ -67,15 +64,6 @@ fn tile_clip(vi: u32, ii: u32) -> vec4f {
   let c = tile_corner(vi);
   let px = min(vec2f((t + c) * tile_side()), tiles.size.xy) + (vec2f(c) * 2.0 - 1.0) * tiles.size.z;
   return select(vec4f(2.0, 2.0, 0.0, 1.0), tile_px_clip(px), tile_claimed(ii));
-}
-
-// Corner `vi` of mark `ii`'s quad, over its tiles, which the frame claims
-// exactly, in clip units.
-fn mark_clip(vi: u32, ii: u32) -> vec4f {
-  let m = marks[ii];
-  let c = tile_corner(vi);
-  let t = select(m.xy, m.zw, c == vec2u(1u));
-  return tile_px_clip(min(vec2f(t * tile_side()), tiles.size.xy));
 }
 
 // Corner `vi` of the quad of tile `ii` of the marks' box, a row after

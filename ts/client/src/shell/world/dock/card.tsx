@@ -20,7 +20,7 @@ const PEEK_PX = 10;
 /** The dock stands tall enough for the card behind to peek out under the front one. */
 export const DOCK_HEIGHT = chrome.control + PEEK_PX;
 
-/** The bar's swipe takes the card's drags; this only keeps a touch on it off the map. */
+/** The bar's swipe takes the card's drags; this only keeps a touch on it off the world. */
 const BAR_TOUCH = {};
 
 /** The dock's cards, one a mode. */
