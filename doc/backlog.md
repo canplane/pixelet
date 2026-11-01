@@ -56,13 +56,6 @@ Nothing now.
   driver offers (`Device.depth32float_stencil8`), taken with the device
   builds.
 
-## P3
-
-- **The claim rule in four places.** Whether a tile is claimed, from its
-  word, `now` and `claimed_for`: pxl-shader cast.rs `screen::claimed`,
-  screen_tiles.wgsl `tile_claimed`, screen_reach.wgsl inline, and tiles.rs's
-  `claiming`; one owner, the rest derived from it (the facts skill).
-
 ## Parked, with the reason on file
 
 - **What each reuse buys over a pure ray a pixel.** Each switched off alone at
