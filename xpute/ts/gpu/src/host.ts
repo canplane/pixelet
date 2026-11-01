@@ -6,12 +6,6 @@
  * slot, each enumeration's number turned into WebGPU's string by its place.
  * It is told the guest's memory, the device and the surfaces the program
  * binds, and nothing of what the guest draws.
- *
- * A pipeline is made with WebGPU's async call, so the page runs while the
- * browser compiles it, and its handle names it at once: a record that sets
- * one still being made, and every record after it, this turn's and later
- * turns', are copied out with the bytes they read of the guest's memory and
- * run in order once it is made. The guest sees the same records run, later.
  */
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";
@@ -68,19 +62,7 @@ type GpuObject =
   | GPUQuerySet
   | GPUCommandEncoder
   | GPURenderPassEncoder
-  | GPUComputePassEncoder
-  | Making;
-
-/** A pipeline the device is still making, at its slot until it is made. */
-class Making {}
-
-/** A record held behind a pipeline being made: its words, and the bytes of
- * the guest's memory it reads, copied as the turn left them. */
-type HeldRecord = {
-  readonly code: u32;
-  readonly w: U32Array;
-  readonly bytes: Uint8Array<ArrayBuffer> | undefined;
-};
+  | GPUComputePassEncoder;
 
 /** A view with its format, which a pass's depth attachment asks of it. */
 type View = {
@@ -203,10 +185,6 @@ export class GpuHost {
   private readonly seen = new Map<u32, u32>();
   /** Where the guest asked the device's block written, for its status. */
   private block: { address: u32; words: u32 } | undefined;
-  /** The records waiting on a pipeline being made, in order. */
-  private readonly held: HeldRecord[] = [];
-  /** A held record's bytes of the guest's memory, while it runs. */
-  private held_bytes: Uint8Array<ArrayBuffer> | undefined;
 
   private readonly device: GPUDevice;
   private readonly memory: () => ArrayBufferLike;
@@ -257,7 +235,6 @@ export class GpuHost {
   /** The device went: every object with it, and the guest told in its block. */
   private on_lost(): void {
     this.objects.length = 0;
-    this.held.length = 0;
     if (this.block) {
       new Uint32Array(this.memory(), this.block.address, this.block.words)[
         this.block.words - 1
@@ -268,78 +245,11 @@ export class GpuHost {
   /** Runs the stream at `at`, `head` words of head, as the turn left it. */
   run(at: u32, head: u32): void {
     let r: Words | undefined;
-    each_record(this.memory(), at, head, (code, w, a, n) => {
-      if (this.held.length !== 0 || this.waits(code, w, a)) {
-        this.held.push(this.hold(code, w, a, n));
-        return;
-      }
+    each_record(this.memory(), at, head, (code, w, a) => {
       r ??= new Words(w);
       r.at = a;
       this.record(code, r);
     });
-  }
-
-  /** Whether the record at `a` sets a pipeline still being made. */
-  private waits(code: u32, w: U32Array, a: u32): boolean {
-    return (
-      code === op.SET_PIPELINE &&
-      this.objects[handle_slot(w[a + 1])] instanceof Making
-    );
-  }
-
-  /** The record at `a` copied out, with the bytes of the guest's memory it
-   * reads where it names them by address. */
-  private hold(code: u32, w: U32Array, a: u32, n: u32): HeldRecord {
-    const words = w.slice(a, a + n);
-    const at = (k: u32) => this.bytesAt(words[k], words[k + 1]).slice();
-    const bytes =
-      code === op.WRITE_BUFFER_AT
-        ? at(2)
-        : code === op.WRITE_TEXTURE_AT
-          ? at(11)
-          : code === op.COPY_EXTERNAL_IMAGE
-            ? at(8)
-            : undefined;
-    return { code, w: words, bytes };
-  }
-
-  /** The held records run in order, up to one that sets a pipeline still
-   * being made. */
-  private drain(): void {
-    let k = 0;
-    try {
-      for (; k < this.held.length; k++) {
-        const h = this.held[k];
-        if (this.waits(h.code, h.w, 0)) break;
-        this.held_bytes = h.bytes;
-        this.record(h.code, new Words(h.w));
-      }
-    } finally {
-      this.held_bytes = undefined;
-      this.held.splice(0, k);
-    }
-  }
-
-  /** `id`'s pipeline put at its slot once made, and what waited on it run.
-   * Where the async call refuses it, `again` makes it as the sync call did,
-   * so its error and the invalid pipeline are what they were. One let go,
-   * or its device lost, while being made is dropped. */
-  private make<P extends GPURenderPipeline | GPUComputePipeline>(
-    id: u32,
-    made: Promise<P>,
-    again: () => P,
-  ): void {
-    const making = new Making();
-    this.put(id, making);
-    const land = (p: () => P) => {
-      if (this.get(id) !== making) return;
-      this.put(id, p());
-      this.drain();
-    };
-    made.then(
-      (p) => land(() => p),
-      () => land(again),
-    );
   }
 
   private put(id: u32, o: GpuObject): void {
@@ -356,15 +266,6 @@ export class GpuHost {
 
   private bytesAt(address: u32, size: u32): Uint8Array {
     return new Uint8Array(this.memory(), address, size);
-  }
-
-  /** Where a record's bytes at `address` lie: copied out with it where it
-   * was held, else in the guest's memory. */
-  private source(address: u32): [ArrayBuffer, number] {
-    const b = this.held_bytes;
-    return b
-      ? [b.buffer, b.byteOffset]
-      : [this.memory() as ArrayBuffer, address];
   }
 
   /** `ticket | DONE` at `word`, where the ticket still stands, and a turn asked to read it. */
@@ -711,24 +612,26 @@ export class GpuHost {
             return { format, blend, writeMask: r.u() };
           },
         );
-        const desc: GPURenderPipelineDescriptor = {
-          layout:
-            layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
-          vertex,
-          primitive,
-          depthStencil: depthFormat === undefined ? undefined : depth,
-          multisample,
-          fragment:
-            module === undefined
-              ? undefined
-              : {
-                  module: this.get<GPUShaderModule>(module),
-                  entryPoint,
-                  targets,
-                },
-        };
-        this.make(id, d.createRenderPipelineAsync(desc), () =>
-          d.createRenderPipeline(desc),
+        this.put(
+          id,
+          d.createRenderPipeline({
+            layout:
+              layout === undefined
+                ? "auto"
+                : this.get<GPUPipelineLayout>(layout),
+            vertex,
+            primitive,
+            depthStencil: depthFormat === undefined ? undefined : depth,
+            multisample,
+            fragment:
+              module === undefined
+                ? undefined
+                : {
+                    module: this.get<GPUShaderModule>(module),
+                    entryPoint,
+                    targets,
+                  },
+          }),
         );
         return;
       }
@@ -736,13 +639,15 @@ export class GpuHost {
         const id = r.u();
         const layout = r.opt();
         const module = this.get<GPUShaderModule>(r.u());
-        const desc: GPUComputePipelineDescriptor = {
-          layout:
-            layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
-          compute: { module, entryPoint: r.text() },
-        };
-        this.make(id, d.createComputePipelineAsync(desc), () =>
-          d.createComputePipeline(desc),
+        this.put(
+          id,
+          d.createComputePipeline({
+            layout:
+              layout === undefined
+                ? "auto"
+                : this.get<GPUPipelineLayout>(layout),
+            compute: { module, entryPoint: r.text() },
+          }),
         );
         return;
       }
@@ -783,8 +688,13 @@ export class GpuHost {
       case op.WRITE_BUFFER_AT: {
         const buffer = this.get<GPUBuffer>(r.u());
         const offset = r.u();
-        const [data, at] = this.source(r.u());
-        d.queue.writeBuffer(buffer, offset, data, at, r.u());
+        d.queue.writeBuffer(
+          buffer,
+          offset,
+          this.memory() as ArrayBuffer,
+          r.u(),
+          r.u(),
+        );
         return;
       }
       case op.WRITE_TEXTURE:
@@ -803,7 +713,8 @@ export class GpuHost {
           layout.offset = r.w.byteOffset + 4 * r.at;
           r.skip(Math.ceil(n / 4));
         } else {
-          [data, layout.offset] = this.source(r.u());
+          data = this.memory() as ArrayBuffer;
+          layout.offset = r.u();
           r.skip(1);
         }
         d.queue.writeTexture(place, data, layout, size);
@@ -813,10 +724,7 @@ export class GpuHost {
         const to = this.texturePlace(r, place());
         const [flipY, premultipliedAlpha] = [r.flag(), r.flag()];
         // Copied now: the guest's bytes are only its until the next turn.
-        const [address, size] = [r.u(), r.u()];
-        const image = new Blob([
-          this.held_bytes ?? this.bytesAt(address, size).slice(),
-        ]);
+        const image = new Blob([this.bytesAt(r.u(), r.u()).slice()]);
         const [word, ticket] = [r.u(), r.u()];
         // An image the browser cannot decode is left out, its word not written.
         createImageBitmap(image, {
