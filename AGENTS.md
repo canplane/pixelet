@@ -26,7 +26,9 @@
 - Read the architecture sections and the READMEs beside the code for the
   roles and boundaries the change touches, and the skills its task takes:
   performance analysis or optimization, anywhere, takes `performance`
-  (`.agents/skills/performance/SKILL.md`).
+  (`.agents/skills/performance/SKILL.md`); a new state, rule, value or
+  representation, and any refactor, takes `facts`
+  (`.agents/skills/facts/SKILL.md`).
 - `ARCHITECTURE.md`, `xpute/ARCHITECTURE.md` and the READMEs beside the code
   state the parts' contracts; a skill gives a task's procedure; the code shows
   the implementation, its debt and its work in progress among it. A pattern in
