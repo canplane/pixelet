@@ -237,8 +237,16 @@ impl<L: PaletteWords> Query for World<'_, L> {
         zooms: [u32; 2],
         _t0: f32,
     ) -> In<[u32; 2]> {
-        let (w, cuts) = (*self, [cut(self.eye.carve), cut(self.eye.hide)]);
+        let (w, cuts) = (*self, self.cuts());
         world::node(self, &w, &w, &w.pool, at, (zoom, c), zooms, cuts)
+    }
+}
+
+impl<L> World<'_, L> {
+    /// The eye's preview's `carve` and `hide` (pxl-spec-core
+    /// `overwrite::Cut`), as the world's one query reads them.
+    pub(crate) fn cuts(&self) -> [Cut; 2] {
+        [cut(self.eye.carve), cut(self.eye.hide)]
     }
 }
 

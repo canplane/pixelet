@@ -383,19 +383,25 @@ pub fn palette_indices(
         );
         (c, c != VOID && c != AIR)
     };
+    // Each quarter's upper child, then its lower, a child a step: one ask.
     let mut four = [v; 4];
-    let mut j = 0;
-    while j < 4 {
-        let (upper, up) = shows(j + 4);
-        let (lower, low) = shows(j);
-        four[j as usize] = if up {
-            upper
-        } else if low {
-            lower
+    let mut upper = (VOID, false);
+    let mut i = 0;
+    while i < 2 * 4 {
+        let j = i / 2;
+        let (c, shown) = shows(if i % 2 == 0 { j + 4 } else { j });
+        if i % 2 == 0 {
+            upper = (c, shown);
         } else {
-            v
-        };
-        j += 1;
+            four[j as usize] = if upper.1 {
+                upper.0
+            } else if shown {
+                c
+            } else {
+                v
+            };
+        }
+        i += 1;
     }
     four
 }

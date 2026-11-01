@@ -167,10 +167,12 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
         c,
         if is_cell { zoom } else { near },
     );
-    // The four palette indices a filling asset of what is placed is drawn by, a byte
-    // each (`ground::word`): only the ground's palette indices, a placed cube of a
-    // palette index, fit; one past a byte, an object's, is drawn by its value.
-    let laid = || {
+    // Where what is placed is a cell, its asset and the four palette indices a
+    // filling one is drawn by, a byte each (`ground::word`): only the ground's
+    // palette indices, a placed cube of a palette index, fit; one past a byte,
+    // an object's, is drawn by its value. Read once, where either use below
+    // takes it.
+    let laid = if over.says == CELL {
         let four = if fills(over.asset) {
             overwrite::palette_indices(columns, put, hide, zoom, c, over.asset)
         } else {
@@ -181,13 +183,15 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
             PLACED_ASSET | over.asset,
             if bytes { ground::word(four) } else { 0 },
         ]
+    } else {
+        [0; 2]
     };
     // Filling its cube whole, what is placed is the cell's asset, whatever is
     // under it.
     if over.says == CELL && over.fill == FULL {
         return In {
             kind: Kind::Cell,
-            asset: laid(),
+            asset: laid,
         };
     }
     // Where what is placed splits the node, the box it may fill.
@@ -258,7 +262,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
         if over.says == CELL {
             let (f, theirs) = cover(fill, over.asset, over.fill);
             if theirs || !fills(val) {
-                [val, four] = laid();
+                [val, four] = laid;
             }
             fill = f;
         }

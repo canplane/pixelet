@@ -23,7 +23,6 @@ use super::world::World;
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
 use crate::domain::layer::Answer;
-use pxl_spec_core::answer;
 use pxl_spec_core::decor;
 
 /// The world as decor's generation asks it on the CPU (pxl-spec-core
@@ -72,20 +71,15 @@ impl DecorQuery for DecorWorld<'_, '_> {
         GROUND.cell()
     }
 
-    /// Void where the world holds nothing there.
-    fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
-        self.ground
-            .asset_about(&f.line, zoom, c)
-            .val()
-            .unwrap_or(u32::from(sentinel::void))
-    }
-
-    /// An edit where the world holds one there, as far as it is held.
-    fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool {
-        self.world
-            .asset((zoom, c))
-            .val()
-            .is_some_and(answer::is_placed)
+    /// Void where the world holds nothing there; as edited, an edit where it
+    /// holds one, as far as it is held.
+    fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3], edited: bool) -> u32 {
+        let answer = if edited {
+            self.world.asset((zoom, c))
+        } else {
+            self.ground.asset_about(&f.line, zoom, c)
+        };
+        answer.val().unwrap_or(u32::from(sentinel::void))
     }
 
     fn next_placed(&self, p: &mut PlacedCursor) -> ([i32; 3], u32, bool) {

@@ -9,14 +9,14 @@
 //! `decor_args_cs`, `decor_compact_cs`).
 
 use pxl_shader_macro::compute;
-use pxl_spec_core::answer::{self, In};
+use pxl_spec_core::answer::In;
 use pxl_spec_core::cast::{End, Query};
 use pxl_spec_core::decor::Decor;
 use pxl_spec_core::fill::put;
 use pxl_spec_core::generation::{self, drawn, DecorQuery};
 use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::scatter;
-use pxl_spec_core::support;
+use pxl_spec_core::support::{self, Ancestors};
 use pxl_spec_core::clipmap::{self, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
 use pxl_spec_core::world::{self, Inheritance};
 use pxl_spec_core::{at, way, LEAF_CELL};
@@ -35,9 +35,14 @@ struct Generating<'a> {
     rows: &'a [Decor],
 }
 
-/// The cast's world unplaced, nothing placed and no preview's cuts: the
-/// ground's alone, as decor generates on it (pxl-spec-core `world::Inheritance::unplaced`).
-struct Ground<'w, 'a>(&'w mut World<'a, NoPalette>);
+/// The cast's world as decor's generation walks it: unplaced, nothing placed
+/// and no preview's cuts, the ground's alone, as decor generates on it
+/// (pxl-spec-core `world::Inheritance::unplaced`); or, asked from a root
+/// as edited (`AssetLine`), with the eye's cuts.
+struct Ground<'w, 'a> {
+    world: &'w mut World<'a, NoPalette>,
+    cuts: [Cut; 2],
+}
 
 impl Query for Ground<'_, '_> {
     type At = Inheritance;
@@ -47,7 +52,7 @@ impl Query for Ground<'_, '_> {
     }
 
     fn child(&mut self, at: &Inheritance, zoom: u32, node: [i32; 3]) -> Inheritance {
-        at.child(&*self.0, &self.0.pool, (zoom, node))
+        at.child(&*self.world, &self.world.pool, (zoom, node))
     }
 
     fn node(
@@ -58,25 +63,61 @@ impl Query for Ground<'_, '_> {
         zooms: [u32; 2],
         _t0: f32,
     ) -> In<[u32; 2]> {
-        let w = *self.0;
+        let w = *self.world;
         world::node(
-            self.0,
+            self.world,
             &w,
             &w,
             &w.pool,
             at,
             (zoom, c),
             zooms,
-            [Cut::NONE; 2],
+            self.cuts,
         )
+    }
+}
+
+/// The line a cell is asked off (`DecorQuery::asset`): the column surface's,
+/// or, as edited, the cell's own from its root, what is placed found there
+/// (`world::Inheritance::of`), the line of its root alone.
+struct AssetLine<'l> {
+    line: &'l support::Line<Inheritance>,
+    edited: bool,
+    root: Inheritance,
+    root_at: [i32; 3],
+}
+
+impl Ancestors<Inheritance> for AssetLine<'_> {
+    fn at(&self) -> [i32; 3] {
+        if self.edited {
+            self.root_at
+        } else {
+            self.line.at()
+        }
+    }
+
+    fn zoom(&self) -> u32 {
+        if self.edited {
+            0
+        } else {
+            self.line.zoom()
+        }
+    }
+
+    fn ancestor(&self, z: u32) -> Inheritance {
+        if self.edited {
+            self.root
+        } else {
+            self.line.ancestor(z)
+        }
     }
 }
 
 /// The query's support on the cast's world (pxl-spec-core `support`): a
 /// column's surface of the world unplaced (`Ground`), its line
 /// kept, each asset about it asked off that line; a cell's edit asked of
-/// the world as edited down its own line; and what is placed in a box
-/// (`world::placed_in`).
+/// the world as edited down its own line, the one ask; and what is placed in
+/// a box (`world::placed_in`).
 impl DecorQuery for Generating<'_> {
     type ColumnSurface = support::ColumnSurface<Inheritance>;
 
@@ -85,7 +126,11 @@ impl DecorQuery for Generating<'_> {
     }
 
     fn column_surface(&mut self, cell: u32, g: [i32; 2]) -> (Self::ColumnSurface, (i32, f32), bool) {
-        let f = support::column_surface(&mut Ground(&mut self.world), cell, g);
+        let mut ground = Ground {
+            world: &mut self.world,
+            cuts: [Cut::NONE; 2],
+        };
+        let f = support::column_surface(&mut ground, cell, g);
         let (top, met) = (f.top, f.ends == End::Hit);
         (f, top, met)
     }
@@ -100,13 +145,24 @@ impl DecorQuery for Generating<'_> {
         }
     }
 
-    fn asset(&mut self, f: &Self::ColumnSurface, zoom: u32, c: [i32; 3]) -> u32 {
-        support::asset(&mut Ground(&mut self.world), &f.line, zoom, c)
-    }
-
-    fn is_edited(&mut self, zoom: u32, c: [i32; 3]) -> bool {
-        let line = support::line(&mut self.world, zoom, c);
-        answer::is_placed(support::asset(&mut self.world, &line, zoom, c))
+    fn asset(&mut self, f: &Self::ColumnSurface, zoom: u32, c: [i32; 3], edited: bool) -> u32 {
+        let root_at = [c[0] >> zoom, c[1] >> zoom, c[2] >> zoom];
+        let (cuts, root) = if edited {
+            (self.world.cuts(), Inheritance::of(&self.world, (0, root_at)))
+        } else {
+            ([Cut::NONE; 2], f.line.ancestor(0))
+        };
+        let line = AssetLine {
+            line: &f.line,
+            edited,
+            root,
+            root_at,
+        };
+        let mut ground = Ground {
+            world: &mut self.world,
+            cuts,
+        };
+        support::asset(&mut ground, &line, zoom, c)
     }
 
     fn next_placed(&self, p: &mut pxl_spec_core::world::PlacedCursor) -> ([i32; 3], u32, bool) {
@@ -307,7 +363,7 @@ pub fn decor_thin_cs(
 /// (`decor_mark_cs`). What it generates on is the clip levels' bricks and the
 /// ways over them alone, what is placed left out (`Ground`); what is placed
 /// and the eye's cuts only take it away where they hold its box
-/// (`DecorQuery::is_edited`).
+/// (`DecorQuery::asset`, edited).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "decor_cs"))]
 pub fn decor_cs(
     #[spirv(global_invocation_id)] id: UVec3,

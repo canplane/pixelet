@@ -773,7 +773,7 @@ fn generated_decor_stays() {
 
 /// Only an edit in its own box takes what the ground generates away, air or a
 /// cube; one under it or over it leaves it generated (pxl-spec-core
-/// `generation::DecorQuery::is_edited`).
+/// `generation::DecorQuery::asset`, edited).
 #[test]
 fn generated_decor_edit_removes() {
     use crate::domain::layer::object::store::AIR;

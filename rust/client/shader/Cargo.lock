@@ -829,6 +829,7 @@ dependencies = [
  "naga 30.0.0",
  "rustc_codegen_spirv",
  "spirv-builder",
+ "spirv-tools",
 ]
 
 [[package]]

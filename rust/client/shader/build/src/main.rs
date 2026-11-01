@@ -9,6 +9,16 @@
 //! barriers about a load of the workgroup's memory (way.rs `load_shared`),
 //! and `uniform_loads` reads exactly that triple back into the statement, so
 //! WebGPU sees a value every lane shares where the shader means one.
+//!
+//! So is spirv-opt. The codegen runs it with every function inlined into
+//! its entry (SPIRV-Tools' performance passes open with `InlineExhaustive`),
+//! a body written again at each call; here a function called from more than
+//! one place and taking only what WGSL takes as a parameter keeps its
+//! boundary where a call is shorter than its body (`dont_inline`), and a
+//! module keeps those boundaries where that makes it shorter (`wgsl_of`).
+//! Every function a binding's pointer reaches the codegen has inlined before
+//! (its legalization, rustc_codegen_spirv linker/inline.rs): no Rust names a
+//! binding but through the entry's parameters.
 
 use naga::proc::TypeResolution;
 use naga::valid::{Capabilities, FunctionInfo, ModuleInfo, ValidationFlags, Validator};
@@ -26,6 +36,7 @@ fn main() {
     let result = SpirvBuilder::new(shader, "spirv-unknown-vulkan1.3")
         .multimodule(true)
         .capability(Capability::ImageQuery)
+        .extra_arg("--no-spirv-opt")
         .build();
     let modules = match result.map(|r| r.module) {
         Ok(ModuleResult::MultiModule(m)) => m,
@@ -36,7 +47,7 @@ fn main() {
         }
     };
     for (entry, spv) in &modules {
-        let wgsl = wgsl(&std::fs::read(spv).expect("spv")).unwrap_or_else(|e| {
+        let wgsl = wgsl_of(&std::fs::read(spv).expect("spv")).unwrap_or_else(|e| {
             eprintln!("failed: {entry}: {e}");
             std::process::exit(1);
         });
@@ -45,10 +56,146 @@ fn main() {
     println!("built: {modules:?}");
 }
 
+/// One entry's WGSL: its SPIR-V optimized with the functions `dont_inline`
+/// marks keeping their boundaries where that is shorter in lines and in
+/// bytes than with every one inlined, as the codegen optimizes, else that. A
+/// call is the shorter only where the bodies it keeps from being written
+/// again outweigh what inlining folds away across them, which no count of a
+/// body before spirv-opt tells.
+fn wgsl_of(spv: &[u8]) -> Result<String, String> {
+    let words: Vec<u32> = spv
+        .chunks_exact(4)
+        .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .collect();
+    let inlined = wgsl(&optimized(words.clone())?)?;
+    let with_calls = wgsl(&optimized(dont_inline(words))?)?;
+    Ok(
+        if with_calls.len() < inlined.len() && with_calls.lines().count() <= inlined.lines().count()
+        {
+            with_calls
+        } else {
+            inlined
+        },
+    )
+}
+
+/// One entry's SPIR-V through spirv-opt as the codegen runs it, its
+/// performance passes and then its dead constants and debug info dropped
+/// (rustc_codegen_spirv link.rs `do_spirv_opt`).
+fn optimized(words: Vec<u32>) -> Result<Vec<u32>, String> {
+    use spirv_tools::opt::{self, Optimizer, Passes};
+    let mut optimizer = opt::create(Some(spirv_tools::TargetEnv::Vulkan_1_3));
+    optimizer
+        .register_performance_passes()
+        .register_pass(Passes::EliminateDeadConstant)
+        .register_pass(Passes::StripDebugInfo);
+    let mut told = String::new();
+    let options = opt::Options {
+        validator_options: Some(spirv_tools::val::ValidatorOptions::default()),
+        ..Default::default()
+    };
+    let out = optimizer.optimize(
+        words,
+        &mut |m: spirv_tools::error::Message| told.push_str(&format!("{}\n", m.message)),
+        Some(options),
+    );
+    match out {
+        Ok(out) => Ok(out.as_words().to_vec()),
+        Err(e) => Err(format!("spirv-opt: {e}: {told}")),
+    }
+}
+
+/// The module's words, each function marked `DontInline`, which spirv-opt
+/// keeps, where it is called from more than one place, takes only values
+/// and pointers to function or private memory, which WGSL takes as
+/// parameters, and is shorter written once and called (`call_shorter`). One
+/// called from one place, one the codegen marked `Inline` (`#[inline]`) and
+/// one taking a pointer to the workgroup's memory or to an image, which WGSL
+/// takes as no parameter, are inlined as before.
+fn dont_inline(mut words: Vec<u32>) -> Vec<u32> {
+    // SPIR-V's opcodes, storage classes and function controls (the SPIR-V
+    // specification, 3.32, 3.7, 3.24).
+    const TYPE_POINTER: u32 = 32;
+    const FUNCTION: u32 = 54;
+    const FUNCTION_PARAMETER: u32 = 55;
+    const FUNCTION_END: u32 = 56;
+    const FUNCTION_CALL: u32 = 57;
+    const PRIVATE: u32 = 6;
+    const FUNCTION_STORAGE: u32 = 7;
+    const INLINE: u32 = 0x1;
+    const DONT_INLINE: u32 = 0x2;
+    /// A function as `dont_inline` reads it: its control word, its
+    /// parameters, whether WGSL takes each, and the instructions of its body.
+    struct Callee {
+        control: usize,
+        params: u32,
+        wgsl_takes: bool,
+        body: u32,
+    }
+    let mut pointers = std::collections::HashMap::new();
+    let mut calls = std::collections::HashMap::<u32, u32>::new();
+    let mut functions = Vec::new();
+    let mut open: Option<(u32, Callee)> = None;
+    let mut i = 5;
+    while i < words.len() {
+        let (op, n) = (words[i] & 0xffff, (words[i] >> 16) as usize);
+        match (op, &mut open) {
+            (TYPE_POINTER, _) => {
+                pointers.insert(words[i + 1], words[i + 2]);
+            }
+            (FUNCTION, _) => {
+                let f = Callee {
+                    control: i + 3,
+                    params: 0,
+                    wgsl_takes: words[i + 3] & INLINE == 0,
+                    body: 0,
+                };
+                open = Some((words[i + 2], f));
+            }
+            (FUNCTION_PARAMETER, Some((_, f))) => {
+                let class = pointers.get(&words[i + 1]);
+                f.params += 1;
+                f.wgsl_takes &= matches!(class, None | Some(&PRIVATE) | Some(&FUNCTION_STORAGE));
+            }
+            (FUNCTION_END, Some(_)) => {
+                functions.extend(open.take());
+            }
+            (_, Some((_, f))) => {
+                f.body += 1;
+                if op == FUNCTION_CALL {
+                    *calls.entry(words[i + 3]).or_default() += 1;
+                }
+            }
+            _ => {}
+        }
+        i += n.max(1);
+    }
+    for (id, f) in functions {
+        let n = calls.get(&id).copied().unwrap_or(0);
+        if f.wgsl_takes && call_shorter(n, f.params, f.body) {
+            words[f.control] |= DONT_INLINE;
+        }
+    }
+    words
+}
+
+/// Whether a function of `body` instructions and `params` parameters,
+/// called from `calls` places, is shorter written once, its head and end
+/// (`OpFunction`, its parameters, its first label, `OpFunctionEnd`) about it,
+/// with a call and its arguments at each, than written at each call.
+fn call_shorter(calls: u32, params: u32, body: u32) -> bool {
+    body + calls * (1 + params) + params + 3 < calls * body
+}
+
 /// One entry's SPIR-V as WGSL, validated as WebGPU takes it.
-fn wgsl(spv: &[u8]) -> Result<String, String> {
-    let mut module = naga::front::spv::parse_u8_slice(spv, &naga::front::spv::Options::default())
-        .map_err(|e| e.to_string())?;
+fn wgsl(spv: &[u32]) -> Result<String, String> {
+    let mut module = naga::front::spv::parse_u8_slice(
+        &spv.iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect::<Vec<u8>>(),
+        &naga::front::spv::Options::default(),
+    )
+    .map_err(|e| e.to_string())?;
     let validate = |m: &Module| {
         Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(m)

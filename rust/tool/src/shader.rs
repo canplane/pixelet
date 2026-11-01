@@ -261,7 +261,7 @@ pub fn header() -> String {
         "// was made from is gen.digest's, beside it.",
         "// Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,",
         "// through rust/client/shader, by",
-        &format!("// rust-gpu 0.10.0-alpha.1 ({NIGHTLY}) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build."),
+        &format!("// rust-gpu 0.10.0-alpha.1 ({NIGHTLY}) for spirv-unknown-vulkan1.3, then spirv-opt and naga in rust/client/shader/build."),
         "",
     ]
     .join("\n")

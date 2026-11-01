@@ -1042,28 +1042,34 @@ pub fn walk<Q: Query>(
                 // A beam ray passes whole a split whose box it clears by
                 // `2√2` of the grid's width there, as the grid's rays about
                 // it clear it too; else it stops at one it may not share with
-                // them, and enters every other.
-                Kind::Split if until == Until::Beam => {
+                // them, and enters every other. Any other: a span wholly out
+                // of the box, or touching it alone, meets nothing a ray
+                // cannot see through, and a walk to that passes the node
+                // whole; a walk to what is transparent goes in, its stop
+                // where that span begins. The box asked once, either way.
+                Kind::Split => {
+                    let beam = until == Until::Beam;
                     // The grid's rays' spacing at the node's far corner: a
                     // split narrower than `2√2` of that may lie between them
                     // (`narrow`).
-                    let width = detail.spacing.width(libm::sqrtf(dist_sq[0]));
-                    let narrow = narrow(side * side, width * width);
-                    let meets = meets_box(NARROW * width);
-                    into = meets && !narrow;
+                    let width = if beam {
+                        detail.spacing.width(libm::sqrtf(dist_sq[0]))
+                    } else {
+                        0.0
+                    };
+                    let narrow = beam && narrow(side * side, width * width);
+                    let meets = until != Until::Transparent
+                        && meets_box(if beam { NARROW * width } else { 0.0 });
+                    into = if beam {
+                        meets && !narrow
+                    } else {
+                        until == Until::Transparent || meets
+                    };
                     if meets && narrow {
                         End::Hit
                     } else {
                         End::Miss
                     }
-                }
-                // A span wholly out of the box, or touching it alone, meets
-                // nothing a ray cannot see through, and a walk to that passes
-                // the node whole. A walk to what is transparent goes in: its
-                // stop is where that span begins.
-                Kind::Split => {
-                    into = until == Until::Transparent || meets_box(0.0);
-                    End::Miss
                 }
             };
             if ends != End::Miss {

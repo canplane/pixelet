@@ -75,7 +75,18 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ColumnSur
         },
         origin: o,
     };
-    let met = cast::walk_from_root(q, o, &ray, detail, Until::Opaque, &mut f, &mut ());
+    // From the root just asked: `walk_from_root` would ask it again.
+    let met = cast::walk(
+        q,
+        o,
+        &ray,
+        detail,
+        Until::Opaque,
+        (Node::ROOT, root, 0.0),
+        &cast::Root(root),
+        &mut f,
+        &mut (),
+    );
     f.ends = met.ends;
     f.top = cast::top(o, &met.hit.node, met.hit.asset[0]);
     f

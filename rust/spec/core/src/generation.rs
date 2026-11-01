@@ -8,7 +8,7 @@
 
 use xpute_kit::math::rng::SplitMix32;
 
-use crate::answer::val;
+use crate::answer::{self, val};
 use crate::cave::node_seed;
 use crate::clipmap;
 use crate::clipmap::{BRICK, BRICK_SHIFT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
@@ -360,12 +360,12 @@ pub trait DecorQuery {
     /// column `g` at: where a candidate there is asked whether it stands and
     /// which way it faces (`placement`), the same whatever clip level asks.
     fn finest(&mut self, cell: Zoom, g: [i32; 2]) -> Zoom;
-    /// What is in the cell `c` of `zoom` about the column_surface `f`, the world
-    /// unplaced's answer (`support::asset`): `void` or the ground's value.
-    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> u32;
-    /// Whether an edit holds the cell `c` of `zoom` in the world as edited,
-    /// something placed or air (`answer::is_placed`).
-    fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool;
+    /// What is in the cell `c` of `zoom`: the world unplaced's answer about
+    /// the column surface `f` (`support::asset`), `void` or the ground's value;
+    /// or, `edited`, the world as edited's down the cell's own line, which an
+    /// edit there, something placed or air, tells (`answer::is_placed`). One
+    /// ask for both, so a GPU's walk to the cell is written once.
+    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3], edited: bool) -> u32;
     /// The next leaf placed in `p`'s box, its cell and its word, false past
     /// the last (`world::PlacedCursor::next`).
     fn next_placed(&self, p: &mut PlacedCursor) -> ([i32; 3], u32, bool);
@@ -398,7 +398,7 @@ impl GeneratedDecor {
 /// under it; facing as the cells beside it vote (`asks`); then, where `boxed`,
 /// whether it generates there: every cell of its box void and every one under
 /// its base a palette entry it generates on, as the ground holds them; no edit
-/// in its box, air included (`DecorQuery::is_edited`); and no placed decor's
+/// in its box, air included (`DecorQuery::asset`, edited); and no placed decor's
 /// box overlaps its own (`overlaps_placed`). It stands at its clip level's
 /// column surface, and the vote and its box are asked at the finest zoom the
 /// world holds its leaf column at (`DecorQuery::finest`), about that zoom's
@@ -414,31 +414,39 @@ pub fn placement(
     boxed: bool,
 ) -> (GeneratedDecor, bool, bool) {
     let s = LEAF_CELL - cell;
-    let at = [c.cell[0] >> s, c.cell[1] >> s];
-    let (f, (floor, rise), here) = q.column_surface(cell, at);
-    if !here {
-        return (GeneratedDecor::NONE, false, false);
-    }
-    let g = GeneratedDecor {
-        variant: 0,
-        turn: 0,
-        at: [c.cell[0], c.cell[1], (floor + 1) * (1 << s)],
-        sink: ((1.0 - rise) * (1u32 << (s + FRAC_W)) as f32 + 0.5) as u32,
-    };
     let zoom = q.finest(cell, c.cell);
-    let (about, base, held) = if zoom == cell {
-        (f, floor, true)
-    } else {
-        let s = LEAF_CELL - zoom;
-        let (about, (base, _), held) = q.column_surface(zoom, [c.cell[0] >> s, c.cell[1] >> s]);
-        (about, base, held)
-    };
-    let (g, generates) = asks(q, &about, decor, (zoom, base), c.seed, g, boxed);
-    (
-        g,
-        true,
-        held && generates && stands_at(decor, g.variant, cell),
-    )
+    // Its clip level's column surface, then the finest's where that is
+    // another: one ask, so a GPU's walk down a column is written once.
+    let mut first = (0, 0.0);
+    let mut k = 0;
+    loop {
+        let z = if k == 0 { cell } else { zoom };
+        let t = LEAF_CELL - z;
+        let (f, top, here) = q.column_surface(z, [c.cell[0] >> t, c.cell[1] >> t]);
+        if k == 0 && !here {
+            return (GeneratedDecor::NONE, false, false);
+        }
+        if k == 0 {
+            first = top;
+        }
+        if k == 1 || zoom == cell {
+            let (floor, rise) = first;
+            let g = GeneratedDecor {
+                variant: 0,
+                turn: 0,
+                at: [c.cell[0], c.cell[1], (floor + 1) * (1 << s)],
+                sink: ((1.0 - rise) * (1u32 << (s + FRAC_W)) as f32 + 0.5) as u32,
+            };
+            let held = k == 0 || here;
+            let (g, generates) = asks(q, &f, decor, (zoom, top.0), c.seed, g, boxed);
+            return (
+                g,
+                true,
+                held && generates && stands_at(decor, g.variant, cell),
+            );
+        }
+        k += 1;
+    }
 }
 
 /// Every cell generating decor asks of the world, at one place, as a GPU
@@ -477,11 +485,14 @@ fn asks<Q: DecorQuery>(
     // The box, laid out once the vote is in: its cells, from the one under
     // its base up, a column at a time.
     let (mut lo, mut n) = ([0; 3], [0; 3]);
+    // Whether the box's cell asked last, void in the world unplaced, is asked
+    // again of the world as edited, each cell's two asks the one ask.
+    let mut edited = false;
     let mut ask = 0;
     loop {
         let voted = ask >= voting;
         let j = ask - voted as i32 * voting;
-        if voted && j == 0 {
+        if voted && j == 0 && !edited {
             // The vote is in: the turn it gives, then the box it turns.
             if voting > 0 {
                 g.turn = u32::from(horizontal > vertical) + 2 * flip;
@@ -517,15 +528,27 @@ fn asks<Q: DecorQuery>(
                 [foot[0], foot[1] + along, foot[2]]
             }
         };
-        let v = q.asset(about, zoom, b);
-        if voted {
+        let v = q.asset(about, zoom, b, edited);
+        if edited {
+            // Void unplaced: it holds where no edit does.
+            if answer::is_placed(v) {
+                return (g, false);
+            }
+            edited = false;
+        } else if voted {
+            // Under its base a palette entry it generates on; over it void,
+            // and then no edit there, asked next.
             let holds = if b[2] == lo[2] {
                 decor.allows(val(v))
             } else {
-                v == sentinel::void as u32 && !q.is_edited(zoom, b)
+                v == sentinel::void as u32
             };
             if !holds {
                 return (g, false);
+            }
+            if b[2] != lo[2] {
+                edited = true;
+                continue;
             }
         } else if Ground::transports(val(v)) {
             if ask % 4 < 2 {
