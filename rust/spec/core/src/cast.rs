@@ -89,7 +89,7 @@ impl Detail {
 
     /// The zooms `range` holds, coarsest and finest: past them no distance
     /// asks another.
-    fn held(self) -> [Zoom; 2] {
+    fn zoom_bounds(self) -> [Zoom; 2] {
         // [rust-gpu] Each by itself, not an array's `map`.
         [
             (0 as Zoom).clamp(self.range[0], self.range[1]),
@@ -105,7 +105,7 @@ impl Detail {
     /// alike, and a box's nearest is none with the eye in it. Less a share
     /// of the distances for the f32 rounding of both askers (`MARGIN_SLACK`).
     pub fn nearer(self, d2: f32, z: Zoom) -> f32 {
-        if z >= self.held()[1] {
+        if z >= self.zoom_bounds()[1] {
             return UNBOUNDED;
         }
         let d = libm::sqrtf(d2);
@@ -117,7 +117,7 @@ impl Detail {
     /// yet: to the far edge of `z`'s band, none where `range` holds nothing
     /// coarser (`nearer`).
     pub fn farther(self, d2: f32, z: Zoom) -> f32 {
-        if z <= self.held()[0] {
+        if z <= self.zoom_bounds()[0] {
             return UNBOUNDED;
         }
         let d = libm::sqrtf(d2);
@@ -170,7 +170,7 @@ impl Visitor for () {
         dist_sq: [f32; 2],
         t0: f32,
     ) -> In<[u32; 2]> {
-        q.node(at, zoom, node, asked(detail, dist_sq), t0)
+        q.node(at, zoom, node, ask_zooms(detail, dist_sq), t0)
     }
 }
 
@@ -517,7 +517,7 @@ pub fn holding(o: [i32; 3], ray: &Ray, mut n: Node, t: f32) -> Node {
 /// axis entered across, the last of those planes the ray reaches
 /// (`crossing`), and that plane's t, no nearer than the origin — the node's
 /// and the ray's alone, whatever walk came to it.
-fn entered(ray: &Ray, near: [f32; 3]) -> (f32, u32) {
+fn entry_plane(ray: &Ray, near: [f32; 3]) -> (f32, u32) {
     let e = crossing(ray.dir, near, true);
     (greater(axis(near, e), 0.0), e)
 }
@@ -555,22 +555,22 @@ pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
 /// The asset `asset` at the node `n` as drawn from the origin `o`, in units
 /// from it (`bounds`, `fill_bounds`): the box `entry` asks a ray into, as
 /// the samples' boxes are drawn (`raster`).
-pub fn drawn(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
+pub fn drawn_box(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
     fill_bounds(bounds(n, grid_of(o)), asset)
 }
 
 /// Where `ray` from the origin `o` enters the cell `asset` is in (an asset's word,
 /// `answer`) at the node `n`, and whether it does within its interval: its span
-/// in the cell as drawn from the origin (`drawn`, `spans`), and
-/// where that span begins (`entered`). Only touched, at a face or an edge,
+/// in the cell as drawn from the origin (`drawn_box`, `spans`), and
+/// where that span begins (`entry_plane`). Only touched, at a face or an edge,
 /// is not entered, as the walk has it.
 pub fn entry(o: [i32; 3], ray: &Ray, n: &Node, asset: u32) -> (f32, u32, bool) {
-    let (x, y, z) = spans(ray, drawn(o, n, asset), 0.0);
+    let (x, y, z) = spans(ray, drawn_box(o, n, asset), 0.0);
     let (t0, t1) = (
         greater(greater(greater(0.0, x.0), y.0), z.0),
         lesser(lesser(lesser(ray.t_max, x.1), y.1), z.1),
     );
-    let (t, e) = entered(ray, [x.0, y.0, z.0]);
+    let (t, e) = entry_plane(ray, [x.0, y.0, z.0]);
     (t, e, t1 > t0)
 }
 
@@ -697,7 +697,7 @@ fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
 /// every ray through it; a ray asks within it no coarser than the farthest
 /// corner, so this only adds coarser zooms than its own, which splits more
 /// and stops on the same cell.
-fn asked(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
+fn ask_zooms(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
 }
 
@@ -728,8 +728,8 @@ impl Visitor for Margin {
         dist_sq: [f32; 2],
         t0: f32,
     ) -> In<[u32; 2]> {
-        let [far, near] = asked(detail, dist_sq);
-        let [coarsest, finest] = detail.held();
+        let [far, near] = ask_zooms(detail, dist_sq);
+        let [coarsest, finest] = detail.zoom_bounds();
         let cell = zoom >= near;
         // Coarser than asked, asked a zoom wider each way.
         let wide = [
@@ -819,12 +819,12 @@ pub fn first<Q: Query>(
     detail: Detail,
     until: Until,
 ) -> Trace<Q::At> {
-    rooted(q, o, ray, detail, until, &mut (), &mut ())
+    walk_from_root(q, o, ray, detail, until, &mut (), &mut ())
 }
 
 /// `walk` from the world's root holding the origin, at 0, leaving its line
 /// to `keep` and telling each node it asks to `told`.
-pub fn rooted<Q: Query>(
+pub fn walk_from_root<Q: Query>(
     q: &mut Q,
     o: [i32; 3],
     ray: &Ray,
@@ -1069,8 +1069,8 @@ pub fn walk<Q: Query>(
             if ends != End::Miss {
                 // Where the walk ends, its hit, made there and nowhere else:
                 // where the ray enters the node, or its asset's box
-                // (`entered`).
-                let (t, axis) = entered(ray, near);
+                // (`entry_plane`).
+                let (t, axis) = entry_plane(ray, near);
                 let hit = Hit {
                     t,
                     axis,
@@ -1464,7 +1464,7 @@ mod tests {
             spacing: Spacing::NONE,
         };
         let mut told = Margin::NONE;
-        let met = rooted(
+        let met = walk_from_root(
             &mut One { fill: EIGHTHS },
             o,
             &ray,

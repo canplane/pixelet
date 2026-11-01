@@ -30,7 +30,7 @@ pub(super) enum Design {
     /// A place as Carto draws it: its symbol (`icon`), or a dot, in its
     /// category's `fill`, and under it its name, where it is named, in its
     /// category's text color, its `ink`, wrapped at `wrap` pixels
-    /// (`spaced`).
+    /// (`with_spacing`).
     Point {
         name: Option<Rc<str>>,
         wrap: u32,
@@ -48,7 +48,7 @@ impl Design {
     /// (`arrangement.rs` `SPACING_PX`), and the width of the region it keeps
     /// (`set.rs`): a place's name wrapped to it, and its region it; any
     /// other's region its own width (0, which the candidates widen to it).
-    pub(super) fn spaced(mut self, spacing: f64) -> (Design, f64) {
+    pub(super) fn with_spacing(mut self, spacing: f64) -> (Design, f64) {
         match &mut self {
             Design::Point { name, wrap, .. } => {
                 if name.is_some() {

@@ -32,7 +32,7 @@ impl GpuHost {
     /// latency are unfinished, so each surface's next texture is free and
     /// taking it does not block. Asked once a turn, before it draws.
     pub fn admit(&mut self) -> bool {
-        self.admitted = self.unfinished.load(Ordering::Relaxed) < self.frame_latency;
+        self.admitted = self.unfinished_frames.load(Ordering::Relaxed) < self.frame_latency;
         self.admitted
     }
 
@@ -46,7 +46,7 @@ impl GpuHost {
         }
         if core::mem::take(&mut self.admitted) {
             self.queue
-                .on_submitted_work_done(FrameGuard::count(&self.unfinished));
+                .on_submitted_work_done(FrameGuard::count(&self.unfinished_frames));
         }
     }
 }

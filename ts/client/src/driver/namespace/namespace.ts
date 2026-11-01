@@ -14,10 +14,10 @@ import { type Binding, Namespace } from "@xpute/host/ipc/ns.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
 import { root } from "@/abi/host.spec.ts";
-import { BASE_LAYERS } from "./published.spec.ts";
+import { BASE_LAYERS } from "./publication.spec.ts";
 import { read_asset } from "@/driver/namespace/asset.ts";
 import { OBJECTS } from "@/driver/namespace/object.ts";
-import { source_declared } from "@/driver/namespace/source.ts";
+import { source_declaration } from "@/driver/namespace/source.ts";
 import { commit_storage, open_storage } from "@/driver/namespace/storage.ts";
 import { read_object } from "@/driver/namespace/tile.ts";
 
@@ -49,7 +49,7 @@ export function namespace(): Namespace {
       bake,
       {
         open: (number, signal) =>
-          read_object(source_declared(), bake, number, signal),
+          read_object(source_declaration(), bake, number, signal),
       },
     ]),
     [root.ASSET, { open: read_asset }],

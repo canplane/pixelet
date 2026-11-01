@@ -618,7 +618,7 @@ impl<'a> PacketWriter<'a> {
 
     /// `finish`'s length, or none when the packet was refused: for a room
     /// that fits a packet or not.
-    pub fn fitted(self) -> Option<u32> {
+    pub fn fit_len(self) -> Option<u32> {
         self.finish().ok()
     }
 }

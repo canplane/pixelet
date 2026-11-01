@@ -96,11 +96,11 @@ XPUTE_TEST(buddy_freed_reused) {
     std::size_t sz = std::size_t{1} << (MIN + 2);
     void *p = heap.malloc(sz);
     XPUTE_CHECK(p != nullptr);
-    std::size_t reached = heap.used();
+    std::size_t reached = heap.peak();
     for (int i = 0; i < 8; i++) {
         heap.free(p, sz);
         XPUTE_CHECK_EQ(heap.malloc(sz), p, "the same request after the same free moved");
-        XPUTE_CHECK_EQ(heap.used(), reached, "a reuse reached further into the range");
+        XPUTE_CHECK_EQ(heap.peak(), reached, "a reuse reached further into the range");
     }
     XPUTE_CHECK(heap.releases() >= 8);
 }

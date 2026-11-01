@@ -13,7 +13,7 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { CATALOG } from "@/abi/host.spec.ts";
 import { CATALOG_HEX } from "@/driver/namespace/catalog.spec.ts";
-import { INGESTED } from "@/driver/namespace/ingested.spec.ts";
+import { ASSET_FILES } from "@/driver/namespace/ingest.spec.ts";
 import { asset_url } from "@/driver/namespace/route.ts";
 import { get } from "@/driver/namespace/read.ts";
 
@@ -25,7 +25,7 @@ export function read_asset(
   if (load === BigInt(CATALOG)) {
     return Promise.resolve(hex_to_bytes(CATALOG_HEX));
   }
-  const key = INGESTED[Number(load) - 1]?.key;
+  const key = ASSET_FILES[Number(load) - 1]?.key;
   if (key === undefined) return Promise.reject(new FileError(Errno.ENOENT));
   return get(asset_url(key), key, signal);
 }

@@ -21,7 +21,7 @@ pub(super) struct Bubble {
 }
 
 /// The line as it is now, seen from `eye`.
-pub(super) fn said(eye: V3) -> Bubble {
+pub(super) fn bubble(eye: V3) -> Bubble {
     Bubble {
         line: shown_line(),
         hangs: line_hangs(eye),
@@ -30,7 +30,7 @@ pub(super) fn said(eye: V3) -> Bubble {
 
 impl Bubble {
     /// Its instance, where it shows.
-    pub(super) fn shown(&self) -> Option<Instance> {
+    pub(super) fn instance(&self) -> Option<Instance> {
         let (design, stands) = (self.line.clone()?, self.hangs?);
         Some(Instance {
             key: Key::Line,
@@ -41,7 +41,7 @@ impl Bubble {
     }
 
     /// Its bubble while it is said, kept wherever its speaker is.
-    pub(super) fn kept(&self) -> Option<Design> {
+    pub(super) fn design(&self) -> Option<Design> {
         self.line.clone()
     }
 }

@@ -50,14 +50,14 @@ pub(super) fn instance(
 #[derive(Default)]
 pub(super) struct Set {
     origin: V3,
-    held: MirroredBlock,
+    block: MirroredBlock,
     cnt: u32,
 }
 
 impl Set {
     /// `instances` holds INSTANCE_FLOATS floats an instance, relative to `origin`.
     pub(super) fn write(&mut self, draw: &mut DrawList, origin: V3, instances: &[f32]) {
-        let written = self.held.write(draw, bytes(instances));
+        let written = self.block.write(draw, bytes(instances));
         self.cnt = if written {
             (instances.len() / INSTANCE_FLOATS) as u32
         } else {
@@ -68,17 +68,17 @@ impl Set {
 
     /// Whether it held a block.
     pub(super) fn free(&mut self, draw: &mut DrawList) -> bool {
-        let held = self.held.bytes > 0;
-        self.held.free(draw);
+        let held = self.block.bytes > 0;
+        self.block.free(draw);
         self.cnt = 0;
         held
     }
 
     pub(super) fn draw(&self, draw: &mut DrawList, eye: V3) {
-        if self.cnt > 0 && self.held.handle != 0 {
+        if self.cnt > 0 && self.block.handle != 0 {
             draw.draw_as(
                 PIPELINE_MARKER,
-                self.held.handle,
+                self.block.handle,
                 self.cnt,
                 0,
                 DrawList::translation(self.origin, eye),

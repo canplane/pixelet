@@ -134,14 +134,14 @@ impl Store for Disk<'_> {
 /// eight around it and no more.
 #[derive(Default)]
 pub struct Walk {
-    held: FnvHashMap<[i32; 2], TileRows>,
+    tiles: FnvHashMap<[i32; 2], TileRows>,
 }
 
 impl Walk {
     /// Drops what is not in `tile`'s 3×3.
     pub fn keep_around(&mut self, tile: [i32; 2]) {
         let near = |p: [i32; 2]| (p[0] - tile[0]).abs() <= 1 && (p[1] - tile[1]).abs() <= 1;
-        self.held.retain(|&p, _| near(p));
+        self.tiles.retain(|&p, _| near(p));
     }
 }
 
@@ -152,11 +152,11 @@ impl Store for Walk {
         repo: &TerrainRepository,
         tile: [i32; 2],
     ) -> Result<TileRows, String> {
-        if let Some(rows) = self.held.get(&tile) {
+        if let Some(rows) = self.tiles.get(&tile) {
             return Ok(rows.clone());
         }
         let rows = tile_rows(client, repo, tile)?;
-        self.held.insert(tile, rows.clone());
+        self.tiles.insert(tile, rows.clone());
         Ok(rows)
     }
 }

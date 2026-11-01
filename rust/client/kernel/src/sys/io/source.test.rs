@@ -7,7 +7,7 @@ fn tile(name: &str) -> Tile {
 }
 
 /// The formats this client reads, by each kind's bake number: the published
-/// table's (pxl-spec bake/published.json `FORMAT`), never copied.
+/// table's (pxl-spec bake/publication.json `FORMAT`), never copied.
 fn formats() -> Vec<u32> {
     BaseLayer::ALL.into_iter().map(|l| FORMAT.of(l)).collect()
 }

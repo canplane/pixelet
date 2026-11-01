@@ -16,10 +16,10 @@ fn storage_file_format() {
     let _g = sys::serial();
     for kept in StorageFile::ALL {
         on_emptied(kept);
-        let bytes = sealed(kept, &[7, 0, 255]);
+        let bytes = seal(kept, &[7, 0, 255]);
         assert_eq!(bytes.first(), Some(&kept.format()));
         assert_eq!(read(kept, &bytes), Some(vec![7, 0, 255]));
-        assert_eq!(read(kept, &sealed(kept, &[])), Some(vec![]));
+        assert_eq!(read(kept, &seal(kept, &[])), Some(vec![]));
         assert!(matches!(storage_of(kept, Vec::new()), StorageRead::None));
         assert!(!is_refused(kept));
     }

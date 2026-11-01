@@ -118,7 +118,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
                 let v = overwrite::val(&store.columns(), held, Cut::NONE, target, [x, y, z]);
-                let kept = answer::eighths(overwrite::filled(&store.columns(), held));
+                let kept = answer::eighths(overwrite::fill_share(&store.columns(), held));
                 if v != VOID && kept > 0 {
                     out.insert([x, y, z], (v, kept));
                 }
@@ -282,21 +282,21 @@ fn leaf_words_freed_on_erase() {
         id: MARKER,
         ext: marker_text("cafe"),
     }]);
-    let e = store.read((zoom, at)).placed().expect("placed");
+    let e = store.read((zoom, at)).entry().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
     store.write([Write {
         key: key(zoom, at),
         id: VOID,
         ext: None,
     }]);
-    assert!(store.read((zoom, at)).placed().is_none());
+    assert!(store.read((zoom, at)).entry().is_none());
     // The freed slot is the next one kept: nothing outlived its leaf.
     store.write([Write {
         key: key(zoom, at),
         id: MARKER,
         ext: marker_text("bar"),
     }]);
-    let e = store.read((zoom, at)).placed().expect("placed again");
+    let e = store.read((zoom, at)).entry().expect("placed again");
     assert_eq!(e.ext, 1);
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
 }
@@ -316,7 +316,7 @@ fn marker_text_change_cube() {
     assert_eq!(put(&mut store, "cafe").len(), 1);
     // The old record's slot is the one kept, so the word is the same.
     assert_eq!(put(&mut store, "bar").len(), 1);
-    let e = store.read((zoom, at)).placed().expect("placed");
+    let e = store.read((zoom, at)).entry().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
 }
 

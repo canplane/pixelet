@@ -40,7 +40,7 @@ export const SYS_SLEEP = 0x1002;
  * Until it comes nothing is observed: the floor is held at the zoom it names, and no
  * tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs). */
 export const FS_MOUNT = 0x1301;
-/** A file the kernel refused (the snapshot's `refused`) is empty now, or its source's
+/** A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's
  * own again, what it held set aside by the host: the kernel reads it again, and writes
  * a storage file from then on. */
 export const FS_TRUNCATED = 0x1302;

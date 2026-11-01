@@ -5,7 +5,7 @@
  * — what vite.config.ts's `define` did — so a branch on one is folded where
  * it is compiled and what only a development build uses is not in a
  * production one at all. They are values and not globals for that reason:
- * `__IS_DEV__ ? EVERY : SHIPPED` read at run time carries both.
+ * `__IS_DEV__ ? EVERY : PRODUCTION` read at run time carries both.
  */
 
 import * as path from "node:path";
@@ -55,8 +55,8 @@ const inlineEnums = ({ types: t }) => ({
       const binding = p.scope.getBinding(object.name);
       const members = !binding
         ? state.own.get(object.name)
-        : state.declared.has(binding.identifier)
-          ? state.declared.get(binding.identifier)
+        : state.enums.has(binding.identifier)
+          ? state.enums.get(binding.identifier)
           : binding.path.isImportSpecifier()
             ? state.imports.get(object.name)
             : undefined;
@@ -73,7 +73,7 @@ const inlineEnums = ({ types: t }) => ({
           `const-enum: enum ${name} is not const, so a bundle would carry its members' names; declare it \`const enum\``,
         );
       }
-      if (!state.declared.has(p.node.id)) {
+      if (!state.enums.has(p.node.id)) {
         throw p.buildCodeFrameError(stale(`const enum ${name}`));
       }
       // The declaration itself first: a path struck only through its parent
@@ -89,7 +89,7 @@ const inlineEnums = ({ types: t }) => ({
       // before any is struck: the traversal reaches a declaration before the
       // uses below it, and a struck path answers no question about itself.
       enter(p, state) {
-        state.declared = new Map();
+        state.enums = new Map();
         const local = LOCAL.get(state.filename) ?? new Map();
         const exported = EXPORTED.get(state.filename) ?? new Map();
         p.traverse({
@@ -98,11 +98,11 @@ const inlineEnums = ({ types: t }) => ({
             const members = (
               d.parentPath.isExportNamedDeclaration() ? exported : local
             ).get(d.node.id.name);
-            if (members) state.declared.set(d.node.id, members);
+            if (members) state.enums.set(d.node.id, members);
           },
         });
         state.own = new Map(
-          [...state.declared].map(([id, members]) => [id.name, members]),
+          [...state.enums].map(([id, members]) => [id.name, members]),
         );
         // Every import that names a const enum, by its local name.
         state.imports = new Map();

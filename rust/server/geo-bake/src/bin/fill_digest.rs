@@ -167,8 +167,8 @@ fn line(name: &str, k: u32, b: &FilledBrick<'_>) -> String {
     format!(
         "{name} {k} levels={:016x} taken={} held={} sub={:016x}",
         levels.finish(),
-        b.taken,
-        b.held,
+        b.peak_groups,
+        b.groups,
         sub.finish()
     )
 }
@@ -209,7 +209,7 @@ fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
 
 /// The lines of `set`, made where the machine keeps none of this digest:
 /// their path.
-fn made(set: &Path, workers: usize) -> Result<PathBuf, String> {
+fn lines_path(set: &Path, workers: usize) -> Result<PathBuf, String> {
     let home = kept_home()?;
     let path = home.join(key(&root(), set)?);
     if path.is_file() {
@@ -270,7 +270,7 @@ fn run() -> Result<bool, String> {
     }
     let set = args.first().map_or(SET, String::as_str);
     let workers = std::thread::available_parallelism().map_or(4, |n| n.get());
-    println!("{}", made(Path::new(set), workers)?.display());
+    println!("{}", lines_path(Path::new(set), workers)?.display());
     Ok(true)
 }
 

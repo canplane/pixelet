@@ -270,7 +270,7 @@ pub fn face_height(cell: Zoom, top: i32) -> i32 {
 /// The face cell of a column whose face is `face` leaf cells, its first
 /// cell in cells of `cell`: under it, the ground under its face, which a
 /// cave may take (`Cell::opens`) and a way's bore is lined in
-/// (pxl-spec-core `way::lined`).
+/// (pxl-spec-core `way::way_cell`).
 pub fn face_cell(cell: Zoom, face: i32) -> i32 {
     cells(cell, face as f32) - leaf_cells(cell)
 }

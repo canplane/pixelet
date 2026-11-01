@@ -230,15 +230,10 @@ impl ScreenAo {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::ao);
         let steps: [(u32, u32, u32, u32); 4] = [
-            (self.downsample.pipeline, self.groups[0], self.half_view, 0),
-            (self.sample.pipeline, self.groups[1], self.ping_view[0], 0),
-            (self.blur.pipeline, self.groups[2], self.ping_view[1], 0),
-            (
-                self.blur.pipeline,
-                self.groups[3],
-                self.ping_view[0],
-                self.stride,
-            ),
+            (self.downsample.id, self.groups[0], self.half_view, 0),
+            (self.sample.id, self.groups[1], self.ping_view[0], 0),
+            (self.blur.id, self.groups[2], self.ping_view[1], 0),
+            (self.blur.id, self.groups[3], self.ping_view[0], self.stride),
         ];
         for (k, &(pipeline, group, target, off)) in steps.iter().enumerate() {
             let pass = g.pass(
@@ -277,7 +272,7 @@ impl ScreenAo {
             );
             self.apply_bound = bound;
         }
-        pass.set_pipeline(self.apply.pipeline);
+        pass.set_pipeline(self.apply.id);
         pass.set_bind_group(0, self.apply_group, &[]);
         pass.draw(6, count, 0, 0);
     }

@@ -324,7 +324,7 @@ template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept
 }
 
 // What a record takes of a stream's room, measured as `emit` writes it.
-template <class F> std::uint64_t measured(F &&put) noexcept {
+template <class F> std::uint64_t record_size(F &&put) noexcept {
     Count count;
     put(count);
     return (2 + std::uint64_t{count.n}) * WORD;

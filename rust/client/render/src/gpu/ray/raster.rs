@@ -30,7 +30,7 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use pxl_spec_core::param::light::SAMPLE;
-use pxl_spec_core::param::raster::GROWN;
+use pxl_spec_core::param::raster::GROWTH;
 
 /// The raster's pipelines, made with the cast's; its args, made with them;
 /// its boxes, room for `room` samples, made again where the grid's samples
@@ -39,18 +39,18 @@ use pxl_spec_core::param::raster::GROWN;
 /// one-layer array, `visibility`, the visibility buffer) and the depth it is
 /// tested by; and the groups of the boxes' writing, their drawing and the
 /// faces' asking, the boxes' and the missed pixels' hits', made again
-/// exactly when what they bind is another (`bound`).
+/// exactly when what they bind is another (`bindings`).
 pub(super) struct Raster {
     /// The boxes' writing, the eye's and the shadow map's (pxl-shader
     /// raster.rs `sample_box_cs`), each over its own group.
-    pub(super) boxes_built: Pipeline,
-    faces_built: Pipeline,
-    draw_built: Pipeline,
+    pub(super) boxes_pipeline: Pipeline,
+    faces_pipeline: Pipeline,
+    draw_pipeline: Pipeline,
     /// The gate the boxes are drawn through in a frame not drawn whole, and
     /// its group over the claimed tiles (`Resolve::tiles`).
     gate: Pipeline,
     gate_group: u32,
-    gate_bound: (u32, u32),
+    gate_bindings: (u32, u32),
     pub(super) args: u32,
     boxes: u32,
     room: u32,
@@ -62,14 +62,14 @@ pub(super) struct Raster {
     depth_view: u32,
     size: [u32; 2],
     groups: [u32; 4],
-    bound: [u32; 10],
+    bindings: [u32; 10],
     /// The light's, made where its shadows are first cast (`light_made`); and a
     /// visibility buffer naming no sample, bound where it is not.
     pub(super) light: LightRaster,
     blank_array: u32,
 }
 
-/// The light's samples' boxes, written by the eye's pass (`boxes_built`) and
+/// The light's samples' boxes, written by the eye's pass (`boxes_pipeline`) and
 /// drawn from the light by the same draw (pxl-spec-core `param::light::SAMPLE`): its
 /// boxes, room for a sample every `param::light::SAMPLE` texels; their args; its
 /// view, a uniform; its targets at the map's side, in the box's order; and
@@ -93,12 +93,16 @@ impl Raster {
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> Raster {
         let blank = g.texture(1, 1, 1, Format::r32uint, 1, texture_usage::TEXTURE_BINDING);
         Raster {
-            boxes_built: pipelines.build_compute(g, SHADER_SAMPLE_BOX, &compute::SAMPLE_BOX_GROUP),
-            faces_built: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
-            draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
+            boxes_pipeline: pipelines.build_compute(
+                g,
+                SHADER_SAMPLE_BOX,
+                &compute::SAMPLE_BOX_GROUP,
+            ),
+            faces_pipeline: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
+            draw_pipeline: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
             gate_group: 0,
-            gate_bound: (0, 0),
+            gate_bindings: (0, 0),
             args: g.buf(
                 word_bytes(raster::ARGS_WORDS as usize),
                 buffer_usage::STORAGE
@@ -119,7 +123,7 @@ impl Raster {
             depth_view: 0,
             size: [0; 2],
             groups: [0; 4],
-            bound: [0; 10],
+            bindings: [0; 10],
             light: LightRaster::default(),
             blank_array: g.view(blank, true, 0, 1, 0, 1),
         }
@@ -200,7 +204,7 @@ impl Raster {
             0.0,
             0.0,
             0.0,
-            GROWN * px,
+            GROWTH * px,
             w,
             h,
             far,
@@ -218,10 +222,10 @@ impl Raster {
             args[raster::ARGS_ASKS as usize] = grid.asks_at;
             g.write_buf(self.args, 0, bytes(&args));
         }
-        let bound = [
+        let bindings = [
             eye, beams, head, self.boxes, clipmap, ground, shards, overwrites, pool, marks,
         ];
-        if bound != self.bound {
+        if bindings != self.bindings {
             for group in self.groups {
                 release(group);
             }
@@ -230,7 +234,7 @@ impl Raster {
             // head: one pass, bound to either's args.
             let faces = |args: u32, at: u32| {
                 g.bind_group(
-                    self.faces_built.layouts[0],
+                    self.faces_pipeline.layouts[0],
                     &[
                         buf_entry(0, eye),
                         buf_entry(1, clipmap),
@@ -245,7 +249,7 @@ impl Raster {
             };
             self.groups = [
                 g.bind_group(
-                    self.boxes_built.layouts[0],
+                    self.boxes_pipeline.layouts[0],
                     &[
                         buf_entry(0, eye),
                         buf_entry(8, beams),
@@ -255,13 +259,13 @@ impl Raster {
                     ],
                 ),
                 g.bind_group(
-                    self.draw_built.layouts[0],
+                    self.draw_pipeline.layouts[0],
                     &[buf_entry(0, self.uniform), buf_entry(1, self.boxes)],
                 ),
                 faces(self.args, 0),
                 faces(marks, word_bytes(ray::MISS_ARGS_ROOM as usize)),
             ];
-            self.bound = bound;
+            self.bindings = bindings;
         }
     }
 
@@ -270,7 +274,7 @@ impl Raster {
     /// the hits' asks, its args among the walk again's words (`marks`,
     /// pxl-spec-core `ray::MISS_ARGS_ROOM`) as the boxes' are in its own.
     pub(super) fn ask_hits(&self, g: &Gpu, pass: u32, marks: u32) {
-        g.set_pipeline(pass, self.faces_built.pipeline);
+        g.set_pipeline(pass, self.faces_pipeline.id);
         g.set_bind_group(pass, 0, self.groups[3], &[]);
         let at = ray::MISS_ARGS_ROOM + raster::ARGS_FACES;
         g.dispatch_indirect(pass, marks, word_bytes(at as usize));
@@ -294,7 +298,7 @@ impl Raster {
         if samples_cast {
             let pass = g.compute_pass(encoder, stamp.pass());
             g.set_bind_group(pass, 0, self.groups[0], &[]);
-            g.set_pipeline(pass, self.boxes_built.pipeline);
+            g.set_pipeline(pass, self.boxes_pipeline.id);
             let w = compute::SAMPLE_BOX_WORKGROUP;
             let [x, y] = grid.samples;
             g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
@@ -315,19 +319,19 @@ impl Raster {
             ),
         );
         if let Some((tiles, cnt)) = claimed {
-            if tiles != self.gate_bound {
+            if tiles != self.gate_bindings {
                 release(self.gate_group);
                 self.gate_group = g.bind_group(
                     self.gate.layouts[0],
                     &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
                 );
-                self.gate_bound = tiles;
+                self.gate_bindings = tiles;
             }
-            g.set_pipeline(pass, self.gate.pipeline);
+            g.set_pipeline(pass, self.gate.id);
             g.set_bind_group(pass, 0, self.gate_group, &[]);
             g.draw(pass, 6, cnt, 0, 0);
         }
-        g.set_pipeline(pass, self.draw_built.pipeline);
+        g.set_pipeline(pass, self.draw_pipeline.id);
         g.set_bind_group(pass, 0, self.groups[1], &[]);
         g.draw_indirect(pass, self.args, 0);
         g.end(pass);
@@ -339,7 +343,7 @@ impl Raster {
         }
         let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::face).pass());
         g.set_bind_group(pass, 0, self.groups[2], &[]);
-        g.set_pipeline(pass, self.faces_built.pipeline);
+        g.set_pipeline(pass, self.faces_pipeline.id);
         g.dispatch_indirect(pass, self.args, word_bytes(raster::ARGS_FACES as usize));
         g.end(pass);
     }
@@ -369,7 +373,7 @@ impl Raster {
             s.depth = g.texture(size, size, 1, Format::depth32float, 1, usage);
             s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
             s.group = g.bind_group(
-                self.draw_built.layouts[0],
+                self.draw_pipeline.layouts[0],
                 &[buf_entry(0, s.uniform), buf_entry(1, s.boxes)],
             );
         }
@@ -423,7 +427,7 @@ impl Raster {
             f32::from_bits(1),
             0.0,
             0.0,
-            GROWN * length(v.across),
+            GROWTH * length(v.across),
             n,
             n,
             v.t_max,
@@ -458,7 +462,7 @@ impl Raster {
                 stamp.pass(),
             ),
         );
-        g.set_pipeline(pass, self.draw_built.pipeline);
+        g.set_pipeline(pass, self.draw_pipeline.id);
         g.set_bind_group(pass, 0, s.group, &[]);
         g.draw_indirect(pass, s.args, 0);
         g.end(pass);

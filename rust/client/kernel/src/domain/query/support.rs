@@ -95,12 +95,12 @@ impl<'w, 'a> Upright<'w, 'a> {
         until: Until,
     ) -> impl Iterator<Item = Aabb> + use<'_, 'w, 'a> {
         (0..self.across * self.across)
-            .filter_map(move |k| self.met(k, z, to, until).val().flatten())
+            .filter_map(move |k| self.meet(k, z, to, until).val().flatten())
     }
 
     /// Column `k`'s ray, with what the world held of the way: a ray that
     /// meets nothing before a lack tells nothing past it.
-    fn met(&mut self, k: u32, z: f64, to: f64, until: Until) -> Answer<Option<Aabb>> {
+    fn meet(&mut self, k: u32, z: f64, to: f64, until: Until) -> Answer<Option<Aabb>> {
         let middle = |i: u32, c: f64| c + (f64::from(i) + 0.5) * self.side;
         let ray = Ray {
             origin: [
@@ -128,7 +128,7 @@ impl<'w, 'a> Upright<'w, 'a> {
         loop {
             let top = (0..self.across * self.across)
                 .map(
-                    |k| match self.met(k, z, BOUNDS.max[2], Until::Transparent) {
+                    |k| match self.meet(k, z, BOUNDS.max[2], Until::Transparent) {
                         Answer::Exact(None) => BOUNDS.max[2],
                         Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => b.min[2].max(z),
                         Answer::Coarser(None, _) | Answer::Nothing(_) => z,
@@ -204,7 +204,7 @@ impl<'w, 'a> Upright<'w, 'a> {
     }
 
     /// `v`, with the first tile its answers lacked.
-    fn done<T>(&self, v: T) -> Answer<T> {
+    fn answer<T>(&self, v: T) -> Answer<T> {
         match self.lack {
             None => Answer::Exact(v),
             Some(l) => Answer::Coarser(v, l),
@@ -235,7 +235,7 @@ impl<'a> World<'a> {
             z if z > start => Some(z.min(hi)),
             _ => c.below(start).or(surface.map(|_| start)),
         };
-        c.done(stands)
+        c.answer(stands)
     }
 
     /// From the center `at` down to the first solid's top, or up out of what
@@ -248,7 +248,7 @@ impl<'a> World<'a> {
             z if z > start => Some(z.min(BOUNDS.max[2])),
             z => c.below(z),
         };
-        c.done(stands)
+        c.answer(stands)
     }
 
     /// The floor under `at` nearest its height: the top of a solid with
@@ -266,7 +266,7 @@ impl<'a> World<'a> {
             .into_iter()
             .flatten()
             .min_by(|a, b| (a - z).abs().total_cmp(&(b - z).abs()));
-        c.done(nearest)
+        c.answer(nearest)
     }
 
     /// Where a walker standing at the center `from` ends going toward `to`,
@@ -345,7 +345,7 @@ impl<'a> World<'a> {
         floor = {
             let mut c = Upright::new(self, center(at), LEAF_ZOOM);
             let f = c.lift(floor);
-            c.done(f).exact()?
+            c.answer(f).exact()?
         };
         // Amanatides and Woo's traversal: the share of `way` at each axis's next edge.
         loop {
@@ -414,7 +414,7 @@ impl<'a> World<'a> {
         let moved = if z > floor {
             let mut left = Upright::new(self, from, LEAF_ZOOM);
             let stopped = left.above(floor, z + cell).is_some();
-            left.done(()).exact()?;
+            left.answer(()).exact()?;
             (!stopped).then_some(z)
         } else {
             if falls {
@@ -422,6 +422,6 @@ impl<'a> World<'a> {
             }
             Some(z)
         };
-        c.done(moved).exact()
+        c.answer(moved).exact()
     }
 }

@@ -64,7 +64,7 @@ function packet(fmt: number, bytes: U8Array): U8Array {
 }
 
 /** `pkt` after `fmt`, as a file. */
-function filed(fmt: number, pkt: U8Array): U8Array {
+function as_file(fmt: number, pkt: U8Array): U8Array {
   const out = new Uint8Array(1 + pkt.byteLength);
   out[0] = fmt;
   out.set(pkt, 1);
@@ -117,7 +117,7 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
       .u32_array(Uint32Array.from(rows))
       .strs(texts),
   );
-  return filed(fmt, new TreeEncoder().encode(tree, { init_cap: 1 << 12 }));
+  return as_file(fmt, new TreeEncoder().encode(tree, { init_cap: 1 << 12 }));
 }
 
 /** The top's rows (host.json `top`). */
@@ -142,7 +142,7 @@ export function encode_top(rows: readonly TopRow[]): U8Array {
       .i32_array(Int32Array.from(rows, (r) => r.z))
       .u32_array(Uint32Array.from(rows, (r) => r.fold)),
   );
-  return filed(
+  return as_file(
     format.OBJECT_TOP,
     new TreeEncoder().encode(tree, { init_cap: 1 << 12 }),
   );
@@ -232,5 +232,5 @@ export function object_backend(s: Storage = STORAGE): {
 }
 
 /** The one OBJECT is bound to (namespace.ts), and refusals are set aside by
- * (refused.ts). */
+ * (refusal.ts). */
 export const OBJECTS = object_backend();

@@ -143,7 +143,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
             ticket: 0,
         };
         for s in 0..ENTRIES {
-            w.entries[(clip_level * ENTRIES + s) as usize].brick = wanted(cell, first, s);
+            w.entries[(clip_level * ENTRIES + s) as usize].brick = entry_brick(cell, first, s);
         }
     }
     assign_slots(w, false);
@@ -272,7 +272,7 @@ fn lay(w: &mut Clipmap, eye: [f64; 2], pivot: [f64; 2]) {
             ticket: 0,
         };
         for s in 0..ENTRIES {
-            w.entries[(clip_level * ENTRIES + s) as usize].brick = wanted(cell, first, s);
+            w.entries[(clip_level * ENTRIES + s) as usize].brick = entry_brick(cell, first, s);
         }
     }
     assign_slots(w, false);

@@ -19,7 +19,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
 
-const HELD: usize = 512;
+const CACHE_CAP: usize = 512;
 
 /// A side of the raster's blocks, in samples: the ingest cuts its warps into
 /// them (`raster2pgsql -t`), each a tile of the pyramid at `BLOCK_ZOOM`, kept
@@ -68,7 +68,7 @@ pub struct Raster {
     raster_tiles: Vec<RasterTileAt>,
     by_key: FnvHashMap<(i64, i64), usize>,
     side: i64,
-    held: Mutex<Cache>,
+    cache: Mutex<Cache>,
 }
 
 #[derive(Clone)]
@@ -156,7 +156,7 @@ impl Raster {
             raster_tiles,
             by_key,
             side,
-            held: Mutex::new(Cache::default()),
+            cache: Mutex::new(Cache::default()),
         })
     }
 
@@ -166,10 +166,10 @@ impl Raster {
         i: usize,
     ) -> Result<Arc<RasterTile>, postgres::Error> {
         let slot = {
-            let mut held = self.held.lock().expect("raster");
+            let mut held = self.cache.lock().expect("raster");
             held.tick += 1;
             let tick = held.tick;
-            if !held.slots.contains_key(&i) && held.slots.len() >= HELD {
+            if !held.slots.contains_key(&i) && held.slots.len() >= CACHE_CAP {
                 let oldest = held
                     .slots
                     .iter()

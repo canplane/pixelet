@@ -521,7 +521,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "/** SETTING without its `dev` entries: what a production bundle carries in its place. */"
             .into(),
         format!(
-            "export const SETTING_SHIPPED = {} as const;",
+            "export const SETTING_PRODUCTION = {} as const;",
             ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "")?
         ),
     ]);

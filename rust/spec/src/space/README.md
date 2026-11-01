@@ -137,7 +137,7 @@ Every tree in this world is dyadic. A node's parent is its coordinate halved and
 its children are the 2^D under it (`hierarchy/tree.rs`), its size is a zoom, a
 cube at a zoom is one box (`coord/zoom.rs` `cube`), and a ray crosses a box by
 the ray's span between the box's planes on each axis (pxl-spec-core `cast.rs`
-`spans`, `entered`). That much is one law, written once. What a node holds,
+`spans`, `entry_plane`). That much is one law, written once. What a node holds,
 whether it is resident, how it is stored and how a reader walks it are each
 tree's own, and follow from what it represents:
 

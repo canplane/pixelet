@@ -55,7 +55,7 @@ type Registration = Option<Result<ModelHandle, Refusal>>;
 
 /// Each file, by its number below the asset root, by the height it was
 /// asked at, its bits.
-static REGISTERED: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
+static REGISTRY: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 
 /// The file `slot` names registered `height_u` units tall, or at its own
 /// size when None, once: two slots naming one file reach one. None while it
@@ -66,7 +66,7 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
     let load = load_of(slot)?;
     let file = load.number();
     let key = height_u.map(f64::to_bits);
-    let registered = REGISTERED.get(Vec::new);
+    let registered = REGISTRY.get(Vec::new);
     let at = registered
         .iter()
         .position(|(a, h, _)| *a == file && *h == key);
@@ -95,10 +95,10 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
 /// `slot`'s model as `model_of` registered it at `height_u`, asking
 /// nothing: what a reader that must not load, such as the query, finds;
 /// none while it is not registered.
-pub fn registered(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
+pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<ModelHandle> {
     let file = load_of(slot)?.number();
     let key = height_u.map(f64::to_bits);
-    REGISTERED
+    REGISTRY
         .get(Vec::new)
         .iter()
         .find(|(a, h, _)| *a == file && *h == key)
@@ -112,7 +112,7 @@ async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
         .await
         .ok_or_else(Refusal::now);
     let key = height_u.map(f64::to_bits);
-    if let Some(row) = REGISTERED
+    if let Some(row) = REGISTRY
         .get(Vec::new)
         .iter_mut()
         .find(|(a, h, _)| *a == file && *h == key)

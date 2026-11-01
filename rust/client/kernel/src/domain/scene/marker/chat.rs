@@ -22,7 +22,7 @@ const SHOWN_MS: f64 = 8000.0;
 /// character swap cannot make a dismissed line look new.
 struct Line {
     text: Rc<str>,
-    said: f64,
+    said_at_ms: f64,
 }
 
 #[derive(Default)]
@@ -39,7 +39,7 @@ fn chat() -> &'static mut Chat {
 pub fn append_chat_line(text: &str) {
     chat().line = Some(Line {
         text: text.into(),
-        said: now(),
+        said_at_ms: now(),
     });
 }
 
@@ -47,10 +47,10 @@ pub fn append_chat_line(text: &str) {
 /// woken then.
 pub(super) fn shown_line() -> Option<Design> {
     let line = chat().line.as_ref()?;
-    if line.said + SHOWN_MS <= now() {
+    if line.said_at_ms + SHOWN_MS <= now() {
         return None;
     }
-    wake_at(line.said + SHOWN_MS);
+    wake_at(line.said_at_ms + SHOWN_MS);
     Some(Design::Bubble {
         text: line.text.clone(),
     })

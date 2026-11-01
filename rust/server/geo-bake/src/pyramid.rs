@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
@@ -285,7 +285,7 @@ impl StagedSet<'_> {
     /// `content` reads its tile: the stage's beside a staged tile, none for
     /// one gone, else the set's (`base`, its `fits`). `None` where the set
     /// keeps nothing, one baked before it did, so it is not known.
-    pub fn kept(
+    pub fn fit_of(
         &self,
         p: Tile,
         base: Option<&FnvHashMap<Tile, String>>,
@@ -359,7 +359,7 @@ pub fn fold<L: Base>(
 
 /// Every tile its parent marks as no tile (`Base::occupancy`), under
 /// `top`: what a reader never asks for.
-pub fn unasked<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, String> {
+pub fn unasked_tiles<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, String> {
     let mut out = FnvHashSet::default();
     let listed = set.by_zoom()?;
     for zoom in top + 1..=L::LEAF {

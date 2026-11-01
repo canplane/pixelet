@@ -199,9 +199,9 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
     state.sys.rise();
     door.drain(|submission| match submission {
         Submission::Opened(opened) => {
-            if let Some(owner) = state.files.opened(&mut state.sys, &opened) {
+            if let Some(owner) = state.files.complete_open(&mut state.sys, &opened) {
                 door.post(
-                    frame::tagged(spec::SENDER, owner),
+                    frame::tag_of(spec::SENDER, owner),
                     spec::cmd::OPENED,
                     0,
                     opened.res,
@@ -322,7 +322,7 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
                 return Err(MarshalError::new(Errno::EINVAL));
             }
             for k in 0..n {
-                door.post(frame::tagged(spec::SENDER, k), spec::cmd::EVENT, 0, 0);
+                door.post(frame::tag_of(spec::SENDER, k), spec::cmd::EVENT, 0, 0);
             }
             Ok(Some(n as i32))
         }

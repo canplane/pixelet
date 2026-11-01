@@ -9,7 +9,7 @@
 
 use pxl_shader_macro::compute;
 use pxl_spec_core::cast::{self, End, Trace};
-use pxl_spec_core::{beam, observed, raster, ray, tally, way};
+use pxl_spec_core::{beam, pyramid, raster, ray, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
@@ -17,10 +17,10 @@ use spirv_std::{spirv, Image};
 use super::Rays;
 use crate::beam::{node_put, Beams, Words};
 use crate::eye::{grid, Eye};
-use crate::observed::{pyramid_at, pyramid_put, Pyramid};
+use crate::pyramid::{pyramid_at, pyramid_put, Pyramid};
 use crate::observer::{self, Observer, Take};
 use crate::workgroup::CAST_SIDE;
-use crate::world::{face_of, unasked, World};
+use crate::world::{face_of, unasked_face, World};
 use crate::{add, most, opens};
 
 /// The visible sample at each drawn pixel (pxl-render gpu/ray/raster.rs): its
@@ -32,7 +32,7 @@ type Visibility = Image!(2D, type = u32, sampled = true, arrayed = true);
 /// face it entered through, then how far as f32 bits, then the four palette indices
 /// the ground's asset is drawn by, a byte each (`ground::word`), or in the
 /// steps view the nodes its descent asked about, then what lies about its
-/// face (`World::faced`); where it met nothing, the first two zero.
+/// face (`World::ask_face`); where it met nothing, the first two zero.
 fn word<A: Copy>(
     ray: &cast::Ray,
     met: Trace<A>,
@@ -97,7 +97,7 @@ pub struct Tiles {
 /// here: its first word is the mark the walk again goes by (pxl-spec-core
 /// `ray::MISS`; `miss_list_cs`, `miss_cs`), so no lane carries a walk's
 /// footprint for the few that walk. A marked pixel is listed for that walk
-/// (pxl-spec-core `observed::MARKS_AT`) by a plain write, its place taken
+/// (pxl-spec-core `pyramid::MARKS_AT`) by a plain write, its place taken
 /// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_CNT`),
 /// so no word of the pyramid is typed atomic here; one past the list's room
 /// has the walk over every pixel dispatched instead.
@@ -108,7 +108,7 @@ pub fn cast_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &mut Pyramid,
     #[spirv(descriptor_set = 0, binding = 13)] visibility: &Visibility,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] marks: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 30)] changed_at: &[u32],
@@ -132,13 +132,13 @@ pub fn cast_cs(
     let aim = eye.aim(px);
     let ray = aim.ray;
     // [naga] Fetched at u32s, as the raster wrote them.
-    let kept: UVec4 = visibility.fetch(UVec3::new(id.x, id.y, 0));
+    let visible: UVec4 = visibility.fetch(UVec3::new(id.x, id.y, 0));
     // The cell off its visible sample, the sky, or a walk of its own
     // (observer.rs `resolve`), the nearest cell entered at the reach where none
     // is.
-    let (took, hit, k) = observer::resolve(eye, beams, px, &aim, kept.x);
+    let (took, hit, k) = observer::resolve(eye, beams, px, &aim, visible.x);
     let steps = eye.origin.w != 0;
-    let on = pyramid_at(seen, observed::TALLY_ON) != 0;
+    let on = pyramid_at(pyramid, pyramid::TALLY_ON) != 0;
     // No sample about it met anything: the sky, taken without a walk of its
     // own, as a thing thinner than the samples' spacing between them goes
     // unseen.
@@ -198,9 +198,9 @@ pub fn cast_cs(
     // SAFETY: within the rays, bounded by their size above.
     unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
     let whole = [size.x.div_ceil(CAST_SIDE), size.y.div_ceil(CAST_SIDE)];
-    let at = enlist(marks, observed::MARKS, whole);
-    if at < observed::MARKS {
-        pyramid_put(seen, observed::MARKS_AT + at, id.y << 16 | id.x);
+    let at = enlist(marks, pyramid::MARKS, whole);
+    if at < pyramid::MARKS {
+        pyramid_put(pyramid, pyramid::MARKS_AT + at, id.y << 16 | id.x);
     }
 }
 
@@ -240,10 +240,10 @@ pub(crate) fn enlist(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
 
 /// Pixel `id`'s ray again from its cell's start, writing what it asks into
 /// the observed pyramid (`Writing`): its words, what lies about the face it
-/// stopped on told at once where it needs no asking (`world::unasked`),
+/// stopped on told at once where it needs no asking (`world::unasked_face`),
 /// else its hit kept for that to be asked once a hit (`keep_hit`).
 #[allow(clippy::too_many_arguments)]
-fn missed(
+fn walk_missed(
     eye: &Eye,
     clipmap: &[IVec4],
     ground: &[u32],
@@ -252,7 +252,7 @@ fn missed(
     overwrites: &[u32],
     pool: &[u32],
     beams: &mut Beams,
-    seen: &mut Pyramid,
+    pyramid: &mut Pyramid,
     id: UVec3,
     size: UVec3,
 ) -> [u32; ray::WORDS as usize] {
@@ -266,11 +266,11 @@ fn missed(
         pool: way::tree::Read(pool),
     };
     let (aim, met, before) =
-        observer::walked(eye, world, seen, &*beams, px_tan(eye, id, size), &mut (), &mut ());
-    let (asks, faces) = unasked(met.ends, met.hit.asset[0]);
+        observer::walk_again(eye, world, pyramid, &*beams, px_tan(eye, id, size), &mut (), &mut ());
+    let (asks, faces) = unasked_face(met.ends, met.hit.asset[0]);
     let faces = if asks {
         let face = face_of(&aim.ray, met.hit.axis);
-        keep_hit(eye, beams, seen, &met.hit.node, face, id)
+        keep_hit(eye, beams, pyramid, &met.hit.node, face, id)
     } else {
         faces
     };
@@ -284,23 +284,23 @@ fn missed(
 /// The hit at `node` of pixel `id`'s walk again, entered through face
 /// `face`, kept for what lies about that face to be asked once a hit
 /// (pxl-spec-core `beam::HIT_WORDS`): numbered as the walks take them
-/// (`observed::HITS_CNT`), the dispatch over them raised by the number
-/// that opens a workgroup (`observed::HITS_ARGS`), and its number marked
+/// (`pyramid::HITS_CNT`), the dispatch over them raised by the number
+/// that opens a workgroup (`pyramid::HITS_ARGS`), and its number marked
 /// waiting (`beam::HIT_WAITS`) as its pixel's last word until its faces
 /// are put there (`hit_faces_cs`); none past `beam::HITS`.
 fn keep_hit(
     eye: &Eye,
     beams: &mut Beams,
-    seen: &mut Pyramid,
+    pyramid: &mut Pyramid,
     node: &cast::Node,
     face: u32,
     id: UVec3,
 ) -> u32 {
-    let r = seen.add(observed::HITS_CNT, 1);
+    let r = pyramid.add(pyramid::HITS_CNT, 1);
     if r >= beam::HITS {
         return 0;
     }
-    opens(seen, observed::HITS_ARGS, r, beam::HIT_LANES);
+    opens(pyramid, pyramid::HITS_ARGS, r, beam::HIT_LANES);
     let k = grid(eye).hit_at(r);
     node_put(beams, k + beam::HIT_NODE, node);
     beams.set(k + beam::HIT_FACE, face);
@@ -326,7 +326,7 @@ fn alike(w: &Beams, a: u32, b: u32) -> bool {
 }
 
 /// Each pixel `cast_cs` marked missed and could not list, its ray again
-/// (`missed`): a thread a drawn pixel, each but the marked returning at
+/// (`walk_missed`): a thread a drawn pixel, each but the marked returning at
 /// once, dispatched only where the list was full (`ray::MISS_ARGS_WHOLE`),
 /// after the list's walk, so a listed pixel it finds is no longer marked.
 /// The two run after `cast_cs` in the cast's one pass and write every
@@ -344,7 +344,7 @@ pub fn miss_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &mut Pyramid,
 ) {
     let clipmap: &[IVec4] = clipmap;
     let size: UVec3 = rays.query_size();
@@ -355,18 +355,18 @@ pub fn miss_cs(
     if first != ray::MISS {
         return;
     }
-    let w = missed(
-        eye, clipmap, ground, palette_indices, shards, overwrites, pool, beams, seen, id, size,
+    let w = walk_missed(
+        eye, clipmap, ground, palette_indices, shards, overwrites, pool, beams, pyramid, id, size,
     );
     write_ray(rays, id, w);
 }
 
-/// Each pixel `cast_cs` listed (pxl-spec-core `observed::MARKS_AT`), its
-/// ray again (`missed`): a thread a listed pixel, `ray::MISS_LANES` a
+/// Each pixel `cast_cs` listed (pxl-spec-core `pyramid::MARKS_AT`), its
+/// ray again (`walk_missed`): a thread a listed pixel, `ray::MISS_LANES` a
 /// workgroup and `ray::MISS_ACROSS` workgroups a row, dispatched over the
 /// rows the list filled (`ray::MISS_ARGS_LIST`), each past the count
 /// returning at once. The count is copied into the pyramid's buffer once
-/// `cast_cs` is done (`observed::MARKS_CNT`).
+/// `cast_cs` is done (`pyramid::MARKS_CNT`).
 #[compute(threads(ray::MISS_LANES), entry_point_name = "miss_list_cs")]
 #[allow(clippy::too_many_arguments)]
 pub fn miss_list_cs(
@@ -381,30 +381,30 @@ pub fn miss_list_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &mut Pyramid,
 ) {
     let clipmap: &[IVec4] = clipmap;
     let k = (group.y * ray::MISS_ACROSS + group.x) * ray::MISS_LANES + lane.x;
-    let cnt = pyramid_at(seen, observed::MARKS_CNT);
-    if k >= cnt || k >= observed::MARKS {
+    let cnt = pyramid_at(pyramid, pyramid::MARKS_CNT);
+    if k >= cnt || k >= pyramid::MARKS {
         return;
     }
-    let listed = pyramid_at(seen, observed::MARKS_AT + k);
+    let listed = pyramid_at(pyramid, pyramid::MARKS_AT + k);
     let id = UVec3::new(listed & 0xffff, listed >> 16, 0);
     let size: UVec3 = rays.query_size();
     if id.x >= size.x || id.y >= size.y {
         return;
     }
-    let w = missed(
-        eye, clipmap, ground, palette_indices, shards, overwrites, pool, beams, seen, id, size,
+    let w = walk_missed(
+        eye, clipmap, ground, palette_indices, shards, overwrites, pool, beams, pyramid, id, size,
     );
     write_ray(rays, id, w);
 }
 
 /// The missed pixels' hits the walks again kept (`keep_hit`), as many as they
 /// took, `beam::HITS` at most.
-fn hits(seen: &Pyramid) -> u32 {
-    pyramid_at(seen, observed::HITS_CNT).min(beam::HITS)
+fn hits(pyramid: &Pyramid) -> u32 {
+    pyramid_at(pyramid, pyramid::HITS_CNT).min(beam::HITS)
 }
 
 /// The number of the hit pixel (`x`, `y`) waits for, where it is one
@@ -423,7 +423,7 @@ fn alike_hit(rays: &Rays, beams: &Beams, g: &beam::Grid, k: u32, x: u32, y: u32)
 
 /// Each hit the walks again kept (`keep_hit`), a thread each,
 /// `beam::HIT_LANES` a workgroup, dispatched off their count
-/// (`observed::HITS_ARGS`): the one that asks what lies about its face is
+/// (`pyramid::HITS_ARGS`): the one that asks what lies about its face is
 /// one whose pixel's neighbors to the left and above wait for no hit alike
 /// (`alike`) within its square of `beam::HIT_SQUARE` a side, so a patch of
 /// hits alike is asked once a square, not once a pixel or a row, and
@@ -444,10 +444,10 @@ pub fn hit_lead_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &Pyramid,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &Pyramid,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] marks: &mut [u32],
 ) {
-    if id.x >= hits(seen) {
+    if id.x >= hits(pyramid) {
         return;
     }
     let g = grid(eye);
@@ -500,9 +500,9 @@ pub fn hit_faces_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &Pyramid,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &Pyramid,
 ) {
-    if id.x >= hits(seen) {
+    if id.x >= hits(pyramid) {
         return;
     }
     let g = grid(eye);

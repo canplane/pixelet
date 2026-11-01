@@ -6,7 +6,7 @@
 //! canvas's and encoded once (screen_finish.wgsl), at the frame's vignette;
 //! and the world's depth carried up to the canvas's size with it
 //! (`Surface::screen_depth`). The world's is finished into the picture it
-//! keeps at the canvas's size (`Surface::shown`), a frame not drawn whole's
+//! keeps at the canvas's size (`Surface::picture`), a frame not drawn whole's
 //! only in its claimed tiles (screen_tiles.wgsl), and shown whole on the
 //! canvas.
 
@@ -21,27 +21,27 @@ use crate::gpu::surface::Surface;
 use crate::gpu::tiles::{Tiles, SIDE};
 
 pub struct Finish {
-    built: Pipeline,
-    /// Its group over `bound`, the frame's words, the color and depth it
+    pipeline: Pipeline,
+    /// Its group over `bindings`, the frame's words, the color and depth it
     /// reads and the tiles' words: made again exactly when one is another.
     group: u32,
-    bound: [u32; 4],
+    bindings: [u32; 4],
     /// The tiles' uniform it draws them by, at the canvas's scale, and the
     /// words it binds where it draws every tile, which none reads.
     tiles: u32,
     every: u32,
-    /// The kept picture shown on the canvas, its group over the picture.
+    /// The picture at the canvas's size shown on the canvas, its group over it.
     show: Pipeline,
     show_group: u32,
-    shown: u32,
+    show_binding: u32,
 }
 
 impl Finish {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Finish {
         Finish {
-            built: pipelines.build(g, PIPELINE_SCREEN_FINISH, g.canvas()),
+            pipeline: pipelines.build(g, PIPELINE_SCREEN_FINISH, g.canvas()),
             group: 0,
-            bound: [0; 4],
+            bindings: [0; 4],
             tiles: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -49,7 +49,7 @@ impl Finish {
             every: g.buf(word_bytes(1), buffer_usage::STORAGE),
             show: pipelines.build(g, PIPELINE_SCREEN_SHOW, g.canvas()),
             show_group: 0,
-            shown: 0,
+            show_binding: 0,
         }
     }
 
@@ -63,7 +63,7 @@ impl Finish {
     /// `color`, `s`'s world color as it is shown, onto `canvas` and `s`'s
     /// depth into its screen's, a pass of its own, by the frame words in
     /// `frame`, its time counted in `span`. Where `s` keeps its picture
-    /// (`Surface::shown`), into it, only in the claimed tiles of the words
+    /// (`Surface::picture`), into it, only in the claimed tiles of the words
     /// `claimed` names (`Tiles`) where it names any, the rest as an
     /// earlier frame left it; then the picture shown whole on `canvas`.
     #[expect(
@@ -80,19 +80,19 @@ impl Finish {
         canvas: u32,
         claimed: Option<&Tiles>,
     ) {
-        let kept = s.shown_view != 0;
-        let claimed = claimed.filter(|_| kept);
+        let has_picture = s.picture_view != 0;
+        let claimed = claimed.filter(|_| has_picture);
         let (changed_at, tiles) = claimed.map_or(
             (self.every, [s.width, s.height].map(|v| v.div_ceil(SIDE))),
             |t| (t.changed_at(), t.squares()),
         );
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(span);
-        let bound = [frame, color, s.depth_only_view, changed_at];
-        if bound != self.bound {
+        let bindings = [frame, color, s.depth_only_view, changed_at];
+        if bindings != self.bindings {
             release(self.group);
             self.group = g.bind_group(
-                self.built.layouts[0],
+                self.pipeline.layouts[0],
                 &[
                     buf_entry(0, frame),
                     view_entry(1, color),
@@ -101,7 +101,7 @@ impl Finish {
                     buf_entry(31, self.tiles),
                 ],
             );
-            self.bound = bound;
+            self.bindings = bindings;
         }
         let partial = claimed.is_some();
         // A tile's quad grown by a canvas pixel each way, in the world's
@@ -123,28 +123,28 @@ impl Finish {
         );
         g.write_buf(self.tiles, 0, bytes(&t));
         let load = if partial { Load::Load } else { Load::Clear };
-        let target = if kept { s.shown_view } else { canvas };
+        let target = if has_picture { s.picture_view } else { canvas };
         let pass = g.pass(
             encoder,
             &pass_desc(target, load, s.screen_depth_view, load, 0.0, stamp.pass()),
         );
-        g.set_pipeline(pass, self.built.pipeline);
+        g.set_pipeline(pass, self.pipeline.id);
         g.set_bind_group(pass, 0, self.group, &[]);
         g.draw(pass, 6, tiles[0] * tiles[1], 0, 0);
         g.end(pass);
-        if !kept {
+        if !has_picture {
             return;
         }
-        if s.shown_view != self.shown {
+        if s.picture_view != self.show_binding {
             release(self.show_group);
-            self.show_group = g.bind_group(self.show.layouts[0], &[view_entry(1, s.shown_view)]);
-            self.shown = s.shown_view;
+            self.show_group = g.bind_group(self.show.layouts[0], &[view_entry(1, s.picture_view)]);
+            self.show_binding = s.picture_view;
         }
         let pass = g.pass(
             encoder,
             &pass_desc(canvas, Load::Clear, 0, Load::Clear, 0.0, stamp.pass()),
         );
-        g.set_pipeline(pass, self.show.pipeline);
+        g.set_pipeline(pass, self.show.id);
         g.set_bind_group(pass, 0, self.show_group, &[]);
         g.draw(pass, 3, 1, 0, 0);
         g.end(pass);

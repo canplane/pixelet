@@ -31,13 +31,13 @@ fn stored_round_trip() {
             && s.set(SettingKey::ao, ao)
             && s.set(SettingKey::person, person)
     );
-    let kept = s.stored();
+    let kept = s.storage_bytes();
     let back = read_stored(&kept);
     for key in SettingKey::ALL {
         assert_eq!(back.get(key), s.get(key), "{key:?} read back from {kept:?}");
     }
     assert!(
-        Settings::DEFAULT.stored().is_empty(),
+        Settings::DEFAULT.storage_bytes().is_empty(),
         "the defaults keep nothing"
     );
 }
@@ -51,7 +51,7 @@ fn stored_pair_format() {
     let mut s = Settings::DEFAULT;
     assert!(s.set(SettingKey::ao, ao as u32));
     assert_eq!(
-        s.stored(),
+        s.storage_bytes(),
         storage_of(&[(SettingKey::ao as u32, ao as u32)])
     );
 }
@@ -114,7 +114,10 @@ fn session_setting_not_stored() {
     for &key in &session {
         assert!(s.set(key, other(key)));
     }
-    assert!(s.stored().is_empty(), "nothing of {session:?} is kept");
+    assert!(
+        s.storage_bytes().is_empty(),
+        "nothing of {session:?} is kept"
+    );
     let back = read_stored(&storage_of(
         &session
             .iter()

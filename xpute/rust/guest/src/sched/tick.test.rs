@@ -8,7 +8,7 @@ use crate::clock;
 // A clock the test moves, and what the steps saw, per thread.
 thread_local! {
     static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };
-    static SEEN: RefCell<Trace> = RefCell::new(Trace::default());
+    static TRACE: RefCell<Trace> = RefCell::new(Trace::default());
 }
 
 fn clock() -> f64 {
@@ -28,12 +28,12 @@ struct Trace {
     id: u32,
 }
 
-fn seen<R>(f: impl FnOnce(&mut Trace) -> R) -> R {
-    SEEN.with(|s| f(&mut s.borrow_mut()))
+fn trace<R>(f: impl FnOnce(&mut Trace) -> R) -> R {
+    TRACE.with(|s| f(&mut s.borrow_mut()))
 }
 
 fn saw() -> Trace {
-    seen(|s| s.clone())
+    trace(|s| s.clone())
 }
 
 // A program's phases, as a world's might number them.
@@ -62,20 +62,20 @@ const QUOTA_MS: f64 = 6.0;
 fn tick(start: Trace) -> Tick<8> {
     clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));
-    seen(|s| *s = start);
+    trace(|s| *s = start);
     Tick::new(POLICY)
 }
 
 #[test]
 fn phase_order() {
     let mut t = tick(Trace::default());
-    t.on_tick(phase::report, |_| seen(|s| s.order.push("report")), 0);
-    t.on_tick(phase::cosmetic, |_| seen(|s| s.order.push("cosmetic")), 0);
-    t.on_tick(phase::content, |_| seen(|s| s.order.push("content")), 0);
-    t.on_tick(phase::visible, |_| seen(|s| s.order.push("visible")), 0);
+    t.on_tick(phase::report, |_| trace(|s| s.order.push("report")), 0);
+    t.on_tick(phase::cosmetic, |_| trace(|s| s.order.push("cosmetic")), 0);
+    t.on_tick(phase::content, |_| trace(|s| s.order.push("content")), 0);
+    t.on_tick(phase::visible, |_| trace(|s| s.order.push("visible")), 0);
     t.on_tick(
         phase::interaction,
-        |_| seen(|s| s.order.push("interaction")),
+        |_| trace(|s| s.order.push("interaction")),
         0,
     );
     t.run(0.016, QUOTA_MS, now());
@@ -85,9 +85,9 @@ fn phase_order() {
 #[test]
 fn step_order() {
     let mut t = tick(Trace::default());
-    t.on_tick(phase::visible, |_| seen(|s| s.order.push("1")), 0);
-    t.on_tick(phase::visible, |_| seen(|s| s.order.push("2")), 0);
-    t.on_tick(phase::visible, |_| seen(|s| s.order.push("3")), 0);
+    t.on_tick(phase::visible, |_| trace(|s| s.order.push("1")), 0);
+    t.on_tick(phase::visible, |_| trace(|s| s.order.push("2")), 0);
+    t.on_tick(phase::visible, |_| trace(|s| s.order.push("3")), 0);
     t.run(0.016, QUOTA_MS, now());
     assert_eq!(saw().order, ["1", "2", "3"]);
 }
@@ -99,7 +99,7 @@ fn shared_budget() {
         ..Default::default()
     });
     t.on_tick(phase::visible, |c| burn(c.pass.total_ms * 0.75), 0);
-    t.on_tick(phase::content, |c| seen(|s| s.a = c.pass.remaining()), 0);
+    t.on_tick(phase::content, |c| trace(|s| s.a = c.pass.remaining()), 0);
     let report = t.run(0.016, QUOTA_MS, now());
     let s = saw();
     assert!(s.a >= 0.0);
@@ -117,7 +117,7 @@ fn held_back_kept_for_later_phases() {
     t.on_tick(
         phase::visible,
         |c| {
-            seen(|s| s.a = c.pass.remaining());
+            trace(|s| s.a = c.pass.remaining());
             c.pass.run(
                 0..1000,
                 |_| {
@@ -129,7 +129,7 @@ fn held_back_kept_for_later_phases() {
         },
         0,
     );
-    t.on_tick(phase::content, |c| seen(|s| s.b = c.pass.remaining()), 0);
+    t.on_tick(phase::content, |c| trace(|s| s.b = c.pass.remaining()), 0);
     let report = t.run(0.016, QUOTA_MS, now());
     let s = saw();
     assert!(
@@ -152,7 +152,7 @@ fn self_unregister() {
     let id = t.on_tick(
         phase::cosmetic,
         |c| {
-            let id = seen(|s| {
+            let id = trace(|s| {
                 s.runs += 1;
                 s.id
             });
@@ -160,7 +160,7 @@ fn self_unregister() {
         },
         0,
     );
-    seen(|s| s.id = id);
+    trace(|s| s.id = id);
     t.run(0.016, QUOTA_MS, now());
     t.run(0.016, QUOTA_MS, now());
     assert_eq!(saw().runs, 1);
@@ -169,11 +169,11 @@ fn self_unregister() {
 #[test]
 fn unregister_earlier_no_skip() {
     let mut t = tick(Trace::default());
-    let first = t.on_tick(phase::visible, |_| seen(|s| s.order.push("first")), 0);
+    let first = t.on_tick(phase::visible, |_| trace(|s| s.order.push("first")), 0);
     t.on_tick(
         phase::visible,
         |c| {
-            let id = seen(|s| {
+            let id = trace(|s| {
                 s.order.push("second");
                 s.id
             });
@@ -181,8 +181,8 @@ fn unregister_earlier_no_skip() {
         },
         0,
     );
-    t.on_tick(phase::visible, |_| seen(|s| s.order.push("third")), 0);
-    seen(|s| s.id = first);
+    t.on_tick(phase::visible, |_| trace(|s| s.order.push("third")), 0);
+    trace(|s| s.id = first);
     t.run(0.016, QUOTA_MS, now());
     assert_eq!(saw().order, ["first", "second", "third"]);
 }
@@ -197,7 +197,7 @@ fn report_sees_all() {
     t.on_tick(
         phase::report,
         |c| {
-            seen(|s| {
+            trace(|s| {
                 s.a = c.phase_ms[phase::visible as usize];
                 s.b = c.phase_ms[phase::report as usize];
             })
@@ -241,7 +241,7 @@ fn silent_storm_capped() {
 #[test]
 fn prior_spend_deducted() {
     let mut t = tick(Trace::default());
-    t.on_tick(phase::visible, |c| seen(|s| s.a = c.pass.remaining()), 0);
+    t.on_tick(phase::visible, |c| trace(|s| s.a = c.pass.remaining()), 0);
     let edge = now();
     burn(2.0);
     t.run(1.0 / 60.0, QUOTA_MS, edge);
@@ -256,7 +256,7 @@ fn interaction_spend_deducted() {
     t.on_tick(
         phase::visible,
         |c| {
-            seen(|s| {
+            trace(|s| {
                 s.a = c.pass.remaining();
                 s.b = c.pass.total_ms;
             })

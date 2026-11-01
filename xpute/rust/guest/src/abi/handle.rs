@@ -25,10 +25,10 @@ struct Slot<T> {
     generation: u16,
     /// One past the epoch the slot was taken in; 0 while free. A `u64`, so
     /// no count of epochs a program lives through brings a stale one round.
-    made: u64,
+    taken_epoch: u64,
     /// A free slot's next free slot; 0, never handed out, ends the list.
     next: u32,
-    /// Initialized while `made` is not 0.
+    /// Initialized while `taken_epoch` is not 0.
     val: MaybeUninit<T>,
 }
 
@@ -64,7 +64,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
             slot: [const {
                 Slot {
                     generation: 0,
-                    made: 0,
+                    taken_epoch: 0,
                     next: 0,
                     val: MaybeUninit::uninit(),
                 }
@@ -91,7 +91,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
         let s = &mut self.slot[slot as usize];
         // Never 0, so no handle is 0.
         s.generation = s.generation.wrapping_add(1).max(1);
-        s.made = self.epoch + 1;
+        s.taken_epoch = self.epoch + 1;
         s.val = MaybeUninit::new(val);
         self.cnt += 1;
         Some(handle_of(slot, s.generation))
@@ -101,7 +101,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
         let s = handle_slot(handle) as usize;
         s != 0
             && s < N
-            && self.slot[s].made != 0
+            && self.slot[s].taken_epoch != 0
             && self.slot[s].generation as u32 == handle >> SLOT_BITS
     }
 
@@ -127,7 +127,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
         let val = *self.get(handle)?;
         let slot = handle_slot(handle);
         let s = &mut self.slot[slot as usize];
-        s.made = 0;
+        s.taken_epoch = 0;
         s.next = self.free;
         self.free = slot;
         self.cnt -= 1;
@@ -146,7 +146,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
         for slot in 1..=self.top {
             let s = &self.slot[slot as usize];
             let handle = handle_of(slot, s.generation);
-            if s.made == self.epoch + 1 {
+            if s.taken_epoch == self.epoch + 1 {
                 if let Some(val) = self.remove(handle) {
                     gone(handle, val);
                 }

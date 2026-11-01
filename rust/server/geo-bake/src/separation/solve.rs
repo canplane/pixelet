@@ -83,11 +83,11 @@ impl Scale {
 /// way on them, their water, and their structures' pieces.
 struct Ring {
     tiles: BTreeSet<[i32; 2]>,
-    loaded: BTreeSet<[i32; 2]>,
+    loaded_tiles: BTreeSet<[i32; 2]>,
     ground: FnvHashMap<[i32; 2], Vec<i16>>,
     ways: BTreeMap<PartId, Way>,
     water: Vec<(Option<String>, String, Vec<[f64; 2]>)>,
-    water_seen: FnvHashSet<Vec<u8>>,
+    water_wkbs: FnvHashSet<Vec<u8>>,
     pieces: BTreeMap<PartId, SampledPiece>,
     by_end: FnvHashMap<End, Vec<PartId>>,
     /// Every way by its two ends.
@@ -141,7 +141,12 @@ impl Stretch {
 /// A way at grade made to stand off it, a bridge's ramp or a tunnel's
 /// approach: a grade line at `points`, which ends where the way does at
 /// either end `ends` says (`coarsest`), drawing `range` of its segment.
-fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2], range: [f64; 2]) -> (Line, WayRange) {
+fn grade_line(
+    way: &Way,
+    points: Vec<[f64; 3]>,
+    ends: [bool; 2],
+    range: [f64; 2],
+) -> (Line, WayRange) {
     (
         Line {
             subtype: way.row.subtype.clone(),
@@ -175,11 +180,11 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     };
     let mut src = Ring {
         tiles: tiles.into_iter().collect(),
-        loaded: BTreeSet::new(),
+        loaded_tiles: BTreeSet::new(),
         ground: FnvHashMap::default(),
         ways: BTreeMap::new(),
         water: Vec::new(),
-        water_seen: FnvHashSet::default(),
+        water_wkbs: FnvHashSet::default(),
         pieces: BTreeMap::new(),
         by_end: FnvHashMap::default(),
         way_ends: FnvHashMap::default(),
@@ -311,7 +316,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     let mut out = Solution::default();
     for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);
-        out.drawn.push(drawn);
+        out.way_ranges.push(drawn);
     }
     Ok(out)
 }
@@ -339,15 +344,15 @@ impl Ring {
 
     /// Whether a point's ground is held: its tile of the ring was read.
     fn is_held(&self, p: [f64; 2]) -> bool {
-        self.loaded.contains(&tile_of(p))
+        self.loaded_tiles.contains(&tile_of(p))
     }
 
     /// Reads a tile of the ring once; a tile past it is never read.
     fn load(&mut self, r: &mut Reader<impl Store>, p: [i32; 2]) -> Result<(), String> {
-        if !self.tiles.contains(&p) || self.loaded.contains(&p) {
+        if !self.tiles.contains(&p) || self.loaded_tiles.contains(&p) {
             return Ok(());
         }
-        self.loaded.insert(p);
+        self.loaded_tiles.insert(p);
         let rows = r.store.tile(r.client, r.repo, p)?;
         self.ground.insert(p, rows.ele().to_vec());
         let step = merc_from_u(CELL_U);
@@ -383,7 +388,7 @@ impl Ring {
             }
         }
         for (subtype, class, wkb) in rows.water() {
-            if !self.water_seen.insert(wkb.clone()) {
+            if !self.water_wkbs.insert(wkb.clone()) {
                 continue;
             }
             for g in wkb_to_geometries(wkb)

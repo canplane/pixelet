@@ -59,36 +59,36 @@ const _: () = assert!(
 const UNIFORM_FLOATS: usize = 36;
 
 pub struct Propagate {
-    built: Pipeline,
+    pipeline: Pipeline,
     uniform: u32,
     /// Its group and what it was made over, made again where one is another.
     group: u32,
-    bound: [u32; 7],
+    bindings: [u32; 7],
     /// The depth's bound (screen_bound.wgsl `bounds`), two floats a square,
     /// the squares across and down it was made for, and its pass and group,
     /// made again where what it binds is another.
     bounds: u32,
     bounds_size: [u32; 2],
-    bounds_built: Pipeline,
+    bounds_pipeline: Pipeline,
     bounds_group: u32,
-    bounds_bound: [u32; 4],
+    bounds_bindings: [u32; 4],
 }
 
 impl Propagate {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Propagate {
         Propagate {
-            built: pipelines.build_compute(g, SHADER_SCREEN_PROPAGATE, &GROUP),
+            pipeline: pipelines.build_compute(g, SHADER_SCREEN_PROPAGATE, &GROUP),
             uniform: g.buf(
                 word_bytes(UNIFORM_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             group: 0,
-            bound: [0; 7],
+            bindings: [0; 7],
             bounds: 0,
             bounds_size: [0; 2],
-            bounds_built: pipelines.build_compute(g, SHADER_SCREEN_BOUND, &BOUNDS_GROUP),
+            bounds_pipeline: pipelines.build_compute(g, SHADER_SCREEN_BOUND, &BOUNDS_GROUP),
             bounds_group: 0,
-            bounds_bound: [0; 4],
+            bounds_bindings: [0; 4],
         }
     }
 
@@ -124,7 +124,7 @@ impl Propagate {
     }
 
     /// The depth's bound set in the tiles the world's pass drew this frame,
-    /// the words and uniform `drawn` (`Tiles::drawn`), off the world's depth `depth`, `size`
+    /// the words and uniform `drawn` (`Tiles::after_gate`), off the world's depth `depth`, `size`
     /// pixels across and down; made anew for a new size, where every tile is
     /// drawn. Timed with the resolve, which follows it.
     pub fn set_bounds(
@@ -145,11 +145,11 @@ impl Propagate {
             );
             self.bounds_size = squares;
         }
-        let bound = [depth, self.bounds, drawn.0, drawn.1];
-        if bound != self.bounds_bound {
+        let bindings = [depth, self.bounds, drawn.0, drawn.1];
+        if bindings != self.bounds_bindings {
             release(self.bounds_group);
             self.bounds_group = g.bind_group(
-                self.bounds_built.layouts[0],
+                self.bounds_pipeline.layouts[0],
                 &[
                     view_entry(0, depth),
                     buf_entry(1, self.bounds),
@@ -157,11 +157,11 @@ impl Propagate {
                     buf_entry(31, drawn.1),
                 ],
             );
-            self.bounds_bound = bound;
+            self.bounds_bindings = bindings;
         }
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::resolve).pass());
         g.set_bind_group(pass, 0, self.bounds_group, &[]);
-        g.set_pipeline(pass, self.bounds_built.pipeline);
+        g.set_pipeline(pass, self.bounds_pipeline.id);
         g.dispatch(pass, tiles[0], tiles[1], 1);
         g.end(pass);
     }
@@ -172,12 +172,12 @@ impl Propagate {
     /// them, off the tiles the frame's marks cover (`Tiles::marks_box`).
     pub fn dispatch(&mut self, ctx: &mut RenderContext, depth: u32, light: &Tiles, screen: &Tiles) {
         let g = ctx.g;
-        let (l, s) = (light.bound(), screen.bound());
-        let bound = [depth, l.0, l.1, s.0, s.1, self.bounds, light.marks_box()];
-        if bound != self.bound {
+        let (l, s) = (light.this_frame(), screen.this_frame());
+        let bindings = [depth, l.0, l.1, s.0, s.1, self.bounds, light.marks_box()];
+        if bindings != self.bindings {
             release(self.group);
             self.group = g.bind_group(
-                self.built.layouts[0],
+                self.pipeline.layouts[0],
                 &[
                     view_entry(0, depth),
                     buf_entry(1, self.uniform),
@@ -189,12 +189,12 @@ impl Propagate {
                     buf_entry(7, light.marks_box()),
                 ],
             );
-            self.bound = bound;
+            self.bindings = bindings;
         }
         let [across, down] = screen.squares();
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
         g.set_bind_group(pass, 0, self.group, &[]);
-        g.set_pipeline(pass, self.built.pipeline);
+        g.set_pipeline(pass, self.pipeline.id);
         g.dispatch(pass, across, down, 1);
         g.end(pass);
     }

@@ -14,7 +14,7 @@ pub const LANES: usize = 8;
 
 #[derive(Clone, Copy, Default)]
 pub struct Pipeline {
-    pub pipeline: u32,
+    pub id: u32,
     pub layouts: [u32; GROUPS],
     pub strides: [u32; LANES],
     pub lanes: usize,
@@ -23,14 +23,14 @@ pub struct Pipeline {
 /// The most distinct group layouts there are: every pipeline's groups, and
 /// a compute shader's one.
 const LAYOUTS: usize = PIPELINES as usize * GROUPS + SHADERS as usize;
-const BUILT: usize = 48;
+const PIPELINE_CAP: usize = 48;
 
 pub struct Pipelines {
     modules: [u32; SHADERS as usize],
     layouts: [(u64, u32); LAYOUTS],
     layout_len: usize,
-    built: [(u64, Pipeline); BUILT],
-    built_len: usize,
+    pipelines: [(u64, Pipeline); PIPELINE_CAP],
+    pipeline_len: usize,
 }
 
 impl Default for Pipelines {
@@ -49,8 +49,8 @@ impl Pipelines {
             modules: [0; SHADERS as usize],
             layouts: [(0, 0); LAYOUTS],
             layout_len: 0,
-            built: [(0, Pipeline::default()); BUILT],
-            built_len: 0,
+            pipelines: [(0, Pipeline::default()); PIPELINE_CAP],
+            pipeline_len: 0,
         }
     }
 
@@ -116,7 +116,10 @@ impl Pipelines {
             ),
             stencil as u32,
         );
-        if let Some(&(_, b)) = self.built[..self.built_len].iter().find(|(k, _)| *k == key) {
+        if let Some(&(_, b)) = self.pipelines[..self.pipeline_len]
+            .iter()
+            .find(|(k, _)| *k == key)
+        {
             return b;
         }
         let words = record_of(id);
@@ -136,16 +139,16 @@ impl Pipelines {
             b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
             at += 1 + 3 * n;
         }
-        b.pipeline = g.pipeline(
+        b.id = g.pipeline(
             words,
             &b.layouts[..groups],
             module,
             format,
             (depth, stencil),
         );
-        xpute_kit::ensure!(self.built_len < BUILT, ENOSPC, BUILT);
-        self.built[self.built_len] = (key, b);
-        self.built_len += 1;
+        xpute_kit::ensure!(self.pipeline_len < PIPELINE_CAP, ENOSPC, PIPELINE_CAP);
+        self.pipelines[self.pipeline_len] = (key, b);
+        self.pipeline_len += 1;
         b
     }
 
@@ -156,7 +159,7 @@ impl Pipelines {
         let module = self.module(g, kind);
         let mut b = Pipeline::default();
         b.layouts[0] = self.layout(g, group);
-        b.pipeline = g.compute_pipeline(module, compute_entry(kind), &b.layouts[..1]);
+        b.id = g.compute_pipeline(module, compute_entry(kind), &b.layouts[..1]);
         b
     }
 }

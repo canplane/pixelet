@@ -10,7 +10,7 @@
 //! after another, that are over the column. A column's visits make its
 //! spans once (`column`), what a cell of it holds is read off them (`at`),
 //! and ground beside the air they leave takes that way's palette index, read off the
-//! spans of the columns beside it as its fill builds its tree (`lined`), so
+//! spans of the columns beside it as its fill builds its tree (`way_cell`), so
 //! a reader reads a cell's own column alone. What is under half a cell in any dimension at a
 //! zoom is absent there, as the fold drops a line under half a cell wide: a
 //! slab or a bore fills a cell where it holds half its height or more, and
@@ -49,10 +49,10 @@ pub const BRIDGE: u32 = 0;
 pub const TUNNEL: u32 = 1;
 pub const APPROACH: u32 = 2;
 
-/// What `lined` answers where the ways write nothing there.
+/// What `way_cell` answers where the ways write nothing there.
 pub const NOTHING: u32 = u32::MAX;
 
-/// What a bore's air is where the ways write it (`lined`): the ground's void.
+/// What a bore's air is where the ways write it (`way_cell`): the ground's void.
 pub const AIR: u32 = sentinel::void as u32;
 
 /// A vector's length, as a GPU takes one: no `hypot` there.
@@ -525,7 +525,7 @@ pub fn fills(cell: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
 /// `[first, last]`, first past last where none: every cell between the
 /// first and the last they reach is filled whole, so only those two can
 /// fail, and a cell finer than a leaf fills as its leaf does.
-pub fn filled(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
+pub fn fill_range(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
     let d = LEAF_CELL as i32 - cell as i32;
     if lo >= hi {
         return [1, 0];
@@ -550,7 +550,7 @@ pub fn filled(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
 
 /// Whether the leaf cells `[lo, hi)` fill any cell of the grid's zoom.
 pub fn fills_any(cell: Zoom, run: [i32; 2]) -> bool {
-    let [first, last] = filled(cell, run);
+    let [first, last] = fill_range(cell, run);
     first <= last
 }
 
@@ -661,7 +661,7 @@ pub const SPANS: usize = 10;
 /// deck's slab or an embankment (its way's palette index), a pier (`PIER`), or a
 /// bore's or a cutting's air (`AIR_OF` over its way's palette index); `n` of them.
 /// And its face cell (`ground::face_cell`), under which a bore's air
-/// beside it lines it (`lined`), `i32::MIN` where the area's edge walls it
+/// beside it lines it (`way_cell`), `i32::MIN` where the area's edge walls it
 /// or it is past the area, where nothing does. What its cells are read
 /// off, its visits found once: a brick's fill keeps them (pxl-spec-core
 /// fill.rs `spans`, read through `ColumnSpans`).
@@ -823,7 +823,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 /// the first in `near`'s order — so a cave never opens into a way, whatever
 /// carves the ground; else `NOTHING`. Read off the spans in place, the
 /// column's own first: a cell it writes reads none beside it.
-pub fn lined(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
+pub fn way_cell(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
     let (face, n) = k.head(c);
     let v = at(k, c, n, cell, z);
     if v != NOTHING {
@@ -842,22 +842,22 @@ pub fn lined(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
 }
 
 /// The leaf cells between which column `c`'s cells at zoom `cell` hold what
-/// the ways write there (`lined`), its ground's top `top` leaf cells: from
+/// the ways write there (`way_cell`), its ground's top `top` leaf cells: from
 /// the lowest to past the highest, `ground::EMPTY` where they write none.
-/// Its own spans' cells (`filled`), a bore's air only as far as the top,
+/// Its own spans' cells (`fill_range`), a bore's air only as far as the top,
 /// over which it is air whatever writes it; and under its face cell, the
 /// cells a bore's air beside it lines, where no slab or pier of that
 /// column fills the cell read (`bare`). A lined cell is under the face's
-/// cell, so under the top: the hull of the cells `lined` reads something
+/// cell, so under the top: the hull of the cells `way_cell` reads something
 /// in, exactly, off the spans, never a cell at a time.
-pub fn bound(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
+pub fn lined_hull(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL - cell);
     let (face, n) = k.head(c);
     let [mut lo, mut hi] = ground::EMPTY;
     let mut j = 0;
     while j < n {
         let (run, v) = k.span(c, j);
-        let [first, last] = filled(cell, run);
+        let [first, last] = fill_range(cell, run);
         let end = if v & AIR_OF != 0 {
             ((last + 1) * s).min(top)
         } else {
@@ -878,7 +878,7 @@ pub fn bound(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2
             let (run, v) = k.span(b, j);
             // Air read at `z + dz` lines `z`, under the face cell, where no
             // slab or pier of its column fills it.
-            let [first, last] = filled(cell, run);
+            let [first, last] = fill_range(cell, run);
             let last = last.min(face - 1 + dz);
             let (from, to) = (
                 bare(k, b, nb, cell, [first, last], 1),
@@ -912,7 +912,7 @@ fn bare(
         let mut j = 0;
         while j < n {
             let (run, v) = k.span(b, j);
-            let [first, last] = filled(cell, run);
+            let [first, last] = fill_range(cell, run);
             if v & AIR_OF == 0 && first <= z && z <= last {
                 (z, moved) = (if step > 0 { last + 1 } else { first - 1 }, true);
             }
@@ -956,7 +956,7 @@ mod tests {
         }
     }
 
-    /// `bound` is the hull of the cells `lined` writes, a cell at a
+    /// `lined_hull` is the hull of the cells `way_cell` writes, a cell at a
     /// time, a bore's air held to the top: every way a slab, a pier or air
     /// over another, beside it or over and under it can lie, at zooms from
     /// the leaves to three coarser.
@@ -999,7 +999,7 @@ mod tests {
             let k = Five(five);
             let mut hull = ground::EMPTY;
             for z in -200 / s..200 / s {
-                let v = lined(&k, [0, 0], cell, z);
+                let v = way_cell(&k, [0, 0], cell, z);
                 if v == NOTHING {
                     continue;
                 }
@@ -1013,7 +1013,7 @@ mod tests {
                 }
             }
             assert_eq!(
-                bound(&k, [0, 0], cell, top),
+                lined_hull(&k, [0, 0], cell, top),
                 hull,
                 "{:?} at {cell}, top {top}",
                 k.0

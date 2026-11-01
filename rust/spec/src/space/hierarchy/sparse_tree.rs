@@ -28,7 +28,7 @@ pub struct SparseTree<T: Copy + PartialEq, const D: usize> {
     free: Vec<u32>,
     /// The first slots of the child groups written since they were last taken, a
     /// child group once a write.
-    written: Vec<u32>,
+    written_groups: Vec<u32>,
 }
 
 /// The child on the way to `at`, `steps` levels over it.
@@ -45,7 +45,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
             first_child: vec![0; Self::WIDTH],
             data: vec![val; Self::WIDTH],
             free: Vec::new(),
-            written: vec![0],
+            written_groups: vec![0],
         }
     }
 
@@ -53,13 +53,13 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     /// `into`, which held the last taken; none listed after.
     pub fn take_written(&mut self, into: &mut Vec<u32>) {
         into.clear();
-        core::mem::swap(into, &mut self.written);
+        core::mem::swap(into, &mut self.written_groups);
     }
 
     /// Lists the child group `slot` lies in: child groups start a whole child group apart from
     /// the root's (`alloc`).
     fn touch(&mut self, slot: usize) {
-        self.written.push((slot - slot % Self::WIDTH) as u32);
+        self.written_groups.push((slot - slot % Self::WIDTH) as u32);
     }
 
     /// The child pointer lane, a word a slot: its child group with `BRANCH`, or 0.

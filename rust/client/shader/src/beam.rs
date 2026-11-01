@@ -12,13 +12,13 @@
 
 use pxl_spec_core::cast::{self, Detail, End, Trace, Query, Until};
 use pxl_spec_core::world::Inheritance;
-use pxl_spec_core::{beam, observed, support, way};
+use pxl_spec_core::{beam, pyramid, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
 use crate::pass_observer::PassObserver;
 use crate::eye::Eye;
-use crate::observed::{pyramid_add, pyramid_at, pyramid_most, pyramid_put, Pyramid};
+use crate::pyramid::{pyramid_add, pyramid_at, pyramid_most, pyramid_put, Pyramid};
 use crate::observer::{self, Level, Observer};
 use crate::light::Head;
 use crate::world::World;
@@ -34,7 +34,7 @@ pub(crate) type Beams = spirv_std::RuntimeArray<u32>;
 /// A beam ray's line (pxl-spec-core `beam::LINE_WORDS`, at `base` of the
 /// words `W` hold: the eye's beam rays' buffer or the light's list) as a walk
 /// resumes from one: what was handed each node of it (`world::Inheritance::words`),
-/// its own at its zoom. A node's entry is its key's (`observed::entry_of`),
+/// its own at its zoom. A node's entry is its key's (`pyramid::entry_of`),
 /// so none is read off the line.
 pub(crate) struct BeamLine<'a, W: ?Sized>(pub(crate) &'a W, pub(crate) u32);
 
@@ -60,7 +60,7 @@ impl<W: Words + ?Sized> BeamLine<'_, W> {
 
     /// What was handed the line's node of `zoom`.
     fn at(self, zoom: u32) -> Inheritance {
-        let (w, k) = (self.0, self.1 + beam::LINE_HANDED + beam::LINE_STEP * zoom);
+        let (w, k) = (self.0, self.1 + beam::LINE_INHERITANCE + beam::LINE_STEP * zoom);
         Inheritance::of_words([
             w.word(k),
             w.word(k + 1),
@@ -73,7 +73,7 @@ impl<W: Words + ?Sized> BeamLine<'_, W> {
 
 impl<W: Words + ?Sized> cast::Over<u32> for BeamLine<'_, W> {
     fn over(&self, _: u32) -> u32 {
-        observed::NONE
+        pyramid::NONE
     }
 }
 
@@ -114,7 +114,7 @@ impl<W: Words + ?Sized> support::Ancestors<Inheritance> for BeamAncestors<'_, W>
         self.zoom
     }
 
-    fn inherited(&self, z: u32) -> Inheritance {
+    fn ancestor(&self, z: u32) -> Inheritance {
         self.line.at(z)
     }
 }
@@ -223,7 +223,7 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Trace
 /// node of `line` holding where it is there, or, where that lies in another
 /// root, from the root at it; through `q`, reading or writing, its line
 /// left where it ends to `keep` and each node it asks told to `told`.
-pub(crate) fn resumed<'a, Q: Query, W: Words + ?Sized>(
+pub(crate) fn resume_walk<'a, Q: Query, W: Words + ?Sized>(
     q: &mut Q,
     origin: [i32; 3],
     ray: &cast::Ray,
@@ -266,7 +266,7 @@ pub fn beam_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &mut Pyramid,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
     let clipmap: &[IVec4] = clipmap;
@@ -284,7 +284,7 @@ pub fn beam_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    observer::beam(&o, world, seen, beams, [id.x, id.y], &mut ());
+    observer::beam(&o, world, pyramid, beams, [id.x, id.y], &mut ());
 }
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
@@ -302,7 +302,7 @@ impl<W: Words + ?Sized> cast::Keep<Inheritance> for Leaving<'_, W> {
         while z <= n.zoom {
             let held = if z == n.zoom { live } else { stack[z as usize] };
             let a = held.words();
-            let k = base + beam::LINE_HANDED + beam::LINE_STEP * z;
+            let k = base + beam::LINE_INHERITANCE + beam::LINE_STEP * z;
             w.set(k, a[0]);
             w.set(k + 1, a[1]);
             w.set(k + 2, a[2]);
@@ -352,7 +352,7 @@ pub fn sample_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] seen: &mut Pyramid,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &mut Pyramid,
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
 ) {
     let clipmap: &[IVec4] = clipmap;
@@ -370,5 +370,5 @@ pub fn sample_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    observer::sample(&o, world, seen, beams, [id.x, id.y], &mut ());
+    observer::sample(&o, world, pyramid, beams, [id.x, id.y], &mut ());
 }

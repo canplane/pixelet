@@ -29,7 +29,7 @@ use super::ray::Ray;
 use super::scatter::{generated_at, DecorWorld};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
-use crate::domain::layer::object::meta::placed;
+use crate::domain::layer::object::meta::decor_instance;
 use crate::domain::layer::object::store::tree_key;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::layer::tile_cache::Line;
@@ -45,7 +45,7 @@ pub(super) struct DecorRay {
     pub(super) box_extent: f64,
     around: i32,
     /// How far along the ray decor is drawn as held.
-    pub(super) held: f64,
+    pub(super) held_dist: f64,
     /// The cell met last, whose neighbors are struck already.
     last: Option<[i32; 2]>,
     /// The nearest struck, where along the ray, and the axis it entered
@@ -93,7 +93,7 @@ fn finest(fits: impl Fn(f64) -> bool) -> Zoom {
 /// never walked from the roots.
 pub(super) struct Around {
     at: [[i32; 3]; cast::DEPTH],
-    held: [[NodeSlot; 27]; cast::DEPTH],
+    slots: [[NodeSlot; 27]; cast::DEPTH],
     /// The 3 × 3 columns about it, a zoom each, as the ground's relief reads
     /// them (`columns`).
     columns_at: [[i32; 2]; cast::DEPTH],
@@ -106,7 +106,7 @@ pub(super) struct Around {
 #[derive(Clone, Copy)]
 struct Column {
     line: Line,
-    found: Lookup,
+    lookup: Lookup,
     hi: Option<i32>,
 }
 
@@ -114,7 +114,7 @@ impl Around {
     pub(super) fn new() -> Around {
         Around {
             at: [[i32::MIN; 3]; cast::DEPTH],
-            held: [[NodeSlot::NOTHING; 27]; cast::DEPTH],
+            slots: [[NodeSlot::NOTHING; 27]; cast::DEPTH],
             columns_at: [[i32::MIN; 2]; cast::DEPTH],
             columns: [[None; 9]; cast::DEPTH],
         }
@@ -135,7 +135,7 @@ impl Around {
                 c[1] + (k / 3 % 3) as i32 - 1,
                 c[2] + (k / 9) as i32 - 1,
             ];
-            self.held[z][k] = if stepped {
+            self.slots[z][k] = if stepped {
                 let q = [
                     (n[0] >> 1) - p[0] + 1,
                     (n[1] >> 1) - p[1] + 1,
@@ -143,7 +143,7 @@ impl Around {
                 ];
                 overwrite::child(
                     lanes,
-                    self.held[z - 1][(q[0] + 3 * q[1] + 9 * q[2]) as usize],
+                    self.slots[z - 1][(q[0] + 3 * q[1] + 9 * q[2]) as usize],
                     zoom,
                     n,
                 )
@@ -152,7 +152,7 @@ impl Around {
                 let inside =
                     (-1..=0).contains(&(n[1] >> zoom)) && (-1..=0).contains(&(n[2] >> zoom));
                 if inside {
-                    overwrite::cursor(lanes, overwrite::PLACED, zoom, n)
+                    overwrite::cursor(lanes, overwrite::OBJECT_ROOT, zoom, n)
                 } else {
                     NodeSlot::NOTHING
                 }
@@ -186,13 +186,17 @@ impl Around {
             let line = world
                 .terrain
                 .line_under(over.as_ref().map(|o| &o.line), (zoom, n), cell);
-            let mut found = over.map_or(Lookup::NONE, |o| o.found);
+            let mut found = over.map_or(Lookup::NONE, |o| o.lookup);
             let hi = world
                 .terrain
                 .relief(&line, &mut found, (zoom, n), [cell, cell])
                 .val()
                 .map(|[[_, hi], _]| hi);
-            self.columns[z][k] = Some(Column { line, found, hi });
+            self.columns[z][k] = Some(Column {
+                line,
+                lookup: found,
+                hi,
+            });
         }
         self.columns_at[z] = c;
     }
@@ -220,7 +224,7 @@ impl Around {
             return None;
         }
         let (mut out, mut n) = ([((0, [0; 3]), NodeSlot::NOTHING); 27], 0);
-        for (k, &held) in self.held[z].iter().enumerate() {
+        for (k, &held) in self.slots[z].iter().enumerate() {
             if !held.holds() {
                 continue;
             }
@@ -246,7 +250,7 @@ impl Around {
     fn holds(&self, (zoom, a): Node<3>) -> bool {
         let z = zoom as usize;
         debug_assert!(self.at[z] == a, "the walk entered the node it reads about");
-        self.held[z].iter().any(|h| h.holds())
+        self.slots[z].iter().any(|h| h.holds())
     }
 }
 
@@ -294,7 +298,7 @@ impl<'a> World<'a> {
     /// What the ground generates of `decor` standing in the leaf cell `at` lies
     /// in; none where it generates nothing there or the clip levels do not hold
     /// it.
-    pub fn generated(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
+    pub fn generated_instance(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
         let [x, y, z] = idx_of(GROUND.cell(), at);
         let mut met = None;
         self.generated_in([x, y], false, |d, i, _| {
@@ -322,7 +326,7 @@ impl<'a> World<'a> {
         Some(DecorRay {
             box_extent: extent,
             around,
-            held,
+            held_dist: held,
             last: None,
             best: None,
             about: Around::new(),
@@ -363,7 +367,7 @@ impl<'a> World<'a> {
         let mut visit = |e: &Entry| {
             let c = e.cube().min;
             let own = [c[0].floor() as i32, c[1].floor() as i32];
-            if let Some(i) = placed(e).filter(|_| space.holds(c) && fresh(own)) {
+            if let Some(i) = decor_instance(e).filter(|_| space.holds(c) && fresh(own)) {
                 meet(s, ray, i);
             }
         };
@@ -425,7 +429,8 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
 }
 
 fn meet(s: &mut DecorRay, ray: &Ray, i: Instance) {
-    if let Some((t, axis)) = intersect(&i, ray.origin, ray.dir, s.best.map_or(s.held, |b| b.0)) {
+    if let Some((t, axis)) = intersect(&i, ray.origin, ray.dir, s.best.map_or(s.held_dist, |b| b.0))
+    {
         s.best = Some((t, i, axis));
     }
 }

@@ -1,7 +1,7 @@
-// @pxl/client/driver/namespace/refused.ts
+// @pxl/client/driver/namespace/refusal.ts
 
 /**
- * The files the kernel refused (the snapshot's `refused`): each set aside
+ * The files the kernel refused (the snapshot's `refused_files`): each set aside
  * once by the backend its root is bound to, a storage file's slot emptied
  * (storage.ts) or a placed objects' file taken from its source
  * (object.ts), and the kernel told it may read it again (FS_TRUNCATED).
@@ -59,18 +59,18 @@ function file_emptied(f: RefusedFile): void {
   );
 }
 
-/** The snapshot's `refused`: each file set aside once, and the kernel told
+/** The snapshot's `refused_files`: each file set aside once, and the kernel told
  * (`emptied`). */
-export function follow_refused(
-  refused: readonly RefusedFile[],
+export function follow_refused_files(
+  files: readonly RefusedFile[],
   emptied: (f: RefusedFile) => void = file_emptied,
   aside: SetAside = set_aside_by_root(STORAGE),
 ): void {
-  const named = new Set(refused.map((f) => `${f.root}/${f.path}`));
+  const named = new Set(files.map((f) => `${f.root}/${f.path}`));
   for (const f of emptying) {
     if (!named.has(f)) emptying.delete(f);
   }
-  for (const f of refused) {
+  for (const f of files) {
     const at = `${f.root}/${f.path}`;
     if (emptying.has(at) || !/^\d{1,20}$/.test(f.path)) continue;
     if (!aside(f.root, BigInt(f.path), Date.now())) continue;

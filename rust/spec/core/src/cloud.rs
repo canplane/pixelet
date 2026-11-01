@@ -5,7 +5,7 @@
 //! from: the cumulus draws its cells from the hash on the CPU (pxl-kernel
 //! domain/scene/environment/cloud.rs), and the sheets sum the hash's noise on the
 //! GPU (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render
-//! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_KEPT`.
+//! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_SHARE_BITS`.
 
 use crate::param::cloud::LATTICE_SHAMT;
 use crate::param::cloud::WIND;
@@ -29,7 +29,7 @@ pub const HASH_ROUNDS: [[u32; 2]; 2] = [[16, 0x7feb_352d], [15, 0x846c_a68b]];
 pub const HASH_LAST: u32 = 16;
 /// The top bits kept as the share: an f32's whole significand, so the share
 /// is exact on either side.
-pub const HASH_KEPT: u32 = 24;
+pub const HASH_SHARE_BITS: u32 = 24;
 
 /// Cell `[x, y]`'s hash under `salt`, in [0, 1).
 pub fn lattice_hash([x, y]: [u32; 2], salt: u32) -> f32 {
@@ -42,5 +42,5 @@ pub fn lattice_hash([x, y]: [u32; 2], salt: u32) -> f32 {
         k += 1;
     }
     h ^= h >> HASH_LAST;
-    (h >> (32 - HASH_KEPT)) as f32 / (1u32 << HASH_KEPT) as f32
+    (h >> (32 - HASH_SHARE_BITS)) as f32 / (1u32 << HASH_SHARE_BITS) as f32
 }

@@ -119,7 +119,7 @@ struct Appearance {
 // in all four taps; coarser, one color as it reads from afar, the ground's
 // the mean of the four palette indices its cell folds where its face's own is among
 // them.
-fn drawn(c: vec3u) -> Appearance {
+fn appearance(c: vec3u) -> Appearance {
   let val = ray_val(c.x);
   let l = look(val);
   if (ray_zoom(c.x) >= GROUND_CELL) {
@@ -278,7 +278,7 @@ fn box_uv(h: Hit) -> vec2f {
 // This px's ray, through its middle, as the cast formed it, and what it
 // met: its aim, once, for the ray and for the face's step across a px;
 // the ray's words; and the face it stopped on, as the lit pass reads it
-// (screen_lit.wgsl).
+// (screen_shade.wgsl).
 struct Pixel {
   a: vec3f,
   size: vec2f,

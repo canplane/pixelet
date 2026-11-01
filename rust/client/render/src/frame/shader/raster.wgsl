@@ -3,7 +3,7 @@
 // The samples' hits drawn at the eye's rays' pixels (pxl-spec-core raster.rs):
 // each box an instance, its three faces turned to the eye, one an axis, as
 // `corner` winds them, the faces turned away never drawn, each grown in its own
-// plane by `GROWN` (pxl-spec-core param.rs `raster::GROWN`) of a drawn pixel. A
+// plane by `GROWTH` (pxl-spec-core param.rs `raster::GROWTH`) of a drawn pixel. A
 // hit's box draws the face across its sample's axis alone, a lack's every face
 // turned to the eye. A face keeps a pixel only where the pixel's own ray enters
 // the box across that face's axis (`raster_enters`). A ray enters a box through

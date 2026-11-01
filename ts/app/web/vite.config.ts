@@ -40,7 +40,7 @@ const __dirname = path.dirname(__filename);
 
 /** Where `name` is installed for the package at `dir`: pnpm gives each
  * package its own dependencies. */
-function installed(name: string, dir: string): string {
+function package_dir(name: string, dir: string): string {
   return path.dirname(
     createRequire(path.join(dir, "package.json")).resolve(
       `${name}/package.json`,
@@ -614,7 +614,7 @@ export default defineConfig(({ mode }) => {
         // `react-native/…` is not rewritten into one that does not exist.
         {
           find: /^react-native$/,
-          replacement: installed("react-native-web", __dirname),
+          replacement: package_dir("react-native-web", __dirname),
         },
         // react-native-svg picks its platform by file suffix, which its
         // package entry does not: the package
@@ -623,7 +623,7 @@ export default defineConfig(({ mode }) => {
         {
           find: /^react-native-svg$/,
           replacement: path.join(
-            installed("react-native-svg", path.join(WORKSPACE, "client")),
+            package_dir("react-native-svg", path.join(WORKSPACE, "client")),
             "lib/module/ReactNativeSVG.web.js",
           ),
         },
@@ -633,7 +633,7 @@ export default defineConfig(({ mode }) => {
         {
           find: /^@react-native\/assets-registry\/registry$/,
           replacement: path.join(
-            installed("react-native-web", __dirname),
+            package_dir("react-native-web", __dirname),
             "dist/modules/AssetRegistry/index.js",
           ),
         },

@@ -12,4 +12,4 @@ pub mod mark;
 pub mod marker;
 pub mod model;
 pub mod preview;
-pub mod skinned;
+pub mod skinned_mesh;

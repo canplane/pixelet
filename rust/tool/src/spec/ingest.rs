@@ -1,6 +1,6 @@
-// pxl-tool/spec/ingested.rs
+// pxl-tool/spec/ingest.rs
 
-//! What the asset ingest wrote (`spec/spec/asset/ingested.json`), rendered:
+//! What the asset ingest wrote (`spec/spec/asset/ingest.json`), rendered:
 //! the host's table, which binds a file's number to its bucket key, and the
 //! texture pack's layout, which the renderer reads. A path is the specs' and
 //! the tools' name for a file; what is generated names it by its number
@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 use super::asset::cube_number;
 use super::{file, read, Node, Output};
 
-pub const INGESTED_JSON: &str = "spec/spec/asset/ingested.json";
+pub const INGEST_JSON: &str = "spec/spec/asset/ingest.json";
 
 pub struct File {
     pub path: String,
@@ -24,14 +24,14 @@ pub struct File {
 
 /// Every file, in the order that numbers it below the asset root from 1.
 pub fn files() -> Result<Vec<File>, String> {
-    let spec = read(INGESTED_JSON)?;
+    let spec = read(INGEST_JSON)?;
     let rows = spec
         .get("files")
         .and_then(Node::arr)
-        .ok_or(format!("{INGESTED_JSON}: no files"))?;
+        .ok_or(format!("{INGEST_JSON}: no files"))?;
     rows.iter()
         .map(|r| {
-            let at = |field: &str| format!("{INGESTED_JSON}: a file's {field}");
+            let at = |field: &str| format!("{INGEST_JSON}: a file's {field}");
             let extent = match r.get("extent").and_then(Node::arr) {
                 None => None,
                 Some(e) => Some(
@@ -64,7 +64,7 @@ pub fn file_number(path: &str) -> Result<u32, String> {
         .position(|p| p == path)
         .map(|i| i as u32 + 1)
         .ok_or(format!(
-            "{path} is no file of {INGESTED_JSON}: run the asset ingest"
+            "{path} is no file of {INGEST_JSON}: run the asset ingest"
         ))
 }
 
@@ -74,11 +74,11 @@ pub fn symbol_number(path: &str) -> Result<u16, String> {
     static PATHS: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
     let paths = PATHS
         .get_or_init(|| {
-            read(INGESTED_JSON)?
+            read(INGEST_JSON)?
                 .get("symbols")
                 .and_then(Node::arr)
                 .and_then(|s| s.iter().map(|p| p.str().map(str::to_string)).collect())
-                .ok_or(format!("{INGESTED_JSON}: no symbols"))
+                .ok_or(format!("{INGEST_JSON}: no symbols"))
         })
         .as_ref()
         .map_err(Clone::clone)?;
@@ -87,7 +87,7 @@ pub fn symbol_number(path: &str) -> Result<u16, String> {
         .position(|p| p == path)
         .map(|i| i as u16 + 1)
         .ok_or(format!(
-            "{path} is no symbol of {INGESTED_JSON}: run the asset ingest"
+            "{path} is no symbol of {INGEST_JSON}: run the asset ingest"
         ))
 }
 
@@ -102,11 +102,9 @@ struct Pack {
 }
 
 fn pack() -> Result<Pack, String> {
-    let spec = read(INGESTED_JSON)?;
-    let p = spec
-        .get("pack")
-        .ok_or(format!("{INGESTED_JSON}: no pack"))?;
-    let at = |field: &str| format!("{INGESTED_JSON}: pack.{field}");
+    let spec = read(INGEST_JSON)?;
+    let p = spec.get("pack").ok_or(format!("{INGEST_JSON}: no pack"))?;
+    let at = |field: &str| format!("{INGEST_JSON}: pack.{field}");
     let whole = |n: &Node| {
         n.num()
             .filter(|n| n.fract() == 0.0 && *n >= 0.0)
@@ -153,21 +151,21 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let (rows, pack) = (files()?, pack()?);
     Ok(vec![
         Output::new(
-            "ts/client/src/driver/namespace/ingested.spec.ts",
+            "ts/client/src/driver/namespace/ingest.spec.ts",
             render_ts(&rows, &pack)?,
         ),
-        Output::new("rust/spec/src/asset/ingested.spec.rs", render_rs(&pack)?),
+        Output::new("rust/spec/src/asset/ingest.spec.rs", render_rs(&pack)?),
     ])
 }
 
 fn render_ts(rows: &[File], pack: &Pack) -> Result<String, String> {
     let mut out = String::with_capacity(rows.len() * 160);
     out.push_str(
-        r#"// @pxl/client/driver/namespace/ingested.spec.ts
+        r#"// @pxl/client/driver/namespace/ingest.spec.ts
 //
-// GENERATED from spec/spec/asset/ingested.json
+// GENERATED from spec/spec/asset/ingest.json
 // Every shipped asset by its number below the asset root, file n at
-// `INGESTED[n - 1]` (ts/client/src/driver/namespace/asset.ts): the bucket key
+// `ASSET_FILES[n - 1]` (ts/client/src/driver/namespace/asset.ts): the bucket key
 // (the SHA-256 of its bytes, which where it lies does not change), its size,
 // and for a model its extent in ENU world units, measured from the glb. The
 // bytes themselves are in the bucket.
@@ -179,7 +177,7 @@ export interface IngestedFile {
   extent?: readonly [number, number, number];
 }
 
-export const INGESTED: readonly IngestedFile[] = [
+export const ASSET_FILES: readonly IngestedFile[] = [
 "#,
     );
     for r in rows {
@@ -220,9 +218,9 @@ export const PACK = {
 
 fn render_rs(pack: &Pack) -> Result<String, String> {
     let mut out = vec![
-        r##"// pxl-spec/asset/ingested.spec.rs
+        r##"// pxl-spec/asset/ingest.spec.rs
 //
-// GENERATED from spec/spec/asset/ingested.json
+// GENERATED from spec/spec/asset/ingest.json
 // The texture pack as the asset ingest composed it: which of its tiles each
 // cube wears on which face, and what each reads as from afar. Its image is
 // the file the catalog names for the cube kind's pack (catalog.spec.rs
@@ -272,7 +270,7 @@ pub const PACK: Pack = Pack {"##
             "top" => "Top",
             "side" => "Side",
             "bottom" => "Bottom",
-            _ => return Err(format!("{INGESTED_JSON}: pack.faces: {face} is no face")),
+            _ => return Err(format!("{INGEST_JSON}: pack.faces: {face} is no face")),
         };
         out.push(format!(
             "        (Cube::{variant}(cube::{variant}::{ty}), CubeFace::{face}, {tile}),"

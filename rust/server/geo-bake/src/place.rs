@@ -6,7 +6,7 @@ use crate::coverage::Coverage;
 use crate::pyramid::Base;
 use postgres::Client;
 use pxl_geo_spec::overture::properties::CATEGORY_SQL;
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::place::{self, category_of, Place, PlaceTile};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857;

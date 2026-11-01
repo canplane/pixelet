@@ -71,7 +71,7 @@ pub mod raster {
     /// is still where its ray meets the face, and what the growth alone covers
     /// fails the fragment's exact test (raster.wgsl `fs`): it costs fragments
     /// and changes no visible sample.
-    pub const GROWN: f32 = 0.25;
+    pub const GROWTH: f32 = 0.25;
 }
 
 pub mod scatter {

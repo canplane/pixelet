@@ -1,4 +1,4 @@
-// pxl-spec-core/observed.rs
+// pxl-spec-core/pyramid.rs
 
 //! gpu-portable: the observed pyramid, as a GPU holds it: the nodes the eye's
 //! rays asked about, each the world's one query's answer at the zooms it
@@ -52,9 +52,9 @@ use crate::{wrap_idx, Zoom, LEAF_CELL, ZOOM_BITS};
 /// leaf cells whose columns what is placed or a preview's cuts changed since
 /// the last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
 /// generation is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
-/// pxl-render gpu/generated.rs); and the child groups of what is placed written
+/// pxl-render gpu/generator.rs); and the child groups of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
-/// `WRITTEN` at most, past which all is forgotten (`reads_written`); and
+/// `WRITTEN_CAP` at most, past which all is forgotten (`reads_written`); and
 /// whether its walks count what they ask, and what they counted (`TALLY_ON`,
 /// `TALLY_AT`).
 pub const FRAME: u32 = 0;
@@ -63,11 +63,11 @@ pub const MOVED_AT: u32 = 2;
 pub const MOVED_WORDS: u32 = (EYE_CLIP_LEVELS * clipmap::ENTRIES).div_ceil(32);
 pub const BOXES_AT: u32 = MOVED_AT + MOVED_WORDS;
 pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
-pub const WRITTEN: u32 = 32;
+pub const WRITTEN_CAP: u32 = 32;
 /// Whether the walks count what they ask, where the `ray_counts` setting
 /// asks, and the words they count into, each observer's walks' lanes
 /// (`tally_at`).
-pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN;
+pub const TALLY_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
 pub const TALLY_AT: u32 = TALLY_ON + 1;
 pub const TALLY_WORDS: u32 = tally::OBSERVERS * tally::WALKS;
 /// The missed pixels' hits kept for their faces (pxl-spec-core
@@ -102,7 +102,7 @@ pub const W_INHERITANCE: u32 = 4;
 pub const W_NODE: u32 = W_INHERITANCE + INHERITANCE_WORDS;
 /// What was handed it of what is placed, its `Inheritance`'s second word
 /// (`world::Inheritance::words`).
-pub const W_PLACED: u32 = W_INHERITANCE + 1;
+pub const W_OBJECT: u32 = W_INHERITANCE + 1;
 pub const ENTRY_WORDS: u32 = W_NODE + 4;
 
 /// The slots: no more than the tiles' entries were (8 roots and 2^16 tiles

@@ -23,7 +23,7 @@ function near(a: number, b: number, tol: number): void {
 }
 
 /** A window of animation frames `gap_ms` apart, then the grant after a turn that asked for the next edge. */
-function gapped(q: FramePacing, gap_ms: number): FrameGrant {
+function grant_after_gaps(q: FramePacing, gap_ms: number): FrameGrant {
   for (let i = 0; i < FRAME_WINDOW; i++) q.gap(gap_ms);
   q.observe(0, q.grant(0), 0);
   return q.grant(0);
@@ -31,13 +31,13 @@ function gapped(q: FramePacing, gap_ms: number): FrameGrant {
 
 test("frame pacing - the refresh is the display's, read off its animation frames", () => {
   const q = new FramePacing(POLICY, () => {});
-  near(gapped(q, 1000 / 165).refresh_ms, 1000 / 165, 1e-9);
-  near(gapped(q, 1000 / 60).refresh_ms, 1000 / 60, 1e-9);
+  near(grant_after_gaps(q, 1000 / 165).refresh_ms, 1000 / 165, 1e-9);
+  near(grant_after_gaps(q, 1000 / 60).refresh_ms, 1000 / 60, 1e-9);
 });
 
 test("frame pacing - turns are paced at the most whole refreshes within 60 Hz, one at least", () => {
   const paced = (hz: number) =>
-    gapped(new FramePacing(POLICY, () => {}), 1000 / hz).paced_ms;
+    grant_after_gaps(new FramePacing(POLICY, () => {}), 1000 / hz).paced_ms;
   near(paced(120), 2000 / 120, 1e-9);
   near(paced(60), 1000 / 60, 1e-9);
   near(paced(144), 2000 / 144, 1e-9);
@@ -49,33 +49,33 @@ test("frame pacing - turns are paced at the most whole refreshes within 60 Hz, o
 
 test("frame pacing - a refresh read a hair long still paces at two on a 120 Hz display", () => {
   const q = new FramePacing(POLICY, () => {});
-  near(gapped(q, 8.34).paced_ms, 2 * 8.34, 1e-9);
+  near(grant_after_gaps(q, 8.34).paced_ms, 2 * 8.34, 1e-9);
 });
 
 test("frame pacing - the pace is the display's: no load moves it", () => {
   const q = new FramePacing(POLICY, () => {});
-  const before = gapped(q, 1000 / 120);
+  const before = grant_after_gaps(q, 1000 / 120);
   for (let i = 0; i < 4 * FRAME_WINDOW; i++) q.observe(40, q.grant(0), 0);
   assert.deepStrictEqual(q.grant(0).paced_ms, before.paced_ms);
 });
 
 test("frame pacing - a gap that is not a frame moves nothing", () => {
   const q = new FramePacing(POLICY, () => {});
-  const before = gapped(q, 1000 / 165);
+  const before = grant_after_gaps(q, 1000 / 165);
   q.gap(3000);
   assert.deepStrictEqual(q.grant(0).refresh_ms, before.refresh_ms);
 });
 
 test("frame pacing - the quota is the paced interval less the margin", () => {
   const q = new FramePacing(POLICY, () => {});
-  const g = gapped(q, 1000 / 120);
+  const g = grant_after_gaps(q, 1000 / 120);
   assert.ok(g.interactive);
   near(g.quota_ms, g.paced_ms * (1 - POLICY.margin_share), 1e-9);
 });
 
 test("frame pacing - what a turn overran comes off its own next quota, down to nothing", () => {
   const q = new FramePacing(POLICY, () => {});
-  const full = gapped(q, 1000 / 30);
+  const full = grant_after_gaps(q, 1000 / 30);
   q.observe(full.quota_ms + 3, full, 0);
   near(q.grant(0).quota_ms, full.quota_ms - 3, 1e-9);
   q.observe(100, full, 0);

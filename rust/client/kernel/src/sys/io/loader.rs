@@ -34,7 +34,7 @@ use crate::sys::sched::edge::TaskPriority;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::tile;
 use xpute_guest::global::Global;

@@ -24,7 +24,7 @@ use crate::coverage::BAKE_READ_DIST;
 use crate::pyramid::Base;
 use crate::terrain::pipeline::ground::render_polygon;
 use crate::wkb::wkb_to_geometries;
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::division;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Lattice;
@@ -180,7 +180,10 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     let rows = client.query(RECORDS_SQL, &[&ids.list]).map_err(db)?;
     let mut records: FnvHashMap<String, (Division, Option<String>)> = FnvHashMap::default();
     for r in &rows {
-        let Some(subtype) = r.get::<_, Option<&str>>("subtype").and_then(Subtype::named) else {
+        let Some(subtype) = r
+            .get::<_, Option<&str>>("subtype")
+            .and_then(Subtype::of_word)
+        else {
             continue;
         };
         let names = match r.get::<_, Option<serde_json::Value>>("names_common") {

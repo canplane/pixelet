@@ -5,7 +5,7 @@
 //! pyramid until it meets a cell that fills or lacks, or a split narrower
 //! than it can share with the rays about it (`cast::narrow`); each cell starts
 //! from the least of the beam rays about it, shortened by a margin
-//! (`handed`), and what resumes from the line that beam ray left is the
+//! (`hand_dist`), and what resumes from the line that beam ray left is the
 //! samples, `SAMPLE` a cell a side, walked to the cell that fills; the
 //! cells they stopped at are drawn as boxes, and each drawn pixel takes the
 //! nearest its own ray enters (`raster`), walking from its cell's start
@@ -37,7 +37,7 @@ pub struct Grid {
     pub s: f32,
     /// What a beam ray's hit is shortened by, `1 − γ`, the margin `γ`
     /// within which two rays enter a cube under `2√2 · s · d` wide apart
-    /// (`handed`).
+    /// (`hand_dist`).
     keep: f32,
     /// As far as a cube a beam ray must cross reaches from its center, `√6
     /// · s` as an angle with the margin, and its tangent (`window`).
@@ -159,7 +159,7 @@ impl Grid {
 
     /// How far a beam ray that stopped at `t` hands on: no farther than any
     /// pixel's ray about it enters what stopped it.
-    pub fn handed(&self, t: f32) -> f32 {
+    pub fn hand_dist(&self, t: f32) -> f32 {
         t * self.keep
     }
 
@@ -247,7 +247,7 @@ impl Grid {
         c * LINE_WORDS
     }
 
-    /// The word of how far corner `c`'s beam ray hands on (`handed`), f32
+    /// The word of how far corner `c`'s beam ray hands on (`hand_dist`), f32
     /// bits, by its index: a word a corner past the lines, in their order,
     /// so a cell's window reads its corners' row by row off a run of words
     /// apiece, not a line apiece.
@@ -303,17 +303,17 @@ pub const NODE_WORDS: u32 = 7;
 /// (`NODE_WORDS`), then, for every node from the root to it, what was
 /// handed it (`world::Inheritance::words`), `LINE_STEP` words a zoom, its own at its
 /// zoom. A node's entry in the observed pyramid is its key's
-/// (`observed::entry_of`), so a line holds none. How far it hands on
-/// (`Grid::handed`) lies apart from its line, a word a corner past the
+/// (`pyramid::entry_of`), so a line holds none. How far it hands on
+/// (`Grid::hand_dist`) lies apart from its line, a word a corner past the
 /// lines (`Grid::hand_at`), which the cells' windows read alone. The light's
 /// beam rays leave the same, their origin after it (pxl-spec-core
 /// `light::LINE_ORIGIN`), and how far they hand on apart as well
 /// (`light::hand_at`).
 pub const LINE_VISITS: u32 = 0;
 pub const LINE_NODE: u32 = 1;
-pub const LINE_HANDED: u32 = LINE_NODE + NODE_WORDS;
+pub const LINE_INHERITANCE: u32 = LINE_NODE + NODE_WORDS;
 pub const LINE_STEP: u32 = world::INHERITANCE_WORDS;
-pub const LINE_WORDS: u32 = LINE_HANDED + LINE_STEP * cast::DEPTH as u32;
+pub const LINE_WORDS: u32 = LINE_INHERITANCE + LINE_STEP * cast::DEPTH as u32;
 
 /// What a cell hands its pixels, in words: where they start, f32 bits, and
 /// the corner whose line they resume from, as an index into the corners

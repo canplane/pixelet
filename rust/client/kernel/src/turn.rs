@@ -36,12 +36,12 @@ use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::preview;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
-use crate::domain::query::changed;
+use crate::domain::query::changes;
 use crate::domain::scene::character::companion;
 use crate::domain::scene::character::companion::{companion_step, CompanionProps};
 use crate::domain::scene::character::preview::preview_step;
 use crate::domain::scene::decor::asset::decor_models_step;
-use crate::domain::scene::decor::drawn;
+use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::environment_step;
 use crate::domain::scene::indicator::location::location_step;
 use crate::domain::scene::marker;
@@ -142,7 +142,7 @@ fn demand_tick(ctx: &mut TickContext) {
     }
     demand::admit_arrived(&ctx.pass);
     changes_step();
-    TerrainTile::demand().step(destination::tile(), clipmap::pinned());
+    TerrainTile::demand().step(destination::tile(), clipmap::pinned_tiles());
     // Nothing is fetched while places are hidden.
     match store::settings_store().place {
         true => PlaceTile::demand().step(None, &[]),
@@ -397,13 +397,13 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
 /// What moved this turn, told to what reads it: the tiles whose answer moved
 /// (identities, not contents, which a tile's identity fixes) and where the
 /// objects were written, the ground's held by the query
-/// (domain/query/changed.rs). Taken after arrivals are admitted, before the
+/// (domain/query/changes.rs). Taken after arrivals are admitted, before the
 /// layers observe.
 fn changes_step() {
-    static MOVED: Global<[Vec<Tile>; 3]> = Global::new();
-    let [places, earth, divisions] = MOVED.get(Default::default);
-    let shared = changed::take();
-    drawn::note_edited(changed::written());
+    static MOVED_TILES: Global<[Vec<Tile>; 3]> = Global::new();
+    let [places, earth, divisions] = MOVED_TILES.get(Default::default);
+    let shared = changes::take();
+    gpu::note_edited(changes::written_boxes());
     PlaceTile::tile_cache().take_moved(places);
     Earth::tile_cache().take_moved(earth);
     DivisionTile::tile_cache().take_moved(divisions);

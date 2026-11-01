@@ -121,7 +121,7 @@ impl<R: Range> BuddyMalloc<R> {
     }
 
     /// Bytes ever reached into, not bytes live.
-    pub fn used(&self) -> usize {
+    pub fn peak(&self) -> usize {
         // SAFETY: single-threaded; see the Sync impl.
         let h = unsafe { &*self.heap.get() };
         h.max_ptr - h.base_ptr

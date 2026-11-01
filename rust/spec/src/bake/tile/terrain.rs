@@ -213,7 +213,7 @@ fn brick_cell(place: [u32; 2], i: u32) -> [u32; 2] {
 
 /// The clip level's brick at `place` (in bricks) of `tile` as its fill reads
 /// it, its lines `lines` (`brick_lines`): its palette indices four a cell as a client
-/// hands them (`handed`) and its heights off the tile's samples `ele` as
+/// hands them (`gpu_cells`) and its heights off the tile's samples `ele` as
 /// `height_cs` draws them (`ground::height`), its ring's too.
 fn laid<'a>(
     tile: Tile,
@@ -300,12 +300,12 @@ pub fn brick_spans(
 /// takes before its fold gives child groups back (`taken`). A brick without
 /// ways takes none.
 pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
-    use pxl_spec_core::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FIRST_CELL, HANDED};
+    use pxl_spec_core::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FIRST_CELL, HAND_CAP};
     let cells = FIRST_CELL..FIRST_CELL + EYE_CLIP_LEVELS;
     let most = cells.clone().map(&worst).max().unwrap_or(0);
     cells.map(worst).sum::<u64>()
         + u64::from(CLIP_LEVELS - EYE_CLIP_LEVELS) * most
-        + u64::from(HANDED) * taken
+        + u64::from(HAND_CAP) * taken
 }
 
 /// `held` with only the lines it draws at `tile`'s zoom: each read alone,
@@ -372,8 +372,8 @@ pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
 /// its fold gives child groups back. Empty for a tile without ways.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Fit {
-    pub held: Vec<(u32, u32)>,
-    pub taken: u32,
+    pub bricks: Vec<(u32, u32)>,
+    pub peak_groups: u32,
 }
 
 /// Why a brick does not fill as a client fills it (`fill_fit`).
@@ -394,12 +394,12 @@ pub enum Unfit {
 /// child groups its build took and holds.
 pub struct FilledBrick<'a> {
     pub column: &'a [u32],
-    pub kept: &'a [u32],
+    pub spans: &'a [u32],
     pub cell: Zoom,
     pub pool: &'a [u32],
     pub root: u32,
-    pub taken: u32,
-    pub held: u32,
+    pub peak_groups: u32,
+    pub groups: u32,
 }
 
 /// Each brick of `tile`'s clip levels filled (`brick_spans`) and its ways'
@@ -454,18 +454,18 @@ pub fn fill_fit(
             k,
             &FilledBrick {
                 column: &column,
-                kept: &kept,
+                spans: &kept,
                 cell,
                 pool: &pool,
                 root,
-                taken,
-                held: child_groups,
+                peak_groups: taken,
+                groups: child_groups,
             },
         );
         if child_groups > 0 {
-            fit.held.push((k, child_groups));
+            fit.bricks.push((k, child_groups));
         }
-        fit.taken = fit.taken.max(taken);
+        fit.peak_groups = fit.peak_groups.max(taken);
     }
     Ok(fit)
 }
@@ -592,7 +592,7 @@ fn read_tile(pkt: &[u8]) -> Result<Columns<'_>, MarshalError> {
 /// What a GPU is handed off a packet: its palette indices, four a cell, a column of
 /// one palette index a cell expanded into `room`, each its own four; and its padded
 /// samples.
-pub fn handed<'a>(
+pub fn gpu_cells<'a>(
     pkt: &'a [u8],
     room: &'a mut [GroundId],
 ) -> Result<(&'a [GroundId], &'a [i16]), MarshalError> {
@@ -607,7 +607,7 @@ pub fn handed<'a>(
 }
 
 /// Decode a tile straight into its resident room in `.fixed.terrain`: its
-/// lines; its cells go to its clip levels (`handed`).
+/// lines; its cells go to its clip levels (`gpu_cells`).
 pub fn decode_into(pkt: &[u8], room: separation::Room) -> Result<TerrainTile, MarshalError> {
     let Columns {
         occupancy,

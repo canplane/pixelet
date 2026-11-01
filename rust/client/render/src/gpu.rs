@@ -8,7 +8,7 @@ pub mod atlas;
 pub mod atmosphere;
 pub mod cloud;
 pub mod finish;
-pub mod generated;
+pub mod generator;
 pub mod image_map;
 pub mod mip;
 pub mod pack;

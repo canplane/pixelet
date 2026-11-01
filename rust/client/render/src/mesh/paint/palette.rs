@@ -7,7 +7,7 @@ use pxl_spec::asset::color;
 use pxl_spec::asset::cube::cube_rgb;
 use pxl_spec::asset::cube::{sentinel, Cube, ALL_CUBES};
 use pxl_spec::asset::cube::{Ground, Object};
-use pxl_spec::asset::ingested::CubeFace;
+use pxl_spec::asset::ingest::CubeFace;
 use pxl_spec::asset::{shipped_sentinel_mean, shipped_tile_mean};
 use std::sync::LazyLock;
 

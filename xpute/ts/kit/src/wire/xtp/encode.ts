@@ -82,7 +82,7 @@ export class TreeEncoder {
       const w = new PacketWriter().root(buf, new DataView(buf.buffer), 0, cap);
       walk(w, view.node);
       try {
-        return buf.subarray(0, w.finished());
+        return buf.subarray(0, w.finish_or_throw());
       } catch (e) {
         if (
           !(e instanceof MarshalError) ||
@@ -540,7 +540,7 @@ export class PacketWriter {
   }
 
   /** The length, header included and to the word; throws why it was refused. */
-  finished(): u32 {
+  finish_or_throw(): u32 {
     const f = this.frame;
     if (f.written !== f.cnt) throw new InvariantError(Errno.ENOTRECOVERABLE);
     // The root branch `begin` opened, closed as `branch` closes one.
@@ -562,7 +562,7 @@ export class PacketWriter {
   /** The packet's length, or -1 when a child did not fit: for a room that fits a packet or not. */
   finish(): number {
     try {
-      return this.finished();
+      return this.finish_or_throw();
     } catch (e) {
       if (e instanceof MarshalError) return -1;
       throw e;

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::util::{pack, Level};
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::place::PLACE_LATTICE;
 use pxl_spec::directory;
 use pxl_spec::space::layer::lattice::GROUND;

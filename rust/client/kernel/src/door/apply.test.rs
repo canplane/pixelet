@@ -43,7 +43,7 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
         w.finish().expect("the buffer holds five numbers")
     };
     let mut s = State {
-        sent: Default::default(),
+        last_snapshot: Default::default(),
         asked: false,
     };
     assert_eq!(

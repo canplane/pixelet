@@ -10,7 +10,7 @@ pub mod bake;
 pub mod catalog;
 pub mod cmd;
 pub mod data;
-pub mod ingested;
+pub mod ingest;
 pub mod route;
 pub mod setting;
 
@@ -48,11 +48,11 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     out.extend(asset::color_outputs()?);
     out.extend(asset::cube_outputs()?);
     out.extend(asset::decor_outputs()?);
-    out.extend(bake::published_outputs()?);
+    out.extend(bake::publication_outputs()?);
     out.extend(bake::object_outputs()?);
     out.extend(bake::place_theme_outputs()?);
     out.extend(data::outputs()?);
-    out.extend(ingested::outputs()?);
+    out.extend(ingest::outputs()?);
     out.extend(catalog::outputs()?);
     out.extend(route::outputs()?);
     Ok(out)
@@ -84,7 +84,7 @@ pub fn generate(write: bool) -> Result<(), String> {
 }
 
 /// What a file the generators write says on one of its first lines, behind
-/// its comment's mark (`generated`).
+/// its comment's mark (`generated_line`).
 const MARK: &str = "GENERATED from ";
 
 /// The trees whose generated files another generator writes: xpute's, by
@@ -631,7 +631,7 @@ pub fn align_star(line: String, indent: &str) -> String {
 }
 
 /// A generated file's line naming the JSON it is generated from.
-pub fn generated(json: &str) -> String {
+pub fn generated_line(json: &str) -> String {
     format!("// GENERATED from {json}")
 }
 

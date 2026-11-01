@@ -42,7 +42,7 @@ pub fn hover(x: f64, y: f64) {
 
 /// Whether the pointer is over a marker a tap would act on.
 pub fn over_marker() -> bool {
-    edit::pointed().is_some_and(|[x, y]| marker_at(x, y).is_some())
+    edit::pointer_ndc().is_some_and(|[x, y]| marker_at(x, y).is_some())
 }
 
 /// A tap at `x`, `y`.

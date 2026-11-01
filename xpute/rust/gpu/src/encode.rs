@@ -92,7 +92,7 @@ fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
 }
 
 /// What a record of `op` takes of a stream's room, measured as `emit` writes it.
-fn measured(put: &dyn Fn(&mut dyn Sink)) -> usize {
+fn record_size(put: &dyn Fn(&mut dyn Sink)) -> usize {
     let mut count = Count(0);
     put(&mut count);
     (2 + count.0) * WORD
@@ -851,7 +851,7 @@ pub mod call {
     /// What `write_buffer` takes of a stream's room (`Stream::fits`), so a
     /// caller writing several asks once.
     pub fn write_buffer_bytes(bytes: &[u8]) -> usize {
-        measured(&|s| buffer_write(s, 0, 0, bytes))
+        record_size(&|s| buffer_write(s, 0, 0, bytes))
     }
 
     /// The bytes read where they lie in the guest's memory when the host
@@ -898,7 +898,7 @@ pub mod call {
             origin: [0; 3],
             aspect: TextureAspect::all,
         };
-        measured(&|s| {
+        record_size(&|s| {
             texture_write(s, &place, [0; 2], [0; 3]);
             s.bytes(bytes);
         })

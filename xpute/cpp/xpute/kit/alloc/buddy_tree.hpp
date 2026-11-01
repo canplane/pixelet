@@ -69,7 +69,7 @@ template <Range R> class BuddyMalloc {
     BuddyMalloc &operator=(const BuddyMalloc &) = delete;
 
     // The high-water mark, not what is live.
-    std::size_t used() const noexcept { return max_ptr_ - base_ptr_; }
+    std::size_t peak() const noexcept { return max_ptr_ - base_ptr_; }
     std::size_t live() const noexcept { return live_; }
     std::size_t range_bytes() const noexcept { return end_ptr_ - base_ptr_; }
     // A refused request can only be served once this has moved.

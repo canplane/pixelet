@@ -152,7 +152,7 @@ export class GpuHost {
    * reads a dictionary only during the call it is given to. Two places, as
    * a texture-to-texture copy names two. */
   private readonly places: [Place, Place] = [place(), place()];
-  private readonly buffered: GPUTexelCopyBufferInfo = {
+  private readonly buffer_info: GPUTexelCopyBufferInfo = {
     buffer: undefined as unknown as GPUBuffer,
     offset: 0,
     bytesPerRow: 0,
@@ -175,7 +175,7 @@ export class GpuHost {
   private readonly stamps: GPURenderPassTimestampWrites = {
     querySet: undefined as unknown as GPUQuerySet,
   };
-  private readonly finished: GPUCommandBuffer[] = [];
+  private readonly command_bufs: GPUCommandBuffer[] = [];
   /** At the slot the guest names each by, with the guest's handle bound there. */
   private readonly surfaces = new Map<
     u32,
@@ -202,7 +202,7 @@ export class GpuHost {
     this.wake = wake;
     // The guest is told of the loss in its block; nothing here destroys the device.
     device.lost.then(() => {
-      this.lost();
+      this.on_lost();
       this.wake();
     });
   }
@@ -233,7 +233,7 @@ export class GpuHost {
   }
 
   /** The device went: every object with it, and the guest told in its block. */
-  private lost(): void {
+  private on_lost(): void {
     this.objects.length = 0;
     if (this.block) {
       new Uint32Array(this.memory(), this.block.address, this.block.words)[
@@ -269,7 +269,7 @@ export class GpuHost {
   }
 
   /** `ticket | DONE` at `word`, where the ticket still stands, and a turn asked to read it. */
-  private done(word: u32, ticket: u32): void {
+  private write_done(word: u32, ticket: u32): void {
     const w = new Uint32Array(this.memory(), word, 1);
     if (w[0] !== ticket) return;
     w[0] = (ticket | DONE) >>> 0;
@@ -289,7 +289,7 @@ export class GpuHost {
   }
 
   private bufferLayout(r: Words): GPUTexelCopyBufferInfo {
-    const b = this.buffered;
+    const b = this.buffer_info;
     b.buffer = this.get<GPUBuffer>(r.u());
     b.offset = r.u();
     b.bytesPerRow = r.u();
@@ -738,7 +738,7 @@ export class GpuHost {
                 to,
                 [source.width, source.height],
               );
-              this.done(word, ticket);
+              this.write_done(word, ticket);
             }
             source.close();
           },
@@ -988,14 +988,14 @@ export class GpuHost {
       }
       case op.SUBMIT: {
         const n = r.u();
-        const finished = this.finished;
+        const command_bufs = this.command_bufs;
         for (let k = 0; k < n; k++) {
           const id = r.u();
-          finished.push(this.get<GPUCommandEncoder>(id).finish());
+          command_bufs.push(this.get<GPUCommandEncoder>(id).finish());
           this.forget(id);
         }
-        d.queue.submit(finished);
-        finished.length = 0;
+        d.queue.submit(command_bufs);
+        command_bufs.length = 0;
         return;
       }
       case op.MAP_ASYNC: {
@@ -1024,7 +1024,7 @@ export class GpuHost {
       }
       case op.QUEUE_DONE: {
         const [word, ticket] = [r.u(), r.u()];
-        d.queue.onSubmittedWorkDone().then(() => this.done(word, ticket));
+        d.queue.onSubmittedWorkDone().then(() => this.write_done(word, ticket));
         return;
       }
       case op.CONFIGURE: {

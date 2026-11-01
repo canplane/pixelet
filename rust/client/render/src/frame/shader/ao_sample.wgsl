@@ -50,7 +50,7 @@ fn view_normal(p: vec2i, c0: f32) -> vec3f {
 
 // The pixel of half texel `hp`'s 2×2 whose depth the downsample kept, the
 // first in its order to hold `depth`.
-fn kept_at(hp: vec2i, depth: f32) -> vec2i {
+fn full_px(hp: vec2i, depth: f32) -> vec2i {
   let fp = hp * i32(AO_DOWNSCALE);
   var at = array<vec2i, 4>(fp, fp + vec2i(1, 0), fp + vec2i(0, 1), fp + vec2i(1, 1));
   for (var k = 0; k < 3; k++) {
@@ -76,7 +76,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   }
   let uv = i.clip.xy / ao_half();
   let pos = view_pos(depth, uv);
-  let normal = view_normal(kept_at(hp, depth), depth);
+  let normal = view_normal(full_px(hp, depth), depth);
   let noise = textureLoad(blue_noise, hp & vec2i(AO_NOISE_MASK), 0);
   var helper = vec3f(0.0, 1.0, 0.0);
   if (dot(helper, normal) > 0.99) {

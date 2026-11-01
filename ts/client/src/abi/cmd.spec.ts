@@ -197,7 +197,7 @@ export interface Snapshot {
    * heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The
    * kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
    * empty. */
-  refused: RefusedFile[];
+  refused_files: RefusedFile[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
   stall: Message | null;
 }
@@ -218,7 +218,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     m_per_px: b.at(11).get<f64>(),
     division: list(b.at_branch(12), read_division_part),
     previews: Array.from(b.at(13).get<U32Array>()),
-    refused: list(b.at_branch(14), read_refused_file),
+    refused_files: list(b.at_branch(14), read_refused_file),
     stall: b.at(15).get<Message | null>(),
   };
 }
@@ -465,7 +465,7 @@ export function encode_sys_sleep(to: PacketRoom, awake: boolean): PacketWriter {
 /** Command.FS_MOUNT's packet, written in place into `to`.
  *
  * @param top_zoom The coarsest zoom the source supplies whole.
- * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/published.spec.rs).
+ * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
  * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
 export function encode_fs_mount(
   to: PacketRoom,

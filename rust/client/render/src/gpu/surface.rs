@@ -39,8 +39,8 @@ pub struct Surface {
     pub height: u32,
     /// The world's size and the canvas's last asked, which hold
     /// `SETTLE_TURNS` before the targets are made at them.
-    pub wanted: ((u32, u32), (u32, u32)),
-    pub waited: u32,
+    pub wanted_sizes: ((u32, u32), (u32, u32)),
+    pub waited_turns: u32,
     /// The frame's depth, the world's and over it what moves on its own
     /// (gpu/renderer.rs, stage 2), with a stencil where the device carries
     /// one (`Gpu::gated_depth`): `depth_view` as a pass draws into it,
@@ -73,8 +73,8 @@ pub struct Surface {
     /// with the screen's depth: a gated frame finishes again only its
     /// claimed tiles in it, and every frame shows it whole on the canvas, whose
     /// texture is a new one each frame (gpu/finish.rs): the world's alone.
-    pub shown: u32,
-    pub shown_view: u32,
+    pub picture: u32,
+    pub picture_view: u32,
 }
 
 impl Surface {
@@ -94,8 +94,8 @@ impl Surface {
             self.history[0],
             self.history_view[1],
             self.history[1],
-            self.shown_view,
-            self.shown,
+            self.picture_view,
+            self.picture,
         ]
     }
 

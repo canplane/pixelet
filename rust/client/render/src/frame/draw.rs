@@ -32,7 +32,7 @@ pub const PIPELINE_GHOST_DECOR: u32 = 2;
 pub const MODEL_VERTEX_WORDS: u32 = 16;
 /// (model handle, joint palette handle, model id, uniform, pipeline); uniform
 /// float 4 is the turn about Z.
-pub const PIPELINE_SKINNED: u32 = 3;
+pub const PIPELINE_SKINNED_MESH: u32 = 3;
 /// Zone: (zone upload handle, instance count, 0, uniform, pipeline). Beacon:
 /// (0, night, 0, uniform, pipeline), uniform float 4 its spin.
 pub const PIPELINE_LOCATION_ZONE: u32 = 4;
@@ -53,7 +53,7 @@ pub const DRAW_PIPELINES: [u32; 10] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_DECOR,
-    PIPELINE_SKINNED,
+    PIPELINE_SKINNED_MESH,
     PIPELINE_LOCATION_ZONE,
     PIPELINE_LOCATION_BEACON,
     PIPELINE_MARKER,
@@ -121,7 +121,7 @@ pub struct DrawList {
     draws: Vec<u32>,
     uniforms: Vec<f32>,
     next_handle: u32,
-    taken: Vec<u32>,
+    rewrites_taken: Vec<u32>,
     /// Where each actor drawn stands, units from the eye (`stand`).
     stands: Vec<[f32; 3]>,
 }
@@ -357,12 +357,12 @@ impl DrawList {
     pub fn take(&mut self) -> Lists<'_> {
         let (side, uploads, frees) = (self.side, self.uploads, self.frees);
         (self.side, self.uploads, self.frees) = (1 - side, 0, 0);
-        core::mem::swap(&mut self.taken, &mut self.rewrites);
+        core::mem::swap(&mut self.rewrites_taken, &mut self.rewrites);
         self.rewrites.clear();
         let l = list_arrays();
         Lists {
             uploads: &l.uploads[side][..uploads],
-            rewrites: &self.taken,
+            rewrites: &self.rewrites_taken,
             frees: &l.frees[side][..frees],
             draws: &self.draws,
             uniforms: &self.uniforms,

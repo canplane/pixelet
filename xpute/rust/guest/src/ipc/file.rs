@@ -54,7 +54,7 @@ impl<O: Copy, const N: usize> Files<O, N> {
 
     /// The owner of the open `opened` completes, or none where its descriptor
     /// was closed since; a descriptor whose open failed is closed here.
-    pub fn opened(&mut self, sys: &mut Sys, opened: &SysOpened) -> Option<O> {
+    pub fn complete_open(&mut self, sys: &mut Sys, opened: &SysOpened) -> Option<O> {
         let owner = self.owner(opened.fd).copied()?;
         if opened.res < 0 {
             self.close(sys, opened.fd);

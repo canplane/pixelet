@@ -63,7 +63,7 @@ export function follow(): () => void {
 }
 
 /** CoreLocation says "no course" and "no accuracy" as a negative, the page's API as null. */
-function known(v: number | null): number | null {
+function null_if_negative(v: number | null): number | null {
   return v !== null && v >= 0 ? v : null;
 }
 
@@ -132,9 +132,9 @@ function geo_start(): void {
         heard.position(
           longitude,
           latitude,
-          known(altitudeAccuracy) === null ? null : altitude,
-          known(accuracy),
-          known(heading),
+          null_if_negative(altitudeAccuracy) === null ? null : altitude,
+          null_if_negative(accuracy),
+          null_if_negative(heading),
         );
       },
       // Android's watch never ends on its own (expo's watch callbacks leave

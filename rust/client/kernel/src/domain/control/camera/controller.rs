@@ -196,7 +196,7 @@ struct TrackerSpace {
 
 struct Controllers {
     base: CameraMode,
-    tracked: Option<TrackerSpace>,
+    tracker: Option<TrackerSpace>,
 }
 
 static CONTROLLERS: Global<Controllers> = Global::new();
@@ -204,13 +204,13 @@ static CONTROLLERS: Global<Controllers> = Global::new();
 fn controllers() -> &'static mut Controllers {
     CONTROLLERS.get(|| Controllers {
         base: CameraMode::orbit,
-        tracked: None,
+        tracker: None,
     })
 }
 
 pub fn active() -> Active {
     let c = controllers();
-    match (&c.tracked, c.base) {
+    match (&c.tracker, c.base) {
         (Some(_), _) => Active::Tracked,
         (None, CameraMode::orbit) => Active::Orbit,
         (None, CameraMode::first_person) => Active::FirstPerson,
@@ -221,7 +221,7 @@ pub fn active() -> Active {
 pub fn pose() -> Option<ObserverPose> {
     camera().eye?;
     let c = controllers();
-    match (&c.tracked, c.base) {
+    match (&c.tracker, c.base) {
         (Some(t), _) => {
             let (mut camera_to_world, mut rot, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
             mat4::mul(&mut camera_to_world, &t.world_turn, &t.turn);
@@ -247,7 +247,7 @@ pub fn set_intent(partial: IntentPatch) -> Intent {
         Active::Orbit => orbit::ask(partial),
         Active::FirstPerson | Active::Tracked => {
             let c = camera_state();
-            c.commit_intent(c.merged(partial));
+            c.commit_intent(c.with_patch(partial));
             c.intent
         }
     }
@@ -329,7 +329,7 @@ fn switch() -> bool {
 /// until it lets go.
 fn take_mode(want: CameraMode) -> bool {
     let c = controllers();
-    if c.base == want || c.tracked.is_some() {
+    if c.base == want || c.tracker.is_some() {
         return false;
     }
     // Taken back to the nearest canonical point, or a few round trips walk the
@@ -370,7 +370,7 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let mut turn = mat4::new();
     mat4::rot_quat(&mut turn, q);
     let c = controllers();
-    if c.tracked.is_none() {
+    if c.tracker.is_none() {
         let Some(now) = pose() else { return };
         let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) =
             (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
@@ -381,20 +381,20 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
             mat4::transpose(&mut turn_back, &turn),
         );
         mat4::transform_point(&mut moved, &world_turn, at[0], at[1], at[2]);
-        c.tracked = Some(TrackerSpace {
+        c.tracker = Some(TrackerSpace {
             world_turn,
             world_at: v3::sub(&now.eye, &moved),
             turn,
             at,
         });
-    } else if let Some(t) = &mut c.tracked {
+    } else if let Some(t) = &mut c.tracker {
         (t.turn, t.at) = (turn, at);
     }
     request_world_tick();
 }
 
 pub fn tracked_end() {
-    if controllers().tracked.take().is_some() {
+    if controllers().tracker.take().is_some() {
         request_world_tick();
     }
 }

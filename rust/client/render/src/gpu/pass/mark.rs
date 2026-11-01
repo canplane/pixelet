@@ -51,7 +51,7 @@ fn drawn_of(uniforms: &[f32], d: &[u32; DRAW_WORDS]) -> Draw {
 /// it reads, as it is or as it was (0 where it reads none), those as they
 /// are first, `now_cnt` of them, and what the last frame drew.
 pub struct Marks {
-    built: Pipeline,
+    pipeline: Pipeline,
     read: UploadOf,
     put: PutMark,
     uniforms: DrawUniforms,
@@ -72,7 +72,7 @@ impl Marks {
         (read, put): (UploadOf, PutMark),
     ) -> Marks {
         Marks {
-            built: pipelines.build_gated(g, id, Format::depth32float, Stencil::Unused),
+            pipeline: pipelines.build_gated(g, id, Format::depth32float, Stencil::Unused),
             read,
             put,
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
@@ -85,13 +85,14 @@ impl Marks {
     /// Group 0's layout (tile_mark.wgsl): the frame, the tiles' words, their
     /// uniform and the box of the tiles the frame's marks cover.
     pub fn layout(&self) -> u32 {
-        self.built.layouts[0]
+        self.pipeline.layouts[0]
     }
 
     /// The marks this frame of `draws`: each that no draw the last frame
     /// drew draws as, where it is, its upload as it is; each the last frame
     /// drew that none of this frame's draws as, where it was, its upload as
-    /// kept (`kept`); one whose upload moved, both. Whether any.
+    /// the last frame drew it (`last_frame_uploads`); one whose upload moved,
+    /// both. Whether any.
     pub fn prepare<'a>(
         &mut self,
         g: &Gpu,
@@ -99,7 +100,7 @@ impl Marks {
         uniforms: &[f32],
         touched: &[u32],
         uploads: &mut Uploads,
-        kept: &UploadCopies,
+        last_frame_uploads: &UploadCopies,
     ) -> bool {
         let (read, put) = (self.read, self.put);
         let now: Vec<Draw> = draws.map(|d| drawn_of(uniforms, d)).collect();
@@ -122,13 +123,13 @@ impl Marks {
             }
             let group = match read(&w.0) {
                 0 => Some(0),
-                h => kept.group_of(h),
+                h => last_frame_uploads.group_of(h),
             };
             marks.extend(group.map(|group| (*w, group)));
         }
         self.uniforms.write(
             g,
-            self.built.layouts[1],
+            self.pipeline.layouts[1],
             marks.len() as u32,
             marks.iter(),
             true,
@@ -157,7 +158,7 @@ impl Marks {
             return;
         };
         for (k, (d, upload)) in self.marks.iter().enumerate() {
-            pass.set_pipeline(self.built.pipeline);
+            pass.set_pipeline(self.pipeline.id);
             pass.set_bind_group(0, frames[usize::from(k >= self.now_cnt)], &[]);
             let (group, off) = slots.at(k as u32);
             pass.set_bind_group(1, group, &[off]);

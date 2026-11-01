@@ -12,10 +12,11 @@ use crate::domain::query::Ray;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
-use crate::perf::frame::{is_missed, long, overran, unmeasured};
+use crate::perf::frame::{is_missed, long, overran, unmeasured_ms};
 use crate::perf::frame::{FrameSample, RaySample, GPU_SPANS};
 use crate::perf::record::{
-    perf_frames_since, perf_recording_held, perf_recording_state, perf_scratch, perf_tasks_since,
+    perf_frames_since, perf_recording_extremes, perf_recording_state, perf_scratch,
+    perf_tasks_since,
 };
 use crate::perf::section::TASK_PHASES;
 use crate::perf::section::{
@@ -103,7 +104,7 @@ pub fn perf_stats(window_ms: Option<f64>) -> &'static [f64] {
         &tasks(scratch, perf_tasks_since(since)),
     );
     put(out, STAT::steps::AT, &steps());
-    put(out, STAT::recording::AT, &perf_recording_held());
+    put(out, STAT::recording::AT, &perf_recording_extremes());
     out
 }
 
@@ -149,7 +150,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         stage: percentiles(scratch, frames.iter().map(|f| f.stage_ms)),
         tasks: percentiles(scratch, frames.iter().map(|f| f.tasks_ms)),
         perf: percentiles(scratch, frames.iter().map(|f| f.perf_ms)),
-        rest: percentiles(scratch, frames.iter().map(unmeasured)),
+        rest: percentiles(scratch, frames.iter().map(unmeasured_ms)),
         effects_p95: core::array::from_fn(|k| {
             percentiles(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
@@ -263,7 +264,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
 
 fn view() -> ViewSection {
     use crate::domain::control::edit::{self, collision};
-    let pointed = edit::pointed();
+    let pointed = edit::pointer_ndc();
     // What the pointer meets, exactly, at the zooms the eye asks, whatever
     // the tool could strike there, and the zoom the rays draw it at.
     let met = pointed.and_then(|[x, y]| {
@@ -326,7 +327,7 @@ fn view() -> ViewSection {
         cell: zoom(cell),
         hit_kind,
         struck_zoom: zoom(picked.as_ref().map(|p| p.zoom())),
-        drawn_zoom: zoom(picked.as_ref().and_then(|p| p.drawn)),
+        drawn_zoom: zoom(picked.as_ref().and_then(|p| p.drawn_zoom)),
         folded: picked
             .as_ref()
             .map_or(f64::NAN, |p| f64::from(u8::from(p.is_folded()))),

@@ -56,7 +56,7 @@ pub type Heap<B> = SlabMalloc<Span<B>>;
 pub struct HeapStat {
     pub range: usize,
     /// A high-water mark, not a holding.
-    pub used: usize,
+    pub peak: usize,
     pub live: usize,
     pub run: usize,
     pub slot: usize,
@@ -74,7 +74,7 @@ pub struct HeapStat {
 pub fn heap_stat<B: Bounds>(a: &Heap<B>) -> HeapStat {
     HeapStat {
         range: a.range_bytes(),
-        used: a.used(),
+        peak: a.peak(),
         live: a.live(),
         run: a.run_live(),
         slot: a.slot_live(),

@@ -86,22 +86,22 @@ export function port<G extends Grant>(host: Host<G>, number: u32): Port<G> {
   // A table's command writes its own packet; a bare number's are lowered.
   const packet = (cmd: u32 | Command<unknown[]>, args: unknown[]) =>
     typeof cmd === "number"
-      ? host.doorbell.lowered(args as Arg[])
+      ? host.doorbell.lower(args as Arg[])
       : (cmd.write?.(room, ...args) ?? null);
-  const numbered = (cmd: u32 | { number: u32 }) =>
+  const number_of = (cmd: u32 | { number: u32 }) =>
     typeof cmd === "number" ? cmd : cmd.number;
   return {
     number,
     host,
     send: (cmd: u32 | Command<unknown[]>, ...args: unknown[]) =>
-      host.send(number, numbered(cmd), packet(cmd, args) ?? undefined),
+      host.send(number, number_of(cmd), packet(cmd, args) ?? undefined),
     call: (cmd: u32 | Command<unknown[]>, ...args: unknown[]) =>
-      host.doorbell.call(number, numbered(cmd), packet(cmd, args), answered),
+      host.doorbell.call(number, number_of(cmd), packet(cmd, args), answered),
     on(
       cmd: u32 | Event<unknown[]>,
       heard: Listener | ((...fields: unknown[]) => void),
     ) {
-      const key = numbered(cmd);
+      const key = number_of(cmd);
       const fields = heard as (...fields: unknown[]) => void;
       const take: Listener =
         typeof cmd === "number"

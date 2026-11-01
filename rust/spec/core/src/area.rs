@@ -14,7 +14,7 @@ use crate::{idx_at, wrap_idx as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHA
 use crate::ground::{UNKNOWN, VOID};
 
 /// The shards a source serves, as the pyramid's own level at `SHARD_ZOOM`
-/// both sides read (`found`): every cell there, addressed by its key
+/// both sides read (`nine_at`): every cell there, addressed by its key
 /// (`shard_key`, `SHARD_CELLS` of them), holding which of the nine about it
 /// are served (`nine`), none where it is beside no served one. On the CPU
 /// its declaration's, on a GPU a buffer of it.
@@ -61,7 +61,7 @@ pub const fn shard_over(zoom: Zoom, c: [i32; 2]) -> (Zoom, [i32; 2]) {
 
 /// Which of the nine cells at `SHARD_ZOOM` about `own` are served, as
 /// `served` says of each, bit `(dy + 1)·3 + (dx + 1)` for the cell `dx, dy`
-/// from it, its own among them, as `Shard::served` holds them: a cell's
+/// from it, its own among them, as `Shard::served_bits` holds them: a cell's
 /// word in the area (`Area::nine`), laid once where the area is made
 /// (pxl-kernel sys/io/source.rs), so a node's shard is one read (`Shard::at`).
 pub fn nine(served: impl Fn([i32; 2]) -> bool, own: [i32; 2]) -> u32 {
@@ -80,7 +80,7 @@ pub fn nine(served: impl Fn([i32; 2]) -> bool, own: [i32; 2]) -> u32 {
 
 /// The cell `c` at `SHARD_ZOOM`'s nine, read where its key addresses it;
 /// none for a row off the world.
-pub fn found(area: &impl Area, c: [i32; 2]) -> u32 {
+pub fn nine_at(area: &impl Area, c: [i32; 2]) -> u32 {
     let k = shard_key(c);
     if k == NO_KEY {
         0
@@ -93,7 +93,7 @@ pub fn found(area: &impl Area, c: [i32; 2]) -> u32 {
 /// shard is over the tile.
 pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
     let s = LEAF_ZOOM - SHARD_ZOOM;
-    area.ends() && found(area, [leaf[0] >> s, leaf[1] >> s]) & OWN == 0
+    area.ends() && nine_at(area, [leaf[0] >> s, leaf[1] >> s]) & OWN == 0
 }
 
 /// What a descent establishes of the service area at a node a shard or
@@ -113,7 +113,7 @@ pub struct Shard(u32);
 
 const SHARD_KNOWN: u32 = 1;
 const SHARD_SERVED_SHIFT: u32 = 1;
-/// The bits of which of the nine are served (`Shard::served`).
+/// The bits of which of the nine are served (`Shard::served_bits`).
 const SHARD_SERVED_BITS: u32 = 9;
 const SHARD_ALL: u32 = (1 << SHARD_SERVED_BITS) - 1;
 /// Its own among the nine, the center.
@@ -126,7 +126,7 @@ impl Shard {
     pub const INSIDE: Shard = Shard(SHARD_KNOWN | SHARD_ALL << SHARD_SERVED_SHIFT);
 
     /// The node `(zoom, c)`'s, as `self` knows it, else found: its shard's
-    /// nine off its entry in the area's index (`found`). Unknown coarser
+    /// nine off its entry in the area's index (`nine_at`). Unknown coarser
     /// than a shard.
     pub fn at(self, area: &impl Area, (zoom, c): (Zoom, [i32; 2])) -> Shard {
         if self.0 & SHARD_KNOWN != 0 || zoom < SHARD_ZOOM {
@@ -136,7 +136,7 @@ impl Shard {
             return Shard(SHARD_KNOWN | SHARD_ALL << SHARD_SERVED_SHIFT);
         }
         let s = zoom - SHARD_ZOOM;
-        Shard(SHARD_KNOWN | found(area, [c[0] >> s, c[1] >> s]) << SHARD_SERVED_SHIFT)
+        Shard(SHARD_KNOWN | nine_at(area, [c[0] >> s, c[1] >> s]) << SHARD_SERVED_SHIFT)
     }
     const fn is_known(self) -> bool {
         self.0 & SHARD_KNOWN != 0
@@ -144,17 +144,17 @@ impl Shard {
     /// Which of the nine shards about it are served, bit `(dy + 1)·3 +
     /// (dx + 1)`: what a word with no room for its known bit holds where it
     /// is known by its zoom (pxl-spec-core `ray`'s stop).
-    pub const fn served(self) -> u32 {
+    pub const fn served_bits(self) -> u32 {
         self.0 >> SHARD_SERVED_SHIFT
     }
 
     /// Past the area: known so.
     pub const fn past(self) -> bool {
-        self.is_known() && self.served() & OWN == 0
+        self.is_known() && self.served_bits() & OWN == 0
     }
     /// Known to lie, a leaf cell about it too, inside the area.
     pub const fn inside(self) -> bool {
-        self.served() == SHARD_ALL
+        self.served_bits() == SHARD_ALL
     }
     /// Whether the leaf tile `leaf` is past the area (`past`): off the nine
     /// bits of what `self`, the node `(zoom, c)`'s, knows, never the area's
@@ -172,7 +172,7 @@ impl Shard {
             self.is_known() && d[0].abs() <= 1 && d[1].abs() <= 1,
             "a leaf in the node's shard's nine"
         );
-        self.served() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0
+        self.served_bits() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0
     }
     pub const fn word(self) -> u32 {
         self.0

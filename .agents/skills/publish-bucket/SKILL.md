@@ -84,7 +84,7 @@ make bake-earth
 
 ```bash
 make ingest-asset
-# -> ./out/asset/<sha256>.<ext>, and regenerates spec/spec/asset/ingested.json and
+# -> ./out/asset/<sha256>.<ext>, and regenerates spec/spec/asset/ingest.json and
 #    what the spec generates from it (the host's table, the catalog, the pack's layout)
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do

@@ -33,7 +33,7 @@ const _: () = assert!(
 );
 
 pub struct CloudPass {
-    built: Pipeline,
+    pipeline: Pipeline,
     uniform: u32,
     group: u32,
     words: [f32; CLOUDS_FLOATS],
@@ -46,7 +46,7 @@ impl CloudPass {
         frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> CloudPass {
-        let built = pipelines.build_world(g, PIPELINE_CLOUD);
+        let pipeline = pipelines.build_world(g, PIPELINE_CLOUD);
         let tile = g.texture(
             CLOUD_TILE_TEXELS,
             CLOUD_TILE_TEXELS,
@@ -83,7 +83,7 @@ impl CloudPass {
             sampler_entry(3, tile_sampler),
         ];
         e.extend(air);
-        let group = g.bind_group(built.layouts[0], &e);
+        let group = g.bind_group(pipeline.layouts[0], &e);
         bake(
             g,
             pipelines,
@@ -91,7 +91,7 @@ impl CloudPass {
             mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
         );
         CloudPass {
-            built,
+            pipeline,
             uniform,
             group,
             words: [0.0; CLOUDS_FLOATS],
@@ -123,7 +123,7 @@ impl CloudPass {
         if self.words[SHOWN] <= 0.0 {
             return;
         }
-        pass.set_pipeline(self.built.pipeline);
+        pass.set_pipeline(self.pipeline.id);
         pass.set_bind_group(0, self.group, &[]);
         // A quad each, the farther sheet first (cloud.wgsl `vs`).
         pass.draw(6, 2, 0, 0);
@@ -149,7 +149,7 @@ fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], env: &[f32]) {
 }
 
 fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
-    let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::r8unorm);
+    let pipeline = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::r8unorm);
     let encoder = g.encoder();
     let level = g.view(tile, false, 0, 1, 0, 1);
     let pass = g.pass(
@@ -157,7 +157,7 @@ fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
         &pass_desc(level, Load::Clear, 0, Load::Clear, 0.0, None),
     );
     let mut pass = TrackedRenderPass::new(g, pass);
-    pass.set_pipeline(built.pipeline);
+    pass.set_pipeline(pipeline.id);
     pass.draw(3, 1, 0, 0);
     pass.end();
     release(level);

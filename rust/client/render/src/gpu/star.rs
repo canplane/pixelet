@@ -22,7 +22,7 @@ use crate::param::sky::star::DRAWN_ABOVE;
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-star.bin");
 
 pub struct StarPass {
-    built: Pipeline,
+    pipeline: Pipeline,
     frame_group: u32,
     uniform: u32,
     group: u32,
@@ -38,7 +38,7 @@ impl StarPass {
         frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> StarPass {
-        let built = pipelines.build_world(g, PIPELINE_STAR);
+        let pipeline = pipelines.build_world(g, PIPELINE_STAR);
         let uniform = g.buf(
             word_bytes(STARS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -56,13 +56,13 @@ impl StarPass {
         g.write_buf(catalog, 0, bytes(&stars));
         let mut frame = vec![buf_entry(0, frame_buf)];
         frame.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
-        let frame_group = g.bind_group(built.layouts[0], &frame);
+        let frame_group = g.bind_group(pipeline.layouts[0], &frame);
         let group = g.bind_group(
-            built.layouts[1],
+            pipeline.layouts[1],
             &[buf_entry(0, uniform), buf_entry(1, catalog)],
         );
         StarPass {
-            built,
+            pipeline,
             frame_group,
             uniform,
             group,
@@ -103,7 +103,7 @@ impl StarPass {
         if self.words[INTENSITY] <= DRAWN_ABOVE {
             return;
         }
-        pass.set_pipeline(self.built.pipeline);
+        pass.set_pipeline(self.pipeline.id);
         pass.set_bind_group(0, self.frame_group, &[]);
         pass.set_bind_group(1, self.group, &[]);
         pass.draw(4, (CATALOG.len() / RECORD_BYTES) as u32, 0, 0);

@@ -10,8 +10,8 @@ use xpute_guest::entry::BootInfo;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
 
 use crate::domain::layer::division;
-use crate::domain::layer::terrain::fixed;
 use crate::domain::layer::terrain::mirror;
+use crate::domain::layer::terrain::room;
 use crate::domain::scene::character;
 use crate::domain::scene::character::companion;
 use crate::domain::scene::character::preview;
@@ -136,7 +136,7 @@ pub const MAX_LIVE_UPLOADS: usize =
     MODELS_MAX + cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
 
 const FIXED: [u32; 5] = [
-    fixed::TERRAIN_BYTES,
+    room::TERRAIN_BYTES,
     division::DIVISION_BYTES,
     upload::uploads_bytes(MAX_LIVE_UPLOADS),
     stream::BYTES,
@@ -219,7 +219,7 @@ pub fn range(f: FixedRange) -> Section {
 /// makes them itself.
 pub fn install(b: &BootInfo) -> u32 {
     section::set_map(section::lay_out(b.given, b.data_end, FIXED_BYTES));
-    fixed::RANGE.set(range(FixedRange::Terrain));
+    room::RANGE.set(range(FixedRange::Terrain));
     division::RANGE.set(range(FixedRange::Division));
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.uploads`, zeroed, each the
     // renderer's or the host's alone.

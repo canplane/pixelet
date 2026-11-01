@@ -45,10 +45,10 @@ class Tasks final : public Executor {
 };
 
 // A read's buffer the host may still fill after its `Read` was destroyed: let
-// go once the turn `asked` has passed.
+// go once the turn `asked_turn` has passed.
 struct Left {
     Bytes bytes;
-    std::uint32_t asked;
+    std::uint32_t asked_turn;
 };
 
 struct Program {
@@ -64,8 +64,8 @@ struct Program {
 
     // An open answered: an errno ends its read, a size has the host fill a
     // buffer of it after this turn.
-    void opened(const abi::SysOpened &opened) noexcept {
-        std::optional<Read *> owner = files.opened(sys, opened);
+    void complete_open(const abi::SysOpened &opened) noexcept {
+        std::optional<Read *> owner = files.complete_open(sys, opened);
         if (!owner) return;
         Read &r = **owner;
         if (opened.res < 0) {
@@ -83,7 +83,7 @@ struct Program {
         sys.read(opened.fd, r.bytes_.span());
         files.close(sys, opened.fd);
         r.got_ = Read::Got::reading;
-        r.asked_ = turn;
+        r.asked_turn_ = turn;
         reading.push_back(&r);
     }
 
@@ -91,9 +91,9 @@ struct Program {
     // those destroyed meanwhile, let go.
     void rise() noexcept {
         turn++;
-        std::erase_if(left, [this](const Left &l) { return turn > l.asked; });
+        std::erase_if(left, [this](const Left &l) { return turn > l.asked_turn; });
         std::erase_if(reading, [this](Read *r) {
-            if (turn <= r->asked_) return false;
+            if (turn <= r->asked_turn_) return false;
             r->ready(Errno::ok);
             return true;
         });
@@ -223,7 +223,7 @@ Read::~Read() {
         break;
     case Got::reading:
         std::erase(p.reading, this);
-        p.left.push_back(program_detail::Left{std::move(bytes_), asked_});
+        p.left.push_back(program_detail::Left{std::move(bytes_), asked_turn_});
         break;
     case Got::idle:
     case Got::done:
@@ -238,17 +238,17 @@ double turn(std::span<const On> handlers) noexcept {
     p.rise();
     p.door.drain(
         [&p](const abi::SysOpened &opened) {
-            p.opened(opened);
-            return Applied{};
+            p.complete_open(opened);
+            return Outcome{};
         },
         [&p, handlers](std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
             for (const On &on : handlers) {
                 if (on.cmd != cmd) continue;
                 Turn cx(p.sys, p.door);
                 Result<std::int32_t> res = on.handler(cx, Packet(pkt));
-                return res ? Applied{.val = *res} : Applied{.err = res.error().errnum};
+                return res ? Outcome{.val = *res} : Outcome{.err = res.error().errnum};
             }
-            return Applied{.err = Errno::enosys};
+            return Outcome{.err = Errno::enosys};
         });
     // The tasks reach the program through `booted_program` themselves.
     ::xpute::poll();

@@ -42,7 +42,7 @@ fn main() {
         }
         let text = std::fs::read_to_string(&path).expect("a shader's text");
         let name = path.file_name().expect("a shader's name");
-        let mut shipped = stripped(&text);
+        let mut shipped = strip_comments(&text);
         if name == "constant.wgsl" {
             shipped += &words();
             shipped += &params();
@@ -148,7 +148,7 @@ fn main() {
     // The cloud field's lattice unit and the hash its cells draw from, the
     // cumulus's own on the CPU (pxl-spec-core cloud.rs `lattice_hash`): its
     // multipliers, its rounds and its kept bits as the Rust takes them.
-    use pxl_spec_core::cloud::{HASH_IN, HASH_KEPT, HASH_LAST, HASH_ROUNDS};
+    use pxl_spec_core::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
     use pxl_spec_core::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;
     let rounds: String = HASH_ROUNDS
@@ -158,8 +158,8 @@ fn main() {
     let cloud = format!(
         "const CLOUD_LATTICE_CELLS: u32 = {}u;\nfn lattice_hash(i: vec2u, salt: u32) -> f32 {{ var h = (i.x * {hx}u) ^ (i.y * {hy}u) ^ (salt * {hs}u); {rounds}h ^= h >> {HASH_LAST}u; return f32(h >> {}u) / {}.0; }}\n",
         1u32 << LATTICE_SHAMT,
-        32 - HASH_KEPT,
-        1u32 << HASH_KEPT
+        32 - HASH_SHARE_BITS,
+        1u32 << HASH_SHARE_BITS
     );
     std::fs::write(out.join("cloud_hash.wgsl"), cloud).expect("the cloud hash's shader");
     std::fs::write(out.join("debug_look.wgsl"), debug_looks()).expect("the debug views' looks");
@@ -220,7 +220,7 @@ fn debug_looks() -> String {
 
 /// WGSL has no string literals, so `//` always starts a comment. Lines are never
 /// joined, so tokens cannot run together; block comments are left alone.
-fn stripped(text: &str) -> String {
+fn strip_comments(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for line in text.lines() {
         let code = match line.find("//") {

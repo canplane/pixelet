@@ -23,7 +23,7 @@ enum Room {
 }
 
 impl Room {
-    fn released(self) -> u32 {
+    fn release_cnt(self) -> u32 {
         match self {
             Room::Heap => heap_stat().releases,
             Room::Bodies => body::releases(),
@@ -35,21 +35,21 @@ impl Room {
 impl Refusal {
     /// By the heap.
     pub fn now() -> Refusal {
-        Refusal(Room::Heap, Room::Heap.released())
+        Refusal(Room::Heap, Room::Heap.release_cnt())
     }
 
     /// By the body slots, every one out.
     pub fn bodies() -> Refusal {
-        Refusal(Room::Bodies, Room::Bodies.released())
+        Refusal(Room::Bodies, Room::Bodies.release_cnt())
     }
 
     /// By the heap, for a run of body slots, every run held full.
     pub fn run() -> Refusal {
-        Refusal(Room::Run, Room::Run.released())
+        Refusal(Room::Run, Room::Run.release_cnt())
     }
 
     /// Whether room has been given back since, so asking again may be served.
     pub fn over(self) -> bool {
-        self.0.released() != self.1
+        self.0.release_cnt() != self.1
     }
 }

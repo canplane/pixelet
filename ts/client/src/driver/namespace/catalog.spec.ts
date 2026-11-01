@@ -1,6 +1,6 @@
 // @pxl/client/driver/namespace/catalog.spec.ts
 //
-// GENERATED from the asset specs and ingested.json
+// GENERATED from the asset specs and ingest.json
 //
 // The catalog the host plugs in, served below the asset root at `CATALOG`
 // (ts/client/src/driver/namespace/asset.ts): the file each of the kernel's slots names and its

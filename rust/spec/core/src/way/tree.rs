@@ -5,7 +5,7 @@
 //! rule it asks what is placed by: from the brick's own nodes along z down
 //! to its cells, a node's eight slots a child group, children only where they
 //! differ, each branch its eight folded (`overwrite::fold`), its leaves what
-//! the ways write at its cells (`way::lined`, read off the brick's spans). A
+//! the ways write at its cells (`way::way_cell`, read off the brick's spans). A
 //! reader asks a brick's ways only of a node the brick's or under it, a
 //! wider one the clip levels' bound over its bricks (`clipmap::bound_over`), so
 //! the tree holds nothing over the brick. Its child groups are taken from one
@@ -172,15 +172,15 @@ pub const NONE: u32 = u32::MAX;
 
 /// A handed brick's scratch past its spans (`clipmap::TREE_AT`), a frame's,
 /// for a tree of `child_groups` at most: the child groups its build gave back, their
-/// count first, for the pushes after it (pxl-shader `way_freed_cs`); then
+/// count first, for the pushes after it (pxl-shader `way_return_cs`); then
 /// the child groups its tree holds from `records_at`, their count first, a
 /// record each, its child group's id and its eight child pointers and eight data words,
 /// which the read-back carries to the CPU's mirror. A build takes no more
 /// than its scratch holds (`is_cramped`), so neither runs past its room. The
 /// renderer starts it small and grows it (pxl-render gpu/ray/ground.rs
 /// `GroundBuffers::grow_scratch`), every brick's alike, so a frame's
-/// scratch is `clipmap::HANDED` of them and each brick's length is a
-/// `HANDED`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
+/// scratch is `clipmap::HAND_CAP` of them and each brick's length is a
+/// `HAND_CAP`th of its buffer's (pxl-spec-core fill.rs `scratch_at`); at
 /// `BRICK_CHILD_GROUPS` it is `SCRATCH_WORDS`.
 pub const FREED_AT: u32 = clipmap::TREE_AT;
 pub const RECORD_WORDS: u32 = 1 + CHILD_GROUP_WORDS;
@@ -330,13 +330,13 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
 }
 
 /// The candidate at `slot`, a cell of the brick: a leaf of what the ways
-/// write there (`way::lined`, off the spans its fill kept), nothing where
+/// write there (`way::way_cell`, off the spans its fill kept), nothing where
 /// they write none. A bore's air is placed air in the tree, filling what it
 /// holds (`overwrite::voxel`), and the ground's void where a reader reads
 /// it, as the ways write it (`way::AIR`).
 pub fn leaf(pool: &mut impl Pool, kept: &impl super::ColumnSpans, cell: Zoom, slot: u32) {
     let at = unpack(pool.data(slot));
-    let val = super::lined(kept, [at[0], at[1]], cell, at[2]);
+    let val = super::way_cell(kept, [at[0], at[1]], cell, at[2]);
     let word = if val == super::NOTHING {
         ground::VOID
     } else if val == super::AIR {

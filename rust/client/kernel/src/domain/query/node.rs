@@ -32,7 +32,7 @@
 //!   ground, or ground a cave may take with a cave through all of it;
 //! - the ways: by their own rule (pxl-spec-core `way::slab`) over their
 //!   own bound in the same levels, the leaf cells the ways write in each
-//!   column (pxl-spec-core `way::bound`) joined apart from the ground's
+//!   column (pxl-spec-core `way::lined_hull`) joined apart from the ground's
 //!   (pxl-spec-core fill.rs `level`); a way a coarser tile drops as
 //!   narrower than half its cell is dropped there, as
 //!   its level of detail does;
@@ -72,7 +72,7 @@ pub(super) fn coarsest() -> Zoom {
 #[derive(Clone, Copy)]
 pub(super) struct At {
     pub(super) node: Node<3>,
-    pub(super) inherited: world::Inheritance,
+    pub(super) inheritance: world::Inheritance,
 }
 
 impl World<'_> {
@@ -84,9 +84,9 @@ impl World<'_> {
 
     /// What is in the cell `node`, X on the asker's lap, at its own
     /// zoom, `coarsest` or finer, for an asker with nothing handed down
-    /// (`drawn`).
+    /// (`asset_at`).
     pub fn asset(&self, node: Node<3>) -> Answer<u32> {
-        self.drawn(&mut self.start(node), &mut Lines::default())
+        self.asset_at(&mut self.start(node), &mut Lines::default())
     }
 
     /// A node with nothing handed down, a descent's root among them: each
@@ -94,7 +94,7 @@ impl World<'_> {
     pub(super) fn start(&self, node: Node<3>) -> At {
         At {
             node,
-            inherited: if self.unplaced {
+            inheritance: if self.unplaced {
                 world::Inheritance::unplaced(node)
             } else {
                 world::Inheritance::of(&self.object.columns(), node)
@@ -106,7 +106,7 @@ impl World<'_> {
     /// where it is air or void, else what fills it (`node`, asked at its
     /// own zoom). `lines` are the ground's lines the asker read, which its
     /// own steps from (`node`).
-    pub(super) fn drawn(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
+    pub(super) fn asset_at(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         self.node(at, [zoom, zoom], lines).map(|i| {
@@ -132,7 +132,7 @@ impl World<'_> {
         let node = (zoom + 1, child_of(c, k));
         At {
             node,
-            inherited: at.inherited.child(&self.object.columns(), pool(), node),
+            inheritance: at.inheritance.child(&self.object.columns(), pool(), node),
         }
     }
 
@@ -162,7 +162,7 @@ impl World<'_> {
             &CpuClipmap,
             &lanes,
             pool(),
-            &mut at.inherited,
+            &mut at.inheritance,
             at.node,
             asked,
             cuts,
@@ -177,7 +177,7 @@ impl World<'_> {
 struct Reading<'r, 'a> {
     world: &'r World<'a>,
     lines: &'r mut Lines,
-    lacked: Option<Tile>,
+    missing: Option<Tile>,
     coarser: Option<Tile>,
 }
 
@@ -186,7 +186,7 @@ impl<'r, 'a> Reading<'r, 'a> {
         Reading {
             world,
             lines,
-            lacked: None,
+            missing: None,
             coarser: None,
         }
     }
@@ -194,7 +194,7 @@ impl<'r, 'a> Reading<'r, 'a> {
     /// `of` as the reading went: where `held`, exact, or coarser for the
     /// first tile only a coarser one stood in for; else the lack.
     fn answer<T>(&self, held: bool, of: impl FnOnce() -> T) -> Answer<T> {
-        match (held, self.lacked, self.coarser) {
+        match (held, self.missing, self.coarser) {
             (false, Some(l), _) => Answer::Nothing(l),
             (_, _, Some(l)) => Answer::Coarser(of(), l),
             _ => Answer::Exact(of()),
@@ -210,7 +210,7 @@ impl<'r, 'a> Reading<'r, 'a> {
                 Some(v)
             }
             Answer::Nothing(l) => {
-                self.lacked = Some(l);
+                self.missing = Some(l);
                 None
             }
         }

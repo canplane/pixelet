@@ -1,4 +1,4 @@
-// pxl-kernel/domain/layer/terrain/fixed.rs
+// pxl-kernel/domain/layer/terrain/room.rs
 
 //! `.fixed.terrain`: the room every resident terrain tile and every held
 //! brick lies in, and where a record's bytes are. A plane is one array of
@@ -15,8 +15,8 @@ use pxl_spec::bake::tile::terrain::PALETTE_COLUMN;
 use pxl_spec_core::clipmap::{BACK_WORDS, BRICK_CELLS, LINES_WORDS, WAYS_BRICK_SEGMENTS};
 
 use crate::domain::layer::tile_cache::TileCache;
-use crate::sys::mem::fixed::arr_bytes;
-use crate::sys::mem::fixed::OwnedRange;
+use crate::sys::mem::range::arr_bytes;
+use crate::sys::mem::range::OwnedRange;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec_core::clipmap::SLOTS;
 

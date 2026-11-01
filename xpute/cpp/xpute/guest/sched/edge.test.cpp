@@ -27,7 +27,7 @@ class Fifo final : public Executor {
         return true;
     }
     void wake(std::coroutine_handle<> task) noexcept override {
-        woken++;
+        wakes++;
         queue_.push_back(task);
     }
     void poll() noexcept override {
@@ -37,7 +37,7 @@ class Fifo final : public Executor {
     }
     bool pending() const noexcept override { return !queue_.empty(); }
 
-    std::uint32_t woken = 0;
+    std::uint32_t wakes = 0;
 
   private:
     std::vector<std::coroutine_handle<>> queue_;
@@ -53,7 +53,7 @@ void reset() {
     clock_ms = 0;
     set_executor(fifo);
     fifo.poll();
-    fifo.woken = 0;
+    fifo.wakes = 0;
     edge = Edge<2>();
     notice = Notify();
     seen.clear();
@@ -90,12 +90,12 @@ XPUTE_TEST(edge_spent_quota_parks) {
     XPUTE_CHECK(spawn(spends_then_goes_on(), 0));
     poll();
     XPUTE_CHECK((seen == std::vector{1}));
-    XPUTE_CHECK(fifo.woken == 0);
+    XPUTE_CHECK(fifo.wakes == 0);
     XPUTE_CHECK_EQ(edge.fall(), 0.0, "a parked task asks for the next turn");
     XPUTE_CHECK(!pending());
 
     edge.rise(4);
-    XPUTE_CHECK(fifo.woken == 1);
+    XPUTE_CHECK(fifo.wakes == 1);
     poll();
     XPUTE_CHECK((seen == std::vector{1, 2}));
 }
@@ -119,7 +119,7 @@ XPUTE_TEST(edge_notice_wakes_task) {
     XPUTE_CHECK(seen.empty());
     XPUTE_CHECK(edge.fall() == NO_WAKE);
     notice.notify();
-    XPUTE_CHECK(fifo.woken == 1);
+    XPUTE_CHECK(fifo.wakes == 1);
     poll();
     XPUTE_CHECK((seen == std::vector{7}));
 

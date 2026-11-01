@@ -15,7 +15,7 @@ use crate::domain::control::camera::orbit::orbit_eye_off;
 use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST};
-use crate::domain::query::changed::Memo;
+use crate::domain::query::changes::Memo;
 use crate::domain::query::{finest, over, Hit, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
@@ -103,11 +103,11 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
         // (`held_under`).
         OrbitObstacleMode::climb => {
             let access = World::now();
-            let (climbed, failed) = climbed(*to, &access);
+            let (climbed, failed) = climb_pose(*to, &access);
             if path_clear(from, &climbed) {
                 return *to;
             }
-            // Through only where the climb itself failed (`climbed`); where only
+            // Through only where the climb itself failed (`climb_pose`); where only
             // the way there is blocked, it stops.
             let dived = failed.then(|| dive(to, &climbed, from, &access)).flatten();
             if let Some(reached) = dived.or_else(|| held_under(to, from, &access)) {
@@ -221,7 +221,7 @@ fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
     })
 }
 
-/// A zoom in where the climb failed (`climbed`), at the pitch asked, blocked
+/// A zoom in where the climb failed (`climb_pose`), at the pitch asked, blocked
 /// by what lies between the pivot and the eye (a tunnel's roof, a cave's):
 /// the eye goes through it to the pivot's side on that line, as far
 /// from the pivot as the zoom asked or the roof leaves, and eases there
@@ -308,9 +308,9 @@ pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
         at,
         pivot: world_to_canonical(&at.pivot),
     };
-    let last = CLIMBED.get(|| Memo::NONE);
+    let last = CLIMB_PITCH.get(|| Memo::NONE);
     last.forget_touched();
-    last.of(World::now(), climb, |w| climbed(at, &w).0.polar)
+    last.of(World::now(), climb, |w| climb_pose(at, &w).0.polar)
 }
 
 /// What a climb is made of, by value.
@@ -322,14 +322,14 @@ struct Climb {
 
 /// The last climb's pitch, kept while what it is made of stands and no
 /// change touched what it read (`Memo`).
-static CLIMBED: Global<Memo<Climb, f64>> = Global::new();
+static CLIMB_PITCH: Global<Memo<Climb, f64>> = Global::new();
 
 /// `at` climbed, and whether the climb failed: steepened, the eye is still in
 /// something solid it may not stand in (`embedded`). Over ground alone,
 /// straight down clears it; what does not is a roof over the pivot, a
 /// tunnel's or a cave's, and there the pitch is the one asked, for a zoom
 /// in to go under it on that line (`dive`).
-fn climbed(at: ViewPose, access: &World) -> (ViewPose, bool) {
+fn climb_pose(at: ViewPose, access: &World) -> (ViewPose, bool) {
     let mut climbed = at;
     for _ in 0..CLIMB_PASSES {
         let Some(rise) = climb_rise(&climbed, access).filter(|r| *r > 0.0) else {

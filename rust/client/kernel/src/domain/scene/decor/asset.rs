@@ -4,14 +4,14 @@
 //! table, which a landing wakes a turn for), as the renderer reads them. A
 //! skin is the load cache's (`load_image`), asked of it where read.
 
-use crate::domain::scene::model::asset::{model_of, registered};
+use crate::domain::scene::model::asset::{model_of, registered_model};
 use crate::sys::io::loader::{load_image, load_of};
 use pxl_spec::asset::decor::{Decor, DECORS};
-use pxl_spec_core::generated;
+use pxl_spec_core::generation;
 
 /// One a variant at most, each its draw group (pxl-spec-core scatter.rs
 /// `GROUPS`): two variants naming one model reach one (`model_of`).
-pub const MODELS_MAX: usize = generated::GROUPS as usize;
+pub const MODELS_MAX: usize = generation::GROUPS as usize;
 
 /// Asks for each variant's model, a turn's effect: each registers in its
 /// own task, sliced by the turn's quota (`model_of`).
@@ -23,7 +23,7 @@ pub fn decor_models_step() {
 
 /// `decor`'s `variant`'s model as registered; none while it loads.
 pub fn decor_model(decor: &Decor, variant: usize) -> Option<u32> {
-    registered(decor.variants.get(variant)?.model, None).map(|h| h.model)
+    registered_model(decor.variants.get(variant)?.model, None).map(|h| h.model)
 }
 
 /// A variant's skin as the renderer takes it (`load_image`); none while it

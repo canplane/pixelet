@@ -96,7 +96,7 @@ fn beacon_holds_on_stall() {
         zone: Some(Zone {
             center: [0.0; 3],
             target: [0.0; 2],
-            shown: None,
+            beacon_at: None,
             night: false,
             time: 0.0,
             run: 0.0,

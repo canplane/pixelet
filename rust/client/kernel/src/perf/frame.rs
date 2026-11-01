@@ -261,7 +261,7 @@ pub fn over_ms(f: &FrameSample) -> f64 {
 
 /// What the interval's turns spent outside every part measured of them: the
 /// door's commands, its pump and the turns' own rise and fall.
-pub fn unmeasured(f: &FrameSample) -> f64 {
+pub fn unmeasured_ms(f: &FrameSample) -> f64 {
     (f.busy_ms - f.effects_ms - f.tick_ms - f.stage_ms - f.tasks_ms - f.perf_ms).max(0.0)
 }
 

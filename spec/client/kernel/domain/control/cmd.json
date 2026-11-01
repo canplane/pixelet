@@ -24,9 +24,9 @@
   "extern": [
     {
       "name": "BakeKind",
-      "rs": "pxl_spec::bake::published::BakeKind",
+      "rs": "pxl_spec::bake::publication::BakeKind",
       "$doc": [
-        "By its index in BAKE_KINDS (published.spec.ts)."
+        "By its index in BAKE_KINDS (publication.spec.ts)."
       ]
     },
     {
@@ -916,7 +916,7 @@
               "list": true,
               "$doc": [
                 "Each kind's format, one a kind, indexed by its bake's number",
-                "(pxl-spec bake/published.spec.rs)."
+                "(pxl-spec bake/publication.spec.rs)."
               ]
             },
             {
@@ -934,7 +934,7 @@
           "name": "FS_TRUNCATED",
           "val": 4866,
           "$doc": [
-            "A file the kernel refused (the snapshot's `refused`) is empty now, or its source's",
+            "A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's",
             "own again, what it held set aside by the host: the kernel reads it again, and writes",
             "a storage file from then on."
           ],
@@ -1484,7 +1484,7 @@
           ]
         },
         {
-          "name": "refused",
+          "name": "refused_files",
           "type": "RefusedFile",
           "list": true,
           "$doc": [

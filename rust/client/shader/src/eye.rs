@@ -6,7 +6,7 @@
 //! (pxl-spec-core `beam::Grid`), a ray at the screen's tangents.
 
 use pxl_spec_core::cast::{self, Detail};
-use pxl_spec_core::{beam, eye, observed, tally};
+use pxl_spec_core::{beam, eye, pyramid, tally};
 use spirv_std::glam::{IVec4, UVec2, UVec4, Vec2, Vec4};
 
 use crate::beam::Words;
@@ -126,9 +126,9 @@ impl Observer for Eye {
 
     fn passes(&self) -> [u32; 3] {
         [
-            observed::BEAM_PASS,
-            observed::SAMPLES_PASS,
-            observed::MISSED_PASS,
+            pyramid::BEAM_PASS,
+            pyramid::SAMPLES_PASS,
+            pyramid::MISSED_PASS,
         ]
     }
 
@@ -145,7 +145,7 @@ impl Observer for Eye {
     }
 
     fn handed(&self, _: &Aim, t: f32) -> f32 {
-        grid(self).handed(t)
+        grid(self).hand_dist(t)
     }
 
     fn line(&self, idx: u32) -> u32 {

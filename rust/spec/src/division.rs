@@ -69,7 +69,7 @@ impl Subtype {
     }
 
     /// None for a word Overture has not given a subtype.
-    pub fn named(word: &str) -> Option<Subtype> {
+    pub fn of_word(word: &str) -> Option<Subtype> {
         Subtype::ALL.into_iter().find(|s| s.name() == word)
     }
 }

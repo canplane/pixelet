@@ -65,7 +65,7 @@ pub fn orbit_eye_off(dist: f64, polar: f64, azimuth: f64) -> V3 {
 /// drawn facing, which would stick if written into the controls.
 pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_state();
-    let mut asked = c.merged(partial);
+    let mut asked = c.with_patch(partial);
     if partial.polar.is_some() && settings_store().orbit_obstacle == OrbitObstacleMode::climb {
         asked.polar = climb_polar(asked.dist, asked.polar, asked.azimuth);
     }

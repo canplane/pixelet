@@ -66,7 +66,7 @@ fn samples(fresh: &[u32], rec: u32) -> impl Fn(usize) -> i32 + '_ {
 
 /// The handed brick `k` of a fresh list: its record's first word, its
 /// brick's first, where it lies in its tile and its cells' zoom.
-fn handed(fresh: &[u32], k: u32) -> (u32, u32, [u32; 2], Zoom) {
+fn fresh_brick(fresh: &[u32], k: u32) -> (u32, u32, [u32; 2], Zoom) {
     let rec = handed_at(k);
     (
         rec,
@@ -185,13 +185,13 @@ fn head_word(s: &way::Spans, fits: bool) -> u32 {
 }
 
 /// Where the brick a frame hands `k`-th has its scratch in the frame's
-/// `scratch`, `clipmap::HANDED` bricks' alike, each a `HANDED`th of its
+/// `scratch`, `clipmap::HAND_CAP` bricks' alike, each a `HAND_CAP`th of its
 /// length (`way::tree::scratch_words`), which the renderer grows
 /// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow_scratch`): taken from
 /// the buffer, as the pool's free stack takes its own (pxl-shader `pop`).
 /// A one brick's scratch is the first's.
 pub fn scratch_at(scratch: &[u32], k: u32) -> u32 {
-    k * (scratch.len() as u32 / clipmap::HANDED)
+    k * (scratch.len() as u32 / clipmap::HAND_CAP)
 }
 
 /// A brick being filled, as the ways' rule reads it (`clipmap::Brick`):
@@ -253,7 +253,7 @@ impl clipmap::Brick for Filling<'_> {
 /// cells about its own are past the area (`area::gone_ring`), off the
 /// brick's shard.
 pub fn heights(ground: &mut [u32], fresh: &[u32], k: u32, [x, y]: [u32; 2]) {
-    let (rec, base, place, cell) = handed(fresh, k);
+    let (rec, base, place, cell) = fresh_brick(fresh, k);
     let (first, shard) = (
         [
             at(fresh, rec + FILL_FIRST) as i32,
@@ -318,7 +318,7 @@ pub fn put_palette_word(palette_indices: &mut [u32], fresh: &[u32], k: u32, [x, 
 /// worked out once, before its levels and its ways' tree read them and its
 /// neighbors': the most it makes (`keep`).
 pub fn spans(ground: &[u32], fresh: &[u32], scratch: &mut [u32], k: u32, i: u32) -> u32 {
-    let (rec, base, place, cell) = handed(fresh, k);
+    let (rec, base, place, cell) = fresh_brick(fresh, k);
     let filling = Filling {
         ground,
         base,
@@ -367,7 +367,7 @@ pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], mine: u32, i: u32) ->
 
 /// Entry `[x, y]` of level `j` of the brick at `base`, its cells at `cell`:
 /// level 0 column `[x, y]`'s own — its ground's top, and the leaf cells
-/// the ways write in it off the spans its fill kept (`way::bound`;
+/// the ways write in it off the spans its fill kept (`way::lined_hull`;
 /// `ground::Bounds`); a higher one over the level under it, written before
 /// (`clipmap::join`). A bore's air counts as far as the column's top, as the
 /// ways write it: the cells of the brick's ways tree under it lie in the
@@ -385,7 +385,7 @@ pub fn level(
 ) {
     let w = if j == 0 {
         let top = column_top(column_of(ground, base, clipmap::idx_of(at)));
-        let lines = way::bound(kept, [at[0] as i32, at[1] as i32], cell, top);
+        let lines = way::lined_hull(kept, [at[0] as i32, at[1] as i32], cell, top);
         ground::bounds_word([[top, top], lines])
     } else {
         let under: &[u32] = ground;
@@ -538,7 +538,7 @@ mod tests {
     use std::{vec, vec::Vec};
 
     /// A brick's tree as `tree` builds it, its root at the brick, reads
-    /// back through `way::tree::cursor` at every cell what `way::lined`
+    /// back through `way::tree::cursor` at every cell what `way::way_cell`
     /// writes there, and nothing past it: random spans in a patch of
     /// columns, slabs, piers and bores over and beside one another, at the
     /// leaves and coarser.
@@ -623,7 +623,7 @@ mod tests {
                     let at = [x as i32, y as i32, z];
                     let held = tree::cursor(&p, root, cell, cell, at);
                     let got = tree::read(overwrite::val(&p, held, Cut::NONE, cell, at));
-                    let want = match way::lined(&kept, [at[0], at[1]], cell, z) {
+                    let want = match way::way_cell(&kept, [at[0], at[1]], cell, z) {
                         way::NOTHING => ground::VOID,
                         v => v,
                     };

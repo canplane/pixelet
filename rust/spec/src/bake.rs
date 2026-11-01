@@ -7,13 +7,13 @@ use xpute_kit::status::error::MarshalError;
 
 pub mod constant;
 pub mod fold;
-pub mod named;
+pub mod name;
 #[path = "bake/object.spec.rs"]
 pub mod object;
 #[path = "bake/place_theme.spec.rs"]
 pub mod place_theme;
-#[path = "bake/published.spec.rs"]
-pub mod published;
+#[path = "bake/publication.spec.rs"]
+pub mod publication;
 pub mod separation;
 pub mod source;
 pub mod tile;

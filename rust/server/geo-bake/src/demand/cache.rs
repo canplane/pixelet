@@ -14,7 +14,7 @@ use tokio::time::Instant;
 #[derive(Default)]
 struct Flight {
     result: OnceLock<Result<(), Failure>>,
-    done: Notify,
+    completion: Notify,
     asked: Arc<AtomicBool>,
 }
 
@@ -97,11 +97,11 @@ impl Cache {
                 }
                 let _ = task.result.set(result);
                 drop(permit);
-                task.done.notify_waiters();
+                task.completion.notify_waiters();
             });
         }
         loop {
-            let ready = flight.done.notified();
+            let ready = flight.completion.notified();
             tokio::pin!(ready);
             ready.as_mut().enable();
             if let Some(result) = flight.result.get() {

@@ -21,7 +21,7 @@ use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
 use pxl_spec_core::cloud::{drift, lattice_hash};
-use pxl_spec_core::generated::drawn;
+use pxl_spec_core::generation::drawn;
 use pxl_spec_core::param::cloud::{CUMULUS_KM, WIND};
 use xpute_guest::global::Global;
 use xpute_guest::mem;
@@ -29,7 +29,7 @@ use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::pass::Pass;
 
 use crate::domain::scene::column::{self, GroupColumns};
-use crate::domain::scene::decor::drawn::{cull_dist_u, decor_impostor_angle, decor_model_angle};
+use crate::domain::scene::decor::gpu::{cull_dist_u, decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
 };
@@ -48,7 +48,7 @@ use crate::sys::io::loader::{catalog, load_image, load_of};
 use pxl_render::gpu::api::Image;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world;
-use pxl_spec_core::generated;
+use pxl_spec_core::generation;
 use pxl_spec_core::param::cloud;
 
 /// Its models, a cloud each one of them.
@@ -58,7 +58,7 @@ pub const MODELS_MAX: usize = VARIANTS.len();
 
 /// Its draw groups follow the decors' variants, which number the groups
 /// before it (pxl-spec-core scatter.rs `GROUPS`).
-const FIRST_GROUP: usize = generated::GROUPS as usize;
+const FIRST_GROUP: usize = generation::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
     "a draw group each variant"
@@ -107,13 +107,13 @@ struct Clouds {
     models: [Option<u32>; VARIANTS.len()],
     patches: FnvHashMap<[i64; 2], Patch>,
     /// Kept so a settled turn asks the heap for nothing.
-    wanted: Vec<[i64; 2]>,
+    wanted_patches: Vec<[i64; 2]>,
     gone: Vec<[i64; 2]>,
     columns: [Vec<[f32; 5]>; VARIANTS.len()],
     impostors: Vec<u32>,
     /// How far from the eye the nearest patch drawn last turn stands; none
     /// drawn, infinite.
-    seen: f64,
+    nearest_dist: f64,
 }
 
 static CLOUDS: Global<Clouds> = Global::new();
@@ -156,7 +156,7 @@ fn layer_u() -> f64 {
 /// by up to that, an angle, the same on every screen. Infinite while none
 /// is drawn.
 pub fn drift_step_s() -> f64 {
-    lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
+    lens::seen_step_s(clouds().nearest_dist, libm::hypot(WIND[0], WIND[1]))
 }
 
 /// How much of the clouds shows, the cumulus and the sheets alike (the stage's
@@ -175,7 +175,7 @@ pub fn clouds_shown() -> f64 {
 /// of, and lists them.
 pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let c = clouds();
-    c.seen = f64::INFINITY;
+    c.nearest_dist = f64::INFINITY;
     for (slot, file) in c.models.iter_mut().zip(VARIANTS) {
         if slot.is_none() {
             *slot = model_of(file, None).map(|h| h.model);
@@ -212,7 +212,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         let [dx, dy] = [gap(x0, eye[0]), gap(corner[1], eye[1])];
         libm::sqrt(dx * dx + dy * dy + dz * dz)
     };
-    c.wanted.clear();
+    c.wanted_patches.clear();
     for y in span(1) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
@@ -223,17 +223,17 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                     decor_impostor_angle() as f32,
                 ) != drawn::CULLED
             {
-                c.wanted.push([x, y]);
+                c.wanted_patches.push([x, y]);
             }
         }
     }
-    c.wanted.sort_unstable();
+    c.wanted_patches.sort_unstable();
     c.gone.clear();
     c.gone.extend(
         c.patches
             .keys()
             .copied()
-            .filter(|k| c.wanted.binary_search(k).is_err()),
+            .filter(|k| c.wanted_patches.binary_search(k).is_err()),
     );
     for k in c.gone.drain(..) {
         if let Some(b) = c.patches.remove(&k) {
@@ -243,9 +243,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         }
     }
     let (patches, columns) = (&mut c.patches, &mut c.columns);
-    c.wanted.retain(|k| !patches.contains_key(k));
+    c.wanted_patches.retain(|k| !patches.contains_key(k));
     pass.run(
-        c.wanted.iter().copied(),
+        c.wanted_patches.iter().copied(),
         |key| match build(key, base, columns, draw) {
             Some(b) => {
                 patches.insert(key, b);
@@ -276,7 +276,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         // The nearest cloud the view holds, each as the box it stands in, no
         // nearer than the near plane, short of which nothing is drawn: from
         // inside a box the drift is still a cell's at that distance.
-        for (local, half) in built(b) {
+        for (local, half) in patch_clouds(b) {
             let at = [corner[0] + local[0], corner[1] + local[1], local[2]];
             if frame.sees_box(
                 core::array::from_fn(|k| at[k] - half[k]),
@@ -291,8 +291,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                         .abs()
                         - half[k]
                 });
-                c.seen = c
-                    .seen
+                c.nearest_dist = c
+                    .nearest_dist
                     .min(v3::len(&gap.map(|g| g.max(0.0))).max(param::NEAR));
             }
         }
@@ -377,7 +377,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
 /// The patch's clouds as `build` laid them, read off its columns: each one's
 /// middle about the patch's corner, its height over the datum, and its half
 /// extent. The field's hash is asked once a patch, where it is built.
-fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
+fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     // SAFETY: the patch's bytes, held until it goes, which is after this turn reads them.
     let words: &[u32] =
         unsafe { core::slice::from_raw_parts(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
@@ -592,7 +592,7 @@ fn present_patch(
     }
     // The patch's draws the scene bounds: the wind moves them, and each
     // that changed marks where it was and where it is.
-    region::drawn(b.handle);
+    region::note_draw(b.handle);
 }
 
 #[cfg(test)]

@@ -29,7 +29,7 @@ struct HostFrame {
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
-    landed: Option<GpuRead>,
+    gpu_read: Option<GpuRead>,
     rays: Option<RayRead>,
 }
 
@@ -57,7 +57,7 @@ impl Default for HostFrame {
             kind: FrameKind::none,
             gpu: GpuSample::default(),
             device: DeviceSample::default(),
-            landed: None,
+            gpu_read: None,
             rays: None,
         }
     }
@@ -71,14 +71,14 @@ pub fn set_host_frame(
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
-    landed: Option<GpuRead>,
+    gpu_read: Option<GpuRead>,
     rays: Option<RayRead>,
 ) {
     HOST.set(HostFrame {
         kind,
         gpu,
         device,
-        landed,
+        gpu_read,
         rays,
     });
 }
@@ -134,7 +134,7 @@ pub fn perf_frame(t: FrameTurn) {
     if !perf_recording() {
         return;
     }
-    if let Some(r) = host.landed {
+    if let Some(r) = host.gpu_read {
         perf_record_gpu(r);
     }
     if let Some(r) = host.rays {
@@ -157,7 +157,7 @@ pub fn perf_frame(t: FrameTurn) {
         gpu: host.gpu,
         terrain_landed,
         device: host.device,
-        heap_used_bytes: heap.used as f64,
+        heap_used_bytes: heap.peak as f64,
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()
     };

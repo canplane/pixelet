@@ -1,8 +1,8 @@
-// pxl-spec-core/generated.rs
+// pxl-spec-core/generation.rs
 
 //! gpu-portable: the decor the ground holds (`scatter`) generated on the
 //! world as either side holds it: where a candidate stands, which way it
-//! faces and whether its column surface holds (`generated`, over `DecorQuery`), what
+//! faces and whether its column surface holds (`placement`, over `DecorQuery`), what
 //! placed decor claims (`overlaps_placed`), and how the GPU lays, lists and
 //! draws what it generates in a clip level's bricks.
 
@@ -140,7 +140,7 @@ pub const fn generated_for(head: [u32; 3], q: [i32; 2]) -> bool {
 /// The boxes a frame's generation is asked over at most: the edits and cuts
 /// held (`overwrite::BOXES`), and each brick handed this frame, which
 /// reaches its clip level's zoom and every coarser one (`asks`'s vote).
-pub const MARKED: u32 = overwrite::BOXES + clipmap::HANDED;
+pub const BOX_CAP: u32 = overwrite::BOXES + clipmap::HAND_CAP;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
 /// finest clip level zoom whose candidates it reaches, `EVERY` for all.
 pub const BOX_WORDS: u32 = 5;
@@ -164,7 +164,7 @@ pub const LIST_EVERY: u32 = 8;
 pub const LIST_BOXES: u32 = 9;
 pub const LIST_PARTS: u32 = 10;
 pub const BOXES_AT: u32 = 12;
-pub const LIST_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
+pub const LIST_AT: u32 = BOXES_AT + BOX_CAP * BOX_WORDS;
 
 /// The words of what `decor_mark_cs` lists.
 pub const LIST_WORDS: u32 = LIST_AT + EYE_ENTRIES * DECORS.len() as u32;
@@ -176,7 +176,7 @@ pub const fn part_at(n: u32) -> u32 {
 }
 
 /// How far about its own, in its clip level's cells, a candidate's generation
-/// reads the world (`generated`): the leaf cells its pose votes on, no
+/// reads the world (`placement`): the leaf cells its pose votes on, no
 /// farther than as many of its clip level's, its box, and the placed decor that
 /// may claim it, none wider than the widest decor.
 const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
@@ -358,7 +358,7 @@ pub trait DecorQuery {
     ) -> (Self::ColumnSurface, (i32, f32), bool);
     /// The finest zoom, `cell` or finer, this side holds the ground's leaf
     /// column `g` at: where a candidate there is asked whether it stands and
-    /// which way it faces (`generated`), the same whatever clip level asks.
+    /// which way it faces (`placement`), the same whatever clip level asks.
     fn finest(&mut self, cell: Zoom, g: [i32; 2]) -> Zoom;
     /// What is in the cell `c` of `zoom` about the column_surface `f`, the world
     /// unplaced's answer (`support::asset`): `void` or the ground's value.
@@ -406,7 +406,7 @@ impl GeneratedDecor {
 /// it is generated at. Its pose stands as itself only at a clip level its size
 /// does (`stands_at`). Where it stands, whether its column surface is found,
 /// and whether it generates there, true where not `boxed` and it stands.
-pub fn generated(
+pub fn placement(
     q: &mut impl DecorQuery,
     decor: &Decor,
     cell: Zoom,
@@ -444,7 +444,7 @@ pub fn generated(
 /// Every cell generating decor asks of the world, at one place, as a GPU
 /// inlines a call once a place it is called from: a candidate posed by its
 /// `seed`, the cells about its column surface its pose votes on, then, where
-/// `boxed`, the box of `g` as that pose turned it (`generated`'s rule), each
+/// `boxed`, the box of `g` as that pose turned it (`placement`'s rule), each
 /// a cell at `zoom` about the column_surface `about`, whose top cell is `base`.
 /// The pose is the candidate's variant and its heading in quarter turns,
 /// its seed's draws in order: along transport, a plurality vote of the
@@ -567,7 +567,7 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// stands at or finer, so it stands where one the ground generates of its
 /// size would. A generated one is asked at the zoom held where it stands
 /// (`held_at`), as a ray there draws. Each clip level generates what stands
-/// as itself at it (pxl-kernel domain/scene/decor/drawn.rs `shown`,
+/// as itself at it (pxl-kernel domain/scene/decor/gpu.rs `shown_zooms`,
 /// `stands_at`).
 pub fn drawn_at(at: Zoom, cell: Zoom, placed: bool) -> bool {
     if placed {
@@ -713,5 +713,5 @@ impl Decor {
 }
 
 #[cfg(test)]
-#[path = "generated.test.rs"]
+#[path = "generation.test.rs"]
 mod test;

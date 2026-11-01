@@ -6,7 +6,7 @@ use crate::sys::io::room::Refusal;
 use xpute_guest::mem;
 
 fn runs() -> usize {
-    held().runs.len()
+    slot_table().runs.len()
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn slot_peak() {
 #[test]
 fn slot_cheaper_than_block() {
     assert_eq!(SLOTS, 7, "at today's packets, as sys/io/body.rs says");
-    for stream in SLOTTED {
+    for stream in SLOT_STREAMS {
         assert!(
             SLOT_BYTES >= longest(stream)
                 && (BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two()
@@ -177,10 +177,10 @@ fn slot_return_asks_turn() {
         .map(|_| take(Some(Stream::terrain), longest).unwrap())
         .collect();
     assert!(take(Some(Stream::terrain), longest).is_err());
-    assert!(held().waited, "refused for want of a slot");
+    assert!(slot_table().waited, "refused for want of a slot");
     // SAFETY: from `take`, given back once, here and below.
     unsafe { give(out.pop().unwrap()) };
-    assert!(!held().waited, "the slot given back asked the turn");
+    assert!(!slot_table().waited, "the slot given back asked the turn");
     for block in out {
         // SAFETY: from `take`, given back once.
         unsafe { give(block) };

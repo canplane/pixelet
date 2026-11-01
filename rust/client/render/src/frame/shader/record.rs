@@ -12,7 +12,7 @@ pub use crate::frame::shader::part::*;
 pub fn compute_entry(kind: u32) -> &'static str {
     match kind {
         SHADER_CAST => "cast_cs",
-        SHADER_JOINED => "joined_cs",
+        SHADER_FOLD => "fold_cs",
         SHADER_ATMOS_FROXEL => "froxel_cs",
         SHADER_ATMOS_EXPOSURE => "exposure_cs",
         SHADER_SCREEN_PROPAGATE => "screen_propagate_cs",
@@ -20,16 +20,16 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_SCREEN_MARK => "screen_mark_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHT => "height_cs",
-        SHADER_GENERATED_MARK => "decor_mark_cs",
-        SHADER_GENERATED_THIN => "decor_thin_cs",
-        SHADER_GENERATED => "decor_cs",
-        SHADER_GENERATED_CNT => "decor_cnt_cs",
-        SHADER_GENERATED_ARGS => "decor_args_cs",
-        SHADER_GENERATED_COMPACT => "decor_compact_cs",
+        SHADER_GENERATION_MARK => "decor_mark_cs",
+        SHADER_GENERATION_THIN => "decor_thin_cs",
+        SHADER_GENERATION => "decor_cs",
+        SHADER_GENERATION_CNT => "decor_cnt_cs",
+        SHADER_GENERATION_ARGS => "decor_args_cs",
+        SHADER_GENERATION_COMPACT => "decor_compact_cs",
         SHADER_WAY => "way_cs",
         SHADER_WAY_FREE => "way_free_cs",
         SHADER_WAY_TREE => "way_tree_cs",
-        SHADER_WAY_FREED => "way_freed_cs",
+        SHADER_WAY_RETURN => "way_return_cs",
         SHADER_BEAM => "beam_cs",
         SHADER_CELL => "cell_cs",
         SHADER_MISS => "miss_cs",
@@ -41,7 +41,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_MISS_LIST => "miss_list_cs",
         SHADER_FACE => "face_cs",
         SHADER_LIGHT_MARK => "light_mark_cs",
-        SHADER_LIGHT_MARK_DRAWN => "light_mark_drawn_cs",
+        SHADER_LIGHT_MARK_DRAWS => "light_mark_draws_cs",
         SHADER_LIGHT_PROPAGATE => "light_propagate_cs",
         SHADER_LIGHT_DETAIL => "light_detail_cs",
         SHADER_LIGHT_BEAM => "light_beam_cs",
@@ -49,8 +49,8 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_HIT_LEAD => "hit_lead_cs",
         SHADER_HIT_FACES => "hit_faces_cs",
         SHADER_BOX_ARGS => "box_args_cs",
-        SHADER_LIGHT_HELD => "light_held_cs",
-        SHADER_LIGHT_MISS_HELD => "light_miss_held_cs",
+        SHADER_LIGHT_MARGIN => "light_margin_cs",
+        SHADER_LIGHT_MISS_MARGIN => "light_miss_margin_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -84,7 +84,7 @@ pub const PIPELINE_SCREEN_RAY: u32 = 27;
 /// Decor's and the actors' depth from the light, and the world's laid in
 /// before them, into the light's shadow map (gpu/shadow.rs).
 pub const PIPELINE_DECOR_DEPTH: u32 = 28;
-pub const PIPELINE_SKINNED_DEPTH: u32 = 29;
+pub const PIPELINE_SKINNED_MESH_DEPTH: u32 = 29;
 pub const PIPELINE_LIGHT_MAP: u32 = 30;
 /// The samples' boxes, the nearest face a pixel's ray enters kept with its
 /// sample (gpu/ray/raster.rs).
@@ -112,8 +112,8 @@ pub const PIPELINE_RASTER_GATE: u32 = 37;
 /// their stencil raised (gpu/shadow.rs).
 pub const PIPELINE_LIGHT_GATE: u32 = 38;
 /// An actor drawn where it was and where it is, its fragments setting their
-/// screen tiles' words (gpu/pass/skinned.rs `draw_marks`).
-pub const PIPELINE_SKINNED_MARK: u32 = 39;
+/// screen tiles' words (gpu/pass/skinned_mesh.rs `draw_marks`).
+pub const PIPELINE_SKINNED_MESH_MARK: u32 = 39;
 /// The same of decor, an impostor, the location indicator's zone and its beacon
 /// (gpu/pass/mark.rs `Marks`).
 pub const PIPELINE_DECOR_MARK: u32 = 40;
@@ -176,7 +176,7 @@ pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) ->
 use crate::frame::draw::{
     PIPELINE_CAMERA_GRID, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
-    PIPELINE_SKINNED,
+    PIPELINE_SKINNED_MESH,
 };
 use crate::frame::shader::floor;
 use pxl_spec_core::param::light;
@@ -205,7 +205,7 @@ struct Head {
 /// The shell holds the same list against the same numbers.
 pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
 
-const fn lit(shader: u32, cull: u32) -> Head {
+const fn lit_head(shader: u32, cull: u32) -> Head {
     Head {
         shader,
         fragment: true,
@@ -220,7 +220,7 @@ const fn lit(shader: u32, cull: u32) -> Head {
     }
 }
 
-const fn blended(shader: u32, cull: u32) -> Head {
+const fn blended_head(shader: u32, cull: u32) -> Head {
     Head {
         shader,
         fragment: true,
@@ -272,7 +272,7 @@ const fn screen(shader: u32) -> Head {
     Head {
         depth_compare: NO_DEPTH,
         blend: OPAQUE,
-        ..blended(shader, CULL_NONE)
+        ..blended_head(shader, CULL_NONE)
     }
 }
 
@@ -435,13 +435,17 @@ const BOX_GROUP: [[u32; 2]; 18] = and(
 );
 /// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
 /// and its upload: one layout each wherever a draw binds them, so a group
-/// one owner makes binds in every pipeline that names them (gpu/generated.rs,
+/// one owner makes binds in every pipeline that names them (gpu/generator.rs,
 /// gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
 const UPLOAD: [[u32; 2]; 1] = [[0, STORAGE]];
 /// An upload's group as every pipeline binding one lays it out, which the
 /// draw list's uploads are grouped in (gpu/upload.rs `Uploads::group`).
-pub const UPLOAD_LAYOUT: [u32; 3] = [UPLOAD[0][0], seen(&UPLOAD, UPLOAD[0][0]), UPLOAD[0][1]];
+pub const UPLOAD_LAYOUT: [u32; 3] = [
+    UPLOAD[0][0],
+    stages_reading(&UPLOAD, UPLOAD[0][0]),
+    UPLOAD[0][1],
+];
 
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the light: the light's frame alone in group 0, where
@@ -505,33 +509,37 @@ impl Descriptor {
 /// records, worked out as the crate is built, ask of each.
 const fn desc_of(id: u32) -> Descriptor {
     match id {
-        PIPELINE_DECOR => {
-            Descriptor::new(lit(SHADER_DECOR, CULL_NONE), &MODEL_BUFFERS, &MODEL_GROUPS)
-        }
+        PIPELINE_DECOR => Descriptor::new(
+            lit_head(SHADER_DECOR, CULL_NONE),
+            &MODEL_BUFFERS,
+            &MODEL_GROUPS,
+        ),
         // What is laid on the world's faces draws at its own depth: the
         // world's stands behind it (screen_ray.wgsl `behind`).
-        PIPELINE_GHOST_BOX => {
-            Descriptor::new(blended(SHADER_BOX, CULL_BACK), &BOX_BUFFERS, &[&BOX_GROUP])
-        }
+        PIPELINE_GHOST_BOX => Descriptor::new(
+            blended_head(SHADER_BOX, CULL_BACK),
+            &BOX_BUFFERS,
+            &[&BOX_GROUP],
+        ),
         PIPELINE_GHOST_DECOR => Descriptor::new(
-            blended(SHADER_DECOR, CULL_NONE),
+            blended_head(SHADER_DECOR, CULL_NONE),
             &MODEL_BUFFERS,
             &MODEL_GROUPS,
         ),
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
-        PIPELINE_SKINNED => Descriptor::new(
-            lit(SHADER_SKINNED, CULL_BACK),
+        PIPELINE_SKINNED_MESH => Descriptor::new(
+            lit_head(SHADER_SKINNED_MESH, CULL_BACK),
             &SKINNED_BUFFERS,
             &MODEL_GROUPS,
         ),
         PIPELINE_LOCATION_ZONE => Descriptor::new(
-            blended(SHADER_LOCATION_ZONE, CULL_NONE),
+            blended_head(SHADER_LOCATION_ZONE, CULL_NONE),
             &LOCATION_ZONE_BUFFERS,
             &[FRAME, &DRAW, &UPLOAD],
         ),
         PIPELINE_LOCATION_BEACON => Descriptor::new(
-            lit(SHADER_LOCATION_BEACON, CULL_BACK),
+            lit_head(SHADER_LOCATION_BEACON, CULL_BACK),
             &LOCATION_BEACON_BUFFERS,
             &[&LIT_FRAME, &DRAW],
         ),
@@ -539,7 +547,7 @@ const fn desc_of(id: u32) -> Descriptor {
             Head {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
-                ..blended(SHADER_MARKER, CULL_NONE)
+                ..blended_head(SHADER_MARKER, CULL_NONE)
             },
             &[],
             &[FRAME, &DRAW, MARKER_SPRITES, &SKIN],
@@ -550,7 +558,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 depth_write: true,
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
-                ..blended(SHADER_MARKER_REGION, CULL_NONE)
+                ..blended_head(SHADER_MARKER_REGION, CULL_NONE)
             },
             &[],
             &[FRAME, &DRAW, MARKER_REGIONS],
@@ -559,7 +567,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_DEBUG => Descriptor::new(
             Head {
                 blend: ALPHA,
-                ..blended(SHADER_DEBUG, CULL_NONE)
+                ..blended_head(SHADER_DEBUG, CULL_NONE)
             },
             &DEBUG_BUFFERS,
             &[FRAME, &DRAW],
@@ -581,7 +589,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_CAMERA_GRID => Descriptor::new(
             Head {
                 depth_compare: ALWAYS,
-                ..blended(SHADER_CAMERA_GRID, CULL_NONE)
+                ..blended_head(SHADER_CAMERA_GRID, CULL_NONE)
             },
             &[],
             &[&[[0, UNIFORM], [19, UNIFORM]]],
@@ -590,7 +598,7 @@ const fn desc_of(id: u32) -> Descriptor {
             Head {
                 depth_write: true,
                 blend: OPAQUE,
-                ..blended(SHADER_SCREEN_RAY, CULL_NONE)
+                ..blended_head(SHADER_SCREEN_RAY, CULL_NONE)
             },
             &[],
             &[&SCREEN_GROUP],
@@ -617,14 +625,18 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_DECOR_DEPTH => {
             Descriptor::new(depth_only(SHADER_DECOR), &MODEL_BUFFERS, &DEPTH_GROUPS)
         }
-        PIPELINE_SKINNED_DEPTH => {
-            Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_BUFFERS, &DEPTH_GROUPS)
-        }
+        PIPELINE_SKINNED_MESH_DEPTH => Descriptor::new(
+            depth_only(SHADER_SKINNED_MESH),
+            &SKINNED_BUFFERS,
+            &DEPTH_GROUPS,
+        ),
         // Its vertices as the depth pass lays them, its fragments writing
         // no color and testing no depth: they mark their tiles.
-        PIPELINE_SKINNED_MARK => {
-            Descriptor::new(mark(SHADER_SKINNED_MARK), &SKINNED_BUFFERS, &MARK_GROUPS)
-        }
+        PIPELINE_SKINNED_MESH_MARK => Descriptor::new(
+            mark(SHADER_SKINNED_MESH_MARK),
+            &SKINNED_BUFFERS,
+            &MARK_GROUPS,
+        ),
         PIPELINE_DECOR_MARK => {
             Descriptor::new(mark(SHADER_DECOR_MARK), &MODEL_BUFFERS, &MARK_GROUPS)
         }
@@ -694,7 +706,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 depth_write: true,
                 depth_compare: GREATER,
                 blend: OPAQUE,
-                ..blended(SHADER_RASTER, CULL_NONE)
+                ..blended_head(SHADER_RASTER, CULL_NONE)
             },
             &[],
             &[&[[0, UNIFORM], [1, STORAGE]]],
@@ -704,7 +716,7 @@ const fn desc_of(id: u32) -> Descriptor {
             Head {
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
-                ..blended(SHADER_SKY, CULL_NONE)
+                ..blended_head(SHADER_SKY, CULL_NONE)
             },
             &[],
             &[&SKY_GROUP],
@@ -770,7 +782,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_IMPOSTOR => Descriptor::new(
             Head {
                 topology: STRIP,
-                ..lit(SHADER_IMPOSTOR, CULL_NONE)
+                ..lit_head(SHADER_IMPOSTOR, CULL_NONE)
             },
             &[],
             &[
@@ -861,7 +873,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
                 blend: ADD,
-                ..blended(SHADER_STAR, CULL_NONE)
+                ..blended_head(SHADER_STAR, CULL_NONE)
             },
             &[],
             &[
@@ -870,7 +882,9 @@ const fn desc_of(id: u32) -> Descriptor {
             ],
         ),
         // The sheets' planes, against the world's depth: what stands before them hides them.
-        PIPELINE_CLOUD => Descriptor::new(blended(SHADER_CLOUD, CULL_NONE), &[], &[&CLOUD_GROUP]),
+        PIPELINE_CLOUD => {
+            Descriptor::new(blended_head(SHADER_CLOUD, CULL_NONE), &[], &[&CLOUD_GROUP])
+        }
         PIPELINE_CLOUD_FIELD => Descriptor::new(screen(SHADER_CLOUD_FIELD), &[], &[]),
         _ => panic!("a pipeline number with no descriptor"),
     }
@@ -911,7 +925,7 @@ const fn alike(a: Group, b: Group) -> bool {
 /// it in every shader whose pipeline lays out the same group, wherever, so
 /// the one layout those pipelines share holds for each, and from no stage
 /// written by hand.
-const fn seen(group: Group, binding: u32) -> u32 {
+const fn stages_reading(group: Group, binding: u32) -> u32 {
     let mut stages = NONE;
     let mut id = 0;
     while id < PIPELINES {
@@ -956,7 +970,7 @@ const RECORD_WORDS: usize = {
 };
 
 /// Pipeline `id`'s record and its length, each group entry seen from the
-/// stages that read it (`seen`).
+/// stages that read it (`stages_reading`).
 const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
     let mut out = [0; RECORD_WORDS];
     let desc = desc_of(id);
@@ -1002,7 +1016,7 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
         n += 1;
         let mut e = 0;
         while e < g.len() {
-            (out[n], out[n + 1], out[n + 2]) = (g[e][0], seen(g, g[e][0]), g[e][1]);
+            (out[n], out[n + 1], out[n + 2]) = (g[e][0], stages_reading(g, g[e][0]), g[e][1]);
             (n, e) = (n + 3, e + 1);
         }
         k += 1;
@@ -1013,7 +1027,7 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
 /// Every pipeline's record, worked out as the crate is built.
 #[expect(
     clippy::large_const_arrays,
-    reason = "`is_floored` reads it as the crate is built, which a static is not"
+    reason = "`is_floored` reads it as the crate is pipeline, which a static is not"
 )]
 const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
     let mut r = [([0; RECORD_WORDS], 0); PIPELINES as usize];

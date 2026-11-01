@@ -32,7 +32,7 @@ fn failed_open_closed() {
         res: -2,
         detail: 0,
     };
-    assert_eq!(files.opened(&mut sys, &answer), Some("first"));
+    assert_eq!(files.complete_open(&mut sys, &answer), Some("first"));
     assert_eq!(files.owner(failed), None, "a failed open is closed");
     let held = files.open(&mut sys, 7, "b", "second");
     let answer = SysOpened {
@@ -40,7 +40,7 @@ fn failed_open_closed() {
         res: 5,
         detail: 0,
     };
-    assert_eq!(files.opened(&mut sys, &answer), Some("second"));
+    assert_eq!(files.complete_open(&mut sys, &answer), Some("second"));
     assert_eq!(
         files.owner(held),
         Some(&"second"),
@@ -58,5 +58,5 @@ fn stale_answer_ownerless() {
         res: -2,
         detail: 0,
     };
-    assert_eq!(files.opened(&mut sys, &answer), None);
+    assert_eq!(files.complete_open(&mut sys, &answer), None);
 }

@@ -24,13 +24,13 @@ pub const ENTRIES: [(&str, &str); 34] = [
     ("light_cs", "light.gen.wgsl"),
     ("light_miss_cs", "light_miss.gen.wgsl"),
     ("light_mark_cs", "light_mark.gen.wgsl"),
-    ("light_mark_drawn_cs", "light_mark_drawn.gen.wgsl"),
+    ("light_mark_draws_cs", "light_mark_draws.gen.wgsl"),
     ("light_propagate_cs", "light_propagate.gen.wgsl"),
     ("light_detail_cs", "light_detail.gen.wgsl"),
     ("light_beam_cs", "light_beam.gen.wgsl"),
     ("light_sample_cs", "light_sample.gen.wgsl"),
-    ("light_held_cs", "light_held.gen.wgsl"),
-    ("light_miss_held_cs", "light_miss_held.gen.wgsl"),
+    ("light_margin_cs", "light_margin.gen.wgsl"),
+    ("light_miss_margin_cs", "light_miss_margin.gen.wgsl"),
     ("miss_cs", "miss.gen.wgsl"),
     ("miss_list_cs", "miss_list.gen.wgsl"),
     ("sample_box_cs", "sample_box.gen.wgsl"),
@@ -38,7 +38,7 @@ pub const ENTRIES: [(&str, &str); 34] = [
     ("hit_lead_cs", "hit_lead.gen.wgsl"),
     ("hit_faces_cs", "hit_faces.gen.wgsl"),
     ("forget_cs", "forget.gen.wgsl"),
-    ("joined_cs", "joined.gen.wgsl"),
+    ("fold_cs", "fold.gen.wgsl"),
     ("height_cs", "height.gen.wgsl"),
     ("bound_cs", "bound.gen.wgsl"),
     ("decor_mark_cs", "decor_mark.gen.wgsl"),
@@ -50,7 +50,7 @@ pub const ENTRIES: [(&str, &str); 34] = [
     ("way_cs", "way.gen.wgsl"),
     ("way_free_cs", "way_free.gen.wgsl"),
     ("way_tree_cs", "way_tree.gen.wgsl"),
-    ("way_freed_cs", "way_freed.gen.wgsl"),
+    ("way_return_cs", "way_return.gen.wgsl"),
 ];
 
 /// rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as
@@ -92,7 +92,7 @@ const INPUT_ROOTS: [&str; 12] = [
 ];
 
 /// Each checked-in entry's path from the checkout's root.
-pub fn generated() -> impl Iterator<Item = String> {
+pub fn entry_paths() -> impl Iterator<Item = String> {
     ENTRIES.iter().map(|(_, file)| format!("{DIR}/{file}"))
 }
 
@@ -158,8 +158,8 @@ fn meaning(f: &str, text: &str) -> Result<Vec<u8>, String> {
         tokens(stream, &mut out);
     } else if f.ends_with(".toml") {
         let mut val: toml::Value = toml::from_str(text).map_err(|e| format!("{f}: {e}"))?;
-        if INHERITED.contains(&f) {
-            val = inherited(&val);
+        if WORKSPACE_MANIFESTS.contains(&f) {
+            val = workspace_tables(&val);
         }
         out.extend(val.to_string().into_bytes());
     } else {
@@ -172,11 +172,11 @@ fn meaning(f: &str, text: &str) -> Result<Vec<u8>, String> {
 /// from (`edition.workspace = true` and the like), and so are read for that
 /// alone: their profiles, patches and members are the workspace that builds
 /// them, which here is the shader's own.
-const INHERITED: [&str; 2] = ["rust/Cargo.toml", "xpute/rust/Cargo.toml"];
+const WORKSPACE_MANIFESTS: [&str; 2] = ["rust/Cargo.toml", "xpute/rust/Cargo.toml"];
 
 /// What a member takes from a workspace's manifest: its `package`,
 /// `dependencies` and `lints` tables under `[workspace]`.
-fn inherited(manifest: &toml::Value) -> toml::Value {
+fn workspace_tables(manifest: &toml::Value) -> toml::Value {
     let mut kept = toml::Table::new();
     if let Some(workspace) = manifest.get("workspace").and_then(toml::Value::as_table) {
         for key in ["package", "dependencies", "lints"] {
@@ -248,7 +248,7 @@ pub fn made_from(root: &Path) -> Option<String> {
 /// names another, else those missing.
 pub fn stale(root: &Path, digest: &str) -> Vec<String> {
     let cur = made_from(root).as_deref() == Some(digest);
-    generated()
+    entry_paths()
         .filter(|f| !cur || !root.join(f).is_file())
         .collect()
 }

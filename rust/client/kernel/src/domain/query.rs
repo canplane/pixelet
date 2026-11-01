@@ -11,12 +11,12 @@
 //! on what is on screen. A node coarser than asked is not what is drawn
 //! there: it is asked only whether anything under it fills, at any zoom.
 
-pub mod changed;
+pub mod changes;
 pub mod decor;
+mod entry;
 mod limit;
 mod node;
 mod place;
-mod placed;
 mod ray;
 mod scatter;
 mod support;

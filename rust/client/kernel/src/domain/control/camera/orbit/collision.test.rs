@@ -200,7 +200,7 @@ fn climb_stands_in_roof_cell() {
     let _g = serial();
     let (tile_cache, store, pivot) = tunnel(2.0, 1);
     let access = World::new(&tile_cache, &store);
-    let (climbed, failed) = climbed(pose(pivot, MIN_DIST, 0.3), &access);
+    let (climbed, failed) = climb_pose(pose(pivot, MIN_DIST, 0.3), &access);
     assert_eq!((climbed.polar, failed), (0.3, false));
 }
 
@@ -212,7 +212,7 @@ fn climb_fails_under_roof() {
     let (tile_cache, store, pivot) = tunnel(3.0, 2);
     let access = World::new(&tile_cache, &store);
     // The eye in the slab's upper cell, from 9 to 10.
-    let (climbed, failed) = climbed(pose(pivot, 3.8, 0.1), &access);
+    let (climbed, failed) = climb_pose(pose(pivot, 3.8, 0.1), &access);
     assert_eq!((climbed.polar, failed), (0.1, true));
 }
 
@@ -244,7 +244,7 @@ fn climb_clears_block() {
         polar: core::f64::consts::FRAC_PI_2,
         azimuth: -core::f64::consts::FRAC_PI_2,
     };
-    let (climbed, failed) = climbed(at, &access);
+    let (climbed, failed) = climb_pose(at, &access);
     assert!(!failed);
     assert!(climbed.polar < at.polar, "{climbed:?}");
     assert!(!in_solid(&climbed, &access), "{climbed:?}");

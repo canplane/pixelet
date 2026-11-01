@@ -66,7 +66,7 @@ fn unseen(near: f64) -> Ask {
 
 fn started<S: Serve>(l: &mut RequestScheduler<S>) -> Vec<u64> {
     let mut out = Vec::new();
-    l.take_started(|credit, _, _| out.push(credit.key()));
+    l.take_starts(|credit, _, _| out.push(credit.key()));
     out
 }
 

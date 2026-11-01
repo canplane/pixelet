@@ -23,7 +23,7 @@
 //! The writes the store takes go up as edits, batched (host.json
 //! `object.EDITS`), which the source applies to its shards and its top: the
 //! kernel writes no shard and no top. A file that does not decode is
-//! refused, named to the host to set aside (`refused`), and read again once
+//! refused, named to the host to set aside (`refused_files`), and read again once
 //! it says so (`on_emptied`).
 
 use fnv::FnvHashSet;
@@ -76,12 +76,12 @@ const SHARD_Z: [i32; 2] = [-1, 0];
 #[derive(Default)]
 struct State {
     /// The shards the top lists, by subject; none until it is read.
-    listed: Option<FnvHashSet<u64>>,
+    top_shards: Option<FnvHashSet<u64>>,
     /// The shards read, by subject: their leaves are in the store.
     read: FnvHashSet<u64>,
     /// The files below OBJECT refused, by number, until the host says each
     /// is empty or its source's own again.
-    refused: Vec<u64>,
+    refused_files: Vec<u64>,
     /// The writes the store took since the last batch went up, in order.
     unsent: Vec<Write>,
     save_due_ms: Option<f64>,
@@ -93,7 +93,7 @@ impl State {
     /// Whether the shard `subject`'s leaves are all in the store: read, or
     /// listed by no top read.
     fn is_read(&self, subject: u64) -> bool {
-        self.listed
+        self.top_shards
             .as_ref()
             .is_some_and(|l| !l.contains(&subject) || self.read.contains(&subject))
     }
@@ -132,8 +132,8 @@ pub fn holds(space: &Aabb) -> bool {
 pub fn want(asked: impl Iterator<Item = (Tile, Ask)>) {
     let st = state();
     st.wants.clear();
-    if st.listed.is_none() {
-        if !st.refused.contains(&TOP) {
+    if st.top_shards.is_none() {
+        if !st.refused_files.contains(&TOP) {
             let ask = Ask {
                 priority: Priority::Demand,
                 order: Order::FIRST,
@@ -143,7 +143,7 @@ pub fn want(asked: impl Iterator<Item = (Tile, Ask)>) {
     } else {
         for (shard, ask) in asked {
             let subject = shard.subject();
-            if !st.is_read(subject) && !st.refused.contains(&subject) {
+            if !st.is_read(subject) && !st.refused_files.contains(&subject) {
                 st.wants.push((subject, ask));
             }
         }
@@ -156,7 +156,7 @@ pub fn want(asked: impl Iterator<Item = (Tile, Ask)>) {
 /// (`arrived`).
 pub fn on_arrived(number: u64, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
     let at = now();
-    let result = arrived(number, block.map(body));
+    let result = admit(number, block.map(body));
     release(block);
     phases.push(TaskPhaseName::decode_ms, now() - at);
     result.map_err(Failure::from)
@@ -166,7 +166,7 @@ pub fn on_arrived(number: u64, block: Option<Block>, phases: &mut Phases) -> Res
 /// where their shards are not read, a shard's leaves into the store in
 /// place of its folds. One that does not decode leaves the store as it was
 /// and is refused.
-fn arrived(number: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
+fn admit(number: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
     let result = match bytes {
         // No top: no shard holds any.
         None if number == TOP => {
@@ -180,8 +180,8 @@ fn arrived(number: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
         Some(b) if number == TOP => decode_top(b).map(on_top),
         Some(b) => decode_shard(Tile::of_subject(number), b).map(|w| on_shard(number, w)),
     };
-    if result.is_err() && !state().refused.contains(&number) {
-        state().refused.push(number);
+    if result.is_err() && !state().refused_files.contains(&number) {
+        state().refused_files.push(number);
         request_world_tick();
     }
     result
@@ -200,7 +200,7 @@ fn on_top(rows: Vec<(u64, i32, u32)>) {
             changed.push(object().set_fold([at[0], at[1], z], word));
         }
     }
-    st.listed = Some(listed);
+    st.top_shards = Some(listed);
     if !changed.is_empty() {
         note_written(&changed);
     }
@@ -221,18 +221,18 @@ fn on_shard(subject: u64, writes: Vec<Write>) {
 }
 
 /// The files refused and not yet emptied, by number below OBJECT.
-pub fn refused() -> &'static [u64] {
-    &state().refused
+pub fn refused_files() -> &'static [u64] {
+    &state().refused_files
 }
 
 /// The host set the refused file `number` aside: it is wanted again, as
 /// new. False where it was not refused.
 pub fn on_emptied(number: u64) -> bool {
     let st = state();
-    let Some(i) = st.refused.iter().position(|&n| n == number) else {
+    let Some(i) = st.refused_files.iter().position(|&n| n == number) else {
         return false;
     };
-    st.refused.remove(i);
+    st.refused_files.remove(i);
     // Its failed want goes, so the next is a new one.
     st.wants.retain(|&(n, _)| n != number);
     declare(Stream::object, &st.wants);

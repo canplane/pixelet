@@ -11,7 +11,7 @@
 pub const CAST_SIDE: u32 = 8;
 
 /// The lanes of a workgroup a brick: `way_tree_cs`'s, which a level's
-/// scan ranks the flagged across, and `way_freed_cs`'s.
+/// scan ranks the flagged across, and `way_return_cs`'s.
 pub const WAY_LANES: u32 = 64;
 
 /// Lanes `decor_thin_cs`'s workgroup has: a clip level cell each.

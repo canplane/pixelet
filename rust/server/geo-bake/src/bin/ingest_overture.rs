@@ -700,7 +700,7 @@ fn add(
     Ok(rows)
 }
 
-/// A shard as a feature is tested against: what it holds (`Node::held`, its
+/// A shard as a feature is tested against: what it holds (`Node::apron_rect`, its
 /// apron included) in EPSG:3857 meters, each rounded half to even,
 /// `[left, bottom, right, top]`; and the same in degrees, for the CLI.
 struct Shard {
@@ -713,7 +713,7 @@ struct Shard {
 
 impl Shard {
     fn of(node: Node) -> Shard {
-        let merc = node.held().map(|u| round(epsg3857::merc_from_u(u)));
+        let merc = node.apron_rect().map(|u| round(epsg3857::merc_from_u(u)));
         let [w, s, _] = epsg4326::from_mercator(&[merc[0], merc[1], 0.0]);
         let [e, n, _] = epsg4326::from_mercator(&[merc[2], merc[3], 0.0]);
         // The east edge at the seam reads back as -180.

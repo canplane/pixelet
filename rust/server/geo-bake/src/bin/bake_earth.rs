@@ -29,7 +29,7 @@ use image::ImageFormat;
 use pxl_geo_bake::cli;
 use pxl_geo_bake::pyramid::{TileSet, MANIFEST};
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::published::{FORMAT, TILE_SPHERE};
+use pxl_spec::bake::publication::{FORMAT, TILE_SPHERE};
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3;
@@ -96,7 +96,7 @@ fn reflectance() -> [f32; 256] {
 }
 
 /// The Black Marble's grays are a picture's, so they are light as shown.
-fn shown() -> [f32; 256] {
+fn gray_light() -> [f32; 256] {
     core::array::from_fn(|b| {
         let c = b as f64 / 255.0;
         (if c <= 0.04045 {
@@ -327,7 +327,7 @@ fn run() -> Result<(), String> {
         width: night_width,
         height: night_height,
         bytes: &night,
-        decode: shown(),
+        decode: gray_light(),
     };
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     global(&day_plate, &night_plate, &out.join(TILE_SPHERE))?;

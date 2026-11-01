@@ -160,7 +160,7 @@ impl<L: PaletteWords> Bricks for World<'_, L> {
     fn brick(&self, cell: u32, entry: u32) -> ([i32; 2], bool) {
         self.row((cell - FIRST_CELL) * ENTRIES + entry).brick()
     }
-    /// Off the clip levels' rows past their table (`joined_cs`).
+    /// Off the clip levels' rows past their table (`fold_cs`).
     fn joined(&self, cell: u32, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
         let r = at(
             self.clipmap,
@@ -249,8 +249,8 @@ impl<L: PaletteWords> World<'_, L> {
     /// down to it read in place (`support::Ancestors`), each from the deepest
     /// node it shares with it, never again from the top (`support::asset`).
     /// Asked once a hit (raster.rs `face_cs`); a hit that needs none is
-    /// told so first (`unasked`).
-    pub(crate) fn faced(
+    /// told so first (`unasked_face`).
+    pub(crate) fn ask_face(
         &mut self,
         face: u32,
         zoom: u32,
@@ -264,10 +264,10 @@ impl<L: PaletteWords> World<'_, L> {
 }
 
 /// What lies about the face a hit that ended `ends` at the asset `asset`
-/// met, where it needs no asking (`World::faced`): nothing where it stopped
+/// met, where it needs no asking (`World::ask_face`): nothing where it stopped
 /// on none, a box's own where the cell keeps short of its cube
 /// (`face::BOX`); and whether it is asked instead.
-pub(crate) fn unasked(ends: End, asset: u32) -> (bool, u32) {
+pub(crate) fn unasked_face(ends: End, asset: u32) -> (bool, u32) {
     if ends != End::Hit {
         (false, 0)
     } else if answer::fill_eighths(asset) < answer::EIGHTHS {

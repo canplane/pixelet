@@ -1,4 +1,4 @@
-// pxl-kernel/domain/query/placed.rs
+// pxl-kernel/domain/query/entry.rs
 
 //! What is placed, as the records an edit would change: the world's answer
 //! for what a player wrote, beside what the assets compose to.
@@ -9,17 +9,17 @@ use pxl_spec::space::coord::zoom::Zoom;
 
 use super::decor::claim;
 use super::world::World;
-use crate::domain::layer::object::meta::placed;
+use crate::domain::layer::object::meta::decor_instance;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query::decor::intersect::box_extent;
 use pxl_spec::bake::constant::EntryAt;
 
 impl<'a> World<'a> {
     /// What is placed at exactly `at`, air left out.
-    pub fn placed(&self, at: EntryAt) -> Option<Entry> {
+    pub fn entry_at(&self, at: EntryAt) -> Option<Entry> {
         self.object
             .read((at.zoom(), at.at()))
-            .placed()
+            .entry()
             .filter(|e| !is_air(e.state))
     }
 
@@ -73,7 +73,7 @@ impl<'a> World<'a> {
 /// (`decor::claim`), which holds its cell, the corner it stands at, since
 /// a variant is a cell or more a side; anything else its cell.
 fn occupies(e: &Entry) -> Option<Aabb> {
-    match placed(e) {
+    match decor_instance(e) {
         Some(decor) => claim(&decor),
         None => Some(e.cube()),
     }

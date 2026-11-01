@@ -45,18 +45,18 @@ impl TileCache<TerrainTile> {
         zooms: [Zoom; 2],
     ) -> Answer<Bounds> {
         let (r, from, here) = cells::bound_over(&CpuClipmap, place, zooms, node);
-        held(line, from, here, r)
+        answer_at(line, from, here, r)
     }
 
     /// The column `c` at `zoom` off the clip levels, the area's edge laid on
     /// it, as the GPU reads it (pxl-spec-core `clipmap::ground`), stepped from
     /// `place`: exact where `line`
     /// says the ground at the clip level it was read off or coarser, else
-    /// coarser, naming its tile (`held`); where no clip level holds it, the
+    /// coarser, naming its tile (`answer_at`); where no clip level holds it, the
     /// lack.
     pub fn column(&self, line: &Line, place: Lookup, (zoom, c): Node<2>) -> Answer<Cell> {
         let (cell, f) = cells::ground(&CpuClipmap, place, zoom, c);
-        held(line, f.from(), f.here(), cell)
+        answer_at(line, f.from(), f.here(), cell)
     }
 
     /// The line `node`'s cells at `cell` are read on, stepped from where
@@ -130,7 +130,7 @@ fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
 
 /// `v`, read off the clip level at `from` (`here`, else none held): exact where
 /// `line` says the ground at `from` or coarser, else coarser, naming its tile.
-fn held<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
+fn answer_at<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     match here {
         false => Answer::Nothing(line.tile),
         true if line.src.is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) => Answer::Exact(v),

@@ -8,12 +8,12 @@ use xpute_kit::collection::list::List;
 
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param::MAX_CREDITS;
-use crate::sys::io::request::{take_started, take_stops};
+use crate::sys::io::request::{take_starts, take_stops};
 use crate::sys::io::{fetch, loader};
 
 pub fn run() {
     // The key is an opaque handle to the shell.
-    take_started(|credit, stream, subject| match stream {
+    take_starts(|credit, stream, subject| match stream {
         Stream::asset => {
             if let Some((_, load)) = loader::of_subject(subject) {
                 loader::open_asset(credit, load);

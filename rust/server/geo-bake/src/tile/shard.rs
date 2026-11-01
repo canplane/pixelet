@@ -26,12 +26,12 @@ use std::path::{Path, PathBuf};
 use crate::cli::Flags;
 use crate::coverage::{src_of, Coverage, Node};
 use crate::pyramid::{
-    ancestor, fold, unasked, write_manifest, Absent, Base, StagedSet, TileSet, FITS, MANIFEST,
+    ancestor, fold, unasked_tiles, write_manifest, Absent, Base, StagedSet, TileSet, FITS, MANIFEST,
 };
 use crate::source;
 use crate::util;
 use crate::util::git_sha;
-use pxl_spec::bake::published::FORMAT;
+use pxl_spec::bake::publication::FORMAT;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::tile::Tile;
 
@@ -63,18 +63,18 @@ impl Stage {
         }
     }
 
-    fn done(&self, unit: &str) -> PathBuf {
+    fn done_path(&self, unit: &str) -> PathBuf {
         self.stage.root.join(format!("{unit}.done"))
     }
 
     fn write_done(&self, unit: &str, gone: impl Iterator<Item = Tile>) -> Result<(), String> {
-        let path = self.done(unit);
+        let path = self.done_path(unit);
         let names: Vec<String> = gone.map(Tile::name).collect();
         util::write_atomic(&path, names.join("\n").as_bytes()).map_err(|e| io(&path, e))
     }
 
     fn read_done(&self, unit: &str) -> Result<Vec<Tile>, String> {
-        let path = self.done(unit);
+        let path = self.done_path(unit);
         match fs::read_to_string(&path) {
             Ok(text) => text
                 .lines()
@@ -89,7 +89,7 @@ impl Stage {
     }
 
     fn remove_done(&self, unit: &str) -> Result<(), String> {
-        let path = self.done(unit);
+        let path = self.done_path(unit);
         match fs::remove_file(&path) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(io(&path, e)),
             _ => Ok(()),
@@ -100,7 +100,7 @@ impl Stage {
     fn whole(&self) -> Result<Vec<Node>, String> {
         Ok(Coverage::of_source()?
             .shards()
-            .filter(|s| self.done(&s.name()).exists())
+            .filter(|s| self.done_path(&s.name()).exists())
             .collect())
     }
 
@@ -110,7 +110,7 @@ impl Stage {
     fn will_hold(&self) -> Result<Option<BTreeSet<Tile>>, String> {
         let held = match source::manifest(&self.set.root)?
             .as_ref()
-            .map(source::held)
+            .map(source::manifest_shards)
             .transpose()?
             .flatten()
         {
@@ -216,8 +216,8 @@ impl Stage {
     /// lists, each `.done` last; only once folded, else the set would hold
     /// leaves under parents not folded from them.
     pub fn commit<L: Base>(&self, workers: usize) -> Result<(), String> {
-        if !self.done(COMMIT).exists() {
-            if !self.done(FOLD).exists() {
+        if !self.done_path(COMMIT).exists() {
+            if !self.done_path(FOLD).exists() {
                 return Err(format!(
                     "{}: nothing folded; run --stage fold first",
                     self.stage.root.display()
@@ -264,13 +264,14 @@ impl Stage {
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
                 util::write_atomic(&path, text.as_bytes()).map_err(|e| io(&path, e))?;
             }
-            fs::rename(self.done(FOLD), self.done(COMMIT)).map_err(|e| io(&self.done(FOLD), e))?;
+            fs::rename(self.done_path(FOLD), self.done_path(COMMIT))
+                .map_err(|e| io(&self.done_path(FOLD), e))?;
         }
         self.finish_commit::<L>()
     }
 
     fn not_committing(&self) -> Result<(), String> {
-        match self.done(COMMIT).exists() {
+        match self.done_path(COMMIT).exists() {
             true => Err(format!(
                 "{}: a commit is begun; finish it with --stage commit",
                 self.stage.root.display()
@@ -342,7 +343,7 @@ impl Stage {
         // none coarser was ever read: a set baked before the fold stopped
         // there still holds them.
         let skip = if pruned {
-            unasked::<L>(&self.set, L::COARSEST)?
+            unasked_tiles::<L>(&self.set, L::COARSEST)?
         } else {
             FnvHashSet::default()
         };
@@ -461,7 +462,7 @@ impl Run {
             // The commit wrote them before it moved anything.
             if let Some(held) = source::manifest(&self.stage.set.root)?
                 .as_ref()
-                .map(source::held)
+                .map(source::manifest_shards)
                 .transpose()?
                 .flatten()
             {

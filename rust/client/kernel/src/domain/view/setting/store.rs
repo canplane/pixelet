@@ -56,7 +56,7 @@ impl Settings {
         Some(true)
     }
 
-    fn stored(&self) -> Vec<u8> {
+    fn storage_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         for key in SettingKey::ALL {
             let val = self.get(key);
@@ -168,7 +168,7 @@ pub fn on_settings_emptied() {
 /// Only a slot read is written; a refused or unreadable one holds its changes.
 pub fn settings_keep_step() {
     if *load() == Load::Loaded && core::mem::take(UNKEPT.get(|| false)) {
-        file::write_storage(StorageFile::Settings, &settings_store().stored());
+        file::write_storage(StorageFile::Settings, &settings_store().storage_bytes());
     }
 }
 

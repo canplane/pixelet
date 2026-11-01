@@ -25,7 +25,7 @@ use pxl_geo_bake::demand::{
 use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, Overrides};
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::published::{tile_object_parts, BaseLayer, FORMAT, TILE_SPHERE};
+use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, FORMAT, TILE_SPHERE};
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -59,7 +59,7 @@ struct App {
 const OVEN_TOKEN: &str = "version";
 
 /// A version named by bytes that change whenever what is served does.
-fn named(bytes: &[u8]) -> String {
+fn bytes_version(bytes: &[u8]) -> String {
     let mut h = fnv::FnvHasher::default();
     std::hash::Hasher::write(&mut h, bytes);
     format!("dev-{:016x}", std::hash::Hasher::finish(&h))
@@ -71,10 +71,10 @@ fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tile_source {
         _ if !is_sharded(layer) => {
-            read(&app.out.join(EARTH).join(pyramid::MANIFEST)).map(|b| named(&b))
+            read(&app.out.join(EARTH).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
         }
         TileSource::Shelf(dir) => {
-            read(&dir.join(layer.name()).join(pyramid::MANIFEST)).map(|b| named(&b))
+            read(&dir.join(layer.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
         }
         TileSource::Oven(_) => {
             let token = app.cache.join(OVEN_TOKEN);
@@ -87,7 +87,7 @@ fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
                 std::fs::write(&token, made.to_string())
                     .map_err(|e| format!("{}: {e}", token.display()))?;
             }
-            read(&token).map(|b| named(&b))
+            read(&token).map(|b| bytes_version(&b))
         }
     }
 }
@@ -127,13 +127,13 @@ async fn earth(app: &App, name: &str) -> Response {
         return StatusCode::NOT_FOUND.into_response();
     }
     match fs::read(app.out.join(EARTH).join(name)).await {
-        Ok(bytes) => packed(bytes),
+        Ok(bytes) => tile_response(bytes),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
 }
 
 /// Immutable, as the Worker serves a tile: its version names its bytes.
-fn packed(bytes: Vec<u8>) -> Response {
+fn tile_response(bytes: Vec<u8>) -> Response {
     (
         [
             (header::CONTENT_TYPE, "application/octet-stream"),
@@ -172,7 +172,7 @@ async fn tile(
         TileSource::Shelf(dir) => return from_shelf(dir, kind, &name).await,
     };
     match demand.get(kind, &name).await {
-        Ok(Some(bytes)) => packed(bytes),
+        Ok(Some(bytes)) => tile_response(bytes),
         Ok(None) => StatusCode::NO_CONTENT.into_response(),
         Err(Failure::BadName) => (StatusCode::BAD_REQUEST, "bad tile name").into_response(),
         Err(Failure::Unavailable) => {
@@ -193,7 +193,7 @@ async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
     }
     let set = dir.join(kind.name());
     match fs::read(set.join(name)).await {
-        Ok(bytes) => packed(bytes),
+        Ok(bytes) => tile_response(bytes),
         // A page the set has no object for is empty, as the Worker answers it.
         Err(_) if set.is_dir() => StatusCode::NO_CONTENT.into_response(),
         Err(_) => StatusCode::NOT_FOUND.into_response(),

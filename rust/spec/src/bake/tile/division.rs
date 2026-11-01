@@ -15,7 +15,7 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::malformed;
-use crate::bake::named::{NameColumns, NamesView};
+use crate::bake::name::{NameColumns, NamesView};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::division::Subtype;
 use crate::space::coord::adapter::epsg3857::cell_zoom_of;
@@ -115,7 +115,7 @@ impl Default for DivisionTile {
 }
 
 /// One branch: the cells; the occupancy; per division its id, subtype,
-/// parent, prominence and whether an area holds it, then its names (`named`).
+/// parent, prominence and whether an area holds it, then its names (`name`).
 pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
     let d = &tile.divisions;
     let parents: Vec<u32> = d.iter().map(|d| d.parent).collect();

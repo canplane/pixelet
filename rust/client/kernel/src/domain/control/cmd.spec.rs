@@ -643,7 +643,7 @@ pub enum Command {
     /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
     FS_MOUNT = 0x1301,
-    /// A file the kernel refused (the snapshot's `refused`) is empty now, or its source's
+    /// A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's
     /// own again, what it held set aside by the host: the kernel reads it again, and writes
     /// a storage file from then on.
     FS_TRUNCATED = 0x1302,
@@ -792,7 +792,7 @@ pub struct Snapshot<'a> {
     /// heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The
     /// kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
     /// empty.
-    pub refused: &'a dyn Fn(&mut dyn FnMut(&RefusedFile<'_>)),
+    pub refused_files: &'a dyn Fn(&mut dyn FnMut(&RefusedFile<'_>)),
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say.
     pub stall: Option<Message>,
 }
@@ -823,9 +823,9 @@ impl Snapshot<'_> {
         });
         w.u32_array(Some(self.previews));
         let mut n = 0;
-        (self.refused)(&mut |_| n += 1);
+        (self.refused_files)(&mut |_| n += 1);
         w.branch(n, |w| {
-            (self.refused)(&mut |item| {
+            (self.refused_files)(&mut |item| {
                 w.branch(RefusedFile::FIELDS, |w| item.write(w));
             });
         });
@@ -1206,7 +1206,7 @@ pub struct FsMount<'a> {
     /// The coarsest zoom the source supplies whole.
     pub top_zoom: u32,
     /// Each kind's format, one a kind, indexed by its bake's number
-    /// (pxl-spec bake/published.spec.rs).
+    /// (pxl-spec bake/publication.spec.rs).
     pub format: &'a [u32],
     /// The shards it serves, by name. Their order means nothing: no two at a zoom
     /// are over one node, and the finer wins.

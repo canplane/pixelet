@@ -15,7 +15,7 @@ import {
   BASE_LAYERS,
   type BaseLayer,
   VERSION_BYTES,
-} from "./published.spec.ts";
+} from "./publication.spec.ts";
 import { Command, encode_fs_mount } from "@/abi/cmd.spec.ts";
 import { Source } from "@/abi/state.ts";
 import { bracket } from "@/bracket.tsx";
@@ -31,7 +31,7 @@ export interface Declaration {
   shard: Record<string, { version?: Partial<Record<BaseLayer, string>> }>;
 }
 
-/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec bake/source.rs `is_version`), `VERSION_BYTES` long at most (published.json). */
+/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec bake/source.rs `is_version`), `VERSION_BYTES` long at most (publication.json). */
 const VERSION = new RegExp(`^[A-Za-z0-9._-]{1,${VERSION_BYTES}}$`);
 
 /** The declaration's text, where every kind has a version and every version
@@ -90,8 +90,8 @@ export function declaration(text: string): Declaration | null {
 }
 
 let state = Source.Asking;
-let declared: Declaration | null = null;
-let shown: readonly { kind: BaseLayer; version: string }[] = [];
+let cur_declaration: Declaration | null = null;
+let versions: readonly { kind: BaseLayer; version: string }[] = [];
 const listeners = new Listeners();
 
 function set(next: Source): void {
@@ -104,8 +104,8 @@ export function source_state(): Source {
 }
 
 /** The declaration handed to the kernel; none until then. */
-export function source_declared(): Declaration | null {
-  return declared;
+export function source_declaration(): Declaration | null {
+  return cur_declaration;
 }
 
 /** Each kind's own version as declared, empty until then. */
@@ -113,7 +113,7 @@ export function source_versions(): readonly {
   kind: BaseLayer;
   version: string;
 }[] {
-  return shown;
+  return versions;
 }
 
 export const watch_source = listeners.watch;
@@ -125,7 +125,7 @@ export const watch_source = listeners.watch;
 const ASK_AGAIN_MS = 2_000;
 const ASK_AGAIN_MOST_MS = 60_000;
 
-async function asked(): Promise<string | null> {
+async function ask_declaration(): Promise<string | null> {
   try {
     const res = await bracket.origin.get(TILE_SOURCE_ROUTE);
     if (res.ok) return await res.text();
@@ -162,7 +162,7 @@ function send_source(
 export async function declare_source(
   send: SendSource = send_source,
 ): Promise<void> {
-  let source = await asked();
+  let source = await ask_declaration();
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
     if (online()) {
@@ -172,7 +172,7 @@ export async function declare_source(
       );
       wait_ms = Math.min(2 * wait_ms, ASK_AGAIN_MOST_MS);
     } else await when_online();
-    source = await asked();
+    source = await ask_declaration();
   }
   const read = declaration(source);
   if (read === null) {
@@ -196,7 +196,7 @@ export async function declare_source(
     set(Source.Refused);
     return;
   }
-  declared = read;
-  shown = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
+  cur_declaration = read;
+  versions = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
   set(Source.Declared);
 }

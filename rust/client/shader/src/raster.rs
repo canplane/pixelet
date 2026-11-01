@@ -17,13 +17,13 @@ use crate::pass_observer::PassObserver;
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
 use crate::light::Head;
 use crate::observer::{self, Level, Observer};
-use crate::world::{face_of, unasked, NoPalette, World};
+use crate::world::{face_of, unasked_face, NoPalette, World};
 use crate::{add, opens};
 
 /// Whether samples at words `a` and `b` stopped on the same box, alike in
 /// every word a pixel reads of them: the node, the asset, whether it lacks
 /// and the axis entered across, so what lies about its face is alike too
-/// (world.rs `World::faced`, its face the axis's turned to the eye).
+/// (world.rs `World::ask_face`, its face the axis's turned to the eye).
 fn alike<W: Words + ?Sized>(w: &W, a: u32, b: u32) -> bool {
     let mut k = 0;
     while k < beam::SAMPLE_FACES {
@@ -42,12 +42,12 @@ fn put(s: &mut [u32], i: u32, v: u32) {
     }
 }
 
-/// No sample before it (`boxed`).
+/// No sample before it (`write_box`).
 pub(crate) const NONE: u32 = u32::MAX;
 
 /// The sample at word `k` of `w`, numbered `sample`, written as a box for
 /// the raster's draw, the eye's and the light's alike: its box as the cast
-/// stops on it (`cast::drawn`) from `origin`, appended to `boxes`, counted
+/// stops on it (`cast::drawn_box`) from `origin`, appended to `boxes`, counted
 /// in `args` (`raster::ARGS_INSTANCES`), its number and its axis,
 /// `raster::EYED` where it lies about the eye at the screen's tangents
 /// `tan` (`raster::is_eyed`), where `eyed` asks (the light's has none); none
@@ -55,7 +55,7 @@ pub(crate) const NONE: u32 = u32::MAX;
 /// across or up, `NONE` where there is none, stopped alike (`alike`), which
 /// some sample before it in turn draws. Its place among the boxes, `NONE`
 /// where it wrote none.
-pub(crate) fn boxed<W: Words + ?Sized>(
+pub(crate) fn write_box<W: Words + ?Sized>(
     w: &W,
     k: u32,
     before: [u32; 2],
@@ -75,7 +75,7 @@ pub(crate) fn boxed<W: Words + ?Sized>(
         return NONE;
     }
     let node = node_at(w, k + beam::SAMPLE_NODE);
-    let (lo, hi) = cast::drawn(origin, &node, w.word(k + beam::SAMPLE_ASSET));
+    let (lo, hi) = cast::drawn_box(origin, &node, w.word(k + beam::SAMPLE_ASSET));
     let lacks = w.word(k + beam::SAMPLE_LACKS) != 0;
     let eyed = eyed && raster::is_eyed(lo, hi, tan);
     let box_at = add(args, raster::ARGS_INSTANCES, 1);
@@ -99,7 +99,7 @@ pub(crate) fn boxed<W: Words + ?Sized>(
 /// word `k` of `w`: where the ray enters it (`cast::entry`) across the axis
 /// the sample entered by, the eye's pixels and the light's slots alike, and
 /// whether it does.
-pub(crate) fn taken<W: Words + ?Sized>(
+pub(crate) fn visible_cell<W: Words + ?Sized>(
     w: &W,
     k: u32,
     origin: [i32; 3],
@@ -150,7 +150,7 @@ pub fn sample_box_cs(
 
 /// What lies about the face sample `s` entered, the screen's, whose box is
 /// at `place` among the boxes: told at once where it needs no asking
-/// (`world::unasked`, a lack none), left in its words (`beam::SAMPLE_FACES`)
+/// (`world::unasked_face`, a lack none), left in its words (`beam::SAMPLE_FACES`)
 /// where its pixels read it (cast.rs `cast_cs`); else its ask at `place`
 /// (`beam::Grid::ask_at`), off the line its cell's rays resumed from, for
 /// the faces' pass (`face_cs`), its faces to be left there.
@@ -161,7 +161,7 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
     let (asks, faces) = if beams.word(k + beam::SAMPLE_LACKS) != 0 {
         (false, 0)
     } else {
-        unasked(End::Hit, beams.word(k + beam::SAMPLE_ASSET))
+        unasked_face(End::Hit, beams.word(k + beam::SAMPLE_ASSET))
     };
     if !asks {
         beams.set(k + beam::SAMPLE_FACES, faces);
@@ -182,7 +182,7 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
 /// Each hit asked its faces, a thread each, `raster::FACES_LANES` a
 /// workgroup, dispatched off its args (`raster::ARGS_FACES`), each past
 /// their count (`raster::ARGS_INSTANCES`) returning at once: what lies
-/// about the face its ray entered (`World::faced`), asked of the world's
+/// about the face its ray entered (`World::ask_face`), asked of the world's
 /// query once a hit rather than once a ray, off the line down to it from
 /// the deepest node of its cell's beam ray's line over it, that line read
 /// in place (`support::sub_line`, beam.rs `BeamAncestors`), and left in the word its ask
@@ -230,7 +230,7 @@ pub fn face_cs(
             pool: way::tree::Read(pool),
         };
         let below = support::sub_line(&mut world, &base, zoom, c);
-        world.faced(w.word(a + beam::ASK_FACE), zoom, c, &below.joined(&base))
+        world.ask_face(w.word(a + beam::ASK_FACE), zoom, c, &below.joined(&base))
     };
     beams.set(to, faces);
 }

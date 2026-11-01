@@ -36,7 +36,7 @@
 //!
 //! In a drawn frame a terrain packet is given back once no window wants
 //! one of its bricks absent (domain/layer/terrain/clipmap.rs `fill`): each frame
-//! hands `HANDED` bricks only of tiles kept or void (`due`), a brick
+//! hands `HAND_CAP` bricks only of tiles kept or void (`due`), a brick
 //! handed is wanted no more, and a packet whose tile left or that no
 //! window wants is given back on that upload too, the stream full or not
 //! (domain/layer/kept.rs `send`). Tiles whose packets were freed are asked again
@@ -56,7 +56,7 @@ use crate::sys::io::room::Refusal;
 use crate::sys::sched::edge;
 
 /// The kinds whose bodies take a slot.
-const SLOTTED: [Stream; 2] = [Stream::terrain, Stream::earth];
+const SLOT_STREAMS: [Stream; 2] = [Stream::terrain, Stream::earth];
 
 const fn longest(stream: Stream) -> u32 {
     match stream.max_body() {
@@ -69,9 +69,9 @@ const fn longest(stream: Stream) -> u32 {
 const SLOT_BYTES: u32 = {
     let mut most = 0;
     let mut k = 0;
-    while k < SLOTTED.len() {
-        if longest(SLOTTED[k]) > most {
-            most = longest(SLOTTED[k]);
+    while k < SLOT_STREAMS.len() {
+        if longest(SLOT_STREAMS[k]) > most {
+            most = longest(SLOT_STREAMS[k]);
         }
         k += 1;
     }
@@ -97,9 +97,9 @@ const _: () = {
         "a run holds two slots or more, a bit each"
     );
     let mut k = 0;
-    while k < SLOTTED.len() {
+    while k < SLOT_STREAMS.len() {
         assert!(
-            BODY_RUN_BYTES / SLOTS < longest(SLOTTED[k]).next_power_of_two(),
+            BODY_RUN_BYTES / SLOTS < longest(SLOT_STREAMS[k]).next_power_of_two(),
             "a slot with its share of the run costs less than the buddy's block for it"
         );
         k += 1;
@@ -108,8 +108,8 @@ const _: () = {
 
 pub const fn is_slotted(stream: Stream) -> bool {
     let mut k = 0;
-    while k < SLOTTED.len() {
-        if SLOTTED[k] as u8 == stream as u8 {
+    while k < SLOT_STREAMS.len() {
+        if SLOT_STREAMS[k] as u8 == stream as u8 {
             return true;
         }
         k += 1;
@@ -141,10 +141,10 @@ struct Slots {
     waited: bool,
 }
 
-static HELD: Global<Slots> = Global::new();
+static SLOT_TABLE: Global<Slots> = Global::new();
 
-fn held() -> &'static mut Slots {
-    HELD.get(Slots::default)
+fn slot_table() -> &'static mut Slots {
+    SLOT_TABLE.get(Slots::default)
 }
 
 /// A block for a body of `n` bytes, of `stream` where the request
@@ -155,7 +155,7 @@ pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
     if !stream.is_some_and(is_slotted) || n > SLOT_BYTES {
         return alloc(n).ok_or_else(Refusal::now);
     }
-    let s = held();
+    let s = slot_table();
     if s.out >= BODY_SLOTS {
         s.waited = true;
         return Err(Refusal::bodies());
@@ -182,7 +182,7 @@ pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
 /// # Safety
 /// `block` came from `take` and has not been given back.
 pub unsafe fn give(block: Block) {
-    let s = held();
+    let s = slot_table();
     let Some(i) = s
         .runs
         .iter()
@@ -217,13 +217,13 @@ pub unsafe fn give(block: Block) {
 /// Moves whenever a slot is given back: a body refused one (`Refusal::bodies`)
 /// may be served once it has.
 pub fn releases() -> u32 {
-    held().releases
+    slot_table().releases
 }
 
 /// The most slots out at once since the last call, the profiler's
 /// (perf/report.rs `perf_frame`): what `BODY_SLOTS` is measured by.
 pub fn take_peak() -> u32 {
-    let s = held();
+    let s = slot_table();
     core::mem::replace(&mut s.peak, s.out)
 }
 

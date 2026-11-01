@@ -108,7 +108,7 @@ impl Part {
             return Vec::new();
         };
         let (whole, length) = ([g.points[0], g.points[g.points.len() - 1]], line.length());
-        let flag = |wanted: &[&str]| flags.flagged(wanted, cell_of(length));
+        let flag = |wanted: &[&str]| flags.flag_ranges(wanted, cell_of(length));
         let (bridge, tunnel, indoor, link, gone) = (
             flag(&["is_bridge"]),
             flag(&["is_tunnel"]),

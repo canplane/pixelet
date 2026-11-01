@@ -9,7 +9,7 @@
 
 pub const SHADER_BOX: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
-pub const SHADER_SKINNED: u32 = 2;
+pub const SHADER_SKINNED_MESH: u32 = 2;
 pub const SHADER_LOCATION_ZONE: u32 = 3;
 pub const SHADER_LOCATION_BEACON: u32 = 4;
 pub const SHADER_MARKER: u32 = 5;
@@ -48,25 +48,25 @@ pub const SHADER_BOUND: u32 = 26;
 pub const SHADER_HEIGHT: u32 = 27;
 /// The decor the ground generates in the eye's clip levels, generated with the
 /// cast from pxl-spec-core's `scatter`: its one compute entry.
-pub const SHADER_GENERATED: u32 = 28;
-/// What `SHADER_GENERATED` and placed decor leave, sized for the screen and
+pub const SHADER_GENERATION: u32 = 28;
+/// What `SHADER_GENERATION` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
 /// args; each drawn compacted into the decor's instances: pxl-spec-core
-/// `generated::drawn`.
-pub const SHADER_GENERATED_CNT: u32 = 29;
-pub const SHADER_GENERATED_ARGS: u32 = 30;
-pub const SHADER_GENERATED_COMPACT: u32 = 31;
+/// `generation::drawn`.
+pub const SHADER_GENERATION_CNT: u32 = 29;
+pub const SHADER_GENERATION_ARGS: u32 = 30;
+pub const SHADER_GENERATION_COMPACT: u32 = 31;
 /// Each newly held terrain frame's ways, its columns' spans off its lines,
 /// generated with the cast from pxl-spec-core's `ways`: its one compute
 /// entry.
 pub const SHADER_WAY: u32 = 32;
 /// Which eye slots' decor generates again this frame, listed for
-/// `SHADER_GENERATED_THIN`'s and `SHADER_GENERATED`'s dispatches: its one
+/// `SHADER_GENERATION_THIN`'s and `SHADER_GENERATION`'s dispatches: its one
 /// compute entry.
-pub const SHADER_GENERATED_MARK: u32 = 33;
+pub const SHADER_GENERATION_MARK: u32 = 33;
 /// The eye's clip levels folded over their bricks, generated with the cast
 /// from pxl-spec-core's `clipmap::fold`: its one compute entry.
-pub const SHADER_JOINED: u32 = 34;
+pub const SHADER_FOLD: u32 = 34;
 /// A light's share of the air's volume, a column of froxels a workgroup
 /// (atmos_froxel.wgsl): its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 35;
@@ -76,14 +76,14 @@ pub const SHADER_ATMOS_FROXEL: u32 = 35;
 /// gave back pushed after: a compute entry each.
 pub const SHADER_WAY_FREE: u32 = 36;
 pub const SHADER_WAY_TREE: u32 = 37;
-pub const SHADER_WAY_FREED: u32 = 38;
+pub const SHADER_WAY_RETURN: u32 = 38;
 /// The camera grid's beam rays, a thread a corner, and where each cell's
 /// pixels start off them, generated with the cast from pxl-spec-core's
 /// `beam`: a compute entry each.
 pub const SHADER_BEAM: u32 = 39;
 pub const SHADER_CELL: u32 = 40;
 /// The pixels the cast's reading walk missed, walked again writing the
-/// observed pyramid, and the pyramid forgotten (pxl-spec-core `observed`): a
+/// observed pyramid, and the pyramid forgotten (pxl-spec-core `pyramid`): a
 /// compute entry each.
 pub const SHADER_MISS: u32 = 41;
 pub const SHADER_FORGET: u32 = 42;
@@ -111,7 +111,7 @@ pub const SHADER_CAMERA_GRID: u32 = 48;
 pub const SHADER_SAMPLE_BOX: u32 = 49;
 pub const SHADER_RASTER: u32 = 50;
 /// The pixels the cast's reading walk missed, walked again from their list
-/// (pxl-spec-core `observed::MARKS_AT`), a thread each: a compute entry.
+/// (pxl-spec-core `pyramid::MARKS_AT`), a thread each: a compute entry.
 pub const SHADER_MISS_LIST: u32 = 51;
 /// What lies about each box's face, asked once a box (pxl-spec-core
 /// `raster::ARGS_FACES`): a compute entry.
@@ -121,12 +121,12 @@ pub const SHADER_FACE: u32 = 52;
 /// where the decor and the actors drawn stand; then those they read
 /// (`light::reads_at`): compute entries.
 pub const SHADER_LIGHT_MARK: u32 = 53;
-pub const SHADER_LIGHT_MARK_DRAWN: u32 = 54;
+pub const SHADER_LIGHT_MARK_DRAWS: u32 = 54;
 pub const SHADER_LIGHT_PROPAGATE: u32 = 55;
-/// Which candidates of a slot `SHADER_GENERATED_MARK` listed the thinning
-/// retains, a clip level cell a thread, for `SHADER_GENERATED` to generate: its
+/// Which candidates of a slot `SHADER_GENERATION_MARK` listed the thinning
+/// retains, a clip level cell a thread, for `SHADER_GENERATION` to generate: its
 /// one compute entry.
-pub const SHADER_GENERATED_THIN: u32 = 56;
+pub const SHADER_GENERATION_THIN: u32 = 56;
 /// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
 pub const SHADER_SCREEN_FINISH: u32 = 57;
 /// The world's color gathered over frames (screen_resolve.wgsl).
@@ -157,7 +157,7 @@ pub const SHADER_LIGHT_GATE: u32 = 65;
 pub const SHADER_SCREEN_BOUND: u32 = 66;
 /// An actor where it was and where it is, its fragments marking their screen
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
-pub const SHADER_SKINNED_MARK: u32 = 67;
+pub const SHADER_SKINNED_MESH_MARK: u32 = 67;
 /// The tiles of the light's box the box slid onto, or whose eye moved past
 /// the margin of what their walks asked (pxl-spec-core `light::holds`): a
 /// compute entry.
@@ -183,9 +183,9 @@ pub const SHADER_HIT_FACES: u32 = 76;
 pub const SHADER_BOX_ARGS: u32 = 77;
 /// What each tile the light's cast casts holds by, gathered off its beam
 /// rays and samples, and lowered by its listed slots' walks (pxl-spec-core
-/// `light::HELD_MARGIN`, `light::miss_word`): compute entries.
-pub const SHADER_LIGHT_HELD: u32 = 78;
-pub const SHADER_LIGHT_MISS_HELD: u32 = 79;
+/// `light::HOLD_MARGIN`, `light::miss_word`): compute entries.
+pub const SHADER_LIGHT_MARGIN: u32 = 78;
+pub const SHADER_LIGHT_MISS_MARGIN: u32 = 79;
 pub const SHADERS: u32 = 80;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
@@ -211,8 +211,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     lit!["paint", "box"],
     // SHADER_DECOR
     lit!["place", "instance", "decor_place", "decor"],
-    // SHADER_SKINNED
-    lit!["place", "skinned_place", "skinned"],
+    // SHADER_SKINNED_MESH
+    lit!["place", "skinned_place", "skinned_mesh"],
     // SHADER_LOCATION_ZONE
     &[
         "frame",
@@ -332,7 +332,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "tile_word",
         "screen_tiles",
         "screen_ray",
-        "screen_lit"
+        "screen_shade"
     ],
     // SHADER_CAST
     &["cast.gen"],
@@ -340,20 +340,20 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["bound.gen"],
     // SHADER_HEIGHT
     &["height.gen"],
-    // SHADER_GENERATED
+    // SHADER_GENERATION
     &["decor.gen"],
-    // SHADER_GENERATED_CNT
+    // SHADER_GENERATION_CNT
     &["decor_cnt.gen"],
-    // SHADER_GENERATED_ARGS
+    // SHADER_GENERATION_ARGS
     &["decor_args.gen"],
-    // SHADER_GENERATED_COMPACT
+    // SHADER_GENERATION_COMPACT
     &["decor_compact.gen"],
     // SHADER_WAY
     &["way.gen"],
-    // SHADER_GENERATED_MARK
+    // SHADER_GENERATION_MARK
     &["decor_mark.gen"],
-    // SHADER_JOINED
-    &["joined.gen"],
+    // SHADER_FOLD
+    &["fold.gen"],
     // SHADER_ATMOS_FROXEL
     &[
         "atmos_medium",
@@ -366,8 +366,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["way_free.gen"],
     // SHADER_WAY_TREE
     &["way_tree.gen"],
-    // SHADER_WAY_FREED
-    &["way_freed.gen"],
+    // SHADER_WAY_RETURN
+    &["way_return.gen"],
     // SHADER_BEAM
     &["beam.gen"],
     // SHADER_CELL
@@ -398,11 +398,11 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["face.gen"],
     // SHADER_LIGHT_MARK
     &["light_mark.gen"],
-    // SHADER_LIGHT_MARK_DRAWN
-    &["light_mark_drawn.gen"],
+    // SHADER_LIGHT_MARK_DRAWS
+    &["light_mark_draws.gen"],
     // SHADER_LIGHT_PROPAGATE
     &["light_propagate.gen"],
-    // SHADER_GENERATED_THIN
+    // SHADER_GENERATION_THIN
     &["decor_thin.gen"],
     // SHADER_SCREEN_FINISH
     &[
@@ -437,7 +437,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_SCREEN_BOUND
     &["tile_word", "screen_tiles", "screen_bound"],
-    // SHADER_SKINNED_MARK
+    // SHADER_SKINNED_MESH_MARK
     &["frame", "place", "skinned_place", "tile_mark"],
     // SHADER_LIGHT_DETAIL
     &["light_detail.gen"],
@@ -465,8 +465,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["hit_faces.gen"],
     // SHADER_BOX_ARGS
     &["box_args"],
-    // SHADER_LIGHT_HELD
-    &["light_held.gen"],
-    // SHADER_LIGHT_MISS_HELD
-    &["light_miss_held.gen"],
+    // SHADER_LIGHT_MARGIN
+    &["light_margin.gen"],
+    // SHADER_LIGHT_MISS_MARGIN
+    &["light_miss_margin.gen"],
 ];

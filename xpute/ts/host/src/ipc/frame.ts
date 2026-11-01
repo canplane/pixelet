@@ -32,6 +32,6 @@ export function id_of(tag: u32): u32 {
 }
 
 /** The tag of a frame of `port`'s, its id or subject `id`. */
-export function tagged(port: u32, id: u32): u32 {
+export function tag_of(port: u32, id: u32): u32 {
   return ((port << PORT_SHIFT) | id) >>> 0;
 }

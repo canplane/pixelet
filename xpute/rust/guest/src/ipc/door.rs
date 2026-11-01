@@ -100,10 +100,10 @@ impl Door {
 
     /// An event for `port`.
     pub fn raise(&self, port: u32, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
-        self.post_in_place(frame::tagged(port, 0), cmd, 0, 0, |out: &mut [u8]| {
+        self.post_in_place(frame::tag_of(port, 0), cmd, 0, 0, |out: &mut [u8]| {
             let mut w = PacketWriter::new(out, cnt);
             f(&mut w);
-            w.fitted()
+            w.fit_len()
         });
     }
 
@@ -128,7 +128,7 @@ impl Door {
                 break;
             };
             let result = match self.sq.pkt(&f) {
-                Ok(pkt) => match applied(&f, pkt, &mut handle) {
+                Ok(pkt) => match apply_frame(&f, pkt, &mut handle) {
                     Ok(Some(val)) => Ok(val),
                     Ok(None) => Err(Errno::ENOSYS as i32),
                     Err(e) => Err(e.errnum as i32),
@@ -152,7 +152,7 @@ impl Door {
 
 /// The host's frames applied, NOP answering its value and an open's
 /// completion handed over; any other sender's handed to the program.
-fn applied(
+fn apply_frame(
     f: &frame::Frame,
     pkt: Option<&[u8]>,
     handle: &mut impl FnMut(Submission) -> Outcome,

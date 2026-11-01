@@ -18,7 +18,7 @@ use crate::gpu::upload::{Draws, Uploads};
 /// hides gizmos and nothing of the world hides one. Each set takes its own
 /// translation, a draw's uniform a set.
 pub struct DebugPass {
-    built: Pipeline,
+    pipeline: Pipeline,
     faces: Pipeline,
     frame_group: u32,
     uniforms: DrawUniforms,
@@ -34,16 +34,16 @@ impl DebugPass {
         sky_buf: u32,
         align: u32,
     ) -> DebugPass {
-        let built = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
+        let pipeline = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
-        let frame_group = g.bind_group(built.layouts[0], &[buf_entry(0, frame_buf)]);
+        let frame_group = g.bind_group(pipeline.layouts[0], &[buf_entry(0, frame_buf)]);
         let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, g.canvas());
         let grid_group = g.bind_group(
             grid.layouts[0],
             &[buf_entry(0, frame_buf), buf_entry(19, sky_buf)],
         );
         DebugPass {
-            built,
+            pipeline,
             faces,
             frame_group,
             uniforms: DrawUniforms::new(16, align),
@@ -56,7 +56,7 @@ impl DebugPass {
         let sets = draws.of(PIPELINE_DEBUG);
         self.uniforms.write(
             g,
-            self.built.layouts[1],
+            self.pipeline.layouts[1],
             sets.len() as u32,
             sets,
             moved,
@@ -104,7 +104,7 @@ impl DebugPass {
                 encoder,
                 &pass_desc(0, Load::Clear, depth, Load::Clear, 0.0, stamp.pass()),
             );
-            g.set_pipeline(pass, self.faces.pipeline);
+            g.set_pipeline(pass, self.faces.id);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
             for (k, _, buf, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
                 let (group, off) = slots.at(k as u32);
@@ -136,7 +136,7 @@ impl DebugPass {
                     &pass_desc(canvas, Load::Load, depth, Load::Clear, 0.0, stamp.pass()),
                 );
             }
-            g.set_pipeline(pass, self.built.pipeline);
+            g.set_pipeline(pass, self.pipeline.id);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
             for (k, _, buf, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
                 let (group, off) = slots.at(k as u32);
@@ -147,7 +147,7 @@ impl DebugPass {
             }
         }
         if grid {
-            g.set_pipeline(pass, self.grid.pipeline);
+            g.set_pipeline(pass, self.grid.id);
             g.set_bind_group(pass, 0, self.grid_group, &[]);
             g.draw(pass, 3, 1, 0, 0);
         }

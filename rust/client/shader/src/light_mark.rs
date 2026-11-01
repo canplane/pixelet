@@ -24,7 +24,7 @@ use crate::light::{cast_number, footprint, light_of, size, stand, stand_between,
 /// by, so none needs an atomic, and only by the first to find it unmarked
 /// (light.rs `stand`). Run after the eye's rays, before the propagation
 /// (`light_propagate_cs`); the drawn receivers stand apart
-/// (`light_mark_drawn_cs`).
+/// (`light_mark_draws_cs`).
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_mark_cs"))]
 pub fn light_mark_cs(
     #[spirv(global_invocation_id)] id: UVec3,

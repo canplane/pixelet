@@ -153,14 +153,14 @@ fn freed_reused() {
     // SAFETY: the range is the test's own, here and below.
     let p = unsafe { heap.malloc(sz) };
     assert!(!p.is_null());
-    let reached = heap.used();
+    let reached = heap.peak();
 
     for _ in 0..8 {
         unsafe { heap.free(p, sz) };
         let q = unsafe { heap.malloc(sz) };
         assert_eq!(q, p, "the same request after the same free moved");
         assert_eq!(
-            heap.used(),
+            heap.peak(),
             reached,
             "a reuse reached further into the range"
         );

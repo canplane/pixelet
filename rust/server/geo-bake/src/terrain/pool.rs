@@ -30,9 +30,9 @@ const SIDE: u32 = TILE_CELLS / BRICK;
 #[derive(Default)]
 struct Tally {
     bricks: BTreeMap<Zoom, FnvHashMap<[i32; 2], u64>>,
-    taken: u64,
+    peak_groups: u64,
     /// Each tile's that takes anything, as the set will keep it.
-    kept: Vec<(Tile, String)>,
+    tiles: Vec<(Tile, String)>,
 }
 
 /// The set's ways' trees fit the pool, and what it will keep of each tile
@@ -46,7 +46,7 @@ pub fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, String)>, 
     let parts: Vec<Result<Tally, String>> = std::thread::scope(|s| {
         let runs: Vec<_> = tiles
             .chunks(chunk)
-            .map(|part| s.spawn(move || held(set, base, part)))
+            .map(|part| s.spawn(move || set_bricks(set, base, part)))
             .collect();
         runs.into_iter()
             .map(|r| r.join().unwrap_or_else(|_| Err("a worker panicked".into())))
@@ -55,21 +55,21 @@ pub fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, String)>, 
     let mut all = Tally::default();
     for part in parts {
         let part = part?;
-        all.taken = all.taken.max(part.taken);
+        all.peak_groups = all.peak_groups.max(part.peak_groups);
         for (zoom, bricks) in part.bricks {
             all.bricks.entry(zoom).or_default().extend(bricks);
         }
-        all.kept.extend(part.kept);
+        all.tiles.extend(part.tiles);
     }
     let worst: BTreeMap<Zoom, ([i32; 2], u64)> = all
         .bricks
         .iter()
         .map(|(&cell, bricks)| (cell, most(bricks)))
         .collect();
-    let needs = terrain::pool_needs(|cell| worst.get(&cell).map_or(0, |w| w.1), all.taken);
+    let needs = terrain::pool_needs(|cell| worst.get(&cell).map_or(0, |w| w.1), all.peak_groups);
     if needs <= u64::from(POOL_CHILD_GROUPS) {
-        all.kept.sort_unstable_by_key(|(p, _)| *p);
-        return Ok(all.kept);
+        all.tiles.sort_unstable_by_key(|(p, _)| *p);
+        return Ok(all.tiles);
     }
     let (cell, (first, n)) = worst
         .iter()
@@ -96,21 +96,21 @@ pub fn fits(set: &StagedSet<'_>, workers: usize) -> Result<Vec<(Tile, String)>, 
         first[0],
         first[1],
         under.join(" "),
-        all.taken
+        all.peak_groups
     ))
 }
 
 /// The bricks of `tiles` the set holds, each its tree's child groups: as each
 /// tile kept them, or made again from the tile where the set as it is
 /// keeps nothing (`base` none, a set baked before it did).
-fn held(
+fn set_bricks(
     set: &StagedSet<'_>,
     base: Option<&FnvHashMap<Tile, String>>,
     tiles: &[Tile],
 ) -> Result<Tally, String> {
     let mut out = Tally::default();
     for &p in tiles {
-        let fit = match set.kept(p, base)? {
+        let fit = match set.fit_of(p, base)? {
             Some(None) => continue,
             Some(Some(line)) => of_line(&line).map_err(|e| format!("{}: {e}", p.name()))?,
             None => {
@@ -126,15 +126,15 @@ fn held(
         }
         let cell = GROUND.cell_zoom(p.zoom);
         let bricks = out.bricks.entry(cell).or_default();
-        for &(k, held) in &fit.held {
+        for &(k, held) in &fit.bricks {
             let at = [
                 p.at[0] * SIDE as i32 + (k % SIDE) as i32,
                 p.at[1] * SIDE as i32 + (k / SIDE) as i32,
             ];
             bricks.insert(at, u64::from(held));
         }
-        out.taken = out.taken.max(u64::from(fit.taken));
-        out.kept.push((p, line(&fit)));
+        out.peak_groups = out.peak_groups.max(u64::from(fit.peak_groups));
+        out.tiles.push((p, line(&fit)));
     }
     Ok(out)
 }
@@ -142,8 +142,8 @@ fn held(
 /// What a tile takes as the set keeps it beside the tile: the most a brick
 /// takes, then each brick with ways as its index and the child groups it holds.
 pub fn line(fit: &Fit) -> String {
-    let mut out = fit.taken.to_string();
-    for (k, held) in &fit.held {
+    let mut out = fit.peak_groups.to_string();
+    for (k, held) in &fit.bricks {
         out += &format!(" {k}:{held}");
     }
     out
@@ -159,7 +159,10 @@ fn of_line(line: &str) -> Result<Fit, String> {
             Ok((k.parse().map_err(|_| bad())?, n.parse().map_err(|_| bad())?))
         })
         .collect::<Result<_, String>>()?;
-    Ok(Fit { held, taken })
+    Ok(Fit {
+        bricks: held,
+        peak_groups: taken,
+    })
 }
 
 /// The placement of `ACROSS` bricks a side holding the most of `bricks`:

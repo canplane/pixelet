@@ -70,7 +70,7 @@ pub const FILL_BRICK_MS: f32 = 0.22;
 pub const FILL_SHARE_MS: f32 = 4.0;
 /// The bricks a frame hands the fill at most, nearest first (pxl-kernel
 /// domain/layer/terrain/clipmap.rs `due`): its share less its passes, over a brick.
-pub const HANDED: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
+pub const HAND_CAP: u32 = ((FILL_SHARE_MS - FILL_MS) / FILL_BRICK_MS) as u32;
 
 /// A brick handed to the GPU's fill, in words: its slot, where it lies in its
 /// tile (`place_word`, in bricks), its cells' zoom, its clip level's as the
@@ -241,7 +241,7 @@ pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_BRICK_SEGMENTS.div_ce
 pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_BRICK_SEGMENTS * way::SEGMENT_WORDS as u32;
 
 /// A handed brick's scratch, the GPU's own for the frame it is filled
-/// (`HANDED` of them, each `way::tree::scratch_words` of the cells its
+/// (`HAND_CAP` of them, each `way::tree::scratch_words` of the cells its
 /// tree holds, `way::tree::SCRATCH_WORDS` at the renderer's cap): its
 /// columns' spans, the brick's and the ring of columns about it, which a
 /// column's cells read beside its own (`SPANS_AT`, pxl-spec-core fill.rs
@@ -306,7 +306,7 @@ pub const BRICK_WORDS: u32 = ROOT_AT + 1;
 pub const BACK_WORDS: u32 = BRICK_WORDS;
 
 /// A brick handed to the fill as a frame's fresh list holds it, a record
-/// each, `HANDED` at most: its words (`fill_words`), then what only its fill
+/// each, `HAND_CAP` at most: its words (`fill_words`), then what only its fill
 /// reads, gone with the frame — its four palette indices a cell, its tile's padded
 /// samples, two a word, and its lines.
 pub const PALETTE_AT: u32 = FILL_WORDS;

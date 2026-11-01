@@ -274,7 +274,7 @@ pub(super) type DeckCells = FnvHashMap<(i64, i64), (i32, i64)>;
 
 pub(super) struct Decks {
     pub(super) ys: Vec<(usize, Vec<i32>)>,
-    pub(super) laid: DeckCells,
+    pub(super) cells: DeckCells,
     /// The ways a bridge's ramp took, kept from a tunnel's approach.
     pub(super) ramp_ways: FnvHashSet<PartId>,
 }
@@ -985,7 +985,7 @@ fn road_decks(
                 .unwrap_or(ground);
             let way = &src.ways[&part];
             let denom = (cells.len() - 1).max(1) as f64;
-            lines.push(graded(
+            lines.push(grade_line(
                 way,
                 cells
                     .iter()
@@ -1029,7 +1029,7 @@ fn road_decks(
     }
     Decks {
         ys: out,
-        laid,
+        cells: laid,
         ramp_ways: claimed,
     }
 }
@@ -1287,7 +1287,7 @@ pub(super) fn decks(
             0,
         ));
     }
-    for (q, ys) in rail_decks(stretches, &obstacles, &solved.laid, scale) {
+    for (q, ys) in rail_decks(stretches, &obstacles, &solved.cells, scale) {
         lines.push(line_of(
             &stretches[q],
             &ys,

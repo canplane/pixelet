@@ -6,7 +6,7 @@
 //! (domain/scene/indicator/ghost.rs). Each is its group count, each
 //! group's instance count, then each group's columns, then the index list.
 
-use pxl_spec_core::generated::drawn::COLUMNS;
+use pxl_spec_core::generation::drawn::COLUMNS;
 
 /// A group's columns in one: `drawn::COLUMNS` f32 columns (x, y, z, spin,
 /// scale), then byte flags padded to a word.

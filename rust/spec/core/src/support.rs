@@ -40,7 +40,7 @@ impl<A: Copy> Line<A> {
     /// The line a walk from `origin` left where it ended at `node`
     /// (`cast::Keep`): what was handed it, `live`, and what was handed each
     /// node over it, by zoom.
-    pub fn kept(origin: [i32; 3], node: &Node, live: A, stack: &[A; DEPTH]) -> Line<A> {
+    pub fn of_walk(origin: [i32; 3], node: &Node, live: A, stack: &[A; DEPTH]) -> Line<A> {
         Line {
             at: node.idx(origin),
             zoom: node.zoom,
@@ -52,7 +52,7 @@ impl<A: Copy> Line<A> {
 
 impl<A: Copy> Keep<A> for ColumnSurface<A> {
     fn keep(&mut self, met: &Trace<A>, stack: &[A; DEPTH]) {
-        self.line = Line::kept(self.origin, &met.hit.node, met.hit.at, stack);
+        self.line = Line::of_walk(self.origin, &met.hit.node, met.hit.at, stack);
     }
 }
 
@@ -75,7 +75,7 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ColumnSur
         },
         origin: o,
     };
-    let met = cast::rooted(q, o, &ray, detail, Until::Opaque, &mut f, &mut ());
+    let met = cast::walk_from_root(q, o, &ray, detail, Until::Opaque, &mut f, &mut ());
     f.ends = met.ends;
     f.top = cast::top(o, &met.hit.node, met.hit.asset[0]);
     f
@@ -120,7 +120,7 @@ pub trait Ancestors<A: Copy> {
     fn at(&self) -> [i32; 3];
     fn zoom(&self) -> Zoom;
     /// What was handed its node over its own at `z`, its own at its zoom.
-    fn inherited(&self, z: Zoom) -> A;
+    fn ancestor(&self, z: Zoom) -> A;
 }
 
 impl<A: Copy> Ancestors<A> for Line<A> {
@@ -132,7 +132,7 @@ impl<A: Copy> Ancestors<A> for Line<A> {
         self.zoom
     }
 
-    fn inherited(&self, z: Zoom) -> A {
+    fn ancestor(&self, z: Zoom) -> A {
         if z == self.zoom {
             self.live
         } else {
@@ -174,11 +174,11 @@ impl<A: Copy, L: Ancestors<A>> Ancestors<A> for JoinedLine<'_, L, A> {
         self.sub.line.zoom
     }
 
-    fn inherited(&self, z: Zoom) -> A {
+    fn ancestor(&self, z: Zoom) -> A {
         if z < self.sub.low {
-            self.base.inherited(z)
+            self.base.ancestor(z)
         } else {
-            self.sub.line.inherited(z)
+            self.sub.line.ancestor(z)
         }
     }
 }
@@ -186,7 +186,7 @@ impl<A: Copy, L: Ancestors<A>> Ancestors<A> for JoinedLine<'_, L, A> {
 /// The deepest zoom at which the line `l` and node `c` of `zoom` share a
 /// node, no finer than either, and whether they share one at all: none
 /// where they lie in two roots.
-fn shared<A: Copy>(l: &impl Ancestors<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
+fn shared_zoom<A: Copy>(l: &impl Ancestors<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
     let (line, lz) = (l.at(), l.zoom());
     let mut z = if zoom < lz { zoom } else { lz };
     while z > 0 && !same(over(line, lz, z), over(c, zoom, z)) {
@@ -240,9 +240,9 @@ pub fn sub_line<Q: Query>(
     zoom: Zoom,
     c: [i32; 3],
 ) -> SubLine<Q::At> {
-    let (z, held) = shared(base, zoom, c);
+    let (z, held) = shared_zoom(base, zoom, c);
     let (from, low) = if held {
-        (base.inherited(z), z)
+        (base.ancestor(z), z)
     } else {
         (q.root(over(c, zoom, 0)), 0)
     };
@@ -265,9 +265,9 @@ pub fn sub_line<Q: Query>(
 /// handed down by its parent (`Query::child`), and from its own root where
 /// no node of the line holds it.
 pub fn asset<Q: Query>(q: &mut Q, l: &impl Ancestors<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
-    let (mut z, held) = shared(l, zoom, c);
+    let (mut z, held) = shared_zoom(l, zoom, c);
     let mut at = if held {
-        l.inherited(z)
+        l.ancestor(z)
     } else {
         z = 0;
         q.root(over(c, zoom, 0))
@@ -374,7 +374,7 @@ mod tests {
 
     impl Keep<At> for KeptLine {
         fn keep(&mut self, met: &Trace<At>, stack: &[At; DEPTH]) {
-            self.0 = Some(Line::kept(self.1, &met.hit.node, met.hit.at, stack));
+            self.0 = Some(Line::of_walk(self.1, &met.hit.node, met.hit.at, stack));
         }
     }
 
@@ -413,7 +413,7 @@ mod tests {
         };
         let beam = Ray::new([-0.45, 0.05, -1.0], 64.0);
         let mut first = KeptLine(None, o);
-        let met = cast::rooted(
+        let met = cast::walk_from_root(
             &mut Step,
             o,
             &beam,

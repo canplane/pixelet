@@ -72,7 +72,7 @@ impl Node {
     }
 
     /// What a shard holds: its rect grown by `SHARD_APRON`.
-    pub fn held(self) -> [f64; 4] {
+    pub fn apron_rect(self) -> [f64; 4] {
         let [x0, y0, x1, y1] = self.rect();
         [
             x0 - SHARD_APRON,

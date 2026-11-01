@@ -22,7 +22,7 @@
 namespace xpute {
 
 // Errno::enosys for a command the guest does not number.
-struct Applied {
+struct Outcome {
     Errno err = Errno::ok;
     std::int32_t val = 0;
 };
@@ -60,7 +60,7 @@ class Door {
 
     // An event for `port`.
     template <class Fill> void raise(std::uint32_t port, std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
-        post_in_place(frame::tagged(port, 0), cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
+        post_in_place(frame::tag_of(port, 0), cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
             xtp::PacketWriter w(out);
             w.branch(cnt, fill);
             Result<std::uint32_t> n = w.finish();
@@ -81,7 +81,7 @@ class Door {
             std::optional<Frame> f = sq_.peek();
             if (!f) break;
             Result<std::span<const std::uint8_t>> pkt = sq_.pkt(*f);
-            Applied a = pkt ? applied(*f, *pkt, opened, apply) : Applied{.err = pkt.error().errnum};
+            Outcome a = pkt ? apply_frame(*f, *pkt, opened, apply) : Outcome{.err = pkt.error().errnum};
             sq_.advance();
             if (a.err != Errno::ok) {
                 post(f->tag, f->cmd, frame::RES, static_cast<std::int32_t>(a.err));
@@ -98,7 +98,7 @@ class Door {
   private:
     bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.cap(); }
 
-    template <class Opened, class Apply> static Applied applied(const Frame &f, std::span<const std::uint8_t> pkt, Opened &opened, Apply &apply) noexcept {
+    template <class Opened, class Apply> static Outcome apply_frame(const Frame &f, std::span<const std::uint8_t> pkt, Opened &opened, Apply &apply) noexcept {
         if (frame::port_of(f.tag) != frame::HOST) return apply(f.cmd, pkt);
         if (f.cmd == static_cast<std::uint32_t>(abi::Command::NOP)) {
             if (pkt.empty()) return {};

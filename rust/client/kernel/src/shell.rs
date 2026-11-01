@@ -93,7 +93,7 @@ pub struct SnapshotInputs {
     stall: Option<Message>,
     declared: bool,
     /// The refused files by root and number, the first `.1` of them.
-    refused: ([(u32, u64); REFUSED_SHOWN], usize),
+    refused_files: ([(u32, u64); REFUSED_SHOWN], usize),
 }
 
 /// The refused files a snapshot names at once: every storage file, and as
@@ -142,12 +142,14 @@ fn snapshot_inputs() -> SnapshotInputs {
         previews,
         stall: stall(),
         declared: source::top().is_some(),
-        refused: {
+        refused_files: {
             let stored = StorageFile::ALL
                 .into_iter()
                 .filter(|&k| file::is_refused(k))
                 .map(|k| (root::STORAGE, u64::from(k.slot())));
-            let objects = repository::refused().iter().map(|&n| (root::OBJECT, n));
+            let objects = repository::refused_files()
+                .iter()
+                .map(|&n| (root::OBJECT, n));
             let mut refused = ([(0, 0); REFUSED_SHOWN], 0);
             for (at, file) in refused.0.iter_mut().zip(stored.chain(objects)) {
                 *at = file;
@@ -162,7 +164,7 @@ fn snapshot_inputs() -> SnapshotInputs {
 /// from: its makings and the marker draft's text.
 #[derive(Default)]
 pub struct SnapshotMemo {
-    shown: Option<SnapshotInputs>,
+    last_inputs: Option<SnapshotInputs>,
     text: String,
 }
 
@@ -171,10 +173,10 @@ impl SnapshotMemo {
     /// sent; taken as sent.
     pub fn take_moved(&mut self) -> Option<SnapshotInputs> {
         let (now, text) = (snapshot_inputs(), write::marker_draft().unwrap_or_default());
-        if self.shown == Some(now) && self.text == text {
+        if self.last_inputs == Some(now) && self.text == text {
             return None;
         }
-        self.shown = Some(now);
+        self.last_inputs = Some(now);
         self.text.clear();
         self.text.push_str(text);
         Some(now)
@@ -228,8 +230,8 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
         m_per_px: m_per_px(shown.u_per_px, shown.pivot),
         division: &|each| division_parts(shown.division, shown.u_per_px, each),
         previews: &shown.previews.0[..shown.previews.1],
-        refused: &|each| {
-            for (root, path) in &shown.refused.0[..shown.refused.1] {
+        refused_files: &|each| {
+            for (root, path) in &shown.refused_files.0[..shown.refused_files.1] {
                 each(&RefusedFile { root: *root, path });
             }
         },
@@ -237,7 +239,7 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);
-    w.fitted()
+    w.fit_len()
 }
 
 /// Why the server does not answer the world's reads now: failing, or given up.

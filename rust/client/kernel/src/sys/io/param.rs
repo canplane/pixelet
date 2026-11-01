@@ -39,7 +39,7 @@ pub const WRITES_A_TURN: u32 = 8;
 /// `bracket.origin.credits`: six on a page and on iOS, five on Android), and
 /// the Earth keeps four frames at most. A clip level is a tile's cells a side
 /// (pxl-spec-core `clipmap::CLIP_SIZE`), so it wants four tiles at most, and
-/// the fill hands `HANDED` bricks a frame, about a row of one clip level's: an
+/// the fill hands `HAND_CAP` bricks a frame, about a row of one clip level's: an
 /// eye that moves keeps the tiles of the few clip levels refilling at once,
 /// four clip levels' four. 6 + 4 + 16 is 26, and 28 is four whole runs of
 /// seven, since a run's slots past the cap would be borrowed and idle. A

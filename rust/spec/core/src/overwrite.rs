@@ -20,7 +20,7 @@ use crate::{Zoom, LEAF_CELL};
 pub const BRANCH: u32 = 1 << 31;
 
 /// The child group of the root what is placed is under.
-pub const PLACED: u32 = 0;
+pub const OBJECT_ROOT: u32 = 0;
 
 use crate::answer;
 use crate::answer::BoxWords;
@@ -30,13 +30,13 @@ use crate::answer::FULL;
 const FULL_BITS: u32 = FULL.trailing_zeros();
 
 /// The edits a frame hands what reads them at most (pxl-kernel
-/// domain/scene/decor/drawn.rs): each the columns an overwrite wrote, a box
+/// domain/scene/decor/gpu.rs): each the columns an overwrite wrote, a box
 /// of leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the kernel
 /// unions the rest into the last.
 pub const EDITS: u32 = 8;
 /// The boxes of leaf cells a frame's edits and a preview's cuts changed:
 /// the edits, and a preview's cut and left-out leaf as they were and as they
-/// are; past them the rest is joined into the last (pxl-render gpu/generated.rs
+/// are; past them the rest is joined into the last (pxl-render gpu/generator.rs
 /// `hold`). What reads those columns asks them again: decor's generation, the
 /// observed pyramid's forgetting.
 pub const BOXES: u32 = EDITS + 4;
@@ -338,7 +338,7 @@ pub fn val(columns: &impl Columns, held: NodeSlot, hide: Cut, zoom: Zoom, at: [i
 
 /// The share of its cube what the node holding `held` folds to fills, in
 /// `FULL`'s units (`value`): a leaf over it whole, a fold its share.
-pub fn filled(columns: &impl Columns, held: NodeSlot) -> u32 {
+pub fn fill_share(columns: &impl Columns, held: NodeSlot) -> u32 {
     if held.is_folded() {
         high(columns.data(held.slot()))
     } else {
@@ -458,7 +458,11 @@ pub fn over(
     Over {
         says,
         asset: v,
-        fill: if carved { FULL } else { filled(columns, held) },
+        fill: if carved {
+            FULL
+        } else {
+            fill_share(columns, held)
+        },
     }
 }
 
@@ -468,7 +472,7 @@ pub fn over(
 /// anything in, or all of it where they are one (not folded). None
 /// (`answer::BOX_NONE`) where nothing is placed. A preview's cut only makes
 /// air, so what is placed under it lies here still.
-pub fn bound(columns: &impl Columns, held: NodeSlot, zoom: Zoom) -> BoxWords {
+pub fn object_box(columns: &impl Columns, held: NodeSlot, zoom: Zoom) -> BoxWords {
     use crate::answer::{box_word, BOX_NONE, BOX_STEPS, BOX_WHOLE};
     if !held.holds() {
         return BOX_NONE;
@@ -577,22 +581,25 @@ mod tests {
         let branch = NodeSlot::branch(1, zoom);
         // Child 0 (low x, y, z) alone: the low half on every axis.
         assert_eq!(
-            box_of(bound(&ChildGroup(&[0]), branch, zoom)),
+            box_of(object_box(&ChildGroup(&[0]), branch, zoom)),
             ([0; 3], [512; 3])
         );
         // Child 5 (x high, y low, z high) alone.
         assert_eq!(
-            box_of(bound(&ChildGroup(&[5]), branch, zoom)),
+            box_of(object_box(&ChildGroup(&[5]), branch, zoom)),
             ([512, 0, 512], [1024, 512, 1024])
         );
         // Children 1 and 2: x and y each both halves, z the low.
         assert_eq!(
-            box_of(bound(&ChildGroup(&[1, 2]), branch, zoom)),
+            box_of(object_box(&ChildGroup(&[1, 2]), branch, zoom)),
             ([0; 3], [1024, 1024, 512])
         );
-        assert_eq!(bound(&ChildGroup(&[]), NodeSlot::NOTHING, zoom), BOX_NONE);
         assert_eq!(
-            bound(&ChildGroup(&[]), NodeSlot(1 << SLOT_SHIFT | zoom), zoom),
+            object_box(&ChildGroup(&[]), NodeSlot::NOTHING, zoom),
+            BOX_NONE
+        );
+        assert_eq!(
+            object_box(&ChildGroup(&[]), NodeSlot(1 << SLOT_SHIFT | zoom), zoom),
             BOX_WHOLE
         );
     }

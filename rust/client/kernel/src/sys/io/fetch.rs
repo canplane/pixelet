@@ -71,12 +71,12 @@ enum Receipt {
 
 struct Arrival {
     key: u64,
-    got: Receipt,
+    receipt: Receipt,
     net_ms: f64,
 }
 
 /// No more arrive at once than fetches are out, each on its credit.
-static ARRIVED: Global<List<Arrival, { MAX_CREDITS as usize }>> = Global::new();
+static ARRIVAL_QUEUE: Global<List<Arrival, { MAX_CREDITS as usize }>> = Global::new();
 
 /// An answer, a body or the source's absence, kept for its owner to take:
 /// what it does with it (admits a tile, opens a group) is the owner's. The
@@ -91,11 +91,11 @@ pub struct Answer {
 }
 
 /// No more are kept than fetches are out, each on its credit, oldest first.
-static ANSWERED: Global<List<Answer, { MAX_CREDITS as usize }>> = Global::new();
+static ANSWERS: Global<List<Answer, { MAX_CREDITS as usize }>> = Global::new();
 
 /// How many answers of one of `of` are not yet taken.
-pub fn answered(of: &[Stream]) -> usize {
-    ANSWERED
+pub fn answer_cnt(of: &[Stream]) -> usize {
+    ANSWERS
         .get(List::new)
         .iter()
         .filter(|a| of.contains(&a.stream))
@@ -104,8 +104,8 @@ pub fn answered(of: &[Stream]) -> usize {
 
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
 /// fetches are out, so the scan is short.
-pub fn take_answered(of: &[Stream]) -> Option<Answer> {
-    let all = ANSWERED.get(List::new);
+pub fn take_answer(of: &[Stream]) -> Option<Answer> {
+    let all = ANSWERS.get(List::new);
     let at = all.iter().position(|a| of.contains(&a.stream))?;
     Some(all.remove(at))
 }
@@ -116,8 +116,8 @@ pub fn on_answer_settled(key: u64, result: Result<(), Failure>, phases: Phases) 
 }
 static ARRIVALS: Global<Notify> = Global::new();
 
-fn arrived() -> &'static mut List<Arrival, { MAX_CREDITS as usize }> {
-    ARRIVED.get(List::new)
+fn arrival_queue() -> &'static mut List<Arrival, { MAX_CREDITS as usize }> {
+    ARRIVAL_QUEUE.get(List::new)
 }
 
 fn arrivals() -> &'static mut Notify {
@@ -159,9 +159,9 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
             got
         }
     };
-    arrived().push(Arrival {
+    arrival_queue().push(Arrival {
         key,
-        got,
+        receipt: got,
         net_ms: now() - at_ms,
     });
     arrivals().notify();
@@ -173,8 +173,8 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
 pub async fn fetch_task() {
     loop {
         notified(arrivals).await;
-        while !arrived().is_empty() {
-            let received = core::mem::take(arrived());
+        while !arrival_queue().is_empty() {
+            let received = core::mem::take(arrival_queue());
             next_turn(world_edge).await;
             for arrival in received {
                 yield_if_spent(world_edge).await;
@@ -184,7 +184,13 @@ pub async fn fetch_task() {
     }
 }
 
-fn on_fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
+fn on_fetch_arrived(
+    Arrival {
+        key,
+        receipt: got,
+        net_ms,
+    }: Arrival,
+) {
     let block = match got {
         Receipt::Read(block) => block,
         _ => None,
@@ -204,7 +210,7 @@ fn on_fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         Receipt::Absent | Receipt::Read(Some(_)) => {
             // An asset loads through the loader (sys/io/loader.rs), never a fetch: nothing would take its answer.
             xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
-            ANSWERED.get(List::new).push(Answer {
+            ANSWERS.get(List::new).push(Answer {
                 key,
                 stream,
                 subject,

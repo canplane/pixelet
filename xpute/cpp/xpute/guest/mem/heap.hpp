@@ -39,7 +39,7 @@ void set_heap(Allocator heap) noexcept;
 struct HeapStat {
     std::size_t range = 0;
     // A high-water mark, not a holding.
-    std::size_t used = 0;
+    std::size_t peak = 0;
     std::size_t live = 0;
     std::size_t run = 0;
     std::size_t slot = 0;
@@ -60,7 +60,7 @@ struct HeapStat {
 template <Range R> HeapStat heap_stat(const SlabMalloc<R> &a) noexcept {
     return HeapStat{
         .range = a.range_bytes(),
-        .used = a.used(),
+        .peak = a.peak(),
         .live = a.live(),
         .run = a.run_live(),
         .slot = a.slot_live(),

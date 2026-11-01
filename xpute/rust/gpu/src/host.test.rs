@@ -22,7 +22,7 @@ fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
 /// largest write a record makes.
 fn cfg(frame_latency: u32) -> Config {
     Config {
-        preferred: wgpu::TextureFormat::Bgra8Unorm,
+        preferred_format: wgpu::TextureFormat::Bgra8Unorm,
         configure_at: ConfigureAt::Here,
         frame_latency,
         upload_chunk_bytes: 1 << 16,
@@ -82,7 +82,7 @@ fn frame_ends_either_way() {
 fn lost_device_frames_released() {
     let (adapter, device, queue) = device();
     let mut h = host(&adapter, &device, &queue, 1);
-    let count = h.unfinished.clone();
+    let count = h.unfinished_frames.clone();
     assert!(h.admit());
     h.present();
     assert_eq!(

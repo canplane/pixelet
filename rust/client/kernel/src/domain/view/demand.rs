@@ -18,7 +18,7 @@ use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::Stream;
-use crate::sys::io::fetch::{answered, body, on_answer_settled, release, take_answered, Answer};
+use crate::sys::io::fetch::{answer_cnt, body, on_answer_settled, release, take_answer, Answer};
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
@@ -97,14 +97,14 @@ pub struct Layer {
     /// slots, the objects' shards about the eye or their top.
     pub slots: u32,
     /// A want's file arrived, by its subject, or its absence.
-    arrived: fn(u64, Option<Block>, &mut Phases) -> Result<(), Failure>,
+    on_arrival: fn(u64, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
 
 const fn layer<L: ObservedLayer>() -> Layer {
     Layer {
         stream: L::STREAM,
         slots: TileCache::<L>::SLOTS,
-        arrived: on_arrived::<L>,
+        on_arrival: on_arrived::<L>,
     }
 }
 
@@ -118,7 +118,7 @@ const LAYERS: [Layer; 5] = [
     Layer {
         stream: Stream::object,
         slots: repository::WANTS,
-        arrived: repository::on_arrived,
+        on_arrival: repository::on_arrived,
     },
 ];
 
@@ -153,7 +153,7 @@ pub struct Demand<L: ObservedLayer> {
     demand: Vec<Tile>,
     asks: FnvHashMap<Tile, Ask>,
     /// The tile cache's revision as it idled it (`idle`), none while it steps.
-    idled: Option<u32>,
+    idle_revision: Option<u32>,
 }
 
 impl<L: ObservedLayer> Default for Demand<L> {
@@ -171,7 +171,7 @@ impl<L: ObservedLayer> Default for Demand<L> {
                 TileCache::<L>::SLOTS as usize,
                 Default::default(),
             ),
-            idled: None,
+            idle_revision: None,
         }
     }
 }
@@ -319,7 +319,7 @@ impl<L: ObservedLayer> Demand<L> {
                 <= if matches!(L::ASK_SCOPE, AskScope::Floor) {
                     0
                 } else {
-                    TileCache::<L>::DST_TILES + L::PINNED
+                    TileCache::<L>::DST_TILES + L::PINNED_CNT
                 },
             ENOTRECOVERABLE,
             named
@@ -378,7 +378,7 @@ impl<L: ObservedLayer> Demand<L> {
     ///
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground; and `pinned`, the
-    /// tiles a reader that takes no coarser answer declares (`Base::PINNED`),
+    /// tiles a reader that takes no coarser answer declares (`Base::PINNED_CNT`),
     /// as the destination is. A layer with a top of its own is observed out
     /// to its own reach.
     pub fn step(&mut self, dst: Option<Tile>, pinned: &[Tile]) {
@@ -393,7 +393,7 @@ impl<L: ObservedLayer> Demand<L> {
         if o.is_none() && dst.is_none() && pinned.is_empty() {
             return;
         }
-        self.idled = None;
+        self.idle_revision = None;
         let now = Key { o, dst };
         if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
             let line = dst
@@ -426,14 +426,17 @@ impl<L: ObservedLayer> Demand<L> {
     /// holds moved since it last was (`TileCache::revision`), as asking
     /// nothing of what is unchanged changes nothing.
     pub fn idle(&mut self) {
-        if self.idled.is_some_and(|r| r == L::tile_cache().revision()) {
+        if self
+            .idle_revision
+            .is_some_and(|r| r == L::tile_cache().revision())
+        {
             return;
         }
         self.wants.clear();
         L::tile_cache().ask(&self.asks);
         declare(L::STREAM, &[]);
         self.last = None;
-        self.idled = Some(L::tile_cache().revision());
+        self.idle_revision = Some(L::tile_cache().revision());
     }
 }
 
@@ -476,7 +479,7 @@ pub fn admit_arrived(pass: &Pass) {
         of
     };
     let stat = pass.run(
-        0..answered(&OF),
+        0..answer_cnt(&OF),
         |_| {
             let Some(Answer {
                 key,
@@ -484,7 +487,7 @@ pub fn admit_arrived(pass: &Pass) {
                 subject,
                 block,
                 mut phases,
-            }) = take_answered(&OF)
+            }) = take_answer(&OF)
             else {
                 return false;
             };
@@ -494,7 +497,7 @@ pub fn admit_arrived(pass: &Pass) {
                 return false;
             }
             let result = match of_stream(stream) {
-                Some(l) => (l.arrived)(subject, block, &mut phases),
+                Some(l) => (l.on_arrival)(subject, block, &mut phases),
                 None => {
                     release(block);
                     Err(Errno::ENOTRECOVERABLE.into())

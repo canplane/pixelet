@@ -11,7 +11,7 @@ pub mod source;
 use crate::pyramid::Base;
 use crate::pyramid::StagedSet;
 use pxl_spec::bake::fold::fold_terrain;
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::{self, Fit, TerrainTile, Unfit};
 use pxl_spec::bake::tile::Occupancy;

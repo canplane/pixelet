@@ -58,7 +58,7 @@ template <Range R> class SlabMalloc {
     const BuddyMalloc<R> &pages() const noexcept { return buddy_; }
     const std::uintptr_t *stat() const noexcept { return buddy_.stat(); }
 
-    std::size_t used() const noexcept { return buddy_.used(); }
+    std::size_t peak() const noexcept { return buddy_.peak(); }
     std::size_t live() const noexcept { return buddy_.live(); }
     std::size_t range_bytes() const noexcept { return buddy_.range_bytes(); }
     std::uint32_t releases() const noexcept { return buddy_.releases(); }

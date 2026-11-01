@@ -9,7 +9,7 @@
 //! versions it names are the client's, which reads a tile under the one that
 //! serves it.
 
-use pxl_spec::bake::published::{BaseLayer, FORMAT};
+use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_sharded, key};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
@@ -47,7 +47,7 @@ fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
         .then(|| (first + row * n + i64::from(at[0]).rem_euclid(n)) as usize)
 }
 
-static DECLARED: Global<Option<Source>> = Global::new();
+static DECLARED_SOURCE: Global<Option<Source>> = Global::new();
 
 /// Declared once, at boot: what it says is read as long as the kernel runs.
 /// `format` is each kind's by its bake's number, and `shard` the shards'
@@ -59,7 +59,7 @@ pub fn declare<'a>(
     format: &[u32],
     shard: impl IntoIterator<Item = &'a str>,
 ) -> Result<(), Errno> {
-    let declared = DECLARED.get(Default::default);
+    let declared = DECLARED_SOURCE.get(Default::default);
     if declared.is_some() {
         return Err(Errno::EEXIST);
     }
@@ -67,18 +67,18 @@ pub fn declare<'a>(
     Ok(())
 }
 
-fn declared() -> Option<&'static Source> {
-    DECLARED.get(Default::default).as_ref()
+fn declared_source() -> Option<&'static Source> {
+    DECLARED_SOURCE.get(Default::default).as_ref()
 }
 
 /// The coarsest zoom the source supplies whole; none until it is declared.
 pub fn top() -> Option<Zoom> {
-    declared().map(|s| s.top_zoom)
+    declared_source().map(|s| s.top_zoom)
 }
 
 /// Whether a served shard is over or under `p`, of a kind held by shards.
 pub fn serves(layer: BaseLayer, p: Tile) -> bool {
-    !is_sharded(layer) || declared().is_some_and(|s| s.covers(p))
+    !is_sharded(layer) || declared_source().is_some_and(|s| s.covers(p))
 }
 
 /// Whether the ground at `[x, y]`, in units, is past the service area: the
@@ -99,17 +99,17 @@ pub struct ServiceArea;
 
 impl Area for ServiceArea {
     fn ends(&self) -> bool {
-        declared().is_some()
+        declared_source().is_some()
     }
     fn nine(&self, key: u32) -> u32 {
-        declared().map_or(0, |s| u32::from(s.nine[key as usize]))
+        declared_source().map_or(0, |s| u32::from(s.nine[key as usize]))
     }
 }
 
 /// The area's cells' nines by key, as a GPU's area reads them (`Area`);
 /// none before a source is declared.
 pub fn nines() -> &'static [u16] {
-    declared().map_or(&[], |s| &s.nine)
+    declared_source().map_or(&[], |s| &s.nine)
 }
 
 impl Source {

@@ -286,10 +286,10 @@ pub struct Read {
 
 enum Stage {
     Opening,
-    /// Filled by the host after the turn `asked` ends.
+    /// Filled by the host after the turn `asked_turn` ends.
     Reading {
         bytes: Vec<u8>,
-        asked: u32,
+        asked_turn: u32,
     },
     Done(Result<Vec<u8>, Errno>),
 }
@@ -371,8 +371,8 @@ impl Drop for Read {
 impl Program {
     /// An open answered: an errno ends its read, a size has the host fill a
     /// buffer of it after this turn.
-    fn opened(&mut self, opened: &SysOpened) {
-        if self.files.opened(&mut self.sys, opened).is_none() {
+    fn complete_open(&mut self, opened: &SysOpened) {
+        if self.files.complete_open(&mut self.sys, opened).is_none() {
             return;
         }
         let Some(r) = self.reads.iter_mut().find(|r| r.fd == opened.fd) else {
@@ -395,7 +395,7 @@ impl Program {
         self.files.close(&mut self.sys, opened.fd);
         r.got = Stage::Reading {
             bytes,
-            asked: self.turn,
+            asked_turn: self.turn,
         };
     }
 
@@ -405,9 +405,9 @@ impl Program {
         self.turn += 1;
         let turn = self.turn;
         self.reads
-            .retain(|r| !(r.gone && turn > asked_of(&r.got).unwrap_or(0)));
+            .retain(|r| !(r.gone && turn > asked_turn_of(&r.got).unwrap_or(0)));
         for r in &mut self.reads {
-            if asked_of(&r.got).is_some_and(|asked| turn > asked) {
+            if asked_turn_of(&r.got).is_some_and(|asked| turn > asked) {
                 let Stage::Reading { bytes, .. } = core::mem::replace(&mut r.got, Stage::Opening)
                 else {
                     unreachable!()
@@ -425,9 +425,9 @@ impl Program {
     }
 }
 
-fn asked_of(got: &Stage) -> Option<u32> {
+fn asked_turn_of(got: &Stage) -> Option<u32> {
     match got {
-        Stage::Reading { asked, .. } => Some(*asked),
+        Stage::Reading { asked_turn, .. } => Some(*asked_turn),
         _ => None,
     }
 }
@@ -546,7 +546,7 @@ pub fn turn(handlers: &[(u32, Handler)]) -> f64 {
         });
     }
     for o in &answered {
-        p.opened(o);
+        p.complete_open(o);
     }
     // The tasks reach the program through `PROGRAM` themselves.
     task::poll();

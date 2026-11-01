@@ -49,7 +49,7 @@ const _: () = assert!(MISS >> (FILL_SHIFT + FILL_BITS) != 0);
 
 /// The walk again's dispatches, as the reading walk counts what it marks
 /// (pxl-shader `cast_cs`): over the marked pixels listed
-/// (`observed::MARKS_AT`), `MISS_LANES` a workgroup, `MISS_ACROSS`
+/// (`pyramid::MARKS_AT`), `MISS_LANES` a workgroup, `MISS_ACROSS`
 /// workgroups a row and a row each `MISS_LANES * MISS_ACROSS` listed
 /// (`MISS_ARGS_LIST`); over every pixel, 8 × 8 a workgroup, where any
 /// marked pixel found the list full, else none (`MISS_ARGS_WHOLE`); and the

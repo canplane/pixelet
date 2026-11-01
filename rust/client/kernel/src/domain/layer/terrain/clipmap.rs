@@ -12,7 +12,7 @@
 //! (`TileCache::again`), which the browser's cache answers.
 
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, handed, GroundId, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
+    brick_lines, gpu_cells, GroundId, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -20,7 +20,7 @@ use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use pxl_spec_core::area::{Area, Shard};
 use pxl_spec_core::clipmap::{
     self, Bricks, Entry, Presence, BRICK, BRICK_CELLS, BRICK_SHIFT, CLIP_LEVELS, ENTRIES,
-    EYE_CLIP_LEVELS, FIRST_CELL, HANDED, LEVELS, SLOTS,
+    EYE_CLIP_LEVELS, FIRST_CELL, HAND_CAP, LEVELS, SLOTS,
 };
 use pxl_spec_core::fill;
 use pxl_spec_core::ground::word;
@@ -32,14 +32,14 @@ use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::domain::layer::terrain::fixed::{cells_off, fill_off, CELLS_ARR_BYTES, RANGE};
 use crate::domain::layer::terrain::mirror::{mirror, Mirror, Unlaid};
+use crate::domain::layer::terrain::room::{cells_off, fill_off, CELLS_ARR_BYTES, RANGE};
 use crate::domain::layer::terrain::tile;
 use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
-use crate::sys::mem::fixed::arr;
+use crate::sys::mem::range::arr;
 use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::renderer::{BrickFill, CellsBack, Resident};
 
@@ -158,11 +158,11 @@ struct Clipmap {
     /// The packets kept when the entries were last stepped over: one given
     /// back may leave room to ask again for a tile whose packet was not
     /// kept (`tile::again_room`).
-    kept: u32,
-    /// The tiles the clip levels apart from the eye's want (`pinned`).
-    pinned: List<Tile, { PINNED_TILES as usize }>,
+    upload_cnt: u32,
+    /// The tiles the clip levels apart from the eye's want (`pinned_tiles`).
+    pinned_tiles: List<Tile, { PINNED_TILES as usize }>,
     /// The slots this turn hands the fill (`due`).
-    due: List<u32, { HANDED as usize }>,
+    due: List<u32, { HAND_CAP as usize }>,
     /// The heap as it was when it first refused a brick's child groups the
     /// mirror's room, while one waits on it (`WAITING`).
     heap: Option<Refusal>,
@@ -194,8 +194,8 @@ fn fresh() -> Clipmap {
         ticket: 0,
         read: 0,
         filled: true,
-        kept: 0,
-        pinned: List::new(),
+        upload_cnt: 0,
+        pinned_tiles: List::new(),
         due: List::new(),
         heap: None,
     }
@@ -211,7 +211,7 @@ fn cell_at(cell: Zoom, p: [f64; 2]) -> [i32; 2] {
 }
 
 /// The brick clip level `first` holds in entry `s`.
-fn wanted(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
+fn entry_brick(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
     let m = (clipmap::ACROSS - 1) as i32;
     let at = |o: i32, k: i32| o + ((k - (o & m)) & m);
     let q = [
@@ -258,7 +258,7 @@ fn planes() -> &'static mut Planes {
 
 /// The eye's clip levels' levels over their bricks folded again, a level at a
 /// time, as the GPU folds its own (pxl-spec-core `clipmap::fold`; pxl-shader
-/// `joined_cs`), over the bricks as they are held here. The writers of a brick
+/// `fold_cs`), over the bricks as they are held here. The writers of a brick
 /// a clip level wants or its presence are `assign_slots`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
 /// (`on_resident`), folded once after all of them (`refold`): no read of a
@@ -321,7 +321,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         || released
         || core::mem::take(&mut w.filled)
         || terrain.revision() != w.read
-        || kept != w.kept;
+        || kept != w.upload_cnt;
     for clip_level in 0..CLIP_LEVELS {
         let (center, laid) = layout(clip_level);
         let p = at[center as usize];
@@ -353,7 +353,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     if !stale {
         return false;
     }
-    w.kept = kept;
+    w.upload_cnt = kept;
     // A clip level that did not move wants its bricks where they are.
     for clip_level in 0..CLIP_LEVELS {
         let (cell, first) = (
@@ -365,7 +365,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         };
         for s in 0..ENTRIES {
             let entry = &mut w.entries[(clip_level * ENTRIES + s) as usize];
-            let want = wanted(cell, f, s);
+            let want = entry_brick(cell, f, s);
             if moved[clip_level as usize] || lost || entry.brick != want {
                 entry.brick = want;
                 terrain.moved_at(tile_of(cell, want).0);
@@ -400,7 +400,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     if !changed[EYE_CLIP_LEVELS as usize..].contains(&true) {
         return false;
     }
-    let was = core::mem::take(&mut w.pinned);
+    let was = core::mem::take(&mut w.pinned_tiles);
     for clip_level in EYE_CLIP_LEVELS..CLIP_LEVELS {
         let cell = w.clip_levels[clip_level as usize].cell;
         if first_of(w, clip_level).is_none() {
@@ -408,12 +408,12 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         }
         for s in 0..ENTRIES {
             let t = tile_of(cell, w.entries[(clip_level * ENTRIES + s) as usize].brick).0;
-            if !w.pinned.contains(&t) {
-                w.pinned.push(t);
+            if !w.pinned_tiles.contains(&t) {
+                w.pinned_tiles.push(t);
             }
         }
     }
-    was[..] != w.pinned[..]
+    was[..] != w.pinned_tiles[..]
 }
 
 /// Each brick waiting on the heap absent again, to be handed again, where
@@ -607,10 +607,10 @@ fn due(w: &mut Clipmap) {
             }
         }
         near.sort_unstable();
-        for &(_, i) in near.iter().take(HANDED as usize - w.due.len()) {
+        for &(_, i) in near.iter().take(HAND_CAP as usize - w.due.len()) {
             w.due.push(i);
         }
-        if w.due.len() == HANDED as usize {
+        if w.due.len() == HAND_CAP as usize {
             return;
         }
     }
@@ -619,7 +619,7 @@ fn due(w: &mut Clipmap) {
 /// The tiles of the bricks this turn hands (`due`) held with no frame,
 /// each once: void tiles, whose bricks are filled off their palette indices alone
 /// (`TileContent::Void`).
-pub fn voids() -> List<Tile, { HANDED as usize }> {
+pub fn voids() -> List<Tile, { HAND_CAP as usize }> {
     let (w, terrain) = (clipmap(), TerrainTile::tile_cache());
     let mut voids = List::new();
     for &b in w.due.iter() {
@@ -649,8 +649,8 @@ fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
 /// The tiles the pivot's and a destination's clip levels want, which the eye's
 /// demand need not name: held hard, as a destination's line is
 /// (pxl-kernel domain/view/demand.rs `observe`).
-pub fn pinned() -> &'static [Tile] {
-    &clipmap().pinned
+pub fn pinned_tiles() -> &'static [Tile] {
+    &clipmap().pinned_tiles
 }
 
 /// The eye's clip level at `cell`'s entries as it holds them, each brick
@@ -752,7 +752,7 @@ pub fn fill(tile: Tile, from: TileContent, write: &mut dyn FnMut(BrickFill<'_>) 
         TileContent::Void => &void,
     };
     let (indices, ele): (&[GroundId], &[i16]) = match from {
-        TileContent::Packet(pkt, _) => match handed(pkt, room) {
+        TileContent::Packet(pkt, _) => match gpu_cells(pkt, room) {
             Ok(h) => h,
             Err(_) => {
                 w.filled = true;

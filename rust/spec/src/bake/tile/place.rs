@@ -47,7 +47,7 @@ pub const PLACE_FIRST: Zoom = {
     let mut first = PLACE_LAST;
     let mut k = 0;
     while k < CATEGORIES.len() {
-        if let Some(z) = shown(k as u16 + 1) {
+        if let Some(z) = first_zoom(k as u16 + 1) {
             if z < first {
                 first = z;
             }
@@ -77,7 +77,7 @@ pub const NAME_CHARS: usize = 32;
 
 /// The zoom a category is first drawn from, as a dot or its icon; none for a category
 /// Carto draws no point for.
-pub const fn shown(category: u16) -> Option<Zoom> {
+pub const fn first_zoom(category: u16) -> Option<Zoom> {
     if category == 0 || category as usize > CATEGORIES.len() {
         return None;
     }
@@ -204,7 +204,7 @@ impl PlaceTile {
             .filter_map(|(point, place)| {
                 Some((
                     GROUND.cell_of(LEAF_ZOOM, &point),
-                    shown(place.category)?,
+                    first_zoom(place.category)?,
                     cut_name(place.name),
                     place,
                 ))
@@ -241,7 +241,7 @@ impl PlaceTile {
                 at: cell.in_tile(),
             })
         });
-        gathered(placed, Occupancy::ZERO)
+        tile_of(placed, Occupancy::ZERO)
     }
 }
 
@@ -276,11 +276,11 @@ pub fn fold(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
                 }),
         );
     }
-    gathered(placed, Occupancy::of_slots(kept))
+    tile_of(placed, Occupancy::of_slots(kept))
 }
 
 /// Places ascending by where they stand.
-fn gathered<'a>(
+fn tile_of<'a>(
     placed: impl IntoIterator<Item = PlaceEntry<'a>>,
     occupancy: Occupancy,
 ) -> PlaceTile {
@@ -375,7 +375,7 @@ fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
         .windows(2)
         .all(|w| [w[0][1], w[0][0]] < [w[1][1], w[1][0]]);
     let bad = |(_, h): (u32, PlaceEntry)| {
-        let shows = shown(h.place.category);
+        let shows = first_zoom(h.place.category);
         shows.is_none_or(|z| h.from < z || h.from > PLACE_LAST)
             || h.place.name.chars().nth(NAME_CHARS).is_some()
     };

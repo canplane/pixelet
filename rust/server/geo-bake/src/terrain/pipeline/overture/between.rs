@@ -47,7 +47,7 @@ impl Rules {
     }
 
     /// Where a flag among `wanted` holds, ranges `cell` apart joined (`cell_of`).
-    pub fn flagged(&self, wanted: &[&str], cell: f64) -> Vec<Range> {
+    pub fn flag_ranges(&self, wanted: &[&str], cell: f64) -> Vec<Range> {
         let has = |r: &Value| {
             r["values"].as_array().is_some_and(|v| {
                 v.iter()

@@ -33,7 +33,7 @@ pub use pxl_spec_core::screen::TILE as SIDE;
 
 /// The pixels a mark is grown by each way on the screen: the resolve's
 /// pixels beside it and a face's growth (pxl-spec-core param.rs
-/// `raster::GROWN`), with room.
+/// `raster::GROWTH`), with room.
 pub const MARK_MARGIN: f32 = 4.0;
 
 /// What a draw that changed marks: pixels, `[x, y, width, height]`, whose
@@ -84,7 +84,7 @@ pub struct Tiles {
     claimed_for: u32,
     /// The uniform the frame draws them by, the claimed alone or every one
     /// (`mark`); and, where the device has no stencil and a pass through the
-    /// gate is drawn whole, one that draws every tile (`drawn`).
+    /// gate is drawn whole, one that draws every tile (`after_gate`).
     uniform: u32,
     every: Option<u32>,
     /// Each tile's word, a row after another, the GPU's; the tiles across
@@ -99,7 +99,7 @@ pub struct Tiles {
     /// its head; and the tiles this frame's mark sets, 0 where it sets none.
     mark: Pipeline,
     mark_group: u32,
-    mark_bound: u32,
+    mark_binding: u32,
     mark_uniform: u32,
     mark_cnt: u32,
     /// The tiles the frame's marks cover, from the first to past the last,
@@ -153,7 +153,7 @@ impl Tiles {
             marked_at: 0,
             mark: pipelines.build_compute(g, SHADER_SCREEN_MARK, &MARK_GROUP),
             mark_group: 0,
-            mark_bound: 0,
+            mark_binding: 0,
             mark_uniform: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -263,7 +263,7 @@ impl Tiles {
             return;
         }
         let g = ctx.g;
-        if self.changed_at != self.mark_bound {
+        if self.changed_at != self.mark_binding {
             release(self.mark_group);
             self.mark_group = g.bind_group(
                 self.mark.layouts[0],
@@ -272,25 +272,25 @@ impl Tiles {
                     buf_entry(1, self.changed_at),
                 ],
             );
-            self.mark_bound = self.changed_at;
+            self.mark_binding = self.changed_at;
         }
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
         g.set_bind_group(pass, 0, self.mark_group, &[]);
-        g.set_pipeline(pass, self.mark.pipeline);
+        g.set_pipeline(pass, self.mark.id);
         g.dispatch(pass, self.mark_cnt.div_ceil(64), 1, 1);
         g.end(pass);
     }
 
     /// The words and the uniform as this frame draws them, the claimed alone
     /// or every one (`mark`).
-    pub fn bound(&self) -> (u32, u32) {
+    pub fn this_frame(&self) -> (u32, u32) {
         (self.changed_at, self.uniform)
     }
 
     /// The words and the uniform the passes after one through the gate draw
-    /// by: as it draws (`bound`), or every one where the device has no
+    /// by: as it draws (`this_frame`), or every one where the device has no
     /// stencil and the pass through the gate is drawn whole.
-    pub fn drawn(&self) -> (u32, u32) {
+    pub fn after_gate(&self) -> (u32, u32) {
         (self.changed_at, self.every.unwrap_or(self.uniform))
     }
 
@@ -312,13 +312,13 @@ impl Tiles {
     /// marks this frame and before a draw reads them, timed in the span
     /// `mark` (box_args.wgsl); none where the tiles keep no box.
     pub fn dispatch_box_args(&self, ctx: &mut RenderContext) {
-        let Some((_, built, group)) = &self.box_args else {
+        let Some((_, pipeline, group)) = &self.box_args else {
             return;
         };
         let g = ctx.g;
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
         g.set_bind_group(pass, 0, *group, &[]);
-        g.set_pipeline(pass, built.pipeline);
+        g.set_pipeline(pass, pipeline.id);
         g.dispatch(pass, 1, 1, 1);
         g.end(pass);
     }

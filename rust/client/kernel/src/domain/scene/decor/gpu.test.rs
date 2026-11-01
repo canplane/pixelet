@@ -1,4 +1,4 @@
-// pxl-kernel/domain/scene/decor/drawn.test.rs
+// pxl-kernel/domain/scene/decor/gpu.test.rs
 
 use super::*;
 use crate::domain::scene::decor::param::{DECOR_IMPOSTOR_CELLS, DECOR_MODEL_CELLS};
@@ -29,7 +29,7 @@ fn decor_clip_levels_by_size() {
     let leaf = 1 << (LEAF_CELL - FIRST_CELL);
     // From a tuft to a ship, as it shows.
     for extent in [0.5, 2.0, 8.0, 40.0, 400.0] {
-        for (k, &bits) in shown_by(|_| extent).iter().enumerate() {
+        for (k, &bits) in shown_zooms_by(|_| extent).iter().enumerate() {
             let (d, at) = (&DECORS[k], |cell: Zoom| {
                 bits >> (cell - FIRST_CELL) & 1 == 1
             });

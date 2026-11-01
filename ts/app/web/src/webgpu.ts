@@ -18,7 +18,7 @@ let host: GpuHost | null = null;
  * answers into; given once by the guest's open (guest.ts), as it never moves. */
 let memory: ArrayBuffer | null = null;
 /** A canvas transfers once: an effect mounted again is handed the same one. */
-const transferred = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
+const offscreens = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
 /** In the order they were bound, so a device acquired again binds each slot's newest last. */
 const canvases = new Map<u32, OffscreenCanvas>();
 
@@ -116,10 +116,10 @@ export async function acquire(
 }
 
 export function bind(handle: u32, canvas: HTMLCanvasElement): void {
-  let offscreen = transferred.get(canvas);
+  let offscreen = offscreens.get(canvas);
   if (!offscreen) {
     offscreen = canvas.transferControlToOffscreen();
-    transferred.set(canvas, offscreen);
+    offscreens.set(canvas, offscreen);
   }
   canvases.delete(handle);
   canvases.set(handle, offscreen);

@@ -1,4 +1,4 @@
-// pxl-spec/bake/named.rs
+// pxl-spec/bake/name.rs
 
 //! A place's names as every bake stores them, whatever the source: its own
 //! name, and `(tag, name)` pairs in the languages it gives. Three leaves.

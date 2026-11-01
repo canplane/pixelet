@@ -49,10 +49,10 @@ const HOME: &str = "pxl-shader";
 /// anew under the lock, so cargo, which judges a path crate by its files'
 /// times, never takes another run's build for this one's.
 const WORK: &str = "/cache/w";
-const BUILT: &str =
+const SPVS: &str =
     "/cache/target/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
 /// How many sources' entries the machine keeps made, the most lately used.
-const KEPT: usize = 100;
+const SOURCE_CAP: usize = 100;
 
 /// Where the machine keeps the entries made of each sources' digest, one
 /// directory a digest: whatever checkout, export or worktree's sources it
@@ -128,12 +128,12 @@ made=/made/{digest}
 if [ {fresh} = true ] || [ ! -f $made/done ]; then
   rm -rf {WORK}
   cp -R /copy {WORK}
-  rm -rf {BUILT}
+  rm -rf {SPVS}
   cd {WORK}/rust/client/shader
   cargo run -q --release --locked -p pxl-shader-build
   rm -rf /made/.part
   mkdir /made/.part
-  cp {BUILT}/*.wgsl /made/.part/
+  cp {SPVS}/*.wgsl /made/.part/
   if [ -f $made/done ]; then
     if ! diff -r -x done /made/.part $made >/dev/null; then
       echo \"the build differs from what the machine made of {digest} before\" >&2
@@ -147,7 +147,7 @@ if [ {fresh} = true ] || [ ! -f $made/done ]; then
   fi
 fi
 ls -1t /made/*/done | tail -n +{} | while read f; do rm -rf \"${{f%/done}}\"; done",
-        KEPT + 1
+        SOURCE_CAP + 1
     );
     let status = Command::new("docker")
         .args(["run", "--rm", "--init", "--platform", "linux/arm64"])

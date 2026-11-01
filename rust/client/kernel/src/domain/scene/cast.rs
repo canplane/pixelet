@@ -82,7 +82,7 @@ pub fn overwrites() -> Overwrites<'static> {
         room: l.room,
         revision: l.revision,
         since: l.since,
-        written: l.written,
+        written_groups: l.written_groups,
     }
 }
 

@@ -227,7 +227,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
     (rows, ground)
 }
 
-/// Each clip level's entries folded a level at a time, as `joined_cs` folds
+/// Each clip level's entries folded a level at a time, as `fold_cs` folds
 /// them; `zero`, the zero entry, none, over a block a brick of which the
 /// clip level does not hold present: no bound, which only splits more.
 fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS as usize]> {

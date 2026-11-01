@@ -21,7 +21,7 @@ use crate::cast;
 use crate::cast::Spacing;
 use crate::cast::{Detail, End, Ray, Trace};
 use crate::eye;
-use crate::generated;
+use crate::generation;
 use crate::param::light;
 use crate::param::light::{SAMPLE, SPREAD};
 use crate::{axis, FRAC_W};
@@ -163,7 +163,7 @@ impl Light {
     }
 
     /// The tile of the box a receiver standing `v` units from the eye
-    /// stands on (pxl-shader light.rs `light_mark_cs`, `light_mark_drawn_cs`).
+    /// stands on (pxl-shader light.rs `light_mark_cs`, `light_mark_draws_cs`).
     pub fn tile_of(&self, v: [f32; 3]) -> [i32; 2] {
         let (at, tile) = (self.texel_at(v), TILE as f32);
         [
@@ -173,16 +173,16 @@ impl Light {
     }
 
     /// How many tiles either side of its own a drawn receiver stands on
-    /// (pxl-shader light.rs `light_mark_drawn_cs`): as many as half the widest
-    /// decor (`generated::WIDEST`) spans, at least one, as its tile is one a
+    /// (pxl-shader light.rs `light_mark_draws_cs`): as many as half the widest
+    /// decor (`generation::WIDEST`) spans, at least one, as its tile is one a
     /// point of it lies in.
     pub fn ring(&self) -> i32 {
         let across = TILE as f32 * libm::sqrtf(dot(self.across, self.across));
-        let half = generated::WIDEST as f32 / 2.0;
+        let half = generation::WIDEST as f32 / 2.0;
         (libm::ceilf(half / across) as i32).max(1)
     }
 
-    /// The way up the tallest decor (`generated::TALLEST`) on the box, in
+    /// The way up the tallest decor (`generation::TALLEST`) on the box, in
     /// tiles across and down, and the steps it takes a tile apart at most:
     /// a receiver standing on a tile reads the box up it, decor and the
     /// actors no taller (pxl-shader light.rs `light_propagate_cs`). The box is
@@ -190,7 +190,7 @@ impl Light {
     pub fn up(&self) -> ([f32; 2], u32) {
         let (low, top, tile) = (
             self.texel_at([0.0; 3]),
-            self.texel_at([0.0, 0.0, generated::TALLEST as f32]),
+            self.texel_at([0.0, 0.0, generation::TALLEST as f32]),
             TILE as f32,
         );
         let way = [(top[0] - low[0]) / tile, (top[1] - low[1]) / tile];
@@ -246,14 +246,14 @@ impl Light {
         [at(0), at(1)]
     }
 
-    /// The first of the held words (`held_at`) of box tile `tile` of the map
+    /// The first of the hold words (`hold_at`) of box tile `tile` of the map
     /// `size` texels a side: its slots' tile's, fixed in the world as the
     /// slots are, so the words hold where the box slides, its corner a whole
     /// number of tiles (pxl-render gpu/shadow.rs `aim`).
-    pub fn held(&self, size: u32, tile: [u32; 2]) -> u32 {
+    pub fn hold(&self, size: u32, tile: [u32; 2]) -> u32 {
         let (t, n) = (TILE, tiles(size));
         let at = |k: usize| ((tile[k] * t) as i32).wrapping_add(self.corner[k]) as u32 & (size - 1);
-        held_at(size) + ((at(1) / t) * n + at(0) / t) * HELD_WORDS
+        hold_at(size) + ((at(1) / t) * n + at(0) / t) * HOLD_WORDS
     }
 
     /// The light its words lay (`words`).
@@ -358,7 +358,7 @@ pub const STARTS_AT: usize = 2;
 pub const STARTS_VEC4S: usize = 11;
 
 /// The actors the host draws, receivers of the shadow map as decor is
-/// (pxl-shader light.rs `light_mark_drawn_cs`), past the starts: how many, the
+/// (pxl-shader light.rs `light_mark_draws_cs`), past the starts: how many, the
 /// first word of a vec4, then each where it stands, units from the eye, a
 /// vec4 each, as many as `ACTORS`; any past them marks nothing.
 pub const ACTORS_AT: usize = STARTS_AT + STARTS_VEC4S;
@@ -472,11 +472,11 @@ const _: () = assert!(
 );
 
 /// What a beam ray leaves, in words: the eye's beam rays' line
-/// (`beam::LINE_NODE`, `beam::LINE_HANDED`), then its origin
+/// (`beam::LINE_NODE`, `beam::LINE_INHERITANCE`), then its origin
 /// (`LINE_ORIGIN`), which its nodes are held from (`cast::Node::moved`), as
 /// every light ray starts apart; then the least margin of the nodes its walk
 /// asked (`LINE_MARGIN`, `cast::Margin`), f32 bits, which the tiles it feeds
-/// gather (pxl-shader light.rs `light_held_cs`).
+/// gather (pxl-shader light.rs `light_margin_cs`).
 pub const LINE_ORIGIN: u32 = beam::LINE_WORDS;
 pub const LINE_MARGIN: u32 = LINE_ORIGIN + 3;
 
@@ -578,7 +578,7 @@ pub const fn sample_words(size: u32) -> u32 {
 
 /// The least margin of the nodes each sample's walk asked (`cast::Margin`),
 /// f32 bits, a word a sample by its index, past the samples' words: what
-/// the tiles it feeds gather (pxl-shader light.rs `light_held_cs`).
+/// the tiles it feeds gather (pxl-shader light.rs `light_margin_cs`).
 pub const fn sample_margin(size: u32, idx: u32) -> u32 {
     sample_words(size) + idx
 }
@@ -590,7 +590,7 @@ pub const fn sample_margin(size: u32, idx: u32) -> u32 {
 /// (pxl-shader cast.rs `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
-/// (`observed::MARKS_CNT`), then a slot each, its X and its Y over 16 bits,
+/// (`pyramid::MARKS_CNT`), then a slot each, its X and its Y over 16 bits,
 /// which its walk writes over with what it tells its tile (`miss_word`).
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_margin(size, (size / SAMPLE) * (size / SAMPLE))
@@ -601,8 +601,8 @@ pub const fn misses_at(size: u32) -> u32 {
 }
 
 /// What a listed slot's walk tells its tile (pxl-shader light.rs
-/// `light_miss_cs`, `light_miss_held_cs`), in its place in the list: the
-/// slot's tile, `j · tiles + i` (`Light::held`'s order, fixed in the world),
+/// `light_miss_cs`, `light_miss_margin_cs`), in its place in the list: the
+/// slot's tile, `j · tiles + i` (`Light::hold`'s order, fixed in the world),
 /// over the high bits of the least margin of the nodes it asked
 /// (`cast::Margin`) under `MISS_TILE_SHIFT`, its low bits dropped, which
 /// only lowers it. A map's tiles fit over them (`MISSED_TILES`).
@@ -611,11 +611,11 @@ pub fn miss_word(size: u32, slot: [u32; 2], margin: f32) -> u32 {
     tile << MISS_TILE_SHIFT | margin.to_bits() >> (u32::BITS - MISS_TILE_SHIFT)
 }
 
-/// The held words (`held_at`) of the tile a listed slot's walk told
+/// The hold words (`hold_at`) of the tile a listed slot's walk told
 /// (`miss_word`), and the margin it told, f32 bits.
-pub const fn miss_held(size: u32, w: u32) -> (u32, u32) {
+pub const fn miss_hold(size: u32, w: u32) -> (u32, u32) {
     (
-        held_at(size) + (w >> MISS_TILE_SHIFT) * HELD_WORDS,
+        hold_at(size) + (w >> MISS_TILE_SHIFT) * HOLD_WORDS,
         (w & ((1 << MISS_TILE_SHIFT) - 1)) << (u32::BITS - MISS_TILE_SHIFT),
     )
 }
@@ -630,7 +630,7 @@ pub const MISSED_TILES: u32 = 1 << (u32::BITS - MISS_TILE_SHIFT);
 /// The tiles of the box a receiver stands on in a cast, past the misses: a
 /// word a tile (`TILE` texels a side), `tiles` a row, the number of the
 /// last cast a receiver stood on it in (`HEAD_CAST`; pxl-shader light.rs
-/// `light_mark_cs`, `light_mark_drawn_cs`): where the eye's pixels meet the
+/// `light_mark_cs`, `light_mark_draws_cs`): where the eye's pixels meet the
 /// world, and where the decor and the actors drawn stand.
 pub const fn stands_at(size: u32) -> u32 {
     misses_at(size) + size * size
@@ -678,24 +678,24 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
     coarse_at(size) + (j / COARSE) * coarse(size) + i / COARSE
 }
 
-/// What a tile cast in its epoch holds by, past the squares, `HELD_WORDS` a
-/// tile of slots (`Light::held`): the least margin of every node the walks
+/// What a tile cast in its epoch holds by, past the squares, `HOLD_WORDS` a
+/// tile of slots (`Light::hold`): the least margin of every node the walks
 /// that fed it asked (`cast::Margin`), f32 bits, gathered once off the beam
 /// rays and the samples that feed it, each of which keeps its own
-/// (`LINE_MARGIN`, `sample_margin`; pxl-shader light.rs `light_held_cs`),
-/// then lowered by each listed slot's walk (`miss_word`, `light_miss_held_cs`);
+/// (`LINE_MARGIN`, `sample_margin`; pxl-shader light.rs `light_margin_cs`),
+/// then lowered by each listed slot's walk (`miss_word`, `light_miss_margin_cs`);
 /// then where the eye stood, Q3, X, Y and Z, when the cast that cast it
 /// claimed it (`light_propagate_cs`).
 /// While the eye stands nearer than the margin to where it stood, every zoom
 /// those walks asked is asked again, so the tile holds what it would be cast
 /// anew to (`holds`; `light_detail_cs`).
-pub const fn held_at(size: u32) -> u32 {
+pub const fn hold_at(size: u32) -> u32 {
     coarse_at(size) + coarse(size) * coarse(size)
 }
 
-pub const HELD_MARGIN: u32 = 0;
-pub const HELD_EYE: u32 = 1;
-pub const HELD_WORDS: u32 = 4;
+pub const HOLD_MARGIN: u32 = 0;
+pub const HOLD_EYE: u32 = 1;
+pub const HOLD_WORDS: u32 = 4;
 
 /// What a cast within its epoch casts, listed as its tiles are claimed
 /// (pxl-shader light.rs `light_propagate_cs`): what feeds a claimed tile
@@ -730,7 +730,7 @@ pub const fn listed_room(size: u32, which: u32) -> u32 {
 
 /// The first of list `which`'s marks, a word a place (`LISTED_CORNERS`).
 pub const fn listed_marks_at(size: u32, which: u32) -> u32 {
-    let mut at = held_at(size) + tiles(size) * tiles(size) * HELD_WORDS;
+    let mut at = hold_at(size) + tiles(size) * tiles(size) * HOLD_WORDS;
     let mut k = 0;
     while k < which {
         at += listed_room(size, k);
@@ -758,7 +758,7 @@ pub const fn listed_per(side: u32) -> u32 {
 }
 
 /// The list's buffer's words: the beam's, the samples, their margins, the
-/// misses, the stands, the reads, their squares, the held words, the lists.
+/// misses, the stands, the reads, their squares, the hold words, the lists.
 pub const fn list_words(size: u32) -> u32 {
     listed_at(size, LISTS)
 }
@@ -1048,7 +1048,7 @@ mod tests {
             1.0,
         );
         let up = s.up();
-        let rise = generated::TALLEST as f32 * 4.0 / TILE as f32 * r;
+        let rise = generation::TALLEST as f32 * 4.0 / TILE as f32 * r;
         assert!(
             (up.0[0] - rise).abs() < 1e-4 && up.0[1].abs() < 1e-6,
             "{up:?}"
@@ -1093,7 +1093,7 @@ mod tests {
             let texel = libm::sqrtf(dot(s.across, s.across));
             for base in [[0.1, 0.2, -3.0], [0.37, -0.81, -2.5], [-0.66, 0.45, -3.3]] {
                 let stood = s.tile_of(base);
-                for h in [0.0, 0.7, 1.9, 3.1, generated::TALLEST as f32] {
+                for h in [0.0, 0.7, 1.9, 3.1, generation::TALLEST as f32] {
                     for (a, b) in [(0.0, 0.0), (3.5, 0.0), (-3.5, 0.0), (0.0, 3.5), (2.5, -2.5)] {
                         // A tap `(a, b)` texels off the point `h` up.
                         let p = [

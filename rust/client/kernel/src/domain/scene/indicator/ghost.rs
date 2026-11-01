@@ -42,9 +42,9 @@ enum Shape {
 
 #[derive(Default)]
 pub struct GhostDraw {
-    /// What `held` holds; none where nothing is drawn.
+    /// What `block` holds; none where nothing is drawn.
     shape: Option<Shape>,
-    held: MirroredBlock,
+    block: MirroredBlock,
     /// A box's, as written (write_lone_box).
     z_step: f64,
     /// A box's min corner, a decor instance's base.
@@ -169,13 +169,13 @@ impl GhostDraw {
 
     /// Whether there was one.
     pub fn clear(&mut self, draw: &mut DrawList) -> bool {
-        self.held.free(draw);
+        self.block.free(draw);
         self.shape.take().is_some()
     }
 
     /// None where the heap refused, so the next asks again.
     fn write(&mut self, draw: &mut DrawList, shape: Shape, instance: &[u8]) {
-        self.shape = self.held.write(draw, instance).then_some(shape);
+        self.shape = self.block.write(draw, instance).then_some(shape);
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
@@ -187,7 +187,7 @@ impl GhostDraw {
                 let unit = f64::from_bits(size_bits) as f32;
                 draw.draw_in(
                     PIPELINE_GHOST_BOX,
-                    self.held.handle,
+                    self.block.handle,
                     1,
                     0,
                     t,
@@ -200,7 +200,7 @@ impl GhostDraw {
                 let idx = GroupColumns::words(1) as u32;
                 draw.draw_instances(
                     PIPELINE_GHOST_DECOR,
-                    self.held.handle,
+                    self.block.handle,
                     group,
                     1,
                     [0, 1, idx],

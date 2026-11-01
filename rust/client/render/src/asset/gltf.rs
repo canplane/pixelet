@@ -132,7 +132,7 @@ fn u32_le(b: &[u8], at: usize) -> u32 {
 }
 
 #[track_caller]
-fn malformed() -> MarshalError {
+fn malformed_err() -> MarshalError {
     MarshalError::new(Errno::EBADMSG)
 }
 
@@ -162,7 +162,7 @@ pub async fn parse_gltf<P: Future<Output = ()>>(
             let end = (at + 8)
                 .checked_add(chunk_length)
                 .filter(|&end| end <= length)
-                .ok_or_else(malformed)?;
+                .ok_or_else(malformed_err)?;
             let data = &bytes[at + 8..end];
             if chunk_type == CHUNK_JSON {
                 text = core::str::from_utf8(data).ok();
@@ -171,14 +171,14 @@ pub async fn parse_gltf<P: Future<Output = ()>>(
             }
             at = end;
         }
-        let text = text.ok_or_else(malformed)?;
-        let json = read_json(text).ok_or_else(malformed)?;
+        let text = text.ok_or_else(malformed_err)?;
+        let json = read_json(text).ok_or_else(malformed_err)?;
         let mut buffers: Vec<&[u8]> = bin.into_iter().collect();
         buffers.extend_from_slice(external_buffers);
         read_document(json, &buffers, &pause, budget).await
     } else {
-        let text = core::str::from_utf8(bytes).map_err(|_| malformed())?;
-        let json = read_json(text).ok_or_else(malformed)?;
+        let text = core::str::from_utf8(bytes).map_err(|_| malformed_err())?;
+        let json = read_json(text).ok_or_else(malformed_err)?;
         read_document(json, external_buffers, &pause, budget).await
     }
 }
@@ -222,13 +222,13 @@ fn idx_of(v: Option<JsonValue>, len: usize) -> Result<Option<usize>, MarshalErro
             .as_f64()
             .and_then(|v| idx_below(v, len))
             .map(Some)
-            .ok_or_else(malformed),
+            .ok_or_else(malformed_err),
     }
 }
 
 /// A field that must be an index below `len`.
 fn idx_in(v: Option<JsonValue>, len: usize) -> Result<usize, MarshalError> {
-    idx_of(v, len)?.ok_or_else(malformed)
+    idx_of(v, len)?.ok_or_else(malformed_err)
 }
 
 /// A count or a byte offset, `default` when absent.
@@ -329,16 +329,16 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         convert: fn(f64) -> T,
     ) -> Result<Vec<T>, MarshalError> {
         (self.pause)().await;
-        let a = *self.accessors.get(idx).ok_or_else(malformed)?;
+        let a = *self.accessors.get(idx).ok_or_else(malformed_err)?;
         if a.sparse {
             return Err(MarshalError::new(Errno::ENOTSUP));
         }
         if a.kind != Some(kind) {
-            return Err(malformed());
+            return Err(malformed_err());
         }
-        let width = type_size(kind).ok_or_else(malformed)?;
+        let width = type_size(kind).ok_or_else(malformed_err)?;
         let cnt = idx_in(a.cnt, usize::MAX)?;
-        let len = cnt.checked_mul(width).ok_or_else(malformed)?;
+        let len = cnt.checked_mul(width).ok_or_else(malformed_err)?;
         self.spend(len)?;
         let mut out = vec![T::default(); len];
         // An accessor with no view is all zeros.
@@ -352,13 +352,13 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         let view = view_off
             .checked_add(view_length)
             .and_then(|end| buf.get(view_off..end))
-            .ok_or_else(malformed)?;
+            .ok_or_else(malformed_err)?;
         let comp_type = idx_in(a.comp_type, usize::MAX)?;
-        let comp = comp_size(comp_type).ok_or_else(malformed)?;
+        let comp = comp_size(comp_type).ok_or_else(malformed_err)?;
         let element = comp * width;
         let stride = size(bv.stride, element)?;
         if stride < element {
-            return Err(malformed());
+            return Err(malformed_err());
         }
         let base = size(a.off, 0)?;
         // The last element ends within the view, so no read below leaves it.
@@ -368,7 +368,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
                 .and_then(|at| at.checked_add(base))
                 .and_then(|at| at.checked_add(element));
             if end.is_none_or(|end| end > view.len()) {
-                return Err(malformed());
+                return Err(malformed_err());
             }
         }
         let norm = a.normalized;
@@ -438,7 +438,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         };
         let vals = self.read(idx, kind, convert).await?;
         if Some(vals.len()) != type_size(kind).map(|w| w * cnt) {
-            return Err(malformed());
+            return Err(malformed_err());
         }
         Ok(Some(vals))
     }
@@ -497,7 +497,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
                 Some(i) => r.read(i, "SCALAR", |v| v as u32).await?,
                 None => {
                     r.spend(cnt)?;
-                    (0..u32::try_from(cnt).map_err(|_| malformed())?).collect()
+                    (0..u32::try_from(cnt).map_err(|_| malformed_err())?).collect()
                 }
             };
             for (k, slice) in idx.chunks(ELEMENTS_PER_PAUSE).enumerate() {
@@ -505,7 +505,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
                     pause().await;
                 }
                 if slice.iter().any(|&i| i as usize >= cnt) {
-                    return Err(malformed());
+                    return Err(malformed_err());
                 }
             }
             prims.push(GltfPrimitive {
@@ -532,7 +532,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     let raw_nodes: Vec<JsonValue> = arr(json.get("nodes")).collect();
     let n = raw_nodes.len();
     if n > i32::MAX as usize {
-        return Err(malformed());
+        return Err(malformed_err());
     }
     let skin_cnt = arr(json.get("skins")).count();
     let mut parents = vec![-1i32; n];
@@ -542,7 +542,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
         for c in arr(node.get("children")) {
             let c = idx_in(Some(c), n)?;
             if c == i || parents[c] >= 0 {
-                return Err(malformed());
+                return Err(malformed_err());
             }
             parents[c] = i as i32;
             own.push(c as u32);
@@ -558,7 +558,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
         stack.extend(children[i].iter().map(|&c| c as usize));
     }
     if reached != n {
-        return Err(malformed());
+        return Err(malformed_err());
     }
     let mut nodes = Vec::with_capacity(n);
     for (i, (node, children)) in raw_nodes.iter().zip(children).enumerate() {
@@ -595,7 +595,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
                 let matrices = r.f32s(i, "MAT4").await?;
                 // Each joint has its matrix; any past them are unread.
                 if matrices.len() < joints.len() * 16 {
-                    return Err(malformed());
+                    return Err(malformed_err());
                 }
                 matrices
             }
@@ -690,7 +690,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
                 let i = idx_in(Some(v), n)?;
                 // Parentless and listed once, so no node is walked twice.
                 if parents[i] >= 0 || listed[i] {
-                    return Err(malformed());
+                    return Err(malformed_err());
                 }
                 listed[i] = true;
                 roots.push(i as u32);

@@ -8,7 +8,7 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{HDR_SZ, WORD_SZ};
 
 use crate::bake::malformed;
-use crate::bake::published::BaseLayer;
+use crate::bake::publication::BaseLayer;
 
 pub mod division;
 pub mod earth;

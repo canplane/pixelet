@@ -19,7 +19,7 @@ pub const DEBUG_FACE_FLOATS: usize = 3;
 
 #[derive(Default)]
 pub struct DebugLines {
-    held: MirroredBlock,
+    block: MirroredBlock,
     line_cnt: u32,
     face_cnt: u32,
     origin: V3,
@@ -29,7 +29,7 @@ impl DebugLines {
     /// `vertices` holds its first `lines` floats as lines, DEBUG_VERTEX_FLOATS a
     /// vertex, then faces, DEBUG_FACE_FLOATS a vertex, all relative to `origin`.
     pub fn set(&mut self, draw: &mut DrawList, origin: V3, vertices: &[f32], lines: usize) {
-        let written = self.held.write(draw, bytes(vertices));
+        let written = self.block.write(draw, bytes(vertices));
         (self.line_cnt, self.face_cnt) = match written {
             true => (
                 (lines / DEBUG_VERTEX_FLOATS) as u32,
@@ -41,13 +41,13 @@ impl DebugLines {
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
-        if self.line_cnt == 0 || self.held.handle == 0 {
+        if self.line_cnt == 0 || self.block.handle == 0 {
             return;
         }
         let t = DrawList::translation(self.origin, eye);
         draw.draw_as(
             PIPELINE_DEBUG,
-            self.held.handle,
+            self.block.handle,
             self.line_cnt,
             self.face_cnt,
             t,

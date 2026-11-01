@@ -74,7 +74,7 @@ fn function_() {
 }
 
 @compute @workgroup_size(64, 1, 1)
-fn light_miss_held_cs(@builtin(workgroup_id) param: vec3<u32>, @builtin(local_invocation_id) param_1: vec3<u32>) {
+fn light_miss_margin_cs(@builtin(workgroup_id) param: vec3<u32>, @builtin(local_invocation_id) param_1: vec3<u32>) {
     global = param;
     global_1 = param_1;
     function_();

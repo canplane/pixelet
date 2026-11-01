@@ -562,7 +562,7 @@ fn reading_reports_columns() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let store = Store::default();
-    let read = changed::Columns::default();
+    let read = changes::Columns::default();
     let access = World::new(&tile_cache, &store).reading(&read);
     let cell = units(GROUND.cell());
     let at = [x + 0.5 * cell, y + 0.5 * cell];
@@ -740,7 +740,7 @@ fn device_loss_drops_bounds() {
 
 /// What the ground generates stands where it was generated whatever is put
 /// over it or in place of the cell under it, air or a cube: it generates on
-/// the world unplaced (pxl-spec-core `generated::generated`).
+/// the world unplaced (pxl-spec-core `generation::placement`).
 #[test]
 fn generated_decor_stays() {
     use crate::domain::layer::object::store::AIR;
@@ -773,7 +773,7 @@ fn generated_decor_stays() {
 
 /// Only an edit in its own box takes what the ground generates away, air or a
 /// cube; one under it or over it leaves it generated (pxl-spec-core
-/// `generated::DecorQuery::is_edited`).
+/// `generation::DecorQuery::is_edited`).
 #[test]
 fn generated_decor_edit_removes() {
     use crate::domain::layer::object::store::AIR;

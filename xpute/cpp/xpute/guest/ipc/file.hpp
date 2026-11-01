@@ -51,7 +51,7 @@ template <class O, std::size_t N> class Files {
     // None for a descriptor already closed.
     // The owner of the open `opened` completes, or none where its descriptor was
     // closed since; a descriptor whose open failed is closed here.
-    std::optional<O> opened(Sys &sys, const abi::SysOpened &opened) {
+    std::optional<O> complete_open(Sys &sys, const abi::SysOpened &opened) {
         const O *held = held_.get(opened.fd);
         if (held == nullptr) return std::nullopt;
         O owner = *held;

@@ -27,7 +27,7 @@ pub struct RenderEdits {
     /// An AIR entry over bare terrain, which has no leaf to hide.
     pub carve: Option<EntryAt>,
     /// The scattered decor hidden, by the cell it stands in.
-    pub scattered: Option<[i32; 3]>,
+    pub scattered_cell: Option<[i32; 3]>,
 }
 
 /// The pointer's preview, the one copy of it.
@@ -95,7 +95,7 @@ pub fn text_at(at: EntryAt) -> Option<&'static str> {
         return Some(&d.text);
     }
     let object = store::object();
-    object.text(&object.read((at.zoom(), at.at())).placed()?)
+    object.text(&object.read((at.zoom(), at.at())).entry()?)
 }
 
 /// The draft, which the markers draw.

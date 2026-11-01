@@ -6,7 +6,7 @@
 //! its samples, its walk again, its pixels or slots taking the visible
 //! sample or walking, and the boxes its samples drew (pxl-render
 //! gpu/ray/tally.rs). A pass adds where it can write: a walk that writes
-//! the observed pyramid into its head (`observed::tally_at`), as no binding
+//! the observed pyramid into its head (`pyramid::tally_at`), as no binding
 //! more fits beside it; a pixel or a slot into its walk again's args
 //! (`ray::MISS_ARGS_TALLY`), which it adds to already, listing itself; the
 //! boxes off the raster's draw (`raster::ARGS_INSTANCES`). The frame's last

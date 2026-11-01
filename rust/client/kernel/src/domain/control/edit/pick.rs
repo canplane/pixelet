@@ -86,7 +86,7 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
         | HitKind::Decor(Instance {
             src: Source::Object(at),
             ..
-        }) => World::now().placed(at),
+        }) => World::now().entry_at(at),
         HitKind::Ground | HitKind::Objects | HitKind::Decor(_) => None,
     }
 }

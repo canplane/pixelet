@@ -33,7 +33,7 @@ fn fs(v: VertexOut) -> FragOut {
   if (!met) {
     discard;
   }
-  let painted = drawn(c);
+  let painted = appearance(c);
   // The face's step across a pixel, once: the lines' width and the depth's
   // step back both read it.
   let steps = px_steps(a, size, h);

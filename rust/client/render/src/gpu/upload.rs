@@ -165,7 +165,7 @@ impl Uploads {
         if !room(write_buffer_bytes(mem(self.at[i], self.len[i] & !3))) {
             return false;
         }
-        // Copied from too, a palette kept as it was drawn (gpu/pass/skinned.rs
+        // Copied from too, a palette kept as it was drawn (gpu/pass/skinned_mesh.rs
         // `keep`).
         let buf = g.buf(
             buf_size(self.len[i]),

@@ -79,7 +79,7 @@ pub mod RASTER {
 }
 
 /// The roots the kernel opens files below (xpute's OPENAT). Below STORAGE a root is a
-/// bake, numbered by its kind (pxl-spec bake/published.spec.rs). Below every root a path is
+/// bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is
 /// an object's number in decimal, its one name; what that object is called and where, a
 /// tile's version and URL, a storage key, is what the host (ts/client/src/driver/namespace/)
 /// binds the root to, `@xpute/host` carrying the open there.
@@ -105,7 +105,7 @@ pub const SPHERE: u32 = 0;
 
 /// Below the asset root, the catalog the host plugs in (pxl-spec asset/catalog.rs): the
 /// file each of the asset specs' references names. Any other number below it is a file,
-/// its row in the asset ingest's table counted from 1 (spec/spec/asset/ingested.json).
+/// its row in the asset ingest's table counted from 1 (spec/spec/asset/ingest.json).
 pub const CATALOG: u32 = 0;
 
 /// Below OBJECT, the files that are no shard's; any other number below it is a shard's

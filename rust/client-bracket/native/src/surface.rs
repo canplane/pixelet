@@ -31,7 +31,7 @@ const PREFERRED: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 /// What the host runs by: the renderer's numbers (spec/client/render/gpu/api.json
 /// `device`) and the platform's surface.
 const CFG: Config = Config {
-    preferred: PREFERRED,
+    preferred_format: PREFERRED,
     configure_at: native::CONFIGURE_AT,
     frame_latency: numbers::FRAME_LATENCY,
     upload_chunk_bytes: numbers::UPLOAD_CHUNK_BYTES as u64,

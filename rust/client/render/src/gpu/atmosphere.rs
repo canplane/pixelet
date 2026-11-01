@@ -204,7 +204,7 @@ const EXPOSURE_READS: [Range<usize>; 3] =
 
 /// Each light's words as laid (atmos_medium.wgsl `laid`, `reaches`), the
 /// sun's first.
-const LAID: [usize; 2] = [SUN_LAID, MOON_LAID];
+const LAID_WORDS: [usize; 2] = [SUN_LAID, MOON_LAID];
 const REACHES: [usize; 2] = [SUN_REACHES, MOON_REACHES];
 
 /// A quantity a table is held at by a measured step: a light's height, the
@@ -217,7 +217,7 @@ struct TableInput {
     /// as its last landed slope says; none before.
     step: Option<f32>,
     /// Where its slope was last measured, and the sample it was taken over.
-    measured: Option<f32>,
+    measured_at: Option<f32>,
     sample: f32,
 }
 
@@ -234,7 +234,7 @@ impl TableInput {
 
     /// Left the sample its slope was taken over, or none was.
     fn left(&self, now: f32) -> bool {
-        self.measured
+        self.measured_at
             .is_none_or(|at| (now - at).abs() >= self.sample)
     }
 }
@@ -294,7 +294,7 @@ pub struct Atmosphere {
     exposure_words: u32,
     /// Each light's view and air, the sun's first, and the ground the
     /// exposure is held at.
-    lit: [LightMemo; 2],
+    light_memos: [LightMemo; 2],
     ground: TableInput,
     /// What the views and the exposure measured (`SLOPES`), and the buffer
     /// it is mapped back through.
@@ -304,7 +304,7 @@ pub struct Atmosphere {
     pending: u32,
     flying: u32,
     /// The words as they land, and their word (`DONE` once in).
-    landed: [u32; SLOPES],
+    landed_words: [u32; SLOPES],
     landed_word: u32,
     plan: Plan,
     sun_mu: f32,
@@ -434,7 +434,7 @@ impl Atmosphere {
                 g.write_buf(own, 0, bytes(&[0.0f32; 4]));
                 own
             },
-            lit: [LightMemo::default(); 2],
+            light_memos: [LightMemo::default(); 2],
             ground: TableInput::default(),
             slopes: (
                 g.buf(
@@ -448,7 +448,7 @@ impl Atmosphere {
             ),
             pending: 0,
             flying: 0,
-            landed: [0; SLOPES],
+            landed_words: [0; SLOPES],
             landed_word: 0,
             plan: Plan::default(),
             read: Read::default(),
@@ -569,7 +569,7 @@ impl Atmosphere {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::air);
         let pass = g.compute_pass(encoder, stamp.pass());
-        g.set_pipeline(pass, self.froxel.pipeline);
+        g.set_pipeline(pass, self.froxel.id);
         g.set_bind_group(pass, 0, self.froxel_groups[k], &[]);
         // A column of froxels a workgroup (atmos_froxel.wgsl).
         g.dispatch(pass, AIR_FROXELS, AIR_FROXELS, 1);
@@ -584,7 +584,7 @@ impl Atmosphere {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::exposure);
         let pass = g.compute_pass(encoder, stamp.pass());
-        g.set_pipeline(pass, self.exposure.pipeline);
+        g.set_pipeline(pass, self.exposure.id);
         g.set_bind_group(pass, 0, self.groups[EXPOSURE_TEXEL], &[]);
         g.dispatch(pass, 1, 1, 1);
         g.end(pass);
@@ -669,14 +669,14 @@ impl Atmosphere {
         self.take_slopes();
         let fresh = !self.baked;
         if fresh {
-            (self.lit, self.ground) = ([LightMemo::default(); 2], TableInput::default());
+            (self.light_memos, self.ground) = ([LightMemo::default(); 2], TableInput::default());
         }
         let busy = self.pending | self.flying;
         let alt = self.words[CAMERA_ALT];
         let mut due = false;
         for k in 0..2 {
             let mu = [self.sun_mu, self.moon_mu][k];
-            let l = &mut self.lit[k];
+            let l = &mut self.light_memos[k];
             let height = TableInput {
                 step: l.step(),
                 ..l.height
@@ -697,13 +697,13 @@ impl Atmosphere {
             let eye = l.alt.left(alt) && busy & Measure::Alt(k).bit() == 0;
             let base = (4 * LIGHT_WORDS * k) as u32;
             if height {
-                l.height.measured = Some(mu);
+                l.height.measured_at = Some(mu);
                 g.write_buf(self.slopes.0, base, bytes(&[0u32]));
                 g.write_buf(self.slopes.0, base + 8, bytes(&[0u32]));
                 self.pending |= Measure::Height(k).bit();
             }
             if eye {
-                (l.alt.measured, l.alt.sample) = (Some(alt), alt_sample(alt));
+                (l.alt.measured_at, l.alt.sample) = (Some(alt), alt_sample(alt));
                 g.write_buf(self.slopes.0, base + 4, bytes(&[0u32]));
                 self.pending |= Measure::Alt(k).bit();
             }
@@ -713,7 +713,7 @@ impl Atmosphere {
                 0,
                 bytes(&[k as f32, flag(height), flag(eye), 0.0]),
             );
-            self.words[LAID[k]..LAID[k] + 3].copy_from_slice(&laid(alt));
+            self.words[LAID_WORDS[k]..LAID_WORDS[k] + 3].copy_from_slice(&laid(alt));
         }
         let ground = self.words[LAND_ALT_KM];
         let e = &mut self.exposure_read;
@@ -727,7 +727,7 @@ impl Atmosphere {
             self.ground.at = Some(ground);
             let measure = self.ground.left(ground) && busy & Measure::Ground.bit() == 0;
             if measure {
-                self.ground.measured = Some(ground);
+                self.ground.measured_at = Some(ground);
                 self.pending |= Measure::Ground.bit();
             }
             let flag = f32::from(u8::from(measure));
@@ -781,7 +781,7 @@ impl Atmosphere {
     /// submitted; its landing wakes the turn that reads it.
     pub fn read_back(&mut self, g: &Gpu) {
         if self.flying != 0 && self.landed_word == 0 {
-            let addr = off_of(self.landed.as_ptr()) as u32;
+            let addr = off_of(self.landed_words.as_ptr()) as u32;
             g.map_read(
                 self.slopes.1,
                 0,
@@ -801,11 +801,11 @@ impl Atmosphere {
         if self.landed_word != 1 | DONE {
             return;
         }
-        let (w, flying) = (self.landed, self.flying);
+        let (w, flying) = (self.landed_words, self.flying);
         let word = |at: usize| f32::from_bits(w[at]);
         let has = |m: Measure| flying & m.bit() != 0;
         for k in 0..2 {
-            let (base, l) = (LIGHT_WORDS * k, &mut self.lit[k]);
+            let (base, l) = (LIGHT_WORDS * k, &mut self.light_memos[k]);
             if has(Measure::Height(k)) {
                 (l.height.step, l.height.sample) = (Some(1.0 / word(base)), word(base + 2));
             }
@@ -830,7 +830,7 @@ impl Atmosphere {
     /// before it comes into reach; none, the least, 0, before either has
     /// landed.
     pub fn steps(&self) -> [f32; 2] {
-        self.lit.map(|l| l.step().unwrap_or(0.0))
+        self.light_memos.map(|l| l.step().unwrap_or(0.0))
     }
 
     fn table(&self, ctx: &mut RenderContext, k: usize, span: GpuSpanName) {
@@ -847,7 +847,7 @@ impl Atmosphere {
                 stamp.pass(),
             ),
         );
-        g.set_pipeline(pass, self.passes[pass_of(k)].pipeline);
+        g.set_pipeline(pass, self.passes[pass_of(k)].id);
         g.set_bind_group(pass, 0, self.groups[k], &[]);
         g.draw(pass, 3, 1, 0, 0);
         g.end(pass);

@@ -105,7 +105,7 @@ uniform! {
         SHADOW_TEXEL: F32 = 49,
         SHADOW_RADIUS_NDC: F32 = 50,
         /// Whether the camera gizmo is drawn, its tint on the rays' cells
-        /// with it (screen_lit.wgsl `cell_share`).
+        /// with it (screen_shade.wgsl `cell_share`).
         GIZMO: F32 = 51,
         /// The canvas's device pixels, where `VIEWPORT` is the world's: what
         /// is drawn over the world, after the finish, is laid out in them.

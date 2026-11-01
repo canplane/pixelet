@@ -6,7 +6,7 @@
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_guest::global::Global;
 
-use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
+use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED_MESH};
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, release, sampler_entry, view_entry, word_bytes,
@@ -96,7 +96,7 @@ pub enum Stage {
 
 /// A layout is shared by its words, so one group 0 serves every model pipeline.
 pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
-    pipelines.build_world(g, PIPELINE_SKINNED).layouts[0]
+    pipelines.build_world(g, PIPELINE_SKINNED_MESH).layouts[0]
 }
 
 /// Group 0 as the models read it: the frame, the sun's shadow map `shadow`

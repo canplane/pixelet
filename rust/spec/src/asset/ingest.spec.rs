@@ -1,6 +1,6 @@
-// pxl-spec/asset/ingested.spec.rs
+// pxl-spec/asset/ingest.spec.rs
 //
-// GENERATED from spec/spec/asset/ingested.json
+// GENERATED from spec/spec/asset/ingest.json
 // The texture pack as the asset ingest composed it: which of its tiles each
 // cube wears on which face, and what each reads as from afar. Its image is
 // the file the catalog names for the cube kind's pack (catalog.spec.rs

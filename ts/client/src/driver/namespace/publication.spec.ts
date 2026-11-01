@@ -1,6 +1,6 @@
-// @pxl/client/driver/namespace/published.spec.ts
+// @pxl/client/driver/namespace/publication.spec.ts
 //
-// GENERATED from spec/spec/bake/published.json
+// GENERATED from spec/spec/bake/publication.json
 
 /** The base layers by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */
 export const BASE_LAYERS = ["terrain", "place", "division", "earth"] as const;

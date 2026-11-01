@@ -54,7 +54,7 @@ use xpute_kit::wire::xtp::PacketWriter;
 
 struct State {
     /// The UI snapshot last posted; one is posted only where it moved.
-    sent: SnapshotMemo,
+    last_snapshot: SnapshotMemo,
     /// A UI command was applied this turn, so its falling edge posts to the shell.
     asked: bool,
 }
@@ -98,7 +98,7 @@ static STATE: Global<State> = Global::new();
 
 fn state() -> &'static mut State {
     STATE.get(|| State {
-        sent: Default::default(),
+        last_snapshot: Default::default(),
         asked: false,
     })
 }
@@ -127,7 +127,7 @@ fn on_host_attached(s: &mut State) {
     }
     sensor::sensors_close();
     text::text_forget();
-    s.sent = Default::default();
+    s.last_snapshot = Default::default();
 }
 
 /// First turn: lays out memory and writes the toc at TOC_AT.
@@ -249,7 +249,7 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),
         }
     }
-    if let Some(shown) = s.sent.take_moved() {
+    if let Some(shown) = s.last_snapshot.take_moved() {
         let buf = SNAPSHOT.get(Vec::new);
         let len = loop {
             if let Some(len) = shell::ui_snapshot(&shown, buf) {

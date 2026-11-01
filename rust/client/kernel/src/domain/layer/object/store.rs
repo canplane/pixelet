@@ -104,19 +104,19 @@ pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) -> bool {
     !regions.is_empty()
 }
 
-static WRITTEN: Global<Vec<Aabb>> = Global::new();
+static WRITTEN_BOXES: Global<Vec<Aabb>> = Global::new();
 
 /// Where the objects changed, kept for the turn to tell what draws them and
 /// what is worked out from them (`take_written`); storage calls nothing above it.
 pub(super) fn note_written(regions: &[Aabb]) {
-    WRITTEN.get(Vec::new).extend_from_slice(regions);
+    WRITTEN_BOXES.get(Vec::new).extend_from_slice(regions);
     request_world_tick();
 }
 
 /// The regions written since the turn last took them, into `out`.
 pub fn take_written(out: &mut Vec<Aabb>) {
     out.clear();
-    core::mem::swap(out, WRITTEN.get(Vec::new));
+    core::mem::swap(out, WRITTEN_BOXES.get(Vec::new));
 }
 
 pub const VOID: AssetId = cube::sentinel::void as u32;
@@ -220,7 +220,7 @@ pub struct Store {
     revision: u32,
     /// The child groups the tree wrote between the revision the columns were last
     /// handed at (`since`) and that hand (`gpu_columns`), each once.
-    handed: Vec<u32>,
+    written_groups: Vec<u32>,
     since: u32,
 }
 
@@ -235,7 +235,7 @@ pub struct GpuColumns<'a> {
     pub room: usize,
     pub revision: u32,
     pub since: u32,
-    pub written: &'a [u32],
+    pub written_groups: &'a [u32],
 }
 
 impl Default for Store {
@@ -244,7 +244,7 @@ impl Default for Store {
             tree: Tree::new(EMPTY.word()),
             ext: Pools::default(),
             revision: 0,
-            handed: Vec::new(),
+            written_groups: Vec::new(),
             since: 0,
         }
     }
@@ -270,9 +270,9 @@ impl Store {
     /// The tree's columns as the GPU takes them (`GpuColumns`): the child groups
     /// written since the last hand, each once, and the revision it was at.
     pub fn gpu_columns(&mut self) -> GpuColumns<'_> {
-        self.tree.take_written(&mut self.handed);
-        self.handed.sort_unstable();
-        self.handed.dedup();
+        self.tree.take_written(&mut self.written_groups);
+        self.written_groups.sort_unstable();
+        self.written_groups.dedup();
         let since = core::mem::replace(&mut self.since, self.revision);
         GpuColumns {
             first_child: self.tree.first_child(),
@@ -280,7 +280,7 @@ impl Store {
             room: self.tree.room(),
             revision: self.revision,
             since,
-            written: &self.handed,
+            written_groups: &self.written_groups,
         }
     }
 
@@ -393,7 +393,7 @@ impl Store {
 
     /// The value placed at exactly the node `at` of `zoom`, if one is, read
     /// off the cursor a descent holds there (`Query::cursor`, `Query::child`).
-    pub(crate) fn placed(&self, zoom: Zoom, at: [i32; 3], held: NodeSlot) -> Option<Entry> {
+    pub(crate) fn entry_at(&self, zoom: Zoom, at: [i32; 3], held: NodeSlot) -> Option<Entry> {
         (held.holds() && !held.is_folded() && held.zoom() == zoom)
             .then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[held.slot() as usize])))
     }
@@ -572,10 +572,10 @@ impl Cells<'_> {
     }
 
     /// The leaf placed at exactly the node, if one is.
-    pub fn placed(&self) -> Option<Entry> {
+    pub fn entry(&self) -> Option<Entry> {
         let (zoom, at) = self.node;
         self.store
-            .placed(zoom, at, self.store.cursor(self.node, zoom))
+            .entry_at(zoom, at, self.store.cursor(self.node, zoom))
     }
 }
 
@@ -588,7 +588,7 @@ impl Query for Store {
         match D {
             3 => overwrite::cursor(
                 &self.columns(),
-                overwrite::PLACED,
+                overwrite::OBJECT_ROOT,
                 zoom,
                 [at[0], at[1], at[2]],
             ),
@@ -623,7 +623,7 @@ impl Query for Store {
 
 /// What a walk over columns carries down the tree from one column to the
 /// next (`Store::column`): for each zoom it stepped through, the column it
-/// stood in there, where that zoom's run of `held` ends and the z the
+/// stood in there, where that zoom's run of `slots` ends and the z the
 /// leaves over it span; each run, the branches the tree holds in that
 /// column at that zoom, by index (`overwrite::path`) with what each holds.
 /// A walk to a column beside the last steps down only from where their
@@ -631,7 +631,7 @@ impl Query for Store {
 #[derive(Default)]
 pub struct Walk {
     at: Vec<Step>,
-    held: Vec<([i32; 3], NodeSlot)>,
+    slots: Vec<([i32; 3], NodeSlot)>,
 }
 
 #[derive(Clone, Copy)]
@@ -642,7 +642,7 @@ struct Step {
 }
 
 impl Walk {
-    /// Where zoom `k`'s run of `held` begins: where the zoom over it ends.
+    /// Where zoom `k`'s run of `slots` begins: where the zoom over it ends.
     fn start(&self, k: usize) -> usize {
         k.checked_sub(1).map_or(0, |o| self.at[o].end)
     }
@@ -665,7 +665,7 @@ impl Store {
             .take_while(|&(k, s)| s.column == column(k))
             .count();
         walk.at.truncate(kept);
-        walk.held.truncate(walk.at.last().map_or(0, |s| s.end));
+        walk.slots.truncate(walk.at.last().map_or(0, |s| s.end));
         let span = |z: usize, at: [i32; 3]| {
             [
                 f64::from(at[2]) * units(z as Zoom),
@@ -689,15 +689,15 @@ impl Store {
             match k.checked_sub(1) {
                 None => {
                     for r in (0..4).map(root).filter(|r| [r[0], r[1]] == c) {
-                        met(&mut walk.held, r, self.cursor((0, r), 0));
+                        met(&mut walk.slots, r, self.cursor((0, r), 0));
                     }
                 }
                 Some(o) => {
                     for i in walk.start(o)..walk.at[o].end {
-                        let (at, h) = walk.held[i];
+                        let (at, h) = walk.slots[i];
                         for child in [0, 1].map(|z| [c[0], c[1], 2 * at[2] + z]) {
                             met(
-                                &mut walk.held,
+                                &mut walk.slots,
                                 child,
                                 self.child(&h, (k as Zoom, child), k as Zoom),
                             );
@@ -707,12 +707,12 @@ impl Store {
             }
             walk.at.push(Step {
                 column: c,
-                end: walk.held.len(),
+                end: walk.slots.len(),
                 leaves,
             });
         }
         let k = zoom as usize;
-        let z = walk.held[walk.start(k)..walk.at[k].end]
+        let z = walk.slots[walk.start(k)..walk.at[k].end]
             .iter()
             .fold(walk.at[k].leaves, |z, &(at, _)| join(z, span(k, at)))?;
         let whole = region((zoom, xy));

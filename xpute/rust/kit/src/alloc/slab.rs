@@ -128,8 +128,8 @@ impl<R: Range> SlabMalloc<R> {
         &self.buddy
     }
 
-    pub fn used(&self) -> usize {
-        self.buddy.used()
+    pub fn peak(&self) -> usize {
+        self.buddy.peak()
     }
 
     /// Runs count whole, not their live slots.

@@ -1,4 +1,4 @@
-// pxl-kernel/domain/query/changed.rs
+// pxl-kernel/domain/query/changes.rs
 
 //! Where the ground's answers moved since the frame turn before: the ground
 //! tiles whose answer moved (their identities, which fix their contents) and
@@ -20,30 +20,30 @@ use xpute_guest::global::Global;
 #[derive(Default)]
 struct Changes {
     ground: Vec<Tile>,
-    written: Vec<Aabb>,
+    written_boxes: Vec<Aabb>,
 }
 
-static CHANGED: Global<Changes> = Global::new();
+static CHANGES: Global<Changes> = Global::new();
 
-fn changed() -> &'static mut Changes {
-    CHANGED.get(Changes::default)
+fn changes() -> &'static mut Changes {
+    CHANGES.get(Changes::default)
 }
 
 /// The frame turn's changes, taken from the ground's tile cache and the
 /// object store in place of the last turn's, each ground tile once, however
 /// many of its bricks or entries moved; true where any moved.
 pub(crate) fn take() -> bool {
-    let c = changed();
+    let c = changes();
     TerrainTile::tile_cache().take_moved(&mut c.ground);
     c.ground.sort_unstable();
     c.ground.dedup();
-    store::take_written(&mut c.written);
-    !c.ground.is_empty() || !c.written.is_empty()
+    store::take_written(&mut c.written_boxes);
+    !c.ground.is_empty() || !c.written_boxes.is_empty()
 }
 
 /// Where the objects were written, as the last take found them.
-pub fn written() -> &'static [Aabb] {
-    &changed().written
+pub fn written_boxes() -> &'static [Aabb] {
+    &changes().written_boxes
 }
 
 /// Whether a ground change, or one of `layer`'s tiles a reader also reads
@@ -59,13 +59,13 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
         max: [xy[1][0], xy[1][1], BOUNDS.max[2]],
     };
     let about = (columns.min[0] + columns.max[0]) / 2.0;
-    let c = changed();
+    let c = changes();
     let mut regions = c
         .ground
         .iter()
         .chain(layer)
         .map(|t| t.region())
-        .chain(c.written.iter().copied());
+        .chain(c.written_boxes.iter().copied());
     regions.any(|r| nearest_box(&r, about).shares(columns))
 }
 

@@ -12,7 +12,7 @@ use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
 use crate::frame::shader::word::DECOR_GROUPS;
 
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
-use crate::gpu::generated::IndirectDraw;
+use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::mark::{self, Marks, UploadCopies};
 use crate::gpu::pass::model::{
@@ -21,15 +21,15 @@ use crate::gpu::pass::model::{
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::{Draws, Uploads};
-use pxl_spec_core::generated;
+use pxl_spec_core::generation;
 
 const _: () = assert!(
-    generated::GROUPS as usize <= DECOR_GROUPS,
+    generation::GROUPS as usize <= DECOR_GROUPS,
     "a decor variant past the draw groups"
 );
 
 pub struct DecorPass {
-    lit: Pipeline,
+    lit_pipeline: Pipeline,
     ghost: Pipeline,
     depth: Pipeline,
     uniforms: DrawUniforms,
@@ -48,7 +48,7 @@ fn put_mark(buf: &mut [u8], (_, u): &mark::Draw) {
 impl DecorPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> DecorPass {
         DecorPass {
-            lit: pipelines.build_world(g, PIPELINE_DECOR),
+            lit_pipeline: pipelines.build_world(g, PIPELINE_DECOR),
             ghost: pipelines.build_world(g, PIPELINE_GHOST_DECOR),
             depth: pipelines.build_gated(
                 g,
@@ -85,16 +85,16 @@ impl DecorPass {
         uniforms: &[f32],
         touched: &[u32],
         uploads: &mut Uploads,
-        kept: &UploadCopies,
+        last_frame_uploads: &UploadCopies,
     ) -> (bool, bool) {
         let opaque = draws.of(PIPELINE_DECOR);
         let casts = self
             .marks
-            .prepare(g, opaque, uniforms, touched, uploads, kept);
+            .prepare(g, opaque, uniforms, touched, uploads, last_frame_uploads);
         let ghost = draws.of(PIPELINE_GHOST_DECOR);
-        let blended = self
-            .ghost_marks
-            .prepare(g, ghost, uniforms, touched, uploads, kept);
+        let blended =
+            self.ghost_marks
+                .prepare(g, ghost, uniforms, touched, uploads, last_frame_uploads);
         (casts || blended, casts)
     }
 
@@ -122,7 +122,7 @@ impl DecorPass {
                 };
                 pass.set_bind_group(2, skin, &[]);
                 pass.set_bind_group(3, upload, &[]);
-                draw_model(pass, &self.lit, model, vertex_cnt, idx_cnt, d[2]);
+                draw_model(pass, &self.lit_pipeline, model, vertex_cnt, idx_cnt, d[2]);
             });
         }
     }
@@ -155,7 +155,7 @@ impl DecorPass {
         uploads: &Uploads,
     ) -> Option<(u32, u32, u32, u32)> {
         self.model(group, uploads, |image| {
-            skin_group(g, self.lit.layouts[2], image)
+            skin_group(g, self.lit_pipeline.layouts[2], image)
         })
     }
 
@@ -198,7 +198,7 @@ impl DecorPass {
         let cnt = (opaque.len() + ghost.len()) as u32;
         self.uniforms.write(
             g,
-            self.lit.layouts[1],
+            self.lit_pipeline.layouts[1],
             cnt,
             opaque.clone().chain(ghost.clone()),
             moved,
@@ -228,8 +228,8 @@ impl DecorPass {
 
     fn pipeline(&self, stage: Stage) -> u32 {
         match stage {
-            Stage::Lit => self.lit.pipeline,
-            Stage::Depth => self.depth.pipeline,
+            Stage::Lit => self.lit_pipeline.id,
+            Stage::Depth => self.depth.id,
         }
     }
 
@@ -245,7 +245,7 @@ impl DecorPass {
             draws,
             uploads,
             PIPELINE_GHOST_DECOR,
-            self.ghost.pipeline,
+            self.ghost.id,
             frame,
         );
     }
@@ -268,10 +268,10 @@ impl DecorPass {
         } else {
             0
         };
-        let lit = self.lit;
+        let lit_pipeline = self.lit_pipeline;
         draw_models(
             pass,
-            &lit,
+            &lit_pipeline,
             pipeline,
             frame,
             slots.skip(first),
@@ -289,7 +289,7 @@ impl DecorPass {
     }
 
     /// The models the GPU generated, an indirect draw a group whose model is held
-    /// (pxl-spec-core `generated::drawn`, a group's models its region `2·group`).
+    /// (pxl-spec-core `generation::drawn`, a group's models its region `2·group`).
     pub fn draw_generated(
         &mut self,
         pass: &mut TrackedRenderPass,
@@ -302,13 +302,13 @@ impl DecorPass {
         pass.set_pipeline(self.pipeline(stage));
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
-        for group in 0..generated::GROUPS {
+        for group in 0..generation::GROUPS {
             let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(group, uploads) else {
                 continue;
             };
             pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group)]);
             pass.set_bind_group(2, skin, &[]);
-            bind_mesh(pass, &self.lit, model, vertex_cnt, idx_cnt);
+            bind_mesh(pass, &self.lit_pipeline, model, vertex_cnt, idx_cnt);
             pass.draw_indexed_indirect(d.args, d.args_at(2 * group));
         }
     }

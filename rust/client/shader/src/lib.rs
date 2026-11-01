@@ -5,7 +5,7 @@
 //! (eye.rs): the passes a cast takes, written once over the observer it
 //! casts for (observer.rs), a pass both observers take one entry
 //! (pass_observer.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
-//! observed pyramid (observed.rs), their image bound only where rays.rs lets
+//! observed pyramid (pyramid.rs), their image bound only where rays.rs lets
 //! it be (cast.rs, light_mark.rs), the world's depth from the light (light.rs),
 //! each handed brick's ground (ground.rs) and ways (way.rs), and the decor
 //! the ground generates (decor.rs), each workgroup a constant its code counts
@@ -24,7 +24,7 @@ mod decor;
 mod pass_observer;
 mod eye;
 mod ground;
-mod observed;
+mod pyramid;
 mod observer;
 mod raster;
 mod light;
@@ -40,15 +40,15 @@ pub use decor::{
     decor_args_cs, decor_cnt_cs, decor_compact_cs, decor_cs, decor_mark_cs, decor_thin_cs,
 };
 pub use eye::Eye;
-pub use ground::{bound_cs, height_cs, joined_cs};
-pub use observed::forget_cs;
+pub use ground::{bound_cs, height_cs, fold_cs};
+pub use pyramid::forget_cs;
 pub use raster::{face_cs, sample_box_cs};
 pub use light::{
-    light_beam_cs, light_cs, light_detail_cs, light_held_cs, light_mark_drawn_cs, light_miss_cs,
-    light_miss_held_cs, light_propagate_cs, light_sample_cs, Head,
+    light_beam_cs, light_cs, light_detail_cs, light_margin_cs, light_mark_draws_cs, light_miss_cs,
+    light_miss_margin_cs, light_propagate_cs, light_sample_cs, Head,
 };
 pub use light_mark::light_mark_cs;
-pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
+pub use way::{way_cs, way_free_cs, way_return_cs, way_tree_cs};
 pub use world::{PaletteWords, NoPalette, World};
 
 use spirv_std::memory::{Scope, Semantics};

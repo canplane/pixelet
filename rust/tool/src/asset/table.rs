@@ -85,9 +85,9 @@ pub fn faces(
     Ok(out)
 }
 
-/// The table as `spec/spec/asset/ingested.json`, which `cargo spec`
+/// The table as `spec/spec/asset/ingest.json`, which `cargo spec`
 /// renders into the host's table, the pack's layout and the catalog
-/// (pxl-tool spec/ingested.rs, spec/catalog.rs).
+/// (pxl-tool spec/ingest.rs, spec/catalog.rs).
 pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
     let string = |s: &str| format!("{s:?}");
     let mut out = String::with_capacity(rows.len() * 160);

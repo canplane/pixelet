@@ -27,7 +27,7 @@ pub use solve::solve_tile;
 #[derive(Default)]
 pub struct Solution {
     pub lines: Vec<Line>,
-    pub drawn: Vec<WayRange>,
+    pub way_ranges: Vec<WayRange>,
 }
 
 /// A solved line: XY in DB coordinates, height in leaf cells, width in u.

@@ -38,6 +38,6 @@ pub fn port_of(tag: u32) -> u32 {
 }
 
 /// The tag of a frame for `port`, its id or subject `id`.
-pub fn tagged(port: u32, id: u32) -> u32 {
+pub fn tag_of(port: u32, id: u32) -> u32 {
     (port << PORT_SHIFT) | id
 }

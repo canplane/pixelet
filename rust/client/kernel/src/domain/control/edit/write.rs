@@ -28,7 +28,7 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::object::store::{apply, Entry, Write, AIR, VOID};
-use crate::domain::query::changed;
+use crate::domain::query::changes;
 use crate::domain::query::World;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
@@ -121,7 +121,7 @@ pub fn place_decor(at: &Q3, decor_id: DecorId) {
 /// The decor the ground generates that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
     (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && is_carved(at))
-        .then(|| World::now().generated(Decor::of(decor_id), at))?
+        .then(|| World::now().generated_instance(Decor::of(decor_id), at))?
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: a draft
@@ -170,7 +170,7 @@ pub fn commit_draft() {
         return;
     };
     let (zoom, cell) = (at.zoom(), at.at());
-    let stands = match World::now().placed(at) {
+    let stands = match World::now().entry_at(at) {
         Some(e) => is_marker(e.state),
         None => !is_placement_blocked(PlacementTool::Marker, &base_of(zoom, cell)),
     };
@@ -235,8 +235,8 @@ pub struct Pending {
     /// What `blocked` was asked of: the tool, its zoom with it, the hovered
     /// corner and the store's revision. Asked again only where one moved or
     /// a change touched the columns it reads (`placement_reads`,
-    /// `changed::within`), as a step each frame turn sees each change once.
-    asked: Option<(PlacementTool, Q3, u32)>,
+    /// `changes::within`), as a step each frame turn sees each change once.
+    blocked_key: Option<(PlacementTool, Q3, u32)>,
 }
 
 static PENDING: Global<Pending> = Global::new();
@@ -252,8 +252,8 @@ pub fn pending_step() -> RenderEdits {
     let hovered = hover.coord;
     let active_tool = ui.active_tool;
     let world = World::now();
-    let object = hover.object_at.and_then(|at| world.placed(at));
-    let scattered = hover.scattered.is_some();
+    let object = hover.object_at.and_then(|at| world.entry_at(at));
+    let scattered = hover.scattered_decor.is_some();
     let digging = active_tool == ActiveTool::Eraser && object.is_none() && !scattered;
     let tool = PlacementTool::of(&ui);
     let zoom = match (tool, &object) {
@@ -263,18 +263,19 @@ pub fn pending_step() -> RenderEdits {
         // material whatever its sub-cell bytes, so the cell goes whole anyway.
         (None, None) => GROUND.cell(),
     };
-    let (blocked, asked) = match (&hovered, tool) {
+    let (blocked, blocked_key) = match (&hovered, tool) {
         (Some(h), Some(tool)) => {
-            let asked = Some((tool, *h, world.revision()));
+            let blocked_key = Some((tool, *h, world.revision()));
             let was = *PENDING.get(Pending::default);
-            let same = was.asked == asked && !changed::within(placement_reads(tool, h), &[]);
+            let same =
+                was.blocked_key == blocked_key && !changes::within(placement_reads(tool, h), &[]);
             (
                 if same {
                     was.blocked
                 } else {
                     is_placement_blocked(tool, h)
                 },
-                asked,
+                blocked_key,
             )
         }
         _ => (false, None),
@@ -289,8 +290,8 @@ pub fn pending_step() -> RenderEdits {
         carve: hovered
             .filter(|_| digging)
             .map(|h| EntryAt::holding(zoom, &h)),
-        scattered: hover
-            .scattered
+        scattered_cell: hover
+            .scattered_decor
             .filter(|_| active_tool == ActiveTool::Eraser)
             .and_then(|s| s.generated_in()),
     };
@@ -299,7 +300,7 @@ pub fn pending_step() -> RenderEdits {
         zoom,
         digging,
         blocked,
-        asked,
+        blocked_key,
     };
     edits
 }

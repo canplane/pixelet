@@ -39,12 +39,12 @@ use crate::sys::mem::section;
 use crate::sys::sched::edge::request_world_tick;
 
 /// The device the last frame went to the screen on (`device_generation`).
-static DRAWN: Global<Option<u32>> = Global::new();
+static DRAWN_DEVICE: Global<Option<u32>> = Global::new();
 
 /// Whether the screen holds a frame of the world: one drawn on the device
 /// there is, as a device that went took what it drew.
 pub fn is_screen_drawn() -> bool {
-    *DRAWN.get(|| None) == Some(api::device_generation())
+    *DRAWN_DEVICE.get(|| None) == Some(api::device_generation())
 }
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
@@ -55,7 +55,7 @@ const EARTH: Load = Load::Sphere;
 use crate::domain::layer::object::preview;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::scene::cast;
-use crate::domain::scene::decor::drawn;
+use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::cloud;
 use crate::domain::scene::gizmo::camera_gizmo;
 use crate::domain::scene::marker;
@@ -77,7 +77,7 @@ use pxl_spec::asset::sky::moon;
 use pxl_spec::object;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3;
-use pxl_spec_core::clipmap::HANDED;
+use pxl_spec_core::clipmap::HAND_CAP;
 use pxl_spec_core::way::tree;
 
 const _: () = assert!(
@@ -204,7 +204,7 @@ pub fn stage_render(pace: Pace) {
             upload: &mut terrain_upload,
             on_resident: &mut on_resident,
             pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
-            scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HANDED)),
+            scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HAND_CAP)),
             records: param::WAYS_RECORDS_FIRST_BYTES,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
@@ -212,7 +212,7 @@ pub fn stage_render(pace: Pace) {
             clipmap: clipmap::table(),
             shards: cast::shards(),
             overwrites: cast::overwrites(),
-            decor: drawn::frame(),
+            decor: gpu::frame(),
             actors,
             ray_counts: settings_store().ray_counts,
         }),
@@ -221,7 +221,7 @@ pub fn stage_render(pace: Pace) {
         admit: boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().perf,
-        bounded,
+        bounded_draws: bounded,
         animated,
     });
     // What landed, folded once after all of it, before anything reads a
@@ -255,7 +255,7 @@ pub fn stage_render(pace: Pace) {
         );
         return;
     };
-    DRAWN.set(Some(api::device_generation()));
+    DRAWN_DEVICE.set(Some(api::device_generation()));
     let [draws, triangles] = stat
         .draws
         .iter()
@@ -325,10 +325,10 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         // the rays' to cut, and its walk is kept.
         let hide = edits.hide.filter(|&at| {
             crate::domain::query::World::now()
-                .placed(at)
+                .entry_at(at)
                 .is_some_and(|e| object::is_decor(e.state))
         });
-        drawn::step(frame.eye, hide, edits.scattered);
+        gpu::step(frame.eye, hide, edits.scattered_cell);
         cloud::step(draw_list(), &frame, &ctx.pass);
     }
     marker::step(ctx, &frame);

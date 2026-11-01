@@ -40,7 +40,7 @@ impl WalkPlan {
 pub struct SettleTracker {
     pub last_seen: [f64; 2],
     pub last_change_time: f64,
-    pub settled: [f64; 2],
+    pub settled_at: [f64; 2],
 }
 
 impl SettleTracker {
@@ -48,7 +48,7 @@ impl SettleTracker {
         SettleTracker {
             last_seen: at,
             last_change_time: now,
-            settled: at,
+            settled_at: at,
         }
     }
 
@@ -57,9 +57,9 @@ impl SettleTracker {
         if target != self.last_seen {
             (self.last_seen, self.last_change_time) = (target, now);
         }
-        let settles = now - self.last_change_time >= delay && self.last_seen != self.settled;
+        let settles = now - self.last_change_time >= delay && self.last_seen != self.settled_at;
         if settles {
-            self.settled = self.last_seen;
+            self.settled_at = self.last_seen;
         }
         settles
     }

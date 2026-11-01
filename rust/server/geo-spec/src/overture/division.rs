@@ -99,7 +99,7 @@ impl Division {
     ) -> Division {
         Division {
             gers_id,
-            subtype: Subtype::named(subtype),
+            subtype: Subtype::of_word(subtype),
             name,
             names: names_of(names_common),
             parent,

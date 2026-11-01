@@ -191,7 +191,7 @@ fn absent_top_reads_every_shard() {
     assert_eq!(state().wants.len(), 1);
     assert_eq!(state().wants[0].0, TOP);
     assert!(!holds(&shard.region()));
-    arrived(TOP, None).unwrap();
+    admit(TOP, None).unwrap();
     assert!(holds(&shard.region()));
     want([(shard, Ask::PLAIN)].into_iter());
     assert!(state().wants.is_empty());
@@ -210,7 +210,7 @@ fn top_folds_until_shard_read() {
     let rows = top_of(&written()[..3]);
     assert_eq!(rows.len(), 2);
     fresh();
-    arrived(TOP, Some(&top_file(&rows))).unwrap();
+    admit(TOP, Some(&top_file(&rows))).unwrap();
     for &(_, z, word) in &rows {
         assert_eq!(object().word_at([shard.at[0], shard.at[1], z]), Some(word));
     }
@@ -219,7 +219,7 @@ fn top_folds_until_shard_read() {
     want([(shard, Ask::PLAIN), (other, Ask::PLAIN)].into_iter());
     assert_eq!(state().wants.len(), 1);
     assert_eq!(state().wants[0].0, shard.subject());
-    arrived(shard.subject(), Some(&shard_file(shard))).unwrap();
+    admit(shard.subject(), Some(&shard_file(shard))).unwrap();
     assert!(holds(&shard.region()));
     assert_eq!(top_of(&written()[..3]), rows);
     assert_eq!(held().len(), 3);
@@ -232,15 +232,15 @@ fn refused_file_named() {
     let _g = sys::serial();
     fresh();
     let shard = shard_of(leaf(0, [5, 7, 2]));
-    arrived(TOP, Some(&top_file(&[(shard.subject(), 0, 0)]))).unwrap();
+    admit(TOP, Some(&top_file(&[(shard.subject(), 0, 0)]))).unwrap();
     let foreign = [format::SETTINGS, 1, 2, 3];
-    assert!(arrived(shard.subject(), Some(&foreign)).is_err());
-    assert_eq!(refused(), &[shard.subject()]);
+    assert!(admit(shard.subject(), Some(&foreign)).is_err());
+    assert_eq!(refused_files(), &[shard.subject()]);
     assert!(!holds(&shard.region()));
     want([(shard, Ask::PLAIN)].into_iter());
     assert!(state().wants.is_empty());
     assert!(on_emptied(shard.subject()));
-    assert!(refused().is_empty() && !on_emptied(shard.subject()));
+    assert!(refused_files().is_empty() && !on_emptied(shard.subject()));
     want([(shard, Ask::PLAIN)].into_iter());
     assert_eq!(state().wants.len(), 1);
 }

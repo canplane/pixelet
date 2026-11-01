@@ -24,8 +24,8 @@ use xpute_kit::status::errno::Errno;
 use crate::sys::io::failure::Failure;
 
 use crate::domain::layer::terrain::clipmap;
-use crate::domain::layer::terrain::fixed::RANGE;
-use crate::domain::layer::terrain::fixed::{separation_column, SEPARATION_COLUMNS};
+use crate::domain::layer::terrain::room::RANGE;
+use crate::domain::layer::terrain::room::{separation_column, SEPARATION_COLUMNS};
 use crate::domain::layer::Base;
 use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::sys::io::fetch;
@@ -40,7 +40,7 @@ impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
     /// The pivot's and a destination's clip levels' tiles.
-    const PINNED: u32 = clipmap::PINNED_TILES;
+    const PINNED_CNT: u32 = clipmap::PINNED_TILES;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy

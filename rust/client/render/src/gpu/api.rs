@@ -314,7 +314,7 @@ impl<'a> TrackedRenderPass<'a> {
 /// only where it holds the pass's reference, this frame's number, as every
 /// draw of the world's pass does; or writes the reference there, as the gate
 /// does (gpu/renderer.rs `frame`). A pass clears it to 0, its reference 0,
-/// unless it keeps it (`PassDesc::kept`), so a pass with no gate passes
+/// unless it keeps it (`PassDesc::load_stencil`), so a pass with no gate passes
 /// everywhere.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Stencil {
@@ -340,7 +340,7 @@ pub struct PassDesc {
     depth: Id,
     depth_load: Load,
     depth_clear: f32,
-    stencil_kept: bool,
+    stencil_load: Load,
     stamp: Option<encode::TimestampWrites>,
 }
 
@@ -349,7 +349,7 @@ impl PassDesc {
     /// frames that claimed each tile (`Stencil`).
     pub fn load_stencil(self) -> PassDesc {
         PassDesc {
-            stencil_kept: true,
+            stencil_load: Load::Load,
             ..self
         }
     }
@@ -369,7 +369,7 @@ pub fn pass_desc(
         depth,
         depth_load,
         depth_clear,
-        stencil_kept: false,
+        stencil_load: Load::Clear,
         stamp,
     }
 }
@@ -463,7 +463,7 @@ struct State {
     /// The images on their way into textures (`Gpu::image`).
     images: Vec<Arriving>,
     /// The images taken since `take_landed` last ran, on this device.
-    landed: Vec<u32>,
+    landed_images: Vec<u32>,
     /// The devices gone so far: what was handed to the GPU under another
     /// count is on none there is.
     generation: u32,
@@ -527,7 +527,7 @@ pub unsafe fn install(at: u32) -> u32 {
         gpu_busy_ms: 0.0,
         gpu_landed: None,
         images: Vec::new(),
-        landed: Vec::new(),
+        landed_images: Vec::new(),
         generation: 0,
     }));
     at
@@ -691,7 +691,7 @@ pub fn on_device_lost() {
         unsafe { core::ptr::write_bytes(core::ptr::from_mut(s.encoder), 0, 1) };
         (s.asked, s.device, s.stamps) = (false, None, None);
         s.images.clear();
-        s.landed.clear();
+        s.landed_images.clear();
         s.generation = s.generation.wrapping_add(1);
         for r in 0..READS {
             *head(read_at(r)) = 0;
@@ -711,7 +711,7 @@ pub fn gpu_publish() {
 /// the device is lost.
 pub fn take_landed(mut landed: impl FnMut(u32)) {
     if let Some(s) = STATE.get(|| None).as_mut() {
-        s.landed.drain(..).for_each(&mut landed);
+        s.landed_images.drain(..).for_each(&mut landed);
     }
 }
 
@@ -762,7 +762,7 @@ pub fn room(bytes: usize) -> bool {
 
 /// An object's handle, or 0 where the frame it was made in no longer fits
 /// (and is dropped with it); a full table is a bug.
-fn made(id: Option<Id>) -> Id {
+fn handle_of(id: Option<Id>) -> Id {
     match id {
         Some(id) => id,
         None => {
@@ -910,7 +910,7 @@ impl Gpu {
             size
         );
         let s = self.s();
-        made(s.encoder.buffer(
+        handle_of(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
                 size,
@@ -930,7 +930,7 @@ impl Gpu {
         usage: u32,
     ) -> Id {
         let s = self.s();
-        made(s.encoder.texture(
+        handle_of(s.encoder.texture(
             &mut s.stream,
             &encode::TextureDescriptor {
                 size: [width, height, layers],
@@ -947,7 +947,7 @@ impl Gpu {
     /// A volume `size` texels on a side each way: no mips, no layers.
     pub fn volume(&self, size: [u32; 3], format: Format, usage: u32) -> Id {
         let s = self.s();
-        made(s.encoder.texture(
+        handle_of(s.encoder.texture(
             &mut s.stream,
             &encode::TextureDescriptor {
                 size,
@@ -964,7 +964,7 @@ impl Gpu {
     /// A volume's view, whole (`volume`).
     pub fn volume_view(&self, texture: Id) -> Id {
         let s = self.s();
-        made(s.encoder.view(
+        handle_of(s.encoder.view(
             &mut s.stream,
             texture,
             &encode::ViewDescriptor {
@@ -989,7 +989,7 @@ impl Gpu {
         layers: u32,
     ) -> Id {
         let s = self.s();
-        made(s.encoder.view(
+        handle_of(s.encoder.view(
             &mut s.stream,
             texture,
             &encode::ViewDescriptor {
@@ -1011,7 +1011,7 @@ impl Gpu {
     /// binding reads it: WebGPU binds no view of both aspects.
     pub fn depth_only_view(&self, texture: Id) -> Id {
         let s = self.s();
-        made(s.encoder.view(
+        handle_of(s.encoder.view(
             &mut s.stream,
             texture,
             &encode::ViewDescriptor {
@@ -1053,7 +1053,7 @@ impl Gpu {
         anisotropy: u32,
     ) -> Id {
         let s = self.s();
-        made(s.encoder.sampler(
+        handle_of(s.encoder.sampler(
             &mut s.stream,
             &encode::SamplerDescriptor {
                 address: [addr, addr, AddressMode::clamp_to_edge],
@@ -1069,7 +1069,7 @@ impl Gpu {
 
     pub fn shader(&self, code: &str) -> Id {
         let s = self.s();
-        made(s.encoder.shader_module(&mut s.stream, code))
+        handle_of(s.encoder.shader_module(&mut s.stream, code))
     }
 
     /// A group's (binding, stages, kind) words, as a pipeline record holds them.
@@ -1085,7 +1085,7 @@ impl Gpu {
             }
         });
         let s = self.s();
-        made(
+        handle_of(
             s.encoder
                 .bind_group_layout(&mut s.stream, &entries[..words.len()]),
         )
@@ -1093,7 +1093,7 @@ impl Gpu {
 
     fn pipeline_layout(&self, layouts: &[Id]) -> Id {
         let s = self.s();
-        made(s.encoder.pipeline_layout(&mut s.stream, layouts))
+        handle_of(s.encoder.pipeline_layout(&mut s.stream, layouts))
     }
 
     /// A render pipeline from its record (frame/shader/record.rs) over the
@@ -1161,7 +1161,7 @@ impl Gpu {
             _ => CompareFunction::always,
         };
         let s = self.s();
-        let p = made(s.encoder.render_pipeline(
+        let p = handle_of(s.encoder.render_pipeline(
             &mut s.stream,
             &encode::RenderPipelineDescriptor {
                 layout: Some(layout),
@@ -1218,7 +1218,7 @@ impl Gpu {
     pub fn compute_pipeline(&self, module: Id, entry: &str, layouts: &[Id]) -> Id {
         let layout = self.pipeline_layout(layouts);
         let s = self.s();
-        let p = made(s.encoder.compute_pipeline(
+        let p = handle_of(s.encoder.compute_pipeline(
             &mut s.stream,
             &encode::ComputePipelineDescriptor {
                 layout: Some(layout),
@@ -1233,7 +1233,7 @@ impl Gpu {
     pub fn bind_group(&self, layout: Id, entries: &[Entry]) -> Id {
         xpute_kit::ensure!(entries.len() <= GROUP_ENTRIES, ENOSPC, entries.len());
         let s = self.s();
-        made(s.encoder.bind_group(&mut s.stream, layout, entries))
+        handle_of(s.encoder.bind_group(&mut s.stream, layout, entries))
     }
 
     /// The format the device's surfaces show best, which the canvas's pipelines target.
@@ -1286,7 +1286,7 @@ impl Gpu {
             if *s.images[k].word & DONE == 0 {
                 return None;
             }
-            s.landed.push(image);
+            s.landed_images.push(image);
             return Some(s.images.swap_remove(k).texture);
         }
         let (width, height) = asset::image_size(file)?;
@@ -1307,7 +1307,7 @@ impl Gpu {
 
     pub fn encoder(&self) -> Id {
         let s = self.s();
-        made(s.encoder.encoder(&mut s.stream))
+        handle_of(s.encoder.encoder(&mut s.stream))
     }
 
     /// `size` texels of `src` into `dst`, as WebGPU's `copyTextureToTexture`.
@@ -1335,17 +1335,13 @@ impl Gpu {
             depth_store: StoreOp::store,
             depth_clear: d.depth_clear,
             depth_read_only: d.depth_load == Load::ReadOnly,
-            stencil_load: if d.stencil_kept {
-                LoadOp::load
-            } else {
-                LoadOp::clear
-            },
+            stencil_load: load_op(d.stencil_load),
             stencil_store: StoreOp::store,
             stencil_clear: 0,
             stencil_read_only: false,
         });
         let s = self.s();
-        made(s.encoder.render_pass(
+        handle_of(s.encoder.render_pass(
             &mut s.stream,
             encoder,
             &encode::RenderPassDescriptor {
@@ -1364,7 +1360,7 @@ impl Gpu {
     /// Timed in `stamp`'s span where the frame is timed.
     pub fn compute_pass(&self, encoder: Id, stamp: Option<encode::TimestampWrites>) -> Id {
         let s = self.s();
-        made(s.encoder.compute_pass(&mut s.stream, encoder, &stamp))
+        handle_of(s.encoder.compute_pass(&mut s.stream, encoder, &stamp))
     }
 
     pub fn dispatch(&self, pass: Id, x: u32, y: u32, z: u32) {
@@ -1522,18 +1518,19 @@ impl Gpu {
     /// A view of the surface's texture for this frame.
     pub fn cur(&self, surface: u32) -> Id {
         let s = self.s();
-        made(s.encoder.current(&mut s.stream, handle_slot(surface)))
+        handle_of(s.encoder.current(&mut s.stream, handle_slot(surface)))
     }
 
     /// The spans' query set, two queries a span, the buffer they resolve into
     /// and those mapped back, a read's each.
     pub fn spans(&self) -> Id {
         let s = self.s();
-        let set = made(
-            s.encoder
-                .query_set(&mut s.stream, QueryType::timestamp, 2 * SPANS as u32),
-        );
-        let resolve = made(s.encoder.buffer(
+        let set = handle_of(s.encoder.query_set(
+            &mut s.stream,
+            QueryType::timestamp,
+            2 * SPANS as u32,
+        ));
+        let resolve = handle_of(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
                 size: (2 * SPANS * 8) as u32,
@@ -1542,7 +1539,7 @@ impl Gpu {
             },
         ));
         let mapped = core::array::from_fn(|_| {
-            made(s.encoder.buffer(
+            handle_of(s.encoder.buffer(
                 &mut s.stream,
                 &encode::BufferDescriptor {
                     size: (2 * SPANS * 8) as u32,

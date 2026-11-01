@@ -8,7 +8,7 @@
 //! the asset root, and its extent (pxl-spec asset/catalog.rs reads the
 //! layout). The host serves it, as hex in TypeScript.
 
-use super::ingested::{file_number, files};
+use super::ingest::{file_number, files};
 use super::{file, read, Node, Output};
 
 /// A data spec's `$type` for a file reference: in Rust its slot, in
@@ -99,7 +99,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let ts = [
         "// @pxl/client/driver/namespace/catalog.spec.ts",
         "//",
-        "// GENERATED from the asset specs and ingested.json",
+        "// GENERATED from the asset specs and ingest.json",
         "//",
         "// The catalog the host plugs in, served below the asset root at `CATALOG`",
         "// (ts/client/src/driver/namespace/asset.ts): the file each of the kernel's slots names and its",

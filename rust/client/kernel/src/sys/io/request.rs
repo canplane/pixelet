@@ -1,6 +1,6 @@
 // pxl-kernel/sys/io/request.rs
 
-//! The kernel's request scheduler: what is wanted (`desired`, a run a
+//! The kernel's request scheduler: what is wanted (`wants`, a run a
 //! stream, replaced whole each turn) and what is out (`attempt`). Ordering, intake and
 //! retry waits are the `Serve` policy's.
 //!
@@ -83,7 +83,7 @@ fn bounds_of(frames: impl Fn(Stream) -> u32) -> Bounds {
     })
 }
 
-/// A want, in its stream's run (`RequestScheduler::desired`).
+/// A want, in its stream's run (`RequestScheduler::wants`).
 #[derive(Clone, Copy, Debug)]
 struct Want {
     subject: u64,
@@ -157,12 +157,12 @@ pub struct RequestScheduler<S> {
     serve: S,
     /// What is wanted: a stream's a run in a room its bound's wide, the
     /// streams' rooms in order (`first`), each run by subject and as long as
-    /// `held` says.
-    desired: Box<[Want]>,
-    held: [usize; Stream::ALL.len()],
+    /// `run_lens` says.
+    wants: Box<[Want]>,
+    run_lens: [usize; Stream::ALL.len()],
     /// Where `declare` lays a stream's run before the run takes its place:
     /// as wide as the widest room.
-    merged: Box<[Want]>,
+    run_stage: Box<[Want]>,
     /// A slot's index and generation are the key the host holds; a key is valid
     /// only while its attempt is out.
     attempt: [Option<Attempt>; MAX_CREDITS as usize],
@@ -170,7 +170,7 @@ pub struct RequestScheduler<S> {
     credits: u32,
     /// The most credits ever granted.
     most_credits: u32,
-    started: Vec<(u64, Stream, u64)>,
+    starts: Vec<(u64, Stream, u64)>,
     stops: Vec<u64>,
     ready: Vec<(Ready, usize)>,
     /// Why reads fail, since the last that came to an answer.
@@ -203,20 +203,21 @@ const fn key_of(slot: usize, generation: u32) -> u64 {
 
 impl<S: Serve> RequestScheduler<S> {
     pub fn new(serve: S, bounds: Bounds) -> RequestScheduler<S> {
-        let desired: usize = bounds.iter().sum();
+        let want_cap: usize = bounds.iter().sum();
         RequestScheduler {
             bounds,
             serve,
-            desired: vec![Want::NONE; desired].into_boxed_slice(),
-            held: [0; Stream::ALL.len()],
-            merged: vec![Want::NONE; bounds.iter().copied().max().unwrap_or(0)].into_boxed_slice(),
+            wants: vec![Want::NONE; want_cap].into_boxed_slice(),
+            run_lens: [0; Stream::ALL.len()],
+            run_stage: vec![Want::NONE; bounds.iter().copied().max().unwrap_or(0)]
+                .into_boxed_slice(),
             attempt: [None; MAX_CREDITS as usize],
             generation: [0; MAX_CREDITS as usize],
             credits: 0,
             most_credits: 0,
-            started: Vec::new(),
+            starts: Vec::new(),
             stops: Vec::new(),
-            ready: Vec::with_capacity(desired),
+            ready: Vec::with_capacity(want_cap),
             failing: None,
             failures: 0,
             struck_ms: f64::NEG_INFINITY,
@@ -225,7 +226,7 @@ impl<S: Serve> RequestScheduler<S> {
         }
     }
 
-    /// Where stream `stream`'s room starts in `desired`: past every room
+    /// Where stream `stream`'s room starts in `wants`: past every room
     /// before it.
     fn first(&self, stream: Stream) -> usize {
         self.bounds[..stream as usize].iter().sum()
@@ -233,7 +234,7 @@ impl<S: Serve> RequestScheduler<S> {
 
     fn run(&self, stream: Stream) -> &[Want] {
         let first = self.first(stream);
-        &self.desired[first..first + self.held[stream as usize]]
+        &self.wants[first..first + self.run_lens[stream as usize]]
     }
 
     fn find(&self, stream: Stream, subject: u64) -> Option<usize> {
@@ -245,9 +246,9 @@ impl<S: Serve> RequestScheduler<S> {
 
     /// The want at `i` of `stream`'s run gone, the rest of the run closing up.
     fn drop_want(&mut self, stream: Stream, i: usize) {
-        let end = self.first(stream) + self.held[stream as usize];
-        self.desired.copy_within(i + 1..end, i);
-        self.held[stream as usize] -= 1;
+        let end = self.first(stream) + self.run_lens[stream as usize];
+        self.wants.copy_within(i + 1..end, i);
+        self.run_lens[stream as usize] -= 1;
     }
 
     fn slot_of(&self, key: u64) -> Option<usize> {
@@ -275,7 +276,7 @@ impl<S: Serve> RequestScheduler<S> {
             stream as u32
         );
         let (first, bound) = (self.first(stream), self.bounds[stream as usize]);
-        let run = &self.desired[first..first + self.held[stream as usize]];
+        let run = &self.wants[first..first + self.run_lens[stream as usize]];
         let (mut k, mut n) = (0, 0);
         for (j, &(subject, ask)) in wanted.iter().enumerate() {
             if wanted.get(j + 1).is_some_and(|w| w.0 == subject) {
@@ -294,11 +295,11 @@ impl<S: Serve> RequestScheduler<S> {
                 },
             };
             xpute_kit::ensure!(n < bound, ENOTRECOVERABLE, stream as u32);
-            self.merged[n] = w;
+            self.run_stage[n] = w;
             n += 1;
         }
-        self.desired[first..first + n].copy_from_slice(&self.merged[..n]);
-        self.held[stream as usize] = n;
+        self.wants[first..first + n].copy_from_slice(&self.run_stage[..n]);
+        self.run_lens[stream as usize] = n;
     }
 
     pub fn set_credits(&mut self, credits: u32) {
@@ -374,7 +375,7 @@ impl<S: Serve> RequestScheduler<S> {
                 break;
             }
             let Some(slot) = self.free_slot() else { break };
-            self.start(slot, r.stream, self.desired[i], r.rank, at);
+            self.start(slot, r.stream, self.wants[i], r.rank, at);
         }
         self.ready = ready;
     }
@@ -391,7 +392,7 @@ impl<S: Serve> RequestScheduler<S> {
             enqueue_ms: w.enqueue_ms,
             start_ms: at,
         });
-        self.started
+        self.starts
             .push((key_of(slot, self.generation[slot]), stream, w.subject));
     }
 
@@ -409,8 +410,8 @@ impl<S: Serve> RequestScheduler<S> {
         record(&a, at, Ended::Aborted, None);
     }
 
-    pub fn take_started(&mut self, mut each: impl FnMut(Credit, Stream, u64)) {
-        for (key, stream, subject) in self.started.drain(..) {
+    pub fn take_starts(&mut self, mut each: impl FnMut(Credit, Stream, u64)) {
+        for (key, stream, subject) in self.starts.drain(..) {
             each(Credit { key }, stream, subject);
         }
     }
@@ -425,7 +426,7 @@ impl<S: Serve> RequestScheduler<S> {
     /// failed: it is not asked again while it is wanted.
     pub fn has_object_failed(&self, stream: Stream, subject: u64) -> bool {
         self.find(stream, subject)
-            .is_some_and(|i| matches!(self.desired[i].wait, Wait::Object))
+            .is_some_and(|i| matches!(self.wants[i].wait, Wait::Object))
     }
 
     pub fn attempt_of(&self, key: u64) -> Option<(Stream, u64)> {
@@ -452,7 +453,7 @@ impl<S: Serve> RequestScheduler<S> {
             Ended::Refused(refused) => {
                 self.on_answered();
                 if let Some(i) = want {
-                    self.desired[i].wait = Wait::Room(refused);
+                    self.wants[i].wait = Wait::Room(refused);
                 }
             }
             Ended::Aborted => {}
@@ -494,7 +495,7 @@ impl<S: Serve> RequestScheduler<S> {
         // Still an answer from the server.
         self.on_answered();
         if let Some(i) = want {
-            self.desired[i].wait = wait;
+            self.wants[i].wait = wait;
         }
     }
 
@@ -505,10 +506,10 @@ impl<S: Serve> RequestScheduler<S> {
                 self.end(slot);
             }
         }
-        self.held = [0; Stream::ALL.len()];
+        self.run_lens = [0; Stream::ALL.len()];
         self.on_answered();
         self.given_up = false;
-        self.started.clear();
+        self.starts.clear();
         self.stops.clear();
     }
 }
@@ -596,8 +597,8 @@ pub fn pump() {
     }
 }
 
-pub fn take_started(each: impl FnMut(Credit, Stream, u64)) {
-    sched().take_started(each);
+pub fn take_starts(each: impl FnMut(Credit, Stream, u64)) {
+    sched().take_starts(each);
 }
 
 pub fn take_stops(each: impl FnMut(u64)) {

@@ -35,7 +35,7 @@ const OFF_CRATES: [&str; 6] = [
 /// named variants, round_half_up and round_half_away, as options a library
 /// offers.
 const ROUNDING_ROOTS: [&str; 3] = ["rust/", "ts/", "xpute/"];
-const ROUNDING_NAMED: [&str; 4] = [
+const ROUNDING_VARIANT_FILES: [&str; 4] = [
     "xpute/ts/kit/src/math/scalar.ts",
     "xpute/ts/kit/src/math/scalar.test.ts",
     "xpute/cpp/xpute/kit/math/scalar.hpp",
@@ -102,14 +102,14 @@ const SPEC_CORE_ORDER: [(&str, u8); 28] = [
     ("world", 2),
     ("cast", 2),
     ("support", 2),
-    ("observed", 2),
+    ("pyramid", 2),
     ("beam", 3),
     ("eye", 3),
     ("raster", 3),
     ("ray", 3),
     ("light", 3),
     ("screen", 3),
-    ("generated", 3),
+    ("generation", 3),
     ("face", 3),
 ];
 
@@ -162,7 +162,7 @@ fn screen_reached(text: &str) -> Vec<usize> {
 /// variants are not.
 const PARTICIPLE_ROOTS: [&str; 2] = ["rust/", "xpute/"];
 const TS_PARTICIPLE_ROOTS: [&str; 2] = ["xpute/ts/", "ts/client/src/"];
-const TS_UNCHECKED: &str = "ts/client/src/shell/";
+const TS_UNCHECKED_ROOT: &str = "ts/client/src/shell/";
 /// The irregular past participles a type's name may not be alone. A word
 /// that is also a noun (`Hit`, `Set`, `Read`, `Run`, `Cut`, `Split`) is not
 /// among them.
@@ -304,7 +304,7 @@ const PIXELET_WORDS: &str = r"(?i)\b(pixelet|kernel|shell)\b";
 /// The modules `text` names through `crate::`, a `domain::` step passed
 /// over (the kernel's heads and trunk live under it), a group's every
 /// first name among them, each with the line it is named on.
-fn named(text: &str) -> Vec<(usize, String)> {
+fn crate_modules(text: &str) -> Vec<(usize, String)> {
     let code: String = text
         .lines()
         .map(|l| l.split("//").next().unwrap_or(""))
@@ -366,7 +366,7 @@ fn standing(f: &str, root: &str) -> String {
 /// `order`, or of one head by another; and every module `order` does not
 /// place, but the crate's root and those that stand `beside` it, so a new
 /// one is placed before it is checked.
-fn ordered(
+fn out_of_order(
     files: &[&str],
     read: &dyn Fn(&str) -> Option<String>,
     root: &str,
@@ -388,7 +388,7 @@ fn ordered(
             }
             continue;
         };
-        for (line, them) in named(&read(f).unwrap_or_default()) {
+        for (line, them) in crate_modules(&read(f).unwrap_or_default()) {
             let Some(theirs) = level(&them) else { continue };
             let head = heads.contains(&me.as_str()) && heads.contains(&them.as_str());
             if them != me && (theirs > mine || head) {
@@ -416,7 +416,7 @@ fn ordered(
 /// `benches/` or `examples/`), and no `mod`, `#[path]` or `include!` in a
 /// file, nor a manifest's `path`, names it. Such a file compiles in nothing,
 /// so nothing checks it.
-fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+fn unlinked_files(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
     use std::collections::BTreeSet;
     use std::path::{Component, Path, PathBuf};
     fn clean(p: &Path) -> PathBuf {
@@ -568,7 +568,7 @@ fn run() -> Result<Vec<String>, String> {
     let rounded = Regex::new(r"\.(rs|tsx?|wgsl|hpp|cpp)$").expect("the extensions' pattern");
     for f in files.iter().filter(|f| {
         ROUNDING_ROOTS.iter().any(|r| f.starts_with(r))
-            && !ROUNDING_NAMED.contains(f)
+            && !ROUNDING_VARIANT_FILES.contains(f)
             && rounded.is_match(f)
             && !f.ends_with(".gen.wgsl")
     }) {
@@ -596,7 +596,7 @@ fn run() -> Result<Vec<String>, String> {
         problems.push(format!("{f}: CommonJS; the tree's scripts are ES modules"));
     }
 
-    problems.extend(ordered(
+    problems.extend(out_of_order(
         &files,
         &read,
         KERNEL,
@@ -604,7 +604,7 @@ fn run() -> Result<Vec<String>, String> {
         &KERNEL_HEADS,
         &KERNEL_BESIDE,
     ));
-    problems.extend(ordered(
+    problems.extend(out_of_order(
         &files,
         &read,
         SPEC_CORE,
@@ -625,7 +625,7 @@ fn run() -> Result<Vec<String>, String> {
     }
     for f in files.iter() {
         let ts = TS_PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
-            && !f.starts_with(TS_UNCHECKED)
+            && !f.starts_with(TS_UNCHECKED_ROOT)
             && (f.ends_with(".ts") || f.ends_with(".tsx"));
         let rs = PARTICIPLE_ROOTS.iter().any(|r| f.starts_with(r))
             && (f.ends_with(".rs") || (f.ends_with(".wgsl") && !f.ends_with(".gen.wgsl")));
@@ -655,7 +655,7 @@ fn run() -> Result<Vec<String>, String> {
         }
     }
 
-    problems.extend(unlinked(&files, &read));
+    problems.extend(unlinked_files(&files, &read));
 
     // The generated shaders' stamp names the digest of the sources they were
     // made from (pxl-tool shader.rs `STAMP`); a set the tree has moved past is
@@ -715,7 +715,7 @@ mod spec;"
                 .to_string(),
             )
         };
-        let found = unlinked(&files, &read);
+        let found = unlinked_files(&files, &read);
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(found[0].starts_with("rust/a/src/stray.rs:"));
     }

@@ -7,7 +7,7 @@
 //! Without the mip chain the far ground crawls as the camera moves.
 
 use crate::frame::shader::word::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
-use pxl_spec::asset::ingested::{CubeFace, PACK};
+use pxl_spec::asset::ingest::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_sentinel_tile, shipped_texture_tile, TileOrigin};
 
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};

@@ -29,7 +29,7 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::domain::query::changed;
+use crate::domain::query::changes;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::view::frame::coord;
@@ -70,9 +70,9 @@ pub(super) fn region((zoom, [x, y]): Brick, [low, high]: [f64; 2]) -> Aabb {
 #[derive(Default)]
 struct Arrangement {
     candidates: Candidates,
-    kept: Vec<u32>,
+    visible: Vec<u32>,
     set: Set,
-    drawn: Vec<u32>,
+    draw_order: Vec<u32>,
     /// Nearest the eye first: screen box, and where a tap on it goes.
     hits: Vec<([f64; 4], MarkerHit)>,
     /// Kept so a settled turn asks the heap for nothing; a brick's in a
@@ -80,7 +80,7 @@ struct Arrangement {
     pins: Vec<pin::Pin>,
     places: Vec<place::Place>,
     /// What the sources show this run, its room kept.
-    shown: Vec<Instance>,
+    source_instances: Vec<Instance>,
     /// The drawn bricks `pins` and `places` were read from: a brick drawn
     /// still keeps what was read from it, so an eye move casts rays only in
     /// the bricks it enters.
@@ -90,23 +90,23 @@ struct Arrangement {
     /// Places, ground or objects moved since they were read.
     moved: bool,
     /// The place tiles whose answer moved, beside the ground's
-    /// (domain/query/changed.rs): a brick they touch is read again.
+    /// (domain/query/changes.rs): a brick they touch is read again.
     moved_places: Vec<Tile>,
     /// The bricks this turn would read, by how far from the eye, with
     /// their columns.
     entering: Vec<(f64, Brick, Aabb)>,
-    sized: Vec<Instance>,
-    /// Last turn's `sized`, its buffer reused.
+    sized_instances: Vec<Instance>,
+    /// Last turn's `sized_instances`, its buffer reused.
     spare: Vec<Instance>,
     /// Designs not ready yet, kept to become so, each by the index in
-    /// `sized` of the instance showing its old drawing meanwhile.
+    /// `sized_instances` of the instance showing its old drawing meanwhile.
     pending: Vec<(u32, Design)>,
     /// What was drawn last by its holder's key, and the designs the markers
     /// keep: made each run, their room kept.
     before: FnvHashMap<Key, Design>,
     keep: FnvHashSet<Design>,
     /// What the marker set holds, and the buffer the next run lays out
-    /// into, swapped as `sized` and `spare` are.
+    /// into, swapped as `sized_instances` and `spare` are.
     instances: Vec<f32>,
     spare_instances: Vec<f32>,
     /// What the last run read, compared by value: equal, with nothing moved
@@ -125,8 +125,8 @@ struct Arrangement {
 struct Inputs {
     o: Observation,
     places: bool,
-    drafted: Option<(EntryAt, u64)>,
-    said: line::Bubble,
+    draft_key: Option<(EntryAt, u64)>,
+    bubble: line::Bubble,
 }
 
 /// The name a holder calls what it shows by, from one run to the next, and
@@ -160,7 +160,7 @@ static ARRANGEMENT: Global<Arrangement> = Global::new();
 /// stands between in it.
 #[derive(Default, PartialEq)]
 struct Read {
-    drawn: Vec<Brick>,
+    bricks: Vec<Brick>,
     places: bool,
 }
 
@@ -225,8 +225,8 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     let seen = Inputs {
         o,
         places: settings_store().place,
-        drafted: pin::drafted(),
-        said: line::said(o.eye),
+        draft_key: pin::draft_key(),
+        bubble: line::bubble(o.eye),
     };
     if !p.waiting && !p.moved && p.last.as_ref() == Some(&seen) {
         return;
@@ -237,7 +237,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     // grown by what a marker draws past it at the box's far side; none past
     // where the rays end, over ground the sky's Earth stands for.
     let now = &mut p.now;
-    now.drawn.clear();
+    now.bricks.clear();
     let extent = extent_px(SPACING_PX);
     let drawn = observation::eye_draw_dist().unwrap_or(0.0);
     observation::bricks(&o, &mut |brick, heights| {
@@ -250,22 +250,22 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         }));
         let pad = extent * units_per_px_at(far);
         if frame.sees_box(b.min.map(|v| v - pad), b.max.map(|v| v + pad)) {
-            now.drawn.push(brick);
+            now.bricks.push(brick);
         }
     });
-    now.drawn.sort_unstable();
+    now.bricks.sort_unstable();
     // Places are a setting; what someone placed is always shown.
     now.places = settings_store().place;
     let places = now.places;
     // What was read stands for a brick still drawn whose columns no change
-    // touches (domain/query/changed.rs), while places did not turn: a
+    // touches (domain/query/changes.rs), while places did not turn: a
     // brick left or touched drops its run, and only one entered or touched
     // is read, as many a turn as a pass of the tick's budget reads and at
     // least one, nearest the eye first; the rest are not read yet, so a
     // later turn reads them.
     p.moved = false;
     let before = match &p.found_for {
-        Some(f) if f.places == places => f.drawn.as_slice(),
+        Some(f) if f.places == places => f.bricks.as_slice(),
         _ => &[],
     };
     let moved_places = &p.moved_places;
@@ -273,15 +273,15 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     // Whether each drawn brick stands, asked once a brick however many pins
     // and places it holds.
     let stood: Vec<bool> = now
-        .drawn
+        .bricks
         .iter()
         .map(|&s| {
             let r = columns(s);
             before.binary_search(&s).is_ok()
-                && !changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
+                && !changes::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
         })
         .collect();
-    let stands = |s: &Brick| now.drawn.binary_search(s).is_ok_and(|k| stood[k]);
+    let stands = |s: &Brick| now.bricks.binary_search(s).is_ok_and(|k| stood[k]);
     let (mut pins, mut read_places) =
         (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
     pins.retain(|s| stands(&s.brick));
@@ -289,7 +289,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     let entering = &mut p.entering;
     entering.clear();
     entering.extend(
-        now.drawn
+        now.bricks
             .iter()
             .zip(&stood)
             .filter(|(_, &st)| !st)
@@ -317,12 +317,12 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
             },
             None,
         )
-        .visited as usize;
+        .steps as usize;
     let unread = entering.len() - read;
     // Not read, so not what they were read from.
     let later = &mut entering[read..];
     later.sort_unstable_by_key(|e| e.1);
-    now.drawn
+    now.bricks
         .retain(|d| later.binary_search_by_key(d, |e| e.1).is_err());
     p.moved_places.clear();
     if p.found_for.as_ref() != Some(&p.now) {
@@ -330,16 +330,16 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         p.now = p.found_for.replace(now).unwrap_or_default();
     }
     p.candidates.reset();
-    let drawn_before = core::mem::take(&mut p.sized);
+    let drawn_before = core::mem::take(&mut p.sized_instances);
     let mut sized = core::mem::take(&mut p.spare);
     sized.clear();
     p.pending.clear();
     // Each shown at the zoom the grid's cell at its own point is.
-    let mut shown = core::mem::take(&mut p.shown);
+    let mut shown = core::mem::take(&mut p.source_instances);
     shown.clear();
     pin::show(&mut pins, o.eye, &mut shown);
     place::show(&mut read_places, o.eye, &mut shown);
-    shown.extend(seen.said.shown());
+    shown.extend(seen.bubble.instance());
     let spacing = SPACING_PX;
     // What was drawn last by its holder's key, read once: what a holder
     // shows changed, and what was drawn stays until the new one is ready to
@@ -351,7 +351,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     // The line is laid out last, so it wins a tie with another marker (the sort's
     // tiebreak).
     for s in shown.drain(..) {
-        let (design, region) = s.design.spaced(spacing);
+        let (design, region) = s.design.with_spacing(spacing);
         let (design, held) = match before.get(&s.key) {
             Some(before) if *before != design && !design::ready(&design) => {
                 (before.clone(), Some(design))
@@ -383,11 +383,11 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
             .iter()
             .map(|s| s.design.clone())
             .chain(p.pending.iter().map(|w| w.1.clone()))
-            .chain(seen.said.kept()),
+            .chain(seen.bubble.design()),
     );
     let freed = design::retain(&p.keep);
-    (p.pins, p.places, p.shown) = (pins, read_places, shown);
-    select_visible(&mut p.candidates, &mut p.kept);
+    (p.pins, p.places, p.source_instances) = (pins, read_places, shown);
+    select_visible(&mut p.candidates, &mut p.visible);
     // A design held for an instance seen asks its slot now, after the slots
     // let go are freed, so it is painted at render. Where the atlas has no
     // room for it, the hold is let go: the instance shows the new design,
@@ -395,7 +395,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     // One whose text is not laid out yet stays held and asks nothing: it
     // asks the turn its text comes (`design::coming`).
     let mut refused = false;
-    for &i in &p.kept {
+    for &i in &p.visible {
         let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else {
             continue;
         };
@@ -416,23 +416,23 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     if p.waiting {
         edge::request_world_tick();
     }
-    p.drawn.clear();
-    for &i in &p.kept {
+    p.draw_order.clear();
+    for &i in &p.visible {
         if design::slot(&sized[i as usize].design) == NO_SLOT {
             continue;
         }
-        p.drawn.push(i);
+        p.draw_order.push(i);
     }
     // Farthest first: where two are both seen, the nearer is drawn over.
     let candidates = &p.candidates;
-    p.drawn.sort_by(|&a, &b| {
+    p.draw_order.sort_by(|&a, &b| {
         candidates.d2[b as usize]
             .total_cmp(&candidates.d2[a as usize])
             .then(candidates.tiebreak[a as usize].total_cmp(&candidates.tiebreak[b as usize]))
     });
     p.hits.clear();
     p.hits.extend(
-        p.drawn
+        p.draw_order
             .iter()
             .rev()
             .filter_map(|&i| Some((p.candidates.screen[i as usize], sized[i as usize].tap?))),
@@ -441,7 +441,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     instances.clear();
     // f32 instances, so about the sea under the eye rather than the world's origin.
     let about = pose::sea_under_eye();
-    for &i in &p.drawn {
+    for &i in &p.draw_order {
         let i = i as usize;
         let at = [
             p.candidates.local_x[i] - about[0],
@@ -466,7 +466,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         ctx.invalidate();
     }
     let drawn_instances = core::mem::replace(&mut p.instances, instances);
-    (p.sized, p.spare, p.spare_instances) = (sized, drawn_before, drawn_instances);
+    (p.sized_instances, p.spare, p.spare_instances) = (sized, drawn_before, drawn_instances);
 }
 
 /// The markers the last step laid out, into the frame's list.

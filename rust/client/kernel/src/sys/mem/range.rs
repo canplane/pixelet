@@ -1,4 +1,4 @@
-// pxl-kernel/sys/mem/fixed.rs
+// pxl-kernel/sys/mem/range.rs
 
 //! What `.fixed` is to whoever holds a range of it: placed once at boot,
 //! never freed, sized at compile time. Only the kernel's own formats belong

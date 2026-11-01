@@ -18,7 +18,7 @@ import {
   type BaseLayer,
   TILE_SPHERE,
   tileObject,
-} from "./published.spec.ts";
+} from "./publication.spec.ts";
 import { tile_url } from "@/driver/namespace/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { get } from "@/driver/namespace/read.ts";
@@ -85,16 +85,18 @@ function packed(body: U8Array): boolean {
   );
 }
 
-/** A bake's object by its number, under the source `declared`; none before
+/** A bake's object by its number, under the source `declaration`; none before
  * the source is declared, as the kernel asks for none. */
 export async function read_object(
-  declared: Declaration | null,
+  declaration: Declaration | null,
   bake: u32,
   number: bigint,
   signal: AbortSignal,
 ): Promise<U8Array> {
   const name =
-    declared === null ? null : tile_object(declared, BASE_LAYERS[bake], number);
+    declaration === null
+      ? null
+      : tile_object(declaration, BASE_LAYERS[bake], number);
   if (name === null) throw new FileError(Errno.ENOENT);
   const body = await get(tile_url(BASE_LAYERS[bake], name), name, signal);
   if (body.byteLength > 0 && packed(body)) {

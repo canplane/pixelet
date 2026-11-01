@@ -9,7 +9,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use pxl_spec::bake::constant::EntryAt;
 
-use super::changed::Columns;
+use super::changes::Columns;
 use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::{Store, Walk};
 use crate::domain::layer::tile_cache::{Lines, TileCache};
@@ -70,8 +70,8 @@ impl<'a> World<'a> {
 
     /// As it is unplaced: nothing placed and no preview's cuts asked of it,
     /// the ground's alone, which decor generates on (pxl-spec-core
-    /// `generated::DecorQuery::column_surface`).
-    pub(super) fn unplaced(self) -> World<'a> {
+    /// `generation::DecorQuery::column_surface`).
+    pub(super) fn ground_only(self) -> World<'a> {
         World {
             unplaced: true,
             hide: None,

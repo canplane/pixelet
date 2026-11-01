@@ -39,7 +39,7 @@ KINDS = ["terrain", "place", "division", "earth"]
 SOURCE = "source"
 # Beside a copy's tiles, what it is: never uploaded.
 MANIFEST = "manifest.json"
-PUBLISHED = json.loads((REPO / "spec/spec/bake/published.json").read_text())
+PUBLISHED = json.loads((REPO / "spec/spec/bake/publication.json").read_text())
 
 
 class Refused(Exception):
@@ -51,7 +51,7 @@ def die(message):
 
 
 def tile_object(version, name):
-    """A tile's object under its kind, published.json's `OBJECT` filled in."""
+    """A tile's object under its kind, publication.json's `OBJECT` filled in."""
     return PUBLISHED["OBJECT"].replace("{version}", version).replace("{name}", name)
 
 

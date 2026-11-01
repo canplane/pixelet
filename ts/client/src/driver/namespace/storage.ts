@@ -6,10 +6,9 @@
  * bytes; the platform keeps text, so each is kept as its bytes' base64url
  * (`kept`, `bytes_of`), and text that is none is no file of bytes
  * (EBADMSG), which the kernel refuses. The kernel refuses a file not of its
- * slot's format and writes nothing over it; here is decided each slot's key,
- * what becomes of a refused file, and what carries over from before the
- * slots. Nothing kept is dropped: a refused file is set aside, and read back,
- * before its slot empties.
+ * slot's format and writes nothing over it; here is decided each slot's key
+ * and what becomes of a refused file. Nothing kept is dropped: a refused file
+ * is set aside, and read back, before its slot empties.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -53,30 +52,12 @@ export function bytes_of(text: string): U8Array {
 }
 
 const KEYS: ReadonlyMap<u32, string> = new Map([
-  [storage.SETTINGS, "pxl:kept:settings"],
+  [storage.SETTINGS, "pxl:storage:settings"],
 ]);
 
 /** A slot's storage key; none for a number the kernel does not keep. */
 export function storage_key(slot: u32): string | undefined {
   return KEYS.get(slot);
-}
-
-/** Where the settings were kept before their slot, by name as JSON, then for
- * a day as their slot holds them. */
-const SETTINGS_BEFORE = "pxl:settings";
-
-/** Before the kernel reads a slot: an empty slot is filled from what was kept
- * before it, once, and that is left where it was. The settings carry over as
- * they are, so the kernel refuses the JSON and they reset once. */
-export function migrate(s: Storage = STORAGE): void {
-  carry(s, storage.SETTINGS, SETTINGS_BEFORE);
-}
-
-function carry(s: Storage, slot: u32, before: string): void {
-  const key = KEYS.get(slot)!;
-  const text = s.get(before);
-  if (text === null || s.get(key) !== null) return;
-  s.set(key, text);
 }
 
 /** Sets what `key` holds aside under `<key>:aside:<ms>` and empties it.

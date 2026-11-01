@@ -3,7 +3,7 @@
 //! One deferrable read for the request scheduler (sys/io/request.rs). The scheduler
 //! orders and cancels; the shell does the transport.
 
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 
 pub use crate::sys::io::demand_spec::TaskPhaseName;
 use core::cmp::Ordering;

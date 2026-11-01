@@ -413,7 +413,7 @@ Decor and the markers stand beside the ground, and both are gathered over the
 eye's clipmap levels' bricks.
 
 Decor is generated on the GPU from the same clipmap levels the rays read
-(`pxl-render gpu/generated.rs`). The leaf cells under a clipmap level's brick
+(`pxl-render gpu/generator.rs`). The leaf cells under a clipmap level's brick
 are read off the hash a level's cell a thread, each candidate that stands at
 the level and stands clear is generated on a thread of its own. A brick's decor
 is thinned and generated whole only where its clipmap level holds another brick
@@ -426,8 +426,8 @@ ground drawn where a finer one holds no brick, over open sea), and compacted
 into the instances, a model down to its own size on screen, an impostor below
 it and culled below that. Placed decor is handed in
 as records the GPU draws beside it, taken where the rays ask the coarsest zoom
-it stands at or finer (`domain/scene/decor/drawn.rs`,
-`pxl-spec-core generated.rs` `drawn_at`).
+it stands at or finer (`domain/scene/decor/gpu.rs`,
+`pxl-spec-core generation.rs` `drawn_at`).
 
 A **marker** is drawn flat to the camera: a place, a pin someone put up, or the
 chat's line. Each kind reads its own, and one arrangement draws them together
@@ -499,8 +499,8 @@ times a scale the `resolution` setting picks
 (`domain/view/frame/resolution.rs`).
 
 What the rays asked of each node is kept between frames in the **observed
-pyramid** (`pxl-spec-core observed.rs`), a table keyed by the node, and
-forgotten only where what a node read changed (`pxl-shader observed.rs`
+pyramid** (`pxl-spec-core pyramid.rs`), a table keyed by the node, and
+forgotten only where what a node read changed (`pxl-shader pyramid.rs`
 `forget_cs`).
 
 A ray leaves four words (`pxl-spec-core ray.rs`): the asset it met, with its
@@ -525,7 +525,7 @@ It casts only what a receiver reads:
 ```text
   the world, where the eye's rays met it ┐
   decor, where it is placed              ├─▶ marks the tile it stands on
-  an actor, where it is drawn            ┘   (light_mark_cs, light_mark_drawn_cs)
+  an actor, where it is drawn            ┘   (light_mark_cs, light_mark_draws_cs)
                                                    │
                                                    ▼
             a tile is read if it lies sunward of one stood on,
@@ -551,9 +551,9 @@ the eye has moved that far (`light_detail_cs`, `light.rs` `holds`). The light's
 beam rays and samples take entries of their own for it (`light_beam_cs`,
 `light_sample_cs`), so the eye's walks tell nothing. Each keeps its own least
 margin, and each tile cast gathers once those of the beam rays and samples that
-feed it (`light_held_cs`); a slot walked apart writes its own over its place in
+feed it (`light_margin_cs`); a slot walked apart writes its own over its place in
 the list, and those alone are lowered into their tiles' with an atomic
-(`light_miss_held_cs`), so the passes that walk read the list plainly.
+(`light_miss_margin_cs`), so the passes that walk read the list plainly.
 
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and
@@ -701,7 +701,7 @@ the host answers from what it holds, a text's lines and its pixels, the kernel
 asks by a hostcall run now, answered before the call returns (`sys/io/text.rs`):
 a page's host through the module's import, a device's on the JavaScript thread
 that waits on the turn. Beside those, only what the bracket hands over is called
-directly. An answer comes back as a number, read once by `answered` into a count
+directly. An answer comes back as a number, read once by `answer_of` into a count
 or one of xpute's `Errno` members; a code no member names is the host breaking
 the protocol.
 
@@ -833,8 +833,8 @@ a platform that keeps text keeps their base64url (`namespace/storage.ts`
 `OBJECT` with its own (`host.json` `format`); the kernel refuses one of another
 format, one its backend cannot read as bytes, or one that does not decode, as a
 driver refuses a superblock it does not know, and never writes over it. It names
-each refused file in the snapshot (`refused`); the client sets it aside, empties
-it and says so (`FS_TRUNCATED`, `namespace/refused.ts`), and the kernel reads it
+each refused file in the snapshot (`refused_files`); the client sets it aside, empties
+it and says so (`FS_TRUNCATED`, `namespace/refusal.ts`), and the kernel reads it
 again. A shard whose file is refused stays unread meanwhile, and no edit stands
 in it.
 
@@ -1063,7 +1063,7 @@ refused ([What the view holds](#what-the-view-holds);
 
 A **version** is a copy of a set uploaded under a new name, its format and the
 day (`script/publish.py`). The format is the code's
-(`spec/spec/bake/published.json` `FORMAT`), bumped only by a change to how the
+(`spec/spec/bake/publication.json` `FORMAT`), bumped only by a change to how the
 client reads a tile. The copy is every tile at the coarsest zoom read and finer,
 less, where a kind is pruned, the tiles no reader asks for: those their parent
 says are no tile (`tile/shard.rs` `Stage::publish`). Places and divisions are
@@ -1103,7 +1103,7 @@ loads at once (`pxl-kernel sys/load.rs` `LOAD_FILES`).
 
 The asset ingest takes every file under `asset/content/` into the bucket's form,
 keyed by the SHA-256 of its bytes, so moving a file changes no key, and writes
-the table that numbers each (`spec/spec/asset/ingested.json`, `pxl-tool
+the table that numbers each (`spec/spec/asset/ingest.json`, `pxl-tool
 bin/ingest_asset.rs`). The client binds a number to its key
 (`ts/client/src/driver/namespace/asset.ts`).
 

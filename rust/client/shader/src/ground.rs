@@ -3,7 +3,7 @@
 //! Each handed brick's ground, filled once as it is handed: its columns'
 //! tops off its tile's samples (`height_cs`) and its levels (`bound_cs`),
 //! which the CPU reads back; and the eye's clip levels' levels folded over
-//! their bricks (`joined_cs`).
+//! their bricks (`fold_cs`).
 
 use pxl_spec_core::fill;
 use pxl_spec_core::clipmap::{self, BRICK, FIRST_CELL};
@@ -21,9 +21,9 @@ use crate::world::{brick_at, NoPalette, World};
 /// than a brick reads as one entry (`clipmap::bound_over`), a level a dispatch
 /// off the one under it. Run where the clip levels' slots moved; a present
 /// brick's levels stand while it does.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "joined_cs"))]
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "fold_cs"))]
 #[allow(clippy::too_many_arguments)]
-pub fn joined_cs(
+pub fn fold_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(num_workgroups)] groups: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
@@ -104,14 +104,14 @@ pub fn bound_cs(
     }
     let rec = clipmap::handed_at(id.z);
     let base = brick_at(at(fresh, rec + clipmap::FILL_BRICK));
-    let kept = fill::Scratch {
+    let spans = fill::Scratch {
         words: scratch,
         at: fill::scratch_at(scratch, id.z),
     };
     fill::level(
         ground,
         base,
-        &kept,
+        &spans,
         at(fresh, rec + clipmap::FILL_CELL),
         j,
         [id.x, id.y],

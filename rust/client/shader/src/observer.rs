@@ -5,7 +5,7 @@
 //! corner's beam ray (`beam`), each cell's start off them (`cell`), each
 //! sample's walk (`sample`) and box (`sample_box`), a ray's visible sample
 //! (`took`), the sky about it (`sky`) or a walk of its own (`resolve`), and its
-//! walk resumed off the beam (`resume`, `walked`), each casting what its
+//! walk resumed off the beam (`resume`, `walk_again`), each casting what its
 //! observer needs alone (`Observer::needs`). An entry is a pass's call for its
 //! observer (beam.rs, cast.rs, raster.rs, light.rs); its lattice, its rays and
 //! what its walks leave are its own (eye.rs `Eye`, light.rs `Map`). A pass both
@@ -14,11 +14,11 @@
 
 use pxl_spec_core::cast::{self, Detail, Trace, Query, Until};
 use pxl_spec_core::world::Inheritance;
-use pxl_spec_core::{beam, observed, raster, tally};
+use pxl_spec_core::{beam, pyramid, raster, tally};
 
-use crate::beam::{resumed, sample_put, BeamLine, Leaving, Words};
-use crate::observed::{add_tally, pyramid_at, Pyramid, Writing};
-use crate::raster::{boxed, taken, NONE};
+use crate::beam::{resume_walk, sample_put, BeamLine, Leaving, Words};
+use crate::pyramid::{add_tally, pyramid_at, Pyramid, Writing};
+use crate::raster::{write_box, visible_cell, NONE};
 use crate::world::{PaletteWords, World};
 
 /// A ray as an observer aims it: where it starts, its way and reach, and
@@ -54,10 +54,10 @@ pub(crate) trait Observer {
     /// `tally::LIGHT`).
     fn tally(&self) -> u32;
     /// Whether its walks write the cells a ray sees into the observed
-    /// pyramid (observed.rs `Writing::assets`).
+    /// pyramid (pyramid.rs `Writing::assets`).
     fn assets(&self) -> bool;
     /// The passes its beam, its samples and its walks again write the
-    /// observed pyramid under (pxl-spec-core `observed::BEAM_PASS`).
+    /// observed pyramid under (pxl-spec-core `pyramid::BEAM_PASS`).
     fn passes(&self) -> [u32; 3];
     /// Whether its rays start apart, a line's nodes held from its own
     /// origin (`origin_of`); else every ray starts at one, a line's node
@@ -104,7 +104,7 @@ pub(crate) trait Observer {
     fn cell_of(&self, at: Self::At) -> [u32; 2];
     /// From where its boxes are laid for the raster, and whether a box
     /// about the eye is marked and at the screen's tangents (raster.rs
-    /// `boxed`).
+    /// `write_box`).
     fn raster_layout(&self) -> ([i32; 3], (bool, [f32; 2]));
     /// Whether the cast needs what `level` at `at` of its lattice gives,
     /// off its words `w`: the one place a pass is told it may pass a thread
@@ -130,7 +130,7 @@ fn idx(across: u32, c: [u32; 2]) -> u32 {
 pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
-    seen: &mut Pyramid,
+    pyramid: &mut Pyramid,
     w: &mut W,
     c: [u32; 2],
     told: &mut impl cast::Visitor,
@@ -142,11 +142,11 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     let k = idx(o.corners()[0], c);
     let base = o.line(k);
     o.keep_origin(w, base, aim.origin);
-    let tag = observed::tag(pyramid_at(seen, observed::FRAME), o.passes()[0]);
-    let met = cast::rooted(
+    let tag = pyramid::tag(pyramid_at(pyramid, pyramid::FRAME), o.passes()[0]);
+    let met = cast::walk_from_root(
         &mut Writing {
             world,
-            seen: &mut *seen,
+            pyramid: &mut *pyramid,
             tag,
             assets: o.assets(),
         },
@@ -157,7 +157,7 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         &mut Leaving(&mut *w, base),
         told,
     );
-    add_tally(seen, o.tally(), tally::BEAM, met.visits);
+    add_tally(pyramid, o.tally(), tally::BEAM, met.visits);
     w.set(o.hand_at(k), o.handed(&aim, met.hit.t).to_bits());
     w.set(base + beam::LINE_VISITS, met.visits);
 }
@@ -199,7 +199,7 @@ pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]
 /// The walk of the ray aimed `aim` to the cell that fills, resumed at
 /// cell `cell`'s start from the deepest node of its line holding where it
 /// is there, held from the ray's own origin, or from the root at it where
-/// that lies in another root (beam.rs `resumed`); through `q`, reading or
+/// that lies in another root (beam.rs `resume_walk`); through `q`, reading or
 /// writing, its line left where it ends to `keep` and each node it asks
 /// told to `told`. Its met, and the nodes the line's beam ray visited.
 pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
@@ -222,7 +222,7 @@ where
     } else {
         line.node()
     };
-    let met = resumed(q, aim.origin, &aim.ray, aim.detail, t, &line, node, keep, told);
+    let met = resume_walk(q, aim.origin, &aim.ray, aim.detail, t, &line, node, keep, told);
     (met, line.visits())
 }
 
@@ -233,7 +233,7 @@ where
 pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
-    seen: &mut Pyramid,
+    pyramid: &mut Pyramid,
     w: &mut W,
     s: [u32; 2],
     told: &mut impl cast::Visitor,
@@ -247,12 +247,12 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         return;
     }
     let aim = o.aim(o.point(s));
-    let tag = observed::tag(pyramid_at(seen, observed::FRAME), o.passes()[1]);
+    let tag = pyramid::tag(pyramid_at(pyramid, pyramid::FRAME), o.passes()[1]);
     let (met, before) = resume(
         o,
         &mut Writing {
             world,
-            seen: &mut *seen,
+            pyramid: &mut *pyramid,
             tag,
             assets: o.assets(),
         },
@@ -262,7 +262,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         &mut (),
         told,
     );
-    add_tally(seen, o.tally(), tally::SAMPLE, met.visits);
+    add_tally(pyramid, o.tally(), tally::SAMPLE, met.visits);
     let met = Trace {
         visits: met.visits + before,
         ..met
@@ -271,7 +271,7 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
 }
 
 /// Sample `s`'s hit written as a box for the raster's draw (raster.rs
-/// `boxed`), the one across and up before it, each where the cast needs
+/// `write_box`), the one across and up before it, each where the cast needs
 /// it, so it was sampled this cast: its place among the boxes, `NONE` where
 /// it wrote none.
 pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
@@ -294,7 +294,7 @@ pub(crate) fn sample_box<O: Observer, W: Words + ?Sized>(
         },
     ];
     let (origin, eyed) = o.raster_layout();
-    boxed(
+    write_box(
         w,
         o.sample_at(s),
         before,
@@ -350,7 +350,7 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
 
 /// The cell the ray aimed `aim` takes off the visible sample `visible`, a
 /// sample's number that lacks not (`raster::sample_of`): where it enters it
-/// as that sample entered it (raster.rs `taken`), the sample's first word,
+/// as that sample entered it (raster.rs `visible_cell`), the sample's first word,
 /// and whether it does.
 pub(crate) fn took<O: Observer, W: Words + ?Sized>(
     o: &O,
@@ -360,7 +360,7 @@ pub(crate) fn took<O: Observer, W: Words + ?Sized>(
 ) -> (cast::Hit<u32>, u32, bool) {
     let (n, s) = (o.samples()[0], raster::sample_of(visible));
     let k = o.sample_at([s % n, s / n]);
-    let (hit, enters) = taken(w, k, aim.origin, &aim.ray);
+    let (hit, enters) = visible_cell(w, k, aim.origin, &aim.ray);
     (hit, k, enters)
 }
 
@@ -388,22 +388,22 @@ fn went_on<O: Observer, W: Words + ?Sized>(o: &O, w: &W, s: [u32; 2]) -> bool {
 /// pyramid writing what it asks, a ray its visible sample and the pyramid left
 /// unmet, its line left where it ends to `keep` and each node it asks told
 /// to `told`: its aim, its met and the nodes its beam ray visited.
-pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: PaletteWords>(
+pub(crate) fn walk_again<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
-    seen: &mut Pyramid,
+    pyramid: &mut Pyramid,
     w: &W,
     at: O::At,
     keep: &mut impl cast::Keep<Inheritance>,
     told: &mut impl cast::Visitor,
 ) -> (Aim, Trace<Inheritance>, u32) {
     let aim = o.aim(at);
-    let tag = observed::tag(pyramid_at(seen, observed::FRAME), o.passes()[2]);
+    let tag = pyramid::tag(pyramid_at(pyramid, pyramid::FRAME), o.passes()[2]);
     let (met, before) = resume(
         o,
         &mut Writing {
             world,
-            seen: &mut *seen,
+            pyramid: &mut *pyramid,
             tag,
             assets: o.assets(),
         },
@@ -413,6 +413,6 @@ pub(crate) fn walked<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         keep,
         told,
     );
-    add_tally(seen, o.tally(), tally::MISS, met.visits);
+    add_tally(pyramid, o.tally(), tally::MISS, met.visits);
     (aim, met, before)
 }

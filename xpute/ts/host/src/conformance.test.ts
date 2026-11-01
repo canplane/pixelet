@@ -74,7 +74,7 @@ interface Opener {
 }
 
 /** What answers a guest's hostcalls until its host says. */
-function unanswered(): number {
+function answer_enosys(): number {
   return Errno.ENOSYS;
 }
 
@@ -87,7 +87,7 @@ function native(path: string): Opener {
     "double xpute_conformance_run(void *mem, double quota)",
   );
   const now = koffi.register(() => clock_ms, koffi.pointer(NOW));
-  let answer: (at: number) => number = unanswered;
+  let answer: (at: number) => number = answer_enosys;
   const host = koffi.register(
     (at: number) => answer(at),
     koffi.pointer(HOSTCALL),
@@ -100,7 +100,7 @@ function native(path: string): Opener {
     open(seed) {
       const at = koffi.alloc("double", MEM_BYTES / 8);
       regions.push(at);
-      answer = unanswered;
+      answer = answer_enosys;
       const toc_at = boot(at, now, host, seed);
       return {
         mem: koffi.view(at, MEM_BYTES),
@@ -232,7 +232,7 @@ class Host {
       pkt = this.writer;
     }
     assert.deepStrictEqual(
-      sq.push(frame.tagged(src, tag), cmd, ack ? frame.ACKREQ : 0, pkt),
+      sq.push(frame.tag_of(src, tag), cmd, ack ? frame.ACKREQ : 0, pkt),
       Errno.OK,
     );
   }

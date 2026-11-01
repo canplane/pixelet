@@ -69,7 +69,7 @@ pub fn bake_leaf(
     tile: [i32; 2],
 ) -> Result<TerrainTile, String> {
     let solved = separation::solve_tile(r, tile)?;
-    let surface = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
+    let surface = fetch_surface(r.repo, r.client, tile, &solved.way_ranges)?;
     let lines = bake_separation(&solved.lines, tile);
     Ok(assemble(tile, surface, lines))
 }

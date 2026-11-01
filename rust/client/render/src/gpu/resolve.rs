@@ -47,23 +47,23 @@ const BLEND_LEAST: f32 = 0.1;
 const UNIFORM_FLOATS: usize = 20;
 
 pub struct Resolve {
-    built: Pipeline,
+    pipeline: Pipeline,
     sampler: u32,
     uniform: u32,
     /// A group a history written, reading the other, and what each was
     /// made over: made again exactly when one is another.
     groups: [u32; 2],
-    bound: [[u32; 5]; 2],
+    bindings: [[u32; 5]; 2],
     /// The write-back, and its group a history read, as `groups`.
     back: Pipeline,
     back_groups: [u32; 2],
-    back_bound: [[u32; 2]; 2],
+    back_bindings: [[u32; 2]; 2],
     /// The history this frame writes, the other the last frame's.
     turn: usize,
     /// The surface's histories it gathered into, and the frames gathered
     /// since they were made: none kept before.
     histories: [u32; 2],
-    gathered: u32,
+    gathered_cnt: u32,
     /// This frame's view, its view-projection about the eye and the eye's
     /// place (`prepare`), and the last drawn frame's.
     view: (Mat4, [f64; 3]),
@@ -81,7 +81,7 @@ pub struct Resolve {
 impl Resolve {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Resolve {
         Resolve {
-            built: pipelines.build_world(g, PIPELINE_SCREEN_RESOLVE),
+            pipeline: pipelines.build_world(g, PIPELINE_SCREEN_RESOLVE),
             sampler: g.sampler(
                 FilterMode::linear,
                 FilterMode::linear,
@@ -95,13 +95,13 @@ impl Resolve {
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             groups: [0; 2],
-            bound: [[0; 5]; 2],
+            bindings: [[0; 5]; 2],
             back: pipelines.build(g, PIPELINE_SCREEN_WRITE_BACK, WORLD_COLOR),
             back_groups: [0; 2],
-            back_bound: [[0; 2]; 2],
+            back_bindings: [[0; 2]; 2],
             turn: 0,
             histories: [0; 2],
-            gathered: 0,
+            gathered_cnt: 0,
             view: (mat4::new(), [0.0; 3]),
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
@@ -138,14 +138,14 @@ impl Resolve {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
-            (self.histories, self.gathered, self.turn) = (s.history_view, 0, 0);
+            (self.histories, self.gathered_cnt, self.turn) = (s.history_view, 0, 0);
         }
         let (k, was) = (self.turn, 1 - self.turn);
         // A square that changed this frame takes its share held no less than
         // `BLEND_LEAST`; one where only the jitter moved since, its even share
         // of the sequence's from the first still frame, off its age
         // (screen_resolve.wgsl).
-        let blend = match self.gathered {
+        let blend = match self.gathered_cnt {
             0 => 1.0,
             n => (1.0 / (n + 1) as f32).max(BLEND_LEAST),
         };
@@ -156,17 +156,17 @@ impl Resolve {
         }
         u[16] = blend;
         g.write_buf(self.uniform, 0, bytes(&u));
-        let bound = [
+        let bindings = [
             frame,
             s.color_view,
             s.depth_only_view,
             s.history_view[was],
             self.tiles.changed_at(),
         ];
-        if bound != self.bound[k] {
+        if bindings != self.bindings[k] {
             release(self.groups[k]);
             self.groups[k] = g.bind_group(
-                self.built.layouts[0],
+                self.pipeline.layouts[0],
                 &[
                     buf_entry(0, frame),
                     view_entry(1, s.color_view),
@@ -174,11 +174,11 @@ impl Resolve {
                     view_entry(3, s.history_view[was]),
                     sampler_entry(4, self.sampler),
                     buf_entry(5, self.uniform),
-                    buf_entry(30, self.tiles.bound().0),
-                    buf_entry(31, self.tiles.bound().1),
+                    buf_entry(30, self.tiles.this_frame().0),
+                    buf_entry(31, self.tiles.this_frame().1),
                 ],
             );
-            self.bound[k] = bound;
+            self.bindings[k] = bindings;
         }
         let [across, down] = self.tiles.squares();
         let tiles = across * down;
@@ -187,25 +187,25 @@ impl Resolve {
             encoder,
             &pass_desc(s.history_view[k], load, 0, Load::Clear, 0.0, stamp.pass()),
         );
-        g.set_pipeline(pass, self.built.pipeline);
+        g.set_pipeline(pass, self.pipeline.id);
         g.set_bind_group(pass, 0, self.groups[k], &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
         if !gated {
             return s.history_view[k];
         }
-        let back_bound = [s.history_view[k], self.tiles.changed_at()];
-        if back_bound != self.back_bound[k] {
+        let back_bindings = [s.history_view[k], self.tiles.changed_at()];
+        if back_bindings != self.back_bindings[k] {
             release(self.back_groups[k]);
             self.back_groups[k] = g.bind_group(
                 self.back.layouts[0],
                 &[
                     view_entry(1, s.history_view[k]),
-                    buf_entry(30, self.tiles.bound().0),
-                    buf_entry(31, self.tiles.bound().1),
+                    buf_entry(30, self.tiles.this_frame().0),
+                    buf_entry(31, self.tiles.this_frame().1),
                 ],
             );
-            self.back_bound[k] = back_bound;
+            self.back_bindings[k] = back_bindings;
         }
         let pass = g.pass(
             encoder,
@@ -218,7 +218,7 @@ impl Resolve {
                 stamp.pass(),
             ),
         );
-        g.set_pipeline(pass, self.back.pipeline);
+        g.set_pipeline(pass, self.back.id);
         g.set_bind_group(pass, 0, self.back_groups[k], &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
@@ -250,7 +250,7 @@ impl Resolve {
         if !gated {
             self.turn = 1 - self.turn;
         }
-        self.gathered = self.gathered.saturating_add(1);
+        self.gathered_cnt = self.gathered_cnt.saturating_add(1);
         self.last = self.view;
         if self.gathering() {
             self.phase = (self.phase + 1) % JITTERS;

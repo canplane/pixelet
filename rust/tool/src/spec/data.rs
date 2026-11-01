@@ -11,10 +11,10 @@
 use std::cell::Cell;
 
 use super::catalog::{run_of, FILE};
-use super::ingested::file_number;
+use super::ingest::file_number;
 use super::{
-    align_star, casing_note, enum_name, file, generated, js_num, json_str, laid_out, line_comments,
-    read, rgb_literal, rs_doc, rs_ident, snake, ts_doc, Node, Output,
+    align_star, casing_note, enum_name, file, generated_line, js_num, json_str, laid_out,
+    line_comments, read, rgb_literal, rs_doc, rs_ident, snake, ts_doc, Node, Output,
 };
 
 enum Enums {
@@ -397,7 +397,7 @@ fn constants(
     doc: Option<&[String]>,
     members: &[(&str, String, Option<Vec<String>>)],
 ) -> String {
-    let mut out = vec![format!("// {logical}"), "//".into(), generated(json)];
+    let mut out = vec![format!("// {logical}"), "//".into(), generated_line(json)];
     if let Some(doc) = doc {
         out.push("//".into());
         out.extend(line_comments(doc, ""));
@@ -762,7 +762,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 .iter()
                 .find_map(|(dir, name)| ts_path.strip_prefix(dir).map(|p| format!("{name}{p}")))
                 .unwrap_or(ts_path.to_string());
-            let mut ts = vec![format!("// {logical}"), "//".into(), generated(d.json)];
+            let mut ts = vec![format!("// {logical}"), "//".into(), generated_line(d.json)];
             if let Some(doc) = &head_doc {
                 ts.push("//".into());
                 ts.extend(line_comments(doc, ""));
@@ -914,7 +914,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             let mut rs = vec![
                 format!("// {crate_name}/{under_src}"),
                 "//".into(),
-                generated(d.json),
+                generated_line(d.json),
             ];
             if let Some(doc) = &head_doc {
                 rs.push("//".into());

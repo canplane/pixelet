@@ -622,13 +622,13 @@ impl GpuHost {
                 drop(self.take(id));
             }
             op::SUBMIT => {
-                let mut finished = core::mem::take(&mut self.finished);
+                let mut finished = core::mem::take(&mut self.command_bufs);
                 finished.extend(r.list().iter().filter_map(|&id| match self.take(id) {
                     Some(Object::Encoder(e)) => Some(e.finish()),
                     _ => None,
                 }));
                 self.submit(finished.drain(..));
-                self.finished = finished;
+                self.command_bufs = finished;
             }
             op::MAP_ASYNC => {
                 let (b, offset, size, address, word, ticket) = (
@@ -680,12 +680,12 @@ impl GpuHost {
                     r.u(),
                 );
                 let format = if format == SURFACE_PREFERRED {
-                    self.preferred
+                    self.preferred_format
                 } else {
                     of(&self.names.texture_format, format, "format")
                 };
                 let premultiplied = CANVAS_ALPHA_MODE.get(alpha as usize) == Some(&"premultiplied");
-                self.surface(surface).asked = Some((format, usage, premultiplied));
+                self.surface(surface).cfg = Some((format, usage, premultiplied));
                 self.want_configured(surface);
             }
             op::RESIZE => {
@@ -725,11 +725,14 @@ impl GpuHost {
                     .names
                     .texture_format
                     .iter()
-                    .position(|f| *f == Some(self.preferred));
+                    .position(|f| *f == Some(self.preferred_format));
                 memory.set_word(
                     address + 4 * (period_at + 1) as u32,
                     preferred.unwrap_or_else(|| {
-                        panic!("[gpu] {:?} is no format the spec names", self.preferred)
+                        panic!(
+                            "[gpu] {:?} is no format the spec names",
+                            self.preferred_format
+                        )
                     }) as u32,
                 );
                 memory.set_word(address + 4 * (words - 1), STATUS::READY);

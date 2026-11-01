@@ -62,7 +62,7 @@ export interface SysHost {
   program?(code: u32, w: U32Array, a: u32): i32 | void;
 }
 
-function logged(r: Abort): void {
+function log_abort(r: Abort): void {
   console.error(
     `[xpute] stopped: ${strerror(r.errnum)} at ${r.file}:${r.line}:${r.column} (${r.a}, ${r.b})`,
   );
@@ -87,12 +87,15 @@ export class Sys {
   readonly files = new Map<u32, File>();
 
   private readonly host: SysHost;
-  private readonly opened: (fd: u32, res: i32, detail: u32) => void;
+  private readonly answer_open: (fd: u32, res: i32, detail: u32) => void;
 
-  /** `opened` answers an open: a size, or an errno and the host's detail. */
-  constructor(host: SysHost, opened: (fd: u32, res: i32, detail: u32) => void) {
+  /** `answer_open` answers an open: a size, or an errno and the host's detail. */
+  constructor(
+    host: SysHost,
+    answer_open: (fd: u32, res: i32, detail: u32) => void,
+  ) {
     this.host = host;
-    this.opened = opened;
+    this.answer_open = answer_open;
   }
 
   run(mem: ArrayBuffer, at: u32): void {
@@ -149,7 +152,7 @@ export class Sys {
       case op.ABORT: {
         const num = (i: u32) =>
           BigInt(w[a + i]) | (BigInt(w[a + i + 1]) << 32n);
-        (this.host.abort ?? logged)({
+        (this.host.abort ?? log_abort)({
           errnum: w[a] | 0,
           line: w[a + 1],
           column: w[a + 2],
@@ -181,7 +184,7 @@ export class Sys {
     const answer = (res: i32, detail: u32) => {
       if (this.files.get(fd) !== file) return;
       if (res < 0) this.files.delete(fd);
-      this.opened(fd, res, detail);
+      this.answer_open(fd, res, detail);
     };
     const failed = (err: unknown) => {
       if (!(err instanceof FileError)) {

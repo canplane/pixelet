@@ -26,7 +26,7 @@ from pathlib import Path
 
 SPEC = Path(__file__).resolve().parent.parent / "spec" / "spec"
 route = json.loads((SPEC / "route.json").read_text())
-published = json.loads((SPEC / "bake" / "published.json").read_text())
+published = json.loads((SPEC / "bake" / "publication.json").read_text())
 
 
 def root(name):
@@ -43,12 +43,12 @@ SEARCH_URL, GEO_INTERNAL, API_INTERNAL = branch("SEARCH_URL"), branch("GEO_INTER
 
 
 def tile_object(version, name):
-    """A tile's object under its kind, published.json's `OBJECT` filled in."""
+    """A tile's object under its kind, publication.json's `OBJECT` filled in."""
     return published["OBJECT"].replace("{version}", version).replace("{name}", name)
 
 
-# Any shipped asset's bucket key: the first ingested.json lists.
-ASSET_KEY = json.loads((SPEC / "asset" / "ingested.json").read_text())["files"][0]["key"]
+# Any shipped asset's bucket key: the first ingest.json lists.
+ASSET_KEY = json.loads((SPEC / "asset" / "ingest.json").read_text())["files"][0]["key"]
 
 # A land page in Bundang: the zoom-15 tile's name.
 PAGE = "010332102130223"

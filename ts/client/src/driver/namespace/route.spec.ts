@@ -26,7 +26,7 @@ export const GEO_ROOT = "/geo";
 export const API_ROOT = "/api";
 
 /** Baked tiles by kind, version and name: under the root a kind's own, and
- * under that its object as a published set lays it out (bake/published.json
+ * under that its object as a published set lays it out (bake/publication.json
  * `OBJECT`, and `SPHERE` for the Earth's picture whole). Its own root for
  * the reason the asset root is: the bake
  * puts them in the bucket and the edge serves them, so neither server

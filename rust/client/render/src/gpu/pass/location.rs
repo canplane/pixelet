@@ -158,15 +158,20 @@ impl LocationPass {
         uniforms: &[f32],
         touched: &[u32],
         uploads: &mut Uploads,
-        kept: &UploadCopies,
+        last_frame_uploads: &UploadCopies,
     ) -> bool {
-        let zones = self
-            .zone_marks
-            .prepare(g, zones(draws), uniforms, touched, uploads, kept);
+        let zones = self.zone_marks.prepare(
+            g,
+            zones(draws),
+            uniforms,
+            touched,
+            uploads,
+            last_frame_uploads,
+        );
         let beacons = draws.of(PIPELINE_LOCATION_BEACON);
-        let beacon = self
-            .beacon_marks
-            .prepare(g, beacons, uniforms, touched, uploads, kept);
+        let beacon =
+            self.beacon_marks
+                .prepare(g, beacons, uniforms, touched, uploads, last_frame_uploads);
         zones || beacon
     }
 
@@ -253,7 +258,7 @@ impl LocationPass {
         if cnt == 0 {
             return;
         }
-        pass.set_pipeline(self.beacon.pipeline);
+        pass.set_pipeline(self.beacon.id);
         pass.set_bind_group(0, frame, &[]);
         pass.set_vertex_buf(0, self.oct_pos, 0, 0);
         pass.set_vertex_buf(1, self.oct_normal, 0, 0);
@@ -274,7 +279,7 @@ impl LocationPass {
         if zones(draws).next().is_none() {
             return;
         }
-        pass.set_pipeline(self.zone.pipeline);
+        pass.set_pipeline(self.zone.id);
         pass.set_bind_group(0, self.frame_group, &[]);
         pass.set_vertex_buf(0, self.box_pos, 0, 0);
         pass.set_vertex_buf(1, self.box_uv, 0, 0);

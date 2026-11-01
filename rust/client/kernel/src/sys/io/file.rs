@@ -19,7 +19,7 @@ use xpute_guest::ipc::sys::Fd;
 
 use crate::sys::io::failure::Failure;
 use crate::sys::io::fetch;
-use crate::sys::io::host::{answered, sys, turn};
+use crate::sys::io::host::{answer_of, sys, turn};
 use crate::sys::io::host_spec::{format, root, storage};
 use crate::sys::io::loader;
 use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
@@ -125,10 +125,10 @@ pub enum StorageRead {
 }
 
 /// The slots refused since they were last emptied, by `StorageFile`.
-static REFUSED: Global<[bool; StorageFile::ALL.len()]> = Global::new();
+static REFUSALS: Global<[bool; StorageFile::ALL.len()]> = Global::new();
 
 fn refusals() -> &'static mut [bool; StorageFile::ALL.len()] {
-    REFUSED.get(|| [false; StorageFile::ALL.len()])
+    REFUSALS.get(|| [false; StorageFile::ALL.len()])
 }
 
 /// Its file is not of its slot's format, or too large for any heap: none of
@@ -164,7 +164,7 @@ fn refuse(file: StorageFile) -> StorageRead {
 }
 
 /// The file `file` holds `bytes`, sealed with its slot's format.
-fn sealed(file: StorageFile, bytes: &[u8]) -> Vec<u8> {
+fn seal(file: StorageFile, bytes: &[u8]) -> Vec<u8> {
     let mut whole = Vec::with_capacity(1 + bytes.len());
     whole.push(file.format());
     whole.extend_from_slice(bytes);
@@ -175,10 +175,10 @@ enum ReadState {
     /// The heap refused its room: opened again after the heap gives some
     /// back, never taken for a file that held nothing. No descriptor is kept.
     Refused(Refusal),
-    /// Filled from the turn after `asked`.
+    /// Filled from the turn after `asked_turn`.
     Reading {
         bytes: Vec<u8>,
-        asked: u64,
+        asked_turn: u64,
     },
     Read(StorageRead),
 }
@@ -214,7 +214,7 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
         Opened::Bytes(n) => match unsafe { read_whole(fd, n) } {
             Ok(bytes) => ReadState::Reading {
                 bytes,
-                asked: turn(),
+                asked_turn: turn(),
             },
             Err(refused) => ReadState::Refused(refused),
         },
@@ -239,7 +239,7 @@ pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
             file,
             ReadState::Reading {
                 bytes: bytes.to_vec(),
-                asked: turn(),
+                asked_turn: turn(),
             },
         ),
         Err(opened) => on_storage_opened(file, 0, opened),
@@ -257,7 +257,7 @@ pub fn take_storage(file: StorageFile) -> Option<StorageRead> {
             }
             None
         }
-        ReadState::Reading { asked, .. } if turn() <= *asked => None,
+        ReadState::Reading { asked_turn, .. } if turn() <= *asked_turn => None,
         _ => match slot.take()? {
             ReadState::Reading { bytes, .. } => Some(storage_of(file, bytes)),
             ReadState::Read(file) => Some(file),
@@ -337,7 +337,7 @@ pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
 }
 
 /// The turn `write` last wrote in, and how many files it wrote there.
-static WRITTEN: Global<(u64, u32)> = Global::new();
+static LAST_WRITE: Global<(u64, u32)> = Global::new();
 
 /// Writes `bytes` whole as `root`'s object `number`, where the turn has a
 /// write left (`WRITES_A_TURN`); false where it has none, nothing written,
@@ -345,7 +345,7 @@ static WRITTEN: Global<(u64, u32)> = Global::new();
 /// counted, where there is no host.
 pub fn write(root: u32, number: u64, bytes: Vec<u8>) -> bool {
     let Some(sys) = sys() else { return true };
-    let written = WRITTEN.get(|| (0, 0));
+    let written = LAST_WRITE.get(|| (0, 0));
     if written.0 != turn() {
         *written = (turn(), 0);
     }
@@ -367,7 +367,7 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
             sys,
             root::STORAGE,
             file.path().as_str(),
-            sealed(file, bytes),
+            seal(file, bytes),
             Owner::Write,
         );
     }
@@ -407,10 +407,10 @@ impl Opened {
 /// the host's answer refused, closed here, and the owner hears EFBIG.
 pub fn on_opened(completed: &SysOpened) {
     let SysOpened { fd, res, detail } = *completed;
-    let Some(owner) = sys().and_then(|sys| files().opened(sys, completed)) else {
+    let Some(owner) = sys().and_then(|sys| files().complete_open(sys, completed)) else {
         return;
     };
-    let opened = match answered(res) {
+    let opened = match answer_of(res) {
         Ok(n) if n > MIN_HEAP_BYTES => {
             close(fd);
             Opened::Failed {

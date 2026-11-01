@@ -87,20 +87,20 @@ export class Doorbell implements PacketRoom {
 
   /** As the port `src`. */
   send(src: u32, cmd: u32, pkt: PacketWriter | null = null): void {
-    this.submit(frame.tagged(src, 0), cmd, pkt, 0);
+    this.submit(frame.tag_of(src, 0), cmd, pkt, 0);
   }
 
   /** `cmd` sent as the port `src` and rung, its arguments its packet's fields
    * in turn, each lowered as XTP lowers a value (wire/xtp `TreeView.set`): a
    * command from outside the host's own code, a console's. */
   cmd(src: u32, cmd: u32, ...args: NodeValue<NodeView>[]): void {
-    this.send(src, cmd, this.lowered(args));
+    this.send(src, cmd, this.lower(args));
     this.ring(0);
   }
 
   /** The next submission's packet, `args` its fields in turn, each lowered as
    * XTP lowers a value (wire/xtp `TreeView.set`); none for no arguments. */
-  lowered(args: NodeValue<NodeView>[]): PacketWriter | null {
+  lower(args: NodeValue<NodeView>[]): PacketWriter | null {
     if (args.length === 0) return null;
     const pkt = this.writer(args.length);
     // Each is grafted into the slot, so a slot is its most.
@@ -139,7 +139,7 @@ export class Doorbell implements PacketRoom {
   ): T {
     if (this.trapped) throw new InvariantError(Errno.ENOTRECOVERABLE);
     this.next_call = frame.id_of(this.next_call + 1);
-    const tag = frame.tagged(src, this.next_call);
+    const tag = frame.tag_of(src, this.next_call);
     let out: { val: T } | null = null;
     this.waiting.set(tag, (result, f) => (out = { val: take(result, f) }));
     try {

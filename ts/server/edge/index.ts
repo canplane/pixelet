@@ -69,7 +69,7 @@ import {
   GEO_PREFIX,
   TILE_PREFIX,
 } from "./route.spec.ts";
-import { BASE_LAYERS, TILE_OBJECT, TILE_SPHERE } from "./published.spec.ts";
+import { BASE_LAYERS, TILE_OBJECT, TILE_SPHERE } from "./publication.spec.ts";
 
 /**
  * Object keys this Worker is willing to ask R2 for, by shape alone, so what
@@ -77,7 +77,7 @@ import { BASE_LAYERS, TILE_OBJECT, TILE_SPHERE } from "./published.spec.ts";
  * the free plan's daily cap.
  *
  * - `<kind>/<object>`: a baked page, a kind of `BASE_LAYERS` and the object
- *   spec/spec/bake/published.json lays out under it (`TILE_OBJECT`), and the Earth's
+ *   spec/spec/bake/publication.json lays out under it (`TILE_OBJECT`), and the Earth's
  *   picture whole beside its tiles (`TILE_SPHERE`). Which versions and
  *   names exist is the declaration's and the tiles' to say, not this file's.
  * - `asset/<sha256>.<ext>`: a model or an image named by its bytes alone

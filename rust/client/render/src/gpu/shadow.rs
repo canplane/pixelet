@@ -205,7 +205,7 @@ impl Shadow {
 
     /// The light's frame, which a draw from the light reads in group 0, and
     /// the map as its pass draws it: what a mark from the light binds and
-    /// attaches (gpu/pass/skinned.rs `draw_marks`).
+    /// attaches (gpu/pass/skinned_mesh.rs `draw_marks`).
     pub fn frame_and_map(&self) -> (u32, u32) {
         (self.light_frame, self.map_view)
     }
@@ -418,7 +418,7 @@ impl Shadow {
         let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(n) = number {
             xpute_kit::ensure!(cast, EINVAL, n);
-            let (words, uniform) = tiles.bound();
+            let (words, uniform) = tiles.this_frame();
             let bound = (words, uniform, tiles.marks_box());
             if bound != self.gate_bound {
                 release(self.gate_group);
@@ -435,13 +435,13 @@ impl Shadow {
                 self.gate_bound = bound;
             }
             pass.set_stencil_reference(n);
-            pass.set_pipeline(self.gate.pipeline);
+            pass.set_pipeline(self.gate.id);
             pass.set_bind_group(0, self.gate_group, &[]);
             if let Some(args) = tiles.box_args() {
                 pass.draw_indirect(args, 0);
             }
         } else if cast {
-            pass.set_pipeline(self.lay.pipeline);
+            pass.set_pipeline(self.lay.id);
             pass.set_bind_group(0, self.lay_group, &[]);
             pass.draw(3, 1, 0, 0);
         }

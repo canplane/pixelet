@@ -10,7 +10,7 @@ use crate::global::{serial, Global};
 
 thread_local! {
     static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };
-    static WOKEN: Cell<u32> = const { Cell::new(0) };
+    static WAKES: Cell<u32> = const { Cell::new(0) };
 }
 
 fn clock() -> f64 {
@@ -23,8 +23,8 @@ fn advance(ms: f64) {
 
 const VTABLE: RawWakerVTable = RawWakerVTable::new(
     |p| RawWaker::new(p, &VTABLE),
-    |_| WOKEN.with(|w| w.set(w.get() + 1)),
-    |_| WOKEN.with(|w| w.set(w.get() + 1)),
+    |_| WAKES.with(|w| w.set(w.get() + 1)),
+    |_| WAKES.with(|w| w.set(w.get() + 1)),
     |_| {},
 );
 
@@ -45,7 +45,7 @@ fn spent_quota_parks() {
     clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));
     EDGE.set(Edge::new());
-    WOKEN.with(|w| w.set(0));
+    WAKES.with(|w| w.set(0));
     let w = waker();
     let mut cx = Context::from_waker(&w);
 
@@ -53,11 +53,11 @@ fn spent_quota_parks() {
     let mut fut = pin!(yield_if_spent(edge));
     advance(5.0);
     assert!(fut.as_mut().poll(&mut cx).is_pending());
-    assert_eq!(WOKEN.with(|w| w.get()), 0);
+    assert_eq!(WAKES.with(|w| w.get()), 0);
     assert_eq!(edge().fall(), 0.0);
 
     edge().rise(4.0);
-    assert_eq!(WOKEN.with(|w| w.get()), 1);
+    assert_eq!(WAKES.with(|w| w.get()), 1);
     assert!(fut.as_mut().poll(&mut cx).is_ready());
 }
 
@@ -90,7 +90,7 @@ fn notice_wakes_task() {
     CLOCK_MS.with(|c| c.set(0.0));
     EDGE.set(Edge::new());
     NOTIFY.set(Notify::new());
-    WOKEN.with(|w| w.set(0));
+    WAKES.with(|w| w.set(0));
     let w = waker();
     let mut cx = Context::from_waker(&w);
 
@@ -98,7 +98,7 @@ fn notice_wakes_task() {
     assert!(fut.as_mut().poll(&mut cx).is_pending());
     assert_eq!(edge().fall(), NO_WAKE);
     notify().notify();
-    assert_eq!(WOKEN.with(|w| w.get()), 1);
+    assert_eq!(WAKES.with(|w| w.get()), 1);
     assert!(fut.as_mut().poll(&mut cx).is_ready());
 
     notify().notify();
