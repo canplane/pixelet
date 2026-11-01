@@ -38,10 +38,12 @@ clone() {
   done
 }
 
-# A worktree's node modules and xpute's untracked lockfile, from main's.
+# A worktree's node modules, every workspace package's (pnpm links each
+# package's own dependencies in its own node_modules), and xpute's untracked
+# lockfile, from main's.
 if [ "$top" != "$main" ]; then
-  for p in ts/node_modules xpute/ts/node_modules xpute/ts/pnpm-lock.yaml; do
-    [ -e "$main/$p" ] && clone "$main/$p" "$top/$p"
+  for p in $(cd "$main" && find ts xpute/ts -name node_modules -type d -prune 2>/dev/null) xpute/ts/pnpm-lock.yaml; do
+    [ -e "$main/$p" ] && [ -d "$top/${p%/*}" ] && clone "$main/$p" "$top/$p"
   done
 fi
 

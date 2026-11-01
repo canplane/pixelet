@@ -260,7 +260,10 @@ impl Overture {
 /// What the geo DB holds for `reads`, which a set's manifest says it was
 /// made from: each source by the `version` and `accessed_at` the DB records
 /// for it, each Overture table with its counts.
-pub(crate) fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
+pub(crate) fn holdings(
+    client: &mut Client,
+    reads: &[&[&str]],
+) -> Result<serde_json::Value, String> {
     let tables = tables_of(reads);
     let text = |client: &mut Client,
                 sql: &str,

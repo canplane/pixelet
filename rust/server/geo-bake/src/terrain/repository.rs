@@ -158,7 +158,11 @@ impl TerrainRepository {
     }
 
     /// A leaf tile's elevation grid.
-    pub(crate) fn ele(&self, client: &mut Client, tile: [i32; 2]) -> Result<Vec<i16>, postgres::Error> {
+    pub(crate) fn ele(
+        &self,
+        client: &mut Client,
+        tile: [i32; 2],
+    ) -> Result<Vec<i16>, postgres::Error> {
         self.raster.tile_grid(client, tile)
     }
 

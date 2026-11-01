@@ -171,7 +171,10 @@ const TUNNELS_SQL: &str = concat!(
 /// The portals of the road tunnels in `[lo, hi]`, DB coordinates: a narrow
 /// read of the tunnels alone, so a solve learns whether a neighbor's tunnel
 /// opens near its tile before it reads the neighbor.
-pub(crate) fn portals_in(client: &mut Client, [lo, hi]: [[f64; 2]; 2]) -> Result<Vec<Portal>, String> {
+pub(crate) fn portals_in(
+    client: &mut Client,
+    [lo, hi]: [[f64; 2]; 2],
+) -> Result<Vec<Portal>, String> {
     let env: [&(dyn ToSql + Sync); 4] = [&lo[0], &lo[1], &hi[0], &hi[1]];
     let rows = client.query(TUNNELS_SQL, &env).map_err(|e| e.to_string())?;
     Ok(TileRows {
