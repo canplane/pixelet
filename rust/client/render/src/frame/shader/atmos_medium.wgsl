@@ -105,6 +105,48 @@ fn land_radius() -> f32 {
 }
 
 
+/* each light's tables */
+
+// A light's sky view and its share of the air's volume as laid
+// (gpu/atmosphere.rs `lay_out`), the sun `k` 0 and the moon 1: how far
+// under the level the horizon dips from the eye's radius they were drawn at,
+// in radians, and the near and far ends of the air's depth law laid there,
+// in km (`air_reach`).
+fn laid(k: u32) -> vec3f {
+  return select(atmos_sun_laid(), atmos_moon_laid(), k == 1u);
+}
+
+// Whether a light reaches the air by half a display level: only then are its
+// view and its air drawn and read (gpu/atmosphere.rs `REACH`).
+fn reaches(k: u32) -> bool {
+  return select(atmos_sun_reaches(), atmos_moon_reaches(), k == 1u) > 0.5;
+}
+
+fn light_dir(k: u32) -> vec3f {
+  return select(atmos_sun_dir(), atmos_moon_dir(), k == 1u);
+}
+
+// A light's illuminance against the sun's.
+fn light_gain(k: u32) -> f32 {
+  return select(1.0, atmos_moon_light(), k == 1u);
+}
+
+// The volume's depth, one law for every direction: slice z, 0 to 1, lies
+// `air_reach(z, e)` km out, the cube of z over the span between the ends `e`
+// it was laid with (`laid`). A cube puts the near view, where most of what is
+// drawn lies, in most of the slices and keeps a far slice a tenth or so past
+// the one before.
+fn air_reach(z: f32, e: vec2f) -> f32 {
+  return e.x + (e.y - e.x) * z * z * z;
+}
+
+// Where a point `d` km out lies among the slices, 0 to the last: the law's
+// inverse, smooth in `d` across every slice.
+fn air_slice(d: f32, e: vec2f) -> f32 {
+  return pow(clamp((d - e.x) / (e.y - e.x), 0.0, 1.0), 1.0 / 3.0) * f32(AIR_FROXELS - 1u);
+}
+
+
 
 /* tables */
 
@@ -115,6 +157,15 @@ fn unit_of(u: f32, size: f32) -> f32 {
 
 fn coord_of(x: f32, size: f32) -> f32 {
   return 0.5 / size + x * (1.0 - 1.0 / size);
+}
+
+// How far the light's height moves over one texel of the transmittance
+// table, which its light is read through, from where it stands: the larger
+// side.
+fn height_step(r: f32, mu: f32) -> f32 {
+  let uv = transmittance_uv(r, mu);
+  let texel = vec2f(1.0 / TRANSMITTANCE_SIZE.x, 0.0);
+  return max(abs(transmittance_r_mu(uv + texel).y - mu), abs(transmittance_r_mu(uv - texel).y - mu));
 }
 
 // Bruneton's: rows where transmittance changes.
@@ -156,15 +207,12 @@ fn multiscatter_uv(r: f32, mu_s: f32) -> vec2f {
   return vec2f(coord_of(clamp(x, 0.0, 1.0), MULTISCATTER_SIZE.x), coord_of(clamp(y, 0.0, 1.0), MULTISCATTER_SIZE.y));
 }
 
-fn horizon_dip(r: f32) -> f32 {
-  let v_horizon = sqrt(max(r * r - atmos_bottom_radius() * atmos_bottom_radius(), 0.0));
-  return acos(clamp(v_horizon / r, -1.0, 1.0));
-}
-
-// Hillaire's directions: across, the azimuth from the light's, squared toward
-// it; up, the zenith, squared toward the horizon from either side.
-fn sky_view_uv(r: f32, mu: f32, light_cos: f32) -> vec2f {
-  let beta = horizon_dip(r);
+// Hillaire's directions, 0 to 1 each: across, the azimuth from the light's,
+// squared toward it; up, the zenith, squared toward the horizon from either
+// side, the horizon dipping `beta` under the level (`laid`). A light's sky
+// view and its share of the air's volume are both laid by them
+// (atmos_sky.wgsl `table_unit`).
+fn view_unit(beta: f32, mu: f32, light_cos: f32) -> vec2f {
   let zenith_horizon = PI - beta;
   let view_zenith = acos(clamp(mu, -1.0, 1.0));
   var y: f32;
@@ -176,12 +224,11 @@ fn sky_view_uv(r: f32, mu: f32, light_cos: f32) -> vec2f {
     y = sqrt(c) * 0.5 + 0.5;
   }
   let x = sqrt(clamp(-light_cos * 0.5 + 0.5, 0.0, 1.0));
-  return vec2f(coord_of(x, SKY_VIEW_SIZE.x), coord_of(y, SKY_VIEW_SIZE.y));
+  return vec2f(x, y);
 }
 
-// The direction at `unit`, `sky_view_uv`'s from 0 to 1, up +z and the light's azimuth +x.
-fn view_dir(r: f32, unit: vec2f) -> vec3f {
-  let beta = horizon_dip(r);
+// The direction at `unit`, `view_unit`'s inverse, up +z and the light's azimuth +x.
+fn view_dir(beta: f32, unit: vec2f) -> vec3f {
   let zenith_horizon = PI - beta;
   var mu: f32;
   if (unit.y < 0.5) {

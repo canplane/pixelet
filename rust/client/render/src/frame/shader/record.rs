@@ -13,6 +13,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_CAST => "cast_cs",
         SHADER_JOINED => "joined_cs",
         SHADER_ATMOS_FROXEL => "froxel_cs",
+        SHADER_ATMOS_EXPOSURE => "exposure_cs",
         SHADER_SCREEN_REACH => "screen_reach_cs",
         SHADER_SCREEN_BOUND => "screen_bound_cs",
         SHADER_SCREEN_MARK => "screen_mark_cs",
@@ -44,6 +45,11 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_LIGHT_DETAIL => "light_detail_cs",
         SHADER_LIGHT_BEAM => "light_beam_cs",
         SHADER_LIGHT_SAMPLE => "light_sample_cs",
+        SHADER_STOP_LEAD => "stop_lead_cs",
+        SHADER_STOP_FACES => "stop_faces_cs",
+        SHADER_BOX_ARGS => "box_args_cs",
+        SHADER_LIGHT_HELD => "light_held_cs",
+        SHADER_LIGHT_TOLD => "light_told_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -53,69 +59,67 @@ include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_SKY: u32 = 10;
 pub const PIPELINE_MIP: u32 = 11;
-/// The occlusion's map laid over the world's color in the claimed tiles
-/// (gpu/ao.rs `apply`).
+/// The occlusion's half-resolution map laid over the world's color in the
+/// claimed tiles (gpu/ao.rs `apply`).
 pub const PIPELINE_AO_APPLY: u32 = 12;
 pub const PIPELINE_AO_DOWNSAMPLE: u32 = 13;
 pub const PIPELINE_AO_SAMPLE: u32 = 14;
 pub const PIPELINE_AO_BLUR: u32 = 15;
-pub const PIPELINE_AO_UPSAMPLE: u32 = 16;
-pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 17;
-pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 18;
-pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 19;
-pub const PIPELINE_ATMOS_EXPOSURE: u32 = 20;
-pub const PIPELINE_STAR: u32 = 21;
-pub const PIPELINE_CLOUD: u32 = 22;
-pub const PIPELINE_CLOUD_FIELD: u32 = 23;
-pub const PIPELINE_SHEET: u32 = 24;
-pub const PIPELINE_IMPOSTOR_BAKE: u32 = 25;
-pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 26;
+pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 16;
+pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 17;
+pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 18;
+pub const PIPELINE_STAR: u32 = 19;
+pub const PIPELINE_CLOUD: u32 = 20;
+pub const PIPELINE_CLOUD_FIELD: u32 = 21;
+pub const PIPELINE_SHEET: u32 = 22;
+pub const PIPELINE_IMPOSTOR_BAKE: u32 = 23;
+pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 24;
 /// The markers' regions, numbered, into a target of their own (pass/marker.rs).
-pub const PIPELINE_MARKER_REGION: u32 = 27;
+pub const PIPELINE_MARKER_REGION: u32 = 25;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/pass/debug.rs `DebugPass`).
-pub const PIPELINE_DEBUG_FACE: u32 = 28;
+pub const PIPELINE_DEBUG_FACE: u32 = 26;
 /// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
-pub const PIPELINE_SCREEN_RAY: u32 = 29;
+pub const PIPELINE_SCREEN_RAY: u32 = 27;
 /// Decor's and the actors' depth from the light, and the world's laid in
 /// before them, into the light's shadow map (gpu/shadow.rs).
-pub const PIPELINE_DECOR_DEPTH: u32 = 30;
-pub const PIPELINE_SKINNED_DEPTH: u32 = 31;
-pub const PIPELINE_LIGHT_MAP: u32 = 32;
+pub const PIPELINE_DECOR_DEPTH: u32 = 28;
+pub const PIPELINE_SKINNED_DEPTH: u32 = 29;
+pub const PIPELINE_LIGHT_MAP: u32 = 30;
 /// The samples' boxes, the nearest face a pixel's ray enters kept with its
 /// sample (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER: u32 = 33;
+pub const PIPELINE_RASTER: u32 = 31;
 /// The world's color onto the canvas, encoded once, and its depth carried to
 /// the canvas's size (gpu/finish.rs).
-pub const PIPELINE_SCREEN_FINISH: u32 = 34;
+pub const PIPELINE_SCREEN_FINISH: u32 = 32;
 /// The world's color gathered over frames (gpu/resolve.rs).
-pub const PIPELINE_SCREEN_RESOLVE: u32 = 35;
+pub const PIPELINE_SCREEN_RESOLVE: u32 = 33;
 /// The gate a frame not drawn whole is drawn through: the claimed tiles
 /// cleared, their stencil raised (gpu/renderer.rs `frame`).
-pub const PIPELINE_SCREEN_GATE: u32 = 36;
+pub const PIPELINE_SCREEN_GATE: u32 = 34;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (gpu/finish.rs).
-pub const PIPELINE_SCREEN_SHOW: u32 = 37;
+pub const PIPELINE_SCREEN_SHOW: u32 = 35;
 /// The claimed tiles of the history the resolve wrote copied back into the
 /// last (gpu/resolve.rs).
-pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 38;
+pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 36;
 /// The gate the samples' raster is drawn through in a frame not drawn whole:
 /// the claimed tiles cleared to the far plane, the rest left at the nearest
 /// (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER_GATE: u32 = 39;
+pub const PIPELINE_RASTER_GATE: u32 = 37;
 /// The gate the light's map is drawn through where only the listed
-/// casters that changed moved: the claimed tiles set back to the far plane, their
-/// stencil raised (gpu/shadow.rs).
-pub const PIPELINE_LIGHT_GATE: u32 = 40;
+/// casters that changed moved: the world's depth laid in the claimed tiles,
+/// their stencil raised (gpu/shadow.rs).
+pub const PIPELINE_LIGHT_GATE: u32 = 38;
 /// An actor drawn where it was and where it is, its fragments setting their
 /// screen tiles' words (gpu/pass/skinned.rs `draw_marks`).
-pub const PIPELINE_SKINNED_MARK: u32 = 41;
+pub const PIPELINE_SKINNED_MARK: u32 = 39;
 /// The same of decor, an impostor, the location puck's zone and its beacon
 /// (gpu/pass/mark.rs `Marks`).
-pub const PIPELINE_DECOR_MARK: u32 = 42;
-pub const PIPELINE_IMPOSTOR_MARK: u32 = 43;
-pub const PIPELINE_PUCK_ZONE_MARK: u32 = 44;
-pub const PIPELINE_PUCK_BEACON_MARK: u32 = 45;
-pub const PIPELINES: u32 = 46;
+pub const PIPELINE_DECOR_MARK: u32 = 40;
+pub const PIPELINE_IMPOSTOR_MARK: u32 = 41;
+pub const PIPELINE_PUCK_ZONE_MARK: u32 = 42;
+pub const PIPELINE_PUCK_BEACON_MARK: u32 = 43;
+pub const PIPELINES: u32 = 44;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -582,15 +586,24 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[&SCREEN_GROUP],
         ),
-        // Its map's texel a pixel multiplied into the world's color, as the
-        // tiles' quads: black blended over by the occlusion's darkening.
+        // Its half-resolution map brought to each pixel and multiplied into
+        // the world's color, as the tiles' quads: black blended over by the
+        // occlusion's darkening, a draw of the world's pass, its depth not
+        // tested or written.
         PIPELINE_AO_APPLY => Descriptor::new(
             Head {
                 blend: ALPHA,
+                depth_compare: ALWAYS,
                 ..screen(SHADER_AO_APPLY)
             },
             &[],
-            &[&[[1, TEXTURE_UNFILTERED], [30, STORAGE], [31, UNIFORM]]],
+            &[&[
+                [1, TEXTURE_UNFILTERED],
+                [2, TEXTURE],
+                [6, UNIFORM],
+                [30, STORAGE],
+                [31, UNIFORM],
+            ]],
         ),
         PIPELINE_DECOR_DEPTH => {
             Descriptor::new(depth_only(SHADER_DECOR), &MODEL_LANES, &DEPTH_GROUPS)
@@ -648,15 +661,24 @@ const fn desc_of(id: u32) -> Descriptor {
                 [32, STORAGE],
             ]],
         ),
+        // The same in the map's claimed tiles alone, a quad a tile of the
+        // marks' box, raising their stencil (gpu/api.rs `Stencil::Gate`).
         PIPELINE_LIGHT_GATE => Descriptor::new(
             Head {
+                fragment: true,
                 depth_compare: ALWAYS,
                 depth_bias_slope: 0,
                 vertex: VS,
                 ..depth_only(SHADER_LIGHT_GATE)
             },
             &[],
-            &[&[[30, STORAGE], [31, UNIFORM], [32, STORAGE]]],
+            &[&[
+                [0, TEXTURE_UINT_ARRAY],
+                [1, UNIFORM],
+                [30, STORAGE],
+                [31, UNIFORM],
+                [33, STORAGE],
+            ]],
         ),
         // Every box's faces turned to the eye, the nearest a pixel's ray
         // enters kept, reversed: its sample's number into a target of its
@@ -796,18 +818,6 @@ const fn desc_of(id: u32) -> Descriptor {
                 [6, UNIFORM],
             ]],
         ),
-        PIPELINE_AO_UPSAMPLE => Descriptor::new(
-            screen(SHADER_AO_UPSAMPLE),
-            &[],
-            &[&[
-                [0, UNIFORM],
-                [1, DEPTH],
-                [2, TEXTURE_UNFILTERED],
-                [3, TEXTURE],
-                [4, SAMPLER],
-                [6, UNIFORM],
-            ]],
-        ),
         PIPELINE_ATMOS_TRANSMITTANCE => {
             Descriptor::new(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[&[AIR[0]]])
         }
@@ -834,23 +844,6 @@ const fn desc_of(id: u32) -> Descriptor {
             screen(SHADER_ATMOS_IRRADIANCE),
             &[],
             &[&[AIR[0], AIR[1], AIR[3], [12, TEXTURE]]],
-        ),
-        // The light on the land under the eye: the air's words and the tables it is lit by.
-        PIPELINE_ATMOS_EXPOSURE => Descriptor::new(
-            screen(SHADER_ATMOS_EXPOSURE),
-            &[],
-            &[&[
-                [0, UNIFORM],
-                AIR[0],
-                AIR[1],
-                AIR[2],
-                AIR[3],
-                AIR[5],
-                AIR[6],
-                AIR[7],
-                AIR[8],
-                AIR[9],
-            ]],
         ),
         PIPELINE_STAR => Descriptor::new(
             Head {

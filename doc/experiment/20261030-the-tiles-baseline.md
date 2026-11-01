@@ -865,3 +865,94 @@ milliseconds.
   begun again about it stores and loads the world's color, depth and
   stencil whole on a tiled GPU, and the occlusion reads the depth with its
   stencil aspect beside it. AO `corner`, the default, does not run it.
+
+**The backlog's round, each change against the tip** (2026-10-31,
+evening, `2ce9c8e90` and five worktrees from it, ports 5191 to 5193). The
+scenario above (S1) and the same without W held (S2, turning only), a
+2056×1169 canvas at a device pixel ratio of 2, the display at 120 Hz, AO
+`corner` unless named. Two to four runs a build, tip runs between.
+
+| build | scenario | busy p50 / p95 | spans p95 that moved |
+|---|---|---|---|
+| tip | S1, AO `screen` | 31.2–31.7 / 46.7–48.2 | `ao` 7.1–7.3 |
+| the occlusion inside the world pass | S1, AO `screen` | 31.3–31.5 / 46.4–47.4 | `ao` 7.0–7.1 |
+| tip | S1 | 28.3 / 43.8 | `miss` 12.2, `sample` 3.5 |
+| the eye's misses asking faces once a stop, the TAA's marks at their own jitter and the occlusion above, merged | S1 | 28.4 / 40.4 | `miss` 8.6, `sample` 4.7 |
+| the screen's rays moved to the new view | S1 | 31.3–31.5 / 55.4–56.8 | `beam` 4.9 → 11.5, `px` 2.1 → 7.0 |
+| tip | S1 | 28.0 / 43.1 | `air` on every frame, 1.6 s a run |
+| the air laid about each light, drawn where it reaches | S1 | 22.2 / 42.6 | `air` on 31 % of frames, 0.5 s a run |
+| tip | S2 | 9.0 / 33.5 | `air` on 30 % of frames |
+| the same | S2 | 8.7 / 33.0 | `air` on 11 % of frames |
+
+- At this canvas the tip's occlusion reads 7.1 ms, not the 9.9 of the
+  run above at 2400×2250; found inside the world pass it costs the same.
+  The regression against the prepass (4.4 ms) stands.
+- Faces asked once a stop: `miss` 3.6 ms less, `sample` 1.2 more (the
+  boxes' asks written there), the busy time's p95 3.4 ms less, its p50
+  the same.
+- The screen's rays moved: dearer, and the picture wrong (a low view lost
+  its near wall, trees and stone to a smooth plane). Read in the code, not
+  confirmed: the samples, the only witness of what is nearer, are missing
+  exactly at the pixels the move answers, and no ray's word names its
+  node, so a moved ray is proven only by the walk it was to save.
+- The air: the busy time's p50 5.8 ms less while walking; turning only,
+  `air` still found on 11 % of frames, supposed the turn's pitch moving
+  the eye's altitude. Noon, 07:00 and 00:30 looked the same on both
+  builds; at 00:30 the clock ran on. The `exposure` span reads `air`'s
+  time and 0.46 ms more on the frames both run, so its stamps are to be
+  checked before it is read alone.
+
+**The closing round, against `0567c0059`** (2026-11-01, evening, ports
+5191 and 5192, the round's tree in a worktree of its own while another
+session edited main's checkout). The scenarios above, a 2056×1113 canvas at
+a device pixel ratio of 2, every run but the first pair placed by
+`INPUT_GOTO` after a fresh load. Two runs a build unless named.
+
+| scenario | tip busy p50 / p95 | round busy p50 / p95 | spans p95 that moved |
+|---|---|---|---|
+| S1 | 23.8–23.9 / 39.1–39.4 | 22.5–23.2 / 39.3–40.3 | `miss` 7.0–7.1 → 6.6–6.9; `light_beam` 4.0 → 3.7; `light_sample` 1.6 → 1.8; `generate` on brick frames 2.8–2.9 → 2.3–2.4; `exposure` 7.7–7.9 → 1.1–1.2 |
+| S1, AO `screen` | 24.2–25.6 / 42.1–42.8 | 25.3–27.1 / 41.0–43.5 | `ao` 6.8–7.3 → 6.4–7.0 |
+| S2 | 8.9–9.4 / 32.1–32.4 | 8.0–8.7 / 29.6–31.6 | gated busy p50 6.8–7.3 → 5.9–6.3; `shadow` on gated frames p95 1.5–1.8 → 0.7–1.0 |
+
+- The faces asked once a square of alike stops, not a row's run: `miss`
+  0.3 ms less. The tip here reads 7.0, not the 8.6 of the evening's runs.
+- The light's list read plainly, its margins gathered by a pass of their
+  own (`light_held_cs`, `light_told_cs`): `light_beam` 0.3 ms less,
+  `light_sample` 0.2 more, the gathering in its span.
+- The light map's gate drawn once over the marks' box, a tile marked once:
+  the gated frames' `shadow` halved, in every condition below.
+- Decor regenerated only where a landed brick reaches: 0.5 ms off
+  `generate` on the frames a brick lands in.
+- The exposure a compute pass: its span its own time, 0.7–1.3 ms, where it
+  read `air`'s with its own. `air` runs on as many frames as on the tip:
+  turning, every trip is something the turn moves (the eye's altitude, the
+  light's height as the sky's anchor follows the eye).
+- The occlusion's upsample folded into its apply: `ao` within a run's noise,
+  busy with AO `screen` over AO `corner` some 2 to 4 ms on both builds. The
+  `ao` span reads the world's first half's painting with its own, the two
+  passes overlapping on this GPU, so the regression against the prepass was
+  the span's, not the frame's.
+- A sample on a beam's ray copying the beam's stop: `sample` the same on
+  both builds, so taken back.
+- The light's map cast again only where a brick, an edit or a cut reaches,
+  against the round without it (S1 at noon, two runs and one with the rays
+  counted; S1 at 07:00, one; a 60 Hz display): the light's spans summed at
+  the p95, 6.4–7.5 ms on brick frames and the rest alike on both builds,
+  the light casting on every walking frame whatever landed. Taken back; a
+  block placed and erased cast its shadow and took it.
+- The picture: the same in a still at noon with AO `corner` and `screen`,
+  and mid-turn; no shadow, decor, edge or air apart.
+
+The conditions the tiles' plan left (S2 unless named; busy p50 / p95):
+
+| condition | tip | round | apart |
+|---|---|---|---|
+| 07:00 | 9.5 / 34.2 | 10.3 / 37.1 | `exposure` 8.1 → 1.0 |
+| 00:30 | 10.7 / 33.6 | 7.5 / 30.9 | `exposure` 7.1 → under 1 |
+| clouds off | 7.1 / 31.4 | 7.1 / 31.5 | `shadow` 1.4 → under 1 |
+| render scale `low` (0.5) | 12.9 / 20.5 | 10.7 / 21.5 | `beam` 3.7 → 4.8 |
+| the quiet view, every frame gated | 8.1 / 8.8 | 8.4 / 9.2 | none |
+
+- One run each; the clouds only turn on or off, and the render scale's other
+  setting, `auto`, stepped down differently on each build, so it is not set
+  side by side. No console error in any.

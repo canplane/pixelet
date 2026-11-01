@@ -112,23 +112,150 @@ fn same(a: [i32; 3], b: [i32; 3]) -> bool {
     a[0] == b[0] && a[1] == b[1] && a[2] == b[2]
 }
 
-/// The line straight down to node `c` of `zoom` from its root, each node
-/// handed down by its parent: where a reader of the assets about a node
-/// asks them from (`asset`).
-pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
-    let mut at = q.root(over(c, zoom, 0));
-    let mut stack = [at; DEPTH];
-    let mut z = 0;
+/// A line as a reader of the assets about its node reads it (`asset`), in
+/// place: its node, by its index at its zoom, and what was handed it and
+/// each node over it, by zoom. A descent's own (`Line`), or one a reader
+/// holds elsewhere, read where it lies (`Off`; pxl-shader a beam ray's).
+pub trait Lineage<A: Copy> {
+    fn at(&self) -> [i32; 3];
+    fn zoom(&self) -> Zoom;
+    /// What was handed its node over its own at `z`, its own at its zoom.
+    fn handed(&self, z: Zoom) -> A;
+}
+
+impl<A: Copy> Lineage<A> for Line<A> {
+    fn at(&self) -> [i32; 3] {
+        self.at
+    }
+
+    fn zoom(&self) -> Zoom {
+        self.zoom
+    }
+
+    fn handed(&self, z: Zoom) -> A {
+        if z == self.zoom {
+            self.live
+        } else {
+            self.stack[z as usize]
+        }
+    }
+}
+
+/// A line down to a node off another (`off`): its own descent from `low`,
+/// the zoom of the deepest node of the other over it, down.
+pub struct Below<A> {
+    low: Zoom,
+    line: Line<A>,
+}
+
+/// A line down to a node read with the line it was descended off
+/// (`Below::off`): over `low`, the other's, read where it lies; from `low`
+/// down, its own descent's. [rust-gpu] Two references and no array of its
+/// own: naga refuses a pointer in a value a shader keeps whole, as one with
+/// an array is kept.
+pub struct Off<'a, L, A> {
+    base: &'a L,
+    below: &'a Below<A>,
+}
+
+impl<A: Copy> Below<A> {
+    /// It read with `base`, the line it was descended off.
+    pub fn off<'a, L: Lineage<A>>(&'a self, base: &'a L) -> Off<'a, L, A> {
+        Off { base, below: self }
+    }
+}
+
+impl<A: Copy, L: Lineage<A>> Lineage<A> for Off<'_, L, A> {
+    fn at(&self) -> [i32; 3] {
+        self.below.line.at
+    }
+
+    fn zoom(&self) -> Zoom {
+        self.below.line.zoom
+    }
+
+    fn handed(&self, z: Zoom) -> A {
+        if z < self.below.low {
+            self.base.handed(z)
+        } else {
+            self.below.line.handed(z)
+        }
+    }
+}
+
+/// The deepest zoom at which the line `l` and node `c` of `zoom` share a
+/// node, no finer than either, and whether they share one at all: none
+/// where they lie in two roots.
+fn shared<A: Copy>(l: &impl Lineage<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
+    let (line, lz) = (l.at(), l.zoom());
+    let mut z = if zoom < lz { zoom } else { lz };
+    while z > 0 && !same(over(line, lz, z), over(c, zoom, z)) {
+        z -= 1;
+    }
+    (z, same(over(line, lz, z), over(c, zoom, z)))
+}
+
+/// Down to node `c` of `zoom` from its node at `z`, handed `at`, each node
+/// handed down by its parent (`Query::child`): what was handed `c`, and
+/// each node from `z` down to it, by zoom, in `stack`.
+fn descend<Q: Query>(
+    q: &mut Q,
+    mut at: Q::At,
+    mut z: Zoom,
+    zoom: Zoom,
+    c: [i32; 3],
+    stack: &mut [Q::At; DEPTH],
+) -> Q::At {
     while z < zoom {
         stack[z as usize] = at;
         z += 1;
         at = q.child(&at, z, over(c, zoom, z));
     }
+    at
+}
+
+/// The line straight down to node `c` of `zoom` from its root, each node
+/// handed down by its parent: where a reader of the assets about a node
+/// asks them from (`asset`).
+pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
+    let root = q.root(over(c, zoom, 0));
+    let mut stack = [root; DEPTH];
+    let live = descend(q, root, 0, zoom, c, &mut stack);
     Line {
         at: c,
         zoom,
-        live: at,
+        live,
         stack,
+    }
+}
+
+/// The line down to node `c` of `zoom` off the line `base`, its own part
+/// (`Below`, read with `base` by `Below::off`): from the deepest node of
+/// `base` over it, each node under it handed down by its parent; from its
+/// own root where no node of `base` is over it. What `line` asks from the
+/// top, asked from where `base` already holds it.
+pub fn off<Q: Query>(
+    q: &mut Q,
+    base: &impl Lineage<Q::At>,
+    zoom: Zoom,
+    c: [i32; 3],
+) -> Below<Q::At> {
+    let (z, held) = shared(base, zoom, c);
+    let (from, low) = if held {
+        (base.handed(z), z)
+    } else {
+        (q.root(over(c, zoom, 0)), 0)
+    };
+    let mut stack = [from; DEPTH];
+    let live = descend(q, from, low, zoom, c, &mut stack);
+    Below {
+        low,
+        line: Line {
+            at: c,
+            zoom,
+            live,
+            stack,
+        },
     }
 }
 
@@ -137,18 +264,13 @@ pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
 /// from the deepest node of the line holding it, each node under that
 /// handed down by its parent (`Query::child`), and from its own root where
 /// no node of the line holds it.
-pub fn asset<Q: Query>(q: &mut Q, l: &Line<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
-    let (line, lz) = (l.at, l.zoom);
-    let mut z = if zoom < lz { zoom } else { lz };
-    while z > 0 && !same(over(line, lz, z), over(c, zoom, z)) {
-        z -= 1;
-    }
-    let mut at = if !same(over(line, lz, z), over(c, zoom, z)) {
-        q.root(over(c, zoom, 0))
-    } else if z == lz {
-        l.live
+pub fn asset<Q: Query>(q: &mut Q, l: &impl Lineage<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
+    let (mut z, held) = shared(l, zoom, c);
+    let mut at = if held {
+        l.handed(z)
     } else {
-        l.stack[z as usize]
+        z = 0;
+        q.root(over(c, zoom, 0))
     };
     while z < zoom {
         z += 1;

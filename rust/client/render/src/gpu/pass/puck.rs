@@ -168,17 +168,17 @@ impl PuckPass {
         zones || beacon
     }
 
-    /// The marks `prepare_marks` made drawn into `pass`, `frame` their group
-    /// 0 (tile_mark.wgsl).
-    pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frame: u32) {
-        self.zone_marks.draw(pass, frame, |pass, d, upload| {
+    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// 0 as they are and as they were (tile_mark.wgsl, `Marks::draw`).
+    pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
+        self.zone_marks.draw(pass, frames, |pass, d, upload| {
             pass.set_vertex_buf(0, self.box_pos, 0, 0);
             pass.set_vertex_buf(1, self.box_uv, 0, 0);
             pass.set_idx_buf(self.box_idx, 0, 0);
             pass.set_bind_group(2, upload, &[]);
             pass.draw_indexed(BOX_VERTICES, d[1], 0, 0);
         });
-        self.beacon_marks.draw(pass, frame, |pass, _, _| {
+        self.beacon_marks.draw(pass, frames, |pass, _, _| {
             pass.set_vertex_buf(0, self.oct_pos, 0, 0);
             pass.set_vertex_buf(1, self.oct_normal, 0, 0);
             pass.draw(BEACON_VERTICES, 1, 0, 0);

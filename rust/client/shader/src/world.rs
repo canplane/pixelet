@@ -5,7 +5,7 @@
 
 use pxl_spec_core::answer::{self, In};
 use pxl_spec_core::area::Area;
-use pxl_spec_core::cast::{self, End, Met, Query};
+use pxl_spec_core::cast::{self, End, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Lanes};
 use pxl_spec_core::window::{self, Bricks, Found, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL};
@@ -219,32 +219,37 @@ impl<L: Looks> Query for World<'_, L> {
 }
 
 impl<L: Looks> World<'_, L> {
-    /// What lies about the face a ray stopped on (pxl-spec-core
-    /// `face::word`): each cell beside the stop's at its zoom, hiding its
-    /// cube whole (`answer::whole`), asked off the line down to the stop's
-    /// node (`support::asset`), each from the deepest node it shares with
-    /// it, never again from the top: `line`'s, the line its walk left where
-    /// it kept one (observed.rs `Lined`), else one walked down to it (`support::line`); a
-    /// box's own, a cell kept short of its cube (`face::BOX`); nothing where
-    /// the ray stopped on none.
-    pub(crate) fn faced<A: Copy>(
+    /// What lies about face `face` of the cell `c` of `zoom` a ray stopped
+    /// on (pxl-spec-core `face::word`): each cell beside it at its zoom,
+    /// hiding its cube whole (`answer::whole`), asked off `line`, the line
+    /// down to it read in place (`support::Lineage`), each from the deepest
+    /// node it shares with it, never again from the top (`support::asset`).
+    /// Asked once a stop (raster.rs `face_cs`); a stop that needs none is
+    /// told so first (`unasked`).
+    pub(crate) fn faced(
         &mut self,
-        origin: [i32; 3],
-        ray: &cast::Ray,
-        met: &Met<A>,
-        line: impl FnOnce(&mut Self, u32, [i32; 3]) -> support::Line<Handed>,
+        face: u32,
+        zoom: u32,
+        c: [i32; 3],
+        line: &impl support::Lineage<Handed>,
     ) -> u32 {
-        if met.ends != End::Stop {
-            return 0;
-        }
-        if answer::kept(met.stop.asset[0]) < answer::EIGHTHS {
-            return face::BOX;
-        }
-        let (zoom, c) = (met.stop.node.zoom, met.stop.node.idx(origin));
-        let line = line(self, zoom, c);
-        face::word(face_of(ray, met.stop.axis), |d| {
-            answer::whole(support::asset(self, &line, zoom, face::beside(zoom, c, d)))
+        face::word(face, |d| {
+            answer::whole(support::asset(self, line, zoom, face::beside(zoom, c, d)))
         })
+    }
+}
+
+/// What lies about the face a stop that ended `ends` at the asset `asset`
+/// met, where it needs no asking (`World::faced`): nothing where it stopped
+/// on none, a box's own where the cell keeps short of its cube
+/// (`face::BOX`); and whether it is asked instead.
+pub(crate) fn unasked(ends: End, asset: u32) -> (bool, u32) {
+    if ends != End::Stop {
+        (false, 0)
+    } else if answer::kept(asset) < answer::EIGHTHS {
+        (false, face::BOX)
+    } else {
+        (true, 0)
     }
 }
 

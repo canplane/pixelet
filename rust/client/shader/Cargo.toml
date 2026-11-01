@@ -21,18 +21,11 @@ codegen-units = 16
 # loop ends an iteration early (gfx-rs/wgpu#4558). rust-gpu emits that shape
 # throughout the generated shaders: on wgpu/Metal height_cs differed from
 # ground::height in 3791 of a brick's 4096 cells, 0 with the fix. Its fix,
-# gfx-rs/wgpu#10459, sits on trunk, whose naga-types wgpu 30.0.1 no longer
-# matches, so wgpu's crates move to the same rev. Drop when a wgpu release
-# carries it.
+# gfx-rs/wgpu#10459, sits on trunk: naga and its types take that rev. Drop
+# when a wgpu release carries it.
 [patch.crates-io]
 naga = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
 naga-types = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
-wgpu = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
-wgpu-core = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
-wgpu-core-deps-apple = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
-wgpu-hal = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
-wgpu-naga-bridge = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
-wgpu-types = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
 
 [package]
 name = "pxl-shader"

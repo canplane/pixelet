@@ -1,7 +1,7 @@
 // The air as the frame shows it: before each point, read off the air's
 // volume (gpu/atmosphere.rs `froxel`), which the march to its froxels made
-// (atmos_froxel.wgsl, atmos_view.wgsl `air_held`); and the sky, and the land
-// past the terrain, seen through it.
+// about each light (atmos_froxel.wgsl); and the sky, and the land past the
+// terrain, seen through it.
 
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
 @group(0) @binding(16) var earth_map: texture_2d_array<f32>;
@@ -26,40 +26,58 @@ fn bspline_taps(x: f32) -> vec4f {
   return vec4f(i - 1.0 + w1 / g0, i + 1.0 + w3 / max(g1, 1e-6), g0, g1);
 }
 
-// The volume at `uv` across and slice `k` deep by the cubic B-spline in all
-// three: smooth to its second derivative across every column and slice,
-// eight trilinear reads. It smooths what it reads by a sixth of the square
-// of a texel's step times its curvature, which the slow light per share
-// taken has little of.
-fn air_held_at(uv: vec2f, k: f32) -> vec3f {
+// The volume about light `k`, the sun's half or the moon's, at
+// column `c` across and down and `slice` deep, texel coordinates with
+// centers at whole numbers, by the cubic B-spline in all three: smooth to
+// its second derivative across every column and slice, eight trilinear
+// reads. A tap past the half's first or last column reads that column, as
+// the edge's own would. It smooths what it reads by a sixth of the square of
+// a texel's step times its curvature, which the slow light per share taken
+// has little of.
+fn air_held_at(k: u32, c: vec2f, slice: f32) -> vec3f {
   let n = f32(AIR_FROXELS);
-  let x = bspline_taps(uv.x * n - 0.5);
-  let y = bspline_taps(uv.y * n - 0.5);
-  let z = bspline_taps(k);
+  let x = bspline_taps(c.x);
+  let y = bspline_taps(c.y);
+  let z = bspline_taps(slice);
+  let across = clamp(x.xy, vec2f(0.0), vec2f(n - 1.0)) + f32(k) * n;
   var sum = vec3f(0.0);
-  for (var c = 0u; c < 8u; c++) {
-    let at = vec3f(select(x.x, x.y, (c & 1u) != 0u), select(y.x, y.y, (c & 2u) != 0u), select(z.x, z.y, (c & 4u) != 0u));
-    let weight = select(x.z, x.w, (c & 1u) != 0u) * select(y.z, y.w, (c & 2u) != 0u) * select(z.z, z.w, (c & 4u) != 0u);
-    sum += weight * textureSampleLevel(air_volume, atmos_sampler, (at + 0.5) / n, 0.0).rgb;
+  for (var i = 0u; i < 8u; i++) {
+    let at = vec3f(select(across.x, across.y, (i & 1u) != 0u), select(y.x, y.y, (i & 2u) != 0u), select(z.x, z.y, (i & 4u) != 0u));
+    let weight = select(x.z, x.w, (i & 1u) != 0u) * select(y.z, y.w, (i & 2u) != 0u) * select(z.z, z.w, (i & 4u) != 0u);
+    sum += weight * textureSampleLevel(air_volume, atmos_sampler, (at + 0.5) / vec3f(2.0 * n, n, n), 0.0).rgb;
   }
   return sum;
 }
 
-// The volume `d` units from the eye along `dir`, at `uv` across
-// (Hillaire 2020's aerial-perspective volume, 32 a side and deep,
-// frame/shader/word.rs `AIR_FROXELS`). What the air lets through is this
-// ray's own, e^-τ(d), per channel, taken as the march takes it
-// (atmos_march.wgsl `gather_between`): from where the ray enters the air to the
-// ground at the latest. What it scatters is that ray's 1 - e^-τ(d) times the
-// light per share taken (atmos_view.wgsl `air_held`), read off the volume
-// smooth (`air_held_at`). Only that slow factor is read off the grid; the
-// fast one is the pixel's own. The volume was exposed at the stops it holds
-// beside every froxel; it is taken to the eye's stops now, exactly itself
-// where they stand.
-fn air_before(uv: vec2f, dir: vec3f, d: f32) -> vec4f {
-  let made = textureLoad(air_volume, vec3i(0), 0).a;
-  let held = air_held_at(uv, air_slice(d)) * exp2(exposure_stops() - made);
+// What the air `d` km along `dir` scatters per share it takes, per unit of
+// light `k`, off that light's half of the volume: laid as its sky view is,
+// so read at the direction's place about the light (atmos_sky.wgsl
+// `table_unit`), and at the slice its depth law puts `d`
+// (atmos_medium.wgsl `laid`, `air_slice`).
+fn air_held_of(k: u32, dir: vec3f, d: f32) -> vec3f {
+  let n = f32(AIR_FROXELS);
+  return air_held_at(k, table_unit(dir, k) * (n - 1.0), air_slice(d, laid(k).yz));
+}
+
+// The air `d` units from the eye along `dir` (Hillaire 2020's
+// aerial-perspective volume, frame/shader/word.rs `AIR_FROXELS`). What the
+// air lets through is this ray's own, e^-τ(d), per channel, taken as the
+// march takes it (atmos_march.wgsl `gather_between`): from where the ray
+// enters the air to the ground at the latest. What it scatters is that ray's
+// 1 - e^-τ(d) times each light per share taken, read off its light's half of
+// the volume smooth (`air_held_of`) where that light reaches the air
+// (atmos_medium.wgsl `reaches`), and shown as that light's sky is
+// (`beyond`). Only that slow factor is read off the grid; the fast one is
+// the pixel's own.
+fn air_before(dir: vec3f, d: f32) -> vec4f {
   let km = atmos_km_per_u();
+  var held = vec3f(0.0);
+  for (var k = 0u; k < 2u; k++) {
+    if (reaches(k)) {
+      held += air_held_of(k, dir, d * km) * light_gain(k);
+    }
+  }
+  held *= shown();
   let r = camera_r();
   let mu = dot(frame_up(), dir);
   let end = short_of_ground(r, mu, d * km);
@@ -69,19 +87,16 @@ fn air_before(uv: vec2f, dir: vec3f, d: f32) -> vec4f {
   return vec4f(held * (vec3f(1.0) - transmittance), dot(transmittance, LUMA));
 }
 
-// The air before a point as the volume holds it at the point's place on the
-// screen and its distance: what the eye's view projects it to, so a point
-// off the screen or behind the eye reads the volume's nearest edge. A point
-// past the air's reach reads the air to its end. The lights at a point are the point's own, read where it
-// stands (atmos_view.wgsl `light_of`): they turn with its height, and a
-// froxel stands higher or lower than what is drawn in it.
+// The air before a point as the volume holds it along the point's direction
+// from the eye and at its distance, whichever way it lies from the view. A
+// point past the air's reach reads the air to its end. The lights at a point
+// are the point's own, read where it stands (atmos_view.wgsl `light_of`):
+// they turn with its height, and a froxel stands higher or lower than what
+// is drawn in it.
 fn seen_from_eye(world_pos: vec3f) -> Seen {
-  let clip = frame_view_proj() * vec4f(world_pos, 1.0);
-  let w = max(clip.w, 1e-6);
-  let uv = vec2f(clip.x / w * 0.5 + 0.5, 0.5 - clip.y / w * 0.5);
   let to = world_pos - frame_camera_pos();
   let d = length(to);
-  let air = air_before(uv, to / max(d, 1e-6), d);
+  let air = air_before(to / max(d, 1e-6), d);
   var s: Seen;
   s.scattered = air.rgb;
   s.transmittance = air.a;
@@ -92,7 +107,7 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
 /* sky */
 
 fn moon_view(dir: vec3f) -> vec3f {
-  return table_view(moon_view_lut, dir, atmos_moon_dir());
+  return table_view(moon_view_lut, dir, 1u);
 }
 
 /* the Earth past the terrain */
@@ -144,11 +159,16 @@ fn city_shown(lights: f32, up: vec3f) -> vec3f {
 // rays end; nearer, the ground is the voxels', or the air's alone.
 fn beyond(dir: vec3f) -> vec3f {
   if (!falls_to_land(dir)) {
-    var sky = sky_view(dir, atmos_sun_dir()) * shown();
-    if (atmos_moon_light() > 0.0) {
-      sky += moon_view(dir) * moon_shown();
+    // Each light's sky where it reaches the air (atmos_medium.wgsl
+    // `reaches`).
+    var sky = vec3f(0.0);
+    if (reaches(0u)) {
+      sky += sky_view(dir) * light_gain(0u);
     }
-    return sky;
+    if (reaches(1u)) {
+      sky += moon_view(dir) * light_gain(1u);
+    }
+    return sky * shown();
   }
   let d = to_land(dir);
   let p = dir * d;

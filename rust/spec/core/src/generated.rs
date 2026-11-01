@@ -151,18 +151,30 @@ const _: () = assert!(FIRST_CELL > EVERY);
 /// What `decor_mark_cs` reads and lists and `decor_thin_cs` and `decor_cs`
 /// are dispatched by, in words: each one's workgroups across, up and the
 /// entry-decor pairs listed, a pad (`THIN_ARGS`, `GENERATE_ARGS`); whether
-/// every entry generates whole, decor having been off (`LIST_EVERY`), and how
-/// many boxes (`LIST_BOXES`), two pads; the boxes, `BOX_WORDS` each; then the
-/// list, an entry and its decor (`<< 16`) each, in no order.
+/// every entry generates whole, decor having been off (`LIST_EVERY`), how
+/// many boxes (`LIST_BOXES`), how many pairs generate again in part
+/// (`LIST_PARTS`), a pad; the boxes, `BOX_WORDS` each; then the list, an
+/// entry and its decor (`<< 16`) each, in no order: the pairs generated
+/// whole from its start, which `decor_thin_cs` thins and `decor_cs`
+/// generates, the pairs generated in part from its end (`part_at`), which
+/// `decor_cs` alone generates, its records where a box reaches them
+/// (`reaches`).
 pub const THIN_ARGS: u32 = 0;
 pub const GENERATE_ARGS: u32 = 4;
 pub const LIST_EVERY: u32 = 8;
 pub const LIST_BOXES: u32 = 9;
+pub const LIST_PARTS: u32 = 10;
 pub const BOXES_AT: u32 = 12;
 pub const LIST_AT: u32 = BOXES_AT + MARKED * BOX_WORDS;
 
 /// The words of what `decor_mark_cs` lists.
 pub const LIST_WORDS: u32 = LIST_AT + EYE_ENTRIES * DECORS.len() as u32;
+
+/// Where the `n`-th pair generated in part is listed: from the list's end,
+/// as no more pairs are listed whole and in part together than there are.
+pub const fn part_at(n: u32) -> u32 {
+    LIST_WORDS - 1 - n
+}
 
 /// How far about its own, in its window's cells, a candidate's generation
 /// reads the world (`generated`): the leaf cells its pose votes on, no
@@ -176,15 +188,33 @@ pub const fn brick_box(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
     [q[0] << k, q[1] << k, (q[0] + 1) << k, (q[1] + 1) << k]
 }
 
-/// The leaf cells any candidate in brick `q` of the window at `cell` reads:
-/// its window's cells within `READ_REACH` of the brick.
-pub const fn brick_reads(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
-    let ([x0, y0, x1, y1], r) = (brick_box(cell, q), READ_REACH << (LEAF_CELL - cell));
-    [x0 - r, y0 - r, x1 + r, y1 + r]
+/// Whether a box of the frame's, `b` of leaf cells at `zoom` (`BOX_WORDS`),
+/// reaches what a candidate in `at` reads, leaf cells of the window at
+/// `cell`: a brick's (`brick_box`), or one candidate's own. A candidate reads
+/// the world at its window's zoom and finer, each a cell within `READ_REACH`
+/// of its own at that zoom; a brick filled at `zoom` answers a read at
+/// `zoom` or finer alone (`window::step`), so it reaches the windows at
+/// `zoom` and coarser, within `READ_REACH` of its cells, not of theirs; an
+/// edit or a cut (`EVERY`) is read at every zoom, so within `READ_REACH` of
+/// the window's own cells.
+pub fn reaches(b: [i32; 4], zoom: Zoom, cell: Zoom, at: [i32; 4]) -> bool {
+    if zoom != EVERY && zoom < cell {
+        return false;
+    }
+    let s = LEAF_CELL - if zoom == EVERY { cell } else { zoom };
+    let r = READ_REACH << s;
+    // `at` laid out to the cells it lies in at that zoom.
+    let reads = [
+        ((at[0] >> s) << s) - r,
+        ((at[1] >> s) << s) - r,
+        ((((at[2] - 1) >> s) + 1) << s) + r,
+        ((((at[3] - 1) >> s) + 1) << s) + r,
+    ];
+    meets(reads, b)
 }
 
 /// Whether the box `b` of leaf cells meets the leaf cells `reads`
-/// (`reads`, `brick_reads`), each X on any lap, X round the world.
+/// (`reaches`), each X on any lap, X round the world.
 pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
     let wide = reads[2] - reads[0];
     // The box's first column from the region's, the short way round.

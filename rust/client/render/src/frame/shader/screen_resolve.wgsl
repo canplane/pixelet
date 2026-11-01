@@ -26,7 +26,9 @@ struct Resolve {
 // Each tile's age (screen_tiles.wgsl `tile_age`): 0 where it changed this frame,
 // what the frames before left held to this frame's pixels; past it, only the
 // jitter moved there since, and the frame takes its even share of the
-// sequence, what they left standing whole.
+// sequence from the first still frame, which takes it whole, so the frame it
+// changed in counts for none of what stands: `TILE_JITTERS` still frames
+// (pxl-spec-core `screen::CLAIMED_FOR`), this view's sequence alone.
 
 // How far, in the spread of the pixels about it, what the frames before
 // left may lie from their mean.
@@ -87,7 +89,7 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let tile = vec2u(p) / tile_side();
   let age = tile_age(tile.y * tiles.count.x + tile.x);
   let still = age > 0u;
-  var blend = select(resolve.blend.x, 1.0 / f32(min(age - 1u, TILE_JITTERS - 2u) + 2u), still);
+  var blend = select(resolve.blend.x, 1.0 / f32(min(age, TILE_JITTERS)), still);
   if (!(was.w > 0.0) || any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
     blend = 1.0;
   }

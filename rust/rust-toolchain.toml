@@ -14,7 +14,7 @@
 [toolchain]
 channel = "1.98.1"
 profile = "minimal"
-components = ["clippy", "rustfmt"]
+components = ["clippy", "rustfmt", "rust-src", "rust-analyzer"]
 # The module's target, and a device's: an iPhone and the simulator on an
 # Apple silicon Mac, and an Android phone and the emulator on one
 # (pxl-native).

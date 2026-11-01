@@ -24,7 +24,7 @@
 	fmt fmt-ts fmt-rust \
 	lint lint-ts \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
-	$(TOOLS) serve-shelf web-oven web-shelf web-preview-oven web-preview-shelf \
+	serve-shelf web-oven web-shelf web-preview-oven web-preview-shelf \
 	sync-build-number deploy
 
 # Each tree's packages, by its own manager: ts/'s here, xpute's by its make.
@@ -44,7 +44,7 @@ check-ts:
 # The module as it ships in both builds, the servers, what runs here alone
 # (the tests' code, the bakes, the tools) and both device targets.
 check-rust:
-	+cd rust && cargo fmt --all --check && cargo lint-guest && cargo lint-guest-published && cargo lint-server && cargo lint-host && cargo lint-ios && cargo lint-android
+	+cd rust && cargo fmt --check && cargo lint-guest && cargo lint-guest-published && cargo lint-server && cargo lint-host && cargo lint-ios && cargo lint-android
 check-rules:
 	+cd rust && cargo check-rules
 check-spec:
@@ -67,7 +67,7 @@ fmt: fmt-ts fmt-rust
 fmt-ts:
 	pnpm --dir ts fmt
 fmt-rust:
-	cd rust && cargo fmt --all
+	cd rust && cargo fmt
 
 lint: lint-ts
 lint-ts:
@@ -120,6 +120,7 @@ web-preview-shelf:
 TOOLS := bake-terrain bake-place bake-division bake-earth bake-star bake-geoid ingest-overture \
 	download-pack download-moon download-earth download-star ingest-asset render-brand \
 	serve-geo serve-api serve-tile
+.PHONY: $(TOOLS)
 $(TOOLS):
 	+cd rust && $(CURDIR)/script/with-env.sh cargo $@ $(ARGS)
 

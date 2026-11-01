@@ -4,8 +4,8 @@
 //! light's map is cast by its own (light.rs): each `TILE` drawn pixels a side,
 //! its word the number of the frame it last changed in (`changed_at`), as a
 //! light tile's names a cast, the GPU's; its age the frames since (`age`);
-//! claimed while its history has not run through the jitter's `JITTERS`
-//! frames
+//! claimed the frame it changed and until its history has run through the
+//! jitter's `JITTERS` frames from the first still one (`CLAIMED_FOR`)
 //! (pxl-render gpu/resolve.rs; doc/minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md).
 
 /// A tile's drawn pixels a side.
@@ -13,6 +13,13 @@ pub const TILE: u32 = 32;
 
 /// The frames the jitter's sequence covers a pixel in.
 pub const JITTERS: u32 = 8;
+
+/// The frames a tile stays claimed once changed (`claimed_for`): the frame
+/// it changed in, whose color is held to its pixels and counts for none of
+/// the sequence, then the `JITTERS` still frames, each its even share
+/// (pxl-render screen_resolve.wgsl), so what stands is the sequence of this
+/// view alone.
+pub const CLAIMED_FOR: u32 = JITTERS + 1;
 
 /// The words of the uniform a pass draws the tiles by: the tiles across and
 /// down, the frames a tile stays claimed once changed (`claimed_for`, all of

@@ -13,7 +13,8 @@
 //! a tile in (`reached`), copied and mapped back as the light's counts are
 //! (gpu/ray/tally.rs), and until a frame it ran in has landed the screen's
 //! tiles are taken to gather (`Tiles::unseen`). The depth it reads is a
-//! bound, each square of 4 pixels a side its least and most depth, kept on
+//! bound, each square of `BOUND_STEP` pixels a side its least and most
+//! depth, a thread a square of the workgroup a screen tile, kept on
 //! the GPU and set after each world's pass in the tiles it drew
 //! (screen_bound.wgsl, `set_bounds`), so a frame it runs in reads no pixel's
 //! depth but where a square's bound spans past a few of the map's tiles; and
@@ -24,8 +25,10 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec_core::param::light;
 use xpute_guest::mem::off_of;
 
+use crate::frame::shader::floor::MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP;
 use crate::frame::shader::part::{SHADER_SCREEN_BOUND, SHADER_SCREEN_REACH};
 use crate::frame::shader::record::{COMPUTE, DEPTH, STORAGE, STORAGE_RW, UNIFORM};
+use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Gpu, RenderContext, DONE,
 };
@@ -48,9 +51,10 @@ const BOUNDS_GROUP: [u32; 12] = [
     0, COMPUTE, DEPTH, 1, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
 ];
 
-/// A square of the depth's bound's pixels a side (screen_bound.wgsl
-/// `BOUND_STEP`, screen_reach.wgsl `REACH_STEP`).
-const BOUND_STEP: u32 = 4;
+const _: () = assert!(
+    BOUND_SQUARES * BOUND_SQUARES <= MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP,
+    "a screen tile's squares are a workgroup every device takes"
+);
 
 /// Its uniform's floats (screen_reach.wgsl `Reach`).
 const UNIFORM_FLOATS: usize = 36;

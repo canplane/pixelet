@@ -75,10 +75,11 @@ impl SkinnedPass {
         self.marks.layout()
     }
 
-    /// The marks `prepare_marks` made drawn into `pass`, `frame` their group
-    /// 0: the eye's or the light's frame and its tiles' (tile_mark.wgsl).
-    pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frame: u32, uploads: &Uploads) {
-        self.marks.draw(pass, frame, |pass, d, palette| {
+    /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
+    /// 0 as they are and as they were: the eye's or the light's frame and its
+    /// tiles' (tile_mark.wgsl, `Marks::draw`).
+    pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2], uploads: &Uploads) {
+        self.marks.draw(pass, frames, |pass, d, palette| {
             let Some((mesh, vertex_cnt, idx_cnt)) = uploads.get(d[0]) else {
                 return;
             };

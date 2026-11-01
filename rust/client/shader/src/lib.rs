@@ -30,7 +30,7 @@ mod way;
 mod world;
 
 pub use beam::{beam_cs, cell_cs, sample_cs};
-pub use cast::{cast_cs, miss_cs, miss_list_cs};
+pub use cast::{cast_cs, miss_cs, miss_list_cs, stop_faces_cs, stop_lead_cs};
 pub use decor::{
     decor_args_cs, decor_cnt_cs, decor_compact_cs, decor_cs, decor_mark_cs, decor_thin_cs,
 };
@@ -39,8 +39,8 @@ pub use ground::{bound_cs, height_cs, joined_cs};
 pub use observed::forget_cs;
 pub use raster::{face_cs, sample_box_cs};
 pub use light::{
-    light_beam_cs, light_cs, light_detail_cs, light_mark_cs, light_mark_drawn_cs, light_miss_cs,
-    light_reach_cs, light_sample_cs, Head,
+    light_beam_cs, light_cs, light_detail_cs, light_held_cs, light_mark_cs, light_mark_drawn_cs,
+    light_miss_cs, light_reach_cs, light_sample_cs, light_told_cs, Head,
 };
 pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
 pub use world::{Looks, Unlooked, World};
@@ -77,6 +77,16 @@ fn least(s: &mut [u32], i: u32, v: u32) {
                 { Semantics::NONE.bits() },
             >(s.get_unchecked_mut(i as usize), v)
         };
+    }
+}
+
+/// Word `i` of `w`, a dispatch's workgroups of `per` lanes over a list,
+/// raised to hold place `at` by the place that opens a workgroup alone:
+/// a list's places are taken one by one from 0 (`beam::Words::add`), so
+/// each workgroup's first place raises it and the rest leave it as it is.
+fn opens<W: beam::Words + ?Sized>(w: &mut W, i: u32, at: u32, per: u32) {
+    if at % per == 0 {
+        w.most(i, at / per + 1);
     }
 }
 

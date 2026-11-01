@@ -110,26 +110,32 @@ fn noon() -> f32 {
   return dot((sun_transmittance(r, 1.0) + sky_ground(r, 1.0).rgb) * atmos_white(), LUMA) / PI;
 }
 
-// The eye, adapted to the light on the land under it: an up-facing face of
-// albedo one, against the same at sea level under a sun overhead. A fall from
-// noon shows as SHOWN_FALL of it down to NIGHT_STOPS under; the eye takes back
-// the rest. In stops, which an opened night eye needs.
-fn eye_stops(s: Lights) -> f32 {
+// The eye, adapted to the light on the land under it, at radius `land_r`: an
+// up-facing face of albedo one, against the same at sea level under a sun
+// overhead. A fall from noon shows as SHOWN_FALL of it down to NIGHT_STOPS
+// under; the eye takes back the rest. In stops, which an opened night eye
+// needs.
+fn eye_stops_at(land_r: f32, s: Lights) -> f32 {
   let up = frame_up();
-  let land = dot(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_radius(), up, s), s), LUMA);
+  let land = dot(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, s), s), LUMA);
   let stops = log2(max(land, 1e-30) / noon());
   let shown = clamp(stops * atmos_shown_fall(), -atmos_night_stops(), 0.0);
   return log2(atmos_exposure()) + shown - stops;
 }
 
+// The eye over the land as the words say it.
+fn eye_stops(s: Lights) -> f32 {
+  return eye_stops_at(land_radius(), s);
+}
+
 /* glare */
 
 // The sun's glare along `dir`, exposed by `e`: the sun toward `sun`, at height
-// `mu` over the eye, as the air above the eye lets it through.
-fn glare_toward(dir: vec3f, sun: vec3f, mu: f32, e: f32) -> vec3f {
+// `mu` over an eye at radius `r`, as the air above that eye lets it through.
+fn glare_toward(r: f32, dir: vec3f, sun: vec3f, mu: f32, e: f32) -> vec3f {
   let theta = degrees(atan2(length(cross(dir, sun)), dot(dir, sun))) + 0.02;
   let psf = 0.478 * 20.91 / (theta * theta * theta) + 0.138 * 72.37 / (theta * theta);
-  return sun_transmittance(camera_r(), mu) * atmos_white() * e * psf * (LENS_GLARE_VEIL / LENS_GLARE_HALO_SHARE);
+  return sun_transmittance(r, mu) * atmos_white() * e * psf * (LENS_GLARE_VEIL / LENS_GLARE_HALO_SHARE);
 }
 
 /* the sun's disc */

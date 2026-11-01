@@ -5,9 +5,9 @@
 //! what the query reads changed (`forget_cs`).
 
 use pxl_spec_core::answer::In;
-use pxl_spec_core::cast::{self, Met, Query};
+use pxl_spec_core::cast::Query;
 use pxl_spec_core::observed;
-use pxl_spec_core::world::{self, Handed};
+use pxl_spec_core::world::Handed;
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
@@ -30,11 +30,23 @@ pub(crate) fn seen_put(w: &mut Seen, i: u32, v: u32) {
     unsafe { *w.index_mut(i as usize) = v }
 }
 
-/// Word `i` lowered to `v` where it is more, whoever else lowers it.
-pub(crate) fn seen_least(w: &mut Seen, i: u32, v: u32) {
+/// `v` added to word `i`, whoever else adds to it: what it held.
+pub(crate) fn seen_add(w: &mut Seen, i: u32, v: u32) -> u32 {
     // SAFETY: as `seen_at`.
     unsafe {
-        spirv_std::arch::atomic_u_min::<
+        spirv_std::arch::atomic_i_add::<
+            u32,
+            { Scope::QueueFamily as u32 },
+            { Semantics::NONE.bits() },
+        >(w.index_mut(i as usize), v)
+    }
+}
+
+/// Word `i` raised to `v` where it is less, whoever else raises it.
+pub(crate) fn seen_most(w: &mut Seen, i: u32, v: u32) {
+    // SAFETY: as `seen_at`.
+    unsafe {
+        spirv_std::arch::atomic_u_max::<
             u32,
             { Scope::QueueFamily as u32 },
             { Semantics::NONE.bits() },
@@ -114,52 +126,14 @@ fn is_node(seen: &Seen, w: u32, zoom: u32, c: [i32; 3]) -> bool {
         && seen_at(seen, n + 3) == c[2] as u32
 }
 
-/// Where a writing walk is: the node's slot, `observed::NONE` where none
-/// keeps it, and what was handed it.
-#[derive(Clone, Copy)]
-pub(crate) struct Writ {
-    pub(crate) entry: u32,
-    pub(crate) at: Handed,
-}
-
-/// What a writing walk leaves of its line where it ends (`cast::Keep`), as
-/// the world's one query holds it, without the walk's slots: what was
-/// handed its stop and each node over it, by zoom. What lies about the face
-/// it stopped on is asked off it (world.rs `World::faced`), none walked down
-/// again.
-pub(crate) struct Lined {
-    pub(crate) live: Handed,
-    pub(crate) stack: [Handed; cast::DEPTH],
-}
-
-impl Lined {
-    /// Before its walk, which leaves its own over it wherever it ends, so
-    /// nothing of this is read.
-    pub(crate) fn before() -> Lined {
-        let none = Handed::of_words([0; world::HANDED_WORDS as usize]);
-        Lined {
-            live: none,
-            stack: [none; cast::DEPTH],
-        }
-    }
-}
-
-impl cast::Keep<Writ> for Lined {
-    fn keep(&mut self, met: &Met<Writ>, stack: &[Writ; cast::DEPTH]) {
-        self.live = met.stop.at.at;
-        let mut z = 0;
-        while z < met.stop.node.zoom {
-            self.stack[z as usize] = stack[z as usize].at;
-            z += 1;
-        }
-    }
-}
-
 /// The observed pyramid as a beam ray's walk, a sample's, or a pixel's that
 /// missed, reads it: a node its slot keeps at the zooms asked, unless this
 /// pass is still writing it (`tag`), taken where the key still stood once
 /// it was read; any other asked of the world's one query there and then,
 /// from what was handed it, and written where this walk claims the slot.
+/// A walk holds of a node what was handed it alone (`world::Handed`), as the
+/// world's one query does: a node's slot is its key's (`observed::entry_of`),
+/// found again wherever the node is asked.
 pub(crate) struct Writing<'a, L> {
     pub(crate) world: World<'a, L>,
     pub(crate) seen: &'a mut Seen,
@@ -171,25 +145,19 @@ pub(crate) struct Writing<'a, L> {
 }
 
 impl<L: Looks> Query for Writing<'_, L> {
-    type At = Writ;
+    type At = Handed;
 
-    fn root(&mut self, node: [i32; 3]) -> Writ {
-        Writ {
-            entry: observed::NONE,
-            at: Query::root(&mut self.world, node),
-        }
+    fn root(&mut self, node: [i32; 3]) -> Handed {
+        Query::root(&mut self.world, node)
     }
 
-    fn child(&mut self, parent: &Writ, zoom: u32, node: [i32; 3]) -> Writ {
-        Writ {
-            entry: observed::NONE,
-            at: Query::child(&mut self.world, &parent.at, zoom, node),
-        }
+    fn child(&mut self, parent: &Handed, zoom: u32, node: [i32; 3]) -> Handed {
+        Query::child(&mut self.world, parent, zoom, node)
     }
 
     fn node(
         &mut self,
-        n: &mut Writ,
+        n: &mut Handed,
         zoom: u32,
         c: [i32; 3],
         asked: [u32; 2],
@@ -230,8 +198,7 @@ impl<L: Looks> Query for Writing<'_, L> {
                             seen_at(self.seen, w + observed::W_ASSET + 1),
                         ];
                         if seen_load(self.seen, w) == held {
-                            n.entry = first + k;
-                            n.at = at;
+                            *n = at;
                             return In { kind, asset };
                         }
                         to = observed::NONE;
@@ -257,8 +224,7 @@ impl<L: Looks> Query for Writing<'_, L> {
                 (to, key) = (v, seen_load(self.seen, observed::entry_at(v)));
             }
         }
-        n.entry = to;
-        let answer = Query::node(&mut self.world, &mut n.at, zoom, c, asked, t0);
+        let answer = Query::node(&mut self.world, n, zoom, c, asked, t0);
         let w = observed::entry_at(to);
         if to != observed::NONE
             && (self.assets
@@ -274,7 +240,7 @@ impl<L: Looks> Query for Writing<'_, L> {
             );
             seen_put(self.seen, w + observed::W_ASSET, answer.asset[0]);
             seen_put(self.seen, w + observed::W_ASSET + 1, answer.asset[1]);
-            let words = n.at.words();
+            let words = n.words();
             let a = w + observed::W_HANDED;
             seen_put(self.seen, a, words[0]);
             seen_put(self.seen, a + 1, words[1]);

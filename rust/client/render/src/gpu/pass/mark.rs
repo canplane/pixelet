@@ -1,10 +1,12 @@
 // pxl-render/gpu/pass/mark.rs
 
 //! What a listed draw that changed marks: the screen's tiles and, where it
-//! casts, the light's map's (tile_mark.wgsl), by itself drawn where it was
-//! and where it is, its vertices as its depth pass lays them, each fragment
+//! casts, the light's map's (tile_mark.wgsl), by itself drawn where it was,
+//! by the frame's words the last frame drew it with, and where it is, by
+//! this frame's, its vertices as its depth pass lays them, each fragment
 //! setting its tile's word (doc/minutes/20261029-the-screen-keeps-its-tiles-
-//! as-the-light-does.md, step 6). A draw changed where no draw the last frame
+//! as-the-light-does.md, step 6): the pixels it covered then and covers now,
+//! each frame at its own jitter. A draw changed where no draw the last frame
 //! drew draws as it does, by its record, its uniform's place in the list
 //! aside, and its uniform; or where the upload it reads moved (`touched`, the
 //! handles this frame's lists upload, rewrite or free). A draw the last frame
@@ -46,14 +48,15 @@ fn drawn_of(uniforms: &[f32], d: &[u32; DRAW_WORDS]) -> Drawn {
 /// One pass's marks: its pipeline, the upload a draw reads (`read`, 0 for
 /// none) and a mark's uniform as the pipeline reads it (`put`), the marks'
 /// uniforms, this frame's marks, each its record and the group of the upload
-/// it reads, as it is or as it was (0 where it reads none), and what the
-/// last frame drew.
+/// it reads, as it is or as it was (0 where it reads none), those as they
+/// are first, `now_cnt` of them, and what the last frame drew.
 pub struct Marks {
     built: Built,
     read: UploadOf,
     put: PutMark,
     uniforms: DrawUniforms,
     marks: Vec<([u32; DRAW_WORDS], u32)>,
+    now_cnt: usize,
     was: Vec<Drawn>,
 }
 
@@ -74,6 +77,7 @@ impl Marks {
             put,
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
             marks: Vec::new(),
+            now_cnt: 0,
             was: Vec::new(),
         }
     }
@@ -111,6 +115,7 @@ impl Marks {
             };
             marks.extend(group.map(|group| (*d, group)));
         }
+        let now_cnt = marks.len();
         for w in &self.was {
             if !moved(w) && now.iter().any(|d| alike(w, d)) {
                 continue;
@@ -133,17 +138,19 @@ impl Marks {
             .into_iter()
             .map(|((d, _), group)| (d, group))
             .collect();
+        self.now_cnt = now_cnt;
         !self.marks.is_empty()
     }
 
-    /// The marks `prepare` made drawn into `pass`, `frame` their group 0
-    /// (tile_mark.wgsl), their uniforms group 1; `bind` binds each one's
-    /// groups past those and its mesh, given its upload's group, and draws
-    /// it, or passes it by where what it draws with is not on the device.
+    /// The marks `prepare` made drawn into `pass`, `frames` their group 0
+    /// (tile_mark.wgsl) over the frame's words of a draw as it is and of one
+    /// as it was, their uniforms group 1; `bind` binds each one's groups past
+    /// those and its mesh, given its upload's group, and draws it, or passes
+    /// it by where what it draws with is not on the device.
     pub fn draw(
         &self,
         pass: &mut TrackedRenderPass,
-        frame: u32,
+        frames: [u32; 2],
         mut bind: impl FnMut(&mut TrackedRenderPass, &[u32; DRAW_WORDS], u32),
     ) {
         let Some(slots) = self.uniforms.slots() else {
@@ -151,7 +158,7 @@ impl Marks {
         };
         for (k, (d, upload)) in self.marks.iter().enumerate() {
             pass.set_pipeline(self.built.pipeline);
-            pass.set_bind_group(0, frame, &[]);
+            pass.set_bind_group(0, frames[usize::from(k >= self.now_cnt)], &[]);
             let (group, off) = slots.at(k as u32);
             pass.set_bind_group(1, group, &[off]);
             bind(pass, d, *upload);
@@ -178,6 +185,7 @@ impl Marks {
         self.was.clear();
         self.was.extend(draws.map(|d| drawn_of(uniforms, d)));
         self.marks.clear();
+        self.now_cnt = 0;
     }
 
     pub fn release(&mut self) {

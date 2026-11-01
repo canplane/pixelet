@@ -89,9 +89,9 @@ pub mod ao {
 }
 
 /// How finely the air is marched: its tables (gpu/atmosphere.rs), the
-/// transmittance, multiple scattering and irradiance once a device and the
-/// sky views whenever the light's height or the camera's altitude moves; and
-/// its volume, whenever the frame's or the sky's words move.
+/// transmittance, multiple scattering and irradiance once a device, and each
+/// light's sky view and its share of the volume where the light or the eye's
+/// altitude moves half its step; and the sample a step is measured over.
 pub mod atmos {
     params! {
         /// Transmittance, as optical depth to the top.
@@ -109,6 +109,15 @@ pub mod atmos {
         /// its far slabs, a hundred km and more down into the ozone and the
         /// Earth's shadow.
         AIR_STRETCH_KNOTS: i32 = 4;
+        /// The eye's altitude a sky view's altitude slope is taken over, a
+        /// share of it and at least so many km (atmos_skyview.wgsl
+        /// `slopes`): an eye raised a sixteenth, at least ten meters.
+        ALT_SAMPLE: f32 = 0.0625;
+        ALT_SAMPLE_LEAST_KM: f32 = 0.01;
+        /// The rows of a light's view, along its own vertical, that the
+        /// exposure pass marches to tell how far the light reaches the air
+        /// (atmos_exposure.wgsl `reach`).
+        REACH_ROWS: i32 = 16;
     }
 }
 

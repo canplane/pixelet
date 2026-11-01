@@ -23,7 +23,7 @@
       "word, then each span's begin and end ticks (gpu/api.rs lays them out and",
       "holds this number to it)."
     ],
-    "HEAD": 137,
+    "HEAD": 141,
     "BYTES": {
       "$val": 4194304,
       "$doc": [
@@ -85,8 +85,10 @@
       "texture's layers read and written in place, the one format family WebGPU",
       "lets a shader do both to; TEXTURE_3D a filtered volume (the air's,",
       "gpu/atmosphere.rs); STORAGE_TEXTURE_3D an rgba16float volume a compute",
-      "pass writes; SAMPLER_COMPARISON a sampler that compares a depth texture's",
-      "texels against a reference (the sun's shadow map, gpu/shadow.rs)."
+      "pass writes, STORAGE_TEXTURE_2D an rgba16float texture one writes (the",
+      "exposure's texel, gpu/atmosphere.rs); SAMPLER_COMPARISON a sampler that",
+      "compares a depth texture's texels against a reference (the sun's shadow",
+      "map, gpu/shadow.rs)."
     ],
     "HEAD": 10,
     "TRIANGLES": 0,
@@ -124,6 +126,7 @@
     "TEXTURE_UINT_ARRAY": 10,
     "STORAGE_TEXTURE_RW": 11,
     "TEXTURE_3D": 12,
-    "STORAGE_TEXTURE_3D": 13
+    "STORAGE_TEXTURE_3D": 13,
+    "STORAGE_TEXTURE_2D": 14
   }
 }

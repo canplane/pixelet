@@ -40,6 +40,10 @@ const _: () = assert!(
     SIZE as i32 <= ANCHOR,
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
 );
+const _: () = assert!(
+    light::tiles(SIZE) * light::tiles(SIZE) <= light::MISSED_TILES,
+    "a listed slot's walk names its tile in 16 bits (`light::missed`)"
+);
 
 /// An anchor of the rays' starts (`Shadow::starts`): its world texel, its
 /// start in Q3 and what rounding to it left.
@@ -70,12 +74,13 @@ pub struct Shadow {
     /// `corner`'s words.
     pub world: u32,
     /// The world laid in, its group over the world, the corner, the map's
-    /// tiles' uniform and their marks (`Tiles::marks`), made again where
-    /// they are others; and the map's gate, its group over the tiles alike;
-    /// both over the tiles' words, which a mark beside sets.
+    /// tiles' words and uniform and their marks (`Tiles::marks`); and the
+    /// map's gate, which lays it in the claimed tiles alone, its group over
+    /// the same and the marks' box (`Tiles::marks_box`); both made again
+    /// where those are others.
     lay: Built,
     lay_group: u32,
-    lay_bound: (u32, u32, u32),
+    lay_bound: (u32, u32, u32, u32),
     gate: Built,
     gate_group: u32,
     corner: u32,
@@ -175,7 +180,7 @@ impl Shadow {
             world,
             lay,
             lay_group: 0,
-            lay_bound: (0, 0, 0),
+            lay_bound: (0, 0, 0, 0),
             gate,
             gate_group: 0,
             corner,
@@ -388,11 +393,11 @@ impl Shadow {
     /// where `cast` (its cast holds this frame's world); else cleared to the
     /// far plane, as nothing is cast there. In the claimed tiles of `tiles`
     /// alone where it is drawn through its gate, its number `number` (the
-    /// world's pass's `GATE_NUMBERS`), the rest kept as the last frame left
-    /// it: the gate sets them back to the far plane and raises their
-    /// stencil, and the world is laid there, a quad a mark of this frame's
-    /// whose tiles the map claims exactly and a tile of each other the map
-    /// claims (`Tiles::beside`), which a frame that casts alone may. The casters are drawn into it next, through
+    /// world's pass's `GATE_NUMBERS`), a frame that casts, the rest kept as
+    /// the last frame left it: the gate lays the world there and raises
+    /// their stencil, a quad a tile of the box the frame's marks cover, the
+    /// unclaimed collapsed, as many as the GPU counted
+    /// (`Tiles::box_args`). The casters are drawn into it next, through
     /// the stencil, then it ends.
     pub fn begin<'a>(
         &mut self,
@@ -418,7 +423,7 @@ impl Shadow {
         let mut pass = TrackedRenderPass::new(g, pass);
         let (marks, cnt) = tiles.marks();
         let (words, uniform) = tiles.bound();
-        let bound = (uniform, marks, words);
+        let bound = (uniform, marks, words, tiles.marks_box());
         if bound != self.lay_bound {
             release(self.lay_group);
             release(self.gate_group);
@@ -435,29 +440,25 @@ impl Shadow {
             self.gate_group = g.bind_group(
                 self.gate.layouts[0],
                 &[
+                    view_entry(0, self.world),
+                    buf_entry(1, self.corner),
                     buf_entry(30, words),
                     buf_entry(31, bound.0),
-                    buf_entry(32, bound.1),
+                    buf_entry(33, bound.3),
                 ],
             );
             self.lay_bound = bound;
         }
         if let Some(n) = number {
+            xpute_kit::ensure!(cast, EINVAL, n);
             pass.set_stencil_reference(n);
             pass.set_pipeline(self.gate.pipeline);
             pass.set_bind_group(0, self.gate_group, &[]);
-            pass.draw(6, cnt, 0, 0);
-            for (first, n) in tiles.beside() {
-                pass.draw(6, n, 0, first);
-            }
-        }
-        if cast {
+            pass.draw_indirect(tiles.box_args(), 0);
+        } else if cast {
             pass.set_pipeline(self.lay.pipeline);
             pass.set_bind_group(0, self.lay_group, &[]);
             pass.draw(6, cnt, 0, 0);
-            for (first, n) in tiles.beside() {
-                pass.draw(6, n, 0, first);
-            }
         }
         pass
     }
