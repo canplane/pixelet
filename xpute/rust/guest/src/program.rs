@@ -4,19 +4,28 @@
 //! the linker stopped, the toc's page, the two rings and their slots and the
 //! hostcalls' stream, then the heap; its turns run; and each command handed
 //! to the function the program names for it, whose result is the reply and
-//! whose errno is the failure. What lies under it, `ipc::door`, `ipc::sys`
-//! and `ipc::toc`, a guest that lays its memory out itself uses as it is.
+//! whose errno is the failure. Work that waits on the host runs as a task
+//! (`Turn::spawn`): a file read whole (`read`) is awaited, and each await ends
+//! at a later turn. What lies under it, `ipc::door`, `ipc::sys`, `ipc::toc` and
+//! `sched::task`, a guest that lays its memory out itself uses as it is.
+
+use core::future::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{BranchCursor, PacketWriter, TreeReader};
 
+use crate::abi::cmd::SysOpened;
 use crate::global::Global;
 use crate::ipc::door::{Door, Submission};
+use crate::ipc::file::Files;
 use crate::ipc::ring::{ring_bytes, slots_bytes, Ring};
-use crate::ipc::sys::{spec::op, Sys};
+use crate::ipc::sys::{spec::op, Fd, Sys};
 use crate::ipc::toc::{spec::key, toc_words, write_toc};
 use crate::mem::section::PAGE_BYTES;
+use crate::sched::task::{self, Executor, Task};
 use crate::sched::wake::NO_WAKE;
 
 /// The port a program's host speaks as unless it says otherwise, and the one
@@ -78,9 +87,16 @@ pub const fn heap_at(layout: &Layout, data_end: u32) -> u32 {
     range_at(data_end) + layout.heap_at()
 }
 
+/// The files a program may have open at once, each a read awaited.
+const MOST_FILES: usize = 64;
+
 struct Program {
     door: Door,
     sys: Sys,
+    files: Files<(), MOST_FILES>,
+    reads: Vec<Reading>,
+    /// Turns run since boot.
+    turn: u32,
 }
 
 static PROGRAM: Global<Option<Program>> = Global::new();
@@ -128,7 +144,11 @@ pub fn boot(layout: &Layout, data_end: u32) -> u32 {
     PROGRAM.set(Some(Program {
         door: Door::new(sq, cq, layout.most_events),
         sys,
+        files: Files::new(),
+        reads: Vec::new(),
+        turn: 0,
     }));
+    task::set(&TASKS);
     range
 }
 
@@ -220,6 +240,279 @@ impl Turn<'_> {
     pub fn raise_packet(&self, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
         self.door.raise(PROGRAM_PORT, cmd, cnt, f);
     }
+
+    /// Work that waits on the host, first polled after this turn's commands
+    /// and then whenever what it awaits is ready; EAGAIN where the executor
+    /// has no room.
+    pub fn spawn(&self, work: impl Future<Output = ()> + 'static) -> Result<(), Errno> {
+        if task::spawn(work, 0) {
+            Ok(())
+        } else {
+            Err(Errno::EAGAIN)
+        }
+    }
+}
+
+/// An event for the program's port from a task, heard after the turn.
+pub fn raise<E: Event>(event: &E) {
+    if let Some(p) = PROGRAM.get(|| None) {
+        p.door
+            .raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, |w| event.write(w));
+    }
+}
+
+/// The file at `path` below `root`, whole: its bytes, or the errno its open
+/// was refused with (ENOENT where there is none; what a root means is the
+/// host's `Fs`), EMFILE where as many are open as a program may have, ENOMEM
+/// where the heap has no room for it. Opened on the turn it is first polled,
+/// read on the turn its open is answered, and ready on the turn after.
+pub fn read(root: u32, path: &str) -> Read {
+    Read {
+        root,
+        path: path.into(),
+        fd: None,
+    }
+}
+
+/// A read awaited (`read`); dropped before it is ready, its open is cancelled.
+pub struct Read {
+    root: u32,
+    path: Box<str>,
+    fd: Option<Fd>,
+}
+
+enum Got {
+    Opening,
+    /// Filled by the host after the turn `asked` ends.
+    Reading {
+        bytes: Vec<u8>,
+        asked: u32,
+    },
+    Done(Result<Vec<u8>, Errno>),
+}
+
+struct Reading {
+    fd: Fd,
+    got: Got,
+    waker: Option<Waker>,
+    /// Its `Read` was dropped: kept only while the host may still fill it.
+    gone: bool,
+}
+
+impl Reading {
+    fn ready(&mut self, res: Result<Vec<u8>, Errno>) {
+        self.got = Got::Done(res);
+        if let Some(w) = self.waker.take() {
+            w.wake();
+        }
+    }
+}
+
+impl Future for Read {
+    type Output = Result<Vec<u8>, Errno>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let Some(p) = PROGRAM.get(|| None) else {
+            return Poll::Ready(Err(Errno::ENXIO));
+        };
+        let Some(fd) = this.fd else {
+            let Some(fd) = p.files.try_open(&mut p.sys, this.root, &this.path, ()) else {
+                return Poll::Ready(Err(Errno::EMFILE));
+            };
+            this.fd = Some(fd);
+            p.reads.push(Reading {
+                fd,
+                got: Got::Opening,
+                waker: Some(cx.waker().clone()),
+                gone: false,
+            });
+            return Poll::Pending;
+        };
+        let Some(i) = p.reads.iter().position(|r| r.fd == fd && !r.gone) else {
+            return Poll::Ready(Err(Errno::EBADF));
+        };
+        if let Got::Done(_) = p.reads[i].got {
+            this.fd = None;
+            let Got::Done(res) = p.reads.swap_remove(i).got else {
+                unreachable!()
+            };
+            return Poll::Ready(res);
+        }
+        p.reads[i].waker = Some(cx.waker().clone());
+        Poll::Pending
+    }
+}
+
+impl Drop for Read {
+    fn drop(&mut self) {
+        let (Some(fd), Some(p)) = (self.fd, PROGRAM.get(|| None)) else {
+            return;
+        };
+        let Some(i) = p.reads.iter().position(|r| r.fd == fd && !r.gone) else {
+            return;
+        };
+        match p.reads[i].got {
+            Got::Opening => {
+                p.files.close(&mut p.sys, fd);
+                p.reads.swap_remove(i);
+            }
+            Got::Reading { .. } => p.reads[i].gone = true,
+            Got::Done(_) => {
+                p.reads.swap_remove(i);
+            }
+        }
+    }
+}
+
+impl Program {
+    /// An open answered: an errno ends its read, a size has the host fill a
+    /// buffer of it after this turn.
+    fn opened(&mut self, opened: &SysOpened) {
+        if self.files.opened(&mut self.sys, opened).is_none() {
+            return;
+        }
+        let Some(r) = self.reads.iter_mut().find(|r| r.fd == opened.fd) else {
+            return;
+        };
+        if opened.res < 0 {
+            r.ready(Err(Errno::of(opened.res).unwrap_or(Errno::EIO)));
+            return;
+        }
+        let mut bytes = Vec::new();
+        if bytes.try_reserve_exact(opened.res as usize).is_err() {
+            self.files.close(&mut self.sys, opened.fd);
+            r.ready(Err(Errno::ENOMEM));
+            return;
+        }
+        bytes.resize(opened.res as usize, 0);
+        // SAFETY: the buffer is kept in `reads`, never grown, until a later
+        // turn's rise; nothing reads it before then.
+        unsafe { self.sys.read(opened.fd, &mut bytes) };
+        self.files.close(&mut self.sys, opened.fd);
+        r.got = Got::Reading {
+            bytes,
+            asked: self.turn,
+        };
+    }
+
+    /// The reads the host filled after an earlier turn, ready; those whose
+    /// `Read` was dropped, let go.
+    fn rise(&mut self) {
+        self.turn += 1;
+        let turn = self.turn;
+        self.reads
+            .retain(|r| !(r.gone && turn > asked_of(&r.got).unwrap_or(0)));
+        for r in &mut self.reads {
+            if asked_of(&r.got).is_some_and(|asked| turn > asked) {
+                let Got::Reading { bytes, .. } = core::mem::replace(&mut r.got, Got::Opening)
+                else {
+                    unreachable!()
+                };
+                r.ready(Ok(bytes));
+            }
+        }
+    }
+
+    /// A read waits for the next turn.
+    fn waiting(&self) -> bool {
+        self.reads
+            .iter()
+            .any(|r| matches!(r.got, Got::Reading { .. }))
+    }
+}
+
+fn asked_of(got: &Got) -> Option<u32> {
+    match got {
+        Got::Reading { asked, .. } => Some(*asked),
+        _ => None,
+    }
+}
+
+/// The executor `program!` installs: each task polled once a turn while it is
+/// woken, a woken one asking for the next turn. Another installed in its place
+/// (`sched::task::set`) runs the same tasks.
+struct Tasks;
+
+struct TaskList {
+    slots: Vec<Option<Task>>,
+    woken: Vec<bool>,
+}
+
+static TASK_LIST: Global<TaskList> = Global::new();
+static TASKS: Tasks = Tasks;
+
+fn task_list() -> &'static mut TaskList {
+    TASK_LIST.get(|| TaskList {
+        slots: Vec::new(),
+        woken: Vec::new(),
+    })
+}
+
+const WAKER: RawWakerVTable = RawWakerVTable::new(
+    |data| RawWaker::new(data, &WAKER),
+    |data| woke(data.addr()),
+    |data| woke(data.addr()),
+    |_| {},
+);
+
+fn woke(slot: usize) {
+    if let Some(w) = task_list().woken.get_mut(slot) {
+        *w = true;
+    }
+}
+
+impl Executor for Tasks {
+    fn spawn(&self, work: Task, _priority: task::Priority) -> bool {
+        let list = task_list();
+        let slot = list
+            .slots
+            .iter()
+            .position(Option::is_none)
+            .unwrap_or_else(|| {
+                list.slots.push(None);
+                list.woken.push(false);
+                list.slots.len() - 1
+            });
+        list.slots[slot] = Some(work);
+        list.woken[slot] = true;
+        true
+    }
+
+    fn poll(&self) {
+        let len = task_list().slots.len();
+        for slot in 0..len {
+            let list = task_list();
+            if !core::mem::take(&mut list.woken[slot]) {
+                continue;
+            }
+            let Some(mut work) = list.slots[slot].take() else {
+                continue;
+            };
+            // SAFETY: the vtable's calls take only the slot's number, no memory.
+            let waker = unsafe {
+                Waker::from_raw(RawWaker::new(core::ptr::without_provenance(slot), &WAKER))
+            };
+            if work
+                .as_mut()
+                .poll(&mut Context::from_waker(&waker))
+                .is_pending()
+            {
+                task_list().slots[slot] = Some(work);
+            } else {
+                // SAFETY: done, so never polled again; unpinned only to be freed.
+                let done: &'static mut (dyn Future<Output = ()> + 'static) =
+                    unsafe { Pin::into_inner_unchecked(work) };
+                let raw: *mut (dyn Future<Output = ()> + 'static) = done;
+                // SAFETY: `task::spawn` made it a box and handed it here once.
+                drop(unsafe { Box::from_raw(raw) });
+            }
+        }
+    }
+
+    fn pending(&self) -> bool {
+        task_list().woken.iter().any(|w| *w)
+    }
 }
 
 /// What a command is handed to: its reply, or its errno.
@@ -228,21 +521,37 @@ pub type Handler = fn(&mut Turn<'_>, Packet<'_>) -> Result<i32, Errno>;
 /// A turn: what waits, each command to its handler in order, ENOSYS for one
 /// with none; the next turn asked for while any is left.
 pub fn turn(handlers: &[(u32, Handler)]) -> f64 {
-    let Some(Program { door, sys }) = PROGRAM.get(|| None) else {
+    let Some(p) = PROGRAM.get(|| None) else {
         return NO_WAKE;
     };
-    sys.rise();
-    door.drain(|s| match s {
-        Submission::Opened(_) => Ok(None),
-        Submission::Program(cmd, pkt) => match handlers.iter().find(|(c, _)| *c == cmd) {
-            None => Ok(None),
-            Some((_, handle)) => handle(&mut Turn { sys, door }, Packet(pkt))
-                .map(Some)
-                .map_err(MarshalError::new),
-        },
-    });
-    sys.fall();
-    if door.pending() {
+    p.sys.rise();
+    p.rise();
+    let mut answered: Vec<SysOpened> = Vec::new();
+    {
+        let Program { door, sys, .. } = &mut *p;
+        door.drain(|s| match s {
+            Submission::Opened(o) => {
+                answered.push(o);
+                Ok(Some(0))
+            }
+            Submission::Program(cmd, pkt) => match handlers.iter().find(|(c, _)| *c == cmd) {
+                None => Ok(None),
+                Some((_, handle)) => handle(&mut Turn { sys, door }, Packet(pkt))
+                    .map(Some)
+                    .map_err(MarshalError::new),
+            },
+        });
+    }
+    for o in &answered {
+        p.opened(o);
+    }
+    // The tasks reach the program through `PROGRAM` themselves.
+    task::poll();
+    let Some(p) = PROGRAM.get(|| None) else {
+        return NO_WAKE;
+    };
+    p.sys.fall();
+    if p.door.pending() || p.waiting() || task::pending() {
         0.0
     } else {
         NO_WAKE

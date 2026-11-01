@@ -94,7 +94,11 @@ one call (`@xpute/host/port.ts` `open`) and talks to it through a **port**, the
 number the guest sees as a command's sender. `send` puts a command on the rings
 for the next turn, `on` hears what the guest raises after the turn that raised
 it, and `call` rings the guest at once and returns its answer. A hostcall of the
-program's own is answered by the function `open` was given for its number.
+program's own is answered by the function `open` was given for its number. What
+waits on the host runs as a task (`Turn::spawn`): a file is read whole by
+awaiting `xpute_guest::program::read`, opened on one turn, read on the turn its
+open is answered and ready on the next, from the host's `Fs` that `open` was
+given; `raise` sends an event from the task.
 
 The commands are the program's own table (`spec/example/cmd.json`), generated
 for both ends by xpute-tool's `cmd`: the guest's function takes its packet as
@@ -115,13 +119,28 @@ fn main() {
 // lib.rs
 xpute_guest::program! {
     on Command::SUM => sum, // fn(&mut Turn, Sum) -> Result<i32, Errno>
+    on Command::COUNT => count,
+}
+
+fn count(cx: &mut Turn<'_>, p: Count<'_>) -> Result<i32, Errno> {
+    let path = String::from(p.path);
+    cx.spawn(async move {
+        let res = match read(ROOT, &path).await {
+            Ok(bytes) => bytes.len() as i32,
+            Err(e) => e as i32,
+        };
+        raise(&CountedEvent { res });
+    })?;
+    Ok(0)
 }
 ```
 
 ```ts
-const guest = open(module, { answer: { [ASK]: () => HELD } });
+const guest = open(module, { answer: { [ASK]: () => HELD }, fs });
 guest.on(SUMMED, (total) => console.log(total)); // 5
 guest.call(SUM, 2, 3); // 2 + 3 + HELD
+guest.on(COUNTED, (res) => console.log(res)); // the file's bytes, or -errno
+guest.send(COUNT, "file.txt");
 ```
 
 Under the two declarations lie the parts they compose, which a program that lays

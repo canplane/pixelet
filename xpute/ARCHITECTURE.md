@@ -573,7 +573,8 @@ decides what must match.
   one gives a program the other gives too. One thing is Rust's alone so far: a
   guest in one declaration (`xpute-guest/program.rs` `program!`), which lays the
   range out, runs the turns and hands each command to a function the program
-  names; C++ gives the parts it composes.
+  names, and runs as tasks what waits on the host, a file read whole awaited
+  across turns (`read`); C++ gives the parts it composes.
 - **Host ends hold what their platform needs.** TypeScript's (`ts/host`)
   reserves a module's memory and opens the module over it (`module.ts`), and
   mounts the doorbell, the hostcalls' end and the strobe on any guest its

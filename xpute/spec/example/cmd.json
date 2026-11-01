@@ -24,6 +24,18 @@
           "val": 4098,
           "$doc": ["Raised as SUM is answered: the two numbers' sum, before the host's is added."],
           "event": [{ "name": "total", "type": "u32" }]
+        },
+        {
+          "name": "COUNT",
+          "val": 4099,
+          "$doc": ["A file's path, read whole by a task; answered at once, its count raised as COUNTED once read."],
+          "pkt": [{ "name": "path", "type": "str" }]
+        },
+        {
+          "name": "COUNTED",
+          "val": 4100,
+          "$doc": ["Raised once COUNT's file is read: its bytes, or -errno."],
+          "event": [{ "name": "res", "type": "i32" }]
         }
       ]
     }

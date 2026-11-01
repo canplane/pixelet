@@ -137,7 +137,8 @@ export interface Options<G extends Grant = Grant> {
 /**
  * A guest built with `xpute_guest::program!`, opened and mounted: its module
  * instantiated over a memory of its own, its `boot` asked where its toc lies,
- * and the port the program speaks as.
+ * its turns begun (stopped by `host.strobe.stop`), and the port the program
+ * speaks as.
  */
 export function open(module: WebAssembly.Module, opts?: Options): Port;
 export function open<G extends Grant>(
@@ -168,5 +169,6 @@ export function open<G extends Grant>(
       opts.policy ?? (new FixedQuota(4) as unknown as SchedulingPolicy<G>),
     submit: opts.submit ?? (() => {}),
   });
+  host.strobe.start();
   return port(host, opts.port ?? PROGRAM_PORT);
 }

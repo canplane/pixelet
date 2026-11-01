@@ -12,7 +12,7 @@ import type {
   PacketRoom,
   PacketWriter,
 } from "@xpute/kit/wire/xtp/mod.ts";
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Raised, Sent } from "@xpute/host/port.ts";
 import * as Command from "./cmd/command.spec.ts";
 
@@ -48,4 +48,34 @@ export function read_summed_tuple(b: BranchCursor): [total: u32] {
 export const SUMMED: Raised<[total: u32]> = {
   number: Command.SUMMED,
   read: read_summed_tuple,
+};
+
+/** Command.COUNT's packet, written in place into `to`. */
+export function encode_count(to: PacketRoom, path: string): PacketWriter {
+  return to.writer(1).str(path);
+}
+
+/** Command.COUNT, as a port sends it or hears it. */
+export const COUNT: Sent<[path: string]> = {
+  number: Command.COUNT,
+  write: encode_count,
+};
+
+/** Command.COUNTED's event. */
+export interface CountedEvent {
+  res: i32;
+}
+
+export function read_counted(b: BranchCursor): CountedEvent {
+  return { res: b.at(0).get<i32>() };
+}
+
+export function read_counted_tuple(b: BranchCursor): [res: i32] {
+  return [b.at(0).get<i32>()];
+}
+
+/** Command.COUNTED, as a port sends it or hears it. */
+export const COUNTED: Raised<[res: i32]> = {
+  number: Command.COUNTED,
+  read: read_counted_tuple,
 };

@@ -34,10 +34,19 @@ pub enum Command {
     SUM = 0x1001,
     /// Raised as SUM is answered: the two numbers' sum, before the host's is added.
     SUMMED = 0x1002,
+    /// A file's path, read whole by a task; answered at once, its count raised as COUNTED once read.
+    COUNT = 0x1003,
+    /// Raised once COUNT's file is read: its bytes, or -errno.
+    COUNTED = 0x1004,
 }
 
 impl Command {
-    pub const ALL: [Command; 2] = [Command::SUM, Command::SUMMED];
+    pub const ALL: [Command; 4] = [
+        Command::SUM,
+        Command::SUMMED,
+        Command::COUNT,
+        Command::COUNTED,
+    ];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<Command> {
@@ -87,5 +96,48 @@ impl xpute_guest::program::Event for SummedEvent {
     const FIELDS: u32 = 1;
     fn write(&self, w: &mut PacketWriter) {
         SummedEvent::write(self, w);
+    }
+}
+
+/// Command::COUNT's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct Count<'a> {
+    pub path: &'a str,
+}
+
+impl<'a> Count<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<Count<'a>, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(Count {
+            path: f.at(0)?.get_str_ref()?,
+        })
+    }
+}
+
+impl<'a> xpute_guest::program::FromPacket<'a> for Count<'a> {
+    fn from_packet(pkt: xpute_guest::program::Packet<'a>) -> Result<Self, Errno> {
+        Count::read(pkt.bytes().ok_or(Errno::EBADMSG)?).map_err(|e| e.errnum)
+    }
+}
+
+/// Command::COUNTED's event.
+pub struct CountedEvent {
+    pub res: i32,
+}
+
+impl CountedEvent {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.i32(Some(self.res));
+    }
+}
+
+impl xpute_guest::program::Event for CountedEvent {
+    const NUMBER: u32 = 4100;
+    const FIELDS: u32 = 1;
+    fn write(&self, w: &mut PacketWriter) {
+        CountedEvent::write(self, w);
     }
 }
