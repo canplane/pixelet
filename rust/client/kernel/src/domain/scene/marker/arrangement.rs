@@ -1,7 +1,7 @@
 // pxl-kernel/domain/scene/marker/arrangement.rs
 
 //! The markers' arrangement: where each is drawn, read by its own source
-//! over the eye's windows' bricks, as decor is generated over them
+//! over the eye's clip levels' bricks, as decor is generated over them
 //! (domain/view/observation.rs `bricks`), and shown at the zoom the camera
 //! grid's cell at its own point is: a place as Carto draws it at that zoom
 //! (`place.rs`); a pin someone put up, near enough (`pin.rs`); a line said,
@@ -29,7 +29,7 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::domain::query::changed;
+use crate::domain::query::changes;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::view::frame::coord;
@@ -37,17 +37,17 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::sys::sched::edge;
 use fnv::{FnvHashMap, FnvHashSet};
+use pxl_engine::clipmap::BRICK_SHIFT;
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::coord::world::BOUNDS;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::clipmap::BRICK_SHIFT;
 
-/// A brick of the eye's windows the markers are read over, by its zoom
+/// A brick of the eye's clip levels the markers are read over, by its zoom
 /// and place, X running on round the world as the view's frame does
 /// (domain/view/observation.rs `bricks`).
 pub(super) type Brick = Node<2>;
@@ -70,9 +70,9 @@ pub(super) fn region((zoom, [x, y]): Brick, [low, high]: [f64; 2]) -> Aabb {
 #[derive(Default)]
 struct Arrangement {
     candidates: Candidates,
-    kept: Vec<u32>,
+    visible: Vec<u32>,
     set: Set,
-    drawn: Vec<u32>,
+    draw_order: Vec<u32>,
     /// Nearest the eye first: screen box, and where a tap on it goes.
     hits: Vec<([f64; 4], MarkerHit)>,
     /// Kept so a settled turn asks the heap for nothing; a brick's in a
@@ -84,13 +84,13 @@ struct Arrangement {
     /// The drawn bricks `pins` and `places` were read from: a brick drawn
     /// still keeps what was read from it, so an eye move casts rays only in
     /// the bricks it enters.
-    found_for: Option<Found>,
+    found_for: Option<Read>,
     /// The same, read this turn.
-    now: Found,
+    now: Read,
     /// Places, ground or objects moved since they were read.
     moved: bool,
     /// The place tiles whose answer moved, beside the ground's
-    /// (domain/query/changed.rs): a brick they touch is read again.
+    /// (domain/query/changes.rs): a brick they touch is read again.
     moved_places: Vec<Tile>,
     /// The bricks this turn would read, by how far from the eye, with
     /// their columns.
@@ -111,22 +111,22 @@ struct Arrangement {
     spare_instances: Vec<f32>,
     /// What the last run read, compared by value: equal, with nothing moved
     /// and nothing left waiting, the designs it laid out stand.
-    last: Option<Seen>,
+    last: Option<Inputs>,
     /// The last run left a design not laid out or not painted, which a later
     /// turn has, or a brick not read yet: the next runs again.
     waiting: bool,
 }
 
-/// Everything `step` reads, by value, as the demand's `Seen` is: the eye and
+/// Everything `step` reads, by value, as the demand's `Key` is: the eye and
 /// its view (the observation holds its frustum), the places
 /// setting, the pin being written and the chat's line and where it hangs. A
 /// new input goes here or the step never sees it change.
 #[derive(Clone, PartialEq)]
-struct Seen {
+struct Inputs {
     o: Observation,
     places: bool,
     drafted: Option<(EntryAt, u64)>,
-    said: line::Said,
+    bubble: line::Bubble,
 }
 
 /// The name a holder calls what it shows by, from one run to the next, and
@@ -159,8 +159,8 @@ static ARRANGEMENT: Global<Arrangement> = Global::new();
 /// it stands while no change touches them, whatever heights the world
 /// stands between in it.
 #[derive(Default, PartialEq)]
-struct Found {
-    drawn: Vec<Brick>,
+struct Read {
+    bricks: Vec<Brick>,
     places: bool,
 }
 
@@ -168,7 +168,7 @@ struct Found {
 /// cull of a brick leaves it: a bound, twice a place's cell, the width its
 /// name wraps to (`SPACING_PX`), past a pin's longest pill and a name's
 /// lines over its icon.
-fn reach_px(spacing: f64) -> f64 {
+fn extent_px(spacing: f64) -> f64 {
     2.0 * spacing
 }
 
@@ -185,7 +185,7 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
     let ray = Ray {
         origin: [xy[0], xy[1], high],
         dir: [0.0, 0.0, -1.0],
-        reach: high - low,
+        t_max: high - low,
     };
     let hit = World::now()
         .first_hit(&ray, at_zoom(zoom))
@@ -197,8 +197,7 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 /// The width a place keeps to itself on the screen, in CSS pixels: its name
 /// wraps to it and its marker's region is it. A marker is laid out as the
 /// shell's text is, in CSS pixels, so the width is one on every screen, set
-/// by eye to hold a name of a few words. Which markers find room is then the
-/// screen's room, as on any map.
+/// by eye to hold a name of a few words.
 const SPACING_PX: f64 = 193.0;
 
 pub fn step(ctx: &mut TickContext, frame: &Frame) {
@@ -222,24 +221,24 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         p.moved_places.clear();
         return;
     };
-    let seen = Seen {
+    let seen = Inputs {
         o,
         places: settings_store().place,
-        drafted: pin::drafted(),
-        said: line::said(o.eye),
+        drafted: pin::draft_key(),
+        bubble: line::bubble(o.eye),
     };
     if !p.waiting && !p.moved && p.last.as_ref() == Some(&seen) {
         return;
     }
     p.last = Some(seen.clone());
-    // The eye's windows' bricks in view (domain/view/observation.rs
+    // The eye's clip levels' bricks in view (domain/view/observation.rs
     // `bricks`), as decor's are: the box the world stands in over each,
     // grown by what a marker draws past it at the box's far side; none past
     // where the rays end, over ground the sky's Earth stands for.
     let now = &mut p.now;
-    now.drawn.clear();
-    let reach = reach_px(SPACING_PX);
-    let drawn = observation::eye_draw_reach().unwrap_or(0.0);
+    now.bricks.clear();
+    let extent = extent_px(SPACING_PX);
+    let drawn = observation::eye_draw_dist().unwrap_or(0.0);
     observation::bricks(&o, &mut |brick, heights| {
         let b = region(brick, heights);
         if o.measure(&b).near > drawn {
@@ -248,49 +247,61 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
         let far = v3::len(&core::array::from_fn(|k| {
             (b.min[k] - o.eye[k]).abs().max((b.max[k] - o.eye[k]).abs())
         }));
-        let pad = reach * units_per_px_at(far);
+        let pad = extent * units_per_px_at(far);
         if frame.sees_box(b.min.map(|v| v - pad), b.max.map(|v| v + pad)) {
-            now.drawn.push(brick);
+            now.bricks.push(brick);
         }
     });
-    now.drawn.sort_unstable();
+    now.bricks.sort_unstable();
     // Places are a setting; what someone placed is always shown.
     now.places = settings_store().place;
     let places = now.places;
     // What was read stands for a brick still drawn whose columns no change
-    // touches (domain/query/changed.rs), while places did not turn: a
+    // touches (domain/query/changes.rs), while places did not turn: a
     // brick left or touched drops its run, and only one entered or touched
     // is read, as many a turn as a pass of the tick's budget reads and at
     // least one, nearest the eye first; the rest are not read yet, so a
     // later turn reads them.
     p.moved = false;
     let before = match &p.found_for {
-        Some(f) if f.places == places => f.drawn.as_slice(),
+        Some(f) if f.places == places => f.bricks.as_slice(),
         _ => &[],
     };
     let moved_places = &p.moved_places;
-    let columns = |s: Brick| region(s, [REACH.min[2], REACH.max[2]]);
-    let drawn = |s: &Brick| now.drawn.binary_search(s).is_ok();
-    let stands = |&s: &Brick| {
-        let r = columns(s);
-        before.binary_search(&s).is_ok()
-            && !changed::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
-    };
+    let columns = |s: Brick| region(s, [BOUNDS.min[2], BOUNDS.max[2]]);
+    // Whether each drawn brick stands, asked once a brick however many pins
+    // and places it holds.
+    let stood: Vec<bool> = now
+        .bricks
+        .iter()
+        .map(|&s| {
+            let r = columns(s);
+            before.binary_search(&s).is_ok()
+                && !changes::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
+        })
+        .collect();
+    let stands = |s: &Brick| now.bricks.binary_search(s).is_ok_and(|k| stood[k]);
     let (mut pins, mut read_places) =
         (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
-    pins.retain(|s| drawn(&s.brick) && stands(&s.brick));
-    read_places.retain(|s| drawn(&s.brick) && stands(&s.brick));
+    pins.retain(|s| stands(&s.brick));
+    read_places.retain(|s| stands(&s.brick));
     let entering = &mut p.entering;
     entering.clear();
-    entering.extend(now.drawn.iter().filter(|s| !stands(s)).map(|&s| {
-        let r = columns(s);
-        let middle = [(r.min[0] + r.max[0]) / 2.0, (r.min[1] + r.max[1]) / 2.0];
-        (
-            libm::hypot(middle[0] - o.eye[0], middle[1] - o.eye[1]),
-            s,
-            r,
-        )
-    }));
+    entering.extend(
+        now.bricks
+            .iter()
+            .zip(&stood)
+            .filter(|(_, &st)| !st)
+            .map(|(&s, _)| {
+                let r = columns(s);
+                let middle = [(r.min[0] + r.max[0]) / 2.0, (r.min[1] + r.max[1]) / 2.0];
+                (
+                    libm::hypot(middle[0] - o.eye[0], middle[1] - o.eye[1]),
+                    s,
+                    r,
+                )
+            }),
+    );
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
     let read = ctx
         .pass
@@ -305,12 +316,12 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
             },
             None,
         )
-        .visited as usize;
+        .step_cnt as usize;
     let unread = entering.len() - read;
     // Not read, so not what they were read from.
     let later = &mut entering[read..];
     later.sort_unstable_by_key(|e| e.1);
-    now.drawn
+    now.bricks
         .retain(|d| later.binary_search_by_key(d, |e| e.1).is_err());
     p.moved_places.clear();
     if p.found_for.as_ref() != Some(&p.now) {
@@ -327,7 +338,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     shown.clear();
     pin::show(&mut pins, o.eye, &mut shown);
     place::show(&mut read_places, o.eye, &mut shown);
-    shown.extend(seen.said.shown());
+    shown.extend(seen.bubble.instance());
     let spacing = SPACING_PX;
     // What was drawn last by its holder's key, read once: what a holder
     // shows changed, and what was drawn stays until the new one is ready to
@@ -339,7 +350,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     // The line is laid out last, so it wins a tie with another marker (the sort's
     // tiebreak).
     for s in shown.drain(..) {
-        let (design, region) = s.design.spaced(spacing);
+        let (design, region) = s.design.with_spacing(spacing);
         let (design, held) = match before.get(&s.key) {
             Some(before) if *before != design && !design::ready(&design) => {
                 (before.clone(), Some(design))
@@ -371,11 +382,11 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
             .iter()
             .map(|s| s.design.clone())
             .chain(p.pending.iter().map(|w| w.1.clone()))
-            .chain(seen.said.kept()),
+            .chain(seen.bubble.design()),
     );
     let freed = design::retain(&p.keep);
     (p.pins, p.places, p.shown) = (pins, read_places, shown);
-    select_visible(&mut p.candidates, &mut p.kept);
+    select_visible(&mut p.candidates, &mut p.visible);
     // A design held for an instance seen asks its slot now, after the slots
     // let go are freed, so it is painted at render. Where the atlas has no
     // room for it, the hold is let go: the instance shows the new design,
@@ -383,7 +394,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     // One whose text is not laid out yet stays held and asks nothing: it
     // asks the turn its text comes (`design::coming`).
     let mut refused = false;
-    for &i in &p.kept {
+    for &i in &p.visible {
         let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else {
             continue;
         };
@@ -404,23 +415,23 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     if p.waiting {
         edge::request_world_tick();
     }
-    p.drawn.clear();
-    for &i in &p.kept {
+    p.draw_order.clear();
+    for &i in &p.visible {
         if design::slot(&sized[i as usize].design) == NO_SLOT {
             continue;
         }
-        p.drawn.push(i);
+        p.draw_order.push(i);
     }
     // Farthest first: where two are both seen, the nearer is drawn over.
     let candidates = &p.candidates;
-    p.drawn.sort_by(|&a, &b| {
+    p.draw_order.sort_by(|&a, &b| {
         candidates.d2[b as usize]
             .total_cmp(&candidates.d2[a as usize])
             .then(candidates.tiebreak[a as usize].total_cmp(&candidates.tiebreak[b as usize]))
     });
     p.hits.clear();
     p.hits.extend(
-        p.drawn
+        p.draw_order
             .iter()
             .rev()
             .filter_map(|&i| Some((p.candidates.screen[i as usize], sized[i as usize].tap?))),
@@ -429,7 +440,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     instances.clear();
     // f32 instances, so about the sea under the eye rather than the world's origin.
     let about = pose::sea_under_eye();
-    for &i in &p.drawn {
+    for &i in &p.draw_order {
         let i = i as usize;
         let at = [
             p.candidates.local_x[i] - about[0],

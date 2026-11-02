@@ -1,11 +1,13 @@
 // pxl-kernel/sys/mem.rs
 
-//! Which sections the core memory is cut into, and what `.fixed` holds.
+//! Which sections the core memory is cut into, and what `.fixed` holds:
+//! ranges placed once at boot, never freed, sized at compile time
+//! (xpute_guest::mem::range). Only the kernel's own formats belong there;
+//! external ones (glTF, PNG) have no predictable bound and are read into the
+//! heap, a model kept parsed and an image only until its texture lands
+//! (sys/io/loader.rs). Which ranges there are and how large is the roof's
+//! (door/layout.rs), which hands each owner its own at boot.
 
-/// A mebibyte, the unit memory is reported in.
-pub const MB: f64 = 1_048_576.0;
-
-pub mod fixed;
-pub mod section;
+pub(crate) mod section;
 #[path = "mem/mem.spec.rs"]
 pub mod spec;

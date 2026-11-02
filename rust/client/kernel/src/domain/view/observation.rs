@@ -4,9 +4,10 @@
 //! is known of what a box of the world holds.
 
 use crate::sys::io::demand::Order;
-use pxl_spec::space::layer::lattice::{demand_reach, draw_reach};
+use pxl_spec::space::layer::lattice::{demand_dist, draw_dist};
 use xpute_guest::global::Global;
 
+use pxl_engine::clipmap::{bricks_zoom, BRICK_SHIFT};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::split_dist;
 use pxl_spec::space::coord::v3::V3;
@@ -15,12 +16,11 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use pxl_spec_core::clipmap::{bricks_zoom, BRICK_SHIFT};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
-use crate::domain::query::changed;
-use crate::domain::query::{Walked, World};
+use crate::domain::query::changes;
+use crate::domain::query::{ColumnWalk, World};
 use crate::domain::view::above_ground::eye_height;
 use crate::domain::view::frame::pose::view;
 use crate::sys::io::source;
@@ -31,42 +31,42 @@ pub fn eye() -> Option<V3> {
     Some(view().pose?.eye)
 }
 
-/// How far from the eye the layers are demanded and the windows hold: as far
-/// as the source's top is, past where it is drawn by the windows' margin.
-/// None before the source declares its top.
-pub fn eye_demand_reach() -> Option<f64> {
-    source::top().map(|top| demand_reach(GROUND, top))
+/// How far from the eye the layers are demanded and the clip levels hold: as
+/// far as the source's top is, past where it is drawn by the clip levels'
+/// margin. None before the source declares its top.
+pub fn eye_demand_dist() -> Option<f64> {
+    source::top().map(|top| demand_dist(GROUND, top))
 }
 
 /// How far the eye draws, the rays and the clouds alike: as far as the
-/// source's top is drawn, short of what the windows hold past it
-/// (`eye_demand_reach`). None before the source declares its top.
-pub fn eye_draw_reach() -> Option<f64> {
-    source::top().map(|top| draw_reach(GROUND, top))
+/// source's top is drawn, short of what the clip levels hold past it
+/// (`eye_demand_dist`). None before the source declares its top.
+pub fn eye_draw_dist() -> Option<f64> {
+    source::top().map(|top| draw_dist(GROUND, top))
 }
 
 /// The turn's observation, made by its first reader after the view is
 /// composed where it moved (`turn`, `forget`): the eye and its ground's
 /// floor asked once where they moved, however many read it.
-static OBSERVED: Global<Option<Option<Observation>>> = Global::new();
+static OBSERVATION: Global<Option<Option<Observation>>> = Global::new();
 
 /// The turn's view moved: the next reader makes the observation again.
 pub fn forget() {
-    *OBSERVED.get(|| None) = None;
+    *OBSERVATION.get(|| None) = None;
 }
 
 /// A turn begins, the pose `moved` or not: the observation stands where it
 /// did not, the reach is what it was, and no change touched the ground under
-/// the eye, whose height over it it holds (`changed::within`, asked each
+/// the eye, whose height over it it holds (`changes::within`, asked each
 /// frame turn, so each change is seen once); else it is made again.
 pub fn turn(moved: bool) {
     let stands = !moved
-        && match *OBSERVED.get(|| None) {
+        && match *OBSERVATION.get(|| None) {
             Some(Some(o)) => {
-                Some(o.reach) == eye_demand_reach()
-                    && !changed::within([[o.eye[0], o.eye[1]]; 2], &[])
+                Some(o.demand_dist) == eye_demand_dist()
+                    && !changes::within([[o.eye[0], o.eye[1]]; 2], &[])
             }
-            Some(None) => eye().is_none() || eye_demand_reach().is_none(),
+            Some(None) => eye().is_none() || eye_demand_dist().is_none(),
             None => false,
         };
     if !stands {
@@ -74,23 +74,23 @@ pub fn turn(moved: bool) {
     }
 }
 
-/// Out to `eye_demand_reach`. None before the camera stands anywhere or the source
+/// Out to `eye_demand_dist`. None before the camera stands anywhere or the source
 /// declares its top.
 pub fn observation() -> Option<Observation> {
-    *OBSERVED.get(|| None).get_or_insert_with(|| {
+    *OBSERVATION.get(|| None).get_or_insert_with(|| {
         let eye = eye()?;
-        let reach = eye_demand_reach()?;
+        let demand_dist = eye_demand_dist()?;
         let height = eye_height();
         Some(Observation {
             eye,
             frustum: Some(view().frustum),
-            reach,
+            demand_dist,
             ground: eye[2] - height,
         })
     })
 }
 
-/// The eye's windows' bricks (pxl-spec-core clipmap.rs), the ground about
+/// The eye's clip levels' bricks (pxl-engine clipmap.rs), the ground about
 /// the eye cut into one partition: from the coarsest bricks within the
 /// floor's ring (tile_cache/floor.rs `ring`), the far edge cut by the ground,
 /// a brick splits into its four while its nearest point is nearer than its
@@ -124,10 +124,10 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     stack.clear();
     stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
     // Depth first, so each brick's lines step from its neighbor's.
-    let (world, mut walked) = (World::now(), Walked::default());
+    let (world, mut walked) = (World::now(), ColumnWalk::default());
     while let Some((zoom, xy)) = stack.pop() {
         let (cell, d) = (zoom + BRICK_SHIFT, near(zoom, xy));
-        if d > o.reach {
+        if d > o.demand_dist {
             continue;
         }
         if cell < GROUND.cell() && d < split_dist(cell) {
@@ -145,7 +145,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
 /// How far from the eye a layer's tiles at `zoom` are asked for: at the
 /// source's `top` the floor's (tile_cache/floor.rs `ring`), past it the
 /// zoom's band (pxl-spec layer/demand.rs `band`); none past the far edge.
-pub fn reach(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
+pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
     if zoom == top {
         return floor::ring(o);
     }
@@ -153,12 +153,12 @@ pub fn reach(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option
 }
 
 /// What the view asks a layer for: at each zoom under the source's top, which
-/// the floor holds, to the leaves, every tile within `reach` of the eye. It
+/// the floor holds, to the leaves, every tile within `demand_radius` of the eye. It
 /// is a function of the eye alone, never of what the rays met, so what is
 /// asked, and so what is read, cannot depend on what was held before: the
 /// rays only see it arrive.
 /// It asks by x and y alone, the eye's height no part of it: a ray picks a
-/// cell's zoom by its distance in 3D (pxl-spec-core `grid::cell_zoom_at`),
+/// cell's zoom by its distance in 3D (pxl-engine `grid::cell_zoom_at`),
 /// never shorter than its distance across the ground, so more is asked than is
 /// read and never less.
 pub struct ByEye {
@@ -171,7 +171,7 @@ pub struct ByEye {
 impl ByEye {
     pub fn requirements(&self, o: &Observation, each: &mut dyn FnMut(Tile)) {
         for zoom in self.top + 1..=LEAF_ZOOM {
-            if let Some(r) = reach(o, self.lattice, self.top, zoom) {
+            if let Some(r) = demand_radius(o, self.lattice, self.top, zoom) {
                 tiles_within(zoom, [o.eye[0], o.eye[1]], r).for_each(&mut *each);
             }
         }
@@ -181,7 +181,7 @@ impl ByEye {
 /// A layer's tile's order, from where anything stands in it as the grid's
 /// cells its own fold into read it, stepped from where `walked` last went:
 /// all of it where nothing is known or nothing stands.
-pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, walked: &mut Walked) -> Order {
+pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, walked: &mut ColumnWalk) -> Order {
     let stands = World::now().bounds(walked, p.node(), lattice.grid_zoom(p.zoom));
     Order::of(o, &stands.val().flatten().unwrap_or(p.region()))
 }

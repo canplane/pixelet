@@ -14,7 +14,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::query::changed::Asked;
+use crate::domain::query::changes::Memo;
 use crate::domain::query::World;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::indicator::param::{
@@ -24,6 +24,7 @@ use crate::domain::scene::indicator::param::{
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::region;
 use crate::domain::scene::scene;
+use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
 use crate::domain::view::lens::{seen_step_s, Stepped};
@@ -49,12 +50,12 @@ struct ZoneSample {
 }
 
 /// How far the zone reaches from its center along an axis, in cells.
-fn zone_reach() -> i32 {
+fn zone_extent() -> i32 {
     ZONE_RADIUS_CELL.ceil() as i32
 }
 
 fn zone_samples() -> impl Iterator<Item = ZoneSample> {
-    let range = zone_reach();
+    let range = zone_extent();
     let flag = |b: bool| if b { 1.0 } else { 0.0 };
     (-range..=range)
         .flat_map(move |x| (-range..=range).map(move |y| (x as f64, y as f64)))
@@ -87,7 +88,7 @@ fn zone_samples() -> impl Iterator<Item = ZoneSample> {
 /// What grounding the zone is made of, by value: the fix, and where it is
 /// in the eye's frame. With the ground its queries read (`Columns`), it is all.
 #[derive(Clone, Copy, PartialEq)]
-struct Seen {
+struct Key {
     device: Q3,
     pos: V3,
 }
@@ -100,7 +101,7 @@ pub fn location_step(device_coord: Option<Q3>) {
     scene.location.step(draw, device_coord, night);
 }
 
-/// The zone's instances about `center_pos` into `lane`, ZONE_INSTANCE_FLOATS
+/// The zone's instances about `center_pos` into `instances`, ZONE_INSTANCE_FLOATS
 /// floats an instance: each cell's ground asked of `ground` once, of the
 /// zone and of the ring its sides look across to, `rise` the room it is
 /// kept in.
@@ -108,12 +109,12 @@ fn lay_zone(
     center_pos: V3,
     mut ground: impl FnMut(&Q3) -> Option<f64>,
     rise: &mut Vec<Option<f64>>,
-    lane: &mut Vec<f32>,
+    instances: &mut Vec<f32>,
 ) {
-    lane.clear();
+    instances.clear();
     let cell = units(GROUND.cell());
     const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    let ring = zone_reach() + 1;
+    let ring = zone_extent() + 1;
     let across = (2 * ring + 1) as usize;
     let idx = |[x, y]: [i32; 2]| ((y + ring) as usize) * across + (x + ring) as usize;
     rise.clear();
@@ -127,8 +128,7 @@ fn lay_zone(
                     s.off[1] + f64::from(d[1]) * cell,
                 ];
                 let v = v3::add(&center_pos, &[off[0], off[1], s.off[2]]);
-                // An unloaded neighbor tile falls back to the center's height; 0 would
-                // sink or launch that instance.
+                // An unloaded neighbor tile falls back to the center's height.
                 let ground = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
                 rise[idx(at)] = Some(ground - center_pos[2]);
             }
@@ -151,7 +151,7 @@ fn lay_zone(
         let open = BESIDE.iter().enumerate().fold(1 << 4, |open, (k, &d)| {
             open | u32::from(box_at(&s, d)[2] < v[2]) << k
         });
-        lane.extend([
+        instances.extend([
             v[0] as f32,
             v[1] as f32,
             v[2] as f32,
@@ -185,7 +185,7 @@ struct Zone {
     center: V3,
     /// Relative to the center.
     target: [f64; 2],
-    shown: Option<[f64; 2]>,
+    beacon_at: Option<[f64; 2]>,
     night: bool,
     /// The bob's and the spin's clock as drawn, in seconds: stepped a seen
     /// step at a time (`lens::Stepped`) off `run`, which runs by the turn's
@@ -203,25 +203,24 @@ struct Zone {
 
 #[derive(Default)]
 pub struct LocationIndicator {
-    /// Holds across a GPS dropout: rebuilding the zone on a blip caused a
-    /// stacked-cube glitch after tab-away-and-back.
+    /// Holds across a GPS dropout.
     last_known_device_coord: Option<Q3>,
-    /// None until grounded, rather than drawing at a guessed height.
+    /// None until grounded.
     last_known_center_z: Option<f64>,
     /// The center the zone was last grounded at, none where it found no
     /// height, kept while the fix stands and no change touched what
-    /// grounding it read (`Asked`).
-    grounded: Asked<Seen, Option<V3>>,
+    /// grounding it read (`Memo`).
+    ground_center: Memo<Key, Option<V3>>,
     /// The zone grounded this step, kept so a step allocates nothing.
-    lane: Vec<f32>,
+    instances: Vec<f32>,
     /// Each cell's ground over the zone's center, of the zone and the ring
-    /// about it, kept as `lane` is.
+    /// about it, kept as `instances` is.
     rise: Vec<Option<f64>>,
     /// The zone's instances drawn, ZONE_INSTANCE_FLOATS floats an instance,
-    /// which `held` holds, so grounding it again to the same heights draws
+    /// which `block` holds, so grounding it again to the same heights draws
     /// nothing anew.
     drawn: Vec<f32>,
-    held: MirroredBlock,
+    block: MirroredBlock,
     /// None where nothing is shown.
     zone: Option<Zone>,
 }
@@ -235,15 +234,15 @@ impl LocationIndicator {
             return self.clear(draw);
         };
 
-        let seen = Seen {
+        let seen = Key {
             device,
             pos: coord::to_world(&device),
         };
         // Looked at each turn, so each change is seen once.
-        let mut grounded = core::mem::take(&mut self.grounded);
+        let mut grounded = core::mem::take(&mut self.ground_center);
         grounded.forget_touched();
         let center_pos = grounded.of(World::now(), seen, |w| self.ground(w, draw, seen));
-        self.grounded = grounded;
+        self.ground_center = grounded;
         let Some(center_pos) = center_pos else {
             return self.clear(draw);
         };
@@ -259,8 +258,8 @@ impl LocationIndicator {
 
     /// The zone grounded at the fix and drawn where it changed: its center, none
     /// where the fix has no height yet.
-    fn ground(&mut self, world: World, draw: &mut DrawList, seen: Seen) -> Option<V3> {
-        let (device, pos) = (seen.device, seen.pos);
+    fn ground(&mut self, world: World, draw: &mut DrawList, key: Key) -> Option<V3> {
+        let (device, pos) = (key.device, key.pos);
         // The fix names a place and not how high.
         if let Some(z) = world.surface_support(&device).val().flatten() {
             self.last_known_center_z = Some(z);
@@ -269,22 +268,22 @@ impl LocationIndicator {
         let raw = [pos[0], pos[1], center_z];
         let center_pos = v3::floor(&raw, units(GROUND.cell()));
 
-        let (mut lane, mut rise) = (
-            core::mem::take(&mut self.lane),
+        let (mut instances, mut rise) = (
+            core::mem::take(&mut self.instances),
             core::mem::take(&mut self.rise),
         );
         lay_zone(
             center_pos,
             |at| world.surface_support(at).val().flatten(),
             &mut rise,
-            &mut lane,
+            &mut instances,
         );
-        if self.zone.as_ref().is_none_or(|z| z.center != center_pos) || self.drawn != lane {
-            self.held.write(draw, bytes(&lane));
+        if self.zone.as_ref().is_none_or(|z| z.center != center_pos) || self.drawn != instances {
+            self.block.write(draw, bytes(&instances));
             match self.zone.as_mut() {
                 // Follows the center, so a whole-cell move does not play as a slide back.
                 Some(z) => {
-                    if let Some(s) = z.shown.as_mut() {
+                    if let Some(s) = z.beacon_at.as_mut() {
                         s[0] -= center_pos[0] - z.center[0];
                         s[1] -= center_pos[1] - z.center[1];
                     }
@@ -294,7 +293,7 @@ impl LocationIndicator {
                     self.zone = Some(Zone {
                         center: center_pos,
                         target: [0.0; 2],
-                        shown: None,
+                        beacon_at: None,
                         night: false,
                         time: 0.0,
                         run: 0.0,
@@ -304,10 +303,10 @@ impl LocationIndicator {
                     });
                 }
             }
-            core::mem::swap(&mut self.drawn, &mut lane);
+            core::mem::swap(&mut self.drawn, &mut instances);
             request_world_tick();
         }
-        (self.lane, self.rise) = (lane, rise);
+        (self.instances, self.rise) = (instances, rise);
         Some(center_pos)
     }
 
@@ -315,7 +314,7 @@ impl LocationIndicator {
         if self.zone.take().is_none() {
             return;
         }
-        self.held.free(draw);
+        self.block.free(draw);
         self.drawn.clear();
         request_world_tick();
     }
@@ -336,11 +335,11 @@ impl LocationIndicator {
         let cell_there = lens::cell_there(v3::len(&to));
         p.visible = frame.sees(p.center, ZONE_RADIUS) && 2.0 * ZONE_RADIUS >= cell_there;
         p.zone_drawn = p.visible && grid::cell_zoom_at(v3::dot(&to, &to)) >= GROUND.cell();
-        let shown = p.shown.get_or_insert(p.target);
+        let shown = p.beacon_at.get_or_insert(p.target);
         let gap = libm::hypot(p.target[0] - shown[0], p.target[1] - shown[1]);
         let slides = p.visible && gap <= ZONE_RADIUS && gap >= cell_there;
         if slides {
-            let a = 1.0 - libm::exp(-BEACON_SMOOTH_RATE * dt);
+            let a = smoothing_factor(BEACON_SMOOTH_RATE, dt);
             shown[0] += (p.target[0] - shown[0]) * a;
             shown[1] += (p.target[1] - shown[1]) * a;
         } else {
@@ -358,17 +357,17 @@ impl LocationIndicator {
             wake_at(now() + (next - p.run) * 1000.0);
         }
         if slides || stepped {
-            region::animated();
+            region::note_animation();
         }
         slides
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(p) = &self.zone else { return };
-        if !p.visible || self.held.handle == 0 {
+        if !p.visible || self.block.handle == 0 {
             return;
         }
-        let shown = p.shown.unwrap_or(p.target);
+        let shown = p.beacon_at.unwrap_or(p.target);
         // The zone about its center, and the beacon over where it is shown:
         // the beacon's bob and slide move it alone, as the zone reads no
         // time; each, its draw changed, marks where it was and where it is
@@ -378,7 +377,7 @@ impl LocationIndicator {
             let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
             draw.draw_as(
                 PIPELINE_LOCATION_ZONE,
-                self.held.handle,
+                self.block.handle,
                 cnt,
                 0,
                 center,

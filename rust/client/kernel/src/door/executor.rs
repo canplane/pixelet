@@ -41,8 +41,7 @@ async fn run(task: Task) {
 struct Embassy;
 
 impl Executor for Embassy {
-    /// The priority is dropped: nothing relies on embassy's queue order, and
-    /// its priority scheduler is left off.
+    /// The priority is dropped.
     fn spawn(&self, task: Task, _: Priority) -> bool {
         match run(task) {
             Ok(token) => {
@@ -68,6 +67,6 @@ impl Executor for Embassy {
 static EMBASSY: Embassy = Embassy;
 
 /// Before the kernel spawns anything.
-pub fn install() {
+pub(super) fn install() {
     task::set(&EMBASSY);
 }

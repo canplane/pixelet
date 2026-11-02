@@ -16,7 +16,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::file::{StorageFile, PATH_BYTES};
 use crate::sys::io::host_spec::stream;
-use crate::sys::io::param::MAX_CREDITS;
+use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 
 static SYS: Global<Option<Sys>> = Global::new();
 
@@ -47,10 +47,11 @@ pub fn rise() {
 const FILE_TURN_BYTES: usize = fd_turn_bytes(PATH_BYTES);
 
 /// What the files may record in one turn: each credit's file answered and a
-/// new one opened on it, and each storage file read and written. A hostcall's
-/// record lies past what the turn has recorded, in the room left.
-pub const RESERVE: usize =
-    FILE_TURN_BYTES * (2 * MAX_CREDITS as usize + 2 * StorageFile::ALL.len());
+/// new one opened on it, each storage file read and written, and the writes
+/// by number a turn allows. A hostcall's record lies past what the turn has
+/// recorded, in the room left.
+pub const RESERVE: usize = FILE_TURN_BYTES
+    * (2 * MAX_CREDITS as usize + 2 * StorageFile::ALL.len() + WRITES_A_TURN as usize);
 
 const _: () = assert!(
     RESERVE < stream::BYTES as usize,
@@ -78,18 +79,9 @@ pub fn fall() {
 }
 
 /// A broken invariant: published at once as the turn's only record, dropping
-/// the rest, since the kernel stops here (sys/stop.rs).
+/// the rest, since the kernel stops here (xpute_guest::stop).
 pub fn abort(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
     if let Some(h) = sys() {
         h.abort(errnum, at, a, b);
-    }
-}
-
-/// A host's answer as one value: a count, or the errno it refused with. A code
-/// no errno names is the host breaking the protocol.
-pub fn answered(res: i32) -> Result<u32, Errno> {
-    match u32::try_from(res) {
-        Ok(n) => Ok(n),
-        Err(_) => Err(Errno::of(res).unwrap_or(Errno::EPROTO)),
     }
 }

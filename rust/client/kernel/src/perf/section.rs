@@ -1,9 +1,6 @@
 // pxl-kernel/perf/section.rs
 
 //! Every STAT and NOW section as a record held to perf.json by `words!`.
-//! Written word by word, sections had shifted columns, mirrored structures and
-//! unread fields that only an audit found (2026-09-23); a record makes each
-//! of those a compile error.
 
 use core::mem::{offset_of, size_of};
 
@@ -32,14 +29,14 @@ words!(Percentiles, PERCENTILES::WORDS, p50 => PERCENTILES::p50, p95 => PERCENTI
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RecSection {
+pub struct RecordingStateSection {
     pub recording: f64,
     pub elapsed_ms: f64,
     pub truncated: f64,
 }
 
-words!(RecSection, NOW::rec::WORDS,
-    recording => NOW::rec::recording, elapsed_ms => NOW::rec::elapsed_ms, truncated => NOW::rec::truncated,
+words!(RecordingStateSection, NOW::recording_state::WORDS,
+    recording => NOW::recording_state::recording, elapsed_ms => NOW::recording_state::elapsed_ms, truncated => NOW::recording_state::truncated,
 );
 
 #[repr(C)]
@@ -47,7 +44,7 @@ words!(RecSection, NOW::rec::WORDS,
 pub struct FramesSection {
     /// 0 for a window with no frames, where every other word is 0 too.
     pub present: f64,
-    pub n: f64,
+    pub cnt: f64,
     pub seconds: f64,
     pub moving: f64,
     /// The moving frames' intervals summed: a second over their mean
@@ -79,10 +76,10 @@ pub struct FramesSection {
     /// for a kind none was.
     pub gpu_busy_kinds: [f64; 3 * FRAME_KINDS],
     /// The p95 alone of each phase and each span: what is read of them; a
-    /// span's over the frames a read timed that ran it, as many as its n.
+    /// span's over the frames a read timed that ran it, `gpu_spans_cnt` of them.
     pub phases_p95: [f64; PHASES],
     pub gpu_spans_p95: [f64; GPU_SPANS],
-    pub gpu_spans_n: [f64; GPU_SPANS],
+    pub gpu_spans_cnt: [f64; GPU_SPANS],
     /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
     pub kinds: [f64; FRAME_KINDS],
     pub wakes: [f64; WAKES],
@@ -101,7 +98,7 @@ const _: () = assert!(
 );
 
 words!(FramesSection, STAT::frames::WORDS,
-    present => STAT::frames::present, n => STAT::frames::n, seconds => STAT::frames::seconds,
+    present => STAT::frames::present, cnt => STAT::frames::cnt, seconds => STAT::frames::seconds,
     moving => STAT::frames::moving, moving_ms => STAT::frames::moving_ms,
     missed => STAT::frames::missed, overran => STAT::frames::overran,
     long => STAT::frames::long, turns => STAT::frames::turns, gpu_read => STAT::frames::gpu_read,
@@ -112,7 +109,7 @@ words!(FramesSection, STAT::frames::WORDS,
     effects_p95 => STAT::frames::effects_p95, gpu_busy => STAT::frames::gpu_busy,
     gpu_busy_kinds => STAT::frames::gpu_busy_kinds,
     phases_p95 => STAT::frames::phases_p95, gpu_spans_p95 => STAT::frames::gpu_spans_p95,
-    gpu_spans_n => STAT::frames::gpu_spans_n,
+    gpu_spans_cnt => STAT::frames::gpu_spans_cnt,
     kinds => STAT::frames::kinds, wakes => STAT::frames::wakes,
     gpu_px => STAT::frames::gpu_px, rays => STAT::frames::rays,
     first => STAT::frames::first, last => STAT::frames::last,
@@ -121,7 +118,7 @@ words!(FramesSection, STAT::frames::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StreamStats {
-    pub n: f64,
+    pub cnt: f64,
     pub ok: f64,
     pub aborted: f64,
     pub err: f64,
@@ -136,7 +133,7 @@ pub struct StreamStats {
 }
 
 words!(StreamStats, STREAM_STAT::WORDS,
-    n => STREAM_STAT::n, ok => STREAM_STAT::ok, aborted => STREAM_STAT::aborted, err => STREAM_STAT::err,
+    cnt => STREAM_STAT::cnt, ok => STREAM_STAT::ok, aborted => STREAM_STAT::aborted, err => STREAM_STAT::err,
     lat_p50 => STREAM_STAT::lat_p50, lat_p95 => STREAM_STAT::lat_p95, reason_cnt => STREAM_STAT::reason_cnt, reasons => STREAM_STAT::reasons,
     phase_n => STREAM_STAT::phase_n, phase_mean => STREAM_STAT::phase_mean,
 );
@@ -169,8 +166,8 @@ pub struct ViewSection {
     pub hover_z: f64,
     pub cell: f64,
     pub hit_kind: f64,
-    pub held: f64,
-    pub drawn: f64,
+    pub pick_zoom: f64,
+    pub ray_zoom: f64,
     pub folded: f64,
     pub place_x: f64,
     pub place_y: f64,
@@ -185,7 +182,7 @@ words!(ViewSection, NOW::view::WORDS,
     pivot_x => NOW::view::pivot_x, pivot_y => NOW::view::pivot_y, pivot_z => NOW::view::pivot_z,
     pivot_lon => NOW::view::pivot_lon, pivot_lat => NOW::view::pivot_lat, pivot_alt => NOW::view::pivot_alt,
     hover_x => NOW::view::hover_x, hover_y => NOW::view::hover_y, hover_z => NOW::view::hover_z,
-    cell => NOW::view::cell, hit_kind => NOW::view::hit_kind, held => NOW::view::held, drawn => NOW::view::drawn,
+    cell => NOW::view::cell, hit_kind => NOW::view::hit_kind, pick_zoom => NOW::view::pick_zoom, ray_zoom => NOW::view::ray_zoom,
     folded => NOW::view::folded, place_x => NOW::view::place_x, place_y => NOW::view::place_y, place_z => NOW::view::place_z,
     place_zoom => NOW::view::place_zoom, blocked => NOW::view::blocked,
 );
@@ -228,7 +225,7 @@ pub struct RecordingSection {
     pub heap_refusals: f64,
     pub ring_cq_peak: f64,
     pub ring_sq_peak: f64,
-    pub ring_held_peak: f64,
+    pub ring_left_peak: f64,
     pub body_slots_peak: f64,
     pub cap_terrain_refused: f64,
 }
@@ -255,7 +252,7 @@ impl RecordingSection {
             heap_refusals: h.heap_refusals,
             ring_cq_peak: max(self.ring_cq_peak, h.ring_cq_peak),
             ring_sq_peak: max(self.ring_sq_peak, h.ring_sq_peak),
-            ring_held_peak: max(self.ring_held_peak, h.ring_held_peak),
+            ring_left_peak: max(self.ring_left_peak, h.ring_left_peak),
             body_slots_peak: max(self.body_slots_peak, h.body_slots_peak),
             cap_terrain_refused: self.cap_terrain_refused + h.cap_terrain_refused,
         };
@@ -268,6 +265,6 @@ words!(RecordingSection, STAT::recording::WORDS,
     heap_range_max_bytes => STAT::recording::heap_range_max_bytes,
     heap_largest_free_min_bytes => STAT::recording::heap_largest_free_min_bytes,
     heap_refusals => STAT::recording::heap_refusals, ring_cq_peak => STAT::recording::ring_cq_peak,
-    ring_sq_peak => STAT::recording::ring_sq_peak, ring_held_peak => STAT::recording::ring_held_peak,
+    ring_sq_peak => STAT::recording::ring_sq_peak, ring_left_peak => STAT::recording::ring_left_peak,
     body_slots_peak => STAT::recording::body_slots_peak, cap_terrain_refused => STAT::recording::cap_terrain_refused,
 );

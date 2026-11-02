@@ -5,26 +5,27 @@
 //! native test has no host and opens nothing.
 //!
 //! Every file is a root's object by number (host.json `root`): a tile by its
-//! subject, an asset by its load, a storage file by its slot. The number is the
-//! path's one name, in decimal; what it is and where, a version, a URL or a
-//! storage key, is what the host (ts/client/src/driver/namespace/) binds the root to,
-//! `@xpute/host` carrying the open there.
+//! subject, an asset by its load, a storage file by its slot, a shard's
+//! objects by the shard's subject, their top and their edits by theirs. The
+//! number is the path's one name, in decimal; what it is and where, a
+//! version, a URL or a storage key, is what the host
+//! (ts/client/src/driver/namespace/) binds the root to, `@xpute/host`
+//! carrying the open there. A file is bytes: how a platform keeps them, as
+//! text or otherwise, is its backend's.
 
 use xpute_guest::abi::cmd::SysOpened;
 use xpute_guest::ipc::file::Files;
+pub use xpute_guest::ipc::file::Opened;
 use xpute_guest::ipc::sys::Fd;
+use xpute_kit::status::bug::OrBug;
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64;
-use base64::Engine;
-
-use crate::sys::io::failure::Failure;
 use crate::sys::io::fetch;
-use crate::sys::io::host::{answered, sys, turn};
+use crate::sys::io::host::{sys, turn};
 use crate::sys::io::host_spec::{format, root, storage};
 use crate::sys::io::loader;
-use crate::sys::io::param::MAX_CREDITS;
+use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::request::Credit;
-use crate::sys::io::room::Refused;
+use crate::sys::io::room::Refusal;
 use crate::sys::mem::spec::MIN_HEAP_BYTES;
 use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::global::Global;
@@ -35,34 +36,31 @@ use xpute_kit::status::errno::Errno;
 /// record there follows from how many.
 ///
 /// A storage file is its slot's format byte (host.json `format`), then what its
-/// owner keeps, the whole in base64 as storage keeps text. One of another
-/// format, not base64, or larger than any heap a device is given (no build
-/// reads it) is refused: read as nothing and never written over,
-/// and named to the host (`is_refused`), whose it is to set the file aside and
-/// empty the slot (`on_emptied`). Which storage a slot is, and what an older
-/// file becomes, the kernel never says.
+/// owner keeps. One of another format, one its backend cannot read as bytes
+/// (EBADMSG), or one larger than any heap a device is given (no build reads
+/// it) is refused: read as nothing and never written over, and named to the
+/// host (`is_refused`), whose it is to set the file aside and empty the slot
+/// (`on_emptied`). Which storage a slot is, how it keeps the bytes, and what
+/// an older file becomes, the kernel never says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StorageFile {
     Settings,
-    Objects,
 }
 
 impl StorageFile {
     /// In declaration order, as `READS` is indexed by `kept as usize`.
-    pub const ALL: [StorageFile; 2] = [StorageFile::Settings, StorageFile::Objects];
+    pub const ALL: [StorageFile; 1] = [StorageFile::Settings];
 
     /// Its path below STORAGE is this in decimal.
     pub const fn slot(self) -> u32 {
         match self {
             StorageFile::Settings => storage::SETTINGS,
-            StorageFile::Objects => storage::OBJECTS,
         }
     }
 
     pub const fn format(self) -> u8 {
         match self {
             StorageFile::Settings => format::SETTINGS,
-            StorageFile::Objects => format::OBJECTS,
         }
     }
 
@@ -128,10 +126,10 @@ pub enum StorageRead {
 }
 
 /// The slots refused since they were last emptied, by `StorageFile`.
-static REFUSED: Global<[bool; StorageFile::ALL.len()]> = Global::new();
+static REFUSALS: Global<[bool; StorageFile::ALL.len()]> = Global::new();
 
 fn refusals() -> &'static mut [bool; StorageFile::ALL.len()] {
-    REFUSED.get(|| [false; StorageFile::ALL.len()])
+    REFUSALS.get(|| [false; StorageFile::ALL.len()])
 }
 
 /// Its file is not of its slot's format, or too large for any heap: none of
@@ -146,19 +144,17 @@ pub fn on_emptied(file: StorageFile) {
     refusals()[file as usize] = false;
 }
 
-/// A storage file as storage held it, `text`: its owner's bytes where it is of
-/// its slot's format, refused where it is anything else.
-pub fn storage_of(file: StorageFile, text: &[u8]) -> StorageRead {
-    if text.is_empty() {
+/// A storage file as its backend read it, `bytes`: its owner's bytes where it
+/// is of its slot's format, refused where it is anything else.
+pub fn storage_of(file: StorageFile, mut bytes: Vec<u8>) -> StorageRead {
+    if bytes.is_empty() {
         return StorageRead::None;
     }
-    match BASE64.decode(text) {
-        Ok(mut bytes) if bytes.first() == Some(&file.format()) => {
-            bytes.remove(0);
-            StorageRead::Bytes(bytes)
-        }
-        _ => refuse(file),
+    if bytes.first() != Some(&file.format()) {
+        return refuse(file);
     }
+    bytes.remove(0);
+    StorageRead::Bytes(bytes)
 }
 
 /// Named to the host in the next snapshot, for it to set aside.
@@ -169,17 +165,17 @@ fn refuse(file: StorageFile) -> StorageRead {
 }
 
 /// The file `file` holds `bytes`, sealed with its slot's format.
-fn sealed(file: StorageFile, bytes: &[u8]) -> Vec<u8> {
+fn seal(file: StorageFile, bytes: &[u8]) -> Vec<u8> {
     let mut whole = Vec::with_capacity(1 + bytes.len());
     whole.push(file.format());
     whole.extend_from_slice(bytes);
-    BASE64.encode(whole).into_bytes()
+    whole
 }
 
 enum ReadState {
     /// The heap refused its room: opened again after the heap gives some
     /// back, never taken for a file that held nothing. No descriptor is kept.
-    Refused(Refused),
+    Refused(Refusal),
     /// Filled from the turn after `asked`.
     Reading {
         bytes: Vec<u8>,
@@ -225,8 +221,9 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
         },
         // Only its absence says nothing was kept.
         Opened::Absent => ReadState::Read(StorageRead::None),
+        // Too large for any heap, or there and not bytes to its backend.
         Opened::Failed {
-            errnum: Errno::EFBIG,
+            errnum: Errno::EFBIG | Errno::EBADMSG,
             ..
         } => ReadState::Read(refuse(file)),
         Opened::Failed { .. } => ReadState::Read(StorageRead::Unreadable),
@@ -234,15 +231,15 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
     set_read_state(file, read);
 }
 
-/// The host's answer to `open_storage`, for a test with none: `text`, read
+/// The host's answer to `open_storage`, for a test with none: `bytes`, read
 /// whole and taken from the next turn on, or an open that came to no bytes.
 #[cfg(test)]
 pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
     match answer {
-        Ok(text) => set_read_state(
+        Ok(bytes) => set_read_state(
             file,
             ReadState::Reading {
-                bytes: text.to_vec(),
+                bytes: bytes.to_vec(),
                 asked: turn(),
             },
         ),
@@ -263,7 +260,7 @@ pub fn take_storage(file: StorageFile) -> Option<StorageRead> {
         }
         ReadState::Reading { asked, .. } if turn() <= *asked => None,
         _ => match slot.take()? {
-            ReadState::Reading { bytes, .. } => Some(storage_of(file, &bytes)),
+            ReadState::Reading { bytes, .. } => Some(storage_of(file, bytes)),
             ReadState::Read(file) => Some(file),
             ReadState::Refused(_) => None,
         },
@@ -281,24 +278,19 @@ pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
     }
 }
 
-/// An opened file of `bytes`, read whole and closed: one owner, so every
-/// file read whole waits on a refusal alike. Where the heap refuses its room
-/// the read is the owner's to ask again once `Refused::over`; no descriptor
-/// is kept meanwhile.
+/// An opened file of `bytes`, read whole and closed (`Files::read_whole`):
+/// one owner, so every file read whole waits on a refusal alike. Where the
+/// heap refuses its room the read is the owner's to ask again once
+/// `Refusal::over`; no descriptor is kept meanwhile. An open is answered only
+/// where there is a host.
 ///
 /// # Safety
 /// The bytes are filled from the next turn on: as `read`, they are neither
 /// read nor dropped before then.
-pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refused> {
-    let mut held = Vec::new();
-    let room = held.try_reserve_exact(bytes as usize);
-    if room.is_ok() {
-        held.resize(bytes as usize, 0);
-        // SAFETY: the caller's.
-        unsafe { read(fd, &mut held) };
-    }
-    close(fd);
-    room.map(|()| held).map_err(|_| Refused::now())
+pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refusal> {
+    let sys = sys().or_bug(Errno::ENOTRECOVERABLE);
+    // SAFETY: the caller's.
+    unsafe { files().read_whole(sys, fd, bytes) }.map_err(|_| Refusal::now())
 }
 
 pub fn close(fd: Fd) {
@@ -340,6 +332,27 @@ pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
     files().held_for(owner)
 }
 
+/// The turn `write` last wrote in, and how many files it wrote there.
+static LAST_WRITE: Global<(u64, u32)> = Global::new();
+
+/// Writes `bytes` whole as `root`'s object `number`, where the turn has a
+/// write left (`WRITES_A_TURN`); false where it has none, nothing written,
+/// for its owner to write on a later turn. Nothing is written, and none
+/// counted, where there is no host.
+pub fn write(root: u32, number: u64, bytes: Vec<u8>) -> bool {
+    let Some(sys) = sys() else { return true };
+    let written = LAST_WRITE.get(|| (0, 0));
+    if written.0 != turn() {
+        *written = (turn(), 0);
+    }
+    if written.1 >= WRITES_A_TURN {
+        return false;
+    }
+    written.1 += 1;
+    files().write_whole(sys, root, Path::of(number).as_str(), bytes, Owner::Write);
+    true
+}
+
 /// Writes `bytes` whole as what `file` holds; a refused slot is not written.
 pub fn write_storage(file: StorageFile, bytes: &[u8]) {
     if is_refused(file) {
@@ -350,60 +363,30 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
             sys,
             root::STORAGE,
             file.path().as_str(),
-            sealed(file, bytes),
+            seal(file, bytes),
             Owner::Write,
         );
     }
 }
 
-/// What an open came to, read once from the host's answer, so no owner
-/// compares a raw result.
-#[derive(Clone, Copy, Debug)]
-pub enum Opened {
-    /// The file's size; the descriptor is the owner's to read and close.
-    Bytes(u32),
-    /// No such file; the descriptor is closed.
-    Absent,
-    /// Every other failure; the descriptor is closed.
-    Failed { errnum: Errno, detail: u32 },
-}
-
-impl Opened {
-    /// An open that came to no bytes, as its run's failure.
-    #[track_caller]
-    pub fn failure(self) -> Failure {
-        match self {
-            Opened::Failed { errnum, detail } => Failure {
-                errnum,
-                detail: detail as u16,
-                at: None,
-            },
-            Opened::Absent => Failure::from(Errno::ENOENT),
-            Opened::Bytes(_) => Failure::from(Errno::ENOTRECOVERABLE),
-        }
-    }
-}
-
-/// An open the host completed, its `res` the file's size or a negative
-/// errno; xpute's table finds its owner and closes it where it failed. A file
-/// larger than the heap every device is given cannot be held anywhere: it is
-/// the host's answer refused, closed here, and the owner hears EFBIG.
+/// An open the host completed, read once (`Opened::of`); xpute's table finds
+/// its owner and closes it where it failed. A file larger than the heap every
+/// device is given cannot be held anywhere: it is the host's answer refused,
+/// closed here, and the owner hears EFBIG.
 pub fn on_opened(completed: &SysOpened) {
-    let SysOpened { fd, res, detail } = *completed;
-    let Some(owner) = sys().and_then(|sys| files().opened(sys, completed)) else {
+    let SysOpened { fd, detail, .. } = *completed;
+    let Some(owner) = sys().and_then(|sys| files().complete_open(sys, completed)) else {
         return;
     };
-    let opened = match answered(res) {
-        Ok(n) if n > MIN_HEAP_BYTES => {
+    let opened = match Opened::of(completed) {
+        Opened::Bytes(n) if n > MIN_HEAP_BYTES => {
             close(fd);
             Opened::Failed {
                 errnum: Errno::EFBIG,
                 detail,
             }
         }
-        Ok(n) => Opened::Bytes(n),
-        Err(Errno::ENOENT) => Opened::Absent,
-        Err(errnum) => Opened::Failed { errnum, detail },
+        opened => opened,
     };
     match owner {
         Owner::Fetch { key, at_ms } => fetch::on_opened(fd, key, at_ms, opened),

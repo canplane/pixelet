@@ -1,9 +1,13 @@
 // pxl-kernel/domain/scene/model/registry.rs
 
-//! The registered models. A model's mesh is one heap block read lane by lane
+//! The registered models, each built and sealed by its registration
+//! (asset.rs) before it joins. A model's mesh is one heap block read column by column
 //! (positions, normals, UVs, joints, weights, indices), in glTF's Y-up scaled
 //! to its registered height; what draws it turns it Z-up. A model poses its
 //! joints at a clip's time and writes their palette for whatever plays it.
+
+use core::future::Future;
+use core::ops::Range;
 
 use pxl_render::asset::gltf::{MAX_SCENE_IDXS, MAX_SCENE_VERTICES};
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS};
@@ -15,6 +19,11 @@ const _: () = assert!(
     (MAX_SCENE_VERTICES as u64 * MODEL_VERTEX_WORDS as u64 + MAX_SCENE_IDXS as u64) * 4
         <= u32::MAX as u64
 );
+
+/// Vertices a pass over a mesh reads or writes, or joint palettes a clip's
+/// keys pose, between a registration's pauses (`Model::seal`, asset.rs
+/// `register_model`).
+pub const STEPS_PER_PAUSE: usize = 1 << 10;
 
 /// Translation, rotation; anything else is scale.
 const T: u8 = 0;
@@ -41,17 +50,12 @@ struct Clip {
     speed: f32,
     /// How far any vertex lies from the origin as its first key skins it,
     /// unscaled; set with it.
-    reach: f32,
+    radius: f32,
 }
 
 #[derive(Clone, Copy)]
 pub struct MeshRef {
-    pub at: usize,
     pub handle: u32,
-    pub vertex_cnt: u32,
-    pub idx_cnt: u32,
-    pub radius: f32,
-    pub scale: f32,
 }
 
 pub struct Model {
@@ -73,13 +77,13 @@ pub struct Model {
     /// Unscaled bounding sphere for a hit test to reject by.
     radius: f32,
     /// How far any vertex lies from its origin as its rest pose skins it,
-    /// unscaled: what it covers drawn (`reach`).
-    rest_reach: f32,
+    /// unscaled: what it covers drawn (`pose_radius`).
+    rest_radius: f32,
 }
 
 #[derive(Default)]
 pub struct Models {
-    /// Never let go: a model is a build asset and stays while the build runs.
+    /// Never let go.
     models: Vec<Model>,
 }
 
@@ -216,20 +220,40 @@ pub fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
 }
 
 impl Models {
-    /// None when the heap refused.
-    pub fn new_model(
-        &mut self,
-        vertex_cnt: u32,
-        idx_cnt: u32,
-        joint_cnt: u32,
-    ) -> Option<(u32, usize)> {
+    /// `model` uploaded through `draw` and kept for good: its number, which
+    /// names it from here on.
+    pub fn add(&mut self, draw: &mut DrawList, mut model: Model) -> u32 {
+        model.handle = draw.upload(
+            model.at as u32,
+            model.bytes,
+            model.vertex_cnt,
+            model.idx_cnt,
+        );
+        self.models.push(model);
+        (self.models.len() - 1) as u32
+    }
+
+    pub fn mesh(&self, model: u32) -> Option<MeshRef> {
+        let m = self.models.get(model as usize)?;
+        Some(MeshRef { handle: m.handle })
+    }
+
+    pub fn get(&self, model: u32) -> Option<&Model> {
+        self.models.get(model as usize)
+    }
+}
+
+impl Model {
+    /// `joint_cnt` joints at rest and a block for `vertex_cnt` vertices and
+    /// `idx_cnt` indices, unwritten; None when the heap refused.
+    pub fn new(vertex_cnt: u32, idx_cnt: u32, joint_cnt: u32) -> Option<Model> {
         let bytes = vertex_cnt
             .checked_mul(MODEL_VERTEX_WORDS)
             .and_then(|words| words.checked_add(idx_cnt))
             .and_then(|words| words.checked_mul(4))?;
         let (at, bytes) = alloc(bytes)?;
         let j = joint_cnt as usize;
-        let model = Model {
+        Some(Model {
             at,
             bytes,
             handle: 0,
@@ -253,145 +277,126 @@ impl Models {
             order: Vec::new(),
             scale: 1.0,
             radius: 0.0,
-            rest_reach: 0.0,
-        };
-        self.models.push(model);
-        Some(((self.models.len() - 1) as u32, at))
+            rest_radius: 0.0,
+        })
+    }
+
+    /// Where its block lies, the vertex columns and then the indices.
+    pub fn at(&self) -> usize {
+        self.at
     }
 
     /// `parent` is -1 for a root; `root_pre` is the transform above a root.
     pub fn joint(
         &mut self,
-        model: u32,
         joint: u32,
         parent: i32,
         rest: [f32; 10],
         root_pre: [f32; 16],
         inverse_bind: [f32; 16],
     ) {
-        let Some(m) = self.models.get_mut(model as usize) else {
-            return;
-        };
         let j = joint as usize;
-        if j >= m.parent.len() {
+        if j >= self.parent.len() {
             return;
         }
-        m.parent[j] = parent;
-        m.rest[j] = rest;
-        m.root_pre[j] = root_pre;
-        m.inverse_bind[j] = inverse_bind;
+        self.parent[j] = parent;
+        self.rest[j] = rest;
+        self.root_pre[j] = root_pre;
+        self.inverse_bind[j] = inverse_bind;
     }
 
-    pub fn clip(&mut self, model: u32, duration: f32) -> u32 {
-        let Some(m) = self.models.get_mut(model as usize) else {
-            return u32::MAX;
-        };
-        m.clips.push(Clip {
+    pub fn clip(&mut self, duration: f32) -> u32 {
+        self.clips.push(Clip {
             duration,
             channels: Vec::new(),
             motion: 0.0,
             speed: 0.0,
-            reach: 0.0,
+            radius: 0.0,
         });
-        (m.clips.len() - 1) as u32
+        (self.clips.len() - 1) as u32
     }
 
-    /// `ch` into `model`'s `clip`, its values a key's each, past them dropped.
-    pub fn ch(&mut self, model: u32, clip: u32, mut ch: Channel) {
-        let Some(m) = self.models.get_mut(model as usize) else {
-            return;
-        };
-        let Some(c) = m.clips.get_mut(clip as usize) else {
+    /// `ch` into `clip`, its values a key's each, past them dropped.
+    pub fn ch(&mut self, clip: u32, mut ch: Channel) {
+        let Some(c) = self.clips.get_mut(clip as usize) else {
             return;
         };
         ch.vals.truncate(ch.times.len() * width(ch.path));
         c.channels.push(ch);
     }
 
+    /// Its scale, bounds, joints' order and clips' reach, off its block,
+    /// awaiting `pause` between clips, between the order's passes and every
+    /// `STEPS_PER_PAUSE` vertices or joint palettes.
+    ///
     /// # Safety
     /// The model's block has been written.
-    pub unsafe fn seal(&mut self, draw: &mut DrawList, model: u32, scale: f32) {
-        let Some(m) = self.models.get_mut(model as usize) else {
-            return;
+    pub async unsafe fn seal<P: Future<Output = ()>>(&mut self, scale: f32, pause: impl Fn() -> P) {
+        self.scale = scale;
+        // SAFETY: the caller's; its positions are the block's first column.
+        let positions = unsafe {
+            core::slice::from_raw_parts(mem::at::<f32>(self.at), self.vertex_cnt as usize * 3)
         };
-        m.scale = scale;
-        m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.idx_cnt);
-        let positions =
-            core::slice::from_raw_parts(mem::at::<f32>(m.at), m.vertex_cnt as usize * 3);
-        m.radius = positions
+        let mut far = 0.0f32;
+        for (k, run) in positions
             .as_chunks::<3>()
             .0
-            .iter()
-            .map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2])
-            .fold(0.0f32, f32::max)
-            .sqrt();
-        let n = m.parent.len();
+            .chunks(STEPS_PER_PAUSE)
+            .enumerate()
+        {
+            if k > 0 {
+                pause().await;
+            }
+            far = run
+                .iter()
+                .map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2])
+                .fold(far, f32::max);
+        }
+        self.radius = far.sqrt();
+        let n = self.parent.len();
         let mut placed = vec![false; n];
-        m.order.clear();
-        while m.order.len() < n {
-            let before = m.order.len();
+        self.order.clear();
+        while self.order.len() < n {
+            pause().await;
+            let before = self.order.len();
             for j in 0..n {
-                let p = m.parent[j];
+                let p = self.parent[j];
                 if !placed[j] && (p < 0 || placed[p as usize]) {
                     placed[j] = true;
-                    m.order.push(j as u32);
+                    self.order.push(j as u32);
                 }
             }
-            if m.order.len() == before {
+            if self.order.len() == before {
                 // A cycle: the rest are roots.
                 for (j, done) in placed.iter_mut().enumerate() {
                     if !*done {
                         *done = true;
-                        m.order.push(j as u32);
+                        self.order.push(j as u32);
                     }
                 }
             }
         }
-        for c in 0..m.clips.len() {
-            (m.clips[c].motion, m.clips[c].speed) = m.moved(c);
-            let first = m.clips[c]
+        for c in 0..self.clips.len() {
+            pause().await;
+            (self.clips[c].motion, self.clips[c].speed) = self.moved(c, &pause).await;
+            let first = self.clips[c]
                 .channels
                 .iter()
                 .flat_map(|ch| ch.times.first().copied())
                 .fold(0.0f32, f32::min);
-            m.clips[c].reach = m.reach_at(Some((c as u32, first)));
+            pause().await;
+            self.clips[c].radius = self.radius_at(Some((c as u32, first)), &pause).await;
         }
-        m.rest_reach = m.reach_at(None);
+        pause().await;
+        self.rest_radius = self.radius_at(None, &pause).await;
     }
 
-    pub fn mesh(&self, model: u32) -> Option<MeshRef> {
-        let m = self.models.get(model as usize)?;
-        Some(MeshRef {
-            at: m.at,
-            handle: m.handle,
-            vertex_cnt: m.vertex_cnt,
-            idx_cnt: m.idx_cnt,
-            radius: m.radius,
-            scale: m.scale,
-        })
-    }
-
-    pub fn get(&self, model: u32) -> Option<&Model> {
-        self.models.get(model as usize)
-    }
-}
-
-impl Model {
     pub fn joints(&self) -> usize {
         self.parent.len()
     }
 
     pub fn handle(&self) -> u32 {
         self.handle
-    }
-
-    pub fn scale(&self) -> f32 {
-        self.scale
-    }
-
-    /// Its bounding sphere about its origin, unscaled.
-    pub fn radius(&self) -> f32 {
-        self.radius
     }
 
     /// A clip's length, where it has one.
@@ -407,17 +412,21 @@ impl Model {
     /// How far any vertex lies from the origin as drawn, unscaled, at a
     /// clip's first key and as far as it moves from there, or at rest where
     /// none plays: a sphere about where it stands that holds it.
-    pub fn reach(&self, clip: Option<u32>) -> f32 {
+    pub fn pose_radius(&self, clip: Option<u32>) -> f32 {
         clip.and_then(|c| self.clips.get(c as usize))
-            .map_or(self.rest_reach, |c| c.reach + c.motion)
+            .map_or(self.rest_radius, |c| c.radius + c.motion)
     }
 
     /// How far any vertex lies from the origin as the pose `at` skins it,
     /// unscaled: each vertex its joints' palettes blended by its weights,
-    /// its lanes laid one after another a vertex count apart
+    /// its columns laid one after another a vertex count apart
     /// (`MODEL_VERTEX_WORDS`: positions 3, normals 3, UVs 2, joints 4,
     /// weights 4; scene/model/asset.rs).
-    fn reach_at(&self, at: Option<(u32, f32)>) -> f32 {
+    async fn radius_at<P: Future<Output = ()>>(
+        &self,
+        at: Option<(u32, f32)>,
+        pause: &impl Fn() -> P,
+    ) -> f32 {
         let n = self.joints();
         if n == 0 {
             return self.radius;
@@ -426,18 +435,23 @@ impl Model {
         let mut palette = vec![0.0; n * 16];
         self.pose(at, &mut local);
         self.palette(&local, &mut global, &mut palette);
-        self.reach_of(&palette)
+        let mut far = 0.0f32;
+        let cnt = self.vertex_cnt as usize;
+        for from in (0..cnt).step_by(STEPS_PER_PAUSE) {
+            if from > 0 {
+                pause().await;
+            }
+            far = far.max(self.radius_of(&palette, from..cnt.min(from + STEPS_PER_PAUSE)));
+        }
+        far
     }
 
-    /// How far any vertex lies from the origin as `palette`, a mat4 a joint,
-    /// skins it, unscaled (`reach_at`).
-    fn reach_of(&self, palette: &[f32]) -> f32 {
-        if self.joints() == 0 {
-            return self.radius;
-        }
+    /// How far any of `vertices` lies from the origin as `palette`, a mat4 a
+    /// joint, skins it, unscaled (`radius_at`).
+    fn radius_of(&self, palette: &[f32], vertices: Range<usize>) -> f32 {
         let count = self.vertex_cnt as usize;
-        let lane = |k: usize| k * count;
-        // SAFETY: the model's block, sealed: its vertex lanes first.
+        let column = |k: usize| k * count;
+        // SAFETY: the model's block, written (`seal`): its vertex columns first.
         let w = unsafe {
             core::slice::from_raw_parts(
                 mem::at::<u32>(self.at),
@@ -445,12 +459,12 @@ impl Model {
             )
         };
         let mut far = 0.0f32;
-        for v in 0..count {
-            let p = [0, 1, 2].map(|k| f32::from_bits(w[lane(0) + v * 3 + k]));
+        for v in vertices {
+            let p = [0, 1, 2].map(|k| f32::from_bits(w[column(0) + v * 3 + k]));
             let mut q = [0.0f32; 3];
             for k in 0..4 {
-                let joint = w[lane(8) + v * 4 + k] as usize;
-                let weight = f32::from_bits(w[lane(12) + v * 4 + k]);
+                let joint = w[column(8) + v * 4 + k] as usize;
+                let weight = f32::from_bits(w[column(12) + v * 4 + k]);
                 let Some(m) = palette
                     .get(joint * 16..joint * 16 + 16)
                     .filter(|_| weight != 0.0)
@@ -480,7 +494,11 @@ impl Model {
     /// times the radius. Twice the farthest from the first key bounds any
     /// two; the farthest from one key to the next over the time between
     /// them is its speed, along their chords.
-    fn moved(&self, clip: usize) -> (f32, f32) {
+    async fn moved<P: Future<Output = ()>>(
+        &self,
+        clip: usize,
+        pause: &impl Fn() -> P,
+    ) -> (f32, f32) {
         let c = &self.clips[clip];
         let mut times: Vec<f32> = c
             .channels
@@ -515,7 +533,12 @@ impl Model {
                 .fold(0.0f32, f32::max)
         };
         let (mut far, mut fast) = (0.0f32, 0.0f32);
+        // A key poses every joint.
+        let keys_per_pause = (STEPS_PER_PAUSE / n.max(1)).max(1);
         for k in 1..times.len() {
+            if k % keys_per_pause == 0 {
+                pause().await;
+            }
             self.pose(Some((clip as u32, times[k])), &mut local);
             self.palette(&local, &mut global, &mut palette);
             far = far.max(apart(&palette, &first));

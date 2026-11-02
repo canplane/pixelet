@@ -15,13 +15,13 @@ use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
+use xpute_guest::mem::range;
+use xpute_guest::mem::range::OwnedRange;
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
-use crate::sys::mem::fixed;
-use crate::sys::mem::fixed::OwnedRange;
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 
@@ -29,7 +29,7 @@ static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 pub static RANGE: OwnedRange = OwnedRange::new();
 
 /// A record's cells, a word each, on a whole cache line.
-const RECORD_BYTES: u32 = fixed::lane_bytes(CELLS, 4);
+const RECORD_BYTES: u32 = range::arr_bytes(CELLS, 4);
 
 /// A record a frame, end to end.
 pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * RECORD_BYTES;
@@ -57,7 +57,7 @@ impl Base for DivisionTile {
         _phases: &mut Phases,
     ) -> Result<DivisionTile, Failure> {
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
-        let room = unsafe { fixed::lane::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS) };
+        let room = unsafe { range::arr::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS) };
         Ok(division::decode_into(pkt, room)?)
     }
 }
@@ -74,7 +74,7 @@ pub fn line(pivot: Option<Q3>) -> Option<Tile> {
 /// held over it, the held parent while the tile under it is on its way, and
 /// the cell in it. A tile's identity fixes what it names.
 pub fn naming(at: &Q3) -> Option<(Tile, u32)> {
-    let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().drawn_from(p))?;
+    let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().finest_resident(p))?;
     Some((from, GROUND.cell_of(from.zoom, at).idx()))
 }
 

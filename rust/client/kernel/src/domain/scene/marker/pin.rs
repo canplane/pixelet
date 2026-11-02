@@ -153,9 +153,9 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
     }
 }
 
-/// The draft, as `Seen` compares it: its entry and its
+/// The draft, as arrangement.rs `Inputs` compares it: its entry and its
 /// text by its hash, so a settled turn asks the heap for nothing.
-pub(super) fn drafted() -> Option<(EntryAt, u64)> {
+pub(super) fn draft_key() -> Option<(EntryAt, u64)> {
     draft().map(|d| {
         let mut h = fnv::FnvHasher::default();
         h.write(d.text.as_bytes());

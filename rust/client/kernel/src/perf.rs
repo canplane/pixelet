@@ -1,8 +1,7 @@
 // pxl-kernel/perf.rs
 
-//! A read-only instrument for the schedulers; it never feeds back into
-//! scheduling. It stands beside the kernel's order and reads anything, and
-//! production reaches it only where it records: what each frame and each
+//! A read-only instrument for the schedulers. It stands beside the kernel's
+//! order and reads anything, and production reaches it only where it records: what each frame and each
 //! task cost, in rings laid out by spec/client/kernel/perf/perf.json,
 //! which the client reads in place (ts/client/src/port/perf.ts) and the
 //! shell prints as a report, beside the place's own long frames

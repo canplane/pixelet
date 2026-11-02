@@ -6,12 +6,12 @@
 //! screen's rays reads (`gpu_cast`), a ray a drawn pixel, one rule wherever
 //! the eye is.
 
+use pxl_engine::{beam, eye};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::CELL;
 use pxl_spec::space::coord::world::origin;
-use pxl_spec_core::{beam, eye};
 
-use crate::domain::query::asked;
+use crate::domain::query::zoom_range;
 use crate::domain::view::observation;
 use crate::domain::view::param;
 
@@ -53,35 +53,41 @@ impl Stepped {
     }
 }
 
-/// What a GPU's cast of the screen's rays reads of the eye (pxl-spec-core
+/// What a GPU's cast of the screen's rays reads of the eye (pxl-engine
 /// `eye`, pxl-shader `Eye`): its Q3 position as a ray's origin, over
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
-/// and how far it draws (observation.rs `eye_draw_reach`); the unit right;
+/// and how far it draws (observation.rs `eye_draw_dist`); the unit right;
 /// the unit up; the tangents of the
 /// screen's half-angles across and up and the zooms a cell is asked at;
-/// the camera grid the cast lays over the screen off them, once. A
+/// the camera grid the cast lays over the screen off them, once, its beam
+/// rays and cells `lattice` cells apart (pxl-engine `beam::Grid::of`). A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
-pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
+pub fn gpu_cast(
+    o: &Observation,
+    steps: bool,
+    lattice: u32,
+    words: &mut [u32; eye::WORDS],
+) -> Option<()> {
     let lens = o.frustum?.lens()?;
-    let reach = observation::eye_draw_reach()?;
+    let far = observation::eye_draw_dist()?;
     let q = origin(o.eye[0], o.eye[1], o.eye[2]);
     let w = |v: f64| (v as f32).to_bits();
     let mut put = |at: usize, v: &[u32]| words[at..at + v.len()].copy_from_slice(v);
     put(eye::ORIGIN, &q.map(|v| v as u32));
     put(eye::STEPS, &[u32::from(steps)]);
     put(eye::FORWARD, &lens.forward.map(w));
-    put(eye::REACH, &[w(reach)]);
+    put(eye::FAR, &[w(far)]);
     put(eye::RIGHT, &lens.right.map(w));
     put(eye::UP, &lens.up.map(w));
     put(eye::TAN, &lens.tan.map(w));
-    put(eye::RANGE, &asked());
+    put(eye::RANGE, &zoom_range());
     // The grid off the very f32s the words above hold, so every reader's is
-    // this one (pxl-spec-core `beam::Grid`).
+    // this one (pxl-engine `beam::Grid`).
     put(
         eye::GRID,
-        &beam::Grid::of(lens.tan.map(|t| t as f32)).words(),
+        &beam::Grid::of(lens.tan.map(|t| t as f32), lattice).words(),
     );
     Some(())
 }

@@ -1,6 +1,6 @@
-// pxl-kernel/domain/scene/decor/drawn.rs
+// pxl-kernel/domain/scene/decor/gpu.rs
 
-//! What the GPU's decor takes each frame (pxl-render gpu/generated.rs), which
+//! What the GPU's decor takes each frame (pxl-render gpu/generator.rs), which
 //! generates what the ground generates and draws it with placed decor: what
 //! only the CPU knows, handed over and never read back. Each kind's zooms
 //! where it is an impostor's worth, the tiers' floors as angles, the anchor
@@ -8,16 +8,16 @@
 //! variant's extent, placed decor as records, and the boxes the objects
 //! were written in, where what the ground generates may have changed.
 
-use pxl_render::gpu::generated::DecorFrame;
+use pxl_content::generation::{self, drawn, row_of};
+use pxl_content::scatter;
+use pxl_engine::overwrite;
+use pxl_engine::LEAF_CELL;
+use pxl_render::gpu::generator::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_dist, WINDOW_CELLS_A_RAD, WINDOW_MARGIN};
+use pxl_spec::space::camera::grid::{split_dist, CLIP_CELLS_A_RAD, CLIP_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
-use pxl_spec_core::generated::{self, drawn, row_of};
-use pxl_spec_core::overwrite;
-use pxl_spec_core::scatter;
-use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
@@ -25,18 +25,17 @@ use crate::domain::query::World;
 use crate::domain::scene::decor::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::catalog;
+use pxl_content::decor;
+use pxl_engine::clipmap::FIRST_CELL;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::layer::lattice;
 use pxl_spec::space::layer::tile;
-use pxl_spec_core::clipmap::FIRST_CELL;
-use pxl_spec_core::decor;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
 /// cell, the model's edge, an angle about the eye in radians (pxl-spec
-/// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it. No fade: the edge is per instance,
-/// so it staggers.
+/// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it.
 pub fn decor_model_angle() -> f64 {
     param::DECOR_MODEL_CELLS * grid::CELL
 }
@@ -47,27 +46,27 @@ pub fn decor_impostor_angle() -> f64 {
     param::DECOR_IMPOSTOR_CELLS * grid::CELL
 }
 
-/// How far a thing `extent_u` wide is an impostor's worth as a window holds
+/// How far a thing `extent_u` wide is an impostor's worth as a clip level holds
 /// it, in units, past which it is culled: where it spans
-/// `DECOR_IMPOSTOR_CELLS` of the window's cells (`WINDOW_CELLS_A_RAD`),
-/// `WINDOW_MARGIN` times as far as `decor_impostor_angle` puts the
+/// `DECOR_IMPOSTOR_CELLS` of the clip level's cells (`CLIP_CELLS_A_RAD`),
+/// `CLIP_MARGIN` times as far as `decor_impostor_angle` puts the
 /// impostor's edge, an upper bound. `is_decor_shown` takes both its
-/// sides at the window's, so its zooms are the view's.
+/// sides at the clip level's, so its zooms are the view's.
 pub const fn cull_dist_u(extent_u: f64) -> f64 {
-    extent_u * WINDOW_CELLS_A_RAD / param::DECOR_IMPOSTOR_CELLS
+    extent_u * CLIP_CELLS_A_RAD / param::DECOR_IMPOSTOR_CELLS
 }
 
 /// Whether a decor `extent_u` wide is an impostor's worth anywhere cells of
 /// `cell_zoom` are drawn: as it spans where that zoom begins.
 fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    split_dist(cell_zoom) * WINDOW_MARGIN <= cull_dist_u(extent_u)
+    split_dist(cell_zoom) * CLIP_MARGIN <= cull_dist_u(extent_u)
 }
 
-/// Each kind's window zooms, a bit each, where it is an impostor's worth: the
-/// leaves', and each coarser one where one of its variants stands as itself,
-/// its own size no narrower than the window's cell (pxl-spec-core
-/// `scatter::stands_at`), the same cells' decor read at every one. A finer
-/// window lies within the leaves'.
+/// Each kind's clip level zooms, a bit each, where it is an impostor's worth:
+/// the leaves', and each coarser one where one of its variants stands as
+/// itself, its own size no narrower than the clip level's cell (pxl-engine
+/// `scatter::stands_at`), the same cells' decor read at every one. A finer clip
+/// level lies within the leaves'.
 fn shown() -> [u32; DECORS.len()] {
     shown_by(|d| d.extent(catalog()))
 }
@@ -87,20 +86,20 @@ fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
 
 /// The frame's hand-over, kept so a settled frame asks the heap for nothing,
 /// and made again only where what it is made of changed.
-struct Handed {
+struct Frame {
     /// Made with the drawing words, from the variants' extents.
     shown: [u32; DECORS.len()],
     drawing: [u32; drawn::DRAWING_WORDS as usize],
-    placed: Vec<[u32; generated::RECORD_WORDS as usize]>,
+    placed: Vec<[u32; generation::RECORD_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
     /// cells, and how many the next frame hands (`note_edited`, `frame`).
     edits: [[i32; 4]; overwrite::EDITS as usize],
     edited: usize,
     translation: [f32; 3],
     /// What the drawing words were last made of, by value.
-    seen: Option<Seen>,
+    seen: Option<Key>,
     /// The cell the placed decor was last walked about, and what it left out.
-    walked: Option<Walked>,
+    walked: Option<WalkKey>,
 }
 
 /// What the drawing words are made of: the unit the eye stands in (its
@@ -109,9 +108,9 @@ struct Handed {
 /// drawing words never see it change. The eye within its unit moves only
 /// the translation.
 #[derive(Clone, Copy, PartialEq)]
-struct Seen {
+struct Key {
     anchor: V3,
-    scattered: Option<[i32; 3]>,
+    scattered_cell: Option<[i32; 3]>,
     read: bool,
 }
 
@@ -121,16 +120,16 @@ struct Seen {
 /// where a write meets its box (`note_edited`): a traversal kept while the eye
 /// stays in its cell.
 #[derive(Clone, Copy, PartialEq)]
-struct Walked {
+struct WalkKey {
     zoom: Zoom,
     cell: [i32; 3],
     hide: Option<EntryAt>,
 }
 
-static HANDED: Global<Handed> = Global::new();
+static HAND_OVER: Global<Frame> = Global::new();
 
-fn handed() -> &'static mut Handed {
-    HANDED.get(|| Handed {
+fn hand_over() -> &'static mut Frame {
+    HAND_OVER.get(|| Frame {
         shown: [0; DECORS.len()],
         drawing: [0; drawn::DRAWING_WORDS as usize],
         placed: Vec::new(),
@@ -142,10 +141,10 @@ fn handed() -> &'static mut Handed {
     })
 }
 
-/// A leaf cell's X as the world names it (pxl-spec-core `wrap_idx`), the
+/// A leaf cell's X as the world names it (pxl-engine `wrap_idx`), the
 /// GPU's generated records' among them, as a word.
-fn wrapped(x: i32) -> u32 {
-    pxl_spec_core::wrap_idx(LEAF_CELL, x) as u32
+fn wrap(x: i32) -> u32 {
+    pxl_engine::wrap_idx(LEAF_CELL, x) as u32
 }
 
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the
@@ -153,12 +152,12 @@ fn wrapped(x: i32) -> u32 {
 /// less the placed decor `hide` names, and the
 /// ground's decor at `scattered` left out.
 pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
-    let h = handed();
+    let h = hand_over();
     let anchor = eye.map(libm::floor);
     h.translation = [0, 1, 2].map(|k| (anchor[k] - eye[k]) as f32);
-    let seen = Seen {
+    let seen = Key {
         anchor,
-        scattered,
+        scattered_cell: scattered,
         read: catalog().is_some(),
     };
     if h.seen != Some(seen) {
@@ -166,20 +165,20 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         drawing(&mut h.drawing, seen);
         h.shown = shown();
     }
-    // Out to the reach from anywhere in the anchor's unit: every unit of the
-    // eye's cell at the reach's zoom reaches no farther than the cell and
-    // one beside it, whose side the reach is short of. What is past an
-    // eye's own reach `decor_cnt_cs` leaves out by its size, as it does
-    // what is past the box.
+    // Out to `dist` from anywhere in the anchor's unit: every unit of the
+    // eye's cell at its zoom reaches no farther than the cell and one
+    // beside it, whose side `dist` is short of. What is past an eye's own
+    // distance `decor_cnt_cs` leaves out by its size, as it does what is
+    // past the box.
     // No farther than the rays ask the leaves' cells, past which none is drawn.
-    let reach = (DECORS
+    let dist = (DECORS
         .iter()
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
         / decor_impostor_angle())
-    .min(lattice::draw_reach(lattice::GROUND, tile::LEAF_ZOOM));
+    .min(lattice::draw_dist(lattice::GROUND, tile::LEAF_ZOOM));
     let mut zoom = UNIT_ZOOM;
-    while zoom > 0 && units(zoom) < reach {
+    while zoom > 0 && units(zoom) < dist {
         zoom -= 1;
     }
     let side = units(zoom);
@@ -188,7 +187,7 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         min: [0, 1, 2].map(|k| (cell[k] - 1) as f64 * side),
         max: [0, 1, 2].map(|k| (cell[k] + 2) as f64 * side),
     };
-    let walked = Walked { zoom, cell, hide };
+    let walked = WalkKey { zoom, cell, hide };
     let met = h.edits[..h.edited].iter().any(|e| meets(e, &around));
     if h.walked == Some(walked) && !met {
         return;
@@ -204,13 +203,13 @@ pub fn step(eye: V3, hide: Option<EntryAt>, scattered: Option<[i32; 3]>) {
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
         let [x, y, z] = idx_of(UNIT_ZOOM, &e.corner());
         placed.push([
-            generated::record_word(
+            generation::record_word(
                 k,
                 variant,
                 turn,
                 scatter::coarsest_stand(&decor::DECORS[k as usize], variant),
             ),
-            wrapped(x),
+            wrap(x),
             y as u32,
             z as u32,
             0,
@@ -241,18 +240,18 @@ fn meets(e: &[i32; 4], around: &Aabb) -> bool {
 }
 
 /// The drawing words of a hand-over `seen` makes.
-fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Seen) {
+fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
     let anchor = seen.anchor;
     p.fill(0);
     p[drawn::MODEL_ANGLE as usize] = (decor_model_angle() as f32).to_bits();
     p[drawn::IMPOSTOR_ANGLE as usize] = (decor_impostor_angle() as f32).to_bits();
     let at = drawn::ANCHOR as usize;
-    p[at] = wrapped(anchor[0] as i32);
+    p[at] = wrap(anchor[0] as i32);
     p[at + 1] = anchor[1] as i32 as u32;
     p[at + 2] = anchor[2] as i32 as u32;
-    if let Some([x, y, z]) = seen.scattered {
+    if let Some([x, y, z]) = seen.scattered_cell {
         let at = drawn::HIDE as usize;
-        p[at..at + 4].copy_from_slice(&[wrapped(x), y as u32, z as u32, 1]);
+        p[at..at + 4].copy_from_slice(&[wrap(x), y as u32, z as u32, 1]);
     }
     let extents = DECORS
         .iter()
@@ -263,12 +262,12 @@ fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Seen) {
 }
 
 /// Where the objects were written, as the turn's change took them
-/// (domain/query/changed.rs), held for the next frame to hand: each region's
+/// (domain/query/changes.rs), held for the next frame to hand: each region's
 /// columns in leaf cells, `[x0, y0, x1, y1)`, X on its own lap; past
 /// `overwrite::EDITS`, the rest joined into the last, so every write is met,
 /// however many turns pass before a frame takes them.
 pub fn note_edited(regions: &[Aabb]) {
-    let h = handed();
+    let h = hand_over();
     let leaf = units(LEAF_CELL);
     for r in regions {
         let b = [
@@ -297,21 +296,21 @@ pub fn note_edited(regions: &[Aabb]) {
 /// decor setting off the ground generates its decor at no zoom, and what was
 /// placed stays.
 pub fn frame() -> DecorFrame<'static> {
-    let h = handed();
+    let h = hand_over();
     let edited = core::mem::take(&mut h.edited);
     DecorFrame {
-        shown: if settings_store().decor {
+        zooms: if settings_store().decor {
             &h.shown
         } else {
             &[0; DECORS.len()]
         },
         drawing: &h.drawing,
-        placed: &h.placed,
+        placed_records: &h.placed,
         translation: h.translation,
         edits: &h.edits[..edited],
     }
 }
 
 #[cfg(test)]
-#[path = "drawn.test.rs"]
+#[path = "gpu.test.rs"]
 mod test;

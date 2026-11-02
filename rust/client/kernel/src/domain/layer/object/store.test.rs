@@ -10,11 +10,11 @@ use pxl_spec::space::hierarchy::morton::child_cube;
 
 use super::*;
 use crate::domain::layer::Query;
+use pxl_engine::answer;
+use pxl_engine::overwrite::{self, Cut};
 use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use pxl_spec_core::answer;
-use pxl_spec_core::overwrite::{self, Cut};
 use xpute_kit::math::rng::SplitMix64;
 
 #[test]
@@ -31,10 +31,10 @@ fn write_undo_round_trip() {
         let finest = at.map(|v| v << (OBJECT_FINEST - OBJECT_COARSEST));
         assert!(
             {
-                let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
-                held.holds()
-                    && !held.is_folded()
-                    && overwrite::val(&store.columns(), held, Cut::NONE, OBJECT_FINEST, finest) == 3
+                let slot = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
+                slot.holds()
+                    && !slot.is_folded()
+                    && overwrite::val(&store.columns(), slot, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"
         );
@@ -85,22 +85,23 @@ impl Rng {
     }
 }
 
-/// A node from a unit to a kilometer wide, within `reach` units of the origin.
-fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
+/// A node from a unit to a kilometer wide, within `radius` units of the origin.
+fn some_node(rng: &mut Rng, radius: f64) -> Node<3> {
     let zoom: Zoom = rng.pick(&[24, 21, 18, 16, 14]);
-    let at = [0, 1, 2]
-        .map(|_| ((rng.next() % (2 * reach as u64)) as f64 - reach).div_euclid(units(zoom)) as i32);
+    let at = [0, 1, 2].map(|_| {
+        ((rng.next() % (2 * radius as u64)) as f64 - radius).div_euclid(units(zoom)) as i32
+    });
     (zoom, at)
 }
 
 /// What the objects' pyramid holds at a cell: its value and the eighths of
-/// its cube it keeps (pxl-spec-core `answer::eighths`).
-type Held = FnvHashMap<[i32; 3], (u32, u32)>;
+/// its cube it keeps (pxl-engine `answer::eighths`).
+type Contents = FnvHashMap<[i32; 3], (u32, u32)>;
 
 /// Whole cells from a corner, and what the objects' pyramid holds at
 /// `zoom`'s cells, read through the store's query, where it keeps any, and
 /// the corner in that zoom's cells.
-fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Held, [i32; 2]) {
+fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
@@ -115,9 +116,9 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Held, [i32; 2]) {
     for z in -4..8 {
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
-                let held = store.cursor((target, [x, y, z]), target);
-                let v = overwrite::val(&store.columns(), held, Cut::NONE, target, [x, y, z]);
-                let kept = answer::eighths(overwrite::filled(&store.columns(), held));
+                let slot = store.cursor((target, [x, y, z]), target);
+                let v = overwrite::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
+                let kept = answer::eighths(overwrite::fill_share(&store.columns(), slot));
                 if v != VOID && kept > 0 {
                     out.insert([x, y, z], (v, kept));
                 }
@@ -217,7 +218,7 @@ fn axis_turn() {
 }
 
 #[test]
-fn column_reach() {
+fn column_extent() {
     let mut rng = Rng(SplitMix64::new(0x7d3a_51e9_c2b4_0f86));
     let red = cube_id(Cube::Object(Object::red));
     let mut store = Store::default();
@@ -229,9 +230,9 @@ fn column_reach() {
         ];
         cube_at(&mut store, at, rng.pick(&[red, red, AIR]));
     }
-    // Each leaf's reach along z in the column, as the cube of the column's
+    // Each leaf's extent along z in the column, as the cube of the column's
     // zoom it lies in where it is finer.
-    let reach = |(zoom, [x, y]): Node<2>| {
+    let extent = |(zoom, [x, y]): Node<2>| {
         let mut z: Option<[f64; 2]> = None;
         store.each(&mut |e| {
             let (k, at) = (
@@ -263,7 +264,7 @@ fn column_reach() {
             zoom,
             [0, 1].map(|_| (rng.next() % side.max(1) as u64) as i32),
         );
-        assert_eq!(store.column(&mut walk, node), reach(node), "{node:?}");
+        assert_eq!(store.column(&mut walk, node), extent(node), "{node:?}");
     }
 }
 
@@ -281,21 +282,21 @@ fn leaf_words_freed_on_erase() {
         id: MARKER,
         ext: marker_text("cafe"),
     }]);
-    let e = store.read((zoom, at)).placed().expect("placed");
+    let e = store.read((zoom, at)).entry().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
     store.write([Write {
         key: key(zoom, at),
         id: VOID,
         ext: None,
     }]);
-    assert!(store.read((zoom, at)).placed().is_none());
+    assert!(store.read((zoom, at)).entry().is_none());
     // The freed slot is the next one kept: nothing outlived its leaf.
     store.write([Write {
         key: key(zoom, at),
         id: MARKER,
         ext: marker_text("bar"),
     }]);
-    let e = store.read((zoom, at)).placed().expect("placed again");
+    let e = store.read((zoom, at)).entry().expect("placed again");
     assert_eq!(e.ext, 1);
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
 }
@@ -315,7 +316,7 @@ fn marker_text_change_cube() {
     assert_eq!(put(&mut store, "cafe").len(), 1);
     // The old record's slot is the one kept, so the word is the same.
     assert_eq!(put(&mut store, "bar").len(), 1);
-    let e = store.read((zoom, at)).placed().expect("placed");
+    let e = store.read((zoom, at)).entry().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
 }
 

@@ -22,10 +22,13 @@ use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom};
 
+use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::object::store::Write;
 use crate::domain::layer::terrain::clipmap::test;
 use crate::sys::io::demand::Ask;
 use crate::sys::serial;
+use pxl_engine::area::{self, Area};
+use pxl_engine::world::placed_in;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::DecorId;
 use pxl_spec::bake::separation::Separation;
@@ -33,7 +36,6 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::tile;
-use pxl_spec_core::world::placed_in;
 
 const CELLS: usize = GROUND_COLUMN;
 const SPAN: usize = TILE_CELLS as usize;
@@ -43,7 +45,7 @@ fn top() -> Tile {
 }
 
 /// A leaf as a client holds it: its lines, and its cells, each its own palette index
-/// and its height, as its windows hold them once a GPU drew them.
+/// and its height, as its clip levels hold them once a GPU drew them.
 #[derive(Clone)]
 struct Leaf {
     tile: TerrainTile,
@@ -55,7 +57,7 @@ struct Leaf {
 /// source supplies whole, as the floor holds it all around the eye
 /// (`domain/layer/tile_cache/floor.rs`): a tile's coarser pictures here are the
 /// same ground, each marking its children held; their cells held in the
-/// windows about `centre`, in units.
+/// clip levels about `centre`, in units.
 fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
     use pxl_spec::bake::tile::Occupancy;
     let mut tile_cache = TileCache::default();
@@ -127,7 +129,7 @@ fn down(at: [f64; 2]) -> Ray {
     Ray {
         origin: [at[0], at[1], 10_000.0],
         dir: [0.0, 0.0, -1.0],
-        reach: 20_000.0,
+        t_max: 20_000.0,
     }
 }
 
@@ -293,7 +295,7 @@ fn ray_across_antimeridian() {
     let along = Ray {
         origin: [seam - 30.0, 100.5, top + 0.5],
         dir: [1.0, 0.0, 0.0],
-        reach: 200.0,
+        t_max: 200.0,
     };
     let hit = access
         .first_hit(&along, at_zoom(LEAF_ZOOM))
@@ -335,11 +337,11 @@ fn ray_from_above_meets_ground() {
         .flatten()
         .unwrap()
         .point[2];
-    let high = 2.0 * world::REACH.max[2];
+    let high = 2.0 * world::BOUNDS.max[2];
     let over = Ray {
         origin: [at[0], at[1], high],
         dir: [0.0, 0.0, -1.0],
-        reach: 2.0 * high,
+        t_max: 2.0 * high,
     };
     let met = access.first_hit(&over, at_zoom(LEAF_ZOOM));
     assert!(matches!(met, Answer::Exact(_)), "{met:?}");
@@ -356,7 +358,7 @@ fn ray_from_above_meets_ground() {
 #[test]
 fn dig_met_as_folded() {
     use crate::domain::layer::object::store::AIR;
-    use pxl_spec_core::answer::{side, EIGHTHS};
+    use pxl_engine::answer::{side, EIGHTHS};
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
@@ -415,7 +417,7 @@ fn half_cube_met() {
     let access = World::new(&tile_cache, &store);
     let at = [x + half / 2.0, y + half / 2.0];
     let hit = access
-        .first_hit(&down(at), held())
+        .first_hit(&down(at), finest())
         .exact()
         .flatten()
         .unwrap();
@@ -473,6 +475,37 @@ fn stack_gap_floored() {
         Answer::Exact(Some(6.0))
     );
     assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
+}
+
+/// A cell coarser than what is placed in it is read as the cast draws it
+/// there, one column whatever is placed finer: from over it or from in the
+/// box it is drawn as, its floor is that box's top (`cast::top`), as a ray
+/// at that zoom meets it.
+#[test]
+fn coarse_cell_floored_as_drawn() {
+    let _g = serial();
+    let (tile_cache, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    write(&mut store, [x, y, 5.0], OBJECT_COARSEST, red);
+    write(&mut store, [x + 1.0, y, 5.0], OBJECT_FINEST, red);
+    let access = World::new(&tile_cache, &store);
+    let zoom = LEAF_ZOOM - 1;
+    let at = [x + 0.5, y + 0.5];
+    let drawn = access
+        .first_hit(&down(at), at_zoom(zoom))
+        .exact()
+        .flatten()
+        .unwrap()
+        .cube
+        .max[2];
+    for z in [drawn + 3.0, drawn - 0.25] {
+        assert_eq!(
+            access.floor_under(&world::point(at[0], at[1], z), zoom),
+            Answer::Exact(Some(drawn)),
+            "from {z}"
+        );
+    }
 }
 
 /// Quake III's step-slide, a column at a time: blocked, the walker climbs the
@@ -561,7 +594,7 @@ fn reading_reports_columns() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let store = Store::default();
-    let read = changed::Columns::default();
+    let read = changes::Columns::default();
     let access = World::new(&tile_cache, &store).reading(&read);
     let cell = units(GROUND.cell());
     let at = [x + 0.5 * cell, y + 0.5 * cell];
@@ -584,7 +617,7 @@ fn reading_reports_columns() {
 #[test]
 fn box_placed_matches_store() {
     let _g = serial();
-    let unit = pxl_spec_core::UNIT_ZOOM;
+    let unit = pxl_engine::UNIT_ZOOM;
     let mut store = Store::default();
     let corners: [V3; 5] = [
         [3.0, 4.0, 5.0],
@@ -627,7 +660,7 @@ fn box_placed_matches_store() {
     assert_eq!(asked, held);
 }
 
-/// A brick that lands after the windows were folded without it is read
+/// A brick that lands after the clip levels were folded without it is read
 /// with what it holds once the landings are folded, as the stage folds them
 /// (domain/layer/terrain/clipmap.rs `refold`): a spike
 /// a cell wide in it, over ground at five and taller than a node over the
@@ -636,10 +669,10 @@ fn box_placed_matches_store() {
 /// read over it at any zoom over a brick.
 #[test]
 fn late_brick_spike() {
-    use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, Windowed};
-    use pxl_render::gpu::renderer::Resident;
-    use pxl_spec_core::clipmap::{self as cells, Bricks, Found, BRICK, LEVELS, WINDOW};
-    use pxl_spec_core::LEAF_CELL;
+    use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, CpuClipmap};
+    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, CLIP_SIZE, LEVELS};
+    use pxl_engine::LEAF_CELL;
+    use pxl_render::gpu::ray::Resident;
     let _g = serial();
     let leaf = top().children()[0];
     let mut heights = vec![5; CELLS];
@@ -654,12 +687,13 @@ fn late_brick_spike() {
     let (x0, y0, _) = leaf.rect();
     let tile_cache = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
     let store = Store::default();
-    // The spike's column in the eye's leaves' window.
-    let (first, _) = Windowed.origin(LEAF_CELL);
-    let top = |g: [i32; 2]| cells::column_top(cells::cell(&Windowed, Found::NONE, LEAF_CELL, g).1);
-    let spike = (0..WINDOW as i32 * WINDOW as i32)
+    // The spike's column in the eye's leaves' clip level.
+    let (first, _) = CpuClipmap.origin(LEAF_CELL);
+    let top =
+        |g: [i32; 2]| cells::column_top(cells::cell(&CpuClipmap, Lookup::NONE, LEAF_CELL, g).1);
+    let spike = (0..CLIP_SIZE as i32 * CLIP_SIZE as i32)
         .map(|k| {
-            let w = WINDOW as i32;
+            let w = CLIP_SIZE as i32;
             [
                 first[0] * BRICK as i32 + k % w,
                 first[1] * BRICK as i32 + k / w,
@@ -697,8 +731,8 @@ fn late_brick_spike() {
         for zoom in TOP_ZOOM..LEAF_CELL - LEVELS {
             let s = LEAF_CELL - zoom;
             let (b, _, _) = cells::bound_over(
-                &Windowed,
-                &mut Found::NONE.clone(),
+                &CpuClipmap,
+                &mut Lookup::NONE.clone(),
                 [LEAF_CELL, LEAF_CELL],
                 (zoom, [g[0] >> s, g[1] >> s]),
             );
@@ -710,17 +744,17 @@ fn late_brick_spike() {
 
 /// The device that went took every brick it held: the turn that sees it
 /// gives up their cells (domain/layer/terrain/clipmap.rs `assign_slots`, as `step`
-/// runs it) and folds the windows over none, so no node over a brick of
+/// runs it) and folds the clip levels over none, so no node over a brick of
 /// the eye's leaves keeps a bound of cells gone.
 #[test]
 fn device_loss_drops_bounds() {
-    use crate::domain::layer::terrain::clipmap::{test::lose, Windowed};
-    use pxl_spec_core::clipmap::{self as cells, Bricks, Found, BRICK, LEVELS};
-    use pxl_spec_core::ground::UNBOUNDED;
-    use pxl_spec_core::LEAF_CELL;
+    use crate::domain::layer::terrain::clipmap::{test::lose, CpuClipmap};
+    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, LEVELS};
+    use pxl_engine::ground::UNBOUNDED;
+    use pxl_engine::LEAF_CELL;
     let _g = serial();
     let _held = flat_at_five();
-    let (first, _) = Windowed.origin(LEAF_CELL);
+    let (first, _) = CpuClipmap.origin(LEAF_CELL);
     let zoom = LEAF_CELL - LEVELS - 1;
     let over = || {
         let s = LEAF_CELL - zoom;
@@ -728,8 +762,8 @@ fn device_loss_drops_bounds() {
             (first[0] * BRICK as i32) >> s,
             (first[1] * BRICK as i32) >> s,
         ];
-        let mut place = Found::NONE;
-        cells::bound_over(&Windowed, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
+        let mut place = Lookup::NONE;
+        cells::bound_over(&CpuClipmap, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
     };
     assert_ne!(over(), [UNBOUNDED; 2], "held");
     lose();
@@ -738,7 +772,7 @@ fn device_loss_drops_bounds() {
 
 /// What the ground generates stands where it was generated whatever is put
 /// over it or in place of the cell under it, air or a cube: it generates on
-/// the world unplaced (pxl-spec-core `generated::generated`).
+/// the world unplaced (pxl-content `generation::placement`).
 #[test]
 fn generated_decor_stays() {
     use crate::domain::layer::object::store::AIR;
@@ -747,8 +781,8 @@ fn generated_decor_stays() {
     let near = |store: &Store| {
         let world = World::new(&tile_cache, store);
         let space = Aabb {
-            min: [x - 8.0, y - 8.0, world::REACH.min[2]],
-            max: [x + 8.0, y + 8.0, world::REACH.max[2]],
+            min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
+            max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
         };
         world.generated_over(&space)
     };
@@ -770,8 +804,8 @@ fn generated_decor_stays() {
 }
 
 /// Only an edit in its own box takes what the ground generates away, air or a
-/// cube; one under it or over it leaves it generated (pxl-spec-core
-/// `generated::DecorQuery::is_edited`).
+/// cube; one under it or over it leaves it generated (pxl-engine
+/// `generation::DecorQuery::asset`, edited).
 #[test]
 fn generated_decor_edit_removes() {
     use crate::domain::layer::object::store::AIR;
@@ -780,8 +814,8 @@ fn generated_decor_edit_removes() {
     let empty = Store::default();
     let world = World::new(&tile_cache, &empty);
     let space = Aabb {
-        min: [x - 8.0, y - 8.0, world::REACH.min[2]],
-        max: [x + 8.0, y + 8.0, world::REACH.max[2]],
+        min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
+        max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
     };
     let at = |tree: &Instance| {
         let [cx, cy, cz] = tree.generated_in().unwrap();
@@ -789,7 +823,7 @@ fn generated_decor_edit_removes() {
     };
     let generates_on = |store: &Store, decor: &Decor, [cx, cy, _]: [i32; 3]| {
         let world = World::new(&tile_cache, store);
-        scatter::generated_at(&mut scatter::Asked::new(&world), decor, [cx, cy], true)
+        scatter::generated_at(&mut scatter::DecorWorld::new(&world), decor, [cx, cy], true)
             .map(|(_, generates)| generates)
     };
     // One that generates on bare ground, its box whole.
@@ -813,4 +847,65 @@ fn generated_decor_edit_removes() {
         write(&mut store, at, OBJECT_COARSEST, val);
         assert_eq!(generates(&store), Some(kept), "{what}");
     }
+}
+
+/// The service area of the shards at `SHARD_ZOOM` in its column and east
+/// of it, every row: their nines as a declaration lays them (`area::nine`).
+struct EastOf(i32);
+
+impl Area for EastOf {
+    fn ends(&self) -> bool {
+        true
+    }
+    fn nine(&self, key: u32) -> u32 {
+        use pxl_engine::SHARD_ZOOM;
+        // `area::shard_key` undone: X's and Y's bits interleaved from the top.
+        let mut c = [0i32; 2];
+        for b in 0..SHARD_ZOOM {
+            c[0] |= ((key >> (2 * b) & 1) as i32) << b;
+            c[1] |= ((key >> (2 * b + 1) & 1) as i32) << b;
+        }
+        area::nine(|n| n[0] >= self.0, c)
+    }
+}
+
+/// The service area's edge is the wall's columns, a leaf cell thick: a
+/// leaf cell one in from the wall is the area's and editable, the wall's
+/// column and a cell past it neither (`World::within`, `World::editable`).
+#[test]
+fn area_edge_leaf_cell_thick() {
+    use pxl_engine::SHARD_ZOOM;
+    let _g = serial();
+    let s = LEAF_ZOOM - SHARD_ZOOM;
+    // A served shard's westmost leaf, the shard west of it unserved.
+    let leaf = Tile::new(LEAF_ZOOM, [5 << s, 3 << s]);
+    let area = EastOf(5);
+    let flat = drawn(
+        vec![5; CELLS],
+        Ground {
+            cells: vec![ground::land; SPAN * SPAN].into(),
+        },
+        Default::default(),
+    );
+    let (x0, y0, _) = leaf.rect();
+    let tile_cache = resident([x0 + 10.0, y0 + 10.0], &[(leaf, flat)]);
+    let store = Store::default();
+    let world = World::new(&tile_cache, &store);
+    let cell = units(GROUND.cell());
+    // The leaf cell `i` east of the leaf's west edge: whether it is the
+    // area's, and a cube of it on the ground editable.
+    let column = |i: f64| {
+        let (x, y) = (x0 + i * cell, y0 + 10.0 * cell);
+        let space = Aabb {
+            min: [x, y, 5.0],
+            max: [x + cell, y + cell, 5.0 + cell],
+        };
+        (
+            limit::within_in(&area, &point(x + 0.5 * cell, y + 0.5 * cell)),
+            world.editable_in(&area, &space),
+        )
+    };
+    assert_eq!(column(1.0), (true, true), "one in from the wall");
+    assert_eq!(column(0.0), (false, false), "the wall's column");
+    assert_eq!(column(-1.0), (false, false), "past the wall");
 }

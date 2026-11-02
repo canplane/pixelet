@@ -4,17 +4,17 @@
 //! two sizes.
 //!
 //! At the zoom a reader asks, it is what the node is, the cell, by the one
-//! rule (pxl-spec-core `ground::node`), each source answering from its own
+//! rule (pxl-engine `ground::node`), each source answering from its own
 //! level of detail at that zoom and from what the node's parent found,
 //! handed down (`At`; `World::asset` for an asker with none):
 //!
-//! - the ground: its column off the windows, as the GPU drew it and the CPU
-//!   read it back, and the area's edge laid on it; the ways off the tree the
+//! - the ground: its column off the clip levels, as the GPU drew it and the CPU
+//!   read it back, the wall where it is the wall; the ways off the tree the
 //!   GPU built of its brick, its child groups read back into the pool's mirror,
-//!   read as the GPU reads them (pxl-spec-core `clipmap::ground`,
+//!   read as the GPU reads them (pxl-engine `clipmap::ground`,
 //!   `way::tree`);
-//! - the caves: the hash pyramid's node at that zoom, its value
-//!   (`procedural.rs` `Cave`);
+//! - the caves: the noises at the cell's center (pxl-content
+//!   `cave::hollow`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
 //!   their majority (`pyramid.rs`, through the store's query).
 //!
@@ -25,39 +25,42 @@
 //! the node's parent found, handed down, as surely or more cautiously, which
 //! only splits more, never from detail finer than asked:
 //!
-//! - the ground: by its one rule (pxl-spec-core `ground::slab`, as a cell's
-//!   asset asks `Cell::opens` of one cell) over the lowest and highest the windows
-//!   hold under the node (`TileCache::relief`, off the finest window holding
-//!   its cells), every cell under it at each zoom asked over the ground, or
-//!   ground a cave may take with a cave through all of it;
-//! - the ways: by their own rule (pxl-spec-core `way::slab`) over their
+//! - the ground: by its one rule (pxl-engine `ground::slab`, as a cell's
+//!   asset asks `Cell::opens` of one cell) over the lowest and highest the
+//!   clip levels hold under the node (`TileCache::relief`, off the finest clip
+//!   level holding its cells), every cell under it at each zoom asked over the
+//!   ground, or ground a cave may take with a cave through all of it;
+//! - the ways: by their own rule (pxl-engine `way::slab`) over their
 //!   own bound in the same levels, the leaf cells the ways write in each
-//!   column (pxl-spec-core `way::bound`) joined apart from the ground's
-//!   (pxl-spec-core fill.rs `level`); a way a coarser tile drops as
+//!   column (pxl-engine `way::lined_hull`) joined apart from the ground's
+//!   (pxl-engine fill.rs `level`); a way a coarser tile drops as
 //!   narrower than half its cell is dropped there, as
 //!   its level of detail does;
-//! - the caves: the hash node hollow and drawing nothing again under it
-//!   (`procedural::Cave`, one draw of its parent's);
+//! - the caves: a cave through all of the node, by the noises' least and
+//!   most over it (pxl-content `cave::all_hollow`);
 //! - what is placed: no record of the objects' pyramid at the node.
 //!
 //! A source not holding the node answers that it lacks it, never air and
 //! never that nothing fills.
 
+use pxl_content::Pixelet;
+use pxl_engine::answer::{In, Kind};
+use pxl_engine::area::{Area, Shard};
+use pxl_engine::clipmap::{self, Lookup};
+use pxl_engine::ground::VOID;
+use pxl_engine::ground::{self, Cell};
+use pxl_engine::overwrite::Cut;
+use pxl_engine::world;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
-use pxl_spec_core::answer::{In, Kind};
-use pxl_spec_core::area::Area;
-use pxl_spec_core::clipmap::{self, Found};
-use pxl_spec_core::ground::VOID;
-use pxl_spec_core::ground::{self, Cell};
-use pxl_spec_core::overwrite::Cut;
-use pxl_spec_core::world;
 
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::{pool, Windowed};
+use crate::domain::layer::object::store::ObjectQuery as _;
+use crate::domain::layer::terrain::clipmap::{pool, CpuClipmap};
+use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::Answer;
 use crate::sys::io::source;
@@ -68,11 +71,11 @@ pub(super) fn coarsest() -> Zoom {
 }
 
 /// A node as a descent reaches it, X on the asker's lap, and what its
-/// ancestors found, handed to its children (pxl-spec-core `world::Inherited`).
+/// ancestors found, handed to its children (pxl-engine `world::Inheritance`).
 #[derive(Clone, Copy)]
 pub(super) struct At {
     pub(super) node: Node<3>,
-    pub(super) inherited: world::Inherited,
+    pub(super) inheritance: world::Inheritance,
 }
 
 impl World<'_> {
@@ -84,9 +87,9 @@ impl World<'_> {
 
     /// What is in the cell `node`, X on the asker's lap, at its own
     /// zoom, `coarsest` or finer, for an asker with nothing handed down
-    /// (`drawn`).
+    /// (`asset_at`).
     pub fn asset(&self, node: Node<3>) -> Answer<u32> {
-        self.drawn(&mut self.start(node), &mut Lines::default())
+        self.asset_at(&mut self.start(node), &mut Lines::default())
     }
 
     /// A node with nothing handed down, a descent's root among them: each
@@ -94,10 +97,10 @@ impl World<'_> {
     pub(super) fn start(&self, node: Node<3>) -> At {
         At {
             node,
-            inherited: if self.unplaced {
-                world::Inherited::unplaced(node)
+            inheritance: if self.unplaced {
+                world::Inheritance::UNPLACED
             } else {
-                world::Inherited::of(&self.object.columns(), node)
+                world::Inheritance::of(&self.object.columns(), node)
             },
         }
     }
@@ -106,7 +109,7 @@ impl World<'_> {
     /// where it is air or void, else what fills it (`node`, asked at its
     /// own zoom). `lines` are the ground's lines the asker read, which its
     /// own steps from (`node`).
-    pub(super) fn drawn(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
+    pub(super) fn asset_at(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         self.node(at, [zoom, zoom], lines).map(|i| {
@@ -118,7 +121,7 @@ impl World<'_> {
         })
     }
 
-    /// A preview's entry as pxl-spec-core `overwrite` takes it.
+    /// A preview's entry as pxl-engine `overwrite` takes it.
     fn cut(&self, entry: Option<EntryAt>) -> Cut {
         entry.map_or(Cut::NONE, |e| Cut {
             zoom: e.zoom(),
@@ -132,15 +135,15 @@ impl World<'_> {
         let node = (zoom + 1, child_of(c, k));
         At {
             node,
-            inherited: at.inherited.child(&self.object.columns(), pool(), node),
+            inheritance: at.inheritance.child(&self.object.columns(), pool(), node),
         }
     }
 
     /// What is in `at`'s node, asked from `far` to `near`, the zooms a reader
-    /// asks within it: the world's one query (pxl-spec-core `world::node`),
+    /// asks within it: the world's one query (pxl-engine `world::node`),
     /// the ground read as the GPU reads it, off what it drew and read back
-    /// (`Windowed`), down the node's line through the tile cache
-    /// (`Reading`). Its answer (pxl-spec-core `answer`): a split and its
+    /// (`CpuClipmap`), down the node's line through the tile cache
+    /// (`Reading`). Its answer (pxl-engine `answer`): a split and its
     /// box in its own steps; the asset of a cell at the zoom asked, void for air; or,
     /// coarser than asked and nothing under it filling, air its size, which
     /// its zoom against `asked` tells. The four palette indices a cell is drawn by are the GPU's to
@@ -159,10 +162,10 @@ impl World<'_> {
         let mut reading = Reading::new(self, lines);
         let i = world::node(
             &mut reading,
-            &Windowed,
+            &CpuClipmap,
             &lanes,
             pool(),
-            &mut at.inherited,
+            &mut at.inheritance,
             at.node,
             asked,
             cuts,
@@ -171,13 +174,13 @@ impl World<'_> {
     }
 }
 
-/// The ground as a node's reading holds it (pxl-spec-core `ground::Held`):
+/// The ground as a node's reading holds it (pxl-engine `ground::Resident`):
 /// the world's tile cache down the node's line, the lines its walk read,
 /// and the first tile it found lacked or only a coarser one standing in for.
 struct Reading<'r, 'a> {
     world: &'r World<'a>,
     lines: &'r mut Lines,
-    lacked: Option<Tile>,
+    missing: Option<Tile>,
     coarser: Option<Tile>,
 }
 
@@ -186,7 +189,7 @@ impl<'r, 'a> Reading<'r, 'a> {
         Reading {
             world,
             lines,
-            lacked: None,
+            missing: None,
             coarser: None,
         }
     }
@@ -194,7 +197,7 @@ impl<'r, 'a> Reading<'r, 'a> {
     /// `of` as the reading went: where `held`, exact, or coarser for the
     /// first tile only a coarser one stood in for; else the lack.
     fn answer<T>(&self, held: bool, of: impl FnOnce() -> T) -> Answer<T> {
-        match (held, self.lacked, self.coarser) {
+        match (held, self.missing, self.coarser) {
             (false, Some(l), _) => Answer::Nothing(l),
             (_, _, Some(l)) => Answer::Coarser(of(), l),
             _ => Answer::Exact(of()),
@@ -210,7 +213,7 @@ impl<'r, 'a> Reading<'r, 'a> {
                 Some(v)
             }
             Answer::Nothing(l) => {
-                self.lacked = Some(l);
+                self.missing = Some(l);
                 None
             }
         }
@@ -219,21 +222,22 @@ impl<'r, 'a> Reading<'r, 'a> {
 
 impl Area for Reading<'_, '_> {
     fn ends(&self) -> bool {
-        source::Declared.ends()
+        source::ServiceArea.ends()
     }
     fn nine(&self, key: u32) -> u32 {
-        source::Declared.nine(key)
+        source::ServiceArea.nine(key)
     }
 }
 
-impl ground::Held for Reading<'_, '_> {
-    /// The bound over the node of the cells at `cell`, off the windows,
-    /// stepped from `place` (pxl-spec-core `Held::relief`); its line names the
-    /// tile a lack or a coarser window stands for; where it lacks, `EMPTY`
+impl ground::Resident for Reading<'_, '_> {
+    type Content = Pixelet;
+    /// The bound over the node of the cells at `cell`, off the clip levels,
+    /// stepped from `place` (pxl-engine `ground::Resident::relief`); its line names the
+    /// tile a lack or a coarser clip level stands for; where it lacks, `EMPTY`
     /// and false.
     fn relief(
         &mut self,
-        place: &mut Found,
+        place: &mut Lookup,
         cells: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
     ) -> (ground::Bounds, bool) {
@@ -251,10 +255,10 @@ impl ground::Held for Reading<'_, '_> {
         }
     }
 
-    /// The cell's column off the windows, the area's edge laid on it, as
-    /// the GPU reads it (pxl-spec-core `clipmap::ground`), stepped from where
-    /// its relief found its cells.
-    fn cell(&mut self, place: Found, zoom: Zoom, c: [i32; 3]) -> Cell {
-        clipmap::ground(&Windowed, place, zoom, [c[0], c[1]]).0
+    /// The cell's column off the clip levels, the wall where it is the
+    /// wall, as the GPU reads it (pxl-engine `clipmap::ground`), stepped
+    /// from where its relief found its cells.
+    fn cell(&mut self, shard: Shard, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell {
+        clipmap::ground(&CpuClipmap, shard, place, zoom, [c[0], c[1]]).0
     }
 }

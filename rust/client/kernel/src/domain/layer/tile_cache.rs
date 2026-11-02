@@ -7,36 +7,35 @@
 //! resident descendant; a tile held only as cache is bytes kept for when it
 //! is asked again, and answers nothing, so what is read is a function of
 //! what this observation asks and never of where the eye has been. A miss
-//! falls back to the nearest resident tile over it (`drawn_from`).
+//! falls back to the nearest resident tile over it (`finest_resident`).
 //!
-//! Capacity is asserted, not observed, since thrash here would be silent:
-//! slots cover everything held hard plus everything demand can name at once
-//! (the reach), so a view at rest converges to exact.
+//! Capacity is asserted: slots cover everything held hard plus everything
+//! demand can name at once (the reach), so a view at rest converges to exact.
 
 pub mod floor;
 
 use fnv::FnvHashMap;
 use pxl_spec::bake::tile::Occupancy;
 
-use pxl_spec::space::layer::demand::reach_tiles;
+use pxl_spec::space::layer::demand::demand_tiles;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::Ask;
 
-/// Only the eye. Another point observer would add its own misses.
+/// Only the eye.
 const OBSERVERS: u32 = 1;
 
 /// No slot for an empty tile, whose body is its own. One asked for again
 /// (`again`) is read meanwhile and fetched once more.
-struct Held<L> {
+struct Resident<L> {
     body: L,
     slot: Option<u32>,
     again: bool,
 }
 
 struct Entry<L> {
-    held: Option<Held<L>>,
+    resident: Option<Resident<L>>,
     ask: Option<Ask>,
     /// The bucket has no object for it, so the tile over it says its ground.
     answered: bool,
@@ -44,24 +43,24 @@ struct Entry<L> {
 
 impl<L> Entry<L> {
     const NONE: Entry<L> = Entry {
-        held: None,
+        resident: None,
         ask: None,
         answered: false,
     };
 
     fn idle(&self) -> bool {
-        self.held.is_none() && self.ask.is_none()
+        self.resident.is_none() && self.ask.is_none()
     }
 
     /// Held in a slot of its own, not as an empty tile.
     fn is_slotted(&self) -> bool {
-        self.held.as_ref().is_some_and(|h| h.slot.is_some())
+        self.resident.as_ref().is_some_and(|h| h.slot.is_some())
     }
 }
 
 pub struct TileCache<L: Base> {
     tiles: FnvHashMap<Tile, Entry<L>>,
-    /// The tile each slot holds: the slots' side of `Held::slot`, one
+    /// The tile each slot holds: the slots' side of `Resident::slot`, one
     /// association read both ways — a tile's slot by every reader of a
     /// tile (`slot`, `is_slotted`; domain/layer/earth.rs `earth_window`,
     /// domain/layer/terrain/tile.rs `pending_for`, domain/layer/terrain/clipmap.rs `voids`),
@@ -95,7 +94,7 @@ impl<L: Base> TileCache<L> {
     pub const DST_TILES: u32 = Self::ZOOMS;
 
     /// The most of its tiles a zoom's demand names, by its lattice.
-    pub const ZOOM_DEMAND_TILES: u32 = reach_tiles(L::LATTICE);
+    pub const ZOOM_DEMAND_TILES: u32 = demand_tiles(L::LATTICE);
 
     const DEMAND_TILES: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
         OBSERVERS * Self::ZOOM_DEMAND_TILES * Self::ZOOMS
@@ -111,11 +110,11 @@ impl<L: Base> TileCache<L> {
     };
 
     /// Held hard apart from the view: the floor, a destination's line, and
-    /// what a reader that cannot take a coarser answer declares (`Base::PINNED`).
+    /// what a reader that cannot take a coarser answer declares (`Base::PIN_CAP`).
     const PINNED_TILES: u32 = match L::ASK_SCOPE {
         AskScope::Floor => floor::tiles(L::LATTICE),
-        AskScope::Line => Self::DST_TILES + L::PINNED,
-        AskScope::View => floor::tiles(L::LATTICE) + Self::DST_TILES + L::PINNED,
+        AskScope::Line => Self::DST_TILES + L::PIN_CAP,
+        AskScope::View => floor::tiles(L::LATTICE) + Self::DST_TILES + L::PIN_CAP,
     };
 
     /// What is held hard at most.
@@ -163,7 +162,7 @@ impl<L: Base> Default for TileCache<L> {
 pub struct Line {
     pub tile: Tile,
     /// The finest resident tile on the line, which the tile is drawn from.
-    pub drawn: Option<Tile>,
+    pub finest_resident: Option<Tile>,
     /// The resident tile that says the tile's ground exactly.
     pub src: Option<Tile>,
     /// Some tile on the line is said.
@@ -181,6 +180,7 @@ pub struct Line {
 /// The lines of a walk's last tile and the tiles over it, by zoom, so a walk
 /// to a tile beside it steps down only from where their lines part. Good
 /// while the tile cache it was walked over is unchanged.
+#[derive(Clone, Copy)]
 pub struct Lines {
     at: [Option<Line>; LEAF_ZOOM as usize + 1],
 }
@@ -200,7 +200,7 @@ impl Line {
             zoom: 0,
             at: [0, 0],
         },
-        drawn: None,
+        finest_resident: None,
         src: None,
         settled: false,
         said: false,
@@ -229,8 +229,8 @@ impl<L: Base> TileCache<L> {
     }
 
     /// Held and asked for: what a reader may read.
-    fn readable(&self, p: Tile) -> Option<&Held<L>> {
-        self.entry(p).filter(|e| e.ask.is_some())?.held.as_ref()
+    fn readable(&self, p: Tile) -> Option<&Resident<L>> {
+        self.entry(p).filter(|e| e.ask.is_some())?.resident.as_ref()
     }
 
     /// Held and asked for, and not asked for again: nothing more is fetched for it.
@@ -250,14 +250,6 @@ impl<L: Base> TileCache<L> {
 
     pub fn get(&self, p: Tile) -> Option<&L> {
         self.readable(p).map(|h| &h.body)
-    }
-
-    /// Every readable tile.
-    pub fn held(&self) -> impl Iterator<Item = (Tile, &L)> {
-        self.tiles
-            .iter()
-            .filter(|(_, e)| e.ask.is_some())
-            .filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
     }
 
     /// What `p`'s line says of it, stepped down from the top a tile at a time.
@@ -285,7 +277,9 @@ impl<L: Base> TileCache<L> {
     /// descent pays one lookup a step and never walks back up.
     pub fn step(&self, parent: &Line, child: Tile) -> Line {
         let e = self.entry(child);
-        let held = e.filter(|e| e.ask.is_some()).and_then(|e| e.held.as_ref());
+        let held = e
+            .filter(|e| e.ask.is_some())
+            .and_then(|e| e.resident.as_ref());
         // Answered for itself, or its parent holds no child there.
         let said = e.is_some_and(|e| e.answered)
             || parent.children.is_some_and(|o| !o.has_child(child.slot()));
@@ -297,10 +291,10 @@ impl<L: Base> TileCache<L> {
         let says = if said { over } else { parent.says };
         Line {
             tile: child,
-            drawn: if held.is_some() {
+            finest_resident: if held.is_some() {
                 Some(child)
             } else {
-                parent.drawn
+                parent.finest_resident
             },
             src: if held.is_some() { Some(child) } else { says },
             settled: said || parent.settled,
@@ -312,8 +306,8 @@ impl<L: Base> TileCache<L> {
     }
 
     /// The finest resident tile on `p`'s line: the miss's answer.
-    pub fn drawn_from(&self, p: Tile) -> Option<Tile> {
-        self.line(p).drawn
+    pub fn finest_resident(&self, p: Tile) -> Option<Tile> {
+        self.line(p).finest_resident
     }
 
     /// The resident tile that says `p`'s ground exactly; none where `p` is a
@@ -336,7 +330,7 @@ impl<L: Base> TileCache<L> {
             e.ask = asks.get(&p).copied();
             // A held tile asked for again, or no longer, is read or not: its
             // answer moved as surely as one arriving or going.
-            let read = e.held.is_some() && was != e.ask.is_some();
+            let read = e.resident.is_some() && was != e.ask.is_some();
             if read | (e.ask.is_none() && core::mem::take(&mut e.answered)) {
                 self.moved.push(p);
                 self.revision = self.revision.wrapping_add(1);
@@ -348,7 +342,7 @@ impl<L: Base> TileCache<L> {
             self.tiles
                 .iter()
                 .filter(|&(_, e)| {
-                    e.ask.is_none() && e.held.as_ref().is_some_and(|h| h.slot.is_none())
+                    e.ask.is_none() && e.resident.as_ref().is_some_and(|h| h.slot.is_none())
                 })
                 .map(|(&p, _)| p),
         );
@@ -362,7 +356,7 @@ impl<L: Base> TileCache<L> {
         }
     }
 
-    pub fn asked(&self, p: Tile) -> Option<Ask> {
+    pub fn ask_of(&self, p: Tile) -> Option<Ask> {
         self.entry(p)?.ask
     }
 
@@ -380,7 +374,7 @@ impl<L: Base> TileCache<L> {
         if let Some(free) = self.free.pop() {
             return Some(free);
         }
-        let unasked = self.asked(p).is_none();
+        let unasked = self.ask_of(p).is_none();
         let Some(q) = victim(
             &mut self
                 .tiles
@@ -408,9 +402,8 @@ impl<L: Base> TileCache<L> {
     /// The slot is emptied first, so a body that fails to decode leaves it free
     /// rather than another tile reading half-overwritten bytes.
     /// `victim` picks which slot goes when one must, among the tiles of the
-    /// slots held only as cache, so a policy changes what is held next and
-    /// never what is correct; none where none may. They come in no order the
-    /// state fixes, so a policy picks by a total one.
+    /// slots held only as cache; none where none may. They come in no order
+    /// the state fixes, so a policy picks by a total one.
     pub fn admit<E>(
         &mut self,
         p: Tile,
@@ -432,9 +425,9 @@ impl<L: Base> TileCache<L> {
         }
     }
 
-    /// Held only while something asks for it: nothing else would ever let it go.
+    /// Held only while something asks for it.
     pub fn set(&mut self, p: Tile, tile: L) {
-        if self.asked(p).is_none() {
+        if self.ask_of(p).is_none() {
             return;
         }
         if let Some(record) = self.remove(p) {
@@ -449,18 +442,18 @@ impl<L: Base> TileCache<L> {
     }
 
     /// Whether every tile asked for shows: its answer, or a resident tile
-    /// over it drawing it coarser (`drawn_from`), as a finer tile asked for
+    /// over it drawing it coarser (`finest_resident`), as a finer tile asked for
     /// while the eye moves is.
     pub fn is_shown(&self) -> bool {
         let mut lines = Lines::default();
         self.tiles
             .iter()
             .filter(|(_, e)| e.ask.is_some())
-            .all(|(&p, _)| self.has_answer(p) || self.seek(&mut lines, p).drawn.is_some())
+            .all(|(&p, _)| self.has_answer(p) || self.seek(&mut lines, p).finest_resident.is_some())
     }
 
     pub fn answer_above(&mut self, p: Tile) {
-        if self.asked(p).is_none() {
+        if self.ask_of(p).is_none() {
             return;
         }
         if !core::mem::replace(&mut self.entry_mut(p).answered, true) {
@@ -484,8 +477,8 @@ impl<L: Base> TileCache<L> {
     fn put(&mut self, p: Tile, body: L, slot: Option<u32>) {
         if let Some(was) = self
             .entry_mut(p)
-            .held
-            .replace(Held {
+            .resident
+            .replace(Resident {
                 body,
                 slot,
                 again: false,
@@ -508,7 +501,7 @@ impl<L: Base> TileCache<L> {
         if let Some(h) = self
             .tiles
             .get_mut(&p)
-            .and_then(|e| e.held.as_mut())
+            .and_then(|e| e.resident.as_mut())
             .filter(|h| h.slot.is_some())
         {
             h.again = true;
@@ -526,7 +519,7 @@ impl<L: Base> TileCache<L> {
         self.tiles
             .iter()
             .filter(|(&p, e)| {
-                e.ask.is_some() && e.held.as_ref().is_some_and(|h| h.again) && counts(p)
+                e.ask.is_some() && e.resident.as_ref().is_some_and(|h| h.again) && counts(p)
             })
             .count() as u32
     }
@@ -546,7 +539,7 @@ impl<L: Base> TileCache<L> {
         let std::collections::hash_map::Entry::Occupied(mut e) = self.tiles.entry(p) else {
             return None;
         };
-        let held = e.get_mut().held.take()?;
+        let held = e.get_mut().resident.take()?;
         if e.get().idle() {
             e.remove();
         }

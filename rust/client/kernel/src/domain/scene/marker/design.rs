@@ -24,13 +24,13 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Design {
+pub(super) enum Design {
     /// Text on a pill in its `fill`, in its `ink`.
     Pill { text: Rc<str>, fill: u32, ink: u32 },
     /// A place as Carto draws it: its symbol (`icon`), or a dot, in its
     /// category's `fill`, and under it its name, where it is named, in its
     /// category's text color, its `ink`, wrapped at `wrap` pixels
-    /// (`spaced`).
+    /// (`with_spacing`).
     Point {
         name: Option<Rc<str>>,
         wrap: u32,
@@ -48,7 +48,7 @@ impl Design {
     /// (`arrangement.rs` `SPACING_PX`), and the width of the region it keeps
     /// (`set.rs`): a place's name wrapped to it, and its region it; any
     /// other's region its own width (0, which the candidates widen to it).
-    pub fn spaced(mut self, spacing: f64) -> (Design, f64) {
+    pub(super) fn with_spacing(mut self, spacing: f64) -> (Design, f64) {
         match &mut self {
             Design::Point { name, wrap, .. } => {
                 if name.is_some() {
@@ -78,7 +78,7 @@ fn sprites() -> &'static mut FnvHashMap<Design, Sprite> {
 /// Lets go of every design but `designs`, those no marker shown or waiting
 /// uses, their slots freed; whether any slot was, so a design the atlas had
 /// no room for may have it now.
-pub fn retain(designs: &FnvHashSet<Design>) -> bool {
+pub(super) fn retain(designs: &FnvHashSet<Design>) -> bool {
     let mut dropped = false;
     sprites().retain(|design, b| {
         if designs.contains(design) {
@@ -102,7 +102,7 @@ pub fn retain(designs: &FnvHashSet<Design>) -> bool {
 /// asked of the host, answered by a later turn, or its slot given and
 /// painted at render. One the atlas has no room for becomes ready only once
 /// a slot is let go (`retain`), so it asks no turn of its own.
-pub fn coming(design: &Design) -> bool {
+pub(super) fn coming(design: &Design) -> bool {
     sprites()
         .get(design)
         .is_none_or(|b| b.slot != NO_SLOT && !atlas().is_painted(b.slot as u32))
@@ -110,7 +110,7 @@ pub fn coming(design: &Design) -> bool {
 
 /// Its width, height and where it stands down from its top; none where its
 /// text could not be laid out this turn.
-pub fn size(design: &Design) -> Option<[f64; 3]> {
+pub(super) fn size(design: &Design) -> Option<[f64; 3]> {
     if let Some(b) = sprites().get(design) {
         return Some(b.size);
     }
@@ -153,7 +153,7 @@ pub fn size(design: &Design) -> Option<[f64; 3]> {
 
 /// Whether the design is laid out and painted, so drawing it shows its
 /// text. It asks the atlas for no slot, which `slot` does.
-pub fn ready(design: &Design) -> bool {
+pub(super) fn ready(design: &Design) -> bool {
     size(design).is_some()
         && sprites()
             .get(design)
@@ -161,7 +161,7 @@ pub fn ready(design: &Design) -> bool {
 }
 
 /// Its design was measured first.
-pub fn slot(design: &Design) -> i32 {
+pub(super) fn slot(design: &Design) -> i32 {
     let b = sprites().get_mut(design).or_bug(Errno::ENOTRECOVERABLE);
     if b.slot == NO_SLOT {
         let [w, h, _] = b.size;

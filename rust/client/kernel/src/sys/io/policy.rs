@@ -4,14 +4,14 @@
 //! ranked against the others. It changes how soon the view is right, never
 //! what it is.
 //!
-//! 1. By layer, the order a view builds up (the user's order,
-//!    2026-09-26): terrain, then the catalog assets decor draws with, then
-//!    places.
+//! 1. By layer, the order a view builds up: terrain, then the catalog assets
+//!    decor draws with, then places. The objects' shards ride the ground's
+//!    order: each of the ground's shells, seen then unseen, is followed by the
+//!    objects' of the same shell, so what is placed in view comes before
+//!    ground out of it.
 //! 2. Within a layer, seen before unseen and nearer first;
 //!    of tiles as near, the finer first, so the leaf under the eye is not
 //!    asked after the coarse tiles over it, which cost a fold where baked on demand.
-//!    Ranking holes before coarse ground instead put the top tile's 2 km
-//!    cubes in front of the eye for seconds on a cold start (2026-09-26).
 //!
 //! Everything else ties, after the view. Rank orders what starts; nothing
 //! running is stopped for it.
@@ -27,8 +27,12 @@ use xpute_kit::status::errno::Errno;
 
 /// A layer's classes: seen or unseen.
 const SHELLS: u8 = 2;
+/// Terrain and the objects interleave by shell: a shell's terrain, then its
+/// objects (`GROUND_SHELL` apart).
 const TERRAIN: u8 = 0;
-const ASSET: u8 = TERRAIN + SHELLS;
+const OBJECT: u8 = TERRAIN + 1;
+const GROUND_SHELL: u8 = 2;
+const ASSET: u8 = TERRAIN + SHELLS * GROUND_SHELL;
 const PLACE: u8 = ASSET + 1;
 const ASIDE: u8 = PLACE + SHELLS;
 
@@ -52,23 +56,29 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
             detail: 0,
         };
     }
-    let base = if layer == Stream::terrain {
-        TERRAIN
-    } else {
-        PLACE
+    let unseen = !ask.order.seen as u8;
+    // A zoom fits the rank's byte. The objects' subjects are their files'
+    // numbers: the top's, no tile, and shards all at `SHARD_ZOOM`, which no
+    // zoom orders.
+    let zoom = || Tile::of_subject(subject).zoom as u8;
+    let (class, detail) = match layer {
+        Stream::terrain => (TERRAIN + unseen * GROUND_SHELL, zoom()),
+        Stream::object => (OBJECT + unseen * GROUND_SHELL, 0),
+        _ => (PLACE + unseen, zoom()),
     };
     Rank {
-        class: base + !ask.order.seen as u8,
+        class,
         dist: ask.order.near,
-        // A zoom fits the rank's byte.
-        detail: Tile::of_subject(subject).zoom as u8,
+        detail,
     }
 }
 
 impl Serve for Policy {
     fn rank(&self, stream: Stream, subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         match stream {
-            Stream::terrain | Stream::place | Stream::earth => tile(stream, subject, ask),
+            Stream::terrain | Stream::object | Stream::place | Stream::earth => {
+                tile(stream, subject, ask)
+            }
             Stream::asset => Rank {
                 class: ASSET,
                 dist: 0.0,
@@ -95,9 +105,8 @@ impl Serve for Policy {
             Errno::ENETUNREACH => Fault::Network,
             // Any other status but 204 and 404, or no response while online. The
             // Worker answers only 200, 204 and 404, so this is the platform under
-            // it: R2's internal error, a Cloudflare incident (R2 down 59 minutes
-            // on 2025-02-06), the free plan's daily cap failing closed, an edge
-            // refusing the connection.
+            // it: R2's internal error, a Cloudflare incident, the free plan's
+            // daily cap failing closed, an edge refusing the connection.
             Errno::EACCES | Errno::EIO => Fault::Server,
             // ENXIO: 404, a key that names nothing. EBADMSG: a body empty, still
             // packed in an encoding this browser does not undo, or not decoding.
@@ -118,3 +127,7 @@ impl Serve for Policy {
         Some(ceiling * u32_to_unit(SplitMix64::new(seed).next_u32()))
     }
 }
+
+#[cfg(test)]
+#[path = "policy.test.rs"]
+mod test;

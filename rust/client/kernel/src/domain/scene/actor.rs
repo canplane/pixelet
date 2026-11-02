@@ -4,11 +4,11 @@
 //! its clips. What is its own alone is its clips' times and its joint
 //! palette, in a block of its own; where it stands is its holder's, a
 //! figure or a case, which hands its transform in (`Transform`). Each tick
-//! advances its clips, cross-fades as three's mixer did, and writes the
-//! palette into its block. It is drawn by decor's tiers, by how much of a
-//! camera cell it spans: posed as it plays down to the model's edge, its pose
-//! held below it down to the impostor's, and nothing below that, as decor
-//! smaller than that is none (`decor::drawn`).
+//! advances its clips, cross-fades, and writes the palette into its block. It
+//! is drawn by decor's tiers, by how much of a camera cell it spans: posed as
+//! it plays down to the model's edge, its pose held below it down to the
+//! impostor's, and nothing below that, as decor smaller than that is none
+//! (`decor::gpu`).
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
@@ -16,7 +16,7 @@ use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::domain::scene::decor::drawn::{decor_impostor_angle, decor_model_angle};
+use crate::domain::scene::decor::gpu::{decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::registry::{blend, Models};
 use crate::domain::scene::region;
@@ -63,9 +63,9 @@ pub struct Actor {
     run: f64,
     last: f64,
     /// Its clip's clock as drawn: `run` stepped a seen step at a time
-    /// (`lens::Stepped`), and the reading its clip last took (`shown`).
+    /// (`lens::Stepped`), and the reading its clip last took (`clip_time`).
     clock: Stepped,
-    shown: f64,
+    clip_time: f64,
 }
 
 impl Actor {
@@ -106,7 +106,7 @@ impl Actor {
             run: 0.0,
             last: 0.0,
             clock: Stepped::default(),
-            shown: 0.0,
+            clip_time: 0.0,
         })
     }
 
@@ -160,7 +160,7 @@ impl Actor {
         let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
         let (about, r) = (
             v3::sub(&transform.at, &frame.anchor),
-            f64::from(m.reach(self.cur.map(|p| p.clip)) * transform.scale),
+            f64::from(m.pose_radius(self.cur.map(|p| p.clip)) * transform.scale),
         );
         // What spans the model's edge at the actor's distance is observed, as a
         // decor's model is; what spans the impostor's is drawn, posed or not,
@@ -193,11 +193,11 @@ impl Actor {
             if next.is_finite() {
                 wake_at(wall + (next - self.run) * 1000.0);
             }
-            dt = (time - self.shown) as f32;
-            self.shown = time;
+            dt = (time - self.clip_time) as f32;
+            self.clip_time = time;
             (moves, asks) = (stepped, false);
             if stepped {
-                region::animated();
+                region::note_animation();
             }
         } else {
             self.last = 0.0;

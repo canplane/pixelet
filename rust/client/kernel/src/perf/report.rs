@@ -29,7 +29,7 @@ struct HostFrame {
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
-    landed: Option<GpuRead>,
+    gpu_read: Option<GpuRead>,
     rays: Option<RayRead>,
 }
 
@@ -57,7 +57,7 @@ impl Default for HostFrame {
             kind: FrameKind::none,
             gpu: GpuSample::default(),
             device: DeviceSample::default(),
-            landed: None,
+            gpu_read: None,
             rays: None,
         }
     }
@@ -71,14 +71,14 @@ pub fn set_host_frame(
     kind: FrameKind,
     gpu: GpuSample,
     device: DeviceSample,
-    landed: Option<GpuRead>,
+    gpu_read: Option<GpuRead>,
     rays: Option<RayRead>,
 ) {
     HOST.set(HostFrame {
         kind,
         gpu,
         device,
-        landed,
+        gpu_read,
         rays,
     });
 }
@@ -99,7 +99,7 @@ fn held_now(h: &HeapStat) -> RecordingSection {
         heap_refusals: f64::from(h.refusals),
         ring_cq_peak: f64::from(rings.cq_peak),
         ring_sq_peak: f64::from(rings.sq_peak),
-        ring_held_peak: f64::from(rings.left_peak),
+        ring_left_peak: f64::from(rings.left_peak),
         body_slots_peak: f64::from(body::take_peak()),
         cap_terrain_refused: TerrainTile::tile_cache().take_refusals() as f64,
     }
@@ -129,12 +129,12 @@ pub fn perf_frame(t: FrameTurn) {
     // Taken whether or not recording, so a recording starts from now.
     let heap = boot::heap_stat();
     let held = held_now(&heap);
-    let tiles_landed = f64::from(TerrainTile::tile_cache().take_landed());
+    let terrain_landed = f64::from(TerrainTile::tile_cache().take_landed());
     let host = core::mem::take(HOST.get(HostFrame::default));
     if !perf_recording() {
         return;
     }
-    if let Some(r) = host.landed {
+    if let Some(r) = host.gpu_read {
         perf_record_gpu(r);
     }
     if let Some(r) = host.rays {
@@ -155,9 +155,9 @@ pub fn perf_frame(t: FrameTurn) {
         effects: turn::effect_times(),
         kind: f64::from(host.kind as u8),
         gpu: host.gpu,
-        tiles_landed,
+        terrain_landed,
         device: host.device,
-        heap_used_bytes: heap.used as f64,
+        heap_used_bytes: heap.peak as f64,
         // The interval's: its turns' as they end, and its length as the next frame closes it.
         ..FrameSample::default()
     };

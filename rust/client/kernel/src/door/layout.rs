@@ -23,24 +23,22 @@ use crate::sys::io::demand::Stream;
 use crate::sys::io::host;
 use crate::sys::io::host_spec::stream::BYTES;
 use crate::sys::io::param;
-use crate::sys::mem::section::{
-    self, fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES,
-};
+use crate::sys::mem::section::{self, fixed_at, map, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
 use crate::sys::mem::spec::{
     CQ_CAP, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES, TOC_AT,
 };
 use pxl_render::api_spec::stream;
 use pxl_render::gpu::api;
-use pxl_render::gpu::renderer;
+use pxl_render::gpu::ray;
 use pxl_render::gpu::upload;
 use xpute_guest::mem;
 use xpute_guest::mem::section::span_of;
-use xpute_guest::mem::section::{Section, PAGE_BYTES};
+use xpute_guest::mem::section::{page_up, Section, PAGE_BYTES};
 use xpute_kit::status::errno::Errno;
 
 /// A packet is at most a page; anything larger crosses by address. A page
 /// is also the buddy's smallest block.
-pub const RING_SLOT_BYTES: u32 = PAGE_BYTES;
+pub(crate) const RING_SLOT_BYTES: u32 = PAGE_BYTES;
 
 const SQ_DESC_AT: u32 = RING_DESC_AT;
 const CQ_DESC_AT: u32 = SQ_DESC_AT + page_up(ring_bytes(SQ_CAP));
@@ -56,7 +54,7 @@ const SLOT_END: u32 = CQ_SLOT_AT + slots_bytes(CQ_CAP, RING_SLOT_BYTES);
 /// # Safety
 /// Once: the ranges are the rings' alone, in memory that never moves and
 /// outlives them.
-pub unsafe fn rings() -> (Ring, Ring) {
+pub(crate) unsafe fn rings() -> (Ring, Ring) {
     let mem = mem::core();
     // SAFETY: the caller's.
     unsafe {
@@ -107,7 +105,7 @@ const _: () = assert!(
 /// or far below its worst most of the time, is the heap's
 /// (`HEAP_FLOWS_BYTES`).
 #[derive(Clone, Copy)]
-pub enum Fixed {
+pub(crate) enum Fixed {
     Terrain,
     Division,
     Uploads,
@@ -132,7 +130,7 @@ const ACTOR_UPLOADS: usize = companion::FIGURES + preview::PREVIEWS_MAX;
 /// renderer's table is a bug, not a load.
 /// The renderer frees a list's uploads before taking its new ones, so it
 /// never holds more.
-pub const MAX_LIVE_UPLOADS: usize =
+pub(crate) const MAX_LIVE_UPLOADS: usize =
     MODELS_MAX + cloud::PATCHES_MAX + ACTOR_UPLOADS + SINGLE_UPLOADS;
 
 const FIXED: [u32; 5] = [
@@ -143,7 +141,7 @@ const FIXED: [u32; 5] = [
     BYTES,
 ];
 
-pub const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
+pub(crate) const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
 
 const _: () = assert!(
     REGION_BYTES.is_multiple_of(PAGE_BYTES)
@@ -172,7 +170,7 @@ const fn body_block(stream: Stream) -> u64 {
 /// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
 /// (sys/io/body.rs), and a body on every credit in the buddy's block for the
 /// longest other kind, each freed as it is decoded; the ways' pool's
-/// mirror at its most (domain/layer/terrain/mirror.rs, pxl-spec-core way/tree.rs `POOL_CHILD_GROUPS`),
+/// mirror at its most (domain/layer/terrain/mirror.rs, pxl-engine way/tree.rs `POOL_CHILD_GROUPS`),
 /// the renderer's rooms for the bricks' records, every read's at a
 /// brick's most (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), and
 /// the profiler's lanes while its setting is on (perf/record.rs), each
@@ -190,7 +188,7 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    let ways = mirror::MIRROR_BYTES + renderer::RECORD_ROOMS_BYTES;
+    let ways = mirror::MIRROR_BYTES + ray::RECORD_ROOMS_BYTES;
     slots_bytes(param::BODY_SLOTS) + param::MAX_CREDITS as u64 * longest + ways + record::PERF_BYTES
 };
 
@@ -206,7 +204,7 @@ pub fn heap_at(data_end: u32) -> u32 {
 }
 
 /// Asking before boot lays out memory is a bug.
-pub fn range(f: Fixed) -> Section {
+pub(crate) fn range(f: Fixed) -> Section {
     use xpute_kit::status::bug::OrBug;
     map()
         .or_bug(Errno::ENOTRECOVERABLE)
@@ -217,7 +215,7 @@ pub fn range(f: Fixed) -> Section {
 /// Lays the memory map and hands each range of `.fixed` to its owner.
 /// Returns where GPU calls are recorded for the host, 0 where the kernel
 /// makes them itself.
-pub fn install(b: &BootInfo) -> u32 {
+pub(crate) fn install(b: &BootInfo) -> u32 {
     section::set_map(section::lay_out(b.given, b.data_end, FIXED_BYTES));
     fixed::RANGE.set(range(Fixed::Terrain));
     division::RANGE.set(range(Fixed::Division));

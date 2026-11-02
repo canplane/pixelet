@@ -23,8 +23,7 @@ pub(super) fn apply(
     pkt: &Option<&[u8]>,
 ) -> Result<Option<i32>, MarshalError> {
     match cmd {
-        // Records only while the profiler setting is on: a window opened with the
-        // panel off would record with nothing to show or stop it.
+        // Records only while the profiler setting is on.
         Command::PERF_START => {
             refuse_unless(settings_store().perf, Errno::EPERM)?;
             refuse_unless(perf_window_start(), Errno::ENOMEM)?;
@@ -54,9 +53,8 @@ fn read_timed(read: impl FnOnce() -> u32) -> u32 {
 }
 
 /// The address of STATS's words (perf.json): the statistics over
-/// `window_ms`, and what holds now. Read in place rather than posted: `Door::post` asserts on a
-/// full completion ring, and reading allocates nothing in the heap being
-/// measured. Valid until the next turn.
+/// `window_ms`, and what holds now. Read in place, not posted: `Door::post`
+/// asserts on a full completion ring. Valid until the next turn.
 fn stats_words(window_ms: Option<f64>) -> u32 {
     use crate::perf::spec::STATS;
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
@@ -71,12 +69,11 @@ fn stats_words(window_ms: Option<f64>) -> u32 {
     off_of(w.as_ptr()) as u32
 }
 
-/// The address of RINGS's words: the three rings as they lie, which a
-/// reader of every record asks without the statistics it would not read.
+/// The address of RINGS's words: the three rings as they lie.
 fn perf_rings() -> u32 {
     use crate::perf::record::{perf_frames, perf_tasks, perf_worst};
     use crate::perf::spec::{RING, RINGS, RING_NAMES};
-    // On the heap, as READ's words are.
+    // On the heap, as STATS's words are (`stats_words`).
     static WORDS: Global<Box<[u32; RINGS::WORDS as usize]>> = Global::new();
     let (frames, tasks, worst) = (perf_frames(), perf_tasks(), perf_worst());
     let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));

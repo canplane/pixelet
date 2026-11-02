@@ -2,7 +2,7 @@
 
 //! What is drawn and how it is lit, and what the stage hands
 //! the GPU of the ways: the pool's first size, the records' first room and
-//! the scratch, each growing to the bake's bound (pxl-spec-core
+//! the scratch, each growing to the bake's bound (pxl-engine
 //! way/tree.rs `POOL_CHILD_GROUPS`, `BRICK_CHILD_GROUPS`).
 
 // ---- lighting ----
@@ -28,13 +28,13 @@ pub const AO_STRENGTH: f64 = 0.2;
 
 /// The ways' pool on the GPU at first, 1 MiB, 16 Ki child groups: a brick with
 /// no ways holds none, and one with ways a child group from its own nodes along
-/// z down (pxl-spec-core `way::tree`), so the ways of a sparse view. It
-/// doubles each time a build runs out (pxl-render gpu/ray/ground.rs
-/// `GroundBuffers::grow`), the brick that ran out filled again a turn later, so a dense view reaches 64 MiB in six. Not yet
-/// measured against a dense view.
+/// z down (pxl-engine `way::tree`), so the ways of a sparse view. It doubles
+/// each time a build runs out (pxl-render gpu/ray/ground.rs
+/// `GroundBuffers::grow`), the brick that ran out filled again a turn later, so
+/// a dense view reaches 64 MiB in six.
 pub const WAYS_POOL_FIRST_BYTES: u32 = 1 << 20;
 const _: () = {
-    use pxl_spec_core::way::tree::{CHILD_GROUP_WORDS, POOL_CHILD_GROUPS};
+    use pxl_engine::way::tree::{CHILD_GROUP_WORDS, POOL_CHILD_GROUPS};
     assert!(
         WAYS_POOL_FIRST_BYTES <= POOL_CHILD_GROUPS * CHILD_GROUP_WORDS * 4
             && WAYS_POOL_FIRST_BYTES >= 2 * CHILD_GROUP_WORDS * 4,
@@ -47,7 +47,7 @@ const _: () = {
 /// read's room doubles past a brick's records that outgrew it, that brick
 /// filled again (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), up to
 /// a brick's most, `way::tree::RECORDS_BYTES`: the GPU's read buffers and
-/// their rooms on the heap together, each pxl-render gpu/renderer.rs
+/// their rooms on the heap together, each pxl-render gpu/ray/ground.rs
 /// `READS` of them.
 pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
 
@@ -57,15 +57,15 @@ pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
 /// room holds records of (240). Each brick's tree room doubles each time a
 /// build outgrows it, its spans fixed, the brick filled again a turn
 /// later, so the scratch goes 4.00, 4.86, 6.58, 10.01, 16.88 and 18.01 MiB,
-/// a brick at the bake's bound reaching its most in five. Not yet measured
-/// against a dense view; the pool's known gap holds for each growth
-/// (pxl-render gpu/ray/ground.rs `GroundBuffers::grow`).
+/// a brick at the bake's bound reaching its most in five. The pool's known
+/// gap holds for each growth (pxl-render gpu/ray/ground.rs
+/// `GroundBuffers::grow`).
 pub const WAYS_SCRATCH_FIRST_BYTES: u32 = 4 << 20;
 const _: () = {
-    use pxl_spec_core::{clipmap::HANDED, way::tree};
-    let least = HANDED * tree::scratch_words(1) * 4;
+    use pxl_engine::{clipmap::FILL_CAP, way::tree};
+    let least = FILL_CAP * tree::scratch_words(1) * 4;
     assert!(
-        WAYS_SCRATCH_FIRST_BYTES <= HANDED * tree::SCRATCH_WORDS * 4
+        WAYS_SCRATCH_FIRST_BYTES <= FILL_CAP * tree::SCRATCH_WORDS * 4
             && WAYS_SCRATCH_FIRST_BYTES >= least,
         "the scratch's first is no more than a brick's most, nor less than a child group a brick"
     );

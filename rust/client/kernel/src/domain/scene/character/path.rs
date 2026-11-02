@@ -18,8 +18,7 @@ pub struct WalkPlan {
 impl WalkPlan {
     /// Where it is at `now`, and its heading, none once arrived. It takes
     /// `duration` whatever the distance, so the companion catches up on the
-    /// same beat after a pan of 1 unit or 1000; a fixed speed made big pans
-    /// absurdly long.
+    /// same beat after a pan of 1 unit or 1000.
     pub fn at(&self, now: f64) -> ([f64; 2], Option<f64>) {
         let frac = if self.duration > 0.0 {
             ((now - self.start_time) / self.duration).clamp(0.0, 1.0)
@@ -34,13 +33,12 @@ impl WalkPlan {
     }
 }
 
-/// Settles when the target stops changing, whatever moved it: keying on drag
-/// state missed click-driven camera animations entirely.
+/// Settles when the target stops changing, whatever moved it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SettleTracker {
     pub last_seen: [f64; 2],
     pub last_change_time: f64,
-    pub settled: [f64; 2],
+    pub settled_at: [f64; 2],
 }
 
 impl SettleTracker {
@@ -48,7 +46,7 @@ impl SettleTracker {
         SettleTracker {
             last_seen: at,
             last_change_time: now,
-            settled: at,
+            settled_at: at,
         }
     }
 
@@ -57,9 +55,9 @@ impl SettleTracker {
         if target != self.last_seen {
             (self.last_seen, self.last_change_time) = (target, now);
         }
-        let settles = now - self.last_change_time >= delay && self.last_seen != self.settled;
+        let settles = now - self.last_change_time >= delay && self.last_seen != self.settled_at;
         if settles {
-            self.settled = self.last_seen;
+            self.settled_at = self.last_seen;
         }
         settles
     }

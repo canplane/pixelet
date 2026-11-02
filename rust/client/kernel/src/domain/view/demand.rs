@@ -9,15 +9,16 @@
 //! a child as no tile (`Base::occupancy`), its ground is the tile's and the
 //! child is never asked for.
 
-use pxl_spec::bake::tile::earth::EARTH_REACH;
+use pxl_spec::bake::tile::earth::EARTH_DIST;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::earth::Earth;
+use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::Stream;
-use crate::sys::io::fetch::{answered, body, on_answer_settled, release, take_answered, Answered};
+use crate::sys::io::fetch::{answer_cnt, body, on_answer_settled, release, take_answer, Response};
 use crate::sys::io::request::attempt_of;
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
@@ -31,7 +32,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::tile_cache::{Lines, TileCache};
-use crate::domain::query::Walked;
+use crate::domain::query::ColumnWalk;
 use crate::domain::view::observation;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::io::demand::Order;
@@ -40,8 +41,10 @@ use crate::sys::io::failure::Failure;
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
 use crate::sys::sched::edge;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
+use pxl_spec::space::layer::demand::tiles_within;
+use pxl_spec::space::layer::lattice::GROUND;
 
 /// A layer as the view asks of it: its demand, held beside its records.
 pub trait Observed: Base {
@@ -49,7 +52,7 @@ pub trait Observed: Base {
 
     /// How far from the eye the layer draws anything; past it nothing of it
     /// is asked for.
-    fn reach() -> f64 {
+    fn demand_dist() -> f64 {
         f64::INFINITY
     }
 }
@@ -82,33 +85,41 @@ impl Observed for Earth {
         EARTH.get(Demand::default)
     }
 
-    fn reach() -> f64 {
-        EARTH_REACH
+    fn demand_dist() -> f64 {
+        EARTH_DIST
     }
 }
 
 /// A layer's own, by the stream its tiles come in (`Base::STREAM`).
 pub struct Layer {
     pub stream: Stream,
-    /// The most tiles it asks for at once, its tile cache's slots.
+    /// The most tiles it asks for at once: a base layer's tile cache's
+    /// slots, the objects' shards about the eye or their top.
     pub slots: u32,
-    arrived: fn(Tile, Option<Block>, &mut Phases) -> Result<(), Failure>,
+    /// A want's file arrived, by its subject, or its absence.
+    on_arrival: fn(u64, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
 
 const fn layer<L: Observed>() -> Layer {
     Layer {
         stream: L::STREAM,
         slots: TileCache::<L>::SLOTS,
-        arrived: on_arrived::<L>,
+        on_arrival: on_arrived::<L>,
     }
 }
 
-/// Every layer on the ground: the one place a stream names its layer.
-const LAYERS: [Layer; 4] = [
+/// Every layer read a tile at a time, the object layer's tile its shard
+/// (domain/layer/object/repository.rs): the one place a stream names its layer.
+const LAYERS: [Layer; 5] = [
     layer::<TerrainTile>(),
     layer::<PlaceTile>(),
     layer::<Earth>(),
     layer::<DivisionTile>(),
+    Layer {
+        stream: Stream::object,
+        slots: repository::WANTS,
+        on_arrival: repository::on_arrived,
+    },
 ];
 
 /// The layer whose tiles `stream` carries; none for an asset's.
@@ -119,7 +130,7 @@ pub fn of_stream(stream: Stream) -> Option<&'static Layer> {
 /// Everything the asks depend on, as read; two turns agreeing on all of it
 /// ask for the same tiles, so the second decides nothing.
 #[derive(Clone, Copy, PartialEq)]
-struct Seen {
+struct Key {
     o: Option<Observation>,
     dst: Option<Tile>,
 }
@@ -128,7 +139,7 @@ pub struct Demand<L: Observed> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     wants: Vec<(u64, Ask)>,
-    last: Option<Seen>,
+    last: Option<Key>,
     /// The floor's tiles as last observed.
     floor: Vec<Tile>,
     /// The asks found absent in an observation, written once all are found
@@ -141,8 +152,13 @@ pub struct Demand<L: Observed> {
     /// what was asked is the tile cache's (`TileCache::ask`).
     demand: Vec<Tile>,
     asks: FnvHashMap<Tile, Ask>,
+    /// Each ask in the view and the tile its place in the view is taken of:
+    /// a demanded tile's for the tile its ground is asked of, a line's or the
+    /// floor's its own. Read only for the asks left unanswered, the wants,
+    /// whose order alone is read (`Policy::rank`).
+    placed: Vec<(Tile, Tile)>,
     /// The tile cache's revision as it idled it (`idle`), none while it steps.
-    idled: Option<u32>,
+    idle_revision: Option<u32>,
 }
 
 impl<L: Observed> Default for Demand<L> {
@@ -160,7 +176,8 @@ impl<L: Observed> Default for Demand<L> {
                 TileCache::<L>::SLOTS as usize,
                 Default::default(),
             ),
-            idled: None,
+            placed: Vec::new(),
+            idle_revision: None,
         }
     }
 }
@@ -189,7 +206,7 @@ impl<L: Observed> Demand<L> {
         // The tile last in view order goes, of two as late the greater.
         let o = self.observation.as_ref();
         let farthest = |tiles: &mut dyn Iterator<Item = Tile>| {
-            let mut walked = Walked::default();
+            let mut walked = ColumnWalk::default();
             tiles.max_by_key(|&t| {
                 (
                     o.map_or(Order::LAST, |o| {
@@ -213,14 +230,18 @@ impl<L: Observed> Demand<L> {
     ) {
         let mut demand = core::mem::take(&mut self.demand);
         let mut asks = core::mem::take(&mut self.asks);
-        let ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, a: Ask| {
+        let mut placed = core::mem::take(&mut self.placed);
+        // An ask in the view placed last until the wants are ordered: its
+        // place, the least of those it is asked by, is read of a want alone.
+        let mut ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, priority: Priority, of: Tile| {
+            let a = Ask {
+                priority,
+                order: Order::LAST,
+            };
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
+            placed.push((p, of));
         };
-        // One walk down the pyramid in key order, so each tile's line, its
-        // own and the ground's it is ordered by, steps from its neighbor's.
-        let (mut lines, mut ground) = (Lines::default(), Walked::default());
-        let mut order =
-            |o: &Observation, p: Tile| observation::order_of_tile(o, L::LATTICE, p, &mut ground);
+        let mut lines = Lines::default();
         if let Some(o) = o {
             if matches!(L::ASK_SCOPE, AskScope::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
@@ -229,14 +250,7 @@ impl<L: Observed> Demand<L> {
             demand.dedup();
             for &p in &demand {
                 let at = L::tile_cache().seek(&mut lines, p).src.unwrap_or(p);
-                ask(
-                    &mut asks,
-                    at,
-                    Ask {
-                        priority: Priority::Demand,
-                        order: order(o, p),
-                    },
-                );
+                ask(&mut asks, at, Priority::Demand, p);
                 // A line already asked is asked to the top.
                 for q in
                     std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1)
@@ -247,14 +261,7 @@ impl<L: Observed> Demand<L> {
                     {
                         break;
                     }
-                    ask(
-                        &mut asks,
-                        q,
-                        Ask {
-                            priority: Priority::Ancestor,
-                            order: order(o, q),
-                        },
-                    );
+                    ask(&mut asks, q, Priority::Ancestor, q);
                 }
             }
             // More demanded than the structure's bound means the capacity is broken too:
@@ -272,14 +279,7 @@ impl<L: Observed> Demand<L> {
                 self.floor.clear();
                 floor::floor(o, top, |p| {
                     self.floor.push(p);
-                    ask(
-                        &mut asks,
-                        p,
-                        Ask {
-                            priority: Priority::Floor,
-                            order: order(o, p),
-                        },
-                    );
+                    ask(&mut asks, p, Priority::Floor, p);
                 });
                 xpute_kit::ensure!(
                     self.floor.len() <= floor::tiles(L::LATTICE) as usize,
@@ -289,26 +289,22 @@ impl<L: Observed> Demand<L> {
             }
         }
         // The whole line, not only the finest tile: which one says the ground is
-        // known only once those above are, and asking one at a time would cost a
-        // round trip per zoom.
+        // known only once those above are.
         let mut named = 0u32;
         for p in dst {
             named += 1;
-            ask(
-                &mut asks,
-                p,
-                Ask {
-                    priority: Priority::Destination,
-                    order: Order::FIRST,
-                },
-            );
+            let a = Ask {
+                priority: Priority::Destination,
+                order: Order::FIRST,
+            };
+            asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         }
         xpute_kit::ensure!(
             named
                 <= if matches!(L::ASK_SCOPE, AskScope::Floor) {
                     0
                 } else {
-                    TileCache::<L>::DST_TILES + L::PINNED
+                    TileCache::<L>::DST_TILES + L::PIN_CAP
                 },
             ENOTRECOVERABLE,
             named
@@ -345,16 +341,31 @@ impl<L: Observed> Demand<L> {
         }
         // By subject, as a stream's wants are said (sys/io/request.rs `declare`):
         // key order, a subject being its key's high half, after every absence
-        // is written.
-        let mut lines = Lines::default();
+        // is written. Each want's place the least of the tiles it is asked by
+        // (`placed`), found in one walk down the pyramid in key order, so each
+        // tile's line, its own and the ground's it is ordered by, steps from
+        // its neighbor's.
+        placed.sort_unstable_by_key(|&(p, of)| (p.key(), of.key()));
+        let (mut lines, mut ground) = (Lines::default(), ColumnWalk::default());
         self.wants.clear();
         for &p in &demand {
             if unanswered(p, &mut lines) {
-                self.wants.push((p.subject(), asks[&p]));
+                let mut a = asks[&p];
+                if let Some(o) = o {
+                    let from = placed.partition_point(|&(q, _)| q.key() < p.key());
+                    for &(_, of) in placed[from..].iter().take_while(|&&(q, _)| q == p) {
+                        a.order =
+                            a.order
+                                .min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
+                    }
+                }
+                self.wants.push((p.subject(), a));
             }
         }
         asks.clear();
         self.asks = asks;
+        placed.clear();
+        self.placed = placed;
         demand.clear();
         self.demand = demand;
 
@@ -363,18 +374,18 @@ impl<L: Observed> Demand<L> {
 
     /// The layer's turn, from the live eye: the eye that is coming, which
     /// every cast reads as it arrives. Observes again whenever anything in
-    /// `Seen` changed.
+    /// `Key` changed.
     ///
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground; and `pinned`, the
-    /// tiles a reader that takes no coarser answer declares (`Base::PINNED`),
+    /// tiles a reader that takes no coarser answer declares (`Base::PIN_CAP`),
     /// as the destination is. A layer with a top of its own is observed out
     /// to its own reach.
     pub fn step(&mut self, dst: Option<Tile>, pinned: &[Tile]) {
         let Some(top) = L::top() else { return };
         let o = observation().map(|o| match L::TOP {
             Some(_) => Observation {
-                reach: L::reach(),
+                demand_dist: L::demand_dist(),
                 ..o
             },
             None => o,
@@ -382,8 +393,8 @@ impl<L: Observed> Demand<L> {
         if o.is_none() && dst.is_none() && pinned.is_empty() {
             return;
         }
-        self.idled = None;
-        let now = Seen { o, dst };
+        self.idle_revision = None;
+        let now = Key { o, dst };
         if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
             let line = dst
                 .into_iter()
@@ -412,21 +423,47 @@ impl<L: Observed> Demand<L> {
 
     /// A layer the view does not show keeps what it holds and asks for
     /// nothing: its tile cache let go of its asks again only where what it
-    /// holds moved since it last was (`TileCache::revision`), as asking
-    /// nothing of what is unchanged changes nothing.
+    /// holds moved since it last was (`TileCache::revision`).
     pub fn idle(&mut self) {
-        if self.idled.is_some_and(|r| r == L::tile_cache().revision()) {
+        if self
+            .idle_revision
+            .is_some_and(|r| r == L::tile_cache().revision())
+        {
             return;
         }
         self.wants.clear();
         L::tile_cache().ask(&self.asks);
         declare(L::STREAM, &[]);
         self.last = None;
-        self.idled = Some(L::tile_cache().revision());
+        self.idle_revision = Some(L::tile_cache().revision());
     }
 }
 
-/// The pyramid tiles arrived, admitted against the view as a pass of the
+/// The object layer's tiles, its shards, from the live eye: every shard
+/// within the demand the view makes of the ground at the shard's zoom
+/// (`observation::demand_radius`), as many as `repository::WANTS` at most,
+/// seen and nearer first. The repository reads their top first, which a
+/// view from afar draws from, then those of them it lists and has not read.
+pub fn object_step() {
+    let o = observation();
+    let r = o.zip(source::top()).and_then(|(o, top)| {
+        observation::demand_radius(&o, GROUND, top, SHARD_ZOOM).map(|r| (o, r))
+    });
+    repository::want(r.into_iter().flat_map(|(o, r)| {
+        tiles_within(SHARD_ZOOM, [o.eye[0], o.eye[1]], r).map(move |shard| {
+            (
+                shard,
+                Ask {
+                    priority: Priority::Demand,
+                    order: Order::of(&o, &shard.region()),
+                },
+            )
+        })
+    }));
+}
+
+/// The tiles arrived, the pyramid's and the objects' shards (`LAYERS`),
+/// admitted against the view as a pass of the
 /// tick's budget, so the visible phase's hold on the content share binds it,
 /// and at least one; each fetch settles here. What the pass leaves stays
 /// queued, and a turn is asked for it.
@@ -441,26 +478,25 @@ pub fn admit_arrived(pass: &Pass) {
         of
     };
     let stat = pass.run(
-        0..answered(&OF),
+        0..answer_cnt(&OF),
         |_| {
-            let Some(Answered {
+            let Some(Response {
                 key,
                 stream,
                 subject,
                 block,
                 mut phases,
-            }) = take_answered(&OF)
+            }) = take_answer(&OF)
             else {
                 return false;
             };
-            let tile = Tile::of_subject(subject);
             // A key the request scheduler no longer holds is one a reset forgot.
             if attempt_of(key).is_none() {
                 release(block);
                 return false;
             }
             let result = match of_stream(stream) {
-                Some(l) => (l.arrived)(tile, block, &mut phases),
+                Some(l) => (l.on_arrival)(subject, block, &mut phases),
                 None => {
                     release(block);
                     Err(Errno::ENOTRECOVERABLE.into())
@@ -476,12 +512,13 @@ pub fn admit_arrived(pass: &Pass) {
     }
 }
 
-/// None is no object for `p`.
+/// None is no object for the tile `subject` names.
 fn on_arrived<L: Observed>(
-    p: Tile,
+    subject: u64,
     block: Option<Block>,
     phases: &mut Phases,
 ) -> Result<(), Failure> {
+    let p = Tile::of_subject(subject);
     let Some(b) = block else {
         L::demand().absent(p);
         return Ok(());

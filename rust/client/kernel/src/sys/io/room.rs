@@ -2,8 +2,7 @@
 
 //! A request refused room, by the heap or by the body slots (sys/io/body.rs),
 //! as what refused it counted its releases then: it waits until that gives
-//! some room back, never on a clock, since only a release can change the
-//! answer, and not on the other. A slot given back gives the heap nothing
+//! some room back, not on the other. A slot given back gives the heap nothing
 //! until its run is empty, which the heap's count then shows; the heap's
 //! pages given back give no slot. A body refused a run of slots waits on
 //! both, since a slot given back in a run held serves it as well.
@@ -12,7 +11,7 @@ use crate::sys::boot::heap_stat;
 use crate::sys::io::body;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Refused(Room, u32);
+pub struct Refusal(Room, u32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Room {
@@ -23,7 +22,7 @@ enum Room {
 }
 
 impl Room {
-    fn released(self) -> u32 {
+    fn release_cnt(self) -> u32 {
         match self {
             Room::Heap => heap_stat().releases,
             Room::Bodies => body::releases(),
@@ -32,24 +31,24 @@ impl Room {
     }
 }
 
-impl Refused {
+impl Refusal {
     /// By the heap.
-    pub fn now() -> Refused {
-        Refused(Room::Heap, Room::Heap.released())
+    pub fn now() -> Refusal {
+        Refusal(Room::Heap, Room::Heap.release_cnt())
     }
 
     /// By the body slots, every one out.
-    pub fn bodies() -> Refused {
-        Refused(Room::Bodies, Room::Bodies.released())
+    pub fn bodies() -> Refusal {
+        Refusal(Room::Bodies, Room::Bodies.release_cnt())
     }
 
     /// By the heap, for a run of body slots, every run held full.
-    pub fn run() -> Refused {
-        Refused(Room::Run, Room::Run.released())
+    pub fn run() -> Refusal {
+        Refusal(Room::Run, Room::Run.release_cnt())
     }
 
     /// Whether room has been given back since, so asking again may be served.
     pub fn over(self) -> bool {
-        self.0.released() != self.1
+        self.0.release_cnt() != self.1
     }
 }

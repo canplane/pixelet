@@ -1,23 +1,24 @@
 // pxl-kernel/domain/scene/cast.rs
 
-//! What the GPU's cast of the eye's rays reads (pxl-render gpu/renderer.rs
+//! What the GPU's cast of the eye's rays reads (pxl-render gpu/ray/cast.rs
 //! `Cast`): the eye as the rays leave it, a ray a drawn pixel, the eye's
-//! windows as a table of the bricks each holds, and each brick the
-//! windows want handed to the GPU once, off its tile's packet
+//! clip levels as a table of the bricks each holds, and each brick the
+//! clip levels want handed to the GPU once, off its tile's packet
 //! (domain/layer/terrain/clipmap.rs `fill`).
 
-use pxl_render::gpu::renderer::{Overwrites, TerrainWrite};
+use pxl_engine::eye;
+use pxl_render::gpu::ray::{Overwrites, TerrainWrite};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec_core::eye;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::object::preview;
 use crate::domain::layer::object::store::object;
 use crate::domain::layer::terrain::clipmap::{self, TileContent};
 use crate::domain::layer::terrain::tile::uploads;
-use crate::domain::layer::upload::Offered;
+use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base as _;
+use crate::domain::view::frame::resolution;
 use crate::domain::view::lens;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::source;
@@ -29,7 +30,7 @@ use pxl_spec::bake::constant::EntryAt;
 /// made then and not again.
 static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 
-/// The area (pxl-spec-core `area::Area`): every cell's nine by its key
+/// The area (pxl-engine `area::Area`): every cell's nine by its key
 /// (`area::shard_key`), four a row; a row of none where none is declared,
 /// since a binding holds at least one, and a read past it is none.
 pub fn shards() -> &'static [[i32; 4]] {
@@ -47,13 +48,20 @@ pub fn shards() -> &'static [[i32; 4]] {
     s
 }
 
-/// The eye as the GPU's rays leave it, a ray a drawn pixel (`lens::gpu_cast`),
+/// The eye as the GPU's rays leave it, a ray a drawn pixel, its beam rays
+/// on the lattice the drawn resolution leaves (`lens::gpu_cast`,
+/// domain/view/frame/resolution.rs `lattice`),
 /// then the pointer's preview as the world answers through it (domain/query/world.rs
 /// `previewing`), its cut to air and its left-out leaf, each X, Y, Z and the
-/// zoom (pxl-spec-core `eye`). None without a screen.
+/// zoom (pxl-engine `eye`). None without a screen.
 pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
-    lens::gpu_cast(o, settings_store().ray_steps, &mut words)?;
+    lens::gpu_cast(
+        o,
+        settings_store().ray_steps,
+        resolution::lattice(),
+        &mut words,
+    )?;
     let edits = preview::cur();
     let cut = |e: Option<EntryAt>| {
         e.map_or([0, 0, 0, eye::NO_CUT], |e| {
@@ -82,11 +90,11 @@ pub fn overwrites() -> Overwrites<'static> {
         room: l.room,
         revision: l.revision,
         since: l.since,
-        written: l.written,
+        written_groups: l.written_groups,
     }
 }
 
-/// Each brick the windows want to `write`, while it takes them: off the
+/// Each brick the clip levels want to `write`, while it takes them: off the
 /// packets kept for them, and off each void tile, held with none.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::tile_cache();
@@ -99,10 +107,10 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         api::device_generation(),
         &mut |slot, pkt| {
             let Some(t) = terrain.in_slot(slot) else {
-                return Offered::Taken;
+                return Uptake::Taken;
             };
             let Some(held) = terrain.get(t) else {
-                return Offered::Taken;
+                return Uptake::Taken;
             };
             clipmap::fill(t, TileContent::Packet(pkt, held), write)
         },
@@ -110,7 +118,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
     );
     // The due bricks' void tiles, not every tile held.
     for p in clipmap::voids() {
-        if clipmap::fill(p, TileContent::Void, write) == Offered::Full {
+        if clipmap::fill(p, TileContent::Void, write) == Uptake::Full {
             return;
         }
     }

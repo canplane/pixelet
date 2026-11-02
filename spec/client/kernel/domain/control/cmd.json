@@ -24,9 +24,9 @@
   "extern": [
     {
       "name": "BakeKind",
-      "rs": "pxl_spec::bake::published::BakeKind",
+      "rs": "pxl_spec::bake::publication::BakeKind",
       "$doc": [
-        "By its index in BAKE_KINDS (published.spec.ts)."
+        "By its index in BAKE_KINDS (publication.spec.ts)."
       ]
     },
     {
@@ -916,7 +916,7 @@
               "list": true,
               "$doc": [
                 "Each kind's format, one a kind, indexed by its bake's number",
-                "(pxl-spec bake/published.spec.rs)."
+                "(pxl-spec bake/publication.spec.rs)."
               ]
             },
             {
@@ -934,15 +934,23 @@
           "name": "FS_TRUNCATED",
           "val": 4866,
           "$doc": [
-            "A storage file the kernel refused (the snapshot's `storage_refused`) is empty now, what it held",
-            "set aside by the host: the kernel reads it again, and writes it from then on."
+            "A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's",
+            "own again, what it held set aside by the host: the kernel reads it again, and writes",
+            "a storage file from then on."
           ],
           "pkt": [
             {
-              "name": "slot",
+              "name": "root",
               "type": "u32",
               "$doc": [
-                "host.json's `storage`."
+                "host.json's `root`."
+              ]
+            },
+            {
+              "name": "path",
+              "type": "str",
+              "$doc": [
+                "Its number below the root in decimal, as the kernel opened it."
               ]
             }
           ]
@@ -1476,13 +1484,14 @@
           ]
         },
         {
-          "name": "storage_refused",
-          "type": "u32",
+          "name": "refused_files",
+          "type": "RefusedFile",
           "list": true,
           "$doc": [
-            "The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for",
-            "any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says",
-            "the slot is empty."
+            "The files the kernel refused, not of their format, not decoding, or too large for any",
+            "heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The",
+            "kernel read none of it and writes nothing over it until FS_TRUNCATED says it is",
+            "empty."
           ]
         },
         {
@@ -1491,6 +1500,13 @@
           "optional": true,
           "$doc": [
             "Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say."
+          ]
+        },
+        {
+          "name": "renderer_progress",
+          "type": "f64",
+          "$doc": [
+            "How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): its shader modules, by their bytes, the first half, its pipelines made the second; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it."
           ]
         }
       ]
@@ -1660,6 +1676,22 @@
           "$doc": [
             "Held by an area the point is in; one without is the nearest found by its point."
           ]
+        }
+      ]
+    },
+    {
+      "name": "RefusedFile",
+      "$doc": ["A file the kernel refused, as it opened it."],
+      "fields": [
+        {
+          "name": "root",
+          "type": "u32",
+          "$doc": ["host.json's `root`."]
+        },
+        {
+          "name": "path",
+          "type": "str",
+          "$doc": ["Its number below the root in decimal."]
         }
       ]
     },

@@ -1,12 +1,14 @@
 // pxl-kernel/door/apply/fs.rs
 
-//! FS: the kernel's files: a root mounted, a storage file truncated.
+//! FS: the kernel's files: a root mounted, a refused file truncated.
 
 use super::State;
 use super::{given, or_refuse, refuse_unless};
 use crate::domain::control::cmd::{self as abi, Command};
 use crate::domain::layer::object::repository;
 use crate::domain::view::setting::store;
+use crate::sys::io::file::{self, StorageFile};
+use crate::sys::io::host_spec::root;
 use crate::sys::io::source;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -26,18 +28,26 @@ pub(super) fn apply(
             Ok(Some(0))
         }
         Command::FS_TRUNCATED => {
-            use crate::sys::io::file::{self, StorageFile};
             let p = abi::FsTruncated::read(given(pkt)?)?;
-            let file = or_refuse(
-                StorageFile::of_slot(p.slot).filter(|&k| file::is_refused(k)),
-                Errno::EINVAL,
-            )?;
-            file::on_emptied(file);
-            // The settings write what they hold from the next keep on; the
-            // objects are read again, empty, and saved from then on.
-            match file {
-                StorageFile::Settings => store::on_settings_emptied(),
-                StorageFile::Objects => repository::open(),
+            let number: u64 = or_refuse(p.path.parse().ok(), Errno::EINVAL)?;
+            match p.root {
+                root::STORAGE => {
+                    let file = or_refuse(
+                        u32::try_from(number)
+                            .ok()
+                            .and_then(StorageFile::of_slot)
+                            .filter(|&k| file::is_refused(k)),
+                        Errno::EINVAL,
+                    )?;
+                    file::on_emptied(file);
+                    // The settings write what they hold from the next keep on.
+                    match file {
+                        StorageFile::Settings => store::on_settings_emptied(),
+                    }
+                }
+                // Read again, as its source holds it now.
+                root::OBJECT => refuse_unless(repository::on_emptied(number), Errno::EINVAL)?,
+                _ => refuse_unless(false, Errno::EINVAL)?,
             }
             Ok(Some(0))
         }

@@ -6,40 +6,40 @@
 //! it is read. Where it stands, which way it faces and whether it generates are
 //! the world unplaced, the ground's alone, its column's surface
 //! and the cells about it (`World::column_surface`); only an edit in its box, asked
-//! of the world as edited, takes it away (pxl-spec-core `generated::generated`).
+//! of the world as edited, takes it away (pxl-content `generation::placement`).
 
+use pxl_content::generation::{self, DecorQuery, Generated};
+use pxl_engine::support::ColumnSurface;
+use pxl_engine::world::PlacedCursor;
+use pxl_engine::FRAC_W;
 use pxl_spec::asset::cube::sentinel;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec_core::generated::{self, DecorQuery, Generated};
-use pxl_spec_core::support::ColumnSurface;
-use pxl_spec_core::world::Placed;
-use pxl_spec_core::FRAC_W;
 
 use super::node::At;
 use super::world::World;
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
+use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::Answer;
-use pxl_spec_core::answer;
-use pxl_spec_core::decor;
+use pxl_content::decor;
 
-/// The world as decor's generation asks it on the CPU (pxl-spec-core
-/// `DecorQuery`): the world's one query and its ray, unplaced (`unplaced`,
+/// The world as decor's generation asks it on the CPU (pxl-engine
+/// `DecorQuery`): the world's one query and its ray, unplaced (`ground`,
 /// the ground's alone) and as edited, and what is placed.
-pub(super) struct Asked<'a, 'w> {
+pub(super) struct DecorWorld<'a, 'w> {
     world: &'a World<'w>,
-    unplaced: World<'w>,
+    ground: World<'w>,
     lanes: store::Columns<'a>,
 }
 
-impl<'a, 'w> Asked<'a, 'w> {
-    pub(super) fn new(world: &'a World<'w>) -> Asked<'a, 'w> {
-        Asked {
+impl<'a, 'w> DecorWorld<'a, 'w> {
+    pub(super) fn new(world: &'a World<'w>) -> DecorWorld<'a, 'w> {
+        DecorWorld {
             world,
-            unplaced: world.unplaced(),
+            ground: world.ground_only(),
             lanes: world.object.columns(),
         }
     }
@@ -49,7 +49,7 @@ impl<'a, 'w> Asked<'a, 'w> {
 /// lacked: a column's surface with its line (`World::column_surface`) and each cell
 /// about it asked off that line (`World::asset_about`), of the world
 /// unplaced; a cell's edit asked of the world as edited (`World::asset`).
-impl DecorQuery for Asked<'_, '_> {
+impl DecorQuery for DecorWorld<'_, '_> {
     type ColumnSurface = ColumnSurface<At>;
 
     fn rows(&self) -> &[decor::Decor] {
@@ -59,7 +59,7 @@ impl DecorQuery for Asked<'_, '_> {
     /// None where the world lacked a tile on the way: decor generates on what
     /// is held as its tiles say.
     fn column_surface(&mut self, cell: Zoom, g: [i32; 2]) -> (ColumnSurface<At>, (i32, f32), bool) {
-        let (answer, f) = self.unplaced.column_surface(cell, g);
+        let (answer, f) = self.ground.column_surface(cell, g);
         match answer {
             Answer::Exact(Some(top)) => (f, top, true),
             _ => (f, (0, 0.0), false),
@@ -72,23 +72,18 @@ impl DecorQuery for Asked<'_, '_> {
         GROUND.cell()
     }
 
-    /// Void where the world holds nothing there.
-    fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
-        self.unplaced
-            .asset_about(&f.line, zoom, c)
-            .val()
-            .unwrap_or(u32::from(sentinel::void))
+    /// Void where the world holds nothing there; as edited, an edit where it
+    /// holds one, as far as it is held.
+    fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3], edited: bool) -> u32 {
+        let answer = if edited {
+            self.world.asset((zoom, c))
+        } else {
+            self.ground.asset_about(&f.line, zoom, c)
+        };
+        answer.val().unwrap_or(u32::from(sentinel::void))
     }
 
-    /// An edit where the world holds one there, as far as it is held.
-    fn is_edited(&mut self, zoom: Zoom, c: [i32; 3]) -> bool {
-        self.world
-            .asset((zoom, c))
-            .val()
-            .is_some_and(answer::is_placed)
-    }
-
-    fn next_placed(&self, p: &mut Placed) -> ([i32; 3], u32, bool) {
+    fn next_placed(&self, p: &mut PlacedCursor) -> ([i32; 3], u32, bool) {
         p.next(&self.lanes)
     }
 }
@@ -97,22 +92,22 @@ impl DecorQuery for Asked<'_, '_> {
 /// read about it (`World::generated_in`): the leaf scatter, cell by cell, which
 /// a region generates the same (pxl-spec procedural.test.rs); and, where
 /// `boxed`, whether it generates there, its box asked about the same column surface
-/// (pxl-spec-core `generated::generated`), true where not.
+/// (pxl-content `generation::placement`), true where not.
 pub(super) fn generated_at(
-    asked: &mut Asked,
+    asked: &mut DecorWorld,
     decor: &Decor,
     cell: [i32; 2],
     boxed: bool,
 ) -> Option<(Instance, bool)> {
     let candidate = scatter_at(decor.row, cell)?;
     let (g, has_footing, generates) =
-        generated::generated(asked, decor.row, GROUND.cell(), &candidate, boxed);
+        generation::placement(asked, decor.row, GROUND.cell(), &candidate, boxed);
     has_footing.then(|| (instance(decor, &g), generates))
 }
 
 /// Decor standing as `g`, as an instance: its box's min corner a leaf
 /// cell's, a unit, its base sunk under it as the GPU draws it (`Generated::sink`).
-pub fn instance(decor: &Decor, g: &Generated) -> Instance {
+pub(super) fn instance(decor: &Decor, g: &Generated) -> Instance {
     let [x, y, z] = g.at;
     let base = f64::from(z) - f64::from(g.sink) / f64::from(1u32 << FRAC_W);
     let (at, meta) = decor.stand([f64::from(x), f64::from(y), base], g.variant, g.turn, 1.0);

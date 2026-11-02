@@ -11,7 +11,7 @@ use crate::sys::sched::phase_spec::Phase;
 use xpute_guest::global::Global;
 
 /// Each phase's share held back for the phases after it: the visible phase
-/// keeps the content's, or content starves while a load keeps it busy.
+/// keeps the content's.
 const HELD_BACK: [f64; Phase::ALL.len()] = {
     let mut held = [0.0; Phase::ALL.len()];
     held[Phase::visible as usize] = param::CONTENT_SHARE;
@@ -50,10 +50,6 @@ pub fn tick_step_stats_reset() {
 /// step names (the turn's, turn/step.spec.rs).
 pub fn on_tick(phase: Phase, step: TickStep, name: u32) -> u32 {
     tick().on_tick(phase as u8, step, name)
-}
-
-pub fn off_tick(id: u32) {
-    tick().off_tick(id);
 }
 
 pub fn run_tick(delta: f64, quota_ms: f64, edge_at: f64) -> TickReport {

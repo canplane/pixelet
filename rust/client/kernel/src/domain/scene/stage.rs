@@ -9,9 +9,8 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
-use pxl_render::gpu::renderer::{
-    render_frame, Cast, EarthTiles, FrameInput, GroundBricks, Resident,
-};
+use pxl_render::gpu::ray::{Cast, GroundBricks, Resident};
+use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -48,14 +47,13 @@ pub fn is_screen_drawn() -> bool {
 }
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
-/// season, as Google Earth and Cesium keep one mosaic; the earth layer's, under
-/// its version.
+/// season; the earth layer's, under its version.
 const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::object::preview;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::scene::cast;
-use crate::domain::scene::decor::drawn;
+use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::cloud;
 use crate::domain::scene::gizmo::camera_gizmo;
 use crate::domain::scene::marker;
@@ -64,11 +62,13 @@ use crate::domain::scene::param;
 use crate::domain::scene::region;
 use crate::domain::view::frame::pose::{sea_under_eye, view};
 use crate::domain::view::frame::resolution;
-use crate::domain::view::frame::resolution::Pace;
+use crate::domain::view::frame::resolution::{GpuMeasure, Pace};
 use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::boot;
 use crate::sys::io::loader;
+use pxl_engine::clipmap::FILL_CAP;
+use pxl_engine::way::tree;
 use pxl_render::gpu::api;
 use pxl_render::gpu::renderer;
 use pxl_spec::asset::catalog::pack;
@@ -77,8 +77,6 @@ use pxl_spec::asset::sky::moon;
 use pxl_spec::object;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3;
-use pxl_spec_core::clipmap::HANDED;
-use pxl_spec_core::way::tree;
 
 const _: () = assert!(
     EARTH_SLOTS == EARTH_LAYERS,
@@ -126,25 +124,20 @@ pub fn stage_write() {
         0.0
     };
     s[STAGE_AT::CLOUDS] = cloud::clouds_shown();
-    // Out to where the grid's cells one zoom coarser than the ground's leaf begin.
-    s[STAGE_AT::SHADOWS] = if settings.shadows {
-        grid::split_dist(GROUND.cell() - 1)
-    } else {
-        0.0
-    };
+    // Out to where the grid's cells one zoom coarser than the ground's leaf
+    // begin, where the casters are drawn whole and a face's bits read the
+    // leaf's: every effect's one boundary.
+    s[STAGE_AT::EFFECT_REACH] = grid::split_dist(GROUND.cell() - 1);
+    s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
 }
 
 /// `pace` is the frame as the turn paced it, which the world's drawn
 /// resolution is judged by (domain/view/frame/resolution.rs `load`).
 pub fn stage_render(pace: Pace) {
-    // Nothing is drawn before the floor: its arrival asks for the next turn.
-    if load_image(EARTH).is_none() {
-        return;
-    }
     let lists = draw_list().take();
     let actors = lists.stands;
     let models = model::models();
-    // Each decor variant at its draw group (pxl-spec-core scatter.rs `first_group`).
+    // Each decor variant at its draw group (pxl-content scatter.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
     for d in &decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {
@@ -180,7 +173,7 @@ pub fn stage_render(pace: Pace) {
     let eye = o.as_ref().and_then(cast::eye);
     let mut terrain_upload = cast::upload;
     let landed = core::cell::Cell::new(false);
-    let mut terrain_landed = |b: u32, ticket: u32, resident: Resident<'_>| {
+    let mut on_resident = |b: u32, ticket: u32, resident: Resident<'_>| {
         landed.set(true);
         clipmap::on_resident(b, ticket, resident);
     };
@@ -202,17 +195,17 @@ pub fn stage_render(pace: Pace) {
         },
         ground: GroundBricks {
             upload: &mut terrain_upload,
-            landed: &mut terrain_landed,
+            on_resident: &mut on_resident,
             pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
-            scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * HANDED)),
+            scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * FILL_CAP)),
             records: param::WAYS_RECORDS_FIRST_BYTES,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
-            window: clipmap::table(),
+            clipmap: clipmap::table(),
             shards: cast::shards(),
             overwrites: cast::overwrites(),
-            decor: drawn::frame(),
+            decor: gpu::frame(),
             actors,
             ray_counts: settings_store().ray_counts,
         }),
@@ -221,7 +214,7 @@ pub fn stage_render(pace: Pace) {
         admit: boot::admit(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().perf,
-        bounded,
+        bounded_draws: bounded,
         animated,
     });
     // What landed, folded once after all of it, before anything reads a
@@ -234,19 +227,27 @@ pub fn stage_render(pace: Pace) {
     }
     // An image whose texture the frame took needs its file no more.
     api::take_landed(loader::on_image_landed);
-    // The scale the world was drawn at, before a read can move the next one.
-    let scale = resolution::drawn_scale();
+    // The scale and the lattice the world was drawn at, before a read can
+    // move the next.
+    let (scale, lattice) = (resolution::drawn_scale(), f64::from(resolution::lattice()));
     let gpu = out
         .stat
         .as_ref()
         .filter(|stat| stat.gpu_read)
-        .map(|stat| (renderer::px_ms(&stat.gpu_spans), stat.gpu_px));
+        .map(|stat| GpuMeasure {
+            px_ms: renderer::px_ms(&stat.gpu_spans),
+            cell_ms: renderer::cell_ms(&stat.gpu_spans),
+            busy_ms: stat.gpu_busy_ms,
+            px: stat.gpu_px,
+            lattice: stat.gpu_lattice,
+        });
     resolution::load(pace, gpu);
     let Some(stat) = out.stat else {
         set_host_frame(
             out.kind,
             GpuSample {
                 scale,
+                lattice,
                 ..GpuSample::default()
             },
             DeviceSample::default(),
@@ -264,6 +265,7 @@ pub fn stage_render(pace: Pace) {
         out.kind,
         GpuSample {
             scale,
+            lattice,
             draws,
             triangles,
             frame: stat.frame,
@@ -305,9 +307,7 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
     };
 
     // The world gizmo, laid before the frame's list begins, so its lines and the
-    // origin they are drawn about are the same turn's: laid after, a new lane
-    // went up under the last origin, and every rebuild flung the lines by how
-    // far it moved.
+    // origin they are drawn about are the same turn's.
     let show = settings_store().world_gizmo;
     frame_gizmo_step(show, pivot, heading);
     coverage_gizmo_step(show);
@@ -325,10 +325,10 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         // the rays' to cut, and its walk is kept.
         let hide = edits.hide.filter(|&at| {
             crate::domain::query::World::now()
-                .placed(at)
+                .entry_at(at)
                 .is_some_and(|e| object::is_decor(e.state))
         });
-        drawn::step(frame.eye, hide, edits.scattered);
+        gpu::step(frame.eye, hide, edits.scattered_cell);
         cloud::step(draw_list(), &frame, &ctx.pass);
     }
     marker::step(ctx, &frame);

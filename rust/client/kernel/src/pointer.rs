@@ -2,9 +2,9 @@
 
 //! What the pointer is over, decided here alone and in one order: a marker a
 //! tap would act on, drawn over the world, then what the eye's ray meets
-//! first in the world. What is met first takes the pointer, and nothing
-//! behind it is picked, previewed or tapped. The scene and control name
-//! neither the other (domain.rs), so the order is kept above both.
+//! first in the world. What is met first takes the pointer. The scene and
+//! control name neither the other (domain.rs), so the order is kept above
+//! both.
 
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::Q3;
@@ -42,7 +42,7 @@ pub fn hover(x: f64, y: f64) {
 
 /// Whether the pointer is over a marker a tap would act on.
 pub fn over_marker() -> bool {
-    edit::pointed().is_some_and(|[x, y]| marker_at(x, y).is_some())
+    edit::pointer_ndc().is_some_and(|[x, y]| marker_at(x, y).is_some())
 }
 
 /// A tap at `x`, `y`.

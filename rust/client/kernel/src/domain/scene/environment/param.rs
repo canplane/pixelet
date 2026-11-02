@@ -20,8 +20,7 @@ pub const CLOUD_SALT: u32 = 0x0c0c;
 /// The fewest of the view's camera cells a cell of the field spans as it is
 /// drawn: past where it spans fewer, each octave farther shows a quarter of
 /// the clouds, the same quarter at every distance, so a cloud seen nearer
-/// stays. Whole, the field ran to the horizon a cloud a cell, a band of dots.
-/// Set by eye.
+/// stays. Set by eye.
 pub const CLOUD_SPACING_CELLS: f64 = 16.0;
 /// Where the clouds are gone, faded from half of it: a product number.
 pub const CLOUD_GONE_KM: f64 = 64.0;

@@ -25,9 +25,9 @@ fn keeps_at_most() {
         7,
         &mut |record, _| {
             if record == 0 {
-                Offered::Taken
+                Uptake::Taken
             } else {
-                Offered::Uploads
+                Uptake::Kept
             }
         },
         &|_| true,
@@ -39,7 +39,7 @@ fn keeps_at_most() {
     );
     k.keep(Some(3), block(), 2);
     assert_eq!(k.cnt(), 2, "room again once one is taken");
-    k.send(7, &mut |_, _| Offered::Taken, &|_| true);
+    k.send(7, &mut |_, _| Uptake::Taken, &|_| true);
     assert_eq!(k.cnt(), 0);
 }
 
@@ -54,7 +54,7 @@ fn full_stream_frees_unwanted() {
         3,
         &mut |record, _| {
             offered.push(record);
-            Offered::Full
+            Uptake::Full
         },
         &|record| record == 2,
     );

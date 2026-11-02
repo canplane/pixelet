@@ -7,13 +7,13 @@ use core::panic::Location;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
-use crate::sys::io::room::Refused;
+use crate::sys::io::file::Opened;
+use crate::sys::io::room::Refusal;
 
 pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
 
 /// Why a task failed, as numbers the statistics count by. A kernel-made
-/// failure carries its source location: EBADMSG alone does not say which
-/// rule a body broke.
+/// failure carries its source location.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Failure {
     pub errnum: Errno,
@@ -28,6 +28,22 @@ impl From<Errno> for Failure {
             errnum,
             detail: 0,
             at: Some(Location::caller()),
+        }
+    }
+}
+
+/// An open that came to no bytes, as its run's failure.
+impl From<Opened> for Failure {
+    #[track_caller]
+    fn from(opened: Opened) -> Failure {
+        match opened {
+            Opened::Failed { errnum, detail } => Failure {
+                errnum,
+                detail: detail as u16,
+                at: None,
+            },
+            Opened::Absent => Failure::from(Errno::ENOENT),
+            Opened::Bytes(_) => Failure::from(Errno::ENOTRECOVERABLE),
         }
     }
 }
@@ -51,8 +67,8 @@ pub enum Ended {
     Failed(Failure),
     /// Its body was refused room, by the heap or the body slots: no failure
     /// of the object's or the server's, and over once what refused it gives
-    /// some back (`Refused::over`).
-    Refused(Refused),
+    /// some back (`Refusal::over`).
+    Refused(Refusal),
 }
 
 impl Ended {

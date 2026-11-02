@@ -17,7 +17,7 @@
     reason = "generated from the spec"
 )]
 
-pub const STREAM_NAMES: usize = 5;
+pub const STREAM_NAMES: usize = 6;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StreamName {
@@ -26,16 +26,18 @@ pub enum StreamName {
     division = 2,
     asset = 3,
     earth = 4,
+    object = 5,
 }
 
 impl StreamName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [StreamName; 5] = [
+    pub const ALL: [StreamName; 6] = [
         StreamName::terrain,
         StreamName::place,
         StreamName::division,
         StreamName::asset,
         StreamName::earth,
+        StreamName::object,
     ];
 
     /// The member a number names, or none for a number the set does not

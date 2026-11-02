@@ -55,7 +55,6 @@ pub const PREVIEWS_MAX: usize = surface::SURFACES;
 
 /// Replaces a preview already open under `id`. False where `id` names no
 /// surface or no character.
-/// On a live surface; false for a character there is none of.
 pub fn preview_open(id: u32, group: Group, number: u8) -> bool {
     preview_close(id);
     let Some(character) = Character::of(group, number) else {

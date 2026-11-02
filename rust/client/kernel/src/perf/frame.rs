@@ -5,7 +5,7 @@
 use core::mem::{offset_of, size_of};
 
 use crate::sys::sched::phase_spec::PHASES;
-use pxl_spec_core::tally;
+use pxl_engine::tally;
 
 use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
 use crate::perf::word::{as_words, as_words_mut, words, Words};
@@ -28,8 +28,11 @@ pub struct GpuSample {
     pub spans: [f64; GPU_SPANS],
     pub busy_ms: f64,
     pub px: f64,
-    /// The share of the display's pixels, each way, the world was drawn at.
+    /// The share of the display's pixels, each way, the world was drawn at,
+    /// and the camera grid's lattice its beam rays and cells were laid on,
+    /// in cells a side (pxl-kernel domain/view/frame/resolution.rs).
     pub scale: f64,
+    pub lattice: f64,
     /// The frame's draws and their triangles, every pipeline a draw names
     /// (pxl-render renderer.rs `FrameStat::draws`, summed).
     pub draws: f64,
@@ -97,7 +100,7 @@ pub struct FrameSample {
     /// (record.rs `perf_record_rays`).
     pub rays: RaySample,
     /// The terrain tiles the tile cache took in during the frame turn.
-    pub tiles_landed: f64,
+    pub terrain_landed: f64,
     pub device: DeviceSample,
     /// The heap's high-water mark (xpute-guest mem/heap.rs `HeapStat`).
     pub heap_used_bytes: f64,
@@ -106,9 +109,9 @@ pub struct FrameSample {
 /// The `ray_counts` setting's counts of one frame, as the renderer hands
 /// them (pxl-render gpu/ray/tally.rs `RayCounts`), in perf.json FRAME's
 /// `rays` group's order: whether the eye cast in full, its pixels and its
-/// lanes; whether the light's map cast, and its lanes (pxl-spec-core
-/// `tally`). The light's slots are its map's, the same every cast, and
-/// left out.
+/// lanes; whether the light's map cast, its slots and its lanes
+/// (pxl-engine `tally`). What an observer took, walked and took the sky
+/// for is what it cast again, of its pixels or slots.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RaySample {
@@ -119,13 +122,16 @@ pub struct RaySample {
     pub eye_miss: f64,
     pub eye_took: f64,
     pub eye_walked: f64,
+    pub eye_sky: f64,
     pub eye_boxes: f64,
     pub light_cast: f64,
+    pub light_rays: f64,
     pub light_beam: f64,
     pub light_sample: f64,
     pub light_miss: f64,
     pub light_took: f64,
     pub light_walked: f64,
+    pub light_sky: f64,
     pub light_boxes: f64,
 }
 
@@ -143,13 +149,16 @@ impl RaySample {
             eye_miss: lane(eye, tally::MISS),
             eye_took: lane(eye, tally::TOOK),
             eye_walked: lane(eye, tally::WALKED),
+            eye_sky: lane(eye, tally::SKY),
             eye_boxes: lane(eye, tally::BOXES),
             light_cast: at(light, ray::CAST),
+            light_rays: at(light, ray::RAYS),
             light_beam: lane(light, tally::BEAM),
             light_sample: lane(light, tally::SAMPLE),
             light_miss: lane(light, tally::MISS),
             light_took: lane(light, tally::TOOK),
             light_walked: lane(light, tally::WALKED),
+            light_sky: lane(light, tally::SKY),
             light_boxes: lane(light, tally::BOXES),
         }
     }
@@ -202,10 +211,11 @@ words!(FrameSample, FRAME::WORDS,
     perf_ms => FRAME::perf_ms, effects => FRAME::effects,
     kind => FRAME::kind_name, wake => FRAME::wake_name,
     gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.busy_ms => FRAME::gpu_busy_ms, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
+    gpu.lattice => FRAME::lattice,
     gpu.draws => FRAME::draws, gpu.triangles => FRAME::triangles, gpu.frame => FRAME::gpu_frame,
     gpu.light_moved => FRAME::light_moved, gpu.decor_boxes => FRAME::decor_boxes,
     rays => FRAME::eye_cast,
-    tiles_landed => FRAME::tiles_landed,
+    terrain_landed => FRAME::terrain_landed,
     device.uploads => FRAME::uploads, device.uploads_bytes => FRAME::uploads_bytes, device.pack_bytes => FRAME::pack_bytes,
     heap_used_bytes => FRAME::heap_used_bytes,
 );
@@ -215,11 +225,13 @@ words!(RaySample, FRAME_GROUP::rays,
     eye_cast => 0, eye_rays => FRAME::eye_rays - FRAME::eye_cast,
     eye_beam => FRAME::eye_beam - FRAME::eye_cast, eye_sample => FRAME::eye_sample - FRAME::eye_cast,
     eye_miss => FRAME::eye_miss - FRAME::eye_cast, eye_took => FRAME::eye_took - FRAME::eye_cast,
-    eye_walked => FRAME::eye_walked - FRAME::eye_cast, eye_boxes => FRAME::eye_boxes - FRAME::eye_cast,
-    light_cast => FRAME::light_cast - FRAME::eye_cast, light_beam => FRAME::light_beam - FRAME::eye_cast,
+    eye_walked => FRAME::eye_walked - FRAME::eye_cast, eye_sky => FRAME::eye_sky - FRAME::eye_cast,
+    eye_boxes => FRAME::eye_boxes - FRAME::eye_cast,
+    light_cast => FRAME::light_cast - FRAME::eye_cast, light_rays => FRAME::light_rays - FRAME::eye_cast,
+    light_beam => FRAME::light_beam - FRAME::eye_cast,
     light_sample => FRAME::light_sample - FRAME::eye_cast, light_miss => FRAME::light_miss - FRAME::eye_cast,
     light_took => FRAME::light_took - FRAME::eye_cast, light_walked => FRAME::light_walked - FRAME::eye_cast,
-    light_boxes => FRAME::light_boxes - FRAME::eye_cast,
+    light_sky => FRAME::light_sky - FRAME::eye_cast, light_boxes => FRAME::light_boxes - FRAME::eye_cast,
 );
 
 words!(WorstFrame, WORST::WORDS,
@@ -234,8 +246,7 @@ pub const EFFECTS: usize = spec::EFFECT_NAMES;
 /// paced one by half a refresh or more, so it landed a refresh late at least.
 /// Half a refresh is the jitter the host's pacing allows a frame, skipping
 /// one nearer the last turn than the paced interval less that (xpute host
-/// sched/strobe.ts `turn`). Still frames take a larger budget on purpose, and
-/// a repeated image is no visible stutter.
+/// sched/strobe.ts `turn`).
 pub fn is_missed(f: &FrameSample) -> bool {
     f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
 }
@@ -245,15 +256,14 @@ pub fn overran(f: &FrameSample) -> bool {
     f.tick_ms > f.budget_ms + tick::HARD_SLACK_MS
 }
 
-/// What the interval's turns ran past it, read off the interval and the
-/// turns rather than kept beside them.
+/// What the interval's turns ran past it.
 pub fn over_ms(f: &FrameSample) -> f64 {
     (f.busy_ms - f.interval_ms).max(0.0)
 }
 
 /// What the interval's turns spent outside every part measured of them: the
 /// door's commands, its pump and the turns' own rise and fall.
-pub fn unmeasured(f: &FrameSample) -> f64 {
+pub fn unmeasured_ms(f: &FrameSample) -> f64 {
     (f.busy_ms - f.effects_ms - f.tick_ms - f.stage_ms - f.tasks_ms - f.perf_ms).max(0.0)
 }
 

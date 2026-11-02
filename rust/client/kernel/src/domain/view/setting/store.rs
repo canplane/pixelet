@@ -12,7 +12,7 @@
 //! its default.
 
 pub use crate::domain::view::setting::schema_spec::{
-    AoMode, CameraMode, OrbitObstacleMode, ResMode, SettingKey, SettingKind, Settings,
+    AoMode, CameraMode, OrbitObstacleMode, ResMode, SettingKey, Settings,
 };
 use crate::sys::io::file::{self, StorageFile, StorageRead};
 use xpute_guest::global::Global;
@@ -56,7 +56,7 @@ impl Settings {
         Some(true)
     }
 
-    fn stored(&self) -> Vec<u8> {
+    fn storage_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         for key in SettingKey::ALL {
             let val = self.get(key);
@@ -100,8 +100,8 @@ static SETTINGS_STORE: Global<Settings> = Global::new();
 /// of changes costs the host stream one file, whatever their number.
 static UNKEPT: Global<bool> = Global::new();
 
-/// The store against its storage file, opened on the storage root as the
-/// objects' is (domain/layer/object/repository.rs). Until the slot is read
+/// The store against its storage file, opened on the storage root
+/// (sys/io/file.rs `StorageFile`). Until the slot is read
 /// the store holds the defaults and nothing is written over it.
 #[derive(Clone, Copy, PartialEq)]
 enum Load {
@@ -168,7 +168,7 @@ pub fn on_settings_emptied() {
 /// Only a slot read is written; a refused or unreadable one holds its changes.
 pub fn settings_keep_step() {
     if *load() == Load::Loaded && core::mem::take(UNKEPT.get(|| false)) {
-        file::write_storage(StorageFile::Settings, &settings_store().stored());
+        file::write_storage(StorageFile::Settings, &settings_store().storage_bytes());
     }
 }
 

@@ -9,9 +9,11 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use pxl_spec::bake::constant::EntryAt;
 
-use super::changed::Columns;
+use super::changes::Columns;
 use crate::domain::layer::object::store;
+use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::object::store::{Store, Walk};
+use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
@@ -28,7 +30,7 @@ pub struct World<'a> {
     /// through decor.
     pub(super) decor: bool,
     /// Whether it is unplaced, nothing placed asked of it: the ground's alone
-    /// (pxl-spec-core `world::Inherited::unplaced`).
+    /// (pxl-engine `world::Inheritance::UNPLACED`).
     pub(super) unplaced: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
@@ -69,9 +71,9 @@ impl<'a> World<'a> {
     }
 
     /// As it is unplaced: nothing placed and no preview's cuts asked of it,
-    /// the ground's alone, which decor generates on (pxl-spec-core
-    /// `generated::DecorQuery::column_surface`).
-    pub(super) fn unplaced(self) -> World<'a> {
+    /// the ground's alone, which decor generates on (pxl-engine
+    /// `generation::DecorQuery::column_surface`).
+    pub(super) fn ground_only(self) -> World<'a> {
         World {
             unplaced: true,
             hide: None,
@@ -119,7 +121,7 @@ impl<'a> World<'a> {
 /// the ground's lines and the objects' tree, each stepped down from where
 /// the last left off. Good while neither moves.
 #[derive(Default)]
-pub struct Walked {
+pub struct ColumnWalk {
     ground: Lines,
     object: Walk,
 }
@@ -127,7 +129,12 @@ pub struct Walked {
 impl World<'_> {
     /// Where the ground and what is placed stand in the node, as its cells
     /// at `cell` are read; each stepped from where `walked` last went.
-    pub fn bounds(&self, walked: &mut Walked, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
+    pub fn bounds(
+        &self,
+        walked: &mut ColumnWalk,
+        node: Node<2>,
+        cell: Zoom,
+    ) -> Answer<Option<Aabb>> {
         let object = self.object.column(&mut walked.object, node);
         self.terrain
             .bound_walked(&mut walked.ground, node, cell)

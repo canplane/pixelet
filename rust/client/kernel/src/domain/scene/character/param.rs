@@ -12,8 +12,7 @@ pub const CATCHUP_DURATION_S: f64 = 0.6;
 
 pub const SETTLE_DELAY_S: f64 = 0.15;
 
-/// A line hangs this far over the model's bounding box: a fixed clearance,
-/// not a multiplier of its height.
+/// A line hangs this far over the model's bounding box: a fixed clearance.
 pub const HEAD_CLEARANCE_U: f64 = 0.22;
 
 /// Under one GPS fix's travel at a walking pace, a fix a second at 1.4 m/s,

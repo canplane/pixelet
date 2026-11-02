@@ -8,7 +8,7 @@ use xpute_guest::clock;
 /// The zone laid by asking the ground for every box and again for each of
 /// its four sides, what `lay_zone` must lay the same bytes as.
 fn laid_asking_each(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) -> Vec<f32> {
-    let mut lane = Vec::new();
+    let mut instances = Vec::new();
     let cell = units(GROUND.cell());
     let mut box_at = |off: V3| {
         let v = v3::add(&center_pos, &off);
@@ -27,7 +27,7 @@ fn laid_asking_each(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) 
             | side(2, [0.0, 1.0])
             | side(3, [0.0, -1.0])
             | 1 << 4;
-        lane.extend([
+        instances.extend([
             v[0] as f32,
             v[1] as f32,
             v[2] as f32,
@@ -38,7 +38,7 @@ fn laid_asking_each(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) 
             open as f32,
         ]);
     }
-    lane
+    instances
 }
 
 /// A rough ground over the cell a point is in: steps up and down, a fraction
@@ -55,7 +55,7 @@ fn zone_cells_once() {
     let cell = units(GROUND.cell());
     for center in [[0.0, 0.0, 3.0], [10.0, -7.0, 5.0], [-123.0, 456.0, -2.0]] {
         let center = center.map(|v| v * cell);
-        let (mut asked, mut rise, mut lane) = (0, Vec::new(), Vec::new());
+        let (mut asked, mut rise, mut instances) = (0, Vec::new(), Vec::new());
         lay_zone(
             center,
             |at| {
@@ -63,11 +63,11 @@ fn zone_cells_once() {
                 rough(at)
             },
             &mut rise,
-            &mut lane,
+            &mut instances,
         );
         let before = laid_asking_each(center, rough);
         assert_eq!(
-            lane.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            instances.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
             before.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
             "about {center:?}"
         );
@@ -96,7 +96,7 @@ fn beacon_holds_on_stall() {
         zone: Some(Zone {
             center: [0.0; 3],
             target: [0.0; 2],
-            shown: None,
+            beacon_at: None,
             night: false,
             time: 0.0,
             run: 0.0,

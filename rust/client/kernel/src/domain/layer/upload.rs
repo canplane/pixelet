@@ -20,11 +20,11 @@ enum Frame {
 
 /// What became of a packet offered to the turn's stream.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Offered {
+pub enum Uptake {
     /// Taken whole: freed.
     Taken,
     /// Taken in part, the rest a later turn's: kept, and the next offered.
-    Uploads,
+    Kept,
     /// The stream ran out: kept, and nothing more offered this turn.
     Full,
 }
@@ -97,7 +97,7 @@ impl Uploads {
     pub fn send(
         &mut self,
         on: u32,
-        send: &mut dyn FnMut(u32, &[u8]) -> Offered,
+        send: &mut dyn FnMut(u32, &[u8]) -> Uptake,
         wanted: &dyn Fn(u32) -> bool,
     ) {
         let mut full = false;
@@ -114,9 +114,9 @@ impl Uploads {
                 continue;
             }
             match send(record as u32, body(block)) {
-                Offered::Full => full = true,
-                Offered::Uploads => {}
-                Offered::Taken => {
+                Uptake::Full => full = true,
+                Uptake::Kept => {}
+                Uptake::Taken => {
                     release(Some(block));
                     *frame = Frame::Sent(on);
                     self.waiting -= 1;

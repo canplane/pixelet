@@ -3,8 +3,7 @@
 //! Decor's tiers: by how much a kind covers, a model, an impostor or culled.
 
 /// A decor kind is drawn as a model while it spans at least this share of a
-/// camera grid cell: by eye, where Google's maps stop drawing buildings in
-/// 3D.
+/// camera grid cell: set by eye.
 pub const DECOR_MODEL_CELLS: f64 = 1.0;
 
 /// Under this share of a camera grid cell a decor kind's impostor is not drawn:

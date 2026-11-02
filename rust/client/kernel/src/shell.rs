@@ -17,7 +17,7 @@ use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::{
     CompanionState, DivisionPart, GroundStatus, LangName, LocationState, LonLat, Message,
-    OrientationState, PivotState, Snapshot, ToolState,
+    OrientationState, PivotState, RefusedFile, Snapshot, ToolState,
 };
 use crate::domain::control::edit::write;
 use crate::domain::control::edit::{tool, Tool};
@@ -27,6 +27,7 @@ use crate::domain::control::sensor::reading::{
     device_location_store, device_orient_store, SensorState,
 };
 use crate::domain::layer::division::{each_division, naming};
+use crate::domain::layer::object::repository;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::preview::{preview_rows, PREVIEWS_MAX};
 use crate::domain::scene::stage::is_screen_drawn;
@@ -35,14 +36,16 @@ use crate::domain::view::observation;
 use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
 use crate::pointer;
 use crate::sys::io::file::{self, StorageFile};
+use crate::sys::io::host_spec::root;
 use crate::sys::io::request;
 use crate::sys::io::source;
+use pxl_render::gpu::renderer::renderer_progress;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::status::errno::Errno;
 
 /// The pivot's division and each above it, broad to narrow. Every language
-/// is sent, so switching language re-reads rather than refetches. A name
+/// is sent. A name
 /// shows where a logical pixel, `u_per_px` wide, is no wider than a cell at
 /// the zoom it shows from (`Division::shown_from`).
 fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&DivisionPart<'_>)) {
@@ -65,9 +68,9 @@ fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&
 
 /// What the snapshot is made of, read off its owners: where the names are
 /// read (`division::naming`) rather than the names, and the waiting
-/// marker's text aside (`Sent`).
+/// marker's text aside (`SnapshotMemo`).
 #[derive(Clone, Copy, PartialEq)]
-pub struct Shown {
+pub struct SnapshotInputs {
     status: GroundStatus,
     is_off_center: bool,
     pivot: Option<Q3>,
@@ -90,11 +93,17 @@ pub struct Shown {
     previews: ([u32; PREVIEWS_MAX], usize),
     stall: Option<Message>,
     declared: bool,
-    /// The refused storage files, the first `.1` of them.
-    storage_refused: ([u32; StorageFile::ALL.len()], usize),
+    /// The refused files by root and number, the first `.1` of them.
+    refused_files: ([(u32, u64); REFUSED_SHOWN], usize),
+    renderer_progress: f64,
 }
 
-fn shown() -> Shown {
+/// The refused files a snapshot names at once: every storage file, and as
+/// many of the objects' as the view asks for at once; the rest are named as
+/// the host empties those.
+const REFUSED_SHOWN: usize = StorageFile::ALL.len() + repository::WANTS as usize;
+
+fn snapshot_inputs() -> SnapshotInputs {
     let (location, settings) = (device_location_store(), settings_store());
     let pivot = controller::pivot();
     let mut previews = ([0u32; PREVIEWS_MAX], 0);
@@ -102,7 +111,7 @@ fn shown() -> Shown {
         *slot = surface;
         previews.1 += 1;
     }
-    Shown {
+    SnapshotInputs {
         // Shown once a frame went to the screen over a view whose tiles all
         // show, if coarser: a finer tile asked for as the eye moves is not
         // the area loading, and would flash its toast each time.
@@ -135,37 +144,42 @@ fn shown() -> Shown {
         previews,
         stall: stall(),
         declared: source::top().is_some(),
-        storage_refused: {
-            let mut refused = ([0; StorageFile::ALL.len()], 0);
-            for file in StorageFile::ALL
+        refused_files: {
+            let stored = StorageFile::ALL
                 .into_iter()
                 .filter(|&k| file::is_refused(k))
-            {
-                refused.0[refused.1] = file.slot();
+                .map(|k| (root::STORAGE, u64::from(k.slot())));
+            let objects = repository::refused_files()
+                .iter()
+                .map(|&n| (root::OBJECT, n));
+            let mut refused = ([(0, 0); REFUSED_SHOWN], 0);
+            for (at, file) in refused.0.iter_mut().zip(stored.chain(objects)) {
+                *at = file;
                 refused.1 += 1;
             }
             refused
         },
+        renderer_progress: renderer_progress(),
     }
 }
 
 /// The snapshot last sent, which a new one is sent only where it moved
 /// from: its makings and the marker draft's text.
 #[derive(Default)]
-pub struct Sent {
-    shown: Option<Shown>,
+pub struct SnapshotMemo {
+    last_inputs: Option<SnapshotInputs>,
     text: String,
 }
 
-impl Sent {
+impl SnapshotMemo {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
-    pub fn take_moved(&mut self) -> Option<Shown> {
-        let (now, text) = (shown(), write::marker_draft().unwrap_or_default());
-        if self.shown == Some(now) && self.text == text {
+    pub fn take_moved(&mut self) -> Option<SnapshotInputs> {
+        let (now, text) = (snapshot_inputs(), write::marker_draft().unwrap_or_default());
+        if self.last_inputs == Some(now) && self.text == text {
             return None;
         }
-        self.shown = Some(now);
+        self.last_inputs = Some(now);
         self.text.clear();
         self.text.push_str(text);
         Some(now)
@@ -173,7 +187,7 @@ impl Sent {
 }
 
 /// The snapshot made of `shown` into `out`; none where it does not fit.
-pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
+pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
     let tool = shown.tool;
     let snapshot = Snapshot {
         pivot: PivotState {
@@ -219,12 +233,17 @@ pub fn ui_snapshot(shown: &Shown, out: &mut [u8]) -> Option<u32> {
         m_per_px: m_per_px(shown.u_per_px, shown.pivot),
         division: &|each| division_parts(shown.division, shown.u_per_px, each),
         previews: &shown.previews.0[..shown.previews.1],
-        storage_refused: &shown.storage_refused.0[..shown.storage_refused.1],
+        refused_files: &|each| {
+            for (root, path) in &shown.refused_files.0[..shown.refused_files.1] {
+                each(&RefusedFile { root: *root, path });
+            }
+        },
         stall: shown.stall,
+        renderer_progress: shown.renderer_progress,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);
-    w.fitted()
+    w.fit_len()
 }
 
 /// Why the server does not answer the world's reads now: failing, or given up.

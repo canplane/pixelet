@@ -1,9 +1,9 @@
 // pxl-kernel/domain/view/setting/store.test.rs
 
 use super::*;
+use crate::domain::view::setting::schema_spec::SettingKind;
 use crate::sys;
 use crate::sys::io::host;
-use base64::engine::general_purpose;
 use xpute_kit::status::errno::Errno;
 
 fn storage_of(pairs: &[(u32, u32)]) -> Vec<u8> {
@@ -32,13 +32,13 @@ fn stored_round_trip() {
             && s.set(SettingKey::ao, ao)
             && s.set(SettingKey::person, person)
     );
-    let kept = s.stored();
+    let kept = s.storage_bytes();
     let back = read_stored(&kept);
     for key in SettingKey::ALL {
         assert_eq!(back.get(key), s.get(key), "{key:?} read back from {kept:?}");
     }
     assert!(
-        Settings::DEFAULT.stored().is_empty(),
+        Settings::DEFAULT.storage_bytes().is_empty(),
         "the defaults keep nothing"
     );
 }
@@ -52,7 +52,7 @@ fn stored_pair_format() {
     let mut s = Settings::DEFAULT;
     assert!(s.set(SettingKey::ao, ao as u32));
     assert_eq!(
-        s.stored(),
+        s.storage_bytes(),
         storage_of(&[(SettingKey::ao as u32, ao as u32)])
     );
 }
@@ -115,7 +115,10 @@ fn session_setting_not_stored() {
     for &key in &session {
         assert!(s.set(key, other(key)));
     }
-    assert!(s.stored().is_empty(), "nothing of {session:?} is kept");
+    assert!(
+        s.storage_bytes().is_empty(),
+        "nothing of {session:?} is kept"
+    );
     let back = read_stored(&storage_of(
         &session
             .iter()
@@ -137,10 +140,9 @@ fn session_setting_not_stored() {
 
 /// What storage holds of the slot, as the host hands it over.
 fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
-    use base64::Engine;
     let mut bytes = vec![StorageFile::Settings.format()];
     bytes.extend(storage_of(pairs));
-    general_purpose::URL_SAFE_NO_PAD.encode(bytes).into_bytes()
+    bytes
 }
 
 /// The slot opened at boot, with nothing waiting and nothing to keep.

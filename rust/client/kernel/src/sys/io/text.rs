@@ -10,7 +10,8 @@ use std::collections::hash_map::Entry;
 use fnv::FnvHashMap;
 
 use pxl_render::gpu::atlas::ATLAS_SCALE;
-use pxl_render::gpu::text::{raster_box, Font, Raster};
+use pxl_render::gpu::text::{raster_box, Raster};
+use pxl_render::look::marker::Font;
 use xpute_guest::mem::off_of_slice;
 
 use crate::sys::io::host::call_now;

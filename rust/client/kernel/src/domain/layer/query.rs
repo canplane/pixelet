@@ -11,8 +11,7 @@
 //!
 //! The decision's two forms are these two methods' readers: the first hit
 //! along a direction is a descent over `bound`, and a value at a point is
-//! the asset in the world's cell there (domain/query/node.rs `World::asset`). No third query
-//! is written beside them. A
+//! the asset in the world's cell there (domain/query/node.rs `World::asset`). A
 //! descent carries a cursor from each node to its children, so a step reads
 //! only what is new there; a node asked alone is the same descent folded to
 //! it (`bounds`).
@@ -23,8 +22,9 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use super::answer::Answer;
 
-/// The terrain's or the object store's answers, by the node asked.
-pub trait Query {
+/// The terrain's or the object store's answers, by the node asked. Read by
+/// the world's query alone (domain/query.rs); every reader asks the world.
+pub(in crate::domain) trait Query {
     /// What a descent carries from a node to its children.
     type Cursor: Copy;
 
@@ -52,6 +52,7 @@ pub trait Query {
         cell: Zoom,
     ) -> Answer<Option<Aabb>>;
 
+    #[cfg(test)]
     fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Aabb>> {
         self.bound(&self.cursor(node, cell), node, cell)
     }

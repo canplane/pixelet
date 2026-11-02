@@ -47,3 +47,7 @@ impl Load {
 /// The files that can be in flight at once: a slot's each, which is wanted
 /// as one kind, the catalog and the sphere.
 pub const LOAD_FILES: usize = SLOTS + 2;
+
+/// The models that can register at once, each in its own task: one a slot,
+/// the most `model_of` starts (domain/scene/model/asset.rs).
+pub const REGISTRATIONS: usize = SLOTS;

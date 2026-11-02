@@ -11,12 +11,12 @@ mod executor;
 pub mod layout;
 /// The ports at the kernel's far side, generated from port.json.
 #[path = "door/port.spec.rs"]
-pub mod port;
+pub(crate) mod port;
 /// The toc's keys, generated from toc.json.
 #[path = "door/toc.spec.rs"]
-pub mod toc;
+pub(crate) mod toc;
 
-use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, ShellSnapshotEvent};
+use crate::domain::control::cmd::{Sensor, SensorStartEvent, SensorStopEvent, ShellSnapshotEvent};
 use crate::domain::control::sensor;
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
@@ -24,7 +24,7 @@ use crate::door::toc::key::GPU_STREAM;
 use crate::perf::record::perf_record_turn;
 use crate::perf::spec::Wake;
 use crate::shell;
-use crate::shell::Sent;
+use crate::shell::SnapshotMemo;
 use crate::sys::boot;
 use crate::sys::io::dispatch;
 use crate::sys::io::file;
@@ -35,8 +35,6 @@ use crate::sys::io::text;
 use crate::sys::mem::section;
 use crate::sys::mem::spec;
 use crate::sys::sched::edge;
-use crate::sys::stop;
-use crate::sys::stop::PanicHook;
 use crate::turn;
 use pxl_render::gpu::api;
 use pxl_render::gpu::renderer;
@@ -50,11 +48,11 @@ use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc, Entry};
 use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_guest::mem::{self, off_of_slice};
 use xpute_guest::sched::task;
-use xpute_kit::wire::xtp::PacketWriter;
+use xpute_guest::stop::{self, PanicHook};
 
 struct State {
     /// The UI snapshot last posted; one is posted only where it moved.
-    sent: Sent,
+    last_snapshot: SnapshotMemo,
     /// A UI command was applied this turn, so its falling edge posts to the shell.
     asked: bool,
 }
@@ -89,16 +87,11 @@ const _: () = assert!(
     "a full submission ring's replies and the turn's events do not fit the completion ring"
 );
 
-/// An event for the port `to` (port.json).
-fn raise(to: u32, cmd: Command, cnt: u32, f: impl Fn(&mut PacketWriter)) {
-    door().raise(to, cmd as u32, cnt, f);
-}
-
 static STATE: Global<State> = Global::new();
 
 fn state() -> &'static mut State {
     STATE.get(|| State {
-        sent: Default::default(),
+        last_snapshot: Default::default(),
         asked: false,
     })
 }
@@ -106,8 +99,7 @@ fn state() -> &'static mut State {
 /// xpute's two rings and the host's stream, and the GPU stream.
 const TOC_ENTRIES: usize = 4;
 
-/// A case lives on its surface, so it goes with it: a preview never closed
-/// held its actor for good.
+/// A case lives on its surface, so it goes with it.
 fn close_surface(handle: u32) {
     if let Some(closed) = surface::surface_close(handle) {
         renderer::on_surface_closed(closed);
@@ -127,7 +119,7 @@ fn on_host_attached(s: &mut State) {
     }
     sensor::sensors_close();
     text::text_forget();
-    s.sent = Default::default();
+    s.last_snapshot = Default::default();
 }
 
 /// First turn: lays out memory and writes the toc at TOC_AT.
@@ -135,7 +127,7 @@ fn boot(b: BootInfo, panic_hook: Option<PanicHook>, admit: Admit) {
     boot::set(b);
     boot::set_admit(admit);
     executor::install();
-    stop::install(panic_hook);
+    stop::install(host::abort, panic_hook);
     let gpu_stream = layout::install(&b);
     // A layer asks for no more tiles than its tile cache's slots.
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slots));
@@ -232,24 +224,21 @@ fn post_shell(s: &mut State) {
         take_geolocation_command, GeolocationCommand,
     };
 
-    let sensor = |cmd: Command, sensor: Sensor| {
-        raise(port::SHELL, cmd, SensorStartEvent::FIELDS, |w| {
-            SensorStartEvent { sensor }.write(w);
-        });
-    };
+    let start = |sensor: Sensor| door().raise_to(port::SHELL, &SensorStartEvent { sensor });
+    let stop = |sensor: Sensor| door().raise_to(port::SHELL, &SensorStopEvent { sensor });
     if let Some(c) = take_geolocation_command() {
         match c {
-            GeolocationCommand::Start => sensor(Command::SENSOR_START, Sensor::Geolocation),
-            GeolocationCommand::Stop => sensor(Command::SENSOR_STOP, Sensor::Geolocation),
+            GeolocationCommand::Start => start(Sensor::Geolocation),
+            GeolocationCommand::Stop => stop(Sensor::Geolocation),
         }
     }
     if let Some(c) = take_orient_command() {
         match c {
-            OrientationCommand::Listen => sensor(Command::SENSOR_START, Sensor::Orientation),
-            OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),
+            OrientationCommand::Listen => start(Sensor::Orientation),
+            OrientationCommand::Remove => stop(Sensor::Orientation),
         }
     }
-    if let Some(shown) = s.sent.take_moved() {
+    if let Some(shown) = s.last_snapshot.take_moved() {
         let buf = SNAPSHOT.get(Vec::new);
         let len = loop {
             if let Some(len) = shell::ui_snapshot(&shown, buf) {
@@ -258,16 +247,11 @@ fn post_shell(s: &mut State) {
             let room = (buf.len() * 2).max(PAGE_BYTES as usize);
             buf.resize(room, 0);
         };
-        let event = ShellSnapshotEvent {
-            at: off_of_slice(&raw const buf[..]) as u32,
-            len,
-        };
-        raise(
+        door().raise_to(
             port::SHELL,
-            Command::SHELL_SNAPSHOT,
-            ShellSnapshotEvent::FIELDS,
-            |w| {
-                event.write(w);
+            &ShellSnapshotEvent {
+                at: off_of_slice(&raw const buf[..]) as u32,
+                len,
             },
         );
     }

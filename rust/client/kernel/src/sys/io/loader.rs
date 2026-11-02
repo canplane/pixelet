@@ -24,7 +24,7 @@ use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use xpute_guest::sched::edge::{next_turn, yield_if_spent};
 
 use crate::sys::io::demand::Ask;
-use crate::sys::io::failure::Ended;
+use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::file::{self, Opened, Owner};
 use crate::sys::io::host_spec::{root, CATALOG, SPHERE};
 use crate::sys::io::request::{attempt_of, settle, Credit};
@@ -34,7 +34,7 @@ use crate::sys::sched::edge::TaskPriority;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::tile;
 use xpute_guest::global::Global;
@@ -42,8 +42,7 @@ use xpute_guest::sched::task;
 
 /// `Arrived` exists because the read's credit is released when the bytes
 /// land (parsing is not I/O and would starve tile reads), but the asset is
-/// not usable yet. Without it, "not usable" read as "not asked for" and one
-/// model was re-read 38 times, once a turn, for as long as its parse took.
+/// not usable yet.
 enum Entry {
     Pending,
     /// Its bytes in its arrival's task, being taken in.
@@ -205,7 +204,7 @@ pub fn cancel_asset(key: u64) -> bool {
 /// where the heap refuses them room, the want waits for room.
 pub fn on_opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {
-        on_load_rejected(key, Ended::Failed(opened.failure()));
+        on_load_rejected(key, Ended::Failed(Failure::from(opened)));
         return;
     };
     let Some(what) = attempt_of(key).and_then(|(_, subject)| of_subject(subject)) else {
@@ -239,7 +238,7 @@ fn on_image_arrived(load: Load, file: Vec<u8>) {
 }
 
 /// The catalog's bytes, read: kept where they read as the compiled slots,
-/// else its failure, final, since asking again returns the same bytes.
+/// else its failure, final.
 fn on_catalog_arrived(load: Load, file: &[u8]) {
     let read = Catalog::read(file);
     *loader().at(LoadKind::Catalog, load) = Some(if read.is_some() {

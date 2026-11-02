@@ -10,22 +10,29 @@
 //! A cell is what the cast draws, by one rule, so picks and column surface stand
 //! on what is on screen. A node coarser than asked is not what is drawn
 //! there: it is asked only whether anything under it fills, at any zoom.
+//!
+//! The query is the only reader of a layer (ARCHITECTURE.md, "The query, the
+//! only seam"): the layers' reads (`Query`, `TerrainQuery`, `ObjectQuery`,
+//! `CpuClipmap`, the ways' pool) are named here and in the layers alone, and
+//! none is re-exported (pxl-tool check_rules.rs `LAYER_READERS`). A public
+//! `World` function answers from the composed world; one layer's answer
+//! alone (`surface_of`) stays inside the query.
 
-pub mod changed;
+pub mod changes;
 pub mod decor;
+mod entry;
 mod limit;
 mod node;
 mod place;
-mod placed;
 mod ray;
 mod scatter;
 mod support;
 mod surface;
 mod world;
 
-pub use ray::{asked, at_zoom, by_dist, cell_zoom_at, held, Hit, HitKind, Ray};
+pub use ray::{at_zoom, by_dist, cell_zoom_at, finest, zoom_range, Hit, HitKind, Ray};
 pub use support::{over, under, walks};
-pub use world::{Walked, World};
+pub use world::{ColumnWalk, World};
 
 #[cfg(test)]
 #[path = "query.test.rs"]

@@ -36,12 +36,12 @@ use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::preview;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
-use crate::domain::query::changed;
+use crate::domain::query::changes;
 use crate::domain::scene::character::companion;
 use crate::domain::scene::character::companion::{companion_step, CompanionProps};
 use crate::domain::scene::character::preview::preview_step;
 use crate::domain::scene::decor::asset::decor_models_step;
-use crate::domain::scene::decor::drawn;
+use crate::domain::scene::decor::gpu;
 use crate::domain::scene::environment::environment_step;
 use crate::domain::scene::indicator::location::location_step;
 use crate::domain::scene::marker;
@@ -86,14 +86,13 @@ fn companion_props() -> Option<CompanionProps> {
     if controller::dist() == 0.0 {
         return None;
     }
-    // Where the camera is going, not where its easing has got to: walked toward
-    // only once the eased pivot settled, it set off as the glide's long tail ended.
+    // Where the camera is going, not where its easing has got to.
     let goal = controller::pivot_to().or_else(controller::pivot)?;
     let eye = coord::world_to_canonical(&controller::eye_world()?);
     let at = coord::to_world(&goal);
     Some(CompanionProps {
         pivot: [at[0], at[1]],
-        floor: companion::pivot_floor(goal, |w| support::floor_seen(w, &goal)),
+        floor: companion::pivot_floor(goal, |w| support::floor_at(w, &goal)),
         azimuth: controller::azimuth(),
         dragging: input::dragging(),
         steered: input::steering(),
@@ -126,7 +125,8 @@ fn companion_tick(ctx: &mut TickContext) {
 
 /// Each pyramid layer's tiles, from the live eye.
 fn demand_tick(ctx: &mut TickContext) {
-    // The ground's windows where their centers now stand, before what arrives fills them.
+    // The ground's clip levels where their centers now stand, before what
+    // arrives fills them.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
     let pinned = clipmap::step(
         [
@@ -141,7 +141,7 @@ fn demand_tick(ctx: &mut TickContext) {
     }
     demand::admit_arrived(&ctx.pass);
     changes_step();
-    TerrainTile::demand().step(destination::tile(), clipmap::pinned());
+    TerrainTile::demand().step(destination::tile(), clipmap::pinned_tiles());
     // Nothing is fetched while places are hidden.
     match store::settings_store().place {
         true => PlaceTile::demand().step(None, &[]),
@@ -149,6 +149,7 @@ fn demand_tick(ctx: &mut TickContext) {
     }
     Earth::demand().step(None, &[]);
     DivisionTile::demand().step(division::line(controller::pivot()), &[]);
+    demand::object_step();
 }
 
 /// The scene's turn, handed the camera's pivot and, third person, its
@@ -234,9 +235,7 @@ pub fn effect_times() -> [f64; spec::EFFECT_NAMES] {
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES])
 }
 
-/// Effects are not budgeted, so nothing in them may be real work. They were
-/// untimed until a fold here took 70 ms of a turn whose tick was 1.5 ms
-/// (2026-09-23).
+/// Effects are not budgeted, so nothing in them may be real work.
 macro_rules! effect {
     ($times:ident, $name:ident, $step:expr) => {{
         let at = now();
@@ -395,13 +394,13 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
 /// What moved this turn, told to what reads it: the tiles whose answer moved
 /// (identities, not contents, which a tile's identity fixes) and where the
 /// objects were written, the ground's held by the query
-/// (domain/query/changed.rs). Taken after arrivals are admitted, before the
+/// (domain/query/changes.rs). Taken after arrivals are admitted, before the
 /// layers observe.
 fn changes_step() {
     static MOVED: Global<[Vec<Tile>; 3]> = Global::new();
     let [places, earth, divisions] = MOVED.get(Default::default);
-    let shared = changed::take();
-    drawn::note_edited(changed::written());
+    let shared = changes::take();
+    gpu::note_edited(changes::written_boxes());
     PlaceTile::tile_cache().take_moved(places);
     Earth::tile_cache().take_moved(earth);
     DivisionTile::tile_cache().take_moved(divisions);

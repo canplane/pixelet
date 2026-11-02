@@ -1,4 +1,4 @@
-// pxl-kernel/domain/query/changed.rs
+// pxl-kernel/domain/query/changes.rs
 
 //! Where the ground's answers moved since the frame turn before: the ground
 //! tiles whose answer moved (their identities, which fix their contents) and
@@ -12,35 +12,38 @@ use crate::domain::layer::Base as _;
 use core::cell::Cell;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::world::{nearest, nearest_box, REACH};
+use pxl_spec::space::coord::world::{nearest, nearest_box, BOUNDS};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
 #[derive(Default)]
-struct Changed {
+struct Changes {
     ground: Vec<Tile>,
     written: Vec<Aabb>,
 }
 
-static CHANGED: Global<Changed> = Global::new();
+static CHANGES: Global<Changes> = Global::new();
 
-fn changed() -> &'static mut Changed {
-    CHANGED.get(Changed::default)
+fn changes() -> &'static mut Changes {
+    CHANGES.get(Changes::default)
 }
 
 /// The frame turn's changes, taken from the ground's tile cache and the
-/// object store in place of the last turn's; true where any moved.
+/// object store in place of the last turn's, each ground tile once, however
+/// many of its bricks or entries moved; true where any moved.
 pub(crate) fn take() -> bool {
-    let c = changed();
+    let c = changes();
     TerrainTile::tile_cache().take_moved(&mut c.ground);
+    c.ground.sort_unstable();
+    c.ground.dedup();
     store::take_written(&mut c.written);
     !c.ground.is_empty() || !c.written.is_empty()
 }
 
 /// Where the objects were written, as the last take found them.
-pub fn written() -> &'static [Aabb] {
-    &changed().written
+pub fn written_boxes() -> &'static [Aabb] {
+    &changes().written
 }
 
 /// Whether a ground change, or one of `layer`'s tiles a reader also reads
@@ -52,11 +55,11 @@ pub fn written() -> &'static [Aabb] {
 /// sees each change exactly once.
 pub fn within(xy: [[f64; 2]; 2], layer: &[Tile]) -> bool {
     let columns = Aabb {
-        min: [xy[0][0], xy[0][1], REACH.min[2]],
-        max: [xy[1][0], xy[1][1], REACH.max[2]],
+        min: [xy[0][0], xy[0][1], BOUNDS.min[2]],
+        max: [xy[1][0], xy[1][1], BOUNDS.max[2]],
     };
     let about = (columns.min[0] + columns.max[0]) / 2.0;
-    let c = changed();
+    let c = changes();
     let mut regions = c
         .ground
         .iter()
@@ -112,16 +115,16 @@ impl Columns {
 /// their corners in units: asked again only where what it asks of moved,
 /// or a change to the ground or the objects touched those columns (`forget_touched`).
 /// An answer that read nothing is not kept, as nothing says when it goes.
-pub struct Asked<K, A>(Option<(K, [[f64; 2]; 2], A)>);
+pub struct Memo<K, A>(Option<(K, [[f64; 2]; 2], A)>);
 
-impl<K, A> Default for Asked<K, A> {
+impl<K, A> Default for Memo<K, A> {
     fn default() -> Self {
-        Asked(None)
+        Memo(None)
     }
 }
 
-impl<K: PartialEq, A: Copy> Asked<K, A> {
-    pub const NONE: Asked<K, A> = Asked(None);
+impl<K: PartialEq, A: Copy> Memo<K, A> {
+    pub const NONE: Memo<K, A> = Memo(None);
 
     /// Let go where a change touched its columns: looked at every frame
     /// turn, so it sees each change once (`within`).

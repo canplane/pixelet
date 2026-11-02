@@ -1,12 +1,11 @@
 // pxl-kernel/perf/record.rs
 
-//! Read-only instrument: records where time and work go. Never read back
-//! into a scheduling decision. Records are laid out word for word as
-//! perf.json says, in columns the shell reads in place, so reading the
-//! profiler allocates nothing in the heap it measures. The columns are the
-//! heap's while the profiler's setting is on, taken whole as it starts
-//! recording and given back as it is turned off (`perf_release`): its
-//! heap figures count them all along, so a frame's deltas do not.
+//! Read-only instrument: records where time and work go. Records are laid
+//! out word for word as perf.json says, in columns the shell reads in place,
+//! so reading the profiler allocates nothing in the heap it measures. The
+//! columns are the heap's while the profiler's setting is on, taken whole as
+//! it starts recording and given back as it is turned off (`perf_release`):
+//! its heap figures count them all along, so a frame's deltas do not.
 
 use core::mem::size_of;
 
@@ -15,7 +14,7 @@ use xpute_guest::global::Global;
 
 use crate::perf::frame::{FrameSample, WorstFrame};
 use crate::perf::report::{GpuRead, RayRead};
-use crate::perf::section::{RecSection, RecordingSection};
+use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::spec::LIMIT;
 use crate::perf::task::TaskRow;
 
@@ -34,8 +33,7 @@ pub const PERCENTILES_LIMIT: usize = if FRAME_LIMIT > TASK_LIMIT {
 };
 
 /// Advances `head` past records older than `cutoff`; returns how many to drop
-/// now, only once the dropped part is the larger half, so most trims are a
-/// head step rather than a shift.
+/// now, only once the dropped part is the larger half.
 fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> usize {
     while *head < ring.len() && t(&ring[*head]) < cutoff {
         *head += 1;
@@ -117,7 +115,7 @@ struct Perf {
     worst_len: usize,
     /// What the frames held at the most or the least since the recording
     /// started (`perf_fold_recording`).
-    held: RecordingSection,
+    extremes: RecordingSection,
     /// The read's, where it sorts what it takes percentiles of (read.rs).
     scratch: Box<[f64]>,
     /// The interval in progress: the last frame turn's record, which every
@@ -147,7 +145,7 @@ fn perf() -> &'static mut Perf {
         stopped_at: None,
         worst: Box::default(),
         worst_len: 0,
-        held: RecordingSection::default(),
+        extremes: RecordingSection::default(),
         scratch: Box::default(),
         open: None,
         frame_task_ms: 0.0,
@@ -159,10 +157,10 @@ pub fn perf_recording() -> bool {
     perf().recording
 }
 
-/// The recording as NOW's rec section holds it, each flag 0 or 1.
-pub fn perf_recording_state() -> RecSection {
+/// The recording as NOW's recording_state section holds it, each flag 0 or 1.
+pub fn perf_recording_state() -> RecordingStateSection {
     let l = perf();
-    RecSection {
+    RecordingStateSection {
         recording: l.recording as u8 as f64,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
         truncated: l.truncated as u8 as f64,
@@ -187,7 +185,7 @@ pub fn perf_recording_start() -> bool {
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
     (l.task_head, l.frame_head) = (0, 0);
     l.open = None;
-    l.held = RecordingSection::default();
+    l.extremes = RecordingSection::default();
     l.truncated = false;
     l.started_at = now();
     l.stopped_at = None;
@@ -324,12 +322,12 @@ pub fn perf_record_rays(r: RayRead) {
 pub fn perf_fold_recording(held: &RecordingSection) {
     let l = perf();
     if l.recording {
-        l.held.fold(held);
+        l.extremes.fold(held);
     }
 }
 
-pub fn perf_recording_held() -> RecordingSection {
-    perf().held
+pub fn perf_recording_extremes() -> RecordingSection {
+    perf().extremes
 }
 
 /// A turn's end, frame turn or not: its time into the interval in progress,

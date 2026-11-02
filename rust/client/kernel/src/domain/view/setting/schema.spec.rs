@@ -11,7 +11,7 @@
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
-// development one; the shell's production bundle carries SETTING_SHIPPED,
+// development one; the shell's production bundle carries SETTING_PRODUCTION,
 // the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
@@ -25,7 +25,8 @@
 // crosses as itself.
 
 // Names as the spec spells them, so one record has one name on every side.
-#![allow(non_camel_case_types, reason = "generated from the spec")]
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(non_camel_case_types, dead_code, reason = "generated from the spec")]
 
 /// Which controller makes the camera's pose.
 ///
@@ -57,9 +58,10 @@ impl CameraMode {
 ///             the scene reads inside out.
 ///   stop    — a control goes as far as it asked or as far as it can.
 ///             Nothing moves on its own; a zoom into a hill stops short.
-///   climb   — dist is always granted and the *view* pitches up instead,
-///             as far as straight down, so every zoom stays
-///             reachable at the cost of an angle nobody asked for.
+///   climb   — dist is granted and the *view* pitches up instead, as far
+///             as straight down, at the cost of an angle nobody asked for.
+///             Where its way hits something all the same, a zoom in goes
+///             through to the pivot's side and any other control stops.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum OrbitObstacleMode {
@@ -99,7 +101,7 @@ impl OrbitObstacleMode {
 ///            once more, the occlusion sampled from it at half resolution,
 ///            denoised, and read by every lit surface. Five passes and 11
 ///            bytes a pixel. The corners' too, the darker of the two where
-///            both fall (screen_lit.wgsl), as N8AO reads a cube's corner
+///            both fall (screen_shade.wgsl), as N8AO reads a cube's corner
 ///            softer at half resolution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -118,14 +120,18 @@ impl AoMode {
     }
 }
 
-/// How many device pixels the world is drawn at to a CSS pixel.
+/// How many device pixels the world is drawn at to a CSS pixel, and the
+/// lattice the camera grid's beam rays and cells are laid on.
 ///
-///   auto  — the display's, stepped down to a share of it while moving
-///           frames run over their budget — the display's interval, no
-///           tighter than a sixtieth of a second — and back up once they
-///           have room (rust/client/kernel/src/domain/view/frame/resolution.rs).
-///   fixed — the display's, whatever the frames cost.
-///   low   — one.
+///   auto  — the display's, stepped down to a share of it, then the
+///           lattice to twice the cell, while moving frames' GPU time runs
+///           over their budget — the display's interval, no tighter than a
+///           sixtieth of a second — and back up, the lattice first, once
+///           the step above would fit, a budget control as congestion
+///           control is (rust/client/kernel/src/domain/view/frame/resolution.rs).
+///           The lattice changes no pixel drawn.
+///   fixed — the display's, on the cell's lattice, whatever the frames cost.
+///   low   — one, on the cell's lattice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum ResMode {
@@ -206,7 +212,7 @@ pub enum SettingKey {
     /// Procedurally scattered decor only; what the player placed stays.
     ///
     /// Med because it is models rather than a shading term: the GPU generates the
-    /// ground's decor where the eye's windows are (decor_cs) and the frame draws
+    /// ground's decor where the eye's clip levels are (decor_cs) and the frame draws
     /// each kind as a model, an impostor or nothing by the angle it
     /// spans, so what it costs follows what is in view. The badge is an ordering,
     /// and this is the one to reach for before any shading term.
@@ -247,12 +253,17 @@ pub enum SettingKey {
     /// reads moves; decor and the actors drawn into it depth only, and a 3x3
     /// compare per fragment; 16 MB of map.
     shadows = 11,
-    /// The pixels the world is filled at, the GPU's largest cost: two to a
-    /// CSS pixel is four times the fragments of one. RES_MODES says each.
+    /// The pixels the world is drawn at: two to a CSS pixel is four times the
+    /// work done a drawn pixel at a time (span.json `per_px`), and nothing
+    /// more; the camera grid's rays and the light's map cost the same at any.
+    /// `auto` lays the grid's beam rays and cells on a coarser lattice too
+    /// (span.json `per_cell`), its samples the same rays, so no pixel drawn
+    /// changes. The markers and the finish stay at the display's. RES_MODES
+    /// says each.
     res = 12,
     /// Where the camera and the pointer are, read live (perf/read.rs, NOW's view section).
     view = 13,
-    /// The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`).
+    /// The performance panel, recording while it is on (perf/window.rs `perf_follow`).
     perf = 14,
     /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs).
     world_gizmo = 15,
@@ -260,9 +271,9 @@ pub enum SettingKey {
     camera_gizmo = 16,
     person = 17,
     pet = 18,
-    /// Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl).
+    /// Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_shade.wgsl).
     ray_steps = 19,
-    /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
+    /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
     ray_counts = 20,
     /// The hour the sky is drawn at; SKY_TIMES says each.
     sky_time = 21,

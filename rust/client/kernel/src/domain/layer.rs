@@ -27,7 +27,7 @@ pub mod upload;
 use crate::sys::io::fetch;
 use crate::sys::io::source;
 pub use answer::Answer;
-pub use query::Query;
+pub(in crate::domain) use query::Query;
 
 /// What a layer asks for of the view.
 #[derive(Clone, Copy)]
@@ -75,7 +75,7 @@ pub trait Base: Clone + 'static {
 
     /// The most tiles a reader that takes no coarser answer pins apart from
     /// the view and a destination's line (pxl-kernel domain/view/demand.rs `step`).
-    const PINNED: u32 = 0;
+    const PIN_CAP: u32 = 0;
 
     /// Its records, which it alone holds.
     fn tile_cache() -> &'static mut TileCache<Self>;

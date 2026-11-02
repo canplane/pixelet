@@ -48,7 +48,7 @@ fn heights(days: f64, [lon, lat]: [f64; 2]) -> [f64; 2] {
 /// own, or the hour `time` names in the place's mean solar time today, held
 /// there, so the sun stands where it does at that hour whatever the clock
 /// reads; and whether it is held.
-fn shown(time: SkyTime, unix_ms: f64, lon: f64) -> (f64, bool) {
+fn sky_clock(time: SkyTime, unix_ms: f64, lon: f64) -> (f64, bool) {
     const HOUR_MS: f64 = 3_600_000.0;
     let hour = match time {
         SkyTime::real => return (unix_ms, false),
@@ -89,12 +89,11 @@ pub struct EnvironmentDraw {
     /// they have come since, to one at the end.
     anchor: [f64; 2],
     from: [[f64; 3]; 2],
-    eased: f64,
+    progress: f64,
     stars: f64,
     /// Seconds of wall time since the first observation, the clouds' clock,
-    /// held between their steps (`observe`): a tick's delta is clamped and
-    /// sparse at rest, which ran the clouds slow, and the epoch would not
-    /// survive the shader's f32.
+    /// held between their steps (`observe`): the epoch would not survive the
+    /// shader's f32.
     time: f64,
     /// Where the sky's hour and the clouds' wall clock last stepped, in
     /// Unix ms.
@@ -115,7 +114,7 @@ impl Default for EnvironmentDraw {
             star_frame: [[0.0; 3]; 3],
             anchor: [0.0; 2],
             from: [[0.0; 3]; 2],
-            eased: 1.0,
+            progress: 1.0,
             stars: 0.0,
             time: 0.0,
             sky_at: Stepped::default(),
@@ -130,7 +129,7 @@ impl EnvironmentDraw {
     /// The anchor the sky is seen from: the eye's (`anchor`) before the sky
     /// starts or where the sun or the moon stands a display level higher or
     /// lower from it, else the one it is seen from.
-    fn observed(&self) -> [f64; 2] {
+    fn sky_anchor(&self) -> [f64; 2] {
         let [lon, lat, _] = anchor();
         let live = [lon, lat];
         if !self.started {
@@ -168,12 +167,12 @@ impl EnvironmentDraw {
     /// words stand (`lens::Stepped`); before the sky starts, every
     /// observation steps them. A clock set back before where a light last
     /// stepped steps it there at once. The sky's clock is the hour
-    /// the `sky_time` setting shows (`shown`), which a held hour never steps;
+    /// the `sky_time` setting shows (`sky_clock`), which a held hour never steps;
     /// the clouds' is the wall clock's.
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
-        let at = self.observed();
-        let (sky_ms, held) = shown(settings_store().sky_time, unix_ms, at[0]);
+        let at = self.sky_anchor();
+        let (sky_ms, held) = sky_clock(settings_store().sky_time, unix_ms, at[0]);
         let heights = |days: f64| heights(days, at);
         let step = steps();
         // As fast as each height moves over the minute from `at`, when it will
@@ -201,7 +200,7 @@ impl EnvironmentDraw {
         let (clouds, clouds_due, drifted) = self.clouds_at.at(unix_ms, clouds_next);
         // The clouds drifting step on their own, waking the turn.
         if drifted && self.started {
-            region::animated();
+            region::note_animation();
         }
         self.time = (clouds - first) / 1000.0;
         let sky_in = if held { f64::INFINITY } else { next - sky_ms };
@@ -225,10 +224,10 @@ impl EnvironmentDraw {
         }
         // Observed from the anchor the sky follows: a pan that moves neither
         // light a display level moves no word of the sky.
-        let live = self.observed();
+        let live = self.sky_anchor();
         if !self.started || live != self.anchor {
             if self.started {
-                (self.from, self.eased) = ([self.sun, self.moon], 0.0);
+                (self.from, self.progress) = ([self.sun, self.moon], 0.0);
             }
             self.anchor = live;
             self.aim();
@@ -239,10 +238,10 @@ impl EnvironmentDraw {
             (self.sun, self.moon) = (sun, moon);
             self.started = true;
         }
-        self.eased = (self.eased + frame.delta_s * SKY_EASE_RATE).min(1.0);
+        self.progress = (self.progress + frame.delta_s * SKY_EASE_RATE).min(1.0);
         let along = |from: [f64; 3], to: [f64; 3]| {
-            if self.eased < 1.0 {
-                core::array::from_fn(|k| from[k] + (to[k] - from[k]) * self.eased)
+            if self.progress < 1.0 {
+                core::array::from_fn(|k| from[k] + (to[k] - from[k]) * self.progress)
             } else {
                 to
             }
@@ -268,6 +267,6 @@ impl EnvironmentDraw {
             star_frame: self.star_frame,
         };
         write_environment(&mut self.out, &light);
-        self.eased < 1.0 || self.stars < 1.0
+        self.progress < 1.0 || self.stars < 1.0
     }
 }

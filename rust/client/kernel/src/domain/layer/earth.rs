@@ -5,9 +5,9 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
+use pxl_engine::wrap_idx;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
-use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
-use pxl_spec_core::wrap_idx;
+use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
@@ -16,7 +16,7 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::heap::Block;
 
 use crate::domain::layer::tile_cache::TileCache;
-use crate::domain::layer::upload::{Offered, Uploads};
+use crate::domain::layer::upload::{Uploads, Uptake};
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
@@ -86,8 +86,8 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     uploads.send(
         on,
         &mut |record, pkt| match earth::decode(pkt).map(|texels| write(record, texels)) {
-            Err(_) | Ok(true) => Offered::Taken,
-            Ok(false) => Offered::Full,
+            Err(_) | Ok(true) => Uptake::Taken,
+            Ok(false) => Uptake::Full,
         },
         &|_| true,
     );
@@ -99,8 +99,8 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
 pub fn earth_window(
     floor: impl Iterator<Item = Tile> + Clone,
     on: u32,
-) -> ([i32; 2], [u32; REACH_TILES as usize]) {
-    let mut layers = [0; REACH_TILES as usize];
+) -> ([i32; 2], [u32; GROUND_DEMAND_TILES as usize]) {
+    let mut layers = [0; GROUND_DEMAND_TILES as usize];
     let at = |p: Tile| p.at;
     let Some([first, _]) = floor.clone().next().map(at) else {
         return ([0; 2], layers);
@@ -117,7 +117,7 @@ pub fn earth_window(
         if uploads().sent_on(record) == Some(on) {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
-            layers[(dy * REACH_ACROSS + dx) as usize] = record + 1;
+            layers[(dy * GROUND_DEMAND_ACROSS + dx) as usize] = record + 1;
         }
     }
     ([x0, y0], layers)

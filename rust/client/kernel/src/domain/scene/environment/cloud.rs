@@ -3,16 +3,19 @@
 //! The cumulus, the sky kind's (`spec/spec/asset/sky.json` `cumulus`),
 //! drawn as decor is and held as decor is not. It claims no cell, so
 //! nothing is built around it and a tower stands through it; it is no layer
-//! and no window's brick holds it. It is laid on the field's own map,
-//! which the wind carries (`pxl-spec-core cloud.rs` `drift`): a patch of
+//! and no clip level's brick holds it. It is laid on the field's own map,
+//! which the wind carries (`pxl-content cloud.rs` `drift`): a patch of
 //! cells there is built once and drawn moved, each instance a model, an
 //! impostor or nothing by its size on the screen (`present_patch`), by the
-//! tiers the GPU draws decor by, one rule (pxl-spec-core scatter.rs
+//! tiers the GPU draws decor by, one rule (pxl-content scatter.rs
 //! `drawn::tier`). A patch is laid in the columns the decor and impostor
 //! shaders read (domain/scene/column.rs).
 
 use fnv::FnvHashMap;
 
+use pxl_content::cloud::{cloud_draw, drift, holds_cloud};
+use pxl_content::generation::drawn;
+use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
@@ -20,16 +23,13 @@ use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
-use pxl_spec_core::cloud::{drift, lattice_hash};
-use pxl_spec_core::generated::drawn;
-use pxl_spec_core::param::cloud::{CUMULUS_KM, WIND};
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::pass::Pass;
 
 use crate::domain::scene::column::{self, GroupColumns};
-use crate::domain::scene::decor::drawn::{cull_dist_u, decor_impostor_angle, decor_model_angle};
+use crate::domain::scene::decor::gpu::{cull_dist_u, decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
 };
@@ -45,11 +45,10 @@ use crate::domain::view::observation::eye;
 use crate::domain::view::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{catalog, load_image, load_of};
+use pxl_content::generation;
+use pxl_content::param::cloud;
 use pxl_render::gpu::api::Image;
 use pxl_spec::space::camera::grid;
-use pxl_spec::space::coord::world;
-use pxl_spec_core::generated;
-use pxl_spec_core::param::cloud;
 
 /// Its models, a cloud each one of them.
 const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
@@ -57,28 +56,26 @@ const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
 pub const MODELS_MAX: usize = VARIANTS.len();
 
 /// Its draw groups follow the decors' variants, which number the groups
-/// before it (pxl-spec-core scatter.rs `GROUPS`).
-const FIRST_GROUP: usize = generated::GROUPS as usize;
+/// before it (pxl-content scatter.rs `GROUPS`).
+const FIRST_GROUP: usize = generation::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
     "a draw group each variant"
 );
 
 /// A cell holds a cloud or none: a unit of the field's lattice, whose hash
-/// says where one is (pxl-spec-core param.rs `cloud::LATTICE_SHAMT`).
+/// says where one is (pxl-content param.rs `cloud::LATTICE_SHAMT`).
 const CELL_SHAMT: u32 = cloud::LATTICE_SHAMT;
 const CELL: f64 = (1u32 << CELL_SHAMT) as f64;
-/// The cells around the world, so a cell's hash wraps with the map.
-const CELLS_AROUND: i64 = 1 << (world::EXTENT[0] - CELL_SHAMT);
 /// A patch is built and drawn as one, this many cells a side.
 const PATCH_CELLS: u32 = 16;
 const PATCH: f64 = CELL * PATCH_CELLS as f64;
 /// The farthest a patch is built: where the widest cloud is an impostor's worth.
-const REACH_MAX: f64 = cull_dist_u(CLOUD_WIDTH[1]);
-/// The most patches the reach spans, the keys of a side squared: its share of
+const DRAW_DIST_MAX: f64 = cull_dist_u(CLOUD_WIDTH[1]);
+/// The most patches the farthest spans, the keys of a side squared: its share of
 /// the renderer's upload table.
 pub const PATCHES_MAX: usize = {
-    let side = (2.0 * REACH_MAX / PATCH) as usize + 2;
+    let side = (2.0 * DRAW_DIST_MAX / PATCH) as usize + 2;
     side * side
 };
 
@@ -87,11 +84,12 @@ pub const PATCHES_MAX: usize = {
 const THIN_FROM: f64 = CELL / grid::CELL / CLOUD_SPACING_CELLS;
 
 /// Whether the cloud whose middle lies at `local` about its patch's corner
-/// shows `d2` square units from the eye: its hash under (THIN_FROM / d)²,
-/// asked as a product, so a cloud costs a multiply. Decided as it is drawn,
-/// never built: a patch built again as the eye moved made the zoom stall.
+/// shows `d2` square units from the eye: its draw under (THIN_FROM / d)²,
+/// asked as a product, so a cloud costs a multiply; the draw keyed by its
+/// middle's bits, by the seed its place and look are drawn by
+/// (`cloud_draw`). Decided as it is drawn, never built.
 fn shows(local: [f32; 2], d2: f64) -> bool {
-    f64::from(lattice_hash(local.map(f32::to_bits), CLOUD_SALT + 6)) * d2 < THIN_FROM * THIN_FROM
+    cloud_draw(local.map(|v| v.to_bits() as i32), CLOUD_SALT + 6) * d2 < THIN_FROM * THIN_FROM
 }
 
 struct Patch {
@@ -188,21 +186,23 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     if opacity <= 0.0 {
         return;
     }
-    let moved = drift(f64::from(env[ENV_SKY + 1]));
+    let off = drift(f64::from(env[ENV_SKY + 1]));
     let base = layer_u();
     let largest = CLOUD_WIDTH[1];
     // As far as the eye draws, a flat layer hiding under no horizon, and no
     // farther than its largest cloud is an impostor's worth.
-    let reach = observation::eye_draw_reach().unwrap_or(0.0).min(REACH_MAX);
-    let on_map = [eye[0] + moved[0], eye[1] + moved[1]];
+    let dist = observation::eye_draw_dist()
+        .unwrap_or(0.0)
+        .min(DRAW_DIST_MAX);
+    let on_map = [eye[0] + off[0], eye[1] + off[1]];
     let span = |k: usize| {
-        libm::floor((on_map[k] - reach) / PATCH) as i64
-            ..=libm::floor((on_map[k] + reach) / PATCH) as i64
+        libm::floor((on_map[k] - dist) / PATCH) as i64
+            ..=libm::floor((on_map[k] + dist) / PATCH) as i64
     };
     let near = |key: [i64; 2]| {
         let corner = [
-            key[0] as f64 * PATCH - moved[0],
-            key[1] as f64 * PATCH - moved[1],
+            key[0] as f64 * PATCH - off[0],
+            key[1] as f64 * PATCH - off[1],
         ];
         let gap = |lo: f64, v: f64| (lo - v).max(v - lo - PATCH).max(0.0);
         let x0 = nearest(corner[0], eye[0]);
@@ -214,7 +214,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     for y in span(1) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
-            if d <= reach
+            if d <= dist
                 && drawn::tier(
                     (largest / d) as f32,
                     decor_model_angle() as f32,
@@ -256,17 +256,17 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let frame_eye = frame.eye;
     for (&key, b) in &c.patches {
         let corner = [
-            key[0] as f64 * PATCH - moved[0],
-            key[1] as f64 * PATCH - moved[1],
+            key[0] as f64 * PATCH - off[0],
+            key[1] as f64 * PATCH - off[1],
         ];
         let [zlo, zhi] = b.heights.map(f64::from);
-        let reach = largest / 2.0;
+        let half = largest / 2.0;
         if !frame.sees_box(
-            [corner[0] - reach, corner[1] - reach, zlo - reach],
+            [corner[0] - half, corner[1] - half, zlo - half],
             [
-                corner[0] + PATCH + reach,
-                corner[1] + PATCH + reach,
-                zhi + reach,
+                corner[0] + PATCH + half,
+                corner[1] + PATCH + half,
+                zhi + half,
             ],
         ) {
             continue;
@@ -274,7 +274,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         // The nearest cloud the view holds, each as the box it stands in, no
         // nearer than the near plane, short of which nothing is drawn: from
         // inside a box the drift is still a cell's at that distance.
-        for (local, half) in built(b) {
+        for (local, half) in patch_clouds(b) {
             let at = [corner[0] + local[0], corner[1] + local[1], local[2]];
             if frame.sees_box(
                 core::array::from_fn(|k| at[k] - half[k]),
@@ -294,7 +294,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                     .min(v3::len(&gap.map(|g| g.max(0.0))).max(param::NEAR));
             }
         }
-        let patch = Shown {
+        let patch = PatchDraw {
             handle: b.handle,
             at: b.at,
             idx: b.idx,
@@ -345,9 +345,12 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
                 key[0] * i64::from(PATCH_CELLS) + i64::from(i),
                 key[1] * i64::from(PATCH_CELLS) + i64::from(j),
             ];
-            let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
-            let hash = |salt: u32| f64::from(lattice_hash(at, salt));
-            if hash(CLOUD_SALT) >= CLOUD_SHARE {
+            let at = cell.map(|v| v as i32);
+            let hash = |salt: u32| cloud_draw(at, salt);
+            // Its patch's count handed down to it (pxl-content cloud.rs
+            // `holds_cloud`), as the decor's and the caves' are.
+            let mean = (CLOUD_SHARE * f64::from(PATCH_CELLS * PATCH_CELLS)) as u32;
+            if !holds_cloud(at, mean) {
                 return None;
             }
             let jitter = [hash(CLOUD_SALT + 1), hash(CLOUD_SALT + 2)];
@@ -375,7 +378,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
 /// The patch's clouds as `build` laid them, read off its columns: each one's
 /// middle about the patch's corner, its height over the datum, and its half
 /// extent. The field's hash is asked once a patch, where it is built.
-fn built(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
+fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     // SAFETY: the patch's bytes, held until it goes, which is after this turn reads them.
     let words: &[u32] =
         unsafe { core::slice::from_raw_parts(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
@@ -463,7 +466,7 @@ fn build(
 
 /// A patch of the clouds' columns as `present_patch` reads it: its square's corner
 /// about the eye's lap, its side, and the heights its instances stand between.
-struct Shown {
+struct PatchDraw {
     handle: u32,
     at: u32,
     idx: u32,
@@ -480,7 +483,7 @@ struct Shown {
 /// which cannot be, is left out.
 fn present_patch(
     draw: &mut DrawList,
-    b: &Shown,
+    b: &PatchDraw,
     translation: [f32; 3],
     eye: V3,
     groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>,
@@ -492,7 +495,7 @@ fn present_patch(
     let [x0, y0] = b.corner;
     let [zlo, zhi] = b.heights.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
-    let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
+    let far = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
     let nearest = v3::len(&[
         gap(x0, x0 + b.side, eye[0]),
         gap(y0, y0 + b.side, eye[1]),
@@ -500,9 +503,9 @@ fn present_patch(
     ])
     .max(1e-3);
     let farthest = v3::len(&[
-        reach(x0, x0 + b.side, eye[0]),
-        reach(y0, y0 + b.side, eye[1]),
-        reach(zlo, zhi, eye[2]),
+        far(x0, x0 + b.side, eye[0]),
+        far(y0, y0 + b.side, eye[1]),
+        far(zlo, zhi, eye[2]),
     ])
     .max(1e-3);
     // SAFETY: the patch's bytes, `bytes` long, its owner's to write past `index`.
@@ -590,7 +593,7 @@ fn present_patch(
     }
     // The patch's draws the scene bounds: the wind moves them, and each
     // that changed marks where it was and where it is.
-    region::drawn(b.handle);
+    region::note_draw(b.handle);
 }
 
 #[cfg(test)]

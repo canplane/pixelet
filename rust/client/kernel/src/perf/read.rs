@@ -2,8 +2,7 @@
 
 //! What PERF_STATS reads: the profiler window reduced into perf.json's
 //! STAT, and what holds as it reads into its NOW, each read in place by the
-//! panel and the report so both agree. Sections go only through `put`;
-//! indexing columns by hand let sections drift out of order (2026-09-23).
+//! panel and the report. Sections go only through `put`.
 
 use crate::domain::control::camera::controller;
 use crate::domain::query;
@@ -12,16 +11,17 @@ use crate::domain::query::Ray;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
-use crate::perf::frame::{is_missed, long, overran, unmeasured};
+use crate::perf::frame::{is_missed, long, overran, unmeasured_ms};
 use crate::perf::frame::{FrameSample, RaySample, GPU_SPANS};
 use crate::perf::record::{
-    perf_frames_since, perf_recording_held, perf_recording_state, perf_scratch, perf_tasks_since,
+    perf_frames_since, perf_recording_extremes, perf_recording_state, perf_scratch,
+    perf_tasks_since,
 };
 use crate::perf::section::TASK_PHASES;
 use crate::perf::section::{
     FramesSection, Percentiles, StepStats, StepsSection, StreamStats, TasksSection, ViewSection,
 };
-use crate::perf::spec::{LIMIT, NOW, STAT};
+use crate::perf::spec::{self, LIMIT, NOW, STAT};
 use crate::perf::task::TaskRow;
 use crate::perf::word::put;
 use crate::sys::io::failure::Outcome;
@@ -103,7 +103,7 @@ pub fn perf_stats(window_ms: Option<f64>) -> &'static [f64] {
         &tasks(scratch, perf_tasks_since(since)),
     );
     put(out, STAT::steps::AT, &steps());
-    put(out, STAT::recording::AT, &perf_recording_held());
+    put(out, STAT::recording::AT, &perf_recording_extremes());
     out
 }
 
@@ -111,7 +111,7 @@ pub fn perf_stats(window_ms: Option<f64>) -> &'static [f64] {
 pub fn perf_now() -> &'static [f64] {
     let out = &mut read().now[..];
     out.fill(0.0);
-    put(out, NOW::rec::AT, &perf_recording_state());
+    put(out, NOW::recording_state::AT, &perf_recording_state());
     put(out, NOW::view::AT, &view());
     out
 }
@@ -123,8 +123,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     let sum = |pick: &dyn Fn(&FrameSample) -> f64| frames.iter().map(pick).sum::<f64>();
     let seconds = ((last.t - first.t) / 1000.0).max(1e-3);
     let moving = || frames.iter().filter(|f| f.settled == 0.0);
-    let n = frames.len() as f64;
-
     let cnt = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
     // A span the frame did not run reads 0 and is left out.
     // The GPU's figures over the frames a read timed, each read once.
@@ -136,7 +134,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     });
     FramesSection {
         present: 1.0,
-        n,
+        cnt: frames.len() as f64,
         seconds,
         moving: moving().count() as f64,
         moving_ms: moving().map(|f| f.interval_ms).sum(),
@@ -151,7 +149,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         stage: percentiles(scratch, frames.iter().map(|f| f.stage_ms)),
         tasks: percentiles(scratch, frames.iter().map(|f| f.tasks_ms)),
         perf: percentiles(scratch, frames.iter().map(|f| f.perf_ms)),
-        rest: percentiles(scratch, frames.iter().map(unmeasured)),
+        rest: percentiles(scratch, frames.iter().map(unmeasured_ms)),
         effects_p95: core::array::from_fn(|k| {
             percentiles(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
@@ -170,7 +168,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
             percentiles(scratch, frames.iter().map(|f| f.phases[k])).p95
         }),
         gpu_spans_p95: spans.map(|(p95, _)| p95),
-        gpu_spans_n: spans.map(|(_, n)| n),
+        gpu_spans_cnt: spans.map(|(_, n)| n),
         kinds: core::array::from_fn(|k| cnt(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| cnt(&|f| f.wake == k as f64)),
         gpu_px: read().next_back().map_or(0.0, |f| f.gpu.px),
@@ -236,7 +234,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
                 .map(|r| r.end_ms - r.enqueue_ms),
         );
         *slot = StreamStats {
-            n: n as f64,
+            cnt: n as f64,
             ok: mine().filter(|r| r.outcome == ok).count() as f64,
             aborted: mine().filter(|r| r.outcome == aborted).count() as f64,
             err: mine().filter(|r| r.outcome == err).count() as f64,
@@ -265,7 +263,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
 
 fn view() -> ViewSection {
     use crate::domain::control::edit::{self, collision};
-    let pointed = edit::pointed();
+    let pointed = edit::pointer_ndc();
     // What the pointer meets, exactly, at the zooms the eye asks, whatever
     // the tool could strike there, and the zoom the rays draw it at.
     let met = pointed.and_then(|[x, y]| {
@@ -275,7 +273,7 @@ fn view() -> ViewSection {
         let ray = Ray {
             origin,
             dir,
-            reach: observation::eye_draw_reach().unwrap_or(0.0),
+            t_max: observation::eye_draw_dist().unwrap_or(0.0),
         };
         let detail = query::by_dist();
         let hit = query::World::now()
@@ -290,11 +288,13 @@ fn view() -> ViewSection {
     let (hover, cell) = (met.map(|m| m.0), met.map(|m| m.1));
     // What the tool held strikes there, as the hover picks it.
     let picked = pointed.and_then(|[x, y]| edit::pick_at(x, y));
-    let hit_kind = picked.as_ref().map_or(f64::NAN, |p| match p.hit.kind {
-        HitKind::Ground => 0.0,
-        HitKind::Object(_) => 1.0,
-        HitKind::Objects => 2.0,
-        HitKind::Decor(_) => 3.0,
+    let hit_kind = picked.as_ref().map_or(f64::NAN, |p| {
+        f64::from(match p.hit.kind {
+            HitKind::Ground => spec::HitKind::ground,
+            HitKind::Object(_) => spec::HitKind::object,
+            HitKind::Objects => spec::HitKind::objects,
+            HitKind::Decor(_) => spec::HitKind::decor,
+        } as u8)
     });
     let tool = collision::PlacementTool::of(&edit::tool());
     let place = edit::hover().coord.filter(|_| tool.is_some());
@@ -325,8 +325,8 @@ fn view() -> ViewSection {
         hover_z,
         cell: zoom(cell),
         hit_kind,
-        held: zoom(picked.as_ref().map(|p| p.held())),
-        drawn: zoom(picked.as_ref().and_then(|p| p.drawn)),
+        pick_zoom: zoom(picked.as_ref().map(|p| p.zoom())),
+        ray_zoom: zoom(picked.as_ref().and_then(|p| p.ray_zoom)),
         folded: picked
             .as_ref()
             .map_or(f64::NAN, |p| f64::from(u8::from(p.is_folded()))),
@@ -340,7 +340,6 @@ fn view() -> ViewSection {
     }
 }
 
-/// Per step: a cooperative scheduler is only as cooperative as its longest step.
 fn steps() -> StepsSection {
     let mut steps = StepsSection::default();
     for s in tick_step_stats()
