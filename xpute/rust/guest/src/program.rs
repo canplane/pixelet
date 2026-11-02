@@ -373,17 +373,16 @@ impl Program {
             r.ready(Err(Errno::of(opened.res).unwrap_or(Errno::EIO)));
             return;
         }
-        let mut bytes = Vec::new();
-        if bytes.try_reserve_exact(opened.res as usize).is_err() {
-            self.files.close(&mut self.sys, opened.fd);
-            r.ready(Err(Errno::ENOMEM));
-            return;
-        }
-        bytes.resize(opened.res as usize, 0);
         // SAFETY: the buffer is kept in `reads`, never grown, until a later
         // turn's rise; nothing reads it before then.
-        unsafe { self.sys.read(opened.fd, &mut bytes) };
-        self.files.close(&mut self.sys, opened.fd);
+        let read = unsafe {
+            self.files
+                .read_whole(&mut self.sys, opened.fd, opened.res as u32)
+        };
+        let bytes = match read {
+            Ok(bytes) => bytes,
+            Err(e) => return r.ready(Err(e)),
+        };
         r.got = Stage::Reading {
             bytes,
             asked_turn: self.turn,

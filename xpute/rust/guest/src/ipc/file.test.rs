@@ -49,6 +49,42 @@ fn failed_open_closed() {
 }
 
 #[test]
+fn answer_read_once() {
+    let answer = |res| SysOpened {
+        fd: 1,
+        res,
+        detail: 404,
+    };
+    assert_eq!(Opened::of(&answer(5)), Opened::Bytes(5));
+    assert_eq!(Opened::of(&answer(-2)), Opened::Absent);
+    assert_eq!(
+        Opened::of(&answer(-5)),
+        Opened::Failed {
+            errnum: Errno::EIO,
+            detail: 404
+        }
+    );
+    assert_eq!(
+        Opened::of(&answer(-4095)),
+        Opened::Failed {
+            errnum: Errno::EPROTO,
+            detail: 404
+        },
+        "a code no errno names breaks the protocol"
+    );
+}
+
+#[test]
+fn read_whole_closes() {
+    let (mut sys, mut files) = (sys(), Files::<_, 8>::new());
+    let fd = files.open(&mut sys, 7, "a", "first");
+    // SAFETY: nothing runs the records, so nothing fills the buffer.
+    let bytes = unsafe { files.read_whole(&mut sys, fd, 5) };
+    assert_eq!(bytes.map(|b| b.len()), Ok(5));
+    assert_eq!(files.owner(fd), None, "read whole, it is closed");
+}
+
+#[test]
 fn stale_answer_ownerless() {
     let (mut sys, mut files) = (sys(), Files::<_, 8>::new());
     let stale = files.open(&mut sys, 7, "a", "first");

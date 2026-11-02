@@ -15,11 +15,12 @@
 
 use xpute_guest::abi::cmd::SysOpened;
 use xpute_guest::ipc::file::Files;
+pub use xpute_guest::ipc::file::Opened;
 use xpute_guest::ipc::sys::Fd;
+use xpute_kit::status::bug::OrBug;
 
-use crate::sys::io::failure::Failure;
 use crate::sys::io::fetch;
-use crate::sys::io::host::{answer_of, sys, turn};
+use crate::sys::io::host::{sys, turn};
 use crate::sys::io::host_spec::{format, root, storage};
 use crate::sys::io::loader;
 use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
@@ -277,24 +278,19 @@ pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
     }
 }
 
-/// An opened file of `bytes`, read whole and closed: one owner, so every
-/// file read whole waits on a refusal alike. Where the heap refuses its room
-/// the read is the owner's to ask again once `Refusal::over`; no descriptor
-/// is kept meanwhile.
+/// An opened file of `bytes`, read whole and closed (`Files::read_whole`):
+/// one owner, so every file read whole waits on a refusal alike. Where the
+/// heap refuses its room the read is the owner's to ask again once
+/// `Refusal::over`; no descriptor is kept meanwhile. An open is answered only
+/// where there is a host.
 ///
 /// # Safety
 /// The bytes are filled from the next turn on: as `read`, they are neither
 /// read nor dropped before then.
 pub unsafe fn read_whole(fd: Fd, bytes: u32) -> Result<Vec<u8>, Refusal> {
-    let mut held = Vec::new();
-    let room = held.try_reserve_exact(bytes as usize);
-    if room.is_ok() {
-        held.resize(bytes as usize, 0);
-        // SAFETY: the caller's.
-        unsafe { read(fd, &mut held) };
-    }
-    close(fd);
-    room.map(|()| held).map_err(|_| Refusal::now())
+    let sys = sys().or_bug(Errno::ENOTRECOVERABLE);
+    // SAFETY: the caller's.
+    unsafe { files().read_whole(sys, fd, bytes) }.map_err(|_| Refusal::now())
 }
 
 pub fn close(fd: Fd) {
@@ -373,53 +369,24 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
     }
 }
 
-/// What an open came to, read once from the host's answer.
-#[derive(Clone, Copy, Debug)]
-pub enum Opened {
-    /// The file's size; the descriptor is the owner's to read and close.
-    Bytes(u32),
-    /// No such file; the descriptor is closed.
-    Absent,
-    /// Every other failure; the descriptor is closed.
-    Failed { errnum: Errno, detail: u32 },
-}
-
-impl Opened {
-    /// An open that came to no bytes, as its run's failure.
-    #[track_caller]
-    pub fn failure(self) -> Failure {
-        match self {
-            Opened::Failed { errnum, detail } => Failure {
-                errnum,
-                detail: detail as u16,
-                at: None,
-            },
-            Opened::Absent => Failure::from(Errno::ENOENT),
-            Opened::Bytes(_) => Failure::from(Errno::ENOTRECOVERABLE),
-        }
-    }
-}
-
-/// An open the host completed, its `res` the file's size or a negative
-/// errno; xpute's table finds its owner and closes it where it failed. A file
-/// larger than the heap every device is given cannot be held anywhere: it is
-/// the host's answer refused, closed here, and the owner hears EFBIG.
+/// An open the host completed, read once (`Opened::of`); xpute's table finds
+/// its owner and closes it where it failed. A file larger than the heap every
+/// device is given cannot be held anywhere: it is the host's answer refused,
+/// closed here, and the owner hears EFBIG.
 pub fn on_opened(completed: &SysOpened) {
-    let SysOpened { fd, res, detail } = *completed;
+    let SysOpened { fd, detail, .. } = *completed;
     let Some(owner) = sys().and_then(|sys| files().complete_open(sys, completed)) else {
         return;
     };
-    let opened = match answer_of(res) {
-        Ok(n) if n > MIN_HEAP_BYTES => {
+    let opened = match Opened::of(completed) {
+        Opened::Bytes(n) if n > MIN_HEAP_BYTES => {
             close(fd);
             Opened::Failed {
                 errnum: Errno::EFBIG,
                 detail,
             }
         }
-        Ok(n) => Opened::Bytes(n),
-        Err(Errno::ENOENT) => Opened::Absent,
-        Err(errnum) => Opened::Failed { errnum, detail },
+        opened => opened,
     };
     match owner {
         Owner::Fetch { key, at_ms } => fetch::on_opened(fd, key, at_ms, opened),

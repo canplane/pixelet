@@ -7,6 +7,7 @@ use core::panic::Location;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
+use crate::sys::io::file::Opened;
 use crate::sys::io::room::Refusal;
 
 pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
@@ -27,6 +28,22 @@ impl From<Errno> for Failure {
             errnum,
             detail: 0,
             at: Some(Location::caller()),
+        }
+    }
+}
+
+/// An open that came to no bytes, as its run's failure.
+impl From<Opened> for Failure {
+    #[track_caller]
+    fn from(opened: Opened) -> Failure {
+        match opened {
+            Opened::Failed { errnum, detail } => Failure {
+                errnum,
+                detail: detail as u16,
+                at: None,
+            },
+            Opened::Absent => Failure::from(Errno::ENOENT),
+            Opened::Bytes(_) => Failure::from(Errno::ENOTRECOVERABLE),
         }
     }
 }

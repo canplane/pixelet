@@ -85,12 +85,3 @@ pub fn abort(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
         h.abort(errnum, at, a, b);
     }
 }
-
-/// A host's answer as one value: a count, or the errno it refused with. A code
-/// no errno names is the host breaking the protocol.
-pub fn answer_of(res: i32) -> Result<u32, Errno> {
-    match u32::try_from(res) {
-        Ok(n) => Ok(n),
-        Err(_) => Err(Errno::of(res).unwrap_or(Errno::EPROTO)),
-    }
-}

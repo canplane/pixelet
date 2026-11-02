@@ -30,6 +30,7 @@
 #include "xpute/kit/wire/xtp/cursor.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
 #include "xpute/guest/ipc/door.hpp"
+#include "xpute/guest/ipc/file.hpp"
 #include "xpute/guest/ipc/ring.hpp"
 #include "xpute/guest/ipc/sys.hpp"
 #include "xpute/guest/mem/section.hpp"
@@ -119,50 +120,6 @@ class Packet {
 template <class T>
 concept FromPacket = std::same_as<T, Packet> || requires(Packet pkt) {
     { T::from_packet(pkt) } -> std::same_as<Result<T>>;
-};
-
-// Bytes of the heap, given back by their size: what a read fills.
-class Bytes {
-  public:
-    Bytes() noexcept = default;
-    Bytes(Bytes &&o) noexcept : at_(std::exchange(o.at_, nullptr)), cnt_(std::exchange(o.cnt_, 0)) {}
-    Bytes &operator=(Bytes &&o) noexcept {
-        if (this != &o) {
-            release();
-            at_ = std::exchange(o.at_, nullptr);
-            cnt_ = std::exchange(o.cnt_, 0);
-        }
-        return *this;
-    }
-    Bytes(const Bytes &) = delete;
-    Bytes &operator=(const Bytes &) = delete;
-    ~Bytes() { release(); }
-
-    // None where the heap has no room.
-    static std::optional<Bytes> make(std::uint32_t cnt) noexcept {
-        Bytes b;
-        if (cnt == 0) return b;
-        b.at_ = static_cast<std::uint8_t *>(::operator new(cnt, std::nothrow));
-        if (b.at_ == nullptr) return std::nullopt;
-        b.cnt_ = cnt;
-        return b;
-    }
-
-    std::uint8_t *data() noexcept { return at_; }
-    const std::uint8_t *data() const noexcept { return at_; }
-    std::size_t size() const noexcept { return cnt_; }
-    std::span<std::uint8_t> span() noexcept { return {at_, cnt_}; }
-    std::span<const std::uint8_t> span() const noexcept { return {at_, cnt_}; }
-
-  private:
-    void release() noexcept {
-        if (at_ != nullptr) ::operator delete(at_, cnt_);
-        at_ = nullptr;
-        cnt_ = 0;
-    }
-
-    std::uint8_t *at_ = nullptr;
-    std::size_t cnt_ = 0;
 };
 
 // A turn as a handler sees it: the host to call, and events to raise.

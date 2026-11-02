@@ -128,7 +128,7 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     let stream = attempt_of(key).map(|(stream, _)| stream);
     let got = match opened {
         Opened::Absent => Receipt::Absent,
-        failed @ Opened::Failed { .. } => Receipt::Failed(failed.failure()),
+        failed @ Opened::Failed { .. } => Receipt::Failed(Failure::from(failed)),
         Opened::Bytes(0) => {
             file::close(fd);
             Receipt::Read(None)

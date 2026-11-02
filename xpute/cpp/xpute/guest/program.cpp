@@ -72,16 +72,13 @@ struct Program {
             r.ready(errno_of(opened.res).value_or(Errno::eio));
             return;
         }
-        std::optional<Bytes> bytes = Bytes::make(static_cast<std::uint32_t>(opened.res));
+        // Kept in `r`, or in `left` once it is gone, until a later turn's rise.
+        Result<Bytes> bytes = files.read_whole(sys, opened.fd, static_cast<std::uint32_t>(opened.res));
         if (!bytes) {
-            files.close(sys, opened.fd);
-            r.ready(Errno::enomem);
+            r.ready(bytes.error().errnum);
             return;
         }
         r.bytes_ = std::move(*bytes);
-        // Kept in `r`, or in `left` once it is gone, until a later turn's rise.
-        sys.read(opened.fd, r.bytes_.span());
-        files.close(sys, opened.fd);
         r.got_ = Read::Got::reading;
         r.asked_ = turn;
         reading.push_back(&r);

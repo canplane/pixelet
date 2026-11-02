@@ -24,7 +24,7 @@ use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use xpute_guest::sched::edge::{next_turn, yield_if_spent};
 
 use crate::sys::io::demand::Ask;
-use crate::sys::io::failure::Ended;
+use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::file::{self, Opened, Owner};
 use crate::sys::io::host_spec::{root, CATALOG, SPHERE};
 use crate::sys::io::request::{attempt_of, settle, Credit};
@@ -204,7 +204,7 @@ pub fn cancel_asset(key: u64) -> bool {
 /// where the heap refuses them room, the want waits for room.
 pub fn on_opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {
-        on_load_rejected(key, Ended::Failed(opened.failure()));
+        on_load_rejected(key, Ended::Failed(Failure::from(opened)));
         return;
     };
     let Some(what) = attempt_of(key).and_then(|(_, subject)| of_subject(subject)) else {

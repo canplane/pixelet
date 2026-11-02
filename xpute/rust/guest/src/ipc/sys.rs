@@ -18,6 +18,12 @@ pub mod spec;
 
 pub type Fd = u32;
 
+/// A host's answer as one value: a count, or the errno it refused with. A code
+/// no errno names is the host breaking the protocol, EPROTO.
+pub fn answer_of(res: i32) -> Result<u32, Errno> {
+    u32::try_from(res).map_err(|_| Errno::of(res).unwrap_or(Errno::EPROTO))
+}
+
 // Each call's arguments, which its record takes as an array of this length.
 pub const OPENAT_ARGS: usize = spec::args::OPENAT as usize;
 pub const READ_ARGS: usize = spec::args::READ as usize;
@@ -108,8 +114,7 @@ impl Sys {
             .stream
             .past(op, args, Some(bytes))
             .ok_or(Errno::ENOSPC)?;
-        let res = crate::hostcall::hostcall(at as u32);
-        u32::try_from(res).map_err(|_| Errno::of(res).unwrap_or(Errno::EPROTO))
+        answer_of(crate::hostcall::hostcall(at as u32))
     }
 
     /// `call` where it fits with `reserve` bytes left after it; false, and
