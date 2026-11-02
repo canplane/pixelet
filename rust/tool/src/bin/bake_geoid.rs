@@ -16,10 +16,8 @@ use std::process::ExitCode;
 use pxl_tool::root;
 
 const OUT: &str = "spec/spec/space/geoid.json";
-/// Coarse beside GPS's vertical error: over Korea bilinear between these
-/// misses the 5′ grid by 3.9 m at most, 1.4 m RMS, against a geoid there
-/// from 15 m to 33 m. The world's worst and RMS are measured and written
-/// beside it.
+/// Coarse beside GPS's vertical error. The world's worst and RMS are measured
+/// and written beside it.
 const STEP_DEG: usize = 5;
 
 /// Rows from 90°N down, columns from 0°E east, in meters.

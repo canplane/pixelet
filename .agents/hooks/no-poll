@@ -1,0 +1,11 @@
+#!/bin/bash
+# PreToolUse(Bash): a command that waits in a loop on sleep (`while`/`until`/`for`
+# … `do` … `sleep`) is refused before it runs. Check the state once instead;
+# what must be waited on runs in the background, and its end is notified.
+
+cmd=$(jq -r '.tool_input.command // empty' | tr '\n' ' ')
+if grep -Eq '\b(while|until|for)\b.*\bdo\b.*\bsleep\b' <<<"$cmd"; then
+  jq -n '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny",
+    permissionDecisionReason: "No polling loop on sleep: check the state once (is the output newer than its sources, does the port answer), and run what must be waited on in the background, whose end is notified."}}'
+fi
+exit 0

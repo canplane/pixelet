@@ -15,7 +15,6 @@ import { type Gauge, perfGaugeRead } from "./view.ts";
 
 const POLL_MS = 500;
 
-/** Folding every frame since load on each repaint grew into a 60 ms task. */
 export const LIVE_WINDOW_MS = 10_000;
 
 const store = create<{ gauge: Gauge | null; view: Gauge["view"] | null }>()(

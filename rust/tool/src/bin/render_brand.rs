@@ -5,8 +5,7 @@
 //! never older than the brand. The symbol's outline is code both apps bundle
 //! (`ts/client/src/shell/setting/info/symbol-path.ts`), so it is kept: a build only
 //! checks it is what the brand writes, and `--symbol` rewrites it. `icon.png`
-//! is opaque because both platforms paint alpha black; `og-image.png` stays
-//! PNG because the source was a 10-bit AVIF not every decoder reads.
+//! is opaque because both platforms paint alpha black.
 //!
 //!   pnpm --dir ts/app/web build:brand   the icons, the outline checked
 //!   make render-brand                        the outline rewritten as well
@@ -60,7 +59,7 @@ fn resize(img: &RgbaImage, w: u32, h: u32) -> RgbaImage {
 }
 
 /// The bounding box of what differs from the corner pixel by more than
-/// `threshold`; untrimmed, a 16-pixel favicon drew a 12-pixel cube.
+/// `threshold`.
 fn trim(img: &RgbaImage, threshold: u8) -> RgbaImage {
     let bg = *img.get_pixel(0, 0);
     let differs = |p: &Rgba<u8>| {

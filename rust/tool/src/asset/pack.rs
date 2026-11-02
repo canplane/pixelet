@@ -240,7 +240,7 @@ const QUALITY: f32 = 92.0;
 /// How far a top's mean may stay from its palette entry's Carto color, in CIE76 ΔE:
 /// the painted palette entry kept up close, the map still Carto's from afar, where a
 /// textured palette entry is drawn as its tile's mean (pxl-render mesh/paint/palette.rs).
-pub const TOWARD_CARTO: f64 = 20.0;
+pub(crate) const TOWARD_CARTO: f64 = 20.0;
 
 /// sRGB bytes to CIE L*a*b* (D65), through linear light.
 fn lab_of(rgb: [u8; 3]) -> [f64; 3] {
@@ -321,8 +321,7 @@ fn toward_carto(img: &mut RgbaImage, carto: u32) {
     }
 }
 
-/// The pack laid out as one lossy WebP (q92): about 400 KB against several MB
-/// lossless, downloaded on every cold start.
+/// The pack laid out as one lossy WebP (q92).
 pub struct Image {
     pub bytes: Vec<u8>,
     pub tiles: Vec<String>,

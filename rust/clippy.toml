@@ -52,6 +52,12 @@ disallowed-methods = [
     # Its precision is unspecified, by platform and by call (std's doc).
     { path = "f64::powi", reason = "write the product out, or libm::pow" },
     { path = "f32::powi", reason = "write the product out, or libm::powf" },
+    # One rounding: half to even, as WGSL rounds (xpute ARCHITECTURE.md,
+    # `math/scalar`); these round half away from zero.
+    { path = "f64::round", reason = "round half to even: f64::round_ties_even, or xpute_kit::math::scalar::round" },
+    { path = "f32::round", reason = "round half to even: f32::round_ties_even, or xpute_kit::math::scalar::round" },
+    { path = "libm::round", reason = "round half to even: f64::round_ties_even, or xpute_kit::math::scalar::round" },
+    { path = "libm::roundf", reason = "round half to even: f32::round_ties_even, or xpute_kit::math::scalar::round" },
 ]
 
 # A map's order is the same on every run: std's hasher is seeded per process.
@@ -63,7 +69,7 @@ disallowed-types = [
 # What `absolute_paths` lets stand in a body: the standard library's own paths
 # (`core::mem::swap`), and no path of more than a crate and a module. A longer
 # one is a `use` at the top of its module, as the Book has it: a function,
-# constant or static through its module (`use pxl_spec_core::clipmap;` then
+# constant or static through its module (`use pxl_engine::clipmap;` then
 # `clipmap::step()`), a type whole; a path only `mod tests` uses is imported
 # there. Where a module's own names take another's, the full path stands under
 # `#[expect(clippy::absolute_paths, reason = "…")]`.

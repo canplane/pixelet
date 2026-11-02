@@ -1,11 +1,12 @@
 // pxl-tool/bin/check_rules.rs
 
 //! Holds the tree to what a reader cannot see and the code must keep: no raw
-//! pointer casts in offset crates, each rounding half to even in every
-//! language, no CommonJS file, each generated shader made from the sources the
-//! tree holds now, the layers' order, where nothing names what is above it,
-//! the screen's pixels read only at the screen, and each workgroup's size
-//! its constant. A rule Rust alone keeps is clippy's (rust/clippy.toml).
+//! pointer casts in offset crates, each rounding half to even where clippy
+//! does not see it, no CommonJS file, each generated shader made from the
+//! sources the tree holds now, the layers' order, where nothing names what is
+//! above it, the layers read by the query alone, the screen's pixels read
+//! only at the screen, and no Rust file outside a crate's module tree. A rule Rust alone keeps is clippy's
+//! (rust/clippy.toml, xpute/rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -26,29 +27,29 @@ const OFF_CRATES: [&str; 6] = [
     "rust/client-bracket/native/src/",
 ];
 
-/// One rounding: half to even (ARCHITECTURE.md, Terrain). A call that rounds
-/// otherwise, or a floor of a half added, is refused in pixelet's code and
-/// xpute's; xpute's scalar keeps its named variants, round_half_up and
-/// round_half_away, as options a library offers.
+/// One rounding: half to even (xpute ARCHITECTURE.md, `math/scalar`). A call
+/// that rounds otherwise, in TypeScript, WGSL or C++, or a floor of a half
+/// added in any of them or in Rust, is refused in pixelet's code and xpute's;
+/// Rust's calls are clippy's (`disallowed-methods`). xpute's scalar keeps its
+/// named variants, round_half_up and round_half_away, as options a library
+/// offers.
 const ROUNDING_ROOTS: [&str; 3] = ["rust/", "ts/", "xpute/"];
-const ROUNDING_NAMED: [&str; 6] = [
-    "xpute/rust/kit/src/math/scalar.rs",
-    "xpute/rust/kit/src/math/scalar.test.rs",
+const ROUNDING_VARIANT_FILES: [&str; 4] = [
     "xpute/ts/kit/src/math/scalar.ts",
     "xpute/ts/kit/src/math/scalar.test.ts",
     "xpute/cpp/xpute/kit/math/scalar.hpp",
     "xpute/cpp/xpute/kit/math/scalar.test.cpp",
 ];
-const NOT_EVEN: [&str; 9] = [
-    r"\.round\(\)",
-    r"\bf(?:32|64)::round\b",
-    r"\blibm::roundf?\(",
+const NOT_EVEN: [&str; 4] = [
     r"\bMath\.round\(",
     r"\bstd::round\b",
     // A number's text rounds its last place half up: `fixed` (ts/client shell/fixed.ts) rounds it half to even.
     r"\.toFixed\(",
     r"\.toPrecision\(",
-    // A half added inside a floor's own parentheses, or before `.floor()`.
+];
+/// A half added inside a floor's own parentheses, or before `.floor()`: no
+/// call clippy can name, so Rust's are refused here too.
+const HALF_FLOORED: [&str; 2] = [
     r"\bfloor\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\+\s*0\.5\s*\)",
     r"\([^()]*\+\s*0\.5\s*\)\.floor\(\)",
 ];
@@ -75,23 +76,21 @@ const KERNEL_ORDER: [(&str, u8); 12] = [
 const KERNEL_HEADS: [&str; 2] = ["scene", "control"];
 const KERNEL_BESIDE: [&str; 1] = ["perf"];
 
-/// pxl-spec-core's order: what every part speaks, the layers' storage and
+/// pxl-engine's order: what every part speaks, the layers' storage and
 /// the world's fields, the query over them (ARCHITECTURE.md, "The query, the
 /// only seam"), and what asks it. A layer knows no query, and the query no
 /// asker.
-const SPEC_CORE: &str = "rust/spec/core/src/";
-const SPEC_CORE_ORDER: [(&str, u8); 28] = [
+const ENGINE: &str = "rust/spec/engine/src/";
+const ENGINE_ORDER: [(&str, u8); 25] = [
     ("param", 0),
-    ("cube", 0),
-    ("decor", 0),
+    ("seed", 0),
+    ("content", 0),
+    ("value", 0),
     ("lattice", 0),
     ("grid", 0),
     ("answer", 0),
     ("tally", 0),
     ("area", 1),
-    ("cave", 1),
-    ("scatter", 1),
-    ("cloud", 1),
     ("ground", 1),
     ("clipmap", 1),
     ("way", 1),
@@ -100,15 +99,30 @@ const SPEC_CORE_ORDER: [(&str, u8); 28] = [
     ("world", 2),
     ("cast", 2),
     ("support", 2),
-    ("observed", 2),
+    ("pyramid", 2),
     ("beam", 3),
     ("eye", 3),
     ("raster", 3),
     ("ray", 3),
     ("light", 3),
     ("screen", 3),
-    ("generated", 3),
     ("face", 3),
+];
+
+/// pxl-content's order: its parameters, its palette and the one rule a
+/// count is handed down by, its rules and fields, then the decor's generation
+/// over its scatter.
+const CONTENT: &str = "rust/spec/content/src/";
+const CONTENT_ORDER: [(&str, u8); 9] = [
+    ("param", 0),
+    ("share", 0),
+    ("cube", 0),
+    ("decor", 0),
+    ("cave", 1),
+    ("strata", 1),
+    ("cloud", 1),
+    ("scatter", 1),
+    ("generation", 2),
 ];
 
 /// What the world shows is decided in angles, the camera grid's cell; a
@@ -151,149 +165,46 @@ fn screen_reached(text: &str) -> Vec<usize> {
     lines
 }
 
-/// On the GPU the screen's size is the eye's rays' image's (pxl-shader
-/// cast.rs `Rays`), bound only to the passes that draw a pixel's ray or read
-/// the rays drawn: the cast and its walks again, the stops' faces put at their
-/// pixels, and the light's receivers. The beam, the cells, the samples, decor
-/// and the shadow map read the eye's angles alone.
-const SHADER: &str = "rust/client/shader/src/";
-const RAYS_ENTRIES: [&str; 6] = [
-    "cast_cs",
-    "miss_cs",
-    "miss_list_cs",
-    "stop_lead_cs",
-    "stop_faces_cs",
-    "light_mark_cs",
+/// Only the world's query reads a layer (ARCHITECTURE.md, "The query, the
+/// only seam"): the layers' reads, the form both answer (`Query`), the
+/// terrain's and the store's past it (`TerrainQuery`, `ObjectQuery`), the clip
+/// levels as the CPU reads them (`CpuClipmap`) and the ways' pool, are named
+/// in the kernel by the layers and the query alone, and the query lends none
+/// of them on. A path is a file, or a folder by its trailing slash.
+const LAYERS: [&str; 2] = [
+    "rust/client/kernel/src/domain/layer.rs",
+    "rust/client/kernel/src/domain/layer/",
 ];
-
-/// Every entry point in `text`, a shader's source, whose parameters bind
-/// the rays' image, by its name or a path to it, and is not one of
-/// `RAYS_ENTRIES`, each with its line: the parameters from its
-/// `entry_point_name` to the body's opening brace.
-fn rays_bound(text: &str) -> Vec<(usize, String)> {
-    let entry = Regex::new(r#"entry_point_name\s*=\s*"(\w+)""#).expect("an entry's pattern");
-    let rays = Regex::new(r"&\s*(?:\w+::)*Rays\b").expect("the rays' pattern");
-    let mut out = Vec::new();
-    for c in entry.captures_iter(text) {
-        let (at, name) = (c.get(0).map_or(0, |m| m.start()), &c[1]);
-        let end = text[at..].find(") {").map_or(text.len(), |k| at + k);
-        if rays.is_match(&text[at..end]) && !RAYS_ENTRIES.contains(&name) {
-            out.push((text[..at].matches('\n').count() + 1, name.to_string()));
-        }
-    }
-    out
-}
-
-/// A workgroup's size is a constant its shader's code also counts by: the
-/// lanes a scan or a stride steps across, the side a pyramid tiles by.
-/// rust-gpu's `threads` takes only literals, so each entry's is held here to
-/// its constant: the entry's file under `SHADER`, the entry, the constant's
-/// file under rust/ and its name, and how many of the size's sides it gives.
-const WORKGROUPS: [(&str, &str, &str, &str, usize); 12] = [
-    (
-        "cast.rs",
-        "stop_lead_cs",
-        "spec/core/src/beam.rs",
-        "STOP_LANES",
-        1,
-    ),
-    (
-        "cast.rs",
-        "stop_faces_cs",
-        "spec/core/src/beam.rs",
-        "STOP_LANES",
-        1,
-    ),
-    (
-        "raster.rs",
-        "face_cs",
-        "spec/core/src/raster.rs",
-        "FACES_LANES",
-        1,
-    ),
-    (
-        "cast.rs",
-        "cast_cs",
-        "client/shader/src/cast.rs",
-        "CAST_SIDE",
-        2,
-    ),
-    (
-        "way.rs",
-        "way_tree_cs",
-        "client/shader/src/way.rs",
-        "LANES",
-        1,
-    ),
-    (
-        "way.rs",
-        "way_freed_cs",
-        "client/shader/src/way.rs",
-        "LANES",
-        1,
-    ),
-    (
-        "decor.rs",
-        "decor_thin_cs",
-        "client/shader/src/decor.rs",
-        "CELL_LANES",
-        1,
-    ),
-    (
-        "decor.rs",
-        "decor_cnt_cs",
-        "client/shader/src/decor.rs",
-        "RECORD_LANES",
-        1,
-    ),
-    (
-        "decor.rs",
-        "decor_compact_cs",
-        "client/shader/src/decor.rs",
-        "RECORD_LANES",
-        1,
-    ),
-    (
-        "cast.rs",
-        "miss_list_cs",
-        "spec/core/src/ray.rs",
-        "MISS_LANES",
-        1,
-    ),
-    (
-        "light.rs",
-        "light_miss_cs",
-        "spec/core/src/ray.rs",
-        "MISS_LANES",
-        1,
-    ),
-    (
-        "light.rs",
-        "light_told_cs",
-        "spec/core/src/ray.rs",
-        "MISS_LANES",
-        1,
-    ),
+const LAYER_READERS: [&str; 3] = [
+    "rust/client/kernel/src/domain/query.rs",
+    "rust/client/kernel/src/domain/query/",
+    "rust/client/kernel/src/domain/query.test.rs",
 ];
+const LAYER_READS: &str =
+    r"\b(?:Query|TerrainQuery|ObjectQuery|CpuClipmap)\b|\bclipmap::(?:\{[^}]*\bpool\b|pool\b)";
 
-/// The workgroup size `text`, a shader's source, gives `entry`.
-fn threads(text: &str, entry: &str) -> Option<[u32; 3]> {
-    let pattern =
-        format!(r#"threads\((\d+),\s*(\d+),\s*(\d+)\),\s*entry_point_name\s*=\s*"{entry}""#);
-    let c = Regex::new(&pattern)
-        .expect("a workgroup's pattern")
-        .captures(text)?;
-    Some([1, 2, 3].map(|k| c[k].parse().unwrap_or(0)))
-}
-
-/// The value of `name`, a `u32` constant `text` writes as a literal.
-fn constant(text: &str, name: &str) -> Option<u32> {
-    let pattern = format!(r"const {name}: u32 = (\d+);");
-    Regex::new(&pattern)
-        .expect("a constant's pattern")
-        .captures(text)?[1]
-        .parse()
-        .ok()
+/// The lines of `text`, a kernel source, comments left out, that name a
+/// layer's read (`LAYER_READS`), or glob a module that would bring one in
+/// unnamed: where `lent`, only a re-export of one past the query.
+fn layer_read_named(text: &str, lent: bool) -> Vec<usize> {
+    let code: String = text
+        .lines()
+        .map(|l| l.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let pattern = match lent {
+        false => format!(r"{LAYER_READS}|\b(?:layer|terrain|clipmap|store)::\*"),
+        true => format!(
+            r"\bpub(?:\s*\(\s*(?:crate|in\s+crate::domain)\s*\))?\s+use\b[^;]*(?:{LAYER_READS}|::\*)"
+        ),
+    };
+    let reach = Regex::new(&pattern).expect("the layers' reads' pattern");
+    let mut lines: Vec<usize> = reach
+        .find_iter(&code)
+        .map(|m| code[..m.start()].matches('\n').count() + 1)
+        .collect();
+    lines.dedup();
+    lines
 }
 
 /// xpute's words are host, guest and their contract (AGENTS.md): pixelet's
@@ -304,7 +215,7 @@ const PIXELET_WORDS: &str = r"(?i)\b(pixelet|kernel|shell)\b";
 /// The modules `text` names through `crate::`, a `domain::` step passed
 /// over (the kernel's heads and trunk live under it), a group's every
 /// first name among them, each with the line it is named on.
-fn named(text: &str) -> Vec<(usize, String)> {
+fn crate_modules(text: &str) -> Vec<(usize, String)> {
     let code: String = text
         .lines()
         .map(|l| l.split("//").next().unwrap_or(""))
@@ -366,7 +277,7 @@ fn standing(f: &str, root: &str) -> String {
 /// `order`, or of one head by another; and every module `order` does not
 /// place, but the crate's root and those that stand `beside` it, so a new
 /// one is placed before it is checked.
-fn ordered(
+fn out_of_order(
     files: &[&str],
     read: &dyn Fn(&str) -> Option<String>,
     root: &str,
@@ -388,7 +299,7 @@ fn ordered(
             }
             continue;
         };
-        for (line, them) in named(&read(f).unwrap_or_default()) {
+        for (line, them) in crate_modules(&read(f).unwrap_or_default()) {
             let Some(theirs) = level(&them) else { continue };
             let head = heads.contains(&me.as_str()) && heads.contains(&them.as_str());
             if them != me && (theirs > mine || head) {
@@ -411,6 +322,81 @@ fn ordered(
 /// laid out under a checkout's ignored target,
 /// every file under it but the builds' and the packages', which git there
 /// would list none of. Outside any checkout, an error.
+/// Each tracked `.rs` that no crate reaches: none of its own crate's roots
+/// (`lib.rs`, `main.rs`, `build.rs`, a file under `src/bin/`, `tests/`,
+/// `benches/` or `examples/`), and no `mod`, `#[path]` or `include!` in a
+/// file, nor a manifest's `path`, names it. Such a file compiles in nothing,
+/// so nothing checks it.
+fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+    use std::collections::BTreeSet;
+    use std::path::{Component, Path, PathBuf};
+    fn clean(p: &Path) -> PathBuf {
+        let mut out = PathBuf::new();
+        for c in p.components() {
+            match c {
+                Component::ParentDir => {
+                    out.pop();
+                }
+                Component::CurDir => {}
+                c => out.push(c),
+            }
+        }
+        out
+    }
+    let rust =
+        |f: &&&str| f.ends_with(".rs") && (f.starts_with("rust/") || f.starts_with("xpute/rust/"));
+    let module = Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;")
+        .expect("a module's pattern");
+    let path_attr = Regex::new(r#"#\[path\s*=\s*"([^"]+)"\]"#).expect("a path's pattern");
+    let include = Regex::new(r#"include!\(\s*"([^"]+\.rs)"\s*\)"#).expect("an include's pattern");
+    let manifest_path =
+        Regex::new(r#"(?m)^\s*path\s*=\s*"([^"]+\.rs)""#).expect("a manifest path's pattern");
+    let mut reached: BTreeSet<PathBuf> = BTreeSet::new();
+    for f in files.iter().filter(|f| f.ends_with("Cargo.toml")) {
+        let dir = Path::new(f).parent().unwrap_or(Path::new(""));
+        for c in manifest_path.captures_iter(&read(f).unwrap_or_default()) {
+            reached.insert(clean(&dir.join(&c[1])));
+        }
+    }
+    for f in files.iter().filter(rust) {
+        let file = Path::new(f);
+        let dir = file.parent().unwrap_or(Path::new(""));
+        let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        // A `mod` in a crate root or a `mod.rs` names files beside it; in any
+        // other file, files in the folder named as that file is.
+        let children = if ["lib", "main", "mod", "build"].contains(&stem) {
+            dir.to_path_buf()
+        } else {
+            dir.join(stem)
+        };
+        let text = read(f).unwrap_or_default();
+        for c in path_attr.captures_iter(&text) {
+            reached.insert(clean(&dir.join(&c[1])));
+        }
+        for c in include.captures_iter(&text) {
+            reached.insert(clean(&dir.join(&c[1])));
+        }
+        for c in module.captures_iter(&text) {
+            reached.insert(children.join(format!("{}.rs", &c[1])));
+            reached.insert(children.join(&c[1]).join("mod.rs"));
+        }
+    }
+    files
+        .iter()
+        .filter(rust)
+        .filter(|f| {
+            let p = Path::new(f);
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let rooted = ["lib.rs", "main.rs", "build.rs"].contains(&name)
+                || ["/src/bin/", "/tests/", "/benches/", "/examples/"]
+                    .iter()
+                    .any(|d| f.contains(d));
+            !rooted && !reached.contains(p)
+        })
+        .map(|f| format!("{f}: no crate reaches it: no `mod`, `#[path]`, `include!` or manifest `path` names it, so it compiles in nothing"))
+        .collect()
+}
+
 fn list_files(root: &std::path::Path) -> Result<String, String> {
     let top = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
@@ -484,19 +470,24 @@ fn run() -> Result<Vec<String>, String> {
         }
     }
 
-    let not_even: Vec<Regex> = NOT_EVEN
-        .iter()
-        .map(|p| Regex::new(p).expect("a rounding's pattern"))
-        .collect();
+    let patterns = |ps: &[&str]| -> Vec<Regex> {
+        ps.iter()
+            .map(|p| Regex::new(p).expect("a rounding's pattern"))
+            .collect()
+    };
+    let (not_even, half_floored) = (patterns(&NOT_EVEN), patterns(&HALF_FLOORED));
     let rounded = Regex::new(r"\.(rs|tsx?|wgsl|hpp|cpp)$").expect("the extensions' pattern");
     for f in files.iter().filter(|f| {
         ROUNDING_ROOTS.iter().any(|r| f.starts_with(r))
-            && !ROUNDING_NAMED.contains(f)
+            && !ROUNDING_VARIANT_FILES.contains(f)
             && rounded.is_match(f)
             && !f.ends_with(".gen.wgsl")
     }) {
+        let calls = !f.ends_with(".rs");
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
-            if not_even.iter().any(|r| r.is_match(line)) {
+            if (calls && not_even.iter().any(|r| r.is_match(line)))
+                || half_floored.iter().any(|r| r.is_match(line))
+            {
                 problems.push(format!(
                     "{f}:{}: rounds other than half to even: {}",
                     n + 1,
@@ -516,7 +507,7 @@ fn run() -> Result<Vec<String>, String> {
         problems.push(format!("{f}: CommonJS; the tree's scripts are ES modules"));
     }
 
-    problems.extend(ordered(
+    problems.extend(out_of_order(
         &files,
         &read,
         KERNEL,
@@ -524,11 +515,12 @@ fn run() -> Result<Vec<String>, String> {
         &KERNEL_HEADS,
         &KERNEL_BESIDE,
     ));
-    problems.extend(ordered(
+    problems.extend(out_of_order(&files, &read, ENGINE, &ENGINE_ORDER, &[], &[]));
+    problems.extend(out_of_order(
         &files,
         &read,
-        SPEC_CORE,
-        &SPEC_CORE_ORDER,
+        CONTENT,
+        &CONTENT_ORDER,
         &[],
         &[],
     ));
@@ -545,24 +537,21 @@ fn run() -> Result<Vec<String>, String> {
     }
     for f in files
         .iter()
-        .filter(|f| f.starts_with(SHADER) && f.ends_with(".rs"))
+        .filter(|f| f.starts_with(KERNEL) && f.ends_with(".rs"))
     {
-        for (line, name) in rays_bound(&read(f).unwrap_or_default()) {
-            problems.push(format!(
-                "{f}:{line}: `{name}` binds the rays' image, the screen's size, past the passes that draw a pixel; only RAYS_ENTRIES may (check_rules.rs)"
-            ));
+        if LAYERS.iter().any(|l| f.starts_with(l)) {
+            continue;
         }
-    }
-    for (file, entry, at, name, sides) in WORKGROUPS {
-        let size = threads(&read(&format!("{SHADER}{file}")).unwrap_or_default(), entry);
-        let val = constant(&read(&format!("rust/{at}")).unwrap_or_default(), name);
-        let held = size
-            .zip(val)
-            .is_some_and(|(s, v)| s[..sides].iter().all(|&d| d == v));
-        if !held {
-            problems.push(format!(
-                "{SHADER}{file}: `{entry}`'s workgroup {size:?} is not `{name}` ({at}: {val:?}) a side, {sides} of them (check_rules.rs WORKGROUPS)"
-            ));
+        let query = LAYER_READERS.iter().any(|r| f.starts_with(r));
+        for line in layer_read_named(&read(f).unwrap_or_default(), query) {
+            problems.push(match query {
+                false => format!(
+                    "{f}:{line}: reads a layer where every reader asks the world's query; only the query may (check_rules.rs `LAYER_READERS`)"
+                ),
+                true => format!(
+                    "{f}:{line}: lends a layer's read on from the query, which answers only as the world (check_rules.rs)"
+                ),
+            });
         }
     }
     let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
@@ -579,12 +568,14 @@ fn run() -> Result<Vec<String>, String> {
         }
     }
 
+    problems.extend(unlinked(&files, &read));
+
     // The generated shaders' stamp names the digest of the sources they were
     // made from (pxl-tool shader.rs `STAMP`); a set the tree has moved past is
     // stale.
     for f in stale(&root, &inputs_digest(&root)?) {
         problems.push(format!(
-            "{f}: stale against pxl-spec-core's sources; run `cargo shader-wgsl` in rust/"
+            "{f}: stale against pxl-engine's sources; run `cargo shader-wgsl` in rust/"
         ));
     }
     Ok(problems)
@@ -593,7 +584,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels and the workgroups' sizes hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the query as the one seam, the screen's pixels and the crates' module trees hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -610,6 +601,82 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unlinked_file_named() {
+        let files = [
+            "rust/a/src/lib.rs",
+            "rust/a/src/one.rs",
+            "rust/a/src/one/two.rs",
+            "rust/a/src/gen.spec.rs",
+            "rust/a/src/stray.rs",
+            "rust/a/Cargo.toml",
+            "rust/a/src/test_bin.rs",
+        ];
+        let read = |f: &str| {
+            Some(
+                match f {
+                    "rust/a/src/lib.rs" => {
+                        "mod one;
+#[path = \"gen.spec.rs\"]
+mod spec;"
+                    }
+                    "rust/a/src/one.rs" => "pub(crate) mod two;",
+                    "rust/a/Cargo.toml" => "[[test]]\npath = \"src/test_bin.rs\"",
+                    _ => "",
+                }
+                .to_string(),
+            )
+        };
+        let found = unlinked(&files, &read);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].starts_with("rust/a/src/stray.rs:"));
+    }
+
+    #[test]
+    fn layer_read_any_name() {
+        for (text, at) in [
+            ("use crate::domain::layer::Query;", vec![1]),
+            (
+                "use crate::domain::layer::terrain::TerrainQuery as _;",
+                vec![1],
+            ),
+            (
+                "use crate::domain::layer::object::store::{\n    object,\n    ObjectQuery,\n};",
+                vec![3],
+            ),
+            (
+                "use crate::domain::layer::terrain::clipmap::{pool, CpuClipmap};",
+                vec![1],
+            ),
+            ("let w = clipmap::pool();", vec![1]),
+            ("use crate::domain::layer::object::store::*;", vec![1]),
+            ("use crate::domain::layer::*;", vec![1]),
+        ] {
+            assert_eq!(layer_read_named(text, false), at, "{text}");
+        }
+        for text in [
+            "use crate::domain::query::World;",
+            "use crate::domain::layer::object::store::{object, Entry};",
+            "// the layer's Query, in a comment",
+            "use pxl_content::generation::DecorQuery;",
+        ] {
+            assert!(layer_read_named(text, false).is_empty(), "{text}");
+        }
+        assert_eq!(
+            layer_read_named("pub use crate::domain::layer::Query;", true),
+            vec![1]
+        );
+        assert_eq!(
+            layer_read_named(
+                "pub(in crate::domain) use crate::domain::layer::Query;",
+                true
+            ),
+            vec![1]
+        );
+        assert!(layer_read_named("use crate::domain::layer::Query;", true).is_empty());
+        assert!(layer_read_named("pub(super) use crate::domain::layer::Query;", true).is_empty());
+    }
 
     #[test]
     fn screen_reach_any_name() {
@@ -632,29 +699,5 @@ mod tests {
         ] {
             assert!(screen_reached(text).is_empty(), "{text}");
         }
-    }
-
-    #[test]
-    fn listed_entries_bind_rays() {
-        let entry = |name: &str, param: &str| {
-            format!("#[spirv(compute(threads(8, 8, 1), entry_point_name = \"{name}\"))]\npub fn {name}(\n    {param}\n) {{\n    let x = 1;\n}}\n")
-        };
-        let rays = "#[spirv(descriptor_set = 0, binding = 3)] rays: &Rays,";
-        let pathed = "#[spirv(descriptor_set = 0, binding = 3)] rays: &crate::cast::Rays,";
-        assert!(rays_bound(&entry("cast_cs", rays)).is_empty());
-        assert_eq!(rays_bound(&entry("cell_cs", rays)).len(), 1);
-        assert_eq!(rays_bound(&entry("cell_cs", pathed)).len(), 1);
-        // A helper after an entry, or its body, is not the entry's binding.
-        let after = entry("cell_cs", "id: UVec3,") + "fn written(rays: &Rays) {}\n";
-        assert!(rays_bound(&after).is_empty());
-    }
-
-    #[test]
-    fn workgroup_vs_constant() {
-        let text = "const LANES: u32 = 64;\n#[spirv(compute(threads(64, 1, 1), entry_point_name = \"way_cs\"))]\n";
-        assert_eq!(threads(text, "way_cs"), Some([64, 1, 1]));
-        assert_eq!(threads(text, "way_free_cs"), None);
-        assert_eq!(constant(text, "LANES"), Some(64));
-        assert_eq!(constant(text, "SIDE"), None);
     }
 }

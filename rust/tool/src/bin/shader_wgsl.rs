@@ -1,6 +1,6 @@
 // pxl-tool/bin/shader_wgsl.rs
 
-//! Makes pxl-spec-core's WGSL (pxl-tool shader.rs): rust/client/shader built
+//! Makes pxl-engine's WGSL (pxl-tool shader.rs): rust/client/shader built
 //! by rust-gpu inside a Linux container, its SPIR-V read into WGSL by naga
 //! (pxl-shader-build), each entry checked in under its header and the digest
 //! of the sources that made them in one stamp beside them (pxl-tool
@@ -24,9 +24,9 @@
 //! test-ts runs: naga takes modules Tint refuses.
 //!
 //! The check judges only that each checked-in file is what the source makes
-//! now; it never compares two implementations, since there is one. The
-//! set's stamp names the digest of its sources, which check_rules recomputes
-//! without the container, so a set the source has moved past fails there too.
+//! now. The set's stamp names the digest of its sources, which check_rules
+//! recomputes without the container, so a set the source has moved past fails
+//! there too.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -49,10 +49,10 @@ const HOME: &str = "pxl-shader";
 /// anew under the lock, so cargo, which judges a path crate by its files'
 /// times, never takes another run's build for this one's.
 const WORK: &str = "/cache/w";
-const BUILT: &str =
+const SPVS: &str =
     "/cache/target/spirv-builder/spirv-unknown-vulkan1.3/release/deps/pxl_shader.spvs";
 /// How many sources' entries the machine keeps made, the most lately used.
-const KEPT: usize = 100;
+const SOURCE_CAP: usize = 100;
 
 /// Where the machine keeps the entries made of each sources' digest, one
 /// directory a digest: whatever checkout, export or worktree's sources it
@@ -128,12 +128,12 @@ made=/made/{digest}
 if [ {fresh} = true ] || [ ! -f $made/done ]; then
   rm -rf {WORK}
   cp -R /copy {WORK}
-  rm -rf {BUILT}
+  rm -rf {SPVS}
   cd {WORK}/rust/client/shader
   cargo run -q --release --locked -p pxl-shader-build
   rm -rf /made/.part
   mkdir /made/.part
-  cp {BUILT}/*.wgsl /made/.part/
+  cp {SPVS}/*.wgsl /made/.part/
   if [ -f $made/done ]; then
     if ! diff -r -x done /made/.part $made >/dev/null; then
       echo \"the build differs from what the machine made of {digest} before\" >&2
@@ -147,7 +147,7 @@ if [ {fresh} = true ] || [ ! -f $made/done ]; then
   fi
 fi
 ls -1t /made/*/done | tail -n +{} | while read f; do rm -rf \"${{f%/done}}\"; done",
-        KEPT + 1
+        SOURCE_CAP + 1
     );
     let status = Command::new("docker")
         .args(["run", "--rm", "--init", "--platform", "linux/arm64"])

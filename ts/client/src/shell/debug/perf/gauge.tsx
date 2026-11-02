@@ -15,6 +15,7 @@ import { failText } from "./report.ts";
 import { fps, type Gauge } from "./view.ts";
 import { alpha, color, textStyle } from "@/shell/ui/theme.ts";
 import { fixed } from "@/shell/fixed.ts";
+import { HIT_KINDS } from "@/abi/perf.spec.ts";
 
 const SPAN_ROWS = 3;
 const MISSED_WARN_SHARE = 0.1;
@@ -52,8 +53,17 @@ const geo = (lat: number, lon: number) =>
   Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`;
 const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
-/** What the pick met, by the kernel's code (perf.json `NOW.view`). */
-const HIT_KIND = ["ground", "cube", "cubes, folded", "decor"];
+/** What the pick met, shown for each of the kernel's kinds (perf.json `HIT_KINDS`). */
+const HIT_KIND_TEXT: Record<(typeof HIT_KINDS)[number], string> = {
+  ground: "ground",
+  object: "cube",
+  objects: "cubes, folded",
+  decor: "decor",
+};
+const hitKindText = (k: number) => {
+  const kind = HIT_KINDS[k];
+  return kind === undefined ? "-" : HIT_KIND_TEXT[kind];
+};
 
 /** A unit to an eighth, the finest cell (z27), with no trailing zeros. */
 const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
@@ -89,7 +99,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
         k="hit"
         v={
           picked
-            ? (HIT_KIND[v.hit_kind] ?? "-")
+            ? hitKindText(v.hit_kind)
             : Number.isNaN(v.hover_x)
               ? "-"
               : "nothing in reach"
@@ -99,7 +109,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
         k="hit/drawn at"
         v={
           picked
-            ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`
+            ? `${zoomName(v.pick_zoom)}/${zoomName(v.ray_zoom)}${folded ? " folded" : ""}`
             : "-"
         }
         warn={folded}

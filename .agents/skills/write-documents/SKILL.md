@@ -48,24 +48,8 @@ description: How the documents people read are written and reviewed — README.m
 
 ## Checks
 
-- **Nothing named is lost.** Every path, identifier and constant in the old
-  version is still there, or was removed on purpose. Diff the backticked
-  tokens:
-
-  ```sh
-  f=README.md; diff <(git show HEAD:$f | grep -o '`[^`]*`' | sort -u) \
-    <(grep -o '`[^`]*`' $f | sort -u)
-  ```
-
-- **No term of this project's is used before it is defined.** A heading that
-  names its own subject, and an opening line that uses the thing's common name,
-  are exempt.
-- **Nothing points at what the document no longer holds.** After moving or
-  cutting a section, recheck counts and summaries ("in two parts"), table rows,
-  sibling documents that use the same word, forward references, and sentences
-  whose antecedent was cut.
-- **No minute is linked.** A document cites the code, another document or an
-  outside source, never a record under `doc/`.
-- **Prose wraps at 80 columns** in `README.md`, `ARCHITECTURE.md`, xpute's two
-  and `infra/README.md`, by hand: break after the last word that fits in 80
-  columns. Rewrap only the paragraphs you touched.
+- What the old version named (paths, identifiers, constants) is still there
+  or was cut on purpose, and nothing points at what was cut.
+- No minute under `doc/` is linked.
+- Prose in `README.md`, `ARCHITECTURE.md`, xpute's two and `infra/README.md`
+  wraps at 80 columns, in the paragraphs touched.

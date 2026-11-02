@@ -47,18 +47,20 @@ fn entries<'a>(list: &'a Node, what: &str) -> Result<Vec<Result<Entry<'a>, &'a s
         .collect()
 }
 
-fn named<'l, 'a>(list: &'l [Result<Entry<'a>, &'a str>]) -> impl Iterator<Item = &'l Entry<'a>> {
+fn cube_entries<'l, 'a>(
+    list: &'l [Result<Entry<'a>, &'a str>],
+) -> impl Iterator<Item = &'l Entry<'a>> {
     list.iter().filter_map(|e| e.as_ref().ok())
 }
 
 /// A cube's number by its group (`sentinel`, `ground`, `object`) and name.
-pub fn cube_number(group: &str, name: &str) -> Result<u32, String> {
+pub(crate) fn cube_number(group: &str, name: &str) -> Result<u32, String> {
     let spec = read(CUBE_JSON)?;
     let list = entries(
         spec.get(group).ok_or(format!("{CUBE_JSON}: no {group}"))?,
         group,
     )?;
-    let val = named(&list).find(|e| e.name == name).map(|e| e.val);
+    let val = cube_entries(&list).find(|e| e.name == name).map(|e| e.val);
     val.ok_or(format!("{CUBE_JSON}: {group}.{name} is no cube"))
 }
 
@@ -82,18 +84,20 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     Ok(vec![
         (
             "ground".into(),
-            named(&ground).map(|e| e.name.to_string()).collect(),
+            cube_entries(&ground).map(|e| e.name.to_string()).collect(),
         ),
         (
             "object".into(),
-            named(&object)
+            cube_entries(&object)
                 .filter(|e| is_color(e))
                 .map(|e| e.name.to_string())
                 .collect(),
         ),
         (
             "sentinel".into(),
-            named(&sentinel).map(|e| e.name.to_string()).collect(),
+            cube_entries(&sentinel)
+                .map(|e| e.name.to_string())
+                .collect(),
         ),
     ])
 }
@@ -104,7 +108,7 @@ fn is_color(e: &Entry) -> bool {
 }
 
 /// Each placeable cube with the section heading it is listed under.
-fn sectioned<'l, 'a>(
+fn with_sections<'l, 'a>(
     list: &'l [Result<Entry<'a>, &'a str>],
 ) -> impl Iterator<Item = (&'a str, &'l Entry<'a>)> {
     list.iter()
@@ -139,7 +143,7 @@ pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String
         .collect()
 }
 
-pub fn color_outputs() -> Result<Vec<Output>, String> {
+pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     let spec = read(COLOR_JSON)?;
     let head: Vec<String> = [
         "//",
@@ -205,7 +209,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
             "    match t {".to_string(),
         ]);
         for (name, entry) in colors.entries() {
-            if !named(&list).any(|e| e.name == name.as_str()) {
+            if !cube_entries(&list).any(|e| e.name == name.as_str()) {
                 return Err(format!(
                     "color.json: {group}.{name} is nothing cube.json names"
                 ));
@@ -223,7 +227,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
             ));
         }
         if group == "ground" {
-            for e in named(&list) {
+            for e in cube_entries(&list) {
                 if colors.get(e.name).is_none() {
                     return Err(format!("color.json: ground.{} has no color", e.name));
                 }
@@ -241,7 +245,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-pub fn cube_outputs() -> Result<Vec<Output>, String> {
+pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     let spec = read(CUBE_JSON)?;
     let sentinel = entries(spec.get("sentinel").ok_or("no sentinel")?, "sentinel")?;
     let ground_node = spec.get("ground").ok_or("no ground")?;
@@ -266,9 +270,9 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         })
         .collect::<Result<_, _>>()?;
     let mut seen = std::collections::BTreeMap::new();
-    for (name, val) in named(&sentinel)
-        .chain(named(&ground))
-        .chain(named(&object))
+    for (name, val) in cube_entries(&sentinel)
+        .chain(cube_entries(&ground))
+        .chain(cube_entries(&object))
         .map(|e| (e.name, e.val))
         .chain(decor.iter().copied())
     {
@@ -300,7 +304,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
             ));
         }
     }
-    for e in named(&ground) {
+    for e in cube_entries(&ground) {
         if e.val == 0 || e.val >= 255 {
             return Err(format!(
                 "{CUBE_JSON}: ground.{} is {}, not within 1-254",
@@ -308,7 +312,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
             ));
         }
     }
-    for e in named(&object) {
+    for e in cube_entries(&object) {
         if e.val <= 255 || e.val >> shape_bits != cube_kind {
             return Err(format!(
                 "{CUBE_JSON}: object.{} is {}, not past a byte of the cube kind",
@@ -317,7 +321,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         }
     }
     for (group, vals) in [("ground", &ground), ("object", &object)] {
-        let vals: Vec<u32> = named(vals).map(|e| e.val).collect();
+        let vals: Vec<u32> = cube_entries(vals).map(|e| e.val).collect();
         if vals.windows(2).any(|w| w[0] >= w[1]) {
             return Err(format!(
                 "{CUBE_JSON}: {group} is numbered ascending, as its order is read"
@@ -353,8 +357,8 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     let mut ts = vec!["// @pxl/client/shell/catalog/asset/cube.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     // Every placeable cube under its heading: the ground's palette entries, and the colors past a ground byte.
-    let cube_sections: Vec<(&str, &Entry)> = sectioned(&ground)
-        .chain(sectioned(&object).filter(|(_, e)| is_color(e)))
+    let cube_sections: Vec<(&str, &Entry)> = with_sections(&ground)
+        .chain(with_sections(&object).filter(|(_, e)| is_color(e)))
         .collect();
     let mut section_ids: Vec<&str> = Vec::new();
     for (s, _) in &cube_sections {
@@ -424,9 +428,9 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "export const CUBES: readonly number[] = [".to_string(),
     ]);
     ts.extend(
-        named(&object)
+        cube_entries(&object)
             .filter(|e| e.name != "air")
-            .chain(named(&ground))
+            .chain(cube_entries(&ground))
             .map(|e| format!("  {},", e.val)),
     );
     ts.extend([
@@ -447,9 +451,9 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
             .to_string(),
         "export const CUBE_LABEL: Readonly<Record<number, string>> = {".to_string(),
     ]);
-    for e in named(&object)
+    for e in cube_entries(&object)
         .filter(|e| e.name != "air")
-        .chain(named(&ground))
+        .chain(cube_entries(&ground))
     {
         let label = e
             .label
@@ -458,8 +462,39 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     }
     ts.push("};".to_string());
 
+    // Which values a word names, for what folds the objects' tree beside the
+    // kernel: the client's source of placed objects
+    // (ts/client/src/driver/namespace/object_tree.ts).
+    let air = cube_entries(&object)
+        .find(|e| e.name == "air")
+        .ok_or(format!("{CUBE_JSON}: no object.air"))?;
+    let mut voxel = vec!["// @pxl/client/abi/voxel.spec.ts".to_string()];
+    voxel.extend(head.iter().cloned());
+    voxel.push(String::new());
+    if let Some(doc) = &air.doc {
+        voxel.extend(ts_doc(doc, ""));
+    }
+    voxel.extend([
+        format!("export const AIR = {};", air.val),
+        String::new(),
+        "/** Whether a value read into a word is a palette entry the palette gives out (pxl-content `Ground::grounds`). */"
+            .to_string(),
+        "export function grounds(val: number): boolean {".to_string(),
+        format!("  return {};", ts_runs(cube_entries(&ground).map(|e| e.val))),
+        "}".to_string(),
+        String::new(),
+        "/** Whether a value read into a word is one of the object's colors (pxl-content `Object::objects`). */"
+            .to_string(),
+        "export function objects(val: number): boolean {".to_string(),
+        format!(
+            "  return {};",
+            ts_runs(cube_entries(&object).filter(|e| is_color(e)).map(|e| e.val))
+        ),
+        "}".to_string(),
+    ]);
+
     // Rust
-    let mut rs = vec!["// pxl-spec-core/cube.spec.rs".to_string()];
+    let mut rs = vec!["// pxl-content/cube.spec.rs".to_string()];
     rs.extend(head);
     rs.push(String::new());
     rs.extend(casing_note());
@@ -474,7 +509,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "pub mod cubes {".to_string(),
         "    pub mod sentinel {".into(),
     ]);
-    for e in named(&sentinel) {
+    for e in cube_entries(&sentinel) {
         if let Some(doc) = &e.doc {
             rs.extend(rs_doc(doc, "        ", "///"));
         }
@@ -505,7 +540,9 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         String::new(),
         "        pub const ENTRIES: &[(&str, u8)] = &[".to_string(),
     ]);
-    rs.extend(named(&ground).map(|e| format!("            ({}, {}),", json_str(e.name), e.name)));
+    rs.extend(
+        cube_entries(&ground).map(|e| format!("            ({}, {}),", json_str(e.name), e.name)),
+    );
     rs.extend([
         "        ];".to_string(),
         String::new(),
@@ -539,7 +576,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "    #[repr(u8)]".into(),
         "    pub enum Ground {".into(),
     ]);
-    rs.extend(named(&ground).map(|e| format!("        {} = {},", e.name, e.val)));
+    rs.extend(cube_entries(&ground).map(|e| format!("        {} = {},", e.name, e.val)));
     rs.extend([
         "    }".to_string(),
         String::new(),
@@ -547,10 +584,10 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// Every palette entry, in paint order.".into(),
         format!(
             "        pub const ALL: [Ground; {}] = [",
-            named(&ground).count()
+            cube_entries(&ground).count()
         ),
     ]);
-    rs.extend(named(&ground).map(|e| format!("            Ground::{},", e.name)));
+    rs.extend(cube_entries(&ground).map(|e| format!("            Ground::{},", e.name)));
     rs.extend([
         "        ];".to_string(),
         String::new(),
@@ -559,7 +596,8 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "            match val {".into(),
     ]);
     rs.extend(
-        named(&ground).map(|e| format!("                {} => Some(Ground::{}),", e.val, e.name)),
+        cube_entries(&ground)
+            .map(|e| format!("                {} => Some(Ground::{}),", e.val, e.name)),
     );
     rs.extend([
         "                _ => None,".to_string(),
@@ -571,7 +609,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// names.".into(),
         format!(
             "        pub const fn grounds(val: u32) -> bool {{ matches!(val, {}) }}",
-            runs(named(&ground).map(|e| e.val)).join(" | ")
+            runs(cube_entries(&ground).map(|e| e.val)).join(" | ")
         ),
         String::new(),
         "        /// A way: decor faces along it and no pier stands on it.".into(),
@@ -580,12 +618,12 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// Whether a palette entry read into a word is a way (`transport`).".into(),
         format!(
             "        pub const fn transports(val: u32) -> bool {{ matches!(val, {}) }}",
-            runs(named(&ground).filter(|e| e.transport).map(|e| e.val)).join(" | ")
+            runs(cube_entries(&ground).filter(|e| e.transport).map(|e| e.val)).join(" | ")
         ),
     ]);
     rs.extend(["    }".to_string(), String::new()]);
     // The object's colors.
-    let colors: Vec<&Entry> = named(&object).filter(|e| is_color(e)).collect();
+    let colors: Vec<&Entry> = cube_entries(&object).filter(|e| is_color(e)).collect();
     rs.extend([
         "    /// One of the object's colors, by its number.".to_string(),
         "    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]".into(),
@@ -634,13 +672,36 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     ]);
     let mut out = vec![
         Output::new("ts/client/src/shell/catalog/asset/cube.spec.ts", file(&ts)),
+        Output::new("ts/client/src/abi/voxel.spec.ts", file(&voxel)),
         Output::new(
-            "rust/spec/core/src/cube.spec.rs",
+            "rust/spec/content/src/cube.spec.rs",
             file(&unwrapped(rs, "pub mod cubes {")),
         ),
     ];
     out.extend(modules);
     Ok(out)
+}
+
+/// Ascending values as a TypeScript test of `val`, each run of consecutive
+/// ones a range, as `runs` patterns them.
+fn ts_runs(vals: impl Iterator<Item = u32>) -> String {
+    let mut out: Vec<(u32, u32)> = Vec::new();
+    for v in vals {
+        match out.last_mut() {
+            Some((_, hi)) if *hi + 1 == v => *hi = v,
+            _ => out.push((v, v)),
+        }
+    }
+    out.into_iter()
+        .map(|(lo, hi)| {
+            if lo == hi {
+                format!("val === {lo}")
+            } else {
+                format!("(val >= {lo} && val <= {hi})")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" || ")
 }
 
 /// Ascending values as patterns, each run of consecutive ones a range.
@@ -663,7 +724,7 @@ fn runs(vals: impl Iterator<Item = u32>) -> Vec<String> {
         .collect()
 }
 
-pub fn decor_outputs() -> Result<Vec<Output>, String> {
+pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let spec = read(DECOR_JSON)?;
     let doc = spec.lines_at("$doc").unwrap_or_default();
     let head: Vec<String> = [
@@ -800,7 +861,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     rs.extend(table);
-    let mut row = vec!["// pxl-spec-core/decor.spec.rs".to_string()];
+    let mut row = vec!["// pxl-content/decor.spec.rs".to_string()];
     row.extend(head);
     row.extend(
         [
@@ -822,7 +883,7 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
             "rust/spec/src/asset/decor.spec.rs",
             file(&unwrapped(rs, "pub mod decors {")),
         ),
-        Output::new("rust/spec/core/src/decor.spec.rs", file(&row)),
+        Output::new("rust/spec/content/src/decor.spec.rs", file(&row)),
     ])
 }
 
@@ -830,14 +891,14 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
 fn ground_palette() -> Result<Vec<(String, u32)>, String> {
     let spec = read(CUBE_JSON)?;
     Ok(
-        named(&entries(spec.get("ground").ok_or("no ground")?, "ground")?)
+        cube_entries(&entries(spec.get("ground").ok_or("no ground")?, "ground")?)
             .map(|e| (e.name.to_string(), e.val))
             .collect(),
     )
 }
 
 /// The decors' table, in the catalog's order, which is the order their
-/// variants are numbered in: in pxl-spec-core every number the GPU reads too
+/// variants are numbered in: in pxl-content every number the GPU reads too
 /// (how the ground generates each one, its palette entries, its boxes), in pxl-spec its
 /// models over that row.
 fn decor_table(
@@ -978,7 +1039,7 @@ fn decor_table(
             "    /// Its scatter: changing it reshuffles every one the ground generates.",
             "    pub seed: u32,",
             "    /// The chance a cell of its holds one, over 2^32: a cell's mean",
-            "    /// (pxl-spec-core scatter.rs `count`).",
+            "    /// (pxl-content scatter.rs `count`).",
             "    pub chance: u32,",
             "    pub orientation: Orientation,",
             "    /// The palette entries it may stand on, a bit each.",
@@ -1020,7 +1081,7 @@ fn decor_table(
     let mut rs: Vec<String> = [
         "",
         "/// How it faces, one row with the GPU's.",
-        "pub use pxl_spec_core::decor::Orientation;",
+        "pub use pxl_content::decor::Orientation;",
         "",
         "/// A model and its pack's colormap, each a slot the catalog fills.",
         "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
@@ -1030,12 +1091,12 @@ fn decor_table(
         "}",
         "",
         "/// A decor: its id, its row (how the ground generates it and the boxes its",
-        "/// variants claim, pxl-spec-core decor.spec.rs) and its variants' models, in",
+        "/// variants claim, pxl-content decor.spec.rs) and its variants' models, in",
         "/// the row's order.",
         "#[derive(Clone, Copy, Debug, PartialEq)]",
         "pub struct Decor {",
         "    pub id: DecorId,",
-        "    pub row: &'static pxl_spec_core::decor::Decor,",
+        "    pub row: &'static pxl_content::decor::Decor,",
         "    pub variants: &'static [Variant],",
         "}",
         "",
@@ -1069,7 +1130,7 @@ fn decor_table(
         rs.extend([
             "    Decor {".to_string(),
             format!("        id: DecorId::{},", r.name),
-            format!("        row: &pxl_spec_core::decor::DECORS[{i}],"),
+            format!("        row: &pxl_content::decor::DECORS[{i}],"),
             "        variants: &[".to_string(),
         ]);
         rs.extend(r.models.iter().map(|v| format!("            {v},")));

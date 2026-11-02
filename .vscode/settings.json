@@ -8,9 +8,9 @@
   "js/ts.preferences.importModuleSpecifier": "non-relative",
   "js/ts.updateImportsOnFileMove.enabled": "never",
 
-  // Rust. Cargo's two workspaces, each its own root: rust-analyzer finds only
-  // a manifest at most one folder down, which reaches rust/ but not
-  // xpute/rust/. The shader's (rust/client/shader) is rust-gpu's, built in its
-  // container, and left out.
-  "rust-analyzer.linkedProjects": ["rust/Cargo.toml", "xpute/rust/Cargo.toml"]
+  // Rust. Cargo's three workspaces, each its own root: rust-analyzer finds
+  // only a manifest at most one folder down, which reaches rust/ but not
+  // xpute/rust/ or the shader's (rust/client/shader), read on its own pinned
+  // nightly (rust-toolchain.toml).
+  "rust-analyzer.linkedProjects": ["rust/Cargo.toml", "xpute/rust/Cargo.toml", "rust/client/shader/Cargo.toml"]
 }

@@ -22,6 +22,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         rs_shown: "pxl-kernel/domain/control/cmd.spec.rs",
         number: "xpute_guest::abi::number",
         program: None,
+        event: Some("xpute_guest::ipc::door"),
         port: None,
     };
     Ok(table_outputs(&table)?

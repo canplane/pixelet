@@ -50,7 +50,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 /// The bytes' name in the bucket: their hash, and the extension their type is read by.
-fn named(rel: &str, bytes: &[u8]) -> String {
+fn bucket_name(rel: &str, bytes: &[u8]) -> String {
     let ext = rel.rsplit_once('.').map_or("", |(_, ext)| ext);
     format!("{}.{ext}", hex(bytes))
 }
@@ -106,7 +106,7 @@ fn run() -> Result<(), String> {
             None => read,
         };
         let is_model = rel.ends_with(".glb");
-        let name = named(rel, &bytes);
+        let name = bucket_name(rel, &bytes);
         let extent = if is_model {
             Some(glb::extent(&bytes).map_err(|e| format!("{rel}: {e}"))?)
         } else {
@@ -172,7 +172,7 @@ fn run() -> Result<(), String> {
             "{image}, the texture pack's path, is a file under asset/content/ too"
         ));
     }
-    let image_name = named(&image, &composed.bytes);
+    let image_name = bucket_name(&image, &composed.bytes);
     std::fs::write(out_dir.join(&image_name), &composed.bytes).map_err(|e| e.to_string())?;
     total += composed.bytes.len() as u64;
     rows.push(Row {
@@ -212,7 +212,7 @@ fn run() -> Result<(), String> {
     // What the code is generated from: the host's table, the pack's layout
     // and the catalog.
     write_formatted(
-        &root.join("spec/spec/asset/ingested.json"),
+        &root.join("spec/spec/asset/ingest.json"),
         &table::render_json(
             &rows,
             &laid,
@@ -222,7 +222,7 @@ fn run() -> Result<(), String> {
     spec::generate(true)?;
 
     println!(
-        "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/, spec/spec/asset/ingested.json and what it generates written",
+        "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/, spec/spec/asset/ingest.json and what it generates written",
         rows.len(),
         total as f64 / 1024.0 / 1024.0,
         laid.tiles.len(),

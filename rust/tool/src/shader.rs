@@ -1,7 +1,7 @@
 // pxl-tool/shader.rs
 
-//! pxl-spec-core's WGSL: the entries rust/client/shader makes of the one Rust
-//! source the CPU compiles too (rust/spec/core, over xpute-kit's
+//! pxl-engine's WGSL: the entries rust/client/shader makes of the one Rust
+//! source the CPU compiles too (rust/spec/engine, over xpute-kit's
 //! math/rng.rs), through rust-gpu inside a Linux container, each a module of
 //! its own checked in beside the renderer's shaders. An everyday build reads
 //! those files and needs neither rust-gpu nor its nightly nor the container;
@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 pub const DIR: &str = "rust/client/render/src/frame/shader";
 
 /// Each entry and the file it is checked in as, in `DIR`.
-pub const ENTRIES: [(&str, &str); 34] = [
+pub const ENTRIES: [(&str, &str); 30] = [
     ("beam_cs", "beam.gen.wgsl"),
     ("cell_cs", "cell.gen.wgsl"),
     ("sample_cs", "sample.gen.wgsl"),
@@ -24,21 +24,17 @@ pub const ENTRIES: [(&str, &str); 34] = [
     ("light_cs", "light.gen.wgsl"),
     ("light_miss_cs", "light_miss.gen.wgsl"),
     ("light_mark_cs", "light_mark.gen.wgsl"),
-    ("light_mark_drawn_cs", "light_mark_drawn.gen.wgsl"),
-    ("light_reach_cs", "light_reach.gen.wgsl"),
-    ("light_detail_cs", "light_detail.gen.wgsl"),
-    ("light_beam_cs", "light_beam.gen.wgsl"),
-    ("light_sample_cs", "light_sample.gen.wgsl"),
-    ("light_held_cs", "light_held.gen.wgsl"),
-    ("light_told_cs", "light_told.gen.wgsl"),
+    ("light_mark_draws_cs", "light_mark_draws.gen.wgsl"),
+    ("light_propagate_cs", "light_propagate.gen.wgsl"),
+    ("light_slide_cs", "light_slide.gen.wgsl"),
     ("miss_cs", "miss.gen.wgsl"),
     ("miss_list_cs", "miss_list.gen.wgsl"),
     ("sample_box_cs", "sample_box.gen.wgsl"),
     ("face_cs", "face.gen.wgsl"),
-    ("stop_lead_cs", "stop_lead.gen.wgsl"),
-    ("stop_faces_cs", "stop_faces.gen.wgsl"),
+    ("hit_lead_cs", "hit_lead.gen.wgsl"),
+    ("hit_faces_cs", "hit_faces.gen.wgsl"),
     ("forget_cs", "forget.gen.wgsl"),
-    ("joined_cs", "joined.gen.wgsl"),
+    ("fold_cs", "fold.gen.wgsl"),
     ("height_cs", "height.gen.wgsl"),
     ("bound_cs", "bound.gen.wgsl"),
     ("decor_mark_cs", "decor_mark.gen.wgsl"),
@@ -50,12 +46,12 @@ pub const ENTRIES: [(&str, &str); 34] = [
     ("way_cs", "way.gen.wgsl"),
     ("way_free_cs", "way_free.gen.wgsl"),
     ("way_tree_cs", "way_tree.gen.wgsl"),
-    ("way_freed_cs", "way_freed.gen.wgsl"),
+    ("way_return_cs", "way_return.gen.wgsl"),
 ];
 
 /// rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as
 /// rust/client/shader/rust-toolchain.toml holds it.
-pub const NIGHTLY: &str = "nightly-2026-04-11";
+pub(crate) const NIGHTLY: &str = "nightly-2026-04-11";
 
 /// The one record of what the entries in `DIR` were made from: the digest
 /// of their sources (`inputs_digest`), beside them. One file for all, since
@@ -63,9 +59,9 @@ pub const NIGHTLY: &str = "nightly-2026-04-11";
 /// bytes did not change has nothing to change.
 pub const STAMP: &str = "gen.digest";
 
-/// What makes the entries: pxl-spec-core, the shader crate, the builder that
-/// reads its SPIR-V into WGSL, xpute-kit beneath them, their lock and the
-/// toolchain's pin, the workspaces the two crates over it inherit from, the
+/// What makes the entries: pxl-engine and pxl-content, the shader crate,
+/// the builder that reads its SPIR-V into WGSL, xpute-kit beneath them, their
+/// lock and the toolchain's pin, the workspaces the crates over it inherit from, the
 /// cargo config the container's cargo reads from above the shader crate and
 /// the compiler wrapper it names, and this generator, which writes each
 /// file's head — every file on disk under them but a test (`inputs`), so a
@@ -73,11 +69,10 @@ pub const STAMP: &str = "gen.digest";
 /// (pxl-tool bin/shader_wgsl.rs `snapshot`), so one it reads and the digest
 /// does not name fails there rather than going unseen. The digest is all that holds
 /// a file current, for a write that skips the container and for check_rules
-/// alike, so it names everything a file is made by. Wider than what reaches a
-/// shader: a change elsewhere in them asks for a regenerate that differs only
-/// here.
-const INPUT_ROOTS: [&str; 12] = [
-    "rust/spec/core/",
+/// alike, so it names everything a file is made by.
+const INPUT_ROOTS: [&str; 13] = [
+    "rust/spec/engine/",
+    "rust/spec/content/",
     "rust/client/shader/",
     "rust/client/shader/build/",
     "xpute/rust/kit/",
@@ -92,7 +87,7 @@ const INPUT_ROOTS: [&str; 12] = [
 ];
 
 /// Each checked-in entry's path from the checkout's root.
-pub fn generated() -> impl Iterator<Item = String> {
+pub fn entry_paths() -> impl Iterator<Item = String> {
     ENTRIES.iter().map(|(_, file)| format!("{DIR}/{file}"))
 }
 
@@ -158,8 +153,8 @@ fn meaning(f: &str, text: &str) -> Result<Vec<u8>, String> {
         tokens(stream, &mut out);
     } else if f.ends_with(".toml") {
         let mut val: toml::Value = toml::from_str(text).map_err(|e| format!("{f}: {e}"))?;
-        if INHERITED.contains(&f) {
-            val = inherited(&val);
+        if WORKSPACE_MANIFESTS.contains(&f) {
+            val = workspace_tables(&val);
         }
         out.extend(val.to_string().into_bytes());
     } else {
@@ -172,11 +167,11 @@ fn meaning(f: &str, text: &str) -> Result<Vec<u8>, String> {
 /// from (`edition.workspace = true` and the like), and so are read for that
 /// alone: their profiles, patches and members are the workspace that builds
 /// them, which here is the shader's own.
-const INHERITED: [&str; 2] = ["rust/Cargo.toml", "xpute/rust/Cargo.toml"];
+const WORKSPACE_MANIFESTS: [&str; 2] = ["rust/Cargo.toml", "xpute/rust/Cargo.toml"];
 
 /// What a member takes from a workspace's manifest: its `package`,
 /// `dependencies` and `lints` tables under `[workspace]`.
-fn inherited(manifest: &toml::Value) -> toml::Value {
+fn workspace_tables(manifest: &toml::Value) -> toml::Value {
     let mut kept = toml::Table::new();
     if let Some(workspace) = manifest.get("workspace").and_then(toml::Value::as_table) {
         for key in ["package", "dependencies", "lints"] {
@@ -248,7 +243,7 @@ pub fn made_from(root: &Path) -> Option<String> {
 /// names another, else those missing.
 pub fn stale(root: &Path, digest: &str) -> Vec<String> {
     let cur = made_from(root).as_deref() == Some(digest);
-    generated()
+    entry_paths()
         .filter(|f| !cur || !root.join(f).is_file())
         .collect()
 }
@@ -259,9 +254,9 @@ pub fn header() -> String {
         "// GENERATED by pxl-tool bin/shader_wgsl.rs; do not edit. Regenerate with",
         "// `cargo shader-wgsl` in rust/; `--check` fails when it is stale. What it",
         "// was made from is gen.digest's, beside it.",
-        "// Source: rust/spec/core (pxl-spec-core) over xpute/rust/kit/src/math/rng.rs,",
+        "// Source: rust/spec/engine (pxl-engine) over xpute/rust/kit/src/math/rng.rs,",
         "// through rust/client/shader, by",
-        &format!("// rust-gpu 0.10.0-alpha.1 ({NIGHTLY}) for spirv-unknown-vulkan1.3, read by naga in rust/client/shader/build."),
+        &format!("// rust-gpu 0.10.0-alpha.1 ({NIGHTLY}) for spirv-unknown-vulkan1.3, then spirv-opt and naga in rust/client/shader/build."),
         "",
     ]
     .join("\n")

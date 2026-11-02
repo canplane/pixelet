@@ -45,12 +45,11 @@ pub struct TileFace {
     pub group: String,
     pub ty: String,
     pub face: Face,
-    pub tile: u32,
+    pub(crate) tile: u32,
 }
 
 /// Each slot and the tile it wears; one tile may be several slots'. A slot
-/// naming no catalog type is an error: a renamed type once left its blocks
-/// untextured silently.
+/// naming no catalog type is an error.
 pub fn faces(
     slots: &[(u32, Slot)],
     groups: &[(String, Vec<String>)],
@@ -85,9 +84,9 @@ pub fn faces(
     Ok(out)
 }
 
-/// The table as `spec/spec/asset/ingested.json`, which `cargo spec`
+/// The table as `spec/spec/asset/ingest.json`, which `cargo spec`
 /// renders into the host's table, the pack's layout and the catalog
-/// (pxl-tool spec/ingested.rs, spec/catalog.rs).
+/// (pxl-tool spec/ingest.rs, spec/catalog.rs).
 pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
     let string = |s: &str| format!("{s:?}");
     let mut out = String::with_capacity(rows.len() * 160);

@@ -4,8 +4,9 @@
  * A development page's console: `xpute`, whose `cmd` sends the kernel any
  * command by its number, as the shell (port/shell.ts `kernel_console`); and
  * `pxl.perf`, what the profiler panel exports, made on this side of the
- * door: `report()`, the window's summary as text, `trace()`, the window saved
- * for ui.perfetto.dev, and `drive(motion, seconds, hour)`, a window taken the
+ * door: `report()`, the window's summary as text, `read()`, the same as
+ * values (script/compare-perf.py reads it), `trace()`, the window saved
+ * for ui.perfetto.dev, and `drive(seconds)`, the one measurement, taken the
  * same way each time (perf/drive.ts).
  */
 
@@ -22,6 +23,7 @@ export function installConsole(): void {
   g.pxl = {
     perf: {
       report: () => perfReportText(perfReportRead()),
+      read: perfReportRead,
       trace: perfTraceSave,
       drive: perfDrive,
     },

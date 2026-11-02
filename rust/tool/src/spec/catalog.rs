@@ -8,15 +8,15 @@
 //! the asset root, and its extent (pxl-spec asset/catalog.rs reads the
 //! layout). The host serves it, as hex in TypeScript.
 
-use super::ingested::{file_number, files};
+use super::ingest::{file_number, files};
 use super::{file, read, Node, Output};
 
 /// A data spec's `$type` for a file reference: in Rust its slot, in
 /// TypeScript its number below the asset root.
-pub const FILE: &str = "file";
+pub(crate) const FILE: &str = "file";
 
-pub const CUBE_JSON: &str = "spec/spec/asset/cube.json";
-pub const DECOR_JSON: &str = "spec/spec/asset/decor.json";
+pub(crate) const CUBE_JSON: &str = "spec/spec/asset/cube.json";
+pub(crate) const DECOR_JSON: &str = "spec/spec/asset/decor.json";
 const ACTOR_JSON: &str = "spec/spec/asset/actor.json";
 const SKY_JSON: &str = "spec/spec/asset/sky.json";
 
@@ -70,7 +70,7 @@ fn leaves(n: &Node, ty: Option<&str>, out: &mut Vec<String>) {
 }
 
 /// The first slot of `json`'s references, and how many it makes.
-pub fn run_of(json: &str) -> Result<(u16, u16), String> {
+pub(crate) fn run_of(json: &str) -> Result<(u16, u16), String> {
     let mut first = 0;
     for (j, paths) in runs()? {
         let n = u16::try_from(paths.len()).map_err(|e| e.to_string())?;
@@ -99,7 +99,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let ts = [
         "// @pxl/client/driver/namespace/catalog.spec.ts",
         "//",
-        "// GENERATED from the asset specs and ingested.json",
+        "// GENERATED from the asset specs and ingest.json",
         "//",
         "// The catalog the host plugs in, served below the asset root at `CATALOG`",
         "// (ts/client/src/driver/namespace/asset.ts): the file each of the kernel's slots names and its",

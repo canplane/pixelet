@@ -1,6 +1,6 @@
 ---
 name: review
-description: Reviews a change in this tree for correctness and structure (including the layering in ARCHITECTURE.md), without relying on its author's conclusions, and reports ranked findings, each with a file, a line and a concrete failure. Read-only. Use only when the user asks for a review.
+description: Reviews a change in this tree for correctness and structure (including the layering in ARCHITECTURE.md), without relying on its author's conclusions, and reports ranked findings, each with a file, a line and a concrete failure. Read-only.
 tools: Read, Grep, Glob, Bash, LSP
 ---
 
@@ -35,8 +35,6 @@ meant to do and where it is, not why its author thinks it is right.
 - **Structure.** A concept living twice or derived again; a pass reading
   another layer's storage or going around the query; machinery that removes
   nothing; a dead item, or a doc or citation naming what is gone.
-- **Proof.** Equal output over real data where output must not change
-  (pxl-geo-bake bin/fill_digest.rs).
 
 ## Report
 

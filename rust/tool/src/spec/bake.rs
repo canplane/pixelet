@@ -1,20 +1,20 @@
 // pxl-tool/spec/bake.rs
 
-use super::ingested::symbol_number;
+use super::ingest::symbol_number;
 use super::{file, json_str, line_comments, packed, read, rs_doc, ts_doc, Output};
 
-pub fn published_outputs() -> Result<Vec<Output>, String> {
-    let spec = read("spec/spec/bake/published.json")?;
-    let format = spec.get("FORMAT").ok_or("published.json: no FORMAT")?;
+pub fn publication_outputs() -> Result<Vec<Output>, String> {
+    let spec = read("spec/spec/bake/publication.json")?;
+    let format = spec.get("FORMAT").ok_or("publication.json: no FORMAT")?;
     let format_doc = format.lines_at("$doc").unwrap_or_default();
     let mut formats: Vec<(&str, u32)> = Vec::new();
     for (k, n) in format.entries().iter().filter(|(k, _)| !k.starts_with('$')) {
         let n = n
             .num()
-            .ok_or(format!("published.json: FORMAT.{k} is no number"))?;
+            .ok_or(format!("publication.json: FORMAT.{k} is no number"))?;
         if n < 1.0 || n.fract() != 0.0 {
             return Err(format!(
-                "published.json: FORMAT.{k} {n} is not a format number"
+                "publication.json: FORMAT.{k} {n} is not a format number"
             ));
         }
         formats.push((k, n as u32));
@@ -23,11 +23,11 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
         .get("VERSION_BYTES")
         .and_then(|n| n.num())
         .filter(|n| *n >= 1.0 && n.fract() == 0.0)
-        .ok_or("published.json: VERSION_BYTES is no count")? as u32;
+        .ok_or("publication.json: VERSION_BYTES is no count")? as u32;
     let version_doc = spec.lines_at("$VERSION_BYTES").unwrap_or_default();
 
     // A kind's object in a set: the one place its segments are ordered.
-    let object = spec.str_at("OBJECT").ok_or("published.json: no OBJECT")?;
+    let object = spec.str_at("OBJECT").ok_or("publication.json: no OBJECT")?;
     let segments: Vec<&str> = object
         .split('/')
         .map(|s| {
@@ -39,23 +39,23 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     // A version is a folder its tiles go up in whole (script/publish.py), so it comes first.
     if segments != ["version", "name"] {
         return Err(format!(
-            "published.json: OBJECT {object:?} is not {{version}}/{{name}}"
+            "publication.json: OBJECT {object:?} is not {{version}}/{{name}}"
         ));
     }
     let object_doc = spec.lines_at("$OBJECT").unwrap_or_default();
-    let sphere = spec.str_at("SPHERE").ok_or("published.json: no SPHERE")?;
+    let sphere = spec.str_at("SPHERE").ok_or("publication.json: no SPHERE")?;
     if sphere.is_empty()
         || !sphere.bytes().all(|b| b.is_ascii_lowercase())
         || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b))
     {
         return Err(format!(
-            "published.json: SPHERE {sphere:?} is no name a tile could have"
+            "publication.json: SPHERE {sphere:?} is no name a tile could have"
         ));
     }
     let sphere_doc = spec.lines_at("$SPHERE").unwrap_or_default();
     let head = [
         "//".to_string(),
-        "// GENERATED from spec/spec/bake/published.json".into(),
+        "// GENERATED from spec/spec/bake/publication.json".into(),
         "".into(),
     ];
     let list = |f: &dyn Fn(&str) -> String| {
@@ -66,7 +66,7 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
             .join(", ")
     };
 
-    let mut ts = vec!["// @pxl/client/driver/namespace/published.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/driver/namespace/publication.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.push("/** The base layers by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */".into());
     ts.push(format!(
@@ -93,7 +93,7 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
 
     // The Worker's own: it is bundled for the Workers runtime, apart from the
     // client, so it reads a copy beside it written from the same JSON.
-    let mut edge = vec!["// @pxl/edge/published.spec.ts".to_string()];
+    let mut edge = vec!["// @pxl/edge/publication.spec.ts".to_string()];
     edge.extend(head.iter().cloned());
     edge.push("/** The base layers, each a kind a baked page is published under. */".into());
     edge.push(format!(
@@ -117,7 +117,7 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     edge.extend(ts_doc(&sphere_doc, ""));
     edge.push(format!("export const TILE_SPHERE = {};", json_str(sphere)));
 
-    let mut rs = vec!["// pxl-spec/bake/published.spec.rs".to_string()];
+    let mut rs = vec!["// pxl-spec/bake/publication.spec.rs".to_string()];
     rs.extend(head);
     rs.extend(rs_doc(&format_doc, "", "///"));
     rs.push("pub struct Format {".into());
@@ -213,11 +213,11 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["        }", "    }", "}"].map(String::from));
     Ok(vec![
         Output::new(
-            "ts/client/src/driver/namespace/published.spec.ts",
+            "ts/client/src/driver/namespace/publication.spec.ts",
             file(&ts),
         ),
-        Output::new("ts/server/edge/published.spec.ts", file(&edge)),
-        Output::new("rust/spec/src/bake/published.spec.rs", file(&rs)),
+        Output::new("ts/server/edge/publication.spec.ts", file(&edge)),
+        Output::new("rust/spec/src/bake/publication.spec.rs", file(&rs)),
     ])
 }
 

@@ -151,7 +151,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     ));
     rs.push(String::new());
     rs.extend(casing_note());
-    rs.push("#![allow(non_camel_case_types, reason = \"generated from the spec\")]".into());
+    rs.push("// A table is generated whole, whether or not this crate calls an entry.".into());
+    rs.push(
+        "#![allow(non_camel_case_types, dead_code, reason = \"generated from the spec\")]".into(),
+    );
     for name in &choices {
         let List { vals, doc, .. } = list(name).ok_or(format!("{JSON}: no list {name}"))?;
         let e = enum_name(name);
@@ -521,7 +524,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "/** SETTING without its `dev` entries: what a production bundle carries in its place. */"
             .into(),
         format!(
-            "export const SETTING_SHIPPED = {} as const;",
+            "export const SETTING_PRODUCTION = {} as const;",
             ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "")?
         ),
     ]);

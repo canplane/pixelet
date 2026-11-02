@@ -8,8 +8,11 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 import type {
   Frame,
   Percentiles,
+  RayCounts,
+  RecordingSection,
   TaskRecord,
   TaskSummary,
+  ViewSection,
   Worst,
 } from "@/port/perf.ts";
 import { n1, pct, phaseText, tris, valueText } from "./column.ts";
@@ -31,29 +34,36 @@ const pastText = (f: Frame) =>
     : `off-turn ${n1(f.interval_ms - f.busy_ms)}`;
 const percentiles = (s: Percentiles) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
+/** What a ray column counts, its observer's name aside (FRAME_GROUP.rays). */
+type RayColumn<K = keyof RayCounts> = K extends `eye_${infer C}` ? C : never;
+
 /** The `ray_counts` setting's counts over the window, the kernel's sums of
  * its frames' (perf.json FRAME's rays columns): an observer's line each where
  * it cast — the nodes its beam rays, its samples and its walk again asked a
- * cast, its pixels that took the visible sample and that walked (the eye's
- * as a share of its pixels, the light's a cast), the nodes its walk again
- * asked a walking one, and the boxes it drew a cast. */
-const raysText = (f: Record<string, f64>) => {
+ * cast, its pixels or slots cast again, those that took the visible sample,
+ * that walked and that took the sky, each as a share of its pixels or its
+ * map's slots, the nodes its walk again asked a walking one, and the boxes
+ * it drew a cast. */
+const raysText = (f: RayCounts) => {
   const observer = (name: "eye" | "light") => {
-    const at = (column: string) => f[`${name}_${column}`] ?? 0;
+    const at = (column: RayColumn) => f[`${name}_${column}`];
     const casts = at("cast");
     if (casts === 0) return [];
     const perCast = (n: number) => n1(n / casts);
-    const rays = name === "eye" ? at("rays") : 0;
+    const rays = at("rays");
     const part = (n: number) =>
       rays > 0 ? `${fixed((100 * n) / rays, 2)}%` : `${perCast(n)} a cast`;
+    const again = at("took") + at("walked") + at("sky");
     return [
       `  ${name.padEnd(7)} cast in ${casts} frames   nodes a cast: beam ${perCast(
         at("beam"),
       )}  sample ${perCast(at("sample"))}  miss ${perCast(
         at("miss"),
-      )}   took ${part(at("took"))}  walked ${part(at("walked"))} (${n1(
+      )}   cast again ${part(again)}: took ${part(at("took"))}  walked ${part(
+        at("walked"),
+      )} (${n1(
         at("miss") / Math.max(1, at("walked")),
-      )} nodes each)   boxes ${perCast(at("boxes"))} a cast`,
+      )} nodes each)  sky ${part(at("sky"))}   boxes ${perCast(at("boxes"))} a cast`,
     ];
   };
   return [...observer("eye"), ...observer("light")];
@@ -64,7 +74,7 @@ const deg = (rad: number) => (rad * 180) / Math.PI;
 /** Where the view was as the report was read, by the kernel's numbers
  * (perf.json NOW.view), and the world's pixels of the last frame a read
  * timed. */
-function viewText(v: Record<string, f64>, gpuPx: f64): string {
+function viewText(v: ViewSection, gpuPx: f64): string {
   const pivot = Number.isNaN(v.pivot_lat)
     ? "-"
     : `${fixed(v.pivot_lat, 5)}°, ${fixed(v.pivot_lon, 5)}° ${n1(v.pivot_alt)} m`;
@@ -77,7 +87,7 @@ function viewText(v: Record<string, f64>, gpuPx: f64): string {
 
 /** What the frames held at the most or the least since the recording
  * started (perf.json STAT.recording). */
-function recordingText(r: Record<string, f64>): string {
+function recordingText(r: RecordingSection): string {
   if (!r.frames) return "  since   no frame folded";
   return `  since   heap max live ${bytes(r.heap_live_max_bytes)}  run ${bytes(
     r.heap_run_max_bytes,
@@ -87,7 +97,7 @@ function recordingText(r: Record<string, f64>): string {
     r.heap_largest_free_min_bytes,
   )}   refusals ${r.heap_refusals}   ring peak cq ${r.ring_cq_peak} sq ${
     r.ring_sq_peak
-  } held ${r.ring_held_peak}   body slots peak ${
+  } left ${r.ring_left_peak}   body slots peak ${
     r.body_slots_peak
   }   terrain refused ${r.cap_terrain_refused}   (over the ${
     r.frames
@@ -206,7 +216,7 @@ function windowSection(r: PerfReport): string[] {
     )} ms   paced ${n1(last.paced_ms)} ms   scale ${fixed(
       last.scale,
       2,
-    )}   turns ${f.turns}`,
+    )}   lattice ${last.lattice}   turns ${f.turns}`,
     `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
     `  interval ${percentiles(f.interval)} ms   missed ${f.missed} (${pct(
       f.missed,
