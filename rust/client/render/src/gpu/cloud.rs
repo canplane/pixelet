@@ -37,6 +37,10 @@ pub struct CloudPass {
     uniform: u32,
     group: u32,
     words: [f32; CLOUDS_FLOATS],
+    /// The field's tile, its pipeline and its mips' pass, until it is baked
+    /// (`bake`): once the renderer's pipelines are made, before its first
+    /// frame.
+    unbaked: Option<(u32, Pipeline, MipPass)>,
 }
 
 impl CloudPass {
@@ -84,18 +88,43 @@ impl CloudPass {
         ];
         e.extend(air);
         let group = g.bind_group(pipeline.layouts[0], &e);
-        bake(
-            g,
-            pipelines,
-            tile,
-            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
-        );
+        let field = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::r8unorm);
+        let mips = MipPass::new(g, pipelines, Format::r8unorm);
         CloudPass {
             pipeline,
             uniform,
             group,
             words: [0.0; CLOUDS_FLOATS],
+            unbaked: Some((tile, field, mips)),
         }
+    }
+
+    /// The field's tile drawn, then its mips, once, as the renderer's first
+    /// frame comes: its pipelines are made by then.
+    pub fn bake(&mut self, g: &Gpu) {
+        let Some((tile, field, mips)) = self.unbaked.take() else {
+            return;
+        };
+        let encoder = g.encoder();
+        let level = g.view(tile, false, 0, 1, 0, 1);
+        let pass = g.pass(
+            encoder,
+            &pass_desc(level, Load::Clear, 0, Load::Clear, 0.0, None),
+        );
+        let mut pass = TrackedRenderPass::new(g, pass);
+        pass.set_pipeline(field.id);
+        pass.draw(3, 1, 0, 0);
+        pass.end();
+        release(level);
+        g.submit(encoder);
+        mips.build(
+            g,
+            tile,
+            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
+            0,
+            1,
+        );
+        mips.release();
     }
 
     /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
@@ -146,23 +175,4 @@ fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], env: &[f32]) {
         words[DRIFT + k] = drift[k] as f32;
     }
     words[CNT] = f32::from_bits(LATTICE_CNT);
-}
-
-fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
-    let pipeline = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::r8unorm);
-    let encoder = g.encoder();
-    let level = g.view(tile, false, 0, 1, 0, 1);
-    let pass = g.pass(
-        encoder,
-        &pass_desc(level, Load::Clear, 0, Load::Clear, 0.0, None),
-    );
-    let mut pass = TrackedRenderPass::new(g, pass);
-    pass.set_pipeline(pipeline.id);
-    pass.draw(3, 1, 0, 0);
-    pass.end();
-    release(level);
-    g.submit(encoder);
-    let mips = MipPass::new(g, pipelines, Format::r8unorm);
-    mips.build(g, tile, levels, 0, 1);
-    mips.release();
 }

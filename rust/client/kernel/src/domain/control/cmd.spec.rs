@@ -794,11 +794,13 @@ pub struct Snapshot<'a> {
     pub refused_files: &'a dyn Fn(&mut dyn FnMut(&RefusedFile<'_>)),
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say.
     pub stall: Option<Message>,
+    /// How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): its shader modules, by their bytes, the first half, its pipelines made the second; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it.
+    pub renderer_made: f64,
 }
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 16;
+    pub const FIELDS: u32 = 17;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(PivotState::FIELDS, |w| self.pivot.write(w));
@@ -829,6 +831,7 @@ impl Snapshot<'_> {
             });
         });
         w.u32(self.stall.map(|m| m as u32));
+        w.f64(Some(self.renderer_made));
     }
 }
 

@@ -617,6 +617,21 @@ stream, which the page runs on WebGPU after the turn returns
 (`rust/client-bracket/native/src/surface.rs`). A frame where nothing it reads
 moved submits nothing, and the canvas keeps its frame.
 
+The renderer is made before its first frame, in three steps
+(`gpu/renderer.rs` `render_frame`, `gpu/pipeline.rs` `Pipelines`), so that
+making it never holds the GPU process's main thread, which every frame the
+browser presents waits on: every shader's module, a few a turn, within
+`stream::MODULE_BYTES` and the stream's room; then the renderer, each of its
+pipelines made by WebGPU's async call, which compiles off that thread, its
+completion a ticket's word (xpute `RENDER_PIPELINE_ASYNC`,
+`COMPUTE_PIPELINE_ASYNC`); then no frame until every word says it is made. A
+frame turn before then draws nothing and asks for the next, and the kernel's
+snapshot carries how much is made (`renderer_made`), which the world's loading
+toast shows as a bar. Every pipeline it draws with is asked for in the second
+step, the cast's and the ground's included; one asked for once it draws is a
+bug (`EBUSY`). The device app's wgpu has no async call, and its GPU host
+answers the same op at once by the same ticket.
+
 A frame where only the draws the kernel bounds moved is drawn again in the
 screen's **tiles** alone (`gpu/tiles.rs` `Tiles`), by the shape the light's cast
 casts by: what moved marks the tiles it covered and covers; the light's map is

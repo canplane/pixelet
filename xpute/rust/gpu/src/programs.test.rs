@@ -65,7 +65,7 @@ pub(crate) struct Program {
     pub encode: fn(&mut Encoder, &mut Stream, &At, &mut Turn),
 }
 
-pub(crate) const PROGRAMS: [Program; 6] = [
+pub(crate) const PROGRAMS: [Program; 7] = [
     Program {
         name: "add_arrays",
         encode: add_arrays,
@@ -89,6 +89,10 @@ pub(crate) const PROGRAMS: [Program; 6] = [
     Program {
         name: "dropped_transaction",
         encode: dropped_transaction,
+    },
+    Program {
+        name: "pipelines_async",
+        encode: pipelines_async,
     },
 ];
 
@@ -758,5 +762,74 @@ fn dropped_transaction(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Tu
     assert!(!write(gpu, s, true), "the first transaction does not fit");
     assert!(write(gpu, s, false), "the second does");
     at.read(gpu, s, out, 4, 1);
+    turn(s);
+}
+
+/// The triangle again, its render pipeline and a compute pipeline made by
+/// the async ops: each in a turn of its own, its ticket at the done word,
+/// and named by no record until the next turn has found it DONE.
+fn pipelines_async(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
+    let m = gpu
+        .shader_module(s, "@compute @workgroup_size(1) fn main() {}\n")
+        .unwrap();
+    let compute = gpu
+        .compute_pipeline_async(
+            s,
+            &ComputePipelineDescriptor {
+                layout: None,
+                module: m,
+                entry: "main",
+            },
+            at.done(),
+            1,
+        )
+        .unwrap();
+    turn(s);
+    let (t, v) = target(gpu, s);
+    let m = gpu
+        .shader_module(
+            s,
+            "@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {\n\
+             \x20 var p = array(vec2f(-0.75, -0.78125), vec2f(0.9375, -0.71875), vec2f(-0.75, 0.96875));\n\
+             \x20 return vec4f(p[i], 0.0, 1.0);\n\
+             }\n\
+             @fragment fn fs() -> @location(0) vec4f { return vec4f(1.0, 0.2, 0.0, 1.0); }\n",
+        )
+        .unwrap();
+    let targets = color_target();
+    let render = gpu
+        .render_pipeline_async(
+            s,
+            &RenderPipelineDescriptor {
+                layout: None,
+                vertex: VertexState {
+                    module: m,
+                    entry: "vs",
+                    buffers: &[],
+                },
+                primitive: PRIMITIVE,
+                depth_stencil: None,
+                multisample: MULTISAMPLE_NONE,
+                fragment: Some(FragmentState {
+                    module: m,
+                    entry: "fs",
+                    targets: &targets,
+                }),
+            },
+            at.done(),
+            2,
+        )
+        .unwrap();
+    turn(s);
+    let e = gpu.encoder(s).unwrap();
+    let work = gpu.compute_pass(s, e, &None).unwrap();
+    call::set_pipeline(s, work, compute);
+    call::dispatch(s, work, [1, 1, 1]);
+    gpu.end(s, work);
+    let pass = pass(gpu, s, e, v);
+    call::set_pipeline(s, pass, render);
+    call::draw(s, pass, 3, 1, 0, 0);
+    gpu.end(s, pass);
+    read_target(gpu, s, at, e, t, 3);
     turn(s);
 }

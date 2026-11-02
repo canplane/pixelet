@@ -27,8 +27,8 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, GIZMO, JITTER, LIGHT_VIEW_PROJ,
-    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
+    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, GIZMO, JITTER,
+    LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
     SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
@@ -284,6 +284,20 @@ fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4) {
 
 static RENDERER: Global<Option<Renderer>> = Global::new();
 
+/// The renderer's pipelines while their modules are made, a few a turn,
+/// before it is (`render_frame`); taken into it once all are.
+static MAKING: Global<Option<Pipelines>> = Global::new();
+
+/// How much of what the renderer makes before its first frame is made, 0 to
+/// 1 (`Pipelines::share`): what the shell's loading bar shows. 0 with no
+/// device, 1 once it draws.
+pub fn renderer_made() -> f64 {
+    if let Some(r) = RENDERER.get(|| None).as_ref() {
+        return r.pipelines.share();
+    }
+    MAKING.get(|| None).as_ref().map_or(0.0, Pipelines::share)
+}
+
 /// Each light's step, the sun's first: the height it moves before the sky as
 /// drawn moves a display level, or out of reach before it comes into reach
 /// (gpu/atmosphere.rs `steps`); 0, the least, before any has landed; none
@@ -311,6 +325,7 @@ fn next_frame() -> f64 {
 
 pub fn on_gpu_lost() {
     RENDERER.set(None);
+    MAKING.set(None);
     on_skins_lost();
     on_device_lost();
     uploads().lose();
@@ -431,8 +446,10 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    fn new(g: &Gpu, device: Device) -> Renderer {
-        let mut pipelines = Pipelines::new();
+    /// Over `pipelines`, every shader's module made (`Pipelines::make_modules`):
+    /// each of its pipelines asked for here, the cast's and the ground's
+    /// among them (`RaysPass::make`), so none is asked for once it draws.
+    fn new(g: &Gpu, device: Device, mut pipelines: Pipelines) -> Renderer {
         let frame_buf = g.buf(
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -533,8 +550,19 @@ impl Renderer {
             previews: [const { None }; SURFACES],
             order: Vec::new(),
         };
+        r.screen.make(g, &mut r.pipelines);
         r.box_groups(g);
         r
+    }
+
+    /// Whether every pipeline it asked for is made, so it may draw: the
+    /// cloud field baked the first time it is (`CloudPass::bake`).
+    fn made(&mut self, g: &Gpu) -> bool {
+        if !self.pipelines.made() {
+            return false;
+        }
+        self.clouds.bake(g);
+        true
     }
 
     /// What a cell's face is painted by, wherever it is drawn from
@@ -660,13 +688,8 @@ impl Renderer {
             // steps; what a receiver reads within, the effects' reach.
             let half_width = libm::exp2(libm::ceil(libm::log2(reach)));
             let reach_ndc = (reach / half_width) as f32;
-            self.shadow.aim(
-                dir,
-                eye,
-                half_width,
-                reach_ndc,
-                eye_world.map(|v| -v),
-            );
+            self.shadow
+                .aim(dir, eye, half_width, reach_ndc, eye_world.map(|v| -v));
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
             u[SHADOW_TEXEL] = self.shadow.texel as f32;
         }
@@ -820,11 +843,10 @@ impl Renderer {
         // the cast pass made first, then the bricks' uploads, which take
         // only the room left.
         if cast.is_some() {
-            self.screen.make(g, &mut self.pipelines);
             self.screen
                 .light_made(g, stage_lane()[STAGE_AT::SHADOWS] > 0.0);
         }
-        self.screen.hand(g, &mut self.pipelines, &mut input.ground);
+        self.screen.hand(g, &mut input.ground);
         let tiles = input.earth_tiles;
         read.mark(
             self.atmosphere
@@ -1705,8 +1727,31 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
             stat: None,
         };
     }
+    // The renderer is made in three steps before it draws (gpu/pipeline.rs):
+    // its shaders' modules, a few a turn; then it, every pipeline asked for
+    // by WebGPU's async call; then nothing until each is made. A turn before
+    // draws nothing and asks for the next.
     let slot = RENDERER.get(|| None);
-    let r = slot.get_or_insert_with(|| Renderer::new(g, device));
+    if slot.is_none() {
+        let making = MAKING.get(|| None);
+        if making.get_or_insert_with(Pipelines::new).make_modules(g) {
+            let pipelines = making.take().or_bug(Errno::ENOTRECOVERABLE);
+            *slot = Some(Renderer::new(g, device, pipelines));
+        }
+    }
+    if !slot.as_mut().is_some_and(|r| r.made(g)) {
+        carry_edits(&input.cast);
+        take_lists(slot.as_ref().map(|_| g), input.lists);
+        if let Some(r) = slot.as_mut() {
+            r.put_off();
+        }
+        return FrameOutput {
+            kind: FrameKind::unready,
+            redraw: true,
+            stat: None,
+        };
+    }
+    let r = slot.as_mut().or_bug(Errno::ENOTRECOVERABLE);
     uploads().restore(g);
     let (kind, stat) = r.frame(g, world, input);
     FrameOutput {

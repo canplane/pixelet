@@ -12,7 +12,7 @@ use xpute_kit::status::errno::Errno;
 
 use super::raster::Raster;
 use super::tally::{self, Counts, RayCounts, Tally};
-use super::{casts_px, RaysPass};
+use super::{casts_px, GroundPipelines, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FOLD, SHADER_FORGET,
@@ -334,14 +334,15 @@ const _: () = assert!(
 );
 
 impl RaysPass {
-    /// The cast pass's pipelines and buffers, made once, where the frame
-    /// first casts: before any of its uploads (`hand`), which take the
-    /// stream only while `stream::RESERVE` is left after them, so the
-    /// shaders made here are never left without room.
+    /// The cast pass's pipelines and buffers, and the ground's pipelines
+    /// (`GroundPipelines`), made once with the renderer, before its first
+    /// frame (gpu/pipeline.rs): no frame names a pipeline until every one
+    /// is made.
     pub fn make(&mut self, g: &Gpu, pipelines: &mut Pipelines) {
         if self.cast.is_some() {
             return;
         }
+        self.ground_built = Some(GroundPipelines::new(g, pipelines));
         // One group for every kernel over the cast's world but the pixels'.
         let group = &WORLD_GROUP;
         let pipeline = pipelines.build_compute(g, SHADER_CAST, &compute::CAST_GROUP);

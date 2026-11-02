@@ -457,10 +457,14 @@ A guest writes them through the encoder (`gpu/encode`), which takes each
 object's handle from one table and writes each record twice, once to count its
 words and once into the room reserved for them. The **GPU host** runs the stream
 on its device after the turn returns (`gpu/host` `GpuHost`): on WebGPU in a
-page, on wgpu in a native program. Three calls finish later — an image copied
-in, a buffer read back, the queue's work done — so each names a word of the
-guest's memory and a ticket, a number the guest wrote there; once the call is
-done, the GPU host writes the ticket back with `DONE` set.
+page, on wgpu in a native program. Some calls finish later — an image copied
+in, a buffer read back, the queue's work done, a pipeline made by WebGPU's
+async call — so each names a word of the guest's memory and a ticket, a number
+the guest wrote there; once the call is done, the GPU host writes the ticket
+back with `DONE` set. A guest names an async pipeline in no record until its
+word says `DONE`, so nothing it records waits on the host. wgpu has no async
+call: the native GPU host makes the pipeline at once and writes its word by
+the same path.
 
 What a surface shows — a canvas, a view's layer, a window — is the program's,
 bound to the GPU host under the guest's handle for it and let go by that handle

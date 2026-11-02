@@ -148,6 +148,9 @@ function older(a: u32, b: u32): boolean {
 
 export class GpuHost {
   private readonly objects: (GpuObject | undefined)[] = [];
+  /** Each async pipeline still being made, by its handle's slot: its handle,
+   * so a slot let go since, or taken by another, waits for it no more. */
+  private readonly making = new Map<u32, u32>();
   /** What a record's call takes, refilled each time rather than made: WebGPU
    * reads a dictionary only during the call it is given to. Two places, as
    * a texture-to-texture copy names two. */
@@ -235,6 +238,7 @@ export class GpuHost {
   /** The device went: every object with it, and the guest told in its block. */
   private on_lost(): void {
     this.objects.length = 0;
+    this.making.clear();
     if (this.block) {
       new Uint32Array(this.memory(), this.block.address, this.block.words)[
         this.block.words - 1
@@ -262,10 +266,36 @@ export class GpuHost {
 
   private forget(id: u32): void {
     this.objects[handle_slot(id)] = undefined;
+    this.making.delete(handle_slot(id));
   }
 
   private bytesAt(address: u32, size: u32): Uint8Array {
     return new Uint8Array(this.memory(), address, size);
+  }
+
+  /** An async pipeline's word and ticket, read past the sync op's words
+   * (RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC): the pipeline kept at
+   * `id` once `made` gives it, where the slot still waits for `id`, and its
+   * word written. One the device refuses is made with the sync call, which
+   * reports its error as the sync op's does. */
+  private make_async<P extends GPURenderPipeline | GPUComputePipeline>(
+    id: u32,
+    r: Words,
+    made: Promise<P>,
+    sync: () => P,
+  ): void {
+    const [word, ticket] = [r.u(), r.u()];
+    const slot = handle_slot(id);
+    this.making.set(slot, id);
+    const waits = () => this.making.get(slot) === id;
+    made
+      .catch(() => (waits() ? sync() : undefined))
+      .then((p) => {
+        if (p === undefined || !waits()) return;
+        this.making.delete(slot);
+        this.put(id, p);
+        this.write_done(word, ticket);
+      });
   }
 
   /** `ticket | DONE` at `word`, where the ticket still stands, and a turn asked to read it. */
@@ -530,7 +560,8 @@ export class GpuHost {
         this.put(id, d.createBindGroup({ layout, entries }));
         return;
       }
-      case op.RENDER_PIPELINE: {
+      case op.RENDER_PIPELINE:
+      case op.RENDER_PIPELINE_ASYNC: {
         const id = r.u();
         const layout = r.opt();
         const vertex: GPUVertexState = {
@@ -612,43 +643,48 @@ export class GpuHost {
             return { format, blend, writeMask: r.u() };
           },
         );
-        this.put(
-          id,
-          d.createRenderPipeline({
-            layout:
-              layout === undefined
-                ? "auto"
-                : this.get<GPUPipelineLayout>(layout),
-            vertex,
-            primitive,
-            depthStencil: depthFormat === undefined ? undefined : depth,
-            multisample,
-            fragment:
-              module === undefined
-                ? undefined
-                : {
-                    module: this.get<GPUShaderModule>(module),
-                    entryPoint,
-                    targets,
-                  },
-          }),
-        );
+        const desc: GPURenderPipelineDescriptor = {
+          layout:
+            layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
+          vertex,
+          primitive,
+          depthStencil: depthFormat === undefined ? undefined : depth,
+          multisample,
+          fragment:
+            module === undefined
+              ? undefined
+              : {
+                  module: this.get<GPUShaderModule>(module),
+                  entryPoint,
+                  targets,
+                },
+        };
+        if (code === op.RENDER_PIPELINE) {
+          this.put(id, d.createRenderPipeline(desc));
+        } else {
+          this.make_async(id, r, d.createRenderPipelineAsync(desc), () =>
+            d.createRenderPipeline(desc),
+          );
+        }
         return;
       }
-      case op.COMPUTE_PIPELINE: {
+      case op.COMPUTE_PIPELINE:
+      case op.COMPUTE_PIPELINE_ASYNC: {
         const id = r.u();
         const layout = r.opt();
         const module = this.get<GPUShaderModule>(r.u());
-        this.put(
-          id,
-          d.createComputePipeline({
-            layout:
-              layout === undefined
-                ? "auto"
-                : this.get<GPUPipelineLayout>(layout),
-            compute: { module, entryPoint: r.text() },
-          }),
-        );
+        const desc: GPUComputePipelineDescriptor = {
+          layout:
+            layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
+          compute: { module, entryPoint: r.text() },
+        };
+        if (code === op.COMPUTE_PIPELINE) {
+          this.put(id, d.createComputePipeline(desc));
+        } else {
+          this.make_async(id, r, d.createComputePipelineAsync(desc), () =>
+            d.createComputePipeline(desc),
+          );
+        }
         return;
       }
       case op.QUERY_SET: {

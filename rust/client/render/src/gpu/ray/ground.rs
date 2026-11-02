@@ -10,6 +10,8 @@ use pxl_spec_core::clipmap::{
 };
 use pxl_spec_core::way;
 use xpute_guest::mem::off_of;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use super::RaysPass;
 use crate::frame::shader::floor;
@@ -111,6 +113,32 @@ pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
 /// A buffer of them carrying no brick.
 const FREE: u32 = u32::MAX;
+
+/// The passes that fill a handed brick: made with the renderer's pipelines
+/// (`RaysPass::make`), before its first frame, and taken into its buffers
+/// when the first are made (`hand`).
+#[derive(Clone, Copy)]
+pub(super) struct GroundPipelines {
+    heights: Pipeline,
+    bound: Pipeline,
+    ways: Pipeline,
+    free: Pipeline,
+    tree: Pipeline,
+    give_back: Pipeline,
+}
+
+impl GroundPipelines {
+    pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> GroundPipelines {
+        GroundPipelines {
+            heights: pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP),
+            bound: pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
+            ways: pipelines.build_compute(g, SHADER_WAY, &compute::WAY_GROUP),
+            free: pipelines.build_compute(g, SHADER_WAY_FREE, &compute::WAY_FREE_GROUP),
+            tree: pipelines.build_compute(g, SHADER_WAY_TREE, &compute::WAY_TREE_GROUP),
+            give_back: pipelines.build_compute(g, SHADER_WAY_RETURN, &compute::WAY_RETURN_GROUP),
+        }
+    }
+}
 
 /// The terrain's frames on the GPU and the passes that draw their cells.
 pub(super) struct GroundBuffers {
@@ -464,16 +492,17 @@ impl RaysPass {
     /// into the turn's stream as it has room, the packets they live in let
     /// go once handed; whether or not an eye casts, as a tile's cells are
     /// no eye's.
-    pub fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: &mut GroundBricks) {
+    pub fn hand(&mut self, g: &Gpu, ground: &mut GroundBricks) {
         let child_groups = ground.pool.min(way::tree::POOL_CHILD_GROUPS);
         let scratch_child_groups = ground.scratch.clamp(1, way::tree::BRICK_CHILD_GROUPS);
+        let built = self.ground_built.or_bug(Errno::ENOTRECOVERABLE);
         let gb = self.ground.get_or_insert_with(|| {
             let buf = |size: u32, usage: u32| g.buf(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let frames_buf = buf(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
             let fresh = buf(word_bytes((HANDED_WORDS * FILL_CAP) as usize), storage);
             let palette_indices = buf(PALETTE_BYTES as u32, storage);
-            let heights_built = pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP);
+            let heights_built = built.heights;
             let heights_group = g.bind_group(
                 heights_built.layouts[0],
                 &[
@@ -491,15 +520,9 @@ impl RaysPass {
                 g.write_buf(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
             let scratch = scratch_buf(g, scratch_child_groups);
-            let (bound_built, ways_built) = (
-                pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
-                pipelines.build_compute(g, SHADER_WAY, &compute::WAY_GROUP),
-            );
+            let (bound_built, ways_built) = (built.bound, built.ways);
             let (pool, stack) = pool_bufs(g, child_groups);
-            let free_built = pipelines.build_compute(g, SHADER_WAY_FREE, &compute::WAY_FREE_GROUP);
-            let tree_built = pipelines.build_compute(g, SHADER_WAY_TREE, &compute::WAY_TREE_GROUP);
-            let return_built =
-                pipelines.build_compute(g, SHADER_WAY_RETURN, &compute::WAY_RETURN_GROUP);
+            let (free_built, tree_built, return_built) = (built.free, built.tree, built.give_back);
             let mut gb = GroundBuffers {
                 ground: frames_buf,
                 palette_indices,

@@ -39,6 +39,7 @@ use crate::sys::io::file::{self, StorageFile};
 use crate::sys::io::host_spec::root;
 use crate::sys::io::request;
 use crate::sys::io::source;
+use pxl_render::gpu::renderer::renderer_made;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::status::errno::Errno;
@@ -94,6 +95,7 @@ pub struct SnapshotInputs {
     declared: bool,
     /// The refused files by root and number, the first `.1` of them.
     refused_files: ([(u32, u64); REFUSED_SHOWN], usize),
+    renderer_made: f64,
 }
 
 /// The refused files a snapshot names at once: every storage file, and as
@@ -157,6 +159,7 @@ fn snapshot_inputs() -> SnapshotInputs {
             }
             refused
         },
+        renderer_made: renderer_made(),
     }
 }
 
@@ -236,6 +239,7 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
             }
         },
         stall: shown.stall,
+        renderer_made: shown.renderer_made,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);

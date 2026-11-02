@@ -20,11 +20,11 @@ use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
 pub use cast::{Cast, Overwrites};
-use ground::GroundBuffers;
 pub use ground::{
     BrickFill, CellsBack, GroundBricks, OnResident, Resident, TerrainUpload, TerrainWrite,
     RECORD_ROOMS_BYTES,
 };
+use ground::{GroundBuffers, GroundPipelines};
 pub use tally::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 
 /// Whether a frame of `kind` casts the pixels' rays, whole or off the
@@ -53,6 +53,9 @@ pub struct RaysPass {
     /// until the renderer hands them.
     lit: Vec<Entry>,
     looks: u32,
+    /// The ground's passes, made with the cast's (`make`); its buffers,
+    /// made the first turn it is handed a brick (`hand`).
+    ground_built: Option<GroundPipelines>,
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
     /// What this frame does with the cast, as `prepare` decided it: nothing
@@ -80,6 +83,7 @@ impl RaysPass {
             tiles: ((0, 0), 0),
             lit: Vec::new(),
             looks,
+            ground_built: None,
             ground: None,
             cast: None,
             kind: FrameKind::plain,

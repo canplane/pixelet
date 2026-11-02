@@ -5,9 +5,10 @@
 //! wgpu device, each object at its handle's slot. It knows nothing of what
 //! the guest draws.
 //!
-//! What finishes after a turn, a read back or the queue's work done, lands
-//! at a later turn's `poll`: the guest finds `ticket | DONE` a turn or more
-//! later, as on the web, and nothing here waits.
+//! What finishes after a turn, a read back, the queue's work done or an
+//! async pipeline, which wgpu makes at once, lands at a later turn's `poll`:
+//! the guest finds `ticket | DONE` a turn or more later, as on the web, and
+//! nothing here waits.
 //!
 //! Beside a guest linked into its own process, `native` holds the host and
 //! exports it under xpute's names (`native_abi!`).

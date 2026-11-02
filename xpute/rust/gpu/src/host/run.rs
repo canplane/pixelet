@@ -350,7 +350,7 @@ impl GpuHost {
                 self.put(id, Object::BindGroup(g));
             }
             op::RENDER_PIPELINE => self.render_pipeline(r),
-            op::COMPUTE_PIPELINE => {
+            op::COMPUTE_PIPELINE | op::COMPUTE_PIPELINE_ASYNC => {
                 let id = r.u();
                 let layout = r.opt();
                 let module = r.u();
@@ -370,6 +370,13 @@ impl GpuHost {
                         cache: None,
                     });
                 self.put(id, Object::ComputePipeline(p));
+                if code == op::COMPUTE_PIPELINE_ASYNC {
+                    self.made_at_once(r);
+                }
+            }
+            op::RENDER_PIPELINE_ASYNC => {
+                self.render_pipeline(r);
+                self.made_at_once(r);
             }
             op::QUERY_SET => {
                 let id = r.u();
@@ -739,6 +746,19 @@ impl GpuHost {
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),
         }
+    }
+
+    /// An async pipeline's word and ticket, read past the sync op's words:
+    /// wgpu has no async call, so it is made already, and its word is
+    /// written as a done's, at the next poll, before the next turn reads it.
+    fn made_at_once(&mut self, r: &mut Words) {
+        let (word, ticket) = (r.u(), r.u());
+        self.pending.push(Pending {
+            state: Arc::new(AtomicU8::new(ANSWERED)),
+            word,
+            ticket,
+            read: None,
+        });
     }
 
     fn render_pipeline(&mut self, r: &mut Words) {

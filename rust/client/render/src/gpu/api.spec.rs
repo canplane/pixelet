@@ -39,10 +39,16 @@ pub mod stream {
     /// wait (`room`) only when a burst of them comes at once.
     pub const BYTES: u32 = 4194304;
     /// What an upload leaves of the range. The records a turn cannot put off — a
-    /// frame's passes and draws, the shaders the first frame makes — are never
-    /// refused, so an upload, which can wait a turn, is taken only while this much
-    /// is left after it.
+    /// frame's passes and draws, the renderer's pipelines — are never refused, so
+    /// an upload, or a shader module made before the renderer (`MODULE_BYTES`),
+    /// which can wait a turn, is taken only while this much is left after it.
     pub const RESERVE: u32 = 1048576;
+    /// The WGSL a turn hands the device as shader modules before the renderer is
+    /// made (gpu/pipeline.rs `Pipelines::make_modules`): one module a turn, then
+    /// more while their sources stay within this and `RESERVE` is left. A page
+    /// makes a module on its main thread, so this bounds the task that makes
+    /// them, a module larger than it alone in its turn.
+    pub const MODULE_BYTES: u32 = 131072;
 }
 
 /// What a device's GPU host runs the renderer's stream by (xpute-gpu host

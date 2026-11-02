@@ -751,8 +751,15 @@ use pxl_spec::asset;
 /// it: what a caller sums over the writes it makes together and asks `room`.
 pub use xpute_gpu::encode::call::{write_buffer_bytes, write_texture_bytes};
 
-/// Whether records of `bytes` (`write_buffer_bytes`, `write_texture_bytes`)
-/// fit the stream, leaving `stream::RESERVE` for what cannot wait.
+/// What a shader module of `code` takes of the stream (`Gpu::shader`), as
+/// its writer measures it: what its maker asks `room` before it.
+pub fn shader_bytes(code: &str) -> usize {
+    Encoder::<OBJECTS>::shader_module_bytes(code)
+}
+
+/// Whether records of `bytes` (`write_buffer_bytes`, `write_texture_bytes`,
+/// `shader_bytes`) fit the stream, leaving `stream::RESERVE` for what cannot
+/// wait.
 pub fn room(bytes: usize) -> bool {
     STATE
         .get(|| None)
@@ -1099,7 +1106,9 @@ impl Gpu {
     /// A render pipeline from its record (frame/shader/record.rs) over the
     /// group layouts, drawing into `format` and `depth`, `stencil` the
     /// stencil beside it: into the depth alone where `format` is depth32's,
-    /// its fragment writing no color (the shadow map, gpu/shadow.rs).
+    /// its fragment writing no color (the shadow map, gpu/shadow.rs). Made by
+    /// WebGPU's async call: `word` holds `ticket | DONE` once it is made, and
+    /// nothing names it before (gpu/pipeline.rs `Pipelines::made`).
     pub fn pipeline(
         &self,
         words: &[u32],
@@ -1107,6 +1116,7 @@ impl Gpu {
         module: Id,
         format: Format,
         (depth, stencil): (Format, Stencil),
+        (word, ticket): (&mut u32, u32),
     ) -> Id {
         let mut at = record::HEAD as usize;
         let mut next = || {
@@ -1161,7 +1171,7 @@ impl Gpu {
             _ => CompareFunction::always,
         };
         let s = self.s();
-        let p = handle_of(s.encoder.render_pipeline(
+        let p = handle_of(s.encoder.render_pipeline_async(
             &mut s.stream,
             &encode::RenderPipelineDescriptor {
                 layout: Some(layout),
@@ -1209,22 +1219,33 @@ impl Gpu {
                     },
                 }),
             },
+            word,
+            ticket,
         ));
         s.encoder.destroy(&mut s.stream, layout);
         p
     }
 
-    /// The module's compute entry `entry`, over `layouts`.
-    pub fn compute_pipeline(&self, module: Id, entry: &str, layouts: &[Id]) -> Id {
+    /// The module's compute entry `entry`, over `layouts`, its word as
+    /// `pipeline`'s.
+    pub fn compute_pipeline(
+        &self,
+        module: Id,
+        entry: &str,
+        layouts: &[Id],
+        (word, ticket): (&mut u32, u32),
+    ) -> Id {
         let layout = self.pipeline_layout(layouts);
         let s = self.s();
-        let p = handle_of(s.encoder.compute_pipeline(
+        let p = handle_of(s.encoder.compute_pipeline_async(
             &mut s.stream,
             &encode::ComputePipelineDescriptor {
                 layout: Some(layout),
                 module,
                 entry,
             },
+            word,
+            ticket,
         ));
         s.encoder.destroy(&mut s.stream, layout);
         p

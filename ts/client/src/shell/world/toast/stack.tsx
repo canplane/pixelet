@@ -117,6 +117,7 @@ export function Toaster() {
               <Toast
                 message={item.message}
                 tone={item.tone}
+                share={item.share}
                 fade={present ? pose.fade : 0}
                 fadeTransition={transition}
                 touch={front ? swipe.current!.panHandlers : undefined}
