@@ -189,14 +189,22 @@ fn open_ground_keeps_a_cell() {
         climb_pose(pose(pivot, MIN_DIST, level), &access).polar,
         level
     );
-    // Under the level at the nearest: as asked in the air, and down to the floor.
+    // Under the level at the nearest: as asked in the air; a tilt into the floor
+    // stops short of it, from any pitch, and the eye stays out of it.
     let low = 1.7;
-    assert_eq!(climb_pose(pose(pivot, MIN_DIST, low), &access).polar, low);
-    let floored = climb_pose(pose(pivot, MIN_DIST, 2.2), &access).polar;
-    assert!(
-        (floored - libm::acos(-0.5 / MIN_DIST)).abs() < 1e-9,
-        "{floored}"
+    let down = climb_step(
+        &pose(pivot, MIN_DIST, low),
+        &pose(pivot, MIN_DIST, 1.6),
+        &access,
     );
+    assert_eq!(down.polar, low);
+    let floored = climb_step(
+        &pose(pivot, MIN_DIST, 2.2),
+        &pose(pivot, MIN_DIST, 1.7),
+        &access,
+    );
+    assert!(floored.polar < 2.2, "{floored:?}");
+    assert!(!in_solid(&floored, &access), "{floored:?}");
     for dist in [NEAREST_DIST + 0.01, 3.0, 16.0] {
         let at = pose(pivot, dist, core::f64::consts::FRAC_PI_2);
         let climbed = climb_pose(at, &access).polar;
@@ -258,16 +266,16 @@ fn nearest_turns_through() {
         ..at
     };
     assert!(climb_pose(past_edge, &access).polar < at.polar);
-    // Asked past the level in a wall, it goes on to the level and no further.
-    let past = ViewPose {
+    // Asked past the level in a wall, it stays where it stands.
+    let level = ViewPose {
         dist: MIN_DIST,
-        polar: 2.2,
         ..at
     };
-    assert_eq!(
-        climb_pose(past, &access).polar,
-        core::f64::consts::FRAC_PI_2
-    );
+    let past = ViewPose {
+        polar: 2.2,
+        ..level
+    };
+    assert_eq!(climb_step(&past, &level, &access), level);
 }
 
 /// `stop` goes the straight line alone: into a low wall it stops short, from

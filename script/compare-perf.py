@@ -4,10 +4,10 @@
 # page, spoken to over Chrome's debugging pipe. Read off the app's own profiler
 # (`pxl.perf.read`, `pxl.perf.drive`): the first load's longest frame, which
 # its long-frame observer replays from load (perf/long-frame.ts), and the
-# GPU's busy time over an orbit at noon and at 07:00. Fails where the change's
-# median runs past the base's: its load's longest frame by more than
-# `LOAD_SLACK_MS`, its GPU's p50 or p95 by more than `P50_SHARE` or
-# `P95_SHARE`.
+# GPU's busy time over the one measurement (`pxl.perf.drive`, perf/drive.ts).
+# Fails where the change's median runs past the base's: its load's longest
+# frame by more than `LOAD_SLACK_MS`, its GPU's p50 or p95 by more than
+# `P50_SHARE` or `P95_SHARE`.
 #
 #   ./script/compare-perf.py <base url> <change url> [rounds]
 
@@ -25,7 +25,7 @@ CHROME = os.environ.get(
     "CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 )
 SIZE = {"width": 2056, "height": 1113}
-# Where the device stands: S1, the route the measurements here are taken on.
+# Where the device stands, so the view opens there as a user's does.
 PLACE = {"latitude": 37.2741, "longitude": 127.0349}
 # How much longer the change's first load may block the page than the base's.
 LOAD_SLACK_MS = 3000
@@ -35,10 +35,9 @@ P95_SHARE = 1.3
 # The page settled: no resource ends for this long, within `LOAD_CAP_S`.
 QUIET_S = 8
 LOAD_CAP_S = 90
-HOURS = ("noon", "dawn")
 # The longest the page may take to answer one ask, a drive included.
 EVAL_CAP_S = 120
-ORBIT_S = 10
+DRIVE_S = 20
 
 READ = """(() => {
   const r = pxl.perf.read();
@@ -169,8 +168,8 @@ class Page:
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
-def once(url, hour):
-    """One page at `hour`: its load's longest frame and its GPU busy time. A
+def once(url):
+    """One page: its load's longest frame and its GPU busy time. A
     page a run, so each run's load is a first load."""
     page = Page(url)
     try:
@@ -186,7 +185,7 @@ def once(url, hour):
             last = max(last, end)
         # The drive turns the profiler on, which installs the long-frame
         # observers, and they replay the load.
-        page.ev(f"pxl.perf.drive('orbit', {ORBIT_S}, {json.dumps(hour)})")
+        page.ev(f"pxl.perf.drive({DRIVE_S})")
         return page.ev(READ)
     finally:
         page.close()
@@ -209,37 +208,35 @@ def main():
     rounds = int(sys.argv[3]) if len(sys.argv) > 3 else 2
     # Each server's first page builds what it serves; no run counts it.
     for url in (base, change):
-        once(url, HOURS[0])
-    runs = {"base": {h: [] for h in HOURS}, "change": {h: [] for h in HOURS}}
+        once(url)
+    runs = {"base": [], "change": []}
     for _ in range(rounds):
-        for hour in HOURS:
-            for who, url in (("base", base), ("change", change)):
-                runs[who][hour].append(once(url, hour))
+        for who, url in (("base", base), ("change", change)):
+            runs[who].append(once(url))
     if os.environ.get("COMPARE_RUNS"):
         print(json.dumps(runs))
     fails = []
     load = [
-        median([r["load"] for h in HOURS for r in runs[who][h]])
+        median([r["load"] for r in runs[who]])
         for who in ("base", "change")
     ]
     print(f"first load, longest frame ms: {load[0]:.0f} -> {load[1]:.0f}")
     if not load[1] <= load[0] + LOAD_SLACK_MS:
         fails.append(f"the first load blocks {load[1]:.0f} ms")
-    for hour in HOURS:
-        b, c = (
-            [median([r["gpu"][k] for r in runs[who][hour]]) for k in range(4)]
-            for who in ("base", "change")
-        )
-        if not (b[3] > 0 and c[3] > 0):
-            fails.append(f"{hour}: no GPU frame timed")
-        print(
-            f"{hour}: GPU p50 {b[0]:.2f} -> {c[0]:.2f}, p95 {b[1]:.2f} -> {c[1]:.2f}, "
-            f"frames {b[2]} -> {c[2]}, timed {b[3]} -> {c[3]}"
-        )
-        if not c[0] <= b[0] * P50_SHARE:
-            fails.append(f"{hour}: GPU p50 past {P50_SHARE}x the base's")
-        if not c[1] <= b[1] * P95_SHARE:
-            fails.append(f"{hour}: GPU p95 past {P95_SHARE}x the base's")
+    b, c = (
+        [median([r["gpu"][k] for r in runs[who]]) for k in range(4)]
+        for who in ("base", "change")
+    )
+    if not (b[3] > 0 and c[3] > 0):
+        fails.append("no GPU frame timed")
+    print(
+        f"GPU p50 {b[0]:.2f} -> {c[0]:.2f}, p95 {b[1]:.2f} -> {c[1]:.2f}, "
+        f"frames {b[2]} -> {c[2]}, timed {b[3]} -> {c[3]}"
+    )
+    if not c[0] <= b[0] * P50_SHARE:
+        fails.append(f"GPU p50 past {P50_SHARE}x the base's")
+    if not c[1] <= b[1] * P95_SHARE:
+        fails.append(f"GPU p95 past {P95_SHARE}x the base's")
     for f in fails:
         print(f"FAIL {f}")
     print("fail" if fails else "pass")

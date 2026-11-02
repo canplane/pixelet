@@ -5,10 +5,10 @@
 //!
 //! The rules, in the order they are asked:
 //!
-//! - **The nearest** (`at_nearest`): within `NEAREST_DIST`, the eye goes
-//!   anywhere over the pivot's level, through what is there, unasked: its rays
-//!   do not meet the cell it stands in (pxl-engine `cast::walk`). Under the
-//!   level it goes anywhere that is in nothing solid.
+//! - **The nearest**: within `NEAREST_DIST`, the eye goes anywhere over the
+//!   pivot's level, through what is there, unasked: its rays do not meet the
+//!   cell it stands in (pxl-engine `cast::walk`). Under the level it stops as
+//!   anywhere, and no pitch is raised.
 //! - **Stop**: the eye's way that hits something solid goes as far as it got
 //!   (`way_hit`). What lies between the eye and the pivot is not asked.
 //! - **Climb**, in `climb`: the way is that of the eye as drawn, its pitch
@@ -109,30 +109,6 @@ fn ground_at(point: &Q3, pivot: V3, access: &Ground<'_>) -> Option<f64> {
     }
 }
 
-/// `at` within the nearest (the module's rules): as it is over the pivot's
-/// level, and under it where the eye is in nothing solid; else no lower than
-/// the floor under the eye, solved as `climb_rise` solves it, or the level
-/// where that floor stands over the pivot. None farther out.
-fn at_nearest(at: &ViewPose, access: &Ground<'_>) -> Option<ViewPose> {
-    if at.dist > NEAREST_DIST {
-        return None;
-    }
-    let level = core::f64::consts::FRAC_PI_2;
-    if at.polar <= level || !in_solid(at, access) {
-        return Some(*at);
-    }
-    let top = ground_under(at, access)? - at.pivot[2];
-    let polar = libm::acos((top / at.dist).clamp(-1.0, 1.0)).max(level);
-    let on_floor = ViewPose { polar, ..*at };
-    Some(match in_solid(&on_floor, access) {
-        true => ViewPose {
-            polar: level,
-            ..*at
-        },
-        false => on_floor,
-    })
-}
-
 /// Rise to the floor under the eye, a cell over it (`EYE_CLEARANCE_U`), as
 /// `ground_under` reads it from the eye's own cell: ground and what is
 /// placed alike, at any distance. None where nothing is known under it.
@@ -153,11 +129,11 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     if mode == OrbitObstacleMode::through {
         return *to;
     }
+    if to.dist <= NEAREST_DIST && to.polar <= core::f64::consts::FRAC_PI_2 {
+        return *to;
+    }
     let world = World::now();
     let access = Ground::of(&world);
-    if let Some(at) = at_nearest(to, &access) {
-        return at;
-    }
     match mode {
         OrbitObstacleMode::climb => climb_step(to, from, &access),
         _ => match way_hit(from, to, |at| *at, &access) {
@@ -325,13 +301,12 @@ pub fn allowed_view(to: Intent, from: Intent) -> Intent {
 ///
 /// It stands while what it is made of stands: the pose, where its pivot is
 /// on the world, and the ground its walks read (`Columns`).
-pub fn climb_polar(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    let Some(at) = pose(Intent {
+pub fn climb_polar(pivot: V3, dist: f64, polar: f64, azimuth: f64) -> f64 {
+    let at = ViewPose {
+        pivot,
         dist,
         polar,
         azimuth,
-    }) else {
-        return polar;
     };
     let key = MemoKey {
         at,
@@ -353,12 +328,12 @@ struct MemoKey {
 /// change touched what it read (`Memo`).
 static CLIMB_PITCH: Global<Memo<MemoKey, f64>> = Global::new();
 
-/// `at` as the climb draws it: as it is at the nearest (`at_nearest`), else
+/// `at` as the climb draws it: as it is at the nearest (`NEAREST_DIST`), else
 /// steepened as the floor under the eye asks (`steepened`), the pitch kept
 /// however far that got, and the pitch asked where even straight down the eye
 /// at `at`'s distance is in something solid, a tunnel's roof or a cave's.
 fn climb_pose(at: ViewPose, access: &Ground<'_>) -> ViewPose {
-    if let Some(at) = at_nearest(&at, access) {
+    if at.dist <= NEAREST_DIST {
         return at;
     }
     let climbed = steepened(at, access);

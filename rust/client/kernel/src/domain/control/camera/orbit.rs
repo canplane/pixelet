@@ -68,7 +68,9 @@ pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_state();
     let mut asked = c.with_patch(partial);
     if partial.polar.is_some() && settings_store().orbit_obstacle == OrbitObstacleMode::climb {
-        asked.polar = climb_polar(asked.dist, asked.polar, asked.azimuth);
+        if let Some(at) = pivot_world() {
+            asked.polar = climb_polar(at, asked.dist, asked.polar, asked.azimuth);
+        }
     }
     c.commit_intent(allowed_view(asked, c.intent));
     c.intent
@@ -139,7 +141,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     // `climb` pitches the facing toward straight down instead of shortening
     // dist: rising fast and relaxing slowly while the ground bounds it.
     let polar = match settings_store().orbit_obstacle {
-        OrbitObstacleMode::climb => climb_polar(o.dist, vs.polar, vs.azimuth),
+        OrbitObstacleMode::climb => climb_polar(drawn_pivot, o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
     };
     let rate = match (polar < vs.polar, polar < cam.polar) {
