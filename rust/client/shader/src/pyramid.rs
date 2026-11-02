@@ -94,17 +94,27 @@ pub(crate) fn add_tally(w: &mut Pyramid, observer: u32, lane: u32, visits: u32) 
     }
 }
 
-/// Word `i` set to `v` where it holds `was`; what it held.
-fn pyramid_swap(w: &mut Pyramid, i: u32, was: u32, v: u32) -> u32 {
+/// Whether this walk claims the slot whose key is word `i`, the key `was`
+/// when it read it: the key exchanged for `CLAIMED`, the claim this walk's
+/// where it was still `was`; else what it took put back, unless it took
+/// another walk's claim. While it is put back the slot reads as claimed, so
+/// another walk asks the world there and none claims it, and what it puts
+/// back is the slot's latest key. No compare-and-swap: Safari's WGSL
+/// compiler writes Metal for one that does not compile
+/// (doc/experiment/20261103-shaders-on-two-phones).
+fn pyramid_claim(w: &mut Pyramid, i: u32, was: u32) -> bool {
     // SAFETY: as `pyramid_at`.
-    unsafe {
-        spirv_std::arch::atomic_compare_exchange::<
+    let held = unsafe {
+        spirv_std::arch::atomic_exchange::<
             u32,
             { Scope::QueueFamily as u32 },
             { Semantics::NONE.bits() },
-            { Semantics::NONE.bits() },
-        >(w.index_mut(i as usize), v, was)
+        >(w.index_mut(i as usize), pyramid::CLAIMED)
+    };
+    if held != was && held != pyramid::CLAIMED {
+        pyramid_store(w, i, held);
     }
+    held == was
 }
 
 /// The first slot of the bucket that may keep node `c` of `zoom`,
@@ -230,7 +240,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                 || answer.kind != pxl_engine::answer::Kind::Cell
                 || pxl_engine::answer::transparent(answer.asset[0]))
             && key != pyramid::CLAIMED
-            && pyramid_swap(self.pyramid, w, key, pyramid::CLAIMED) == key
+            && pyramid_claim(self.pyramid, w, key)
         {
             pyramid_put(
                 self.pyramid,
