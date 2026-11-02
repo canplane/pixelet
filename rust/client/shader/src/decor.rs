@@ -37,7 +37,7 @@ struct Generating<'a> {
 
 /// The cast's world as decor's generation walks it: unplaced, nothing placed
 /// and no preview's cuts, the ground's alone, as decor generates on it
-/// (pxl-spec-core `world::Inheritance::unplaced`); or, asked from a root
+/// (pxl-spec-core `world::Inheritance::UNPLACED`); or, asked from a root
 /// as edited (`AssetLine`), with the eye's cuts.
 struct Ground<'w, 'a> {
     world: &'w mut World<'a, NoPalette>,
@@ -47,8 +47,8 @@ struct Ground<'w, 'a> {
 impl Query for Ground<'_, '_> {
     type At = Inheritance;
 
-    fn root(&mut self, node: [i32; 3]) -> Inheritance {
-        Inheritance::unplaced((0, node))
+    fn root(&mut self, _: [i32; 3]) -> Inheritance {
+        Inheritance::UNPLACED
     }
 
     fn child(&mut self, at: &Inheritance, zoom: u32, node: [i32; 3]) -> Inheritance {

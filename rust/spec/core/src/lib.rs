@@ -8,6 +8,14 @@
 //! ground generates, the clouds' field, the ray's descent, and the samples'
 //! stops as the boxes a raster draws. pxl-spec takes it as its own, and a
 //! shader crate depends on it as it is.
+//!
+//! Nothing here may abort: rust-gpu inlines a function that may panic into
+//! every call, and so every function calling it, before pxl-shader-build
+//! could keep it a WGSL function (rustc_codegen_spirv linker/inline.rs
+//! `should_inline`, pxl-shader-build `dont_inline`), so its body is written
+//! again at each. An index is a constant, an array taken apart, or read by
+//! `at` or `axis`; no index a loop counts, which is bounds-checked, and no
+//! `wrapping_shl`, whose `unchecked_shl` checks its amount.
 
 #![no_std]
 
@@ -138,10 +146,11 @@ pub(crate) const fn idx_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
 
 /// X named as the world names it at `zoom`, X going round: from minus half
 /// its count to under half (pxl-spec space/coord/world.rs `wrap_idx`).
+/// By `<<`, which drops the bits shifted out (nothing may abort, above).
 pub fn wrap_idx(zoom: Zoom, x: i32) -> i32 {
     match zoom {
         0 => 0,
-        z => x.wrapping_shl(32 - z) >> (32 - z),
+        z => (x << (32 - z)) >> (32 - z),
     }
 }
 

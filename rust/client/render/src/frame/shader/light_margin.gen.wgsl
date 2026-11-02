@@ -8,7 +8,7 @@ struct type_4 {
     member: array<u32>,
 }
 
-struct type_14 {
+struct type_15 {
     member: f32,
     member_1: f32,
 }
@@ -41,7 +41,7 @@ struct type_28 {
 
 struct type_31 {
     member: array<u32, 2>,
-    member_1: type_14,
+    member_1: type_15,
     member_2: array<f32, 3>,
 }
 
@@ -127,7 +127,7 @@ fn function_() {
             let _e50 = (_e49 * _e49);
             let _e51 = (_e44 + 11u);
             let _e54 = (_e44 * _e44);
-            let _e58 = ((((_e51 * _e51) * 178u) + (_e54 * 2u)) + (_e50 * 13u));
+            let _e58 = ((((_e51 * _e51) * 145u) + (_e54 * 2u)) + (_e50 * 13u));
             let _e63 = ((((_e58 + _e50) + 1u) + (_e43 * _e43)) + _e54);
             let _e66 = ((_e63 + (_e35.y * _e44)) + _e35.x);
             if (_e66 < _e37) {
@@ -186,7 +186,7 @@ fn function_() {
                 let _e335 = global_2.member.member[12u][1u];
                 let _e340 = global_2.member.member[12u][2u];
                 let _e358 = global_2.member.member[0u][2u];
-                local = type_36(type_34(array<array<i32, 3>, 4>(array<i32, 3>(_e207, _e212, _e217), array<i32, 3>(_e222, _e227, _e232), array<i32, 3>(_e237, _e242, _e247), array<i32, 3>(_e252, _e257, _e262)), array<array<f32, 3>, 4>(array<f32, 3>(bitcast<f32>(bitcast<u32>(_e267)), bitcast<f32>(bitcast<u32>(_e272)), bitcast<f32>(bitcast<u32>(_e277))), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e288)), bitcast<f32>(bitcast<u32>(_e293)), bitcast<f32>(bitcast<u32>(_e298))), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e309)), bitcast<f32>(bitcast<u32>(_e314)), bitcast<f32>(bitcast<u32>(_e319))), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e330)), bitcast<f32>(bitcast<u32>(_e335)), bitcast<f32>(bitcast<u32>(_e340)))), array<i32, 2>(_e155, _e160), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e165)), bitcast<f32>(bitcast<u32>(_e170)), bitcast<f32>(bitcast<u32>(_e175))), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e186)), bitcast<f32>(bitcast<u32>(_e191)), bitcast<f32>(bitcast<u32>(_e196)))), type_35(array<i32, 2>(bitcast<i32>(bitcast<u32>(_e95.w)), bitcast<i32>(bitcast<u32>(_e102.w))), array<f32, 3>(_e83.x, _e83.y, _e83.z), _e91, array<f32, 3>(_e95.x, _e95.y, _e95.z), array<f32, 3>(_e102.x, _e102.y, _e102.z), array<f32, 3>(_e109.x, _e109.y, _e109.z), array<f32, 3>(_e116.x, _e116.y, _e116.z), _e130), _e43, array<i32, 3>(_e134, _e138, _e142), type_31(array<u32, 2>(_e146, _e150), type_14(0f, (8f * sqrt((((_e95.x * _e95.x) + (_e95.y * _e95.y)) + (_e95.z * _e95.z))))), array<f32, 3>(0f, 0f, 0f)), _e78, bitcast<u32>(_e358));
+                local = type_36(type_34(array<array<i32, 3>, 4>(array<i32, 3>(_e207, _e212, _e217), array<i32, 3>(_e222, _e227, _e232), array<i32, 3>(_e237, _e242, _e247), array<i32, 3>(_e252, _e257, _e262)), array<array<f32, 3>, 4>(array<f32, 3>(bitcast<f32>(bitcast<u32>(_e267)), bitcast<f32>(bitcast<u32>(_e272)), bitcast<f32>(bitcast<u32>(_e277))), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e288)), bitcast<f32>(bitcast<u32>(_e293)), bitcast<f32>(bitcast<u32>(_e298))), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e309)), bitcast<f32>(bitcast<u32>(_e314)), bitcast<f32>(bitcast<u32>(_e319))), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e330)), bitcast<f32>(bitcast<u32>(_e335)), bitcast<f32>(bitcast<u32>(_e340)))), array<i32, 2>(_e155, _e160), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e165)), bitcast<f32>(bitcast<u32>(_e170)), bitcast<f32>(bitcast<u32>(_e175))), array<f32, 3>(bitcast<f32>(bitcast<u32>(_e186)), bitcast<f32>(bitcast<u32>(_e191)), bitcast<f32>(bitcast<u32>(_e196)))), type_35(array<i32, 2>(bitcast<i32>(bitcast<u32>(_e95.w)), bitcast<i32>(bitcast<u32>(_e102.w))), array<f32, 3>(_e83.x, _e83.y, _e83.z), _e91, array<f32, 3>(_e95.x, _e95.y, _e95.z), array<f32, 3>(_e102.x, _e102.y, _e102.z), array<f32, 3>(_e109.x, _e109.y, _e109.z), array<f32, 3>(_e116.x, _e116.y, _e116.z), _e130), _e43, array<i32, 3>(_e134, _e138, _e142), type_31(array<u32, 2>(_e146, _e150), type_15(0f, (8f * sqrt((((_e95.x * _e95.x) + (_e95.y * _e95.y)) + (_e95.z * _e95.z))))), array<f32, 3>(0f, 0f, 0f)), _e78, bitcast<u32>(_e358));
                 let _e386 = bitcast<i32>(_e35.x);
                 let _e387 = bitcast<i32>(_e35.y);
                 let _e388 = bitcast<i32>(_e51);
@@ -212,7 +212,7 @@ fn function_() {
                             local_3 = _e407;
                             let _e411 = (_e405 <= select(_e408, _e397, (_e397 < _e408)));
                             if _e411 {
-                                let _e416 = ((bitcast<u32>(((_e393 * _e388) + _e405)) * 177u) + 176u);
+                                let _e416 = ((bitcast<u32>(((_e393 * _e388) + _e405)) * 144u) + 143u);
                                 if (_e416 < _e37) {
                                     let _e420 = global_3.member[_e416];
                                     phi_988_ = _e420;

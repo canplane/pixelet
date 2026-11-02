@@ -100,9 +100,9 @@ pub const W_ASSET: u32 = 2;
 pub const W_INHERITANCE: u32 = 4;
 /// The node: its zoom, then its index on X, Y and Z.
 pub const W_NODE: u32 = W_INHERITANCE + INHERITANCE_WORDS;
-/// What was handed it of what is placed, its `Inheritance`'s second word
+/// What was handed it of what is placed, its `Inheritance`'s first word
 /// (`world::Inheritance::words`).
-pub const W_PLACED: u32 = W_INHERITANCE + 1;
+pub const W_PLACED: u32 = W_INHERITANCE;
 pub(crate) const ENTRY_WORDS: u32 = W_NODE + 4;
 
 /// The slots: no more than the tiles' entries were (8 roots and 2^16 tiles

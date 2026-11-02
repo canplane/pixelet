@@ -1,12 +1,20 @@
 // pxl-spec-core/cave.rs
 
 //! gpu-portable: a node's seed and the caves, u32 hashes over i32 cells, no
-//! `Option<bool>`, and index loops where rust-gpu lowers no array iterator.
+//! `Option<bool>`, and every index a constant (lib.rs, nothing may abort).
+//!
+//! The caves are Minecraft 1.18's noise caves: tunnels where two noises are
+//! both near zero, its spaghetti, and caverns where one is high, its cheese,
+//! a finer noise over all three so no wall runs smooth. Each noise is Ken
+//! Perlin's improved noise on a lattice of its own, a hash at each lattice
+//! point (`node_seed`) choosing its gradient, all in integers, so the CPU
+//! and a GPU carve the same cells to the bit. A cave is a pure function of
+//! the cube and the seed: nothing is handed down a descent and nothing kept.
 
 use xpute_kit::math::rng::derive_seed_u32;
 
 use crate::param::cave;
-use crate::{wrap_idx, Zoom, LEAF_CELL};
+use crate::{idx_at, wrap_idx, Zoom, LEAF_CELL};
 
 /// The seed every draw on the world's nodes starts from (`node_seed`): the
 /// caves, the ground's decor and a placed decor's pose. Changing it
@@ -19,129 +27,321 @@ const MASTER_SEED: u32 = 0x5eed_0001;
 /// it (`wrap_idx`), so a node seeds alike on whichever lap its asker counts
 /// it. Every draw on the world's nodes seeds by it, each use under a tag of
 /// its own, so no two uses draw one stream.
-pub fn node_seed<const D: usize>(tag: u32, (zoom, at): (Zoom, [i32; D])) -> u32 {
-    const { assert!(D <= 3, "a node has at most three indices") };
-    let mut h = derive_seed_u32(derive_seed_u32(MASTER_SEED, tag), zoom);
-    // [naga] each index by itself, not a loop: Naga's Metal backend breaks a
-    // `loop { … continuing { break if … } }` an iteration early, re-reading
-    // its condition after the counter moved.
-    if D > 0 {
-        h = derive_seed_u32(h, wrap_idx(zoom, at[0]) as u32);
-    }
-    if D > 1 {
-        h = derive_seed_u32(h, at[1] as u32);
-    }
-    if D > 2 {
-        h = derive_seed_u32(h, at[2] as u32);
-    }
-    h
+///
+/// [naga] Each index by itself, not a loop (`Indices`): Naga's Metal backend
+/// breaks a `loop { … continuing { break if … } }` an iteration early,
+/// re-reading its condition after the counter moved.
+pub fn node_seed<I: Indices>(tag: u32, (zoom, c): (Zoom, I)) -> u32 {
+    c.fold(
+        derive_seed_u32(derive_seed_u32(MASTER_SEED, tag), zoom),
+        zoom,
+    )
 }
 
-/// The caves' tag (`node_seed`).
-const CAVES: u32 = 0xca7e_0001;
+/// A node's indices, two or three, as `node_seed` folds them in, each by
+/// itself and taken apart, not indexed: an index into an array of a const
+/// generic's length is checked even where it cannot fail, since rustc folds
+/// no constant after monomorphizing (lib.rs, nothing may abort).
+pub trait Indices: Copy {
+    /// `h` with each index folded in, X named as the world at `zoom` names it.
+    fn fold(self, h: u32, zoom: Zoom) -> u32;
+}
 
-// ---- caves: a sparse tree of hashes ----
+impl Indices for [i32; 2] {
+    fn fold(self, h: u32, zoom: Zoom) -> u32 {
+        let [x, y] = self;
+        derive_seed_u32(derive_seed_u32(h, wrap_idx(zoom, x) as u32), y as u32)
+    }
+}
+
+impl Indices for [i32; 3] {
+    fn fold(self, h: u32, zoom: Zoom) -> u32 {
+        let [x, y, z] = self;
+        derive_seed_u32([x, y].fold(h, zoom), z as u32)
+    }
+}
+
+/// The caves' tags (`node_seed`), a lattice each: the tunnels' two noises
+/// off one hash, the caverns', and the detail over them.
+const TUNNELS: u32 = 0xca7e_0001;
+const CAVERNS: u32 = 0xca7e_0002;
+const DETAIL: u32 = 0xca7e_0003;
 
 /// The coarsest cube a cave takes, 32 units a side: nothing coarser is
 /// hollow, so every coarser fold of the caves is solid.
 pub const CAVE_COARSEST: Zoom = LEAF_CELL - cave::COARSEST_STEPS;
 
-/// A cube's draws, `c` at `z`, from one hash: whether it flips a child
-/// (its top two bits), which (its low three), and which of its eight draw
-/// again (its second byte, a bit each). A child that does not draw is its
-/// value all through, so the caves are a sparse tree whose nodes are the
-/// cubes that draw, every cube at the root's zoom among them.
-fn draws(z: Zoom, c: [i32; 3]) -> (bool, u32, u32) {
-    let h = node_seed(CAVES, (z, c));
-    (h < cave::FLIP, h & 7, (h >> 8) & 0xff)
+/// Where a point lies in a lattice cell, in fixed point: `T_ONE` across it.
+const T_BITS: u32 = 14;
+const T_ONE: i32 = 1 << T_BITS;
+
+/// Ken Perlin's quintic fade, 6t⁵ − 15t⁴ + 10t³, over `[0, T_ONE]`, in
+/// steps that stay within an i32.
+fn fade(t: i32) -> i32 {
+    let t3 = (((t * t) >> T_BITS) * t) >> T_BITS;
+    let inner = 10 * T_ONE + ((((6 * t - 15 * T_ONE) >> 2) * t) >> (T_BITS - 2));
+    (t3 * (inner >> 2)) >> (T_BITS - 2)
 }
 
-/// A child's place among its parent's eight.
-fn slot(c: [i32; 3]) -> u32 {
-    (c[0] & 1 | (c[1] & 1) << 1 | (c[2] & 1) << 2) as u32
+/// `a` toward `b` by `t` of `T_ONE`, never past either: the floor of a
+/// product no larger than either's span.
+fn lerp(a: i32, b: i32, t: i32) -> i32 {
+    a + (((b - a) * t) >> T_BITS)
 }
 
-/// The caves at a cube as its parent hands them down, so a descent asks
-/// each cube's draws once rather than again from the caves' first zoom:
-/// its value, and whether anything under it differs (`branch`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Cave {
-    hollow: bool,
-    branch: bool,
+/// A lattice: its tag, and its spacing as powers of two of units, across
+/// (X and Y) and up (Z).
+#[derive(Clone, Copy)]
+struct Lattice {
+    tag: u32,
+    shift: [u32; 2],
 }
 
-impl Cave {
-    /// Any cube coarser than the caves' first: solid, and every cube of the
-    /// caves' first zoom under it draws.
-    pub const ROOT: Cave = Cave {
-        hollow: false,
-        branch: true,
+const TUNNEL_LATTICE: Lattice = Lattice {
+    tag: TUNNELS,
+    shift: cave::TUNNEL_SHIFT,
+};
+const CAVERN_LATTICE: Lattice = Lattice {
+    tag: CAVERNS,
+    shift: cave::CAVERN_SHIFT,
+};
+const DETAIL_LATTICE: Lattice = Lattice {
+    tag: DETAIL,
+    shift: cave::DETAIL_SHIFT,
+};
+
+impl Lattice {
+    /// The lattice cell `p`, in half units, lies in, and where in it along
+    /// each axis, in `T_ONE`.
+    fn place(self, p: [i32; 3]) -> ([i32; 3], [i32; 3]) {
+        let (x, y, z) = (
+            along(p[0], self.shift[0]),
+            along(p[1], self.shift[0]),
+            along(p[2], self.shift[1]),
+        );
+        ([x.0, y.0, z.0], [x.1, y.1, z.1])
+    }
+
+    /// The hashes at the eight corners of the lattice cell `cell`, corner
+    /// `dx + 2·dy + 4·dz`. X is wrapped as the world wraps it, its lattice's
+    /// zoom the one whose cells are its spacing.
+    fn corners(self, [x, y, z]: [i32; 3]) -> [u32; 8] {
+        let at = (LEAF_CELL - self.shift[0], self.tag);
+        [
+            node_seed(at.1, (at.0, [x, y, z])),
+            node_seed(at.1, (at.0, [x + 1, y, z])),
+            node_seed(at.1, (at.0, [x, y + 1, z])),
+            node_seed(at.1, (at.0, [x + 1, y + 1, z])),
+            node_seed(at.1, (at.0, [x, y, z + 1])),
+            node_seed(at.1, (at.0, [x + 1, y, z + 1])),
+            node_seed(at.1, (at.0, [x, y + 1, z + 1])),
+            node_seed(at.1, (at.0, [x + 1, y + 1, z + 1])),
+        ]
+    }
+}
+
+/// Along one axis, the lattice cell `p`, in half units (`HALF_UNIT`), lies
+/// in, its spacing `2^shift` units, and where in it, in `T_ONE`.
+fn along(p: i32, shift: u32) -> (i32, i32) {
+    let s = shift + 1;
+    (
+        idx_at(HALF_UNIT, p, LEAF_CELL - shift),
+        (p & ((1 << s) - 1)) << (T_BITS - s),
+    )
+}
+
+/// The zoom whose cells are half a unit, the points a cube's center and its
+/// corners fall on.
+const HALF_UNIT: Zoom = LEAF_CELL + 1;
+
+/// Ken Perlin's improved gradient, the low four bits of `h`, one of the
+/// cube's twelve edges, four of them twice: its least and most against the
+/// offsets `[lo, hi]` from its lattice point, in `T_ONE`, each axis its own.
+fn grad_span(h: u32, lo: [i32; 3], hi: [i32; 3]) -> [i32; 2] {
+    let h = h & 15;
+    let (u0, u1) = if h < 8 {
+        (lo[0], hi[0])
+    } else {
+        (lo[1], hi[1])
     };
-
-    /// As a word a GPU's storage holds, `bool` being none of its: hollow,
-    /// then branch.
-    pub const fn word(self) -> u32 {
-        self.hollow as u32 | (self.branch as u32) << 1
-    }
-
-    pub(crate) const fn of_word(w: u32) -> Cave {
-        Cave {
-            hollow: w & 1 != 0,
-            branch: w & 2 != 0,
-        }
-    }
-
-    /// The child `c` at `zoom` of a cube whose caves are `self`, by its
-    /// place among the eight (`slot`): its parent's draws, one hash, flip one
-    /// of them or none, and say which draw again. Past the leaves a cube is
-    /// its leaf's.
-    pub fn child(self, zoom: Zoom, c: [i32; 3]) -> Cave {
-        if zoom < CAVE_COARSEST {
-            return Cave::ROOT;
-        }
-        if !self.branch || zoom > LEAF_CELL {
-            return Cave {
-                branch: false,
-                ..self
-            };
-        }
-        let (flips, flip, branches) = draws(zoom - 1, [c[0] >> 1, c[1] >> 1, c[2] >> 1]);
-        let k = slot(c);
-        Cave {
-            hollow: self.hollow ^ (flips && flip == k),
-            branch: branches >> k & 1 == 1,
-        }
-    }
-
-    /// The caves at the cube `c` at `zoom`, down its line from the caves'
-    /// first, for an asker with nothing handed down.
-    pub fn of(zoom: Zoom, c: [i32; 3]) -> Cave {
-        let mut cave = Cave::ROOT;
-        let mut z = CAVE_COARSEST;
-        while z <= zoom && z <= LEAF_CELL {
-            let s = zoom - z;
-            cave = cave.child(z, [c[0] >> s, c[1] >> s, c[2] >> s]);
-            if !cave.branch {
-                break;
-            }
-            z += 1;
-        }
-        cave
-    }
-
-    /// Whether the cube is a cave's air. A cube is its parent's value unless
-    /// its parent flipped it, and a parent flips at most one of its eight, so
-    /// the majority of any cube's children is the cube: the caves fold to
-    /// themselves at every zoom.
-    pub fn hollow(self) -> bool {
-        self.hollow
-    }
-
-    /// What the caves are all through a cube at `zoom`: whether that is known
-    /// there — its value where nothing under it differs, a leaf's or finer
-    /// always, never coarser than the caves' first — and the value.
-    pub fn whole(self, zoom: Zoom) -> (bool, bool) {
-        let known = zoom >= CAVE_COARSEST && (!self.branch || zoom >= LEAF_CELL);
-        (known, known && self.hollow)
-    }
+    let (v0, v1) = if h < 4 {
+        (lo[1], hi[1])
+    } else if h == 12 || h == 14 {
+        (lo[0], hi[0])
+    } else {
+        (lo[2], hi[2])
+    };
+    let (u0, u1) = if h & 1 == 0 { (u0, u1) } else { (-u1, -u0) };
+    let (v0, v1) = if h & 2 == 0 { (v0, v1) } else { (-v1, -v0) };
+    [u0 + v0, u1 + v1]
 }
+
+/// Corner `k`'s offset from the point at `t` in its lattice cell.
+fn offset(k: usize, t: [i32; 3]) -> [i32; 3] {
+    [
+        t[0] - (k & 1) as i32 * T_ONE,
+        t[1] - (k >> 1 & 1) as i32 * T_ONE,
+        t[2] - (k >> 2 & 1) as i32 * T_ONE,
+    ]
+}
+
+/// `lerp`'s least over `a` and `b` at their least and `t` between `t0` and
+/// `t1`, and its most at their most: it rises with `a` and `b`, and runs
+/// straight in `t`.
+fn lerp_span(a: [i32; 2], b: [i32; 2], t0: i32, t1: i32) -> [i32; 2] {
+    let (l0, l1) = (lerp(a[0], b[0], t0), lerp(a[0], b[0], t1));
+    let (m0, m1) = (lerp(a[1], b[1], t0), lerp(a[1], b[1], t1));
+    [if l0 < l1 { l0 } else { l1 }, if m0 > m1 { m0 } else { m1 }]
+}
+
+/// The least and the most the noise whose gradients are `h`'s bits from
+/// `from` takes over the box `[lo, hi]` of its lattice cell, in `T_ONE`,
+/// about `±T_ONE`, widened by `slack`: each corner's gradient over the box,
+/// blended at the fades of the box's ends, the fade only rising. Over a box
+/// of no size, a point, it is the noise there, both ends.
+fn noise_span(h: [u32; 8], from: u32, [lo, hi]: [[i32; 3]; 2], slack: i32) -> [i32; 2] {
+    let g = |k: usize, h: u32| grad_span(h >> from, offset(k, lo), offset(k, hi));
+    let v = [
+        g(0, h[0]),
+        g(1, h[1]),
+        g(2, h[2]),
+        g(3, h[3]),
+        g(4, h[4]),
+        g(5, h[5]),
+        g(6, h[6]),
+        g(7, h[7]),
+    ];
+    let f0 = [fade(lo[0]), fade(lo[1]), fade(lo[2])];
+    let f1 = [fade(hi[0]), fade(hi[1]), fade(hi[2])];
+    let x00 = lerp_span(v[0], v[1], f0[0], f1[0]);
+    let x10 = lerp_span(v[2], v[3], f0[0], f1[0]);
+    let x01 = lerp_span(v[4], v[5], f0[0], f1[0]);
+    let x11 = lerp_span(v[6], v[7], f0[0], f1[0]);
+    let y0 = lerp_span(x00, x10, f0[1], f1[1]);
+    let y1 = lerp_span(x01, x11, f0[1], f1[1]);
+    let z = lerp_span(y0, y1, f0[2], f1[2]);
+    [z[0] - slack, z[1] + slack]
+}
+
+/// The detail over a noise: a share of it (`cave::DETAIL_SHRINK`).
+fn detail(n: i32) -> i32 {
+    n >> cave::DETAIL_SHRINK
+}
+
+/// The leaf cell a cube finer than the leaves lies in, and any other as
+/// itself, its X wrapped as the world wraps it.
+fn leaf_or_coarser((zoom, c): (Zoom, [i32; 3])) -> (Zoom, [i32; 3]) {
+    let to = if zoom > LEAF_CELL { LEAF_CELL } else { zoom };
+    let [x, y, z] = c;
+    (
+        to,
+        [
+            wrap_idx(to, idx_at(zoom, x, to)),
+            idx_at(zoom, y, to),
+            idx_at(zoom, z, to),
+        ],
+    )
+}
+
+/// Whether the tunnels' two noises, `a` and `b` with the detail over them,
+/// are both within the band about zero.
+fn in_tunnel(a: i32, b: i32) -> bool {
+    a > -cave::TUNNEL_BAND
+        && a < cave::TUNNEL_BAND
+        && b > -cave::TUNNEL_BAND
+        && b < cave::TUNNEL_BAND
+}
+
+/// The box `[lo, hi]`, in `T_ONE`, that the cube `c` at `zoom`, no finer
+/// than a leaf, takes of the lattice cell it lies in, and that cell: the
+/// cube whole where `whole`, none (`false`) where it is larger than a
+/// lattice cell along an axis; else its center, a box of no size.
+fn span(
+    lattice: Lattice,
+    (zoom, c): (Zoom, [i32; 3]),
+    whole: bool,
+) -> ([i32; 3], [[i32; 3]; 2], bool) {
+    let s = LEAF_CELL - zoom;
+    let [across, up] = lattice.shift;
+    if whole && (s > across || s > up) {
+        return ([0; 3], [[0; 3]; 2], false);
+    }
+    // Its first corner, and its center half its side on.
+    let half = if whole { 0 } else { 1 << s };
+    let [x, y, z] = c;
+    let lo = [
+        idx_at(zoom, x, HALF_UNIT) + half,
+        idx_at(zoom, y, HALF_UNIT) + half,
+        idx_at(zoom, z, HALF_UNIT) + half,
+    ];
+    let (cell, lo) = lattice.place(lo);
+    let hi = if whole {
+        let (a, u) = (1 << (T_BITS + s - across), 1 << (T_BITS + s - up));
+        [lo[0] + a, lo[1] + a, lo[2] + u]
+    } else {
+        lo
+    };
+    (cell, [lo, hi], true)
+}
+
+/// Whether the cube `c` at `zoom` is a cave's air (`whole` false), by the
+/// noises at its center, or whether a cave takes all of it (`whole`),
+/// whatever cube under it is asked, by the noises' least and most over it
+/// (`noise_span`), known only where it lies in one cell of the detail's
+/// lattice, the finest: in a tunnel, or in a cavern. A cube coarser than the
+/// caves' first is solid; one finer than the leaves is its leaf's, whole.
+/// One body for both, so a GPU's module writes it once.
+fn caves(node: (Zoom, [i32; 3]), whole: bool) -> bool {
+    let whole = whole && node.0 < LEAF_CELL;
+    let (zoom, c) = leaf_or_coarser(node);
+    if zoom < CAVE_COARSEST {
+        return false;
+    }
+    let slack = if whole { cave::SLACK } else { 0 };
+    let (cell, b, within) = span(DETAIL_LATTICE, (zoom, c), whole);
+    if !within {
+        return false;
+    }
+    let h = DETAIL_LATTICE.corners(cell);
+    let da = noise_span(h, 0, b, slack);
+    let db = noise_span(h, 4, b, slack);
+    let dc = noise_span(h, 8, b, slack);
+    let (cell, b, _) = span(TUNNEL_LATTICE, (zoom, c), whole);
+    let h = TUNNEL_LATTICE.corners(cell);
+    let ta = noise_span(h, 0, b, slack);
+    let tb = noise_span(h, 4, b, slack);
+    if in_tunnel(ta[0] + detail(da[0]), tb[0] + detail(db[0]))
+        && in_tunnel(ta[1] + detail(da[1]), tb[1] + detail(db[1]))
+    {
+        return true;
+    }
+    let (cell, b, _) = span(CAVERN_LATTICE, (zoom, c), whole);
+    noise_span(CAVERN_LATTICE.corners(cell), 0, b, slack)[0] + detail(dc[0]) > cave::CAVERN_OVER
+}
+
+/// Whether the cube `c` at `zoom` is a cave's air, by the noises at its
+/// center (`caves`).
+pub fn hollow(node: (Zoom, [i32; 3])) -> bool {
+    caves(node, false)
+}
+
+/// Whether a cave takes all of the cube `c` at `zoom`, whatever cube under
+/// it is asked (`caves`).
+pub fn all_hollow(node: (Zoom, [i32; 3])) -> bool {
+    caves(node, true)
+}
+
+const _: () = assert!(
+    cave::DETAIL_SHIFT[0] <= cave::TUNNEL_SHIFT[0]
+        && cave::DETAIL_SHIFT[1] <= cave::TUNNEL_SHIFT[1]
+        && cave::DETAIL_SHIFT[0] <= cave::CAVERN_SHIFT[0]
+        && cave::DETAIL_SHIFT[1] <= cave::CAVERN_SHIFT[1],
+    "the detail's lattice is the finest, so a cube within one of its cells is within one of each"
+);
+const _: () = assert!(
+    cave::TUNNEL_SHIFT[0] < T_BITS
+        && cave::TUNNEL_SHIFT[1] < T_BITS
+        && cave::CAVERN_SHIFT[0] < T_BITS
+        && cave::CAVERN_SHIFT[1] < T_BITS,
+    "a lattice cell's half units fit `T_ONE`"
+);

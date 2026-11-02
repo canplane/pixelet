@@ -20,7 +20,7 @@ use crate::answer::{
     BOX_WHOLE, FULL,
 };
 use crate::area::{earth, is_walled, Area, Shard};
-use crate::cave::Cave;
+use crate::cave;
 use crate::clipmap::Lookup;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::CELL_CENTER;
@@ -437,7 +437,8 @@ pub trait Resident: Area {
 pub type Answer = In<[u32; 2]>;
 
 /// The ground's answer for a node, the one way a descent asks the ground,
-/// `cave` the caves there and `is_cell` whether it is asked at its own zoom:
+/// `is_cell` whether it is asked at its own zoom, the caves asked of the node
+/// itself only where they may take it (`cave::hollow`, `cave::all_hollow`):
 /// past the service area, the Earth's; else the node's own bound first, of
 /// each zoom's tile its cells are read from (`Resident::relief`) — at its own zoom,
 /// over it is air, else its column's asset (`Cell::asset`), its palette index; a
@@ -455,7 +456,6 @@ pub type Answer = In<[u32; 2]>;
 /// (`Resident::relief`), `EMPTY` where none was.
 pub fn node<H: Resident>(
     held: &mut H,
-    cave: Cave,
     shard: Shard,
     place: &mut Lookup,
     (zoom, c): (Zoom, [i32; 3]),
@@ -516,7 +516,7 @@ pub fn node<H: Resident>(
     }
     if is_cell {
         let column = held.cell(shard, *place, zoom, c);
-        let asset = column.asset(zoom, c[2], || cave.hollow());
+        let asset = column.asset(zoom, c[2], || cave::hollow((zoom, c)));
         return (
             In {
                 kind: Kind::Cell,
@@ -527,9 +527,13 @@ pub fn node<H: Resident>(
         );
     }
     // Air where none of it lies where the ground may fill, else a split
-    // and its box, the span along z it may fill in the node's steps.
-    let (known, hollow) = cave.whole(zoom);
-    let s = slab(shard, (zoom, c), relief, [far, near], known && hollow);
+    // and its box, the span along z it may fill in the node's steps. The
+    // caves only take away, so they are asked only of a node the ground
+    // meets.
+    let mut s = slab(shard, (zoom, c), relief, [far, near], false);
+    if meets(s, (zoom, c[2]), near) && cave::all_hollow((zoom, c)) {
+        s = slab(shard, (zoom, c), relief, [far, near], true);
+    }
     let answer = if meets(s, (zoom, c[2]), near) {
         In {
             kind: Kind::Split,

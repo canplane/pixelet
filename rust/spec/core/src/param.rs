@@ -21,10 +21,23 @@ pub mod beam {
 pub(crate) mod cave {
     use crate::Zoom;
 
-    /// The chance a drawing cube flips one of its eight children, as the
-    /// hash's share under it: a quarter. With each child drawing again at even
-    /// odds (one hash bit), some 6% of the ground is hollow.
-    pub const FLIP: u32 = 1 << 30;
+    /// The tunnels' lattice, as powers of two of units across and up: 32
+    /// units across and 16 up, so a tunnel winds more across than up.
+    pub const TUNNEL_SHIFT: [u32; 2] = [5, 4];
+    /// The caverns' lattice: 64 across, 32 up.
+    pub const CAVERN_SHIFT: [u32; 2] = [6, 5];
+    /// The detail's lattice, the finest: 8 units every way.
+    pub const DETAIL_SHIFT: [u32; 2] = [3, 3];
+    /// The detail's span against a noise's, in halvings: a quarter.
+    pub const DETAIL_SHRINK: u32 = 2;
+    /// The band about zero both tunnel noises fall in where a tunnel is, of
+    /// a noise's about `±2^14`.
+    pub const TUNNEL_BAND: i32 = 1200;
+    /// What the caverns' noise passes where a cavern is, of its about `±2^14`.
+    pub const CAVERN_OVER: i32 = 7000;
+    /// What a noise's least and most over a box are widened by, past the
+    /// integers' rounding.
+    pub const SLACK: i32 = 64;
 
     /// The coarsest cube a cave takes, in zoom steps over the leaf cell: 32
     /// units a side; nothing coarser is hollow, so every coarser fold of the

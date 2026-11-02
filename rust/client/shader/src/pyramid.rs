@@ -190,7 +190,6 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
                             pyramid_at(self.pyramid, a + 1),
                             pyramid_at(self.pyramid, a + 2),
                             pyramid_at(self.pyramid, a + 3),
-                            pyramid_at(self.pyramid, a + 4),
                         ]);
                         let kind = pyramid::kind_of(pyramid_at(self.pyramid, w + pyramid::W_KIND));
                         let asset = [
@@ -246,7 +245,6 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
             pyramid_put(self.pyramid, a + 1, words[1]);
             pyramid_put(self.pyramid, a + 2, words[2]);
             pyramid_put(self.pyramid, a + 3, words[3]);
-            pyramid_put(self.pyramid, a + 4, words[4]);
             let k = w + pyramid::W_NODE;
             pyramid_put(self.pyramid, k, zoom);
             pyramid_put(self.pyramid, k + 1, c[0] as u32);

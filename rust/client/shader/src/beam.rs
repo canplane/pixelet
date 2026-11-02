@@ -66,7 +66,6 @@ impl<W: Words + ?Sized> BeamLine<'_, W> {
             w.word(k + 1),
             w.word(k + 2),
             w.word(k + 3),
-            w.word(k + 4),
         ])
     }
 }
@@ -307,7 +306,6 @@ impl<W: Words + ?Sized> cast::Keep<Inheritance> for Leaving<'_, W> {
             w.set(k + 1, a[1]);
             w.set(k + 2, a[2]);
             w.set(k + 3, a[3]);
-            w.set(k + 4, a[4]);
             z += 1;
         }
     }

@@ -13,8 +13,8 @@
 //!   GPU built of its brick, its child groups read back into the pool's mirror,
 //!   read as the GPU reads them (pxl-spec-core `clipmap::ground`,
 //!   `way::tree`);
-//! - the caves: the hash pyramid's node at that zoom, its value
-//!   (`procedural.rs` `Cave`);
+//! - the caves: the noises at the cell's center (`procedural.rs`
+//!   `hollow`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
 //!   their majority (`pyramid.rs`, through the store's query).
 //!
@@ -36,8 +36,8 @@
 //!   (pxl-spec-core fill.rs `level`); a way a coarser tile drops as
 //!   narrower than half its cell is dropped there, as
 //!   its level of detail does;
-//! - the caves: the hash node hollow and drawing nothing again under it
-//!   (`procedural::Cave`, one draw of its parent's);
+//! - the caves: a cave through all of the node, by the noises' least and
+//!   most over it (`procedural::all_hollow`);
 //! - what is placed: no record of the objects' pyramid at the node.
 //!
 //! A source not holding the node answers that it lacks it, never air and
@@ -95,7 +95,7 @@ impl World<'_> {
         At {
             node,
             inheritance: if self.unplaced {
-                world::Inheritance::unplaced(node)
+                world::Inheritance::UNPLACED
             } else {
                 world::Inheritance::of(&self.object.columns(), node)
             },

@@ -185,16 +185,16 @@ sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
 | decor  | what the ground generates                    | a placed decor  |
 | marker | a place, Carto's icon and its name           | a placed marker |
 
-The ground generates decor by evaluating, never storing, a tree of hashes as the
-caves are: a column at the coarsest zoom a decor stands at holds as many as a
-hash draws about its mean, each column hands its count to its four a hash each,
-and a leaf cell holds one or none; where it stands is a function of the cell, a
-seed and the ground's face, one rule on both sides (`pxl-spec-core scatter.rs`).
-One whose box meets a neighbor's that drew lower gives way, so two generated
-decors never share a cell. A decor, placed or generated, stands as itself, a
-model or its impostor, at every zoom whose cell its box keeps an eighth of or
-more, as a folded cube of that box is drawn (`answer::eighths`), and is none
-where it keeps none, so neither is told from the other.
+The ground generates decor by evaluating, never storing, a tree of hashes: a
+column at the coarsest zoom a decor stands at holds as many as a hash draws
+about its mean, each column hands its count to its four a hash each, and a leaf
+cell holds one or none; where it stands is a function of the cell, a seed and
+the ground's face, one rule on both sides (`pxl-spec-core scatter.rs`). One
+whose box meets a neighbor's that drew lower gives way, so two generated decors
+never share a cell. A decor, placed or generated, stands as itself, a model or
+its impostor, at every zoom whose cell its box keeps an eighth of or more, as a
+folded cube of that box is drawn (`answer::eighths`), and is none where it keeps
+none, so neither is told from the other.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its palette index the majority of those it folds,
@@ -298,8 +298,9 @@ alike (`pxl-spec-core world.rs` `node`, which `pxl-kernel domain/query/world.rs`
 `World` answers on the CPU):
 
 1. the ground's grid, each cell a cube shifted up to its height;
-2. the caves' air under its face, from a hash pyramid asked only at the cells a
-   reader asks for (`pxl-spec-core cave.rs`);
+2. the caves' air under its face, Minecraft 1.18's noise caves in integers off
+   the one seed, asked only of the cells and nodes a reader asks for
+   (`pxl-spec-core cave.rs`);
 3. the ways off the ground, where each crossing of a line over the column is a
    deck and its pier, a bore, an embankment or a cutting (`pxl-spec-core
 way.rs`);
@@ -1142,6 +1143,7 @@ them.
 | Minecraft's `cube_all`, `cube_bottom_top`                                                                                              | `pxl-render gpu/pack.rs`                                                                | Which face image a cube wears: its own side and bottom where the pack ships them, its top on every face where not                        |
 | Minecraft Beta's `replaceBlocksForBiome`                                                                                               | `pxl-spec-core ground.rs` `Cell::asset`                                                 | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
 | Minecraft's map colors                                                                                                                 | `spec/spec/asset/color.json` underground                                                | The colors of soil, sandstone and stone                                                                                                  |
+| Minecraft 1.18's noise caves; Ken Perlin's improved noise (SIGGRAPH 2002)                                                              | `pxl-spec-core cave.rs`                                                                 | Tunnels where two noises are both near zero, caverns where one is high; the fade and the gradients                                       |
 | Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | `pxl-kernel domain/query/support.rs` `step_slide`                                       | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
 | Amanatides and Woo's voxel traversal                                                                                                   | `pxl-spec-core cast.rs` `walk`, `pxl-kernel domain/query/support.rs`                    | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
 | Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010)                                                                          | `pxl-spec-core cast.rs` `walk`                                                          | Push, advance and pop down an octree; a split passed whole where the ray misses its contour, here a box                                  |

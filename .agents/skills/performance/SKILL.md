@@ -1,6 +1,6 @@
 ---
 name: performance
-description: How a performance problem in pixelet is analyzed and a change to it judged — the contracts a change keeps (by AGENTS.md's Reading and changing), measurement kept apart from the fix, where a cost comes from and removing the work before speeding it, the state and invalidation a change adds, the conditions a gain is checked under, and the three-line report. Use for any profiling, performance analysis or optimization, in the renderer, the kernel, the shell or the tools.
+description: How a performance problem in pixelet is analyzed and a change to it judged — the contracts a change keeps (by AGENTS.md's Reading and changing), measurement kept apart from the fix, where a cost comes from and removing the work before speeding it, the state and invalidation a change adds, the conditions a gain is checked under, the generated WGSL's size, and the three-line report. Use for any profiling, performance analysis or optimization, in the renderer, the kernel, the shell or the tools.
 ---
 
 # Performance
@@ -98,6 +98,24 @@ ownership and lifetime.
   moves and window length on both. A span runs only on the frames that need it
   (decor's `generate` as the view moves, not at rest), so the moves decide
   what is measured. Say how many runs and what was not held equal.
+
+## The generated WGSL's size
+
+- Compare each `*.gen.wgsl` and their total against `HEAD` and against the
+  tree just before the change: `cargo shader-wgsl` keeps every set it made
+  under the user's cache (`~/Library/Caches/pixelet/shader/<digest>/` on a
+  Mac), newest last, so a change another session left in the tree is told
+  apart from this one.
+- A body written again at each call is what grows it. pxl-shader-build keeps
+  a function called from more than one place a WGSL function (`dont_inline`),
+  but only one rust-gpu has not inlined already: rust-gpu inlines a function
+  that may panic, and every function calling it (pxl-spec-core lib.rs,
+  nothing may abort).
+- To find why one was inlined, mark it and the functions under it
+  `#[inline(never)]` for one build: rust-gpu warns that each "has been
+  inlined", with the cause (`panicking`, `illegal (pointer) argument`) and its
+  callers. Follow the cause down to the function that holds it, fix it there,
+  and take the marks out.
 
 ## Report
 

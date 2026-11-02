@@ -10,7 +10,7 @@ use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::tile::Tile;
 
 /// A node's seed and the caves, one source with the GPU's (pxl-spec-core).
-pub use pxl_spec_core::cave::{node_seed, Cave, CAVE_COARSEST};
+pub use pxl_spec_core::cave::{all_hollow, hollow, node_seed, CAVE_COARSEST};
 use pxl_spec_core::way::{Stations, INTERVAL_M};
 use pxl_spec_core::LEAF_CELL;
 
