@@ -38,9 +38,6 @@ pub mod pkt {
     }
 }
 
-/// Where a tile's encoding starts its buffer; it doubles to the packet's size.
-pub(crate) const ENCODE_FROM: u32 = 1 << 10;
-
 /// The most bytes a packet of `layer` takes: what a client may hold one
 /// in, and refuses one past. Terrain's and the Earth's follow from their
 /// lanes; places' and divisions' are a room their bake refuses a tile past.
@@ -99,10 +96,6 @@ impl Occupancy {
 }
 
 /// A whole number a byte holds, never a cast of one that is not.
-pub(crate) fn occupancy_of(number: f64) -> Result<Occupancy, MarshalError> {
-    let whole = number.fract() == 0.0 && (0.0..=255.0).contains(&number);
-    whole
-        .then_some(number as u8)
-        .and_then(Occupancy::of_bits)
-        .ok_or_else(malformed)
+pub(crate) fn occupancy_of(bits: u8) -> Result<Occupancy, MarshalError> {
+    Occupancy::of_bits(bits).ok_or_else(malformed)
 }

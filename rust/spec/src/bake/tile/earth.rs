@@ -13,7 +13,7 @@ use crate::space::layer::lattice::demand_dist;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::tile::TOP_ZOOM;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_kit::wire::shape;
 
 /// The Earth's one zoom: the ground's top. Its tiles are the ground's lattice,
 /// a ground cell a texel, so the tile follows the grid as the ground does.
@@ -34,29 +34,18 @@ pub const PICTURE: (u32, u32) = (2048, 1024);
 pub(crate) const PKT_BYTES: usize =
     super::pkt::HEADER + super::pkt::branch(1) + super::pkt::seq(EARTH_BYTES);
 
+type Packet = (Vec<u8>,);
+
 pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, MarshalError> {
     if rgba.len() != EARTH_BYTES {
         return Err(malformed());
     }
-    let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| {
-        b.u8_array(Some(rgba));
-    }));
-    encoder().encode(
-        &t,
-        TreeEncoderOptions {
-            init_cap: super::ENCODE_FROM,
-            max_cap: None,
-        },
-    )
+    shape::encode::<Packet>((rgba,), PKT_BYTES as u32)
 }
 
 /// The tile's texels, read in place.
 pub fn decode(bytes: &[u8]) -> Result<&[u8], MarshalError> {
-    let rgba = TreeReader::new(bytes)?
-        .read_branch()?
-        .at(0)?
-        .get_array::<u8>()?;
+    let (rgba,) = shape::get_deep::<Packet>(bytes)?;
     if rgba.len() != EARTH_BYTES {
         return Err(malformed());
     }

@@ -12,7 +12,7 @@ use fnv::FnvHashMap;
 use std::borrow::Cow;
 
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_kit::wire::shape;
 
 use crate::bake::malformed;
 use crate::bake::name::{NameColumns, NamesView};
@@ -36,6 +36,21 @@ pub const NONE: u32 = u32::MAX;
 
 /// A tile's cells, and so the room a client decodes them into.
 pub const CELLS: usize = (TILE_CELLS * TILE_CELLS) as usize;
+
+/// The cells; the occupancy; per division its id, subtype, parent, prominence
+/// and whether an area holds it; then its names' three leaves (`name`).
+type Packet = (
+    Vec<u32>,
+    u8,
+    Vec<String>,
+    Vec<u8>,
+    Vec<u32>,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u32>,
+    Vec<String>,
+    Vec<String>,
+);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Division {
@@ -112,8 +127,6 @@ impl Default for DivisionTile {
     }
 }
 
-/// One branch: the cells; the occupancy; per division its id, subtype,
-/// parent, prominence and whether an area holds it, then its names (`name`).
 pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
     let d = &tile.divisions;
     let parents: Vec<u32> = d.iter().map(|d| d.parent).collect();
@@ -130,23 +143,21 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
                 .map(|(tag, name)| (tag.as_str(), name.as_str())),
         )
     }));
-    let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| {
-        b.u32_array(Some(&tile.cells))
-            .u8(Some(tile.occupancy.bits()));
-        b.strs(Some(&ids))
-            .u8_array(Some(&subtypes))
-            .u32_array(Some(&parents))
-            .u8_array(Some(&prominence))
-            .u8_array(Some(&area));
-        names.write(b);
-    }));
-    encoder().encode(
-        &t,
-        TreeEncoderOptions {
-            init_cap: super::ENCODE_FROM,
-            max_cap: Some(MAX_PKT_BYTES as u32),
-        },
+    let (starts, names, langs) = names.leaves();
+    shape::encode::<Packet>(
+        (
+            &tile.cells,
+            tile.occupancy.bits(),
+            &ids,
+            &subtypes,
+            &parents,
+            &prominence,
+            &area,
+            starts,
+            names,
+            langs,
+        ),
+        MAX_PKT_BYTES as u32,
     )
 }
 
@@ -191,16 +202,9 @@ struct DivisionTileView<'a> {
 }
 
 fn open(pkt: &[u8]) -> Result<DivisionTileView<'_>, MarshalError> {
-    let root = TreeReader::new(pkt)?.read_branch()?;
-    let cells = root.at(0)?.get_array::<u32>()?;
-    let occupancy = occupancy_of(root.at(1)?.get_number()?)?;
-    let (ids, subtypes, parents, prominence, area) = (
-        root.at(2)?.get_strs()?,
-        root.at(3)?.get_array::<u8>()?,
-        root.at(4)?.get_array::<u32>()?,
-        root.at(5)?.get_array::<u8>()?,
-        root.at(6)?.get_array::<u8>()?,
-    );
+    let (cells, occupancy, ids, subtypes, parents, prominence, area, starts, names, langs) =
+        shape::get_deep::<Packet>(pkt)?;
+    let occupancy = occupancy_of(occupancy)?;
     let n = subtypes.len();
     if ids.len() as usize != n
         || parents.len() != n
@@ -219,7 +223,7 @@ fn open(pkt: &[u8]) -> Result<DivisionTileView<'_>, MarshalError> {
         parents,
         prominence,
         area,
-        names: NamesView::read(&root, 7, n)?,
+        names: NamesView::of(starts, names, langs, n)?,
     })
 }
 

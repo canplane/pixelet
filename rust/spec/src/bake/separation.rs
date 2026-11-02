@@ -8,7 +8,7 @@
 use std::borrow::Cow;
 
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
+use xpute_kit::wire::shape::Shape;
 
 use pxl_engine::lattice::CELL_CENTER;
 use pxl_engine::way::{self, Segment, Stations};
@@ -47,7 +47,7 @@ pub enum Form {
 impl Form {
     const ALL: [Form; 3] = [Form::Bridge, Form::Tunnel, Form::Approach];
 
-    /// A byte `read_branch` let through.
+    /// A byte `Columns::of` let through.
     pub fn of(byte: u8) -> Form {
         Form::ALL[usize::from(byte)]
     }
@@ -563,18 +563,31 @@ impl Builder {
     }
 }
 
-// separation = [starts, points (flattened), tops, width, kind, form, clear, coarsest]
-pub(crate) fn write_branch<'a>(separation: &'a Separation, b: &mut BranchViewImpl<'a>) {
-    b.branch(Some(&mut |d| {
-        d.u32_array(Some(&separation.starts))
-            .i16_array(Some(separation.points.as_flattened()))
-            .i16_array(Some(&separation.tops))
-            .u8_array(Some(&separation.width))
-            .u8_array(Some(&separation.kind))
-            .u8_array(Some(&separation.form))
-            .u8_array(Some(&separation.clear))
-            .u8_array(Some(&separation.coarsest));
-    }));
+/// starts, points (flattened), tops, width, kind, form, clear, coarsest.
+pub(crate) type Packet = (
+    Vec<u32>,
+    Vec<i16>,
+    Vec<i16>,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+    Vec<u8>,
+);
+
+impl Separation {
+    pub(crate) fn pkt(&self) -> <Packet as Shape>::Write<'_> {
+        (
+            &self.starts,
+            self.points.as_flattened(),
+            &self.tops,
+            &self.width,
+            &self.kind,
+            &self.form,
+            &self.clear,
+            &self.coarsest,
+        )
+    }
 }
 
 pub struct Columns<'a> {
@@ -588,41 +601,40 @@ pub struct Columns<'a> {
     coarsest: &'a [u8],
 }
 
-/// Refused unless the columns are one tile's separation, consistently sized and within a record's room.
-pub fn read_branch(d: BranchCursor<'_>) -> Result<Columns<'_>, MarshalError> {
-    let starts = d.at(0)?.get_array::<u32>()?;
-    let (points, []) = d.at(1)?.get_array::<i16>()?.as_chunks::<2>() else {
-        return Err(malformed());
-    };
-    let columns = Columns {
-        starts,
-        points,
-        tops: d.at(2)?.get_array::<i16>()?,
-        width: d.at(3)?.get_array::<u8>()?,
-        kind: d.at(4)?.get_array::<u8>()?,
-        form: d.at(5)?.get_array::<u8>()?,
-        clear: d.at(6)?.get_array::<u8>()?,
-        coarsest: d.at(7)?.get_array::<u8>()?,
-    };
-    let n = columns.width.len();
-    let shaped = columns.kind.len() == n
-        && columns.form.len() == n
-        && columns.clear.len() == n
-        && starts.len() == n + 1
-        && columns.tops.len() == points.len()
-        && columns.coarsest.len() == points.len()
-        && holds(n, points.len())
-        && starts.first() == Some(&0)
-        && starts.last() == Some(&(points.len() as u32))
-        && starts.windows(2).all(|w| w[0] <= w[1])
-        && columns
-            .form
-            .iter()
-            .all(|&f| usize::from(f) < Form::ALL.len());
-    shaped.then_some(columns).ok_or_else(malformed)
-}
+impl<'a> Columns<'a> {
+    /// Refused unless the columns are one tile's separation, consistently sized and within a record's room.
+    pub fn of(
+        (starts, points, tops, width, kind, form, clear, coarsest): <Packet as Shape>::Read<'a>,
+    ) -> Result<Columns<'a>, MarshalError> {
+        let (points, []) = points.as_chunks::<2>() else {
+            return Err(malformed());
+        };
+        let n = width.len();
+        let shaped = kind.len() == n
+            && form.len() == n
+            && clear.len() == n
+            && starts.len() == n + 1
+            && tops.len() == points.len()
+            && coarsest.len() == points.len()
+            && holds(n, points.len())
+            && starts.first() == Some(&0)
+            && starts.last() == Some(&(points.len() as u32))
+            && starts.windows(2).all(|w| w[0] <= w[1])
+            && form.iter().all(|&f| usize::from(f) < Form::ALL.len());
+        shaped
+            .then_some(Columns {
+                starts,
+                points,
+                tops,
+                width,
+                kind,
+                form,
+                clear,
+                coarsest,
+            })
+            .ok_or_else(malformed)
+    }
 
-impl Columns<'_> {
     pub(crate) fn to_separation(&self) -> Separation {
         Separation {
             starts: self.starts.to_vec().into(),

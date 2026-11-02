@@ -3,7 +3,8 @@
 //! A baked terrain tile and its wire: `[samples, ground, occupancy, separation]`.
 
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_kit::wire::shape;
+use xpute_kit::wire::xtp::MAX_PKT_SZ;
 
 use std::borrow::Cow;
 
@@ -57,6 +58,9 @@ pub const WAYS_BRICK_SEGMENTS: usize = clipmap::WAYS_BRICK_SEGMENTS as usize;
 /// What a ground cell holds: the id of a cube of the ground's palette, a
 /// Carto palette index, which fits a byte (`asset/cube.json`).
 pub type GroundId = u8;
+
+/// The samples, the palette indices, the occupancy, the separation.
+type Packet = (Vec<i16>, Vec<GroundId>, u8, separation::Packet);
 
 /// A tile's ground: in the bake the four palette indices a cell folds, `dx + 2·dy`, as
 /// a GPU holds them, a leaf's its own four; on the wire one a cell where
@@ -567,19 +571,14 @@ pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
         .all(|q| q.iter().all(|&l| l == q[0]))
         .then(|| four.chunks(4).map(|q| q[0]).collect());
     let palette_indices: &[GroundId] = one.as_deref().unwrap_or(four);
-    let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| {
-        b.i16_array(Some(&tile.ele))
-            .u8_array(Some(palette_indices))
-            .u8(Some(tile.occupancy.bits()));
-        separation::write_branch(&tile.separation, b);
-    }));
-    encoder().encode(
-        &t,
-        TreeEncoderOptions {
-            init_cap: super::ENCODE_FROM,
-            max_cap: None,
-        },
+    shape::encode::<Packet>(
+        (
+            &tile.ele,
+            palette_indices,
+            tile.occupancy.bits(),
+            tile.separation.pkt(),
+        ),
+        MAX_PKT_SZ,
     )
 }
 
@@ -592,11 +591,9 @@ struct Columns<'a> {
 
 /// Refused unless every column is a tile's length.
 fn read_tile(pkt: &[u8]) -> Result<Columns<'_>, MarshalError> {
-    let root = TreeReader::new(pkt)?.read_branch()?;
-    let ele = root.at(0)?.get_array::<i16>()?;
-    let ground = root.at(1)?.get_array::<GroundId>()?;
-    let occupancy = occupancy_of(root.at(2)?.get_number()?)?;
-    let separation = separation::read_branch(root.at_branch(3)?)?;
+    let (ele, ground, occupancy, separation) = shape::get_deep::<Packet>(pkt)?;
+    let occupancy = occupancy_of(occupancy)?;
+    let separation = separation::Columns::of(separation)?;
     if ele.len() != ELE_COLUMN || (ground.len() != GROUND_COLUMN && ground.len() != PALETTE_COLUMN)
     {
         return Err(malformed());

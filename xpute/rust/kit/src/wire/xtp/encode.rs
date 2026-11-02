@@ -3,6 +3,7 @@
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
+use super::cursor::{bytes_of, ArrayElem};
 use super::spec::{
     BranchNode, GraftNode, Node, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType,
     SequenceVal, SpecialType, ALIGN_SZ, ELEM_SZ, GET_DESC, GET_LEN, HDR_SZ, MAGIC, MAX_PKT_SZ,
@@ -438,6 +439,11 @@ impl<'a> PacketWriter<'a> {
                 self.entry(None, type_ as u8)
             }
         }
+    }
+
+    /// An array of its elements' type.
+    pub fn array<T: ArrayElem>(&mut self, a: Option<&[T]>) -> &mut Self {
+        self.array_bytes(T::TYPE, a.map(bytes_of))
     }
 
     pub fn u8_array(&mut self, a: Option<&[u8]>) -> &mut Self {
