@@ -13,7 +13,7 @@
 //!   GPU built of its brick, its child groups read back into the pool's mirror,
 //!   read as the GPU reads them (pxl-engine `clipmap::ground`,
 //!   `way::tree`);
-//! - the caves: the noises at the cell's center (pxl-engine
+//! - the caves: the noises at the cell's center (pxl-content
 //!   `cave::hollow`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
 //!   their majority (`pyramid.rs`, through the store's query).
@@ -37,12 +37,13 @@
 //!   narrower than half its cell is dropped there, as
 //!   its level of detail does;
 //! - the caves: a cave through all of the node, by the noises' least and
-//!   most over it (pxl-engine `cave::all_hollow`);
+//!   most over it (pxl-content `cave::all_hollow`);
 //! - what is placed: no record of the objects' pyramid at the node.
 //!
 //! A source not holding the node answers that it lacks it, never air and
 //! never that nothing fills.
 
+use pxl_content::Pixelet;
 use pxl_engine::answer::{In, Kind};
 use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{self, Lookup};
@@ -229,6 +230,7 @@ impl Area for Reading<'_, '_> {
 }
 
 impl ground::Resident for Reading<'_, '_> {
+    type Content = Pixelet;
     /// The bound over the node of the cells at `cell`, off the clip levels,
     /// stepped from `place` (pxl-engine `ground::Resident::relief`); its line names the
     /// tile a lack or a coarser clip level stands for; where it lacks, `EMPTY`

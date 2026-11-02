@@ -3,7 +3,7 @@
 //! Where the world ends, one place for every limit an edit and a column
 //! meet: the world is open from `BEDROCK_DEPTH` under the ground or sea
 //! level, whichever is lower, to `HEADROOM` over the ground or sea level,
-//! whichever is higher, in leaf cells (pxl-engine ground.rs `bedrock`,
+//! whichever is higher, in leaf cells (pxl-content strata.rs `bedrock`,
 //! `ceiling`). Under the floor is bedrock, the unknown the world holds no more of
 //! (`spec/spec/asset/cube.json` `unknown`), and the service area is walled by
 //! it from inside: a leaf column with ground beside one past the area is
@@ -13,4 +13,4 @@
 //! them, by the rule the wall is laid by (pxl-kernel domain/query/limit.rs
 //! `within`, `editable`).
 
-pub use pxl_engine::ground::{bedrock, ceiling};
+pub use pxl_content::strata::{bedrock, ceiling};

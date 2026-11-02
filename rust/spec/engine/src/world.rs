@@ -27,7 +27,7 @@ use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 /// (`area::Shard`), where the clip levels held the ground's cells of a node
 /// over it (`clipmap::Lookup`, `clipmap::step`), and the ways' cursor in the
 /// tree of the brick `ground` names (`way::tree`). The CPU's and a GPU's
-/// alike. The caves are none of it: a cube's are its own (`cave::hollow`).
+/// alike. The caves are none of it: a cube's are its own (`Content::hollow`).
 #[derive(Clone, Copy)]
 pub struct Inheritance {
     pub object: overwrite::NodeSlot,

@@ -2,15 +2,13 @@
 
 //! gpu-portable: where the world's data ends, the service area — the shards
 //! a source serves — and the ground's own rule at its edge (pxl-spec
-//! limit.rs): past it, the Earth's ground, solid to sea level; inside
+//! limit.rs): past it, the Earth's ground (its content's, `Content::earth`); inside
 //! it, a leaf column beside one past the area is the wall (`is_wall`),
 //! bedrock up to its own face, so the wall's outer face stands on the area's
 //! edge at every zoom. The area runs on shards' edges, which no node a
 //! shard or finer straddles.
 
-use crate::{idx_at, wrap_idx as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM};
-
-use crate::ground::{UNKNOWN, VOID};
+use crate::{idx_at, wrap_idx as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
 
 /// The shards a source serves, as the pyramid's own level at `SHARD_ZOOM`
 /// both sides read (`nine_at`): every cell there, addressed by its key
@@ -283,13 +281,3 @@ fn past_about([lo, hi]: [[i32; 2]; 2], past: impl Fn([i32; 2]) -> bool) -> bool 
     false
 }
 const _: () = assert!(LEAF_CELL > SHARD_ZOOM);
-
-/// Cell `z` past the service area: the Earth's ground, bedrock under sea
-/// level, air over it.
-pub fn earth(z: i32) -> u32 {
-    if z < SEA_LEVEL {
-        UNKNOWN
-    } else {
-        VOID
-    }
-}

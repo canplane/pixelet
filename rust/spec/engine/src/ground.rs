@@ -3,7 +3,8 @@
 //! gpu-portable: the ground's column at a cell, the one rule a node's ground
 //! is answered by (`node`) before what overwrites it: a cell's palette index and
 //! height off the clip level drawing it (`clipmap::ground`), and its cells by
-//! depth with a cave's air where a cave may take them.
+//! depth with a cave's air where a cave may take them, by its content's
+//! strata and caves (`Resident::Content`).
 //!
 //! A palette index and a height are stored as a byte and an i16 and read into a word
 //! here, since WGSL has no narrower integer.
@@ -17,28 +18,17 @@ use crate::answer::{
     bound_of, bound_word, box_word, eighths, BoxWords, In, Kind, BOX_BITS, BOX_NONE, BOX_STEPS,
     BOX_WHOLE, FULL,
 };
-use crate::area::{earth, is_walled, Area, Shard};
-use crate::cave;
+use crate::area::{is_walled, Area, Shard};
 use crate::clipmap::Lookup;
-use crate::cube::ground;
+use crate::content::Content;
 use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
-use crate::param::ground::BEDROCK_DEPTH;
-use crate::param::ground::FILLER_DEPTH;
-use crate::param::ground::HEADROOM;
-use crate::param::ground::SANDSTONE_DEPTH;
 use crate::value;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
-/// The catalog's void and unknown as the words a palette index is read into.
+/// The value space's void and unknown as the words a palette index is read into.
 pub const VOID: u32 = value::VOID;
 pub const UNKNOWN: u32 = value::UNKNOWN;
-const SAND: u32 = ground::sand as u32;
-const BEACH: u32 = ground::beach as u32;
-const WATER: u32 = ground::water as u32;
-const SOIL: u32 = ground::soil as u32;
-const SANDSTONE: u32 = ground::sandstone as u32;
-const STONE: u32 = ground::stone as u32;
 
 /// Inner elevation samples across one leaf tile: a tile is about twice its
 /// side in units in meters wide and the source is about 30 m, rounded to 32 m.
@@ -53,18 +43,6 @@ pub const ELE_PADDED_SPAN: u32 = TILE_ELE_SPAN + 2 * ELE_PAD;
 /// Sample (x, y) of a padded elevation grid, rows from the south.
 pub const fn ele_idx(x: u32, y: u32) -> usize {
     (y * ELE_PADDED_SPAN + x) as usize
-}
-
-/// The bedrock's top under a face at `face` leaf cells, in leaf cells: the
-/// lowest a cube may reach there, every walk's, edit's and column's.
-pub fn bedrock(face: i32) -> i32 {
-    face.min(SEA_LEVEL) - BEDROCK_DEPTH
-}
-
-/// The highest a cube may reach over a face at `face` leaf cells, in leaf
-/// cells: every edit's ceiling, as `bedrock` is its floor.
-pub fn ceiling(face: i32) -> i32 {
-    face.max(SEA_LEVEL) + HEADROOM
 }
 
 /// The height the surface draws at the center of a tile's cell `(x, y)`,
@@ -243,14 +221,14 @@ pub fn top(cell: Zoom, h: f32) -> (i32, u32) {
 }
 
 /// Cells of `cell` a leaf cell is tall: one where a cell folds the leaves.
-pub(crate) fn leaf_cells(cell: Zoom) -> i32 {
+pub fn leaf_cells(cell: Zoom) -> i32 {
     1 << (cell as i32 - LEAF_CELL as i32).max(0)
 }
 
 /// The face of a top of `top` cells of `cell`, in leaf cells, as the grid
 /// draws it: past the leaves a leaf height shifted, under them the mean as
 /// its cells round it.
-pub(crate) fn face_height(cell: Zoom, top: i32) -> i32 {
+pub fn face_height(cell: Zoom, top: i32) -> i32 {
     let d = cell as i32 - LEAF_CELL as i32;
     if d >= 0 {
         // Divided by 2^d toward zero, as the grid draws a face under sea
@@ -273,43 +251,10 @@ pub(crate) fn face_cell(cell: Zoom, face: i32) -> i32 {
     cells(cell, face as f32) - leaf_cells(cell)
 }
 
-/// The bedrock's top under a face at `face` leaf cells, in cells of `cell`.
-pub(crate) fn rock(cell: Zoom, face: i32) -> i32 {
-    cells(cell, bedrock(face) as f32)
-}
-
-/// What the ground is in cell `z` of a column of `cell` whose palette index is `palette_idx`
-/// and whose top is `top` cells: by depth under its top, `void` over it. A
-/// column coarser than the leaves' is a summary of the faces under it, its
-/// ground its face whole; the wall (`unknown`) is itself all through.
-pub(crate) fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
-    if z >= top {
-        return VOID;
-    }
-    if cell < LEAF_CELL || palette_idx == UNKNOWN {
-        return palette_idx;
-    }
-    let s = leaf_cells(cell);
-    // Water's filler is water, as sand's is sand: under a face it is the
-    // same cell.
-    let (filler, sandstone) = match palette_idx {
-        SAND | BEACH => (SAND, SANDSTONE_DEPTH),
-        WATER => (WATER, 0),
-        _ => (SOIL, 0),
-    };
-    let face = top - s;
-    let filled = face - FILLER_DEPTH * s;
-    if z >= face {
-        palette_idx
-    } else if z >= filled {
-        filler
-    } else if z >= filled - sandstone * s {
-        SANDSTONE
-    } else if z >= rock(cell, face_height(cell, top)) {
-        STONE
-    } else {
-        UNKNOWN
-    }
+/// The bedrock's top under a face at `face` leaf cells, in cells of `cell`,
+/// `C`'s bedrock (`Content::bedrock`).
+pub fn rock<C: Content>(cell: Zoom, face: i32) -> i32 {
+    cells(cell, C::bedrock(face) as f32)
 }
 
 /// Where the ground may fill the node `(zoom, c)` along z, at the zooms
@@ -334,8 +279,8 @@ pub(crate) fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
 /// more (`top`), so a zoom's top is at most the bottom exactly when the
 /// face is under an eighth of that zoom's cell over it, the finest zoom's
 /// saying it for all of them. A top kept short of whole still lies in it
-/// whole, which only splits more.
-pub fn slab(
+/// whole, which only splits more. The bedrock is `C`'s (`Content::bedrock`).
+pub fn slab<C: Content>(
     shard: Shard,
     (zoom, c): (Zoom, [i32; 3]),
     [lo, hi]: [i32; 2],
@@ -349,7 +294,7 @@ pub fn slab(
     };
     // No bedrock in it: the bedrock's top, rounded at `near` as a face is,
     // at most its bottom.
-    let rock = face_height(near, cells(near, bedrock(hi) as f32));
+    let rock = face_height(near, cells(near, C::bedrock(hi) as f32));
     let caved = hollow
         && !meets([UNBOUNDED[0], rock], (zoom, c[2]), near)
         && !is_walled(shard, near, (zoom, [c[0], c[1]]));
@@ -406,6 +351,8 @@ pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 /// read them back or a GPU filled them, read the one way (`clipmap::ground`,
 /// `clipmap::bound_over`).
 pub trait Resident: Area {
+    /// The content whose rules its ground follows: its caves and its strata.
+    type Content: Content;
     /// The lowest and highest the ground's cells at `cell` reach over the
     /// node `(zoom, c)`, and the ways' over them, apart (`Bounds`), off the
     /// finest held tile they are read from (`clipmap::bound_over`); bounds no
@@ -436,7 +383,8 @@ pub type Answer = In<[u32; 2]>;
 
 /// The ground's answer for a node, the one way a descent asks the ground,
 /// `is_cell` whether it is asked at its own zoom, the caves asked of the node
-/// itself only where they may take it (`cave::hollow`, `cave::all_hollow`):
+/// itself only where they may take it (`Content::hollow`,
+/// `Content::all_hollow`), the content `H`'s, as its strata (`Cell::asset`):
 /// past the service area, the Earth's; else the node's own bound first, of
 /// each zoom's tile its cells are read from (`Resident::relief`) — at its own zoom,
 /// over it is air, else its column's asset (`Cell::asset`), its palette index; a
@@ -476,7 +424,7 @@ pub fn node<H: Resident>(
     // Past the area: a cell's own Earth, or a node's where it is all over
     // sea level. No node a shard or finer straddles the area.
     if shard.past() {
-        let earth = earth(c[2]);
+        let earth = H::Content::earth(c[2]);
         let answer = if is_cell {
             In {
                 kind: Kind::Cell,
@@ -514,7 +462,7 @@ pub fn node<H: Resident>(
     }
     if is_cell {
         let column = held.cell(shard, *place, zoom, c);
-        let asset = column.asset(zoom, c[2], || cave::hollow((zoom, c)));
+        let asset = column.asset::<H::Content>(zoom, c[2], || H::Content::hollow((zoom, c)));
         return (
             In {
                 kind: Kind::Cell,
@@ -528,9 +476,9 @@ pub fn node<H: Resident>(
     // and its box, the span along z it may fill in the node's steps. The
     // caves only take away, so they are asked only of a node the ground
     // meets.
-    let mut s = slab(shard, (zoom, c), relief, [far, near], false);
-    if meets(s, (zoom, c[2]), near) && cave::all_hollow((zoom, c)) {
-        s = slab(shard, (zoom, c), relief, [far, near], true);
+    let mut s = slab::<H::Content>(shard, (zoom, c), relief, [far, near], false);
+    if meets(s, (zoom, c[2]), near) && H::Content::all_hollow((zoom, c)) {
+        s = slab::<H::Content>(shard, (zoom, c), relief, [far, near], true);
     }
     let answer = if meets(s, (zoom, c[2]), near) {
         In {
@@ -586,10 +534,10 @@ impl Cell {
     /// cells as the column rounds them. Under a top kept short of whole
     /// is ground, as under a shrunk box, so the cell under it is not taken
     /// either.
-    fn opens(&self, cell: Zoom, z: i32) -> bool {
+    fn opens<C: Content>(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
         let under = face_cell(cell, face) - (self.part < FULL) as i32;
-        self.palette_idx != UNKNOWN && z < under && z >= rock(cell, face)
+        self.palette_idx != UNKNOWN && z < under && z >= rock::<C>(cell, face)
     }
 
     /// The four palette indices asset `g` of the column at `cell` is drawn by: where it
@@ -608,13 +556,14 @@ impl Cell {
     /// The asset in cell `z` of the column at `cell`, a cave's air where a cave may take
     /// it (`opens`) and `hollow` says one does, asked only there: the
     /// ground's palette index, its fold's majority at a coarser cell, as what is
-    /// placed is its fold's, `void` for air.
-    pub fn asset(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
+    /// placed is its fold's, `void` for air; by `C`'s strata
+    /// (`Content::by_depth`).
+    pub fn asset<C: Content>(&self, cell: Zoom, z: i32, hollow: impl FnOnce() -> bool) -> u32 {
         if !self.is_grounded() {
             return VOID;
         }
-        let g = by_depth(cell, self.palette_idx, self.top, z);
-        if g == VOID || self.opens(cell, z) && hollow() {
+        let g = C::by_depth(cell, self.palette_idx, self.top, z);
+        if g == VOID || self.opens::<C>(cell, z) && hollow() {
             return VOID;
         }
         g

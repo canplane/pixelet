@@ -1,4 +1,4 @@
-// pxl-engine/cave.test.rs
+// pxl-content/cave.test.rs
 
 extern crate std;
 
@@ -69,4 +69,41 @@ fn all_hollow_holds_every_cube_under() {
         }
     }
     assert!(said > 0);
+}
+
+/// The caves only take away, and only under a leaf column's face cell, the
+/// cell under its top: every cell from it up is what the strata make it,
+/// cave or none (pxl-engine `ground::Cell::asset`).
+#[test]
+fn caves_under_face_alone() {
+    use crate::Pixelet;
+    use pxl_engine::answer::FULL;
+    use pxl_engine::content::Content;
+    use pxl_engine::ground::Cell;
+    use pxl_engine::value;
+    let mut taken = 0;
+    for x in 0..64 {
+        for y in 0..64 {
+            let top = (x * 7 + y * 13) % 40 - 20;
+            let column = Cell {
+                palette_idx: 7,
+                top,
+                part: FULL,
+                fold: [7; 4],
+            };
+            for z in top - 90..top + 2 {
+                let c = [x * 977, y * 991, z];
+                let asset =
+                    column.asset::<Pixelet>(LEAF_CELL, z, || Pixelet::hollow((LEAF_CELL, c)));
+                let strata = Pixelet::by_depth(LEAF_CELL, column.palette_idx, top, z);
+                if z >= top - 1 {
+                    assert_eq!(asset, strata, "{c:?}, top {top}");
+                } else if asset != strata {
+                    assert_eq!(asset, value::VOID, "{c:?}");
+                    taken += 1;
+                }
+            }
+        }
+    }
+    assert!(taken > 0);
 }

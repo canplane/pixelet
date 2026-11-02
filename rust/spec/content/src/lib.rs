@@ -1,15 +1,47 @@
 // pxl-content/lib.rs
 
 //! gpu-portable: pixelet's content, one source for the CPU and, through
-//! rust-gpu, WGSL, as the engine's is (pxl-engine): the clouds' field
+//! rust-gpu, WGSL, as the engine's is (pxl-engine): the rules the engine
+//! asks of it (pxl-engine `content::Content`), answered by `Pixelet` —
+//! its caves (`cave`) and its strata (`strata`) — and the clouds' field
 //! (`cloud`). The engine names none of it: pxl-spec, the kernel, the
-//! renderer and the shader crate name it where they hand the engine its
-//! content.
+//! renderer and the shader crate name `Pixelet` where they hand the engine
+//! its content.
 
 #![no_std]
 
+pub mod cave;
 pub mod cloud;
 pub mod param;
+pub mod strata;
+
+use pxl_engine::content::Content;
+use pxl_engine::Zoom;
+
+/// Pixelet's content: the rules its world follows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Pixelet;
+
+impl Content for Pixelet {
+    fn hollow(node: (Zoom, [i32; 3])) -> bool {
+        cave::hollow(node)
+    }
+    fn all_hollow(node: (Zoom, [i32; 3])) -> bool {
+        cave::all_hollow(node)
+    }
+    fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
+        strata::by_depth(cell, palette_idx, top, z)
+    }
+    fn bedrock(face: i32) -> i32 {
+        strata::bedrock(face)
+    }
+    fn ceiling(face: i32) -> i32 {
+        strata::ceiling(face)
+    }
+    fn earth(z: i32) -> u32 {
+        strata::earth(z)
+    }
+}
 
 // Pixelet's palette laid into the engine's value space (pxl-engine
 // value.rs): its sentinels the engine's, every ground entry in the ground's

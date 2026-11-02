@@ -9,13 +9,13 @@
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::answer::{self, val};
-use crate::cave::node_seed;
 use crate::clipmap;
 use crate::clipmap::{BRICK, BRICK_SHIFT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
 use crate::decor::{Decor, Orientation, DECORS};
 use crate::overwrite;
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
 use crate::scatter::{mul_hi, root, stands_at, variant_of, Candidate};
+use crate::seed::node_seed;
 use crate::value;
 use crate::world::{placed_in, PlacedCursor};
 use crate::{wrap_idx, Zoom, FRAC_W, LEAF_CELL, UNIT_ZOOM};

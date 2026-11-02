@@ -3,6 +3,7 @@
 //! The world as the GPU holds it, asked through pxl-engine's one query
 //! (`world::node`) by every entry that walks or generates over it.
 
+use pxl_content::Pixelet;
 use pxl_engine::answer::{self, In};
 use pxl_engine::area::{Area, Shard};
 use pxl_engine::cast::{self, End, Query};
@@ -192,6 +193,7 @@ impl<L: PaletteWords> Bricks for World<'_, L> {
 
 /// The ground as the GPU holds it, for pxl-engine's one answer for a node.
 impl<L: PaletteWords> ground::Resident for World<'_, L> {
+    type Content = Pixelet;
     /// The bound over the node of the clip level `cell` reads its cells from,
     /// the finest holding them present (`clipmap::bound_over`), as the CPU reads
     /// it (pxl-engine `ground::Resident::relief`).

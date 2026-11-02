@@ -2208,6 +2208,7 @@ dependencies = [
  "fnv",
  "hex",
  "libm",
+ "pxl-content",
  "pxl-engine",
  "serde",
  "xpute-kit",

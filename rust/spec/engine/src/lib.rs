@@ -3,11 +3,11 @@
 //! gpu-portable: one source for the CPU and, through rust-gpu, WGSL.
 //!
 //! What pixelet's spec computes the same on the CPU and on the GPU, in
-//! `core` alone: the zooms and the lattices of cells on them, a node's seed
-//! and the caves, the ground and the service area it ends at, the decor the
+//! `core` alone: the zooms and the lattices of cells on them, a node's seed,
+//! the value space, the ground and the service area it ends at, the decor the
 //! ground generates, the ray's descent, and the samples' stops as the boxes
-//! a raster draws. pxl-spec takes it as its own, and a shader crate depends
-//! on it as it is.
+//! a raster draws, asking the content it draws its rules (`content`).
+//! pxl-spec takes it as its own, and a shader crate depends on it as it is.
 //!
 //! No check here fails: an index stays in its array, a divisor is not zero,
 //! a range's bounds do not cross. A GPU's module takes each as unreachable
@@ -19,8 +19,8 @@ pub mod answer;
 pub mod area;
 pub mod beam;
 pub mod cast;
-pub mod cave;
 pub mod clipmap;
+pub mod content;
 #[path = "cube.spec.rs"]
 pub mod cube;
 #[path = "decor.spec.rs"]
@@ -40,6 +40,7 @@ pub mod raster;
 pub mod ray;
 pub mod scatter;
 pub mod screen;
+pub mod seed;
 pub mod support;
 pub mod tally;
 pub mod value;
@@ -132,7 +133,7 @@ const _: () = assert!(FINEST_ZOOM < 1 << ZOOM_BITS);
 
 /// Index `v` along an axis at `zoom` as an index at `to`: the first of the
 /// finer that lie in it, or the coarser it lies in, the floor.
-pub(crate) const fn idx_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
+pub const fn idx_at(zoom: Zoom, v: i32, to: Zoom) -> i32 {
     if to >= zoom {
         v << (to - zoom)
     } else {

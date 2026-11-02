@@ -822,9 +822,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pxl-content"
+version = "0.0.0"
+dependencies = [
+ "pxl-engine",
+]
+
+[[package]]
 name = "pxl-shader"
 version = "0.0.0"
 dependencies = [
+ "pxl-content",
  "pxl-engine",
  "pxl-shader-macro",
  "spirv-std",

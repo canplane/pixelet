@@ -20,6 +20,7 @@ libm.workspace = true
 serde = { version = "1", features = ["derive"], optional = true }
 xpute-kit = { workspace = true, features = ["std"] }
 pxl-engine.workspace = true
+pxl-content.workspace = true
 
 [dev-dependencies]
 hex.workspace = true

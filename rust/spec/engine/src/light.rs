@@ -415,7 +415,7 @@ impl Starts {
             (true, true) => (self.at[3], self.frac[3]),
         };
         let step = |k: usize| libm::rintf(frac[k] + i * self.across[k] + j * self.down[k]) as i32;
-        // [naga] each axis by itself, not a loop (cave.rs `node_seed`).
+        // [naga] each axis by itself, not a loop (seed.rs `node_seed`).
         [
             at[0].wrapping_add(step(0)),
             at[1].wrapping_add(step(1)),

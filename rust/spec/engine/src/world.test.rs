@@ -11,7 +11,7 @@ use crate::clipmap::{
     COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL, JOINED_ENTRIES, JOINED_LEVELS, JOINED_WORDS,
     LAID_AT, LAID_CELLS, LEVELS, LEVELS_AT, LEVEL_ENTRY_WORDS, ORIGIN_AT,
 };
-use crate::cube::ground::stone;
+use crate::content::Sample;
 use crate::fill::{column_of, laid_of, level_of, put, root_of, LoneBrick};
 use crate::ground::Bounds;
 use crate::support::{asset, column_surface};
@@ -61,7 +61,7 @@ impl Bricks for Clipmap<'_> {
         self.rows[((cell - FIRST_CELL) * ENTRIES + entry) as usize].brick()
     }
     fn palette_word(&self, _: Zoom, _: u32, _: u32) -> u32 {
-        ground::word([stone as u32; 4])
+        ground::word([Sample::GROUND; 4])
     }
     fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
         column_of(self.ground, slot * BRICK_WORDS, i)
@@ -94,6 +94,7 @@ impl Area for Clipmap<'_> {
 }
 
 impl ground::Resident for Clipmap<'_> {
+    type Content = Sample;
     fn relief(
         &mut self,
         place: &mut Lookup,
@@ -198,7 +199,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                 let top = height(leaf);
                 put(&mut ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
                 let w = &mut ground[(base + LAID_AT + i / LAID_CELLS) as usize];
-                *w |= (stone as u32) << (8 * (i % LAID_CELLS));
+                *w |= (Sample::GROUND) << (8 * (i % LAID_CELLS));
                 let e = base + LEVELS_AT + LEVEL_ENTRY_WORDS * level_idx(0, [x, y]);
                 let b = ground::bounds_word([[top, top], ground::EMPTY]);
                 put(&mut ground, e, b[0] as u32);
@@ -440,7 +441,7 @@ fn wall_off_any_brick() {
         clipmap::ground(&w, Shard::UNKNOWN, Lookup::NONE, zoom, b)
     };
     let y = EYE[1];
-    for (x, palette_idx) in [(past - 1, ground::UNKNOWN), (past - 2, stone as u32)] {
+    for (x, palette_idx) in [(past - 1, ground::UNKNOWN), (past - 2, Sample::GROUND)] {
         let (cell, f) = read(&rows, LEAF_CELL, [x, y]);
         assert!(f.here() && f.from() < LEAF_CELL, "{x} off a stand-in");
         assert_eq!(cell.palette_idx, palette_idx, "{x} off a stand-in");

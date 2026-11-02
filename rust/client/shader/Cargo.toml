@@ -7,9 +7,10 @@
 resolver = "2"
 members = [".", "build", "macro"]
 
-# The one crate of the main workspace it compiles, by its path once.
+# The crates of the main workspace it compiles, each by its path once.
 [workspace.dependencies]
 pxl-engine = { path = "../../spec/engine" }
+pxl-content = { path = "../../spec/content" }
 
 [profile.release.build-override]
 opt-level = 3
@@ -44,8 +45,9 @@ crate-type = ["lib", "dylib"]
 
 [dependencies]
 spirv-std = "=0.10.0-alpha.1"
-# The one source, as pxl-spec takes it.
+# The one source, as pxl-spec takes it, and pixelet's content over it.
 pxl-engine.workspace = true
+pxl-content.workspace = true
 # An entry's workgroup written off the constants its code counts by.
 pxl-shader-macro = { path = "macro" }
 

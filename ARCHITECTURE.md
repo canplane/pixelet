@@ -186,7 +186,7 @@ sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
 | marker | a place, Carto's icon and its name           | a placed marker |
 
 The ground generates its decor as it carves its caves, each a function of the
-node and the one seed (`pxl-engine cave.rs` `node_seed`), evaluated where it
+node and the one seed (`pxl-engine seed.rs` `node_seed`), evaluated where it
 is asked, never stored and never handed down a descent. Decor's is a tree of
 hashes: a column at the coarsest zoom a decor stands at holds as many as a hash
 draws about its mean, each column hands its count to its four a hash each, and a
@@ -310,7 +310,7 @@ alike (`pxl-engine world.rs` `node`, which `pxl-kernel domain/query/world.rs`
 1. the ground's grid, each cell a cube shifted up to its height;
 2. the caves' air under its face, Minecraft 1.18's noise caves in integers off
    the one seed, asked only of the cells and nodes a reader asks for
-   (`pxl-engine cave.rs`);
+   (`pxl-content cave.rs`, asked through pxl-engine `content::Content`);
 3. the ways off the ground, where each crossing of a line over the column is a
    deck and its pier, a bore, an embankment or a cutting (`pxl-engine
 way.rs`);
@@ -1207,9 +1207,9 @@ them.
 | Earth Engine's `MODE` pyramiding                                                                                                       | `pxl-spec bake/fold.rs`                                                                 | A 2 × 2 majority fold of the zoom under it                                                                                               |
 | Distant Horizons                                                                                                                       | `pxl-render mesh/paint/palette.rs`                                                      | A distant cell drawn as the mean of what it folds                                                                                        |
 | Minecraft's `cube_all`, `cube_bottom_top`                                                                                              | `pxl-render gpu/pack.rs`                                                                | Which face image a cube wears: its own side and bottom where the pack ships them, its top on every face where not                        |
-| Minecraft Beta's `replaceBlocksForBiome`                                                                                               | `pxl-engine ground.rs` `Cell::asset`                                                 | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
+| Minecraft Beta's `replaceBlocksForBiome`                                                                                               | `pxl-content strata.rs` `by_depth`                                                      | A column under its face: the look on top, a filler of soil, sand or water, sandstone under sand, stone under all                         |
 | Minecraft's map colors                                                                                                                 | `spec/spec/asset/color.json` underground                                                | The colors of soil, sandstone and stone                                                                                                  |
-| Minecraft 1.18's noise caves; Ken Perlin's improved noise (SIGGRAPH 2002)                                                              | `pxl-engine cave.rs`                                                                 | Tunnels where two noises are both near zero, caverns where one is high; the fade and the gradients                                       |
+| Minecraft 1.18's noise caves; Ken Perlin's improved noise (SIGGRAPH 2002)                                                              | `pxl-content cave.rs`                                                                   | Tunnels where two noises are both near zero, caverns where one is high; the fade and the gradients                                       |
 | Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | `pxl-kernel domain/query/support.rs` `step_slide`                                       | Blocked, step up and slide along the wall as `PM_ClipVelocity` clips; ours has no step height but the ceiling's and settles on the floor |
 | Amanatides and Woo's voxel traversal                                                                                                   | `pxl-engine cast.rs` `walk`, `pxl-kernel domain/query/support.rs`                    | The next cell along a ray, by the share of the way to each axis's edge                                                                   |
 | Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010)                                                                          | `pxl-engine cast.rs` `walk`                                                          | Push, advance and pop down an octree; a split passed whole where the ray misses its contour, here a box                                  |

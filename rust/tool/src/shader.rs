@@ -59,9 +59,9 @@ pub(crate) const NIGHTLY: &str = "nightly-2026-04-11";
 /// bytes did not change has nothing to change.
 pub const STAMP: &str = "gen.digest";
 
-/// What makes the entries: pxl-engine, the shader crate, the builder that
-/// reads its SPIR-V into WGSL, xpute-kit beneath them, their lock and the
-/// toolchain's pin, the workspaces the two crates over it inherit from, the
+/// What makes the entries: pxl-engine and pxl-content, the shader crate,
+/// the builder that reads its SPIR-V into WGSL, xpute-kit beneath them, their
+/// lock and the toolchain's pin, the workspaces the crates over it inherit from, the
 /// cargo config the container's cargo reads from above the shader crate and
 /// the compiler wrapper it names, and this generator, which writes each
 /// file's head — every file on disk under them but a test (`inputs`), so a
@@ -70,8 +70,9 @@ pub const STAMP: &str = "gen.digest";
 /// does not name fails there rather than going unseen. The digest is all that holds
 /// a file current, for a write that skips the container and for check_rules
 /// alike, so it names everything a file is made by.
-const INPUT_ROOTS: [&str; 12] = [
+const INPUT_ROOTS: [&str; 13] = [
     "rust/spec/engine/",
+    "rust/spec/content/",
     "rust/client/shader/",
     "rust/client/shader/build/",
     "xpute/rust/kit/",

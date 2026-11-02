@@ -15,8 +15,8 @@
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::answer::EIGHTHS;
-use crate::cave::node_seed;
 use crate::decor::{Decor, DECORS};
+use crate::seed::node_seed;
 use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 
 /// A cell's candidate: the leaf cell it stands at, at every zoom; its first
