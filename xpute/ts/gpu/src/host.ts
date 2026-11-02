@@ -1097,9 +1097,8 @@ export class GpuHost {
         const [address, words] = [r.u(), r.u()];
         this.block = { address, words };
         const out = new Uint32Array(this.memory(), address, words);
-        const limits = d.limits as unknown as Record<string, number>;
         LIMIT_NAME.forEach(
-          (name, k) => (out[k] = Math.min(limits[name] ?? 0, 0xffffffff)),
+          (name, k) => (out[k] = Math.min(d.limits[name], 0xffffffff)),
         );
         FEATURE_NAME.forEach((name, k) => {
           if (d.features.has(name as GPUFeatureName)) {
