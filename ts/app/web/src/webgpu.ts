@@ -11,8 +11,6 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { GpuHost } from "@xpute/gpu/host.ts";
 
-import { DEV_BUNDLE } from "./bundle.ts";
-
 let host: GpuHost | null = null;
 /** The kernel's memory, which the host reads the stream from and writes
  * answers into; given once by the guest's open (guest.ts), as it never moves. */
@@ -72,33 +70,6 @@ export async function acquire(
   const d = await adapter.requestDevice({
     requiredFeatures: wanted.filter((f) => adapter.features.has(f)),
   });
-  // A compatibility-mode WebGPU (GLES 3.1 hardware) may offer no storage
-  // buffers in the vertex stage, which the terrain needs; it shows here only.
-  if (DEV_BUNDLE) {
-    const l = d.limits as unknown as Record<string, number>;
-    const of = (k: string) => `${k}=${l[k] ?? "-"}`;
-    const info = (adapter as unknown as { info?: Record<string, string> }).info;
-    console.info(
-      `[gpu] adapter ${
-        info
-          ? `${info.vendor ?? "?"}/${info.architecture ?? "?"}/${
-              info.device ?? "?"
-            }`
-          : "?"
-      } features [${[...d.features].join(",")}] ` +
-        [
-          "maxStorageBuffersPerShaderStage",
-          "maxStorageBuffersInVertexStage",
-          "maxStorageBufferBindingSize",
-          "maxBufferSize",
-          "minStorageBufferOffsetAlignment",
-          "minUniformBufferOffsetAlignment",
-          "maxBindGroups",
-        ]
-          .map(of)
-          .join(" "),
-    );
-  }
   const h = new GpuHost(d, () => memory!, wake);
   d.lost.then((info) => {
     // Nothing here destroys the device, so a loss is always the browser's.
