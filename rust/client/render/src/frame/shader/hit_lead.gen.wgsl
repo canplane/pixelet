@@ -242,7 +242,7 @@ fn function_() {
             let _e270 = select(_e265, 0f, _e269);
             let _e275 = select(select(u32(_e270), 0u, (_e270 < 0f)), 4294967295u, (_e270 > 4294967000f));
             let _e276 = (_e60 - 1u);
-            let _e286 = global_2.member[((_e65 + (((select(_e275, _e276, (_e276 < _e275)) * _e55) + select(_e259, _e260, (_e260 < _e259))) * 2u)) + 1u)];
+            let _e286 = global_2.member[((_e65 + (((select(_e275, _e276, (_e276 < _e275)) * _e55) + select(_e259, _e260, (_e260 < _e259))) * 3u)) + 1u)];
             let _e290 = global_2.member[(_e86 + 7u)];
             let _e292 = (_e75 + (_e211 * 4u));
             global_2.member[_e292] = _e86;

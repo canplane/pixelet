@@ -96,7 +96,7 @@ pub const LIGHT_MOVED: usize = 4;
 #[repr(u8)]
 pub enum LightMoved {
     content = 0,
-    detail = 1,
+    slide = 1,
     receivers = 2,
     footprint = 3,
 }
@@ -105,7 +105,7 @@ impl LightMoved {
     /// Every member, in the JSON's own order.
     pub const ALL: [LightMoved; 4] = [
         LightMoved::content,
-        LightMoved::detail,
+        LightMoved::slide,
         LightMoved::receivers,
         LightMoved::footprint,
     ];

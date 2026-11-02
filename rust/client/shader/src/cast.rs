@@ -266,7 +266,7 @@ fn walk_missed(
         pool: way::tree::Read(pool),
     };
     let (aim, met, before) =
-        observer::walk_again(eye, world, pyramid, &*beams, px_tan(eye, id, size), &mut (), &mut ());
+        observer::walk_again(eye, world, pyramid, &*beams, px_tan(eye, id, size), &mut ());
     let (asks, faces) = unasked_face(met.ends, met.hit.asset[0]);
     let faces = if asks {
         let face = face_of(&aim.ray, met.hit.axis);

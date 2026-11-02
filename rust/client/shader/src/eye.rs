@@ -82,7 +82,6 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
         [eye.origin.x, eye.origin.y, eye.origin.z],
         Detail {
             range: [eye.range.x, eye.range.y],
-            eye: [0.0; 3],
             spacing: cast::Spacing {
                 angle: pxl_spec_core::grid::CELL,
                 across: 0.0,
@@ -180,6 +179,15 @@ impl Observer for Eye {
         grid(self).cell_at(c)
     }
 
+    /// Its own everywhere (`detail`).
+    fn corner_detail(&self, _: [u32; 2]) -> Detail {
+        eye_origin(self).1
+    }
+
+    fn cell_detail(&self, _: [u32; 2]) -> Detail {
+        eye_origin(self).1
+    }
+
     fn samples(&self) -> [u32; 2] {
         grid(self).samples
     }
@@ -213,6 +221,11 @@ impl Observer for Eye {
 
     fn cell_of(&self, at: [f32; 2]) -> [u32; 2] {
         grid(self).cell(at)
+    }
+
+    /// Its own everywhere, each distance's zoom from the eye.
+    fn detail(&self, _: [f32; 2]) -> Detail {
+        eye_origin(self).1
     }
 
     /// From the eye, its boxes about it marked at the screen's tangents.

@@ -522,11 +522,16 @@ only the face's normal and distance, reach as far as the eye draws.
 
 Shadows are read off the shadow map, the world's depth from the sun in a square
 box of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world
-and held in a map slot by its index modulo the map's side
-(`pxl-spec-core light.rs` `Light`). The sun is an observer as the eye is: one set of
-passes, written once over an interface both implement (`pxl-shader observer.rs`
-`Observer`), asks the world at the eye's zooms, so a shadow has the detail of
-what it falls on.
+and held in a map slot by its index modulo the map's side (`pxl-spec-core
+light.rs` `Light`). The sun is an observer as the eye is: one set of passes,
+written once over an interface both implement (`pxl-shader observer.rs`
+`Observer`), asks the world, each tile of the box at one zoom, its band: the
+camera grid's cell zoom at the tile column's nearest point to the eye. This
+contract was changed on purpose. The light asked at the eye's zooms, so a
+shadow had the detail of what it falls on, and a tile was cast again as the eye
+moved; a band is the tile's place in the box alone, so a tile holds while the
+eye moves, and where the sun is low or the eye high the light asks two or
+three zooms finer than the eye draws there.
 
 It casts only what a receiver reads:
 
@@ -544,24 +549,21 @@ It casts only what a receiver reads:
             are cast; the rest stand
 ```
 
-What a tile holds moves with the light, the zooms the eye asks of it, and the
-world under it. The eye moving alone keeps it: the box follows the eye a tile at
-a time, and what the cast read moves with it, so a tile the box slid onto is
-read anew. Every node a walk feeding a tile asks tells how far the eye may move
-before its answer, at the zooms the eye then asks, turns the walk elsewhere,
-only through the band edges that answer reads: where its nearest zoom crosses
-its own, whether it is a cell, and past the zooms it says what lies under it
-at, which it is asked a band wider each way; a node passed as air that is
-air past the band its cell is decided at too tells none of that band
-(`pxl-spec-core cast.rs` `Margin::visit`, `Detail::nearer`, `Detail::farther`); the
-tile keeps the least of them and where the eye stood, and is cast again once
-the eye has moved that far (`light_detail_cs`, `light.rs` `holds`). The light's
-beam rays and samples take entries of their own for it (`light_beam_cs`,
-`light_sample_cs`), so the eye's walks tell nothing. Each keeps its own least
-margin, and each tile cast gathers once those of the beam rays and samples that
-feed it (`light_margin_cs`); a slot walked apart writes its own over its place in
-the list, and those alone are lowered into their tiles' with an atomic
-(`light_miss_margin_cs`), so the passes that walk read the list plainly.
+Every walk of the light asks one zoom, the band of the tile it lies on: the
+zoom the eye's rays ask as near as the tile's column comes to the eye, from the
+box's middle, held to the eye's zooms (`pxl-spec-core light.rs` `Light::band`),
+a slot's, a sample's and a beam ray's alike. A ray takes another's walk only
+where that one asked as it does: the cell a sample stopped at, the sky past the
+samples about it, and its cell's start and line, where every beam ray of the
+cell's window did; else it walks on its own, from the world's root where it
+was the window (`pxl-spec-core cast.rs` `Detail::alike`; `pxl-shader
+observer.rs` `took`, `sky`, `cell`). A band is the tile's place in the box
+alone, so what a tile holds moves with the light, the eye's zooms and the world
+under it, and no walk reads where the eye stands: the eye and the light run the
+same entries (`beam_cs`, `sample_cs`) over one walk. The eye moving keeps every
+tile: the box follows the eye a tile at a time, and what the cast read moves
+with it; a tile the box slid onto, or slid into another band, is read anew, the
+rest stand (`light_slide_cs`, `light.rs` `Light::keeps`).
 
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and

@@ -4,27 +4,27 @@
 //! shadow map (pxl-shader `light_cs`): each texel's ray from where it
 //! lies on the light box's near plane, along the light's rays to the far
 //! plane, walked through the one descent the eye's rays take, every node
-//! asked at the zoom the eye's rays ask it (`cast::Detail::eye`); and the
-//! depth it leaves, as a raster caster's would be (pxl-render gpu/shadow.rs,
-//! where the decor and the actors are drawn into the same map).
+//! asked at its tile's band, the zoom the eye's rays ask as near as the
+//! tile's column comes to the eye (`Light::band`); and the depth it leaves,
+//! as a raster caster's would be (pxl-render gpu/shadow.rs, where the decor
+//! and the actors are drawn into the same map).
 //!
 //! The world's depth is a clipmap: the light box's texels lie on a grid
 //! fixed in the world (`aim`'s snap), and each world texel is held in the
 //! slot its index names modulo the map's side. A slot holds its depth
-//! (`word`). A tile of slots cast in an epoch holds while the eye stays
-//! nearer where it was claimed than the least margin of the zooms its
-//! walks asked (`holds`, pxl-shader light.rs `light_detail_cs`), and is
-//! cast again once read past it, or once the box slid onto it.
+//! (`word`). A tile of slots cast in an epoch holds until the box slides it
+//! off or into another band (`Light::keeps`, pxl-shader light.rs
+//! `light_slide_cs`); no walk reads where the eye stands.
 
 use crate::beam;
 use crate::cast;
 use crate::cast::Spacing;
-use crate::cast::{Detail, End, Ray, Trace};
+use crate::cast::{End, Ray, Trace};
 use crate::eye;
 use crate::generation;
 use crate::param::light;
 use crate::param::light::{SAMPLE, SPREAD};
-use crate::{axis, FRAC_W};
+use crate::{axis, Zoom, FRAC_W};
 use core::f32::consts::SQRT_2;
 
 /// The light's cast as the eye's words hold it (`eye::LIGHT`), a frame's
@@ -225,15 +225,61 @@ impl Light {
         x * x + y * y <= r * r
     }
 
-    /// `detail`, the eye's zooms at every point as the eye asks them
-    /// (`cast::Detail::eye`), so the map holds the cells the eye draws; its
-    /// beam rays `BEAM` of the map's texels apart (`cast::Spacing`).
-    pub fn detail(&self, mut detail: Detail) -> Detail {
-        detail.spacing = Spacing {
+    /// How far apart its beam rays lie, `BEAM` of the map's texels
+    /// (`cast::Spacing`).
+    pub fn spacing(&self) -> Spacing {
+        Spacing {
             angle: 0.0,
             across: BEAM as f32 * length(self.across),
+        }
+    }
+
+    /// The zoom every walk over box tile `tile` asks, its band, the map
+    /// `size` texels a side: the camera grid's cell zoom
+    /// (`grid::cell_zoom_at`) at the tile column's nearest point to the eye,
+    /// from the box's middle (`read`), in units, held to the eye's zooms
+    /// `range` (`eye::RANGE`). The tile's place in the box alone, the same
+    /// wherever the eye stands in it, and as fine as the eye asks anywhere in
+    /// the column.
+    pub fn band(&self, size: u32, range: [Zoom; 2], tile: [i32; 2]) -> Zoom {
+        let (half, t) = (size as f32 / 2.0, TILE as f32);
+        // Texels from the middle to the tile's span on one axis, none within it.
+        let gap = |k: i32| {
+            let (a, b) = (k as f32 * t, (k + 1) as f32 * t);
+            if half < a {
+                a - half
+            } else if half > b {
+                half - b
+            } else {
+                0.0
+            }
         };
-        detail
+        let x = gap(tile[0]) * length(self.across);
+        let y = gap(tile[1]) * length(self.down);
+        let held = cast::Detail {
+            range,
+            spacing: Spacing::NONE,
+        };
+        held.at(x * x + y * y)
+    }
+
+    /// Whether box tile `tile`, the map `size` texels a side, keeps what a
+    /// cast left in it where the box slid to its corner from `was`, the
+    /// eye's zooms `range`: the tile lay in the box under `was` too, and its
+    /// band there is its band here (`band`). The one rule of what a slide
+    /// keeps (pxl-shader light.rs `light_slide_cs`).
+    pub fn keeps(&self, size: u32, range: [Zoom; 2], tile: [u32; 2], was: [i32; 2]) -> bool {
+        let (n, t) = (tiles(size) as i32, TILE as i32);
+        let from = [
+            tile[0] as i32 + self.corner[0].wrapping_sub(was[0]) / t,
+            tile[1] as i32 + self.corner[1].wrapping_sub(was[1]) / t,
+        ];
+        let here = [tile[0] as i32, tile[1] as i32];
+        from[0] >= 0
+            && from[1] >= 0
+            && from[0] < n
+            && from[1] < n
+            && self.band(size, range, from) == self.band(size, range, here)
     }
 
     /// The box's texel a slot of the map holds, `size` a power of two its
@@ -244,16 +290,6 @@ impl Light {
     pub fn texel(&self, size: u32, slot: [u32; 2]) -> [u32; 2] {
         let at = |k: usize| (slot[k] as i32).wrapping_sub(self.corner[k]) as u32 & (size - 1);
         [at(0), at(1)]
-    }
-
-    /// The first of the hold words (`hold_at`) of box tile `tile` of the map
-    /// `size` texels a side: its slots' tile's, fixed in the world as the
-    /// slots are, so the words hold where the box slides, its corner a whole
-    /// number of tiles (pxl-render gpu/shadow.rs `aim`).
-    pub fn hold(&self, size: u32, tile: [u32; 2]) -> u32 {
-        let (t, n) = (TILE, tiles(size));
-        let at = |k: usize| ((tile[k] * t) as i32).wrapping_add(self.corner[k]) as u32 & (size - 1);
-        hold_at(size) + ((at(1) / t) * n + at(0) / t) * HOLD_WORDS
     }
 
     /// The light its words lay (`words`).
@@ -310,8 +346,9 @@ pub const HEAD_WORDS: usize = 4 * HEAD_VEC4S;
 pub const HEAD_CAST: usize = 0;
 pub const HEAD_COUNTED: usize = 1;
 /// The number of the cast since which only what says which tiles are read
-/// moved: what a cast in it or after left in a tile stands, as the eye's
-/// place, the light and the world it was cast for still do (`reads_at`).
+/// moved, and the box: what a cast in it or after left in a tile stands, as
+/// the light, the eye's zooms and the world it was cast for still do, where
+/// the box kept it (`reads_at`, `Light::keeps`).
 pub const HEAD_EPOCH: usize = 2;
 /// The map's side, which the slots' lattice is laid by. A pass the eye's
 /// rays and the shadow map share is handed the eye's own head, all zero, in
@@ -321,7 +358,7 @@ pub const HEAD_SIZE: usize = 3;
 /// The clipmap's corner the cast before was cast under, X and Y, the first
 /// two words of the second vec4: how many tiles the box slid since, its
 /// corners `TILE`-aligned, which the reads move by (pxl-shader light.rs
-/// `light_detail_cs`).
+/// `light_slide_cs`).
 pub const HEAD_CORNER_WAS: usize = 4;
 /// Whether the cast's marks take each pixel's footprint (`FOOTPRINT_TILES`),
 /// 1 or 0, the second vec4's third word: not while the eye moves, as the next
@@ -449,10 +486,14 @@ pub const TILE: u32 = 8;
 /// a beam ray at every `BEAM`-th texel of the box across and down,
 /// `BEAM_WINDOW` past it on each side, each walked from the world's root along
 /// the light's rays until a cell that fills or lacks or a split narrower than
-/// `2√2` beam spacings (`Light::detail`, `cast::Spacing`), leaving its line and
+/// `2√2` beam spacings (`Light::spacing`), at the band of the tile it lies on
+/// (`corner_at`, `Light::band`) as a slot asks its own, leaving its line and
 /// how far it got less `margin`; each `BEAM`-square cell of the box starts at
 /// the least of the beam rays within `BEAM_WINDOW` of its corners, and its
-/// texels resume from that ray's line there.
+/// texels resume from that ray's line there where every beam ray of the
+/// window asked their band, and walk from the root where one asked another
+/// (`cast::Detail::alike`, `beam::CELL_RESUMES`), as the proof below holds
+/// for walks alike.
 ///
 /// Why that is a texel's root walk, as the eye's proof has it with the
 /// rays parallel: take `X`, the cell a texel's ray ends at, `e` its entry,
@@ -474,11 +515,16 @@ const _: () = assert!(
 /// What a beam ray leaves, in words: the eye's beam rays' line
 /// (`beam::LINE_NODE`, `beam::LINE_INHERITANCE`), then its origin
 /// (`LINE_ORIGIN`), which its nodes are held from (`cast::Node::moved`), as
-/// every light ray starts apart; then the least margin of the nodes its walk
-/// asked (`LINE_MARGIN`, `cast::Margin`), f32 bits, which the tiles it feeds
-/// gather (pxl-shader light.rs `light_margin_cs`).
+/// every light ray starts apart.
 pub const LINE_ORIGIN: u32 = beam::LINE_WORDS;
-pub const LINE_MARGIN: u32 = LINE_ORIGIN + 3;
+
+/// The box texel beam ray `c` starts over, across and down: every `BEAM`-th,
+/// from `BEAM_WINDOW` of them before the box's first (pxl-shader light.rs
+/// `Map::corner`).
+pub const fn corner_at(c: [u32; 2]) -> [i32; 2] {
+    let (b, w) = (BEAM as i32, BEAM_WINDOW as i32);
+    [(c[0] as i32 - w) * b, (c[1] as i32 - w) * b]
+}
 
 /// How far past the disk a receiver reads the map reaches, in texels, at
 /// worst (pxl-render shadow.wgsl `shadow_visibility`): its corner tap `SPREAD`
@@ -494,12 +540,7 @@ const FILTER: f32 = 1.0;
 /// the slot's tile, from the first to the last: a tap reads that far
 /// (pxl-shader light.rs `light_propagate_cs`).
 pub const READ_TILES: [i32; 2] = [-2, 1];
-pub const LINE_WORDS: u32 = LINE_MARGIN + 1;
-/// What a cell hands its texels: their start, f32 bits, and the beam ray
-/// whose line they resume from, by its index (`line`).
-pub const CELL_T: u32 = 0;
-pub const CELL_RAY: u32 = 1;
-pub const CELL_WORDS: u32 = 2;
+pub const LINE_WORDS: u32 = LINE_ORIGIN + 3;
 
 /// The beam rays across the map `size` texels a side, and down.
 pub const fn beam_across(size: u32) -> u32 {
@@ -532,11 +573,11 @@ pub(crate) const fn cells_at(size: u32) -> u32 {
 }
 
 pub const fn cell(size: u32, [i, j]: [u32; 2]) -> u32 {
-    cells_at(size) + (j * cells_across(size) + i) * CELL_WORDS
+    cells_at(size) + (j * cells_across(size) + i) * beam::CELL_WORDS
 }
 
 pub(crate) const fn beam_words(size: u32) -> u32 {
-    cells_at(size) + cells_across(size) * cells_across(size) * CELL_WORDS
+    cells_at(size) + cells_across(size) * cells_across(size) * beam::CELL_WORDS
 }
 
 /// How far short of where a beam ray stopped a cell's texels start: the
@@ -576,13 +617,6 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
     sample(size, (size / SAMPLE) * (size / SAMPLE))
 }
 
-/// The least margin of the nodes each sample's walk asked (`cast::Margin`),
-/// f32 bits, a word a sample by its index, past the samples' words: what
-/// the tiles it feeds gather (pxl-shader light.rs `light_margin_cs`).
-pub const fn sample_margin(size: u32, idx: u32) -> u32 {
-    sample_words(size) + idx
-}
-
 /// The slots whose ray took no visible sample, listed for their walk
 /// (pxl-shader `light_miss_cs`) apart from the slots that took theirs
 /// (`light_cs`), as the eye's missed pixels are walked apart from the pixels
@@ -590,42 +624,14 @@ pub const fn sample_margin(size: u32, idx: u32) -> u32 {
 /// (pxl-shader cast.rs `enlist`, `ray::MISS_ARGS_WORDS`): a walk holds its
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
-/// (`pyramid::MARKS_CNT`), then a slot each, its X and its Y over 16 bits,
-/// which its walk writes over with what it tells its tile (`miss_word`).
+/// (`pyramid::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
 pub const fn misses_cnt(size: u32) -> u32 {
-    sample_margin(size, (size / SAMPLE) * (size / SAMPLE))
+    sample_words(size)
 }
 
 pub const fn misses_at(size: u32) -> u32 {
     misses_cnt(size) + 1
 }
-
-/// What a listed slot's walk tells its tile (pxl-shader light.rs
-/// `light_miss_cs`, `light_miss_margin_cs`), in its place in the list: the
-/// slot's tile, `j · tiles + i` (`Light::hold`'s order, fixed in the world),
-/// over the high bits of the least margin of the nodes it asked
-/// (`cast::Margin`) under `MISS_TILE_SHIFT`, its low bits dropped, which
-/// only lowers it. A map's tiles fit over them (`MISSED_TILES`).
-pub fn miss_word(size: u32, slot: [u32; 2], margin: f32) -> u32 {
-    let tile = (slot[1] / TILE) * tiles(size) + slot[0] / TILE;
-    tile << MISS_TILE_SHIFT | margin.to_bits() >> (u32::BITS - MISS_TILE_SHIFT)
-}
-
-/// The hold words (`hold_at`) of the tile a listed slot's walk told
-/// (`miss_word`), and the margin it told, f32 bits.
-pub const fn miss_hold(size: u32, w: u32) -> (u32, u32) {
-    (
-        hold_at(size) + (w >> MISS_TILE_SHIFT) * HOLD_WORDS,
-        (w & ((1 << MISS_TILE_SHIFT) - 1)) << (u32::BITS - MISS_TILE_SHIFT),
-    )
-}
-
-/// Where a miss word (`miss_word`) splits: its tile above, its margin's high
-/// bits below.
-pub const MISS_TILE_SHIFT: u32 = 16;
-
-/// The tiles a map's miss words number at most (`miss_word`).
-pub const MISSED_TILES: u32 = 1 << (u32::BITS - MISS_TILE_SHIFT);
 
 /// The tiles of the box a receiver stands on in a cast, past the misses: a
 /// word a tile (`TILE` texels a side), `tiles` a row, the number of the
@@ -678,25 +684,6 @@ pub const fn coarse_square(size: u32, [i, j]: [u32; 2]) -> u32 {
     coarse_at(size) + (j / COARSE) * coarse(size) + i / COARSE
 }
 
-/// What a tile cast in its epoch holds by, past the squares, `HOLD_WORDS` a
-/// tile of slots (`Light::hold`): the least margin of every node the walks
-/// that fed it asked (`cast::Margin`), f32 bits, gathered once off the beam
-/// rays and the samples that feed it, each of which keeps its own
-/// (`LINE_MARGIN`, `sample_margin`; pxl-shader light.rs `light_margin_cs`),
-/// then lowered by each listed slot's walk (`miss_word`, `light_miss_margin_cs`);
-/// then where the eye stood, Q3, X, Y and Z, when the cast that cast it
-/// claimed it (`light_propagate_cs`).
-/// While the eye stands nearer than the margin to where it stood, every zoom
-/// those walks asked is asked again, so the tile holds what it would be cast
-/// anew to (`holds`; `light_detail_cs`).
-pub const fn hold_at(size: u32) -> u32 {
-    coarse_at(size) + coarse(size) * coarse(size)
-}
-
-pub const HOLD_MARGIN: u32 = 0;
-pub const HOLD_EYE: u32 = 1;
-pub const HOLD_WORDS: u32 = 4;
-
 /// What a cast within its epoch casts, listed as its tiles are claimed
 /// (pxl-shader light.rs `light_propagate_cs`): what feeds a claimed tile
 /// at each level of the lattice, by the reach it feeds within (pxl-shader
@@ -730,7 +717,7 @@ pub const fn listed_room(size: u32, which: u32) -> u32 {
 
 /// The first of list `which`'s marks, a word a place (`LISTED_CORNERS`).
 pub const fn listed_marks_at(size: u32, which: u32) -> u32 {
-    let mut at = hold_at(size) + tiles(size) * tiles(size) * HOLD_WORDS;
+    let mut at = coarse_at(size) + coarse(size) * coarse(size);
     let mut k = 0;
     while k < which {
         at += listed_room(size, k);
@@ -757,21 +744,10 @@ pub const fn listed_per(side: u32) -> u32 {
     side * side
 }
 
-/// The list's buffer's words: the beam's, the samples, their margins, the
-/// misses, the stands, the reads, their squares, the hold words, the lists.
+/// The list's buffer's words: the beam's, the samples, the misses, the
+/// stands, the reads, their squares, the lists.
 pub const fn list_words(size: u32) -> u32 {
     listed_at(size, LISTS)
-}
-
-/// Whether a tile whose walks' least margin is `margin` units, cast with the
-/// eye at Q3 `was`, holds with the eye at Q3 `eye`: the eye moved less than
-/// the margin, its step in units on every axis alike, X the short way round
-/// as an i32 wraps.
-pub fn holds(margin: f32, was: [i32; 3], eye: [i32; 3]) -> bool {
-    let q3 = (1u32 << FRAC_W) as f32;
-    let d = |k: usize| eye[k].wrapping_sub(was[k]) as f32 / q3;
-    let (x, y, z) = (d(0), d(1), d(2));
-    libm::sqrtf(x * x + y * y + z * z) < margin
 }
 
 /// The workgroups of the passes that cast tiles, a buffer of their own: each
@@ -792,17 +768,13 @@ pub const ARGS_WORDS: u32 = 2 * ARGS_WHOLE;
 
 /// Box texel `p`'s ray: its origin, where its world texel's middle lies on
 /// the near plane, rounded to a Q3 step as its anchor lays it (`Starts`);
-/// the ray; and where the eye, at Q3 `eye`, stands from that origin, in
-/// units, for the zooms it asks (`cast::Detail::eye`).
-pub fn ray(eye: [i32; 3], s: &Light, starts: &Starts, p: [u32; 2]) -> ([i32; 3], Ray, [f32; 3]) {
+/// and the ray.
+pub fn ray(s: &Light, starts: &Starts, p: [u32; 2]) -> ([i32; 3], Ray) {
     let o = starts.start([
         s.corner[0].wrapping_add(p[0] as i32),
         s.corner[1].wrapping_add(p[1] as i32),
     ]);
-    let step = (1u32 << FRAC_W) as f32;
-    // The eye from the start, X the short way round as an i32 wraps.
-    let from = |k: usize| eye[k].wrapping_sub(o[k]) as f32 / step;
-    (o, Ray::new(s.dir, s.t_max), [from(0), from(1), from(2)])
+    (o, Ray::new(s.dir, s.t_max))
 }
 /// The depth a texel's walk `met` leaves in the map: where it stopped
 /// along its ray, as a share of the box's depth, pushed back as its face's
@@ -821,9 +793,14 @@ pub fn depth<A>(s: &Light, met: &Trace<A>) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
+
     use super::*;
+    use crate::answer;
     use crate::cast::Hit;
     use crate::cast::Node;
+    use crate::cube::ground::stone;
+    use crate::overwrite::AIR;
     use crate::param::light;
 
     /// Starts as a host lays them for the eye at Q3 `eye`, off the light's
@@ -902,15 +879,14 @@ mod tests {
     #[test]
     fn texel_starts_on_near_plane() {
         let s = down();
-        let (o, ray, from) = ray([100, 200, 300], &s, &starts_of([100, 200, 300], &s), [0, 0]);
+        let (o, ray) = ray(&s, &starts_of([100, 200, 300], &s), [0, 0]);
         // The top-left texel's middle: half the box across to the left, up.
         assert_eq!(o, [100 - 256, 200 + 256, 300 + 4 * 256]);
         assert_eq!(ray.dir, [0.0, 0.0, -1.0]);
         assert_eq!(ray.t_max, 8.0);
-        assert_eq!(from, [1.0, -1.0, -4.0]);
         // The next across and the next down, a texel's side on.
         assert_eq!(
-            super::ray([0; 3], &s, &starts_of([0; 3], &s), [1, 1]).0,
+            super::ray(&s, &starts_of([0; 3], &s), [1, 1]).0,
             [256, -256, 4 * 256]
         );
     }
@@ -993,9 +969,10 @@ mod tests {
     #[test]
     fn point_on_texel() {
         let s = down();
-        let (_, _, from) = ray([0; 3], &s, &starts_of([0; 3], &s), [1, 0]);
-        // Texel (1, 0)'s start, from the eye, and a point straight under it.
-        let at = s.texel_at([-from[0], -from[1], -from[2] - 3.0]);
+        let (o, _) = ray(&s, &starts_of([0; 3], &s), [1, 0]);
+        // Texel (1, 0)'s start, from the eye at 0, and a point straight under it.
+        let v = o.map(|k| k as f32 / (1 << FRAC_W) as f32);
+        let at = s.texel_at([v[0], v[1], v[2] - 3.0]);
         assert!((at[0] - 1.0).abs() < 1e-5 && at[1].abs() < 1e-5, "{at:?}");
     }
 
@@ -1019,7 +996,7 @@ mod tests {
         let st = starts_of(eye, &s);
         let q3 = (1u32 << FRAC_W) as f32;
         for p in [[0, 0], [5, 17], [63, 40]] {
-            let (o, ray, _) = ray(eye, &s, &st, p);
+            let (o, ray) = ray(&s, &st, p);
             let v = |k: usize, t: f32| o[k].wrapping_sub(eye[k]) as f32 / q3 + ray.dir[k] * t;
             let at = s.texel_at([v(0, 3.0), v(1, 3.0), v(2, 3.0)]);
             assert!(
@@ -1151,56 +1128,119 @@ mod tests {
         assert_eq!(s.texel(8, [0, 5]), [2, 0]);
     }
 
-    /// A tile held while the eye moves breaks where a node its walk asked
-    /// is asked at another zoom, though the zoom at the hit is the same: a
-    /// node [0, 8]³ units from the ray's origin, the hit on its top face,
-    /// the eye on X past it stepping a unit nearer across the band edge at
-    /// 96 units (`grid::cell_zoom_from`) at the node's nearest point, while
-    /// the hit stays within its band. The check by the hit's zoom, which the
-    /// slot's word held before the margin, holds it; the margin breaks it
-    /// (`holds`).
+    /// Ground whose top is a few units of bumps, as each zoom's cells take it:
+    /// a cell is stone where its floor lies under the top at its middle, so
+    /// a coarser zoom's steps are wider; a node coarser than asked is a split
+    /// where it reaches under the bumps' height, air over it.
+    struct Bumps;
+
+    const BUMPS: f32 = 6.0;
+
+    fn top(x: f32, y: f32) -> f32 {
+        3.0 * libm::sinf(x * 0.37) + 3.0 * libm::cosf(y * 0.29)
+    }
+
+    impl cast::Query for Bumps {
+        type At = ();
+        fn root(&mut self, _: [i32; 3]) {}
+        fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
+        fn node(
+            &mut self,
+            _: &mut (),
+            zoom: Zoom,
+            c: [i32; 3],
+            [_, near]: [Zoom; 2],
+            _: f32,
+        ) -> answer::In<[u32; 2]> {
+            let side = libm::ldexpf(1.0, crate::UNIT_ZOOM as i32 - zoom as i32);
+            let floor = c[2] as f32 * side;
+            let (kind, asset) = if zoom >= near {
+                let mid = |k: usize| (c[k] as f32 + 0.5) * side;
+                let filled = answer::fill_word(stone as u32, answer::EIGHTHS);
+                let under = floor < top(mid(0), mid(1));
+                (answer::Kind::Cell, [if under { filled } else { AIR }, 0])
+            } else if floor < BUMPS {
+                (answer::Kind::Split, answer::BOX_WHOLE)
+            } else {
+                (answer::Kind::Cell, [AIR, 0])
+            };
+            answer::In { kind, asset }
+        }
+    }
+
+    /// A box 512 units a side looking straight down over the bumps, 64
+    /// texels a side, a tile 64 units: its bands run from the unit cells'
+    /// about its middle to two zooms coarser at its edge.
+    fn over_bumps(corner: [i32; 2]) -> Light {
+        Light::of(
+            [
+                [256.0, 0.0, 0.0],
+                [0.0, 256.0, 0.0],
+                [0.0, 0.0, -128.0],
+                [0.0, 0.0, 64.0],
+            ],
+            64,
+            corner,
+            1.0,
+        )
+    }
+
+    /// The words a cast of box tile `tile` leaves, a slot each of its
+    /// texels, every walk at the tile's band (`Light::band`) over the bumps.
+    fn cast_tile(s: &Light, st: &Starts, range: [Zoom; 2], tile: [i32; 2]) -> std::vec::Vec<u32> {
+        let b = s.band(64, range, tile);
+        let detail = cast::Detail {
+            range: [b, b],
+            spacing: s.spacing(),
+        };
+        (0..TILE * TILE)
+            .map(|k| {
+                let p = [
+                    tile[0] as u32 * TILE + k % TILE,
+                    tile[1] as u32 * TILE + k / TILE,
+                ];
+                let (o, ray) = ray(s, st, p);
+                let met = cast::first(&mut Bumps, o, &ray, detail, cast::Until::Opaque);
+                word(depth(s, &met))
+            })
+            .collect()
+    }
+
+    /// A tile a slide of the box keeps (`Light::keeps`) holds what a fresh
+    /// cast of it at its new place leaves, word for word; and a tile the
+    /// slide moved into another band is cast again, as a fresh cast there
+    /// leaves other words. The rays' starts are the light frame's, worked
+    /// out once, as the host's anchors are (pxl-render gpu/shadow.rs
+    /// `starts`).
     #[test]
-    fn held_breaks_where_a_node_changes_zoom() {
-        use crate::cast::Margin;
-        use crate::grid::cell_zoom_from;
-        use crate::{FINEST_ZOOM, UNIT_ZOOM};
-        let (hi, hit) = (8.0f32, [0.0f32, 0.0, 8.0]);
-        let detail = |x: f32| Detail {
-            range: [0, FINEST_ZOOM],
-            eye: [x, 0.0, 0.0],
-            spacing: Spacing::NONE,
-        };
-        let sq = |v: [f32; 3]| v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
-        // The node's farthest corner and nearest point from the eye, squared,
-        // as the walk takes them (pxl-spec-core cast.rs `node_dist_sq`), the eye
-        // past X's far face.
-        let dist_sq = |d: Detail| {
-            let e = d.eye;
-            [sq([e[0], hi, hi]), sq([e[0] - hi, 0.0, 0.0])]
-        };
-        let pair = |d: Detail| {
-            let [far, near] = dist_sq(d);
-            [d.at(far), d.at(near)]
-        };
-        let at_hit = |d: Detail| {
-            let e = d.eye;
-            d.at(sq([hit[0] - e[0], hit[1] - e[1], hit[2] - e[2]]))
-        };
-        let (was, now) = (detail(104.5), detail(103.5));
-        assert_eq!(cell_zoom_from(UNIT_ZOOM as i32 - 1), 96.0);
-        // The old check: the hit's zoom alike, so the tile held.
-        assert_eq!(at_hit(was), at_hit(now));
-        // What the walk asked moved: the node's nearest zoom is finer.
-        assert_ne!(pair(was), pair(now));
-        // The new: the eye moved a unit, past the margin the walk told of
-        // the node as a cell at its nearest zoom (cast.rs `Margin::visit`).
-        let told = Margin(was.nearer(dist_sq(was)[1], pair(was)[1]));
-        assert!(told.0 < 1.0, "{}", told.0);
-        let q3 = |x: f32| [(x * (1 << FRAC_W) as f32) as i32, 0, 0];
-        assert!(!holds(told.0, q3(was.eye[0]), q3(now.eye[0])));
-        // Within it, the tile holds, and the node is asked as it was.
-        let near = detail(104.5 - told.0 / 2.0);
-        assert!(holds(told.0, q3(was.eye[0]), q3(near.eye[0])));
-        assert_eq!(pair(was), pair(near));
+    fn kept_tile_is_fresh_cast() {
+        let (size, range) = (64, [crate::UNIT_ZOOM - 3, crate::UNIT_ZOOM]);
+        let (n, t) = (tiles(size) as i32, TILE as i32);
+        let was = over_bumps([512, 512]);
+        let st = starts_of([0; 3], &was);
+        let (mut kept, mut banded) = (0, 0);
+        for (dx, dy) in [(1, 0), (0, -1), (2, 1), (-3, 2)] {
+            let now = Light {
+                corner: [was.corner[0] + dx * t, was.corner[1] + dy * t],
+                ..was
+            };
+            for k in 0..n * n {
+                let here = [k % n, k / n];
+                let from = [here[0] + dx, here[1] + dy];
+                let fresh = cast_tile(&now, &st, range, here);
+                let tile = [here[0] as u32, here[1] as u32];
+                if now.keeps(size, range, tile, was.corner) {
+                    assert_eq!(
+                        cast_tile(&was, &st, range, from),
+                        fresh,
+                        "{dx} {dy} {here:?}"
+                    );
+                    kept += 1;
+                } else if (0..n).contains(&from[0]) && (0..n).contains(&from[1]) {
+                    banded += u32::from(cast_tile(&was, &st, range, from) != fresh);
+                }
+            }
+        }
+        assert!(kept > 0 && banded > 0, "{kept} {banded}");
     }
 }

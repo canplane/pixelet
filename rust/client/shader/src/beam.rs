@@ -3,12 +3,9 @@
 //! The beam rays (pxl-spec-core `beam`): each corner's walk and line
 //! (`beam_cs`), where each cell's rays start off them (`cell_cs`), and the
 //! samples walked from those starts (`sample_cs`), each its pass's entry,
-//! cast for the eye's camera grid, and the cells' for the shadow map too, as
-//! the head it is handed names (pass_observer.rs `PassObserver`); the shadow map's beam
-//! rays and samples take entries of their own over the same passes, which
-//! tell what their walks ask of (light.rs `light_beam_cs`,
-//! `light_sample_cs`); and the words a line, a node and a sample are held
-//! in, every observer's.
+//! cast for the eye's camera grid and for the shadow map, as the head it is
+//! handed names (pass_observer.rs `PassObserver`); and the words a line, a
+//! node and a sample are held in, every observer's.
 
 use pxl_spec_core::cast::{self, Detail, End, Trace, Query, Until};
 use pxl_spec_core::world::Inheritance;
@@ -220,8 +217,9 @@ pub(crate) fn sample_put<W: Words + ?Sized, A>(w: &mut W, base: u32, met: &Trace
 
 /// `ray`'s walk to the cell that fills, resumed at `t` from the deepest
 /// node of `line` holding where it is there, or, where that lies in another
-/// root, from the root at it; through `q`, reading or writing, its line
-/// left where it ends to `keep` and each node it asks told to `told`.
+/// root, from the root at it; where it `resumes` not, from the world's root
+/// at 0, through the same walk; through `q`, reading or writing, its line
+/// left where it ends to `keep`.
 pub(crate) fn resume_walk<'a, Q: Query, W: Words + ?Sized>(
     q: &mut Q,
     origin: [i32; 3],
@@ -230,29 +228,36 @@ pub(crate) fn resume_walk<'a, Q: Query, W: Words + ?Sized>(
     t: f32,
     line: &BeamLine<'a, W>,
     node: cast::Node,
+    resumes: bool,
     keep: &mut impl cast::Keep<Q::At>,
-    told: &mut impl cast::Visitor,
 ) -> Trace<Q::At>
 where
     BeamLine<'a, W>: cast::Over<Q::At>,
 {
-    let (h, held) = node.over(cast::point_at(origin, ray, t));
-    let h = cast::holding(origin, ray, h, t);
-    let from = if held {
-        (
-            h,
-            <BeamLine<'a, W> as cast::Over<Q::At>>::over(line, h.zoom),
-            t,
-        )
+    let root = (cast::Node::ROOT, cast::Node::ROOT.idx(origin));
+    let from = if !resumes {
+        (root.0, q.root(root.1), 0.0)
     } else {
-        (cast::Node::ROOT, q.root(cast::Node::ROOT.idx(origin)), t)
+        let (h, held) = node.over(cast::point_at(origin, ray, t));
+        let h = cast::holding(origin, ray, h, t);
+        if held {
+            (
+                h,
+                <BeamLine<'a, W> as cast::Over<Q::At>>::over(line, h.zoom),
+                t,
+            )
+        } else {
+            (root.0, q.root(root.1), t)
+        }
     };
-    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, keep, told)
+    cast::walk(q, origin, ray, detail, Until::Opaque, from, line, keep)
 }
 
-/// Each beam ray of the camera grid, a thread a corner (pxl-spec-core
-/// `beam::Grid::corners`; observer.rs `beam`), off the eye's head (pass_observer.rs
-/// `PassObserver`).
+/// Each beam ray of its observer's lattice, a thread a corner (observer.rs
+/// `beam`): the camera grid's (pxl-spec-core `beam::Grid::corners`), or the
+/// shadow map's (`light::BEAM`), as the head it is handed names
+/// (pass_observer.rs `PassObserver`), its line left in the eye's beam rays'
+/// buffer or in the light's list.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "beam_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn beam_cs(
@@ -271,7 +276,8 @@ pub fn beam_cs(
     let clipmap: &[IVec4] = clipmap;
     let o = PassObserver::of(eye, head);
     let [across, down] = o.corners();
-    if id.x >= across || id.y >= down {
+    let c = o.take(&*beams, Level::Corner, [id.x, id.y]);
+    if c[0] >= across || c[1] >= down {
         return;
     }
     let world = World {
@@ -283,7 +289,7 @@ pub fn beam_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    observer::beam(&o, world, pyramid, beams, [id.x, id.y], &mut ());
+    observer::beam(&o, world, pyramid, beams, c);
 }
 
 /// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
@@ -331,9 +337,10 @@ pub fn cell_cs(
     observer::cell(&o, beams, c);
 }
 
-/// Each sample of the camera grid, a thread each (observer.rs `sample`;
-/// pxl-spec-core `beam::Grid::samples`), off the eye's head (pass_observer.rs
-/// `PassObserver`). The node and asset it stopped at left for
+/// Each sample of its observer's lattice, a thread each (observer.rs
+/// `sample`): the camera grid's (pxl-spec-core `beam::Grid::samples`), or
+/// the shadow map's (`param::light::SAMPLE`), as the head it is handed names
+/// (pass_observer.rs `PassObserver`). The node and asset it stopped at left for
 /// the raster (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where
 /// it went on to its reach, and whether what it stopped at lacks. What lies
 /// about the face it entered is asked only of a sample that draws a box,
@@ -356,7 +363,8 @@ pub fn sample_cs(
     let clipmap: &[IVec4] = clipmap;
     let o = PassObserver::of(eye, head);
     let [across, down] = o.samples();
-    if id.x >= across || id.y >= down {
+    let s = o.take(&*beams, Level::Sample, [id.x, id.y]);
+    if s[0] >= across || s[1] >= down {
         return;
     }
     let world = World {
@@ -368,5 +376,5 @@ pub fn sample_cs(
         eye,
         pool: way::tree::Read(pool),
     };
-    observer::sample(&o, world, pyramid, beams, [id.x, id.y], &mut ());
+    observer::sample(&o, world, pyramid, beams, s);
 }

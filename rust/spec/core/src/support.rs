@@ -85,7 +85,6 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ColumnSur
         (Node::ROOT, root, 0.0),
         &cast::Root(root),
         &mut f,
-        &mut (),
     );
     f.ends = met.ends;
     f.top = cast::top(o, &met.hit.node, met.hit.asset[0]);
@@ -105,7 +104,6 @@ fn down(cell: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
         ray,
         Detail {
             range: [cell, cell],
-            eye: [0.0; 3],
             spacing: cast::Spacing::NONE,
         },
     )
@@ -419,20 +417,11 @@ mod tests {
         let o = [(6 << s) + 17, (3 << s) + 90, 9 << s];
         let detail = Detail {
             range: [UNIT_ZOOM, UNIT_ZOOM],
-            eye: [0.0; 3],
             spacing: cast::Spacing::NONE,
         };
         let beam = Ray::new([-0.45, 0.05, -1.0], 64.0);
         let mut first = LineCollector(None, o);
-        let met = cast::walk_from_root(
-            &mut Step,
-            o,
-            &beam,
-            detail,
-            Until::Opaque,
-            &mut first,
-            &mut (),
-        );
+        let met = cast::walk_from_root(&mut Step, o, &beam, detail, Until::Opaque, &mut first);
         assert_eq!(met.ends, End::Hit);
         let first = first.0.unwrap();
         same(&first, &line(&mut Step, first.zoom, first.at));
@@ -466,7 +455,6 @@ mod tests {
                     from,
                     &Along(&first),
                     &mut kept,
-                    &mut (),
                 );
                 assert_eq!(resumed.ends, End::Hit, "{d:?} {share}");
                 let kept = kept.0.unwrap();

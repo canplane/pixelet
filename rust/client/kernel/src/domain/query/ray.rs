@@ -43,7 +43,6 @@ pub fn at_zoom(tile: Zoom) -> Detail {
     let z = GROUND.cell_zoom(tile).clamp(lo, hi);
     Detail {
         range: [z, z],
-        eye: [0.0; 3],
         spacing: Spacing::NONE,
     }
 }
@@ -56,7 +55,6 @@ pub fn finest() -> Detail {
     let [_, finest] = zoom_range();
     Detail {
         range: [finest, finest],
-        eye: [0.0; 3],
         spacing: Spacing::NONE,
     }
 }
@@ -68,7 +66,6 @@ pub fn finest() -> Detail {
 pub fn by_dist() -> Detail {
     Detail {
         range: zoom_range(),
-        eye: [0.0; 3],
         spacing: Spacing::NONE,
     }
 }

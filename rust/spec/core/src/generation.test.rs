@@ -11,7 +11,6 @@ use crate::cast::{Detail, Spacing};
 fn decor_at_its_clip_level() {
     let detail = Detail {
         range: [0, crate::FINEST_ZOOM],
-        eye: [0.0; 3],
         spacing: Spacing::NONE,
     };
     let mut d = 0.25f32;

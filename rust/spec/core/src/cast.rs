@@ -25,7 +25,7 @@
 use crate::answer::{
     box_of, fill_eighths, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS,
 };
-use crate::grid::{cell_zoom_at, cell_zoom_from};
+use crate::grid::cell_zoom_at;
 use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
@@ -43,7 +43,7 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
 }
 
 /// How far apart a beam's rays lie, `across + angle · d` units at `d` from
-/// the eye (`Detail::eye`): the eye's an angle, its camera grid's cell
+/// the walk's origin: the eye's an angle, its camera grid's cell
 /// (`grid::CELL`); the light's, whose rays are parallel, a width, `light::BEAM`
 /// of its map's texels. Only a beam reads it, its widening and `narrow`
 /// (`Until::Beam`); an asker that casts no beam, control and physics, fills
@@ -60,131 +60,42 @@ impl Spacing {
         across: 0.0,
     };
 
-    /// Its width at `d` from the eye.
+    /// Its width at `d` from the walk's origin.
     pub fn width(self, d: f32) -> f32 {
         self.across + self.angle * d
     }
 }
 
-/// The zoom asked at each distance: the camera grid's cells there
-/// (`cell_zoom_at`), held to `range`, asked of a distance squared (`at`). A
-/// stated zoom's cells wherever they are is a range of that zoom alone.
-/// The distance is the eye's, `eye` units from the walk's origin: none for
-/// the eye's own rays; for a ray from elsewhere, a ray toward the light from
-/// what an eye's ray met, where the eye stands from it, so a node is asked
-/// at the zooms the eye's rays ask it (`node_dist_sq`). `spacing` is how far a
-/// beam ray lies from the next of its grid (`Spacing`, `Until::Beam`).
+/// The zoom asked at each distance from the walk's origin: the camera
+/// grid's cells there (`cell_zoom_at`), held to `range`, asked of a distance
+/// squared (`at`). A stated zoom's cells wherever they are is a range of that
+/// zoom alone, as the light's walks ask their band (pxl-spec-core
+/// `light::Light::band`). `spacing` is how far a beam ray lies from the next
+/// of its grid (`Spacing`, `Until::Beam`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detail {
     pub range: [Zoom; 2],
-    pub eye: [f32; 3],
     pub spacing: Spacing,
 }
 
 impl Detail {
-    /// At `d2`, a distance squared.
+    /// At `d2`, a distance squared. Held by `max` then `min`, not `clamp`,
+    /// which aborts where `range` inverts (lib.rs): there, its finest.
     pub fn at(self, d2: f32) -> Zoom {
-        cell_zoom_at(d2).clamp(self.range[0], self.range[1])
+        cell_zoom_at(d2).max(self.range[0]).min(self.range[1])
     }
 
-    /// The zooms `range` holds, coarsest and finest: past them no distance
-    /// asks another.
-    fn zoom_bounds(self) -> [Zoom; 2] {
-        // [rust-gpu] Each by itself, not an array's `map`.
-        [
-            (0 as Zoom).clamp(self.range[0], self.range[1]),
-            FINEST_ZOOM.clamp(self.range[0], self.range[1]),
-        ]
+    /// Whether a walk asking it may take what one asking `other` met: the
+    /// cell it stopped at, the sky past it, the line it left. Only where
+    /// both asked the same zooms at the same spacing. [rust-gpu] Word by
+    /// word: an array's `==` is an intrinsic (`raw_eq`) its backend lowers
+    /// none of.
+    pub fn alike(self, other: Detail) -> bool {
+        self.range[0] == other.range[0]
+            && self.range[1] == other.range[1]
+            && self.spacing.angle == other.spacing.angle
+            && self.spacing.across == other.spacing.across
     }
-
-    /// How far the eye may move nearer a point `d2` from it, squared, before
-    /// the zoom `at` names there is finer than `z`, which it is not yet: to
-    /// its band's near edge (`cell_zoom_from`), none where `range` holds
-    /// nothing finer. A point's distance and a box's nearest and farthest
-    /// from the eye each move no more than the eye does, on every axis
-    /// alike, and a box's nearest is none with the eye in it. Less a share
-    /// of the distances for the f32 rounding of both askers (`MARGIN_SLACK`).
-    pub fn nearer(self, d2: f32, z: Zoom) -> f32 {
-        if z >= self.zoom_bounds()[1] {
-            return UNBOUNDED;
-        }
-        let d = libm::sqrtf(d2);
-        self.slack(d, d - cell_zoom_from(z as i32))
-    }
-
-    /// How far the eye may move away from a point `d2` from it, squared,
-    /// before the zoom `at` names there is coarser than `z`, which it is not
-    /// yet: to the far edge of `z`'s band, none where `range` holds nothing
-    /// coarser (`nearer`).
-    pub fn farther(self, d2: f32, z: Zoom) -> f32 {
-        if z <= self.zoom_bounds()[0] {
-            return UNBOUNDED;
-        }
-        let d = libm::sqrtf(d2);
-        self.slack(d, cell_zoom_from(z as i32 - 1) - d)
-    }
-
-    /// `m` less the share of `d` and the eye's distance from the origin
-    /// the f32 rounding takes (`MARGIN_SLACK`), none under none.
-    fn slack(self, d: f32, m: f32) -> f32 {
-        let e = self.eye;
-        greater(m - (d + libm::sqrtf(squared(e))) * MARGIN_SLACK, 0.0)
-    }
-}
-
-/// A margin no edge bounds: 2^64 units, past any distance the world holds,
-/// exact in f32 and in its WGSL literal, where `f32::MAX` is written rounded
-/// past what an f32 holds and refused.
-const UNBOUNDED: f32 = 18_446_744_073_709_551_616.0;
-
-/// The share of the distances a margin is taken in by (`Detail::nearer`):
-/// the f32 rounding of a box's planes from the eye and of their squares,
-/// a few of its last places, many times over.
-const MARGIN_SLACK: f32 = 1.0 / 65536.0;
-
-/// How a walk asks each node it enters (`walk`): what `q` answers of the
-/// node `node` at `zoom`, `at` what was handed it and the ray in it from
-/// `t0`, its farthest and nearest distances from the eye squared
-/// (`node_dist_sq`), and what the visitor keeps of it. A walk nothing reads
-/// it of (`()`) asks it at the zooms its rays ask (`zooms`) and keeps
-/// nothing, so it costs nothing.
-pub trait Visitor {
-    fn visit<Q: Query>(
-        &mut self,
-        q: &mut Q,
-        at: &mut Q::At,
-        node: (Zoom, [i32; 3]),
-        detail: Detail,
-        dist_sq: [f32; 2],
-        t0: f32,
-    ) -> In<[u32; 2]>;
-}
-
-impl Visitor for () {
-    fn visit<Q: Query>(
-        &mut self,
-        q: &mut Q,
-        at: &mut Q::At,
-        (zoom, node): (Zoom, [i32; 3]),
-        detail: Detail,
-        dist_sq: [f32; 2],
-        t0: f32,
-    ) -> In<[u32; 2]> {
-        q.node(at, zoom, node, ask_zooms(detail, dist_sq), t0)
-    }
-}
-
-/// The least margin of the nodes a walk asked (`Margin::visit`), units:
-/// while the eye moves less from where they were asked, every node the walk
-/// asks again is a cell or not as it was, and what lies under it at the
-/// zooms its rays then ask is within what it said, so the walk, from the
-/// same start in the same world, meets what it met. `UNBOUNDED` where none
-/// told one: a number WGSL names, as it names no infinity.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Margin(pub f32);
-
-impl Margin {
-    pub const NONE: Margin = Margin(UNBOUNDED);
 }
 
 /// Whether a node `side` wide, squared, is too narrow for a beam ray to
@@ -674,9 +585,9 @@ pub struct Trace<A> {
 /// entry holds them.
 pub const DEPTH: usize = FINEST_ZOOM as usize + 1;
 
-/// A node's farthest and nearest distances from the eye, squared, its
-/// planes `lo` and `hi` units from the eye on each axis: its corner
-/// farthest from the eye and its point nearest it.
+/// A node's farthest and nearest distances from the walk's origin, squared,
+/// its planes `lo` and `hi` units from the origin on each axis: its corner
+/// farthest from the origin and its point nearest it.
 fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
     let near = [
         lesser(greater(lo[0], 0.0), hi[0]),
@@ -693,115 +604,12 @@ fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
 
 /// The zooms a node is asked at by every ray from the origin in it, from
 /// its farthest corner to its nearest point (`node_dist_sq`, `Detail::at`). A
-/// function of the node and the eye alone, so a node's answer is one for
+/// function of the node and the origin alone, so a node's answer is one for
 /// every ray through it; a ray asks within it no coarser than the farthest
 /// corner, so this only adds coarser zooms than its own, which splits more
 /// and stops on the same cell.
 fn ask_zooms(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
-}
-
-/// A node a walk asks tells its margin through what its answer reads of
-/// the zooms asked, and no more (pxl-spec-core `world::node`). A node is a cell where `near` is its zoom
-/// or coarser, and that cell reads none of them; coarser, it says what lies
-/// under it at the zooms from `ground::coarsest(zoom, far)` to `near`, a
-/// claim that holds at any zooms within those, as a bound over fewer zooms
-/// lies within one over more.
-///
-/// So a cell tells how far the eye may come nearer before its `near` is
-/// finer than its zoom, and a coarser node how far before its `near` is its
-/// zoom, or past the zooms it was asked at. A coarser node is asked a zoom
-/// wider each way than its rays ask (which only splits more and stops on
-/// the same cell, as `zooms`'s coarser zooms do), so its claim holds while the eye moves a band; and where the walk
-/// passes it as air (`Kind::Cell`, transparent) one band off the zoom its
-/// cell is decided at, it is asked as it would be past that band too, and
-/// where it is air there as well that band's edge tells nothing: a node
-/// air at every zoom it may be asked at tells only the far edges of the
-/// bands it was asked over.
-impl Visitor for Margin {
-    fn visit<Q: Query>(
-        &mut self,
-        q: &mut Q,
-        at: &mut Q::At,
-        (zoom, node): (Zoom, [i32; 3]),
-        detail: Detail,
-        dist_sq: [f32; 2],
-        t0: f32,
-    ) -> In<[u32; 2]> {
-        let [far, near] = ask_zooms(detail, dist_sq);
-        let [coarsest, finest] = detail.zoom_bounds();
-        let cell = zoom >= near;
-        // Coarser than asked, asked a zoom wider each way.
-        let wide = [
-            if far > coarsest { far - 1 } else { far },
-            if near < finest { near + 1 } else { near },
-        ];
-        // What was handed it, for the ask past the band, which hands nothing on.
-        let handed = *at;
-        let passes = |i: In<[u32; 2]>| i.kind == Kind::Cell && transparent(i.asset[0]);
-        // Air one band past the zoom its cell is decided at, and air there too:
-        // a cell asked a zoom finer, a coarser node asked as its cell. Both asks
-        // from the one call, so the query is written once.
-        let beyond = if cell {
-            near == zoom && zoom < finest
-        } else {
-            near == zoom + 1
-        };
-        let probe = if cell {
-            [far, zoom + 1]
-        } else {
-            [if far < zoom { far } else { zoom }, zoom]
-        };
-        let (mut i, mut past, mut k) = (
-            In {
-                kind: Kind::Lacks,
-                asset: [0; 2],
-            },
-            false,
-            0,
-        );
-        while k < 2 {
-            let mut a = handed;
-            let zooms = if k == 1 {
-                probe
-            } else if cell {
-                [far, near]
-            } else {
-                wide
-            };
-            let r = q.node(&mut a, zoom, node, zooms, t0);
-            if k == 1 {
-                past = passes(r);
-                k = 2;
-            } else {
-                *at = a;
-                i = r;
-                k = if beyond && passes(r) { 1 } else { 2 };
-            }
-        }
-        let m = if cell {
-            // A cell until its `near` is finer than its zoom, or than the zoom
-            // past it where it is air there too.
-            detail.nearer(dist_sq[1], if past { zoom + 1 } else { zoom })
-        } else {
-            // Its claim, while the coarsest zoom it reads, never finer than its
-            // children's, is no coarser and its finest no finer; and coarser
-            // than asked until its `near` is its zoom, where it is air past it.
-            let by_far = if wide[0] > zoom + 1 {
-                detail.farther(dist_sq[0], wide[0])
-            } else {
-                UNBOUNDED
-            };
-            let by_cell = if past {
-                UNBOUNDED
-            } else {
-                detail.farther(dist_sq[1], zoom + 1)
-            };
-            lesser(lesser(by_far, detail.nearer(dist_sq[1], wide[1])), by_cell)
-        };
-        self.0 = lesser(self.0, m);
-        i
-    }
 }
 
 /// A vector's length squared.
@@ -819,11 +627,11 @@ pub fn first<Q: Query>(
     detail: Detail,
     until: Until,
 ) -> Trace<Q::At> {
-    walk_from_root(q, o, ray, detail, until, &mut (), &mut ())
+    walk_from_root(q, o, ray, detail, until, &mut ())
 }
 
 /// `walk` from the world's root holding the origin, at 0, leaving its line
-/// to `keep` and telling each node it asks to `visitor`.
+/// to `keep`.
 pub fn walk_from_root<Q: Query>(
     q: &mut Q,
     o: [i32; 3],
@@ -831,7 +639,6 @@ pub fn walk_from_root<Q: Query>(
     detail: Detail,
     until: Until,
     keep: &mut impl Keep<Q::At>,
-    visitor: &mut impl Visitor,
 ) -> Trace<Q::At> {
     let at = q.root(Node::ROOT.idx(o));
     walk(
@@ -843,7 +650,6 @@ pub fn walk_from_root<Q: Query>(
         (Node::ROOT, at, 0.0),
         &Root(at),
         keep,
-        visitor,
     )
 }
 
@@ -887,7 +693,7 @@ impl<A: Copy> Keep<A> for () {
 
 /// The first cell `ray` meets within its interval that `until` stops at, at
 /// the zoom `detail` asks where it meets it, its line left where it ended
-/// to `keep` and each node it asks told to `visitor` (`Visitor`): down the
+/// to `keep`: down the
 /// pyramid from `from`, a node holding where the ray is at its `t`, what was
 /// handed it, and that `t` — the world's root holding
 /// the origin at 0 (`first`), or a node of the line a beam ray handed on —
@@ -912,7 +718,7 @@ impl<A: Copy> Keep<A> for () {
 /// (POP), or past a root, in the next root, from its top. One loop.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the walk's query, origin, ray, detail, stop and start, and the three visitors it hands each node, each its own (Laine & Karras 2010)"
+    reason = "the walk's query, origin, ray, detail, stop and start, the line over its start and what keeps its own, each its own (Laine & Karras 2010)"
 )]
 pub fn walk<Q: Query>(
     q: &mut Q,
@@ -923,7 +729,6 @@ pub fn walk<Q: Query>(
     from: (Node, Q::At, f32),
     over: &impl Over<Q::At>,
     keep: &mut impl Keep<Q::At>,
-    told: &mut impl Visitor,
 ) -> Trace<Q::At> {
     let og = grid_of(o);
     // What the walk carries is what nothing it holds gives again: the node
@@ -946,12 +751,8 @@ pub fn walk<Q: Query>(
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
         if t1 > t0 {
-            let e = detail.eye;
-            let dist_sq = node_dist_sq(
-                [lo[0] - e[0], lo[1] - e[1], lo[2] - e[2]],
-                [hi[0] - e[0], hi[1] - e[1], hi[2] - e[2]],
-            );
-            let i = told.visit(q, &mut at, (n.zoom, n.idx(o)), detail, dist_sq, t0);
+            let dist_sq = node_dist_sq(lo, hi);
+            let i = q.node(&mut at, n.zoom, n.idx(o), ask_zooms(detail, dist_sq), t0);
             visits += 1;
             let inside = lo[0] <= 0.0
                 && 0.0 < hi[0]
@@ -1304,7 +1105,6 @@ mod tests {
         let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
         let detail = Detail {
             range: [UNIT_ZOOM, UNIT_ZOOM],
-            eye: [0.0; 3],
             spacing: Spacing::NONE,
         };
         first(&mut One { fill }, o, &ray, detail, Until::Opaque)
@@ -1379,7 +1179,6 @@ mod tests {
         let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
         let detail = Detail {
             range: [UNIT_ZOOM, UNIT_ZOOM],
-            eye: [0.0; 3],
             spacing: Spacing {
                 angle: grid::CELL,
                 across: 0.0,
@@ -1447,6 +1246,20 @@ mod tests {
         assert!(met.visits > 1);
     }
 
+    /// A range that inverts, its least over its most, as the eye's may
+    /// while it crosses, holds every distance to its finest, and aborts
+    /// nothing.
+    #[test]
+    fn inverted_range_holds() {
+        let detail = Detail {
+            range: [UNIT_ZOOM, UNIT_ZOOM - 4],
+            spacing: Spacing::NONE,
+        };
+        for d in [0.0f32, 1.0, 96.0, 1.0e4, 1.0e9] {
+            assert_eq!(detail.at(d * d), UNIT_ZOOM - 4, "{d}");
+        }
+    }
+
     #[test]
     fn ray_beside_box_passes() {
         let met = along(1, 0.1, 0.5);
@@ -1455,31 +1268,5 @@ mod tests {
         assert_eq!(met.ends, End::Miss);
         // The whole cube stops it there.
         assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Hit);
-    }
-
-    /// A walk tells each node it asks (`Visitor`): its least margin is a
-    /// number once it asked any; one told to `()` costs nothing.
-    #[test]
-    fn walk_tells_its_margin() {
-        let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
-        let o = [steps(5.0), steps(0.1), steps(0.5)];
-        let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
-        let detail = Detail {
-            range: [0, FINEST_ZOOM],
-            eye: [-5.0, 0.0, 0.0],
-            spacing: Spacing::NONE,
-        };
-        let mut told = Margin::NONE;
-        let met = walk_from_root(
-            &mut One { fill: EIGHTHS },
-            o,
-            &ray,
-            detail,
-            Until::Opaque,
-            &mut (),
-            &mut told,
-        );
-        assert_eq!(met.ends, End::Hit);
-        assert!(told.0 < Margin::NONE.0);
     }
 }

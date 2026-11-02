@@ -43,14 +43,10 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_LIGHT_MARK => "light_mark_cs",
         SHADER_LIGHT_MARK_DRAWS => "light_mark_draws_cs",
         SHADER_LIGHT_PROPAGATE => "light_propagate_cs",
-        SHADER_LIGHT_DETAIL => "light_detail_cs",
-        SHADER_LIGHT_BEAM => "light_beam_cs",
-        SHADER_LIGHT_SAMPLE => "light_sample_cs",
+        SHADER_LIGHT_SLIDE => "light_slide_cs",
         SHADER_HIT_LEAD => "hit_lead_cs",
         SHADER_HIT_FACES => "hit_faces_cs",
         SHADER_BOX_ARGS => "box_args_cs",
-        SHADER_LIGHT_MARGIN => "light_margin_cs",
-        SHADER_LIGHT_MISS_MARGIN => "light_miss_margin_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }

@@ -52,16 +52,16 @@ struct type_36 {
     member_3: u32,
 }
 
-struct type_40 {
-    member: array<u32, 3>,
-    member_1: u32,
-    member_2: array<i32, 3>,
-}
-
-struct type_46 {
+struct type_42 {
     member: array<i32, 2>,
     member_1: i32,
     member_2: u32,
+}
+
+struct type_44 {
+    member: array<u32, 3>,
+    member_1: u32,
+    member_2: array<i32, 3>,
 }
 
 struct type_53 {
@@ -442,7 +442,7 @@ fn function_18(param_28: u32) -> u32 {
     return (param_28 >> bitcast<u32>(6u));
 }
 
-fn function_19(param_29: ptr<function, type_40>, param_30: array<i32, 3>) -> array<i32, 3> {
+fn function_19(param_29: ptr<function, type_44>, param_30: array<i32, 3>) -> array<i32, 3> {
     let _e177 = (*param_29).member_1;
     let _e180 = (*param_29).member_2[0u];
     let _e184 = (*param_29).member[0u];
@@ -611,8 +611,8 @@ fn function_30(param_44: u32, param_45: i32, param_46: u32) -> i32 {
     return _e178;
 }
 
-fn function_31(param_47: array<i32, 4>) -> type_46 {
-    return type_46(array<i32, 2>(param_47[0], param_47[1]), param_47[2], bitcast<u32>(param_47[3]));
+fn function_31(param_47: array<i32, 4>) -> type_42 {
+    return type_42(array<i32, 2>(param_47[0], param_47[1]), param_47[2], bitcast<u32>(param_47[3]));
 }
 
 fn function_32(param_48: u32, param_49: i32) -> i32 {
@@ -658,12 +658,12 @@ fn function_39(param_61: array<i32, 2>) -> u32 {
     return ((bitcast<u32>((param_61[1] & 7i)) * 8u) + bitcast<u32>((param_61[0] & 7i)));
 }
 
-fn function_40(param_62: ptr<function, type_46>) -> u32 {
+fn function_40(param_62: ptr<function, type_42>) -> u32 {
     let _e167 = (*param_62).member_1;
     return bitcast<u32>((_e167 - 1i));
 }
 
-fn function_41(param_63: ptr<function, type_46>, param_64: array<i32, 2>) -> bool {
+fn function_41(param_63: ptr<function, type_42>, param_64: array<i32, 2>) -> bool {
     var phi_1429_: bool;
     var phi_1431_: bool;
     var phi_1432_: bool;
@@ -1379,15 +1379,15 @@ fn function_68() {
     var local_28: array<u32, 3>;
     var local_29: array<u32, 3>;
     var local_30: array<u32, 6>;
-    var local_31: type_46;
-    var local_32: type_46;
+    var local_31: type_42;
+    var local_32: type_42;
     var local_33: array<u32, 3>;
     var local_34: array<u32, 3>;
     var local_35: array<u32, 6>;
     var local_36: array<u32, 4>;
     var local_37: array<type_36, 33>;
-    var local_38: type_40;
-    var local_39: type_40;
+    var local_38: type_44;
+    var local_39: type_44;
     var phi_2994_: u32;
     var phi_3010_: u32;
     var phi_2995_: u32;
@@ -2001,7 +2001,7 @@ fn function_68() {
                     let _e271 = global_6.member[(_e252 + 4u)];
                     let _e276 = global_6.member[(_e252 + 5u)];
                     let _e281 = global_6.member[(_e252 + 6u)];
-                    local_39 = type_40(array<u32, 3>(_e256, _e260, _e264), _e267, array<i32, 3>(bitcast<i32>(_e271), bitcast<i32>(_e276), bitcast<i32>(_e281)));
+                    local_39 = type_44(array<u32, 3>(_e256, _e260, _e264), _e267, array<i32, 3>(bitcast<i32>(_e271), bitcast<i32>(_e276), bitcast<i32>(_e281)));
                     let _e287 = local_39.member_1;
                     let _e288 = function_19((&local_39), _e249);
                     let _e292 = global_6.member[(_e231 + 2u)];
@@ -2012,7 +2012,7 @@ fn function_68() {
                     let _e312 = global_6.member[(_e292 + 5u)];
                     let _e317 = global_6.member[(_e292 + 6u)];
                     let _e322 = global_6.member[(_e292 + 7u)];
-                    local_38 = type_40(array<u32, 3>(_e297, _e301, _e305), _e308, array<i32, 3>(bitcast<i32>(_e312), bitcast<i32>(_e317), bitcast<i32>(_e322)));
+                    local_38 = type_44(array<u32, 3>(_e297, _e301, _e305), _e308, array<i32, 3>(bitcast<i32>(_e312), bitcast<i32>(_e317), bitcast<i32>(_e322)));
                     let _e327 = function_19((&local_38), _e249);
                     let _e329 = local_38.member_1;
                     phi_2994_ = select(_e329, _e287, (_e287 < _e329));
@@ -3650,7 +3650,7 @@ fn function_68() {
                                                             }
                                                             let _e1508 = phi_5789_;
                                                             let _e1514 = function_31(array<i32, 4>(_e1508.x, _e1508.y, _e1508.z, _e1508.w));
-                                                            local_32 = type_46(array<i32, 2>(_e1514.member[0], _e1514.member[1]), _e1514.member_1, _e1514.member_2);
+                                                            local_32 = type_42(array<i32, 2>(_e1514.member[0], _e1514.member[1]), _e1514.member_1, _e1514.member_2);
                                                             let _e1522 = function_40((&local_32));
                                                             let _e1523 = function_41((&local_32), _e1498.member);
                                                             if _e1523 {
@@ -3953,7 +3953,7 @@ fn function_68() {
                                                             }
                                                             let _e2131 = phi_6084_;
                                                             let _e2137 = function_31(array<i32, 4>(_e2131.x, _e2131.y, _e2131.z, _e2131.w));
-                                                            local_31 = type_46(array<i32, 2>(_e2137.member[0], _e2137.member[1]), _e2137.member_1, _e2137.member_2);
+                                                            local_31 = type_42(array<i32, 2>(_e2137.member[0], _e2137.member[1]), _e2137.member_1, _e2137.member_2);
                                                             let _e2145 = function_40((&local_31));
                                                             let _e2146 = function_41((&local_31), _e2121.member);
                                                             if _e2146 {

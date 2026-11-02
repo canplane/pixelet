@@ -44,8 +44,8 @@ pub(crate) enum Level {
 
 /// An observer as the passes ask it: its lattice of beam rays' corners,
 /// their cells and its samples, where each one's words lie, and the ray at
-/// a point of it. Its rays ask the zooms the eye asks at each point, and
-/// its beam rays lie apart by a spacing of its own (`Aim::detail`).
+/// a point of it. Its rays ask the zooms its own (`detail`), and its beam
+/// rays lie apart by a spacing of its own (`Aim::detail`).
 pub(crate) trait Observer {
     /// Where on its lattice a ray is aimed: the eye's tangents across and
     /// up, the map's slot.
@@ -86,6 +86,11 @@ pub(crate) trait Observer {
     /// The window of cell `c` its start is the least of: its first corner,
     /// and its side in corners.
     fn window(&self, c: [u32; 2]) -> ([u32; 2], u32);
+    /// The zooms corner `c`'s beam ray asks (`corner`), and those cell `c`'s
+    /// rays ask (`detail`): a cell reuses its window's beam rays only where
+    /// every one asked as its rays do (`cell`).
+    fn corner_detail(&self, c: [u32; 2]) -> Detail;
+    fn cell_detail(&self, c: [u32; 2]) -> Detail;
     /// The first word of cell `c`'s start (`beam::CELL_WORDS`).
     fn cell_at(&self, c: [u32; 2]) -> u32;
     /// Its samples across and down.
@@ -102,6 +107,10 @@ pub(crate) trait Observer {
     /// The ray at `at`, and the cell it starts from.
     fn aim(&self, at: Self::At) -> Aim;
     fn cell_of(&self, at: Self::At) -> [u32; 2];
+    /// The zooms the ray at `at` asks (`aim`): the eye's, one everywhere;
+    /// the map's, its tile's band (light.rs `Map`). A ray takes another's
+    /// cell or sky only where that one asked as it does (`took`, `sky`).
+    fn detail(&self, at: Self::At) -> Detail;
     /// From where its boxes are laid for the raster, and whether a box
     /// about the eye is marked and at the screen's tangents (raster.rs
     /// `write_box`).
@@ -125,15 +134,13 @@ fn idx(across: u32, c: [u32; 2]) -> u32 {
 /// that fills or lacks, or the first split too narrow to share
 /// (`cast::Until::Beam`), through the observed pyramid writing what it asks,
 /// its line left in `w` for the rays about it (`Leaving`), how far they
-/// start from it and the nodes it visited; each node it asks told to `visitor`
-/// (`cast::Visitor`), none where the cast needs it not.
+/// start from it and the nodes it visited; none where the cast needs it not.
 pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
     pyramid: &mut Pyramid,
     w: &mut W,
     c: [u32; 2],
-    visitor: &mut impl cast::Visitor,
 ) {
     if !o.needs(&*w, Level::Corner, c) {
         return;
@@ -155,7 +162,6 @@ pub(crate) fn beam<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         aim.detail,
         Until::Beam,
         &mut Leaving(&mut *w, base),
-        visitor,
     );
     add_tally(pyramid, o.tally(), tally::BEAM, met.visits);
     w.set(o.hand_at(k), o.handed(&aim, met.hit.t).to_bits());
@@ -169,15 +175,19 @@ fn t_of<O: Observer, W: Words + ?Sized>(o: &O, w: &W, k: u32) -> f32 {
 
 /// Where cell `c`'s rays start: the least of the beam rays within its
 /// window (`Observer::window`), and that corner, whose line they resume
-/// from.
+/// from; and whether they do (`beam::CELL_RESUMES`), not where a beam ray of
+/// the window asked other zooms than its rays ask (`cast::Detail::alike`),
+/// as the window's least start and line hold only for walks alike.
 pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]) {
     if !o.needs(&*w, Level::Cell, c) {
         return;
     }
     let across = o.corners()[0];
     let ([x, y], side) = o.window(c);
+    let asks = o.cell_detail(c);
     let mut from = idx(across, [x, y]);
     let mut least = t_of(o, &*w, from);
+    let mut alike = true;
     let mut j = 0;
     while j < side {
         let mut i = 0;
@@ -187,6 +197,7 @@ pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]
             if t < least {
                 (least, from) = (t, k);
             }
+            alike = alike && o.corner_detail([x + i, y + j]).alike(asks);
             i += 1;
         }
         j += 1;
@@ -194,14 +205,18 @@ pub(crate) fn cell<O: Observer, W: Words + ?Sized>(o: &O, w: &mut W, c: [u32; 2]
     let at = o.cell_at(c);
     w.set(at + beam::CELL_T, least.to_bits());
     w.set(at + beam::CELL_CORNER, from);
+    w.set(at + beam::CELL_RESUMES, u32::from(alike));
 }
 
 /// The walk of the ray aimed `aim` to the cell that fills, resumed at
 /// cell `cell`'s start from the deepest node of its line holding where it
 /// is there, held from the ray's own origin, or from the root at it where
-/// that lies in another root (beam.rs `resume_walk`); through `q`, reading or
-/// writing, its line left where it ends to `keep` and each node it asks
-/// told to `visitor`. Its met, and the nodes the line's beam ray visited.
+/// that lies in another root (beam.rs `resume_walk`), where its window's
+/// beam rays asked as its rays ask, else walked from the world's root
+/// (`cell`, `beam::CELL_RESUMES`), as a ray whose sample asked otherwise
+/// walks its own (`took`); through `q`, reading or writing, its line left
+/// where it ends to `keep`. Its met, and the nodes the line's beam ray
+/// visited, none from the root.
 pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
     o: &O,
     q: &mut Q,
@@ -209,34 +224,36 @@ pub(crate) fn resume<'a, O: Observer, Q: Query, W: Words + ?Sized>(
     aim: &Aim,
     cell: [u32; 2],
     keep: &mut impl cast::Keep<Q::At>,
-    visitor: &mut impl cast::Visitor,
 ) -> (Trace<Q::At>, u32)
 where
     BeamLine<'a, W>: cast::Over<Q::At>,
 {
     let at = o.cell_at(cell);
-    let t = f32::from_bits(w.word(at + beam::CELL_T));
     let line = BeamLine(w, o.line(w.word(at + beam::CELL_CORNER)));
-    let node = if o.apart() {
+    let resumes = w.word(at + beam::CELL_RESUMES) != 0;
+    let t = f32::from_bits(w.word(at + beam::CELL_T));
+    // The line's node, read only where the walk resumes from it.
+    let node = if !resumes {
+        cast::Node::ROOT
+    } else if o.apart() {
         line.node().moved(o.origin_of(w, line.1), aim.origin)
     } else {
         line.node()
     };
-    let met = resume_walk(q, aim.origin, &aim.ray, aim.detail, t, &line, node, keep, visitor);
-    (met, line.visits())
+    let met = resume_walk(q, aim.origin, &aim.ray, aim.detail, t, &line, node, resumes, keep);
+    (met, if resumes { line.visits() } else { 0 })
 }
 
 /// Sample `s`'s ray resumed from its cell's start, walked to the cell that
 /// fills through the observed pyramid writing what it asks, and its hit
 /// left in `w` for the raster (`sample_put`), with the nodes it and its
-/// beam ray visited; each node it asks told to `visitor`.
+/// beam ray visited.
 pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
     pyramid: &mut Pyramid,
     w: &mut W,
     s: [u32; 2],
-    visitor: &mut impl cast::Visitor,
 ) {
     // One not needed meets nothing, so draws no box (`sample_box`).
     if !o.needs(&*w, Level::Sample, s) {
@@ -260,7 +277,6 @@ pub(crate) fn sample<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         &aim,
         o.sample_cell(s),
         &mut (),
-        visitor,
     );
     add_tally(pyramid, o.tally(), tally::SAMPLE, met.visits);
     let met = Trace {
@@ -341,7 +357,7 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
         at: 0u32,
         asset: [0; 2],
     };
-    if visible == 0 && sky(o, w, at) {
+    if visible == 0 && sky(o, w, at, aim) {
         (Take::Sky, none, 0)
     } else {
         (Take::Walk, none, 0)
@@ -351,7 +367,8 @@ pub(crate) fn resolve<O: Observer, W: Words + ?Sized>(
 /// The cell the ray aimed `aim` takes off the visible sample `visible`, a
 /// sample's number that lacks not (`raster::sample_of`): where it enters it
 /// as that sample entered it (raster.rs `visible_cell`), the sample's first word,
-/// and whether it does.
+/// and whether it does, which it does only where the sample asked as the
+/// ray asks (`asks_alike`).
 pub(crate) fn took<O: Observer, W: Words + ?Sized>(
     o: &O,
     w: &W,
@@ -359,35 +376,45 @@ pub(crate) fn took<O: Observer, W: Words + ?Sized>(
     visible: u32,
 ) -> (cast::Hit<u32>, u32, bool) {
     let (n, s) = (o.samples()[0], raster::sample_of(visible));
-    let k = o.sample_at([s % n, s / n]);
+    let at = [s % n, s / n];
+    let k = o.sample_at(at);
     let (hit, enters) = visible_cell(w, k, aim.origin, &aim.ray);
-    (hit, k, enters)
+    (hit, k, enters && asks_alike(o, at, aim))
 }
 
 /// Whether the four samples about `at` each went on to its reach
-/// (`beam::SAMPLE_NONE`), meeting nothing: the ray there takes the sky
-/// without a walk of its own, as a thing thinner than the samples' spacing
-/// between them goes unseen. None where the four lie not about it.
-pub(crate) fn sky<O: Observer, W: Words + ?Sized>(o: &O, w: &W, at: O::At) -> bool {
+/// (`beam::SAMPLE_NONE`), meeting nothing, each asked as the ray aimed
+/// `aim` there asks (`asks_alike`): the ray there takes the sky without a
+/// walk of its own, as a thing thinner than the samples' spacing between
+/// them goes unseen. None where the four lie not about it.
+pub(crate) fn sky<O: Observer, W: Words + ?Sized>(o: &O, w: &W, at: O::At, aim: &Aim) -> bool {
     let ([i, j], about) = o.sample_before(at);
     about
-        && went_on(o, w, [i, j])
-        && went_on(o, w, [i + 1, j])
-        && went_on(o, w, [i, j + 1])
-        && went_on(o, w, [i + 1, j + 1])
+        && went_on(o, w, [i, j], aim)
+        && went_on(o, w, [i + 1, j], aim)
+        && went_on(o, w, [i, j + 1], aim)
+        && went_on(o, w, [i + 1, j + 1], aim)
 }
 
-/// Whether sample `s` went on to its reach (`sky`). [rust-gpu] A call of
-/// its own, not a closure over `w`, whose capture spirv-val refuses as no
-/// logical pointer.
-fn went_on<O: Observer, W: Words + ?Sized>(o: &O, w: &W, s: [u32; 2]) -> bool {
+/// Whether sample `s` went on to its reach, asked as the ray aimed `aim`
+/// asks (`sky`). [rust-gpu] A call of its own, not a closure over `w`, whose
+/// capture spirv-val refuses as no logical pointer.
+fn went_on<O: Observer, W: Words + ?Sized>(o: &O, w: &W, s: [u32; 2], aim: &Aim) -> bool {
     w.word(o.sample_at(s) + beam::SAMPLE_NODE + beam::NODE_ZOOM) == beam::SAMPLE_NONE
+        && asks_alike(o, s, aim)
+}
+
+/// Whether sample `s` was walked at the zooms the ray aimed `aim` asks
+/// (`Observer::detail`, `cast::Detail::alike`): what it met is the ray's to
+/// take only then.
+fn asks_alike<O: Observer>(o: &O, s: [u32; 2], aim: &Aim) -> bool {
+    o.detail(o.point(s)).alike(aim.detail)
 }
 
 /// The ray at `at` walked again from its cell's start through the observed
 /// pyramid writing what it asks, a ray its visible sample and the pyramid left
-/// unmet, its line left where it ends to `keep` and each node it asks told
-/// to `visitor`: its aim, its met and the nodes its beam ray visited.
+/// unmet, its line left where it ends to `keep`: its aim, its met and the
+/// nodes its beam ray visited.
 pub(crate) fn walk_again<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     o: &O,
     world: World<'_, L>,
@@ -395,7 +422,6 @@ pub(crate) fn walk_again<O: Observer, W: Words + ?Sized, L: PaletteWords>(
     w: &W,
     at: O::At,
     keep: &mut impl cast::Keep<Inheritance>,
-    visitor: &mut impl cast::Visitor,
 ) -> (Aim, Trace<Inheritance>, u32) {
     let aim = o.aim(at);
     let tag = pyramid::tag(pyramid_at(pyramid, pyramid::FRAME), o.passes()[2]);
@@ -411,7 +437,6 @@ pub(crate) fn walk_again<O: Observer, W: Words + ?Sized, L: PaletteWords>(
         &aim,
         o.cell_of(at),
         keep,
-        visitor,
     );
     add_tally(pyramid, o.tally(), tally::MISS, met.visits);
     (aim, met, before)

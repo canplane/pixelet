@@ -2,10 +2,9 @@
 
 //! The observer of a pass both the eye and the shadow map take (observer.rs
 //! `Observer`), chosen by the head the pass is handed: one entry a pass, so
-//! a pass is one module whichever casts it (beam.rs, raster.rs). A walk the
-//! shadow map's alone tells what it asks of (pxl-spec-core `cast::Visitor`)
-//! takes an entry of its own over the same pass (light.rs `light_beam_cs`,
-//! `light_sample_cs`), so the eye's tells nothing and pays nothing for it.
+//! a pass is one module whichever casts it (beam.rs, raster.rs).
+
+use pxl_spec_core::cast::Detail;
 
 use crate::beam::Words;
 use crate::eye::Eye;
@@ -162,6 +161,22 @@ impl Observer for PassObserver<'_> {
         }
     }
 
+    fn corner_detail(&self, c: [u32; 2]) -> Detail {
+        if self.light {
+            self.map.corner_detail(c)
+        } else {
+            self.eye.corner_detail(c)
+        }
+    }
+
+    fn cell_detail(&self, c: [u32; 2]) -> Detail {
+        if self.light {
+            self.map.cell_detail(c)
+        } else {
+            self.eye.cell_detail(c)
+        }
+    }
+
     fn samples(&self) -> [u32; 2] {
         if self.light {
             self.map.samples()
@@ -221,6 +236,14 @@ impl Observer for PassObserver<'_> {
             self.map.cell_of(at.slot)
         } else {
             self.eye.cell_of(at.tan)
+        }
+    }
+
+    fn detail(&self, at: Point) -> Detail {
+        if self.light {
+            self.map.detail(at.slot)
+        } else {
+            self.eye.detail(at.tan)
         }
     }
 

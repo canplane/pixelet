@@ -38,7 +38,7 @@ export const GPU_SPAN_NAMES = [
 
 export const LIGHT_MOVED = [
   "content",
-  "detail",
+  "slide",
   "receivers",
   "footprint",
 ] as const;

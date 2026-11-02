@@ -44,8 +44,7 @@ pub use ground::{bound_cs, height_cs, fold_cs};
 pub use pyramid::forget_cs;
 pub use raster::{face_cs, sample_box_cs};
 pub use light::{
-    light_beam_cs, light_cs, light_detail_cs, light_margin_cs, light_mark_draws_cs, light_miss_cs,
-    light_miss_margin_cs, light_propagate_cs, light_sample_cs, Head,
+    light_cs, light_slide_cs, light_mark_draws_cs, light_miss_cs, light_propagate_cs, Head,
 };
 pub use light_mark::light_mark_cs;
 pub use way::{way_cs, way_free_cs, way_return_cs, way_tree_cs};
@@ -69,20 +68,6 @@ fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
         }
     } else {
         0
-    }
-}
-
-/// Word `i` of `s` lowered to `v` where it is more, none past `s`.
-fn least(s: &mut [u32], i: u32, v: u32) {
-    if (i as usize) < s.len() {
-        // SAFETY: just bounded by the slice's own length.
-        unsafe {
-            spirv_std::arch::atomic_u_min::<
-                u32,
-                { Scope::QueueFamily as u32 },
-                { Semantics::NONE.bits() },
-            >(s.get_unchecked_mut(i as usize), v)
-        };
     }
 }
 

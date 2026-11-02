@@ -16,10 +16,9 @@ use super::{casts_px, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
     compute, within, COMPUTE, SHADER_BEAM, SHADER_CAST, SHADER_CELL, SHADER_FOLD, SHADER_FORGET,
-    SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_BEAM, SHADER_LIGHT_DETAIL,
-    SHADER_LIGHT_MARGIN, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS,
-    SHADER_LIGHT_MISS_MARGIN, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SAMPLE, SHADER_MISS,
-    SHADER_MISS_LIST, SHADER_SAMPLE, UNIFORM,
+    SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS,
+    SHADER_LIGHT_MISS, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_LIST,
+    SHADER_SAMPLE, UNIFORM,
 };
 use crate::gpu::api;
 use crate::gpu::api::{
@@ -118,23 +117,13 @@ pub(super) struct CastBuffers {
     light_mark_built: Pipeline,
     light_mark_draws_built: Pipeline,
     light_propagate_built: Pipeline,
-    /// The tiles the box slid onto, or whose eye moved past the margin of
-    /// what their walks asked, set back to be read anew (`light_detail_cs`),
-    /// before the propagation.
-    light_detail_built: Pipeline,
-    /// The light's beam rays and samples, the eye's passes in entries of
-    /// their own, which keep the margin of what their walks ask
-    /// (`light_beam_cs`, `light_sample_cs`); its misses' walk keeps its own.
-    light_beam_built: Pipeline,
-    light_sample_built: Pipeline,
-    /// What each tile cast holds by: gathered off its beam rays and samples
-    /// (`light_margin_cs`), lowered by its listed slots' walks
-    /// (`light_miss_margin_cs`).
-    light_margin_built: Pipeline,
-    light_miss_margin_built: Pipeline,
+    /// The tiles the box slid onto, or slid into another band, set back to
+    /// be read anew (`light_slide_cs`, pxl-spec-core `Light::keeps`), before
+    /// the propagation, where the box slid.
+    light_slide_built: Pipeline,
     /// The light's cast's groups (`light_groups`), and the buffers they bind:
     /// made again exactly when one of them is another.
-    light_groups: [u32; 12],
+    light_groups: [u32; 8],
     light_bound: [u32; 12],
     /// A word bound where decor is off, the decor's buffers the drawn mark
     /// reads none (`light_mark_draws_cs`).
@@ -143,9 +132,9 @@ pub(super) struct CastBuffers {
     /// (pxl-spec-core `light::HEAD_CAST`), never zero, which no tile holds
     /// marked.
     light_number: u32,
-    /// The number of the cast since which only the eye's look moved
-    /// (pxl-spec-core `light::HEAD_EPOCH`): a tile cast in it or after
-    /// stands.
+    /// The number of the cast since which only which tiles are read moved,
+    /// and the box (pxl-spec-core `light::HEAD_EPOCH`): a tile cast in it or
+    /// after stands where the box kept it.
     light_epoch: u32,
     /// Whether all the light's cast is made (`light_made`): its list and its
     /// raster's buffers and targets; before then no shadow map is cast.
@@ -165,24 +154,23 @@ pub(super) struct CastBuffers {
     /// shadows are cast, the eye's zooms, and whether the world under it
     /// moved; one moving begins an epoch (`light_epoch`).
     light_content: Read,
-    /// The eye's place and the light box, which follows it, as it last read
-    /// them: the zooms the walks ask follow the one, and what each tile of
-    /// the box holds moves with the other's corner. One moving alone moves
-    /// the reads with the box and casts the tiles the box slid onto or whose
-    /// eye moved past the margin of what their walks asked
-    /// (`light_detail_cs`, pxl-spec-core `light::holds`), and those read
-    /// anew; whether this frame's cast asks which first, and the corner the
-    /// cast before was cast under (`light::HEAD_CORNER_WAS`).
-    light_detail: Read,
-    light_detail_moved: bool,
+    /// Whether this frame's cast is in its epoch and the box slid, its
+    /// corner `light_corner` where the cast before was cast under
+    /// `light_corner_was` (`light::HEAD_CORNER_WAS`): the reads moved with the
+    /// box, and the tiles it slid onto or into another band cast
+    /// (`light_slide_cs`, pxl-spec-core `Light::keeps`), with those read
+    /// anew. The box follows the eye a tile at a time, and a tile's band is
+    /// its place in it alone (`Light::band`), so nothing else of the eye's
+    /// place moves what a tile holds.
+    light_slid: bool,
     light_corner: [i32; 2],
     light_corner_was: [i32; 2],
     /// The reads as the cast before left them, copied out where the box slid
     /// to be copied back moved with it.
     light_reads_was: u32,
-    /// Which tiles the receivers read, as it last read it: the eye's look,
-    /// the actors' places, decor placed again. One moving alone casts only
-    /// the tiles read anew.
+    /// Which tiles the receivers read, as it last read it: the eye's place
+    /// and look, the actors' places, decor placed again. One moving alone
+    /// casts only the tiles read anew.
     light_receivers: Read,
     /// What it is handed beside the eye's words (pxl-spec-core
     /// `light::HEAD_WORDS`).
@@ -333,19 +321,8 @@ impl RaysPass {
             pipelines.build_compute(g, SHADER_LIGHT_MARK_DRAWS, &compute::LIGHT_MARK_DRAWS_GROUP);
         let light_propagate_built =
             pipelines.build_compute(g, SHADER_LIGHT_PROPAGATE, &compute::LIGHT_PROPAGATE_GROUP);
-        let light_detail_built =
-            pipelines.build_compute(g, SHADER_LIGHT_DETAIL, &compute::LIGHT_DETAIL_GROUP);
-        let light_beam_built =
-            pipelines.build_compute(g, SHADER_LIGHT_BEAM, &compute::LIGHT_BEAM_GROUP);
-        let light_sample_built =
-            pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, &compute::LIGHT_SAMPLE_GROUP);
-        let light_margin_built =
-            pipelines.build_compute(g, SHADER_LIGHT_MARGIN, &compute::LIGHT_MARGIN_GROUP);
-        let light_miss_margin_built = pipelines.build_compute(
-            g,
-            SHADER_LIGHT_MISS_MARGIN,
-            &compute::LIGHT_MISS_MARGIN_GROUP,
-        );
+        let light_slide_built =
+            pipelines.build_compute(g, SHADER_LIGHT_SLIDE, &compute::LIGHT_SLIDE_GROUP);
         let raster = Raster::new(g, pipelines);
         let tally = Tally::new(g);
         let buf = |size: u32, usage: u32| g.buf(size, usage);
@@ -394,12 +371,8 @@ impl RaysPass {
             light_mark_built,
             light_mark_draws_built,
             light_propagate_built,
-            light_detail_built,
-            light_beam_built,
-            light_sample_built,
-            light_margin_built,
-            light_miss_margin_built,
-            light_groups: [0; 12],
+            light_slide_built,
+            light_groups: [0; 8],
             light_bound: [0; 12],
             light_none: buf(word_bytes(2 * generation::drawn::REGIONS as usize), storage),
             light_number: 0,
@@ -416,8 +389,7 @@ impl RaysPass {
                 storage | buffer_usage::INDIRECT,
             ),
             light_content: Read::default(),
-            light_detail: Read::default(),
-            light_detail_moved: false,
+            light_slid: false,
             light_corner: [0; 2],
             light_corner_was: [0; 2],
             light_reads_was: buf(
@@ -747,15 +719,15 @@ impl RaysPass {
             .prepare(g, cast.decor, generation, meshes, world);
         // The shadow map is cast, every slot a receiver reads, as the eye's
         // rays are (pxl-spec-core `light`), where what it reads moved: the
-        // light's frame or box, the eye's place or zooms, which the
-        // zooms its rays ask follow, or the world under it; and where what
-        // says which tiles are read moved, the look, the actors' places and
-        // decor placed again (`light_mark_cs`, `light_mark_draws_cs`). A
-        // standing frame casts none. Where only the latter moved, a tile
-        // cast since anything else last did stands, and only the tiles read
-        // anew are cast (`light::HEAD_EPOCH`). None where no shadow is cast,
-        // nor before all its cast is made (`light_made`), its read let go
-        // until then.
+        // light's frame, the eye's zooms, which every band is held to, or
+        // the world under it; where the box slid; and where what says which
+        // tiles are read moved, the eye's place and look, the actors' places
+        // and decor placed again (`light_mark_cs`, `light_mark_draws_cs`). A
+        // standing frame casts none. Where only the latter two moved, a tile
+        // cast since anything else last did stands where the box kept it,
+        // and only the tiles read anew are cast (`light::HEAD_EPOCH`). None
+        // where no shadow is cast, nor before all its cast is made
+        // (`light_made`), its read let go until then.
         let shadows = cast.eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
             .iter()
             .any(|&w| w != 0);
@@ -766,20 +738,17 @@ impl RaysPass {
         r.read(&cast.eye[eye::RANGE..eye::RANGE + 2]);
         r.mark(world_moved);
         let held = r.end();
-        // The eye's place, which the zooms the walks ask follow, and the box,
-        // off the eye: a tile cast in the epoch holds while the one moved
-        // less than the margin of what its walks asked and the other slid
-        // off none of its slots (`light_detail_cs`).
-        let d = &mut c.light_detail;
-        d.begin();
-        d.read(&cast.eye[eye::ORIGIN..eye::STEPS]);
-        d.read(&cast.eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]);
-        let detail_held = d.end();
-        // The look, where the actors stand and decor compacted again: which
-        // tiles are read, not what a tile holds. Not the jitter: a pixel's
-        // marks hold its footprint (`light_mark_cs`).
+        // The box, a tile at a time about the eye: what a tile holds moves
+        // with its corner, kept where the slide kept its band
+        // (`light_slide_cs`).
+        let corner = light::CORNER.map(|k| cast.eye[eye::LIGHT + k] as i32);
+        let slid = corner != c.light_corner;
+        // The eye's place and look, where the actors stand and decor
+        // compacted again: which tiles are read, not what a tile holds. Not
+        // the jitter: a pixel's marks hold its footprint (`light_mark_cs`).
         let l = &mut c.light_receivers;
         l.begin();
+        l.read(&cast.eye[eye::ORIGIN..eye::STEPS]);
         l.read(&cast.eye[eye::FORWARD..eye::TAN + 2]);
         l.read(cast.actors);
         l.mark(c.generator.counts());
@@ -791,12 +760,12 @@ impl RaysPass {
             .into_iter()
             .filter(|m| match m {
                 LightMoved::content => !held,
-                LightMoved::detail => !detail_held,
+                LightMoved::slide => slid,
                 LightMoved::receivers => !receivers_held,
                 LightMoved::footprint => footprint_owed,
             })
             .fold(0, |bits, m| bits | 1 << m as u32);
-        c.light_detail_moved = held && !detail_held;
+        c.light_slid = held && slid;
         if !c.light_ready {
             c.light_content.forget();
         }
@@ -820,7 +789,6 @@ impl RaysPass {
             head[light::HEAD_EPOCH] = c.light_epoch;
             head[light::HEAD_COUNTED] = u32::from(ray_counts);
             head[light::HEAD_SIZE] = shadow::SIZE;
-            let corner = light::CORNER.map(|k| cast.eye[eye::LIGHT + k] as i32);
             c.light_corner_was = core::mem::replace(&mut c.light_corner, corner);
             head[light::HEAD_CORNER_WAS] = c.light_corner_was[0] as u32;
             head[light::HEAD_CORNER_WAS + 1] = c.light_corner_was[1] as u32;
@@ -1024,11 +992,7 @@ impl RaysPass {
                     &c.light_mark_built,
                     &c.light_mark_draws_built,
                     &c.light_propagate_built,
-                    &c.light_detail_built,
-                    &c.light_beam_built,
-                    &c.light_sample_built,
-                    &c.light_margin_built,
-                    &c.light_miss_margin_built,
+                    &c.light_slide_built,
                 ],
                 light_bound,
                 [
@@ -1201,9 +1165,9 @@ impl RaysPass {
             // The reads moved with the box, a tile of it at a time: each
             // tile's word the word of the tile that held its world texels
             // under the corner before, copied out and back in, which the
-            // detail's pass then sets to none where the box slid onto it
-            // (`light_detail_cs`).
-            if c.light_detail_moved && c.light_corner != c.light_corner_was {
+            // slide's pass then sets to none where the box slid onto it or
+            // into another band (`light_slide_cs`).
+            if c.light_slid {
                 let n = light::tiles(shadow::SIZE) as i32;
                 let t = light::TILE as i32;
                 let dx = (c.light_corner[0] - c.light_corner_was[0]) / t;
@@ -1230,14 +1194,13 @@ impl RaysPass {
             // missed pixels are: each a pass timed in its own span.
             let stamp = ctx.stamp(GpuSpanName::light_beam).pass();
             let pass = g.compute_pass(encoder, stamp);
-            // The tiles the box slid onto, and those whose eye moved past the
-            // margin of what their walks asked, set back to be read anew
-            // first, a thread a tile (`light_detail_cs`).
-            if c.light_detail_moved {
+            // The tiles the box slid onto or into another band set back to be
+            // read anew first, a thread a tile (`light_slide_cs`).
+            if c.light_slid {
                 let n = light::tiles(shadow::SIZE);
-                let w = compute::LIGHT_DETAIL_WORKGROUP;
+                let w = compute::LIGHT_SLIDE_WORKGROUP;
                 g.set_bind_group(pass, 0, c.light_groups[7], &[]);
-                g.set_pipeline(pass, c.light_detail_built.id);
+                g.set_pipeline(pass, c.light_slide_built.id);
                 g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             }
             // The tiles its receivers read marked, timed with the beam:
@@ -1263,32 +1226,22 @@ impl RaysPass {
             let w = compute::LIGHT_PROPAGATE_WORKGROUP;
             let n = light::tiles(shadow::SIZE);
             g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
-            // The beam by its entry of its own, which tells the margin of
-            // what its walks ask (`light_beam_cs`), then the cells' starts by
-            // the eye's pass over the light's world's group, which hands it
-            // the light's head. Each as many workgroups as the propagation left it
+            // The beam and the cells' starts by the eye's passes over the
+            // light's world's group, which hands them the light's head. Each
+            // as many workgroups as the propagation left it
             // (`light::ARGS_WORDS`).
             let args = |w: u32| word_bytes(w as usize);
-            g.set_bind_group(pass, 0, c.light_groups[8], &[]);
-            g.set_pipeline(pass, c.light_beam_built.id);
-            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_BEAM));
             g.set_bind_group(pass, 0, c.light_groups[1], &[]);
+            g.set_pipeline(pass, c.beam_built.id);
+            g.dispatch_indirect(pass, c.light_args, args(light::ARGS_BEAM));
             g.set_pipeline(pass, c.cells_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_CELLS));
             g.end(pass);
             let stamp = ctx.stamp(GpuSpanName::light_sample).pass();
             let pass = g.compute_pass(encoder, stamp);
-            g.set_bind_group(pass, 0, c.light_groups[9], &[]);
-            g.set_pipeline(pass, c.light_sample_built.id);
+            g.set_bind_group(pass, 0, c.light_groups[1], &[]);
+            g.set_pipeline(pass, c.sample_built.id);
             g.dispatch_indirect(pass, c.light_args, args(light::ARGS_SAMPLE));
-            // What each tile cast holds by, gathered once off the beam rays
-            // and the samples that feed it, a thread a tile
-            // (`light_margin_cs`).
-            g.set_bind_group(pass, 0, c.light_groups[10], &[]);
-            g.set_pipeline(pass, c.light_margin_built.id);
-            let w = compute::LIGHT_MARGIN_WORKGROUP;
-            let n = light::tiles(shadow::SIZE);
-            g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             g.end(pass);
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_raster).pass());
             g.set_bind_group(pass, 0, c.light_groups[2], &[]);
@@ -1315,11 +1268,6 @@ impl RaysPass {
             g.set_bind_group(pass, 0, c.light_groups[3], &[]);
             g.set_pipeline(pass, c.light_miss_built.id);
             let list = word_bytes(ray::MISS_ARGS_LIST as usize);
-            g.dispatch_indirect(pass, c.light_misses, list);
-            // Each walk's margin lowered into its tile's hold words, over
-            // the same list (`light_miss_margin_cs`).
-            g.set_bind_group(pass, 0, c.light_groups[11], &[]);
-            g.set_pipeline(pass, c.light_miss_margin_built.id);
             g.dispatch_indirect(pass, c.light_misses, list);
             g.end(pass);
         }
@@ -1577,18 +1525,17 @@ fn light_list(g: &Gpu, whole: bool) -> u32 {
 /// the casting passes' workgroups (`light::ARGS_WORDS`), which the
 /// propagation writes; the eye's rays, which the mark reads, and the decor's drawing
 /// words, regions and instances, which the drawn mark reads. The slots',
-/// its world's (the cells' starts, the eye's pass, over `WORLD_GROUP`, its
-/// list where the eye's beam rays' buffer lies and its head where the
-/// eye's), its boxes' (the eye's raster's pass), the misses' walk's, the two
-/// marks', the propagation's, the detail's, the beam's, the samples', the
-/// margins' gather's and the misses' margins'; the boxes' none before its
-/// raster's buffers are made.
+/// its world's (the beam, the cells' starts and the samples, the eye's
+/// passes, over `WORLD_GROUP`, its list where the eye's beam rays' buffer
+/// lies and its head where the eye's), its boxes' (the eye's raster's
+/// pass), the misses' walk's, the two marks', the propagation's and the
+/// slide's; the boxes' none before its raster's buffers are made.
 fn light_groups(
     g: &Gpu,
-    [walk, world, boxes_built, miss, mark, mark_draws, propagate, detail, beam, sample, margin, miss_margin]: [&Pipeline; 12],
+    [walk, world, boxes_built, miss, mark, mark_draws, propagate, slide]: [&Pipeline; 8],
     bindings: [u32; 12],
     [pyramid, head, list, boxes, visibility, args, misses, light_args]: [u32; 8],
-) -> [u32; 12] {
+) -> [u32; 8] {
     let [eye, clipmap, ground, palette_indices, shards, overwrites, pool, light, rays, drawing, regions, instances] =
         bindings;
     let entries = [
@@ -1659,13 +1606,6 @@ fn light_groups(
         g.bind_group(mark.layouts[0], &of(&compute::LIGHT_MARK_GROUP)),
         g.bind_group(mark_draws.layouts[0], &of(&compute::LIGHT_MARK_DRAWS_GROUP)),
         g.bind_group(propagate.layouts[0], &of(&compute::LIGHT_PROPAGATE_GROUP)),
-        g.bind_group(detail.layouts[0], &of(&compute::LIGHT_DETAIL_GROUP)),
-        g.bind_group(beam.layouts[0], &of(&compute::LIGHT_BEAM_GROUP)),
-        g.bind_group(sample.layouts[0], &of(&compute::LIGHT_SAMPLE_GROUP)),
-        g.bind_group(margin.layouts[0], &of(&compute::LIGHT_MARGIN_GROUP)),
-        g.bind_group(
-            miss_margin.layouts[0],
-            &of(&compute::LIGHT_MISS_MARGIN_GROUP),
-        ),
+        g.bind_group(slide.layouts[0], &of(&compute::LIGHT_SLIDE_GROUP)),
     ]
 }

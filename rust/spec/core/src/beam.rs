@@ -315,14 +315,18 @@ pub const LINE_INHERITANCE: u32 = LINE_NODE + NODE_WORDS;
 pub const LINE_STEP: u32 = world::INHERITANCE_WORDS;
 pub const LINE_WORDS: u32 = LINE_INHERITANCE + LINE_STEP * cast::DEPTH as u32;
 
-/// What a cell hands its pixels, in words: where they start, f32 bits, and
-/// the corner whose line they resume from, as an index into the corners
-/// row by row (pxl-shader observer.rs `index`). A screen's cell each, in
-/// the beam rays' buffer past the lines (`Grid::cell_at`), one binding for
-/// both.
+/// What a cell hands its rays, in words, every observer's (`light::cell`):
+/// where they start, f32 bits; the corner of the least
+/// start, as an index into the corners row by row (pxl-shader observer.rs
+/// `idx`), whose line the faces they stop on are asked off; and whether they
+/// resume from that line, 1, or walk from the world's root, 0, a beam ray of
+/// its window having asked other zooms than they do (pxl-shader observer.rs
+/// `cell`). A screen's cell each, in the beam rays' buffer past the lines
+/// (`Grid::cell_at`), one binding for both.
 pub const CELL_T: u32 = 0;
 pub const CELL_CORNER: u32 = 1;
-pub const CELL_WORDS: u32 = 2;
+pub const CELL_RESUMES: u32 = 2;
+pub const CELL_WORDS: u32 = 3;
 
 /// The samples: rays on a lattice `SAMPLE` a cell a side, each resumed from
 /// its cell's start as a pixel is and walked to the cell that fills; a

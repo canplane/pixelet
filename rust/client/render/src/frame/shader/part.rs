@@ -158,35 +158,24 @@ pub const SHADER_SCREEN_BOUND: u32 = 66;
 /// An actor where it was and where it is, its fragments marking their screen
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
 pub const SHADER_SKINNED_MARK: u32 = 67;
-/// The tiles of the light's box the box slid onto, or whose eye moved past
-/// the margin of what their walks asked (pxl-spec-core `light::holds`): a
-/// compute entry.
-pub const SHADER_LIGHT_DETAIL: u32 = 68;
+/// The tiles of the light's box the box slid onto, or slid into another
+/// band (pxl-spec-core `Light::keeps`): a compute entry.
+pub const SHADER_LIGHT_SLIDE: u32 = 68;
 /// Decor, an impostor, the location indicator's zone and its beacon where each
 /// was and where it is, their fragments marking their tiles (tile_mark.wgsl).
 pub const SHADER_DECOR_MARK: u32 = 69;
 pub const SHADER_IMPOSTOR_MARK: u32 = 70;
 pub const SHADER_LOCATION_ZONE_MARK: u32 = 71;
 pub const SHADER_LOCATION_BEACON_MARK: u32 = 72;
-/// The shadow map's beam rays and samples, the eye's passes in entries of
-/// their own, which tell what their walks ask of (pxl-spec-core
-/// `cast::Margin`): compute entries.
-pub const SHADER_LIGHT_BEAM: u32 = 73;
-pub const SHADER_LIGHT_SAMPLE: u32 = 74;
 /// The missed pixels' hits whose faces are asked once a square of them,
 /// the one of each square that asks listed (pxl-spec-core `beam::HIT_WORDS`), and
 /// the faces asked put at their pixels: compute entries.
-pub const SHADER_HIT_LEAD: u32 = 75;
-pub const SHADER_HIT_FACES: u32 = 76;
+pub const SHADER_HIT_LEAD: u32 = 73;
+pub const SHADER_HIT_FACES: u32 = 74;
 /// The indirect args of a quad a tile of the box the frame's marks cover
 /// (box_args.wgsl): its one compute entry.
-pub const SHADER_BOX_ARGS: u32 = 77;
-/// What each tile the light's cast casts holds by, gathered off its beam
-/// rays and samples, and lowered by its listed slots' walks (pxl-spec-core
-/// `light::HOLD_MARGIN`, `light::miss_word`): compute entries.
-pub const SHADER_LIGHT_MARGIN: u32 = 78;
-pub const SHADER_LIGHT_MISS_MARGIN: u32 = 79;
-pub const SHADERS: u32 = 80;
+pub const SHADER_BOX_ARGS: u32 = 75;
+pub const SHADERS: u32 = 76;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -439,8 +428,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &["tile_word", "screen_tiles", "screen_bound"],
     // SHADER_SKINNED_MARK
     &["frame", "place", "skinned_place", "tile_mark"],
-    // SHADER_LIGHT_DETAIL
-    &["light_detail.gen"],
+    // SHADER_LIGHT_SLIDE
+    &["light_slide.gen"],
     // SHADER_DECOR_MARK
     &["frame", "place", "instance", "decor_place", "tile_mark"],
     // SHADER_IMPOSTOR_MARK
@@ -455,18 +444,10 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "location_beacon_place",
         "tile_mark",
     ],
-    // SHADER_LIGHT_BEAM
-    &["light_beam.gen"],
-    // SHADER_LIGHT_SAMPLE
-    &["light_sample.gen"],
     // SHADER_HIT_LEAD
     &["hit_lead.gen"],
     // SHADER_HIT_FACES
     &["hit_faces.gen"],
     // SHADER_BOX_ARGS
     &["box_args"],
-    // SHADER_LIGHT_MARGIN
-    &["light_margin.gen"],
-    // SHADER_LIGHT_MISS_MARGIN
-    &["light_miss_margin.gen"],
 ];
