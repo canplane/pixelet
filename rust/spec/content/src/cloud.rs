@@ -56,6 +56,13 @@ const PATCH_ZOOM: Zoom = CELL_ZOOM - 4;
 const CUMULUS: u32 = 0xc10d_0001;
 const CUMULUS_SPLIT: u32 = 0xc10d_0002;
 
+/// Cell `cell`'s draw under `salt`, in [0, 1): what a cumulus there takes
+/// its place, size, turn and variant from, by the one seed the decor draws
+/// theirs by (`node_seed`).
+pub fn cloud_draw(cell: [i32; 2], salt: u32) -> f64 {
+    f64::from(node_seed(CUMULUS ^ salt, (CELL_ZOOM, cell))) / 4_294_967_296.0
+}
+
 /// Whether the field's cell `cell` holds a cumulus: its patch holds `mean`
 /// of its 256 about a hash's draw, halved across and along a step by weights
 /// a hash draws, pushed apart so they gather in clumps (`pyramid::halve`,

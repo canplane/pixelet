@@ -13,7 +13,7 @@
 
 use fnv::FnvHashMap;
 
-use pxl_content::cloud::{drift, holds_cloud, lattice_hash};
+use pxl_content::cloud::{cloud_draw, drift, holds_cloud, lattice_hash};
 use pxl_content::generation::drawn;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
@@ -49,7 +49,6 @@ use pxl_content::generation;
 use pxl_content::param::cloud;
 use pxl_render::gpu::api::Image;
 use pxl_spec::space::camera::grid;
-use pxl_spec::space::coord::world;
 
 /// Its models, a cloud each one of them.
 const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
@@ -68,8 +67,6 @@ const _: () = assert!(
 /// says where one is (pxl-content param.rs `cloud::LATTICE_SHAMT`).
 const CELL_SHAMT: u32 = cloud::LATTICE_SHAMT;
 const CELL: f64 = (1u32 << CELL_SHAMT) as f64;
-/// The cells around the world, so a cell's hash wraps with the map.
-const CELLS_AROUND: i64 = 1 << (world::EXTENT[0] - CELL_SHAMT);
 /// A patch is built and drawn as one, this many cells a side.
 const PATCH_CELLS: u32 = 16;
 const PATCH: f64 = CELL * PATCH_CELLS as f64;
@@ -347,12 +344,12 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
                 key[0] * i64::from(PATCH_CELLS) + i64::from(i),
                 key[1] * i64::from(PATCH_CELLS) + i64::from(j),
             ];
-            let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
-            let hash = |salt: u32| f64::from(lattice_hash(at, salt));
+            let at = cell.map(|v| v as i32);
+            let hash = |salt: u32| cloud_draw(at, salt);
             // Its patch's count handed down to it (pxl-content cloud.rs
             // `holds_cloud`), as the decor's and the caves' are.
             let mean = (CLOUD_SHARE * f64::from(PATCH_CELLS * PATCH_CELLS)) as u32;
-            if !holds_cloud(cell.map(|v| v as i32), mean) {
+            if !holds_cloud(at, mean) {
                 return None;
             }
             let jitter = [hash(CLOUD_SALT + 1), hash(CLOUD_SALT + 2)];
