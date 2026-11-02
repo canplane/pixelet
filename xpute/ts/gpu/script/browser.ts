@@ -102,7 +102,7 @@ async function main(): Promise<number> {
     chrome.kill();
     await exited;
     server.close();
-    await rm(profile, { recursive: true });
+    await rm(profile, { recursive: true, force: true, maxRetries: 10 });
   }
 }
 

@@ -55,6 +55,16 @@ without the checked-in header, with one change taken out at a time
 The last row is why `specialize_roots` runs only where `remove_aborts` does
 (`mod.rs`, `aborts_in_place`).
 
+In Chrome on an Apple M-series Mac, a09e60a8d against the same tree with
+these changes, two runs each, the view still at one place at noon:
+
+| measure                                                   | without     | with        |
+| --------------------------------------------------------- | ----------- | ----------- |
+| the frame's GPU time, p50 / p95                           | 3.6–3.7 / 4.1 ms | 3.8–3.9 / 4.2 ms |
+| a first load's shaders and pipelines, first made to last settled | 11.1 s | 9.8 s |
+| the same, the shader cache warm                           | 1.5 s       | 0.7–0.9 s   |
+| pixels that differ in a screenshot                        | 0.71%, all on the moving actors and the toast | |
+
 ## Change 1: aborts left in place under the unreachable strategy
 
 - **Sites:** `src/linker/simple_passes.rs` `remove_aborts` (new);

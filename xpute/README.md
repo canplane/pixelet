@@ -118,7 +118,10 @@ program's own is answered by the function `open` was given for its number. What
 waits on the host runs as a task (`Turn::spawn`): a file is read whole by
 awaiting `xpute_guest::program::read`, opened on one turn, read on the turn its
 open is answered and ready on the next, from the host's `Fs` that `open` was
-given; `raise` sends an event from the task.
+given; `raise` sends an event from the task to the program's port, and
+`Door::raise_to` to any port. A bug or a panic ends the guest:
+`program!` and `XPUTE_PROGRAM` install xpute's stop (`xpute-guest/stop.rs`,
+`cpp/xpute/guest/stop.hpp`), which the host hears as `ABORT`.
 
 The commands are the program's own table (`spec/example/cmd.json`), generated
 for both ends by xpute-tool's `cmd`: the guest's function takes its packet as
