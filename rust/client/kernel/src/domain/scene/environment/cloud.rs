@@ -13,7 +13,7 @@
 
 use fnv::FnvHashMap;
 
-use pxl_content::cloud::{cloud_draw, drift, holds_cloud, lattice_hash};
+use pxl_content::cloud::{cloud_draw, drift, holds_cloud};
 use pxl_content::generation::drawn;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
@@ -84,11 +84,12 @@ pub const PATCHES_MAX: usize = {
 const THIN_FROM: f64 = CELL / grid::CELL / CLOUD_SPACING_CELLS;
 
 /// Whether the cloud whose middle lies at `local` about its patch's corner
-/// shows `d2` square units from the eye: its hash under (THIN_FROM / d)²,
-/// asked as a product, so a cloud costs a multiply. Decided as it is drawn,
-/// never built.
+/// shows `d2` square units from the eye: its draw under (THIN_FROM / d)²,
+/// asked as a product, so a cloud costs a multiply; the draw keyed by its
+/// middle's bits, by the seed its place and look are drawn by
+/// (`cloud_draw`). Decided as it is drawn, never built.
 fn shows(local: [f32; 2], d2: f64) -> bool {
-    f64::from(lattice_hash(local.map(f32::to_bits), CLOUD_SALT + 6)) * d2 < THIN_FROM * THIN_FROM
+    cloud_draw(local.map(|v| v.to_bits() as i32), CLOUD_SALT + 6) * d2 < THIN_FROM * THIN_FROM
 }
 
 struct Patch {
