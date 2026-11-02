@@ -2,9 +2,10 @@
 
 //! The pivot standing on the ground, and where every camera's pan
 //! puts it. The pivot's Z is half a cell over the floor the character
-//! stands on, as a cell's center stands over its ground. Only a leaf gives
-//! that floor; a pivot put over coarser ground keeps its Z unknown and
-//! stands on the finest ground known there until the leaves' is.
+//! stands on, as a cell's center stands over its ground, and follows that
+//! floor as the world under it changes. Only a leaf gives that floor; a
+//! pivot put over coarser ground keeps its Z unknown and stands on the
+//! finest ground known there until the leaves' is.
 
 use crate::domain::query::changes::Memo;
 use crate::domain::query::{over, under};
@@ -70,12 +71,23 @@ pub fn support_step() {
     stand_memo().forget_touched();
 }
 
-/// An unknown Z on the surface of `world`'s finest ground known there; none
-/// where nothing stands. Kept while the point is the one asked and nothing
+/// Where `at` stands in `world`: an unknown Z on the surface of the finest
+/// ground known there, none where nothing stands; a known Z, where the
+/// surface is followed, on the floor under it as a leaf gives it, down to it
+/// where what it stood on is taken away and up out of what fills it
+/// (`World::floor_under`), so the pivot and the figures at it stand on one
+/// floor; else as it is. Kept while the point is the one asked and nothing
 /// changed under what it read (`STAND_MEMO`).
 fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
     if !is_unknown(at) {
-        return Answer::Exact(Some(*at));
+        if !settings_store().surface_follow {
+            return Answer::Exact(Some(*at));
+        }
+        let floor = stand_memo().of(world, *at, |w| {
+            w.floor_under(at, LEAF_ZOOM)
+                .map(|top| top.map(|top| stand_over(at, top)))
+        });
+        return Answer::Exact(Some(floor.exact().flatten().unwrap_or(*at)));
     }
     stand_memo().of(world, *at, |w| {
         w.surface_support(at)
@@ -148,3 +160,7 @@ pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
         .step_slide(from, &to, eye, true, false)
         .unwrap_or_else(|| unknown_z(&to))
 }
+
+#[cfg(test)]
+#[path = "support.test.rs"]
+mod test;

@@ -58,9 +58,10 @@ impl CameraMode {
 ///             the scene reads inside out.
 ///   stop    — a control goes as far as it asked or as far as it can.
 ///             Nothing moves on its own; a zoom into a hill stops short.
-///   climb   — dist is always granted and the *view* pitches up instead,
-///             as far as straight down, so every zoom stays
-///             reachable at the cost of an angle nobody asked for.
+///   climb   — dist is granted and the *view* pitches up instead, as far
+///             as straight down, at the cost of an angle nobody asked for.
+///             Where its way hits something all the same, a zoom in goes
+///             through to the pivot's side and any other control stops.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum OrbitObstacleMode {

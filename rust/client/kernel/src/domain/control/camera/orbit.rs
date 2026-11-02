@@ -18,7 +18,6 @@ pub mod collision;
 use pxl_spec::space::coord::q3::Q3;
 
 use pxl_spec::space::coord::v3::{self, V3};
-use xpute_kit::math::scalar::clamp;
 
 use crate::domain::control::camera::controller::{
     camera, facing_dir, facing_domain, pivot, pivot_world, set_eye_world,
@@ -39,6 +38,7 @@ use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use collision::{allowed_view, climb_polar};
 use xpute_guest::global::Global;
+use xpute_kit::math::scalar::clamp;
 
 pub struct OrbitState {
     pub dist: f64,
