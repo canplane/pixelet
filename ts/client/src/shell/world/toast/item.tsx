@@ -38,7 +38,6 @@ import { bracket } from "@/bracket.tsx";
 
 export const TOAST_SIDE = 32;
 const MESSAGE_PAD = 4;
-const BAR_HEIGHT = 3;
 const EDGE = 4;
 
 const OPEN_AFTER_MS = 450;
@@ -76,7 +75,6 @@ interface ToastProps extends ToastSpec {
 export function Toast({
   message,
   tone,
-  share,
   fade,
   fadeTransition,
   touch,
@@ -147,11 +145,6 @@ export function Toast({
         >
           {message}
         </Text>
-        {share !== undefined && (
-          <View style={styles.track}>
-            <View style={[styles.bar, { width: `${share * 100}%` }]} />
-          </View>
-        )}
       </Motion>
       <View style={styles.slot}>
         <Motion to={open ? {} : { opacity: 0, scale: 0 }} transition={SNAP}>
@@ -183,14 +176,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: MESSAGE_PAD,
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  /** A wait's bar, under the words and as wide as they are. */
-  track: {
-    height: BAR_HEIGHT,
-    marginHorizontal: MESSAGE_PAD,
-    marginTop: 2,
-    borderRadius: BAR_HEIGHT / 2,
-    backgroundColor: alpha(LABEL.primary, 0.15),
-    overflow: "hidden",
-  },
-  bar: { height: BAR_HEIGHT, backgroundColor: LABEL.primary },
 });

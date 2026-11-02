@@ -12,9 +12,6 @@ export const enum ToastTone {
 export interface ToastSpec {
   message: string;
   tone: ToastTone;
-  /** How much of a wait is done, 0 to 1, as the kernel says it: a bar under
-   * the words while present. */
-  share?: number;
 }
 
 interface Entry extends ToastSpec {
@@ -80,18 +77,13 @@ function toFront(id: u32): void {
 export function showToast(id: u32, spec: ToastSpec): void {
   const { entries, dragging } = get();
   const shown = entries.find((e) => e.id === id);
-  // Said again as it is, as a toast kept past its cause is, its bar moved at
-  // most: no card to bring forward.
+  // Said again as it is, as a toast kept past its cause is: no card to bring forward.
   if (
     shown !== undefined &&
     shown.message === spec.message &&
     shown.tone === spec.tone
-  ) {
-    if (shown.share !== spec.share) {
-      set({ entries: entries.map((e) => (e.id === id ? { id, ...spec } : e)) });
-    }
+  )
     return;
-  }
   if (shown !== undefined) {
     set({ entries: entries.map((e) => (e.id === id ? { id, ...spec } : e)) });
     // Reshuffling mid-drag would move the held card out of front.

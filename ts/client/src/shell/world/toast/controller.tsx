@@ -44,7 +44,6 @@ const SERVER_HOLD_MS = 3000;
 interface Said {
   key: string;
   tone: ToastTone;
-  share?: number;
 }
 
 /** The words, as `t` reads them now: react-i18next's new `t` on a language change re-showed toasts. */
@@ -60,10 +59,9 @@ function useSaid(id: Report, said: Said | null, holdMs = 0): void {
   const words = useWords();
   const key = said?.key ?? null;
   const tone = said?.tone ?? null;
-  const share = said?.share;
   useEffect(() => {
     if (key !== null && tone !== null) {
-      showToast(id, { message: words(key), tone, share });
+      showToast(id, { message: words(key), tone });
       return;
     }
     if (holdMs === 0) {
@@ -72,7 +70,7 @@ function useSaid(id: Report, said: Said | null, holdMs = 0): void {
     }
     const timer = setTimeout(() => dismissToast(id), holdMs);
     return () => clearTimeout(timer);
-  }, [id, key, tone, share, words, holdMs]);
+  }, [id, key, tone, words, holdMs]);
 }
 
 const error = (key: string): Said => ({ key, tone: ToastTone.Error });
@@ -97,21 +95,15 @@ function serverError(source: Source, stall: Message | null): Said | null {
   return stall === Message.WorldReadFailing ? error(messageKey(stall)) : null;
 }
 
-/** The world's one toast: none there, or it coming, its bar the renderer's
- * making while that is short of whole, then its companions, then the ready
- * word once. */
+/** The world's one toast: none there, or it coming, then its companions, then the ready word once. */
 function world(
   outside: boolean,
   shown: boolean,
-  made: number,
   companionLoading: boolean,
   greeting: Greeting,
 ): Said | null {
   if (outside) return error("toast.outside");
-  if (!shown) {
-    const said = loading("toast.world_loading");
-    return made < 1 ? { ...said, share: made } : said;
-  }
+  if (!shown) return loading("toast.world_loading");
   if (companionLoading) return loading("toast.companion_loading");
   return greeting === Greeting.Said
     ? { key: "toast.world_ready", tone: ToastTone.Ready }
@@ -138,7 +130,6 @@ export function ToastController() {
 
   const outside = useKernel((s) => s.pivot.outside);
   const shown = useKernel((s) => s.pivot.status === GroundStatus.Success);
-  const made = useKernel((s) => s.renderer_made);
   const companionLoading = useKernel(
     (s) => !s.companion.person_ready || !s.companion.pet_ready,
   );
@@ -154,10 +145,7 @@ export function ToastController() {
     const timer = setTimeout(() => setGreeting(Greeting.Done), READY_MS);
     return () => clearTimeout(timer);
   }, [greeting]);
-  useSaid(
-    Report.World,
-    world(outside, shown, made, companionLoading, greeting),
-  );
+  useSaid(Report.World, world(outside, shown, companionLoading, greeting));
 
   return null;
 }

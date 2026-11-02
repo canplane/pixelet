@@ -1,23 +1,23 @@
 // @pxl/client/shell/world/top/scale-bar.tsx
 
 import { StyleSheet, View } from "react-native";
-import { G, Path, Svg } from "react-native-svg";
+import { Svg } from "react-native-svg";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 import { Presence } from "@/shell/ui/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/shell/ui/motion/transition.ts";
-import { HaloText } from "./halo.tsx";
-import { color, halo, haloRings, textStyle, weight } from "@/shell/ui/theme.ts";
+import { HaloPath, HaloText } from "./halo.tsx";
+import { color, halo, textStyle, weight } from "@/shell/ui/theme.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 
 const TICK_PX = 5;
 const QUARTER_TICK_PX = 3;
 const LINE_PX = 1;
 const PAD_PX = LINE_PX + halo.width + 1;
-const LABEL_GAP_PX = 8;
-const BAR_MAX_PX = 80;
+export const LABEL_GAP_PX = 8;
+export const BAR_MAX_PX = 80;
 
 /** Nearest 1, 2 or 5 × 10ⁿ. */
 function niceLength(m: f64): f64 {
@@ -27,7 +27,7 @@ function niceLength(m: f64): f64 {
   return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * base;
 }
 
-/** Line and ticks are one path, stroked as the halo's rings, so the halo is unbroken where they meet. */
+/** Line and ticks are one path under one halo. */
 export function MapScaleBar({ show }: { show: boolean }) {
   const mPerPx = useKernel((s) => s.m_per_px);
   const totalMeters = niceLength(BAR_MAX_PX * mPerPx);
@@ -59,31 +59,14 @@ export function MapScaleBar({ show }: { show: boolean }) {
       style={styles.root}
     >
       <View style={styles.above}>
-        <HaloText style={styles.label}>{label}</HaloText>
+        <HaloText style={scaleLabel}>{label}</HaloText>
       </View>
       <Svg
         width={width}
         height={svgHeight}
         viewBox={`0 0 ${width} ${svgHeight}`}
       >
-        {haloRings.map((px) => (
-          <G key={px} opacity={halo.ring}>
-            <Path
-              d={d}
-              stroke={color.black}
-              strokeWidth={LINE_PX + 2 * px}
-              fill="none"
-              strokeLinecap="square"
-            />
-          </G>
-        ))}
-        <Path
-          d={d}
-          stroke={color.white}
-          strokeWidth={LINE_PX}
-          fill="none"
-          strokeLinecap="square"
-        />
+        <HaloPath d={d} width={LINE_PX} />
       </Svg>
     </Presence>
   );
@@ -99,6 +82,10 @@ const styles = StyleSheet.create({
     bottom: PAD_PX + TICK_PX + LABEL_GAP_PX - halo.width,
     alignItems: "center",
   },
+});
+
+/** The scale's label, the progress bar's too. */
+export const scaleLabel = StyleSheet.create({
   label: {
     ...textStyle.caption2,
     fontWeight: weight.semibold,
@@ -106,4 +93,4 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
     color: color.white,
   },
-});
+}).label;

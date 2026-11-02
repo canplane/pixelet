@@ -9,6 +9,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
+import { G, Path } from "react-native-svg";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { IconProps } from "@/shell/ui/icon.tsx";
@@ -84,6 +85,43 @@ export function HaloIcon({
         <Glyph {...icon} color={ink ?? icon.color} struck={struck} />
       )}
     />
+  );
+}
+
+/** A white stroke inside an `Svg` over its halo: rings stroked black along
+ * `under` (`d` where left out), each ring one layer. */
+export function HaloPath({
+  d,
+  under = d,
+  width,
+  cap = "square",
+}: {
+  d: string;
+  under?: string;
+  width: f64;
+  cap?: "butt" | "square";
+}) {
+  return (
+    <>
+      {haloRings.map((px) => (
+        <G key={px} opacity={halo.ring}>
+          <Path
+            d={under}
+            stroke={theme.black}
+            strokeWidth={width + 2 * px}
+            fill="none"
+            strokeLinecap={cap}
+          />
+        </G>
+      ))}
+      <Path
+        d={d}
+        stroke={theme.white}
+        strokeWidth={width}
+        fill="none"
+        strokeLinecap={cap}
+      />
+    </>
   );
 }
 
