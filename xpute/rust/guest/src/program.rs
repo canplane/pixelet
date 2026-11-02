@@ -19,7 +19,7 @@ use xpute_kit::wire::xtp::{BranchCursor, PacketWriter, TreeReader};
 
 use crate::abi::cmd::SysOpened;
 use crate::global::Global;
-use crate::ipc::door::{Door, Submission};
+use crate::ipc::door::{Door, Event, Submission};
 use crate::ipc::file::Files;
 use crate::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use crate::ipc::sys::{spec::op, Fd, Sys};
@@ -207,13 +207,6 @@ impl<'a> FromPacket<'a> for Packet<'a> {
     }
 }
 
-/// An event a table generates: its number and its fields.
-pub trait Event {
-    const NUMBER: u32;
-    const FIELDS: u32;
-    fn write(&self, w: &mut PacketWriter);
-}
-
 /// A turn as a handler sees it: the host to call, and events to raise.
 pub struct Turn<'a> {
     sys: &'a mut Sys,
@@ -235,8 +228,7 @@ impl Turn<'_> {
 
     /// An event for the program's port, heard after the turn.
     pub fn raise<E: Event>(&self, event: &E) {
-        self.door
-            .raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, |w| event.write(w));
+        self.door.raise_to(PROGRAM_PORT, event);
     }
 
     /// An event of no table's: `cmd`, and `cnt` fields, which `f` writes.
@@ -259,8 +251,7 @@ impl Turn<'_> {
 /// An event for the program's port from a task, heard after the turn.
 pub fn raise<E: Event>(event: &E) {
     if let Some(p) = PROGRAM.get(|| None) {
-        p.door
-            .raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, |w| event.write(w));
+        p.door.raise_to(PROGRAM_PORT, event);
     }
 }
 

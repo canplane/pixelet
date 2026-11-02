@@ -8,6 +8,7 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
 #include <cstdint>
 #include <span>
 #include <utility>
@@ -20,6 +21,15 @@
 #include "ring.hpp"
 
 namespace xpute {
+
+// An event a table generates (xpute-tool `spec/cmd`): its number, the
+// children it is written as, and its writer.
+template <class E>
+concept Event = requires(const E &e, xtp::PacketWriter &w) {
+    { E::NUMBER } -> std::convertible_to<std::uint32_t>;
+    { E::FIELDS } -> std::convertible_to<std::uint32_t>;
+    e.write(w);
+};
 
 // Errno::enosys for a command the guest does not number.
 struct Outcome {
@@ -66,6 +76,11 @@ class Door {
             Result<std::uint32_t> n = w.finish();
             return n ? std::optional(*n) : std::nullopt;
         });
+    }
+
+    // `event` for `port`.
+    template <Event E> void raise_to(std::uint32_t port, const E &event) const noexcept {
+        raise(port, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
     }
 
     // Applies waiting commands in order while there is room for what one more may

@@ -121,14 +121,6 @@ concept FromPacket = std::same_as<T, Packet> || requires(Packet pkt) {
     { T::from_packet(pkt) } -> std::same_as<Result<T>>;
 };
 
-// An event a table generates: its number and its fields.
-template <class E>
-concept Event = requires(const E &e, xtp::PacketWriter &w) {
-    { E::NUMBER } -> std::convertible_to<std::uint32_t>;
-    { E::FIELDS } -> std::convertible_to<std::uint32_t>;
-    e.write(w);
-};
-
 // Bytes of the heap, given back by their size: what a read fills.
 class Bytes {
   public:
@@ -191,9 +183,7 @@ class Turn {
     }
 
     // An event for the program's port, heard after the turn.
-    template <Event E> void raise(const E &event) const noexcept {
-        door_.raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
-    }
+    template <Event E> void raise(const E &event) const noexcept { door_.raise_to(PROGRAM_PORT, event); }
 
     // An event of no table's: `cmd`, and `cnt` fields, which `fill` writes.
     template <class Fill> void raise_packet(std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
@@ -221,9 +211,7 @@ const Door *door() noexcept;
 
 // An event for the program's port from a task, heard after the turn.
 template <Event E> void raise(const E &event) noexcept {
-    if (const Door *door = program_detail::door()) {
-        door->raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
-    }
+    if (const Door *door = program_detail::door()) door->raise_to(PROGRAM_PORT, event);
 }
 
 // A read awaited (`read`), holding its own copy of the path, so it may be made

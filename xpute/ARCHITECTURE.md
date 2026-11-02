@@ -228,7 +228,8 @@ sent and rung. A guest that traps is gone, and the doorbell rings it no more.
 
 The guest's end is the **door** (`ipc/door` `Door`). It applies the submissions
 in order, answers each, and posts what the guest raises into the completion
-ring, for the port it names (`raise`), which holds a whole turn's output.
+ring, for the port it names (`raise`, or `raise_to` for an event its table
+generates, `Event`), which holds a whole turn's output.
 What the host sent it applies itself, and hands the program every other sender's
 and each open the host completed (`Submission`). A drain runs before any phase's budget, so the program records what it is handed
 and returns. Before each submission the door checks that the ring has room for

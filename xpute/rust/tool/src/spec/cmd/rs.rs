@@ -374,11 +374,11 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<String, String> {
         if let Some(event) = &c.event {
             let doc = [format!("Command::{}'s event.", c.name)];
             rs_writer(spec, &mut out, &format!("{name}Event"), Some(&doc), event)?;
-            if let Some(program) = t.program {
+            if let Some(door) = t.event {
                 let lt = if rs_borrows(spec, event)? { "<'_>" } else { "" };
                 out.extend([
                     String::new(),
-                    format!("impl {program}::Event for {name}Event{lt} {{"),
+                    format!("impl {door}::Event for {name}Event{lt} {{"),
                     format!("    const NUMBER: u32 = {};", c.val),
                     format!("    const FIELDS: u32 = {};", event.len()),
                     "    fn write(&self, w: &mut PacketWriter) {".to_string(),

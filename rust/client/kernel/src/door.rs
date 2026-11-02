@@ -16,7 +16,7 @@ pub(crate) mod port;
 #[path = "door/toc.spec.rs"]
 pub(crate) mod toc;
 
-use crate::domain::control::cmd::{Command, Sensor, SensorStartEvent, ShellSnapshotEvent};
+use crate::domain::control::cmd::{Sensor, SensorStartEvent, SensorStopEvent, ShellSnapshotEvent};
 use crate::domain::control::sensor;
 use crate::domain::scene::character::preview;
 use crate::domain::view::demand;
@@ -50,7 +50,6 @@ use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc, Entry};
 use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_guest::mem::{self, off_of_slice};
 use xpute_guest::sched::task;
-use xpute_kit::wire::xtp::PacketWriter;
 
 struct State {
     /// The UI snapshot last posted; one is posted only where it moved.
@@ -88,11 +87,6 @@ const _: () = assert!(
     spec::SQ_CAP + EVENTS < spec::CQ_CAP,
     "a full submission ring's replies and the turn's events do not fit the completion ring"
 );
-
-/// An event for the port `to` (port.json).
-fn raise(to: u32, cmd: Command, cnt: u32, f: impl Fn(&mut PacketWriter)) {
-    door().raise(to, cmd as u32, cnt, f);
-}
 
 static STATE: Global<State> = Global::new();
 
@@ -231,21 +225,18 @@ fn post_shell(s: &mut State) {
         take_geolocation_command, GeolocationCommand,
     };
 
-    let sensor = |cmd: Command, sensor: Sensor| {
-        raise(port::SHELL, cmd, SensorStartEvent::FIELDS, |w| {
-            SensorStartEvent { sensor }.write(w);
-        });
-    };
+    let start = |sensor: Sensor| door().raise_to(port::SHELL, &SensorStartEvent { sensor });
+    let stop = |sensor: Sensor| door().raise_to(port::SHELL, &SensorStopEvent { sensor });
     if let Some(c) = take_geolocation_command() {
         match c {
-            GeolocationCommand::Start => sensor(Command::SENSOR_START, Sensor::Geolocation),
-            GeolocationCommand::Stop => sensor(Command::SENSOR_STOP, Sensor::Geolocation),
+            GeolocationCommand::Start => start(Sensor::Geolocation),
+            GeolocationCommand::Stop => stop(Sensor::Geolocation),
         }
     }
     if let Some(c) = take_orient_command() {
         match c {
-            OrientationCommand::Listen => sensor(Command::SENSOR_START, Sensor::Orientation),
-            OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),
+            OrientationCommand::Listen => start(Sensor::Orientation),
+            OrientationCommand::Remove => stop(Sensor::Orientation),
         }
     }
     if let Some(shown) = s.last_snapshot.take_moved() {
@@ -257,16 +248,11 @@ fn post_shell(s: &mut State) {
             let room = (buf.len() * 2).max(PAGE_BYTES as usize);
             buf.resize(room, 0);
         };
-        let event = ShellSnapshotEvent {
-            at: off_of_slice(&raw const buf[..]) as u32,
-            len,
-        };
-        raise(
+        door().raise_to(
             port::SHELL,
-            Command::SHELL_SNAPSHOT,
-            ShellSnapshotEvent::FIELDS,
-            |w| {
-                event.write(w);
+            &ShellSnapshotEvent {
+                at: off_of_slice(&raw const buf[..]) as u32,
+                len,
             },
         );
     }

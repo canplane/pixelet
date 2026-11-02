@@ -16,6 +16,14 @@ use crate::abi::cmd::{Command, Nop, SysOpened};
 use crate::ipc::frame;
 use crate::ipc::ring::Ring;
 
+/// An event a table generates (xpute-tool `spec/cmd`): its number, the
+/// children it is written as, and its writer.
+pub trait Event {
+    const NUMBER: u32;
+    const FIELDS: u32;
+    fn write(&self, w: &mut PacketWriter);
+}
+
 /// None for an unknown command, which replies ENOSYS.
 pub type Outcome = Result<Option<i32>, MarshalError>;
 
@@ -105,6 +113,11 @@ impl Door {
             f(&mut w);
             w.fit_len()
         });
+    }
+
+    /// `event` for `port`.
+    pub fn raise_to<E: Event>(&self, port: u32, event: &E) {
+        self.raise(port, E::NUMBER, E::FIELDS, |w| event.write(w));
     }
 
     /// An unapplied command can wait in the submission ring; what it would

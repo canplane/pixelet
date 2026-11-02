@@ -129,7 +129,7 @@ fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
 }
 
 /// A program's event: its number, the children it is written as, and its
-/// writer (cpp/xpute/guest/program.hpp `Event`).
+/// writer (cpp/xpute/guest/ipc/door.hpp `Event`).
 fn cpp_event(
     spec: &Spec,
     out: &mut Vec<String>,

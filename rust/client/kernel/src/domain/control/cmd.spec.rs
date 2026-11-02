@@ -1028,6 +1028,14 @@ impl SensorStartEvent {
     }
 }
 
+impl xpute_guest::ipc::door::Event for SensorStartEvent {
+    const NUMBER: u32 = 4609;
+    const FIELDS: u32 = 1;
+    fn write(&self, w: &mut PacketWriter) {
+        SensorStartEvent::write(self, w);
+    }
+}
+
 /// Command::SENSOR_STOP's event.
 pub struct SensorStopEvent {
     pub sensor: Sensor,
@@ -1039,6 +1047,14 @@ impl SensorStopEvent {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.sensor as u32));
+    }
+}
+
+impl xpute_guest::ipc::door::Event for SensorStopEvent {
+    const NUMBER: u32 = 4611;
+    const FIELDS: u32 = 1;
+    fn write(&self, w: &mut PacketWriter) {
+        SensorStopEvent::write(self, w);
     }
 }
 
@@ -1591,5 +1607,13 @@ impl ShellSnapshotEvent {
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.at));
         w.u32(Some(self.len));
+    }
+}
+
+impl xpute_guest::ipc::door::Event for ShellSnapshotEvent {
+    const NUMBER: u32 = 6913;
+    const FIELDS: u32 = 2;
+    fn write(&self, w: &mut PacketWriter) {
+        ShellSnapshotEvent::write(self, w);
     }
 }
