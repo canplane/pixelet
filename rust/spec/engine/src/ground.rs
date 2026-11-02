@@ -464,12 +464,13 @@ pub fn node<H: Resident>(
         let column = held.cell(shard, *place, zoom, c);
         // The caves' share where they may take the cell, beside its asset:
         // the cell is air where they take it all.
-        let cave = if column.opens::<H::Content>(zoom, c[2]) {
+        let ground = column.asset::<H::Content>(zoom, c[2], || false);
+        let cave = if ground != VOID && column.opens::<H::Content>(zoom, c[2]) {
             H::Content::hollow((zoom, c))
         } else {
             0
         };
-        let asset = column.asset::<H::Content>(zoom, c[2], || cave >= FULL);
+        let asset = if cave >= FULL { VOID } else { ground };
         return (
             In {
                 kind: Kind::Cell,

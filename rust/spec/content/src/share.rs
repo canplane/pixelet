@@ -8,14 +8,17 @@
 //! seed.
 
 /// The first half's part of `n` (under 2^16), the rest the second's: `n` by
-/// `w` of 2^16, held within each half's room (`rooms`, together at least
+/// the weight in `w`'s top 16 bits of 2^16, its fraction rounded up where it
+/// passes the draw in `w`'s low 16, so a lone count goes either way as the
+/// weight says; held within each half's room (`rooms`, together at least
 /// `n`).
 #[expect(
     clippy::implicit_saturating_sub,
     reason = "rust-gpu has no `saturating_sub`"
 )]
 pub fn halve(n: u32, rooms: [u32; 2], w: u32) -> u32 {
-    let share = (n * (w & 0xffff)) >> 16;
+    let scaled = n * (w >> 16);
+    let share = (scaled >> 16) + ((scaled & 0xffff) > (w & 0xffff)) as u32;
     let least = if n > rooms[1] { n - rooms[1] } else { 0 };
     let most = if n < rooms[0] { n } else { rooms[0] };
     if share < least {
@@ -24,6 +27,19 @@ pub fn halve(n: u32, rooms: [u32; 2], w: u32) -> u32 {
         most
     } else {
         share
+    }
+}
+
+/// Quarter `q` (`dx + 2dy`)'s part of `n` over four of `room` each: halved
+/// across by `w[0]`, then along by `w[1]` (`halve`).
+pub fn quarter(n: u32, room: u32, w: [u32; 2], q: u32) -> u32 {
+    let a = halve(n, [2 * room, 2 * room], w[0]);
+    let n = if q & 1 == 0 { a } else { n - a };
+    let b = halve(n, [room, room], w[1]);
+    if q & 2 == 0 {
+        b
+    } else {
+        n - b
     }
 }
 

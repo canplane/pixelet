@@ -123,9 +123,20 @@ fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
     let ey = near(h, 8);
     let ez = q + ((h >> 16) % (2 * q) as u32) as i32;
     let e = [o[0] + ex, o[1] + ey, o[2] + ez];
+    // Mirrored across the node and moved back toward its middle by hash,
+    // so it stays in the node.
+    let back = |e: i32, r: u32| {
+        let m = s - 1 - e;
+        let d = (r % (q as u32 / 2 + 1)) as i32;
+        if m < 2 * q {
+            m + d
+        } else {
+            m - d
+        }
+    };
     let x = [
-        o[0] + s - 1 - ex - (g % (q as u32 / 2 + 1)) as i32,
-        o[1] + s - 1 - ey - ((g >> 8) % (q as u32 / 2 + 1)) as i32,
+        o[0] + back(ex, g),
+        o[1] + back(ey, g >> 8),
         o[2] + ez + ((g >> 16) % (q as u32 / 2 + 1)) as i32 - q / 4,
     ];
     Piece {
@@ -184,7 +195,7 @@ fn walk_at(u: u32, v: u32, h: u32, i: u32) -> u32 {
 /// The node's piece handed to its children, child `want`'s part of it, and
 /// the children the walk passes, a bit each: the walk's parts cross each face
 /// near the way on toward its end, moved by hash; their blocks split by how
-/// far each runs, none past a pipe cell's each (`share_out`).
+/// far each runs, none past a pipe cell's each (`halve`).
 fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
     let (o, s) = bounds(node);
     let half = s / 2;
@@ -267,7 +278,9 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
         let c = cells[i as usize];
         rest -= c;
         let all = c + rest;
-        let w = (c << 16) / if all == 0 { 1 } else { all };
+        let weight = (c << 16) / if all == 0 { 1 } else { all };
+        let weight = if weight > 0xffff { 0xffff } else { weight };
+        let w = weight << 16 | (wh.rotate_left(7 * i + 3) & 0xffff);
         let got = halve(left, [c * CELL_BLOCKS, rest * CELL_BLOCKS], w);
         if i == at {
             mine.blocks = got;
@@ -308,12 +321,13 @@ fn tunnels_down(node: (Zoom, [i32; 3]), tunnels: [u32; 4], on: u32, want: u32) -
                 (keep & !upper).count_ones() * r,
                 (keep & upper).count_ones() * r,
             ];
-            let w = (h >> (8 * side)) & 0xff;
-            let w = if side == 2 {
-                0x8000 + w * 0x60
+            let u = (h >> (8 * side)) & 0xff;
+            let weight = if side == 2 {
+                0x8000 + u * 0x60
             } else {
-                0x4000 + w * 0x80
+                0x4000 + u * 0x80
             };
+            let w = weight << 16 | (h.rotate_left(11 * side + 5) & 0xffff);
             let lo = halve(n, rooms, w);
             let up = want >> side & 1 == 1;
             n = if up { n - lo } else { lo };
@@ -364,51 +378,48 @@ fn holds(node: (Zoom, [i32; 3])) -> Holds {
     }
 }
 
-/// Side `side`'s middle in a pipe cell, in sixteenths of a unit from its
-/// corner; the cell's middle for none (6).
-fn side_mid(side: u32) -> [i32; 3] {
-    let mut p = [64; 3];
-    if side < 6 {
-        p[(side / 2) as usize] = if side & 1 == 1 { 128 } else { 0 };
-    }
-    p
-}
-
 /// How far block `b`'s middle lies from the piece's line, from the middle
 /// of the side it comes in by to the middle of the side it goes out by, in
-/// squared sixteenths, nudged by a draw off the cell's hash so no wall runs
-/// smooth: the lower, the sooner the block is hollowed.
+/// eighths of a unit, its square times the line's (`l`, so no division),
+/// nudged by a draw off the cell's hash `h` so no wall runs smooth: the
+/// lower, the sooner the block is hollowed.
 fn key(a: [i32; 3], ab: [i32; 3], l: i32, h: u32, b: u32) -> i32 {
     let ap = [
-        (b & 3) as i32 * 32 + 16 - a[0],
-        (b >> 2 & 3) as i32 * 32 + 16 - a[1],
-        (b >> 4 & 3) as i32 * 32 + 16 - a[2],
+        (b & 3) as i32 * 16 + 8 - a[0],
+        (b >> 2 & 3) as i32 * 16 + 8 - a[1],
+        (b >> 4 & 3) as i32 * 16 + 8 - a[2],
     ];
+    let pp = ap[0] * ap[0] + ap[1] * ap[1] + ap[2] * ap[2];
     let t = ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2];
-    let t = if l == 0 || t <= 0 {
-        0
+    // |ap|²·l less t² along it, its ends' own distances past them.
+    let d = if l == 0 || t <= 0 {
+        pp * if l == 0 { 1 } else { l }
     } else if t >= l {
-        l
+        (pp - 2 * t + l) * l
     } else {
-        t
+        pp * l - t * t
     };
-    let mut d = 0;
-    let mut j = 0;
-    while j < 3 {
-        let q = if l == 0 { ap[j] } else { ap[j] - ab[j] * t / l };
-        d += q * q;
-        j += 1;
-    }
     let mut n = h ^ b.wrapping_mul(0x9e37_79b9);
     n ^= n >> 15;
     n = n.wrapping_mul(0x2c1b_3c6d);
     n ^= n >> 12;
-    d + (n % NUDGE) as i32
+    d + (n % NUDGE) as i32 * if l == 0 { 1 } else { l }
 }
 
-/// Whether block `b` of the pipe cell `cell` is hollow: among its piece's
-/// `blocks` nearest its line (`key`, the lower block first where two tie).
-fn block_hollow(cell: [i32; 3], p: &Piece, b: u32) -> bool {
+/// Side `side`'s middle in a pipe cell, in eighths of a unit from its
+/// corner; the cell's middle for none (6).
+fn side_mid(side: u32) -> [i32; 3] {
+    let mut p = [32; 3];
+    if side < 6 {
+        p[(side / 2) as usize] = if side & 1 == 1 { 64 } else { 0 };
+    }
+    p
+}
+
+/// Whether block `b` of a pipe cell whose hash is `h` is hollow: among its
+/// piece's `blocks` nearest its line (`key`, the lower block first where two
+/// tie).
+fn block_hollow(h: u32, p: &Piece, b: u32) -> bool {
     if p.blocks >= CELL_BLOCKS {
         return true;
     }
@@ -416,7 +427,6 @@ fn block_hollow(cell: [i32; 3], p: &Piece, b: u32) -> bool {
     let z = side_mid(p.to);
     let ab = [z[0] - a[0], z[1] - a[1], z[2] - a[2]];
     let l = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
-    let h = node_seed(BLOCKS, (PIPE, cell));
     let mine = key(a, ab, l, h, b);
     let mut before = 0;
     let mut o = 0;
@@ -459,6 +469,7 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
         let n = 1 << t;
         (n, [(c[0] << t) & 3, (c[1] << t) & 3, (c[2] << t) & 3])
     };
+    let h = node_seed(BLOCKS, (PIPE, cell));
     let mut n = 0;
     let mut z = 0;
     while z < side {
@@ -467,7 +478,7 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
             let mut x = 0;
             while x < side {
                 let b = (lo[0] + x) as u32 | ((lo[1] + y) as u32) << 2 | ((lo[2] + z) as u32) << 4;
-                n += block_hollow(cell, &p, b) as u32;
+                n += block_hollow(h, &p, b) as u32;
                 x += 1;
             }
             y += 1;
@@ -483,6 +494,13 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
 #[inline(never)]
 pub fn hollow(node: (Zoom, [i32; 3])) -> u32 {
     let (zoom, c) = node;
+    // Finer than a leaf, its leaf's.
+    let (zoom, c) = if zoom > LEAF_CELL {
+        let t = zoom - LEAF_CELL;
+        (LEAF_CELL, [c[0] >> t, c[1] >> t, c[2] >> t])
+    } else {
+        (zoom, c)
+    };
     // Coarser than a root, a root's: every root holds the same.
     let (zoom, n) = if zoom <= ROOT {
         (ROOT, ROOT_BLOCKS)

@@ -1,5 +1,6 @@
 use super::{blocks, hollow, ROOT, ROOT_BLOCKS};
 use pxl_engine::answer::FULL;
+use pxl_engine::seed::node_seed;
 use pxl_engine::LEAF_CELL;
 
 fn children(zoom: u32, c: [i32; 3]) -> impl Iterator<Item = (u32, [i32; 3])> {
@@ -87,8 +88,9 @@ fn picture() {
                 if p.blocks == 0 {
                     continue;
                 }
+                let h = node_seed(super::BLOCKS, (PIPE, [cx, cy, cz]));
                 for b in 0..64u32 {
-                    if block_hollow([cx, cy, cz], &p, b) {
+                    if block_hollow(h, &p, b) {
                         let (x, y, z) = (
                             cx as usize * 4 + (b & 3) as usize,
                             cy as usize * 4 + (b >> 2 & 3) as usize,
@@ -133,4 +135,53 @@ fn picture() {
     let mut out = format!("P5 {w} {w} 255\n").into_bytes();
     out.extend(img);
     std::fs::write(path, out).unwrap();
+}
+
+/// Every node of a root, from the root to its pipe cells, holds exactly what
+/// its eight do; no pipe cell holds past its 64; every piece lies in its
+/// node; and the pipe cells together hold the root's blocks.
+#[test]
+fn every_node_of_a_root_is_its_children() {
+    extern crate std;
+    use super::{bounds, holds, PIPE};
+    use std::vec;
+    use std::vec::Vec;
+    for r in [[0, 0, 0], [1, 2, 3], [-7, 5, -1], [33, -40, 2]] {
+        let mut level = vec![(ROOT, r)];
+        while level[0].0 < PIPE {
+            let mut next = vec![];
+            for &node in &level {
+                let kids: Vec<_> = children(node.0, node.1).collect();
+                let sum: u32 = kids.iter().map(|&k| blocks(k)).sum();
+                assert_eq!(blocks(node), sum, "node {node:?}");
+                let p = holds(node).piece;
+                if p.blocks > 0 {
+                    let (o, s) = bounds(node);
+                    let inside = |v: [i32; 3]| (0..3).all(|j| v[j] >= o[j] && v[j] < o[j] + s);
+                    assert!(inside(p.e) && inside(p.x), "piece {p:?} out of {node:?}");
+                }
+                next.extend(kids);
+            }
+            level = next;
+        }
+        let mut all = 0;
+        for &cell in &level {
+            let n = blocks(cell);
+            assert!(n <= 64, "{cell:?} {n}");
+            all += n;
+        }
+        assert_eq!(all, ROOT_BLOCKS, "root {r:?}");
+    }
+}
+
+/// Finer than a leaf, a node reads its leaf.
+#[test]
+fn finer_than_a_leaf_is_its_leaf() {
+    for c in [[5, 9, 3], [-11, 40, -2]] {
+        let leaf = hollow((LEAF_CELL, c));
+        assert_eq!(
+            hollow((LEAF_CELL + 2, [c[0] * 4 + 1, c[1] * 4 + 3, c[2] * 4])),
+            leaf
+        );
+    }
 }

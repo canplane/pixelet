@@ -117,3 +117,23 @@ fn stands_as_a_cube_keeps() {
     assert_eq!(tree.sizes[0], [1, 1, 3]);
     assert!(stands_at(tree, 0, LEAF_CELL - 1) && !stands_at(tree, 0, LEAF_CELL - 2));
 }
+
+/// A leaf cell's count comes up as often at each of its four places under
+/// its parent: a lone count goes either way.
+#[test]
+fn counts_land_on_every_quarter() {
+    let mut by = [0u32; 4];
+    for k in 0..DECORS.len() {
+        for y in 0..256 {
+            for x in 0..256 {
+                if count(k, LEAF_CELL, [x, y]) > 0 {
+                    by[(x & 1 | (y & 1) << 1) as usize] += 1;
+                }
+            }
+        }
+    }
+    let all: u32 = by.iter().sum();
+    for n in by {
+        assert!(n * 8 > all, "{by:?}");
+    }
+}

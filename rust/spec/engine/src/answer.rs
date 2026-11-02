@@ -193,8 +193,10 @@ pub const fn eighths(fill: u32) -> u32 {
 /// palette index: the ground filling `ground` of it, under an overwrite — what is
 /// placed, or the ways — of `kind` filling `over` of it, each in
 /// `FULL`'s units. A kind that fills lies beside the ground, as
-/// a thing stands on it, so their shares add; air lies in it, as a cut or a
-/// bore, so it takes its share from the ground's. The palette index is the kind most
+/// a thing stands on it, so their shares add; air lies in it, as a cut, a
+/// bore or a cave, so it takes its share from the ground's, in whole eighths
+/// as a fill is kept (`eighths`): a trace too small to empty one child
+/// empties none. The palette index is the kind most
 /// of the fill is: the overwrite's where it fills at least as much as the
 /// ground, the ground's where air is what is written.
 #[expect(
@@ -206,6 +208,7 @@ pub fn cover(ground: u32, kind: u32, over: u32) -> (u32, bool) {
         let sum = ground + over;
         (if sum > FULL { FULL } else { sum }, over >= ground)
     } else {
+        let over = over / (FULL / EIGHTHS) * (FULL / EIGHTHS);
         (if over > ground { 0 } else { ground - over }, false)
     }
 }

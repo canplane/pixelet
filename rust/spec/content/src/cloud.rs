@@ -2,17 +2,18 @@
 
 //! gpu-portable: the cloud field the cumulus and the sheets share. The
 //! lattice it lies on, the wind that carries it and the hash its cells draw
-//! from: the cumulus draws its cells from the hash on the CPU (pxl-kernel
-//! domain/scene/environment/cloud.rs), and the sheets sum the hash's noise on the
-//! GPU (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render
-//! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_SHARE_BITS`.
+//! from: the sheets sum the hash's noise on the GPU (pxl-render
+//! frame/shader/noise.wgsl), whose `lattice_hash` pxl-render build.rs writes
+//! from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_SHARE_BITS`; the
+//! cumulus is handed down and drawn by `node_seed`, as the decor and the
+//! caves are (`holds_cloud`, `cloud_draw`).
 
 use pxl_engine::seed::node_seed;
 use pxl_engine::{Zoom, UNIT_ZOOM};
 
 use crate::param::cloud::LATTICE_SHAMT;
 use crate::param::cloud::WIND;
-use crate::share::halve;
+use crate::share;
 
 /// The lattice's units around the world, X's 2^24 units over a lattice unit's.
 pub const LATTICE_CNT: u32 = 1 << (UNIT_ZOOM - LATTICE_SHAMT);
@@ -65,7 +66,7 @@ pub fn cloud_draw(cell: [i32; 2], salt: u32) -> f64 {
 
 /// Whether the field's cell `cell` holds a cumulus: its patch holds `mean`
 /// of its 256 about a hash's draw, halved across and along a step by weights
-/// a hash draws, pushed apart so they gather in clumps (`share::halve`,
+/// a hash draws, pushed apart so they gather in clumps (`share::quarter`,
 /// the one rule the decor and the caves hand theirs by), to one or none a
 /// cell.
 pub fn holds_cloud(cell: [i32; 2], mean: u32) -> bool {
@@ -86,10 +87,12 @@ pub fn holds_cloud(cell: [i32; 2], mean: u32) -> bool {
         let room = 1u32 << (2 * (CELL_ZOOM - z - 1));
         let c = at(z + 1);
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
-        let a = halve(n, [2 * room, 2 * room], w(0));
-        let n2 = if quarter & 1 == 0 { a } else { n - a };
-        let b = halve(n2, [room, room], w(16));
-        n = if quarter & 2 == 0 { b } else { n2 - b };
+        n = share::quarter(
+            n,
+            room,
+            [w(0) << 16 | (h >> 16), w(8) << 16 | (h & 0xffff)],
+            quarter as u32,
+        );
         z += 1;
     }
     n > 0

@@ -18,7 +18,7 @@ use pxl_engine::{Zoom, LEAF_CELL, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::decor::{Decor, DECORS};
-use crate::share::halve;
+use crate::share;
 
 /// A cell's candidate: the leaf cell it stands at, at every zoom; its first
 /// draw, against the decor's chance and, lower first, the order neighbors
@@ -118,17 +118,19 @@ pub fn count(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
     let mut z = root;
     while z < zoom && n > 0 {
         // Halved across, then along, by weights its own hash draws, none
-        // past what its leaf cells hold (`share::halve`), the one rule the
+        // past what its leaf cells hold (`share::quarter`), the one rule the
         // caves and the cumulus hand theirs down by.
         let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT, (z, at(z))));
         let c = at(z + 1);
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
         let room = 1u32 << (2 * (LEAF_CELL - z - 1));
         let room = if room > 0xffff { 0xffff } else { room };
-        let a = halve(n, [2 * room, 2 * room], draws.next_u32() >> 16);
-        let n2 = if quarter & 1 == 0 { a } else { n - a };
-        let b = halve(n2, [room, room], draws.next_u32() >> 16);
-        n = if quarter & 2 == 0 { b } else { n2 - b };
+        n = share::quarter(
+            n,
+            room,
+            [draws.next_u32(), draws.next_u32()],
+            quarter as u32,
+        );
         z += 1;
     }
     n
