@@ -262,7 +262,7 @@ pub enum SettingKey {
     res = 12,
     /// Where the camera and the pointer are, read live (perf/read.rs, NOW's view section).
     view = 13,
-    /// The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`).
+    /// The performance panel, recording while it is on (perf/window.rs `perf_follow`).
     perf = 14,
     /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs).
     world_gizmo = 15,

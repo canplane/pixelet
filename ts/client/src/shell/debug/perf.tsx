@@ -220,7 +220,7 @@ export function PerfPanel() {
   return (
     <Accordion
       name="perf"
-      title="Perf"
+      title="Performance"
       note={note}
       end={
         <Text style={[gauge.text, gauge.key]}>

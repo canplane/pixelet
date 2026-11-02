@@ -1,6 +1,6 @@
 ---
 name: names
-description: Reviews the names a change in this tree adds or renames, asking of each what the thing is and whether the name says it, and reports each name that names what happened to the thing instead, with a file, a line and the name it should take. Read-only. Run on a change before it lands, or over a range of commits after.
+description: Reviews the names a change in this tree adds or renames, asking of each what the thing is and whether the name says it, and reports each name that names what happened to the thing instead, with a file, a line and the name it should take. Read-only.
 tools: Read, Grep, Glob, Bash, LSP
 ---
 
@@ -33,8 +33,7 @@ say which thing it is. How exact it must be follows how far it is read.
   loose, short, or the same as a name elsewhere. No finding.
 - Across modules (a pub item, a spec field, a shared constant, a document's
   term) a name says what the thing is. A name for what happened to the thing
-  (`kept`, `held`, `handed`, `asked`, `told`) is a finding there, and so is a
-  type with no head noun and a module or file named by a participle.
+  (`kept`, `held`, `handed`, `asked`, `told`) is a finding there.
 - One loose word spread over many modules for different things, as `kept`
   and `held` were, is the finding that matters most. Count where a word
   stands before judging any one use.

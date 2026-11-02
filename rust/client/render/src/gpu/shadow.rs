@@ -226,14 +226,7 @@ impl Shadow {
     /// `reach_ndc` the share of it a receiver reads within; `fixed`
     /// is a point that stays put in the world as the eye moves, in the eye's
     /// frame.
-    pub fn aim(
-        &mut self,
-        sun_dir: &[f32],
-        target: V3,
-        half_width: f64,
-        reach_ndc: f32,
-        fixed: V3,
-    ) {
+    pub fn aim(&mut self, sun_dir: &[f32], target: V3, half_width: f64, reach_ndc: f32, fixed: V3) {
         self.texel = half_width * 2.0 / f64::from(SIZE);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
         // the light goes, on purpose: the light read as moving. Turned on every

@@ -39,10 +39,6 @@ HOURS = ("noon", "dawn")
 # The longest the page may take to answer one ask, a drive included.
 EVAL_CAP_S = 120
 ORBIT_S = 10
-# A run whose orbit drew fewer frames a second than this, the view not moving
-# under it, is run again, up to `TRIES` times in all.
-DREW_FPS = 10
-TRIES = 3
 
 READ = """(() => {
   const r = pxl.perf.read();
@@ -112,7 +108,9 @@ class Page:
             browser=True,
         )
         self.send("Emulation.setGeolocationOverride", {**PLACE, "accuracy": 10})
-        # Every resource kept, past the browser's 250, so the load is seen to settle.
+        # Every resource kept, past the browser's 250, so the load is seen to
+        # settle; a script for new documents runs only with the page's events on.
+        self.send("Page.enable")
         self.send(
             "Page.addScriptToEvaluateOnNewDocument",
             {"source": "performance.setResourceTimingBufferSize(1e6)"},
@@ -191,13 +189,6 @@ def once(url, hour):
         page.close()
 
 
-def run(url, hour):
-    for i in range(1, TRIES + 1):
-        r = once(url, hour)
-        if r["gpu"][2] >= DREW_FPS * ORBIT_S or i == TRIES:
-            return r
-
-
 def median(v):
     """A figure the window could not give (None) counts as none: NaN fails
     every test."""
@@ -220,7 +211,7 @@ def main():
     for _ in range(rounds):
         for hour in HOURS:
             for who, url in (("base", base), ("change", change)):
-                runs[who][hour].append(run(url, hour))
+                runs[who][hour].append(once(url, hour))
     if os.environ.get("COMPARE_RUNS"):
         print(json.dumps(runs))
     fails = []

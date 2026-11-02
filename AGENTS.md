@@ -24,11 +24,8 @@
 ## Reading and changing
 
 - Read the architecture sections and the READMEs beside the code for the
-  roles and boundaries the change touches, and the skills its task takes:
-  performance analysis or optimization, anywhere, takes `performance`
-  (`.agents/skills/performance/SKILL.md`); a new state, rule, value or
-  representation, and any refactor, takes `facts`
-  (`.agents/skills/facts/SKILL.md`).
+  roles and boundaries the change touches, and the skill the task needs
+  (`.agents/skills/`). What done means: `.agents/working.md`.
 - `ARCHITECTURE.md`, `xpute/ARCHITECTURE.md` and the READMEs beside the code
   state the parts' contracts; a skill gives a task's procedure. The code is
   agents' work, not the user's intent: read it as suspect. Decide what a part

@@ -99,7 +99,7 @@ it, the knob's premises hold:
 
 - Measured on no GPU: how much of the frame `beam` and `cell` are where the
   budget runs over, and how much farther the samples walk at twice the cell.
-  The comparison against a base (`ts/app/web/script/compare-perf.py`) was
+  The comparison against a base (`script/compare-perf.py`) was
   not run on the second knob.
 - A sample's hit the same at either lattice is argued, not tested: the test
   holds its ray and its cell; its walk from the coarser cell's start is not

@@ -55,7 +55,7 @@ asked other bands walks from the root (`beam::CELL_RESUMES`).
 
 ## Measured
 
-`ts/app/web/script/compare-perf.py`, base `4d5d1a293` against the change, three
+`script/compare-perf.py`, base `4d5d1a293` against the change, three
 rounds, a fresh page a run, medians: the first load's longest frame 819 to
 539 ms; noon's GPU p50 10.94 to 9.90 ms, p95 16.65 to 16.25; 07:00's p50 15.34
 to 9.11, p95 20.84 to 16.78. The WGSL 5.63 MB to 4.61 MB.

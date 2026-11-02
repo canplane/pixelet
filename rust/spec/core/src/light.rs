@@ -109,12 +109,7 @@ impl Light {
     /// `corner` is the world texel index of the box's first texel;
     /// `reach_ndc` the share of its half-width a receiver reads
     /// within.
-    pub fn of(
-        [x, y, z, w]: [[f32; 3]; 4],
-        size: u32,
-        corner: [i32; 2],
-        reach_ndc: f32,
-    ) -> Light {
+    pub fn of([x, y, z, w]: [[f32; 3]; 4], size: u32, corner: [i32; 2], reach_ndc: f32) -> Light {
         let texel = 2.0 / size as f32;
         let (ax, ay) = (1.0 - texel / 2.0, texel / 2.0 - 1.0);
         let t_max = length(z);

@@ -190,7 +190,7 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`). */
+  /** The performance panel, recording while it is on (perf/window.rs `perf_follow`). */
   perf: {
     key: 14 as number,
     kind: "toggle",
@@ -402,7 +402,7 @@ export const SETTING_PRODUCTION = {
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`). */
+  /** The performance panel, recording while it is on (perf/window.rs `perf_follow`). */
   perf: {
     key: 14 as number,
     kind: "toggle",

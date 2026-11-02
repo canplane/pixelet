@@ -202,10 +202,7 @@ A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its palette index the majority of those it folds,
 and its top cell is filled to the share its height reaches (`pxl-spec-core
 ground.rs` `top`). What is placed and the ways fold to the kind most of their
-fill is (`overwrite.rs` `fold`). The caves' coarse cell is the noises' at its
-center (`cave.rs` `hollow`), no summary of the cells under it: a cave narrower
-than the cell opens or closes there as the zoom changes. A coarser node is all
-air only where the noises' least and most over it say so (`all_hollow`).
+fill is (`overwrite.rs` `fold`).
 
 A coarse cell keeps how much of its cube the ground and what is written over it
 fill (`answer.rs` `cover`), in eighths, floored: its **fill eighths**. It is

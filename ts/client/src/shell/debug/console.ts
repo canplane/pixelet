@@ -5,7 +5,7 @@
  * command by its number, as the shell (port/shell.ts `kernel_console`); and
  * `pxl.perf`, what the profiler panel exports, made on this side of the
  * door: `report()`, the window's summary as text, `read()`, the same as
- * values (ts/app/web/script/compare-perf.py reads it), `trace()`, the window saved
+ * values (script/compare-perf.py reads it), `trace()`, the window saved
  * for ui.perfetto.dev, and `drive(motion, seconds, hour)`, a window taken the
  * same way each time (perf/drive.ts).
  */

@@ -190,7 +190,6 @@ fn do_rotate(s: &mut Input, view_x: f64, view_y: f64) {
     }
 
     if s.rotate_axis_lock == RotateAxisLock::Tilt {
-        // tilt_lock is an experiment toggle, not a decided product change.
         if !settings_store().tilt_lock {
             let polar = s.rotate_tilt.ask(view_y, linear(tilt_gain()));
             let took = controller::set_intent(IntentPatch {

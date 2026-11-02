@@ -286,7 +286,7 @@
     },
     "perf": {
       "number": 14,
-      "$doc": ["The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`)."],
+      "$doc": ["The performance panel, recording while it is on (perf/window.rs `perf_follow`)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
