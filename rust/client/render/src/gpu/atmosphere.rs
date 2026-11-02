@@ -314,8 +314,8 @@ pub struct Atmosphere {
     read: Read,
     /// The words the exposure texel was last drawn of (`EXPOSURE_READS`).
     exposure_read: Read,
-    /// This month's Earth: the kernel draws nothing before its image has
-    /// come (`ImageMap::step`).
+    /// This month's Earth, zero until its image has come (`ImageMap::step`):
+    /// the land past the terrain shows the air before it alone until then.
     pub earth: ImageMap,
     earth_tiles: (u32, u32),
     /// The air before each point (atmos_froxel.wgsl), the sun's half and

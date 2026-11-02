@@ -705,8 +705,10 @@ The pyramid is planar and leaves the poles out, but the sky and the ground past
 the terrain are drawn too. The earth's picture is a layer: reflectance with city
 lights in alpha (`pxl-spec bake/tile/earth.rs`), held only for the floor's tiles
 (`domain/layer/earth.rs` `earth_window`), and answered by a coarser global
-picture where none is held. The sun, moon and stars, the scattering and the
-clouds are no layer: each is evaluated per pixel from a few parameters.
+picture where none is held. Nothing waits for that picture: until it comes,
+the land past the terrain shows the air before it alone. The sun, moon and
+stars, the scattering and the clouds are no layer: each is evaluated per pixel
+from a few parameters.
 
 The sky is drawn at the far plane, so only pixels no ray met run it
 (`frame/shader/sky.wgsl`). Where such a ray falls to the land, it shows flat

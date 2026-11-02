@@ -116,8 +116,8 @@ fn map_of(p: vec3f) -> vec2f {
 }
 
 // Reflectance, and in alpha its lights' square root, at the map's place
-// `mercator`: the global picture at its latitude and longitude, a held tile
-// over it.
+// `mercator`: the global picture at its latitude and longitude, zero before
+// it has come, a held tile over it.
 fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
   let lat = 2.0 * atan(exp(mercator.y)) - 0.5 * PI;
   let uv = vec2f(fract(mercator.x / TAU + 0.5), 0.5 - lat / PI);

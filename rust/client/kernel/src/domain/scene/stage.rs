@@ -134,10 +134,6 @@ pub fn stage_write() {
 /// `pace` is the frame as the turn paced it, which the world's drawn
 /// resolution is judged by (domain/view/frame/resolution.rs `load`).
 pub fn stage_render(pace: Pace) {
-    // Nothing is drawn before the floor: its arrival asks for the next turn.
-    if load_image(EARTH).is_none() {
-        return;
-    }
     let lists = draw_list().take();
     let actors = lists.stands;
     let models = model::models();
