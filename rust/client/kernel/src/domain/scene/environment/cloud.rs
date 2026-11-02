@@ -13,7 +13,7 @@
 
 use fnv::FnvHashMap;
 
-use pxl_content::cloud::{drift, lattice_hash};
+use pxl_content::cloud::{drift, holds_cloud, lattice_hash};
 use pxl_content::generation::drawn;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
@@ -349,7 +349,10 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
             ];
             let at = cell.map(|v| (v & (CELLS_AROUND - 1)) as u32);
             let hash = |salt: u32| f64::from(lattice_hash(at, salt));
-            if hash(CLOUD_SALT) >= CLOUD_SHARE {
+            // Its patch's count handed down to it (pxl-content cloud.rs
+            // `holds_cloud`), as the decor's and the caves' are.
+            let mean = (CLOUD_SHARE * f64::from(PATCH_CELLS * PATCH_CELLS)) as u32;
+            if !holds_cloud(cell.map(|v| v as i32), mean) {
                 return None;
             }
             let jitter = [hash(CLOUD_SALT + 1), hash(CLOUD_SALT + 2)];

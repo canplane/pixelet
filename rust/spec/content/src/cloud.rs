@@ -7,10 +7,12 @@
 //! GPU (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render
 //! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_SHARE_BITS`.
 
-use pxl_engine::UNIT_ZOOM;
+use pxl_engine::seed::node_seed;
+use pxl_engine::{Zoom, UNIT_ZOOM};
 
 use crate::param::cloud::LATTICE_SHAMT;
 use crate::param::cloud::WIND;
+use crate::pyramid::share_out;
 
 /// The lattice's units around the world, X's 2^24 units over a lattice unit's.
 pub const LATTICE_CNT: u32 = 1 << (UNIT_ZOOM - LATTICE_SHAMT);
@@ -45,3 +47,41 @@ pub fn lattice_hash([x, y]: [u32; 2], salt: u32) -> f32 {
     h ^= h >> HASH_LAST;
     (h >> (32 - HASH_SHARE_BITS)) as f32 / (1u32 << HASH_SHARE_BITS) as f32
 }
+
+/// The lattice's zoom: a cell of the field a node there, across.
+const CELL_ZOOM: Zoom = UNIT_ZOOM - LATTICE_SHAMT;
+/// A patch of cells a cumulus count starts at, 16 a side.
+const PATCH_ZOOM: Zoom = CELL_ZOOM - 4;
+/// The tags of a patch's count and its split (`node_seed`).
+const CUMULUS: u32 = 0xc10d_0001;
+const CUMULUS_SPLIT: u32 = 0xc10d_0002;
+
+/// Whether the field's cell `cell` holds a cumulus: its patch holds `mean`
+/// of its 256 about a hash's draw, handed down to its four a step by
+/// weights a hash draws, squared so they gather in clumps
+/// (`pyramid::share_out`, the one rule the decor and the caves hand theirs
+/// by), to one or none a cell.
+pub fn holds_cloud(cell: [i32; 2], mean: u32) -> bool {
+    let at = |z: Zoom| [cell[0] >> (CELL_ZOOM - z), cell[1] >> (CELL_ZOOM - z)];
+    let draw = node_seed(CUMULUS, (PATCH_ZOOM, at(PATCH_ZOOM)));
+    let n = mean as i32 + (draw & 0x3f) as i32 - 32;
+    let mut n = n.clamp(0, 256) as u32;
+    let mut z = PATCH_ZOOM;
+    while z < CELL_ZOOM && n > 0 {
+        let h = node_seed(CUMULUS_SPLIT, (z, at(z)));
+        let w = |b: u32| {
+            let u = (h >> b) & 0x7f;
+            u * u + 1
+        };
+        let room = 1u32 << (2 * (CELL_ZOOM - z - 1));
+        let c = at(z + 1);
+        let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
+        n = share_out(n, [room, room, room, room, 0, 0, 0, 0], [w(0), w(8), w(16), w(24), 0, 0, 0, 0])[quarter];
+        z += 1;
+    }
+    n > 0
+}
+
+#[cfg(test)]
+#[path = "cloud.test.rs"]
+mod test;
