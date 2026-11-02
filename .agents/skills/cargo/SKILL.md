@@ -16,6 +16,9 @@ worktree is refused a command that runs git inside `$(...)`.
 export CARGO_TARGET_DIR="<root>/rust/target/session/<id>"
 ```
 
+A hook (`.claude/hooks/seed`) clones a new target and a worktree's node modules
+from what is built.
+
 `cargo lint-android` (in `make check`) needs the NDK's compiler at the app's
 minSdk (29), or zstd-sys fails with
 `failed to find tool "aarch64-linux-android-clang"`:

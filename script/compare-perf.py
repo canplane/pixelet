@@ -78,9 +78,9 @@ class Page:
                 "--disable-backgrounding-occluded-windows",
                 "--disable-renderer-backgrounding",
                 "--disable-background-timer-throttling",
-                # A CSS pixel is a device pixel on whichever screen the window
-                # opens: every run draws `SIZE`'s pixels.
-                "--force-device-scale-factor=1",
+                # A CSS pixel is two device pixels on whichever screen the
+                # window opens: every run draws twice `SIZE`'s pixels a side.
+                "--force-device-scale-factor=2",
                 "about:blank",
             ],
             preexec_fn=pipes,
