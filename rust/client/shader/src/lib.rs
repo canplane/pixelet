@@ -3,8 +3,8 @@
 //! The GPU's compute entries, a module of their own each when built, over
 //! the world as the GPU holds it (world.rs) and the eye it is cast from
 //! (eye.rs): the passes a cast takes, written once over the observer it
-//! casts for (observer.rs), a pass both observers take one entry
-//! (pass_observer.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
+//! casts for (observer.rs), a pass both observers take an entry each, the
+//! eye's rays (beam.rs, raster.rs, cast.rs) through the
 //! observed pyramid (pyramid.rs), their image bound only where rays.rs lets
 //! it be (cast.rs, light_mark.rs), the world's depth from the light (light.rs),
 //! each handed brick's ground (ground.rs) and ways (way.rs), and the decor
@@ -20,7 +20,6 @@
 mod beam;
 mod rays;
 mod decor;
-mod pass_observer;
 mod eye;
 mod ground;
 mod pyramid;
@@ -33,7 +32,7 @@ mod world;
 
 use rays::{cast, light_mark};
 
-pub use beam::{beam_cs, cell_cs, sample_cs};
+pub use beam::{beam_cs, cell_cs, light_beam_cs, light_cell_cs, light_sample_cs, sample_cs};
 pub use cast::{cast_cs, miss_cs, miss_list_cs, hit_faces_cs, hit_lead_cs};
 pub use decor::{
     decor_args_cs, decor_cnt_cs, decor_compact_cs, decor_cs, decor_footing_cs, decor_mark_cs,
@@ -42,7 +41,7 @@ pub use decor::{
 pub use eye::Eye;
 pub use ground::{bound_cs, height_cs, fold_cs};
 pub use pyramid::forget_cs;
-pub use raster::{face_cs, sample_box_cs};
+pub use raster::{face_cs, light_sample_box_cs, sample_box_cs};
 pub use light::{
     light_cs, light_slide_cs, light_mark_draws_cs, light_miss_cs, light_propagate_cs, Head,
 };

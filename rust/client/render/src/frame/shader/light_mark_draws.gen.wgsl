@@ -56,9 +56,15 @@ fn function_() {
     var phi_158_: u32;
     var phi_167_: u32;
     var phi_184_: u32;
-    var phi_188_: array<f32, 3>;
-    var phi_210_: array<f32, 3>;
-    var phi_211_: array<f32, 3>;
+    var phi_188__i0: f32;
+    var phi_188__i1: f32;
+    var phi_188__i2: f32;
+    var phi_210__i0: f32;
+    var phi_210__i1: f32;
+    var phi_210__i2: f32;
+    var phi_211__i0: f32;
+    var phi_211__i1: f32;
+    var phi_211__i2: f32;
     var phi_212_: bool;
     var phi_278_: bool;
     var phi_280_: bool;
@@ -83,16 +89,25 @@ fn function_() {
         let _e162 = global_2.member.member[13u][0u];
         let _e164 = (_e45.x >= bitcast<u32>(_e162));
         if _e164 {
-            phi_210_ = array<f32, 3>();
+            let split_1 = vec3<f32>();
+            phi_210__i0 = split_1[0];
+            phi_210__i1 = split_1[1];
+            phi_210__i2 = split_1[2];
         } else {
             let _e165 = (14u + _e45.x);
             let _e170 = global_2.member.member[_e165][0u];
             let _e175 = global_2.member.member[_e165][1u];
             let _e180 = global_2.member.member[_e165][2u];
-            phi_210_ = array<f32, 3>(bitcast<f32>(bitcast<u32>(_e170)), bitcast<f32>(bitcast<u32>(_e175)), bitcast<f32>(bitcast<u32>(_e180)));
+            let split_2 = vec3<f32>(bitcast<f32>(bitcast<u32>(_e170)), bitcast<f32>(bitcast<u32>(_e175)), bitcast<f32>(bitcast<u32>(_e180)));
+            phi_210__i0 = split_2[0];
+            phi_210__i1 = split_2[1];
+            phi_210__i2 = split_2[2];
         }
-        let _e189 = phi_210_;
-        phi_211_ = _e189;
+        let _e189 = vec3<f32>(phi_210__i0, phi_210__i1, phi_210__i2);
+        let split_3 = _e189;
+        phi_211__i0 = split_3[0];
+        phi_211__i1 = split_3[1];
+        phi_211__i2 = split_3[2];
         phi_212_ = _e164;
     } else {
         let _e56 = (_e45.x - 32u);
@@ -106,7 +121,10 @@ fn function_() {
         let _e63 = (_e53 / 6u);
         let _e66 = (_e56 >= select(_e62, _e63, (_e63 < _e62)));
         if _e66 {
-            phi_188_ = array<f32, 3>();
+            let split_4 = vec3<f32>();
+            phi_188__i0 = split_4[0];
+            phi_188__i1 = split_4[1];
+            phi_188__i2 = split_4[2];
         } else {
             let _e70 = global_1.member.member[0u];
             let _e74 = global_1.member.member[1u];
@@ -155,13 +173,19 @@ fn function_() {
                 phi_184_ = 0u;
             }
             let _e152 = phi_184_;
-            phi_188_ = array<f32, 3>(((f32((((bitcast<i32>(_e84) - (_e70 >> bitcast<u32>(8u))) << bitcast<u32>(8i)) >> bitcast<u32>(8i))) - (f32((_e70 & 255i)) * 0.00390625f)) + bitcast<f32>(_e103)), ((f32((bitcast<i32>(_e111) - (_e74 >> bitcast<u32>(8u)))) - (f32((_e74 & 255i)) * 0.00390625f)) + bitcast<f32>(_e127)), ((f32((bitcast<i32>(_e135) - (_e78 >> bitcast<u32>(8u)))) - (f32((_e78 & 255i)) * 0.00390625f)) + bitcast<f32>(_e152)));
+            let split_5 = vec3<f32>(((f32((((bitcast<i32>(_e84) - (_e70 >> bitcast<u32>(8u))) << bitcast<u32>(8i)) >> bitcast<u32>(8i))) - (f32((_e70 & 255i)) * 0.00390625f)) + bitcast<f32>(_e103)), ((f32((bitcast<i32>(_e111) - (_e74 >> bitcast<u32>(8u)))) - (f32((_e74 & 255i)) * 0.00390625f)) + bitcast<f32>(_e127)), ((f32((bitcast<i32>(_e135) - (_e78 >> bitcast<u32>(8u)))) - (f32((_e78 & 255i)) * 0.00390625f)) + bitcast<f32>(_e152)));
+            phi_188__i0 = split_5[0];
+            phi_188__i1 = split_5[1];
+            phi_188__i2 = split_5[2];
         }
-        let _e157 = phi_188_;
-        phi_211_ = _e157;
+        let _e157 = vec3<f32>(phi_188__i0, phi_188__i1, phi_188__i2);
+        let split_6 = _e157;
+        phi_211__i0 = split_6[0];
+        phi_211__i1 = split_6[1];
+        phi_211__i2 = split_6[2];
         phi_212_ = _e66;
     }
-    let _e191 = phi_211_;
+    let _e191 = vec3<f32>(phi_211__i0, phi_211__i1, phi_211__i2);
     let _e193 = phi_212_;
     if select(true, false, _e193) {
         let _e198 = (_e191[2] + 2.5f);

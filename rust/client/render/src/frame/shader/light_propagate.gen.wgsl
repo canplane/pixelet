@@ -35,8 +35,8 @@ struct type_24 {
 }
 
 struct type_29 {
-    member: array<i32, 2>,
-    member_1: array<i32, 2>,
+    member: vec2<i32>,
+    member_1: vec2<i32>,
 }
 
 struct type_32 {
@@ -93,14 +93,24 @@ fn function_() {
     var phi_435_: u32;
     var phi_436_: bool;
     var phi_442_: u32;
-    var phi_450_: type_29;
+    var phi_450__f_member_i0: i32;
+    var phi_450__f_member_i1: i32;
+    var phi_450__f_member_1_i0: i32;
+    var phi_450__f_member_1_i1: i32;
     var phi_451_: bool;
-    var phi_455_: type_29;
-    var phi_484_: array<i32, 2>;
-    var phi_485_: array<u32, 2>;
+    var phi_455__f_member_i0: i32;
+    var phi_455__f_member_i1: i32;
+    var phi_455__f_member_1_i0: i32;
+    var phi_455__f_member_1_i1: i32;
+    var phi_484__i0: i32;
+    var phi_484__i1: i32;
+    var phi_485__i0: u32;
+    var phi_485__i1: u32;
     var phi_486_: bool;
-    var phi_498_: array<i32, 2>;
-    var phi_499_: array<i32, 2>;
+    var phi_498__i0: i32;
+    var phi_498__i1: i32;
+    var phi_499__i0: i32;
+    var phi_499__i1: i32;
     var phi_503_: u32;
     var phi_506_: u32;
     var phi_504_: u32;
@@ -462,88 +472,144 @@ fn function_() {
                                     let _e373 = bitcast<i32>(_e372);
                                     switch bitcast<i32>(_e363) {
                                         case 0: {
-                                            phi_450_ = type_29(array<i32, 2>(-7i, -7i), array<i32, 2>(6i, 6i));
+                                            let split_1 = type_29(vec2<i32>(-7i, -7i), vec2<i32>(6i, 6i));
+                                            phi_450__f_member_i0 = split_1.member[0];
+                                            phi_450__f_member_i1 = split_1.member[1];
+                                            phi_450__f_member_1_i0 = split_1.member_1[0];
+                                            phi_450__f_member_1_i1 = split_1.member_1[1];
                                             phi_451_ = false;
                                             break;
                                         }
                                         case 1: {
-                                            phi_450_ = type_29();
+                                            let split_2 = type_29();
+                                            phi_450__f_member_i0 = split_2.member[0];
+                                            phi_450__f_member_i1 = split_2.member[1];
+                                            phi_450__f_member_1_i0 = split_2.member_1[0];
+                                            phi_450__f_member_1_i1 = split_2.member_1[1];
                                             phi_451_ = true;
                                             break;
                                         }
                                         case 2: {
-                                            phi_450_ = type_29();
+                                            let split_3 = type_29();
+                                            phi_450__f_member_i0 = split_3.member[0];
+                                            phi_450__f_member_i1 = split_3.member[1];
+                                            phi_450__f_member_1_i0 = split_3.member_1[0];
+                                            phi_450__f_member_1_i1 = split_3.member_1[1];
                                             phi_451_ = true;
                                             break;
                                         }
                                         case 3: {
-                                            phi_450_ = type_29(array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i));
+                                            let split_4 = type_29(vec2<i32>(0i, 0i), vec2<i32>(0i, 0i));
+                                            phi_450__f_member_i0 = split_4.member[0];
+                                            phi_450__f_member_i1 = split_4.member[1];
+                                            phi_450__f_member_1_i0 = split_4.member_1[0];
+                                            phi_450__f_member_1_i1 = split_4.member_1[1];
                                             phi_451_ = false;
                                             break;
                                         }
                                         default: {
-                                            phi_450_ = type_29();
+                                            let split_5 = type_29();
+                                            phi_450__f_member_i0 = split_5.member[0];
+                                            phi_450__f_member_i1 = split_5.member[1];
+                                            phi_450__f_member_1_i0 = split_5.member_1[0];
+                                            phi_450__f_member_1_i1 = split_5.member_1[1];
                                             phi_451_ = bool();
                                             break;
                                         }
                                     }
-                                    let _e376 = phi_450_;
+                                    let _e376 = type_29(vec2<i32>(phi_450__f_member_i0, phi_450__f_member_i1), vec2<i32>(phi_450__f_member_1_i0, phi_450__f_member_1_i1));
                                     let _e378 = phi_451_;
                                     if _e378 {
-                                        phi_455_ = type_29(array<i32, 2>(-1i, -1i), array<i32, 2>(1i, 1i));
+                                        let split_6 = type_29(vec2<i32>(-1i, -1i), vec2<i32>(1i, 1i));
+                                        phi_455__f_member_i0 = split_6.member[0];
+                                        phi_455__f_member_i1 = split_6.member[1];
+                                        phi_455__f_member_1_i0 = split_6.member_1[0];
+                                        phi_455__f_member_1_i1 = split_6.member_1[1];
                                     } else {
-                                        phi_455_ = _e376;
+                                        let split_7 = _e376;
+                                        phi_455__f_member_i0 = split_7.member[0];
+                                        phi_455__f_member_i1 = split_7.member[1];
+                                        phi_455__f_member_1_i0 = split_7.member_1[0];
+                                        phi_455__f_member_1_i1 = split_7.member_1[1];
                                     }
-                                    let _e380 = phi_455_;
+                                    let _e380 = type_29(vec2<i32>(phi_455__f_member_i0, phi_455__f_member_i1), vec2<i32>(phi_455__f_member_1_i0, phi_455__f_member_1_i1));
                                     if (_e363 == 0u) {
                                         switch bitcast<i32>(_e363) {
                                             case 0: {
-                                                phi_484_ = array<i32, 2>(-5i, -5i);
-                                                phi_485_ = array<u32, 2>();
+                                                let split_8 = vec2<i32>(-5i, -5i);
+                                                phi_484__i0 = split_8[0];
+                                                phi_484__i1 = split_8[1];
+                                                let split_9 = vec2<u32>();
+                                                phi_485__i0 = split_9[0];
+                                                phi_485__i1 = split_9[1];
                                                 phi_486_ = true;
                                                 break;
                                             }
                                             case 1: {
-                                                phi_484_ = array<i32, 2>(0i, 0i);
-                                                phi_485_ = array<u32, 2>();
+                                                let split_10 = vec2<i32>(0i, 0i);
+                                                phi_484__i0 = split_10[0];
+                                                phi_484__i1 = split_10[1];
+                                                let split_11 = vec2<u32>();
+                                                phi_485__i0 = split_11[0];
+                                                phi_485__i1 = split_11[1];
                                                 phi_486_ = true;
                                                 break;
                                             }
                                             case 2: {
                                                 let _e395 = (_e68 - 1u);
-                                                phi_484_ = array<i32, 2>();
-                                                phi_485_ = array<u32, 2>((bitcast<u32>((0i - _e97)) & _e395), (bitcast<u32>((0i - _e100)) & _e395));
+                                                let split_12 = vec2<i32>();
+                                                phi_484__i0 = split_12[0];
+                                                phi_484__i1 = split_12[1];
+                                                let split_13 = vec2<u32>((bitcast<u32>((0i - _e97)) & _e395), (bitcast<u32>((0i - _e100)) & _e395));
+                                                phi_485__i0 = split_13[0];
+                                                phi_485__i1 = split_13[1];
                                                 phi_486_ = false;
                                                 break;
                                             }
                                             case 3: {
                                                 let _e387 = (_e68 - 1u);
-                                                phi_484_ = array<i32, 2>();
-                                                phi_485_ = array<u32, 2>((bitcast<u32>((0i - _e97)) & _e387), (bitcast<u32>((0i - _e100)) & _e387));
+                                                let split_14 = vec2<i32>();
+                                                phi_484__i0 = split_14[0];
+                                                phi_484__i1 = split_14[1];
+                                                let split_15 = vec2<u32>((bitcast<u32>((0i - _e97)) & _e387), (bitcast<u32>((0i - _e100)) & _e387));
+                                                phi_485__i0 = split_15[0];
+                                                phi_485__i1 = split_15[1];
                                                 phi_486_ = false;
                                                 break;
                                             }
                                             default: {
-                                                phi_484_ = array<i32, 2>();
-                                                phi_485_ = array<u32, 2>();
+                                                let split_16 = vec2<i32>();
+                                                phi_484__i0 = split_16[0];
+                                                phi_484__i1 = split_16[1];
+                                                let split_17 = vec2<u32>();
+                                                phi_485__i0 = split_17[0];
+                                                phi_485__i1 = split_17[1];
                                                 phi_486_ = bool();
                                                 break;
                                             }
                                         }
-                                        let _e402 = phi_484_;
-                                        let _e404 = phi_485_;
+                                        let _e402 = vec2<i32>(phi_484__i0, phi_484__i1);
+                                        let _e404 = vec2<u32>(phi_485__i0, phi_485__i1);
                                         let _e406 = phi_486_;
                                         if select(true, false, _e406) {
-                                            phi_498_ = array<i32, 2>(bitcast<i32>((_e404[0] / 8u)), bitcast<i32>((_e404[1] / 8u)));
+                                            let split_18 = vec2<i32>(bitcast<i32>((_e404[0] / 8u)), bitcast<i32>((_e404[1] / 8u)));
+                                            phi_498__i0 = split_18[0];
+                                            phi_498__i1 = split_18[1];
                                         } else {
-                                            phi_498_ = _e402;
+                                            let split_19 = _e402;
+                                            phi_498__i0 = split_19[0];
+                                            phi_498__i1 = split_19[1];
                                         }
-                                        let _e416 = phi_498_;
-                                        phi_499_ = _e416;
+                                        let _e416 = vec2<i32>(phi_498__i0, phi_498__i1);
+                                        let split_20 = _e416;
+                                        phi_499__i0 = split_20[0];
+                                        phi_499__i1 = split_20[1];
                                     } else {
-                                        phi_499_ = array<i32, 2>(0i, 0i);
+                                        let split_21 = vec2<i32>(0i, 0i);
+                                        phi_499__i0 = split_21[0];
+                                        phi_499__i1 = split_21[1];
                                     }
-                                    let _e418 = phi_499_;
+                                    let _e418 = vec2<i32>(phi_499__i0, phi_499__i1);
                                     let _e420 = (_e348 + (_e350 * _e350));
                                     phi_503_ = 0u;
                                     phi_506_ = _e420;

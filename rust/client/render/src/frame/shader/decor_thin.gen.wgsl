@@ -42,17 +42,17 @@ var<storage, read_write> global_3: type_28;
 var<storage> global_4: type_4;
 
 fn function_() {
-    var local: array<u32, 4>;
-    var local_1: array<u32, 4>;
-    var local_2: array<u32, 4>;
-    var local_3: array<u32, 4>;
-    var local_4: array<u32, 4>;
-    var local_5: array<u32, 4>;
-    var local_6: array<u32, 4>;
-    var local_7: array<u32, 4>;
-    var local_8: array<u32, 4>;
-    var local_9: array<u32, 4>;
-    var local_10: array<u32, 4>;
+    var local: vec4<u32>;
+    var local_1: vec4<u32>;
+    var local_2: vec4<u32>;
+    var local_3: vec4<u32>;
+    var local_4: vec4<u32>;
+    var local_5: vec4<u32>;
+    var local_6: vec4<u32>;
+    var local_7: vec4<u32>;
+    var local_8: vec4<u32>;
+    var local_9: vec4<u32>;
+    var local_10: vec4<u32>;
     var phi_120_: u32;
     var phi_128_: u32;
     var phi_135_: u32;
@@ -222,11 +222,11 @@ fn function_() {
             let _e139 = ((_e117.y << bitcast<u32>(_e123)) + bitcast<i32>(((_e78.x / 64u) << bitcast<u32>(_e130))));
             let _e141 = (_e134 >> bitcast<u32>(_e130));
             let _e143 = (_e139 >> bitcast<u32>(_e130));
-            local_8 = array<u32, 4>(2030195468u, 2963636269u, 212217872u, 2074443821u);
+            local_8 = vec4<u32>(2030195468u, 2963636269u, 212217872u, 2074443821u);
             let _e145 = local_8[_e107];
-            local_9 = array<u32, 4>(107374182u, 4294967u, 12884902u, 6442451u);
+            local_9 = vec4<u32>(107374182u, 4294967u, 12884902u, 6442451u);
             let _e147 = local_9[_e107];
-            local_10 = array<u32, 4>(23u, 22u, 23u, 23u);
+            local_10 = vec4<u32>(23u, 22u, 23u, 23u);
             let _e149 = local_10[_e107];
             if (_e110 < _e149) {
                 phi_420_ = 0u;
@@ -379,7 +379,7 @@ fn function_() {
                         let _e430 = (_e139 + bitcast<i32>((_e422 / _e420)));
                         let _e434 = global_1.member[_e107].member;
                         let _e435 = (_e434 - 1024u);
-                        local_7 = array<u32, 4>(2030195468u, 2963636269u, 212217872u, 2074443821u);
+                        local_7 = vec4<u32>(2030195468u, 2963636269u, 212217872u, 2074443821u);
                         let _e437 = local_7[_e435];
                         let _e439 = ((1592590337u ^ _e437) + 2654435769u);
                         let _e443 = ((_e439 ^ (_e439 >> bitcast<u32>(16i))) * 2246822507u);
@@ -403,11 +403,11 @@ fn function_() {
                         let _e512 = ((_e508 ^ (_e508 >> bitcast<u32>(16i))) * 2246822507u);
                         let _e516 = ((_e512 ^ (_e512 >> bitcast<u32>(13i))) * 3266489909u);
                         let _e519 = (_e516 ^ (_e516 >> bitcast<u32>(16i)));
-                        local_4 = array<u32, 4>(2030195468u, 2963636269u, 212217872u, 2074443821u);
+                        local_4 = vec4<u32>(2030195468u, 2963636269u, 212217872u, 2074443821u);
                         let _e521 = local_4[_e435];
-                        local_5 = array<u32, 4>(107374182u, 4294967u, 12884902u, 6442451u);
+                        local_5 = vec4<u32>(107374182u, 4294967u, 12884902u, 6442451u);
                         let _e523 = local_5[_e435];
-                        local_6 = array<u32, 4>(23u, 22u, 23u, 23u);
+                        local_6 = vec4<u32>(23u, 22u, 23u, 23u);
                         let _e525 = local_6[_e435];
                         if (24u < _e525) {
                             phi_752_ = 0u;
@@ -627,7 +627,7 @@ fn function_() {
                                                 }
                                                 let _e924 = phi_878_;
                                                 if _e924 {
-                                                    local_3 = array<u32, 4>(2030195468u, 2963636269u, 212217872u, 2074443821u);
+                                                    local_3 = vec4<u32>(2030195468u, 2963636269u, 212217872u, 2074443821u);
                                                     let _e926 = local_3[_e435];
                                                     let _e928 = ((1592590337u ^ _e926) + 2654435769u);
                                                     let _e932 = ((_e928 ^ (_e928 >> bitcast<u32>(16i))) * 2246822507u);
@@ -649,11 +649,11 @@ fn function_() {
                                                     let _e997 = (_e984 + 1013904242u);
                                                     let _e1001 = ((_e997 ^ (_e997 >> bitcast<u32>(16i))) * 2246822507u);
                                                     let _e1005 = ((_e1001 ^ (_e1001 >> bitcast<u32>(13i))) * 3266489909u);
-                                                    local = array<u32, 4>(2030195468u, 2963636269u, 212217872u, 2074443821u);
+                                                    local = vec4<u32>(2030195468u, 2963636269u, 212217872u, 2074443821u);
                                                     let _e1010 = local[_e435];
-                                                    local_1 = array<u32, 4>(107374182u, 4294967u, 12884902u, 6442451u);
+                                                    local_1 = vec4<u32>(107374182u, 4294967u, 12884902u, 6442451u);
                                                     let _e1012 = local_1[_e435];
-                                                    local_2 = array<u32, 4>(23u, 22u, 23u, 23u);
+                                                    local_2 = vec4<u32>(23u, 22u, 23u, 23u);
                                                     let _e1014 = local_2[_e435];
                                                     if (24u < _e1014) {
                                                         phi_1188_ = 0u;

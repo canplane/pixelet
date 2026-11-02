@@ -161,7 +161,8 @@ fn function_() {
     var phi_564_: u32;
     var phi_567_: u32;
     var local_19: u32;
-    var phi_688_: type_11;
+    var phi_688__f_member: u32;
+    var phi_688__f_member_1: u32;
     var phi_692_: u32;
     var phi_711_: u32;
     var phi_784_: i32;
@@ -725,7 +726,9 @@ fn function_() {
                         }
                     }
                     let _e655 = local_19;
-                    phi_688_ = type_11((((_e62.x * 1264u) + _e655) + _e519), select(16u, _e523, (_e523 < 16u)));
+                    let split_1 = type_11((((_e62.x * 1264u) + _e655) + _e519), select(16u, _e523, (_e523 < 16u)));
+                    phi_688__f_member = split_1.member;
+                    phi_688__f_member_1 = split_1.member_1;
                 } else {
                     let _e127 = (((_e62.x - 768u) * 79u) + _e122);
                     if (4859136u < _e67) {
@@ -735,9 +738,11 @@ fn function_() {
                         phi_198_ = 0u;
                     }
                     let _e134 = phi_198_;
-                    phi_688_ = type_11((970752u + _e127), select(0u, 1u, (_e127 < _e134)));
+                    let split_2 = type_11((970752u + _e127), select(0u, 1u, (_e127 < _e134)));
+                    phi_688__f_member = split_2.member;
+                    phi_688__f_member_1 = split_2.member_1;
                 }
-                let _e662 = phi_688_;
+                let _e662 = type_11(phi_688__f_member, phi_688__f_member_1);
                 phi_692_ = 0u;
                 loop {
                     let _e666 = phi_692_;

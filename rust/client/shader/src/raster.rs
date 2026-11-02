@@ -13,9 +13,8 @@ use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
 use crate::beam::{node_at, BeamLine, Beams, BeamAncestors, Words};
-use crate::pass_observer::PassObserver;
 use crate::eye::{eye_origin, eye_ray, grid, Eye};
-use crate::light::Head;
+use crate::light::{Head, Map};
 use crate::observer::{self, Level, Observer};
 use crate::world::{face_of, unasked_face, NoPalette, World};
 use crate::{add, opens};
@@ -121,13 +120,28 @@ pub(crate) fn visible_cell<W: Words + ?Sized>(
     (hit, enters && axis == w.word(k + beam::SAMPLE_AXIS))
 }
 
-/// Each sample of its observer's lattice, a thread each: written as a box
-/// for the raster's draw (observer.rs `sample_box`), the screen's or the
-/// shadow map's as its head names (pass_observer.rs `PassObserver`); and, the screen's,
-/// what lies about its face asked once a box (`ask`), as its pixels draw
-/// the face.
+/// Each sample of the camera grid, a thread each: written as a box for the
+/// raster's draw (observer.rs `sample_box`); and what lies about its face
+/// asked once a box (`ask`), as its pixels draw the face. The shadow map's
+/// is `light_sample_box_cs`, which asks none.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "sample_box_cs"))]
 pub fn sample_box_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] boxes: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &mut [u32],
+) {
+    let (s, box_at) = box_by(eye, id, beams, boxes, args);
+    if box_at != NONE {
+        ask(eye, beams, s, box_at);
+        opens(args, raster::ARGS_FACES, box_at, raster::FACES_LANES);
+    }
+}
+
+/// `sample_box_cs` for the shadow map's samples.
+#[spirv(compute(threads(8, 8, 1), entry_point_name = "light_sample_box_cs"))]
+pub fn light_sample_box_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] beams: &mut Beams,
@@ -135,17 +149,24 @@ pub fn sample_box_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 14)] boxes: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 16)] args: &mut [u32],
 ) {
-    let o = PassObserver::of(eye, head);
+    box_by(&Map::of(eye, head), id, beams, boxes, args);
+}
+
+/// Sample `id` of `o`'s lattice written as a box, where it has one: the
+/// sample, and where its box lies among the boxes, `NONE` where none.
+fn box_by<O: Observer>(
+    o: &O,
+    id: UVec3,
+    beams: &mut Beams,
+    boxes: &mut [u32],
+    args: &mut [u32],
+) -> ([u32; 2], u32) {
     let [across, down] = o.samples();
     let s = o.take(&*beams, Level::Sample, [id.x, id.y]);
     if s[0] >= across || s[1] >= down {
-        return;
+        return (s, NONE);
     }
-    let box_at = observer::sample_box(&o, &*beams, s, boxes, args);
-    if !o.light() && box_at != NONE {
-        ask(eye, beams, s, box_at);
-        opens(args, raster::ARGS_FACES, box_at, raster::FACES_LANES);
-    }
+    (s, observer::sample_box(o, &*beams, s, boxes, args))
 }
 
 /// What lies about the face sample `s` entered, the screen's, whose box is

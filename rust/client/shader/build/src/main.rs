@@ -14,7 +14,8 @@
 //! its entry (SPIRV-Tools' performance passes open with `InlineExhaustive`),
 //! and every entry here is read so, no function of it called (`wgsl_of`):
 //! Adreno's driver refuses modules whose functions hand an array or a struct
-//! across a call (doc/experiment/20261103-shaders-on-two-phones).
+//! across a call (doc/experiment/20261103-shaders-on-two-phones), and what
+//! naga writes is rewritten for the same driver (rewrite.rs).
 //! A function a binding's pointer reaches is the codegen's clone of it for
 //! that binding, the pointer made again inside from the binding itself
 //! (rustc_codegen_spirv linker/specialize_roots.rs, vendored beside), or,
@@ -28,6 +29,8 @@ use naga::{
     Range, Span, Statement, Type, UniqueArena,
 };
 use spirv_builder::{Capability, ModuleResult, ShaderPanicStrategy, SpirvBuilder};
+
+mod rewrite;
 
 fn main() {
     let shader = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
@@ -120,7 +123,9 @@ fn wgsl(spv: &[u32]) -> Result<String, String> {
     uniform_loads(&mut module, &info);
     let info = validate(&module)?;
     naga::back::wgsl::write_string(&module, &info, naga::back::wgsl::WriterFlags::empty())
-        .map(|text| i32_min_called(&text))
+        .map(|text| {
+            rewrite::small_arrays_as_vectors(&rewrite::split_phis(&i32_min_called(&text)))
+        })
         .map_err(|e| e.to_string())
 }
 

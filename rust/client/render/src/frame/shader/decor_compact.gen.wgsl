@@ -143,10 +143,13 @@ fn function_() {
     var phi_540_: u32;
     var phi_543_: u32;
     var local_19: u32;
-    var phi_664_: type_11;
+    var phi_664__f_member: u32;
+    var phi_664__f_member_1: u32;
     var phi_668_: u32;
     var phi_687_: u32;
-    var phi_721_: array<u32, 3>;
+    var phi_721__i0: u32;
+    var phi_721__i1: u32;
+    var phi_721__i2: u32;
     var phi_669_: u32;
     var phi_152_: u32;
 
@@ -672,7 +675,9 @@ fn function_() {
                         }
                     }
                     let _e644 = local_19;
-                    phi_664_ = type_11((((_e49.x * 1264u) + _e644) + _e508), select(16u, _e512, (_e512 < 16u)));
+                    let split_1 = type_11((((_e49.x * 1264u) + _e644) + _e508), select(16u, _e512, (_e512 < 16u)));
+                    phi_664__f_member = split_1.member;
+                    phi_664__f_member_1 = split_1.member_1;
                 } else {
                     let _e116 = (((_e49.x - 768u) * 79u) + _e111);
                     if (4859136u < _e54) {
@@ -682,9 +687,11 @@ fn function_() {
                         phi_174_ = 0u;
                     }
                     let _e123 = phi_174_;
-                    phi_664_ = type_11((970752u + _e116), select(0u, 1u, (_e116 < _e123)));
+                    let split_2 = type_11((970752u + _e116), select(0u, 1u, (_e116 < _e123)));
+                    phi_664__f_member = split_2.member;
+                    phi_664__f_member_1 = split_2.member_1;
                 }
-                let _e651 = phi_664_;
+                let _e651 = type_11(phi_664__f_member, phi_664__f_member_1);
                 phi_668_ = 0u;
                 loop {
                     let _e655 = phi_668_;
@@ -712,11 +719,17 @@ fn function_() {
                                 let _e696 = global_4.member[_e678].member_7[_e681][1u];
                                 let _e702 = global_4.member[_e678].member_7[_e681][2u];
                                 if ((_e684 % 2u) == 0u) {
-                                    phi_721_ = array<u32, 3>(_e690, _e696, _e702);
+                                    let split_3 = vec3<u32>(_e690, _e696, _e702);
+                                    phi_721__i0 = split_3[0];
+                                    phi_721__i1 = split_3[1];
+                                    phi_721__i2 = split_3[2];
                                 } else {
-                                    phi_721_ = array<u32, 3>(_e696, _e690, _e702);
+                                    let split_4 = vec3<u32>(_e696, _e690, _e702);
+                                    phi_721__i0 = split_4[0];
+                                    phi_721__i1 = split_4[1];
+                                    phi_721__i2 = split_4[2];
                                 }
-                                let _e708 = phi_721_;
+                                let _e708 = vec3<u32>(phi_721__i0, phi_721__i1, phi_721__i2);
                                 let _e711 = (arrayLength((&global_7.member)) / 6u);
                                 if (_e677 >= _e711) {
                                 } else {

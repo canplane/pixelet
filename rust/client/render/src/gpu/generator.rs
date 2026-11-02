@@ -162,11 +162,7 @@ impl Generator {
             mark: pipelines.build_compute(g, SHADER_GENERATION_MARK, &compute::DECOR_MARK_GROUP),
             thin: pipelines.build_compute(g, SHADER_GENERATION_THIN, &compute::DECOR_THIN_GROUP),
             // The footing's group is the pose's: one layout, one bind group.
-            footing: pipelines.build_compute(
-                g,
-                SHADER_GENERATION_FOOTING,
-                &compute::DECOR_GROUP,
-            ),
+            footing: pipelines.build_compute(g, SHADER_GENERATION_FOOTING, &compute::DECOR_GROUP),
             generate: pipelines.build_compute(g, SHADER_GENERATION, &compute::DECOR_GROUP),
             cnt: pipelines.build_compute(g, SHADER_GENERATION_CNT, &compute::DECOR_CNT_GROUP),
             args_pipeline: pipelines.build_compute(
