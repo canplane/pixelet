@@ -73,7 +73,7 @@ fn stats_words(window_ms: Option<f64>) -> u32 {
 fn perf_rings() -> u32 {
     use crate::perf::record::{perf_frames, perf_tasks, perf_worst};
     use crate::perf::spec::{RING, RINGS, RING_NAMES};
-    // On the heap, as READ's words are.
+    // On the heap, as STATS's words are (`stats_words`).
     static WORDS: Global<Box<[u32; RINGS::WORDS as usize]>> = Global::new();
     let (frames, tasks, worst) = (perf_frames(), perf_tasks(), perf_worst());
     let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
