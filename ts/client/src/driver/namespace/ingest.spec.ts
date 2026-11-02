@@ -1,8 +1,8 @@
-// @pxl/client/driver/namespace/ingested.spec.ts
+// @pxl/client/driver/namespace/ingest.spec.ts
 //
-// GENERATED from spec/spec/asset/ingested.json
+// GENERATED from spec/spec/asset/ingest.json
 // Every shipped asset by its number below the asset root, file n at
-// `INGESTED[n - 1]` (ts/client/src/driver/namespace/asset.ts): the bucket key
+// `ASSET_FILES[n - 1]` (ts/client/src/driver/namespace/asset.ts): the bucket key
 // (the SHA-256 of its bytes, which where it lies does not change), its size,
 // and for a model its extent in ENU world units, measured from the glb. The
 // bytes themselves are in the bucket.
@@ -14,7 +14,7 @@ export interface IngestedFile {
   extent?: readonly [number, number, number];
 }
 
-export const INGESTED: readonly IngestedFile[] = [
+export const ASSET_FILES: readonly IngestedFile[] = [
   {
     key: "asset/20f91809e69c66625190eb02aebef9ab543f5cf5cb17b8211b1002330584bfac.glb",
     bytes: 149728,

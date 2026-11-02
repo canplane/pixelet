@@ -12,14 +12,12 @@
  * - The debug builds of both flavors, a phone's and a Quest's (the `mobile`
  *   and `quest` expo-horizon-core adds), load their JavaScript from Metro.
  *   React Native takes a variant for a debug build only by its whole name,
- *   `debug` unless told, and bundles every other one into its APK: a
- *   `questDebug` was a Debug build that never asked Metro.
+ *   `debug` unless told, and bundles every other one into its APK.
  * - Gradle's daemon on Java 17, whatever launches it: the NDK's native build
  *   of expo-modules-core fails under a newer Java ("A restricted method in
- *   java.lang.System has been called"). A shell's `JAVA_HOME` did not hold
- *   it — Android Studio's sync writes the daemon's criteria for its own
- *   bundled Java 25, and the criteria outrank `JAVA_HOME` — so the criteria
- *   are written here, where Studio finds them already said.
+ *   java.lang.System has been called"). Android Studio's sync writes the
+ *   daemon's criteria for its own bundled Java 25, and the criteria outrank
+ *   `JAVA_HOME`, so the criteria are written here.
  */
 
 import * as fs from "node:fs";
@@ -29,6 +27,7 @@ import {
   withDangerousMod,
   withGradleProperties,
 } from "expo/config-plugins";
+import type { ConfigPlugin } from "expo/config-plugins";
 
 const PROPERTIES = {
   reactNativeArchitectures: "arm64-v8a",
@@ -43,7 +42,7 @@ const DEBUGGABLE = FLAVORS.flatMap((flavor) => [
 const MARK = "// pxl: the flavors' debug builds (plugin/android-build.ts)";
 const DAEMON_JAVA = "17";
 
-export default (config) => {
+const plugin: ConfigPlugin = (config) => {
   config = withGradleProperties(config, (config) => {
     const items = config.modResults.filter(
       (item) => !(item.type === "property" && item.key in PROPERTIES),
@@ -87,3 +86,5 @@ export default (config) => {
     return config;
   });
 };
+
+export default plugin;

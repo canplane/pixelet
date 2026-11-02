@@ -3,8 +3,9 @@
 /**
  * The client is ts/client/src, the same files Vite bundles for the web,
  * with a device's own beside a default by React Native's suffixes (pill.ios.tsx
- * beside pill.tsx). Every alias is tsconfig.json's (ts/build/paths.ts), so
- * the client is read exactly as the type-check reads it.
+ * beside pill.tsx). Every alias is tsconfig.json's and every workspace package
+ * resolves to its source (ts/build/paths.ts), so the client is read exactly as
+ * the type-check reads it.
  */
 
 import { execSync } from "node:child_process";
@@ -12,7 +13,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
 import { getDefaultConfig } from "expo/metro-config";
-import { mapped, REPO, WORKSPACE } from "@pxl/build/paths.ts";
+import { REPO, treeFile, WORKSPACE } from "@pxl/build/paths.ts";
 
 // The app's directory, from the workspace the import maps are read under: Expo
 // loads this file through its own transform, which takes no `import.meta`.
@@ -30,9 +31,8 @@ const FROM_APP = path.join(here, "index.ts");
  * module `virtual:pxl-build` (deploy.ts reads it). The source is git's
  * short hash, `-dirty` where the tree had changes; the number is the one CI
  * handed the build, or else `#<n>-<id>` from the number the deployment serves
- * (ts/client/.build_number, script/build-number.py), since a build CI did not
- * number is not that build. Written once, when Metro starts: a dev server's
- * stamp is the one it started under.
+ * (ts/client/.build_number, script/build-number.py). Written once, when
+ * Metro starts: a dev server's stamp is the one it started under.
  */
 function buildStamp(): string {
   let id = "unknown";
@@ -96,13 +96,13 @@ function ownPlatform(
   return file;
 }
 
-const config = getDefaultConfig(here);
+const base = getDefaultConfig(here);
 
-// The shell's files, xpute's and pnpm's store are all outside this app's
-// directory; the bundle reads nothing else.
-config.watchFolders = [WORKSPACE, path.join(REPO, "xpute/ts")];
-
-config.resolver.resolveRequest = (context, name, platform) => {
+const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
+  context,
+  name,
+  platform,
+) => {
   if (SINGLETONS.some((s) => name === s || name.startsWith(`${s}/`))) {
     return context.resolveRequest(
       { ...context, originModulePath: FROM_APP },
@@ -113,15 +113,14 @@ config.resolver.resolveRequest = (context, name, platform) => {
   if (name === "virtual:pxl-build") {
     return { type: "sourceFile", filePath: BUILD_STAMP };
   }
-  // A file an import names, through an alias or relative, is taken as this
-  // platform has it.
+  // A file an import names, through an alias, a workspace package or
+  // relative, is taken as this platform has it.
   const from = context.originModulePath;
-  const hit = mapped(name);
-  const file = hit
-    ? hit.path
-    : name.startsWith(".") && path.extname(name) !== ""
+  const file = name.startsWith(".")
+    ? path.extname(name) !== ""
       ? path.resolve(path.dirname(from), name)
-      : null;
+      : null
+    : treeFile(from, name);
   if (file) {
     return context.resolveRequest(
       context,
@@ -132,4 +131,10 @@ config.resolver.resolveRequest = (context, name, platform) => {
   return context.resolveRequest(context, name, platform);
 };
 
-export default config;
+export default {
+  ...base,
+  // The shell's files, xpute's and pnpm's store are all outside this app's
+  // directory; the bundle reads nothing else.
+  watchFolders: [WORKSPACE, path.join(REPO, "xpute/ts")],
+  resolver: { ...base.resolver, resolveRequest },
+};

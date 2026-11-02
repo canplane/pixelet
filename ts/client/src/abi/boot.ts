@@ -20,7 +20,8 @@ import { FramePacing } from "@xpute/host/sched/frame_pacing.ts";
 import { Command, encode_sys_boot } from "@/abi/cmd.spec.ts";
 import { declare_source } from "@/driver/namespace/source.ts";
 import { namespace } from "@/driver/namespace/namespace.ts";
-import { follow_refused, migrate } from "@/driver/namespace/storage.ts";
+import { follow_refused_files } from "@/driver/namespace/refusal.ts";
+
 import { HOST, open_host } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
 import { BATCH_FRAMES, MARGIN_SHARE, SETTLE_MS } from "@/abi/pacing.spec.ts";
@@ -59,12 +60,12 @@ export function boot_state(): Boot {
 
 export const watch_boot = listeners.watch;
 
-/** What the shell hears the kernel raise: the snapshot it reads, and the kept
- * slots it names refused; the sensors the drivers start and stop. */
+/** What the shell hears the kernel raise: the snapshot it reads, and the
+ * files it names refused; the sensors the drivers start and stop. */
 const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.SHELL_SNAPSHOT]: (f) => {
     snapshot_posted(f);
-    follow_refused(kernel_snapshot().storage_refused);
+    follow_refused_files(kernel_snapshot().refused_files);
   },
   [Command.SENSOR_START]: sensor_start,
   [Command.SENSOR_STOP]: sensor_stop,
@@ -133,8 +134,6 @@ async function open(): Promise<void> {
   });
   bracket.online.watch(set_online);
   bracket.visibility.watch(world_visible);
-  // Before the kernel opens its storage files, which it does from SYS_BOOT on.
-  migrate();
   const pkt = encode_sys_boot(
     HOST.doorbell,
     __IS_DEV__,

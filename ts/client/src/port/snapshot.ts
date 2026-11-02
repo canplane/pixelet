@@ -39,8 +39,9 @@ const INIT: Snapshot = {
   m_per_px: 0,
   division: [],
   previews: [],
-  storage_refused: [],
+  refused_files: [],
   stall: null,
+  renderer_progress: 0,
 };
 
 let snapshot: Snapshot = INIT;

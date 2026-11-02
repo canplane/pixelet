@@ -15,7 +15,7 @@
 
 use pxl_render::api_spec::{device as numbers, stream};
 use xpute_gpu::host::native;
-use xpute_gpu::host::{Ask, Config};
+use xpute_gpu::host::{Ask, Config, OpenError};
 use xpute_host::mem::Memory;
 
 #[cfg(target_os = "android")]
@@ -31,25 +31,35 @@ const PREFERRED: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 /// What the host runs by: the renderer's numbers (spec/client/render/gpu/api.json
 /// `device`) and the platform's surface.
 const CFG: Config = Config {
-    preferred: PREFERRED,
+    preferred_format: PREFERRED,
     configure_at: native::CONFIGURE_AT,
     frame_latency: numbers::FRAME_LATENCY,
     upload_chunk_bytes: numbers::UPLOAD_CHUNK_BYTES as u64,
     present_mode: wgpu::PresentMode::Fifo,
 };
 
-/// The device the kernel asks for: the timestamps its spans are timed by
-/// and a stencil beside the world's depth, each where the adapter has it
-/// (pxl-render gpu/api.rs `Device`), and the adapter's own limits, since the
-/// simulator's Metal falls short of WebGPU's defaults and refuses a device
-/// that asks for them.
+/// The device the kernel asks for: its features (`features`), and the
+/// adapter's own limits, since the simulator's Metal falls short of WebGPU's
+/// defaults and refuses a device that asks for them.
 const ASK: Ask = Ask {
     backends: wgpu::Backends::PRIMARY,
     power_preference: wgpu::PowerPreference::HighPerformance,
-    features: wgpu::Features::TIMESTAMP_QUERY.union(wgpu::Features::DEPTH32FLOAT_STENCIL8),
+    features,
     limits: wgpu::Adapter::limits,
     memory_hints: wgpu::MemoryHints::Performance,
 };
+
+/// A stencil beside the world's depth (pxl-render gpu/api.rs
+/// `GATED_DEPTH`), and the timestamps its spans are timed by where the
+/// adapter has them (`Device`).
+fn features(adapter: &wgpu::Adapter) -> wgpu::Features {
+    wgpu::Features::DEPTH32FLOAT_STENCIL8 | (adapter.features() & wgpu::Features::TIMESTAMP_QUERY)
+}
+
+/// What refused the device, said as a panic is (`crate::say`).
+fn refused(e: &OpenError) {
+    crate::say(&format!("[gpu] the device did not open: {e:?}"));
+}
 
 /// What an iPhone's view hands over to be drawn into: its `CAMetalLayer`.
 #[cfg(target_vendor = "apple")]
@@ -63,11 +73,11 @@ fn target(layer: core::ptr::NonNull<core::ffi::c_void>) -> wgpu::SurfaceTargetUn
 // `xpute_gpu_surface_bind` and `xpute_gpu_surface_unbind`
 // (include/pxl_native.h): the app's loop then sends the app an event, and
 // JavaScript asks the strobe for a frame (ts/app/native/src/gpu.ts).
-xpute_gpu::native_abi!(crate::guest, ASK, CFG, target);
+xpute_gpu::native_abi!(crate::guest, ASK, CFG, target, refused);
 
 /// The turn's edge, on the kernel's thread: what the device has answered
 /// since, written into `memory` before the turn reads it.
-pub fn before_turn(mem: &mut Memory<'_>) {
+pub(crate) fn before_turn(mem: &mut Memory<'_>) {
     if let Some(h) = native::host() {
         h.poll(mem);
     }
@@ -78,12 +88,12 @@ pub fn before_turn(mem: &mut Memory<'_>) {
 /// taking a layer's drawable never blocks the JavaScript thread, which waits
 /// for the turn (xpute-host native `Guest::run`); every frame before the
 /// device opens.
-pub fn admit() -> bool {
+pub(crate) fn admit() -> bool {
     native::host().is_none_or(|h| h.admit())
 }
 
 /// The turn's calls run on the device, and its frames shown.
-pub fn after_turn(mem: &mut Memory<'_>) {
+pub(crate) fn after_turn(mem: &mut Memory<'_>) {
     if let (Some(h), Some(at)) = (native::host(), api::stream_at()) {
         h.run(mem, at, stream::HEAD);
         h.present();

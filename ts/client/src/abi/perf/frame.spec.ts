@@ -40,60 +40,68 @@ export const gpu_read = 29 as number;
 
 export const gpu_spans = 30 as number;
 
-export const gpu_busy_ms = 57 as number;
+export const gpu_busy_ms = 61 as number;
 
-export const gpu_px = 58 as number;
+export const gpu_px = 62 as number;
 
-export const scale = 59 as number;
+export const scale = 63 as number;
 
-export const draws = 60 as number;
+export const lattice = 64 as number;
 
-export const triangles = 61 as number;
+export const draws = 65 as number;
 
-export const gpu_frame = 62 as number;
+export const triangles = 66 as number;
 
-export const light_moved = 63 as number;
+export const gpu_frame = 67 as number;
 
-export const decor_boxes = 64 as number;
+export const light_moved = 68 as number;
 
-export const eye_cast = 65 as number;
+export const decor_boxes = 69 as number;
 
-export const eye_rays = 66 as number;
+export const eye_cast = 70 as number;
 
-export const eye_beam = 67 as number;
+export const eye_rays = 71 as number;
 
-export const eye_sample = 68 as number;
+export const eye_beam = 72 as number;
 
-export const eye_miss = 69 as number;
+export const eye_sample = 73 as number;
 
-export const eye_took = 70 as number;
+export const eye_miss = 74 as number;
 
-export const eye_walked = 71 as number;
+export const eye_took = 75 as number;
 
-export const eye_boxes = 72 as number;
+export const eye_walked = 76 as number;
 
-export const light_cast = 73 as number;
+export const eye_sky = 77 as number;
 
-export const light_beam = 74 as number;
+export const eye_boxes = 78 as number;
 
-export const light_sample = 75 as number;
+export const light_cast = 79 as number;
 
-export const light_miss = 76 as number;
+export const light_rays = 80 as number;
 
-export const light_took = 77 as number;
+export const light_beam = 81 as number;
 
-export const light_walked = 78 as number;
+export const light_sample = 82 as number;
 
-export const light_boxes = 79 as number;
+export const light_miss = 83 as number;
 
-export const tiles_landed = 80 as number;
+export const light_took = 84 as number;
 
-export const uploads = 81 as number;
+export const light_walked = 85 as number;
 
-export const uploads_bytes = 82 as number;
+export const light_sky = 86 as number;
 
-export const pack_bytes = 83 as number;
+export const light_boxes = 87 as number;
 
-export const heap_used_bytes = 84 as number;
+export const terrain_landed = 88 as number;
 
-export const WORDS = 85 as number;
+export const uploads = 89 as number;
+
+export const uploads_bytes = 90 as number;
+
+export const pack_bytes = 91 as number;
+
+export const heap_used_bytes = 92 as number;
+
+export const WORDS = 93 as number;

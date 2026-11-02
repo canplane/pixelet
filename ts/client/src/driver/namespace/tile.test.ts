@@ -3,33 +3,33 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import type { BaseLayer } from "./published.spec.ts";
+import type { BaseLayer } from "./publication.spec.ts";
 import { tile_url } from "@/driver/namespace/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { declaration } from "./source.ts";
 import { tile_name, tile_object } from "./tile.ts";
 import FIXTURE from "./tile.fixture.json" with { type: "json" };
 
-const DECLARED = declaration(JSON.stringify(FIXTURE.source))!;
+const DECLARATION = declaration(JSON.stringify(FIXTURE.source))!;
 
 test("tile_object - each kind's tile at each zoom, a shard's own version or not, is the URL the kernel made", () => {
   for (const { kind, subject, object } of FIXTURE.tiles) {
     const k = kind as BaseLayer;
     assert.deepStrictEqual(
-      tile_url(k, tile_object(DECLARED, k, BigInt(subject))!),
+      tile_url(k, tile_object(DECLARATION, k, BigInt(subject))!),
       tile_url(k, object),
       `${kind} ${subject}`,
     );
   }
   assert.deepStrictEqual(
-    tile_url("earth", tile_object(DECLARED, "earth", BigInt(SPHERE))!),
+    tile_url("earth", tile_object(DECLARATION, "earth", BigInt(SPHERE))!),
     tile_url("earth", FIXTURE.sphere),
   );
 });
 
 test("tile_object - a number that is no object's names none", () => {
   assert.deepStrictEqual(
-    tile_object(DECLARED, "terrain", BigInt(SPHERE)),
+    tile_object(DECLARATION, "terrain", BigInt(SPHERE)),
     null,
   );
   assert.deepStrictEqual(tile_name(1n << 64n), null);

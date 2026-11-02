@@ -3,8 +3,7 @@
 /** The kernel as the shell reaches it, beside each major's own commands
  * (input.ts, edit.ts, camera.ts, scene.ts, setting.ts, sensor.ts, surface.ts,
  * perf.ts, snapshot.ts), and what the drivers below it show the UI. The shell
- * names no host and no driver (AGENTS.md), so a function here that only
- * forwards to one is that boundary, not a rename. */
+ * names no host and no driver (AGENTS.md). */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type {
@@ -34,7 +33,7 @@ export {
 } from "@/driver/namespace/source.ts";
 export { asset_url } from "@/driver/namespace/route.ts";
 export { SEARCH_URL } from "@/driver/namespace/route.spec.ts";
-export { INGESTED, PACK } from "@/driver/namespace/ingested.spec.ts";
+export { ASSET_FILES, PACK } from "@/driver/namespace/ingest.spec.ts";
 
 /** A command of the kernel's, rung at once with no quota. */
 export function kernel_command(cmd: Command, pkt?: PacketWriter): void {

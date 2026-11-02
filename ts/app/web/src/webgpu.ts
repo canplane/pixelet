@@ -11,14 +11,12 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { GpuHost } from "@xpute/gpu/host.ts";
 
-import { DEV_BUNDLE } from "./bundle.ts";
-
 let host: GpuHost | null = null;
 /** The kernel's memory, which the host reads the stream from and writes
  * answers into; given once by the guest's open (guest.ts), as it never moves. */
 let memory: ArrayBuffer | null = null;
 /** A canvas transfers once: an effect mounted again is handed the same one. */
-const transferred = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
+const offscreens = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
 /** In the order they were bound, so a device acquired again binds each slot's newest last. */
 const canvases = new Map<u32, OffscreenCanvas>();
 
@@ -65,40 +63,16 @@ export async function acquire(
     powerPreference: "high-performance",
   });
   if (!adapter) return false;
-  // What the kernel asks for where the adapter has it: the timestamps its
-  // spans are timed by, and a stencil beside the world's depth (pxl-render
-  // gpu/api.rs `Device`).
-  const wanted: GPUFeatureName[] = ["timestamp-query", "depth32float-stencil8"];
+  // What the kernel asks for: a stencil beside the world's depth
+  // (pxl-render gpu/api.rs `GATED_DEPTH`), and the timestamps its spans are
+  // timed by where the adapter has them (`Device`).
+  const wanted: GPUFeatureName[] = ["timestamp-query"];
   const d = await adapter.requestDevice({
-    requiredFeatures: wanted.filter((f) => adapter.features.has(f)),
+    requiredFeatures: [
+      "depth32float-stencil8",
+      ...wanted.filter((f) => adapter.features.has(f)),
+    ],
   });
-  // A compatibility-mode WebGPU (GLES 3.1 hardware) may offer no storage
-  // buffers in the vertex stage, which the terrain needs; it shows here only.
-  if (DEV_BUNDLE) {
-    const l = d.limits as unknown as Record<string, number>;
-    const of = (k: string) => `${k}=${l[k] ?? "-"}`;
-    const info = (adapter as unknown as { info?: Record<string, string> }).info;
-    console.info(
-      `[gpu] adapter ${
-        info
-          ? `${info.vendor ?? "?"}/${info.architecture ?? "?"}/${
-              info.device ?? "?"
-            }`
-          : "?"
-      } features [${[...d.features].join(",")}] ` +
-        [
-          "maxStorageBuffersPerShaderStage",
-          "maxStorageBuffersInVertexStage",
-          "maxStorageBufferBindingSize",
-          "maxBufferSize",
-          "minStorageBufferOffsetAlignment",
-          "minUniformBufferOffsetAlignment",
-          "maxBindGroups",
-        ]
-          .map(of)
-          .join(" "),
-    );
-  }
   const h = new GpuHost(d, () => memory!, wake);
   d.lost.then((info) => {
     // Nothing here destroys the device, so a loss is always the browser's.
@@ -116,10 +90,10 @@ export async function acquire(
 }
 
 export function bind(handle: u32, canvas: HTMLCanvasElement): void {
-  let offscreen = transferred.get(canvas);
+  let offscreen = offscreens.get(canvas);
   if (!offscreen) {
     offscreen = canvas.transferControlToOffscreen();
-    transferred.set(canvas, offscreen);
+    offscreens.set(canvas, offscreen);
   }
   canvases.delete(handle);
   canvases.set(handle, offscreen);

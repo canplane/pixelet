@@ -158,7 +158,7 @@ export interface FrameSummary {
   /** The world's pixels of the last frame a read timed. */
   gpu_px: f64;
   /** The ray counts of the window's frames summed, by FRAME's rays columns. */
-  rays: Record<string, f64>;
+  rays: RayCounts;
   /** The heap's high-water mark, the window's last frame's less its first's. */
   heap_used_delta_bytes: f64;
   /** The window's first frame and its last. */
@@ -211,15 +211,26 @@ export interface Worst {
   } | null;
 }
 
+/** A section's words by the names its spec gives them (perf.json), AT and
+ * WORDS aside. */
+export type Section<S> = { [K in Exclude<keyof S, "AT" | "WORDS">]: f64 };
+/** Where the view is as the read finds it (NOW.view). */
+export type ViewSection = Section<typeof NOW.view>;
+/** What the frames held at the most or the least since the recording
+ * started (STAT.recording). */
+export type RecordingSection = Section<typeof STAT.recording>;
+/** The window's ray counts by FRAME's rays columns (FRAME_GROUP.rays). */
+export type RayCounts = { [K in (typeof FRAME_GROUP.rays)[number]]: f64 };
+
 /** What PERF_STATS sums over its window, section by section: `recording` is since
  * the recording started, as the steps are, by STAT.recording's names. */
 export interface Summary {
-  rec: { recording: boolean; elapsed_ms: f64; truncated: boolean };
+  recording_state: { recording: boolean; elapsed_ms: f64; truncated: boolean };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
   steps: Step[];
-  recording: Record<string, f64>;
-  view: Record<string, f64>;
+  recording: RecordingSection;
+  view: ViewSection;
 }
 
 /** The records each ring holds, as RINGS counts them. */
@@ -242,7 +253,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
   const first = frame_at(s, a + F.first);
   const last = frame_at(s, a + F.last);
   return {
-    n: s[a + F.n],
+    n: s[a + F.cnt],
     seconds: s[a + F.seconds],
     moving: s[a + F.moving],
     moving_ms: s[a + F.moving_ms],
@@ -274,14 +285,14 @@ function frame_summary(s: F64Array): FrameSummary | null {
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({
       name,
       p95: s[a + F.gpu_spans_p95 + k],
-      n: s[a + F.gpu_spans_n + k],
+      n: s[a + F.gpu_spans_cnt + k],
     })),
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
     gpu_px: s[a + F.gpu_px],
     rays: Object.fromEntries(
       FRAME_GROUP.rays.map((name, k) => [name, s[a + F.rays + k]]),
-    ),
+    ) as RayCounts,
     heap_used_delta_bytes: last.heap_used_bytes - first.heap_used_bytes,
     first,
     last,
@@ -292,7 +303,7 @@ function task_summaries(s: F64Array): TaskSummary[] {
   const out: TaskSummary[] = [];
   STREAM_NAMES.forEach((stream, c) => {
     const a = STAT.tasks.AT + STAT.tasks.slots + c * STREAM_STAT.WORDS;
-    const n = s[a + STREAM_STAT.n];
+    const n = s[a + STREAM_STAT.cnt];
     if (n === 0) return;
     const reasons = Array.from(
       { length: s[a + STREAM_STAT.reason_cnt] },
@@ -335,12 +346,15 @@ function steps_at(s: F64Array): Step[] {
   });
 }
 
-function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
+function section<S extends { AT: u32; WORDS: u32 }>(
+  s: F64Array,
+  sec: S,
+): Section<S> {
   const out: Record<string, f64> = {};
-  for (const [k, v] of Object.entries(sec)) {
+  for (const [k, v] of Object.entries(sec) as [string, u32][]) {
     if (k !== "AT" && k !== "WORDS") out[k] = s[sec.AT + v];
   }
-  return out;
+  return out as Section<S>;
 }
 
 /** STAT's words over `window_ms` and NOW's, as PERF_STATS lays them out. */
@@ -358,9 +372,9 @@ function read(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
 /** The summary over the last `window_ms`, or the whole recording at null. */
 export function perf_summary(window_ms: f64 | null): Summary {
   const { stats: s, now: n } = read(window_ms);
-  const R = NOW.rec;
+  const R = NOW.recording_state;
   return {
-    rec: {
+    recording_state: {
       recording: n[R.AT + R.recording] !== 0,
       elapsed_ms: n[R.AT + R.elapsed_ms],
       truncated: n[R.AT + R.truncated] !== 0,
@@ -375,7 +389,7 @@ export function perf_summary(window_ms: f64 | null): Summary {
 
 /** The view alone, NOW's, read over an empty window, which folds no frame or
  * task. */
-export function perf_view(): Summary["view"] {
+export function perf_view(): ViewSection {
   return section(read(0).now, NOW.view);
 }
 

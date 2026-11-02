@@ -25,6 +25,9 @@
     "@pxl/build": "workspace:*",
     "@pxl/client": "workspace:*",
     "@vitejs/plugin-react": "^6.1.1",
+    "@xpute/gpu": "workspace:*",
+    "@xpute/host": "workspace:*",
+    "@xpute/kit": "workspace:*",
     "vite": "^8.3.0",
     "webgpu": "0.6.2"
   }

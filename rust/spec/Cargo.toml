@@ -19,7 +19,8 @@ fnv.workspace = true
 libm.workspace = true
 serde = { version = "1", features = ["derive"], optional = true }
 xpute-kit = { workspace = true, features = ["std"] }
-pxl-spec-core.workspace = true
+pxl-engine.workspace = true
+pxl-content.workspace = true
 
 [dev-dependencies]
 hex.workspace = true

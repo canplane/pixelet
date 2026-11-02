@@ -11,7 +11,7 @@
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
-// development one; the shell's production bundle carries SETTING_SHIPPED,
+// development one; the shell's production bundle carries SETTING_PRODUCTION,
 // the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
@@ -43,7 +43,7 @@ export const SETTING = {
   /** Procedurally scattered decor only; what the player placed stays.
    *
    * Med because it is models rather than a shading term: the GPU generates the
-   * ground's decor where the eye's windows are (decor_cs) and the frame draws
+   * ground's decor where the eye's clip levels are (decor_cs) and the frame draws
    * each kind as a model, an impostor or nothing by the angle it
    * spans, so what it costs follows what is in view. The badge is an ordering,
    * and this is the one to reach for before any shading term. */
@@ -165,8 +165,13 @@ export const SETTING = {
     cost: "high",
     section: "lighting",
   },
-  /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RES_MODES says each. */
+  /** The pixels the world is drawn at: two to a CSS pixel is four times the
+   * work done a drawn pixel at a time (span.json `per_px`), and nothing
+   * more; the camera grid's rays and the light's map cost the same at any.
+   * `auto` lays the grid's beam rays and cells on a coarser lattice too
+   * (span.json `per_cell`), its samples the same rays, so no pixel drawn
+   * changes. The markers and the finish stay at the display's. RES_MODES
+   * says each. */
   res: {
     key: 12 as number,
     kind: "choice",
@@ -185,7 +190,7 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`). */
+  /** The performance panel, recording while it is on (perf/window.rs `perf_follow`). */
   perf: {
     key: 14 as number,
     kind: "toggle",
@@ -218,14 +223,14 @@ export const SETTING = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl). */
+  /** Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_shade.wgsl). */
   ray_steps: {
     key: 19 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/core/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
+  /** How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off. */
   ray_counts: {
     key: 20 as number,
     kind: "toggle",
@@ -253,7 +258,7 @@ export const SETTING = {
 } as const;
 
 /** SETTING without its `dev` entries: what a production bundle carries in its place. */
-export const SETTING_SHIPPED = {
+export const SETTING_PRODUCTION = {
   /** Ground color from the art pack (four taps of the layer array per
    * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
@@ -272,7 +277,7 @@ export const SETTING_SHIPPED = {
   /** Procedurally scattered decor only; what the player placed stays.
    *
    * Med because it is models rather than a shading term: the GPU generates the
-   * ground's decor where the eye's windows are (decor_cs) and the frame draws
+   * ground's decor where the eye's clip levels are (decor_cs) and the frame draws
    * each kind as a model, an impostor or nothing by the angle it
    * spans, so what it costs follows what is in view. The badge is an ordering,
    * and this is the one to reach for before any shading term. */
@@ -372,8 +377,13 @@ export const SETTING_SHIPPED = {
     cost: "high",
     section: "lighting",
   },
-  /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RES_MODES says each. */
+  /** The pixels the world is drawn at: two to a CSS pixel is four times the
+   * work done a drawn pixel at a time (span.json `per_px`), and nothing
+   * more; the camera grid's rays and the light's map cost the same at any.
+   * `auto` lays the grid's beam rays and cells on a coarser lattice too
+   * (span.json `per_cell`), its samples the same rays, so no pixel drawn
+   * changes. The markers and the finish stay at the display's. RES_MODES
+   * says each. */
   res: {
     key: 12 as number,
     kind: "choice",
@@ -392,7 +402,7 @@ export const SETTING_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** The profiler's panel, with the profiler recording while it is on (perf/window.rs `perf_follow`). */
+  /** The performance panel, recording while it is on (perf/window.rs `perf_follow`). */
   perf: {
     key: 14 as number,
     kind: "toggle",
@@ -425,7 +435,7 @@ export const SETTING_SHIPPED = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_lit.wgsl). */
+  /** Each ray's pixel colored by the nodes asked of the world on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the beam ray's walk its cell starts off (beam::LINE_VISITS) and its own after, or, where it took a sample's cell or the samples' sky, that sample's, counted the same way (beam::SAMPLE_VISITS; rust/client/render/src/frame/shader/screen_shade.wgsl). */
   ray_steps: {
     key: 19 as number,
     kind: "toggle",

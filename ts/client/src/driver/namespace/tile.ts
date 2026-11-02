@@ -18,7 +18,7 @@ import {
   type BaseLayer,
   TILE_SPHERE,
   tileObject,
-} from "./published.spec.ts";
+} from "./publication.spec.ts";
 import { tile_url } from "@/driver/namespace/route.ts";
 import { SPHERE } from "@/abi/host.spec.ts";
 import { get } from "@/driver/namespace/read.ts";
@@ -74,9 +74,8 @@ export function tile_object(
 
 /**
  * A body still packed means the transport did not decode the stored
- * encoding: a browser that cannot, which the Worker cannot refuse, since
- * Cloudflare rewrites `accept-encoding` before the Worker sees it; or a
- * device whose own decode (ts/app/native/src/origin.ts) was skipped.
+ * encoding: a browser that cannot, or a device whose own decode
+ * (ts/app/native/src/origin.ts) was skipped.
  */
 function packed(body: U8Array): boolean {
   return (
@@ -85,20 +84,22 @@ function packed(body: U8Array): boolean {
   );
 }
 
-/** A bake's object by its number, under the source `declared`; none before
+/** A bake's object by its number, under the source `declaration`; none before
  * the source is declared, as the kernel asks for none. */
 export async function read_object(
-  declared: Declaration | null,
+  declaration: Declaration | null,
   bake: u32,
   number: bigint,
   signal: AbortSignal,
 ): Promise<U8Array> {
   const name =
-    declared === null ? null : tile_object(declared, BASE_LAYERS[bake], number);
+    declaration === null
+      ? null
+      : tile_object(declaration, BASE_LAYERS[bake], number);
   if (name === null) throw new FileError(Errno.ENOENT);
   const body = await get(tile_url(BASE_LAYERS[bake], name), name, signal);
   if (body.byteLength > 0 && packed(body)) {
-    // Fail here: handing it on would fail in the kernel's decoder, far from the cause.
+    // Fail here, not in the kernel's decoder.
     console.warn(
       `[read] ${name}: the body arrived still packed, with no encoding to undo it`,
     );

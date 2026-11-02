@@ -1,11 +1,14 @@
 // @pxl/client/driver/namespace/storage.ts
 
 /**
- * STORAGE's backend: the kernel's storage files (host.json `storage`) in the
- * platform's storage. The kernel refuses a file not of its slot's format and
- * writes nothing over it; here is decided each slot's key, what becomes of a
- * refused file, and what carries over from before the slots. Nothing kept is
- * dropped: a refused file is set aside, and read back, before its slot empties.
+ * STORAGE's backend: the kernel's storage files (host.json `storage`), the
+ * settings, in the platform's storage. The kernel hands and takes a file's
+ * bytes; the platform keeps text, so each is kept as its bytes' base64url
+ * (`kept`, `bytes_of`), and text that is none is no file of bytes
+ * (EBADMSG), which the kernel refuses. The kernel refuses a file not of its
+ * slot's format and writes nothing over it; here is decided each slot's key
+ * and what becomes of a refused file. Nothing kept is dropped: a refused file
+ * is set aside, and read back, before its slot empties.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -13,17 +16,13 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import {
   b64url_to_bytes,
   bytes_to_b64url,
-  td,
-  te,
+  is_b64url,
 } from "@xpute/kit/codec/encoding.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 
-import { Command, encode_fs_truncated } from "@/abi/cmd.spec.ts";
 import { storage } from "@/abi/host.spec.ts";
 import { bracket } from "@/bracket.tsx";
-import { HOST } from "@/host/mount.ts";
-import * as port from "@/abi/port.spec.ts";
 
 /** Storage as the bracket gives it: a refused write keeps nothing, and does not throw. */
 export interface Storage {
@@ -32,14 +31,28 @@ export interface Storage {
 }
 
 /** The bracket's, read at each call: the bracket is set after this loads. */
-const STORAGE: Storage = {
+export const STORAGE: Storage = {
   get: (key) => bracket.storage.get(key),
   set: (key, value) => bracket.storage.set(key, value),
 };
 
+/** A file's bytes as storage keeps them, as text. */
+export function text_of(bytes: U8Array): string {
+  return bytes_to_b64url(bytes);
+}
+
+/** The bytes `text` keeps (`kept`); EBADMSG for text that keeps none. */
+export function bytes_of(text: string): U8Array {
+  if (!is_b64url(text)) throw new FileError(Errno.EBADMSG);
+  try {
+    return b64url_to_bytes(text);
+  } catch {
+    throw new FileError(Errno.EBADMSG);
+  }
+}
+
 const KEYS: ReadonlyMap<u32, string> = new Map([
-  [storage.SETTINGS, "pxl:kept:settings"],
-  [storage.OBJECTS, "pxl:kept:objects"],
+  [storage.SETTINGS, "pxl:storage:settings"],
 ]);
 
 /** A slot's storage key; none for a number the kernel does not keep. */
@@ -47,60 +60,14 @@ export function storage_key(slot: u32): string | undefined {
   return KEYS.get(slot);
 }
 
-/** Where each was kept before the slots, under a key naming it: the settings
- * by name as JSON, then for a day as their slot holds them; the objects as
- * their packet's base64 alone, the format theirs by the key. */
-const SETTINGS_BEFORE = "pxl:settings";
-const OBJECTS_BEFORE_FORMAT = 15;
-const OBJECTS_BEFORE = `pxl:object:v${OBJECTS_BEFORE_FORMAT}`;
-
-/** Before the kernel reads a slot: an empty slot is filled from what was kept
- * before it, once, and that is left where it was. The settings carry over as
- * they are, so the kernel refuses the JSON and they reset once; the objects
- * with their format put before them. */
-export function migrate(s: Storage = STORAGE): void {
-  carry(s, storage.SETTINGS, SETTINGS_BEFORE, (text) => text);
-  carry(s, storage.OBJECTS, OBJECTS_BEFORE, (text) =>
-    formatted(OBJECTS_BEFORE_FORMAT, text),
-  );
-}
-
-function carry(
+/** Sets what `key` holds aside under `<key>:aside:<ms>` and empties it.
+ * False, the key as it was, where the copy did not read back: storage that
+ * refuses the write must not see the file emptied. */
+export function set_aside_key(
   s: Storage,
-  slot: u32,
-  before: string,
-  as: (text: string) => string,
-): void {
-  const key = KEYS.get(slot)!;
-  const text = s.get(before);
-  if (text === null || s.get(key) !== null) return;
-  s.set(key, as(text));
-}
-
-/** `text`, the base64url of a file with no format byte, with `format`
- * before its bytes; as it is where it is not base64url, for the kernel to
- * refuse and `set_aside` to keep. */
-export function formatted(format: number, text: string): string {
-  if (text === "") return text;
-  let bytes: Uint8Array;
-  try {
-    bytes = b64url_to_bytes(text);
-  } catch {
-    return text;
-  }
-  const out = new Uint8Array(bytes.length + 1);
-  out[0] = format;
-  out.set(bytes, 1);
-  return bytes_to_b64url(out);
-}
-
-/** Sets a refused slot's file aside under `<key>:aside:<ms>` and empties
- * the slot. False, the slot as it was, for a slot the kernel does not keep or
- * where the copy did not read back: storage that refuses the write must not
- * see the file emptied. */
-export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
-  const key = KEYS.get(slot);
-  if (key === undefined) return false;
+  key: string,
+  now_ms: number,
+): boolean {
   const text = s.get(key);
   if (text !== null && text !== "") {
     let aside = `${key}:aside:${now_ms}`;
@@ -114,38 +81,11 @@ export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
   return true;
 }
 
-/** The slots set aside and not yet seen read again, so a snapshot that
- * still names one before the kernel hears it was emptied sets nothing aside
- * twice. */
-const emptying = new Set<u32>();
-
-/** The kernel told a slot is empty (FS_TRUNCATED), after the completion
- * ring is read: the doorbell refuses a write while it reads. */
-function storage_emptied(slot: u32): void {
-  queueMicrotask(() =>
-    HOST.send(
-      port.SHELL,
-      Command.FS_TRUNCATED,
-      encode_fs_truncated(HOST.doorbell, slot),
-    ),
-  );
-}
-
-/** The snapshot's `storage_refused`: each slot set aside once, and the kernel
- * told it is empty (`emptied`). */
-export function follow_refused(
-  refused: readonly u32[],
-  emptied: (slot: u32) => void = storage_emptied,
-  s: Storage = STORAGE,
-): void {
-  for (const slot of emptying) {
-    if (!refused.includes(slot)) emptying.delete(slot);
-  }
-  for (const slot of refused) {
-    if (emptying.has(slot) || !set_aside(s, slot, Date.now())) continue;
-    emptying.add(slot);
-    emptied(slot);
-  }
+/** Sets a refused slot's file aside and empties the slot (`set_aside_key`);
+ * false for a slot the kernel does not keep. */
+export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
+  const key = KEYS.get(slot);
+  return key !== undefined && set_aside_key(s, key, now_ms);
 }
 
 /** STORAGE's object `number` is a storage file, under the key `storage_key` gives it. */
@@ -156,13 +96,17 @@ function key_of(number: bigint): string {
 }
 
 /** STORAGE's object `number`, whole; ENOENT where nothing is kept. */
-export function open_storage(number: bigint): U8Array {
-  const value = STORAGE.get(key_of(number));
-  if (value === null) throw new FileError(Errno.ENOENT);
-  return te.encode(value);
+export function open_storage(number: bigint, s: Storage = STORAGE): U8Array {
+  const text = s.get(key_of(number));
+  if (text === null) throw new FileError(Errno.ENOENT);
+  return bytes_of(text);
 }
 
 /** What the kernel wrote to STORAGE's object `number`, kept whole. */
-export function commit_storage(number: bigint, bytes: U8Array): void {
-  STORAGE.set(key_of(number), td.decode(bytes));
+export function commit_storage(
+  number: bigint,
+  bytes: U8Array,
+  s: Storage = STORAGE,
+): void {
+  s.set(key_of(number), text_of(bytes));
 }

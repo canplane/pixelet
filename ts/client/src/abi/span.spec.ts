@@ -22,9 +22,11 @@ export const GPU_SPAN_NAMES = [
   "beam",
   "cell",
   "sample",
+  "sample_box",
   "sraster",
   "px",
   "miss",
+  "light_receivers",
   "light_beam",
   "light_sample",
   "light_raster",
@@ -34,11 +36,13 @@ export const GPU_SPAN_NAMES = [
   "shadow",
   "face",
   "mark",
+  "light_mark",
+  "propagate",
 ] as const;
 
 export const LIGHT_MOVED = [
   "content",
-  "detail",
+  "slide",
   "receivers",
   "footprint",
 ] as const;

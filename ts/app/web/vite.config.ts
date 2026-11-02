@@ -40,7 +40,7 @@ const __dirname = path.dirname(__filename);
 
 /** Where `name` is installed for the package at `dir`: pnpm gives each
  * package its own dependencies. */
-function installed(name: string, dir: string): string {
+function package_dir(name: string, dir: string): string {
   return path.dirname(
     createRequire(path.join(dir, "package.json")).resolve(
       `${name}/package.json`,
@@ -54,12 +54,7 @@ const apiBaseDefault = "http://127.0.0.1:3002";
 
 /**
  * Which source a build is: the short hash, and `-dirty` where the working
- * tree had uncommitted changes. Derived from git rather than a counter kept
- * in a file, which would have to be bumped by a commit of its own and would
- * count builds rather than source. The commit count that used to lead it
- * (`r<commits>`) is gone: it renumbers whenever the history is rewritten,
- * which main's is here as a matter of course, and the hash was the identity
- * either way.
+ * tree had uncommitted changes.
  */
 function buildId(): string {
   try {
@@ -80,9 +75,7 @@ function buildId(): string {
 /**
  * Which build this is: `#<n>` where CI handed the build its number, and
  * `#<n>-<id>` — the number the deployment serves, then what this one actually
- * is — where it did not. A build with no number from CI is not that build
- * whatever it was built from, so the source says so itself rather than a sign
- * meaning "after"; before any number is cached, the id alone. The count is
+ * is — where it did not; before any number is cached, the id alone. The count is
  * taken by CI's number job (script/build-log.py --take); the deployment
  * states its own in /build.json (`buildStamp`), and ts/client/.build_number is
  * this checkout's cache of it (script/build-number.py, run by `make dev`).
@@ -101,22 +94,6 @@ function buildNumber(id: string): string {
   }
 }
 
-/**
- * `virtual:pxl-build` — what a build is: when it was built, which source,
- * which official number (deploy.ts reads it). A module rather than
- * `define` constants so that a dev server gives every page load the values
- * as they are then, not as they were when the server started: the module is
- * dropped from the graph on each navigation and computed again on import,
- * so a profiler report taken from a long-running dev server names the source
- * actually on screen.
- *
- * The time is evaluated at build, so it updates itself with nothing to
- * remember — a date someone has to bump by hand goes stale silently. It
- * does mean the bundle hash changes on every build even when no source
- * did; that is the cost of it being accurate, chosen over the commit date.
- * UTC: it is formatted for the reader's own timezone where it is shown
- * (shell/setting/info/about.tsx).
- */
 /** The other half of `src/remote-console.ts`: what a device posts to
  * `/__console` is printed where this server's own output goes, so a phone or a
  * tablet on a tunnel can be read without attaching a debugger to it. Dev only
@@ -139,10 +116,7 @@ function remoteConsole(): Plugin {
         req.on("end", () => {
           const lines = body.split("\n").filter(Boolean);
           for (const line of lines) console.log(line);
-          // Also to a file, because the terminal this prints in belongs to
-          // whoever started the server and an agent reading the same session
-          // cannot see it. Appended rather than held, so `tail -f` works and
-          // nothing here has to be flushed or closed.
+          // Also appended to a file, for a reader without this terminal.
           if (lines.length > 0) {
             appendFileSync(
               CONSOLE_LOG,
@@ -177,6 +151,12 @@ function stripHtmlComments(): Plugin {
   };
 }
 
+/**
+ * `virtual:pxl-build` — what a build is: when it was built (UTC), which
+ * source, which official number (deploy.ts reads it). A dev server drops the
+ * module from the graph on each page load, so its values are those of the
+ * source on screen.
+ */
 function buildStamp(): Plugin {
   const id = "virtual:pxl-build";
   const resolved = "\0" + id;
@@ -222,24 +202,17 @@ function buildStamp(): Plugin {
 }
 
 /**
- * A `const enum` is a compile-time name for a number, and a published bundle
- * should hold the number alone. It does not, because Vite transpiles each
- * file on its own and nothing ever sees the declaration and its use at once:
- * esbuild emitted the runtime object, reverse mapping and all, so a build
- * carried every command's and every errno's name as a string
- * (`e[e.WORLD_SNAPSHOT=6933]="WORLD_SNAPSHOT"`); oxc erases the declaration
- * as the type syntax it is, which leaves every importer bound to an export
- * that no longer exists.
+ * Inlines every `const enum`: Vite transpiles each file on its own, and oxc
+ * erases the declaration, which leaves every importer bound to a missing
+ * export.
  *
- * The table is ts/build/const-enum.ts's, shared with the device's Babel pass,
- * and it refuses an enum it cannot inline rather than leave one. Here each
- * use is replaced by its value — a file's own enums in that file only — and
- * the declarations struck. An access left behind after a declaration went
- * is a build error, never a bundle that reaches a browser and throws. The
- * table is read once, as the server starts, so an enum declared since, or a
- * member added to one, is the same error, saying the server has to be
- * restarted. A file that declares enums and reaches the transform without
- * its declarations is a build error.
+ * The table is ts/build/const-enum.ts's, shared with the device's Babel pass.
+ * Here each use is replaced by its value — a file's own enums in that file
+ * only — and the declarations struck. An access left behind after a
+ * declaration went is a build error. The table is read once, as the server
+ * starts, so an enum declared since, or a member added to one, is the same
+ * error, saying the server has to be restarted. A file that declares enums
+ * and reaches the transform without its declarations is a build error.
  */
 function constEnum(roots: string[]): Plugin {
   const table = readEnums(roots);
@@ -301,9 +274,7 @@ function constEnum(roots: string[]): Plugin {
       const struck: string[] = [];
       for (const [name, members] of bound) {
         if (!out.includes(name)) continue;
-        // Whole names only: a member that is a prefix of another, as
-        // INPUT_POSE is of INPUT_POSE_END, would otherwise leave `4361_END`
-        // for the parser instead of a name the stale check below can say.
+        // Whole names only: INPUT_POSE is a prefix of INPUT_POSE_END.
         out = out.replace(
           new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"),
           (whole, key: string) =>
@@ -313,9 +284,7 @@ function constEnum(roots: string[]): Plugin {
       }
       if (!struck.length) return null;
       out = out.replace(DECL, "");
-      // An enum's name is gone from what it was bound to, so it goes from
-      // the clause that imported it too, or the bundler is left binding an
-      // export nobody declares.
+      // A struck enum leaves the clause that imported it too.
       out = out.replace(IMPORT, (whole, clause: string, from: string) => {
         const all = items(clause);
         const kept = all
@@ -342,10 +311,6 @@ function constEnum(roots: string[]): Plugin {
   };
 }
 
-// Where `make dev` points when nothing overrides it: the project's
-// own published deployment, the site (spec/spec/route.json `origins`).
-// VITE_REMOTE_ORIGIN overrides it. A domain that is retired at the Cloudflare
-// edge answers 404 to everything, and nothing here would say why.
 /**
  * Prefixes a dev server forwards, split as the Worker splits them: `tiles` to
  * the tile server, the rest to the search server. `published` ones go to the
@@ -363,14 +328,15 @@ export const DEV_PROXY_ROUTES: readonly {
   { path: API_PREFIX, app: true, published: true },
 ];
 
+// Where `make dev` points when nothing overrides it: the project's
+// own published deployment, the site (spec/spec/route.json `origins`).
+// VITE_REMOTE_ORIGIN overrides it.
 const remoteOriginDefault = SITE_URL;
 
-// anti-HMR. All of the client below the shell is here too, its host, abi/,
-// port/ and driver/: their modules hold the one kernel's memory and device, the
-// place's callbacks and the shell's subscriptions, and a hot-swapped copy ran
-// beside them — a second device beside the renderer's objects on the first. The
-// shell's components alone take Vite's own HMR. The built module is the page's
-// own, beside the guest.ts that opens it.
+// anti-HMR: a change here reloads the page. These modules hold the one
+// kernel's memory and device, the place's callbacks and the shell's
+// subscriptions, which a hot-swapped copy would duplicate. The shell's
+// components alone take Vite's own HMR.
 const corePathIncludes = [
   "/xpute/ts/kit/",
   "/xpute/ts/host/",
@@ -383,8 +349,7 @@ const corePathIncludes = [
 ];
 
 // One reload for a change that reaches both sides: while the kernel builds, a
-// core change waits for it, so the page never runs the shell generated from a
-// new spec beside a module built from the old. The wait before a reload lets a
+// core change waits for it. The wait before a reload lets a
 // build the same write starts claim it: the generator writes the .ts beside
 // the .rs, and the Rust watcher reports the one after Vite's reports the other.
 const RELOAD_SETTLE_MS = 200;
@@ -419,11 +384,7 @@ function fullReloadOnCoreChange(): Plugin {
     name: "full-reload-core",
     enforce: "pre",
 
-    // Vite's watcher covers `root`, which here is ts/app/web: without this,
-    // nothing under xpute/ts/ or ts/client/ is watched, handleHotUpdate
-    // below never runs for a core file, and the server keeps serving the
-    // transform it cached at first import — a core edit does nothing, and a
-    // browser reload does not help because the staleness is on the server.
+    // Vite's watcher covers `root`, ts/app/web, alone.
     configureServer(server) {
       for (const pat of corePathIncludes) {
         server.watcher.add(path.resolve(REPO, pat.replace(/^\/|\/$/g, "")));
@@ -436,19 +397,14 @@ function fullReloadOnCoreChange(): Plugin {
 
       if (isCoreFile(file)) {
         reloadOnce(ctx.server);
-        // Vite prints "page reload" for the ones it decides itself and says
-        // nothing about this one, so without a line here a core edit looks
-        // exactly like a core edit that was never noticed.
         ctx.server.config.logger.info(
           `core reload ${path.relative(REPO, file)}`,
           { timestamp: true },
         );
         return [];
       }
-      // Nothing returned, not `[]`: Vite takes any array — an empty one
-      // too — as the modules to update and overwrites ctx.modules with it,
-      // which would disable HMR for every non-core file. Returning nothing
-      // lets Vite fall through to its default HMR for those.
+      // Nothing returned, not `[]`: Vite takes any array as the modules to
+      // update, which would disable HMR for every non-core file.
     },
   };
 }
@@ -456,12 +412,9 @@ function fullReloadOnCoreChange(): Plugin {
 // The kernel's module, built again when what it is built from changes. It is
 // built once as the server starts (package.json `dev`), and the
 // page reloads when src/guest.wasm is replaced
-// (fullReloadOnCoreChange), so a Rust edit otherwise waited for a hand-run
-// build or a restart of everything. Every change under rust/ asks, outside
-// cargo's own target/: cargo knows which of them the module is built from, and
-// build-wasm writes nothing when it is not one of them. One build at a time; a
-// change during one asks for one more after it, which covers every change it
-// missed.
+// (fullReloadOnCoreChange). Every change under rust/ asks, outside cargo's
+// own target/: build-wasm writes nothing when the module is not built from
+// it. One build at a time; a change during one asks for one more after it.
 function rebuildKernelOnRustChange(): Plugin {
   return {
     name: "rebuild-kernel",
@@ -513,20 +466,10 @@ function rebuildKernelOnRustChange(): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
 
-  // A production build is never a development build, whatever .env says.
-  // VITE_APP_ENV lives in .env, which Vite loads for *every* mode, so a
-  // developer's local `VITE_APP_ENV=development` would ride into the
-  // deployed bundle and ship the debug settings section and the dev routes
-  // with it.
-  //
-  // The other direction is honored: running the dev server with
-  // VITE_APP_ENV=production turns dev-only surfaces off locally, which is
-  // the point of the variable. Only the "development" value is overridden,
-  // so a production build labeled `staging` still says staging.
-  //
-  // The override lands on the NAME, and isDev is derived from it: a guard
-  // on isDev alone would leave __APP_ENV__ reading "development" while the
-  // debug section it implies is absent. One value, one rule.
+  // A production build is never a development build, whatever .env says:
+  // Vite loads .env for every mode. Only the "development" value is
+  // overridden, so a production build labeled `staging` still says staging.
+  // isDev is derived from the name.
   const rawAppEnv = env.VITE_APP_ENV || mode;
   const appEnv =
     mode === "production" && rawAppEnv === "development"
@@ -553,10 +496,9 @@ export default defineConfig(({ mode }) => {
   const remoteOrigin = delivery
     ? env.VITE_REMOTE_ORIGIN || remoteOriginDefault
     : "";
-  // What the proxy hands the page is never stored. The objects behind it are
-  // `immutable` for a year, which a deployment means; here a restart of this
-  // server cuts a body in flight, and a browser kept the empty one as the
-  // asset under that header through every reload (2026-09-28).
+  // What the proxy hands the page is never stored: the objects behind it are
+  // `immutable` for a year, and a restart of this server cuts a body in
+  // flight.
   const noStore: ProxyOptions["configure"] = (proxy) => {
     proxy.on("proxyRes", (res) => {
       res.headers["cache-control"] = "no-store";
@@ -581,9 +523,7 @@ export default defineConfig(({ mode }) => {
   );
 
   return {
-    // Root `make dev-oven` runs the three servers and this in one
-    // terminal, and Vite's default clearScreen would wipe the whole of it —
-    // the servers' output too — on every restart or error.
+    // Root `make dev-oven` runs the three servers and this in one terminal.
     clearScreen: false,
 
     plugins: [
@@ -608,22 +548,20 @@ export default defineConfig(({ mode }) => {
       // The aliases are ../../tsconfig.json's.
       tsconfigPaths: true,
       alias: [
-        // The shell imports React Native's API, which the type-check resolves
-        // to React Native itself; a web bundle takes the
+        // The shell imports React Native's API; a web bundle takes the
         // same names from react-native-web. Exact, so a package under
-        // `react-native/…` is not rewritten into one that does not exist.
+        // `react-native/…` is not rewritten.
         {
           find: /^react-native$/,
-          replacement: installed("react-native-web", __dirname),
+          replacement: package_dir("react-native-web", __dirname),
         },
-        // react-native-svg picks its platform by file suffix, which its
-        // package entry does not: the package
-        // resolves to its CommonJS entry, whose native half reaches into
-        // React Native's Flow sources. The web half is named instead.
+        // react-native-svg's package entry is its CommonJS one, whose native
+        // half reaches into React Native's Flow sources: the web half is
+        // named.
         {
           find: /^react-native-svg$/,
           replacement: path.join(
-            installed("react-native-svg", path.join(WORKSPACE, "client")),
+            package_dir("react-native-svg", path.join(WORKSPACE, "client")),
             "lib/module/ReactNativeSVG.web.js",
           ),
         },
@@ -633,7 +571,7 @@ export default defineConfig(({ mode }) => {
         {
           find: /^@react-native\/assets-registry\/registry$/,
           replacement: path.join(
-            installed("react-native-web", __dirname),
+            package_dir("react-native-web", __dirname),
             "dist/modules/AssetRegistry/index.js",
           ),
         },
@@ -675,20 +613,12 @@ export default defineConfig(({ mode }) => {
       },
     },
 
-    // .glb is not in Vite's default asset extensions: without this each
-    // import relies on its own `?url` suffix to be treated as an asset
-    // rather than parsed as JS, and under concurrent dev-server requests
-    // one of 36 character variants is misclassified now and then and throws
-    // "invalid JS syntax", a different file each time. Declared here, every
-    // .glb is an asset in both dev and build.
+    // .glb is not in Vite's default asset extensions: under concurrent
+    // dev-server requests a `?url` import alone is now and then parsed as JS.
     assetsInclude: ["**/*.glb"],
 
     build: {
       target: "esnext",
-      // Named rather than left to `true`, because the two Vite ships are not
-      // interchangeable and which one is the default has already changed
-      // once. Measured on this bundle: oxc 762.86 kB / 248.49 kB gzipped,
-      // esbuild 785.03 / 261.15.
       minify: "oxc",
       sourcemap: mode !== "production",
     },
@@ -696,15 +626,11 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       // A tunnel's hostname, so a device that is not this machine can reach
-      // the dev server over HTTPS: WebGPU is a secure context away, and a
-      // LAN address over plain http is not one, so an iPad on `http://<ip>`
-      // has no `navigator.gpu` at all. Named rather than opened to
-      // everything — Vite checks the Host header against this list, and the
-      // check is what stands between a dev server and DNS rebinding.
+      // the dev server over HTTPS: WebGPU needs a secure context. Vite checks
+      // the Host header against this list, against DNS rebinding.
       allowedHosts: [".trycloudflare.com"],
-      // Vite's default fs.allow is the pnpm workspace, ts/, so an asset
-      // import (`import x from "*.png"`) into xpute/ts/ is refused. The repo
-      // root allowed once covers every such path.
+      // Vite's default fs.allow is the pnpm workspace, ts/, which leaves out
+      // xpute/ts/'s assets.
       fs: { allow: [REPO] },
       // Each prefix forwarded whole and unrewritten.
       proxy,
@@ -712,8 +638,7 @@ export default defineConfig(({ mode }) => {
 
     // The production bundle served here, against the same routes: with
     // `VITE_DEV_SOURCE=delivery`, the deployment's data under the built
-    // client, which is what a measurement of the client alone wants —
-    // the dev server's unbundled modules and hooks are not in it.
+    // client.
     preview: { proxy },
 
     define: {

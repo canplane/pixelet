@@ -8,7 +8,7 @@
 
 const ENDPOINT = "/__console";
 
-const queued: string[] = [];
+const queue: string[] = [];
 let scheduled = false;
 
 const LINE_MAX = 2000;
@@ -37,9 +37,9 @@ function text(v: unknown): string {
 
 function flush(): void {
   scheduled = false;
-  if (queued.length === 0) return;
-  const body = queued.join("\n");
-  queued.length = 0;
+  if (queue.length === 0) return;
+  const body = queue.join("\n");
+  queue.length = 0;
   // `keepalive` lands a line logged as the page unloads; a failure is swallowed.
   fetch(ENDPOINT, { method: "POST", body, keepalive: true }).then(
     (r) => r.body?.cancel(),
@@ -48,8 +48,8 @@ function flush(): void {
 }
 
 function send(level: string, args: unknown[]): void {
-  if (queued.length > 200) return;
-  queued.push(
+  if (queue.length > 200) return;
+  queue.push(
     `[${label()}/${level}] ${args.map(text).join(" ").slice(0, LINE_MAX)}`,
   );
   if (scheduled) return;

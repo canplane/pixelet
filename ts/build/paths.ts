@@ -1,14 +1,16 @@
 // @pxl/build/paths.ts
 
 /**
- * The aliases tsconfig.json's `paths` give the tree's own directories, read
- * for what has no tsconfig resolver of its own: Metro, and the const-enum
- * table both bundlers share. Vite and vitest read the same paths themselves
- * (`resolve.tsconfigPaths`). Plain TypeScript over `node:` modules, which
+ * The aliases tsconfig.json's `paths` give the tree's own directories, and
+ * the workspace packages' sources, read for what has no tsconfig resolver of
+ * its own: Metro, and the const-enum table both bundlers share. Vite and
+ * vitest read the same paths themselves (`resolve.tsconfigPaths`) and resolve
+ * the packages as Node does. Plain TypeScript over `node:` modules, which
  * Node loads (package.json `engines`).
  */
 
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import * as path from "node:path";
 
 /** JSONC as JSON: comments and trailing commas out, strings untouched. */
@@ -60,11 +62,23 @@ const PREFIXES: [string, string][] = Object.entries(
   ])
   .sort(([a], [b]) => b.length - a.length);
 
-/** Where `spec` names a directory of the tree through an alias: the path past
- * its prefix, and the prefix; none for a relative or a package specifier. */
-export function mapped(spec: string): { path: string; prefix: string } | null {
+const MODULES = `${path.sep}node_modules${path.sep}`;
+
+/** Where `spec`, imported from the file `from`, names a file of the tree:
+ * through an alias, the path past its prefix; through a workspace package
+ * (xpute's, `workspace:*`), the source file its package.json `exports` maps it
+ * to, as Node resolves it, the package's own name from inside it included.
+ * None for a relative specifier, an installed package, or an import from one. */
+export function treeFile(from: string, spec: string): string | null {
   const hit = PREFIXES.find(([prefix]) => spec.startsWith(prefix));
-  return hit
-    ? { path: hit[1] + spec.slice(hit[0].length), prefix: hit[0] }
-    : null;
+  if (hit) return hit[1] + spec.slice(hit[0].length);
+  if (spec.startsWith(".") || path.isAbsolute(spec) || from.includes(MODULES)) {
+    return null;
+  }
+  try {
+    const file = createRequire(from).resolve(spec);
+    return path.isAbsolute(file) && !file.includes(MODULES) ? file : null;
+  } catch {
+    return null;
+  }
 }

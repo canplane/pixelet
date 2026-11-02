@@ -193,12 +193,15 @@ export interface Snapshot {
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
-  /** The storage files (host.json's `storage`) whose file is not of the slot's format, or too large for
-   * any heap: the kernel read none of it and writes nothing over it until FS_TRUNCATED says
-   * the slot is empty. */
-  storage_refused: u32[];
+  /** The files the kernel refused, not of their format, not decoding, or too large for any
+   * heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The
+   * kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
+   * empty. */
+  refused_files: RefusedFile[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
   stall: Message | null;
+  /** How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): its shader modules, by their bytes, the first half, its pipelines made the second; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it. */
+  renderer_progress: f64;
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -217,8 +220,9 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     m_per_px: b.at(11).get<f64>(),
     division: list(b.at_branch(12), read_division_part),
     previews: Array.from(b.at(13).get<U32Array>()),
-    storage_refused: Array.from(b.at(14).get<U32Array>()),
+    refused_files: list(b.at_branch(14), read_refused_file),
     stall: b.at(15).get<Message | null>(),
+    renderer_progress: b.at(16).get<f64>(),
   };
 }
 
@@ -333,6 +337,18 @@ export function read_division_part(b: BranchCursor): DivisionPart {
     shown: b.at(3).get<boolean>(),
     area: b.at(4).get<boolean>(),
   };
+}
+
+/** A file the kernel refused, as it opened it. */
+export interface RefusedFile {
+  /** host.json's `root`. */
+  root: u32;
+  /** Its number below the root in decimal. */
+  path: string;
+}
+
+export function read_refused_file(b: BranchCursor): RefusedFile {
+  return { root: b.at(0).get<u32>(), path: b.at(1).get<string>() };
 }
 
 export interface LangName {
@@ -452,7 +468,7 @@ export function encode_sys_sleep(to: PacketRoom, awake: boolean): PacketWriter {
 /** Command.FS_MOUNT's packet, written in place into `to`.
  *
  * @param top_zoom The coarsest zoom the source supplies whole.
- * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/published.spec.rs).
+ * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
  * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
 export function encode_fs_mount(
   to: PacketRoom,
@@ -469,9 +485,14 @@ export function encode_fs_mount(
 
 /** Command.FS_TRUNCATED's packet, written in place into `to`.
  *
- * @param slot host.json's `storage`. */
-export function encode_fs_truncated(to: PacketRoom, slot: u32): PacketWriter {
-  return to.writer(1).u32(slot);
+ * @param root host.json's `root`.
+ * @param path Its number below the root in decimal, as the kernel opened it. */
+export function encode_fs_truncated(
+  to: PacketRoom,
+  root: u32,
+  path: string,
+): PacketWriter {
+  return to.writer(2).u32(root).str(path);
 }
 
 /** Command.SENSOR_PERMISSION's packet, written in place into `to`. */

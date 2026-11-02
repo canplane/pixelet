@@ -21,7 +21,7 @@ mod unpack;
 use pxl_kernel::door;
 use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES, THREAD_STACK_BYTES};
-use pxl_kernel::sys::stop::Stop;
+use xpute_guest::stop::Stop;
 use xpute_host::mem::Memory;
 use xpute_host::native::{self, Alloc, BootInfo, Config};
 
@@ -50,9 +50,7 @@ xpute_host::native_abi!(
     turn
 );
 
-/// The process's error stream, or Android's log where that stream goes
-/// nowhere: the kernel stops with the app, before the shell could run the
-/// report's record.
+/// A stop's line, said (`say`).
 fn panic_hook(stop: Stop<'_>) {
     let line = match stop {
         Stop::Bug { errnum, at, a, b } => format!(
@@ -63,8 +61,14 @@ fn panic_hook(stop: Stop<'_>) {
         ),
         Stop::Panic(info) => format!("[pxl] {info}"),
     };
+    say(&line);
+}
+
+/// A line to the process's error stream, or to Android's log where that
+/// stream goes nowhere.
+fn say(line: &str) {
     #[cfg(target_os = "android")]
-    android::say(&line);
+    android::say(line);
     #[cfg(not(target_os = "android"))]
     eprintln!("{line}");
 }

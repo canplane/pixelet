@@ -13,7 +13,6 @@ test = false
 doctest = false
 
 [dependencies]
-xpute-kit = { workspace = true, features = ["std"] }
 xpute-guest.workspace = true
 # A page's GPU host admits every frame (xpute_gpu::admit `every`).
 xpute-gpu.workspace = true

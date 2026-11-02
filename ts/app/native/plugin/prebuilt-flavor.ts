@@ -10,7 +10,7 @@
  * Pods/ReactNativeDependencies, and Pods itself for Hermes); a phase of
  * every build extracts the other when they differ. `pod install` makes the folders
  * again without that file and keeps what was extracted, and a missing file
- * is read as Debug. A Release build followed by an install then left the
+ * is read as Debug. A Release build followed by an install leaves the
  * Release core under a Debug app, whose link fails on what only the Debug
  * core defines (`facebook::react::Sealable`). Saying neither makes the next
  * build of either extract its own, one extraction after an install.
@@ -20,6 +20,7 @@
  */
 
 import { withPodfile } from "expo/config-plugins";
+import type { ConfigPlugin } from "expo/config-plugins";
 
 const MARK = "# pxl: React Native's prebuilt parts, of no configuration";
 
@@ -31,7 +32,7 @@ const STEP = `
     end
 `;
 
-export default (config) =>
+const plugin: ConfigPlugin = (config) =>
   withPodfile(config, (config) => {
     const podfile = config.modResults.contents;
     if (!podfile.includes(MARK)) {
@@ -45,3 +46,5 @@ export default (config) =>
     }
     return config;
   });
+
+export default plugin;

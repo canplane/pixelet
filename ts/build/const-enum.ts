@@ -5,13 +5,13 @@
  * Babel): a one-file-at-a-time transpiler emits an enum as an object with
  * member names as strings. A non-const enum or a non-literal member is an
  * error here. A use is resolved through its import, so two files exporting
- * one name are two enums, and an import resolves through the aliases as the
- * type-check reads them (paths.ts).
+ * one name are two enums, and an import resolves through the aliases and the
+ * workspace packages as the type-check reads them (paths.ts).
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { mapped } from "./paths.ts";
+import { treeFile } from "./paths.ts";
 
 /** A const enum's members, each its value. */
 export type Members = Map<string, number | string>;
@@ -82,15 +82,12 @@ export function readEnums(roots: string[]): Table {
   return { exported, local };
 }
 
-/** Where `spec`, imported from `from`, is: relative, or through an alias
- * (paths.ts). */
+/** Where `spec`, imported from `from`, is: relative, or through an alias or a
+ * workspace package (paths.ts). */
 function fileOf(from: string, spec: string): string | null {
-  let base: string | null = null;
-  if (spec.startsWith(".")) base = path.resolve(path.dirname(from), spec);
-  else {
-    const hit = mapped(spec);
-    if (hit) base = hit.path;
-  }
+  const base = spec.startsWith(".")
+    ? path.resolve(path.dirname(from), spec)
+    : treeFile(from, spec);
   if (base === null) return null;
   for (const at of [
     base,
