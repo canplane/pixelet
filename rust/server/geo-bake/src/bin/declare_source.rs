@@ -7,7 +7,7 @@
 use std::io::Read;
 use std::process::ExitCode;
 
-use pxl_geo_bake::source::recorded;
+use pxl_geo_bake::source::declaration_of;
 
 fn run() -> Result<(), String> {
     let mut text = String::new();
@@ -16,7 +16,7 @@ fn run() -> Result<(), String> {
         .map_err(|e| format!("stdin: {e}"))?;
     let record: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| format!("stdin: {e}"))?;
-    println!("{}", recorded(&record)?);
+    println!("{}", declaration_of(&record)?);
     Ok(())
 }
 

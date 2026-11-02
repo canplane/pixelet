@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::source::{is_sharded, is_version, key};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
@@ -30,7 +30,7 @@ pub struct Kind {
     pub shard: Option<BTreeSet<Tile>>,
 }
 
-pub type Kinds = [Kind; BaseLayer::ALL.len()];
+pub(crate) type Kinds = [Kind; BaseLayer::ALL.len()];
 
 /// Each kind's, in `BaseLayer`'s order.
 pub fn try_kinds(kind: impl FnMut(BaseLayer) -> Result<Kind, String>) -> Result<Kinds, String> {
@@ -163,7 +163,7 @@ pub fn manifest(set: &Path) -> Result<Option<Value>, String> {
 }
 
 /// The shards a set's manifest names it holds; none where it names none.
-pub fn held(manifest: &Value) -> Result<Option<BTreeSet<Tile>>, String> {
+pub fn manifest_shards(manifest: &Value) -> Result<Option<BTreeSet<Tile>>, String> {
     manifest["shard"]
         .as_array()
         .map(|names| tiles(names.iter().filter_map(Value::as_str)))
@@ -180,14 +180,14 @@ pub fn of_set(set: &Path, version: &str) -> Result<Kind, String> {
             .ok_or(format!("{}: its {MANIFEST} names no format", set.display()))?
             as u32,
         version: version.to_string(),
-        shard: held(&manifest)?,
+        shard: manifest_shards(&manifest)?,
     })
 }
 
 /// The published declaration from a record of what the bucket serves:
 /// `kind`, each kind's version and what its manifest says of it, its
 /// `format` and `shard`; `override`, a kind's version for a shard.
-pub fn recorded(record: &Value) -> Result<Value, String> {
+pub fn declaration_of(record: &Value) -> Result<Value, String> {
     let kind = |l: BaseLayer| -> Result<Kind, String> {
         let k = &record["kind"][l.name()];
         let at = |field: &str| format!("kind.{}.{field}", l.name());
@@ -197,7 +197,7 @@ pub fn recorded(record: &Value) -> Result<Value, String> {
                 .as_str()
                 .ok_or_else(|| at("version"))?
                 .to_string(),
-            shard: held(k)?,
+            shard: manifest_shards(k)?,
         })
     };
     let kinds = try_kinds(kind)?;

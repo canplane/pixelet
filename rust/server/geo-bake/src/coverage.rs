@@ -9,6 +9,7 @@ use std::sync::LazyLock;
 
 use postgres::types::ToSql;
 use postgres::{Client, NoTls};
+use pxl_engine::area;
 use pxl_geo_spec::table::CATALOG;
 use pxl_spec::space::coord::zoom::{cnt, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
@@ -29,19 +30,18 @@ pub const EPS: f64 = units(GROUND.cell());
 /// How far past a leaf any bake reads, in units: a z13 tile, four terrain
 /// leaves. A terrain leaf's reads stay within its 2-ring; a
 /// divisions leaf looks this far for the point of a division with no area,
-/// past the gap between such points nearly everywhere (99% of Korea's
-/// neighborhoods, most of its villages, measured 2026-10-08).
-pub const BAKE_REACH: f64 = units(LEAF_ZOOM - 2);
+/// past the gap between such points nearly everywhere.
+pub(crate) const BAKE_READ_DIST: f64 = units(LEAF_ZOOM - 2);
 
 const _: () = assert!(
-    2.0 * units(LEAF_ZOOM) <= BAKE_REACH,
-    "a terrain leaf's 2-ring reads past the bakes' reach"
+    2.0 * units(LEAF_ZOOM) <= BAKE_READ_DIST,
+    "a terrain leaf's 2-ring reads past the bakes' read distance"
 );
 
-/// How far past its edges a shard holds, in units: the bakes' reach and
-/// `EPS`, so every leaf bakes from its shard alone. A read past `BAKE_REACH` is a
-/// violation, never a reason to grow this.
-pub const SHARD_APRON: f64 = BAKE_REACH + EPS;
+/// How far past its edges a shard holds, in units: the bakes' read distance
+/// and `EPS`, so every leaf bakes from its shard alone. A read past
+/// `BAKE_READ_DIST` is a violation.
+pub const SHARD_APRON: f64 = BAKE_READ_DIST + EPS;
 
 /// A node of the hierarchy at or above the shards: its zoom and index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -71,7 +71,7 @@ impl Node {
     }
 
     /// What a shard holds: its rect grown by `SHARD_APRON`.
-    pub fn held(self) -> [f64; 4] {
+    pub fn apron_rect(self) -> [f64; 4] {
         let [x0, y0, x1, y1] = self.rect();
         [
             x0 - SHARD_APRON,
@@ -118,14 +118,15 @@ impl Coverage {
     }
 
     /// These shards, each a tile at `SHARD_ZOOM`.
-    pub fn of_shards(shards: impl IntoIterator<Item = Tile>) -> Coverage {
+    pub(crate) fn of_shards(shards: impl IntoIterator<Item = Tile>) -> Coverage {
         Coverage {
             shards: shards.into_iter().map(|t| t.at).collect(),
         }
     }
 
+    /// The shard over a tile a shard or finer (pxl-engine `area::shard_over`).
     fn shard_of(zoom: Zoom, tile: [i32; 2]) -> Shard {
-        ancestor_of(tile, zoom - SHARD_ZOOM)
+        area::shard_over(zoom, tile).1
     }
 
     pub fn contains(&self, leaf: [i32; 2]) -> bool {
@@ -183,7 +184,7 @@ impl Coverage {
 
 /// The `overture_*` tables a set of statements names, outside string
 /// literals and `--` comments, without the catalog; sorted, each once.
-pub fn tables_of<'a>(reads: &[&[&'a str]]) -> Vec<&'a str> {
+pub(crate) fn tables_of<'a>(reads: &[&[&'a str]]) -> Vec<&'a str> {
     let mut out: Vec<&str> = Vec::new();
     for sql in reads.iter().flat_map(|r| r.iter()) {
         let b = sql.as_bytes();
@@ -258,7 +259,10 @@ impl Overture {
 /// What the geo DB holds for `reads`, which a set's manifest says it was
 /// made from: each source by the `version` and `accessed_at` the DB records
 /// for it, each Overture table with its counts.
-pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
+pub(crate) fn holdings(
+    client: &mut Client,
+    reads: &[&[&str]],
+) -> Result<serde_json::Value, String> {
     let tables = tables_of(reads);
     let text = |client: &mut Client,
                 sql: &str,
@@ -297,7 +301,7 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
 }
 
 /// `holdings`, for a set's manifest.
-pub fn src_of(reads: &[&[&str]]) -> Result<serde_json::Value, String> {
+pub(crate) fn src_of(reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let (_, mut client) = Overture::reading(reads, &BTreeSet::new())?;
     holdings(&mut client, reads)
 }

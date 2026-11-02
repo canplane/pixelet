@@ -20,7 +20,7 @@ use crate::util::{pack, unpack, write_atomic, Level};
 /// A road tunnel's end: where a portal may open, and the tunnel's level, which
 /// sets how far its approaches can sink (`portals_in`).
 #[derive(Clone, Copy)]
-pub struct Portal {
+pub(crate) struct Portal {
     pub at: [f64; 2],
     pub level: i64,
 }
@@ -34,8 +34,7 @@ const SEGMENTS_SQL: &str = concat!(
     " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"
 );
 
-/// The waterways a deck clears, lines alone: a water area, a sea's 444,741
-/// points among them, clears nothing.
+/// The waterways a deck clears, lines alone: a water area clears nothing.
 const WATER_SQL: &str = "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_water WHERE ST_Dimension(geom) = 1 AND geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)";
 
 /// One tile's rows, as a tile's other rows are read: whatever overlaps it.
@@ -58,12 +57,12 @@ impl TileRows {
         &self.water
     }
 
-    pub fn ele(&self) -> &[i16] {
+    pub(crate) fn ele(&self) -> &[i16] {
         &self.ele
     }
 
     /// Both ends of every road tunnel among its ways (`piece_of`).
-    pub fn portals(&self) -> Vec<Portal> {
+    pub(crate) fn portals(&self) -> Vec<Portal> {
         self.ways
             .iter()
             .filter_map(piece_of)
@@ -134,14 +133,14 @@ impl Store for Disk<'_> {
 /// eight around it and no more.
 #[derive(Default)]
 pub struct Walk {
-    held: FnvHashMap<[i32; 2], TileRows>,
+    tiles: FnvHashMap<[i32; 2], TileRows>,
 }
 
 impl Walk {
     /// Drops what is not in `tile`'s 3×3.
     pub fn keep_around(&mut self, tile: [i32; 2]) {
         let near = |p: [i32; 2]| (p[0] - tile[0]).abs() <= 1 && (p[1] - tile[1]).abs() <= 1;
-        self.held.retain(|&p, _| near(p));
+        self.tiles.retain(|&p, _| near(p));
     }
 }
 
@@ -152,11 +151,11 @@ impl Store for Walk {
         repo: &TerrainRepository,
         tile: [i32; 2],
     ) -> Result<TileRows, String> {
-        if let Some(rows) = self.held.get(&tile) {
+        if let Some(rows) = self.tiles.get(&tile) {
             return Ok(rows.clone());
         }
         let rows = tile_rows(client, repo, tile)?;
-        self.held.insert(tile, rows.clone());
+        self.tiles.insert(tile, rows.clone());
         Ok(rows)
     }
 }
@@ -171,7 +170,10 @@ const TUNNELS_SQL: &str = concat!(
 /// The portals of the road tunnels in `[lo, hi]`, DB coordinates: a narrow
 /// read of the tunnels alone, so a solve learns whether a neighbor's tunnel
 /// opens near its tile before it reads the neighbor.
-pub fn portals_in(client: &mut Client, [lo, hi]: [[f64; 2]; 2]) -> Result<Vec<Portal>, String> {
+pub(crate) fn portals_in(
+    client: &mut Client,
+    [lo, hi]: [[f64; 2]; 2],
+) -> Result<Vec<Portal>, String> {
     let env: [&(dyn ToSql + Sync); 4] = [&lo[0], &lo[1], &hi[0], &hi[1]];
     let rows = client.query(TUNNELS_SQL, &env).map_err(|e| e.to_string())?;
     Ok(TileRows {

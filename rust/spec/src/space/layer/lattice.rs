@@ -4,7 +4,7 @@
 //! every zoom, and its scale on the camera grid's cells.
 
 use super::tile::{tile_at, Cell, Tile};
-use crate::space::camera::grid::{cell_zoom_at, split_dist, WINDOW_MARGIN};
+use crate::space::camera::grid::{cell_zoom_at, split_dist, CLIP_MARGIN};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{idx_of, Zoom};
 use crate::space::hierarchy::tree::{
@@ -12,9 +12,9 @@ use crate::space::hierarchy::tree::{
 };
 
 /// A lattice's integer core — its zooms, its cells' indices, the ground's —
-/// is pxl-spec-core's, which a GPU reads tiles by too; placing it in the
+/// is pxl-engine's, which a GPU reads tiles by too; placing it in the
 /// world is here (`Cells`).
-pub use pxl_spec_core::lattice::{Lattice, GROUND, TILE_CELLS};
+pub use pxl_engine::lattice::{Lattice, GROUND, TILE_CELLS};
 
 /// The coarsest zoom `lattice`'s tiles are read at: where it reads the top's
 /// ground cells, the coarsest the camera grid draws. A tile coarser is one no
@@ -26,16 +26,16 @@ pub const fn coarsest(lattice: Lattice) -> Zoom {
 /// How far from the eye the view draws with `zoom` its coarsest:
 /// where the grid asks the cell a zoom coarser, which nothing holds, so a ray
 /// past it would cross cells finer than its distance asks.
-pub const fn draw_reach(lattice: Lattice, zoom: Zoom) -> f64 {
+pub const fn draw_dist(lattice: Lattice, zoom: Zoom) -> f64 {
     split_dist(lattice.grid_zoom(zoom - 1))
 }
 
 /// How far from an observer's foot a demand at `zoom` can lie: where a
-/// window holds the grid's cell a zoom coarser from (`WINDOW_MARGIN`), as
-/// far past `draw_reach` as it holds every finer cell past where it is
+/// clip level holds the grid's cell a zoom coarser from (`CLIP_MARGIN`), as
+/// far past `draw_dist` as it holds every finer cell past where it is
 /// drawn. Bounds the run along the ground too.
-pub const fn demand_reach(lattice: Lattice, zoom: Zoom) -> f64 {
-    draw_reach(lattice, zoom) * WINDOW_MARGIN
+pub const fn demand_dist(lattice: Lattice, zoom: Zoom) -> f64 {
+    draw_dist(lattice, zoom) * CLIP_MARGIN
 }
 
 /// A lattice placed in the world: the tiles and cells a node, a point or an

@@ -19,7 +19,7 @@
 //! each table anew from every shard, beside the live one, and swaps it in.
 //! When to run which is the user's to say: the catalog records each shard's
 //! release and when it was ingested, and decides nothing. The release is the
-//! one `source.json` pins, never the CLI's latest. A column a reader
+//! one `source.json` pins. A column a reader
 //! filters on is generated from `properties`.
 //! A division names its parent, which may stand past every shard: the
 //! divisions are taken with their ancestors, each fetched by its id, so a
@@ -45,7 +45,7 @@ use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::{Coverage, Node};
 use pxl_geo_bake::util::fnv1a;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
-use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::coord::world::BOUNDS;
 use serde_json::{Map, Number, Value};
 use xpute_kit::math::scalar::round;
 
@@ -353,8 +353,8 @@ fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {
 }
 
 /// A type's extracts, a CLI call a rectangle of shards, called one after
-/// another: every call reads Overture's STAC catalog, and a call a shard, six
-/// at once, was refused for load (HTTP 429). Each is named by the release and
+/// another: every call reads Overture's STAC catalog, which refuses calls made
+/// at once (HTTP 429). Each is named by the release and
 /// the bbox it was asked for, and the CLI's output takes that name only once
 /// the CLI has finished, so an extract under it is current and whole; the
 /// CLI's own state file is its private format, not read. The type's other
@@ -700,7 +700,7 @@ fn add(
     Ok(rows)
 }
 
-/// A shard as a feature is tested against: what it holds (`Node::held`, its
+/// A shard as a feature is tested against: what it holds (`Node::apron_rect`, its
 /// apron included) in EPSG:3857 meters, each rounded half to even,
 /// `[left, bottom, right, top]`; and the same in degrees, for the CLI.
 struct Shard {
@@ -713,7 +713,7 @@ struct Shard {
 
 impl Shard {
     fn of(node: Node) -> Shard {
-        let merc = node.held().map(|u| round(epsg3857::merc_from_u(u)));
+        let merc = node.apron_rect().map(|u| round(epsg3857::merc_from_u(u)));
         let [w, s, _] = epsg4326::from_mercator(&[merc[0], merc[1], 0.0]);
         let [e, n, _] = epsg4326::from_mercator(&[merc[2], merc[3], 0.0]);
         // The east edge at the seam reads back as -180.
@@ -948,7 +948,7 @@ fn items(list: &dyn Array) -> Result<Value, String> {
 /// world's edge clamps latitude (`epsg4326`), so what lies past it is cut off
 /// rather than refused by the projection.
 fn projected(wkb: &str) -> String {
-    let lat = epsg4326::Y_TO_LAT(epsg3857::merc_from_u(REACH.max[1]));
+    let lat = epsg4326::Y_TO_LAT(epsg3857::merc_from_u(BOUNDS.max[1]));
     format!("ST_Transform(ST_ClipByBox2D(ST_GeomFromWKB({wkb}, 4326), ST_MakeEnvelope(-180, -{lat:?}, 180, {lat:?}, 4326)), 3857)")
 }
 

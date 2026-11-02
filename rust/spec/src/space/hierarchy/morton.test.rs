@@ -84,3 +84,10 @@ fn digit_is_child_slot() {
         }
     }
 }
+
+/// Zero is no key: `node_of` refuses it.
+#[test]
+#[should_panic]
+fn zero_refused() {
+    node_of::<2>(0);
+}

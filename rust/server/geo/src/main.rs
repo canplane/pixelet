@@ -1,7 +1,6 @@
 // pxl-geo/main.rs
 
-//! Live forward search over Overture's Places and Divisions under `/geo/`;
-//! a free-text query has no tile key, so it cannot be baked.
+//! Live forward search over Overture's Places and Divisions under `/geo/`.
 
 mod division;
 mod search;

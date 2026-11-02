@@ -9,7 +9,7 @@ use xpute_kit::math::scalar::round;
 
 use crate::wkb::WkbGeometry;
 
-pub type P = [f64; 2];
+pub(crate) type P = [f64; 2];
 
 /// OpenStreetMap Carto's layers in the order `project.mml` stacks them
 /// (gravitystorm/openstreetmap-carto 1cc4b89), but buildings over roads: a
@@ -42,7 +42,7 @@ pub struct Rank {
     pub layer: Layer,
     pub order: i64,
     /// Carto's `feature` (`landuse_forest`), its tie within landcover.
-    pub feat: &'static str,
+    pub(crate) feat: &'static str,
     pub id: Box<str>,
 }
 
@@ -58,7 +58,7 @@ impl Rank {
 
     /// Carto sorts an area layer by `way_area`, larger first: the whole
     /// source's, so every tile and every part of it ranks alike.
-    pub fn by_area(layer: Layer, way_area: f64, feat: &'static str, id: &str) -> Rank {
+    pub(crate) fn by_area(layer: Layer, way_area: f64, feat: &'static str, id: &str) -> Rank {
         Rank::new(layer, -(round(way_area) as i64), feat, id)
     }
 }
@@ -66,18 +66,18 @@ impl Rank {
 #[derive(Clone, Debug)]
 pub struct Feature {
     pub points: Vec<P>,
-    pub holes: Vec<Vec<P>>,
+    pub(crate) holes: Vec<Vec<P>>,
     pub closed: bool,
     /// A line's width in u.
     pub width: f64,
     /// Ends a flag or a line cuts: square, not rounded.
     pub cut: [bool; 2],
     pub cell: GroundId,
-    pub rank: Rank,
+    pub(crate) rank: Rank,
 }
 
 /// In the tile's cells from its corner.
-pub fn local(p: G3857, tile_min: G3857) -> P {
+pub(crate) fn local(p: G3857, tile_min: G3857) -> P {
     [
         u_from_merc(p[0] - tile_min[0]) / CELL_U,
         u_from_merc(p[1] - tile_min[1]) / CELL_U,
@@ -85,7 +85,7 @@ pub fn local(p: G3857, tile_min: G3857) -> P {
 }
 
 /// A polygon, or a ring whose ends meet within a tenth of the DB's unit, is an area.
-pub fn closes(g: &WkbGeometry) -> bool {
+pub(crate) fn closes(g: &WkbGeometry) -> bool {
     let p = &g.points;
     g.is_polygon_src
         || (p.len() >= 3

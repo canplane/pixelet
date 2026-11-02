@@ -4,7 +4,7 @@
 //! literal, a subject a module, its reason beside it. What follows from
 //! them is computed by name where it is used.
 
-pub mod place {
+pub(crate) mod place {
     use crate::space::coord::zoom::Zoom;
 
     /// How far apart places stand, in zooms: an icon's cell is this many

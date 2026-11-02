@@ -25,7 +25,7 @@ use crate::bake::malformed;
 use crate::param::place::SPREAD_STEPS;
 
 /// Carto's last zoom, openstreetmap.org's: the leaf places through it.
-pub const PLACE_LAST: Zoom = 19;
+pub(crate) const PLACE_LAST: Zoom = 19;
 
 /// An icon's cell: a mark's, which a power of two makes nest.
 const ICON_STEPS: Zoom = MARK_STEPS;
@@ -37,9 +37,7 @@ const ICON_STEPS: Zoom = MARK_STEPS;
 pub const PLACE_LATTICE: Lattice =
     Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
 
-/// The cell a place keeps to itself, as a zoom under the tile. Seen at an
-/// icon's own cell, places a few meters apart stood side by side as near as
-/// the view came.
+/// The cell a place keeps to itself, as a zoom under the tile.
 const SPACING_STEPS: Zoom = ICON_STEPS - SPREAD_STEPS;
 
 /// The coarsest zoom any category is shown from; no tile coarser holds a place.
@@ -47,7 +45,7 @@ pub const PLACE_FIRST: Zoom = {
     let mut first = PLACE_LAST;
     let mut k = 0;
     while k < CATEGORIES.len() {
-        if let Some(z) = shown(k as u16 + 1) {
+        if let Some(z) = first_zoom(k as u16 + 1) {
             if z < first {
                 first = z;
             }
@@ -66,18 +64,16 @@ const _: () = assert!(
     "a tile's ground leaf cells no longer fit a half-word a lane"
 );
 
-/// The most a packet takes, a tile past it failing its bake (`encode`): the
-/// set baked 2026-10-17 holds at most 107 KiB.
-pub const MAX_PKT_BYTES: usize = 1 << 20;
+/// The most a packet takes, a tile past it failing its bake (`encode`).
+pub(crate) const MAX_PKT_BYTES: usize = 1 << 20;
 
 /// The longest name a tile holds, in code points; a longer one is cut to end
-/// in an ellipsis. At 32, 99% of the places Overture names in Korea are whole
-/// (their names' 99th percentile, measured 2026-09-25).
-pub const NAME_CHARS: usize = 32;
+/// in an ellipsis.
+pub(crate) const NAME_CHARS: usize = 32;
 
 /// The zoom a category is first drawn from, as a dot or its icon; none for a category
 /// Carto draws no point for.
-pub const fn shown(category: u16) -> Option<Zoom> {
+pub const fn first_zoom(category: u16) -> Option<Zoom> {
     if category == 0 || category as usize > CATEGORIES.len() {
         return None;
     }
@@ -110,7 +106,7 @@ pub fn category_of(category: &str) -> u16 {
 
 /// Strings end to end in one buffer, read by index.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Strings {
+pub(crate) struct Strings {
     bytes: String,
     ends: Vec<u32>,
 }
@@ -204,7 +200,7 @@ impl PlaceTile {
             .filter_map(|(point, place)| {
                 Some((
                     GROUND.cell_of(LEAF_ZOOM, &point),
-                    shown(place.category)?,
+                    first_zoom(place.category)?,
                     cut_name(place.name),
                     place,
                 ))
@@ -241,7 +237,7 @@ impl PlaceTile {
                 at: cell.in_tile(),
             })
         });
-        gathered(placed, Occupancy::ZERO)
+        tile_of(placed, Occupancy::ZERO)
     }
 }
 
@@ -276,11 +272,11 @@ pub fn fold(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
                 }),
         );
     }
-    gathered(placed, Occupancy::of_slots(kept))
+    tile_of(placed, Occupancy::of_slots(kept))
 }
 
 /// Places ascending by where they stand.
-fn gathered<'a>(placed: impl IntoIterator<Item = Placed<'a>>, occupancy: Occupancy) -> PlaceTile {
+fn tile_of<'a>(placed: impl IntoIterator<Item = Placed<'a>>, occupancy: Occupancy) -> PlaceTile {
     let mut placed: Vec<Placed> = placed.into_iter().collect();
     placed.sort_by_key(|h| [h.at[1], h.at[0]]);
     let mut tile = PlaceTile {
@@ -372,7 +368,7 @@ fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
         .windows(2)
         .all(|w| [w[0][1], w[0][0]] < [w[1][1], w[1][0]]);
     let bad = |(_, h): (u32, Placed)| {
-        let shows = shown(h.place.category);
+        let shows = first_zoom(h.place.category);
         shows.is_none_or(|z| h.from < z || h.from > PLACE_LAST)
             || h.place.name.chars().nth(NAME_CHARS).is_some()
     };

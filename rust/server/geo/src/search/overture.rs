@@ -46,11 +46,9 @@ macro_rules! home {
     };
 }
 
-/// Ranked against `near`: its country's places first, as Google's Places
-/// API biases suggestions to the request's `regionCode`, so another country's
+/// Ranked against `near`: its country's places first, so another country's
 /// fill only what room is left. Similarity is rounded to two decimals so
-/// distance decides among near-equal names; on the raw score, one trigram
-/// outranked a thousand kilometers.
+/// distance decides among near-equal names.
 const SEARCH_NEAR_SQL: &str = concat!(
     "WITH home AS (SELECT geom FROM overture_division_areas WHERE properties->>'division_id' = ",
     home!(),
@@ -93,17 +91,16 @@ const DIVISION_SEARCH_NEAR_SQL: &str = concat!(
 LIMIT $2"
 );
 
-/// Its kind and category by number (spec/spec/search.json): a name of
-/// Overture's taxonomy is never on the wire.
+/// Its kind and category by number (spec/spec/search.json).
 #[derive(Serialize)]
-pub struct SearchResult {
+pub(crate) struct SearchResult {
     pub gers_id: String,
     /// `SEARCH_KIND`.
     pub kind: u8,
     pub name: String,
     /// A place's category (`category_of`), a division's subtype.
     pub category: u16,
-    /// Null for a places: Places' `names.common` is ~0% populated for Korean.
+    /// Null for a place.
     pub common: Option<serde_json::Value>,
     pub context: Vec<DivisionPart>,
     pub lon: f64,
@@ -163,7 +160,7 @@ impl DivisionRow {
     }
 }
 
-pub async fn search(
+pub(crate) async fn search(
     pool: &Pool,
     query: &str,
     near: Option<&Near>,
@@ -200,7 +197,7 @@ pub async fn search(
     let mut division_results: Vec<SearchResult> = Vec::with_capacity(division_rows.len());
     for r in division_rows {
         // A subtype newer than this tree has no number, as the division tiles skip it.
-        let Some(subtype) = Subtype::named(&r.subtype) else {
+        let Some(subtype) = Subtype::of_word(&r.subtype) else {
             continue;
         };
         let context = division::ancestors(pool, &r.gers_id).await?;
@@ -218,8 +215,7 @@ pub async fn search(
     }
 
     // Context comes from the point, not `addresses[0]`: a row can be addressed
-    // to the city it is named for while it sits in the next, and the field's
-    // format varies by contributor.
+    // to the city it is named for while it sits in the next.
     let xs: Vec<f64> = place_rows.iter().map(|r| r.x3857).collect();
     let ys: Vec<f64> = place_rows.iter().map(|r| r.y3857).collect();
     let place_context = division::name_points(pool, &xs, &ys).await?;

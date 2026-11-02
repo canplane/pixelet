@@ -1,7 +1,7 @@
 // pxl-spec/lib.rs
 
 //! pixelet's spec in Rust: space and coordinates, the asset catalog and its file
-//! tables, bake formats, shared by server and client with no second implementation.
+//! tables, bake formats, shared by server and client.
 
 pub mod asset;
 pub mod bake;

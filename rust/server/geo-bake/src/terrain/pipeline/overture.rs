@@ -3,4 +3,4 @@
 pub mod between;
 pub mod policy;
 pub mod role;
-pub mod width;
+pub(crate) mod width;

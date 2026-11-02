@@ -6,7 +6,7 @@
     "Each decor is said here once: its number, its models, and how the ground",
     "generates it on its own. A decor's `seed` names its scatter, so changing it",
     "reshuffles every one the ground generates; `density` is the chance a cell of",
-    "its holds one, the mean of a tree of hashes of the cells (pxl-spec-core",
+    "its holds one, the mean of a tree of hashes of the cells (pxl-content",
     "scatter.rs); `on` the palette entries it may stand on; `orientation` a random",
     "heading, or along the road or rail its cell lies on. A variant's",
     "skin is its pack's colormap, kept outside the glb.",
@@ -39,7 +39,7 @@
         "at 1u spacing."
       ],
       "seed": "0x7902530c",
-      "density": 0.04,
+      "density": 0.025,
       "orient": "random",
       "on": ["park", "forest", "land"],
       "variants": [
@@ -58,12 +58,17 @@
       "val": 1025,
       "label": "Boat",
       "$doc": [
-        "Boats on open river and lake water; wetland is too shallow. Rivers are a",
-        "few cells wide, so the per-cell rate reads far denser than on land: cut to",
-        "a quarter of 0.015 after boats covered the water."
+        "Boats on open water: rivers, lakes and the sea near a coast; wetland is",
+        "too shallow. The sea is the same `water` ground, and boats stand on it",
+        "near a coast alone: a tile of open sea is left out of the bake and drawn",
+        "from a coarser one, at whose cells no boat stands (pxl-content",
+        "`scatter::stands_at`), so the clip levels a boat stands at hold sea only in",
+        "the tiles a coast crosses. Rivers are a few cells wide, so the per-cell",
+        "rate reads far denser than on land: cut to a quarter of 0.015 after",
+        "boats covered the water."
       ],
       "seed": "0xb0a5802d",
-      "density": 0.002,
+      "density": 0.001,
       "orient": "random",
       "on": ["water"],
       "variants": [
@@ -83,7 +88,7 @@
         "of cells reads as gridlock."
       ],
       "seed": "0x0ca63010",
-      "density": 0.004,
+      "density": 0.003,
       "orient": "along_transport",
       "on": ["motorway", "trunk", "primary", "secondary", "residential_road"],
       "variants": [
@@ -103,7 +108,7 @@
         "trains should read as occasional."
       ],
       "seed": "0x7ba5802d",
-      "density": 0.004,
+      "density": 0.0015,
       "orient": "along_transport",
       "on": ["tram", "light_rail", "subway", "monorail", "rail"],
       "variants": [

@@ -1,7 +1,7 @@
 // pxl-spec/bake/separation.test.rs
 
 use super::*;
-use pxl_spec_core::way;
+use pxl_engine::way;
 
 use crate::procedural::Frame;
 use crate::space::layer::tile;

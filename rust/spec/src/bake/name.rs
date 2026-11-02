@@ -1,4 +1,4 @@
-// pxl-spec/bake/named.rs
+// pxl-spec/bake/name.rs
 
 //! A place's names as every bake stores them, whatever the source: its own
 //! name, and `(tag, name)` pairs in the languages it gives. Three leaves.
@@ -8,7 +8,7 @@ use xpute_kit::status::error::MarshalError;
 use crate::bake::malformed;
 use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView, Strs};
 
-pub struct NameColumns<'a> {
+pub(crate) struct NameColumns<'a> {
     /// Where each place's pairs start; one longer than the places.
     starts: Vec<u32>,
     names: Vec<&'a str>,
@@ -44,7 +44,7 @@ impl<'a> NameColumns<'a> {
 
 /// Read where it lies.
 #[derive(Clone, Copy)]
-pub struct NamesView<'a> {
+pub(crate) struct NamesView<'a> {
     starts: &'a [u32],
     names: Strs<'a>,
     langs: Strs<'a>,

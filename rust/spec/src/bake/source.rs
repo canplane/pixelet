@@ -4,11 +4,11 @@
 //! (pxl-geo-bake source.rs) and where it is read (pxl-kernel sys/io/source.rs):
 //! a declaration one side writes is one the other reads.
 
-use crate::bake::published::BaseLayer;
+use crate::bake::publication::BaseLayer;
 use crate::space::coord::zoom::SHARD_ZOOM;
 use crate::space::layer::tile::Tile;
 
-use crate::bake::published::VERSION_BYTES;
+use crate::bake::publication::VERSION_BYTES;
 
 /// A key of its shards: a shard, or a node over shards.
 pub fn key(name: &str) -> Option<Tile> {

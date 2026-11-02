@@ -8,7 +8,7 @@
 )]
 
 use crate::space::coord::q3::Q3;
-use crate::space::coord::world::REACH;
+use crate::space::coord::world::BOUNDS;
 use crate::space::coord::world::ROUND;
 use crate::space::coord::zoom::Zoom;
 
@@ -31,7 +31,7 @@ fn NORMALIZE_LON(lon: f64) -> f64 {
 /// the equator, as wide as X is around, so the edge is atan(sinh π); Y
 /// diverges past it.
 fn CLAMP_LAT(lat: f64) -> f64 {
-    let max = libm::atan(libm::sinh(core::f64::consts::TAU * REACH.max[1] / ROUND)) * RAD_TO_DEG;
+    let max = libm::atan(libm::sinh(core::f64::consts::TAU * BOUNDS.max[1] / ROUND)) * RAD_TO_DEG;
     lat.clamp(-max, max)
 }
 
@@ -103,7 +103,7 @@ pub fn dist(a: &G4326, b: &G4326) -> f64 {
     2.0 * EARTH_RADIUS_M * libm::atan2(h.sqrt(), (1.0 - h).sqrt())
 }
 
-pub type BBox4326 = [G4326; 2];
+pub(crate) type BBox4326 = [G4326; 2];
 
 pub fn get_tile_bbox(zoom: Zoom, tile: [i32; 2]) -> BBox4326 {
     let [min_merc, max_merc] = epsg3857::get_tile_bbox(zoom, tile);

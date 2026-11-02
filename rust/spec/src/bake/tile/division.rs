@@ -15,23 +15,21 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::malformed;
-use crate::bake::named::{NameColumns, NamesView};
+use crate::bake::name::{NameColumns, NamesView};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::division::Subtype;
 use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec_core::ground::majority;
+use pxl_engine::ground::majority;
 use xpute_kit::wire::xtp::Strs;
 
 /// The finest tile Overture makes of its divisions (overture-tiles
 /// `profiles/Divisions.java`, `MAXZOOM`): finer views read it.
 pub const DIVISION_LEAF: Zoom = 12;
 
-/// The most a packet takes, a tile past it failing its bake (`encode`): the
-/// set baked 2026-10-17 holds at most 3.28 MiB, z5's, its names' strings
-/// the most of it past the cells' 1 MiB.
-pub const MAX_PKT_BYTES: usize = 4 << 20;
+/// The most a packet takes, a tile past it failing its bake (`encode`).
+pub(crate) const MAX_PKT_BYTES: usize = 4 << 20;
 
 /// A cell in no division, and a division with no parent.
 pub const NONE: u32 = u32::MAX;
@@ -115,7 +113,7 @@ impl Default for DivisionTile {
 }
 
 /// One branch: the cells; the occupancy; per division its id, subtype,
-/// parent, prominence and whether an area holds it, then its names (`named`).
+/// parent, prominence and whether an area holds it, then its names (`name`).
 pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
     let d = &tile.divisions;
     let parents: Vec<u32> = d.iter().map(|d| d.parent).collect();

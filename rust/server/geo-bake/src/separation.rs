@@ -4,9 +4,9 @@
 //! source, and the lines the bake stores for them, solved as Arnis solves
 //! them (`separation/solve.rs`).
 
-pub mod elevation;
+pub(crate) mod elevation;
 pub mod piece;
-pub mod solve;
+pub(crate) mod solve;
 pub mod source;
 pub mod way;
 
@@ -25,25 +25,25 @@ pub use solve::solve_tile;
 /// which the ground leaves unpainted. One solve makes both, so the road
 /// leaves the ground's paint exactly where its line begins.
 #[derive(Default)]
-pub struct Solved {
+pub struct Solution {
     pub lines: Vec<Line>,
-    pub drawn: Vec<Drawn>,
+    pub way_ranges: Vec<WayRange>,
 }
 
 /// A solved line: XY in DB coordinates, height in leaf cells, width in u.
 pub struct Line {
     pub subtype: String,
     pub class: Option<String>,
-    pub width_u: f64,
-    pub form: Form,
+    pub(crate) width_u: f64,
+    pub(crate) form: Form,
     pub points: Vec<G3857>,
     /// The coarsest zoom each point is held at (`coarsest`).
-    pub coarsest: Vec<u8>,
+    pub(crate) coarsest: Vec<u8>,
     /// A bore's clear space over its surface, in leaf cells; none for another form.
-    pub clear: u8,
+    pub(crate) clear: u8,
 }
 
-/// Each point's coarsest zoom (pxl-spec-core `way::coarsest`) on the line
+/// Each point's coarsest zoom (pxl-engine `way::coarsest`) on the line
 /// through `points`, its XY in DB coordinates and its height in leaf cells:
 /// its effective area on the line, in leaf cells² — Visvalingam–Whyatt, as
 /// TopoJSON's presimplify and mapshaper weigh a point: the triangle it makes
@@ -57,7 +57,7 @@ pub struct Line {
     clippy::absolute_paths,
     reason = "this module's own `way` and `coarsest` take the core's names"
 )]
-pub fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
+pub(crate) fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
     let n = points.len();
@@ -111,7 +111,7 @@ pub fn coarsest(points: &[G3857], ends: [bool; 2]) -> Vec<u8> {
         .map(|i| match i {
             0 => end(ends[0]),
             _ if i + 1 == n => end(ends[1]),
-            _ => pxl_spec_core::way::coarsest(area[i] as f32) as u8,
+            _ => pxl_engine::way::coarsest(area[i] as f32) as u8,
         })
         .collect()
 }
@@ -136,9 +136,9 @@ impl Ord for Area {
 
 /// A range of a way, as fractions of it, that a line draws.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Drawn {
+pub struct WayRange {
     pub gers_id: String,
-    pub range: [f64; 2],
+    pub(crate) range: [f64; 2],
 }
 
 /// What a solve reads through: the DB, and each tile's rows.

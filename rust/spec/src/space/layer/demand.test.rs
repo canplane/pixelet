@@ -4,7 +4,7 @@ use super::*;
 use crate::space::camera::grid::*;
 use crate::space::coord::zoom::FINEST_ZOOM;
 use crate::space::layer::lattice::GROUND;
-use crate::space::layer::lattice::{demand_reach, draw_reach};
+use crate::space::layer::lattice::{demand_dist, draw_dist};
 use crate::space::layer::tile::*;
 
 /// The ground tile a distance folds from, past the pyramid's ends too, as
@@ -14,7 +14,7 @@ fn zoom_at(r: f64) -> i32 {
 }
 
 /// The distance just short of `r` as the rule reads a distance: the f32
-/// before it (pxl-spec-core `grid::cell_zoom_at`).
+/// before it (pxl-engine `grid::cell_zoom_at`).
 fn short_of(r: f64) -> f64 {
     f64::from(f32::from_bits((r as f32).to_bits() - 1))
 }
@@ -35,15 +35,15 @@ fn feet(zoom: Zoom) -> Vec<[f64; 2]> {
 }
 
 fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
-    tiles_within(zoom, foot, demand_reach(GROUND, zoom)).collect()
+    tiles_within(zoom, foot, demand_dist(GROUND, zoom)).collect()
 }
 
 #[test]
-fn demand_within_reach() {
+fn demand_within_dist() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let n = demands(zoom, foot).len() as u32;
-            assert!(n <= REACH_TILES, "z{zoom} at {foot:?}: {n} tiles");
+            assert!(n <= GROUND_DEMAND_TILES, "z{zoom} at {foot:?}: {n} tiles");
         }
     }
 }
@@ -63,12 +63,12 @@ fn parents_in_coarser() {
     }
 }
 
-/// The reach, over the window's margin, is exactly where the view stops
+/// The reach, over the clip level's margin, is exactly where the view stops
 /// asking for a zoom.
 #[test]
 fn fault_bound_zoom_end() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
-        let r = demand_reach(GROUND, zoom) / WINDOW_MARGIN;
+        let r = demand_dist(GROUND, zoom) / CLIP_MARGIN;
         assert_eq!(
             zoom_at(short_of(r)),
             zoom as i32,
@@ -108,18 +108,22 @@ fn zoom_by_dist() {
 }
 
 /// The view draws a zoom out to where the grid asks the cell a zoom coarser,
-/// no farther: just short of `draw_reach` a ray asks the zoom's own cells,
+/// no farther: just short of `draw_dist` a ray asks the zoom's own cells,
 /// and at it the coarser's.
 #[test]
 fn view_zoom_extent() {
     for zoom in TOP_ZOOM..=LEAF_ZOOM {
-        let r = draw_reach(GROUND, zoom);
+        let r = draw_dist(GROUND, zoom);
         assert_eq!(
             zoom_at(short_of(r)),
             zoom as i32,
-            "zoom {zoom} short of its reach"
+            "zoom {zoom} short of its draw distance"
         );
-        assert_eq!(zoom_at(r), zoom as i32 - 1, "zoom {zoom} at its reach");
-        assert_eq!(demand_reach(GROUND, zoom), r * WINDOW_MARGIN);
+        assert_eq!(
+            zoom_at(r),
+            zoom as i32 - 1,
+            "zoom {zoom} at its draw distance"
+        );
+        assert_eq!(demand_dist(GROUND, zoom), r * CLIP_MARGIN);
     }
 }

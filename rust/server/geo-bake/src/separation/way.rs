@@ -7,7 +7,7 @@ use crate::segment::Part;
 type P = [f64; 2];
 
 /// A polyline with its length so far at each point.
-pub struct Polyline {
+pub(crate) struct Polyline {
     pub points: Vec<P>,
     along: Vec<f64>,
 }
@@ -48,7 +48,7 @@ impl Polyline {
 }
 
 /// A way as read: its row and its line.
-pub struct Way {
+pub(crate) struct Way {
     pub row: Part,
     pub line: Polyline,
 }

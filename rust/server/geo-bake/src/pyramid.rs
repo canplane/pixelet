@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
@@ -34,7 +34,7 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     const LATTICE: Lattice;
 
     /// The coarsest zoom it is folded to: the coarsest the client reads it
-    /// at (pxl-spec lattice.rs `coarsest`), since a tile coarser is one nobody asks for.
+    /// at (pxl-spec lattice.rs `coarsest`).
     const COARSEST: Zoom = coarsest(Self::LATTICE);
 
     /// As tile `at` is published.
@@ -53,7 +53,7 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     }
 
     /// `p` from its sources; None where a required one is not held.
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self>;
+    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self>;
 
     /// Which of its children are tiles, as the tile says.
     fn occupancy(&self) -> Occupancy;
@@ -89,7 +89,7 @@ pub const MANIFEST: &str = "manifest.json";
 /// hold of these, never of the tiles read and made again. Not published.
 /// A stage keeps each staged tile's beside it, `<name>.fit`. No tile is
 /// named so.
-pub const FITS: &str = "fits";
+pub(crate) const FITS: &str = "fits";
 
 pub struct TileSet {
     pub root: PathBuf,
@@ -147,7 +147,7 @@ impl TileSet {
 
     /// What the set keeps of its tiles (`FITS`), by tile; none for a set
     /// that keeps nothing, one baked before it kept them.
-    pub fn fits(&self) -> Result<Option<FnvHashMap<Tile, String>>, String> {
+    pub(crate) fn fits(&self) -> Result<Option<FnvHashMap<Tile, String>>, String> {
         let path = self.root.join(FITS);
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
@@ -213,7 +213,7 @@ fn remove_file(path: &Path) -> Result<(), String> {
 }
 
 /// None where it has no child: a parent exists exactly where a child does.
-pub fn fold_parent<'a, L: Base>(
+pub(crate) fn fold_parent<'a, L: Base>(
     parent: Tile,
     read: impl Fn(Tile) -> Option<&'a L>,
     absent: &impl Absent<L>,
@@ -231,7 +231,7 @@ pub fn fold_parent<'a, L: Base>(
     })
 }
 
-pub fn fold_stored<L: Base>(
+pub(crate) fn fold_stored<L: Base>(
     set: &TileSet,
     parent: Tile,
     absent: &impl Absent<L>,
@@ -253,7 +253,7 @@ pub struct Staged<'a> {
     pub stage: &'a TileSet,
     pub leaf: Zoom,
     pub whole: &'a FnvHashSet<Tile>,
-    pub gone: FnvHashSet<Tile>,
+    pub(crate) gone: FnvHashSet<Tile>,
 }
 
 impl Staged<'_> {
@@ -282,7 +282,7 @@ impl Staged<'_> {
     /// `content` reads its tile: the stage's beside a staged tile, none for
     /// one gone, else the set's (`base`, its `fits`). `None` where the set
     /// keeps nothing, one baked before it did, so it is not known.
-    pub fn kept(
+    pub fn fit_of(
         &self,
         p: Tile,
         base: Option<&FnvHashMap<Tile, String>>,
@@ -356,7 +356,7 @@ pub fn fold<L: Base>(
 
 /// Every tile its parent marks as no tile (`Base::occupancy`), under
 /// `top`: what a reader never asks for.
-pub fn unasked<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, String> {
+pub(crate) fn unasked_tiles<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, String> {
     let mut out = FnvHashSet::default();
     let listed = set.by_zoom()?;
     for zoom in top + 1..=L::LEAF {

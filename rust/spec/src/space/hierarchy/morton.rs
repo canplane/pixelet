@@ -97,9 +97,21 @@ fn spread(v: u64, n: u32) -> u64 {
     }
 }
 
+/// Whether `key` is a key, which `node_of` reads back: a 1 ends its digits
+/// below bit 127, which no key sets.
+pub const fn is_key(key: u128) -> bool {
+    key & (u128::MAX >> 1) != 0
+}
+
+/// The digits `key` holds, above its end bit; a non-key refused.
+fn len(key: u128) -> u32 {
+    xpute_kit::ensure!(is_key(key), EINVAL);
+    126 - key.trailing_zeros()
+}
+
 /// `key_of`'s inverse: the zoom, and each axis's index at it, signed.
 pub fn node_of<const D: usize>(key: u128) -> Node<D> {
-    let n = 126 - key.trailing_zeros();
+    let n = len(key);
     let (mut zoom, mut read, mut at) = (0, 0, [0i32; D]);
     while read < n {
         zoom += 1;
@@ -117,8 +129,8 @@ pub fn node_of<const D: usize>(key: u128) -> Node<D> {
 /// A key written a character a zoom, coarsest first: the digits that zoom
 /// adds as one octal digit, so a coarser node's name prefixes a finer one's
 /// and the length is the zoom. Written, not built, so a read allocates nothing.
-pub fn write_name<const D: usize>(out: &mut impl fmt::Write, key: u128) -> fmt::Result {
-    let n = 126 - key.trailing_zeros();
+pub(crate) fn write_name<const D: usize>(out: &mut impl fmt::Write, key: u128) -> fmt::Result {
+    let n = len(key);
     let (mut zoom, mut read) = (0, 0);
     while read < n {
         zoom += 1;

@@ -24,17 +24,17 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::BTreeMap;
 
 use crate::terrain::CELL_U;
+use pxl_engine::param::way::STACKED_DECK_HEADROOM_M;
+use pxl_engine::way;
 use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, u_from_merc};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::param::way::STACKED_DECK_HEADROOM_M;
-use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};
 use crate::separation::elevation::sample_cells;
 use crate::separation::way::{Polyline, Way};
-use crate::separation::{Drawn, Line};
+use crate::separation::{Line, WayRange};
 use crate::terrain::pipeline::overture::policy::waterway_width;
 
 use super::*;
@@ -54,7 +54,7 @@ const STREAM_HEADROOM_M: f64 = 2.0;
 const MAX_CLEARANCE_SLOPE: f64 = 1.0;
 const PROFILE_MONOTONIC_TOLERANCE_M: f64 = 2.0;
 const OBSTACLE_GRID_M: f64 = 64.0;
-const RAIL_ON_DECK_REACH_M: f64 = 2.0;
+const RAIL_ON_DECK_RADIUS_M: f64 = 2.0;
 const DECK_RAMP_FRACTION: f64 = 0.35;
 const DECK_RAMP_M: [f64; 2] = [15.0, 50.0];
 const RAIL_BRIDGE_FLAT_CLEARANCE_M: f64 = 4.0;
@@ -83,7 +83,7 @@ fn effective_layer(r: &Stretch) -> i64 {
 struct Obstacle {
     a: [f64; 2],
     b: [f64; 2],
-    /// In cells: what it covers is as the client's way covers (pxl-spec-core `covers`).
+    /// In cells: what it covers is as the client's way covers (pxl-engine `covers`).
     width: f32,
     headroom: i32,
     nodes: Vec<End>,
@@ -145,7 +145,7 @@ impl Obstacles {
                         headroom,
                         nodes: nodes.clone(),
                     });
-                    let r = f64::from(way::reach(width));
+                    let r = f64::from(way::half_width(width));
                     let k = |v: f64| (v / out.bucket).floor() as i64;
                     for bx in k(pair[0][0].min(pair[1][0]) - r)..=k(pair[0][0].max(pair[1][0]) + r)
                     {
@@ -270,11 +270,11 @@ fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
 // ---- road bridges (Arnis `BridgeStructureMap::build`) ----
 
 /// Decks resolved: by cell, the deck's height and layer.
-pub(super) type Laid = FnvHashMap<(i64, i64), (i32, i64)>;
+pub(super) type DeckCells = FnvHashMap<(i64, i64), (i32, i64)>;
 
 pub(super) struct Decks {
     pub(super) ys: Vec<(usize, Vec<i32>)>,
-    pub(super) laid: Laid,
+    pub(super) cells: DeckCells,
     /// The ways a bridge's ramp took, kept from a tunnel's approach.
     pub(super) ramp_ways: FnvHashSet<PartId>,
 }
@@ -330,9 +330,9 @@ fn side_by_side(a: &Stretch, b: &Stretch, scale: Scale) -> bool {
         return false;
     }
     let same = effective_layer(a) == effective_layer(b);
-    // their edges meet where each way's cover ends (pxl-spec-core `reach`)
-    let reach = |r: &Stretch| f64::from(way::reach((r.width_u / CELL_U) as f32));
-    let touching = reach(a) + reach(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M));
+    // their edges meet where each way's cover ends (pxl-engine `half_width`)
+    let half_width = |r: &Stretch| f64::from(way::half_width((r.width_u / CELL_U) as f32));
+    let touching = half_width(a) + half_width(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same {
         touching.max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DIST_M)))
     } else {
@@ -473,8 +473,7 @@ fn ramp_len(total: f64, scale: Scale) -> f64 {
 /// deck sets, the deck it clears and the joint it meets, leans in turn on that deck's own window, so
 /// it is weighed only within `DECK_NEAR`, the cell's own included, and the reach adds up over the
 /// levels stacked (a deck over a deck, a track riding it, a bore opening on it): `DECK_LEVELS` of them
-/// fit in a tile, which every ring holds about what its tile draws. Arnis solves a structure as one,
-/// over all of it, which no ring can; a deck no longer than a window comes out much as it would.
+/// fit in a tile, which every ring holds about what its tile draws.
 const DECK_PANEL: usize = 16;
 const DECK_WINDOW: usize = 384;
 const DECK_NEAR: usize = 16;
@@ -572,7 +571,7 @@ fn deck_panel(
     let c = r.whole.at(((k * DECK_PANEL) as f64).min(r.whole.length()));
     let within = |p: &[f64; 2], d: usize| libm::hypot(p[0] - c[0], p[1] - c[1]) <= d as f64;
     // what the source gives within the window, what another deck sets within the near
-    let reach = |set_by_deck: bool| if set_by_deck { DECK_NEAR } else { DECK_WINDOW };
+    let radius = |set_by_deck: bool| if set_by_deck { DECK_NEAR } else { DECK_WINDOW };
     let grounds: Vec<&([f64; 2], i32, usize)> = needs
         .grounds
         .iter()
@@ -581,12 +580,12 @@ fn deck_panel(
     let anchors: Vec<&([f64; 2], i32, bool, usize)> = needs
         .anchors
         .iter()
-        .filter(|a| within(&a.0, reach(a.2)))
+        .filter(|a| within(&a.0, radius(a.2)))
         .collect();
     let clears: Vec<&([f64; 2], i32, f64, bool)> = needs
         .clears
         .iter()
-        .filter(|n| within(&n.0, reach(n.3)))
+        .filter(|n| within(&n.0, radius(n.3)))
         .collect();
     let (Some(tmax), Some(tmin)) = (
         grounds.iter().map(|g| g.1).max(),
@@ -633,8 +632,7 @@ fn deck_panel(
         .chain(plateau)
         .fold(tmax, i32::max);
     let u = |p: [f64; 2]| along(me, p);
-    // a joint holds every deck about it; an end at the ground only its own way's, which ramps down to it,
-    // where Arnis's one line over the whole passes over an end in the middle of a structure
+    // a joint holds every deck about it; an end at the ground only its own way's, which ramps down to it
     let mut pts: Vec<(f64, f64)> = anchors
         .iter()
         .filter(|a| a.2 || a.3 == m)
@@ -696,7 +694,7 @@ fn road_decks(
     stretches: &[Stretch],
     obstacles: &Obstacles,
     scale: Scale,
-    lines: &mut Vec<(Line, Drawn)>,
+    lines: &mut Vec<(Line, WayRange)>,
 ) -> Decks {
     let road: Vec<usize> = (0..stretches.len())
         .filter(|&q| stretches[q].piece.form == Form::Bridge && !stretches[q].rail())
@@ -724,9 +722,9 @@ fn road_decks(
         .iter()
         .map(|&q| cells_box(&stretches[q].whole.points))
         .collect();
-    let reach = |q: usize| f64::from(way::reach((stretches[q].width_u / CELL_U) as f32));
+    let half_width = |q: usize| f64::from(way::half_width((stretches[q].width_u / CELL_U) as f32));
     let farthest = |a: usize, b: usize| {
-        (reach(a) + reach(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M)))
+        (half_width(a) + half_width(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M)))
             .max(f64::from(scale.c(DUAL_CARRIAGEWAY_MAX_DIST_M)))
     };
     for i in 0..road.len() {
@@ -763,7 +761,7 @@ fn road_decks(
             bridge_nodes.entry(e).or_default().push(q);
         }
     }
-    let mut laid: Laid = FnvHashMap::default();
+    let mut laid: DeckCells = FnvHashMap::default();
     let mut joints: FnvHashMap<End, i32> = FnvHashMap::default();
     let mut claimed: FnvHashSet<PartId> = FnvHashSet::default();
     let mut out = Vec::new();
@@ -985,7 +983,7 @@ fn road_decks(
                 .unwrap_or(ground);
             let way = &src.ways[&part];
             let denom = (cells.len() - 1).max(1) as f64;
-            lines.push(graded(
+            lines.push(grade_line(
                 way,
                 cells
                     .iter()
@@ -1014,7 +1012,7 @@ fn road_decks(
             }
             let layer = effective_layer(r);
             let width = (r.width_u / CELL_U) as f32;
-            let around = disk(way::reach(width));
+            let around = disk(way::half_width(width));
             for (&c, &y) in r.cell.iter().zip(&ys[m]) {
                 let (x, z) = cell_key(c);
                 for &[dx, dz] in &around {
@@ -1029,7 +1027,7 @@ fn road_decks(
     }
     Decks {
         ys: out,
-        laid,
+        cells: laid,
         ramp_ways: claimed,
     }
 }
@@ -1039,7 +1037,7 @@ fn road_decks(
 fn rail_decks(
     stretches: &[Stretch],
     obstacles: &Obstacles,
-    laid: &Laid,
+    laid: &DeckCells,
     scale: Scale,
 ) -> Vec<(usize, Vec<i32>)> {
     let rail: Vec<usize> = (0..stretches.len())
@@ -1053,7 +1051,7 @@ fn rail_decks(
         }
     }
     // what each track cell rides: the nearest road deck of its layer within reach
-    let reach = i64::from(scale.c(RAIL_ON_DECK_REACH_M));
+    let radius = i64::from(scale.c(RAIL_ON_DECK_RADIUS_M));
     let on: Vec<Vec<Option<i32>>> = rail
         .iter()
         .map(|&q| {
@@ -1064,8 +1062,8 @@ fn rail_decks(
                 .map(|&c| {
                     let (x, z) = cell_key(c);
                     let mut best: Option<(i64, i32)> = None;
-                    for dx in -reach..=reach {
-                        for dz in -reach..=reach {
+                    for dx in -radius..=radius {
+                        for dz in -radius..=radius {
                             if let Some(&(y, l)) = laid.get(&(x + dx, z + dz)) {
                                 let d = dx.abs() + dz.abs();
                                 if l == layer && best.is_none_or(|(bd, _)| d < bd) {
@@ -1269,7 +1267,7 @@ pub(super) fn decks(
     stretches: &[Stretch],
     ring: [[f64; 2]; 2],
     scale: Scale,
-    lines: &mut Vec<(Line, Drawn)>,
+    lines: &mut Vec<(Line, WayRange)>,
 ) -> Decks {
     // what a deck must clear, only where there is a deck
     let obstacles = if stretches.iter().any(|r| r.piece.form == Form::Bridge) {
@@ -1287,7 +1285,7 @@ pub(super) fn decks(
             0,
         ));
     }
-    for (q, ys) in rail_decks(stretches, &obstacles, &solved.laid, scale) {
+    for (q, ys) in rail_decks(stretches, &obstacles, &solved.cells, scale) {
         lines.push(line_of(
             &stretches[q],
             &ys,

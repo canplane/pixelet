@@ -25,7 +25,7 @@ pub struct Flags {
 }
 
 impl Flags {
-    pub fn from_env() -> Flags {
+    pub(crate) fn from_env() -> Flags {
         Flags::of(std::env::args().skip(1).collect())
     }
 

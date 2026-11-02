@@ -10,7 +10,7 @@ doctest = false
 
 [features]
 # `serve_tiles` only; off by default so the bake tools skip axum.
-serve = ["dep:axum", "dep:tokio", "dep:pxl-server"]
+serve = ["dep:axum", "dep:tokio"]
 # `ingest_overture` only; off by default so the bakes skip Arrow and Parquet.
 ingest = ["dep:arrow", "dep:parquet"]
 
@@ -19,7 +19,7 @@ fnv.workspace = true
 libm.workspace = true
 pxl-geo-spec.workspace = true
 pxl-spec = { workspace = true, features = ["serde"] }
-pxl-spec-core.workspace = true
+pxl-engine.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 # Blocking: the pack and rasterize are `Rc`-backed, so a page is one non-`Send`
 # call, and each worker is a thread with its own connection.
@@ -36,7 +36,6 @@ serde = { version = "1", features = ["derive"] }
 # 227 of 10,979 longitudes by an ULP.
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 axum = { version = "0.8", optional = true }
-pxl-server = { workspace = true, optional = true }
 tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync", "process", "time"], optional = true }
 # Overture's GeoParquet, read into db-geo (bin/ingest_overture.rs).
 arrow = { version = "60", default-features = false, optional = true }

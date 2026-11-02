@@ -19,7 +19,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
 
-const HELD: usize = 512;
+const CACHE_CAP: usize = 512;
 
 /// A side of the raster's blocks, in samples: the ingest cuts its warps into
 /// them (`raster2pgsql -t`), each a tile of the pyramid at `BLOCK_ZOOM`, kept
@@ -50,14 +50,14 @@ fn grid_of([min, max]: BBox3857) -> ([f64; 2], f64) {
 
 /// What a tile's grid reads of the raster, `[minx, miny, maxx, maxy]` in
 /// EPSG:3857: its padded samples and the resample's reach past them.
-pub fn tile_reads(tile_bbox: BBox3857) -> [f64; 4] {
+pub(crate) fn tile_reads(tile_bbox: BBox3857) -> [f64; 4] {
     let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
-    let (side, reach) = (f64::from(ELE_PADDED_SPAN) * stride, stride * 2.0);
+    let (side, margin) = (f64::from(ELE_PADDED_SPAN) * stride, stride * 2.0);
     [
-        ref_x - reach,
-        ref_y - side - reach,
-        ref_x + side + reach,
-        ref_y + reach,
+        ref_x - margin,
+        ref_y - side - margin,
+        ref_x + side + margin,
+        ref_y + margin,
     ]
 }
 
@@ -68,7 +68,7 @@ pub struct Raster {
     raster_tiles: Vec<RasterTileAt>,
     by_key: FnvHashMap<(i64, i64), usize>,
     side: i64,
-    held: Mutex<Held>,
+    cache: Mutex<Cache>,
 }
 
 #[derive(Clone)]
@@ -90,7 +90,7 @@ struct RasterTile {
 type Slot = Mutex<Option<Arc<RasterTile>>>;
 
 #[derive(Default)]
-struct Held {
+struct Cache {
     slots: FnvHashMap<usize, (u64, Arc<Slot>)>,
     tick: u64,
 }
@@ -156,7 +156,7 @@ impl Raster {
             raster_tiles,
             by_key,
             side,
-            held: Mutex::new(Held::default()),
+            cache: Mutex::new(Cache::default()),
         })
     }
 
@@ -166,10 +166,10 @@ impl Raster {
         i: usize,
     ) -> Result<Arc<RasterTile>, postgres::Error> {
         let slot = {
-            let mut held = self.held.lock().expect("raster");
+            let mut held = self.cache.lock().expect("raster");
             held.tick += 1;
             let tick = held.tick;
-            if !held.slots.contains_key(&i) && held.slots.len() >= HELD {
+            if !held.slots.contains_key(&i) && held.slots.len() >= CACHE_CAP {
                 let oldest = held
                     .slots
                     .iter()
@@ -201,8 +201,8 @@ impl Raster {
     }
 
     /// Leaf `tile`'s padded grid of heights, in leaf cells at its scale
-    /// (pxl-spec-core `cells_of_m`, pxl-spec `Frame::per_m`).
-    pub fn tile_grid(
+    /// (pxl-engine `cells_of_m`, pxl-spec `Frame::per_m`).
+    pub(crate) fn tile_grid(
         &self,
         client: &mut Client,
         tile: [i32; 2],
@@ -303,8 +303,8 @@ impl Raster {
         for r in 0..span {
             let y = row0 + r as f64 + 0.5;
             let (s0, s1) = (to_src(0.5, y), to_src(last as f64 + 0.5, y));
-            let reach = last as f64;
-            let (dx, dy) = ((s1.0 - s0.0) / reach, (s1.1 - s0.1) / reach);
+            let steps = last as f64;
+            let (dx, dy) = ((s1.0 - s0.0) / steps, (s1.1 - s0.1) / steps);
             for c in 0..span {
                 let dist = col0 + c as f64;
                 let (px, py) = (s0.0 + dx * dist, s0.1 + dy * dist);
@@ -312,7 +312,7 @@ impl Raster {
                 // sea: a shard's apron covers every pad, so none lacks a shard.
                 if let Some(v) = src.sample(px, py) {
                     grid[ele_idx(c as u32, (span - 1 - r) as u32)] =
-                        pxl_spec_core::cells_of_m(v, per_m) as i16;
+                        pxl_engine::cells_of_m(v, per_m) as i16;
                 }
             }
         }

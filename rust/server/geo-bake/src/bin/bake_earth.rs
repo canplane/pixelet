@@ -29,7 +29,7 @@ use image::ImageFormat;
 use pxl_geo_bake::cli;
 use pxl_geo_bake::pyramid::{TileSet, MANIFEST};
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::published::{FORMAT, TILE_SPHERE};
+use pxl_spec::bake::publication::{FORMAT, TILE_SPHERE};
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3;
@@ -96,7 +96,7 @@ fn reflectance() -> [f32; 256] {
 }
 
 /// The Black Marble's grays are a picture's, so they are light as shown.
-fn shown() -> [f32; 256] {
+fn gray_light() -> [f32; 256] {
     core::array::from_fn(|b| {
         let c = b as f64 / 255.0;
         (if c <= 0.04045 {
@@ -231,8 +231,7 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
         }
     });
     // Lossless: a tile of one color is left out because the global picture reads
-    // the same there, which holds only if the picture keeps every byte; lossy, the
-    // open sea came back a step off the tiles' and their edges showed.
+    // the same there, which holds only if the picture keeps every byte.
     let mut config = webp::WebPConfig::new().map_err(|()| "a WebP config")?;
     config.lossless = 1;
     // libwebp otherwise rewrites the color under a zero alpha: the unlit Earth.
@@ -262,7 +261,6 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
     Ok(())
 }
 
-/// The Black Marble's eight tiles as one raster.
 /// The night's tiles, `rows` of NASA's tiling, put back into one plate.
 fn night_mosaic(rows: &[Vec<&str>]) -> Result<(Vec<u8>, usize, usize), String> {
     let mut mosaic = Vec::new();
@@ -327,7 +325,7 @@ fn run() -> Result<(), String> {
         width: night_width,
         height: night_height,
         bytes: &night,
-        decode: shown(),
+        decode: gray_light(),
     };
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     global(&day_plate, &night_plate, &out.join(TILE_SPHERE))?;

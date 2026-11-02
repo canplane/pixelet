@@ -17,9 +17,8 @@ use crate::separation::Line;
 use crate::terrain::pipeline::overture::policy::segment_type;
 
 /// All of them: a tile whose lines a record's room does not hold is refused
-/// where it is encoded rather than cut, since a missing line is a gap in a
-/// road. Each line holds a point where it crosses a tile's edge
-/// (`crossings`).
+/// where it is encoded. Each line holds a point where it crosses a tile's
+/// edge (`crossings`).
 pub fn bake_separation(lines: &[Line], tile: [i32; 2]) -> Separation {
     let mut separation = Builder::default();
     // The world's corner, where its grid of leaf cells starts; a point in that

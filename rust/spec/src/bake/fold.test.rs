@@ -4,7 +4,7 @@ use super::*;
 
 use crate::asset::cube::ground;
 use crate::space::layer::tile::{neighborhood, Tile, LEAF_ZOOM};
-use pxl_spec_core::ground::majority;
+use pxl_engine::ground::majority;
 
 const SPAN: usize = TILE_CELLS as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;

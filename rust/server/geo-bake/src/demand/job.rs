@@ -42,7 +42,7 @@ pub enum Job {
     },
 }
 
-pub struct Runner {
+pub(crate) struct Runner {
     pub(super) admission: Arc<Semaphore>,
     workers: Arc<Workers>,
     pub(super) limits: Limits,

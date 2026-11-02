@@ -3,15 +3,15 @@
 use std::env::{self, VarError};
 
 pub struct Config {
-    pub host: String,
-    pub port: u16,
-    pub max_body_size: usize,
-    pub admin_token: String,
-    pub db_url: String,
-    pub db_pool_size: usize,
+    pub(crate) host: String,
+    pub(crate) port: u16,
+    pub(crate) max_body_size: usize,
+    pub(crate) admin_token: String,
+    pub(crate) db_url: String,
+    pub(crate) db_pool_size: usize,
 }
 
-/// A server's own variable names; distinct prefixes keep two local servers off one port.
+/// A server's own variable names.
 pub struct Env<'a> {
     pub prefix: &'a str,
     pub default_port: u16,
@@ -54,7 +54,7 @@ fn must_int(key: &str, fallback: u64, min: u64, max: u64) -> Result<u64, String>
 }
 
 impl Config {
-    pub fn from_env(env: &Env) -> Result<Config, String> {
+    pub(crate) fn from_env(env: &Env) -> Result<Config, String> {
         let max_body_size_mb = must_int("MAX_BODY_SIZE_MB", 1, 1, 1024)?;
 
         Ok(Config {

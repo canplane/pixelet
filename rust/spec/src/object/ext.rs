@@ -1,8 +1,8 @@
 // pxl-spec/object/ext.rs
 
 //! Which class an asset id is of: the shape the extension a placed asset of it
-//! carries takes, and so the pool it is kept in. By kind for now: a marker
-//! carries its text.
+//! carries takes, and so the pool it is kept in. By kind: a marker carries
+//! its text.
 
 #[path = "ext.spec.rs"]
 mod spec;

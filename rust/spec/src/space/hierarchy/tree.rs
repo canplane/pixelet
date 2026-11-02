@@ -5,7 +5,7 @@
 //! number of axes; a node's size is its zoom (`zoom.rs`).
 
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::world::REACH;
+use crate::space::coord::world::BOUNDS;
 use crate::space::coord::zoom::{units, Zoom};
 
 /// A node of the hierarchy in `D` axes: its zoom and its index there.
@@ -15,7 +15,7 @@ pub type Node<const D: usize> = (Zoom, [i32; D]);
 /// over every axis it does not name, as far as the world reaches.
 pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     let side = units(zoom);
-    let mut b = REACH;
+    let mut b = BOUNDS;
     for (k, &v) in at.iter().enumerate() {
         b.min[k] = f64::from(v) * side;
         b.max[k] = b.min[k] + side;
@@ -24,7 +24,7 @@ pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
 }
 
 /// A floor on the signed axes.
-pub fn parent_of<const D: usize>(at: [i32; D]) -> [i32; D] {
+pub(crate) fn parent_of<const D: usize>(at: [i32; D]) -> [i32; D] {
     at.map(|v| v.div_euclid(2))
 }
 
@@ -49,7 +49,7 @@ pub fn ancestor_of<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
 
 /// Where `at` lies in its ancestor `steps` up, from that ancestor's first
 /// descendant.
-pub fn off_in<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
+pub(crate) fn off_in<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
     at.map(|v| v & ((1 << steps) - 1))
 }
 

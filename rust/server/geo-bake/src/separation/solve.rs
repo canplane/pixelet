@@ -25,8 +25,7 @@
 //!
 //! The 1-ring is the most a tile may consult, not what it must: nothing is
 //! read past it, and nothing reads all of it where less will do. A tile draws
-//! only itself (`terrain/pipeline/separation.rs` keeps what lies in it), so
-//! what it computes past what bears on its own cells is spent for nothing. Two
+//! only itself (`terrain/pipeline/separation.rs` keeps what lies in it). Two
 //! rules follow, and a change here or in `bridge` or `tunnel` keeps both:
 //!
 //! - Where the ring cuts a piece is no end of it. A cut lies a tile from every
@@ -36,12 +35,9 @@
 //!   piece shows (its lowest point, the straight run between its portals),
 //!   comes out different, and their tiles step at the seam.
 //! - What only the whole piece can answer is not answered by reading past the
-//!   ring for it, which costs every tile reads it is not owed. A tile that
-//!   cannot see it does without it, by a rule that leans on what it sees
-//!   (a long bore, `tunnel::road_bores`; a deck, `bridge::deck_panel`).
-//!
-//! Arnis is where this solve started, not a bound on it: where its answer
-//! needs a structure whole, the ring wins and the answer is reworked.
+//!   ring for it. A tile that cannot see it does without it, by a rule that
+//!   leans on what it sees (a long bore, `tunnel::road_bores`; a deck,
+//!   `bridge::deck_panel`).
 
 mod bridge;
 mod tunnel;
@@ -52,9 +48,9 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::separation::{footprint as line_reach, Form};
+use pxl_engine::way;
+use pxl_spec::bake::separation::{footprint as line_footprint, Form};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
-use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, Part, PartId};
@@ -62,11 +58,11 @@ use crate::separation::elevation::{sample_cells, tile_of};
 use crate::separation::piece::{piece_of, Piece};
 use crate::separation::source::{portals_in, ring, Store};
 use crate::separation::way::{Polyline, Way};
-use crate::separation::{Drawn, Line, Reader, Solved};
+use crate::separation::{Line, Reader, Solution, WayRange};
 use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
 
-/// The tile's scale: Arnis's meters in leaf cells (pxl-spec-core
+/// The tile's scale: Arnis's meters in leaf cells (pxl-engine
 /// `cells_of_m`), at the tile's `Frame::per_m`.
 #[derive(Clone, Copy)]
 struct Scale {
@@ -75,7 +71,7 @@ struct Scale {
 
 impl Scale {
     fn c(self, m: f64) -> i32 {
-        pxl_spec_core::cells_of_m(m as f32, self.per_m)
+        pxl_engine::cells_of_m(m as f32, self.per_m)
     }
 }
 
@@ -141,7 +137,12 @@ impl Stretch {
 /// A way at grade made to stand off it, a bridge's ramp or a tunnel's
 /// approach: a grade line at `points`, which ends where the way does at
 /// either end `ends` says (`coarsest`), drawing `range` of its segment.
-fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2], range: [f64; 2]) -> (Line, Drawn) {
+fn grade_line(
+    way: &Way,
+    points: Vec<[f64; 3]>,
+    ends: [bool; 2],
+    range: [f64; 2],
+) -> (Line, WayRange) {
     (
         Line {
             subtype: way.row.subtype.clone(),
@@ -152,14 +153,14 @@ fn graded(way: &Way, points: Vec<[f64; 3]>, ends: [bool; 2], range: [f64; 2]) ->
             points,
             clear: 0,
         },
-        Drawn {
+        WayRange {
             gers_id: way.row.gers_id.clone(),
             range,
         },
     )
 }
 
-pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, String> {
+pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution, String> {
     let tiles = ring(tile);
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
     for &p in &tiles {
@@ -194,20 +195,20 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
     // draws, whether or not it touches the tile: the tunnels about the tile are asked for alone, as far
     // as the deepest one's approaches run, a reach well inside the ring, and only about a portal that
     // near are the ring's tiles read, as far as its approaches run
-    let reach_of = |level: i64| tunnel::approach_reach(level, scale);
+    let approach_of = |level: i64| tunnel::approach_run(level, scale);
     let off = |p: [f64; 2]| {
         let d = [0, 1].map(|k| (own[0][k] - p[k]).max(p[k] - own[1][k]).max(0.0));
         libm::hypot(d[0], d[1])
     };
     // and never past the ring, whatever the reach comes to: the query is cut to the ring's box, as `load`
     // refuses a tile past it
-    let asked = grown(own, reach_of(tunnel::DEEPEST));
+    let asked = grown(own, approach_of(tunnel::DEEPEST));
     let asked = [
         [asked[0][0].max(lo[0]), asked[0][1].max(lo[1])],
         [asked[1][0].min(hi[0]), asked[1][1].min(hi[1])],
     ];
     for p in portals_in(r.client, asked)? {
-        let d = reach_of(p.level);
+        let d = approach_of(p.level);
         if off(p.at) <= d {
             let [a, b] = [
                 tile_of([p.at[0] - d, p.at[1] - d]),
@@ -225,7 +226,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         is_road_tunnel(&s.piece)
             && [p[0], p[p.len() - 1]]
                 .iter()
-                .any(|e| off([e[0], e[1]]) <= reach_of(s.piece.way.tags.level.unwrap_or(0)))
+                .any(|e| off([e[0], e[1]]) <= approach_of(s.piece.way.tags.level.unwrap_or(0)))
     };
     let mut queue: Vec<PartId> = src
         .pieces
@@ -235,9 +236,9 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         .collect();
     // a tile no structure touches nor sinks into has nothing to solve
     if queue.is_empty() {
-        return Ok(Solved::default());
+        return Ok(Solution::default());
     }
-    let reach = merc_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DIST_M) + 16) * CELL_U);
+    let radius = merc_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DIST_M) + 16) * CELL_U);
     // each piece is looked at once, against the pieces read so far; a piece a later read brings in
     // is held against what was looked at before it (`seen`), so no pass is repeated
     let lies_on = |o: &Piece, ends: &FnvHashSet<End>| {
@@ -281,7 +282,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
             seen_portals.extend(ends);
         }
         if s.piece.form == Form::Bridge {
-            let b = grown(bbox_of(s), reach);
+            let b = grown(bbox_of(s), radius);
             reached.extend(
                 src.pieces
                     .iter()
@@ -303,15 +304,15 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solved, 
         queue.extend(reached.into_iter().filter(|q| !scope.contains(q)));
     }
     let stretches = stretches_of(&src, &scope, lo);
-    let mut lines: Vec<(Line, Drawn)> = Vec::new();
+    let mut lines: Vec<(Line, WayRange)> = Vec::new();
 
     // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
     let decks = bridge::decks(&src, &stretches, [lo, hi], scale, &mut lines);
     tunnel::bores(&src, &stretches, &decks, scale, &mut lines);
-    let mut out = Solved::default();
+    let mut out = Solution::default();
     for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);
-        out.drawn.push(drawn);
+        out.way_ranges.push(drawn);
     }
     Ok(out)
 }
@@ -409,7 +410,7 @@ impl Ring {
         let step = merc_from_u(CELL_U);
         let line = Polyline::of(s.piece.way.points.iter().map(|p| [p[0], p[1]]));
         let length = s.piece.way.length();
-        let reach = merc_from_u((line_reach(s.piece.width() / CELL_U) + 16.0) * CELL_U);
+        let radius = merc_from_u((line_footprint(s.piece.width() / CELL_U) + 16.0) * CELL_U);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
             .filter(|(_, p)| self.tiles.contains(&tile_of(*p)))
@@ -418,10 +419,10 @@ impl Ring {
         for (_, p) in &at {
             for d in [
                 [0.0, 0.0],
-                [reach, 0.0],
-                [-reach, 0.0],
-                [0.0, reach],
-                [0.0, -reach],
+                [radius, 0.0],
+                [-radius, 0.0],
+                [0.0, radius],
+                [0.0, -radius],
             ] {
                 wanted.insert(tile_of([p[0] + d[0], p[1] + d[1]]));
             }
@@ -519,13 +520,13 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
     out
 }
 
-/// The cells about one whose centers lie within `reach` cells of its own, as
-/// a way covers them (pxl-spec-core `covers`, here its distance to its own).
-fn disk(reach: f32) -> Vec<[i64; 2]> {
-    let r = libm::ceilf(reach) as i64;
+/// The cells about one whose centers lie within `radius` cells of its own, as
+/// a way covers them (pxl-engine `covers`, here its distance to its own).
+fn disk(radius: f32) -> Vec<[i64; 2]> {
+    let r = libm::ceilf(radius) as i64;
     (-r..=r)
         .flat_map(|dz| (-r..=r).map(move |dx| [dx, dz]))
-        .filter(|&[dx, dz]| libm::hypotf(dx as f32, dz as f32) <= reach)
+        .filter(|&[dx, dz]| libm::hypotf(dx as f32, dz as f32) <= radius)
         .collect()
 }
 
@@ -543,7 +544,7 @@ fn absolute(p: [f64; 2]) -> [f64; 2] {
 
 /// Cells `a..=b` of a stretch as a line of `form` at heights `ys`: the piece's
 /// vertices and where the slope bends, no more.
-fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> (Line, Drawn) {
+fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> (Line, WayRange) {
     let step = merc_from_u(CELL_U);
     let along = |k: usize| ((r.k0 + k) as f64 * step).min(r.piece.way.length());
     let mut keep: Vec<(f64, [f64; 2], f64)> = Vec::new();
@@ -591,7 +592,7 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
             points,
             clear,
         },
-        Drawn {
+        WayRange {
             gers_id: r.piece.way.gers_id.clone(),
             range: [fraction(along(a)), fraction(along(b))],
         },

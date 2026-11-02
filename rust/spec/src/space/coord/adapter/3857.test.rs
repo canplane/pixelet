@@ -76,3 +76,29 @@ fn tile_bbox_exclusive_edge() {
     let [_, max_geodetic] = epsg4326::get_tile_bbox(Z15, tile_idx);
     assert_almost(max_geodetic[0], 180.0, 1e-10);
 }
+
+/// A height's meters are the ground's own: leaf cells over its leaf tile's
+/// `Frame::per_m`, which the bake made them by, at a point off the tile's
+/// south-west corner.
+#[test]
+fn height_meters_baked_scale() {
+    use crate::procedural::Frame;
+    use crate::space::layer::tile::{Tile, LEAF_ZOOM};
+    use pxl_engine::LEAF_CELL;
+    let [x, y] = [14139274.0, 4508140.0].map(u_from_merc);
+    let tile = Tile::new(
+        LEAF_ZOOM,
+        [x, y].map(|v| libm::floor(v / units(LEAF_ZOOM)) as i32),
+    );
+    let per_m = f64::from(Frame::of(tile).per_m());
+    let cells = 1000.0;
+    let at = world::point(x, y, cells * units(LEAF_CELL));
+    let m = unproject(&at)[2];
+    assert_almost(m, cells / per_m, 1e-3);
+    let back = project(merc_from_u(x), merc_from_u(y), cells / per_m);
+    assert_almost(
+        q3::to_real(i64::from(back[2])) / units(LEAF_CELL),
+        cells,
+        1e-3,
+    );
+}

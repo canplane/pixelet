@@ -23,8 +23,6 @@ pub const fn fnv1a(bytes: &[u8]) -> u64 {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Level {
-    /// Measured on v4 leaves: 39% under gzip -6 at four times its time; the
-    /// ultra levels save a tenth more at five times again.
     Stored = 19,
     Live = 3,
 }
@@ -33,11 +31,11 @@ pub fn pack(raw: &[u8], level: Level) -> std::io::Result<Vec<u8>> {
     bulk::compress(raw, level as i32)
 }
 
-pub fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {
+pub(crate) fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {
     stream::decode_all(stored)
 }
 
-pub fn fmt_bytes(n: f64) -> String {
+pub(crate) fn fmt_bytes(n: f64) -> String {
     if n < 1024.0 * 1024.0 {
         format!("{:.1} kB", n / 1024.0)
     } else if n < 1024.0 * 1024.0 * 1024.0 {
@@ -47,7 +45,7 @@ pub fn fmt_bytes(n: f64) -> String {
     }
 }
 
-pub fn fmt_dur(ms: f64) -> String {
+pub(crate) fn fmt_dur(ms: f64) -> String {
     let s = round(ms / 1000.0) as u64;
     let (h, m) = (s / 3600, (s % 3600) / 60);
     if h > 0 {
@@ -85,7 +83,7 @@ pub fn git_sha() -> Option<String> {
     }
 }
 
-pub fn now_iso8601() -> String {
+pub(crate) fn now_iso8601() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("after the epoch")

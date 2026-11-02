@@ -4,7 +4,7 @@
 //
 // Carto's place symbols (openstreetmap-carto `symbols/`, CC0), each a mask
 // of its coverage, a byte a pixel, `SYMBOL_PX` a side, row by row, in
-// `symbol.mask`, symbol n the (n - 1)th, in spec/spec/asset/ingested.json's
+// `symbol.mask`, symbol n the (n - 1)th, in spec/spec/asset/ingest.json's
 // `symbols` order.
 
 pub const SYMBOL_PX: u32 = 28;

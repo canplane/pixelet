@@ -5,14 +5,14 @@
 //! `terrain::fill_fit`), each one line of what a reader reads of it: its
 //! levels' words, the child groups its tree took and holds, and its tree under
 //! each of its own nodes along z as a reader steps down it
-//! (pxl-spec-core `way::tree::cursor`), each node's holding, folding and
+//! (pxl-engine `way::tree::cursor`), each node's holding, folding and
 //! word, no child group's id. Two checkouts' lines over one set are a proof that
 //! a change left what the fill makes as it was.
 //!
 //! The lines are a function of the sources that make them and the set they
 //! read, so they are kept once a pair, under the digest of both, where every
 //! checkout, export or worktree finds them, as the shaders are (pxl-tool
-//! bin/shader_wgsl.rs): a proof's side made once is made for all.
+//! bin/shader_wgsl.rs).
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin fill_digest -- [set]
 //!       the lines of `set` (default out/terrain), made or found: their path
@@ -25,13 +25,13 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use fnv::FnvHasher;
+use pxl_engine::overwrite::{self, Columns, NodeSlot};
+use pxl_engine::way::tree::{self, Read};
+use pxl_engine::{clipmap, fill};
 use pxl_geo_bake::pyramid::{Base, TileSet};
-use pxl_spec::bake::tile::terrain::{self, Built, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, FilledBrick, TerrainTile};
 use pxl_spec::directory;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec_core::overwrite::{self, Columns, Held};
-use pxl_spec_core::way::tree::{self, Read};
-use pxl_spec_core::{clipmap, fill};
 
 /// The set a proof reads when none is named: the finished one, which no
 /// bake writes while it is read (out/terrain.stage is).
@@ -41,7 +41,7 @@ const SET: &str = "out/terrain";
 /// built in: the crates it compiles of this tree, and the workspace's
 /// manifest and lock.
 const SOURCES: [&str; 6] = [
-    "rust/spec/core",
+    "rust/spec/engine",
     "rust/spec",
     "rust/server/geo-bake",
     "xpute/rust/kit",
@@ -55,7 +55,7 @@ fn root() -> PathBuf {
 }
 
 /// Where the machine keeps the lines, a file a digest.
-fn kept_home() -> Result<PathBuf, String> {
+fn lines_dir() -> Result<PathBuf, String> {
     directory::cache_dir("fill")
 }
 
@@ -114,15 +114,21 @@ fn key(root: &Path, set: &Path) -> Result<String, String> {
 
 /// The node `at` of `zoom` and every node under it a reader steps to, into
 /// `h`: its zoom, whether it holds, whether folded, and its word.
-fn walk(l: &impl Columns, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], h: &mut FnvHasher) {
+fn walk(
+    l: &impl Columns,
+    slot: NodeSlot,
+    (zoom, cell): (Zoom, Zoom),
+    at: [i32; 3],
+    h: &mut FnvHasher,
+) {
     h.write_u32(zoom);
-    if !held.holds() {
+    if !slot.holds() {
         h.write_u32(0);
         return;
     }
-    h.write_u32(1 + u32::from(held.is_folded()));
-    h.write_u32(l.data(held.slot()));
-    if held.is_folded() && zoom < cell {
+    h.write_u32(1 + u32::from(slot.is_folded()));
+    h.write_u32(l.data(slot.slot()));
+    if slot.is_folded() && zoom < cell {
         for k in 0..8 {
             let c = [
                 2 * at[0] + (k & 1),
@@ -131,7 +137,7 @@ fn walk(l: &impl Columns, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], 
             ];
             walk(
                 l,
-                overwrite::child(l, held, zoom + 1, c),
+                overwrite::child(l, slot, zoom + 1, c),
                 (zoom + 1, cell),
                 c,
                 h,
@@ -143,7 +149,7 @@ fn walk(l: &impl Columns, held: Held, (zoom, cell): (Zoom, Zoom), at: [i32; 3], 
 /// A brick's line: its levels' words, the child groups its build took and
 /// holds, and its tree under each of its own nodes along z its ways meet
 /// and two past either end.
-fn line(name: &str, k: u32, b: &Built<'_>) -> String {
+fn line(name: &str, k: u32, b: &FilledBrick<'_>) -> String {
     let at = clipmap::LEVELS_AT as usize;
     let mut levels = FnvHasher::default();
     for w in &b.column[at..at + clipmap::LEVEL_WORDS as usize] {
@@ -154,15 +160,15 @@ fn line(name: &str, k: u32, b: &Built<'_>) -> String {
     let (l, mut sub) = (Read(b.pool), FnvHasher::default());
     if nodes > 0 {
         for z in z0 - 2..z0 + nodes as i32 + 2 {
-            let held = tree::cursor(&l, b.root, b.cell, top, [0, 0, z]);
-            walk(&l, held, (top, b.cell), [0, 0, z], &mut sub);
+            let slot = tree::cursor(&l, b.root, b.cell, top, [0, 0, z]);
+            walk(&l, slot, (top, b.cell), [0, 0, z], &mut sub);
         }
     }
     format!(
         "{name} {k} levels={:016x} taken={} held={} sub={:016x}",
         levels.finish(),
-        b.taken,
-        b.held,
+        b.peak_group_cnt,
+        b.group_cnt,
         sub.finish()
     )
 }
@@ -203,14 +209,14 @@ fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
 
 /// The lines of `set`, made where the machine keeps none of this digest:
 /// their path.
-fn made(set: &Path, workers: usize) -> Result<PathBuf, String> {
-    let home = kept_home()?;
-    let path = home.join(key(&root(), set)?);
+fn lines_path(set: &Path, workers: usize) -> Result<PathBuf, String> {
+    let dir = lines_dir()?;
+    let path = dir.join(key(&root(), set)?);
     if path.is_file() {
         return Ok(path);
     }
     let text = lines(&TileSet::new(set), workers)?.join("\n") + "\n";
-    std::fs::create_dir_all(&home).map_err(|e| format!("{}: {e}", home.display()))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let part = path.with_extension(format!("{}.part", std::process::id()));
     std::fs::write(&part, text)
         .and_then(|()| std::fs::rename(&part, &path))
@@ -264,7 +270,7 @@ fn run() -> Result<bool, String> {
     }
     let set = args.first().map_or(SET, String::as_str);
     let workers = std::thread::available_parallelism().map_or(4, |n| n.get());
-    println!("{}", made(Path::new(set), workers)?.display());
+    println!("{}", lines_path(Path::new(set), workers)?.display());
     Ok(true)
 }
 

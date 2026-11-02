@@ -12,7 +12,7 @@ use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
 use crate::segment::Part;
-use crate::separation::Drawn;
+use crate::separation::WayRange;
 use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
 use crate::terrain::pipeline::overture::between::{merged, uncovered, Line};
 use crate::terrain::pipeline::overture::role::Role;
@@ -22,7 +22,7 @@ use crate::wkb::wkb_to_geometries;
 
 /// A way's palette entry: Carto's `highway` and `railway` values, its white roads one
 /// palette entry told apart by width, `path` and `steps` footways.
-pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundId {
+pub(crate) fn segment_type(subtype: &str, class: Option<&str>) -> GroundId {
     let c = class.unwrap_or("");
     if subtype == "rail" {
         return match c {
@@ -132,9 +132,8 @@ fn golf_paint(class: &str) -> Option<Paint> {
 
 /// `natural`, as Overture's land classes carry it; Carto fills a wetland by
 /// its `wetland` tag, which Overture drops, and one without it not at all.
-/// The only land classes read: the rest, an island's coast of 585,169 points
-/// among them, paint nothing.
-pub const LAND: &[(&str, Paint)] = {
+/// The only land classes read: the rest paint nothing.
+pub(crate) const LAND: &[(&str, Paint)] = {
     use Layer::Landcover as L;
     &[
         ("wood", (g::forest, L, "natural_wood")),
@@ -169,7 +168,7 @@ const WATERWAYS: [(&str, f64); 5] = [
 ];
 
 /// A waterway line's width in u, if Carto draws one of its class.
-pub fn waterway_width(class: &str) -> Option<f64> {
+pub(crate) fn waterway_width(class: &str) -> Option<f64> {
     WATERWAYS
         .iter()
         .find(|(c, _)| *c == class)
@@ -194,7 +193,7 @@ fn water_paint(subtype: &str, class: &str, closed: bool) -> Option<Paint> {
 
 /// The infrastructure classes with a Carto fill, the only ones read. An
 /// aeroway's area is `highway-area-fill`'s, its line the `aeroways` layer's.
-pub const INFRASTRUCTURE: &[(&str, Paint)] = {
+pub(crate) const INFRASTRUCTURE: &[(&str, Paint)] = {
     use Layer::{Landcover as L, RoadArea};
     &[
         ("parking", (g::parking, L, "amenity_parking")),
@@ -286,7 +285,7 @@ fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
 }
 
 /// A runway's, the widest line Carto draws at z16, in its pixels.
-pub const WIDEST_LINE: f64 = 24.0;
+pub(crate) const WIDEST_LINE: f64 = 24.0;
 
 /// A Base line's width in u: Carto's at z16, as a way's
 /// (`overture/width.rs`), its casing included.
@@ -310,7 +309,7 @@ fn barrier_order(class: &str, closed: bool) -> i64 {
     4 * i64::from(!closed) + if class == "pier" { 3 } else { 1 }
 }
 
-pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
+pub(crate) fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
     let kind = row
         .class
         .as_deref()
@@ -333,7 +332,7 @@ pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
 /// route or a strait's label line, nor of a crossing, a line over a road the
 /// road already shows; and not where a line draws it, cut square there, so
 /// the paint ends where the line begins.
-pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
+pub fn ways(row: &Part, way_ranges: &[WayRange], tile_min: G3857) -> Vec<Feature> {
     if row.subtype == "water"
         || row.tags.tunnel
         || row.tags.indoor
@@ -344,7 +343,7 @@ pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
     // the lines' ranges are the segment's; in the part's own
     let [a0, b0] = row.span;
     let lined = merged(
-        drawn
+        way_ranges
             .iter()
             .filter(|c| c.gers_id == row.gers_id && c.range[1] > a0 && c.range[0] < b0)
             .map(|c| c.range.map(|f| ((f - a0) / (b0 - a0)).clamp(0.0, 1.0)))
@@ -378,7 +377,7 @@ pub fn ways(row: &Part, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
 }
 
 /// Every Base row with a Carto fill; an area layer paints larger areas first.
-pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
+pub(crate) fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
     let (src, subtype, class) = (
         row.src.as_str(),
         row.subtype.as_deref().unwrap_or(""),

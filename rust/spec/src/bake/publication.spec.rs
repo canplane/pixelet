@@ -1,6 +1,6 @@
-// pxl-spec/bake/published.spec.rs
+// pxl-spec/bake/publication.spec.rs
 //
-// GENERATED from spec/spec/bake/published.json
+// GENERATED from spec/spec/bake/publication.json
 
 /// The format each bake writes now, which a published name begins with.
 /// Bumped by a change to how the client reads a tile, or to what a

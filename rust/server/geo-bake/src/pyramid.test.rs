@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::util::{pack, Level};
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::place::PLACE_LATTICE;
 use pxl_spec::directory;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -25,11 +25,11 @@ impl<const PLACE: bool> Base for Count<PLACE> {
         )))
     }
 
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
         Some(Count(
             p.children()
                 .iter()
-                .filter_map(|&c| held(c))
+                .filter_map(|&c| get(c))
                 .map(|c| c.0)
                 .sum(),
         ))

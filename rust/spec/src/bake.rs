@@ -1,19 +1,19 @@
 // pxl-spec/bake.rs
 
-//! Baked tile formats shared by the bake and the kernel, so the two cannot drift.
+//! Baked tile formats shared by the bake and the kernel.
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
 pub mod constant;
 pub mod fold;
-pub mod named;
+pub mod name;
 #[path = "bake/object.spec.rs"]
 pub mod object;
 #[path = "bake/place_theme.spec.rs"]
 pub mod place_theme;
-#[path = "bake/published.spec.rs"]
-pub mod published;
+#[path = "bake/publication.spec.rs"]
+pub mod publication;
 pub mod separation;
 pub mod source;
 pub mod tile;

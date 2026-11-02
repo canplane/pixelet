@@ -6,12 +6,15 @@ pub mod leaf;
 pub mod pipeline;
 pub mod pool;
 pub mod repository;
-pub mod source;
+pub(crate) mod source;
 
 use crate::pyramid::Base;
 use crate::pyramid::Staged;
+use pxl_engine::clipmap::BRICK;
+use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
+use pxl_engine::way::SPANS;
 use pxl_spec::bake::fold::fold_terrain;
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::{self, Fit, TerrainTile, Unfit};
 use pxl_spec::bake::tile::Occupancy;
@@ -19,12 +22,9 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
-use pxl_spec_core::clipmap::BRICK;
-use pxl_spec_core::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
-use pxl_spec_core::way::SPANS;
 
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
-pub const CELL_U: f64 = units(GROUND.cell());
+pub(crate) const CELL_U: f64 = units(GROUND.cell());
 
 impl Base for TerrainTile {
     const LAYER: BaseLayer = BaseLayer::terrain;
@@ -60,8 +60,8 @@ impl Base for TerrainTile {
         neighborhood(p).to_vec()
     }
 
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        fold_terrain(neighborhood(p).map(held), p.zoom).map(|t| terrain::drawn(p, t))
+    fn fold_tile<'a>(p: Tile, get: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+        fold_terrain(neighborhood(p).map(get), p.zoom).map(|t| terrain::drawn(p, t))
     }
 
     fn occupancy(&self) -> Occupancy {
@@ -76,7 +76,7 @@ impl Base for TerrainTile {
 }
 
 /// Why brick `at` of a tile does not fit (`terrain::fill_fit`), said.
-pub fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
+pub(crate) fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
     match why {
         Unfit::Spans(spans) => format!("its brick ({qx}, {qy}) makes a column of {spans} of the ways' spans, past SPANS ({SPANS})"),
         Unfit::Nodes(nodes) => format!("its brick ({qx}, {qy}) has its ways meet {nodes} of its nodes along z, past ROOT_NODES ({ROOT_NODES})"),

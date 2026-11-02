@@ -3,10 +3,13 @@
 //! Lengths: `_u` the plane's units, `_merc` the Mercator plane's meter (EPSG:3857's
 //! coordinates), `_m` a meter on the ground. u and merc are one scale apart
 //! everywhere (`U_PER_MERC`); merc and m by the scale factor at a latitude
-//! (`scale_factor`), so a length in u per ground meter is `u_per_m`.
+//! (`scale_factor`), so a length in u per ground meter is `u_per_m`. A
+//! height's meters are the ground's own, the scale its leaf tile was baked
+//! by (pxl-spec procedural.rs `height_u_per_m`).
 
 use core::f64::consts::TAU;
 
+use crate::procedural::height_u_per_m;
 use crate::space::coord::q3::{unpack, Q3};
 use crate::space::coord::world;
 use crate::space::coord::world::ROUND;
@@ -24,10 +27,10 @@ pub const fn cell_zoom_of(web_zoom: i32) -> Zoom {
 }
 
 /// EPSG:3857 spans 2πR once round.
-pub const U_PER_MERC: f64 = ROUND / (TAU * EARTH_RADIUS_M);
+pub(crate) const U_PER_MERC: f64 = ROUND / (TAU * EARTH_RADIUS_M);
 
 /// sec φ = cosh(y / R). One value for a whole tile is its base's.
-pub fn scale_factor(y_u: f64) -> f64 {
+pub(crate) fn scale_factor(y_u: f64) -> f64 {
     libm::cosh(y_u * TAU / ROUND)
 }
 
@@ -45,12 +48,12 @@ pub fn u_from_merc(merc: f64) -> f64 {
 
 pub fn project(x: f64, y: f64, z: f64) -> Q3 {
     let [x, y, _] = world::within([u_from_merc(x), u_from_merc(y), 0.0]);
-    world::point(x, y, z * u_per_m(y))
+    world::point(x, y, z * height_u_per_m(y))
 }
 
 pub fn unproject(q: &Q3) -> G3857 {
     let [x, y, z] = unpack(q);
-    [merc_from_u(x), merc_from_u(y), z / u_per_m(y)]
+    [merc_from_u(x), merc_from_u(y), z / height_u_per_m(y)]
 }
 
 pub type BBox3857 = [G3857; 2];

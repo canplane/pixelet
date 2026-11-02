@@ -23,15 +23,15 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::{BTreeMap, VecDeque};
 
 use crate::terrain::CELL_U;
+use pxl_engine::way;
 use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::merc_from_u;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};
 use crate::separation::elevation::{sample_cells, tile_of};
-use crate::separation::{Drawn, Line};
+use crate::separation::{Line, WayRange};
 
 use super::bridge::Decks;
 use super::*;
@@ -53,11 +53,11 @@ const RAIL_INTERIOR_HEIGHT_M: f64 = 4.0;
 /// A block, as a length: what Arnis adds or takes by one.
 const BLOCK_M: f64 = 1.0;
 
-/// The level whose approaches run furthest (`approach_reach`).
+/// The level whose approaches run furthest (`approach_run`).
 pub(super) const DEEPEST: i64 = -(TUNNEL_MAX_LAYERS_BELOW + 1);
 
 /// How far a portal's approaches can run for a road tunnel at `level`, in DB coordinates.
-pub(super) fn approach_reach(level: i64, scale: Scale) -> f64 {
+pub(super) fn approach_run(level: i64, scale: Scale) -> f64 {
     merc_from_u(f64::from(tunnel_drop(level, scale) * TUNNEL_RAMP_RUN) * CELL_U)
 }
 
@@ -68,7 +68,7 @@ pub(super) fn bores(
     stretches: &[Stretch],
     decks: &Decks,
     scale: Scale,
-    lines: &mut Vec<(Line, Drawn)>,
+    lines: &mut Vec<(Line, WayRange)>,
 ) {
     let ceiling = (scale.c(TUNNEL_CEIL_OFF_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
     for (q, ys, covered) in road_bores(src, stretches, decks, scale, lines) {
@@ -138,7 +138,7 @@ fn road_bores(
     stretches: &[Stretch],
     decks: &Decks,
     scale: Scale,
-    lines: &mut Vec<(Line, Drawn)>,
+    lines: &mut Vec<(Line, WayRange)>,
 ) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
     let ramp_ways = &decks.ramp_ways;
     let tunnels: Vec<usize> = (0..stretches.len())
@@ -373,7 +373,7 @@ fn road_bores(
                             })
                             .collect();
                         let fraction = |k: i32| w.row.span[0] + along(k) / w.row.segment_length;
-                        lines.push(graded(
+                        lines.push(grade_line(
                             w,
                             points,
                             [from == 0, k - 1 == last],
@@ -443,15 +443,12 @@ fn road_bores(
         // as high as its cover leaves room for, in one valley. Every tile that draws any of it holds
         // all of it in its ring, so all of them solve it alike.
         //
-        // A longer one is not: a tile that draws it may see neither portal, and the straight run
-        // between them is not a ring's to know. Its ring cuts it, and where the ring cuts is no end of
-        // it, nor a height to draw a line from: two neighbors cut it in different places, and a
-        // floor that leaned on the cut would differ where they meet, though both see the cells there.
-        // So the floor of a long bore leans on nothing further than a tile (`TILE_CELLS`) from each
-        // cell, which every ring holds about what its tile draws: the highest floor under the cover by
-        // its drop that rises from the lowest such floor within a tile at `TUNNEL_FAR_GRADE` at most
-        // (`envelope`), raised to whichever portal it sees. Reading past the ring to find the portals
-        // instead costs every tile reads it is not owed, and is not done.
+        // A longer one is not: a tile that draws it may see neither portal, and where its ring cuts
+        // it is no end of it (the module's rules). So the floor of a long bore leans on nothing
+        // further than a tile (`TILE_CELLS`) from each cell, which every ring holds about what its
+        // tile draws: the highest floor under the cover by its drop that rises from the lowest such
+        // floor within a tile at `TUNNEL_FAR_GRADE` at most (`envelope`), raised to whichever portal
+        // it sees.
         let long = libm::ceil(r.piece.way.length() / step) > f64::from(TILE_CELLS);
         let denom = last.max(1) as f64;
         let grade = |i: usize| round(f64::from(gs) + f64::from(ge - gs) * i as f64 / denom) as i32;

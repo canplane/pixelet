@@ -5,7 +5,7 @@
 //! marker, the actors, the sky — numbered by its id, its kind over its shape
 //! (`id`), and each file a definition references a slot, which the catalog
 //! the host plugs in fills (`catalog`). The texture pack is the cube kind's:
-//! which of its tiles a cube wears on each face (`ingested`). A cube with no
+//! which of its tiles a cube wears on each face (`ingest`). A cube with no
 //! image still draws as its catalog color.
 
 use std::sync::LazyLock;
@@ -19,8 +19,8 @@ pub mod cube;
 #[path = "asset/decor.spec.rs"]
 pub mod decor;
 pub mod id;
-#[path = "asset/ingested.spec.rs"]
-pub mod ingested;
+#[path = "asset/ingest.spec.rs"]
+pub mod ingest;
 pub mod marker;
 #[path = "asset/sky.spec.rs"]
 pub mod sky;
@@ -35,9 +35,9 @@ use crate::space::coord::aabb::Aabb;
 use crate::space::coord::zoom::units;
 use catalog::Catalog;
 use cube::Cube;
-use ingested::{CubeFace, PACK};
-use pxl_spec_core::decor::DECORS;
-use pxl_spec_core::generated;
+use ingest::{CubeFace, PACK};
+use pxl_content::decor::DECORS;
+use pxl_content::generation;
 use xpute_kit::status::errno::Errno;
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
@@ -131,10 +131,10 @@ impl decor::Decor {
     }
 
     /// Where its variants are numbered from as draw groups, as the GPU's
-    /// decor numbers them (pxl-spec-core scatter.rs `first_group`).
+    /// decor numbers them (pxl-content scatter.rs `first_group`).
     pub fn first_group(&self) -> u32 {
         let kind = decor::DECORS.iter().take_while(|d| d.id != self.id).count();
-        generated::first_group(&DECORS, kind as u32)
+        generation::first_group(&DECORS, kind as u32)
     }
 
     /// The generator writes one entry a decor, so every id has one.
