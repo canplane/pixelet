@@ -1120,8 +1120,9 @@ impl RaysPass {
             // reading what the ones before wrote (pxl-spec-core `pyramid`).
             // A pass a dispatch, each timed in its own span, so the cast's
             // parts are read apart: `cast` holds the forgetting alone; the
-            // samples' boxes drawn between the samples and the pixels, which
-            // take the visible sample (ray/raster.rs, span `sraster`). Where
+            // samples' boxes written and drawn between the samples and the
+            // pixels, which take the visible sample (ray/raster.rs, spans
+            // `sample_box` and `sraster`). Where
             // only the jitter moved (`FrameKind::px`), the beam rays, the
             // cells' starts and the samples stand, and the rest is cast again
             // off them.
@@ -1239,6 +1240,22 @@ impl RaysPass {
                     );
                 }
             }
+            // The tiles the world's receivers stand on marked where the eye's
+            // rays meet it, a thread a drawn pixel (`light_mark_cs`), in a span
+            // of its own (`light_receivers`, span.json `per_px`). It writes
+            // the stands alone and the slide the reads alone
+            // (`light::stands_at`, `light::reads_at`), so it goes first.
+            if c.light_world {
+                c.light_world = false;
+                let stamp = ctx.stamp(GpuSpanName::light_receivers).pass();
+                let pass = g.compute_pass(encoder, stamp);
+                g.set_bind_group(pass, 0, c.light_groups[4], &[]);
+                g.set_pipeline(pass, c.light_mark_built.id);
+                let w = compute::LIGHT_MARK_WORKGROUP;
+                let [x, y] = c.size;
+                g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
+                g.end(pass);
+            }
             // The beam, the samples, their boxes drawn, the slots taking
             // their visible sample, a workgroup a tile (pxl-spec-core
             // `light::TILE`), and the rest walked off their list as the eye's
@@ -1254,19 +1271,10 @@ impl RaysPass {
                 g.set_pipeline(pass, c.light_slide_built.id);
                 g.dispatch(pass, n.div_ceil(w[0]), n.div_ceil(w[1]), 1);
             }
-            // The tiles its receivers read marked, timed with the beam:
-            // where the eye's rays meet the world, a thread a drawn pixel
-            // (`light_mark_cs`), and where the decor and
-            // the actors drawn stand, a thread each (`light_mark_draws_cs`);
-            // then those they read, a thread a tile (`light_propagate_cs`).
-            if c.light_world {
-                c.light_world = false;
-                g.set_bind_group(pass, 0, c.light_groups[4], &[]);
-                g.set_pipeline(pass, c.light_mark_built.id);
-                let w = compute::LIGHT_MARK_WORKGROUP;
-                let [x, y] = c.size;
-                g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
-            }
+            // The tiles the drawn receivers stand on marked, timed with the
+            // beam: where the decor and the actors drawn stand, a thread each
+            // (`light_mark_draws_cs`); then those they read, a thread a tile
+            // (`light_propagate_cs`).
             g.set_bind_group(pass, 0, c.light_groups[5], &[]);
             g.set_pipeline(pass, c.light_mark_draws_built.id);
             let cap = c.generator.instances().map_or(0, |p| p.cap);

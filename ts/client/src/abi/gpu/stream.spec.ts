@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/client/render/gpu/api.json
 
-export const HEAD = 363 as number;
+export const HEAD = 411 as number;
 
 /** The range's size: the stream, what one turn may send the device, then at
  * its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an

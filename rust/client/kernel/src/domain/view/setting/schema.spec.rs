@@ -122,9 +122,10 @@ impl AoMode {
 /// How many device pixels the world is drawn at to a CSS pixel.
 ///
 ///   auto  — the display's, stepped down to a share of it while moving
-///           frames run over their budget — the display's interval, no
-///           tighter than a sixtieth of a second — and back up once they
-///           have room (rust/client/kernel/src/domain/view/frame/resolution.rs).
+///           frames' per-pixel GPU time runs over their budget — the
+///           display's interval, no tighter than a sixtieth of a second —
+///           and back up once the step above would fit, a budget control
+///           as congestion control is (rust/client/kernel/src/domain/view/frame/resolution.rs).
 ///   fixed — the display's, whatever the frames cost.
 ///   low   — one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -248,8 +249,10 @@ pub enum SettingKey {
     /// reads moves; decor and the actors drawn into it depth only, and a 3x3
     /// compare per fragment; 16 MB of map.
     shadows = 11,
-    /// The pixels the world is filled at, the GPU's largest cost: two to a
-    /// CSS pixel is four times the fragments of one. RES_MODES says each.
+    /// The pixels the world is drawn at: two to a CSS pixel is four times the
+    /// work done a drawn pixel at a time (span.json `per_px`), and nothing
+    /// more; the camera grid's rays and the light's map cost the same at any.
+    /// The markers and the finish stay at the display's. RES_MODES says each.
     res = 12,
     /// Where the camera and the pointer are, read live (perf/read.rs, NOW's view section).
     view = 13,

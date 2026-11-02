@@ -2,10 +2,10 @@
 
 //! The samples' hits handed to the rasterizer (pxl-spec-core `raster`,
 //! pxl-shader raster.rs): after the samples, each stopped sample's box
-//! written (`sample_box_cs`) and the boxes drawn at the rays' pixels
-//! (raster.wgsl), the nearest face a pixel's ray enters kept with its
-//! sample, in passes timed together (span `sraster`), which the cast's
-//! pixels read (pxl-shader cast.rs `cast_cs`); then what lies about each
+//! written (`sample_box_cs`, span `sample_box`, a thread a sample of the
+//! camera grid) and the boxes drawn at the rays' pixels (raster.wgsl, span
+//! `sraster`, its fragments the drawn pixels), the nearest face a pixel's
+//! ray enters kept with its sample, which the cast's pixels read (pxl-shader cast.rs `cast_cs`); then what lies about each
 //! box's face asked once a box (`face_cs`, span `face`). Its targets are
 //! written whole each frame before they are read: in a frame not drawn
 //! whole, through a gate of their own, the depth cleared to the nearest and
@@ -277,11 +277,10 @@ impl Raster {
     }
 
     /// The boxes written off the samples, a thread a sample of `grid`, where
-    /// they were cast again (`samples_cast`), else the last kept; and drawn
-    /// into its targets as many as their args say, cleared first, through
-    /// the gate in the `claimed` tiles where the frame is not drawn whole
-    /// (`Resolve::tiles`, `cnt` of them): in passes of their own, timed
-    /// together (span `sraster`).
+    /// they were cast again (`samples_cast`), else the last kept (span
+    /// `sample_box`); and drawn into its targets as many as their args say,
+    /// cleared first, through the gate in the `claimed` tiles where the frame
+    /// is not drawn whole (`Resolve::tiles`, `cnt` of them; span `sraster`).
     pub(super) fn draw(
         &mut self,
         ctx: &mut RenderContext,
@@ -290,9 +289,8 @@ impl Raster {
         claimed: Option<((u32, u32), u32)>,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::sraster);
         if samples_cast {
-            let pass = g.compute_pass(encoder, stamp.pass());
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
             g.set_bind_group(pass, 0, self.groups[0], &[]);
             g.set_pipeline(pass, self.boxes_built.id);
             let w = compute::SAMPLE_BOX_WORKGROUP;
@@ -311,7 +309,7 @@ impl Raster {
                 self.depth_view,
                 Load::Clear,
                 if claimed.is_some() { 1.0 } else { 0.0 },
-                stamp.pass(),
+                ctx.stamp(GpuSpanName::sraster).pass(),
             ),
         );
         if let Some((tiles, cnt)) = claimed {

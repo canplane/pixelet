@@ -82,6 +82,9 @@ pub struct Tiles {
     /// changed, in a frame through the gate.
     side: u32,
     claimed_for: u32,
+    /// The span their marks' passes are timed in (`dispatch_marks`,
+    /// `dispatch_box_args`): the screen's or the light's.
+    span: GpuSpanName,
     /// The uniform the frame draws them by, the claimed alone or every one
     /// (`mark`); and, where the device has no stencil and a pass through the
     /// gate is drawn whole, one that draws every tile (`after_gate`).
@@ -118,8 +121,14 @@ pub struct Tiles {
 
 impl Tiles {
     /// Tiles `side` pixels a side, claimed for `claimed_for` frames once
-    /// changed.
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, side: u32, claimed_for: u32) -> Tiles {
+    /// changed, their marks timed in `span`.
+    pub fn new(
+        g: &Gpu,
+        pipelines: &mut Pipelines,
+        side: u32,
+        claimed_for: u32,
+        span: GpuSpanName,
+    ) -> Tiles {
         let uniform = || {
             g.buf(
                 word_bytes(TILES_WORDS),
@@ -145,6 +154,7 @@ impl Tiles {
         Tiles {
             side,
             claimed_for,
+            span,
             uniform: uniform(),
             every: (!g.gates()).then(uniform),
             changed_at: 0,
@@ -256,8 +266,8 @@ impl Tiles {
     }
 
     /// The mark `mark` handed set into the tiles' words, a thread a tile of
-    /// its tiles, first in the frame, timed in the span `mark`; none where it
-    /// handed none.
+    /// its tiles, before anything reads them, timed in the tiles' span; none
+    /// where it handed none.
     pub fn dispatch_marks(&mut self, ctx: &mut RenderContext) {
         if self.mark_cnt == 0 {
             return;
@@ -274,7 +284,7 @@ impl Tiles {
             );
             self.mark_binding = self.changed_at;
         }
-        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(self.span).pass());
         g.set_bind_group(pass, 0, self.mark_group, &[]);
         g.set_pipeline(pass, self.mark.id);
         g.dispatch(pass, self.mark_cnt.div_ceil(64), 1, 1);
@@ -309,14 +319,14 @@ impl Tiles {
     }
 
     /// The marks' box's args set from it on the GPU, after every pass that
-    /// marks this frame and before a draw reads them, timed in the span
-    /// `mark` (box_args.wgsl); none where the tiles keep no box.
+    /// marks this frame and before a draw reads them, timed in the tiles'
+    /// span (box_args.wgsl); none where the tiles keep no box.
     pub fn dispatch_box_args(&self, ctx: &mut RenderContext) {
         let Some((_, pipeline, group)) = &self.box_args else {
             return;
         };
         let g = ctx.g;
-        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(self.span).pass());
         g.set_bind_group(pass, 0, *group, &[]);
         g.set_pipeline(pass, pipeline.id);
         g.dispatch(pass, 1, 1, 1);

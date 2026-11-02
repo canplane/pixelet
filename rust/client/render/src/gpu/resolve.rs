@@ -106,7 +106,7 @@ impl Resolve {
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
             jitter: [0.0; 2],
-            tiles: Tiles::new(g, pipelines, SIDE, CLAIMED_FOR),
+            tiles: Tiles::new(g, pipelines, SIDE, CLAIMED_FOR, GpuSpanName::mark),
         }
     }
 

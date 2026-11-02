@@ -514,6 +514,21 @@ a frame the kernel hands them the eye and the camera grid's layout
 times a scale the `resolution` setting picks
 (`domain/view/frame/resolution.rs`).
 
+The scale buys back only the work done a drawn pixel at a time: the pixels' cast
+and misses, the boxes drawn into the visibility buffer, the world's passes, its
+occlusion, gathering and marks, and the light's tiles marked where the eye's
+rays meet the world. The beam rays, cells, samples and their boxes run on the
+camera grid's angular cells and the rest of the light's passes on its map's
+texels, which no scale shrinks; the finish and the markers draw at the display's
+pixels at any scale, their text sharp. Each GPU span says which it is (span.json
+`per_px`), and a span whose passes are of both kinds is split. `auto` is a
+budget controller, as congestion control is: the frame's budget is the display's
+interval, no tighter than 1/60 s; while the per-pixel spans' time runs over it
+the scale steps down, and steps up where the step above, that time grown by its
+pixels, would fit. Without timestamps it reads the frames' gaps, which cannot
+foresee room, so a step up is a probe whose failure doubles the wait before the
+next.
+
 What the rays asked of each node is kept between frames in the **observed
 pyramid** (`pxl-spec-core pyramid.rs`), a table keyed by the node, and
 forgotten only where what a node read changed (`pxl-shader pyramid.rs`

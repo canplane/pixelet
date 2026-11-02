@@ -7,7 +7,7 @@
 //! where the casters that changed marked tiles of the map (gpu/tiles.rs),
 //! each screen tile whose pixels' shadow's taps read one of them is set to
 //! have changed this frame, on the GPU, after the marks and before anything
-//! reads the screen's words, timed with them in the span `mark`. It reads
+//! reads the screen's words, timed in the span `propagate`. It reads
 //! the world's depth as the last frame left it, which holds while the eye
 //! stands, as it does in every frame through the gate. What it marked the
 //! host does not read back: it runs only in a frame whose casters that
@@ -192,7 +192,7 @@ impl Propagate {
             self.bindings = bindings;
         }
         let [across, down] = screen.squares();
-        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::mark).pass());
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::propagate).pass());
         g.set_bind_group(pass, 0, self.group, &[]);
         g.set_pipeline(pass, self.pipeline.id);
         g.dispatch(pass, across, down, 1);

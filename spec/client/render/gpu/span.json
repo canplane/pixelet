@@ -20,9 +20,11 @@
     { "name": "beam", "per_px": false },
     { "name": "cell", "per_px": false },
     { "name": "sample", "per_px": false },
+    { "name": "sample_box", "per_px": false },
     { "name": "sraster", "per_px": true },
     { "name": "px", "per_px": true },
     { "name": "miss", "per_px": true },
+    { "name": "light_receivers", "per_px": true },
     { "name": "light_beam", "per_px": false },
     { "name": "light_sample", "per_px": false },
     { "name": "light_raster", "per_px": false },
@@ -31,9 +33,11 @@
     { "name": "generate", "per_px": false },
     { "name": "shadow", "per_px": false },
     { "name": "face", "per_px": false },
-    { "name": "mark", "per_px": true }
+    { "name": "mark", "per_px": true },
+    { "name": "light_mark", "per_px": false },
+    { "name": "propagate", "per_px": true }
   ],
-  "$GPU_SPAN_NAMES": "`world` is the world's pass as it lays the opaque world, and `world_rest` the pass that goes on after the occlusion is found between them (`ao`), drawing over it the occlusion's map, the sky and what the kernel animates; where the occlusion is not found again the one pass draws it all, timed as `world`, and `world_rest` runs none. A span is `per_px` where a pass it times runs threads over the world's drawn pixels, its fragments or a thread a pixel or a square of them, so its cost goes with the drawn resolution: the world's passes, its occlusion, its gathering and the depth's bound (`resolve`), the boxes' raster into the visibility buffer (`sraster`), the pixels' cast and their misses' walk, and the marks drawn over the world's depth with their propagation over its squares (`mark`); the drawn resolution's scale is judged on these alone (pxl-render gpu/renderer.rs `px_ms`, pxl-kernel domain/view/frame/resolution.rs). Not `per_px`: the camera grid's beam rays, cells, samples and their boxes' faces, on its own angular lattice (`beam`, `cell`, `sample`, `face`); the observed pyramid's forgetting, over its entries (`cast`); and the canvas's passes, at the display's pixels (`finish`, `marker`, `debug`).",
+  "$GPU_SPAN_NAMES": "`world` is the world's pass as it lays the opaque world, and `world_rest` the pass that goes on after the occlusion is found between them (`ao`), drawing over it the occlusion's map, the sky and what the kernel animates; where the occlusion is not found again the one pass draws it all, timed as `world`, and `world_rest` runs none. A span is `per_px` where every pass it times runs threads over the world's drawn pixels, its fragments or a thread a pixel or a square of them, so its cost goes with the drawn resolution; a span whose passes do not all is split until each is one or the other. `per_px`: the world's passes, its occlusion, its gathering and the depth's bound (`resolve`), the boxes drawn into the visibility buffer (`sraster`), the pixels' cast and their misses' walk, the screen's marks, its tiles' words set and the marks drawn over the world's depth (`mark`), the light's changed tiles propagated to the screen's, a thread a square of its pixels (`propagate`), and the tiles of the light's box the world's receivers stand on, marked where the eye's rays meet it, a thread a drawn pixel (`light_receivers`); the drawn resolution's scale is judged on these alone (pxl-render gpu/renderer.rs `px_ms`, pxl-kernel domain/view/frame/resolution.rs). Not `per_px`: the camera grid's beam rays, cells, samples, their boxes written (`sample_box`) and their faces, on its own angular lattice (`beam`, `cell`, `sample`, `face`); the light's cast, its slide, the drawn receivers' marks, its propagation, its beam rays and cells (`light_beam`), its samples (`light_sample`), their boxes (`light_raster`), its slots (`light_slot`) and their walks (`light_walk`), at the map's texels and tiles; the light's marks, its tiles' words set, the marks drawn over its map and their box's args (`light_mark`), at the map's texels; the observed pyramid's forgetting, over its entries (`cast`); and the canvas's passes, at the display's pixels, the markers' text among them (`finish`, `marker`, `debug`).",
   "LIGHT_MOVED": [
     "content",
     "slide",

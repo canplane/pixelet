@@ -10,16 +10,23 @@
 //! steps between whole and `SCALE_MIN`, each a like share of the last, so
 //! every move lays the pixels on one of a few grids.
 //!
-//! `auto` judges only frames that move: the gap before the first is how long
+//! `auto` is a budget controller, as congestion control is, over the one
+//! cost the scale buys back: the work done a drawn pixel at a time. The
+//! camera grid's beam rays, cells and samples, on its angular cells, and the
+//! light's passes, on its map's texels, cost what they cost at any scale, and
+//! the finish and the markers draw at the display's pixels.
+//!
+//! It judges only frames that move: the gap before the first is how long
 //! the view stood still, so moving starts a fresh window, and the quiet
 //! windows judged before the pause still count. A window is
 //! `SCALE_WINDOW_MS` of the moving frames' budgets, the paced interval the
 //! host grants (@xpute/host sched/frame_pacing.ts `FrameGrant::paced_ms`) no tighter
 //! than `SCALE_BUDGET_FLOOR_MS`, and its load is the samples its frames took,
 //! summed against their own budgets. Where the device keeps timestamps the
-//! sample is the GPU time of the passes drawn at the world's pixels
-//! (pxl-render gpu/renderer.rs `px_ms`), from a read that landed, which
-//! not every frame has, and a window none landed in is not judged. Timed, a
+//! sample is the GPU time of the spans that run a drawn pixel at a time
+//! (span.json `per_px`, pxl-render gpu/renderer.rs `px_ms`), from a read that
+//! landed, which not every frame has, and a window none landed in is not
+//! judged. Timed, a
 //! window over its budget by more than `SCALE_BAND` steps down at once, and
 //! `SCALE_UP_WINDOWS` windows in a row in which the step above, cost times its
 //! pixels over these, fits under it by that much step up, so the scale does
@@ -216,7 +223,7 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
 }
 
 /// A frame was paced: `gpu`, where a GPU read landed with it, is the time of
-/// its passes drawn at the world's pixels and those pixels. A frame drawn at
+/// its spans run a drawn pixel at a time (`px_ms`) and those pixels. A frame drawn at
 /// another size than now is not counted, and a read timed at one is no
 /// sample; the world's surface takes the scale the setting and the judge
 /// leave.

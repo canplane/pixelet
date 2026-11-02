@@ -494,7 +494,7 @@ impl Renderer {
             gate: pipelines.build_gate(g, PIPELINE_SCREEN_GATE),
             gate_group: 0,
             gate_bound: (0, 0),
-            light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1),
+            light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1, GpuSpanName::light_mark),
             last_frame_uploads: UploadCopies::default(),
             frame_was: [0.0; FRAME_FLOATS],
             frame_was_buf: g.buf(
@@ -1138,12 +1138,13 @@ impl Renderer {
         frame_begin();
         let encoder = g.encoder();
         let mut ctx = RenderContext::new(g, encoder, &mut stamps);
-        // The tiles' words first, before anything reads them; a frame
-        // dropped leaves them as they were, and the next is drawn whole.
+        // The screen's tiles' words first, then its marks, then the light's
+        // words and marks, each before anything reads them; a frame dropped
+        // leaves them as they were, and the next is drawn whole. A span times
+        // from its first pass to its last (gpu/api.rs `TimestampWrites`), so
+        // the screen's (`mark`), the light's (`light_mark`) and the
+        // propagation's (`propagate`) passes are each encoded together.
         self.resolve.tiles.dispatch_marks(&mut ctx);
-        if map_drawn {
-            self.light_tiles.dispatch_marks(&mut ctx);
-        }
         if screen_marking {
             // A draw as it is marked by this frame's words, as it was by the
             // last's: each at the jitter it is or was drawn at.
@@ -1192,6 +1193,9 @@ impl Renderer {
             self.location.draw_marks(&mut pass, frames);
             pass.end();
         }
+        if map_drawn {
+            self.light_tiles.dispatch_marks(&mut ctx);
+        }
         // The same from the light, where the map is drawn through its gate:
         // the map's tiles the casters' shadows change, their words set by
         // their drawn selves, which the propagation reads.
@@ -1219,7 +1223,7 @@ impl Renderer {
                 map,
                 Load::ReadOnly,
                 1.0,
-                ctx.stamp(GpuSpanName::mark).pass(),
+                ctx.stamp(GpuSpanName::light_mark).pass(),
             )
             .load_stencil();
             let pass = g.pass(ctx.encoder, &desc);

@@ -165,8 +165,10 @@ export const SETTING = {
     cost: "high",
     section: "lighting",
   },
-  /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RES_MODES says each. */
+  /** The pixels the world is drawn at: two to a CSS pixel is four times the
+   * work done a drawn pixel at a time (span.json `per_px`), and nothing
+   * more; the camera grid's rays and the light's map cost the same at any.
+   * The markers and the finish stay at the display's. RES_MODES says each. */
   res: {
     key: 12 as number,
     kind: "choice",
@@ -372,8 +374,10 @@ export const SETTING_PRODUCTION = {
     cost: "high",
     section: "lighting",
   },
-  /** The pixels the world is filled at, the GPU's largest cost: two to a
-   * CSS pixel is four times the fragments of one. RES_MODES says each. */
+  /** The pixels the world is drawn at: two to a CSS pixel is four times the
+   * work done a drawn pixel at a time (span.json `per_px`), and nothing
+   * more; the camera grid's rays and the light's map cost the same at any.
+   * The markers and the finish stay at the display's. RES_MODES says each. */
   res: {
     key: 12 as number,
     kind: "choice",
