@@ -15,7 +15,7 @@ xpute-kit = { workspace = true, features = ["std"] }
 pxl-spec.workspace = true
 # The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs),
 # and the cloud field the sheets lie on (gpu/cloud.rs).
-pxl-spec-core.workspace = true
+pxl-engine.workspace = true
 
 # WebGPU's calls written into a stream (gpu/api.rs): xpute's encoder, which
 # the page's host and the device app's run alike.
@@ -28,7 +28,7 @@ libm.workspace = true
 # The zooms the screen's rays are painted by (build.rs `lattice.wgsl`), the
 # cloud field's hash (`cloud_hash.wgsl`), and the values every shader may
 # name (`words`).
-pxl-spec-core.workspace = true
+pxl-engine.workspace = true
 # Every shader validated, and what its stages read, as it is built (build.rs `assemble`).
 naga = { version = "30", features = ["wgsl-in"] }
 

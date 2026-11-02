@@ -156,7 +156,7 @@
     "$type": "u32",
     "$val": 8,
     "$doc": [
-      "The zoom of the tile a shard below OBJECT is: pxl-spec-core's `SHARD_ZOOM`, which the",
+      "The zoom of the tile a shard below OBJECT is: pxl-engine's `SHARD_ZOOM`, which the",
       "kernel holds this to (domain/layer/object/repository.rs). A key's digits to it name the",
       "shard, and past it each zoom adds a digit on each of three axes (pxl-spec",
       "space/hierarchy/morton.rs)."
@@ -210,7 +210,7 @@
     "FOLD": {
       "$val": 2,
       "$doc": [
-        "u32[]: what its leaves fold to, its word in the objects' tree (pxl-spec-core",
+        "u32[]: what its leaves fold to, its word in the objects' tree (pxl-engine",
         "overwrite.rs `fold`, `fold_word`): the kind most of its fill is and its share filled."
       ]
     }

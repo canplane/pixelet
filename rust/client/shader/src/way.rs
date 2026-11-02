@@ -1,16 +1,16 @@
 // pxl-shader/way.rs
 
 //! Each handed brick's ways: their spans off its lines (`way_cs`), and
-//! their tree in the ways' pool (pxl-spec-core `way::tree`), the old one
+//! their tree in the ways' pool (pxl-engine `way::tree`), the old one
 //! given back (`way_free_cs`), the new one built (`way_tree_cs`) and the
 //! child groups the build gave back pushed (`way_return_cs`).
 
+use pxl_engine::at;
+use pxl_engine::fill::{self, put};
+use pxl_engine::overwrite;
+use pxl_engine::way::tree::{self, Pool, FREED_AT, RECORD_WORDS};
+use pxl_engine::clipmap;
 use pxl_shader_macro::compute;
-use pxl_spec_core::at;
-use pxl_spec_core::fill::{self, put};
-use pxl_spec_core::overwrite;
-use pxl_spec_core::way::tree::{self, Pool, FREED_AT, RECORD_WORDS};
-use pxl_spec_core::clipmap;
 use spirv_std::arch::IndexUnchecked;
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
@@ -26,7 +26,7 @@ use crate::world::brick_at;
 /// levels and its ways' tree read its cells and its neighbors' off. Over
 /// `height_cs`'s tops: a way is told from their faces. Each brick's
 /// entry as handed whole: where it lies and its shard say the wall
-/// (pxl-spec-core `area::is_wall`).
+/// (pxl-engine `area::is_wall`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "way_cs"))]
 pub fn way_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -255,7 +255,7 @@ pub fn way_free_cs(
 }
 
 /// Each handed brick's ways as a tree of the placed tree's shape
-/// (pxl-spec-core `way::tree`), a workgroup a brick, `group.z` its place
+/// (pxl-engine `way::tree`), a workgroup a brick, `group.z` its place
 /// in `fresh`: from the brick's own nodes along z its ways' bound meets
 /// (`tree::span`) down a level at a time, each
 /// candidate flagged where the brick's levels say a way may lie under it

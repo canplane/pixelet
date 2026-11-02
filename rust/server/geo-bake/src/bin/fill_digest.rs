@@ -5,7 +5,7 @@
 //! `terrain::fill_fit`), each one line of what a reader reads of it: its
 //! levels' words, the child groups its tree took and holds, and its tree under
 //! each of its own nodes along z as a reader steps down it
-//! (pxl-spec-core `way::tree::cursor`), each node's holding, folding and
+//! (pxl-engine `way::tree::cursor`), each node's holding, folding and
 //! word, no child group's id. Two checkouts' lines over one set are a proof that
 //! a change left what the fill makes as it was.
 //!
@@ -25,13 +25,13 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use fnv::FnvHasher;
+use pxl_engine::overwrite::{self, Columns, NodeSlot};
+use pxl_engine::way::tree::{self, Read};
+use pxl_engine::{clipmap, fill};
 use pxl_geo_bake::pyramid::{Base, TileSet};
 use pxl_spec::bake::tile::terrain::{self, FilledBrick, TerrainTile};
 use pxl_spec::directory;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec_core::overwrite::{self, Columns, NodeSlot};
-use pxl_spec_core::way::tree::{self, Read};
-use pxl_spec_core::{clipmap, fill};
 
 /// The set a proof reads when none is named: the finished one, which no
 /// bake writes while it is read (out/terrain.stage is).
@@ -41,7 +41,7 @@ const SET: &str = "out/terrain";
 /// built in: the crates it compiles of this tree, and the workspace's
 /// manifest and lock.
 const SOURCES: [&str; 6] = [
-    "rust/spec/core",
+    "rust/spec/engine",
     "rust/spec",
     "rust/server/geo-bake",
     "xpute/rust/kit",

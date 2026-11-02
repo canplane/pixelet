@@ -10,7 +10,7 @@
 //! stands on what is placed whatever its size; a coarser zoom's cell is one
 //! column, read as that zoom's cells are (`at_zoom`), what is placed finer
 //! folded into it. Either way a cell kept short of its cube stands to the
-//! top of the box it is drawn as (pxl-spec-core `cast::top`).
+//! top of the box it is drawn as (pxl-engine `cast::top`).
 
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
@@ -26,8 +26,8 @@ use super::ray::{at_zoom, cell_zoom_at, finest, Ray, Until};
 use super::world::World;
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::*;
+use pxl_engine::cast::{fill_bounds, Detail};
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::cast::{fill_bounds, Detail};
 
 /// The center's height over a floor whose top is `top`: half a cell up, as a
 /// cell's center stands over its ground.
@@ -140,7 +140,7 @@ impl<'w, 'a> CellColumns<'w, 'a> {
     }
 
     /// The top of column `k`'s cell under the height `open`, at the zoom its
-    /// rays read, as it is drawn (pxl-spec-core `cast::top`): its cube's top
+    /// rays read, as it is drawn (pxl-engine `cast::top`): its cube's top
     /// where it keeps its cube whole, else its fill box's; `open` where what
     /// it holds is not known.
     fn top_under(&mut self, k: u32, open: f64) -> f64 {
@@ -207,7 +207,7 @@ impl<'w, 'a> CellColumns<'w, 'a> {
 
     /// The top of the highest solid in any column, within the reach: each
     /// column's surface at its zoom, the one support every reader asks
-    /// (`World::column_surface`, pxl-spec-core `support::column_surface`).
+    /// (`World::column_surface`, pxl-engine `support::column_surface`).
     fn highest(&mut self) -> Option<f64> {
         let cell = self.detail.range[0];
         let unit = units(cell);
@@ -257,7 +257,7 @@ impl<'w, 'a> CellColumns<'w, 'a> {
 
 impl<'a> World<'a> {
     /// What is in the leaf cell at `at`, as the cast draws it: its value
-    /// (pxl-spec-core `world::node`'s), void where none.
+    /// (pxl-engine `world::node`'s), void where none.
     pub fn asset_of(&self, at: &Q3) -> Answer<u32> {
         let side = units(GROUND.cell());
         let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);

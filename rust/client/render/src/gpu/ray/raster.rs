@@ -1,6 +1,6 @@
 // pxl-render/gpu/ray/raster.rs
 
-//! The samples' hits handed to the rasterizer (pxl-spec-core `raster`,
+//! The samples' hits handed to the rasterizer (pxl-engine `raster`,
 //! pxl-shader raster.rs): after the samples, each stopped sample's box
 //! written (`sample_box_cs`, span `sample_box`, a thread a sample of the
 //! camera grid) and the boxes drawn at the rays' pixels (raster.wgsl, span
@@ -15,7 +15,7 @@
 //! faces each frame its samples are cast, and kept where only the pixels are
 //! cast again over them.
 
-use pxl_spec_core::{beam, eye, light, raster, ray};
+use pxl_engine::{beam, eye, light, raster, ray};
 
 use super::cast::HEAD_BINDING;
 
@@ -29,8 +29,8 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use pxl_spec_core::param::light::SAMPLE;
-use pxl_spec_core::param::raster::GROWTH;
+use pxl_engine::param::light::SAMPLE;
+use pxl_engine::param::raster::GROWTH;
 
 /// The raster's pipelines, made with the cast's; its args, made with them;
 /// its boxes, room for `room` samples, made again where the grid's samples
@@ -70,7 +70,7 @@ pub(super) struct Raster {
 }
 
 /// The light's samples' boxes, written by the eye's pass (`boxes_built`) and
-/// drawn from the light by the same draw (pxl-spec-core `param::light::SAMPLE`): its
+/// drawn from the light by the same draw (pxl-engine `param::light::SAMPLE`): its
 /// boxes, room for a sample every `param::light::SAMPLE` texels; their args; its
 /// view, a uniform; its targets at the map's side, in the box's order; and
 /// the draw's group.
@@ -130,7 +130,7 @@ impl Raster {
     /// rays' `size`; the raster's view off the `eye`'s words; the args
     /// cleared where the samples are cast again (`samples_cast`), else the
     /// boxes they left kept; its groups over the cast's `eye`, `beams` and
-    /// the eye's `head` (pxl-spec-core `light::HEAD_SIZE`), and, for the
+    /// the eye's `head` (pxl-engine `light::HEAD_SIZE`), and, for the
     /// faces' asking, the world's query's buffers (the clip level, the tiles'
     /// frames, the service area's index, the overwrites, the ways' pool)
     /// and the walk again's words (`marks`), which hold the missed pixels'
@@ -268,7 +268,7 @@ impl Raster {
     /// What lies about each missed pixel's hit's face asked once a square of
     /// them, in the cast's pass `pass` (ray/cast.rs): the faces' pass over
     /// the hits' asks, its args among the walk again's words (`marks`,
-    /// pxl-spec-core `ray::MISS_ARGS_ROOM`) as the boxes' are in its own.
+    /// pxl-engine `ray::MISS_ARGS_ROOM`) as the boxes' are in its own.
     pub(super) fn ask_hits(&self, g: &Gpu, pass: u32, marks: u32) {
         g.set_pipeline(pass, self.faces_built.id);
         g.set_bind_group(pass, 0, self.groups[3], &[]);
@@ -384,7 +384,7 @@ impl Raster {
         }
     }
 
-    /// The light's view off the eye's words `e` (pxl-spec-core `light::Light`) for
+    /// The light's view off the eye's words `e` (pxl-engine `light::Light`) for
     /// the map `size` a side, as `prepare` lays the eye's; the args cleared.
     pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
         let s = &self.light;

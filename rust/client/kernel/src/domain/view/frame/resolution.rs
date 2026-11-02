@@ -15,7 +15,7 @@
 //! `auto` is a budget controller, as congestion control is, over two knobs
 //! and the one budget: the scale, which buys back the work done a drawn
 //! pixel at a time (span.json `per_px`), and the camera grid's lattice, the
-//! beam rays and cells laid `lattice` cells apart (pxl-spec-core
+//! beam rays and cells laid `lattice` cells apart (pxl-engine
 //! `beam::Grid::of`, span.json `per_cell`), which buys back theirs at a
 //! quarter at the coarsest, `grid::LATTICE_MAX`. The samples are the very
 //! rays at every lattice, so the lattice changes no pixel drawn; the
@@ -53,10 +53,10 @@
 use crate::domain::view::param;
 use crate::domain::view::setting::store::{settings_store, ResMode};
 use crate::sys::sched::edge;
+use pxl_engine::grid::LATTICE_MAX;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::api;
 use pxl_render::gpu::surface::{surfaces, Surface};
-use pxl_spec_core::grid::LATTICE_MAX;
 use xpute_guest::global::Global;
 
 /// A frame as the turn paced it.
@@ -283,7 +283,7 @@ pub fn drawn_scale() -> f64 {
 }
 
 /// The camera grid's lattice, in cells (`grid::CELL`) a side, its beam rays
-/// and cells are laid on (pxl-spec-core `beam::Grid::of`): `auto`'s, the
+/// and cells are laid on (pxl-engine `beam::Grid::of`): `auto`'s, the
 /// cell's own at any other setting. The eye's words take it as they are
 /// written, so the frame drawn next casts on it.
 pub fn lattice() -> u32 {

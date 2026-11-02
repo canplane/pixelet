@@ -1,6 +1,6 @@
 // pxl-shader/decor.rs
 
-//! The decor the ground generates in the eye's clip levels (pxl-spec-core
+//! The decor the ground generates in the eye's clip levels (pxl-engine
 //! `scatter`, `generation`): the entries that generate again listed
 //! (`decor_mark_cs`), the candidates the cells under a brick hold that stand at
 //! its clip level and stand clear, a clip level cell at a time
@@ -8,18 +8,18 @@
 //! laid out and compacted into their draws' instances (`decor_cnt_cs`,
 //! `decor_args_cs`, `decor_compact_cs`).
 
+use pxl_engine::answer::In;
+use pxl_engine::cast::{End, Query};
+use pxl_engine::decor::Decor;
+use pxl_engine::fill::put;
+use pxl_engine::generation::{self, drawn, DecorQuery};
+use pxl_engine::overwrite::Cut;
+use pxl_engine::scatter;
+use pxl_engine::support::{self, Ancestors};
+use pxl_engine::clipmap::{self, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
+use pxl_engine::world::{self, Inheritance};
+use pxl_engine::{at, way, LEAF_CELL};
 use pxl_shader_macro::compute;
-use pxl_spec_core::answer::In;
-use pxl_spec_core::cast::{End, Query};
-use pxl_spec_core::decor::Decor;
-use pxl_spec_core::fill::put;
-use pxl_spec_core::generation::{self, drawn, DecorQuery};
-use pxl_spec_core::overwrite::Cut;
-use pxl_spec_core::scatter;
-use pxl_spec_core::support::{self, Ancestors};
-use pxl_spec_core::clipmap::{self, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
-use pxl_spec_core::world::{self, Inheritance};
-use pxl_spec_core::{at, way, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
@@ -28,7 +28,7 @@ use crate::eye::{eye_origin, Eye};
 use crate::workgroup::{DECOR_CELL_LANES, DECOR_RECORD_LANES};
 use crate::world::{Clipmap, NoPalette, World};
 
-/// The world as decor's generation asks it on the GPU (pxl-spec-core `scatter`):
+/// The world as decor's generation asks it on the GPU (pxl-engine `scatter`):
 /// the cast's, and the catalog's rows as handed.
 struct Generating<'a> {
     world: World<'a, NoPalette>,
@@ -37,7 +37,7 @@ struct Generating<'a> {
 
 /// The cast's world as decor's generation walks it: unplaced, nothing placed
 /// and no preview's cuts, the ground's alone, as decor generates on it
-/// (pxl-spec-core `world::Inheritance::UNPLACED`); or, asked from a root
+/// (pxl-engine `world::Inheritance::UNPLACED`); or, asked from a root
 /// as edited (`AssetLine`), with the eye's cuts.
 struct Ground<'w, 'a> {
     world: &'w mut World<'a, NoPalette>,
@@ -113,7 +113,7 @@ impl Ancestors<Inheritance> for AssetLine<'_> {
     }
 }
 
-/// The query's support on the cast's world (pxl-spec-core `support`): a
+/// The query's support on the cast's world (pxl-engine `support`): a
 /// column's surface of the world unplaced (`Ground`), its line
 /// kept, each asset about it asked off that line; a cell's edit asked of
 /// the world as edited down its own line, the one ask; and what is placed in
@@ -165,7 +165,7 @@ impl DecorQuery for Generating<'_> {
         support::asset(&mut ground, &line, zoom, c)
     }
 
-    fn next_placed(&self, p: &mut pxl_spec_core::world::PlacedCursor) -> ([i32; 3], u32, bool) {
+    fn next_placed(&self, p: &mut pxl_engine::world::PlacedCursor) -> ([i32; 3], u32, bool) {
         p.next(&self.world)
     }
 }
@@ -176,7 +176,7 @@ fn shown_at(shown: &[u32], j: u32, cell: u32) -> bool {
     cell <= LEAF_CELL && at(shown, j) >> (cell - FIRST_CELL) & 1 != 0
 }
 
-/// Whether a box of the frame's (pxl-spec-core `generation::BOXES_AT`)
+/// Whether a box of the frame's (pxl-engine `generation::BOXES_AT`)
 /// reaches what a candidate in `cells`, leaf cells of the clip level at `cell`,
 /// reads (`generation::reaches`): a brick's, or one candidate's own cell.
 fn is_changed(list: &[u32], cell: u32, cells: [i32; 4]) -> bool {
@@ -199,7 +199,7 @@ fn is_changed(list: &[u32], cell: u32, cells: [i32; 4]) -> bool {
 
 /// The eye's entries whose decor generates again this frame, a thread an entry,
 /// listed with each decor shown at the entry's clip level zoom (`shown_at`) for
-/// `decor_cs` (pxl-spec-core `generation::LIST_AT`), the decors the catalog's
+/// `decor_cs` (pxl-engine `generation::LIST_AT`), the decors the catalog's
 /// rows as handed (`rows`), its count the dispatch's. An entry generates whole
 /// where every one does, decor having been off, or its records were not
 /// generated for its brick (`generation::generated_for`), its head then laid
@@ -429,7 +429,7 @@ pub fn decor_cs(
     }
 }
 
-/// The `z`-th entry and decor `decor_mark_cs` listed (pxl-spec-core
+/// The `z`-th entry and decor `decor_mark_cs` listed (pxl-engine
 /// `generation::LIST_AT`), and whether it generates in part: the pairs
 /// generated whole first, as many as `decor_thin_cs` is dispatched over,
 /// then those in part (`generation::part_at`).
@@ -447,7 +447,7 @@ fn list_entry(list: &[u32], z: u32) -> (u32, u32, bool) {
     (w & 0xffff, w >> 16 & 0xff, part)
 }
 
-/// The first word of entry `s`'s `i`-th record of decor `k` (pxl-spec-core
+/// The first word of entry `s`'s `i`-th record of decor `k` (pxl-engine
 /// `generation::entry_record`).
 fn entry_word(rows: &[Decor], s: u32, k: u32, i: u32) -> u32 {
     generation::record_at(generation::entry_record(rows, s, k, i))
@@ -466,7 +466,7 @@ fn is_held(records: &[u32], clipmap: &[IVec4], g: u32) -> bool {
 }
 
 /// The `k`-th run of records workgroup `g` of a decor pass reads, as record
-/// numbers (pxl-spec-core `generation::record_at`): the first and how many,
+/// numbers (pxl-engine `generation::record_at`): the first and how many,
 /// where it reads any (`is_held`). A workgroup an entry, each run
 /// `generation::RUN` of its records, those of the decor whose room the run
 /// lies in that it laid (`generation::cnt_at`); past the entries, a workgroup
@@ -506,7 +506,7 @@ fn run_of(records: &[u32], rows: &[Decor], g: u32, k: u32) -> (u32, u32) {
 /// counted: nothing where the rays ask another zoom at its distance, held to
 /// the clip levels holding its column (`generation::held_at`), than the one
 /// its record's clip level draws at (`generation::drawn_at`), or where it is
-/// the decor left out; else sized for the screen (pxl-spec-core
+/// the decor left out; else sized for the screen (pxl-engine
 /// `generation::drawn`), a model where its group's extent spans `MODEL_ANGLE`
 /// at its distance, an impostor down to `IMPOSTOR_ANGLE`, else culled.
 #[compute(threads(DECOR_RECORD_LANES), entry_point_name = "decor_cnt_cs")]
@@ -718,7 +718,7 @@ fn compact_one(
     let x = from_anchor(drawing, records, i, 0) + across as f32 / 2.0;
     let y = from_anchor(drawing, records, i, 1) + deep as f32 / 2.0;
     // Its base as drawn: under its box's corner by its column surface's kept top.
-    let sink = records[i + 4] as f32 / (1 << pxl_spec_core::FRAC_W) as f32;
+    let sink = records[i + 4] as f32 / (1 << pxl_engine::FRAC_W) as f32;
     let z = from_anchor(drawing, records, i, 2) - sink;
     let (cap, slot) = (cap as usize, slot as usize);
     instances[slot] = x.to_bits();
@@ -752,7 +752,7 @@ fn about(d: i32, axis: u32) -> i32 {
 }
 
 const _: () = assert!(
-    pxl_spec_core::FRAC_W == 8,
+    pxl_engine::FRAC_W == 8,
     "a Q3's unit cells wrap at 2^24 as `about` takes them"
 );
 
@@ -791,7 +791,7 @@ impl Instances<'_> {
 
     /// The anchor on `axis` from a Q3 `o`, in units.
     fn anchor(&self, axis: u32, o: i32) -> f32 {
-        let w = pxl_spec_core::FRAC_W;
+        let w = pxl_engine::FRAC_W;
         let a = at(self.drawing, drawn::ANCHOR + axis) as i32;
         about(a.wrapping_sub(o >> w), axis) as f32 - (o & ((1 << w) - 1)) as f32 / (1 << w) as f32
     }

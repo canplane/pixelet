@@ -28,7 +28,7 @@
 resolver = "2"
 members = [
   "spec",
-  "spec/core",
+  "spec/engine",
   "client/render",
   "client/kernel",
   "client-bracket/wasm",
@@ -60,7 +60,7 @@ xpute-kit = { path = "../xpute/rust/kit", default-features = false }
 xpute-guest = { path = "../xpute/rust/guest" }
 xpute-gpu = { path = "../xpute/rust/gpu" }
 xpute-host = { path = "../xpute/rust/host" }
-pxl-spec-core = { path = "spec/core" }
+pxl-engine = { path = "spec/engine" }
 pxl-spec = { path = "spec" }
 pxl-render = { path = "client/render" }
 pxl-kernel = { path = "client/kernel", default-features = false }

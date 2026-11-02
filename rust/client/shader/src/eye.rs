@@ -1,26 +1,26 @@
 // pxl-shader/eye.rs
 
-//! The eye a cast is from, as the kernel writes its words (pxl-spec-core
+//! The eye a cast is from, as the kernel writes its words (pxl-engine
 //! `eye`), what every entry reads off it, and the eye as an observer
 //! (observer.rs `Observer`): its camera grid's corners, cells and samples
-//! (pxl-spec-core `beam::Grid`), a ray at the screen's tangents.
+//! (pxl-engine `beam::Grid`), a ray at the screen's tangents.
 
-use pxl_spec_core::cast::{self, Detail};
-use pxl_spec_core::{beam, eye, pyramid, tally};
+use pxl_engine::cast::{self, Detail};
+use pxl_engine::{beam, eye, pyramid, tally};
 use spirv_std::glam::{IVec4, UVec2, UVec4, Vec2, Vec4};
 
 use crate::beam::Words;
 use crate::observer::{Aim, Level, Observer};
 
 /// The eye a cast is from (pxl-kernel domain/view/lens.rs `gpu_cast`), its words
-/// where pxl-spec-core `eye` lays them (asserted below).
+/// where pxl-engine `eye` lays them (asserted below).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Eye {
     /// The Q3 position, and whether a ray reports the nodes its descent
     /// asked (`word`), not what it met.
     pub origin: IVec4,
-    /// The unit forward, and how far the rays go (pxl-spec-core `eye::FAR`).
+    /// The unit forward, and how far the rays go (pxl-engine `eye::FAR`).
     pub forward_far: Vec4,
     /// The unit right, and a pad.
     pub right: Vec4,
@@ -37,13 +37,13 @@ pub struct Eye {
     pub carve: IVec4,
     pub hide: IVec4,
     /// The camera grid the frame casts on, as the kernel laid it once
-    /// (pxl-spec-core `beam::Grid`, `grid`).
+    /// (pxl-engine `beam::Grid`, `grid`).
     pub grid: [UVec4; eye::GRID_WORDS / 4],
-    /// The light's cast, a frame's constants (pxl-spec-core `light::Light`), all
+    /// The light's cast, a frame's constants (pxl-engine `light::Light`), all
     /// zero where no shadow is cast.
     pub light: [Vec4; 5],
     /// Each pixel's ray's offset from its middle, in drawn pixels, and the
-    /// first pixel of the region the frame casts (pxl-spec-core
+    /// first pixel of the region the frame casts (pxl-engine
     /// `eye::JITTER`).
     pub jitter: Vec4,
 }
@@ -102,7 +102,7 @@ pub(crate) fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
 }
 
 /// The camera grid the frame casts on, read whole off the eye's words, as
-/// the kernel worked it out once (pxl-spec-core `beam::Grid`): no thread
+/// the kernel worked it out once (pxl-engine `beam::Grid`): no thread
 /// works any of it out again.
 pub(crate) fn grid(eye: &Eye) -> beam::Grid {
     let g = &eye.grid;

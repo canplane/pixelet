@@ -6,10 +6,10 @@
 
 use crate::domain::scene::model::asset::{model_of, registered_model};
 use crate::sys::io::loader::{load_image, load_of};
+use pxl_engine::generation;
 use pxl_spec::asset::decor::{Decor, DECORS};
-use pxl_spec_core::generation;
 
-/// One a variant at most, each its draw group (pxl-spec-core scatter.rs
+/// One a variant at most, each its draw group (pxl-engine scatter.rs
 /// `GROUPS`): two variants naming one model reach one (`model_of`).
 pub const MODELS_MAX: usize = generation::GROUPS as usize;
 

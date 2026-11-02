@@ -120,7 +120,7 @@ pub mod object {
     pub const EDITS: u32 = 1;
 }
 
-/// The zoom of the tile a shard below OBJECT is: pxl-spec-core's `SHARD_ZOOM`, which the
+/// The zoom of the tile a shard below OBJECT is: pxl-engine's `SHARD_ZOOM`, which the
 /// kernel holds this to (domain/layer/object/repository.rs). A key's digits to it name the
 /// shard, and past it each zoom adds a digit on each of three axes (pxl-spec
 /// space/hierarchy/morton.rs).
@@ -152,7 +152,7 @@ pub mod top {
     pub const SHARD: u32 = 0;
     /// i32[]: its index on Z, -1 below sea level and 0 above.
     pub const Z: u32 = 1;
-    /// u32[]: what its leaves fold to, its word in the objects' tree (pxl-spec-core
+    /// u32[]: what its leaves fold to, its word in the objects' tree (pxl-engine
     /// overwrite.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.
     pub const FOLD: u32 = 2;
 }

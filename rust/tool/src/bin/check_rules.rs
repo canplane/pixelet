@@ -76,12 +76,12 @@ const KERNEL_ORDER: [(&str, u8); 12] = [
 const KERNEL_HEADS: [&str; 2] = ["scene", "control"];
 const KERNEL_BESIDE: [&str; 1] = ["perf"];
 
-/// pxl-spec-core's order: what every part speaks, the layers' storage and
+/// pxl-engine's order: what every part speaks, the layers' storage and
 /// the world's fields, the query over them (ARCHITECTURE.md, "The query, the
 /// only seam"), and what asks it. A layer knows no query, and the query no
 /// asker.
-const SPEC_CORE: &str = "rust/spec/core/src/";
-const SPEC_CORE_ORDER: [(&str, u8); 28] = [
+const ENGINE: &str = "rust/spec/engine/src/";
+const ENGINE_ORDER: [(&str, u8); 28] = [
     ("param", 0),
     ("cube", 0),
     ("decor", 0),
@@ -502,14 +502,7 @@ fn run() -> Result<Vec<String>, String> {
         &KERNEL_HEADS,
         &KERNEL_BESIDE,
     ));
-    problems.extend(out_of_order(
-        &files,
-        &read,
-        SPEC_CORE,
-        &SPEC_CORE_ORDER,
-        &[],
-        &[],
-    ));
+    problems.extend(out_of_order(&files, &read, ENGINE, &ENGINE_ORDER, &[], &[]));
     for f in files.iter().filter(|f| {
         f.starts_with(KERNEL)
             && f.ends_with(".rs")
@@ -561,7 +554,7 @@ fn run() -> Result<Vec<String>, String> {
     // stale.
     for f in stale(&root, &inputs_digest(&root)?) {
         problems.push(format!(
-            "{f}: stale against pxl-spec-core's sources; run `cargo shader-wgsl` in rust/"
+            "{f}: stale against pxl-engine's sources; run `cargo shader-wgsl` in rust/"
         ));
     }
     Ok(problems)
@@ -645,7 +638,7 @@ mod spec;"
             "use crate::domain::query::World;",
             "use crate::domain::layer::object::store::{object, Entry};",
             "// the layer's Query, in a comment",
-            "use pxl_spec_core::generation::DecorQuery;",
+            "use pxl_engine::generation::DecorQuery;",
         ] {
             assert!(layer_read_named(text, false).is_empty(), "{text}");
         }

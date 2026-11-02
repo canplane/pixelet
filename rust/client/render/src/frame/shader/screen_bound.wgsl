@@ -12,7 +12,7 @@
 @group(0) @binding(1) var<storage, read_write> bounds: array<vec2f>;
 
 // A square's pixels a side, `BOUND_STEP`, a thread's of a tile's
-// `BOUND_SQUARES` a side (constant.wgsl, pxl-spec-core `screen::TILE`), the
+// `BOUND_SQUARES` a side (constant.wgsl, pxl-engine `screen::TILE`), the
 // propagation's.
 @compute @workgroup_size(BOUND_SQUARES, BOUND_SQUARES, 1)
 fn screen_bound_cs(

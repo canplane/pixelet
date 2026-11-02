@@ -102,9 +102,9 @@ The last row is why `specialize_roots` runs only where `remove_aborts` does
 - **If lost:** 3,298,579 → 4,096,345 bytes; `world::node` and the walks are no
   function in any module (written again at each call).
 - **Check:** `world::node` one function in each of the modules that read
-  `spec/core/src/world.rs`, `cast::walk` one in each that casts: in a build's
+  `spec/engine/src/world.rs`, `cast::walk` one in each that casts: in a build's
   `*.spv` (`target/spirv-builder/…/pxl_shader.spvs`), count the `OpFunction`s
-  whose `OpName` starts `pxl_spec_core::world::node`.
+  whose `OpName` starts `pxl_engine::world::node`.
 
 ## Change 3: a field's address passed as a copy (`copy_pointer_arguments`)
 

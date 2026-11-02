@@ -1,7 +1,7 @@
 // pxl-render/gpu/resolve.rs
 
 //! The world's color gathered over frames: each frame's pixels sample the
-//! world off their middles by a jitter of their own (pxl-spec-core
+//! world off their middles by a jitter of their own (pxl-engine
 //! `eye::JITTER`), a sequence that covers the pixel in `JITTERS` frames, and
 //! each is blended into what the frames before left (screen_resolve.wgsl),
 //! two of the world surface's `history` in turn, the one written this frame
@@ -14,7 +14,7 @@
 //! the frames before left is moved to where this frame's eye sees it and
 //! held within what this frame's pixels about it hold, for that frame's
 //! picture alone. A tile is claimed, drawn again, the frame it changed and
-//! until its still frames have run through the sequence (pxl-spec-core
+//! until its still frames have run through the sequence (pxl-engine
 //! `screen::CLAIMED_FOR`, screen_tiles.wgsl); once every one has,
 //! the jitter holds, and the frame stands. The tiles' words are the GPU's,
 //! as the light's are (gpu/tiles.rs): each the number of the frame it last
@@ -36,7 +36,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::{Surface, WORLD_COLOR};
 use crate::gpu::tiles::{Tiles, SIDE};
-use pxl_spec_core::screen::{CLAIMED_FOR, JITTERS};
+use pxl_engine::screen::{CLAIMED_FOR, JITTERS};
 
 /// The least share a frame takes where what the frames before left is
 /// held to it: how long a trail what moved leaves, and how still an edge

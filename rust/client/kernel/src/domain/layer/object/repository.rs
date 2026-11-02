@@ -7,7 +7,7 @@
 //! below OBJECT (host.json `root`); this file reads what it serves and sends
 //! it edits.
 //!
-//! The source keeps them a shard at a time (pxl-spec-core `SHARD_ZOOM`), a
+//! The source keeps them a shard at a time (pxl-engine `SHARD_ZOOM`), a
 //! file a shard named by the shard's subject, as a bake's tile is named by
 //! its own, and the top of their tree (host.json `object.TOP`): what each node
 //! at `SHARD_ZOOM` holding objects folds to. The top is read first, and its
@@ -27,15 +27,15 @@
 //! it says so (`on_emptied`).
 
 use fnv::FnvHashSet;
+use pxl_engine::answer::FULL;
+use pxl_engine::area::shard_over;
+use pxl_engine::overwrite;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{units, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{is_key, node_of};
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
 use pxl_spec::space::layer::tile::{tile_at, Tile};
-use pxl_spec_core::answer::FULL;
-use pxl_spec_core::area::shard_over;
-use pxl_spec_core::overwrite;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::mem::heap::Block;

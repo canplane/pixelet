@@ -1,14 +1,14 @@
 // pxl-shader/raster.rs
 
-//! The samples' hits handed to the rasterizer (pxl-spec-core `raster`):
+//! The samples' hits handed to the rasterizer (pxl-engine `raster`):
 //! each stopped sample's box written for the raster's draw (`sample_box_cs`),
 //! which pxl-render raster.wgsl draws and pxl-shader cast.rs `cast_cs`
 //! reads each pixel's visible sample off; and what lies about each hit's
 //! face asked once a hit (`face_cs`), a box's and a missed pixel's alike.
 
+use pxl_engine::cast::End;
+use pxl_engine::{beam, cast, raster, support, way};
 use pxl_shader_macro::compute;
-use pxl_spec_core::cast::End;
-use pxl_spec_core::{beam, cast, raster, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
@@ -189,7 +189,7 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
 /// names (`beam::ASK_TO`). The boxes' asks (`beam::Grid::ask_at`), their
 /// faces left in their samples' words, which the pixels read (cast.rs
 /// `cast_cs`); and the missed pixels' hits' (`beam::Grid::hit_ask_at`;
-/// cast.rs `hit_lead_cs`), their args laid alike (pxl-spec-core
+/// cast.rs `hit_lead_cs`), their args laid alike (pxl-engine
 /// `ray::MISS_ARGS_ROOM`), their faces left in the hits, which their pixels
 /// take (cast.rs `hit_faces_cs`). One pass for both, over the args it is
 /// bound to: where its asks lie (`raster::ARGS_ASKS`) and how many.

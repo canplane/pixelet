@@ -9,7 +9,7 @@
  * time, ported, and held to the store by one record both read
  * (rust/spec/golden/object/top.tsv): the keys' layout (pxl-spec
  * space/hierarchy/morton.rs `key_of`), a write's reach (pxl-spec
- * space/hierarchy/sparse_tree.rs `set`), and the fold (pxl-spec-core
+ * space/hierarchy/sparse_tree.rs `set`), and the fold (pxl-engine
  * overwrite.rs `fold`, `share`, `voxel`; answer.rs `FULL`). The values a
  * fold counts as filling are generated (abi/voxel.spec.ts).
  */
@@ -33,7 +33,7 @@ export interface TopRow {
   fold: number;
 }
 
-/** The value an erase writes, and the empty word (pxl-spec-core
+/** The value an erase writes, and the empty word (pxl-engine
  * `cube::sentinel::void`). */
 export const VOID = 0;
 
@@ -104,7 +104,7 @@ export function lay(leaves: Map<bigint, Leaf>, w: Leaf): void {
   if (w.id !== VOID) leaves.set(w.key, w);
 }
 
-/** A cube filled whole, in a share's units (pxl-spec-core answer.rs `FULL`). */
+/** A cube filled whole, in a share's units (pxl-engine answer.rs `FULL`). */
 const FULL = 1 << 15;
 
 /** A fold's word: its kind low, its share high (overwrite.rs `fold_word`). */

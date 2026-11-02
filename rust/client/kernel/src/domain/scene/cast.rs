@@ -6,10 +6,10 @@
 //! clip levels want handed to the GPU once, off its tile's packet
 //! (domain/layer/terrain/clipmap.rs `fill`).
 
+use pxl_engine::eye;
 use pxl_render::gpu::ray::{Overwrites, TerrainWrite};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec_core::eye;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::object::preview;
@@ -30,7 +30,7 @@ use pxl_spec::bake::constant::EntryAt;
 /// made then and not again.
 static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 
-/// The area (pxl-spec-core `area::Area`): every cell's nine by its key
+/// The area (pxl-engine `area::Area`): every cell's nine by its key
 /// (`area::shard_key`), four a row; a row of none where none is declared,
 /// since a binding holds at least one, and a read past it is none.
 pub fn shards() -> &'static [[i32; 4]] {
@@ -53,7 +53,7 @@ pub fn shards() -> &'static [[i32; 4]] {
 /// domain/view/frame/resolution.rs `lattice`),
 /// then the pointer's preview as the world answers through it (domain/query/world.rs
 /// `previewing`), its cut to air and its left-out leaf, each X, Y, Z and the
-/// zoom (pxl-spec-core `eye`). None without a screen.
+/// zoom (pxl-engine `eye`). None without a screen.
 pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     lens::gpu_cast(

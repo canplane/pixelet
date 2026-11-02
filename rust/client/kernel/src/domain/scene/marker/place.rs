@@ -13,6 +13,7 @@ use super::arrangement::{cell_zoom, surface, Brick, Instance, Key, MarkerHit};
 use crate::domain::layer::place::carto_zoom;
 use crate::domain::query::{cell_zoom_at, World};
 use crate::domain::scene::marker::design::Design;
+use pxl_engine::wrap_idx;
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{stands, symbol_of, PLACE_FIRST, PLACE_LATTICE};
 use pxl_spec::space::coord::q3;
@@ -22,7 +23,6 @@ use pxl_spec::space::coord::zoom::{idx_of, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Cell};
-use pxl_spec_core::wrap_idx;
 
 /// A place read from a drawn brick: what Carto shows of it, the ground leaf
 /// cell it stands in, the finest camera grid cell its brick draws, which

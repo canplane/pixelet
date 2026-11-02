@@ -10,6 +10,9 @@ pub(crate) mod source;
 
 use crate::pyramid::Base;
 use crate::pyramid::Staged;
+use pxl_engine::clipmap::BRICK;
+use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
+use pxl_engine::way::SPANS;
 use pxl_spec::bake::fold::fold_terrain;
 use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
@@ -19,9 +22,6 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
-use pxl_spec_core::clipmap::BRICK;
-use pxl_spec_core::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
-use pxl_spec_core::way::SPANS;
 
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
 pub(crate) const CELL_U: f64 = units(GROUND.cell());

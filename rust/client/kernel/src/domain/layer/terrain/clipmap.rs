@@ -3,7 +3,7 @@
 //! The ground's cells as the kernel holds them: a clipmap level a zoom about each
 //! center a reader declares — the eye, the pivot where walking and editing
 //! happen, a destination being gone to — each as deep as its reader reads
-//! (pxl-spec-core `clipmap`). A brick at a zoom is held once, in a slot,
+//! (pxl-engine `clipmap`). A brick at a zoom is held once, in a slot,
 //! however many clipmap levels want it (`Slot`). It is filled from its tile as it
 //! lands: its four palette indices and its tile's samples handed to the GPU, which
 //! draws and lays its cells; they come back into `.fixed.terrain`, and the
@@ -11,21 +11,21 @@
 //! a brick still to come: one that enters asks its tile again
 //! (`TileCache::again`), which the browser's cache answers.
 
+use pxl_engine::area::{Area, Shard};
+use pxl_engine::clipmap::{
+    self, Bricks, Entry, Presence, BRICK, BRICK_CELLS, BRICK_SHIFT, CLIP_LEVELS, ENTRIES,
+    EYE_CLIP_LEVELS, FILL_CAP, FIRST_CELL, LEVELS, SLOTS,
+};
+use pxl_engine::fill;
+use pxl_engine::ground::word;
+use pxl_engine::wrap_idx;
+use pxl_engine::LEAF_CELL;
 use pxl_spec::bake::tile::terrain::{
     brick_lines, gpu_cells, GroundId, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
-use pxl_spec_core::area::{Area, Shard};
-use pxl_spec_core::clipmap::{
-    self, Bricks, Entry, Presence, BRICK, BRICK_CELLS, BRICK_SHIFT, CLIP_LEVELS, ENTRIES,
-    EYE_CLIP_LEVELS, FILL_CAP, FIRST_CELL, LEVELS, SLOTS,
-};
-use pxl_spec_core::fill;
-use pxl_spec_core::ground::word;
-use pxl_spec_core::wrap_idx;
-use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 use xpute_guest::mem::off_of_slice;
 use xpute_kit::collection::list::List;
@@ -136,7 +136,7 @@ struct Clipmap {
     /// Every clip level's entries, each its brick and its slot's state, then
     /// each clip level's first brick, a row shaped as an entry's, its brick the
     /// first and present while it is laid out, none while its center is not
-    /// (pxl-spec-core `clipmap::ORIGIN_AT`): the GPU's table as it is
+    /// (pxl-engine `clipmap::ORIGIN_AT`): the GPU's table as it is
     /// (`table`).
     entries: [Entry; (SLOTS + CLIP_LEVELS) as usize],
     /// The bricks the clip levels want, each in one slot (`Slot`).
@@ -257,7 +257,7 @@ fn planes() -> &'static mut Planes {
 }
 
 /// The eye's clip levels' levels over their bricks folded again, a level at a
-/// time, as the GPU folds its own (pxl-spec-core `clipmap::fold`; pxl-shader
+/// time, as the GPU folds its own (pxl-engine `clipmap::fold`; pxl-shader
 /// `fold_cs`), over the bricks as they are held here. The writers of a brick
 /// a clip level wants or its presence are `assign_slots`, a turn's step's,
 /// which folds before it returns, and the landings of a frame's read-back
@@ -280,13 +280,13 @@ fn fold(w: &mut Clipmap) {
 
 /// The GPU's ways' pool as the CPU mirrors it, the landed bricks' child groups
 /// at the GPU's entries, which a cursor reads as the cast reads the GPU's
-/// (pxl-spec-core `way::tree`).
+/// (pxl-engine `way::tree`).
 pub(in crate::domain) fn pool() -> &'static Mirror {
     mirror()
 }
 
 /// Slot `b`'s words as they came back: a brick's words whole, from its
-/// first, which pxl-spec-core reads a brick's words by (`fill::column_of`).
+/// first, which pxl-engine reads a brick's words by (`fill::column_of`).
 fn cells(b: u32) -> &'static [u32] {
     let at = (b * CELLS_ARR_BYTES / 4) as usize;
     &planes().cells[at..at + clipmap::BACK_WORDS as usize]
@@ -576,7 +576,7 @@ pub fn refold() {
 
 /// The slots this turn hands, nearest first, as many as a frame's fill takes:
 /// the eye's clip levels coarsest first, since a reader of a brick absent reads
-/// the coarser clip level's (pxl-spec-core `clipmap::step`), then the pivot's
+/// the coarser clip level's (pxl-engine `clipmap::step`), then the pivot's
 /// and a destination's; in a clip level by how far its brick lies from the
 /// center. A brick another clip level listed first is not listed again. Only a
 /// brick whose tile can hand it now: one waiting on its tile does not hold a
@@ -670,7 +670,7 @@ pub fn eye_entries(cell: Zoom) -> Option<[Entry; ENTRIES as usize]> {
 
 /// The clip levels' entries and their first bricks, as the GPU's cast reads
 /// them (pxl-shader `World::present`, `World::origin`): a row an entry
-/// (pxl-spec-core `clipmap::Entry`), then a row a clip level
+/// (pxl-engine `clipmap::Entry`), then a row a clip level
 /// (`clipmap::ORIGIN_AT`).
 pub fn table() -> &'static [i32] {
     let rows = &clipmap().entries[..];
@@ -817,11 +817,11 @@ pub fn fill(tile: Tile, from: TileContent, write: &mut dyn FnMut(BrickFill<'_>) 
     rest(w)
 }
 
-/// The clip levels as the CPU holds them, for pxl-spec-core's one reading of a
+/// The clip levels as the CPU holds them, for pxl-engine's one reading of a
 /// cell (`clipmap::step`, `clipmap::bound_over`): each brick's columns, levels
 /// and ways' tree's root as the GPU drew them, read back (its tree's child
 /// groups in the pool's mirror, `pool`), the eye's clip levels' levels over
-/// them folded here (`fold`); and the service area they end at (pxl-spec-core
+/// them folded here (`fold`); and the service area they end at (pxl-engine
 /// `area::Area`).
 #[derive(Clone, Copy)]
 pub(in crate::domain) struct CpuClipmap;

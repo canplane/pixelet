@@ -1,7 +1,7 @@
 // pxl-render/gpu/cloud.rs
 
 //! The cloud sheets, altocumulus and cirrus, each a plane drawn over the
-//! world's pass against its depth, both reading the cloud field (`pxl-spec-core cloud.rs`) as a tile baked once
+//! world's pass against its depth, both reading the cloud field (`pxl-engine cloud.rs`) as a tile baked once
 //! per device.
 //! The cumulus is drawn as decor is (`pxl-kernel domain/scene/environment/cloud.rs`).
 
@@ -18,10 +18,10 @@ use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::look::environment::ENV_SKY;
+use pxl_engine::cloud::{drift, LATTICE_CNT};
+use pxl_engine::param::cloud::LATTICE_SHAMT;
+use pxl_engine::UNIT_ZOOM;
 use pxl_spec::space::coord::world::EXTENT;
-use pxl_spec_core::cloud::{drift, LATTICE_CNT};
-use pxl_spec_core::param::cloud::LATTICE_SHAMT;
-use pxl_spec_core::UNIT_ZOOM;
 
 const _: () = assert!(
     EXTENT[0] == UNIT_ZOOM && EXTENT[1] == UNIT_ZOOM,

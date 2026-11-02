@@ -1,5 +1,5 @@
 // Value noise over the cloud field's hash, `lattice_hash`, which build.rs
-// writes from pxl-spec-core cloud.rs, where the cumulus draws its cells from
+// writes from pxl-engine cloud.rs, where the cumulus draws its cells from
 // it on the CPU.
 
 // Wraps at `mask + 1`, the lattice's cnt across the world, so the noise wraps with the map.

@@ -52,9 +52,9 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;
+use pxl_engine::way;
 use pxl_spec::bake::separation::{footprint as line_footprint, Form};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
-use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, Part, PartId};
@@ -66,7 +66,7 @@ use crate::separation::{Line, Reader, Solution, WayRange};
 use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
 
-/// The tile's scale: Arnis's meters in leaf cells (pxl-spec-core
+/// The tile's scale: Arnis's meters in leaf cells (pxl-engine
 /// `cells_of_m`), at the tile's `Frame::per_m`.
 #[derive(Clone, Copy)]
 struct Scale {
@@ -75,7 +75,7 @@ struct Scale {
 
 impl Scale {
     fn c(self, m: f64) -> i32 {
-        pxl_spec_core::cells_of_m(m as f32, self.per_m)
+        pxl_engine::cells_of_m(m as f32, self.per_m)
     }
 }
 
@@ -525,7 +525,7 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
 }
 
 /// The cells about one whose centers lie within `radius` cells of its own, as
-/// a way covers them (pxl-spec-core `covers`, here its distance to its own).
+/// a way covers them (pxl-engine `covers`, here its distance to its own).
 fn disk(radius: f32) -> Vec<[i64; 2]> {
     let r = libm::ceilf(radius) as i64;
     (-r..=r)

@@ -36,10 +36,10 @@ use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::Line;
 use crate::domain::query::decor::intersect::{box_extent, intersect};
-use pxl_spec_core::area::{self, Shard};
-use pxl_spec_core::cast;
-use pxl_spec_core::clipmap::Lookup;
-use pxl_spec_core::overwrite::{self, NodeSlot};
+use pxl_engine::area::{self, Shard};
+use pxl_engine::cast;
+use pxl_engine::clipmap::Lookup;
+use pxl_engine::overwrite::{self, NodeSlot};
 
 /// One ray's decor tests, carried along its ground walk.
 pub(super) struct DecorRay {
@@ -88,7 +88,7 @@ fn finest(fits: impl Fn(f64) -> bool) -> Zoom {
 
 /// What is placed in the 27 nodes about the node a striking walk is at, at
 /// each zoom it went through: the objects' tree's cursors there
-/// (pxl-spec-core `overwrite::NodeSlot`), each zoom's the children of the zoom
+/// (pxl-engine `overwrite::NodeSlot`), each zoom's the children of the zoom
 /// over's, as a node's neighbors are its parent's neighbors' children
 /// (Samet 1989, neighbor finding). A walk enters a node through its
 /// parent, so each zoom's is stepped from the one over in 27 `child` reads,
@@ -165,7 +165,7 @@ impl Around {
 
     /// The 3 × 3 columns about `(zoom, c)` read at its tile's cells: each
     /// column's line off its parent column's (`line_under`), its cells found
-    /// from where its parent column's were (pxl-spec-core `clipmap::step`),
+    /// from where its parent column's were (pxl-engine `clipmap::step`),
     /// and its relief's highest, read once for every node under it. A walk
     /// enters a node through its parent, so each zoom's is stepped from the
     /// one over's, never walked from the top.

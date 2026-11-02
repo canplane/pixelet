@@ -9,6 +9,7 @@
 //! versions it names are the client's, which reads a tile under the one that
 //! serves it.
 
+use pxl_engine::area::{self, Area};
 use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_sharded, key};
 use pxl_spec::space::coord::world;
@@ -16,13 +17,12 @@ use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
-use pxl_spec_core::area::{self, Area};
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
 struct Source {
     top_zoom: Zoom,
-    /// The area at `SHARD_ZOOM` (pxl-spec-core `area::Area`): every cell's
+    /// The area at `SHARD_ZOOM` (pxl-engine `area::Area`): every cell's
     /// nine by its key (`area::shard_key`), none beside no served one.
     nine: Vec<u16>,
     /// The pyramid's nodes from zoom 0 to `SHARD_ZOOM`, each where its zoom
@@ -93,7 +93,7 @@ pub fn past_at([x, y]: [f64; 2]) -> bool {
     area::past(&ServiceArea, leaf)
 }
 
-/// The service area as pxl-spec-core's rules read it: the declared source's
+/// The service area as pxl-engine's rules read it: the declared source's
 /// shards, and no end before one is declared.
 pub struct ServiceArea;
 
@@ -165,7 +165,7 @@ fn parse<'a>(
     for &[x, y] in &covered {
         for k in 0..9 {
             let n = [
-                pxl_spec_core::wrap_idx(SHARD_ZOOM, x + k % 3 - 1),
+                pxl_engine::wrap_idx(SHARD_ZOOM, x + k % 3 - 1),
                 y + k / 3 - 1,
             ];
             let key = area::shard_key(n);

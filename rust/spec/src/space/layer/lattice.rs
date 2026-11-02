@@ -12,9 +12,9 @@ use crate::space::hierarchy::tree::{
 };
 
 /// A lattice's integer core — its zooms, its cells' indices, the ground's —
-/// is pxl-spec-core's, which a GPU reads tiles by too; placing it in the
+/// is pxl-engine's, which a GPU reads tiles by too; placing it in the
 /// world is here (`Cells`).
-pub use pxl_spec_core::lattice::{Lattice, GROUND, TILE_CELLS};
+pub use pxl_engine::lattice::{Lattice, GROUND, TILE_CELLS};
 
 /// The coarsest zoom `lattice`'s tiles are read at: where it reads the top's
 /// ground cells, the coarsest the camera grid draws. A tile coarser is one no

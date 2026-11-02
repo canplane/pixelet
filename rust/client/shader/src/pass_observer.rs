@@ -4,7 +4,7 @@
 //! `Observer`), chosen by the head the pass is handed: one entry a pass, so
 //! a pass is one module whichever casts it (beam.rs, raster.rs).
 
-use pxl_spec_core::cast::Detail;
+use pxl_engine::cast::Detail;
 
 use crate::beam::Words;
 use crate::eye::Eye;
@@ -12,7 +12,7 @@ use crate::observer::{Aim, Level, Observer};
 use crate::light::{self, Map, Head};
 
 /// The observer of a pass both take, read off the head it is handed
-/// (pxl-spec-core `light::HEAD_SIZE`): the shadow map where the head names
+/// (pxl-engine `light::HEAD_SIZE`): the shadow map where the head names
 /// one, else the eye, whose head is all zero. Each call is its observer's;
 /// no walk asks which, so the walk is one in the module whichever casts.
 /// Both walk the same world, its palette indices too, which only what a hit is drawn

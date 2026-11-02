@@ -12,8 +12,8 @@ const _: () = assert!(
     "a height in i16 ground cells is the world's height"
 );
 /// A leaf's elevation samples and their padding, which the bake draws its
-/// cells' heights off (pxl-spec-core).
-pub use pxl_spec_core::ground::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+/// cells' heights off (pxl-engine).
+pub use pxl_engine::ground::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 
 pub use super::object::OBJECT_TIERS;
 

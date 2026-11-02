@@ -5,20 +5,20 @@
 
 use super::*;
 use crate::sys;
+use pxl_engine::fill;
+use pxl_engine::ground::word;
+use pxl_engine::overwrite::Columns;
+use pxl_engine::way::tree;
+use pxl_engine::way::tree::Read;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain;
-use pxl_spec_core::fill;
-use pxl_spec_core::ground::word;
-use pxl_spec_core::overwrite::Columns;
-use pxl_spec_core::way::tree;
-use pxl_spec_core::way::tree::Read;
 
 /// A tile as `hold` takes it: a cell's own palette index and its height, row by row
 /// from its first, and its lines.
 pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, Separation);
 
 /// What `hold` leaves held: the bricks' words up to their last that is
-/// not zero, the pool's child groups taken as records (pxl-spec-core
+/// not zero, the pool's child groups taken as records (pxl-engine
 /// `way::tree::lay`), the entries and the slots.
 struct Levels {
     cells: Vec<u32>,
@@ -39,7 +39,7 @@ const POOL_WORDS: usize = 16 * tree::POOL_CHILD_GROUPS as usize;
 
 /// The pool's mirror holding `records`, a brick's most at a time.
 fn mirrored(records: &[u32]) {
-    use pxl_spec_core::way::tree::{BRICK_CHILD_GROUPS, RECORD_WORDS};
+    use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, RECORD_WORDS};
     let m = mirror();
     m.clear();
     for child_groups in records.chunks((BRICK_CHILD_GROUPS * RECORD_WORDS) as usize) {
@@ -58,7 +58,7 @@ fn mirrored(records: &[u32]) {
 /// clip levels the eye's finest two again: per tile, a cell's own palette index
 /// and its height, row by row from its first, and its lines; each brick's
 /// columns, its tops and its ways' spans as its fill keeps them
-/// (`fill_columns`), and its levels as a GPU folds them (pxl-spec-core
+/// (`fill_columns`), and its levels as a GPU folds them (pxl-engine
 /// `fill::level`), read back. Built once a run for a center and its tiles
 /// (`BUILT`); each hold is its own copy, whatever a test does to it.
 pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
@@ -204,7 +204,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
                     fill::level(
                         &mut back,
                         0,
-                        &pxl_spec_core::fill::Scratch {
+                        &pxl_engine::fill::Scratch {
                             words: &scratch,
                             at: 0,
                         },
@@ -238,7 +238,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) -> Vec<u32> {
     records
 }
 
-/// A brick's columns as a GPU's fill writes them (pxl-spec-core
+/// A brick's columns as a GPU's fill writes them (pxl-engine
 /// `fill::heights`, `fill::spans`), over cells whose tops are given
 /// (`top`) rather than drawn off samples: each column's word, its top, into
 /// `back`; and the spans of its columns and its ring off its lines

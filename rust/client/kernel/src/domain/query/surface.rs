@@ -2,16 +2,16 @@
 
 //! The ground's surface: a cell's top and the asset its face is, read off
 //! the clip levels by the one reading of a column the GPU reads too
-//! (pxl-spec-core `clipmap::ground`), the wall where it is the wall. The
+//! (pxl-engine `clipmap::ground`), the wall where it is the wall. The
 //! ground's alone, so a part of the support (`support.rs`), where a walker
 //! starts looking for what it stands on, and read inside the query only:
 //! what a cell holds, a cave, a way, a bridge or what is placed included,
 //! is the world's answer (`World::asset_of`), never the ground's.
 
+use pxl_engine::area::Shard;
+use pxl_engine::clipmap::Lookup;
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec_core::area::Shard;
-use pxl_spec_core::clipmap::Lookup;
 
 use super::world::World;
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
@@ -34,7 +34,7 @@ impl World<'_> {
         let shard = Shard::UNKNOWN.at(&CpuClipmap, (cell, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {
-                top: f64::from(pxl_spec_core::SEA_LEVEL),
+                top: f64::from(pxl_engine::SEA_LEVEL),
                 asset: sentinel::unknown,
             }));
         }

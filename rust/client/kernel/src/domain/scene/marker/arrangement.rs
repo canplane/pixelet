@@ -37,6 +37,7 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::sys::sched::edge;
 use fnv::{FnvHashMap, FnvHashSet};
+use pxl_engine::clipmap::BRICK_SHIFT;
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -45,7 +46,6 @@ use pxl_spec::space::coord::world::BOUNDS;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::clipmap::BRICK_SHIFT;
 
 /// A brick of the eye's clip levels the markers are read over, by its zoom
 /// and place, X running on round the world as the view's frame does

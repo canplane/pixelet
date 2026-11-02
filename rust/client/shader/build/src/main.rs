@@ -36,7 +36,7 @@ fn main() {
     // `textureDimensions`): the rays are as large as the surface they lie on.
     // Vulkan 1.3 is the SPIR-V rust-gpu emits for its naga target. A check
     // that fails (a bound, an overflow) is unreachable, not an early return:
-    // pxl-spec-core's rule is that nothing aborts, so the branch is dead by
+    // pxl-engine's rule is that nothing aborts, so the branch is dead by
     // contract and spirv-opt drops it; where one is reached after all, the
     // invocation runs on with WGSL's defined behaviour for the access.
     let result = SpirvBuilder::new(shader, "spirv-unknown-vulkan1.3")

@@ -1,15 +1,15 @@
 // pxl-kernel/domain/layer/terrain/mirror.rs
 
-//! The GPU's ways' pool as the CPU mirrors it (pxl-spec-core `way::tree`):
+//! The GPU's ways' pool as the CPU mirrors it (pxl-engine `way::tree`):
 //! each landing brick's child groups laid at the ids the GPU gave them
 //! (clipmap.rs `on_resident`), which a cursor reads as the cast reads the GPU's.
 //! On the heap, a chunk at a time as the ids laid reach past it: the GPU's
 //! stack hands ids from the lowest up (pxl-shader `TAKEN_CNT`), so the mirror
 //! holds the child groups up to the most ever taken at once, a child group's sixteen
-//! words each, never past the pool's most (pxl-spec-core way/tree.rs `POOL_CHILD_GROUPS`).
+//! words each, never past the pool's most (pxl-engine way/tree.rs `POOL_CHILD_GROUPS`).
 
-use pxl_spec_core::overwrite::Columns;
-use pxl_spec_core::way::tree::{self, Pool, BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS, RECORD_WORDS};
+use pxl_engine::overwrite::Columns;
+use pxl_engine::way::tree::{self, Pool, BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS, RECORD_WORDS};
 use xpute_guest::global::Global;
 
 /// A chunk's child groups, 64 KiB of them: what the mirror grows by.
@@ -48,7 +48,7 @@ pub fn mirror() -> &'static mut Mirror {
 }
 
 impl Mirror {
-    /// A brick's records (pxl-spec-core `way::tree::lay`) laid at their
+    /// A brick's records (pxl-engine `way::tree::lay`) laid at their
     /// child groups' ids, the chunks they reach grown first; nothing laid where
     /// one lies past the cap or the heap refuses a chunk, which the brick's
     /// landing takes as its tree refused or waiting on the heap

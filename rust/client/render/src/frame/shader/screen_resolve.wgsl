@@ -28,7 +28,7 @@ struct Resolve {
 // jitter moved there since, and the frame takes its even share of the
 // sequence from the first still frame, which takes it whole, so the frame it
 // changed in counts for none of what stands: `TILE_JITTERS` still frames
-// (pxl-spec-core `screen::CLAIMED_FOR`), this view's sequence alone.
+// (pxl-engine `screen::CLAIMED_FOR`), this view's sequence alone.
 
 // How far, in the spread of the pixels about it, what the frames before
 // left may lie from their mean.

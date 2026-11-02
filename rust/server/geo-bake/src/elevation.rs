@@ -201,7 +201,7 @@ impl Raster {
     }
 
     /// Leaf `tile`'s padded grid of heights, in leaf cells at its scale
-    /// (pxl-spec-core `cells_of_m`, pxl-spec `Frame::per_m`).
+    /// (pxl-engine `cells_of_m`, pxl-spec `Frame::per_m`).
     pub(crate) fn tile_grid(
         &self,
         client: &mut Client,
@@ -312,7 +312,7 @@ impl Raster {
                 // sea: a shard's apron covers every pad, so none lacks a shard.
                 if let Some(v) = src.sample(px, py) {
                     grid[ele_idx(c as u32, (span - 1 - r) as u32)] =
-                        pxl_spec_core::cells_of_m(v, per_m) as i16;
+                        pxl_engine::cells_of_m(v, per_m) as i16;
                 }
             }
         }

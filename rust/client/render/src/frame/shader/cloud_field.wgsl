@@ -2,7 +2,7 @@
 // and `cloud_tile_sampler` in a group of its own.
 
 // A lattice unit is `CLOUD_LATTICE_CELLS` cells, which build.rs writes from
-// pxl-spec-core param.rs `param::cloud::LATTICE_SHAMT`.
+// pxl-engine param.rs `param::cloud::LATTICE_SHAMT`.
 
 // On the map under it, so a cloud stays over its ground wherever the eye is.
 fn cloud_lattice(point: vec3f) -> vec2f {

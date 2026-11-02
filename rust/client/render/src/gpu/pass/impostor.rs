@@ -26,7 +26,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
 
 /// Impostors span less than the model tier's floor, a camera grid cell
-/// (pxl-spec-core `grid::CELLS_A_RAD`), 45 drawn pixels on a view 2160
+/// (pxl-engine `grid::CELLS_A_RAD`), 45 drawn pixels on a view 2160
 /// CSS pixels high at ratio 2, so this is several times any one's drawn
 /// size.
 const IMPOSTOR_SIZE: u32 = 128;
@@ -285,7 +285,7 @@ impl ImpostorPass {
     }
 
     /// The impostors the GPU generated, an indirect draw a group whose layer
-    /// is drawn (pxl-spec-core `generation::drawn`, a group's impostors its region
+    /// is drawn (pxl-engine `generation::drawn`, a group's impostors its region
     /// `2·group + 1`).
     pub fn draw_generated(
         &self,

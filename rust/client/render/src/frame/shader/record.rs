@@ -75,7 +75,7 @@ pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 24;
 pub const PIPELINE_MARKER_REGION: u32 = 25;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/pass/debug.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 26;
-/// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
+/// The eye's rays, opaque at their depth (pxl-engine ray.rs).
 pub const PIPELINE_SCREEN_RAY: u32 = 27;
 /// Decor's and the actors' depth from the light, and the world's laid in
 /// before them, into the light's shadow map (gpu/shadow.rs).
@@ -175,7 +175,7 @@ use crate::frame::draw::{
     PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
-use pxl_spec_core::param::light;
+use pxl_engine::param::light;
 
 const fn f(v: f32) -> u32 {
     v.to_bits()
@@ -231,7 +231,7 @@ const fn blended(shader: u32, cull: u32) -> Head {
     }
 }
 
-/// The shadow map's casters' alike, raster and cast (pxl-spec-core `param::light::SLOPE_BIAS`).
+/// The shadow map's casters' alike, raster and cast (pxl-engine `param::light::SLOPE_BIAS`).
 const DEPTH_SLOPE_BIAS: f32 = light::SLOPE_BIAS;
 
 /// Depth alone: plain less-than, no fragment stage, both sides, pushed back

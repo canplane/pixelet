@@ -33,31 +33,31 @@ pub const SHADER_IMPOSTOR: u32 = 20;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 21;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 22;
 pub const SHADER_MARKER_REGION: u32 = 23;
-/// The eye's rays drawn at their pixels (pxl-spec-core ray.rs).
+/// The eye's rays drawn at their pixels (pxl-engine ray.rs).
 pub const SHADER_SCREEN_RAY: u32 = 24;
 /// The eye's rays cast on the GPU into the world surface's rays, generated from
-/// pxl-spec-core's descent (pxl-tool bin/shader_wgsl.rs): its one compute entry.
+/// pxl-engine's descent (pxl-tool bin/shader_wgsl.rs): its one compute entry.
 pub const SHADER_CAST: u32 = 25;
 /// Each newly held brick's levels over its columns, a level a dispatch,
-/// generated with the cast from pxl-spec-core's `fill::level` and
+/// generated with the cast from pxl-engine's `fill::level` and
 /// `clipmap::join`: its one compute entry.
 pub const SHADER_BOUND: u32 = 26;
 /// Each newly held brick's columns' ground tops off its samples,
-/// generated with the cast from pxl-spec-core's `ground::height`: its one
+/// generated with the cast from pxl-engine's `ground::height`: its one
 /// compute entry.
 pub const SHADER_HEIGHT: u32 = 27;
 /// The decor the ground generates in the eye's clip levels, generated with the
-/// cast from pxl-spec-core's `scatter`: its one compute entry.
+/// cast from pxl-engine's `scatter`: its one compute entry.
 pub const SHADER_GENERATION: u32 = 28;
 /// What `SHADER_GENERATION` and placed decor leave, sized for the screen and
 /// counted a draw region each; the regions laid out with their indirect
-/// args; each drawn compacted into the decor's instances: pxl-spec-core
+/// args; each drawn compacted into the decor's instances: pxl-engine
 /// `generation::drawn`.
 pub const SHADER_GENERATION_CNT: u32 = 29;
 pub const SHADER_GENERATION_ARGS: u32 = 30;
 pub const SHADER_GENERATION_COMPACT: u32 = 31;
 /// Each newly held terrain frame's ways, its columns' spans off its lines,
-/// generated with the cast from pxl-spec-core's `ways`: its one compute
+/// generated with the cast from pxl-engine's `ways`: its one compute
 /// entry.
 pub const SHADER_WAY: u32 = 32;
 /// Which eye slots' decor generates again this frame, listed for
@@ -65,12 +65,12 @@ pub const SHADER_WAY: u32 = 32;
 /// compute entry.
 pub const SHADER_GENERATION_MARK: u32 = 33;
 /// The eye's clip levels folded over their bricks, generated with the cast
-/// from pxl-spec-core's `clipmap::fold`: its one compute entry.
+/// from pxl-engine's `clipmap::fold`: its one compute entry.
 pub const SHADER_FOLD: u32 = 34;
 /// A light's share of the air's volume, a column of froxels a workgroup
 /// (atmos_froxel.wgsl): its one compute entry.
 pub const SHADER_ATMOS_FROXEL: u32 = 35;
-/// Each handed brick's ways as a tree of cells in one pool (pxl-spec-core
+/// Each handed brick's ways as a tree of cells in one pool (pxl-engine
 /// `way::tree`), generated with the cast: a re-filled brick's old child groups
 /// given back, its tree built off the pool's stack, the child groups its build
 /// gave back pushed after: a compute entry each.
@@ -78,24 +78,24 @@ pub const SHADER_WAY_FREE: u32 = 36;
 pub const SHADER_WAY_TREE: u32 = 37;
 pub const SHADER_WAY_RETURN: u32 = 38;
 /// The camera grid's beam rays, a thread a corner, and where each cell's
-/// pixels start off them, generated with the cast from pxl-spec-core's
+/// pixels start off them, generated with the cast from pxl-engine's
 /// `beam`: a compute entry each.
 pub const SHADER_BEAM: u32 = 39;
 pub const SHADER_CELL: u32 = 40;
 /// The pixels the cast's reading walk missed, walked again writing the
-/// observed pyramid, and the pyramid forgotten (pxl-spec-core `pyramid`): a
+/// observed pyramid, and the pyramid forgotten (pxl-engine `pyramid`): a
 /// compute entry each.
 pub const SHADER_MISS: u32 = 41;
 pub const SHADER_FORGET: u32 = 42;
 /// The samples, a thread each, resumed from their cells' starts and walked
-/// to the cells the pixels about them take (pxl-spec-core `beam::Grid::samples`):
+/// to the cells the pixels about them take (pxl-engine `beam::Grid::samples`):
 /// a compute entry.
 pub const SHADER_SAMPLE: u32 = 43;
 /// The world's depth from the light into its clipmap, generated with the cast
-/// from pxl-spec-core's `light`: every slot taking the visible sample, a
+/// from pxl-engine's `light`: every slot taking the visible sample, a
 /// workgroup a tile, a compute entry; that depth laid into the map
 /// (light_map.wgsl, gpu/shadow.rs); and the slots that took none walked
-/// apart (pxl-spec-core `light::misses_at`), a compute entry of its own.
+/// apart (pxl-engine `light::misses_at`), a compute entry of its own.
 pub const SHADER_LIGHT: u32 = 44;
 pub const SHADER_LIGHT_MAP: u32 = 45;
 pub const SHADER_LIGHT_MISS: u32 = 46;
@@ -104,20 +104,20 @@ pub const SHADER_LIGHT_MISS: u32 = 46;
 pub const SHADER_AO_APPLY: u32 = 47;
 /// The camera grid's cells over the screen (camera_grid.wgsl).
 pub const SHADER_CAMERA_GRID: u32 = 48;
-/// The samples' hits handed to the rasterizer (pxl-spec-core `raster`):
+/// The samples' hits handed to the rasterizer (pxl-engine `raster`):
 /// their boxes written, a compute entry; and the boxes drawn, the nearest
 /// face a pixel's ray enters kept with its sample (raster.wgsl), which the
 /// cast's pixels read (`SHADER_CAST`).
 pub const SHADER_SAMPLE_BOX: u32 = 49;
 pub const SHADER_RASTER: u32 = 50;
 /// The pixels the cast's reading walk missed, walked again from their list
-/// (pxl-spec-core `pyramid::MARKS_AT`), a thread each: a compute entry.
+/// (pxl-engine `pyramid::MARKS_AT`), a thread each: a compute entry.
 pub const SHADER_MISS_LIST: u32 = 51;
-/// What lies about each box's face, asked once a box (pxl-spec-core
+/// What lies about each box's face, asked once a box (pxl-engine
 /// `raster::ARGS_FACES`): a compute entry.
 pub const SHADER_FACE: u32 = 52;
 /// The tiles of the light's box its receivers stand on in a cast
-/// (pxl-spec-core `light::stands_at`): where the eye's rays meet the world, and
+/// (pxl-engine `light::stands_at`): where the eye's rays meet the world, and
 /// where the decor and the actors drawn stand; then those they read
 /// (`light::reads_at`): compute entries.
 pub const SHADER_LIGHT_MARK: u32 = 53;
@@ -159,7 +159,7 @@ pub const SHADER_SCREEN_BOUND: u32 = 66;
 /// tiles (skinned_place.wgsl, tile_mark.wgsl).
 pub const SHADER_SKINNED_MARK: u32 = 67;
 /// The tiles of the light's box the box slid onto, or slid into another
-/// band (pxl-spec-core `Light::keeps`): a compute entry.
+/// band (pxl-engine `Light::keeps`): a compute entry.
 pub const SHADER_LIGHT_SLIDE: u32 = 68;
 /// Decor, an impostor, the location indicator's zone and its beacon where each
 /// was and where it is, their fragments marking their tiles (tile_mark.wgsl).
@@ -168,7 +168,7 @@ pub const SHADER_IMPOSTOR_MARK: u32 = 70;
 pub const SHADER_LOCATION_ZONE_MARK: u32 = 71;
 pub const SHADER_LOCATION_BEACON_MARK: u32 = 72;
 /// The missed pixels' hits whose faces are asked once a square of them,
-/// the one of each square that asks listed (pxl-spec-core `beam::HIT_WORDS`), and
+/// the one of each square that asks listed (pxl-engine `beam::HIT_WORDS`), and
 /// the faces asked put at their pixels: compute entries.
 pub const SHADER_HIT_LEAD: u32 = 73;
 pub const SHADER_HIT_FACES: u32 = 74;

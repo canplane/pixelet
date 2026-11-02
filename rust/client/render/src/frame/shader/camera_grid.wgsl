@@ -4,7 +4,7 @@
 // of one solid angle, a cell's angle squared (`frame_cell`, pxl-spec
 // space/camera/grid.rs `CELL`), in rings a cell apart about the
 // optical axis, each ring cut into as many as fit, so a cell here holds the
-// area the eye decides a cell's zoom by (pxl-spec-core grid.rs). Its lines
+// area the eye decides a cell's zoom by (pxl-engine grid.rs). Its lines
 // are `GRID_COLOR` (debug_look.json).
 
 struct VertexOut {

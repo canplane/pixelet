@@ -23,16 +23,16 @@ pub const PALETTE_COLUMN: usize = 4 * GROUND_COLUMN;
 pub const ELE_COLUMN: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 use crate::asset::cube::sentinel;
 use crate::space::layer::lattice::GROUND;
-use pxl_spec_core::area::Shard;
-use pxl_spec_core::clipmap;
-use pxl_spec_core::clipmap::Brick;
+use pxl_engine::area::Shard;
+use pxl_engine::clipmap;
+use pxl_engine::clipmap::Brick;
 /// Bins a side a tile's ways are cut into, each `1 << WAYS_SHIFT` cells a
 /// side, as a clip level's brick lays its lines by them (`brick_lines`).
-pub use pxl_spec_core::clipmap::{WAYS_ACROSS, WAYS_SHIFT};
-use pxl_spec_core::fill;
-use pxl_spec_core::ground;
-use pxl_spec_core::lattice;
-use pxl_spec_core::way;
+pub use pxl_engine::clipmap::{WAYS_ACROSS, WAYS_SHIFT};
+use pxl_engine::fill;
+use pxl_engine::ground;
+use pxl_engine::lattice;
+use pxl_engine::way;
 
 /// The most a packet takes: every column at its longest, a palette index a cell four
 /// and the separation at a record's room (`separation::MAX_LINES`,
@@ -49,7 +49,7 @@ pub(crate) const MAX_PKT_BYTES: usize = {
     HEADER + branch(4) + seq(ELE_COLUMN * 2) + seq(PALETTE_COLUMN) + SCALAR + separation
 };
 
-/// The most entries a clip level's brick holds of the ways (pxl-spec-core
+/// The most entries a clip level's brick holds of the ways (pxl-engine
 /// `clipmap::WAYS_BRICK_SEGMENTS`); a tile past it fails its bake
 /// (`ways_fit`).
 pub const WAYS_BRICK_SEGMENTS: usize = clipmap::WAYS_BRICK_SEGMENTS as usize;
@@ -70,7 +70,7 @@ pub struct Ground {
 /// a slab, a bore, a pier — is not here. The bake holds what goes on the
 /// wire; a client what it reads of a tile as a whole, its lines. Its cells
 /// a client holds in its clip levels, drawn by a GPU off the samples, and its
-/// ways there off the lines (pxl-spec-core `clipmap`).
+/// ways there off the lines (pxl-engine `clipmap`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainTile {
     pub ground: Ground, // a class a cell: the source rasterized, or its fold; a client's void tile's alone
@@ -104,7 +104,7 @@ pub fn ways_fit(separation: &Separation, brick: u32) -> Result<(), ([u32; 2], us
 }
 
 /// The lines of the clip level's brick at `place` (in bricks) of `tile`, as
-/// the GPU asks them (pxl-spec-core clipmap.rs `LINES_*`), into `out`, a
+/// the GPU asks them (pxl-engine clipmap.rs `LINES_*`), into `out`, a
 /// brick's `LINES_WORDS`: the tile's header, each bin's entries, and the
 /// segments a bin reaches, each once, in their lines' order — the reach
 /// `ways_fit` counts, so none holds more than `WAYS_BRICK_SEGMENTS`. The
@@ -117,10 +117,8 @@ pub fn brick_lines(
     scratch: &mut [(u32, u32)],
     out: &mut [u32],
 ) -> usize {
-    use pxl_spec_core::clipmap::{
-        BRICK, LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, WAYS_BINS,
-    };
-    use pxl_spec_core::way::{header, HEADER_WORDS, SEGMENT_WORDS};
+    use pxl_engine::clipmap::{BRICK, LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, WAYS_BINS};
+    use pxl_engine::way::{header, HEADER_WORDS, SEGMENT_WORDS};
     xpute_kit::ensure!(out.len() == LINES_WORDS as usize, ENOTRECOVERABLE);
     xpute_kit::ensure!(scratch.len() == WAYS_BRICK_SEGMENTS, ENOTRECOVERABLE);
     let bins = BRICK >> WAYS_SHIFT;
@@ -172,7 +170,7 @@ pub fn brick_lines(
     LINES_SEGMENTS_AT as usize + n * SEGMENT_WORDS
 }
 
-/// A clip level's brick as its fill reads it (pxl-spec-core `clipmap::Brick`):
+/// A clip level's brick as its fill reads it (pxl-engine `clipmap::Brick`):
 /// its cells' zoom, place in its tile and first cell (`first_cell`), inside
 /// the area, its lines as `brick_lines` lays them, cell `i`'s own palette
 /// index off its four (`palette_indices`), and column `c`'s height,
@@ -214,7 +212,7 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for TileBrick<'_, L, H> {
 
 /// Cell `i` of the brick at `place` (in bricks), in its tile's cells.
 fn brick_cell(place: [u32; 2], i: u32) -> [u32; 2] {
-    use pxl_spec_core::clipmap::{of_idx, BRICK};
+    use pxl_engine::clipmap::{of_idx, BRICK};
     let [x, y] = of_idx(i);
     [place[0] * BRICK + x, place[1] * BRICK + y]
 }
@@ -252,7 +250,7 @@ fn laid<'a>(
 }
 
 /// The clip level's brick at `place` (in bricks) of `tile` handed into
-/// `record` as a client hands it to a GPU's fill (pxl-spec-core clipmap.rs
+/// `record` as a client hands it to a GPU's fill (pxl-engine clipmap.rs
 /// `HANDED_WORDS`): its palette indices four a cell (`gpu_cells`), its tile's padded
 /// samples, and its lines (`brick_lines`, with `scratch`); the rest zero.
 fn record(
@@ -262,7 +260,7 @@ fn record(
     scratch: &mut [(u32, u32)],
     record: &mut [u32],
 ) {
-    use pxl_spec_core::clipmap::{BRICK_CELLS, ELE_AT, LINES_AT, LINES_WORDS, PALETTE_AT};
+    use pxl_engine::clipmap::{BRICK_CELLS, ELE_AT, LINES_AT, LINES_WORDS, PALETTE_AT};
     record.fill(0);
     for i in 0..BRICK_CELLS {
         let at = brick_cell(place, i);
@@ -286,7 +284,7 @@ fn record(
 
 /// The clip level's brick at `place` (in bricks) of `tile`, handed into
 /// `handed` (`record`) and filled into `column`, its spans into `kept`, its
-/// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-spec-core
+/// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-engine
 /// `fill::brick`): the most spans a column makes.
 pub(crate) fn brick_spans(
     tile: Tile,
@@ -310,19 +308,19 @@ pub(crate) fn brick_spans(
 /// The first cell at `cell`, its cells' zoom, of the clip level's brick at
 /// `place` (in bricks) of `tile`, as the world names it.
 pub fn first_cell(tile: Tile, cell: Zoom, place: [u32; 2]) -> [i32; 2] {
-    use pxl_spec_core::clipmap::BRICK;
+    use pxl_engine::clipmap::BRICK;
     let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * BRICK) as i32);
-    [pxl_spec_core::wrap_idx(cell, first[0]), first[1]]
+    [pxl_engine::wrap_idx(cell, first[0]), first[1]]
 }
 
 /// The child groups the clip levels' trees take wherever the eye is, of the
-/// pool (pxl-spec-core `way::tree::POOL_CHILD_GROUPS`): each eye's clip level's
+/// pool (pxl-engine `way::tree::POOL_CHILD_GROUPS`): each eye's clip level's
 /// most at its cells (`worst`, the most any placement of it holds), the others'
 /// each the most of any, and the bricks handed a frame each the most a brick
 /// takes before its fold gives child groups back (`taken`). A brick without
 /// ways takes none.
 pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
-    use pxl_spec_core::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FILL_CAP, FIRST_CELL};
+    use pxl_engine::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FILL_CAP, FIRST_CELL};
     let cells = FIRST_CELL..FIRST_CELL + EYE_CLIP_LEVELS;
     let most = cells.clone().map(&worst).max().unwrap_or(0);
     cells.map(worst).sum::<u64>()
@@ -336,7 +334,7 @@ pub fn pool_needs(worst: impl Fn(Zoom) -> u64, taken: u64) -> u64 {
 /// of which fills no cell there (`way::fills_any`) is none at that zoom,
 /// and is not stored.
 pub fn drawn(tile: Tile, held: TerrainTile) -> TerrainTile {
-    use pxl_spec_core::clipmap::{BRICK, LINES_WORDS};
+    use pxl_engine::clipmap::{BRICK, LINES_WORDS};
     let lines = &held.separation;
     let bricks = TILE_CELLS / BRICK;
     let (mut scratch, mut words) = (
@@ -411,7 +409,7 @@ pub enum Unfit {
 }
 
 /// A brick as `fill_fit` filled and built it: its words and its kept
-/// spans (pxl-spec-core `fill::brick`), its cells' zoom, and its ways' tree
+/// spans (pxl-engine `fill::brick`), its cells' zoom, and its ways' tree
 /// in a pool of its own, its root word (`way::tree::root_word`) and the
 /// child groups its build took and holds.
 pub struct FilledBrick<'a> {
@@ -425,7 +423,7 @@ pub struct FilledBrick<'a> {
 }
 
 /// Each brick of `tile`'s clip levels filled (`brick_spans`) and its ways'
-/// tree built (pxl-spec-core `fill::tree`) as a client fills and builds
+/// tree built (pxl-engine `fill::tree`) as a client fills and builds
 /// them, row by row of its bricks, once, each handed to `each` as built
 /// with its index in the tile, which a proof reads (pxl-geo-bake
 /// bin/fill_digest.rs): the first brick that does not fit and why, else
@@ -435,8 +433,8 @@ pub fn fill_fit(
     held: &TerrainTile,
     mut each: impl FnMut(u32, &FilledBrick<'_>),
 ) -> Result<Fit, ([u32; 2], Unfit)> {
-    use pxl_spec_core::clipmap::{BRICK, BRICK_WORDS, HANDED_WORDS};
-    use pxl_spec_core::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES, SCRATCH_WORDS};
+    use pxl_engine::clipmap::{BRICK, BRICK_WORDS, HANDED_WORDS};
+    use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES, SCRATCH_WORDS};
     let mut fit = Fit::default();
     if held.separation.is_empty() {
         return Ok(fit);

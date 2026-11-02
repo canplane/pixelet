@@ -30,7 +30,7 @@ pub struct World<'a> {
     /// through decor.
     pub(super) decor: bool,
     /// Whether it is unplaced, nothing placed asked of it: the ground's alone
-    /// (pxl-spec-core `world::Inheritance::UNPLACED`).
+    /// (pxl-engine `world::Inheritance::UNPLACED`).
     pub(super) unplaced: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
     pub(super) hide: Option<EntryAt>,
@@ -71,7 +71,7 @@ impl<'a> World<'a> {
     }
 
     /// As it is unplaced: nothing placed and no preview's cuts asked of it,
-    /// the ground's alone, which decor generates on (pxl-spec-core
+    /// the ground's alone, which decor generates on (pxl-engine
     /// `generation::DecorQuery::column_surface`).
     pub(super) fn ground_only(self) -> World<'a> {
         World {

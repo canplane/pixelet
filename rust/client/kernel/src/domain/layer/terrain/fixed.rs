@@ -10,15 +10,15 @@
 //! brick's records, the renderer's (pxl-render gpu/ray/ground.rs
 //! `GroundBuffers::room`).
 
+use pxl_engine::clipmap::{BACK_WORDS, BRICK_CELLS, LINES_WORDS, WAYS_BRICK_SEGMENTS};
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::PALETTE_COLUMN;
-use pxl_spec_core::clipmap::{BACK_WORDS, BRICK_CELLS, LINES_WORDS, WAYS_BRICK_SEGMENTS};
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::mem::range::arr_bytes;
 use crate::sys::mem::range::OwnedRange;
+use pxl_engine::clipmap::SLOTS;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec_core::clipmap::SLOTS;
 
 /// `.fixed.terrain`, handed in at boot.
 pub static RANGE: OwnedRange = OwnedRange::new();
@@ -69,7 +69,7 @@ pub const SEPARATION_BYTES: u32 = separation_plane(SEPARATION_COLUMNS.len());
 
 /// One brick's cells as the GPU drew them, read back whole: its columns,
 /// a word a cell (its ground's top), then its levels, its cells as laid and
-/// its ways' tree's root (pxl-spec-core `clipmap::BACK_WORDS`).
+/// its ways' tree's root (pxl-engine `clipmap::BACK_WORDS`).
 pub const CELLS_BYTES: u32 = BACK_WORDS * 4;
 pub const CELLS_ARR_BYTES: u32 = arr_bytes(CELLS_BYTES as usize, 1);
 

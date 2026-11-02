@@ -32,9 +32,9 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::object::ext::{Ext, Pools, NONE};
 use crate::domain::layer::{Answer, Query};
 use crate::sys::sched::edge::request_world_tick;
+use pxl_engine::overwrite::{self, path, NodeSlot};
 use pxl_spec::object::ext::class_of;
 use pxl_spec::object::volume::fold;
-use pxl_spec_core::overwrite::{self, path, NodeSlot};
 
 /// The asset a placed cell holds, by its kind.
 #[derive(Clone, Debug, PartialEq)]
@@ -143,7 +143,7 @@ impl Leaf {
         }
     }
 
-    /// Its word in the tree (pxl-spec-core `overwrite::leaf_word`).
+    /// Its word in the tree (pxl-engine `overwrite::leaf_word`).
     pub(super) const fn word(self) -> u32 {
         overwrite::leaf_word(self.id as u32, self.ext as u32)
     }
@@ -158,7 +158,7 @@ const fn depth(zoom: Zoom) -> u32 {
     zoom + 1
 }
 
-/// The tree's columns as pxl-spec-core `overwrite` reads them, the CPU as a GPU.
+/// The tree's columns as pxl-engine `overwrite` reads them, the CPU as a GPU.
 pub struct Columns<'a>(&'a Tree);
 
 impl overwrite::Columns for Columns<'_> {
@@ -417,7 +417,7 @@ impl Store {
     }
 
     /// The node `at` at `SHARD_ZOOM` held as `word`, what its leaves fold to
-    /// (pxl-spec-core `overwrite::fold_word`), they not here: a branch whose
+    /// (pxl-engine `overwrite::fold_word`), they not here: a branch whose
     /// children hold nothing, so it is drawn as its fold from where its zoom
     /// or a coarser one is a cell, and nothing finer is met in it. Its cube.
     pub(crate) fn set_fold(&mut self, at: [i32; 3], word: u32) -> Aabb {
@@ -516,7 +516,7 @@ impl Cells<'_> {
 }
 
 impl Query for Store {
-    /// What a cube holds, its parent's handed down (pxl-spec-core `overwrite`);
+    /// What a cube holds, its parent's handed down (pxl-engine `overwrite`);
     /// a node over the ground's two axes is read under it.
     type Cursor = NodeSlot;
 

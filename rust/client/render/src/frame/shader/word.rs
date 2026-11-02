@@ -5,7 +5,7 @@
 //! (constant.wgsl's tail), a uniform's floats as its vec4s, and each
 //! uniform's fields as their accessors to the part that binds it.
 
-use pxl_spec_core::screen;
+use pxl_engine::screen;
 
 /// A draw's uniform (frame/draw.rs): its translation and what its pipeline
 /// reads past it.
@@ -114,7 +114,7 @@ uniform! {
         /// 1 where the shadow map is cast from the moon (`LIGHT_VIEW_PROJ`).
         SHADOW_MOON: F32 = 54,
         /// Where this frame's pixels sample the world, off their middles, in
-        /// clip units, X right and Y up: pxl-spec-core `eye::JITTER`'s offset
+        /// clip units, X right and Y up: pxl-engine `eye::JITTER`'s offset
         /// `j`, in drawn pixels with Y down, as (2 j.x / width, -2 j.y /
         /// height) of `VIEWPORT`. What is drawn into the world's color is
         /// moved against it (frame.wgsl `jittered`), the sky aimed along it.
@@ -164,7 +164,7 @@ uniform! {
         MOON_LIGHT: F32 = 31,
         /// As it reaches the air, against the sun's white.
         MOON_COLOR: Vec3 = 32,
-        /// Where the eye's rays end, in units (pxl-spec-core `eye::FAR`):
+        /// Where the eye's rays end, in units (pxl-engine `eye::FAR`):
         /// past it the land is the Earth's picture whole.
         DRAWN: F32 = 35,
         /// Lights the ground, never drawn: drawn, the sky went pale blue.
@@ -278,7 +278,7 @@ pub const AO_NOISE_SIDE: u32 = 128;
 /// A square of the depth's bound the propagation reads, its pixels a side
 /// (gpu/propagate.rs, screen_bound.wgsl, screen_propagate.wgsl).
 pub const BOUND_STEP: u32 = 4;
-/// A screen tile's squares a side (pxl-spec-core `screen::TILE`), a thread
+/// A screen tile's squares a side (pxl-engine `screen::TILE`), a thread
 /// each of the workgroup a tile both passes take: every square of a tile is
 /// set and read whatever its side.
 pub const BOUND_SQUARES: u32 = screen::TILE / BOUND_STEP;
@@ -308,7 +308,7 @@ pub const ATLAS_HALO: u32 = 4;
 /// its mesh's own.
 pub const BOX_XY_STEPS: u32 = 256;
 
-/// A box's vertices, two triangles each of its six faces (pxl-spec-core
+/// A box's vertices, two triangles each of its six faces (pxl-engine
 /// raster.rs `corner`, box.wgsl).
 pub const BOX_VERTICES: u32 = 36;
 

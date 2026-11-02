@@ -12,9 +12,9 @@
 //! observers take is one entry, its observer the one its head names
 //! (pass_observer.rs `PassObserver`), so a pass is one module whichever casts it.
 
-use pxl_spec_core::cast::{self, Detail, Trace, Query, Until};
-use pxl_spec_core::world::Inheritance;
-use pxl_spec_core::{beam, pyramid, raster, tally};
+use pxl_engine::cast::{self, Detail, Trace, Query, Until};
+use pxl_engine::world::Inheritance;
+use pxl_engine::{beam, pyramid, raster, tally};
 
 use crate::beam::{resume_walk, sample_put, BeamLine, Leaving, Words};
 use crate::pyramid::{add_tally, pyramid_at, Pyramid, Writing};
@@ -50,14 +50,14 @@ pub(crate) trait Observer {
     /// Where on its lattice a ray is aimed: the eye's tangents across and
     /// up, the map's slot.
     type At: Copy;
-    /// Its run of lanes in the tally (pxl-spec-core `tally::EYE`,
+    /// Its run of lanes in the tally (pxl-engine `tally::EYE`,
     /// `tally::LIGHT`).
     fn tally(&self) -> u32;
     /// Whether its walks write the cells a ray sees into the observed
     /// pyramid (pyramid.rs `Writing::assets`).
     fn assets(&self) -> bool;
     /// The passes its beam, its samples and its walks again write the
-    /// observed pyramid under (pxl-spec-core `pyramid::BEAM_PASS`).
+    /// observed pyramid under (pxl-engine `pyramid::BEAM_PASS`).
     fn passes(&self) -> [u32; 3];
     /// Whether its rays start apart, a line's nodes held from its own
     /// origin (`origin_of`); else every ray starts at one, a line's node

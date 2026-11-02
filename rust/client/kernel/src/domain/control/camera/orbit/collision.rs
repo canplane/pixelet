@@ -141,7 +141,7 @@ fn solid(at: &ViewPose, ground: Option<f64>) -> bool {
 /// Whether the eye at `eye` stands in a solid cell with air beside it or
 /// under it: the first cell of a wall, a roof or a slope's step, where it
 /// may stand embedded, as the eye's rays do not meet the cell they start in
-/// (pxl-spec-core `cast::walk`). Not a cell with air only over it, so over
+/// (pxl-engine `cast::walk`). Not a cell with air only over it, so over
 /// open ground the eye keeps its height (`EYE_CLEARANCE_U`). A point is in
 /// something solid as `in_solid` asks it, a cell's side away; where that is
 /// not known, not embedded.
@@ -178,7 +178,7 @@ fn crossed(last_solid: bool, at_solid: bool, at: &ViewPose, access: &World) -> b
 /// from the pivot as the zoom asked or the roof leaves, and eases there
 /// through it. Where the roof is nearer the pivot than the orbit comes
 /// (`MIN_DIST`), the eye stands at `MIN_DIST` in the roof's lowest cell,
-/// which its rays do not meet (pxl-spec-core `cast::walk`): it sees the
+/// which its rays do not meet (pxl-engine `cast::walk`): it sees the
 /// pivot as from under the roof. Only a zoom in: a zoom out goes through
 /// (`climb_step`). None where nothing on the line roofs the pivot, or
 /// `MIN_DIST` is past the roof's lowest cell.
@@ -217,7 +217,7 @@ fn toward_eye(at: &ViewPose, t_max: f64, access: &World) -> Option<Hit> {
 }
 
 /// Whether the eye `dist` from `at`'s pivot is under `roof`: short of it, or
-/// in its lowest cell, which the eye's rays do not meet (pxl-spec-core
+/// in its lowest cell, which the eye's rays do not meet (pxl-engine
 /// `cast::walk`), on its floor and not its ceiling as the walk's `inside` is.
 fn under(roof: &Hit, at: &ViewPose, dist: f64) -> bool {
     let eye = v3::add(&at.pivot, &orbit_eye_off(dist, at.polar, at.azimuth));

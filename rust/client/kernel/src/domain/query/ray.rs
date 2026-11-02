@@ -1,7 +1,7 @@
 // pxl-kernel/domain/query/ray.rs
 
 //! The first cell a ray meets, at the zoom its distance asks: the descent is
-//! pxl-spec-core's (`cast::first`), the one a GPU's cast runs too,
+//! pxl-engine's (`cast::first`), the one a GPU's cast runs too,
 //! and the world answers it here from everything it holds, each node handed
 //! what its parent found (`Walker`). What only the CPU answers, decor,
 //! rides on that answer.
@@ -13,6 +13,11 @@ use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::{Answer, Base};
+use pxl_engine::answer::{self, In, Kind};
+pub(super) use pxl_engine::cast::Until;
+use pxl_engine::cast::{self, Detail, End, Query, Spacing};
+use pxl_engine::support;
+use pxl_engine::support::{ColumnSurface, Line};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -24,11 +29,6 @@ use pxl_spec::space::coord::world::{origin, wrap_cell};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
-use pxl_spec_core::answer::{self, In, Kind};
-pub(super) use pxl_spec_core::cast::Until;
-use pxl_spec_core::cast::{self, Detail, End, Query, Spacing};
-use pxl_spec_core::support;
-use pxl_spec_core::support::{ColumnSurface, Line};
 
 /// The zooms a cell is asked at: no coarser than a tile draws and no finer
 /// than what is placed is held.
@@ -37,7 +37,7 @@ pub fn zoom_range() -> [Zoom; 2] {
 }
 
 /// The cells of tiles at the zoom `tile` wherever they are, as the descent
-/// reads a level of detail (pxl-spec-core `cast::Detail`): a range of that
+/// reads a level of detail (pxl-engine `cast::Detail`): a range of that
 /// zoom's cells alone, held to the zooms a cell is asked at (`zoom_range`).
 pub fn at_zoom(tile: Zoom) -> Detail {
     let [lo, hi] = zoom_range();
@@ -249,7 +249,7 @@ impl<'a> World<'a> {
     }
 
     /// The first cell along `ray` that `until` stops at, at the zoom `detail`
-    /// asks where it meets it (pxl-spec-core `cast::first`), from the ray's
+    /// asks where it meets it (pxl-engine `cast::first`), from the ray's
     /// origin, over the world where it stands there (pxl-spec `world::origin`).
     /// Its tiles' lines stepped from `lines`, the ground's a walk beside it
     /// read over the same tile cache, and left there for the next.
@@ -285,7 +285,7 @@ impl<'a> World<'a> {
         (answer, walker.decor_ray.map(|(_, s)| s))
     }
 
-    /// The column surface down column `g` at `cell` (pxl-spec-core
+    /// The column surface down column `g` at `cell` (pxl-engine
     /// `support::column_surface`): the top of the cell met as drawn, with what the
     /// world lacked on the way, none where nothing a ray cannot see through
     /// is met; and the column surface itself, whose line the cells about it are
@@ -310,7 +310,7 @@ impl<'a> World<'a> {
         (answer, f)
     }
 
-    /// What is in the cell `c` of `zoom`, asked off the line `l` (pxl-spec-core
+    /// What is in the cell `c` of `zoom`, asked off the line `l` (pxl-engine
     /// `support::asset`): from the deepest node of it holding the cell,
     /// never again from the top; nothing and the tile where the world lacks
     /// it.
@@ -360,7 +360,7 @@ impl<'a> World<'a> {
             false => HitKind::Ground,
         };
         // A cell kept short of its cube is the box it is drawn as, about
-        // its cube's center (pxl-spec-core `cast::fill_bounds`).
+        // its cube's center (pxl-engine `cast::fill_bounds`).
         let (lo, hi) = cast::fill_bounds(([0.0; 3], [1.0; 3]), s.asset[0]);
         let t = f64::from(s.t);
         Hit {

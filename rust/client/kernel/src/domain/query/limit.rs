@@ -8,26 +8,26 @@
 //! asks these, and nothing else decides them; the camera is no walker and
 //! asks none (query/support.rs `step_slide`).
 
+use pxl_engine::area::{is_wall, walls_in, Area, Shard};
+use pxl_engine::wrap_idx;
 use pxl_spec::limit::{bedrock, ceiling};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{Cells, GROUND};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use pxl_spec_core::area::{is_wall, walls_in, Area, Shard};
-use pxl_spec_core::wrap_idx;
 
 use super::World;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::Query;
 use crate::sys::io::source;
+use pxl_engine::clipmap::Lookup;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec_core::clipmap::Lookup;
 
 impl World<'_> {
     /// Whether the leaf column under `at` is the service area's and not the
-    /// wall (pxl-spec-core `area::is_wall`), known before any of its ground
+    /// wall (pxl-engine `area::is_wall`), known before any of its ground
     /// arrives, off its shard's nine, the area's index asked once
     /// (`Shard::at`). A walker comes to the wall's face and stands on none
     /// of it.
@@ -37,7 +37,7 @@ impl World<'_> {
 
     /// Whether `space` may hold an edit: every shard under it read, so a
     /// write stands over what its file held (domain/layer/object/repository.rs
-    /// `holds`); none of its leaf columns the wall (pxl-spec-core
+    /// `holds`); none of its leaf columns the wall (pxl-engine
     /// `area::walls_in`), as `within` holds; and there `space` over the
     /// bedrock and under the ceiling of ground the world knows exactly, no
     /// tile not yet held (`pxl-spec limit.rs`).

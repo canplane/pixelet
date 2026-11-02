@@ -4,9 +4,9 @@
 //! world's depth from the light cast with them, and the decor generated over the
 //! world (gpu/generator.rs): what each reads, made once, and their dispatches.
 
-use pxl_spec_core::clipmap::{self, FILL_CELL, FILL_FIRST};
-use pxl_spec_core::generation::{self, GROUPS};
-use pxl_spec_core::{beam, eye, light, overwrite, pyramid, raster, ray};
+use pxl_engine::clipmap::{self, FILL_CELL, FILL_FIRST};
+use pxl_engine::generation::{self, GROUPS};
+use pxl_engine::{beam, eye, light, overwrite, pyramid, raster, ray};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -30,23 +30,23 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, LightMoved};
-use pxl_spec_core::param::light::SAMPLE;
+use pxl_engine::param::light::SAMPLE;
 
 /// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
 /// a drawn pixel of the world surface: the eye, the terrain's tiles as the
 /// GPU holds them, and what is placed.
 pub struct Cast<'a> {
-    /// The eye (pxl-spec-core `eye`; pxl-kernel domain/view/lens.rs `gpu_cast`,
+    /// The eye (pxl-engine `eye`; pxl-kernel domain/view/lens.rs `gpu_cast`,
     /// domain/scene/cast.rs `eye`).
     pub eye: [u32; eye::WORDS],
-    /// The clipmap's table (pxl-spec-core `clipmap::Entry`; pxl-kernel
+    /// The clipmap's table (pxl-engine `clipmap::Entry`; pxl-kernel
     /// domain/layer/terrain/clipmap.rs `table`), four words a row: every clip
     /// level's entries, the eye's first, from the top's, each the brick it
     /// wants, X and Y, the slot holding it plus one while present (`Entry::slot`)
     /// and the fill it is on its way from; then each clip level's first brick
     /// (`clipmap::ORIGIN_AT`).
     pub clipmap: &'a [i32],
-    /// The service area's index (pxl-spec-core `area::Area`), its keys four a
+    /// The service area's index (pxl-engine `area::Area`), its keys four a
     /// row (pxl-kernel domain/scene/cast.rs `shards`); read where it lies,
     /// unwritten until the page replays the turn.
     pub shards: &'a [[i32; 4]],
@@ -55,7 +55,7 @@ pub struct Cast<'a> {
     pub decor: DecorFrame<'a>,
     /// Where each actor drawn stands, units from the eye, as its draw is
     /// placed (frame/draw.rs `Lists::stands`): receivers of the shadow map as
-    /// decor is (pxl-spec-core `light::ACTORS_AT`).
+    /// decor is (pxl-engine `light::ACTORS_AT`).
     pub actors: &'a [[f32; 3]],
     /// Whether what the eye's cast and the sun's walked and took is counted
     /// (gpu/ray/tally.rs).
@@ -84,25 +84,25 @@ pub(super) struct CastBuffers {
     /// from those starts (`sample_cs`, a thread a sample): the eye's over
     /// the cast's group and the shadow map's over the light's (`light_groups`),
     /// each told by the head it binds (`eye_head`, `light_head`); and the
-    /// eye's buffer (pxl-spec-core `beam`): a line a corner, a start a
+    /// eye's buffer (pxl-engine `beam`): a line a corner, a start a
     /// cell, a hit a sample, as the eye's words lay the frame's `grid`, none
     /// a pixel's; room for `beam_room` words.
     beam_built: Pipeline,
     cells_built: Pipeline,
     sample_built: Pipeline,
     beams: u32,
-    /// The eye's head, all zero: a head naming no map (pxl-spec-core
+    /// The eye's head, all zero: a head naming no map (pxl-engine
     /// `light::HEAD_SIZE`), which tells a pass both take the eye's.
     eye_head: u32,
     grid: beam::Grid,
     beam_room: u32,
-    /// The observed pyramid (pxl-spec-core `pyramid`): its buffer, no
+    /// The observed pyramid (pxl-engine `pyramid`): its buffer, no
     /// pixel's; the pixels the cast's reading walk missed walked again, a
-    /// thread each of their list (`miss_list_cs`, pxl-spec-core
+    /// thread each of their list (`miss_list_cs`, pxl-engine
     /// `pyramid::MARKS_AT`), or where it was full a thread a drawn pixel
     /// (`miss_cs`), each told by the mark its own first ray word holds
-    /// (pxl-spec-core `ray::MISS`), both dispatched off the words the
-    /// reading walk counts them in (`marks`, pxl-spec-core
+    /// (pxl-engine `ray::MISS`), both dispatched off the words the
+    /// reading walk counts them in (`marks`, pxl-engine
     /// `ray::MISS_ARGS_WORDS`); the pyramid forgotten (`forget_cs`) where
     /// what the world's query reads changed since the last cast: all of it
     /// (`forget`), or the nodes over the eye's clip levels' entries that moved
@@ -111,14 +111,14 @@ pub(super) struct CastBuffers {
     /// `holding` of them, as decor's generation holds them, gpu/generator.rs
     /// `hold`), and those handed a slot of a child group of what is placed that
     /// was written (`written_groups`, `writes` of them); as this frame's cast does
-    /// (`forgets`, pxl-spec-core `pyramid::FORGETS`), and what it sent, put
+    /// (`forgets`, pxl-engine `pyramid::FORGETS`), and what it sent, put
     /// back where its frame is dropped (`sent_forget`). `frame` numbers the casts since it was last
     /// forgotten whole, and `cuts` are the preview's cuts it was asked with.
     miss_built: Pipeline,
     miss_list_built: Pipeline,
     marks: u32,
     /// What lies about the faces the walks again stopped on, asked once a
-    /// square of their hits (pxl-spec-core `beam::HIT_WORDS`): the one of
+    /// square of their hits (pxl-engine `beam::HIT_WORDS`): the one of
     /// each square that asks listed (`hit_lead_cs`), the faces' pass over
     /// their asks (ray/raster.rs `ask_hits`), and the faces put at their
     /// pixels (`hit_faces_cs`), each dispatched off the walks' count in the
@@ -154,14 +154,14 @@ pub(super) struct CastBuffers {
     /// The slots that took no visible sample walked apart (`light_miss_cs`).
     light_miss_built: Pipeline,
     /// The tiles of the light's box its receivers stand on in a cast
-    /// (pxl-spec-core `light::stands_at`): where the eye's rays meet the world
+    /// (pxl-engine `light::stands_at`): where the eye's rays meet the world
     /// (`light_mark_cs`), and where the decor and the actors drawn stand
     /// (`light_mark_draws_cs`); then those they read (`light_propagate_cs`).
     light_mark_built: Pipeline,
     light_mark_draws_built: Pipeline,
     light_propagate_built: Pipeline,
     /// The tiles the box slid onto, or slid into another band, set back to
-    /// be read anew (`light_slide_cs`, pxl-spec-core `Light::keeps`), before
+    /// be read anew (`light_slide_cs`, pxl-engine `Light::keeps`), before
     /// the propagation, where the box slid.
     light_slide_built: Pipeline,
     /// The light's cast's groups (`light_groups`), and the buffers they bind:
@@ -172,24 +172,24 @@ pub(super) struct CastBuffers {
     /// reads none (`light_mark_draws_cs`).
     light_none: u32,
     /// The light's casts so far, the number its marks are made with
-    /// (pxl-spec-core `light::HEAD_CAST`), never zero, which no tile holds
+    /// (pxl-engine `light::HEAD_CAST`), never zero, which no tile holds
     /// marked.
     light_number: u32,
     /// The number of the cast since which only which tiles are read moved,
-    /// and the box (pxl-spec-core `light::HEAD_EPOCH`): a tile cast in it or
+    /// and the box (pxl-engine `light::HEAD_EPOCH`): a tile cast in it or
     /// after stands where the box kept it.
     light_epoch: u32,
     /// Whether all the light's cast is made (`light_made`): its list and its
     /// raster's buffers and targets; before then no shadow map is cast.
     light_ready: bool,
-    /// The beam's lines, the samples and the misses (pxl-spec-core
+    /// The beam's lines, the samples and the misses (pxl-engine
     /// `light::list_words`), made where shadows are first cast.
     light_list: u32,
     light_list_whole: bool,
     /// The misses' walk's dispatch and count, as the eye's are
-    /// (pxl-spec-core `ray::MISS_ARGS_WORDS`).
+    /// (pxl-engine `ray::MISS_ARGS_WORDS`).
     light_misses: u32,
-    /// The workgroups of the passes that cast its tiles (pxl-spec-core
+    /// The workgroups of the passes that cast its tiles (pxl-engine
     /// `light::ARGS_WORDS`): none, or each whole where a tile is claimed.
     light_args: u32,
     /// What a tile of the shadow map holds follows, as the light's cast last
@@ -201,7 +201,7 @@ pub(super) struct CastBuffers {
     /// corner `light_corner` where the cast before was cast under
     /// `light_corner_was` (`light::HEAD_CORNER_WAS`): the reads moved with the
     /// box, and the tiles it slid onto or into another band cast
-    /// (`light_slide_cs`, pxl-spec-core `Light::keeps`), with those read
+    /// (`light_slide_cs`, pxl-engine `Light::keeps`), with those read
     /// anew. The box follows the eye a tile at a time, and a tile's band is
     /// its place in it alone (`Light::band`), so nothing else of the eye's
     /// place moves what a tile holds.
@@ -215,7 +215,7 @@ pub(super) struct CastBuffers {
     /// and look, the actors' places, decor placed again. One moving alone
     /// casts only the tiles read anew.
     light_receivers: Read,
-    /// What it is handed beside the eye's words (pxl-spec-core
+    /// What it is handed beside the eye's words (pxl-engine
     /// `light::HEAD_WORDS`).
     light_head: u32,
     light_cast: bool,
@@ -250,7 +250,7 @@ pub(super) struct CastBuffers {
     /// frame's is the same: the samples and the decor generated over them
     /// stand, and only the pixels are cast again where the jitter moved.
     read: Read,
-    /// Where each pixel's ray went through it last (pxl-spec-core
+    /// Where each pixel's ray went through it last (pxl-engine
     /// `eye::JITTER`). It moving alone, the beam rays, the cells' starts and
     /// the samples stand, and the pixels are cast again off them.
     jitter: [u32; 2],
@@ -273,7 +273,7 @@ pub(super) struct CastBuffers {
     light_grouped: [u32; 3],
 }
 
-/// What a cast's head handed the pyramid's forgetting (pxl-spec-core
+/// What a cast's head handed the pyramid's forgetting (pxl-engine
 /// `pyramid::HEAD_WORDS`): whether all of it, the entries that moved, the
 /// boxes and the child groups written; put back where its frame is dropped.
 struct ForgetHead {
@@ -545,7 +545,7 @@ impl RaysPass {
         let r = &mut c.read;
         r.begin();
         // The light's words are its cast's alone (below); the grid among the
-        // rest, so a lattice changed casts in full (pxl-spec-core
+        // rest, so a lattice changed casts in full (pxl-engine
         // `beam::Grid::lattice`).
         let eye_moved = r.read(&eye[..eye::LIGHT]);
         let clipmap_moved = r.read(clipmap);
@@ -574,7 +574,7 @@ impl RaysPass {
             c.refold = true;
         }
         c.size = rays.1;
-        // The grid as the eye's words lay it (pxl-spec-core `eye::GRID`), the
+        // The grid as the eye's words lay it (pxl-engine `eye::GRID`), the
         // dispatches' sizes, and room for its corners' lines, its cells'
         // starts and its samples' hits, made again only where they outgrow
         // it.
@@ -705,7 +705,7 @@ impl RaysPass {
         // holds present the brick it holds. A clip level following its
         // center a brick moves none of it: the brick it lets go and the one
         // it takes, not present yet, each lie past what its zoom observes
-        // about the eye (pxl-spec-core `clipmap`), and are read off the
+        // about the eye (pxl-engine `clipmap`), and are read off the
         // coarser one alike.
         let mut present_moved = false;
         if clipmap_moved {
@@ -771,7 +771,7 @@ impl RaysPass {
         c.generator
             .prepare(g, cast.decor, generation, meshes, world);
         // The shadow map is cast, every slot a receiver reads, as the eye's
-        // rays are (pxl-spec-core `light`), where what it reads moved: the
+        // rays are (pxl-engine `light`), where what it reads moved: the
         // light's frame, the eye's zooms, which every band is held to, or
         // the world under it; where the box slid; and where what says which
         // tiles are read moved, the eye's place and look, the actors' places
@@ -832,7 +832,7 @@ impl RaysPass {
         // footprint, marked already where the eye stood when they were.
         c.light_world |= kind == FrameKind::cast || !held || footprint_owed;
         if c.light_cast {
-            // The head (pxl-spec-core `light::HEAD_WORDS`).
+            // The head (pxl-engine `light::HEAD_WORDS`).
             let mut head = [0u32; light::HEAD_WORDS];
             c.light_number = c.light_number.wrapping_add(1).max(1);
             if !held {
@@ -1119,7 +1119,7 @@ impl RaysPass {
             // pixels that missed; and those again,
             // writing it, a thread a drawn pixel, each but the marked
             // returning at once. One pass, a dispatch each, each
-            // reading what the ones before wrote (pxl-spec-core `pyramid`).
+            // reading what the ones before wrote (pxl-engine `pyramid`).
             // A pass a dispatch, each timed in its own span, so the cast's
             // parts are read apart: `cast` holds the forgetting alone; the
             // samples' boxes written and drawn between the samples and the
@@ -1259,7 +1259,7 @@ impl RaysPass {
                 g.end(pass);
             }
             // The beam, the samples, their boxes drawn, the slots taking
-            // their visible sample, a workgroup a tile (pxl-spec-core
+            // their visible sample, a workgroup a tile (pxl-engine
             // `light::TILE`), and the rest walked off their list as the eye's
             // missed pixels are: each a pass timed in its own span.
             let stamp = ctx.stamp(GpuSpanName::light_beam).pass();

@@ -7,9 +7,9 @@
 //! (`hit_lead_cs`, raster.rs `face_cs`), and put at their pixels
 //! (`hit_faces_cs`).
 
+use pxl_engine::cast::{self, End, Trace};
+use pxl_engine::{beam, pyramid, raster, ray, tally, way};
 use pxl_shader_macro::compute;
-use pxl_spec_core::cast::{self, End, Trace};
-use pxl_spec_core::{beam, pyramid, raster, ray, tally, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 
 use spirv_std::{spirv, Image};
@@ -24,7 +24,7 @@ use crate::world::{face_of, unasked_face, World};
 use crate::{add, most, opens};
 
 /// The visible sample at each drawn pixel (pxl-render gpu/ray/raster.rs): its
-/// sample's number (pxl-spec-core `raster::id_of`), 0 where it kept none,
+/// sample's number (pxl-engine `raster::id_of`), 0 where it kept none,
 /// read as an array of one layer.
 type Visibility = Image!(2D, type = u32, sampled = true, arrayed = true);
 
@@ -57,7 +57,7 @@ const _: () = assert!(
 );
 
 /// The tangents across and up of where drawn pixel `p`'s ray goes through it,
-/// its middle off by the eye's jitter (pxl-spec-core `eye::JITTER`), of the
+/// its middle off by the eye's jitter (pxl-engine `eye::JITTER`), of the
 /// `size` the rays are, row 0 at the top, as the screen pass forms its own
 /// pixel's: the screen's half-angles' scaled by where it lies.
 pub(crate) fn px_tan(eye: &Eye, p: UVec3, size: UVec3) -> [f32; 2] {
@@ -76,7 +76,7 @@ fn write_ray(rays: &Rays, p: UVec3, w: [u32; ray::WORDS as usize]) {
     }
 }
 
-/// The tiles as a pass draws them (pxl-spec-core `screen::TILES_WORDS`): the
+/// The tiles as a pass draws them (pxl-engine `screen::TILES_WORDS`): the
 /// tiles across and down, the frames a tile stays claimed once changed and
 /// this frame's number, then the world's drawn pixels and a quad's growth, which the cast
 /// reads none of.
@@ -87,17 +87,17 @@ pub struct Tiles {
     size: spirv_std::glam::Vec4,
 }
 
-/// Each pixel's ray: the cell the raster kept at it (pxl-spec-core
+/// Each pixel's ray: the cell the raster kept at it (pxl-engine
 /// `raster`; pxl-render gpu/ray/raster.rs), the nearest a sample stopped at
 /// that its ray enters across the axis that sample entered by, tested again
 /// exactly (`cast::entry`) where a GPU's f32 may part the two, its words, no
 /// step its own, with what lies about its face, its sample's; the sky
 /// where no sample about it met anything. Any other pixel, where it kept a
 /// node a sample lacks at, or none, or the test refuses it, takes no walk
-/// here: its first word is the mark the walk again goes by (pxl-spec-core
+/// here: its first word is the mark the walk again goes by (pxl-engine
 /// `ray::MISS`; `miss_list_cs`, `miss_cs`), so no lane carries a walk's
 /// footprint for the few that walk. A marked pixel is listed for that walk
-/// (pxl-spec-core `pyramid::MARKS_AT`) by a plain write, its place taken
+/// (pxl-engine `pyramid::MARKS_AT`) by a plain write, its place taken
 /// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_CNT`),
 /// so no word of the pyramid is typed atomic here; one past the list's room
 /// has the walk over every pixel dispatched instead.
@@ -120,11 +120,11 @@ pub fn cast_cs(
     }
     // A tile not claimed is passed by, as the light's cast passes one by
     // (light.rs `Map::needs`): a frame not drawn whole casts the claimed
-    // tiles' pixels alone (pxl-spec-core `screen`).
-    let side = pxl_spec_core::screen::TILE;
+    // tiles' pixels alone (pxl-engine `screen`).
+    let side = pxl_engine::screen::TILE;
     let tile = (id.y / side) * tiles.count.x + id.x / side;
-    let age = pxl_spec_core::screen::age(tiles.count.w, changed_at[tile as usize]);
-    if !pxl_spec_core::screen::claimed(age, tiles.count.z) {
+    let age = pxl_engine::screen::age(tiles.count.w, changed_at[tile as usize]);
+    if !pxl_engine::screen::claimed(age, tiles.count.z) {
         return;
     }
     let g = grid(eye);
@@ -204,7 +204,7 @@ pub fn cast_cs(
     }
 }
 
-/// `v` added to lane `lane` of a pixel's or a slot's (pxl-spec-core
+/// `v` added to lane `lane` of a pixel's or a slot's (pxl-engine
 /// `tally::TOOK` on) in its walk again's args `args`, where `on`
 /// (`ray::MISS_ARGS_TALLY`), the eye's pixels and the light's slots alike.
 pub(crate) fn add_cnt(args: &mut [u32], on: bool, lane: u32, v: u32) {
@@ -215,7 +215,7 @@ pub(crate) fn add_cnt(args: &mut [u32], on: bool, lane: u32, v: u32) {
 
 /// One more missed ray listed for its walk again, the eye's pixels and the
 /// light's slots alike (pxl-shader light.rs `light_cs`): its place off the count
-/// in its dispatch's words `args` (pxl-spec-core `ray::MISS_ARGS_CNT`),
+/// in its dispatch's words `args` (pxl-engine `ray::MISS_ARGS_CNT`),
 /// the rows the list fills raised to hold it by the place that opens each
 /// (`ray::MISS_ARGS_LIST`, `opens`); the first past the list's `room` has
 /// the walk over `whole` workgroups dispatched instead
@@ -283,7 +283,7 @@ fn walk_missed(
 
 /// The hit at `node` of pixel `id`'s walk again, entered through face
 /// `face`, kept for what lies about that face to be asked once a hit
-/// (pxl-spec-core `beam::HIT_WORDS`): numbered as the walks take them
+/// (pxl-engine `beam::HIT_WORDS`): numbered as the walks take them
 /// (`pyramid::HITS_CNT`), the dispatch over them raised by the number
 /// that opens a workgroup (`pyramid::HITS_ARGS`), and its number marked
 /// waiting (`beam::HIT_WAITS`) as its pixel's last word until its faces
@@ -308,7 +308,7 @@ fn keep_hit(
     beam::HIT_WAITS | r
 }
 const _: () = assert!(
-    pxl_spec_core::face::BITS < 31,
+    pxl_engine::face::BITS < 31,
     "a waiting hit's mark lies past every face's bit"
 );
 
@@ -361,7 +361,7 @@ pub fn miss_cs(
     write_ray(rays, id, w);
 }
 
-/// Each pixel `cast_cs` listed (pxl-spec-core `pyramid::MARKS_AT`), its
+/// Each pixel `cast_cs` listed (pxl-engine `pyramid::MARKS_AT`), its
 /// ray again (`walk_missed`): a thread a listed pixel, `ray::MISS_LANES` a
 /// workgroup and `ray::MISS_ACROSS` workgroups a row, dispatched over the
 /// rows the list filled (`ray::MISS_ARGS_LIST`), each past the count

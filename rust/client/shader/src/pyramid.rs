@@ -1,20 +1,20 @@
 // pxl-shader/pyramid.rs
 
-//! The observed pyramid (pxl-spec-core `pyramid`): what the cast's walks
+//! The observed pyramid (pxl-engine `pyramid`): what the cast's walks
 //! kept of the world's query, read and written by them, and forgotten where
 //! what the query reads changed (`forget_cs`).
 
-use pxl_spec_core::answer::In;
-use pxl_spec_core::cast::Query;
-use pxl_spec_core::pyramid;
-use pxl_spec_core::world::Inheritance;
+use pxl_engine::answer::In;
+use pxl_engine::cast::Query;
+use pxl_engine::pyramid;
+use pxl_engine::world::Inheritance;
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
 use crate::world::{PaletteWords, World};
 
-/// The observed pyramid's buffer (pxl-spec-core `pyramid`), bound as a
+/// The observed pyramid's buffer (pxl-engine `pyramid`), bound as a
 /// runtime array, whose pointer a walk holds whole: a slice's would be a
 /// pointer and a length, which naga traces no atomic through.
 pub(crate) type Pyramid = spirv_std::RuntimeArray<u32>;
@@ -76,7 +76,7 @@ fn pyramid_store(w: &mut Pyramid, i: u32, v: u32) {
 }
 
 /// `visits`, the nodes a walk of `observer`'s asked, added to its lane
-/// `lane` of the head where the walks count (pxl-spec-core
+/// `lane` of the head where the walks count (pxl-engine
 /// `pyramid::TALLY_ON`, `tally`).
 pub(crate) fn add_tally(w: &mut Pyramid, observer: u32, lane: u32, visits: u32) {
     if pyramid_load(w, pyramid::TALLY_ON) != 0 {
@@ -227,8 +227,8 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
         let w = pyramid::entry_at(to);
         if to != pyramid::NONE
             && (self.assets
-                || answer.kind != pxl_spec_core::answer::Kind::Cell
-                || pxl_spec_core::answer::transparent(answer.asset[0]))
+                || answer.kind != pxl_engine::answer::Kind::Cell
+                || pxl_engine::answer::transparent(answer.asset[0]))
             && key != pyramid::CLAIMED
             && pyramid_swap(self.pyramid, w, key, pyramid::CLAIMED) == key
         {
@@ -257,7 +257,7 @@ impl<L: PaletteWords> Query for Writing<'_, L> {
 }
 
 /// What the observed pyramid kept forgotten, a thread a slot, where what
-/// the world's query reads changed (pxl-spec-core `pyramid::FORGETS`):
+/// the world's query reads changed (pxl-engine `pyramid::FORGETS`):
 /// every slot's key, or the key of each slot over a brick that moved
 /// (`pyramid::forgets`), over a box of what is placed or cut that changed
 /// (`pyramid::over_box`), or handed a slot of a child group of what is placed

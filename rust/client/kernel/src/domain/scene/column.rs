@@ -1,12 +1,12 @@
 // pxl-kernel/domain/scene/column.rs
 
 //! Instances as columns, in the layout the decor and impostor shaders read
-//! (pxl-spec-core scatter.rs `drawn`), as the CPU writes them: the clouds'
+//! (pxl-engine scatter.rs `drawn`), as the CPU writes them: the clouds'
 //! patches (domain/scene/environment/cloud.rs) and the ghost's one decor
 //! (domain/scene/indicator/ghost.rs). Each is its group count, each
 //! group's instance count, then each group's columns, then the index list.
 
-use pxl_spec_core::generation::drawn::COLUMNS;
+use pxl_engine::generation::drawn::COLUMNS;
 
 /// A group's columns in one: `drawn::COLUMNS` f32 columns (x, y, z, spin,
 /// scale), then byte flags padded to a word.

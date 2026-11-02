@@ -1,23 +1,23 @@
 // pxl-shader/world.rs
 
-//! The world as the GPU holds it, asked through pxl-spec-core's one query
+//! The world as the GPU holds it, asked through pxl-engine's one query
 //! (`world::node`) by every entry that walks or generates over it.
 
-use pxl_spec_core::answer::{self, In};
-use pxl_spec_core::area::{Area, Shard};
-use pxl_spec_core::cast::{self, End, Query};
-use pxl_spec_core::fill::{self, column_of, level_of};
-use pxl_spec_core::overwrite::{Cut, Columns};
-use pxl_spec_core::clipmap::{
+use pxl_engine::answer::{self, In};
+use pxl_engine::area::{Area, Shard};
+use pxl_engine::cast::{self, End, Query};
+use pxl_engine::fill::{self, column_of, level_of};
+use pxl_engine::overwrite::{Cut, Columns};
+use pxl_engine::clipmap::{
     self, Bricks, Lookup, Presence, BRICK_CELLS, BRICK_WORDS, ENTRIES, FIRST_CELL,
 };
-use pxl_spec_core::world::{self, Inheritance};
-use pxl_spec_core::{at, face, ground, support, way};
+use pxl_engine::world::{self, Inheritance};
+use pxl_engine::{at, face, ground, support, way};
 use spirv_std::glam::IVec4;
 
 use crate::eye::Eye;
 
-/// A preview's entry as pxl-spec-core `overwrite` takes it.
+/// A preview's entry as pxl-engine `overwrite` takes it.
 fn cut(e: IVec4) -> Cut {
     Cut {
         zoom: e.w as u32,
@@ -25,7 +25,7 @@ fn cut(e: IVec4) -> Cut {
     }
 }
 
-/// Brick `brick`'s first word in the ground's buffer (pxl-spec-core
+/// Brick `brick`'s first word in the ground's buffer (pxl-engine
 /// `clipmap::BRICK_WORDS`).
 pub(crate) fn brick_at(brick: u32) -> u32 {
     brick * BRICK_WORDS
@@ -34,13 +34,13 @@ pub(crate) fn brick_at(brick: u32) -> u32 {
 /// The world as the GPU holds it (pxl-kernel domain/scene/cast.rs fills it): the
 /// bricks the eye's clip levels hold, their columns, levels and runs, the
 /// service area, and what is placed with a preview's cuts; the caves are a
-/// hash, held nowhere. Decor is not here (pxl-spec-core `cast::Query`).
+/// hash, held nowhere. Decor is not here (pxl-engine `cast::Query`).
 /// The bricks' cells' four palette indices are `L`'s: their own buffer for the
 /// cast's walks, every observer's alike, none where a pass reads no cell's
 /// palette index (`NoPalette`).
 #[derive(Clone, Copy)]
 pub struct World<'a, L> {
-    /// The clip levels' table (pxl-spec-core `clipmap::Entry`): every clip
+    /// The clip levels' table (pxl-engine `clipmap::Entry`): every clip
     /// level's entries, a row each, the brick it wants, the slot holding it
     /// plus one while present (`Entry::slot`) and the fill it is on its way
     /// from, the eye's clip levels first, from the top's; then each clip
@@ -54,7 +54,7 @@ pub struct World<'a, L> {
     pub(crate) ground: &'a [u32],
     /// Per slot, in the same order, its cells' four palette indices (`PaletteWords`).
     pub(crate) palette_indices: L,
-    /// The service area's index (pxl-spec-core `area::Area`), its keys four a
+    /// The service area's index (pxl-engine `area::Area`), its keys four a
     /// row.
     pub(crate) shards: &'a [IVec4],
     /// The overwrites' tree (pxl-kernel domain/layer/object/store.rs): its child
@@ -63,7 +63,7 @@ pub struct World<'a, L> {
     /// The eye, whose preview cuts are read where something placed or cut
     /// is asked about, not held through the descent.
     pub(crate) eye: &'a Eye,
-    /// The ways' pool (pxl-spec-core `way::tree`), every brick's tree,
+    /// The ways' pool (pxl-engine `way::tree`), every brick's tree,
     /// which every pass that asks the world's query reads.
     pub(crate) pool: way::tree::Read<'a>,
 }
@@ -190,11 +190,11 @@ impl<L: PaletteWords> Bricks for World<'_, L> {
     }
 }
 
-/// The ground as the GPU holds it, for pxl-spec-core's one answer for a node.
+/// The ground as the GPU holds it, for pxl-engine's one answer for a node.
 impl<L: PaletteWords> ground::Resident for World<'_, L> {
     /// The bound over the node of the clip level `cell` reads its cells from,
     /// the finest holding them present (`clipmap::bound_over`), as the CPU reads
-    /// it (pxl-spec-core `ground::Resident::relief`).
+    /// it (pxl-engine `ground::Resident::relief`).
     fn relief(
         &mut self,
         place: &mut Lookup,
@@ -206,7 +206,7 @@ impl<L: PaletteWords> ground::Resident for World<'_, L> {
     }
 
     /// The cell's column off the clip levels, the wall where it is the
-    /// wall (pxl-spec-core `clipmap::ground`), as the CPU reads it (pxl-kernel
+    /// wall (pxl-engine `clipmap::ground`), as the CPU reads it (pxl-kernel
     /// domain/query/node.rs `Reading::cell`).
     fn cell(&mut self, shard: Shard, place: Lookup, zoom: u32, c: [i32; 3]) -> ground::Cell {
         clipmap::ground(self, shard, place, zoom, [c[0], c[1]]).0
@@ -228,7 +228,7 @@ impl<L: PaletteWords> Query for World<'_, L> {
     }
 
     /// What is in the node `c` at `zoom`: the world's one query
-    /// (pxl-spec-core `world::node`).
+    /// (pxl-engine `world::node`).
     fn node(
         &mut self,
         at: &mut Inheritance,
@@ -243,7 +243,7 @@ impl<L: PaletteWords> Query for World<'_, L> {
 }
 
 impl<L> World<'_, L> {
-    /// The eye's preview's `carve` and `hide` (pxl-spec-core
+    /// The eye's preview's `carve` and `hide` (pxl-engine
     /// `overwrite::Cut`), as the world's one query reads them.
     pub(crate) fn cuts(&self) -> [Cut; 2] {
         [cut(self.eye.carve), cut(self.eye.hide)]
@@ -252,7 +252,7 @@ impl<L> World<'_, L> {
 
 impl<L: PaletteWords> World<'_, L> {
     /// What lies about face `face` of the cell `c` of `zoom` a ray stopped
-    /// on (pxl-spec-core `face::word`): each cell beside it at its zoom,
+    /// on (pxl-engine `face::word`): each cell beside it at its zoom,
     /// hiding its cube whole (`answer::whole`), asked off `line`, the line
     /// down to it read in place (`support::Ancestors`), each from the deepest
     /// node it shares with it, never again from the top (`support::asset`).
@@ -285,9 +285,9 @@ pub(crate) fn unasked_face(ends: End, asset: u32) -> (bool, u32) {
     }
 }
 
-/// The face a ray enters a cell through across `axis` (pxl-spec-core
+/// The face a ray enters a cell through across `axis` (pxl-engine
 /// `ray`): 2·axis, plus one where its outward normal points down the axis,
 /// against the ray.
 pub(crate) fn face_of(ray: &cast::Ray, axis: u32) -> u32 {
-    2 * axis + (pxl_spec_core::axis(ray.dir, axis) > 0.0) as u32
+    2 * axis + (pxl_engine::axis(ray.dir, axis) > 0.0) as u32
 }

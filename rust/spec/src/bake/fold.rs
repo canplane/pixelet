@@ -1,7 +1,7 @@
 // pxl-spec/bake/fold.rs
 
 //! One zoom coarser: a parent tile from the tiles under it. A cell holds the
-//! four palette indices under it, each child cell's own (pxl-spec-core `ground::own`,
+//! four palette indices under it, each child cell's own (pxl-engine `ground::own`,
 //! their majority, as Earth Engine's `MODE` pyramiding, so a feature
 //! narrower than half a cell rounds away at the zoom that reads it).
 //! Elevation is the box average of the samples, which preserves a column's
@@ -19,7 +19,7 @@ use super::separation::fold_separation;
 use super::tile::terrain::{Ground, TerrainTile, ELE_COLUMN};
 use super::tile::Occupancy;
 use crate::space::coord::zoom::Zoom;
-use pxl_spec_core::ground::own;
+use pxl_engine::ground::own;
 
 /// The four palette indices of each parent cell: the own palette index of each child cell
 /// under it, `dx + 2·dy`, as the zoom under the parent's reads it.

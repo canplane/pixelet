@@ -4,7 +4,7 @@
 //! (`light_mark_cs`), the one pass of the light's that reads them (rays.rs
 //! `Rays`), apart from the rest of the light's (light.rs).
 
-use pxl_spec_core::light::Light;
+use pxl_engine::light::Light;
 use spirv_std::glam::UVec3;
 use spirv_std::spirv;
 
@@ -69,7 +69,7 @@ fn met_tile(eye: &Eye, rays: &Rays, s: &Light, p: UVec3, drawn: UVec3) -> (bool,
         return (false, [0; 2]);
     }
     let first: u32 = rays.read(UVec3::new(p.x, p.y, 0));
-    if first == 0 || first == pxl_spec_core::ray::MISS {
+    if first == 0 || first == pxl_engine::ray::MISS {
         return (false, [0; 2]);
     }
     let t = f32::from_bits(rays.read(UVec3::new(p.x, p.y, 1)));

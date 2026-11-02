@@ -23,10 +23,10 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::{BTreeMap, VecDeque};
 
 use crate::terrain::CELL_U;
+use pxl_engine::way;
 use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::merc_from_u;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};

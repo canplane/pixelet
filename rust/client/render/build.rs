@@ -3,12 +3,12 @@
 // The shipped WGSL is the shader files with comments and indentation stripped; nothing is renamed.
 
 use naga::front::wgsl;
-use pxl_spec_core::answer;
-use pxl_spec_core::grid;
-use pxl_spec_core::ground;
-use pxl_spec_core::lattice;
-use pxl_spec_core::param::light;
-use pxl_spec_core::screen;
+use pxl_engine::answer;
+use pxl_engine::grid;
+use pxl_engine::ground;
+use pxl_engine::lattice;
+use pxl_engine::param::light;
+use pxl_engine::screen;
 use std::path::Path;
 
 #[path = "src/frame/shader/debug_look.spec.rs"]
@@ -48,18 +48,18 @@ fn main() {
         std::fs::write(out.join(name), shipped).expect("the stripped shader");
     }
     // A unit's zoom, a unit's fraction bits in Q3 and the ground's cell, from
-    // pxl-spec-core, where the cast reads them: a ray is painted by its
+    // pxl-engine, where the cast reads them: a ray is painted by its
     // cell's zoom against these, its cell placed off the eye's Q3 steps.
     let lattice = format!(
         "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
-        pxl_spec_core::UNIT_ZOOM,
-        pxl_spec_core::FRAC_W,
+        pxl_engine::UNIT_ZOOM,
+        pxl_engine::FRAC_W,
         lattice::GROUND.cell()
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
-    // A ray's first word, its fields as the cast writes them (pxl-spec-core
+    // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
-    use pxl_spec_core::ray::*;
+    use pxl_engine::ray::*;
     let field = |name: &str, shift: u32, bits: u32| {
         format!(
             "fn ray_{name}(w: u32) -> u32 {{ return (w >> {shift}u) & {}u; }}\n",
@@ -67,11 +67,11 @@ fn main() {
         )
     };
     // Its word of what lies about its face, and that word's fields, a bit an
-    // edge or a corner (pxl-spec-core face.rs).
-    use pxl_spec_core::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
+    // edge or a corner (pxl-engine face.rs).
+    use pxl_engine::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
     let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
     // The side of the box a cell kept short of its cube is, by the eighths
-    // it keeps, 0 for all eight (pxl-spec-core answer.rs `side`).
+    // it keeps, 0 for all eight (pxl-engine answer.rs `side`).
     let sides: String = (1..answer::EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
         .collect();
@@ -79,7 +79,7 @@ fn main() {
         "fn fill_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
     // A coarse cell's four palette indices, its ray's third word, as a cell's word
-    // holds them (pxl-spec-core ground.rs `palette_indices`).
+    // holds them (pxl-engine ground.rs `palette_indices`).
     let b = ground::PALETTE_BITS;
     let m = (1u32 << b) - 1;
     let palette_indices = format!(
@@ -97,12 +97,12 @@ fn main() {
         palette_indices,
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
-    // How the samples' boxes lie in their buffer (pxl-spec-core raster.rs),
+    // How the samples' boxes lie in their buffer (pxl-engine raster.rs),
     // as the raster reads them, and a box's 36 corners as `corner` winds
     // them, then wound the other way. The depth a hit's box about the eye
     // is drawn at, short of a lack's 1: finite, as every literal here is.
     {
-        use pxl_spec_core::raster::{
+        use pxl_engine::raster::{
             corner, BOX_AXIS, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, LACK, NEAR,
         };
         let n = word::BOX_VERTICES;
@@ -119,9 +119,9 @@ fn main() {
         );
         std::fs::write(out.join("raster_box.wgsl"), raster).expect("the raster's boxes' shader");
     }
-    // The eye's words the screen pass reads (pxl-spec-core eye.rs), each its
+    // The eye's words the screen pass reads (pxl-engine eye.rs), each its
     // word, and the vec4s it binds to reach the last of them.
-    use pxl_spec_core::eye::{FAR, FORWARD, JITTER, ORIGIN, RIGHT, STEPS, TAN, UP};
+    use pxl_engine::eye::{FAR, FORWARD, JITTER, ORIGIN, RIGHT, STEPS, TAN, UP};
     let last = (ORIGIN + 2)
         .max(STEPS)
         .max(FAR)
@@ -136,17 +136,17 @@ fn main() {
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
     // A light slot's word read as its depth, a share of the light box's, as
-    // pxl-spec-core light.rs `word` lays it: the one place a word's depth is
+    // pxl-engine light.rs `word` lays it: the one place a word's depth is
     // read.
-    use pxl_spec_core::light::DEPTH_ONE;
+    use pxl_engine::light::DEPTH_ONE;
     let light = format!("fn light_depth(w: u32) -> f32 {{ return f32(w) / {DEPTH_ONE}.0; }}\n");
     std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
     std::fs::write(out.join("tile_word.wgsl"), tile_word()).expect("the tile word's shader");
     // The cloud field's lattice unit and the hash its cells draw from, the
-    // cumulus's own on the CPU (pxl-spec-core cloud.rs `lattice_hash`): its
+    // cumulus's own on the CPU (pxl-engine cloud.rs `lattice_hash`): its
     // multipliers, its rounds and its kept bits as the Rust takes them.
-    use pxl_spec_core::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
-    use pxl_spec_core::param::cloud::LATTICE_SHAMT;
+    use pxl_engine::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
+    use pxl_engine::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;
     let rounds: String = HASH_ROUNDS
         .iter()
@@ -177,7 +177,7 @@ fn main() {
 fn debug_looks() -> String {
     use debug_look::{share, steps};
     // A world's cell spans (1, `SPANS`] of the view's cells where the rays
-    // stop on it (pxl-spec-core grid.rs `cell_zoom_at`), so its share of a cell
+    // stop on it (pxl-engine grid.rs `cell_zoom_at`), so its share of a cell
     // squared is within (1, `SPANS`²]: the tints' bounds are those.
     let spans = grid::SPANS;
     assert!(
@@ -311,9 +311,9 @@ fn compute(dir: &Path) -> String {
     out
 }
 
-/// The tiles' uniform as every pass reads it (pxl-spec-core
+/// The tiles' uniform as every pass reads it (pxl-engine
 /// `screen::TILES_WORDS`, gpu/tiles.rs `Tiles::words`), and a tile's word
-/// read by it as pxl-spec-core's `screen::age` and `screen::claimed` read it:
+/// read by it as pxl-engine's `screen::age` and `screen::claimed` read it:
 /// the frames since it changed, wrapping, and claimed while fewer than the
 /// uniform's `claimed_for`. The one rule the screen's and the light's passes
 /// claim by (screen_tiles.wgsl, screen_propagate.wgsl); pxl-shader's cast calls
@@ -356,7 +356,7 @@ fn params() -> String {
 }
 
 /// What the host lays out and every shader reads (frame/shader/word.rs), as
-/// WGSL: a uniform's floats as its vec4s; and the pxl-spec-core values every
+/// WGSL: a uniform's floats as its vec4s; and the pxl-engine values every
 /// shader may name, the world's height and the light's taps apart.
 fn words() -> String {
     use word::*;
@@ -379,7 +379,7 @@ fn words() -> String {
         // The depth's bound's square and a screen tile's squares a side, the
         // workgroup its passes take a tile by (screen_bound.wgsl,
         // screen_propagate.wgsl); the frames the jitter's sequence covers a pixel
-        // in, each still frame's even share of it (pxl-spec-core
+        // in, each still frame's even share of it (pxl-engine
         // `screen::JITTERS`, screen_resolve.wgsl).
         format!(
             "const BOUND_STEP: u32 = {BOUND_STEP}u;\nconst BOUND_SQUARES: u32 = {BOUND_SQUARES}u;\nconst TILE_JITTERS: u32 = {}u;\n",
@@ -403,10 +403,10 @@ fn words() -> String {
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
         format!("const LIGHT_SLOPES: u32 = {LIGHT_SLOPES}u;\nconst GROUND_SLOPES: u32 = {GROUND_SLOPES}u;\nconst SLOPE_WORDS: u32 = {SLOPE_WORDS}u;\n"),
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
-        // Q3's Z, the world's height about sea level (pxl-spec-core).
-        format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_spec_core::HEIGHT_BITS),
+        // Q3's Z, the world's height about sea level (pxl-engine).
+        format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_engine::HEIGHT_BITS),
         // The receiver's taps apart in the shadow map, which the map's read
-        // pad is sized by (pxl-spec-core param.rs `light::SPREAD`, light.rs
+        // pad is sized by (pxl-engine param.rs `light::SPREAD`, light.rs
         // `READ_PAD`).
         format!("const LIGHT_SPREAD: f32 = {:?};\n", light::SPREAD),
     ]

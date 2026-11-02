@@ -43,7 +43,7 @@ fn layout() -> (Vec<TileOrigin>, Vec<u32>) {
             // An asset wears what the pack ships for it: a side or a bottom of its
             // own where it has one, its top's image on every face where it has
             // not, as a cube_all. The dirt under a face is its own asset, the
-            // stratum under it (pxl-spec-core ground.rs `Cell::asset`), never a side.
+            // stratum under it (pxl-engine ground.rs `Cell::asset`), never a side.
             let top = shipped_texture_tile(cube, CubeFace::Top);
             let side = shipped_texture_tile(cube, CubeFace::Side).or(top);
             let bottom = shipped_texture_tile(cube, CubeFace::Bottom).or(top);

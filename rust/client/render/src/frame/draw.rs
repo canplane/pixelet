@@ -215,7 +215,7 @@ impl DrawList {
 
     /// An actor drawn stands at `translation`, its draw's (pxl-kernel
     /// domain/scene/actor.rs `Actor::draw`): a receiver of the shadow map
-    /// (pxl-spec-core `light::ACTORS_AT`).
+    /// (pxl-engine `light::ACTORS_AT`).
     pub fn stand(&mut self, translation: [f32; 3]) {
         self.stands.push(translation);
     }

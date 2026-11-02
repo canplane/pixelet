@@ -1,6 +1,6 @@
 // pxl-tool/bin/shader_wgsl.rs
 
-//! Makes pxl-spec-core's WGSL (pxl-tool shader.rs): rust/client/shader built
+//! Makes pxl-engine's WGSL (pxl-tool shader.rs): rust/client/shader built
 //! by rust-gpu inside a Linux container, its SPIR-V read into WGSL by naga
 //! (pxl-shader-build), each entry checked in under its header and the digest
 //! of the sources that made them in one stamp beside them (pxl-tool

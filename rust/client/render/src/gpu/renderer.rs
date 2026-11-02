@@ -3,15 +3,15 @@
 //! Executes the scheduler's draw lists on the device, in the kernel's own turn,
 //! in the device's depth (`mat4::perspective`).
 
+use pxl_engine::generation::GROUPS;
+use pxl_engine::light::TILE as LIGHT_TILE;
+use pxl_engine::ray;
+use pxl_engine::{beam, eye};
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec_core::generation::GROUPS;
-use pxl_spec_core::light::TILE as LIGHT_TILE;
-use pxl_spec_core::ray;
-use pxl_spec_core::{beam, eye};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -208,7 +208,7 @@ pub struct FrameStat {
     /// once, the frame's GPU time where its passes overlap (`Gpu::gpu_busy_ms`),
     /// `gpu_px` the world's pixels the frame it timed drew, what the spans
     /// were measured over, `gpu_lattice` the camera grid's lattice its eye
-    /// laid (pxl-spec-core `beam::Grid::lattice`), 0 where it had none, and
+    /// laid (pxl-engine `beam::Grid::lattice`), 0 where it had none, and
     /// `gpu_frame` that frame's number (`frame` as it was); else they are 0,
     /// as nothing was measured with this frame.
     pub gpu_read: bool,
@@ -408,7 +408,7 @@ pub struct Renderer {
     gate: Pipeline,
     gate_group: u32,
     gate_bound: (u32, u32),
-    /// The light's map's tiles, the light's cast's tiles' side (pxl-spec-core
+    /// The light's map's tiles, the light's cast's tiles' side (pxl-engine
     /// `light::TILE`), claimed the frame they changed alone, as the
     /// map gathers nothing (gpu/tiles.rs).
     light_tiles: Tiles,
@@ -886,7 +886,7 @@ impl Renderer {
         let far = cast
             .as_ref()
             .map_or(0.0, |c| f32::from_bits(c.eye[eye::FAR]));
-        // The lattice the eye's grid lays (pxl-spec-core `beam::GRID_LATTICE`),
+        // The lattice the eye's grid lays (pxl-engine `beam::GRID_LATTICE`),
         // which a read of this frame was timed on.
         let lattice = cast
             .as_ref()

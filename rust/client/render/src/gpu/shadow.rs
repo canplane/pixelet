@@ -6,7 +6,7 @@
 //! The world is cast a ray a texel through the world's query, as the eye's
 //! rays are, off samples and the visible sample (pxl-shader `light_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
-//! texel each frame it is cast (pxl-spec-core `light`); laid into the map
+//! texel each frame it is cast (pxl-engine `light`); laid into the map
 //! each frame in the box's own order, one triangle over it
 //! (`PIPELINE_LIGHT_MAP`), and decor and the actors, which move every frame,
 //! drawn over it depth only, from the light's frame. The lit passes read
@@ -15,10 +15,10 @@
 //! map is drawn again in the tiles they set alone (gpu/tiles.rs), through a
 //! gate of its own (light_gate.wgsl), as the world's pass is.
 
+use pxl_engine::eye;
+use pxl_engine::light::{self, Light, Starts, ANCHOR};
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec_core::eye;
-use pxl_spec_core::light::{self, Light, Starts, ANCHOR};
 use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_GATE, PIPELINE_LIGHT_MAP};
@@ -65,7 +65,7 @@ pub struct Shadow {
     blank_view: u32,
     blank_sampler: u32,
     /// The world's depth from the light as its cast leaves it, a word a slot
-    /// of the clipmap (pxl-spec-core `light::word`): `light_cs` writes it,
+    /// of the clipmap (pxl-engine `light::word`): `light_cs` writes it,
     /// `PIPELINE_LIGHT_MAP` lays it into the map off the box's corner,
     /// `corner`'s words.
     pub world: u32,
@@ -84,7 +84,7 @@ pub struct Shadow {
     light_frame: u32,
     light: [f32; FRAME_FLOATS],
     pub light_view_proj: Mat4,
-    /// The world's cast's words off it (pxl-spec-core `eye::LIGHT`).
+    /// The world's cast's words off it (pxl-engine `eye::LIGHT`).
     pub light_words: [u32; eye::LIGHT_WORDS],
     /// The normal offset a fragment takes: a texel at the last reach.
     pub texel: f64,
@@ -300,7 +300,7 @@ impl Shadow {
         self.eye_world = fixed.map(|v| -v);
     }
 
-    /// Where the world's cast starts each texel's ray (pxl-spec-core
+    /// Where the world's cast starts each texel's ray (pxl-engine
     /// `light::Starts`): the anchors about the box's corner, each worked out
     /// once a light frame, on the near plane where its world texel's middle
     /// lies, in Q3 off the eye's world position, and kept while the frame
@@ -315,7 +315,7 @@ impl Shadow {
             corner[0].div_euclid(ANCHOR) * ANCHOR,
             corner[1].div_euclid(ANCHOR) * ANCHOR,
         ];
-        let q3 = f64::from(1u32 << pxl_spec_core::FRAC_W);
+        let q3 = f64::from(1u32 << pxl_engine::FRAC_W);
         let texel = 2.0 / f64::from(SIZE);
         let (inverse, eye) = (self.inverse, self.eye_world);
         let mut anchor = |k: usize| {

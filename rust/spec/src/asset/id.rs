@@ -9,7 +9,7 @@ pub use spec::{Kind, SHAPE_BITS};
 /// An asset's id, `kind << SHAPE_BITS | shape`, as the code carries it: a
 /// u32 whose values a u16 holds. A type alias and not a newtype, since the
 /// number crosses as a bare u32 wherever it goes — a command's and the
-/// snapshot's words, the object store's leaf word, which pxl-spec-core
+/// snapshot's words, the object store's leaf word, which pxl-engine
 /// packs for the GPU too (`overwrite::leaf_word`) — and a value past a u16
 /// is refused where it is read (`kind_of`, the store's write), not where
 /// it is made.

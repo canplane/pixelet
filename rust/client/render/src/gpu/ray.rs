@@ -1,7 +1,7 @@
 // pxl-render/gpu/ray.rs
 
 //! The eye's rays, each drawn at its own pixel where it met a face, painted
-//! by paint.wgsl's `paint` (pxl-spec-core ray.rs), from the world surface's
+//! by paint.wgsl's `paint` (pxl-engine ray.rs), from the world surface's
 //! `rays` the GPU's cast leaves (`Cast`): the ground it
 //! casts over (ray/ground.rs) and the cast (ray/cast.rs), its samples'
 //! stops handed to the rasterizer (ray/raster.rs).

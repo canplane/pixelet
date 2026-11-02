@@ -24,11 +24,11 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::BTreeMap;
 
 use crate::terrain::CELL_U;
+use pxl_engine::param::way::STACKED_DECK_HEADROOM_M;
+use pxl_engine::way;
 use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, u_from_merc};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::param::way::STACKED_DECK_HEADROOM_M;
-use pxl_spec_core::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};
@@ -83,7 +83,7 @@ fn effective_layer(r: &Stretch) -> i64 {
 struct Obstacle {
     a: [f64; 2],
     b: [f64; 2],
-    /// In cells: what it covers is as the client's way covers (pxl-spec-core `covers`).
+    /// In cells: what it covers is as the client's way covers (pxl-engine `covers`).
     width: f32,
     headroom: i32,
     nodes: Vec<End>,
@@ -330,7 +330,7 @@ fn side_by_side(a: &Stretch, b: &Stretch, scale: Scale) -> bool {
         return false;
     }
     let same = effective_layer(a) == effective_layer(b);
-    // their edges meet where each way's cover ends (pxl-spec-core `half_width`)
+    // their edges meet where each way's cover ends (pxl-engine `half_width`)
     let half_width = |r: &Stretch| f64::from(way::half_width((r.width_u / CELL_U) as f32));
     let touching = half_width(a) + half_width(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same {

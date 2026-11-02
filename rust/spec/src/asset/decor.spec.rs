@@ -10,7 +10,7 @@
 // Each decor is said here once: its number, its models, and how the ground
 // generates it on its own. A decor's `seed` names its scatter, so changing it
 // reshuffles every one the ground generates; `density` is the chance a cell of
-// its holds one, the mean of a tree of hashes of the cells (pxl-spec-core
+// its holds one, the mean of a tree of hashes of the cells (pxl-engine
 // scatter.rs); `on` the palette entries it may stand on; `orientation` a random
 // heading, or along the road or rail its cell lies on. A variant's
 // skin is its pack's colormap, kept outside the glb.
@@ -64,7 +64,7 @@ impl DecorId {
 }
 
 /// How it faces, one row with the GPU's.
-pub use pxl_spec_core::decor::Orientation;
+pub use pxl_engine::decor::Orientation;
 
 /// A model and its pack's colormap, each a slot the catalog fills.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,12 +74,12 @@ pub struct Variant {
 }
 
 /// A decor: its id, its row (how the ground generates it and the boxes its
-/// variants claim, pxl-spec-core decor.spec.rs) and its variants' models, in
+/// variants claim, pxl-engine decor.spec.rs) and its variants' models, in
 /// the row's order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Decor {
     pub id: DecorId,
-    pub row: &'static pxl_spec_core::decor::Decor,
+    pub row: &'static pxl_engine::decor::Decor,
     pub variants: &'static [Variant],
 }
 
@@ -98,7 +98,7 @@ pub const DECORS: [Decor; 4] = [
     // at 1u spacing.
     Decor {
         id: DecorId::tree,
-        row: &pxl_spec_core::decor::DECORS[0],
+        row: &pxl_engine::decor::DECORS[0],
         variants: &[
             Variant {
                 model: crate::asset::catalog::Slot(1),
@@ -141,14 +141,14 @@ pub const DECORS: [Decor; 4] = [
     // Boats on open water: rivers, lakes and the sea near a coast; wetland is
     // too shallow. The sea is the same `water` ground, and boats stand on it
     // near a coast alone: a tile of open sea is left out of the bake and drawn
-    // from a coarser one, at whose cells no boat stands (pxl-spec-core
+    // from a coarser one, at whose cells no boat stands (pxl-engine
     // `scatter::stands_at`), so the clip levels a boat stands at hold sea only in
     // the tiles a coast crosses. Rivers are a few cells wide, so the per-cell
     // rate reads far denser than on land: cut to a quarter of 0.015 after
     // boats covered the water.
     Decor {
         id: DecorId::boat,
-        row: &pxl_spec_core::decor::DECORS[1],
+        row: &pxl_engine::decor::DECORS[1],
         variants: &[
             Variant {
                 model: crate::asset::catalog::Slot(19),
@@ -174,7 +174,7 @@ pub const DECORS: [Decor; 4] = [
     // of cells reads as gridlock.
     Decor {
         id: DecorId::car,
-        row: &pxl_spec_core::decor::DECORS[2],
+        row: &pxl_engine::decor::DECORS[2],
         variants: &[
             Variant {
                 model: crate::asset::catalog::Slot(27),
@@ -203,7 +203,7 @@ pub const DECORS: [Decor; 4] = [
     // trains should read as occasional.
     Decor {
         id: DecorId::train,
-        row: &pxl_spec_core::decor::DECORS[3],
+        row: &pxl_engine::decor::DECORS[3],
         variants: &[
             Variant {
                 model: crate::asset::catalog::Slot(37),

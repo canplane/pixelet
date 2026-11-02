@@ -21,7 +21,7 @@ use crate::division::Subtype;
 use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec_core::ground::majority;
+use pxl_engine::ground::majority;
 use xpute_kit::wire::xtp::Strs;
 
 /// The finest tile Overture makes of its divisions (overture-tiles

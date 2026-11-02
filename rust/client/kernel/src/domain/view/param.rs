@@ -9,7 +9,7 @@ use pxl_spec::space::coord::adapter::epsg4326::G4326;
 pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 // ---- the drawn resolution ----
-// `auto`'s two knobs, the scale and the camera grid's lattice (pxl-spec-core
+// `auto`'s two knobs, the scale and the camera grid's lattice (pxl-engine
 // `grid::LATTICE_MAX`), share the windows, the band and the budget, `RES_`
 // (frame/resolution.rs); the steps, and the misses and probes judged where no
 // GPU time is reported, are the scale's alone, `SCALE_`.

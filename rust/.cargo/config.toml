@@ -9,17 +9,17 @@ lint-guest-published = ["clippy", "--target", "wasm32-unknown-unknown", "-p", "p
 lint-server = ["clippy", "--all-targets", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-api", "--", "-D", "warnings"]
 # What runs here alone: the tests' code, the bakes (the tile server's feature
 # with them, which only adds) and the tools.
-lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-spec-core", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-bake", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve,pxl-geo-bake/ingest", "--", "-D", "warnings"]
+lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-bake", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve,pxl-geo-bake/ingest", "--", "-D", "warnings"]
 # The device's library, for an iPhone and an Android phone.
 lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-native", "--", "-D", "warnings"]
 lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-native", "--no-default-features", "--", "-D", "warnings"]
 # pxl-tool holds every model to the committed table, which has been wrong by hand before.
-test-host = ["test", "-p", "pxl-spec", "-p", "pxl-spec-core", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool"]
+test-host = ["test", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-render", "-p", "pxl-kernel", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool"]
 test-kernel-published = ["test", "-p", "pxl-kernel", "--no-default-features"]
 test-bake-serve = ["test", "-p", "pxl-geo-bake", "--features", "serve"]
 # The code generated from spec/: `cargo spec` says what is stale, `cargo spec --write` writes it.
 spec = ["run", "-q", "-p", "pxl-tool", "--bin", "spec", "--"]
-# pxl-spec-core's WGSL, made by rust-gpu in a container: `cargo shader-wgsl` writes it, `--check` says what is stale.
+# pxl-engine's WGSL, made by rust-gpu in a container: `cargo shader-wgsl` writes it, `--check` says what is stale.
 shader-wgsl = ["run", "-q", "-p", "pxl-tool", "--bin", "shader_wgsl", "--"]
 # What the tree must keep that no compiler sees (pxl-tool bin/check_rules.rs).
 check-rules = ["run", "-q", "-p", "pxl-tool", "--bin", "check_rules", "--"]

@@ -8,16 +8,16 @@
 //! variant's extent, placed decor as records, and the boxes the objects
 //! were written in, where what the ground generates may have changed.
 
+use pxl_engine::generation::{self, drawn, row_of};
+use pxl_engine::overwrite;
+use pxl_engine::scatter;
+use pxl_engine::LEAF_CELL;
 use pxl_render::gpu::generator::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::space::camera::grid::{split_dist, CLIP_CELLS_A_RAD, CLIP_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
-use pxl_spec_core::generation::{self, drawn, row_of};
-use pxl_spec_core::overwrite;
-use pxl_spec_core::scatter;
-use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
@@ -25,13 +25,13 @@ use crate::domain::query::World;
 use crate::domain::scene::decor::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::catalog;
+use pxl_engine::clipmap::FIRST_CELL;
+use pxl_engine::decor;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::layer::lattice;
 use pxl_spec::space::layer::tile;
-use pxl_spec_core::clipmap::FIRST_CELL;
-use pxl_spec_core::decor;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
 /// cell, the model's edge, an angle about the eye in radians (pxl-spec
@@ -65,7 +65,7 @@ fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
 
 /// Each kind's clip level zooms, a bit each, where it is an impostor's worth:
 /// the leaves', and each coarser one where one of its variants stands as
-/// itself, its own size no narrower than the clip level's cell (pxl-spec-core
+/// itself, its own size no narrower than the clip level's cell (pxl-engine
 /// `scatter::stands_at`), the same cells' decor read at every one. A finer clip
 /// level lies within the leaves'.
 fn shown() -> [u32; DECORS.len()] {
@@ -142,10 +142,10 @@ fn hand_over() -> &'static mut Frame {
     })
 }
 
-/// A leaf cell's X as the world names it (pxl-spec-core `wrap_idx`), the
+/// A leaf cell's X as the world names it (pxl-engine `wrap_idx`), the
 /// GPU's generated records' among them, as a word.
 fn wrap(x: i32) -> u32 {
-    pxl_spec_core::wrap_idx(LEAF_CELL, x) as u32
+    pxl_engine::wrap_idx(LEAF_CELL, x) as u32
 }
 
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the

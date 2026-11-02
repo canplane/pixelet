@@ -47,7 +47,7 @@ Nothing now.
   text (`ts/client/src/shell/debug/console.ts`). What a screen point draws is
   not: the block its ray met, with its face, zoom and distance, and where that
   block was read from, asked of the running page and answered as text. The
-  answer is the GPU's, the ray's words read back (`pxl-spec-core ray.rs`), since
+  answer is the GPU's, the ray's words read back (`pxl-engine ray.rs`), since
   the CPU's `first_hit` (`pxl-kernel domain/query/ray.rs`) can disagree where
   the samples miss a thin face
   ([20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md)).

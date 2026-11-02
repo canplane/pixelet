@@ -61,7 +61,7 @@ pub struct Surface {
     pub screen_depth_view: u32,
     /// The eye's rays as the cast leaves them, a drawn pixel each, made with
     /// the depth: `ray::WORDS` layers of `r32uint`, a word of the ray's a
-    /// layer (pxl-spec-core `ray`).
+    /// layer (pxl-engine `ray`).
     pub rays: u32,
     pub rays_view: u32,
     /// The world's color gathered over frames, two of `WORLD_COLOR` made

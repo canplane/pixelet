@@ -5,7 +5,7 @@
 use core::mem::{offset_of, size_of};
 
 use crate::sys::sched::phase_spec::PHASES;
-use pxl_spec_core::tally;
+use pxl_engine::tally;
 
 use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
 use crate::perf::word::{as_words, as_words_mut, words, Words};
@@ -110,7 +110,7 @@ pub struct FrameSample {
 /// them (pxl-render gpu/ray/tally.rs `RayCounts`), in perf.json FRAME's
 /// `rays` group's order: whether the eye cast in full, its pixels and its
 /// lanes; whether the light's map cast, its slots and its lanes
-/// (pxl-spec-core `tally`). What an observer took, walked and took the sky
+/// (pxl-engine `tally`). What an observer took, walked and took the sky
 /// for is what it cast again, of its pixels or slots.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

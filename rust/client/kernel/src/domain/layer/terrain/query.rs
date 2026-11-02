@@ -7,14 +7,14 @@
 //! A column's ways are its brick's tree the GPU built, its child groups read
 //! back into the pool's mirror (domain/layer/terrain/clipmap.rs `pool`).
 
+use pxl_engine::area::Shard;
+use pxl_engine::clipmap::{self as cells, Lookup};
+use pxl_engine::ground::{Bounds, Cell};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile, TOP_ZOOM};
-use pxl_spec_core::area::Shard;
-use pxl_spec_core::clipmap::{self as cells, Lookup};
-use pxl_spec_core::ground::{Bounds, Cell};
 
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
 use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
@@ -28,17 +28,17 @@ use pxl_spec::space::coord::aabb::Aabb;
 /// the world's query alone (domain/query.rs), as `Query` is.
 pub(in crate::domain) trait TerrainQuery {
     /// The lowest and highest the ground holds over the column `node`'s own
-    /// cells, in leaf cells, and the ways apart (pxl-spec-core
+    /// cells, in leaf cells, and the ways apart (pxl-engine
     /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off the
     /// finest clip level holding them, one look-up whatever the node's size
     /// (`relief`). A coarser clip level standing in holds its own cells, which
     /// its bound holds, and names the tile lacked; where no clip level holds
     /// it, the lack, never nothing. Past the service area no clip level holds
     /// anything: a reader asks that first, the descent of its shard
-    /// (pxl-spec-core `area::Shard`). `place` is where a node over it found its
-    /// cells, or `Lookup::NONE`, and becomes where its own are (pxl-spec-core
+    /// (pxl-engine `area::Shard`). `place` is where a node over it found its
+    /// cells, or `Lookup::NONE`, and becomes where its own are (pxl-engine
     /// `clipmap::step`). Its cells are read at `cell` as the GPU reads them
-    /// (pxl-spec-core `clipmap::bound_over`); `line` names the tile and says
+    /// (pxl-engine `clipmap::bound_over`); `line` names the tile and says
     /// whether the clip level read is its ground's own.
     fn relief(
         &self,
@@ -49,7 +49,7 @@ pub(in crate::domain) trait TerrainQuery {
     ) -> Answer<Bounds>;
 
     /// The column `node` off the clip levels, the wall where it is the
-    /// wall, as the GPU reads it (pxl-spec-core `clipmap::ground`), stepped
+    /// wall, as the GPU reads it (pxl-engine `clipmap::ground`), stepped
     /// from `place`: exact where `line`
     /// says the ground at the clip level it was read off or coarser, else
     /// coarser, naming its tile (`answer_at`); where no clip level holds it, the
@@ -164,7 +164,7 @@ impl Query for TileCache<TerrainTile> {
     /// ground's and the ways' joined, down to a cell at `cell` under its
     /// lowest, within the node. A node past the service area, no palette index in
     /// it, holds nothing: known before any of its ground arrives, a shard or
-    /// finer, as every reader knows it (pxl-spec-core `area::Shard`); a
+    /// finer, as every reader knows it (pxl-engine `area::Shard`); a
     /// coarser node may straddle the area's edge and is read.
     fn bound<const D: usize>(
         &self,

@@ -10,5 +10,5 @@ publish = false
 proc-macro = true
 
 [dependencies]
-# The constants pxl-spec-core holds; pxl-shader's own it reads as a module.
-pxl-spec-core.workspace = true
+# The constants pxl-engine holds; pxl-shader's own it reads as a module.
+pxl-engine.workspace = true

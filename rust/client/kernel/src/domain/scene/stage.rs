@@ -68,6 +68,8 @@ use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::boot;
 use crate::sys::io::loader;
+use pxl_engine::clipmap::FILL_CAP;
+use pxl_engine::way::tree;
 use pxl_render::gpu::api;
 use pxl_render::gpu::renderer;
 use pxl_spec::asset::catalog::pack;
@@ -76,8 +78,6 @@ use pxl_spec::asset::sky::moon;
 use pxl_spec::object;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3;
-use pxl_spec_core::clipmap::FILL_CAP;
-use pxl_spec_core::way::tree;
 
 const _: () = assert!(
     EARTH_SLOTS == EARTH_LAYERS,
@@ -142,7 +142,7 @@ pub fn stage_render(pace: Pace) {
     let lists = draw_list().take();
     let actors = lists.stands;
     let models = model::models();
-    // Each decor variant at its draw group (pxl-spec-core scatter.rs `first_group`).
+    // Each decor variant at its draw group (pxl-engine scatter.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
     for d in &decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {

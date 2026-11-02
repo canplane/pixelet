@@ -5,9 +5,9 @@
 //! which the CPU reads back; and the eye's clip levels' levels folded over
 //! their bricks (`fold_cs`).
 
-use pxl_spec_core::fill;
-use pxl_spec_core::clipmap::{self, BRICK, FIRST_CELL};
-use pxl_spec_core::{at, way};
+use pxl_engine::fill;
+use pxl_engine::clipmap::{self, BRICK, FIRST_CELL};
+use pxl_engine::{at, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 use spirv_std::spirv;
 
@@ -15,7 +15,7 @@ use crate::eye::Eye;
 use crate::world::{brick_at, NoPalette, World};
 
 /// The eye's clip levels folded over their bricks, a thread an entry
-/// (pxl-spec-core `clipmap::fold`), each a row of the clip levels' buffer past
+/// (pxl-engine `clipmap::fold`), each a row of the clip levels' buffer past
 /// their slot table (`clipmap::JOINED_AT`): each clip level's levels over a
 /// brick, the join of its aligned blocks of bricks, which a node wider
 /// than a brick reads as one entry (`clipmap::bound_over`), a level a dispatch

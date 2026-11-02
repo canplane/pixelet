@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/light_lay.wgsl
 
 // The world's depth from the light, as its cast left it a word a slot of the
-// clipmap (pxl-shader `light_cs`, pxl-spec-core `light::word`; its depth
+// clipmap (pxl-shader `light_cs`, pxl-engine `light::word`; its depth
 // read as `light_depth`, which build.rs makes off its layout), as the map
 // lays it in the light box's own order (light_map.wgsl, light_gate.wgsl):
 // box texel p's slot is its world texel, the box's corner on by p, modulo

@@ -12,11 +12,11 @@
 
 use core::ops::Range;
 
+use pxl_engine::HEIGHT_BITS;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::procedural::height_u_per_m;
 use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec_core::HEIGHT_BITS;
 
 use pxl_spec::space::coord::world::around;
 

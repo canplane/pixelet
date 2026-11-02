@@ -66,7 +66,7 @@ export const CATALOG: u32 = 0 as number;
  * above for a tile the pyramid holds. */
 export { object };
 
-/** The zoom of the tile a shard below OBJECT is: pxl-spec-core's `SHARD_ZOOM`, which the
+/** The zoom of the tile a shard below OBJECT is: pxl-engine's `SHARD_ZOOM`, which the
  * kernel holds this to (domain/layer/object/repository.rs). A key's digits to it name the
  * shard, and past it each zoom adds a digit on each of three axes (pxl-spec
  * space/hierarchy/morton.rs). */

@@ -17,9 +17,9 @@ use super::zoom::{cube, units, Zoom};
 /// - Z, 16: ±2^15 units of height, as the terrain stores a height, an `i16`
 ///   in ground cells, a ground cell a unit (`bake/constant.rs`).
 pub const EXTENT: [u32; 3] = [
-    pxl_spec_core::UNIT_ZOOM,
-    pxl_spec_core::UNIT_ZOOM,
-    pxl_spec_core::HEIGHT_BITS,
+    pxl_engine::UNIT_ZOOM,
+    pxl_engine::UNIT_ZOOM,
+    pxl_engine::HEIGHT_BITS,
 ];
 
 const _: () = assert!(
@@ -94,10 +94,10 @@ pub const fn around(zoom: Zoom) -> i64 {
     1i64 << zoom
 }
 
-/// A cell at `z` named as pxl-spec-core's `wrap_idx` names its X, which
+/// A cell at `z` named as pxl-engine's `wrap_idx` names its X, which
 /// every key goes through.
 pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i32; 3]) -> [i32; 3] {
-    [pxl_spec_core::wrap_idx(zoom, x), y, h]
+    [pxl_engine::wrap_idx(zoom, x), y, h]
 }
 
 /// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.

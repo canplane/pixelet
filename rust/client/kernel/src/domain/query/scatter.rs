@@ -6,17 +6,17 @@
 //! it is read. Where it stands, which way it faces and whether it generates are
 //! the world unplaced, the ground's alone, its column's surface
 //! and the cells about it (`World::column_surface`); only an edit in its box, asked
-//! of the world as edited, takes it away (pxl-spec-core `generation::placement`).
+//! of the world as edited, takes it away (pxl-engine `generation::placement`).
 
+use pxl_engine::generation::{self, DecorQuery, Generated};
+use pxl_engine::support::ColumnSurface;
+use pxl_engine::world::PlacedCursor;
+use pxl_engine::FRAC_W;
 use pxl_spec::asset::cube::sentinel;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec_core::generation::{self, DecorQuery, Generated};
-use pxl_spec_core::support::ColumnSurface;
-use pxl_spec_core::world::PlacedCursor;
-use pxl_spec_core::FRAC_W;
 
 use super::node::At;
 use super::world::World;
@@ -24,9 +24,9 @@ use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::Answer;
-use pxl_spec_core::decor;
+use pxl_engine::decor;
 
-/// The world as decor's generation asks it on the CPU (pxl-spec-core
+/// The world as decor's generation asks it on the CPU (pxl-engine
 /// `DecorQuery`): the world's one query and its ray, unplaced (`ground`,
 /// the ground's alone) and as edited, and what is placed.
 pub(super) struct DecorWorld<'a, 'w> {
@@ -92,7 +92,7 @@ impl DecorQuery for DecorWorld<'_, '_> {
 /// read about it (`World::generated_in`): the leaf scatter, cell by cell, which
 /// a region generates the same (pxl-spec procedural.test.rs); and, where
 /// `boxed`, whether it generates there, its box asked about the same column surface
-/// (pxl-spec-core `generation::placement`), true where not.
+/// (pxl-engine `generation::placement`), true where not.
 pub(super) fn generated_at(
     asked: &mut DecorWorld,
     decor: &Decor,

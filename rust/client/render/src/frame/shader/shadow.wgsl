@@ -10,7 +10,7 @@
 @group(0) @binding(2) var shadow_sampler: sampler_comparison;
 
 // How much the depth of a plane with normal `n` changes a texel across and
-// a texel down the map, as a share of the box's depth: pxl-spec-core
+// a texel down the map, as a share of the box's depth: pxl-engine
 // `light::slope`, the one statement of it, which the casters' push takes too
 // (`Light::of`, `param::light::SLOPE_BIAS`). Its steps are the light box's own: the
 // box is orthographic, so each row of its matrix is the world's step along

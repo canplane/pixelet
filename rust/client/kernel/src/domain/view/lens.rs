@@ -6,10 +6,10 @@
 //! screen's rays reads (`gpu_cast`), a ray a drawn pixel, one rule wherever
 //! the eye is.
 
+use pxl_engine::{beam, eye};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::CELL;
 use pxl_spec::space::coord::world::origin;
-use pxl_spec_core::{beam, eye};
 
 use crate::domain::query::zoom_range;
 use crate::domain::view::observation;
@@ -53,7 +53,7 @@ impl Stepped {
     }
 }
 
-/// What a GPU's cast of the screen's rays reads of the eye (pxl-spec-core
+/// What a GPU's cast of the screen's rays reads of the eye (pxl-engine
 /// `eye`, pxl-shader `Eye`): its Q3 position as a ray's origin, over
 /// the world where it stands there (pxl-spec `world::origin`), and whether each ray
 /// reports the nodes its descent asked, not what it met; the unit forward
@@ -61,7 +61,7 @@ impl Stepped {
 /// the unit up; the tangents of the
 /// screen's half-angles across and up and the zooms a cell is asked at;
 /// the camera grid the cast lays over the screen off them, once, its beam
-/// rays and cells `lattice` cells apart (pxl-spec-core `beam::Grid::of`). A
+/// rays and cells `lattice` cells apart (pxl-engine `beam::Grid::of`). A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
 pub fn gpu_cast(
@@ -84,7 +84,7 @@ pub fn gpu_cast(
     put(eye::TAN, &lens.tan.map(w));
     put(eye::RANGE, &zoom_range());
     // The grid off the very f32s the words above hold, so every reader's is
-    // this one (pxl-spec-core `beam::Grid`).
+    // this one (pxl-engine `beam::Grid`).
     put(
         eye::GRID,
         &beam::Grid::of(lens.tan.map(|t| t as f32), lattice).words(),

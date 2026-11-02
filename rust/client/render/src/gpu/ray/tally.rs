@@ -1,14 +1,14 @@
 // pxl-render/gpu/ray/tally.rs
 
 //! What the eye's cast and the light's walked and took, counted where the
-//! `ray_counts` setting asks (pxl-spec-core `tally`): where each pass
+//! `ray_counts` setting asks (pxl-engine `tally`): where each pass
 //! counts cleared each counted frame, gathered into one array after the
 //! frame's dispatches where no mapping of it is out (`copied`), mapped back
 //! (`mapped`), and handed on as it lands with what the host knew of the
 //! frame that counted it (`Frame`), by the renderer's number of that frame
 //! (`RayCounts`), as a GPU read is.
 
-use pxl_spec_core::{pyramid, raster, ray, tally};
+use pxl_engine::{pyramid, raster, ray, tally};
 use xpute_guest::mem::off_of;
 
 use crate::gpu::api::{buffer_usage, bytes, word_bytes, Gpu, DONE};
@@ -17,7 +17,7 @@ const WORDS: usize = tally::WORDS as usize;
 
 /// A counted frame's counts, by index, an observer's each (`count_at`):
 /// whether it cast, 1 or 0 (`CAST`), its pixels or slots (`RAYS`), and its
-/// lanes (pxl-spec-core `tally`, from `LANES_AT`).
+/// lanes (pxl-engine `tally`, from `LANES_AT`).
 pub const CAST: usize = 0;
 pub const RAYS: usize = 1;
 pub const LANES_AT: usize = 2;

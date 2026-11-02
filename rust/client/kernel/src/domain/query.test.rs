@@ -27,6 +27,8 @@ use crate::domain::layer::object::store::Write;
 use crate::domain::layer::terrain::clipmap::test;
 use crate::sys::io::demand::Ask;
 use crate::sys::serial;
+use pxl_engine::area::{self, Area};
+use pxl_engine::world::placed_in;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::DecorId;
 use pxl_spec::bake::separation::Separation;
@@ -34,8 +36,6 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::tile;
-use pxl_spec_core::area::{self, Area};
-use pxl_spec_core::world::placed_in;
 
 const CELLS: usize = GROUND_COLUMN;
 const SPAN: usize = TILE_CELLS as usize;
@@ -358,7 +358,7 @@ fn ray_from_above_meets_ground() {
 #[test]
 fn dig_met_as_folded() {
     use crate::domain::layer::object::store::AIR;
-    use pxl_spec_core::answer::{side, EIGHTHS};
+    use pxl_engine::answer::{side, EIGHTHS};
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
@@ -617,7 +617,7 @@ fn reading_reports_columns() {
 #[test]
 fn box_placed_matches_store() {
     let _g = serial();
-    let unit = pxl_spec_core::UNIT_ZOOM;
+    let unit = pxl_engine::UNIT_ZOOM;
     let mut store = Store::default();
     let corners: [V3; 5] = [
         [3.0, 4.0, 5.0],
@@ -670,9 +670,9 @@ fn box_placed_matches_store() {
 #[test]
 fn late_brick_spike() {
     use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, CpuClipmap};
+    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, CLIP_SIZE, LEVELS};
+    use pxl_engine::LEAF_CELL;
     use pxl_render::gpu::ray::Resident;
-    use pxl_spec_core::clipmap::{self as cells, Bricks, Lookup, BRICK, CLIP_SIZE, LEVELS};
-    use pxl_spec_core::LEAF_CELL;
     let _g = serial();
     let leaf = top().children()[0];
     let mut heights = vec![5; CELLS];
@@ -749,9 +749,9 @@ fn late_brick_spike() {
 #[test]
 fn device_loss_drops_bounds() {
     use crate::domain::layer::terrain::clipmap::{test::lose, CpuClipmap};
-    use pxl_spec_core::clipmap::{self as cells, Bricks, Lookup, BRICK, LEVELS};
-    use pxl_spec_core::ground::UNBOUNDED;
-    use pxl_spec_core::LEAF_CELL;
+    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, LEVELS};
+    use pxl_engine::ground::UNBOUNDED;
+    use pxl_engine::LEAF_CELL;
     let _g = serial();
     let _held = flat_at_five();
     let (first, _) = CpuClipmap.origin(LEAF_CELL);
@@ -772,7 +772,7 @@ fn device_loss_drops_bounds() {
 
 /// What the ground generates stands where it was generated whatever is put
 /// over it or in place of the cell under it, air or a cube: it generates on
-/// the world unplaced (pxl-spec-core `generation::placement`).
+/// the world unplaced (pxl-engine `generation::placement`).
 #[test]
 fn generated_decor_stays() {
     use crate::domain::layer::object::store::AIR;
@@ -804,7 +804,7 @@ fn generated_decor_stays() {
 }
 
 /// Only an edit in its own box takes what the ground generates away, air or a
-/// cube; one under it or over it leaves it generated (pxl-spec-core
+/// cube; one under it or over it leaves it generated (pxl-engine
 /// `generation::DecorQuery::asset`, edited).
 #[test]
 fn generated_decor_edit_removes() {
@@ -858,7 +858,7 @@ impl Area for EastOf {
         true
     }
     fn nine(&self, key: u32) -> u32 {
-        use pxl_spec_core::SHARD_ZOOM;
+        use pxl_engine::SHARD_ZOOM;
         // `area::shard_key` undone: X's and Y's bits interleaved from the top.
         let mut c = [0i32; 2];
         for b in 0..SHARD_ZOOM {
@@ -874,7 +874,7 @@ impl Area for EastOf {
 /// column and a cell past it neither (`World::within`, `World::editable`).
 #[test]
 fn area_edge_leaf_cell_thick() {
-    use pxl_spec_core::SHARD_ZOOM;
+    use pxl_engine::SHARD_ZOOM;
     let _g = serial();
     let s = LEAF_ZOOM - SHARD_ZOOM;
     // A served shard's westmost leaf, the shard west of it unserved.

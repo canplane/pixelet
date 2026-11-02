@@ -4,11 +4,11 @@
 //! (`height_cs`, `way_cs`, `bound_cs`, the ways' tree) and its cells and
 //! its tree's records read back where the CPU looks them up.
 
-use pxl_spec_core::clipmap::{
+use pxl_engine::clipmap::{
     self, BACK_WORDS, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT, FILL_BRICK, FILL_CAP,
     FILL_WORDS, HANDED_WORDS, LEVELS, LINES_AT, PALETTE_AT, SLOTS,
 };
-use pxl_spec_core::way;
+use pxl_engine::way;
 use xpute_guest::mem::off_of;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -26,7 +26,7 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 
-/// The ground's clip levels as the GPU holds them (pxl-spec-core
+/// The ground's clip levels as the GPU holds them (pxl-engine
 /// `clipmap`, their bricks in `SLOTS` slots): the bricks to hand it, and where
 /// their cells come back.
 pub struct GroundBricks<'a> {
@@ -53,7 +53,7 @@ pub struct GroundBricks<'a> {
 /// How a brick's fill landed: its cells are back in every case.
 pub enum Resident<'a> {
     /// Its ways' tree built: the child groups it holds, their count first, a
-    /// record each (pxl-spec-core `way::tree::lay`).
+    /// record each (pxl-engine `way::tree::lay`).
     Built(&'a [u32]),
     /// To be filled again, for want of room the renderer grows: its tree not
     /// built, the pool or the scratch it was built in having run out
@@ -67,7 +67,7 @@ pub enum Resident<'a> {
 }
 
 /// The read-backs a brick's cells and its ways' records come back in
-/// (`GroundBuffers::read_back`): two frames' fills (pxl-spec-core
+/// (`GroundBuffers::read_back`): two frames' fills (pxl-engine
 /// `clipmap::FILL_CAP`), so one frame's mappings are still landing while
 /// the next is copied.
 const READS: usize = 2 * FILL_CAP as usize;
@@ -85,7 +85,7 @@ pub type OnResident<'a> = dyn FnMut(u32, u32, Resident<'_>) + 'a;
 
 /// Where a brick's cells, which the GPU draws, come back to in the
 /// kernel's memory: its columns, levels, laid cells and root
-/// (pxl-spec-core `clipmap::BACK_WORDS`); and the fill's ticket, never 0,
+/// (pxl-engine `clipmap::BACK_WORDS`); and the fill's ticket, never 0,
 /// which the kernel is told once this fill's are in.
 #[derive(Clone, Copy, Default)]
 pub struct CellsBack {
@@ -95,7 +95,7 @@ pub struct CellsBack {
 
 /// A brick handed to the GPU's fill, the record the ground's clip levels hand
 /// on (pxl-kernel domain/layer/terrain/clipmap.rs `fill`): its words
-/// (pxl-spec-core `clipmap::fill_words`), its four palette indices a cell, its tile's
+/// (pxl-engine `clipmap::fill_words`), its four palette indices a cell, its tile's
 /// padded samples, its lines as far as they are written
 /// (`clipmap::LINES_AT`), and where its cells come back to.
 pub struct BrickFill<'a> {
@@ -144,7 +144,7 @@ impl GroundPipelines {
 pub(super) struct GroundBuffers {
     /// Per slot of the clip levels' bricks (`clipmap::SLOTS`), its columns,
     /// levels, cells as laid and root, which `height_cs`, `bound_cs` and
-    /// `way_tree_cs` write in the turn it is handed (pxl-spec-core
+    /// `way_tree_cs` write in the turn it is handed (pxl-engine
     /// `clipmap::BRICK_WORDS`).
     pub(super) ground: u32,
     /// Per slot, its cells' four palette indices (`PALETTE_BYTES`).
@@ -210,7 +210,7 @@ pub(super) struct GroundBuffers {
     ways_built: Pipeline,
     ways_group: u32,
     /// A re-filled brick's old ways' tree given back, its new one built,
-    /// the child groups the build gave back pushed (pxl-spec-core `way::tree`):
+    /// the child groups the build gave back pushed (pxl-engine `way::tree`):
     /// each pass and its group, over the ways' pool, child pointers then data
     /// words (`pool_bytes`), its free stack, the count taken then the ids,
     /// child group 0 never among them, a word a child group, and each handed brick's
@@ -248,7 +248,7 @@ fn pool_bufs(g: &Gpu, child_groups: u32) -> (u32, u32) {
 
 /// The handed bricks' scratch, each brick's for a tree of `child_groups`, in
 /// bytes: `FILL_CAP` of them, every brick's alike, so each finds its own off
-/// the buffer's length (pxl-spec-core fill.rs `scratch_at`).
+/// the buffer's length (pxl-engine fill.rs `scratch_at`).
 const fn scratch_bytes(child_groups: u32) -> u32 {
     FILL_CAP * way::tree::scratch_words(child_groups) * 4
 }
@@ -621,7 +621,7 @@ impl RaysPass {
         };
         let pass = g.compute_pass(encoder, stamp.pass());
         // A re-filled brick's old ways' child groups given back, off its root word
-        // before its build writes another (pxl-spec-core `way::tree`).
+        // before its build writes another (pxl-engine `way::tree`).
         g.set_pipeline(pass, c.free_built.id);
         g.set_bind_group(pass, 0, c.free_group, &[]);
         g.dispatch(pass, 1, 1, c.fresh_len);
@@ -635,7 +635,7 @@ impl RaysPass {
             c.fresh_len,
         );
         // A column a thread, over the tops just drawn: each column's spans
-        // once, the brick's and its ring's (pxl-spec-core fill.rs `spans`),
+        // once, the brick's and its ring's (pxl-engine fill.rs `spans`),
         // which the levels and the trees read.
         g.set_pipeline(pass, c.ways_built.id);
         g.set_bind_group(pass, 0, c.ways_group, &[]);

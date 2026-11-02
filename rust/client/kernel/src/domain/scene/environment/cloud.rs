@@ -4,15 +4,18 @@
 //! drawn as decor is and held as decor is not. It claims no cell, so
 //! nothing is built around it and a tower stands through it; it is no layer
 //! and no clip level's brick holds it. It is laid on the field's own map,
-//! which the wind carries (`pxl-spec-core cloud.rs` `drift`): a patch of
+//! which the wind carries (`pxl-engine cloud.rs` `drift`): a patch of
 //! cells there is built once and drawn moved, each instance a model, an
 //! impostor or nothing by its size on the screen (`present_patch`), by the
-//! tiers the GPU draws decor by, one rule (pxl-spec-core scatter.rs
+//! tiers the GPU draws decor by, one rule (pxl-engine scatter.rs
 //! `drawn::tier`). A patch is laid in the columns the decor and impostor
 //! shaders read (domain/scene/column.rs).
 
 use fnv::FnvHashMap;
 
+use pxl_engine::cloud::{drift, lattice_hash};
+use pxl_engine::generation::drawn;
+use pxl_engine::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
@@ -20,9 +23,6 @@ use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
-use pxl_spec_core::cloud::{drift, lattice_hash};
-use pxl_spec_core::generation::drawn;
-use pxl_spec_core::param::cloud::{CUMULUS_KM, WIND};
 use xpute_guest::global::Global;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::{alloc, free};
@@ -45,11 +45,11 @@ use crate::domain::view::observation::eye;
 use crate::domain::view::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{catalog, load_image, load_of};
+use pxl_engine::generation;
+use pxl_engine::param::cloud;
 use pxl_render::gpu::api::Image;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world;
-use pxl_spec_core::generation;
-use pxl_spec_core::param::cloud;
 
 /// Its models, a cloud each one of them.
 const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
@@ -57,7 +57,7 @@ const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
 pub const MODELS_MAX: usize = VARIANTS.len();
 
 /// Its draw groups follow the decors' variants, which number the groups
-/// before it (pxl-spec-core scatter.rs `GROUPS`).
+/// before it (pxl-engine scatter.rs `GROUPS`).
 const FIRST_GROUP: usize = generation::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
@@ -65,7 +65,7 @@ const _: () = assert!(
 );
 
 /// A cell holds a cloud or none: a unit of the field's lattice, whose hash
-/// says where one is (pxl-spec-core param.rs `cloud::LATTICE_SHAMT`).
+/// says where one is (pxl-engine param.rs `cloud::LATTICE_SHAMT`).
 const CELL_SHAMT: u32 = cloud::LATTICE_SHAMT;
 const CELL: f64 = (1u32 << CELL_SHAMT) as f64;
 /// The cells around the world, so a cell's hash wraps with the map.

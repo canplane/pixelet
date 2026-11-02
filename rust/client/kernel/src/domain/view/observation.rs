@@ -7,6 +7,7 @@ use crate::sys::io::demand::Order;
 use pxl_spec::space::layer::lattice::{demand_dist, draw_dist};
 use xpute_guest::global::Global;
 
+use pxl_engine::clipmap::{bricks_zoom, BRICK_SHIFT};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::split_dist;
 use pxl_spec::space::coord::v3::V3;
@@ -15,7 +16,6 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use pxl_spec_core::clipmap::{bricks_zoom, BRICK_SHIFT};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
@@ -90,7 +90,7 @@ pub fn observation() -> Option<Observation> {
     })
 }
 
-/// The eye's clip levels' bricks (pxl-spec-core clipmap.rs), the ground about
+/// The eye's clip levels' bricks (pxl-engine clipmap.rs), the ground about
 /// the eye cut into one partition: from the coarsest bricks within the
 /// floor's ring (tile_cache/floor.rs `ring`), the far edge cut by the ground,
 /// a brick splits into its four while its nearest point is nearer than its
@@ -158,7 +158,7 @@ pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -
 /// asked, and so what is read, cannot depend on what was held before: the
 /// rays only see it arrive.
 /// It asks by x and y alone, the eye's height no part of it: a ray picks a
-/// cell's zoom by its distance in 3D (pxl-spec-core `grid::cell_zoom_at`),
+/// cell's zoom by its distance in 3D (pxl-engine `grid::cell_zoom_at`),
 /// never shorter than its distance across the ground, so more is asked than is
 /// read and never less.
 pub struct ByEye {

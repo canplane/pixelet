@@ -12,6 +12,9 @@
 
 use fnv::{FnvHashMap, FnvHashSet};
 
+use pxl_engine::area;
+use pxl_engine::clipmap::{self, Entry, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
+use pxl_engine::LEAF_CELL;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
@@ -22,9 +25,6 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
-use pxl_spec_core::area;
-use pxl_spec_core::clipmap::{self, Entry, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
-use pxl_spec_core::LEAF_CELL;
 use xpute_guest::global::Global;
 
 use crate::domain::layer::terrain::clipmap::{eye_entries, tile_of};
@@ -196,7 +196,7 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
 /// which are read there instead; none coarser than the source's top, which
 /// nothing asks for. A piece is drawn where its brick is present, or where a
 /// coarser clip level's brick is, which the cast reads in its place
-/// (pxl-spec-core `clipmap::step`): from the floor where that brick's tile is
+/// (pxl-engine `clipmap::step`): from the floor where that brick's tile is
 /// the floor's alone. One not drawn is marked by its line: no tile on it, only
 /// the floor's, or a tile and its brick not yet filled.
 fn outline(o: &Observation, top: Zoom) -> Outline {

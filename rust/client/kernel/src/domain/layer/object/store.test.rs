@@ -10,11 +10,11 @@ use pxl_spec::space::hierarchy::morton::child_cube;
 
 use super::*;
 use crate::domain::layer::Query;
+use pxl_engine::answer;
+use pxl_engine::overwrite::{self, Cut};
 use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use pxl_spec_core::answer;
-use pxl_spec_core::overwrite::{self, Cut};
 use xpute_kit::math::rng::SplitMix64;
 
 #[test]
@@ -95,7 +95,7 @@ fn some_node(rng: &mut Rng, radius: f64) -> Node<3> {
 }
 
 /// What the objects' pyramid holds at a cell: its value and the eighths of
-/// its cube it keeps (pxl-spec-core `answer::eighths`).
+/// its cube it keeps (pxl-engine `answer::eighths`).
 type Contents = FnvHashMap<[i32; 3], (u32, u32)>;
 
 /// Whole cells from a corner, and what the objects' pyramid holds at

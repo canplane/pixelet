@@ -5,7 +5,7 @@
 //! is `#[spirv(compute(threads(64, 1, 1), entry_point_name = "hit_lead_cs"))]`,
 //! each side named in `threads` written as its constant's value, since
 //! rust-gpu's `threads` takes literals alone. The constants are
-//! pxl-spec-core's and pxl-shader workgroup.rs's, read here as they are, so
+//! pxl-engine's and pxl-shader workgroup.rs's, read here as they are, so
 //! an entry's size and the constant it counts by are one fact.
 
 #![deny(warnings)]
@@ -15,7 +15,7 @@ use proc_macro::{Delimiter, TokenStream, TokenTree};
 #[path = "../../src/workgroup.rs"]
 mod workgroup;
 
-use pxl_spec_core::{beam, raster, ray};
+use pxl_engine::{beam, raster, ray};
 use workgroup::{CAST_SIDE, DECOR_CELL_LANES, DECOR_RECORD_LANES, WAY_LANES};
 
 /// Each constant, by its path as it is written here and in `threads`.

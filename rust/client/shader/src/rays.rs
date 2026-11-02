@@ -11,7 +11,7 @@
 use spirv_std::Image;
 
 /// The eye's rays, a drawn pixel each, a layer a word of the ray's
-/// (cast.rs `word`; pxl-spec-core `ray`): the cast writes them.
+/// (cast.rs `word`; pxl-engine `ray`): the cast writes them.
 type Rays = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 
 #[path = "cast.rs"]

@@ -1,15 +1,15 @@
 // pxl-shader/beam.rs
 
-//! The beam rays (pxl-spec-core `beam`): each corner's walk and line
+//! The beam rays (pxl-engine `beam`): each corner's walk and line
 //! (`beam_cs`), where each cell's rays start off them (`cell_cs`), and the
 //! samples walked from those starts (`sample_cs`), each its pass's entry,
 //! cast for the eye's camera grid and for the shadow map, as the head it is
 //! handed names (pass_observer.rs `PassObserver`); and the words a line, a
 //! node and a sample are held in, every observer's.
 
-use pxl_spec_core::cast::{self, Detail, End, Trace, Query, Until};
-use pxl_spec_core::world::Inheritance;
-use pxl_spec_core::{beam, pyramid, support, way};
+use pxl_engine::cast::{self, Detail, End, Trace, Query, Until};
+use pxl_engine::world::Inheritance;
+use pxl_engine::{beam, pyramid, support, way};
 use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
@@ -20,7 +20,7 @@ use crate::observer::{self, Level, Observer};
 use crate::light::Head;
 use crate::world::World;
 
-/// The beam rays' buffer, the cast's own for a frame (pxl-spec-core
+/// The beam rays' buffer, the cast's own for a frame (pxl-engine
 /// `beam`): the lines, a corner each, the cells' starts and the samples'
 /// hits, as the frame's `Grid` lays them (`Grid::size`), or as the light's
 /// list does (`light::list_words`) where the pass casts for the map; a
@@ -28,7 +28,7 @@ use crate::world::World;
 /// missed (`ray::MISS`), so nothing here is a pixel's.
 pub(crate) type Beams = spirv_std::RuntimeArray<u32>;
 
-/// A beam ray's line (pxl-spec-core `beam::LINE_WORDS`, at `base` of the
+/// A beam ray's line (pxl-engine `beam::LINE_WORDS`, at `base` of the
 /// words `W` hold: the eye's beam rays' buffer or the light's list) as a walk
 /// resumes from one: what was handed each node of it (`world::Inheritance::words`),
 /// its own at its zoom. A node's entry is its key's (`pyramid::entry_of`),
@@ -80,7 +80,7 @@ impl<W: Words + ?Sized> cast::Over<Inheritance> for BeamLine<'_, W> {
 }
 
 /// A beam ray's line as a reader of the assets about a node near it reads
-/// it, in place (pxl-spec-core `support::Ancestors`): the node it stopped at,
+/// it, in place (pxl-engine `support::Ancestors`): the node it stopped at,
 /// by its index from the eye's origin, and what was handed each node of it
 /// (`BeamLine`), none of it copied. The eye's: its lines' nodes are held from
 /// the one origin its rays start at.
@@ -115,9 +115,9 @@ impl<W: Words + ?Sized> support::Ancestors<Inheritance> for BeamAncestors<'_, W>
     }
 }
 
-/// Where lines, nodes and samples' words lie (pxl-spec-core
+/// Where lines, nodes and samples' words lie (pxl-engine
 /// `beam::LINE_WORDS`, `beam::NODE_WORDS`, `beam::SAMPLE_WORDS`): the eye's
-/// in the beam rays' buffer; the light's in its list's (pxl-spec-core
+/// in the beam rays' buffer; the light's in its list's (pxl-engine
 /// `light::line`, `light::sample`).
 pub(crate) trait Words {
     fn word(&self, k: u32) -> u32;
@@ -148,11 +148,11 @@ impl Words for Beams {
 
 impl Words for [u32] {
     fn word(&self, k: u32) -> u32 {
-        pxl_spec_core::at(self, k)
+        pxl_engine::at(self, k)
     }
 
     fn set(&mut self, k: u32, v: u32) {
-        pxl_spec_core::fill::put(self, k, v)
+        pxl_engine::fill::put(self, k, v)
     }
 
     fn add(&mut self, k: u32, v: u32) -> u32 {
@@ -165,7 +165,7 @@ impl Words for [u32] {
 }
 
 /// The node at word `k`, as a line and a sample each hold one
-/// (pxl-spec-core `beam::NODE_WORDS`).
+/// (pxl-engine `beam::NODE_WORDS`).
 pub(crate) fn node_at<W: Words + ?Sized>(w: &W, k: u32) -> cast::Node {
     cast::Node {
         corner: [
@@ -193,7 +193,7 @@ pub(crate) fn node_put<W: Words + ?Sized>(w: &mut W, k: u32, n: &cast::Node) {
     w.set(k + beam::NODE_ROOTS + 2, n.roots[2] as u32);
 }
 
-/// A sample's hit `met` put at word `base` (pxl-spec-core
+/// A sample's hit `met` put at word `base` (pxl-engine
 /// `beam::SAMPLE_WORDS`), as the raster reads it (raster.rs): the node and
 /// cell it stopped at, `beam::SAMPLE_NONE` where it went on to its reach,
 /// whether what it stopped at lacks, and the axis it entered across; what
@@ -254,7 +254,7 @@ where
 }
 
 /// Each beam ray of its observer's lattice, a thread a corner (observer.rs
-/// `beam`): the camera grid's (pxl-spec-core `beam::Grid::corners`), or the
+/// `beam`): the camera grid's (pxl-engine `beam::Grid::corners`), or the
 /// shadow map's (`light::BEAM`), as the head it is handed names
 /// (pass_observer.rs `PassObserver`), its line left in the eye's beam rays'
 /// buffer or in the light's list.
@@ -292,7 +292,7 @@ pub fn beam_cs(
     observer::beam(&o, world, pyramid, beams, c);
 }
 
-/// A beam ray's line as it leaves it (pxl-spec-core `cast::Keep`), into the
+/// A beam ray's line as it leaves it (pxl-engine `cast::Keep`), into the
 /// words `W` hold at `base` (`beam::LINE_WORDS`), as `BeamLine` reads it: the
 /// eye's beam rays' and the light's.
 pub(crate) struct Leaving<'a, W: ?Sized>(pub(crate) &'a mut W, pub(crate) u32);
@@ -317,7 +317,7 @@ impl<W: Words + ?Sized> cast::Keep<Inheritance> for Leaving<'_, W> {
     }
 }
 
-/// Where each cell's rays start (pxl-spec-core `beam::CELL_WORDS`), a
+/// Where each cell's rays start (pxl-engine `beam::CELL_WORDS`), a
 /// thread a cell of its observer's lattice (observer.rs `cell`): the
 /// screen's (`beam::Grid::span`), past the lines in the beam rays' buffer
 /// (`Grid::cell_at`), or the shadow map's (`light::cell`).
@@ -338,7 +338,7 @@ pub fn cell_cs(
 }
 
 /// Each sample of its observer's lattice, a thread each (observer.rs
-/// `sample`): the camera grid's (pxl-spec-core `beam::Grid::samples`), or
+/// `sample`): the camera grid's (pxl-engine `beam::Grid::samples`), or
 /// the shadow map's (`param::light::SAMPLE`), as the head it is handed names
 /// (pass_observer.rs `PassObserver`). The node and asset it stopped at left for
 /// the raster (`beam::SAMPLE_WORDS`; raster.rs), `beam::SAMPLE_NONE` where

@@ -1,7 +1,7 @@
 // pxl-spec/space/camera/grid.test.rs
 
 use super::*;
-use pxl_spec_core::grid;
+use pxl_engine::grid;
 
 #[test]
 fn field_of_view() {

@@ -10,8 +10,8 @@ use std::borrow::Cow;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
-use pxl_spec_core::lattice::CELL_CENTER;
-use pxl_spec_core::way::{self, Segment, Stations};
+use pxl_engine::lattice::CELL_CENTER;
+use pxl_engine::way::{self, Segment, Stations};
 
 use super::malformed;
 use crate::procedural::Frame;
@@ -20,7 +20,7 @@ use crate::space::layer::lattice::TILE_CELLS;
 use xpute_kit::math::scalar::round;
 
 /// Points are in eighths of the tile's cell, which an `i16` holds far past
-/// the tile's edge (pxl-spec-core way.rs).
+/// the tile's edge (pxl-engine way.rs).
 pub const POINT_SCALE: f64 = way::POINT_SCALE as f64;
 
 /// A line's width byte for `width` of its tile's cells, in eighths rounded
@@ -32,8 +32,8 @@ pub fn width_byte(width: f64) -> u8 {
     round(width * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8
 }
 
-/// What a line over a column is and occupies there (pxl-spec-core way.rs).
-pub use pxl_spec_core::way::{Crossing, Occupancy, Occupy};
+/// What a line over a column is and occupies there (pxl-engine way.rs).
+pub use pxl_engine::way::{Crossing, Occupancy, Occupy};
 
 /// What a line is, from the source's flags alone; the byte is the wire's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -89,7 +89,7 @@ pub struct Separation {
     pub kind: Cow<'static, [u8]>,    // transport type: the source's class, the slab's material
     pub form: Cow<'static, [u8]>,    // `Form`: the source's flags
     pub clear: Cow<'static, [u8]>,   // a bore's clear space over its surface, in leaf cells: solved
-    /// The coarsest zoom each point is held at (pxl-spec-core `way::coarsest`):
+    /// The coarsest zoom each point is held at (pxl-engine `way::coarsest`):
     /// what a fold keeps of a line, the bake's alone — no client path folds,
     /// so a client's record holds none (`Columns::into_room`).
     pub coarsest: Cow<'static, [u8]>,
@@ -190,7 +190,7 @@ impl Separation {
         Segment::of(self.segment_words(p, p > self.starts[d] as usize))
     }
 
-    /// The segment that starts at point `p` in its words (pxl-spec-core
+    /// The segment that starts at point `p` in its words (pxl-engine
     /// way.rs `Segment::words`), and whether the one stored before it is its
     /// line's one before it: a line ends square at its first and last.
     pub(crate) fn segment_words(&self, p: usize, continues: bool) -> [u32; way::SEGMENT_WORDS] {
@@ -295,7 +295,7 @@ impl Line<'_> {
 }
 
 /// What segment `s` is over the column of side `side` about `at` in its
-/// tile's cells (pxl-spec-core way.rs `crossing`).
+/// tile's cells (pxl-engine way.rs `crossing`).
 fn crossing_at(s: &Segment, at: [f64; 2], side: f64, stations: &Stations) -> Option<Crossing> {
     Some(way::crossing(
         s,
@@ -342,7 +342,7 @@ pub fn runs_within(points: &[[f64; 2]], margin: f64) -> Vec<[usize; 2]> {
 /// segment once: every point is the child's halved and rounded (`round`,
 /// half to even), a function of that point alone, so the copies tiles hold
 /// of one line fold to the same segments and are taken as one. A line whose
-/// width vanishes at the parent's cells (pxl-spec-core `way::vanishes`) is
+/// width vanishes at the parent's cells (pxl-engine `way::vanishes`) is
 /// none there, and a segment whose ends fold to one point is none. The
 /// segments rejoin where a copy held one after another and the second starts
 /// where the first ends, surface and all, so a line runs on through its

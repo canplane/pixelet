@@ -22,8 +22,8 @@
 //! it passes by what lies off the map's tiles the frame's marks cover, which
 //! the GPU keeps (`Tiles::marks_box`).
 
+use pxl_engine::param::light;
 use pxl_spec::space::coord::mat4::{self, Mat4};
-use pxl_spec_core::param::light;
 
 use crate::frame::shader::floor::MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP;
 use crate::frame::shader::part::{SHADER_SCREEN_BOUND, SHADER_SCREEN_PROPAGATE};
