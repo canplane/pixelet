@@ -1,4 +1,4 @@
-// pxl-engine/cloud.rs
+// pxl-content/cloud.rs
 
 //! gpu-portable: the cloud field the cumulus and the sheets share. The
 //! lattice it lies on, the wind that carries it and the hash its cells draw
@@ -7,9 +7,10 @@
 //! GPU (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render
 //! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_SHARE_BITS`.
 
+use pxl_engine::UNIT_ZOOM;
+
 use crate::param::cloud::LATTICE_SHAMT;
 use crate::param::cloud::WIND;
-use crate::UNIT_ZOOM;
 
 /// The lattice's units around the world, X's 2^24 units over a lattice unit's.
 pub const LATTICE_CNT: u32 = 1 << (UNIT_ZOOM - LATTICE_SHAMT);

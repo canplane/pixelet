@@ -4,7 +4,7 @@
 //! drawn as decor is and held as decor is not. It claims no cell, so
 //! nothing is built around it and a tower stands through it; it is no layer
 //! and no clip level's brick holds it. It is laid on the field's own map,
-//! which the wind carries (`pxl-engine cloud.rs` `drift`): a patch of
+//! which the wind carries (`pxl-content cloud.rs` `drift`): a patch of
 //! cells there is built once and drawn moved, each instance a model, an
 //! impostor or nothing by its size on the screen (`present_patch`), by the
 //! tiers the GPU draws decor by, one rule (pxl-engine scatter.rs
@@ -13,9 +13,9 @@
 
 use fnv::FnvHashMap;
 
-use pxl_engine::cloud::{drift, lattice_hash};
+use pxl_content::cloud::{drift, lattice_hash};
+use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_engine::generation::drawn;
-use pxl_engine::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
@@ -45,8 +45,8 @@ use crate::domain::view::observation::eye;
 use crate::domain::view::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{catalog, load_image, load_of};
+use pxl_content::param::cloud;
 use pxl_engine::generation;
-use pxl_engine::param::cloud;
 use pxl_render::gpu::api::Image;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world;
@@ -65,7 +65,7 @@ const _: () = assert!(
 );
 
 /// A cell holds a cloud or none: a unit of the field's lattice, whose hash
-/// says where one is (pxl-engine param.rs `cloud::LATTICE_SHAMT`).
+/// says where one is (pxl-content param.rs `cloud::LATTICE_SHAMT`).
 const CELL_SHAMT: u32 = cloud::LATTICE_SHAMT;
 const CELL: f64 = (1u32 << CELL_SHAMT) as f64;
 /// The cells around the world, so a cell's hash wraps with the map.

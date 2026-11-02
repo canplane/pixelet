@@ -143,10 +143,10 @@ fn main() {
     std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
     std::fs::write(out.join("tile_word.wgsl"), tile_word()).expect("the tile word's shader");
     // The cloud field's lattice unit and the hash its cells draw from, the
-    // cumulus's own on the CPU (pxl-engine cloud.rs `lattice_hash`): its
+    // cumulus's own on the CPU (pxl-content cloud.rs `lattice_hash`): its
     // multipliers, its rounds and its kept bits as the Rust takes them.
-    use pxl_engine::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
-    use pxl_engine::param::cloud::LATTICE_SHAMT;
+    use pxl_content::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
+    use pxl_content::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;
     let rounds: String = HASH_ROUNDS
         .iter()

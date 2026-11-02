@@ -216,7 +216,8 @@ language by where a thing runs.
 │   └── build/           #   what the bundlers read the workspace through
 ├── rust/                # The Rust workspace (Cargo)
 │   ├── spec/            #   pxl-spec: the model every crate shares
-│   │   └── engine/      #     pxl-engine: what CPU and GPU both compute
+│   │   ├── engine/      #     pxl-engine: what CPU and GPU both compute
+│   │   └── content/     #     pxl-content: pixelet's content over it
 │   ├── client/          #   pxl-kernel, pxl-render, and pxl-shader, the GPU's
 │   │                    #     compute entries built to WGSL
 │   ├── client-bracket/  #   pxl-wasm and pxl-native, the kernel's two forms

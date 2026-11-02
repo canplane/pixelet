@@ -81,7 +81,7 @@ const KERNEL_BESIDE: [&str; 1] = ["perf"];
 /// only seam"), and what asks it. A layer knows no query, and the query no
 /// asker.
 const ENGINE: &str = "rust/spec/engine/src/";
-const ENGINE_ORDER: [(&str, u8); 28] = [
+const ENGINE_ORDER: [(&str, u8); 27] = [
     ("param", 0),
     ("cube", 0),
     ("decor", 0),
@@ -92,7 +92,6 @@ const ENGINE_ORDER: [(&str, u8); 28] = [
     ("area", 1),
     ("cave", 1),
     ("scatter", 1),
-    ("cloud", 1),
     ("ground", 1),
     ("clipmap", 1),
     ("way", 1),
@@ -111,6 +110,10 @@ const ENGINE_ORDER: [(&str, u8); 28] = [
     ("generation", 3),
     ("face", 3),
 ];
+
+/// pxl-content's order: its parameters, then its rules and fields.
+const CONTENT: &str = "rust/spec/content/src/";
+const CONTENT_ORDER: [(&str, u8); 2] = [("param", 0), ("cloud", 1)];
 
 /// What the world shows is decided in angles, the camera grid's cell; a
 /// pixel enters only at the screen (ARCHITECTURE.md, "The camera grid").
@@ -503,6 +506,14 @@ fn run() -> Result<Vec<String>, String> {
         &KERNEL_BESIDE,
     ));
     problems.extend(out_of_order(&files, &read, ENGINE, &ENGINE_ORDER, &[], &[]));
+    problems.extend(out_of_order(
+        &files,
+        &read,
+        CONTENT,
+        &CONTENT_ORDER,
+        &[],
+        &[],
+    ));
     for f in files.iter().filter(|f| {
         f.starts_with(KERNEL)
             && f.ends_with(".rs")

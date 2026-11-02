@@ -1,0 +1,16 @@
+[package]
+name = "pxl-content"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[dependencies]
+# The engine it fills, `no_std` as it is.
+pxl-engine.workspace = true
+
+[lints]
+workspace = true

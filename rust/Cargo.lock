@@ -2078,6 +2078,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pxl-content"
+version = "0.0.0"
+dependencies = [
+ "pxl-engine",
+]
+
+[[package]]
 name = "pxl-engine"
 version = "0.0.0"
 dependencies = [
@@ -2142,6 +2149,7 @@ dependencies = [
  "embassy-executor",
  "fnv",
  "libm",
+ "pxl-content",
  "pxl-engine",
  "pxl-render",
  "pxl-spec",
@@ -2173,6 +2181,7 @@ dependencies = [
  "image",
  "libm",
  "naga",
+ "pxl-content",
  "pxl-engine",
  "pxl-spec",
  "xpute-gpu",

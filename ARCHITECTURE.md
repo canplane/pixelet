@@ -726,7 +726,7 @@ move, or the ground under the eye half its step. Every step comes from a
 slope its table measures as it is drawn, each measured again apart, only
 where its own quantity has left the sample it was taken over.
 
-The **clouds** are three layers on one wind (`pxl-engine cloud.rs`): the
+The **clouds** are three layers on one wind (`pxl-content cloud.rs`): the
 cumulus, models drawn like decor but claiming no cell
 (`domain/scene/environment/cloud.rs`), and above it altocumulus and cirrus,
 planes read where a ray meets them (`frame/shader/cloud.wgsl` `sheet`).

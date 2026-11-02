@@ -18,6 +18,7 @@ xpute-kit = { workspace = true, features = ["std"] }
 xpute-gpu.workspace = true
 pxl-spec.workspace = true
 pxl-engine.workspace = true
+pxl-content.workspace = true
 pxl-render.workspace = true
 # The executor the door polls the kernel's tasks on inside a turn
 # (door/executor.rs). No platform feature: the pender is the kernel's own, and
