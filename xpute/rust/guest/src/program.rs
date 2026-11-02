@@ -6,8 +6,9 @@
 //! to the function the program names for it, whose result is the reply and
 //! whose errno is the failure. Work that waits on the host runs as a task
 //! (`Turn::spawn`): a file read whole (`read`) is awaited, and each await ends
-//! at a later turn. What lies under it, `ipc::door`, `ipc::sys`, `ipc::toc` and
-//! `sched::task`, a guest that lays its memory out itself uses as it is.
+//! at a later turn. A bug or a panic is published to the host (`stop`). What
+//! lies under it, `ipc::door`, `ipc::sys`, `ipc::toc`, `sched::task` and
+//! `stop`, a guest that lays its memory out itself uses as it is.
 
 use core::future::Future;
 use core::pin::Pin;
@@ -27,6 +28,7 @@ use crate::ipc::toc::{spec::key, toc_words, write_toc};
 use crate::mem::section::PAGE_BYTES;
 use crate::sched::task::{self, Executor, Task};
 use crate::sched::wake::NO_WAKE;
+use crate::stop;
 
 #[path = "program.spec.rs"]
 pub mod spec;
@@ -152,7 +154,15 @@ pub fn boot(layout: &Layout, data_end: u32) -> u32 {
         turn: 0,
     }));
     task::set(&TASKS);
+    stop::install(abort, None);
     range
+}
+
+/// A stop published as the turn's one record.
+fn abort(errnum: Errno, at: &core::panic::Location<'_>, a: u64, b: u64) {
+    if let Some(p) = PROGRAM.get(|| None) {
+        p.sys.abort(errnum, at, a, b);
+    }
 }
 
 /// A command's packet as its handler reads it: a branch of fields, or none.

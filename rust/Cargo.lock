@@ -2171,6 +2171,7 @@ dependencies = [
  "pxl-render",
  "wgpu",
  "xpute-gpu",
+ "xpute-guest",
  "xpute-host",
  "xpute-kit",
  "zstd 0.13.3",

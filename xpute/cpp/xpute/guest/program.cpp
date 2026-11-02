@@ -14,6 +14,7 @@
 #include "xpute/guest/ipc/toc.hpp"
 #include "xpute/guest/mem.hpp"
 #include "xpute/guest/sched/wake.hpp"
+#include "xpute/guest/stop.hpp"
 
 namespace xpute {
 
@@ -134,6 +135,10 @@ std::uint32_t boot(const Layout &layout, std::uint32_t data_end) noexcept {
         .sys = Sys(mem, at(layout.sys_at()), layout.sys_words),
     };
     set_executor(booted_program->tasks);
+    // A stop published as the turn's one record.
+    stop::install([](Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b) {
+        if (booted_program != nullptr) booted_program->sys.abort(errnum, at, a, b);
+    });
     return range;
 }
 

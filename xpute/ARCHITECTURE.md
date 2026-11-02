@@ -396,7 +396,8 @@ the invariant that stopped the guest; a program numbers its own with the
 `PROGRAM` bit. Each is a record (`ipc/sys`, `spec/ipc/sys.json`), run after the
 turn from one stream the toc names (`SYS`), or, a program's own, at once
 (below). The report (`ABORT`) drops the turn's other calls and is published
-alone, at once.
+alone, at once; a guest's bug reporter and, in Rust, its panic hook publish it
+(`stop`), which `program!` and `XPUTE_PROGRAM` install.
 
 Files borrow Plan 9's file namespace:
 

@@ -21,7 +21,7 @@ mod unpack;
 use pxl_kernel::door;
 use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES, THREAD_STACK_BYTES};
-use pxl_kernel::sys::stop::Stop;
+use xpute_guest::stop::Stop;
 use xpute_host::mem::Memory;
 use xpute_host::native::{self, Alloc, BootInfo, Config};
 

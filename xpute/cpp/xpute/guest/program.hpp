@@ -6,8 +6,9 @@
 // the function the program names for it, whose result is the reply and whose
 // errno is the failure. Work that waits on the host runs as a task
 // (`Turn::spawn`): a file read whole (`read`) is awaited, and each await ends
-// at a later turn. What lies under it, ipc/door.hpp, ipc/sys.hpp, ipc/toc.hpp
-// and sched/task.hpp, a guest that lays its memory out itself uses as it is.
+// at a later turn. A bug is published to the host (stop.hpp). What lies under
+// it, ipc/door.hpp, ipc/sys.hpp, ipc/toc.hpp, sched/task.hpp and stop.hpp, a
+// guest that lays its memory out itself uses as it is.
 
 #pragma once
 

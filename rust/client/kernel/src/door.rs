@@ -35,8 +35,6 @@ use crate::sys::io::text;
 use crate::sys::mem::section;
 use crate::sys::mem::spec;
 use crate::sys::sched::edge;
-use crate::sys::stop;
-use crate::sys::stop::PanicHook;
 use crate::turn;
 use pxl_render::gpu::api;
 use pxl_render::gpu::renderer;
@@ -50,6 +48,7 @@ use xpute_guest::ipc::toc::{spec::key, toc_words, write_toc, Entry};
 use xpute_guest::mem::section::PAGE_BYTES;
 use xpute_guest::mem::{self, off_of_slice};
 use xpute_guest::sched::task;
+use xpute_guest::stop::{self, PanicHook};
 
 struct State {
     /// The UI snapshot last posted; one is posted only where it moved.
@@ -128,7 +127,7 @@ fn boot(b: BootInfo, panic_hook: Option<PanicHook>, admit: Admit) {
     boot::set(b);
     boot::set_admit(admit);
     executor::install();
-    stop::install(panic_hook);
+    stop::install(host::abort, panic_hook);
     let gpu_stream = layout::install(&b);
     // A layer asks for no more tiles than its tile cache's slots.
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slots));

@@ -762,7 +762,7 @@ A **bracket** plugs the kernel into one of xpute's guest forms: the kernel
 implements xpute's entry (`pxl-kernel door.rs` `run`), and the bracket hands it
 what that form hands any guest (`xpute_guest::entry` `BootInfo`,
 `xpute_gpu::admit` `Admit`) and pixelet's place to report what stopped it
-(`sys/stop.rs` `PanicHook`). `pxl-wasm` makes the kernel a WebAssembly module
+(`xpute_guest::stop` `PanicHook`). `pxl-wasm` makes the kernel a WebAssembly module
 the page runs (`ts/app/web/src/guest.ts`); `pxl-native` links it into the device
 app under xpute's native host, which runs each call on the kernel's own thread,
 since a turn that draws through wgpu outgrows React Native's JavaScript stack
@@ -920,7 +920,8 @@ asked again later, a failed parse is final, and neither touches what is drawn,
 until the server stays down past its last wait and the reads are given up, when
 the page shows the blue screen `WORLD_UNAVAILABLE`
 (`ts/client/src/shell/layout.tsx` `endedOf`). A broken invariant is a **bug**,
-and it ends the module (`sys/stop.rs` `bug`): on a device the process dies with
+and it ends the module (`xpute_guest::stop`, its record the kernel's host
+stream's): on a device the process dies with
 the kernel and its panic hook says why, and in a page the shell shows the blue
 screen with the errno and place as its stop code, as it does for a GPU lost for
 good. Memory pressure is neither; the memory map says how each range meets it.

@@ -79,7 +79,7 @@ pub fn fall() {
 }
 
 /// A broken invariant: published at once as the turn's only record, dropping
-/// the rest, since the kernel stops here (sys/stop.rs).
+/// the rest, since the kernel stops here (xpute_guest::stop).
 pub fn abort(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
     if let Some(h) = sys() {
         h.abort(errnum, at, a, b);
