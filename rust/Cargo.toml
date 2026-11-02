@@ -28,7 +28,8 @@
 resolver = "2"
 members = [
   "spec",
-  "spec/core",
+  "spec/engine",
+  "spec/content",
   "client/render",
   "client/kernel",
   "client-bracket/wasm",
@@ -50,9 +51,6 @@ libm = "=0.2.16"
 # the bake's among them, so an order read off one is the same on every run,
 # where std's hasher is seeded per process (clippy.toml).
 fnv = "1"
-# base64url without padding: the blob a placement set is kept under in the
-# shell's storage.
-base64 = "0.23"
 # What a test reads a golden packet's bytes back as.
 hex = "0.4"
 
@@ -63,7 +61,8 @@ xpute-kit = { path = "../xpute/rust/kit", default-features = false }
 xpute-guest = { path = "../xpute/rust/guest" }
 xpute-gpu = { path = "../xpute/rust/gpu" }
 xpute-host = { path = "../xpute/rust/host" }
-pxl-spec-core = { path = "spec/core" }
+pxl-engine = { path = "spec/engine" }
+pxl-content = { path = "spec/content" }
 pxl-spec = { path = "spec" }
 pxl-render = { path = "client/render" }
 pxl-kernel = { path = "client/kernel", default-features = false }

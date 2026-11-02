@@ -1,0 +1,106 @@
+// pxl-engine/eye.rs
+
+//! gpu-portable: the eye a cast is from, as the words the kernel writes
+//! (pxl-kernel domain/view/lens.rs `gpu_cast`, domain/scene/cast.rs `eye`) and every GPU
+//! reader takes (pxl-shader `Eye`, pxl-render gpu/ray/cast.rs and
+//! gpu/generator.rs, the screen pass). Each is a word's place among them, one
+//! layout written here alone.
+
+/// The eye's position in Q3 steps, X, Y and Z.
+use crate::beam;
+use crate::overwrite::Cut;
+
+pub const ORIGIN: usize = 0;
+/// Whether each ray reports the nodes its descent asked, not what it met.
+pub const STEPS: usize = 3;
+/// The unit forward, X, Y and Z, then how far every ray goes (`FAR`), f32 bits.
+pub const FORWARD: usize = 4;
+pub const FAR: usize = 7;
+/// The unit right, then the unit up, f32 bits, each then a word no reader
+/// reads, so the next starts a vec4.
+pub const RIGHT: usize = 8;
+pub const UP: usize = 12;
+/// The tangents of the screen's half-angles across and up, f32 bits.
+pub const TAN: usize = 16;
+/// The zooms a cell is asked at, coarsest then finest.
+pub const RANGE: usize = 18;
+/// A preview's cut to air and its left-out leaf, each X, Y, Z and the zoom,
+/// the zoom `NO_CUT` for none (pxl-engine `overwrite::Cut`).
+pub const CARVE: usize = 20;
+pub const HIDE: usize = 24;
+pub const CUT_WORDS: usize = 4;
+/// Both cuts, carve then hide, as one run of words.
+pub const CUTS: usize = 2 * CUT_WORDS;
+pub const NO_CUT: u32 = Cut::NONE.zoom;
+/// The light's cast into the shadow map, its frame's constants off the light
+/// box (pxl-engine `light::Light`, its `words`): texel (0, 0)'s ray's start
+/// and every ray's reach, the step to the next texel across and down, the
+/// rays' direction, and a hit's push in depth by its face's axis, a vec4
+/// each, f32 bits, the last four's fourth words the clipmap's corners
+/// (`light::CORNER`, `light::KEPT`). All zero where no shadow is cast. The renderer writes
+/// them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the kernel
+/// leaves them zero.
+pub const LIGHT: usize = HIDE + CUT_WORDS;
+pub const LIGHT_WORDS: usize = 20;
+/// Where each pixel's ray goes through it this frame, its offset from the
+/// pixel's middle in drawn pixels, X right and Y down, f32 bits; then two
+/// words unused, as the eye is laid out in fours. The renderer's to write;
+/// the kernel leaves it zero.
+/// What the beams, cells and samples cast is the camera grid's and reads none
+/// of it.
+pub const JITTER: usize = LIGHT + LIGHT_WORDS;
+pub(crate) const JITTER_WORDS: usize = 4;
+/// The camera grid the frame casts on (pxl-engine `beam::Grid`, its
+/// `words`), worked out once off the tangents above where the kernel
+/// writes them: every thread of the cast and the renderer's dispatches and
+/// buffer read it here. Past the words a cast is from, those before
+/// `LIGHT`: the frames that stand on a cast's samples keep its grid, and
+/// the next cast lays this one (pxl-render gpu/ray/cast.rs `prepare`).
+pub const GRID: usize = JITTER + JITTER_WORDS;
+pub const GRID_WORDS: usize = beam::GRID_WORDS;
+/// Every word, the grid last.
+pub const WORDS: usize = GRID + GRID_WORDS;
+const _: () = assert!(
+    STEPS == ORIGIN + 3
+        && FAR == FORWARD + 3
+        && UP == RIGHT + 4
+        && TAN == UP + 4
+        && RANGE == TAN + 2
+        && CARVE == RANGE + 2
+        && HIDE == CARVE + CUT_WORDS
+        && LIGHT.is_multiple_of(4)
+        && JITTER.is_multiple_of(4)
+        && GRID.is_multiple_of(4)
+);
+
+/// Whether a ball `radius` units wide about `v`, units from the eye, lies
+/// at all in the view of the eye looking along `forward`, `right` across
+/// and `up`, the screen's half-angles' tangents `tan`: before it, and past
+/// none of its sides by more than its radius, each side's distance to a
+/// point its offset over the side's slope (`√(1 + tan²)`).
+pub fn sees([forward, right, up]: [[f32; 3]; 3], tan: [f32; 2], v: [f32; 3], radius: f32) -> bool {
+    let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let f = dot(v, forward);
+    let side = |o: f32, t: f32| libm::fabsf(o) - t * f <= radius * libm::sqrtf(1.0 + t * t);
+    f >= -radius && side(dot(v, right), tan[0]) && side(dot(v, up), tan[1])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A ball before the eye within its view is seen, one past a side or
+    /// behind it by more than its radius not.
+    #[test]
+    fn eye_sees_view() {
+        let axes = [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
+        let tan = [1.0, 0.5];
+        assert!(sees(axes, tan, [0.0, 10.0, 0.0], 0.0));
+        assert!(sees(axes, tan, [9.9, 10.0, 0.0], 0.0));
+        assert!(!sees(axes, tan, [12.0, 10.0, 0.0], 1.0));
+        assert!(sees(axes, tan, [12.0, 10.0, 0.0], 2.0));
+        assert!(!sees(axes, tan, [0.0, 10.0, 6.0], 0.5));
+        assert!(!sees(axes, tan, [0.0, -3.0, 0.0], 2.0));
+        assert!(sees(axes, tan, [0.0, -1.0, 0.0], 2.0));
+    }
+}

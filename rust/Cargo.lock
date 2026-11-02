@@ -2078,6 +2078,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pxl-content"
+version = "0.0.0"
+dependencies = [
+ "libm",
+ "pxl-engine",
+ "xpute-kit",
+]
+
+[[package]]
+name = "pxl-engine"
+version = "0.0.0"
+dependencies = [
+ "libm",
+ "xpute-kit",
+]
+
+[[package]]
 name = "pxl-geo"
 version = "0.0.0"
 dependencies = [
@@ -2106,10 +2123,9 @@ dependencies = [
  "libm",
  "parquet",
  "postgres",
+ "pxl-engine",
  "pxl-geo-spec",
- "pxl-server",
  "pxl-spec",
- "pxl-spec-core",
  "serde",
  "serde_json",
  "tokio",
@@ -2131,14 +2147,14 @@ dependencies = [
 name = "pxl-kernel"
 version = "0.0.0"
 dependencies = [
- "base64 0.23.1",
  "critical-section",
  "embassy-executor",
  "fnv",
  "libm",
+ "pxl-content",
+ "pxl-engine",
  "pxl-render",
  "pxl-spec",
- "pxl-spec-core",
  "xpute-gpu",
  "xpute-guest",
  "xpute-kit",
@@ -2165,12 +2181,12 @@ dependencies = [
 name = "pxl-render"
 version = "0.0.0"
 dependencies = [
- "fnv",
  "image",
  "libm",
  "naga",
+ "pxl-content",
+ "pxl-engine",
  "pxl-spec",
- "pxl-spec-core",
  "xpute-gpu",
  "xpute-guest",
  "xpute-kit",
@@ -2195,16 +2211,9 @@ dependencies = [
  "fnv",
  "hex",
  "libm",
- "pxl-spec-core",
+ "pxl-content",
+ "pxl-engine",
  "serde",
- "xpute-kit",
-]
-
-[[package]]
-name = "pxl-spec-core"
-version = "0.0.0"
-dependencies = [
- "libm",
  "xpute-kit",
 ]
 
@@ -2212,7 +2221,6 @@ dependencies = [
 name = "pxl-tool"
 version = "0.0.0"
 dependencies = [
- "flate2",
  "fnv",
  "image",
  "libm",
@@ -2236,7 +2244,6 @@ dependencies = [
  "pxl-kernel",
  "xpute-gpu",
  "xpute-guest",
- "xpute-kit",
 ]
 
 [[package]]
@@ -3683,7 +3690,6 @@ dependencies = [
 name = "xpute-guest"
 version = "0.0.0"
 dependencies = [
- "indexmap",
  "xpute-kit",
 ]
 
