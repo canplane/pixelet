@@ -15,17 +15,6 @@ fn view_pos(d: f32, uv: vec2f) -> vec3f {
   return p.xyz / p.w;
 }
 
-// The side of the cell drawn at view position `pos`, in units: the camera
-// grid's at its distance, a zoom's cell drawn from `GRID_SPLIT` of its sides
-// on (pxl-spec-core grid.rs `cell_zoom_at`), the ground's leaf where that is
-// finer. The occlusion's reach is in these, so it closes a crease over the
-// same share of a cell at every zoom, as the corners' do (screen_ray.wgsl
-// `creases`).
-fn ao_cell(pos: vec3f) -> f32 {
-  let leaf = exp2(f32(i32(UNIT_ZOOM) - i32(GROUND_CELL)));
-  return max(leaf, exp2(floor(log2(length(pos) / GRID_SPLIT))));
-}
-
 fn view_dist(d: f32) -> f32 {
   let p = ao_inv_proj() * vec4f(0.0, 0.0, d, 1.0);
   return -p.z / p.w;

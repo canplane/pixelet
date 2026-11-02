@@ -748,3 +748,31 @@ no shadow coarser anywhere than it was.
   No texel is coarser and no reach shorter than before. Open: a receiver
   dug below the ground's face keeps only the reach from that face. Read in
   the code, no GPU run.
+
+## Withdrawn: effects alike across zooms (2026-11-02)
+
+The user's word: every effect applied at every zoom is withdrawn, all of
+them together, not one: the face bits answered at coarse cells
+(`answer::hides`, `face::ask_word`), the screen's occlusion in sides of the
+cell drawn (`ao_cell`) and the shadow map's 12 clip levels with what
+followed them (the level chosen along the rays, the box toward the sun over
+the relief, the levels' shared list) are reverted to how they stood before
+the closing round. Measured once (S1, 10 s turned and walked, 2056×1113,
+6a6429155 against 30b477576): the GPU's p50 3 to 10 ms more in every
+condition, the light's passes 6.6 → 14.4 ms at noon and 8.9 → 21.9 ms at
+07:00, `shadow` 0.3 → 3.5 ms, decor's and the actors' depth, the marks and
+the propagation run every frame for every level. The aim, the user's: a
+design symmetric and orthogonal, with fewer states.
+
+## The effects stop at one boundary (2026-11-02)
+
+The user's word: the effects stop at the same boundary. The lines, the
+corners' occlusion, the screen's occlusion and the shadows reach one
+distance from the eye, `STAGE_AT::EFFECT_REACH`, where the camera grid's cells
+one zoom coarser than the ground's leaf begin (the shadows' reach as it
+stood), and fade by one function from `effect::FADE_START` of it
+(`effect.wgsl` `effect_share`), by the distance from the eye; the shadows
+faded by their place across the light's box before. `STAGE_AT::SHADOWS` is
+the setting's on or off alone, and the frame's `REACH_NDC` is gone
+(`EFFECT_REACH` in its place); the cast still reads within the same reach. The
+rim and the air go on as far as the eye draws.

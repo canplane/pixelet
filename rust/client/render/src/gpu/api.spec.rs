@@ -77,8 +77,7 @@ pub mod device {
 /// pass writes, STORAGE_TEXTURE_2D an rgba16float texture one writes (the
 /// exposure's texel, gpu/atmosphere.rs); SAMPLER_COMPARISON a sampler that
 /// compares a depth texture's texels against a reference (the light's shadow
-/// map, gpu/shadow.rs); DEPTH_ARRAY a depth texture's layers (the light's
-/// levels past the first).
+/// map, gpu/shadow.rs).
 pub mod record {
     pub const HEAD: u32 = 10;
     pub const TRIANGLES: u32 = 0;
@@ -118,5 +117,4 @@ pub mod record {
     pub const TEXTURE_3D: u32 = 12;
     pub const STORAGE_TEXTURE_3D: u32 = 13;
     pub const STORAGE_TEXTURE_2D: u32 = 14;
-    pub const DEPTH_ARRAY: u32 = 15;
 }

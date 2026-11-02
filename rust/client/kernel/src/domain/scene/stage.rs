@@ -14,6 +14,7 @@ use pxl_render::gpu::renderer::{
 };
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
 use crate::perf::frame::{DeviceSample, GpuSample, RaySample};
@@ -125,8 +126,10 @@ pub fn stage_write() {
         0.0
     };
     s[STAGE_AT::CLOUDS] = cloud::clouds_shown();
-    // As far as the eye draws, the map's levels as many as that takes
-    // (pxl-render gpu/shadow.rs `levels_for`).
+    // Out to where the grid's cells one zoom coarser than the ground's leaf
+    // begin, where the casters are drawn whole and a face's bits read the
+    // leaf's: every effect's one boundary.
+    s[STAGE_AT::EFFECT_REACH] = grid::split_dist(GROUND.cell() - 1);
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
 }
 
@@ -202,7 +205,6 @@ pub fn stage_render(pace: Pace) {
             pool: param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS),
             scratch: tree::scratch_child_groups(param::WAYS_SCRATCH_FIRST_BYTES / (4 * FILL_CAP)),
             records: param::WAYS_RECORDS_FIRST_BYTES,
-            relief: clipmap::relief_over,
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,

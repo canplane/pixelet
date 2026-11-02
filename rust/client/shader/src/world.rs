@@ -5,7 +5,7 @@
 
 use pxl_spec_core::answer::{self, In};
 use pxl_spec_core::area::{Area, Shard};
-use pxl_spec_core::cast::{self, Query};
+use pxl_spec_core::cast::{self, End, Query};
 use pxl_spec_core::fill::{self, column_of, level_of};
 use pxl_spec_core::overwrite::{Cut, Columns};
 use pxl_spec_core::clipmap::{
@@ -251,33 +251,38 @@ impl<L> World<'_, L> {
 }
 
 impl<L: PaletteWords> World<'_, L> {
-    /// What lies about the face a ray stopped on, of the cell `c` of
-    /// `zoom` (pxl-spec-core `face::word`), the face and what the cell keeps
-    /// of its cube, the hit's fill, in `ask` (`face::ask_word`): each cell beside it at its
-    /// zoom, hiding the cell's box where it keeps as much of its own cube
-    /// (`answer::hides`), asked off `line`, the line down to it read in
-    /// place (`support::Ancestors`), each from the deepest node it shares
-    /// with it, never again from the top (`support::asset`). Asked once a
-    /// hit (raster.rs `face_cs`), at every zoom alike.
+    /// What lies about face `face` of the cell `c` of `zoom` a ray stopped
+    /// on (pxl-spec-core `face::word`): each cell beside it at its zoom,
+    /// hiding its cube whole (`answer::whole`), asked off `line`, the line
+    /// down to it read in place (`support::Ancestors`), each from the deepest
+    /// node it shares with it, never again from the top (`support::asset`).
+    /// Asked once a hit (raster.rs `face_cs`); a hit that needs none is
+    /// told so first (`unasked_face`).
     pub(crate) fn ask_face(
         &mut self,
-        ask: u32,
+        face: u32,
         zoom: u32,
         c: [i32; 3],
         line: &impl support::Ancestors<Inheritance>,
     ) -> u32 {
-        let hit_fill = face::ask_hit_fill(ask);
-        face::word(face::ask_face(ask), |d| {
-            answer::hides(support::asset(self, line, zoom, face::beside(zoom, c, d)), hit_fill)
+        face::word(face, |d| {
+            answer::whole(support::asset(self, line, zoom, face::beside(zoom, c, d)))
         })
     }
 }
 
-/// What a hit asks its faces off (`World::ask_face`, `face::ask_word`): the face
-/// its ray entered across `axis` (`face_of`) and what the cell it stopped
-/// at, `asset`, keeps of its cube.
-pub(crate) fn face_ask(ray: &cast::Ray, axis: u32, asset: u32) -> u32 {
-    face::ask_word(face_of(ray, axis), answer::fill_eighths(asset))
+/// What lies about the face a hit that ended `ends` at the asset `asset`
+/// met, where it needs no asking (`World::ask_face`): nothing where it stopped
+/// on none, a box's own where the cell keeps short of its cube
+/// (`face::BOX`); and whether it is asked instead.
+pub(crate) fn unasked_face(ends: End, asset: u32) -> (bool, u32) {
+    if ends != End::Hit {
+        (false, 0)
+    } else if answer::fill_eighths(asset) < answer::EIGHTHS {
+        (false, face::BOX)
+    } else {
+        (true, 0)
+    }
 }
 
 /// The face a ray enters a cell through across `axis` (pxl-spec-core

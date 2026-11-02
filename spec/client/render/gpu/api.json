@@ -88,8 +88,7 @@
       "pass writes, STORAGE_TEXTURE_2D an rgba16float texture one writes (the",
       "exposure's texel, gpu/atmosphere.rs); SAMPLER_COMPARISON a sampler that",
       "compares a depth texture's texels against a reference (the light's shadow",
-      "map, gpu/shadow.rs); DEPTH_ARRAY a depth texture's layers (the light's",
-      "levels past the first)."
+      "map, gpu/shadow.rs)."
     ],
     "HEAD": 10,
     "TRIANGLES": 0,
@@ -128,7 +127,6 @@
     "STORAGE_TEXTURE_RW": 11,
     "TEXTURE_3D": 12,
     "STORAGE_TEXTURE_3D": 13,
-    "STORAGE_TEXTURE_2D": 14,
-    "DEPTH_ARRAY": 15
+    "STORAGE_TEXTURE_2D": 14
   }
 }

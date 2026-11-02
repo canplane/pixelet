@@ -246,16 +246,10 @@ pub const fn side(k: u32) -> f32 {
     }
 }
 
-/// Whether `asset`, beside the cell a ray stopped on, which keeps
-/// `hit_fill` eighths of its cube (`fill_eighths`), hides that cell's box
-/// across the face between them: it is not transparent and keeps as much of
-/// its own cube or more, so its box, inset about its cube's center as the
-/// other's is, spans the other's across their axis. A leaf keeps its cube
-/// whole, so there it is a neighbor that keeps all of its own; a coarse
-/// cell's fold answers the same by its share, at every zoom alike
-/// (pxl-shader `ask_face`).
-pub fn hides(asset: u32, hit_fill: u32) -> bool {
-    !transparent(asset) && fill_eighths(asset) >= hit_fill
+/// Whether an asset hides its cube whole: it is not transparent and keeps
+/// all of it (`fill_eighths`). A cell beside a box closes in none of its edges.
+pub fn whole(asset: u32) -> bool {
+    !transparent(asset) && fill_eighths(asset) == EIGHTHS
 }
 
 /// Whether what is placed holds an asset's value (`PLACED_ASSET`).
@@ -275,19 +269,5 @@ mod tests {
         assert_eq!(box_of(box_join(a, b)), ([0, 0, 1], [1024, 1024, 700]));
         assert_eq!(box_join(BOX_NONE, a), a);
         assert_eq!(box_of(BOX_WHOLE), ([0; 3], [BOX_STEPS; 3]));
-    }
-
-    /// A neighbor hides a cell's box where it keeps as much of its own
-    /// cube: at the leaf, a whole one; at a coarse cell, one whose fold
-    /// keeps the cell's share or more; air never.
-    #[test]
-    fn hides_by_share() {
-        let rock = 1;
-        assert!(hides(rock, EIGHTHS));
-        assert!(!hides(fill_word(rock, 7), EIGHTHS));
-        assert!(hides(fill_word(rock, 3), 3));
-        assert!(hides(fill_word(rock, 5), 3));
-        assert!(!hides(fill_word(rock, 2), 3));
-        assert!(!hides(object::air as u32, 1));
     }
 }

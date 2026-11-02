@@ -71,34 +71,20 @@ pub(super) struct Raster {
 
 /// The light's samples' boxes, written by the eye's pass (`boxes_built`) and
 /// drawn from the light by the same draw (pxl-spec-core `param::light::SAMPLE`): its
-/// boxes, room for a sample every `param::light::SAMPLE` texels of the
-/// widest level; its targets at each side a level has, in the box's order;
-/// one level's at a time, the levels cast one after another, each with its
-/// own args, view, group and the targets of its side (`LightRasterLevel`).
+/// boxes, room for a sample every `param::light::SAMPLE` texels; their args; its
+/// view, a uniform; its targets at the map's side, in the box's order; and
+/// the draw's group.
 #[derive(Default)]
 pub(super) struct LightRaster {
     pub(super) boxes: u32,
-    targets: Vec<LightTarget>,
-    pub(super) levels: Vec<LightRasterLevel>,
-}
-
-/// The light's raster's targets at one side: its visibility buffer, as the
-/// draw writes it and as an array of one layer, as the slots read it, and
-/// its depth.
-struct LightTarget {
-    size: u32,
-    visibility_view: u32,
-    visibility_array: u32,
-    depth_view: u32,
-}
-
-/// A level's draw of the light's boxes: their args, its view, a uniform, the
-/// draw's group, and which targets it draws into (`LightTarget`).
-pub(super) struct LightRasterLevel {
     pub(super) args: u32,
     uniform: u32,
+    visibility: u32,
+    visibility_view: u32,
+    visibility_array: u32,
+    depth: u32,
+    depth_view: u32,
     group: u32,
-    target: usize,
 }
 
 impl Raster {
@@ -360,72 +346,56 @@ impl Raster {
 }
 
 impl Raster {
-    /// The light's buffers and its targets at each side a level has, level
-    /// `l` `size(l)` a side, made once, and each level's args, view and
-    /// group; whether they are.
-    pub(super) fn light_made(&mut self, g: &Gpu, size: impl Fn(u32) -> u32) -> bool {
+    /// The light's buffers and its targets at the map's `size`, made once;
+    /// whether they are.
+    pub(super) fn light_made(&mut self, g: &Gpu, size: u32) -> bool {
         let s = &mut self.light;
-        if s.levels.is_empty() {
-            let widest = (0..light::LEVELS).map(&size).max().unwrap_or(0);
-            let samples = (widest / SAMPLE) * (widest / SAMPLE);
+        if s.group == 0 {
+            let samples = (size / SAMPLE) * (size / SAMPLE);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             s.boxes = g.buf(word_bytes(raster::words(samples) as usize), storage);
+            s.args = g.buf(
+                word_bytes(raster::ARGS_WORDS as usize),
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
+            );
+            s.uniform = g.buf(
+                word_bytes(RASTER_FLOATS),
+                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+            );
             let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-            let boxes = s.boxes;
-            for l in 0..light::LEVELS {
-                let n = size(l);
-                let target = match s.targets.iter().position(|t| t.size == n) {
-                    Some(k) => k,
-                    None => {
-                        let visibility = g.texture(n, n, 1, Format::r32uint, 1, usage);
-                        let depth = g.texture(n, n, 1, Format::depth32float, 1, usage);
-                        s.targets.push(LightTarget {
-                            size: n,
-                            visibility_view: g.view(visibility, false, 0, 1, 0, 1),
-                            visibility_array: g.view(visibility, true, 0, 1, 0, 1),
-                            depth_view: g.view(depth, false, 0, 1, 0, 1),
-                        });
-                        s.targets.len() - 1
-                    }
-                };
-                let args = g.buf(
-                    word_bytes(raster::ARGS_WORDS as usize),
-                    storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
-                );
-                let uniform = g.buf(
-                    word_bytes(RASTER_FLOATS),
-                    buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-                );
-                let group = g.bind_group(
-                    self.draw_built.layouts[0],
-                    &[buf_entry(0, uniform), buf_entry(1, boxes)],
-                );
-                s.levels.push(LightRasterLevel {
-                    args,
-                    uniform,
-                    group,
-                    target,
-                });
-            }
+            s.visibility = g.texture(size, size, 1, Format::r32uint, 1, usage);
+            s.visibility_view = g.view(s.visibility, false, 0, 1, 0, 1);
+            s.visibility_array = g.view(s.visibility, true, 0, 1, 0, 1);
+            s.depth = g.texture(size, size, 1, Format::depth32float, 1, usage);
+            s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
+            s.group = g.bind_group(
+                self.draw_built.layouts[0],
+                &[buf_entry(0, s.uniform), buf_entry(1, s.boxes)],
+            );
         }
-        !s.levels.is_empty()
+        s.group != 0
     }
 
-    /// Level `l`'s visibility buffer as its cast reads it, an array of one
-    /// layer; one naming no sample where it is not made.
-    pub(super) fn light_visibility(&self, l: u32) -> u32 {
+    /// The light's visibility buffer as its cast reads it, an array of one layer;
+    /// one naming no sample where it is not made.
+    pub(super) fn light_visibility(&self) -> u32 {
+        if self.light.group != 0 {
+            self.light.visibility_array
+        } else {
+            self.blank_array
+        }
+    }
+
+    /// The light's view off the eye's words `e` (pxl-spec-core `light::Light`) for
+    /// the map `size` a side, as `prepare` lays the eye's; the args cleared.
+    pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32) {
         let s = &self.light;
-        s.levels
-            .get(l as usize)
-            .map_or(self.blank_array, |v| s.targets[v.target].visibility_array)
-    }
-
-    /// Level `l`'s view off its words (pxl-spec-core `light::Light`) for
-    /// a map `size` a side, as `prepare` lays the eye's; its args cleared.
-    pub(super) fn light_prepare(&self, g: &Gpu, l: u32, words: &[u32; light::WORDS], size: u32) {
-        let Some(s) = self.light.levels.get(l as usize) else {
+        if s.group == 0 {
             return;
-        };
+        }
+        let words: &[u32; eye::LIGHT_WORDS] = e[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS]
+            .try_into()
+            .unwrap_or(&[0; eye::LIGHT_WORDS]);
         let v = light::Light::of_words(words);
         let length = |a: [f32; 3]| libm::sqrtf(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
         let unit = |a: [f32; 3]| {
@@ -470,28 +440,27 @@ impl Raster {
         g.write_buf(s.args, 0, bytes(&args));
     }
 
-    /// Level `l`'s boxes drawn into the light's targets as many as their
-    /// args say, cleared first, timed in the span `light_raster`, after its
-    /// boxes are written.
-    pub(super) fn light_draw(&self, ctx: &mut RenderContext, l: u32) {
+    /// The light's boxes drawn into its targets as many as their args say,
+    /// cleared first, timed in the span `light_raster`, after its boxes
+    /// are written.
+    pub(super) fn light_draw(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::light_raster);
-        let v = &self.light.levels[l as usize];
-        let t = &self.light.targets[v.target];
+        let s = &self.light;
         let pass = g.pass(
             encoder,
             &pass_desc(
-                t.visibility_view,
+                s.visibility_view,
                 Load::Clear,
-                t.depth_view,
+                s.depth_view,
                 Load::Clear,
                 0.0,
                 stamp.pass(),
             ),
         );
         g.set_pipeline(pass, self.draw_built.id);
-        g.set_bind_group(pass, 0, v.group, &[]);
-        g.draw_indirect(pass, v.args, 0);
+        g.set_bind_group(pass, 0, s.group, &[]);
+        g.draw_indirect(pass, s.args, 0);
         g.end(pass);
     }
 }

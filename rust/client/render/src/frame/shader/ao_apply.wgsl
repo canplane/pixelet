@@ -39,6 +39,9 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   var acc = 0.0;
   var open_cnt = 0.0;
   var open_acc = 0.0;
+  // Where the pixel lies, for its reach: its half texel's, or where that is
+  // the sky, the first of its taps that is not.
+  var at = pos;
   for (var y = 0; y <= 1; y++) {
     for (var x = 0; x <= 1; x++) {
       let p = clamp(base + vec2i(x, y), vec2i(0), half_max);
@@ -47,12 +50,15 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
         continue;
       }
       let tap = textureLoad(blurred, p, 0);
+      let tap_pos = view_pos(tap_depth, (vec2f(p) + 0.5) / ao_half());
+      if (own_depth == 0.0 && open_cnt == 0.0) {
+        at = tap_pos;
+      }
       open_cnt += 1.0;
       open_acc += tap.r;
       let tap_normal = tap.gba * 2.0 - 1.0;
-      let tap_pos = view_pos(tap_depth, (vec2f(p) + 0.5) / ao_half());
       let plane_dist = abs(dot(tap_pos - pos, normal));
-      let weight = exp(-plane_dist / (AO_DIST_FALLOFF * ao_cell(pos))) * max(dot(normal, tap_normal), 0.0);
+      let weight = exp(-plane_dist / AO_DIST_FALLOFF) * max(dot(normal, tap_normal), 0.0);
       total += weight;
       acc += tap.r * weight;
     }
@@ -63,5 +69,7 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   } else if (open_cnt > 0.0) {
     occ = open_acc / open_cnt;
   }
-  return vec4f(0.0, 0.0, 0.0, 1.0 - pow(occ, AO_INTENSITY));
+  // To the effects' reach, faded alike before it (effect.wgsl `effect_share`).
+  let share = effect_share(length(at), ao_effect_reach());
+  return vec4f(0.0, 0.0, 0.0, (1.0 - pow(occ, AO_INTENSITY)) * share);
 }

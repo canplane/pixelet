@@ -17,7 +17,7 @@ use pxl_spec_core::cast::{self, Detail, Margin};
 use pxl_spec_core::fill::put;
 use pxl_spec_core::light::{Light, Starts};
 use pxl_spec_core::{at, beam, pyramid, ray, tally, way};
-use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec4};
+use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::{spirv, Image};
 
 use crate::beam::{Beams, Words};
@@ -43,102 +43,14 @@ type LightWords = Image!(2D, format = r32ui, sampled = false, arrayed = true);
 /// as the eye's pixels read theirs.
 type Visibility = Image!(2D, type = u32, sampled = true, arrayed = true);
 
-/// What a level's cast is handed beside the eye's words, a uniform
+/// What the light's cast is handed beside the eye's words, a uniform
 /// (pxl-spec-core `light::HEAD_VEC4S`): its number, whether it is counted,
-/// its epoch and the map's side, its level and light, where the rays start
-/// (`light::Starts`) and the actors drawn. The eye's head, all zero, names
-/// no map (`size`).
+/// its epoch and the map's side, where the rays start (`light::Starts`) and
+/// the actors drawn. The eye's head, all zero, names no map (`size`).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Head {
-    /// The first vec4's words: the cast's number and whether it is counted,
-    /// then its epoch and the map's side (`light::HEAD_CAST` to
-    /// `light::HEAD_SIZE`). [naga] Vec2s of u32s, which naga's SPIR-V reader
-    /// looks for, and never makes, where it splits the layer off an arrayed
-    /// image's coordinate: the slots' pass reads none of the eye's words,
-    /// which hold the other (`light_cs`, eye.rs `Eye::range`).
-    cast: UVec2,
-    epoch: UVec2,
-    v: [IVec4; pxl_spec_core::light::HEAD_VEC4S - 1],
-}
-
-/// The head's vec4 `k`, past the first (`Head::cast`, `Head::epoch`).
-fn vec4_of(m: &Head, k: usize) -> IVec4 {
-    m.v[k - 1]
-}
-
-/// Every level's head, `light::HEAD_STRIDE` vec4s apart, as the marks read
-/// them (`light_mark_cs`, `light_mark_draws_cs`): a receiver marks the
-/// level it is read at (`light::level_range`).
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Heads {
-    v: [IVec4; pxl_spec_core::light::HEAD_STRIDE * pxl_spec_core::light::LEVELS as usize],
-}
-
-/// Level `l`'s head's vec4 `k` (`Heads`).
-fn head_at(h: &Heads, l: u32, k: usize) -> IVec4 {
-    h.v[l as usize * pxl_spec_core::light::HEAD_STRIDE + k]
-}
-
-/// What a mark marks a level by: its light, its side, its stands' first
-/// word among the levels' (`light::HEAD_BASE`) and its cast's number.
-pub(crate) struct LevelMark {
-    pub(crate) light: Light,
-    size: u32,
-    base: u32,
-    cast: u32,
-}
-
-/// The levels as the marks read them (`Heads`): the first level's light and
-/// side, which every level's reach and a receiver's distance out from the
-/// eye are read off (`light::level_range`, `Light::level_dist`), and the
-/// levels the map has (`light::HEAD_LEVELS`).
-pub(crate) struct Levels<'a> {
-    heads: &'a Heads,
-    first: Light,
-    first_size: u32,
-    levels: u32,
-}
-
-impl<'a> Levels<'a> {
-    pub(crate) fn of(heads: &'a Heads) -> Levels<'a> {
-        let at = pxl_spec_core::light::HEAD_LEVELS;
-        Levels {
-            heads,
-            first: light_at(|k| head_at(heads, 0, k)),
-            first_size: head_at(heads, 0, 0).w as u32,
-            levels: head_at(heads, 0, at / 4).y as u32,
-        }
-    }
-
-    /// Whether the cast's marks take each pixel's footprint
-    /// (`light::HEAD_FOOTPRINT`), every level's alike.
-    pub(crate) fn footprint(&self) -> bool {
-        head_at(self.heads, 0, 1).z != 0
-    }
-
-    /// The levels a receiver `v` units from the eye is read at, the first
-    /// and past the last (`light::level_range`), none past the map's.
-    pub(crate) fn of_receiver(&self, v: [f32; 3], grown: f32) -> [u32; 2] {
-        let q = self.first.level_dist(v);
-        let reach = self.first.reach(self.first_size);
-        let lo = pxl_spec_core::light::level_range((q - grown).max(0.0), reach)[0];
-        let hi = pxl_spec_core::light::level_range(q + grown, reach)[1];
-        [lo, (hi + 1).min(self.levels)]
-    }
-
-    /// Level `l` as a mark marks it (`LevelMark`).
-    pub(crate) fn level(&self, l: u32) -> LevelMark {
-        let base = pxl_spec_core::light::HEAD_BASE;
-        let head = |k: usize| head_at(self.heads, l, k);
-        LevelMark {
-            light: light_at(head),
-            size: head(0).w as u32,
-            base: head(base / 4).z as u32,
-            cast: head(0).x as u32,
-        }
-    }
+    v: [IVec4; pxl_spec_core::light::HEAD_VEC4S],
 }
 
 const _: () = assert!(
@@ -147,61 +59,49 @@ const _: () = assert!(
         && pxl_spec_core::light::HEAD_EPOCH == 2
         && pxl_spec_core::light::HEAD_SIZE == 3
         && pxl_spec_core::light::HEAD_CORNER_WAS == 4
-        && pxl_spec_core::light::HEAD_FOOTPRINT == 6
-        && pxl_spec_core::light::HEAD_LEVEL == 7
-        && pxl_spec_core::light::HEAD_LEVELS % 4 == 1
-        && pxl_spec_core::light::HEAD_BASE == pxl_spec_core::light::HEAD_LEVELS + 1
-        && pxl_spec_core::light::HEAD_STATE == pxl_spec_core::light::HEAD_BASE + 1,
-    "the head's first two vec4s are read by their words, the levels, the base and the state the actors' vec4's second, third and fourth"
+        && pxl_spec_core::light::HEAD_FOOTPRINT == 6,
+    "the head's first two vec4s are read by their words"
 );
 
 /// Where the rays start (`light::Starts`), off the head.
 fn starts(m: &Head) -> Starts {
     Starts::of_words(|k| {
-        let v = vec4_of(m, pxl_spec_core::light::STARTS_AT + k);
+        let v = m.v[pxl_spec_core::light::STARTS_AT + k];
         [v.x, v.y, v.z, v.w]
     })
 }
 
 fn counts(m: &Head) -> bool {
-    m.cast.y != 0
+    m.v[0].y != 0
 }
 
 /// The cast's number (`light::HEAD_CAST`).
 pub(crate) fn cast_number(m: &Head) -> u32 {
-    m.cast.x
+    m.v[0].x as u32
 }
 
 /// The number of the cast since which only the eye's look moved
 /// (`light::HEAD_EPOCH`).
 fn epoch(m: &Head) -> u32 {
-    m.epoch.x
+    m.v[0].z as u32
+}
+
+/// Whether the cast's marks take each pixel's footprint
+/// (`light::HEAD_FOOTPRINT`).
+pub(crate) fn footprint(m: &Head) -> bool {
+    m.v[1].z != 0
 }
 
 /// The map's side (`light::HEAD_SIZE`), none in the eye's head.
 pub(crate) fn size(m: &Head) -> u32 {
-    m.epoch.y
-}
-
-/// The first word of the level's state in the list's buffer
-/// (`light::HEAD_STATE`, `light::reads_at`).
-fn state(m: &Head) -> u32 {
-    vec4_of(m, pxl_spec_core::light::HEAD_STATE / 4).w as u32
+    m.v[0].w as u32
 }
 
 /// Whether a tile from `lo` to `hi`, tiles across and down, is one the
-/// cast numbered `cast` casts (`light::reads_at`, in the level's state at
-/// `state`), none past the box: tile by tile where they are few, else by
-/// the squares they lie in (`light::coarse_at`, in the list), which may
-/// name a square for a tile of it alone.
-fn casts_in<W: Words + ?Sized>(
-    w: &W,
-    size: u32,
-    state: u32,
-    cast: u32,
-    lo: [i32; 2],
-    hi: [i32; 2],
-) -> bool {
+/// cast numbered `cast` casts (`light::reads_at`), none past the box: tile by
+/// tile where they are few, else by the squares they lie in
+/// (`light::coarse_at`), which may name a square for a tile of it alone.
+fn casts_in<W: Words + ?Sized>(w: &W, size: u32, cast: u32, lo: [i32; 2], hi: [i32; 2]) -> bool {
     let n = pxl_spec_core::light::tiles(size) as i32;
     let (lo, hi) = (
         [lo[0].max(0), lo[1].max(0)],
@@ -212,7 +112,7 @@ fn casts_in<W: Words + ?Sized>(
     }
     let few = (hi[0] - lo[0] + 1) * (hi[1] - lo[1] + 1) <= 16;
     let (k, first, row) = if few {
-        (1, state + pxl_spec_core::light::reads_at(size), n)
+        (1, pxl_spec_core::light::reads_at(size), n)
     } else {
         (
             pxl_spec_core::light::COARSE as i32,
@@ -257,28 +157,20 @@ fn world<'a>(
     }
 }
 
-/// A level's light off its head's vec4s, `v(k)` the `k`-th
-/// (pxl-spec-core `light::HEAD_LIGHT`, `light::Light::words`).
-fn light_at(v: impl Fn(usize) -> IVec4) -> Light {
-    let at = pxl_spec_core::light::HEAD_LIGHT;
-    let f = |w: i32| f32::from_bits(w as u32);
-    let v3 = |q: IVec4| [f(q.x), f(q.y), f(q.z)];
-    let (a, b, c, d, e) = (v(at), v(at + 1), v(at + 2), v(at + 3), v(at + 4));
+/// The light's cast off the eye's words (pxl-spec-core `light::Light::words`).
+pub(crate) fn light_of(eye: &Eye) -> Light {
+    let v3 = |v: Vec4| [v.x, v.y, v.z];
+    let i = |v: Vec4| v.w.to_bits() as i32;
     Light {
-        first: v3(a),
-        t_max: f(a.w),
-        across: v3(b),
-        down: v3(c),
-        dir: v3(d),
-        bias: v3(e),
-        corner: [b.w, c.w],
-        shadow_radius_ndc: f(d.w),
+        first: v3(eye.light[0]),
+        t_max: eye.light[0].w,
+        across: v3(eye.light[1]),
+        down: v3(eye.light[2]),
+        dir: v3(eye.light[3]),
+        bias: v3(eye.light[4]),
+        corner: [i(eye.light[1]), i(eye.light[2])],
+        reach_ndc: eye.light[3].w,
     }
-}
-
-/// The level's light its head holds (`light_at`).
-pub(crate) fn light_of(head: &Head) -> Light {
-    light_at(|k| vec4_of(head, k))
 }
 
 /// The shadow map as an observer (observer.rs `Observer`), off the eye's
@@ -300,14 +192,11 @@ pub(crate) struct Map {
     /// Its epoch's (`light::HEAD_EPOCH`): where it is the cast's, the cast
     /// casts every tile read, its passes whole (`Observer::take`).
     epoch: u32,
-    /// The first word of its state in the list's buffer
-    /// (`light::HEAD_STATE`).
-    state: u32,
 }
 
 impl Map {
     pub(crate) fn of(eye: &Eye, head: &Head) -> Map {
-        let light = light_of(head);
+        let light = light_of(eye);
         let (origin, detail) = eye_origin(eye);
         Map {
             light,
@@ -317,7 +206,6 @@ impl Map {
             detail: light.detail(detail),
             cast: cast_number(head),
             epoch: epoch(head),
-            state: state(head),
         }
     }
 
@@ -505,7 +393,7 @@ impl Observer for Map {
     /// tiles it feeds (`feeds`).
     fn needs<W: Words + ?Sized>(&self, w: &W, level: Level, at: [u32; 2]) -> bool {
         let (lo, hi) = self.feeds(level, at);
-        casts_in(w, self.size, self.state, self.cast, lo, hi)
+        casts_in(w, self.size, self.cast, lo, hi)
     }
 
     /// Each at its own place where the cast begins its epoch, its passes
@@ -683,10 +571,8 @@ const _: () = assert!(
 );
 
 const _: () = assert!(
-    pxl_spec_core::light::SHADOW_RADIUS_NDC == 15
-        && pxl_spec_core::light::CORNER[0] == 7
-        && pxl_spec_core::light::CORNER[1] == 11,
-    "`light_at` reads the shadow's radius off the rays' direction's fourth word, the corner off the steps'"
+    pxl_spec_core::light::REACH_NDC == 15,
+    "`light_of` reads the shadow's radius off the rays' direction's fourth word"
 );
 
 const _: () = assert!(
@@ -825,7 +711,7 @@ pub fn light_miss_margin_cs(
     let w = at(list, pxl_spec_core::light::misses_at(n) + i);
     let (h, told) = pxl_spec_core::light::miss_hold(n, w);
     if told < Margin::NONE.0.to_bits() {
-        crate::least(list, state(head) + h + pxl_spec_core::light::HOLD_MARGIN, told);
+        crate::least(list, h + pxl_spec_core::light::HOLD_MARGIN, told);
     }
 }
 
@@ -923,8 +809,7 @@ pub fn light_margin_cs(
     if id.x >= tiles || id.y >= tiles {
         return;
     }
-    let state = state(head);
-    if at(list, state + l::reads_at(n) + id.y * tiles + id.x) != cast_number(head) {
+    if at(list, l::reads_at(n) + id.y * tiles + id.x) != cast_number(head) {
         return;
     }
     let m = Map::of(eye, head);
@@ -970,13 +855,12 @@ pub fn light_margin_cs(
         }
         b += 1;
     }
-    put(list, state + m.light.hold(n, [id.x, id.y]) + l::HOLD_MARGIN, least);
+    put(list, m.light.hold(n, [id.x, id.y]) + l::HOLD_MARGIN, least);
 }
 
-/// The tiles between `a` and `b` of the level `m` marked stood on, where
-/// they lie within a footprint of each other (`light::FOOTPRINT_TILES`);
-/// none past it.
-pub(crate) fn stand_between(stands: &mut [u32], m: &LevelMark, a: [i32; 2], b: [i32; 2]) {
+/// The tiles between `a` and `b` marked stood on, where they lie within a
+/// footprint of each other (`light::FOOTPRINT_TILES`); none past it.
+pub(crate) fn stand_between(list: &mut [u32], size: u32, cast: u32, a: [i32; 2], b: [i32; 2]) {
     let span = pxl_spec_core::light::FOOTPRINT_TILES;
     let (lo, hi) = (
         [a[0].min(b[0]), a[1].min(b[1])],
@@ -989,15 +873,15 @@ pub(crate) fn stand_between(stands: &mut [u32], m: &LevelMark, a: [i32; 2], b: [
     while j <= hi[1] {
         let mut i = lo[0];
         while i <= hi[0] {
-            stand(stands, m, [i, j]);
+            stand(list, size, cast, [i, j]);
             i += 1;
         }
         j += 1;
     }
 }
 
-/// Tile `[i, j]`'s word among the box's tiles' words at `first` (its
-/// stands, its reads), `NO_TILE` past the box.
+/// Tile `[i, j]`'s word among the box's tiles' words at `first` (the
+/// stands, the reads), `NO_TILE` past the box.
 fn tile_word(size: u32, first: u32, [i, j]: [i32; 2]) -> u32 {
     let n = pxl_spec_core::light::tiles(size) as i32;
     if i >= 0 && j >= 0 && i < n && j < n {
@@ -1010,14 +894,14 @@ fn tile_word(size: u32, first: u32, [i, j]: [i32; 2]) -> u32 {
 /// No tile's word (`tile_word`).
 const NO_TILE: u32 = u32::MAX;
 
-/// Tile `tile` of level `m`'s box marked stood on in its cast among every
-/// level's stands (`light::stands`), none past the box: written only where
-/// it does not hold that number yet, so of the many threads whose pixels
-/// stand on one tile the first alone writes it.
-pub(crate) fn stand(stands: &mut [u32], m: &LevelMark, tile: [i32; 2]) {
-    let w = tile_word(m.size, 0, tile);
-    if w != NO_TILE && at(stands, m.base + w) != m.cast {
-        put(stands, m.base + w, m.cast);
+/// Tile `tile` of the box marked stood on in the cast numbered `cast`
+/// (`light::stands_at`), none past the box: written only where it does not
+/// hold that number yet, so of the many threads whose pixels stand on one
+/// tile the first alone writes it.
+pub(crate) fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
+    let w = tile_word(size, pxl_spec_core::light::stands_at(size), tile);
+    if w != NO_TILE && at(list, w) != cast {
+        put(list, w, cast);
     }
 }
 
@@ -1027,20 +911,17 @@ pub(crate) fn stand(stands: &mut [u32], m: &LevelMark, tile: [i32; 2]) {
 /// instances (pxl-render gpu/generator.rs), as many as are placed, where each
 /// stands, as decor tells (decor.rs `Instances`). Seen where a
 /// ball about its middle as wide as decor is tall and wide meets the view
-/// (`eye::sees`); marked in each level a point of it may be read at
-/// (`Levels::of_receiver`), the tiles about its own stood on too, as many
-/// as half the widest decor spans there (`Light::ring`). The actors are
-/// those the scene draws in the world (pxl-render gpu/renderer.rs
-/// `Cast::actors`), no more than `light::ACTORS`. Run after decor is
-/// placed, before the propagation, once for every level, the levels'
-/// stands one buffer (`light::stands`).
+/// (`eye::sees`); the tiles about its own stood on too, as many as half
+/// the widest decor spans (`Light::ring`). The actors are those the scene
+/// draws in the world (pxl-render gpu/renderer.rs `Cast::actors`), no more
+/// than `light::ACTORS`. Run after decor is placed, before the propagation.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "light_mark_draws_cs"))]
 #[allow(clippy::too_many_arguments)]
 pub fn light_mark_draws_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(uniform, descriptor_set = 0, binding = 22)] heads: &Heads,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 23)] stands: &mut [u32],
+    #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 18)] drawing: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 19)] regions: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 20)] instances: &[u32],
@@ -1049,10 +930,10 @@ pub fn light_mark_draws_cs(
     let at = pxl_spec_core::light::ACTORS_AT;
     let k = id.x as usize;
     let v = if k < pxl_spec_core::light::ACTORS {
-        if k >= head_at(heads, 0, at).x as usize {
+        if k >= head.v[at].x as usize {
             return;
         }
-        let p = head_at(heads, 0, at + 1 + k);
+        let p = head.v[at + 1 + k];
         [
             f32::from_bits(p.x as u32),
             f32::from_bits(p.y as u32),
@@ -1082,22 +963,16 @@ pub fn light_mark_draws_cs(
     ) {
         return;
     }
-    let levels = Levels::of(heads);
-    let [first, past] = levels.of_receiver(v, pxl_spec_core::light::draw_reach());
-    let mut l = first;
-    while l < past {
-        let m = levels.level(l);
-        let ([i, j], r) = (m.light.tile_of(v), m.light.ring());
-        let mut b = -r;
-        while b <= r {
-            let mut a = -r;
-            while a <= r {
-                stand(stands, &m, [i + a, j + b]);
-                a += 1;
-            }
-            b += 1;
+    let (s, n) = (light_of(eye), size(head));
+    let ([i, j], cast, r) = (s.tile_of(v), cast_number(head), s.ring());
+    let mut b = -r;
+    while b <= r {
+        let mut a = -r;
+        while a <= r {
+            stand(list, n, cast, [i + a, j + b]);
+            a += 1;
         }
-        l += 1;
+        b += 1;
     }
 }
 
@@ -1121,14 +996,13 @@ pub fn light_propagate_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 11)] head: &Head,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 21)] args: &mut [u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 23)] stands: &[u32],
 ) {
     let side = size(head);
     let n = pxl_spec_core::light::tiles(side);
     if id.x >= n || id.y >= n {
         return;
     }
-    let s = light_of(head);
+    let s = light_of(eye);
     // A tile past every slot a receiver reads holds none of its slots.
     let t = pxl_spec_core::light::TILE;
     let middle = [(id.x * t + t / 2) as i32, (id.y * t + t / 2) as i32];
@@ -1151,7 +1025,7 @@ pub fn light_propagate_cs(
         while b <= last && !read {
             let mut a = first;
             while a <= last && !read {
-                read = stood(stands, side, cast, [t[0] - o[0] + a, t[1] - o[1] + b]);
+                read = stood(&*list, side, cast, [t[0] - o[0] + a, t[1] - o[1] + b]);
                 a += 1;
             }
             b += 1;
@@ -1159,13 +1033,12 @@ pub fn light_propagate_cs(
         k += 1;
     }
     // Read, and read first in the epoch: the cast's to cast.
-    let state = state(head);
-    let w = state + pxl_spec_core::light::reads_at(side) + id.y * n + id.x;
+    let w = pxl_spec_core::light::reads_at(side) + id.y * n + id.x;
     if read && at(list, w) < epoch {
         put(list, w, cast);
         // Where the eye stands as it is cast; its margin the walks that
         // feed it set (`light_margin_cs`, `light_miss_margin_cs`).
-        let h = state + s.hold(side, [id.x, id.y]);
+        let h = s.hold(side, [id.x, id.y]);
         let e = pxl_spec_core::light::HOLD_EYE;
         put(list, h + e, eye.origin.x as u32);
         put(list, h + e + 1, eye.origin.y as u32);
@@ -1207,16 +1080,15 @@ pub fn light_detail_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] list: &mut [u32],
 ) {
     let t = pxl_spec_core::light::TILE;
-    let (s, n) = (light_of(head), size(head));
+    let (s, n) = (light_of(eye), size(head));
     let tiles = pxl_spec_core::light::tiles(n);
     if id.x >= tiles || id.y >= tiles {
         return;
     }
-    let state = state(head);
-    let w = state + pxl_spec_core::light::reads_at(n) + id.y * tiles + id.x;
+    let w = pxl_spec_core::light::reads_at(n) + id.y * tiles + id.x;
     // Where the tile lay under the corner before: one the box slid onto
     // holds none of what it read.
-    let was = vec4_of(head, 1);
+    let was = head.v[1];
     let c = s.corner;
     let from = [
         id.x as i32 + (c[0] - was.x) / t as i32,
@@ -1229,7 +1101,7 @@ pub fn light_detail_cs(
     if at(list, w) < epoch(head) {
         return;
     }
-    let h = state + s.hold(n, [id.x, id.y]);
+    let h = s.hold(n, [id.x, id.y]);
     let margin = f32::from_bits(at(list, h + pxl_spec_core::light::HOLD_MARGIN));
     let e = pxl_spec_core::light::HOLD_EYE;
     let stood = [
@@ -1243,9 +1115,9 @@ pub fn light_detail_cs(
     }
 }
 
-/// Whether a receiver stood on tile `tile` of the level's stands, bound at
-/// its own, in the cast numbered `cast`, none past the box.
-fn stood(stands: &[u32], size: u32, cast: u32, tile: [i32; 2]) -> bool {
-    let w = tile_word(size, 0, tile);
-    w != NO_TILE && at(stands, w) == cast
+/// Whether a receiver stood on tile `tile` in the cast numbered `cast`,
+/// none past the box.
+fn stood(list: &[u32], size: u32, cast: u32, tile: [i32; 2]) -> bool {
+    let w = tile_word(size, pxl_spec_core::light::stands_at(size), tile);
+    w != NO_TILE && at(list, w) == cast
 }

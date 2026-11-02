@@ -110,7 +110,9 @@ impl ScreenAo {
         }
     }
 
-    pub fn prepare(&mut self, proj: &Mat4, width: u32, height: u32) {
+    /// `reach` the reach of every effect, which the occlusion
+    /// takes to as the others do (effect.wgsl `effect_share`).
+    pub fn prepare(&mut self, proj: &Mat4, width: u32, height: u32, reach: f32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
         mat4::invert(&mut inv, proj);
@@ -118,6 +120,7 @@ impl ScreenAo {
         put_mat(u, ao::INV_PROJ, &inv);
         u[ao::HALF] = (width / AO_DOWNSCALE) as f32;
         u[ao::HALF + 1] = (height / AO_DOWNSCALE) as f32;
+        u[ao::EFFECT_REACH] = reach;
     }
 
     /// The words its passes read, as `prepare` wrote them.

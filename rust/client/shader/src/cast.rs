@@ -20,7 +20,7 @@ use crate::eye::{grid, Eye};
 use crate::pyramid::{pyramid_at, pyramid_put, Pyramid};
 use crate::observer::{self, Observer, Take};
 use crate::workgroup::CAST_SIDE;
-use crate::world::{face_ask, face_of, World};
+use crate::world::{face_of, unasked_face, World};
 use crate::{add, most, opens};
 
 /// The visible sample at each drawn pixel (pxl-render gpu/ray/raster.rs): its
@@ -239,9 +239,9 @@ pub(crate) fn enlist(args: &mut [u32], room: u32, whole: [u32; 2]) -> u32 {
 }
 
 /// Pixel `id`'s ray again from its cell's start, writing what it asks into
-/// the observed pyramid (`Writing`): its words, and where it stopped on a
-/// cell, its hit kept for what lies about its face to be asked once a hit
-/// (`keep_hit`); none where it stopped on none.
+/// the observed pyramid (`Writing`): its words, what lies about the face it
+/// stopped on told at once where it needs no asking (`world::unasked_face`),
+/// else its hit kept for that to be asked once a hit (`keep_hit`).
 #[allow(clippy::too_many_arguments)]
 fn walk_missed(
     eye: &Eye,
@@ -267,11 +267,12 @@ fn walk_missed(
     };
     let (aim, met, before) =
         observer::walk_again(eye, world, pyramid, &*beams, px_tan(eye, id, size), &mut (), &mut ());
-    let faces = if met.ends == End::Hit {
-        let face = face_ask(&aim.ray, met.hit.axis, met.hit.asset[0]);
+    let (asks, faces) = unasked_face(met.ends, met.hit.asset[0]);
+    let faces = if asks {
+        let face = face_of(&aim.ray, met.hit.axis);
         keep_hit(eye, beams, pyramid, &met.hit.node, face, id)
     } else {
-        0
+        faces
     };
     let met = Trace {
         visits: met.visits + before,

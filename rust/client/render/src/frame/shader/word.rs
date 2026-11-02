@@ -5,7 +5,7 @@
 //! (constant.wgsl's tail), a uniform's floats as its vec4s, and each
 //! uniform's fields as their accessors to the part that binds it.
 
-use pxl_spec_core::{light, screen};
+use pxl_spec_core::screen;
 
 /// A draw's uniform (frame/draw.rs): its translation and what its pipeline
 /// reads past it.
@@ -24,9 +24,6 @@ pub enum Kind {
     /// Three columns, a vec4 each, their `w` unread.
     Mat3,
     Mat4,
-    /// A vec4 a level of the light's map (pxl-spec-core `light::LEVELS`),
-    /// read by its level.
-    Levels,
 }
 
 impl Kind {
@@ -39,7 +36,6 @@ impl Kind {
             Kind::Vec4i | Kind::Vec4u => 4,
             Kind::Mat3 => 11,
             Kind::Mat4 => 16,
-            Kind::Levels => 4 * light::LEVELS as usize,
         }
     }
 }
@@ -98,15 +94,17 @@ uniform! {
         EDGE_WIDTH: F32 = 29,
         RIM_INTENSITY: F32 = 30,
         CORNER_AO: F32 = 31,
-        /// The first level's light box from the eye's frame (gpu/shadow.rs
-        /// `aim`), how much of its light a shadow takes, none where no map
-        /// is drawn, and the share of a level's half-width a receiver reads
-        /// it within (gpu/shadow.rs `READ_SHARE`). Its light is the sun's,
-        /// or the moon's where `SHADOW_MOON` is 1 (shadow.wgsl
-        /// `shadow_light`).
+        /// The light box from the eye's frame (gpu/shadow.rs `aim`), how
+        /// much of its light a shadow takes, none where no map is drawn, and
+        /// the normal offset a fragment takes, a texel at the map's reach.
+        /// Its light is the sun's, or the moon's where `SHADOW_MOON` is 1
+        /// (shadow.wgsl `shadow_light`).
         LIGHT_VIEW_PROJ: Mat4 = 32,
         SHADOW_STRENGTH: F32 = 48,
-        SHADOW_RADIUS_NDC: F32 = 50,
+        SHADOW_TEXEL: F32 = 49,
+        /// How far from the eye the effects on a drawn surface reach, in
+        /// units (effect.wgsl `effect_share`).
+        EFFECT_REACH: F32 = 50,
         /// Whether the camera gizmo is drawn, its tint on the rays' cells
         /// with it (screen_shade.wgsl `cell_share`).
         GIZMO: F32 = 51,
@@ -115,14 +113,6 @@ uniform! {
         SCREEN: Vec2 = 52,
         /// 1 where the shadow map is cast from the moon (`LIGHT_VIEW_PROJ`).
         SHADOW_MOON: F32 = 54,
-        /// The levels the map has, as far as the eye draws (gpu/shadow.rs
-        /// `levels_for`): a receiver past the last's reach reads none.
-        SHADOW_LEVELS: F32 = 55,
-        /// Each level's translation, the last column of its frame, its turn
-        /// the first's scaled across by `2^-l`, and the first's depth over
-        /// its own, the scale its depth takes (gpu/shadow.rs `level_clip`,
-        /// shadow.wgsl `shadow_level_clip`).
-        LIGHT_LEVELS: Levels = 56,
         /// Where this frame's pixels sample the world, off their middles, in
         /// clip units, X right and Y up: pxl-spec-core `eye::JITTER`'s offset
         /// `j`, in drawn pixels with Y down, as (2 j.x / width, -2 j.y /
@@ -130,7 +120,7 @@ uniform! {
         /// moved against it (frame.wgsl `jittered`), the sky aimed along it.
         /// Last: the words before it are what a frame reads as moved
         /// (gpu/renderer.rs `frame`).
-        JITTER: Vec2 = 108,
+        JITTER: Vec2 = 56,
     }
 }
 pub const FRAME_FLOATS: usize = floats(frame::FIELDS);
@@ -238,11 +228,13 @@ pub const STARS_FLOATS: usize = floats(stars::FIELDS);
 
 uniform! {
     /// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs): the view's
-    /// projection and its inverse, and the half-resolution target's size.
+    /// projection and its inverse, the half-resolution target's size, and
+    /// the effects' reach, the frame's `EFFECT_REACH`.
     ao {
         PROJ: Mat4 = 0,
         INV_PROJ: Mat4 = 16,
         HALF: Vec2 = 32,
+        EFFECT_REACH: F32 = 34,
     }
 }
 pub const AO_FLOATS: usize = floats(ao::FIELDS);

@@ -37,9 +37,13 @@ pub mod STAGE_AT {
     pub const CORNER_AO: usize = SCREEN_AO + 1;
     /// How much of the clouds shows, none to all.
     pub const CLOUDS: usize = CORNER_AO + 1;
-    /// Whether the shadows are cast, 1, or off, 0: as far as the eye draws,
-    /// the map's levels as many as that takes (gpu/shadow.rs `levels_for`).
-    pub const SHADOWS: usize = CLOUDS + 1;
+    /// How far from the eye the effects on a drawn surface reach, in units:
+    /// its lines, its corners' and the screen's occlusion and the shadows,
+    /// all to this one boundary, faded alike before it (pxl-render
+    /// frame/shader/effect.wgsl `effect_share`).
+    pub const EFFECT_REACH: usize = CLOUDS + 1;
+    /// 1 where the shadows are on, 0 where off; they reach `EFFECT_REACH`.
+    pub const SHADOWS: usize = EFFECT_REACH + 1;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

@@ -510,55 +510,22 @@ and which of the face's edges and corners meet the air or a rising cell. The
 (`frame/shader/screen_ray.wgsl` `pixel_ray`, `frame/shader/paint.wgsl` `paint`):
 its swatch or image, shaded edges, light, and the air before it.
 
-The shading of a drawn face applies at every zoom by one computation from
-what the ray met there. A coarse cell is a fold, so what it gives is its
-fold's. Its image is no part of the shading: a cell coarser than the ground's
-leaf is drawn in the colors its fold reads from afar (`appearance`).
-
-- **Edges and corners.** A neighbor hides the face where it keeps as much of
-  its cube as the cell does (`pxl-spec-core answer.rs` `hides`), a whole cube
-  at the leaf. The lines and the corners' shading read those bits, over the
-  cell's own side.
-- **Shadows.** The map reaches as far as the eye draws (The shadow map).
-- **The screen's occlusion.** It reaches over the side of the cell drawn at
-  its distance (`frame/shader/ao_view.wgsl` `ao_cell`).
-- **What does not scale.** A line stays as wide in units whatever the cell,
-  so cells side by side show one line, and perspective alone thins it. The
-  rim and the air read only the face's normal and distance.
-
-Nothing stops short of where the eye stops drawing: an effect whose reads are
-missing at some zoom would stop at one boundary stated from that, and fade as
-the shadows fade at the map's last reach.
+The effects on a drawn surface, its lines, its corners' and the screen's
+occlusion and the shadows, reach one distance from the eye, where the camera
+grid's cells one zoom coarser than the ground's leaf begin, and fade alike
+before it (`pxl-kernel domain/scene/stage.rs` `STAGE_AT::EFFECT_REACH`,
+`frame/shader/effect.wgsl` `effect_share`). The rim and the air, which read
+only the face's normal and distance, reach as far as the eye draws.
 
 ## The shadow map
 
-Shadows are read off the shadow map, the world's depth from the sun in square
-boxes of the light about the eye, its **clip levels** (`gpu/shadow.rs`,
-`pxl-spec-core light.rs` `LEVELS`). Each level is twice as wide as the one
-before. The first is `FIRST_SIZE` texels a side, each `FIRST_TEXEL` units,
-out past where the ground's leaf cells end. Each later level is `SIZE` texels
-a side,
-the least that keeps its texel no wider than the camera grid's cell at its
-near edge. The coarsest reaches as far as the eye draws at the pyramid's top.
-`gpu/shadow.rs` asserts all three. A receiver reads the finest level that holds
-it (`level_of`, `shadow.wgsl` `shadow_level`). A level's box holds its
-receivers a half-width either side of the eye along the light's rays, and
-toward the sun past them every caster that can shadow one: as far along the
-rays as they climb from the lowest ground under the box to the world's ceiling
-over the highest ground they cross, as the ground's clip levels bound it, no
-farther than the eye draws (`caster_reach`, `pxl-kernel` `relief_over`).
-
-Each texel is fixed in the world and held in its level's slot by its index
-modulo the level's side (`Light`). The sun is an observer as the eye is: one set
-of passes, written once over an interface both implement
-(`pxl-shader observer.rs` `Observer`), asks the world at the eye's zooms, so a
-shadow has the detail of what it falls on. Each level is cast by those passes
-over its own head, deciding apart whether to cast. A cast's working words, its
-beam rays, samples and misses (`pxl-spec-core light.rs` `list_words`), are
-written before they are read, so the levels share one list, each cast whole
-before the next; what outlives a cast, which tiles were read and what each holds
-by, is the level's own state (`reads_at`). The marks of where receivers stand
-run once for every level, each receiver in the levels it is read at.
+Shadows are read off the shadow map, the world's depth from the sun in a square
+box of the light about the eye (`gpu/shadow.rs`), each texel fixed in the world
+and held in a map slot by its index modulo the map's side
+(`pxl-spec-core light.rs` `Light`). The sun is an observer as the eye is: one set of
+passes, written once over an interface both implement (`pxl-shader observer.rs`
+`Observer`), asks the world at the eye's zooms, so a shadow has the detail of
+what it falls on.
 
 It casts only what a receiver reads:
 
@@ -598,8 +565,7 @@ the list, and those alone are lowered into their tiles' with an atomic
 Decor and the actors, which move, are drawn into the map each frame, their depth
 only. A receiver compares nine taps, each moved by its own plane's slope, and
 casters are pushed by the same formula, so a plane does not shadow itself
-(`shadow.wgsl` `shadow_visibility`), every level by one computation, its own
-texel the offset. Beside the shadows, the lighting settings
+(`shadow.wgsl` `shadow_visibility`). Beside the shadows, the lighting settings
 outline an edge that meets the air, lift a rim, and shade corners or run N8AO
 (`spec/client/kernel/domain/view/setting/schema.json`, section `lighting`).
 

@@ -238,9 +238,11 @@ struct Creases {
 // every size side by side show one line and perspective alone thins it far
 // off (`line_at`). The closing in: each edge a cell rises across, and each
 // corner one rises across alone, takes its share of what the last left,
-// over a cell.
+// over a cell. Both to the effects' reach, faded alike before it
+// (effect.wgsl `effect_share`).
 fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
-  if (frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) {
+  let share = effect_share(length(h.at), frame_effect_reach());
+  if ((frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) || share <= 0.0) {
     return Creases(0.0, 1.0);
   }
   let u = (h.axis + 1u) % 3u;
@@ -266,8 +268,8 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
       ao *= 1.0 - occlusion_of(length(vec2f(to[a], to[b])));
     }
   }
-  let k = frame_corner_ao() * (1.0 - ao);
-  return Creases(edge, 1.0 - k);
+  let k = frame_corner_ao() * (1.0 - ao) * share;
+  return Creases(edge * share, 1.0 - k);
 }
 
 // The face's texture coordinate: the world's pos, one repeat a unit.

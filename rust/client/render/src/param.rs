@@ -52,6 +52,7 @@ macro_rules! params {
 /// Every module's settings, as build.rs writes them: each module once, which
 /// param.test.rs holds it to.
 pub const ALL: &[&[(&str, &str, Value)]] = &[
+    effect::ALL,
     ao::ALL,
     atmos::ALL,
     cloud::ALL,
@@ -71,12 +72,20 @@ pub const ALL: &[&[(&str, &str, Value)]] = &[
     sky::star::ALL,
 ];
 
+/// The effects on a drawn surface, its lines, its corners' and the screen's
+/// occlusion and the shadows: one reach from the eye (pxl-kernel
+/// domain/scene/stage.rs `STAGE_AT::EFFECT_REACH`), each faded alike before it
+/// (frame/shader/effect.wgsl `effect_share`).
+pub mod effect {
+    params! {
+        /// The share of the reach past which the effects fade to nothing at it.
+        FADE_START: f32 = 0.75;
+    }
+}
+
 /// The screen's ambient occlusion (the passes frame/shader/ao_*.wgsl).
 pub mod ao {
     params! {
-        /// The reach and the falloff, in sides of the cell drawn where the
-        /// pixel lies (ao_view.wgsl `ao_cell`): a leaf's, a unit, near the
-        /// eye, and as coarse as the cells farther off.
         RADIUS: f32 = 1.5;
         DIST_FALLOFF: f32 = 1.0;
         INTENSITY: f32 = 1.2;
@@ -281,16 +290,12 @@ pub mod shadow {
         /// (`light::BY_NORMAL`'s rest) a cast shadow takes away; all of it left
         /// the shade as dark.
         BY_UP_TAKEN: f32 = 0.5;
-        /// The share of the casters' reach past which a shadow fades to
-        /// nothing at it.
-        FADE_START: f32 = 0.75;
         /// The share of the box's depth its planes step along the sun by, on
         /// a grid fixed in the world as its texels are across: a step casts
         /// the world again, since every texel's ray starts on the near plane.
-        /// The box is as much deeper than what it holds, its receivers and
-        /// the casters' reach toward the sun past them (gpu/shadow.rs
-        /// `aim_level`), half a step each side, so they lie within it
-        /// wherever the step leaves it.
+        /// The box is as much deeper than the sphere of its reach, half a step
+        /// each side, so the sphere lies within it wherever the step leaves
+        /// it.
         DEPTH_STEP: f64 = 0.2;
     }
 }

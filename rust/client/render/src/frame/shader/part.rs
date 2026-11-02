@@ -202,7 +202,7 @@ macro_rules! air {
 /// shadow and the finish.
 macro_rules! lit {
     [$($own:literal),*] => {
-        air!["frame", "encode"; "atmos_air", "atmos_ground", "shade", "shadow", "finish", $($own),*]
+        air!["frame", "encode", "effect"; "atmos_air", "atmos_ground", "shade", "shadow", "finish", $($own),*]
     };
 }
 
@@ -238,11 +238,11 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MIP
     &["mip"],
     // SHADER_AO_DOWNSAMPLE
-    &["lattice", "frame", "ao_view", "ao_pass", "ao_downsample"],
+    &["frame", "ao_view", "ao_pass", "ao_downsample"],
     // SHADER_AO_SAMPLE
-    &["lattice", "frame", "ao_view", "ao_pass", "ao_sample"],
+    &["frame", "ao_view", "ao_pass", "ao_sample"],
     // SHADER_AO_BLUR
-    &["lattice", "ao_view", "ao_pass", "ao_blur"],
+    &["ao_view", "ao_pass", "ao_blur"],
     // SHADER_ATMOS_TRANSMITTANCE
     &["atmos_medium", "atmos_pass", "atmos_transmittance"],
     // SHADER_ATMOS_MULTISCATTER
@@ -385,13 +385,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_LIGHT_MISS
     &["light_miss.gen"],
     // SHADER_AO_APPLY
-    &[
-        "lattice",
-        "tile_word",
-        "screen_tiles",
-        "ao_view",
-        "ao_apply",
-    ],
+    &["tile_word", "screen_tiles", "effect", "ao_view", "ao_apply"],
     // SHADER_CAMERA_GRID
     &["frame", "encode", "sky_word", "debug_look", "camera_grid"],
     // SHADER_SAMPLE_BOX

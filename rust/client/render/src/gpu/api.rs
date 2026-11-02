@@ -813,7 +813,6 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
         record::TEXTURE => texture(TextureSampleType::float, TextureViewDimension::_2d),
         record::TEXTURE_ARRAY => texture(TextureSampleType::float, TextureViewDimension::_2d_array),
         record::DEPTH => texture(TextureSampleType::depth, TextureViewDimension::_2d),
-        record::DEPTH_ARRAY => texture(TextureSampleType::depth, TextureViewDimension::_2d_array),
         record::TEXTURE_UNFILTERED => texture(
             TextureSampleType::unfilterable_float,
             TextureViewDimension::_2d,
@@ -1020,23 +1019,6 @@ impl Gpu {
                 aspect: Some(TextureAspect::depth_only),
                 mips: Some(1),
                 layers: Some(1),
-                ..Default::default()
-            },
-        ))
-    }
-
-    /// The depth alone of `layers` layers of a depth target that carries a
-    /// stencil, an array, as a binding reads them (`depth_only_view`).
-    pub fn depth_only_array_view(&self, texture: Id, layers: u32) -> Id {
-        let s = self.s();
-        handle_of(s.encoder.view(
-            &mut s.stream,
-            texture,
-            &encode::ViewDescriptor {
-                dimension: Some(TextureViewDimension::_2d_array),
-                aspect: Some(TextureAspect::depth_only),
-                mips: Some(1),
-                layers: Some(layers),
                 ..Default::default()
             },
         ))
@@ -1595,11 +1577,6 @@ impl Gpu {
     /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.
     pub fn copy_buf(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), size: u32) {
         call::copy_buffer_to_buffer(&mut self.s().stream, encoder, (from, at), (to, to_at), size);
-    }
-
-    /// `size` bytes of `id` from `at` set to zero, on `encoder`.
-    pub fn clear_buf(&self, encoder: Id, (id, at): (Id, u32), size: u32) {
-        call::clear_buffer(&mut self.s().stream, encoder, id, at, Some(size));
     }
 
     /// `length` bytes of `id`, a buffer made `MAP_READ | COPY_DST` and copied

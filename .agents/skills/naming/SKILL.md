@@ -8,26 +8,12 @@ description: How a name in pixelet is chosen, judged and spelled — what the th
 ## What a name says
 
 Before naming or renaming, read what the thing is: its role, what it takes and
-gives, its value, unit and lifetime. The name says that, plainly. Where the
-field names the same thing, shown by its literature, an official document or a
-representative implementation and not by the word merely turning up there, use
-its word and say where it comes from. A term that only overlaps is not the
-name, and none stands in where no match is confirmed: a disk's radius is a
-radius, not another system's "max distance".
+gives, its value, unit and lifetime. The name says that, plainly. A field's
+word is taken only where it says the thing at least as exactly.
 
 A rename is made where the name misstates the thing or gets in the way of
 understanding it, and the new one clearly does better; not because a name is
 this project's own.
-
-Where a word comes from follows the layer. The system — xpute, the commands'
-modules, what the kernel asks of its host — takes its word from Unix, Linux or
-Wayland; a device outside them keeps its platform's word. The application — the
-world, its drawing, its map, its UI — takes the word its own field uses
-(graphics, cartography, games). In either, a name for what the thing is beats
-one for what it looks like: where a field's metaphor and a plain word for the
-thing both fit, the plain word wins (`LocationIndicator`, not a map SDK's
-`puck`). What the program alone does takes a plain word for what it does. A
-metaphor no field uses is not a name, however apt it reads.
 
 ## What is named with the user
 
