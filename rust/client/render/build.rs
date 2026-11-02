@@ -99,21 +99,34 @@ fn main() {
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // How the samples' boxes lie in their buffer (pxl-engine raster.rs),
     // as the raster reads them, and a box's 36 corners as `corner` winds
-    // them, then wound the other way. The depth a hit's box about the eye
+    // them, then wound the other way, three bits a corner and ten a word
+    // (`raster_corner`): Adreno's driver refuses a table of vectors read at
+    // a place found as it runs (doc/experiment/20261103-shaders-on-two-phones).
+    // The depth a hit's box about the eye
     // is drawn at, short of a lack's 1: finite, as every literal here is.
     {
         use pxl_engine::raster::{
             corner, BOX_AXIS, BOX_HI, BOX_ID, BOX_LO, BOX_WORDS, EYED, LACK, NEAR,
         };
         let n = word::BOX_VERTICES;
-        let corners: Vec<String> = (0..2 * n)
+        let bits: Vec<u32> = (0..2 * n)
             .map(|k| corner(k % n, k >= n))
-            .map(|c| format!("vec3f({}.0, {}.0, {}.0)", c[0], c[1], c[2]))
+            .map(|c| {
+                assert!(c.iter().all(|&v| v == 0 || v == 1), "a corner's a 0 or a 1 a lane");
+                c[0] as u32 | (c[1] as u32) << 1 | (c[2] as u32) << 2
+            })
+            .collect();
+        let corners: Vec<String> = bits
+            .chunks(10)
+            .map(|w| {
+                let word = w.iter().enumerate().fold(0, |a, (j, &b)| a | b << (3 * j));
+                format!("{word}u")
+            })
             .collect();
         let eyed_depth = 1.0f32 - 1.0 / (1u32 << 20) as f32;
         let raster = format!(
-            "const RASTER_CORNERS = array<vec3f, {}>({});\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
-            2 * n,
+            "const RASTER_CORNERS = array<u32, {}>({});\nfn raster_corner(k: u32) -> vec3f {{\n  let b = (RASTER_CORNERS[k / 10u] >> (3u * (k % 10u))) & 7u;\n  return vec3f(f32(b & 1u), f32((b >> 1u) & 1u), f32(b >> 2u));\n}}\nconst RASTER_BOX_WORDS: u32 = {BOX_WORDS}u;\nconst RASTER_BOX_LO: u32 = {BOX_LO}u;\nconst RASTER_BOX_HI: u32 = {BOX_HI}u;\nconst RASTER_BOX_ID: u32 = {BOX_ID}u;\nconst RASTER_BOX_AXIS: u32 = {BOX_AXIS}u;\nconst RASTER_AXIS_MASK: u32 = {}u;\nconst RASTER_EYED: u32 = {EYED}u;\nconst RASTER_LACK: u32 = {LACK}u;\nconst RASTER_EYED_DEPTH: f32 = {eyed_depth:?};\nconst RASTER_NEAR: f32 = {NEAR:?};\n",
+            corners.len(),
             corners.join(", "),
             EYED - 1
         );
