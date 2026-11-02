@@ -63,3 +63,20 @@ fn decor_at_held_clip_level() {
     }
     assert_eq!(held_at(&HeldTo(coarse), coarse - 1, c), coarse - 1);
 }
+
+/// A footing word gives back what it holds, every top cell a unit's in the
+/// world's height, and is no record's, nor `RETAINED` nor `UNGENERATED`.
+#[test]
+fn footing_word_round_trips() {
+    for held in [false, true] {
+        for base in [-(1 << 15), -2, -1, 0, 1, 7, (1 << 15) - 1] {
+            let w = footing_word(held, base);
+            assert!(is_footing(w), "{held} {base}");
+            assert_eq!(footing_of(w), (held, base));
+            assert_ne!(w, RETAINED);
+            assert_ne!(w, UNGENERATED);
+        }
+    }
+    assert!(!is_footing(RETAINED) && !is_footing(UNGENERATED));
+    assert!(!is_footing(record_word(3, 255, 3, pxl_engine::FINEST_ZOOM)));
+}

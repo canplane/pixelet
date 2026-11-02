@@ -21,7 +21,7 @@ use crate::frame::draw::PIPELINE_DECOR;
 use crate::frame::shader::record::compute;
 use crate::frame::shader::record::{
     SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT, SHADER_GENERATION_COMPACT,
-    SHADER_GENERATION_MARK, SHADER_GENERATION_THIN,
+    SHADER_GENERATION_FOOTING, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN,
 };
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Gpu};
@@ -73,6 +73,7 @@ pub struct Generation<'a> {
 pub struct Generator {
     mark: Pipeline,
     thin: Pipeline,
+    footing: Pipeline,
     generate: Pipeline,
     cnt: Pipeline,
     args_pipeline: Pipeline,
@@ -160,6 +161,12 @@ impl Generator {
         Generator {
             mark: pipelines.build_compute(g, SHADER_GENERATION_MARK, &compute::DECOR_MARK_GROUP),
             thin: pipelines.build_compute(g, SHADER_GENERATION_THIN, &compute::DECOR_THIN_GROUP),
+            // The footing's group is the pose's: one layout, one bind group.
+            footing: pipelines.build_compute(
+                g,
+                SHADER_GENERATION_FOOTING,
+                &compute::DECOR_GROUP,
+            ),
             generate: pipelines.build_compute(g, SHADER_GENERATION, &compute::DECOR_GROUP),
             cnt: pipelines.build_compute(g, SHADER_GENERATION_CNT, &compute::DECOR_CNT_GROUP),
             args_pipeline: pipelines.build_compute(
@@ -526,13 +533,15 @@ impl Generator {
                 1,
                 1,
             );
+            // The footing and the pose over the same records and group.
             let listed = [
-                (&self.thin, generation::THIN_ARGS),
-                (&self.generate, generation::GENERATE_ARGS),
+                (&self.thin, self.groups[1], generation::THIN_ARGS),
+                (&self.footing, self.groups[2], generation::GENERATE_ARGS),
+                (&self.generate, self.groups[2], generation::GENERATE_ARGS),
             ];
-            for (k, (pipeline, args)) in listed.into_iter().enumerate() {
+            for (pipeline, group, args) in listed {
                 g.set_pipeline(pass, pipeline.id);
-                g.set_bind_group(pass, 0, self.groups[1 + k], &[]);
+                g.set_bind_group(pass, 0, group, &[]);
                 g.dispatch_indirect(pass, self.list, args * 4);
             }
         }

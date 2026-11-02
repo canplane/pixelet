@@ -36,7 +36,8 @@ use rays::{cast, light_mark};
 pub use beam::{beam_cs, cell_cs, sample_cs};
 pub use cast::{cast_cs, miss_cs, miss_list_cs, hit_faces_cs, hit_lead_cs};
 pub use decor::{
-    decor_args_cs, decor_cnt_cs, decor_compact_cs, decor_cs, decor_mark_cs, decor_thin_cs,
+    decor_args_cs, decor_cnt_cs, decor_compact_cs, decor_cs, decor_footing_cs, decor_mark_cs,
+    decor_thin_cs,
 };
 pub use eye::Eye;
 pub use ground::{bound_cs, height_cs, fold_cs};

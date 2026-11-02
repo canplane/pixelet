@@ -22,6 +22,7 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_HEIGHT => "height_cs",
         SHADER_GENERATION_MARK => "decor_mark_cs",
         SHADER_GENERATION_THIN => "decor_thin_cs",
+        SHADER_GENERATION_FOOTING => "decor_footing_cs",
         SHADER_GENERATION => "decor_cs",
         SHADER_GENERATION_CNT => "decor_cnt_cs",
         SHADER_GENERATION_ARGS => "decor_args_cs",

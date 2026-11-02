@@ -19,55 +19,58 @@ var<storage> global_2: type_4;
 @group(0) @binding(1)
 var<storage, read_write> global_3: type_10;
 
-fn function_(param_2: u32, param_3: u32) -> u32 {
-    var phi_73_: u32;
-
-    if (param_3 < param_2) {
-        let _e17 = global_2.member[param_3];
-        phi_73_ = _e17;
-    } else {
-        phi_73_ = 0u;
-    }
-    let _e19 = phi_73_;
-    return _e19;
-}
-
-fn function_1() {
-    var phi_38_: u32;
-    var phi_56_: u32;
+fn function_() {
     var phi_39_: u32;
+    var phi_42_: u32;
+    var phi_59_: u32;
+    var phi_66_: u32;
+    var phi_43_: u32;
 
     let _e12 = global;
     let _e13 = global_1;
     let _e15 = arrayLength((&global_2.member));
     let _e17 = arrayLength((&global_3.member));
     let _e20 = (_e12.z * (_e15 / 9u));
-    let _e22 = function_(_e15, (_e20 + 91476u));
-    phi_38_ = _e13.x;
+    let _e21 = (_e20 + 91476u);
+    if (_e21 < _e15) {
+        let _e25 = global_2.member[_e21];
+        phi_39_ = _e25;
+    } else {
+        phi_39_ = 0u;
+    }
+    let _e27 = phi_39_;
+    phi_42_ = _e13.x;
     loop {
-        let _e25 = phi_38_;
-        let _e26 = (_e25 < _e22);
-        if _e26 {
-            let _e29 = function_(_e15, ((_e20 + 91477u) + _e25));
-            if (0u < _e17) {
-                let _e33 = atomicAdd((&global_3.member[0u]), 4294967295u);
-                phi_56_ = _e33;
+        let _e30 = phi_42_;
+        let _e31 = (_e30 < _e27);
+        if _e31 {
+            let _e33 = ((_e20 + 91477u) + _e30);
+            if (_e33 < _e15) {
+                let _e37 = global_2.member[_e33];
+                phi_59_ = _e37;
             } else {
-                phi_56_ = 0u;
+                phi_59_ = 0u;
             }
-            let _e35 = phi_56_;
-            if (_e35 < _e17) {
-                atomicStore((&global_3.member[_e35]), (_e29 ^ _e35));
+            let _e39 = phi_59_;
+            if (0u < _e17) {
+                let _e43 = atomicAdd((&global_3.member[0u]), 4294967295u);
+                phi_66_ = _e43;
+            } else {
+                phi_66_ = 0u;
             }
-            phi_39_ = (_e25 + 64u);
+            let _e45 = phi_66_;
+            if (_e45 < _e17) {
+                atomicStore((&global_3.member[_e45]), (_e39 ^ _e45));
+            }
+            phi_43_ = (_e30 + 64u);
         } else {
-            phi_39_ = u32();
+            phi_43_ = u32();
         }
-        let _e42 = phi_39_;
+        let _e52 = phi_43_;
         continue;
         continuing {
-            phi_38_ = _e42;
-            break if !(_e26);
+            phi_42_ = _e52;
+            break if !(_e31);
         }
     }
     return;
@@ -77,5 +80,5 @@ fn function_1() {
 fn way_return_cs(@builtin(workgroup_id) param: vec3<u32>, @builtin(local_invocation_id) param_1: vec3<u32>) {
     global = param;
     global_1 = param_1;
-    function_1();
+    function_();
 }

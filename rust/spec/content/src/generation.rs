@@ -70,6 +70,33 @@ const _: () = assert!(UNGENERATED >> drawn::REGION_SHIFT == drawn::NONE);
 /// lays it, its candidate's cell and seed after it, and `decor_cs`
 /// generates it in its place the same frame, so no other pass reads one.
 pub const RETAINED: u32 = UNGENERATED - 1;
+
+/// A record whose candidate's footing is found, its pose still to ask
+/// (`decor_footing_cs`, then `decor_cs`, the same frame): its first word
+/// marked by every zoom and region bit set, as `RETAINED`'s, and holding
+/// below them whether the finest zoom's column surface was found and its
+/// top cell (`Footing::held`, `Footing::base`, 16 bits signed), bit 17
+/// clear, so no footing word is `RETAINED` or `UNGENERATED`; its box's
+/// height and sink in its words as `decor_cs` leaves them.
+pub const fn footing_word(held: bool, base: i32) -> u32 {
+    FOOTING_MARK | (base as u32 & 0xffff) << 1 | held as u32
+}
+
+/// Whether a record's first word is a footing's (`footing_word`).
+pub const fn is_footing(w: u32) -> bool {
+    w & FOOTING_MARK == FOOTING_MARK && w & 1 << 17 == 0
+}
+
+/// A footing word's `held` and `base` (`footing_word`).
+pub const fn footing_of(w: u32) -> (bool, i32) {
+    (w & 1 != 0, ((w << 15) as i32) >> 16)
+}
+
+const FOOTING_MARK: u32 = !((1 << CELL_SHIFT) - 1);
+const _: () = assert!(
+    CELL_SHIFT == 18 && pxl_engine::HEIGHT_BITS <= 16 && LEAF_CELL == UNIT_ZOOM,
+    "a footing's top cell, a unit or coarser within the world's height, fits 16 bits under the mark"
+);
 const _: () = assert!(
     FINEST_ZOOM < (1 << ZOOM_BITS) - 1,
     "no record's first word is `RETAINED` or `UNGENERATED`: its zoom's bits are never all set"
@@ -413,40 +440,81 @@ pub fn placement(
     c: &Candidate,
     boxed: bool,
 ) -> (Generated, bool, bool) {
+    let (f, ft, has_footing) = footing(q, cell, c.cell);
+    if !has_footing {
+        return (Generated::NONE, false, false);
+    }
+    let (g, generates) = pose(q, &f, decor, cell, c.seed, &ft, boxed);
+    (g, true, generates)
+}
+
+/// Where a candidate in the leaf cell `leaf` stands at `cell`, before it is
+/// posed (`placement`): its box's min corner and sink, `Generated`'s with no
+/// pose; the finest zoom it is posed at (`DecorQuery::finest`) and its
+/// column surface's top cell there, `base`; and whether that zoom's column
+/// surface was found, `held`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Footing {
+    pub g: Generated,
+    pub zoom: Zoom,
+    pub base: i32,
+    pub held: bool,
+}
+
+/// The column surfaces under leaf cell `leaf` at `cell` (`placement`'s
+/// first half): its clip level's, then the finest's where that is another,
+/// one ask, so a GPU's walk down a column is written once. The last asked,
+/// what its pose is asked about, its `Footing`, and whether the clip level's
+/// was found; none stands where it was not.
+pub fn footing<Q: DecorQuery>(
+    q: &mut Q,
+    cell: Zoom,
+    leaf: [i32; 2],
+) -> (Q::ColumnSurface, Footing, bool) {
     let s = LEAF_CELL - cell;
-    let zoom = q.finest(cell, c.cell);
-    // Its clip level's column surface, then the finest's where that is
-    // another: one ask, so a GPU's walk down a column is written once.
+    let zoom = q.finest(cell, leaf);
     let mut first = (0, 0.0);
     let mut k = 0;
     loop {
         let z = if k == 0 { cell } else { zoom };
         let t = LEAF_CELL - z;
-        let (f, top, here) = q.column_surface(z, [c.cell[0] >> t, c.cell[1] >> t]);
-        if k == 0 && !here {
-            return (Generated::NONE, false, false);
-        }
+        let (f, top, here) = q.column_surface(z, [leaf[0] >> t, leaf[1] >> t]);
         if k == 0 {
             first = top;
         }
-        if k == 1 || zoom == cell {
+        if (k == 0 && !here) || k == 1 || zoom == cell {
             let (floor, rise) = first;
-            let g = Generated {
-                variant: 0,
-                turn: 0,
-                at: [c.cell[0], c.cell[1], (floor + 1) * (1 << s)],
-                sink: ((1.0 - rise) * (1u32 << (s + FRAC_W)) as f32 + 0.5) as u32,
+            let ft = Footing {
+                g: Generated {
+                    variant: 0,
+                    turn: 0,
+                    at: [leaf[0], leaf[1], (floor + 1) * (1 << s)],
+                    sink: ((1.0 - rise) * (1u32 << (s + FRAC_W)) as f32 + 0.5) as u32,
+                },
+                zoom,
+                base: top.0,
+                held: k == 0 || here,
             };
-            let held = k == 0 || here;
-            let (g, generates) = asks(q, &f, decor, (zoom, top.0), c.seed, g, boxed);
-            return (
-                g,
-                true,
-                held && generates && stands_at(decor, g.variant, cell),
-            );
+            return (f, ft, k == 1 || here);
         }
         k += 1;
     }
+}
+
+/// How a candidate of `decor` with its `seed` stands on its footing `ft` at
+/// `cell` (`placement`'s second half), its pose asked about the column
+/// surface `f` (`asks`), and whether it generates there.
+pub fn pose<Q: DecorQuery>(
+    q: &mut Q,
+    f: &Q::ColumnSurface,
+    decor: &Decor,
+    cell: Zoom,
+    seed: u32,
+    ft: &Footing,
+    boxed: bool,
+) -> (Generated, bool) {
+    let (g, generates) = asks(q, f, decor, (ft.zoom, ft.base), seed, ft.g, boxed);
+    (g, ft.held && generates && stands_at(decor, g.variant, cell))
 }
 
 /// Every cell generating decor asks of the world, at one place, as a GPU
