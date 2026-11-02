@@ -38,6 +38,35 @@ own Vulkan driver. Each is a different compiler with its own faults.
   the entry into passes at a clean seam, as `decor` splits at
   `generation::placement`'s halves (footing, then pose).
 
+## What the host and a shader share
+
+The same S23 failed twice before, in September, with no error at all: it
+compiled the shader and read a buffer laid out otherwise than the host wrote
+it, so the screen drew wrong (archived minutes
+`20260923-the-ground-one-device-does-not-draw.md` and
+`20260927-a-matrix-the-driver-reads-its-own-way.md`, on `origin/original`).
+
+- A `vec3f` followed by an `f32` in a struct in a `var<storage>` array: WGSL
+  puts the float at byte 12, the S23's Vulkan read it at 16, every field after
+  it one slot along. The terrain did not draw.
+- A `var<storage> array<mat4x4f>`: read with another stride, in the native app
+  (wgpu on Vulkan) as well. Every skinned actor lay on the ground.
+
+So what a `var<uniform>` or `var<storage>` holds has no room inside it: a
+four-byte scalar, a `vec4` of them, an array of those whose stride is its
+element, or a struct of those with nothing between its members. Never a
+`vec3`, a `vec2` beside something else, a matrix, or a padded struct. Bind it
+as the words it is on the wire (`array<vec4f, N>`) and read each field by a
+function of its own. Never build the whole struct back from the words: Safari
+on the Mac and the iPhone lost its GPU process on a shader that did, which a
+field read alone did not.
+
+Two tests held this then, parsing every module with naga
+(`what_a_shader_shares_with_the_host_has_no_room_inside_it`,
+`every_block_reads_each_field_from_where_it_lies`); they are not on main.
+The generated shaders' blocks break the rule today (a `vec2<f32>` and a
+`vec2<u32>` among `vec4`s in `cell`'s uniform), unchecked on the S23.
+
 ## Check
 
 - `ts/app/web/probe.html` on the dev server compiles every module on the
