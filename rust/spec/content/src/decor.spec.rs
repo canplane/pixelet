@@ -49,7 +49,7 @@ pub const DECORS: [Decor; 4] = [
     Decor {
         val: 1024,
         seed: 0x7902530c,
-        chance: 171798692,
+        chance: 107374182,
         orientation: Orientation::random,
         on: [0x00000902, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         scale_steps: 0,
@@ -60,7 +60,7 @@ pub const DECORS: [Decor; 4] = [
     Decor {
         val: 1025,
         seed: 0xb0a5802d,
-        chance: 8589935,
+        chance: 4294967,
         orientation: Orientation::random,
         on: [0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         scale_steps: 0,
@@ -71,7 +71,7 @@ pub const DECORS: [Decor; 4] = [
     Decor {
         val: 1026,
         seed: 0x0ca63010,
-        chance: 17179869,
+        chance: 12884902,
         orientation: Orientation::along_transport,
         on: [0x00000000, 0x0001e800, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         scale_steps: 0,
@@ -82,7 +82,7 @@ pub const DECORS: [Decor; 4] = [
     Decor {
         val: 1027,
         seed: 0x7ba5802d,
-        chance: 17179869,
+        chance: 6442451,
         orientation: Orientation::along_transport,
         on: [0x00000000, 0x007c0000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         scale_steps: 0,

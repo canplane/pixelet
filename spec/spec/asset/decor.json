@@ -39,7 +39,7 @@
         "at 1u spacing."
       ],
       "seed": "0x7902530c",
-      "density": 0.04,
+      "density": 0.025,
       "orient": "random",
       "on": ["park", "forest", "land"],
       "variants": [
@@ -68,7 +68,7 @@
         "boats covered the water."
       ],
       "seed": "0xb0a5802d",
-      "density": 0.002,
+      "density": 0.001,
       "orient": "random",
       "on": ["water"],
       "variants": [
@@ -88,7 +88,7 @@
         "of cells reads as gridlock."
       ],
       "seed": "0x0ca63010",
-      "density": 0.004,
+      "density": 0.003,
       "orient": "along_transport",
       "on": ["motorway", "trunk", "primary", "secondary", "residential_road"],
       "variants": [
@@ -108,7 +108,7 @@
         "trains should read as occasional."
       ],
       "seed": "0x7ba5802d",
-      "density": 0.004,
+      "density": 0.0015,
       "orient": "along_transport",
       "on": ["tram", "light_rail", "subway", "monorail", "rail"],
       "variants": [
