@@ -1007,19 +1007,18 @@ impl Renderer {
         // them, its pixels cast there alone.
         let partial = read.same() && !beside_moved;
         // The tiles of this size, before anything binds them: the claimed
-        // the pixels' cast casts and its samples' raster draws, and those the
-        // rays' screen pass draws, every one where the world's pass has no
-        // gate. The depth's bound of this size with them, which the world's
-        // pass sets where the shadows are cast (`Propagate::set_bounds`).
+        // the pixels' cast casts, its samples' raster draws and the rays'
+        // screen pass draws. The depth's bound of this size with them, which
+        // the world's pass sets where the shadows are cast
+        // (`Propagate::set_bounds`).
         let size = [world.width, world.height];
         self.resolve.tiles.size(g, size);
         if self.shadows {
             self.propagate.size(g, size);
         }
-        let drawn = self.resolve.tiles.after_gate();
+        let drawn = self.resolve.tiles.this_frame();
         let [across, down] = self.resolve.tiles.squares();
-        self.screen
-            .set_tiles(self.resolve.tiles.this_frame(), drawn, across * down);
+        self.screen.set_tiles(drawn, across * down);
         self.screen.prepare(
             g,
             cast,
@@ -1118,15 +1117,15 @@ impl Renderer {
         self.last_frame_uploads.prepare(g, &read_uploads, b);
         // The sun's map: whole where it moved, but where the frame is gated
         // over the world the sun's cast left as it was, through its gate,
-        // the tiles the casters that changed set, or none of it; whole where
-        // the device has no stencil. Which tiles they set the GPU alone
-        // knows, so the map draws its claimed tiles among those of the box
-        // they cover, which the GPU keeps and counts (`Tiles::box_args`).
+        // the tiles the casters that changed set, or none of it. Which tiles
+        // they set the GPU alone knows, so the map draws its claimed tiles
+        // among those of the box they cover, which the GPU keeps and counts
+        // (`Tiles::box_args`).
         // No mark is handed: through the gate the casters mark drawn, and a
         // map drawn whole claims every tile by its uniform, its stamp read
         // by no frame while the map's `claimed_for` is 1 (`Tiles::mark`).
         let cast = self.screen.kind != FrameKind::plain;
-        let map_gated = gated && cast && !self.screen.light_casts() && g.gates();
+        let map_gated = gated && cast && !self.screen.light_casts();
         self.light_tiles.size(g, [shadow::SIZE; 2]);
         self.light_tiles.mark(g, (map_gated, false), None);
         let map_drawn = self.shadows && (!map_gated || casters_marking);
@@ -1280,10 +1279,7 @@ impl Renderer {
         // number into their stencil, and every draw after it passes there
         // alone (`Stencil`). The stencil kept but where the numbers come
         // round, cleared then; a frame drawn whole clears it, its number 0.
-        // Without the stencil the gate passes every pixel, so the world's pass
-        // is drawn whole, the rest by tile all the same.
-        let gating = gated && g.gates();
-        let load = if gating { Load::Load } else { Load::Clear };
+        let load = if gated { Load::Load } else { Load::Clear };
         let desc = pass_desc(
             world.color_view,
             load,
@@ -1292,7 +1288,7 @@ impl Renderer {
             0.0,
             ctx.stamp(GpuSpanName::world).pass(),
         );
-        let (desc, number) = self.resolve.tiles.gate(desc, gating);
+        let (desc, number) = self.resolve.tiles.gate(desc, gated);
         let pass = g.pass(encoder, &desc);
         let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(number) = number {
@@ -1378,11 +1374,11 @@ impl Renderer {
         self.location.keep(&draws, uniforms);
         self.last_frame_uploads
             .keep(g, ctx.encoder, &read_uploads, &touched, b);
-        // The depth's bound the propagation reads, in the tiles the world's pass
-        // drew: the claimed, or every one without the stencil. None without
-        // the shadows, which the propagation runs with alone: the frame they come
-        // on in moves the frame's words (`SHADOW_STRENGTH`), so it is drawn
-        // whole and sets every square before a frame reaches.
+        // The depth's bound the propagation reads, in the tiles the world's
+        // pass drew, the claimed. None without the shadows, which the
+        // propagation runs with alone: the frame they come on in moves the
+        // frame's words (`SHADOW_STRENGTH`), so it is drawn whole and sets
+        // every square before a frame reaches.
         if self.shadows {
             self.propagate
                 .set_bounds(&mut ctx, world.depth_only_view, drawn, squares);
@@ -1631,7 +1627,7 @@ fn targets(g: &Gpu, s: &mut Surface) {
         release(id);
     }
     let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-    s.depth = g.texture(width, height, 1, g.gated_depth(), 1, usage);
+    s.depth = g.texture(width, height, 1, api::GATED_DEPTH, 1, usage);
     s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
     s.depth_only_view = g.depth_only_view(s.depth);
     s.color = g.texture(width, height, 1, WORLD_COLOR, 1, usage);

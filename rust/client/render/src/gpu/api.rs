@@ -99,9 +99,6 @@ const _: () = assert!(
 pub struct Device {
     pub align: u32,
     pub timestamps: bool,
-    /// Whether a depth target may carry a stencil beside a 32-bit float
-    /// depth, which the world's does where it can (`Gpu::gated_depth`).
-    pub depth32float_stencil8: bool,
     /// What a surface shows best, and so what the canvas's pipelines target.
     pub canvas: Format,
     period_ns: f32,
@@ -305,7 +302,12 @@ impl<'a> TrackedRenderPass<'a> {
     }
 }
 
-/// What a pipeline does with the stencil beside its depth (`Gpu::gated_depth`),
+/// The depth a pass drawn through a gate draws into, the world's surfaces'
+/// and the light's map's: a 32-bit float, and a stencil, which marks the
+/// tiles a frame draws again, so a pass skips the rest (`Stencil`).
+pub const GATED_DEPTH: Format = Format::depth32float_stencil8;
+
+/// What a pipeline does with the stencil beside its depth (`GATED_DEPTH`),
 /// which holds in each tile the number of the gated frame that last claimed
 /// it, as a light tile's word names the cast that read it: nothing; passes
 /// only where it holds the pass's reference, this frame's number, as every
@@ -574,7 +576,6 @@ pub fn device() -> Option<Device> {
         s.device = Some(Device {
             align,
             timestamps: feat("timestamp-query"),
-            depth32float_stencil8: feat("depth32float-stencil8"),
             canvas,
             period_ns: f32::from_bits(word(PERIOD_AT)),
         });
@@ -1026,24 +1027,6 @@ impl Gpu {
                 ..Default::default()
             },
         ))
-    }
-
-    /// The depth a pass drawn through a gate draws into, the world's
-    /// surfaces' and the light's map's: a 32-bit float, with a stencil where
-    /// the device carries one beside it (`gates`).
-    pub fn gated_depth(&self) -> Format {
-        if self.gates() {
-            Format::depth32float_stencil8
-        } else {
-            Format::depth32float
-        }
-    }
-
-    /// Whether a gated depth carries a stencil, so a frame may be drawn
-    /// through a gate (`Stencil`); else every pass a gate would hold is
-    /// drawn whole.
-    pub fn gates(&self) -> bool {
-        self.s().device.is_some_and(|d| d.depth32float_stencil8)
     }
 
     /// Both directions addressed alike; `compare` for a comparison sampler.

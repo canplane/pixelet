@@ -26,7 +26,7 @@ use crate::frame::shader::word::frame::VIEW_PROJ;
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
-    word_bytes, Entry, Format, Gpu, Load, RenderContext, Stencil, TrackedRenderPass,
+    word_bytes, Entry, Format, Gpu, Load, RenderContext, Stencil, TrackedRenderPass, GATED_DEPTH,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
@@ -56,9 +56,8 @@ fn ortho(out: &mut Mat4, half: f64, near: f64, far: f64) {
 }
 
 pub struct Shadow {
-    /// The map as its pass draws it, with the gate's stencil where the
-    /// device carries one (`Gpu::gated_depth`), and its depth alone, as the
-    /// lit passes read it.
+    /// The map as its pass draws it, with the gate's stencil
+    /// (`GATED_DEPTH`), and its depth alone, as the lit passes read it.
     map_view: u32,
     map_depth_view: u32,
     sampler: u32,
@@ -109,7 +108,7 @@ impl Shadow {
             SIZE,
             SIZE,
             1,
-            g.gated_depth(),
+            GATED_DEPTH,
             1,
             texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
         );

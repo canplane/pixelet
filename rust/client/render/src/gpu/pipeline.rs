@@ -14,7 +14,7 @@ use crate::api_spec::stream;
 use crate::frame::shader::record::{
     compute_entry, pipeline as record_of, src, HEAD, PIPELINES, SHADERS,
 };
-use crate::gpu::api::{room, shader_bytes, Format, Gpu, Stencil, DONE};
+use crate::gpu::api::{room, shader_bytes, Format, Gpu, Stencil, DONE, GATED_DEPTH};
 use crate::gpu::surface::WORLD_COLOR;
 
 pub const GROUPS: usize = 4;
@@ -155,8 +155,8 @@ impl Pipelines {
     }
 
     /// Pipeline `id` drawing into a world surface's color and depth
-    /// (`WORLD_COLOR`, `Gpu::gated_depth`), through the gate where the depth
-    /// carries one (`Stencil::Gated`).
+    /// (`WORLD_COLOR`, `GATED_DEPTH`), through the gate
+    /// (`Stencil::Gated`).
     pub fn build_world(&mut self, g: &Gpu, id: u32) -> Pipeline {
         self.build_gated(g, id, WORLD_COLOR, Stencil::Gated)
     }
@@ -167,11 +167,10 @@ impl Pipelines {
     }
 
     /// Pipeline `id` drawing into `format` and a gated depth
-    /// (`Gpu::gated_depth`), as `stencil` asks where the depth carries one:
-    /// into the depth alone where `format` is depth32's (`build`).
+    /// (`GATED_DEPTH`), as `stencil` asks: into the depth alone where
+    /// `format` is depth32's (`build`).
     pub fn build_gated(&mut self, g: &Gpu, id: u32, format: Format, stencil: Stencil) -> Pipeline {
-        let stencil = if g.gates() { stencil } else { Stencil::Unused };
-        self.build_onto(g, id, format, (g.gated_depth(), stencil))
+        self.build_onto(g, id, format, (GATED_DEPTH, stencil))
     }
 
     fn build_onto(

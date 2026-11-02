@@ -42,12 +42,10 @@ pub struct RaysPass {
     group: u32,
     bindings: [u32; 4],
     /// The surface's rays and the cast's eye as last handed; the tiles the
-    /// pixels' cast casts, the claimed (`Resolve::tiles`); and those its
-    /// screen pass draws, a quad each (screen_tiles.wgsl), the claimed or,
-    /// where the world's pass has no gate, every one (`Resolve::every`):
-    /// their words and uniform, and how many tiles there are.
+    /// pixels' cast casts and its screen pass draws, a quad each
+    /// (screen_tiles.wgsl), the claimed (`Resolve::tiles`): their words and
+    /// uniform, and how many tiles there are.
     rays_eye: [u32; 2],
-    claimed: (u32, u32),
     tiles: ((u32, u32), u32),
     /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
     /// until the renderer hands them.
@@ -79,7 +77,6 @@ impl RaysPass {
             group: 0,
             bindings: [0; 4],
             rays_eye: [0; 2],
-            claimed: (0, 0),
             tiles: ((0, 0), 0),
             lit: Vec::new(),
             looks,
@@ -102,12 +99,10 @@ impl RaysPass {
         self.bindings = [0; 4];
     }
 
-    /// The tiles this frame casts (`claimed`) and draws (`drawn`), `cnt` of
-    /// them, handed before it prepares, which makes its groups again where
-    /// they are others.
-    pub fn set_tiles(&mut self, claimed: (u32, u32), drawn: (u32, u32), cnt: u32) {
-        self.claimed = claimed;
-        self.tiles = (drawn, cnt);
+    /// The tiles this frame casts and draws, `cnt` of them, handed before
+    /// it prepares, which makes its groups again where they are others.
+    pub fn set_tiles(&mut self, tiles: (u32, u32), cnt: u32) {
+        self.tiles = (tiles, cnt);
     }
 
     /// The group over the surface's rays and the cast's eye (`rays`) and

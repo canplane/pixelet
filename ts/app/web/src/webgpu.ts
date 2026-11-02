@@ -63,12 +63,15 @@ export async function acquire(
     powerPreference: "high-performance",
   });
   if (!adapter) return false;
-  // What the kernel asks for where the adapter has it: the timestamps its
-  // spans are timed by, and a stencil beside the world's depth (pxl-render
-  // gpu/api.rs `Device`).
-  const wanted: GPUFeatureName[] = ["timestamp-query", "depth32float-stencil8"];
+  // What the kernel asks for: a stencil beside the world's depth
+  // (pxl-render gpu/api.rs `GATED_DEPTH`), and the timestamps its spans are
+  // timed by where the adapter has them (`Device`).
+  const wanted: GPUFeatureName[] = ["timestamp-query"];
   const d = await adapter.requestDevice({
-    requiredFeatures: wanted.filter((f) => adapter.features.has(f)),
+    requiredFeatures: [
+      "depth32float-stencil8",
+      ...wanted.filter((f) => adapter.features.has(f)),
+    ],
   });
   const h = new GpuHost(d, () => memory!, wake);
   d.lost.then((info) => {

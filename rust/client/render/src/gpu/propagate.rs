@@ -130,7 +130,7 @@ impl Propagate {
     }
 
     /// The depth's bound set in the tiles the world's pass drew this frame,
-    /// the words and uniform `drawn` (`Tiles::after_gate`), off the world's
+    /// the words and uniform `drawn` (`Tiles::this_frame`), off the world's
     /// depth `depth`, `tiles` across and down. Timed with the resolve, which
     /// follows it.
     pub fn set_bounds(

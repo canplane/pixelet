@@ -42,8 +42,8 @@ pub struct Surface {
     pub wanted_sizes: ((u32, u32), (u32, u32)),
     pub waited_turns: u32,
     /// The frame's depth, the world's and over it what moves on its own
-    /// (gpu/renderer.rs, stage 2), with a stencil where the device carries
-    /// one (`Gpu::gated_depth`): `depth_view` as a pass draws into it,
+    /// (gpu/renderer.rs, stage 2), with a stencil (`GATED_DEPTH`):
+    /// `depth_view` as a pass draws into it,
     /// `depth_only_view` as a binding reads it.
     pub depth: u32,
     pub depth_view: u32,

@@ -996,14 +996,15 @@ impl RaysPass {
                 c.hit_groups = hit_groups(g, [&c.hit_lead_built, &c.hit_faces_built], hit_bound);
                 c.hit_bindings = hit_bound;
             }
+            let ((changed_at, uniform), _) = self.tiles;
             let px_bound = [
                 c.eye,
                 rays.0,
                 c.beams,
                 c.pyramid,
                 c.raster.visibility_array,
-                self.claimed.0,
-                self.claimed.1,
+                changed_at,
+                uniform,
             ];
             if px_bound != c.px_bound {
                 release(c.px_group);
@@ -1112,7 +1113,7 @@ impl RaysPass {
     pub fn dispatch(&mut self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let (generates, casts, kind) = (self.generates(), self.casts_px(), self.kind);
-        let claimed = (self.claimed, self.tiles.1);
+        let claimed = self.tiles;
         let Some(c) = self.cast.as_mut() else { return };
         if casts {
             // The observed pyramid forgotten first where it is; then the

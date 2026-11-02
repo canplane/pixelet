@@ -85,10 +85,8 @@ pub struct Tiles {
     /// `dispatch_box_args`): the screen's or the light's.
     span: GpuSpanName,
     /// The uniform the frame draws them by, the claimed alone or every one
-    /// (`mark`); and, where the device has no stencil and a pass through the
-    /// gate is drawn whole, one that draws every tile (`after_gate`).
+    /// (`mark`).
     uniform: u32,
-    every: Option<u32>,
     /// Each tile's word, a row after another, the GPU's; the target's
     /// pixels across and down; this frame's number, and that of the last
     /// frame a mark was handed in, every tile where it was drawn whole.
@@ -125,12 +123,6 @@ impl Tiles {
         claimed_for: u32,
         span: GpuSpanName,
     ) -> Tiles {
-        let uniform = || {
-            g.buf(
-                word_bytes(TILES_WORDS),
-                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-            )
-        };
         let marks_box = g.buf(
             word_bytes(4),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
@@ -151,8 +143,10 @@ impl Tiles {
             side,
             claimed_for,
             span,
-            uniform: uniform(),
-            every: (!g.gates()).then(uniform),
+            uniform: g.buf(
+                word_bytes(TILES_WORDS),
+                buffer_usage::UNIFORM | buffer_usage::COPY_DST,
+            ),
             changed_at: 0,
             size: [0; 2],
             now: 0,
@@ -173,7 +167,6 @@ impl Tiles {
         let (args, group) = self.box_args.map_or((0, 0), |(a, _, g)| (a, g));
         for id in [
             self.uniform,
-            self.every.unwrap_or(0),
             self.changed_at,
             self.mark_uniform,
             self.marks_box,
@@ -185,9 +178,8 @@ impl Tiles {
     }
 
     /// The tiles of a target `size` pixels across and down, their words made
-    /// anew and `every` written where the target was another size, a frame
-    /// that moves every one; before anything this frame binds them
-    /// (`this_frame`, `after_gate`).
+    /// anew where the target was another size, a frame that moves every
+    /// one; before anything this frame binds them (`this_frame`).
     pub fn size(&mut self, g: &Gpu, size: [u32; 2]) {
         if size == self.size {
             return;
@@ -196,10 +188,6 @@ impl Tiles {
         let [across, down] = self.squares();
         release(self.changed_at);
         self.changed_at = g.buf(word_bytes((across * down) as usize), buffer_usage::STORAGE);
-        if let Some(every) = self.every {
-            let words = self.words(0.0, u32::MAX);
-            g.write_buf(every, 0, bytes(&words));
-        }
     }
 
     /// The mark this frame hands, the frame numbered anew: where it is
@@ -276,13 +264,6 @@ impl Tiles {
     /// or every one (`mark`).
     pub fn this_frame(&self) -> (u32, u32) {
         (self.changed_at, self.uniform)
-    }
-
-    /// The words and the uniform the passes after one through the gate draw
-    /// by: as it draws (`this_frame`), or every one where the device has no
-    /// stencil and the pass through the gate is drawn whole.
-    pub fn after_gate(&self) -> (u32, u32) {
-        (self.changed_at, self.every.unwrap_or(self.uniform))
     }
 
     /// The words alone, as a pass drawing the tiles by a uniform of its own
