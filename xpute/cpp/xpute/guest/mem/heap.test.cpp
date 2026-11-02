@@ -43,7 +43,7 @@ XPUTE_TEST(heap_block_off_and_guard) {
     XPUTE_CHECK_EQ(alloc(1u << (MAX + 1)), std::nullopt, "and a block past the range is none, not a bug");
 
     HeapStat stat = heap_stat(slab);
-    XPUTE_CHECK(stat.range == slab.range_bytes() && stat.used == slab.used() && stat.live == slab.live());
+    XPUTE_CHECK(stat.range == slab.range_bytes() && stat.peak == slab.peak() && stat.live == slab.live());
     XPUTE_CHECK(stat.run == slab.run_live() && stat.slot == slab.slot_live() && stat.largest_free == slab.largest_free());
     XPUTE_CHECK(stat.releases == slab.releases() && stat.refusals == slab.refusals() && stat.requests == slab.pages().allocs());
     XPUTE_CHECK_EQ(stat.refusals, 1u, "the block past the range was the one refusal");

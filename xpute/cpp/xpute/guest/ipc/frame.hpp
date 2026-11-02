@@ -46,7 +46,7 @@ constexpr std::uint32_t port_of(std::uint32_t tag) noexcept {
 }
 
 // The tag of a frame for `port`, its id or subject `id`.
-constexpr std::uint32_t tagged(std::uint32_t port, std::uint32_t id) noexcept {
+constexpr std::uint32_t tag_of(std::uint32_t port, std::uint32_t id) noexcept {
     return port << PORT_SHIFT | id;
 }
 

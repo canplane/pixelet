@@ -6,8 +6,9 @@
 // the function the program names for it, whose result is the reply and whose
 // errno is the failure. Work that waits on the host runs as a task
 // (`Turn::spawn`): a file read whole (`read`) is awaited, and each await ends
-// at a later turn. What lies under it, ipc/door.hpp, ipc/sys.hpp, ipc/toc.hpp
-// and sched/task.hpp, a guest that lays its memory out itself uses as it is.
+// at a later turn. A bug is published to the host (stop.hpp). What lies under
+// it, ipc/door.hpp, ipc/sys.hpp, ipc/toc.hpp, sched/task.hpp and stop.hpp, a
+// guest that lays its memory out itself uses as it is.
 
 #pragma once
 
@@ -30,6 +31,7 @@
 #include "xpute/kit/wire/xtp/cursor.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
 #include "xpute/guest/ipc/door.hpp"
+#include "xpute/guest/ipc/file.hpp"
 #include "xpute/guest/ipc/ring.hpp"
 #include "xpute/guest/ipc/sys.hpp"
 #include "xpute/guest/mem/section.hpp"
@@ -65,7 +67,7 @@ struct Layout {
     constexpr std::uint32_t sys_at() const noexcept { return cq_slots_at() + slots_bytes(cap, slot_bytes); }
 
     // Where the heap begins, from the range's start.
-    constexpr std::uint32_t heap_at() const noexcept { return align_up(sys_at() + 4 * sys_words, PAGE_BYTES); }
+    constexpr std::uint32_t heap_at() const noexcept { return page_up(sys_at() + 4 * sys_words); }
 };
 
 inline constexpr Layout Layout::DEFAULT{
@@ -77,7 +79,7 @@ inline constexpr Layout Layout::DEFAULT{
 
 // The range starts on the page past where the linker stopped.
 constexpr std::uint32_t range_at(std::uint32_t data_end) noexcept {
-    return align_up(data_end, PAGE_BYTES);
+    return page_up(data_end);
 }
 
 // Where the heap begins in the memory.
@@ -121,58 +123,6 @@ concept FromPacket = std::same_as<T, Packet> || requires(Packet pkt) {
     { T::from_packet(pkt) } -> std::same_as<Result<T>>;
 };
 
-// An event a table generates: its number and its fields.
-template <class E>
-concept Event = requires(const E &e, xtp::PacketWriter &w) {
-    { E::NUMBER } -> std::convertible_to<std::uint32_t>;
-    { E::FIELDS } -> std::convertible_to<std::uint32_t>;
-    e.write(w);
-};
-
-// Bytes of the heap, given back by their size: what a read fills.
-class Bytes {
-  public:
-    Bytes() noexcept = default;
-    Bytes(Bytes &&o) noexcept : at_(std::exchange(o.at_, nullptr)), cnt_(std::exchange(o.cnt_, 0)) {}
-    Bytes &operator=(Bytes &&o) noexcept {
-        if (this != &o) {
-            release();
-            at_ = std::exchange(o.at_, nullptr);
-            cnt_ = std::exchange(o.cnt_, 0);
-        }
-        return *this;
-    }
-    Bytes(const Bytes &) = delete;
-    Bytes &operator=(const Bytes &) = delete;
-    ~Bytes() { release(); }
-
-    // None where the heap has no room.
-    static std::optional<Bytes> make(std::uint32_t cnt) noexcept {
-        Bytes b;
-        if (cnt == 0) return b;
-        b.at_ = static_cast<std::uint8_t *>(::operator new(cnt, std::nothrow));
-        if (b.at_ == nullptr) return std::nullopt;
-        b.cnt_ = cnt;
-        return b;
-    }
-
-    std::uint8_t *data() noexcept { return at_; }
-    const std::uint8_t *data() const noexcept { return at_; }
-    std::size_t size() const noexcept { return cnt_; }
-    std::span<std::uint8_t> span() noexcept { return {at_, cnt_}; }
-    std::span<const std::uint8_t> span() const noexcept { return {at_, cnt_}; }
-
-  private:
-    void release() noexcept {
-        if (at_ != nullptr) ::operator delete(at_, cnt_);
-        at_ = nullptr;
-        cnt_ = 0;
-    }
-
-    std::uint8_t *at_ = nullptr;
-    std::size_t cnt_ = 0;
-};
-
 // A turn as a handler sees it: the host to call, and events to raise.
 class Turn {
   public:
@@ -191,9 +141,7 @@ class Turn {
     }
 
     // An event for the program's port, heard after the turn.
-    template <Event E> void raise(const E &event) const noexcept {
-        door_.raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
-    }
+    template <Event E> void raise(const E &event) const noexcept { door_.raise_to(PROGRAM_PORT, event); }
 
     // An event of no table's: `cmd`, and `cnt` fields, which `fill` writes.
     template <class Fill> void raise_packet(std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
@@ -221,9 +169,7 @@ const Door *door() noexcept;
 
 // An event for the program's port from a task, heard after the turn.
 template <Event E> void raise(const E &event) noexcept {
-    if (const Door *door = program_detail::door()) {
-        door->raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
-    }
+    if (const Door *door = program_detail::door()) door->raise_to(PROGRAM_PORT, event);
 }
 
 // A read awaited (`read`), holding its own copy of the path, so it may be made

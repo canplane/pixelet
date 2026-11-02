@@ -1,8 +1,12 @@
 [package]
 name = "xpute-kit"
+description = "The generic code under both of xpute's ends: collections, codecs, scalar math, an errno table and the wire formats"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 
 [lib]
 path = "src/lib.rs"

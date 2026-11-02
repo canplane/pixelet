@@ -1,4 +1,4 @@
-// @xpute/example/sum.test.ts
+// ts/example/sum.test.ts
 
 /**
  * The smallest host, beside the smallest guest, in Rust (rust/example) and in

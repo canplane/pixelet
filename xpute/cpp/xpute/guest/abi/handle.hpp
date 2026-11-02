@@ -45,7 +45,7 @@ template <class T, std::size_t N> class Table {
         // Never 0, so no handle is 0.
         auto generation = static_cast<std::uint16_t>(s.generation + 1);
         s.generation = generation == 0 ? 1 : generation;
-        s.made = epoch_ + 1;
+        s.epoch = epoch_ + 1;
         s.val = std::move(val);
         cnt_++;
         return handle_of(slot, s.generation);
@@ -53,7 +53,7 @@ template <class T, std::size_t N> class Table {
 
     bool live(std::uint32_t handle) const noexcept {
         std::uint32_t slot = handle_slot(handle);
-        return slot != 0 && slot < N && slots_[slot].made != 0 && slots_[slot].generation == handle >> SLOT_BITS;
+        return slot != 0 && slot < N && slots_[slot].epoch != 0 && slots_[slot].generation == handle >> SLOT_BITS;
     }
 
     T *get(std::uint32_t handle) noexcept { return live(handle) ? &slots_[handle_slot(handle)].val : nullptr; }
@@ -63,7 +63,7 @@ template <class T, std::size_t N> class Table {
         if (!live(handle)) return std::nullopt;
         std::uint32_t slot = handle_slot(handle);
         Slot &s = slots_[slot];
-        s.made = 0;
+        s.epoch = 0;
         s.next = free_;
         free_ = slot;
         cnt_--;
@@ -79,7 +79,7 @@ template <class T, std::size_t N> class Table {
     template <class F> void rollback(F &&gone) noexcept {
         for (std::uint32_t slot = 1; slot <= top_; slot++) {
             std::uint32_t handle = handle_of(slot, slots_[slot].generation);
-            if (slots_[slot].made != epoch_ + 1) continue;
+            if (slots_[slot].epoch != epoch_ + 1) continue;
             if (std::optional<T> val = remove(handle)) gone(handle, std::move(*val));
         }
     }
@@ -98,7 +98,7 @@ template <class T, std::size_t N> class Table {
         std::uint16_t generation = 0;
         // One past the epoch the slot was taken in; 0 while free. 64 bits, so
         // no count of epochs a program lives through brings a stale one round.
-        std::uint64_t made = 0;
+        std::uint64_t epoch = 0;
         // A free slot's next free slot; 0, never handed out, ends the list.
         std::uint32_t next = 0;
         T val{};

@@ -92,7 +92,6 @@ export class MinHeap<K extends primitive, T> {
     return out;
   }
 
-  /** Requires a non-empty heap. */
   /** The heap must not be empty. */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
@@ -183,7 +182,6 @@ export class MaxHeap<K extends primitive, T> {
     return out;
   }
 
-  /** Requires a non-empty heap. */
   /** The heap must not be empty. */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;

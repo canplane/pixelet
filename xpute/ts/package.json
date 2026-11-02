@@ -6,7 +6,6 @@
     "node": ">=24"
   },
   "scripts": {
-    "preinstall": "node script/require-pnpm.ts",
     "check": "pnpm fmt:check && pnpm lint && pnpm typecheck",
     "typecheck": "tsc -p .",
     "test": "vitest run --exclude host/src/conformance.test.ts --exclude 'example/**'",
@@ -18,6 +17,9 @@
     "lint": "oxlint"
   },
   "devDependencies": {
+    "@xpute/gpu": "workspace:*",
+    "@xpute/host": "workspace:*",
+    "@xpute/kit": "workspace:*",
     "@types/node": "^24",
     "@webgpu/types": "~0.1.74",
     "koffi": "^3.3.5",

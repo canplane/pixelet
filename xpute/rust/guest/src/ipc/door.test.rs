@@ -92,7 +92,7 @@ fn sys_opened(fd: u32, res: i32) -> Vec<u8> {
     let mut buf = vec![0u8; SLOT as usize];
     let mut w = PacketWriter::new(&mut buf, 3);
     w.u32(Some(fd)).i32(Some(res)).u32(Some(0));
-    let len = w.fitted().expect("a packet that fits a slot") as usize;
+    let len = w.fit_len().expect("a packet that fits a slot") as usize;
     buf.truncate(len);
     buf
 }

@@ -92,7 +92,7 @@ fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
 }
 
 /// What a record of `op` takes of a stream's room, measured as `emit` writes it.
-fn measured(put: &dyn Fn(&mut dyn Sink)) -> usize {
+fn record_size(put: &dyn Fn(&mut dyn Sink)) -> usize {
     let mut count = Count(0);
     put(&mut count);
     (2 + count.0) * WORD
@@ -380,6 +380,106 @@ fn stencil_face(s: &mut dyn Sink, f: &StencilFaceState) {
     .for_each(|w| s.word(w));
 }
 
+/// A render pipeline's words but its id (RENDER_PIPELINE).
+fn render_pipeline_words(s: &mut dyn Sink, d: &RenderPipelineDescriptor) {
+    s.word(opt(d.layout));
+    let v = &d.vertex;
+    s.word(v.module);
+    s.bytes(v.entry.as_bytes());
+    s.word(v.buffers.len() as u32);
+    for b in v.buffers {
+        [b.stride, b.step as u32, b.attributes.len() as u32]
+            .into_iter()
+            .for_each(|w| s.word(w));
+        for a in b.attributes {
+            [a.format as u32, a.offset, a.location]
+                .into_iter()
+                .for_each(|w| s.word(w));
+        }
+    }
+    let p = &d.primitive;
+    [
+        p.topology as u32,
+        opt(p.strip_index_format.map(|f| f as u32)),
+        p.front_face as u32,
+        p.cull as u32,
+        flag(p.unclipped_depth),
+    ]
+    .into_iter()
+    .for_each(|w| s.word(w));
+    match &d.depth_stencil {
+        Some(ds) => {
+            [
+                ds.format as u32,
+                flag(ds.depth_write),
+                ds.depth_compare as u32,
+            ]
+            .into_iter()
+            .for_each(|w| s.word(w));
+            stencil_face(s, &ds.stencil_front);
+            stencil_face(s, &ds.stencil_back);
+            [
+                ds.stencil_read_mask,
+                ds.stencil_write_mask,
+                ds.bias as u32,
+                f(ds.slope_scale),
+                f(ds.clamp),
+            ]
+            .into_iter()
+            .for_each(|w| s.word(w));
+        }
+        None => {
+            // Present either way, so the record's shape is fixed.
+            s.word(NONE);
+            (0..2 + 8 + 5).for_each(|_| s.word(0));
+        }
+    }
+    let m = &d.multisample;
+    [m.count, m.mask, flag(m.alpha_to_coverage)]
+        .into_iter()
+        .for_each(|w| s.word(w));
+    match &d.fragment {
+        Some(fr) => {
+            s.word(fr.module);
+            s.bytes(fr.entry.as_bytes());
+            s.word(fr.targets.len() as u32);
+            for t in fr.targets {
+                s.word(t.format as u32);
+                match &t.blend {
+                    Some(b) => [
+                        b.color.operation as u32,
+                        b.color.src as u32,
+                        b.color.dst as u32,
+                        b.alpha.operation as u32,
+                        b.alpha.src as u32,
+                        b.alpha.dst as u32,
+                    ]
+                    .into_iter()
+                    .for_each(|w| s.word(w)),
+                    None => {
+                        s.word(NONE);
+                        (0..5).for_each(|_| s.word(0));
+                    }
+                }
+                s.word(t.write_mask);
+            }
+        }
+        None => {
+            s.word(NONE);
+            s.bytes(&[]);
+            s.word(0);
+        }
+    }
+}
+
+/// A compute pipeline's words but its id (COMPUTE_PIPELINE).
+fn compute_pipeline_words(s: &mut dyn Sink, d: &ComputePipelineDescriptor) {
+    [opt(d.layout), d.module]
+        .into_iter()
+        .for_each(|w| s.word(w));
+    s.bytes(d.entry.as_bytes());
+}
+
 /// The ops below DESTROY make what lasts until it is destroyed, the objects a
 /// program holds; those past it make what a turn lets go (an encoder, a
 /// pass, a surface's current texture).
@@ -416,8 +516,20 @@ impl<const N: usize> Gpu<N> {
     /// An object's handle, written by `op` as the record's first word; none
     /// where the table is full or the record did not fit.
     fn make(&mut self, stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> Option<Id> {
-        let lasts = (op as usize) < OBJECT_OPS;
-        let id = self.handles.insert(if lasts { op as u8 } else { 0 })?;
+        self.make_as(stream, op, op, put)
+    }
+
+    /// As `make`, the object counted as `kind` makes it: an async pipeline
+    /// as its sync op's.
+    fn make_as(
+        &mut self,
+        stream: &mut Stream,
+        op: u32,
+        kind: u32,
+        put: &dyn Fn(&mut dyn Sink),
+    ) -> Option<Id> {
+        let lasts = (kind as usize) < OBJECT_OPS;
+        let id = self.handles.insert(if lasts { kind as u8 } else { 0 })?;
         if !emit(stream, op, &|s| {
             s.word(id);
             put(s);
@@ -426,7 +538,7 @@ impl<const N: usize> Gpu<N> {
             return None;
         }
         if lasts {
-            self.objects[op as usize] += 1;
+            self.objects[kind as usize] += 1;
         }
         Some(id)
     }
@@ -505,6 +617,15 @@ impl<const N: usize> Gpu<N> {
 
     pub fn shader_module(&mut self, stream: &mut Stream, wgsl: &str) -> Option<Id> {
         self.make(stream, op::SHADER_MODULE, &|s| s.bytes(wgsl.as_bytes()))
+    }
+
+    /// What `shader_module` takes of a stream's room (`Stream::fits`), so a
+    /// caller making several asks before each.
+    pub fn shader_module_bytes(wgsl: &str) -> usize {
+        record_size(&|s| {
+            s.word(0);
+            s.bytes(wgsl.as_bytes());
+        })
     }
 
     pub fn bind_group_layout(
@@ -595,95 +716,31 @@ impl<const N: usize> Gpu<N> {
         d: &RenderPipelineDescriptor,
     ) -> Option<Id> {
         self.make(stream, op::RENDER_PIPELINE, &|s| {
-            s.word(opt(d.layout));
-            let v = &d.vertex;
-            s.word(v.module);
-            s.bytes(v.entry.as_bytes());
-            s.word(v.buffers.len() as u32);
-            for b in v.buffers {
-                [b.stride, b.step as u32, b.attributes.len() as u32]
-                    .into_iter()
-                    .for_each(|w| s.word(w));
-                for a in b.attributes {
-                    [a.format as u32, a.offset, a.location]
-                        .into_iter()
-                        .for_each(|w| s.word(w));
-                }
-            }
-            let p = &d.primitive;
-            [
-                p.topology as u32,
-                opt(p.strip_index_format.map(|f| f as u32)),
-                p.front_face as u32,
-                p.cull as u32,
-                flag(p.unclipped_depth),
-            ]
-            .into_iter()
-            .for_each(|w| s.word(w));
-            match &d.depth_stencil {
-                Some(ds) => {
-                    [
-                        ds.format as u32,
-                        flag(ds.depth_write),
-                        ds.depth_compare as u32,
-                    ]
-                    .into_iter()
-                    .for_each(|w| s.word(w));
-                    stencil_face(s, &ds.stencil_front);
-                    stencil_face(s, &ds.stencil_back);
-                    [
-                        ds.stencil_read_mask,
-                        ds.stencil_write_mask,
-                        ds.bias as u32,
-                        f(ds.slope_scale),
-                        f(ds.clamp),
-                    ]
-                    .into_iter()
-                    .for_each(|w| s.word(w));
-                }
-                None => {
-                    // Present either way, so the record's shape is fixed.
-                    s.word(NONE);
-                    (0..2 + 8 + 5).for_each(|_| s.word(0));
-                }
-            }
-            let m = &d.multisample;
-            [m.count, m.mask, flag(m.alpha_to_coverage)]
-                .into_iter()
-                .for_each(|w| s.word(w));
-            match &d.fragment {
-                Some(fr) => {
-                    s.word(fr.module);
-                    s.bytes(fr.entry.as_bytes());
-                    s.word(fr.targets.len() as u32);
-                    for t in fr.targets {
-                        s.word(t.format as u32);
-                        match &t.blend {
-                            Some(b) => [
-                                b.color.operation as u32,
-                                b.color.src as u32,
-                                b.color.dst as u32,
-                                b.alpha.operation as u32,
-                                b.alpha.src as u32,
-                                b.alpha.dst as u32,
-                            ]
-                            .into_iter()
-                            .for_each(|w| s.word(w)),
-                            None => {
-                                s.word(NONE);
-                                (0..5).for_each(|_| s.word(0));
-                            }
-                        }
-                        s.word(t.write_mask);
-                    }
-                }
-                None => {
-                    s.word(NONE);
-                    s.bytes(&[]);
-                    s.word(0);
-                }
-            }
+            render_pipeline_words(s, d)
         })
+    }
+
+    /// As `render_pipeline`, made where the host can without holding its
+    /// thread: `word` holds `ticket | DONE` once it is made, and no record
+    /// names it before.
+    pub fn render_pipeline_async(
+        &mut self,
+        stream: &mut Stream,
+        d: &RenderPipelineDescriptor,
+        word: &mut u32,
+        ticket: u32,
+    ) -> Option<Id> {
+        *word = ticket;
+        let at = off_of_slice(core::slice::from_ref(word)) as u32;
+        self.make_as(
+            stream,
+            op::RENDER_PIPELINE_ASYNC,
+            op::RENDER_PIPELINE,
+            &|s| {
+                render_pipeline_words(s, d);
+                [at, ticket].into_iter().for_each(|w| s.word(w));
+            },
+        )
     }
 
     pub fn compute_pipeline(
@@ -692,11 +749,29 @@ impl<const N: usize> Gpu<N> {
         d: &ComputePipelineDescriptor,
     ) -> Option<Id> {
         self.make(stream, op::COMPUTE_PIPELINE, &|s| {
-            [opt(d.layout), d.module]
-                .into_iter()
-                .for_each(|w| s.word(w));
-            s.bytes(d.entry.as_bytes());
+            compute_pipeline_words(s, d)
         })
+    }
+
+    /// As `compute_pipeline`, its word as `render_pipeline_async`'s.
+    pub fn compute_pipeline_async(
+        &mut self,
+        stream: &mut Stream,
+        d: &ComputePipelineDescriptor,
+        word: &mut u32,
+        ticket: u32,
+    ) -> Option<Id> {
+        *word = ticket;
+        let at = off_of_slice(core::slice::from_ref(word)) as u32;
+        self.make_as(
+            stream,
+            op::COMPUTE_PIPELINE_ASYNC,
+            op::COMPUTE_PIPELINE,
+            &|s| {
+                compute_pipeline_words(s, d);
+                [at, ticket].into_iter().for_each(|w| s.word(w));
+            },
+        )
     }
 
     pub fn query_set(&mut self, stream: &mut Stream, ty: QueryType, count: u32) -> Option<Id> {
@@ -851,7 +926,7 @@ pub mod call {
     /// What `write_buffer` takes of a stream's room (`Stream::fits`), so a
     /// caller writing several asks once.
     pub fn write_buffer_bytes(bytes: &[u8]) -> usize {
-        measured(&|s| buffer_write(s, 0, 0, bytes))
+        record_size(&|s| buffer_write(s, 0, 0, bytes))
     }
 
     /// The bytes read where they lie in the guest's memory when the host
@@ -898,7 +973,7 @@ pub mod call {
             origin: [0; 3],
             aspect: TextureAspect::all,
         };
-        measured(&|s| {
+        record_size(&|s| {
             texture_write(s, &place, [0; 2], [0; 3]);
             s.bytes(bytes);
         })

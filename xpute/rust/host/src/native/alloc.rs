@@ -96,7 +96,7 @@ static HEAP: Locked = Locked {
     slab: Heap::new(),
 };
 
-pub fn stat() -> HeapStat {
+pub(super) fn stat() -> HeapStat {
     HEAP.with(heap_stat)
 }
 

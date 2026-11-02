@@ -1,9 +1,6 @@
 // xpute-kit/alloc/slab.rs
 
-//! Size classes over `buddy_tree.rs`, whose smallest block is a page (its
-//! split bitmap a bit per parent node: over the guest's 2 GiB span,
-//! xpute-guest mem/heap.rs `SPAN_LOG2`, 64 KiB for its 4 KiB pages, mem/section.rs
-//! `PAGE_BYTES`, where a 16-byte leaf would cost 16 MiB). A class
+//! Size classes over `buddy_tree.rs`, whose smallest block is a page. A class
 //! borrows a run of pages, carves it into slots SLUB-style (free list through
 //! the free slots, header in the run's leading slots), and gives the run back
 //! when its last slot is freed. A page or more goes straight to the buddy.
@@ -128,8 +125,8 @@ impl<R: Range> SlabMalloc<R> {
         &self.buddy
     }
 
-    pub fn used(&self) -> usize {
-        self.buddy.used()
+    pub fn peak(&self) -> usize {
+        self.buddy.peak()
     }
 
     /// Runs count whole, not their live slots.

@@ -105,7 +105,7 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
    * measure, so a 120 Hz display read at 8.34 ms still paces at two; one at
    * least.
    */
-  paced(refresh_ms: f64): f64 {
+  pace_ms(refresh_ms: f64): f64 {
     const divisor = Math.max(
       1,
       Math.floor((PACED_MAX_MS + refresh_ms / 8) / refresh_ms),
@@ -119,7 +119,8 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
     if (this.frame_at >= 0) this.gap(now - this.frame_at);
     this.frame_at = now;
     const refresh_ms = this.refresh();
-    if (now - this.last < this.paced(refresh_ms) - refresh_ms / 2) return false;
+    if (now - this.last < this.pace_ms(refresh_ms) - refresh_ms / 2)
+      return false;
     this.last = now;
     return true;
   }
@@ -132,7 +133,7 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
 
   grant(now: f64): FrameGrant {
     const refresh_ms = this.refresh();
-    const paced_ms = this.paced(refresh_ms);
+    const paced_ms = this.pace_ms(refresh_ms);
     const c = this.cfg;
     const interactive = now - this.input_at < c.settle_ms || this.asked_next;
     const frames = interactive ? 1 : c.batch_frames;

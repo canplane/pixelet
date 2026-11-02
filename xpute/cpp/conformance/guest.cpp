@@ -114,7 +114,7 @@ std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> pkt) {
     return n ? std::optional(*n) : std::nullopt;
 }
 
-Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
+Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     // A command that takes a number fails with EBADMSG when its packet does not read.
     std::uint32_t arg = 0;
     if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE || cmd == cmd::HOSTCALL) {
@@ -129,7 +129,7 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         return {.err = Errno::einval};
     case cmd::RAISE:
         if (arg > MOST_RAISE) return {.err = Errno::einval};
-        for (std::uint32_t k = 0; k < arg; k++) s.door.post(frame::tagged(SENDER, k), cmd::EVENT, 0, 0);
+        for (std::uint32_t k = 0; k < arg; k++) s.door.post(frame::tag_of(SENDER, k), cmd::EVENT, 0, 0);
         return {.val = static_cast<std::int32_t>(arg)};
     case cmd::RECORD:
         s.stream.record(arg, {});
@@ -140,16 +140,16 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         return {.val = static_cast<std::int32_t>(*h)};
     }
     case cmd::RELEASE:
-        return s.handles.remove(arg) ? Applied{} : Applied{.err = Errno::ebadf};
+        return s.handles.remove(arg) ? Outcome{} : Outcome{.err = Errno::ebadf};
     case cmd::USE:
-        return s.handles.live(arg) ? Applied{} : Applied{.err = Errno::ebadf};
+        return s.handles.live(arg) ? Outcome{} : Outcome{.err = Errno::ebadf};
     case cmd::MARK:
         s.mark = s.now();
         return {};
     case cmd::OPEN:
         return {.val = static_cast<std::int32_t>(s.files.open(s.sys, 1, "f", arg))};
     case cmd::CLOSE:
-        return s.files.close(s.sys, arg) ? Applied{} : Applied{.err = Errno::ebadf};
+        return s.files.close(s.sys, arg) ? Outcome{} : Outcome{.err = Errno::ebadf};
     case cmd::SINCE: {
         double since = s.now() - s.mark;
         return {.val = static_cast<std::int32_t>(round(since))};
@@ -189,8 +189,8 @@ double turn(Memory m, std::uint32_t range) {
     s.sys.rise();
     s.door.drain(
         [&s](const abi::SysOpened &opened) {
-            if (std::optional<std::uint32_t> owner = s.files.opened(s.sys, opened)) s.door.post(frame::tagged(SENDER, *owner), cmd::OPENED, 0, opened.res);
-            return Applied{};
+            if (std::optional<std::uint32_t> owner = s.files.complete_open(s.sys, opened)) s.door.post(frame::tag_of(SENDER, *owner), cmd::OPENED, 0, opened.res);
+            return Outcome{};
         },
         [&s](std::uint32_t cmd, std::span<const std::uint8_t> pkt) { return apply(s, cmd, pkt); });
     s.stream.publish();

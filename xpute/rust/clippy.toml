@@ -1,0 +1,7 @@
+# One rounding: half to even, as WGSL rounds (ARCHITECTURE.md, `math/scalar`);
+# these round half away from zero, and only math::scalar's named variants call
+# them.
+disallowed-methods = [
+    { path = "f64::round", reason = "round half to even: f64::round_ties_even, or xpute_kit::math::scalar::round" },
+    { path = "f32::round", reason = "round half to even: f32::round_ties_even, or xpute_kit::math::scalar::round" },
+]

@@ -29,8 +29,8 @@ const PAGE_LOG2: usize = crate::mem::section::PAGE_BYTES.trailing_zeros() as usi
 /// real.
 const SPAN_LOG2: usize = ADDR_BITS - 1;
 
-/// A bit per possible parent node; the compiler cannot derive the length,
-/// so the buddy checks it on the first request.
+/// A bit per possible parent node; the buddy checks the length on the first
+/// request.
 const SPLIT_BYTES: usize = (1 << (SPAN_LOG2 - PAGE_LOG2)) / 8;
 
 pub struct Span<B>(PhantomData<B>);
@@ -56,7 +56,7 @@ pub type Heap<B> = SlabMalloc<Span<B>>;
 pub struct HeapStat {
     pub range: usize,
     /// A high-water mark, not a holding.
-    pub used: usize,
+    pub peak: usize,
     pub live: usize,
     pub run: usize,
     pub slot: usize,
@@ -74,7 +74,7 @@ pub struct HeapStat {
 pub fn heap_stat<B: Bounds>(a: &Heap<B>) -> HeapStat {
     HeapStat {
         range: a.range_bytes(),
-        used: a.used(),
+        peak: a.peak(),
         live: a.live(),
         run: a.run_live(),
         slot: a.slot_live(),

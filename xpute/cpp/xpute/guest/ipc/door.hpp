@@ -1,13 +1,14 @@
 // cpp/xpute/guest/ipc/door.hpp
 
 // The guest's end of its two rings. A command is started only while the
-// completion ring has room for all it may leave (`reserve`), as a credit-based
-// link bounds a sender, so one started never finds the ring full; what is not
-// started waits in order. Overrunning the ring is a sizing fault.
+// completion ring has room for all it may leave (`reserve`), so one started
+// never finds the ring full; what is not started waits in order. Overrunning
+// the ring is a sizing fault.
 
 #pragma once
 
 #include <algorithm>
+#include <concepts>
 #include <cstdint>
 #include <span>
 #include <utility>
@@ -21,8 +22,17 @@
 
 namespace xpute {
 
+// An event a table generates (xpute-tool `spec/cmd`): its number, the
+// children it is written as, and its writer.
+template <class E>
+concept Event = requires(const E &e, xtp::PacketWriter &w) {
+    { E::NUMBER } -> std::convertible_to<std::uint32_t>;
+    { E::FIELDS } -> std::convertible_to<std::uint32_t>;
+    e.write(w);
+};
+
 // Errno::enosys for a command the guest does not number.
-struct Applied {
+struct Outcome {
     Errno err = Errno::ok;
     std::int32_t val = 0;
 };
@@ -60,12 +70,17 @@ class Door {
 
     // An event for `port`.
     template <class Fill> void raise(std::uint32_t port, std::uint32_t cmd, std::uint32_t cnt, Fill &&fill) const noexcept {
-        post_in_place(frame::tagged(port, 0), cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
+        post_in_place(frame::tag_of(port, 0), cmd, 0, 0, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
             xtp::PacketWriter w(out);
             w.branch(cnt, fill);
             Result<std::uint32_t> n = w.finish();
             return n ? std::optional(*n) : std::nullopt;
         });
+    }
+
+    // `event` for `port`.
+    template <Event E> void raise_to(std::uint32_t port, const E &event) const noexcept {
+        raise(port, E::NUMBER, E::FIELDS, [&event](xtp::PacketWriter &w) { event.write(w); });
     }
 
     // Applies waiting commands in order while there is room for what one more may
@@ -81,7 +96,7 @@ class Door {
             std::optional<Frame> f = sq_.peek();
             if (!f) break;
             Result<std::span<const std::uint8_t>> pkt = sq_.pkt(*f);
-            Applied a = pkt ? applied(*f, *pkt, opened, apply) : Applied{.err = pkt.error().errnum};
+            Outcome a = pkt ? apply_frame(*f, *pkt, opened, apply) : Outcome{.err = pkt.error().errnum};
             sq_.advance();
             if (a.err != Errno::ok) {
                 post(f->tag, f->cmd, frame::RES, static_cast<std::int32_t>(a.err));
@@ -98,7 +113,7 @@ class Door {
   private:
     bool has_room() const noexcept { return cq_.len() + reserve_ <= cq_.cap(); }
 
-    template <class Opened, class Apply> static Applied applied(const Frame &f, std::span<const std::uint8_t> pkt, Opened &opened, Apply &apply) noexcept {
+    template <class Opened, class Apply> static Outcome apply_frame(const Frame &f, std::span<const std::uint8_t> pkt, Opened &opened, Apply &apply) noexcept {
         if (frame::port_of(f.tag) != frame::HOST) return apply(f.cmd, pkt);
         if (f.cmd == static_cast<std::uint32_t>(abi::Command::NOP)) {
             if (pkt.empty()) return {};

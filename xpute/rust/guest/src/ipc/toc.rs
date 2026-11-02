@@ -1,9 +1,8 @@
 // xpute-guest/ipc/toc.rs
 
 //! The toc a guest's first turn writes: where the host finds the rings
-//! and streams. Keys are looked up, never
-//! counted to, so a host passes over an entry it does not know (as ELF's
-//! auxiliary vector does).
+//! and streams. Keys are looked up, never counted to, so a host passes over
+//! an entry it does not know.
 
 #[path = "toc.spec.rs"]
 pub mod spec;
@@ -18,8 +17,7 @@ pub const fn toc_words(entries: usize) -> usize {
     spec::HEAD as usize + 2 * entries
 }
 
-/// Into the `words` at `at` in `mem`. A key may appear once, so no two
-/// readers can pick different values.
+/// Into the `words` at `at` in `mem`. A key may appear once.
 ///
 /// # Safety
 /// The range is valid and nothing else holds it while the toc is written.

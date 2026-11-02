@@ -108,7 +108,7 @@ fn no_op_uncounted() {
     );
     assert_eq!(seen, [1, 2, 3, 4]);
     assert_eq!(stats.ran, 1);
-    assert_eq!(stats.visited, 4);
+    assert_eq!(stats.step_cnt, 4);
     assert!(!stats.stopped_early);
 }
 

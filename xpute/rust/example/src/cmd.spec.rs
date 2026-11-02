@@ -125,7 +125,7 @@ impl SummedEvent {
     }
 }
 
-impl xpute_guest::program::Event for SummedEvent {
+impl xpute_guest::ipc::door::Event for SummedEvent {
     const NUMBER: u32 = 4098;
     const FIELDS: u32 = 1;
     fn write(&self, w: &mut PacketWriter) {
@@ -168,7 +168,7 @@ impl CountedEvent {
     }
 }
 
-impl xpute_guest::program::Event for CountedEvent {
+impl xpute_guest::ipc::door::Event for CountedEvent {
     const NUMBER: u32 = 4100;
     const FIELDS: u32 = 1;
     fn write(&self, w: &mut PacketWriter) {

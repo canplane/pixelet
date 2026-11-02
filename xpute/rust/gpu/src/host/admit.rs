@@ -10,18 +10,18 @@ use super::GpuHost;
 /// that holds it ends: called once the work is done, or let go uncalled, as
 /// wgpu lets a gone device's callbacks go. Taken off as it drops, so a frame
 /// never stands forever.
-pub(super) struct Unfinished(Arc<AtomicU32>);
+pub(super) struct FrameGuard(Arc<AtomicU32>);
 
-impl Unfinished {
+impl FrameGuard {
     /// `count`'s next frame, and the callback the queue is handed for it.
     pub(super) fn count(count: &Arc<AtomicU32>) -> impl FnOnce() + Send + 'static {
         count.fetch_add(1, Ordering::Relaxed);
-        let frame = Unfinished(count.clone());
+        let frame = FrameGuard(count.clone());
         move || drop(frame)
     }
 }
 
-impl Drop for Unfinished {
+impl Drop for FrameGuard {
     fn drop(&mut self) {
         self.0.fetch_sub(1, Ordering::Relaxed);
     }
@@ -32,7 +32,7 @@ impl GpuHost {
     /// latency are unfinished, so each surface's next texture is free and
     /// taking it does not block. Asked once a turn, before it draws.
     pub fn admit(&mut self) -> bool {
-        self.admitted = self.unfinished.load(Ordering::Relaxed) < self.frame_latency;
+        self.admitted = self.unfinished_cnt.load(Ordering::Relaxed) < self.frame_latency;
         self.admitted
     }
 
@@ -46,7 +46,7 @@ impl GpuHost {
         }
         if core::mem::take(&mut self.admitted) {
             self.queue
-                .on_submitted_work_done(Unfinished::count(&self.unfinished));
+                .on_submitted_work_done(FrameGuard::count(&self.unfinished_cnt));
         }
     }
 }

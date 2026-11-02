@@ -1,5 +1,4 @@
 // xpute-kit/status/bug.rs
-// (no pair: a script's thrown error carries its own stack)
 
 //! A broken invariant: an errno, the source place, and at most two numbers,
 //! reported through `set_report`; then the module stops.

@@ -148,11 +148,14 @@ function older(a: u32, b: u32): boolean {
 
 export class GpuHost {
   private readonly objects: (GpuObject | undefined)[] = [];
+  /** Each async pipeline still being made, by its handle's slot: its handle,
+   * so a slot let go since, or taken by another, waits for it no more. */
+  private readonly making = new Map<u32, u32>();
   /** What a record's call takes, refilled each time rather than made: WebGPU
    * reads a dictionary only during the call it is given to. Two places, as
    * a texture-to-texture copy names two. */
   private readonly places: [Place, Place] = [place(), place()];
-  private readonly buffered: GPUTexelCopyBufferInfo = {
+  private readonly buffer_info: GPUTexelCopyBufferInfo = {
     buffer: undefined as unknown as GPUBuffer,
     offset: 0,
     bytesPerRow: 0,
@@ -175,7 +178,7 @@ export class GpuHost {
   private readonly stamps: GPURenderPassTimestampWrites = {
     querySet: undefined as unknown as GPUQuerySet,
   };
-  private readonly finished: GPUCommandBuffer[] = [];
+  private readonly command_bufs: GPUCommandBuffer[] = [];
   /** At the slot the guest names each by, with the guest's handle bound there. */
   private readonly surfaces = new Map<
     u32,
@@ -202,7 +205,7 @@ export class GpuHost {
     this.wake = wake;
     // The guest is told of the loss in its block; nothing here destroys the device.
     device.lost.then(() => {
-      this.lost();
+      this.on_lost();
       this.wake();
     });
   }
@@ -233,8 +236,9 @@ export class GpuHost {
   }
 
   /** The device went: every object with it, and the guest told in its block. */
-  private lost(): void {
+  private on_lost(): void {
     this.objects.length = 0;
+    this.making.clear();
     if (this.block) {
       new Uint32Array(this.memory(), this.block.address, this.block.words)[
         this.block.words - 1
@@ -262,14 +266,40 @@ export class GpuHost {
 
   private forget(id: u32): void {
     this.objects[handle_slot(id)] = undefined;
+    this.making.delete(handle_slot(id));
   }
 
   private bytesAt(address: u32, size: u32): Uint8Array {
     return new Uint8Array(this.memory(), address, size);
   }
 
+  /** An async pipeline's word and ticket, read past the sync op's words
+   * (RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC): the pipeline kept at
+   * `id` once `made` gives it, where the slot still waits for `id`, and its
+   * word written. One the device refuses is made with the sync call, which
+   * reports its error as the sync op's does. */
+  private make_async<P extends GPURenderPipeline | GPUComputePipeline>(
+    id: u32,
+    r: Words,
+    made: Promise<P>,
+    sync: () => P,
+  ): void {
+    const [word, ticket] = [r.u(), r.u()];
+    const slot = handle_slot(id);
+    this.making.set(slot, id);
+    const waits = () => this.making.get(slot) === id;
+    made
+      .catch(() => (waits() ? sync() : undefined))
+      .then((p) => {
+        if (p === undefined || !waits()) return;
+        this.making.delete(slot);
+        this.put(id, p);
+        this.write_done(word, ticket);
+      });
+  }
+
   /** `ticket | DONE` at `word`, where the ticket still stands, and a turn asked to read it. */
-  private done(word: u32, ticket: u32): void {
+  private write_done(word: u32, ticket: u32): void {
     const w = new Uint32Array(this.memory(), word, 1);
     if (w[0] !== ticket) return;
     w[0] = (ticket | DONE) >>> 0;
@@ -289,7 +319,7 @@ export class GpuHost {
   }
 
   private bufferLayout(r: Words): GPUTexelCopyBufferInfo {
-    const b = this.buffered;
+    const b = this.buffer_info;
     b.buffer = this.get<GPUBuffer>(r.u());
     b.offset = r.u();
     b.bytesPerRow = r.u();
@@ -530,7 +560,8 @@ export class GpuHost {
         this.put(id, d.createBindGroup({ layout, entries }));
         return;
       }
-      case op.RENDER_PIPELINE: {
+      case op.RENDER_PIPELINE:
+      case op.RENDER_PIPELINE_ASYNC: {
         const id = r.u();
         const layout = r.opt();
         const vertex: GPUVertexState = {
@@ -612,43 +643,48 @@ export class GpuHost {
             return { format, blend, writeMask: r.u() };
           },
         );
-        this.put(
-          id,
-          d.createRenderPipeline({
-            layout:
-              layout === undefined
-                ? "auto"
-                : this.get<GPUPipelineLayout>(layout),
-            vertex,
-            primitive,
-            depthStencil: depthFormat === undefined ? undefined : depth,
-            multisample,
-            fragment:
-              module === undefined
-                ? undefined
-                : {
-                    module: this.get<GPUShaderModule>(module),
-                    entryPoint,
-                    targets,
-                  },
-          }),
-        );
+        const desc: GPURenderPipelineDescriptor = {
+          layout:
+            layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
+          vertex,
+          primitive,
+          depthStencil: depthFormat === undefined ? undefined : depth,
+          multisample,
+          fragment:
+            module === undefined
+              ? undefined
+              : {
+                  module: this.get<GPUShaderModule>(module),
+                  entryPoint,
+                  targets,
+                },
+        };
+        if (code === op.RENDER_PIPELINE) {
+          this.put(id, d.createRenderPipeline(desc));
+        } else {
+          this.make_async(id, r, d.createRenderPipelineAsync(desc), () =>
+            d.createRenderPipeline(desc),
+          );
+        }
         return;
       }
-      case op.COMPUTE_PIPELINE: {
+      case op.COMPUTE_PIPELINE:
+      case op.COMPUTE_PIPELINE_ASYNC: {
         const id = r.u();
         const layout = r.opt();
         const module = this.get<GPUShaderModule>(r.u());
-        this.put(
-          id,
-          d.createComputePipeline({
-            layout:
-              layout === undefined
-                ? "auto"
-                : this.get<GPUPipelineLayout>(layout),
-            compute: { module, entryPoint: r.text() },
-          }),
-        );
+        const desc: GPUComputePipelineDescriptor = {
+          layout:
+            layout === undefined ? "auto" : this.get<GPUPipelineLayout>(layout),
+          compute: { module, entryPoint: r.text() },
+        };
+        if (code === op.COMPUTE_PIPELINE) {
+          this.put(id, d.createComputePipeline(desc));
+        } else {
+          this.make_async(id, r, d.createComputePipelineAsync(desc), () =>
+            d.createComputePipeline(desc),
+          );
+        }
         return;
       }
       case op.QUERY_SET: {
@@ -738,7 +774,7 @@ export class GpuHost {
                 to,
                 [source.width, source.height],
               );
-              this.done(word, ticket);
+              this.write_done(word, ticket);
             }
             source.close();
           },
@@ -988,14 +1024,14 @@ export class GpuHost {
       }
       case op.SUBMIT: {
         const n = r.u();
-        const finished = this.finished;
+        const command_bufs = this.command_bufs;
         for (let k = 0; k < n; k++) {
           const id = r.u();
-          finished.push(this.get<GPUCommandEncoder>(id).finish());
+          command_bufs.push(this.get<GPUCommandEncoder>(id).finish());
           this.forget(id);
         }
-        d.queue.submit(finished);
-        finished.length = 0;
+        d.queue.submit(command_bufs);
+        command_bufs.length = 0;
         return;
       }
       case op.MAP_ASYNC: {
@@ -1024,7 +1060,7 @@ export class GpuHost {
       }
       case op.QUEUE_DONE: {
         const [word, ticket] = [r.u(), r.u()];
-        d.queue.onSubmittedWorkDone().then(() => this.done(word, ticket));
+        d.queue.onSubmittedWorkDone().then(() => this.write_done(word, ticket));
         return;
       }
       case op.CONFIGURE: {
@@ -1061,9 +1097,8 @@ export class GpuHost {
         const [address, words] = [r.u(), r.u()];
         this.block = { address, words };
         const out = new Uint32Array(this.memory(), address, words);
-        const limits = d.limits as unknown as Record<string, number>;
         LIMIT_NAME.forEach(
-          (name, k) => (out[k] = Math.min(limits[name] ?? 0, 0xffffffff)),
+          (name, k) => (out[k] = Math.min(d.limits[name], 0xffffffff)),
         );
         FEATURE_NAME.forEach((name, k) => {
           if (d.features.has(name as GPUFeatureName)) {

@@ -31,8 +31,8 @@ use core::ptr;
 
 /// The range this allocator spans. `MAX_LOG2` bounds the address space the
 /// tree can describe, not the memory; `end` says how much of it is real.
-/// `Split` must be `2^(MAX_LOG2 - MIN_LOG2) / 8` bytes (stable Rust cannot
-/// size an array from a trait's constants); the first `malloc` checks it.
+/// `Split` must be `2^(MAX_LOG2 - MIN_LOG2) / 8` bytes; the first `malloc`
+/// checks it.
 pub trait Range {
     const MIN_LOG2: usize;
     const MAX_LOG2: usize;
@@ -60,8 +60,7 @@ struct List {
 struct Heap<S> {
     /// Bucket 0 is the largest block, the whole address space.
     buckets: [List; MAX_BUCKETS],
-    /// The tree starts small and grows: one root the size of the whole space
-    /// would reserve half of it on the first split.
+    /// The tree starts small and grows.
     bucket_limit: usize,
     /// Linearized tree: parent `(i - 1) / 2`, children `2i + 1` and `2i + 2`.
     /// Only SPLIT is stored; UNUSED and USED are told apart from context.
@@ -72,8 +71,7 @@ struct Heap<S> {
     base_ptr: usize,
     max_ptr: usize,
     end_ptr: usize,
-    /// Not the C's. `releases` moves exactly when a refused request might now
-    /// be served.
+    /// `releases` moves exactly when a refused request might now be served.
     live: usize,
     releases: u32,
     allocs: u32,
@@ -121,7 +119,7 @@ impl<R: Range> BuddyMalloc<R> {
     }
 
     /// Bytes ever reached into, not bytes live.
-    pub fn used(&self) -> usize {
+    pub fn peak(&self) -> usize {
         // SAFETY: single-threaded; see the Sync impl.
         let h = unsafe { &*self.heap.get() };
         h.max_ptr - h.base_ptr

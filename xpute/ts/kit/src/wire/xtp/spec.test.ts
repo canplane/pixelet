@@ -1,8 +1,7 @@
 // @xpute/kit/wire/xtp/spec.test.ts
 
-/** The type bytes as constants, held to what an enum's type held them to:
- * each of a group is of its kind and a type the wire carries, and no two
- * types share a byte. */
+/** The type bytes as constants: each of a group is of its kind and a type
+ * the wire carries, and no two types share a byte. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

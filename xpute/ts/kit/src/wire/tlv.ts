@@ -253,7 +253,7 @@ export type TlvEnd = "closed" | "unclosed";
 export class TlvReader implements Iterable<TlvValue> {
   private _stream: Stream;
   private _end: u32;
-  private _ended: TlvEnd | null = null;
+  private _ending: TlvEnd | null = null;
 
   private readonly _buf: Bytes;
 
@@ -266,7 +266,7 @@ export class TlvReader implements Iterable<TlvValue> {
   /** How the sequence ended, once reading has reached its end: null while
    * values remain, and after a fault. */
   end(): TlvEnd | null {
-    return this._ended;
+    return this._ending;
   }
 
   read_all(): TlvValue[] {
@@ -276,14 +276,14 @@ export class TlvReader implements Iterable<TlvValue> {
   }
 
   *[Symbol.iterator](): Iterator<TlvValue> {
-    while (this._ended === null) {
+    while (this._ending === null) {
       if (this._stream.off >= this._end) {
-        this._ended = "unclosed";
+        this._ending = "unclosed";
         break;
       }
       const tag = get_tag(this._stream);
       if (tag === Tag.END) {
-        this._ended = "closed";
+        this._ending = "closed";
         break;
       }
 

@@ -1,7 +1,7 @@
 // xpute-kit/collection/heap.rs
 
-//! A binary heap over an array the caller owns, keyed by any `PartialOrd`
-//! (an `f64` needs no `total_cmp` newtype). A NaN key breaks the order.
+//! A binary heap over an array the caller owns, keyed by any `PartialOrd`.
+//! A NaN key breaks the order.
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Element<K, T> {

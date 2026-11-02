@@ -1,8 +1,7 @@
 // Runs ts/gpu/src/host.test.ts where the web host runs: in Chrome, on its
 // WebGPU. The test is bundled for the browser and served at its own path
 // beside the tree's spec/, Chrome is started headless on the page, and the
-// page posts its outcome back. No Chrome, or no WebGPU in it, fails: a
-// device without WebGPU is not one xpute runs on.
+// page posts its outcome back. No Chrome, or no WebGPU in it, fails.
 //
 //   pnpm --dir ts test:gpu:web          ($CHROME names the browser's binary)
 
@@ -27,8 +26,7 @@ const CHROME =
 const SECONDS = 60;
 
 async function main(): Promise<number> {
-  // One ES module, the test and all it imports, by vite as a library's
-  // entry: no config of the tree's, no page, nothing else written.
+  // One ES module, the test and all it imports, by vite as a library's entry.
   await build({
     configFile: false,
     root: join(ROOT, "ts"),
@@ -104,7 +102,7 @@ async function main(): Promise<number> {
     chrome.kill();
     await exited;
     server.close();
-    await rm(profile, { recursive: true });
+    await rm(profile, { recursive: true, force: true, maxRetries: 10 });
   }
 }
 

@@ -42,7 +42,7 @@ macro_rules! range {
 range!(Spread, SPREAD_AT);
 range!(Buddies, BUDDIES_AT);
 range!(Full, FULL_AT);
-range!(Reused, REUSED_AT);
+range!(Reuse, REUSE_AT);
 
 #[test]
 fn block_contents_survive() {
@@ -148,19 +148,19 @@ fn oversize_refused() {
 
 #[test]
 fn freed_reused() {
-    let heap: BuddyMalloc<Reused> = BuddyMalloc::new();
+    let heap: BuddyMalloc<Reuse> = BuddyMalloc::new();
     let sz = 1 << (MIN + 2);
     // SAFETY: the range is the test's own, here and below.
     let p = unsafe { heap.malloc(sz) };
     assert!(!p.is_null());
-    let reached = heap.used();
+    let reached = heap.peak();
 
     for _ in 0..8 {
         unsafe { heap.free(p, sz) };
         let q = unsafe { heap.malloc(sz) };
         assert_eq!(q, p, "the same request after the same free moved");
         assert_eq!(
-            heap.used(),
+            heap.peak(),
             reached,
             "a reuse reached further into the range"
         );

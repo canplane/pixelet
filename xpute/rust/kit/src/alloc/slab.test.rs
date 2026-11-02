@@ -41,9 +41,9 @@ macro_rules! range {
 }
 
 range!(Slots, SLOTS_AT);
-range!(Returned, RETURNED_AT);
+range!(EmptyRun, EMPTY_RUN_AT);
 range!(Whole, WHOLE_AT);
-range!(Held, HELD_AT);
+range!(Runs, RUNS_AT);
 
 fn small() -> Layout {
     Layout::from_size_align(24, 8).unwrap()
@@ -100,7 +100,7 @@ fn slot_contents_survive() {
 
 #[test]
 fn empty_run_returned() {
-    let heap: SlabMalloc<Returned> = SlabMalloc::new();
+    let heap: SlabMalloc<EmptyRun> = SlabMalloc::new();
     // SAFETY: the range is the test's own, here and below.
     let first = unsafe { heap.alloc(small()) };
     assert!(!first.is_null());
@@ -158,11 +158,11 @@ fn page_requests_delegated() {
 
 #[test]
 fn slots_inside_runs() {
-    let heap: SlabMalloc<Held> = SlabMalloc::new();
+    let heap: SlabMalloc<Runs> = SlabMalloc::new();
     let sizes = [16usize, 24, 64, 300, 1000, PAGE, PAGE * 3];
     let mut live: Vec<(*mut u8, Layout)> = Vec::new();
 
-    let check = |heap: &SlabMalloc<Held>| {
+    let check = |heap: &SlabMalloc<Runs>| {
         assert!(
             heap.slot_live() <= heap.run_live(),
             "slots out past the runs they are carved from"

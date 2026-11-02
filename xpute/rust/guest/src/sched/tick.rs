@@ -86,7 +86,7 @@ pub struct TickReport {
 }
 
 #[derive(Clone, Copy)]
-struct Registered {
+struct Entry {
     id: u32,
     phase: Phase,
     step: TickStep,
@@ -95,7 +95,7 @@ struct Registered {
 
 pub struct Tick<const N: usize> {
     policy: TickPolicy,
-    registry: [Option<Registered>; N],
+    registry: [Option<Entry>; N],
     len: usize,
     next_id: u32,
     stats: [StepStat; N],
@@ -134,7 +134,7 @@ impl<const N: usize> Tick<N> {
         );
         let id = self.next_id;
         self.next_id += 1;
-        self.registry[self.len] = Some(Registered {
+        self.registry[self.len] = Some(Entry {
             id,
             phase,
             step,

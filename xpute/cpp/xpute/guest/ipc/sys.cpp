@@ -45,9 +45,7 @@ Result<std::uint32_t> Sys::call_now(std::uint32_t op, std::span<const std::uint3
     ensure((op & sys::op::PROGRAM) != 0, Errno::einval, op);
     std::optional<std::uint32_t> at = stream_.past(op, args, bytes);
     if (!at) return make_error(ErrorClass::fault, Errno::enospc);
-    std::int32_t res = xpute::hostcall(*at);
-    if (res < 0) return make_error(ErrorClass::fault, errno_of(res).value_or(Errno::eproto));
-    return static_cast<std::uint32_t>(res);
+    return answer_of(xpute::hostcall(*at));
 }
 
 bool Sys::try_call(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint8_t> bytes, std::uint32_t reserve) noexcept {

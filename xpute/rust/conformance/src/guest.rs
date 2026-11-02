@@ -10,7 +10,7 @@
 use core::cell::Cell;
 
 use xpute_guest::abi::handle::Table;
-use xpute_guest::ipc::door::{Applied, Door, Submission};
+use xpute_guest::ipc::door::{Door, Outcome, Submission};
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::frame;
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes, Ring};
@@ -199,9 +199,9 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
     state.sys.rise();
     door.drain(|submission| match submission {
         Submission::Opened(opened) => {
-            if let Some(owner) = state.files.opened(&mut state.sys, &opened) {
+            if let Some(owner) = state.files.complete_open(&mut state.sys, &opened) {
                 door.post(
-                    frame::tagged(spec::SENDER, owner),
+                    frame::tag_of(spec::SENDER, owner),
                     spec::cmd::OPENED,
                     0,
                     opened.res,
@@ -278,7 +278,7 @@ mod wasm {
     }
 
     #[no_mangle]
-    pub extern "C" fn xpute_conformance_boot(seed: u32) -> u32 {
+    extern "C" fn xpute_conformance_boot(seed: u32) -> u32 {
         let range = range_at(xpute_guest::wasm::data_end());
         // A host that sized the memory for another guest.
         xpute_kit::ensure!(
@@ -302,7 +302,7 @@ mod wasm {
     }
 }
 
-fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Applied {
+fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Outcome {
     let State {
         stream,
         sys,
@@ -322,7 +322,7 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
                 return Err(MarshalError::new(Errno::EINVAL));
             }
             for k in 0..n {
-                door.post(frame::tagged(spec::SENDER, k), spec::cmd::EVENT, 0, 0);
+                door.post(frame::tag_of(spec::SENDER, k), spec::cmd::EVENT, 0, 0);
             }
             Ok(Some(n as i32))
         }

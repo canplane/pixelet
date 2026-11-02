@@ -5,11 +5,10 @@
 //! it stays valid for the module's life.
 
 /// What every range begins on and the buddy's smallest block: a 32-bit
-/// machine's page with no MMU, as a guest is; the host's own page decides nothing here.
+/// machine's page with no MMU, as a guest is.
 pub const PAGE_BYTES: u32 = 4096;
 
-// The buddy's leaf is its log2; any other page would be a smaller leaf than
-// the sections align to.
+// The buddy's leaf is its log2.
 const _: () = assert!(PAGE_BYTES.is_power_of_two());
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -48,6 +47,11 @@ impl Section {
 
 pub const fn align_up(n: u32, unit: u32) -> u32 {
     n.div_ceil(unit) * unit
+}
+
+/// `n` rounded up to a whole page, where whatever follows it begins.
+pub const fn page_up(n: u32) -> u32 {
+    align_up(n, PAGE_BYTES)
 }
 
 /// Includes the last one's rounding.

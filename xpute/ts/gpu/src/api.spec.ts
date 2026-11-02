@@ -20,7 +20,7 @@ import * as STATUS from "./api/status.spec.ts";
 /** An optional field left unset, an index or a handle absent. */
 export const NONE: u32 = 4294967295 as number;
 
-/** Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE). */
+/** Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE, RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC). */
 export const DONE: u32 = 2147483648 as number;
 
 /** In CONFIGURE's format: the format the host's surface prefers. */

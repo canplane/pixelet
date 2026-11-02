@@ -211,10 +211,13 @@ struct Target {
     /// Where the number checks a packet's reader calls are.
     number: &'static str,
     /// For a program's own table: the guest's `program` module, which each
-    /// packet is read for (`FromPacket`) and each event raised by (`Event`).
+    /// packet is read for (`FromPacket`).
     program: Option<&'static str>,
-    /// For a program's own table: the host's port module, whose `Sent` and
-    /// `Raised` each command's descriptor is, its fields by place.
+    /// For a guest that raises the table's events: the module whose `Event`
+    /// each implements (`xpute_guest::ipc::door`).
+    event: Option<&'static str>,
+    /// For a program's own table: the host's port module, whose `Command` and
+    /// `Event` each command's descriptor is, its fields by place.
     port: Option<&'static str>,
     cpp: Option<(&'static str, &'static str)>,
 }
@@ -228,6 +231,7 @@ const TARGETS: [Target; 2] = [
         rs_logical: "xpute-guest/abi/cmd.spec.rs",
         number: "crate::abi::number",
         program: None,
+        event: None,
         port: None,
         cpp: Some(("cpp/xpute/guest/abi/cmd.spec.hpp", "xpute::abi")),
     },
@@ -235,11 +239,12 @@ const TARGETS: [Target; 2] = [
     Target {
         json: "spec/example/cmd.json",
         ts: "ts/example/cmd.spec.ts",
-        ts_logical: "@xpute/example/cmd.spec.ts",
+        ts_logical: "ts/example/cmd.spec.ts",
         rs: "rust/example/src/cmd.spec.rs",
         rs_logical: "xpute-example/cmd.spec.rs",
         number: "xpute_guest::abi::number",
         program: Some("xpute_guest::program"),
+        event: Some("xpute_guest::ipc::door"),
         port: Some("@xpute/host/port.ts"),
         cpp: Some(("cpp/example/cmd.spec.hpp", "example")),
     },
@@ -262,6 +267,9 @@ pub struct Table<'a> {
     pub number: &'a str,
     /// For a guest built with `program!`: its `program` module.
     pub program: Option<&'a str>,
+    /// For a guest that raises the table's events: the module whose `Event`
+    /// each implements (`xpute_guest::ipc::door`).
+    pub event: Option<&'a str>,
     /// For a host that sends through a port: its port module.
     pub port: Option<&'a str>,
 }
@@ -293,6 +301,7 @@ fn outputs_of(table: &Table, cpp_out: Option<&Cpp>) -> Result<Vec<Output>, Strin
         rs_logical: keep(table.rs_shown),
         number: keep(table.number),
         program: table.program.map(keep),
+        event: table.event.map(keep),
         port: table.port.map(keep),
         cpp: None,
     };
@@ -327,6 +336,7 @@ pub fn program_outputs(
         rs_shown: shown[2],
         number: "xpute_guest::abi::number",
         program: Some("xpute_guest::program"),
+        event: Some("xpute_guest::ipc::door"),
         port: Some("@xpute/host/port.ts"),
     };
     outputs_of(&table, cpp_out)

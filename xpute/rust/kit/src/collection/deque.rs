@@ -1,8 +1,7 @@
 // xpute-kit/collection/deque.rs
 
-//! A ring over a buffer the caller owns; it never grows. A slot is an
-//! `Option` only so a value can leave without unsafe: `head` and `len` alone
-//! say which slots are live.
+//! A ring over a buffer the caller owns; it never grows. `head` and `len`
+//! alone say which slots are live.
 
 pub struct Deque<'a, T> {
     pub buf: &'a mut [Option<T>],

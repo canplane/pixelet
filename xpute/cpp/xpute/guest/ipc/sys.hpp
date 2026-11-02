@@ -25,6 +25,13 @@ namespace xpute {
 
 using Fd = std::uint32_t;
 
+// A host's answer as one value: a count, or the errno it refused with. A code
+// no errno names is the host breaking the protocol, EPROTO.
+inline Result<std::uint32_t> answer_of(std::int32_t res) noexcept {
+    if (res < 0) return make_error(ErrorClass::fault, errno_of(res).value_or(Errno::eproto));
+    return static_cast<std::uint32_t>(res);
+}
+
 // Each call's arguments, which its record takes as an array of this length.
 inline constexpr std::size_t OPENAT_ARGS = sys::args::OPENAT;
 inline constexpr std::size_t READ_ARGS = sys::args::READ;

@@ -350,7 +350,7 @@ impl GpuHost {
                 self.put(id, Object::BindGroup(g));
             }
             op::RENDER_PIPELINE => self.render_pipeline(r),
-            op::COMPUTE_PIPELINE => {
+            op::COMPUTE_PIPELINE | op::COMPUTE_PIPELINE_ASYNC => {
                 let id = r.u();
                 let layout = r.opt();
                 let module = r.u();
@@ -370,6 +370,13 @@ impl GpuHost {
                         cache: None,
                     });
                 self.put(id, Object::ComputePipeline(p));
+                if code == op::COMPUTE_PIPELINE_ASYNC {
+                    self.made_at_once(r);
+                }
+            }
+            op::RENDER_PIPELINE_ASYNC => {
+                self.render_pipeline(r);
+                self.made_at_once(r);
             }
             op::QUERY_SET => {
                 let id = r.u();
@@ -622,13 +629,13 @@ impl GpuHost {
                 drop(self.take(id));
             }
             op::SUBMIT => {
-                let mut finished = core::mem::take(&mut self.finished);
+                let mut finished = core::mem::take(&mut self.command_bufs);
                 finished.extend(r.list().iter().filter_map(|&id| match self.take(id) {
                     Some(Object::Encoder(e)) => Some(e.finish()),
                     _ => None,
                 }));
                 self.submit(finished.drain(..));
-                self.finished = finished;
+                self.command_bufs = finished;
             }
             op::MAP_ASYNC => {
                 let (b, offset, size, address, word, ticket) = (
@@ -680,12 +687,12 @@ impl GpuHost {
                     r.u(),
                 );
                 let format = if format == SURFACE_PREFERRED {
-                    self.preferred
+                    self.preferred_format
                 } else {
                     of(&self.names.texture_format, format, "format")
                 };
                 let premultiplied = CANVAS_ALPHA_MODE.get(alpha as usize) == Some(&"premultiplied");
-                self.surface(surface).asked = Some((format, usage, premultiplied));
+                self.surface(surface).cfg = Some((format, usage, premultiplied));
                 self.want_configured(surface);
             }
             op::RESIZE => {
@@ -725,17 +732,33 @@ impl GpuHost {
                     .names
                     .texture_format
                     .iter()
-                    .position(|f| *f == Some(self.preferred));
+                    .position(|f| *f == Some(self.preferred_format));
                 memory.set_word(
                     address + 4 * (period_at + 1) as u32,
                     preferred.unwrap_or_else(|| {
-                        panic!("[gpu] {:?} is no format the spec names", self.preferred)
+                        panic!(
+                            "[gpu] {:?} is no format the spec names",
+                            self.preferred_format
+                        )
                     }) as u32,
                 );
                 memory.set_word(address + 4 * (words - 1), STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),
         }
+    }
+
+    /// An async pipeline's word and ticket, read past the sync op's words:
+    /// wgpu has no async call, so it is made already, and its word is
+    /// written as a done's, at the next poll, before the next turn reads it.
+    fn made_at_once(&mut self, r: &mut Words) {
+        let (word, ticket) = (r.u(), r.u());
+        self.pending.push(Pending {
+            state: Arc::new(AtomicU8::new(ANSWERED)),
+            word,
+            ticket,
+            read: None,
+        });
     }
 
     fn render_pipeline(&mut self, r: &mut Words) {

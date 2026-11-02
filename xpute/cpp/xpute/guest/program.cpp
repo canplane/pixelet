@@ -14,6 +14,7 @@
 #include "xpute/guest/ipc/toc.hpp"
 #include "xpute/guest/mem.hpp"
 #include "xpute/guest/sched/wake.hpp"
+#include "xpute/guest/stop.hpp"
 
 namespace xpute {
 
@@ -45,10 +46,10 @@ class Tasks final : public Executor {
 };
 
 // A read's buffer the host may still fill after its `Read` was destroyed: let
-// go once the turn `asked` has passed.
+// go once the turn `asked_turn` has passed.
 struct Left {
     Bytes bytes;
-    std::uint32_t asked;
+    std::uint32_t asked_turn;
 };
 
 struct Program {
@@ -64,24 +65,21 @@ struct Program {
 
     // An open answered: an errno ends its read, a size has the host fill a
     // buffer of it after this turn.
-    void opened(const abi::SysOpened &opened) noexcept {
-        std::optional<Read *> owner = files.opened(sys, opened);
+    void complete_open(const abi::SysOpened &opened) noexcept {
+        std::optional<Read *> owner = files.complete_open(sys, opened);
         if (!owner) return;
         Read &r = **owner;
         if (opened.res < 0) {
             r.ready(errno_of(opened.res).value_or(Errno::eio));
             return;
         }
-        std::optional<Bytes> bytes = Bytes::make(static_cast<std::uint32_t>(opened.res));
+        // Kept in `r`, or in `left` once it is gone, until a later turn's rise.
+        Result<Bytes> bytes = files.read_whole(sys, opened.fd, static_cast<std::uint32_t>(opened.res));
         if (!bytes) {
-            files.close(sys, opened.fd);
-            r.ready(Errno::enomem);
+            r.ready(bytes.error().errnum);
             return;
         }
         r.bytes_ = std::move(*bytes);
-        // Kept in `r`, or in `left` once it is gone, until a later turn's rise.
-        sys.read(opened.fd, r.bytes_.span());
-        files.close(sys, opened.fd);
         r.got_ = Read::Got::reading;
         r.asked_ = turn;
         reading.push_back(&r);
@@ -91,7 +89,7 @@ struct Program {
     // those destroyed meanwhile, let go.
     void rise() noexcept {
         turn++;
-        std::erase_if(left, [this](const Left &l) { return turn > l.asked; });
+        std::erase_if(left, [this](const Left &l) { return turn > l.asked_turn; });
         std::erase_if(reading, [this](Read *r) {
             if (turn <= r->asked_) return false;
             r->ready(Errno::ok);
@@ -137,6 +135,10 @@ std::uint32_t boot(const Layout &layout, std::uint32_t data_end) noexcept {
         .sys = Sys(mem, at(layout.sys_at()), layout.sys_words),
     };
     set_executor(booted_program->tasks);
+    // A stop published as the turn's one record.
+    stop::install([](Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b) {
+        if (booted_program != nullptr) booted_program->sys.abort(errnum, at, a, b);
+    });
     return range;
 }
 
@@ -238,17 +240,17 @@ double turn(std::span<const On> handlers) noexcept {
     p.rise();
     p.door.drain(
         [&p](const abi::SysOpened &opened) {
-            p.opened(opened);
-            return Applied{};
+            p.complete_open(opened);
+            return Outcome{};
         },
         [&p, handlers](std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
             for (const On &on : handlers) {
                 if (on.cmd != cmd) continue;
                 Turn cx(p.sys, p.door);
                 Result<std::int32_t> res = on.handler(cx, Packet(pkt));
-                return res ? Applied{.val = *res} : Applied{.err = res.error().errnum};
+                return res ? Outcome{.val = *res} : Outcome{.err = res.error().errnum};
             }
-            return Applied{.err = Errno::enosys};
+            return Outcome{.err = Errno::enosys};
         });
     // The tasks reach the program through `booted_program` themselves.
     ::xpute::poll();

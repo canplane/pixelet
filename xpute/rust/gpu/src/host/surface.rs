@@ -12,7 +12,7 @@ use super::GpuHost;
 /// surface is bound to it.
 pub(super) struct Surface {
     /// CONFIGURE's format, usage and whether alpha is premultiplied.
-    pub(super) asked: Option<(wgpu::TextureFormat, wgpu::TextureUsages, bool)>,
+    pub(super) cfg: Option<(wgpu::TextureFormat, wgpu::TextureUsages, bool)>,
     /// RESIZE's, at least a pixel each way.
     pub(super) size: [u32; 2],
     bound: Option<Bound>,
@@ -21,12 +21,12 @@ pub(super) struct Surface {
     pub(super) handle: u32,
     /// The newest handle bound here, kept after it is let go, so an older
     /// one's late bind is refused.
-    seen: u32,
+    newest_handle: u32,
     /// This turn's texture, the same to every CURRENT of the turn.
     pub(super) frame: Option<Frame>,
     /// Drawn where the window gives none, kept until what is asked changes,
     /// so a hidden window costs no texture a frame.
-    unshown: Option<wgpu::Texture>,
+    offscreen: Option<wgpu::Texture>,
 }
 
 struct Bound {
@@ -45,13 +45,13 @@ pub(super) enum Frame {
 impl Default for Surface {
     fn default() -> Self {
         Surface {
-            asked: None,
+            cfg: None,
             size: [1, 1],
             bound: None,
             handle: 0,
-            seen: 0,
+            newest_handle: 0,
             frame: None,
-            unshown: None,
+            offscreen: None,
         }
     }
 }
@@ -102,10 +102,10 @@ impl GpuHost {
     pub(super) fn claim(&mut self, handle: u32) -> Option<u32> {
         let slot = handle_slot(handle);
         let s = self.surface(slot);
-        if s.seen != 0 && older(handle, s.seen) {
+        if s.newest_handle != 0 && older(handle, s.newest_handle) {
             return None;
         }
-        s.seen = handle;
+        s.newest_handle = handle;
         s.handle = handle;
         Some(slot)
     }
@@ -127,7 +127,7 @@ impl GpuHost {
         let frame_latency = self.frame_latency;
         for (n, s) in self.surfaces.iter_mut().enumerate() {
             let (Some(b), Some((format, usage, premultiplied))) =
-                (s.bound.as_mut().filter(|b| b.stale), s.asked)
+                (s.bound.as_mut().filter(|b| b.stale), s.cfg)
             else {
                 continue;
             };
@@ -189,7 +189,7 @@ impl GpuHost {
         }
         let device = self.device.clone();
         let s = self.surface(surface);
-        let Some((format, usage, _)) = s.asked else {
+        let Some((format, usage, _)) = s.cfg else {
             panic!("[gpu] surface {surface} drawn before it is configured")
         };
         let usage = usage | wgpu::TextureUsages::RENDER_ATTACHMENT;
@@ -199,7 +199,7 @@ impl GpuHost {
             depth_or_array_layers: 1,
         };
         let kept = s
-            .unshown
+            .offscreen
             .take()
             .filter(|t| t.format() == format && t.usage() == usage && t.size() == size);
         let texture = kept.unwrap_or_else(|| {
@@ -214,7 +214,7 @@ impl GpuHost {
                 view_formats: &[],
             })
         });
-        s.unshown = Some(texture.clone());
+        s.offscreen = Some(texture.clone());
         Frame::Unshown(texture)
     }
 
@@ -228,7 +228,7 @@ impl GpuHost {
 
     pub(super) fn want_configured(&mut self, surface: u32) {
         let s = self.surface(surface);
-        let Some(b) = s.bound.as_mut().filter(|_| s.asked.is_some()) else {
+        let Some(b) = s.bound.as_mut().filter(|_| s.cfg.is_some()) else {
             return;
         };
         b.stale = true;

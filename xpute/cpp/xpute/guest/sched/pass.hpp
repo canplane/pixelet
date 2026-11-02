@@ -17,7 +17,7 @@ namespace xpute {
 struct PassStat {
     std::uint32_t ran = 0;
     // With the steps that did no work, and the one that tripped the stop.
-    std::uint32_t visited = 0;
+    std::uint32_t step_cnt = 0;
     double elapsed_ms = 0;
     bool stopped_early = false;
 
@@ -48,11 +48,11 @@ struct Pass {
         for (auto &&item : items) {
             double at = now();
             // Before the waiver below, but the first item is always tried.
-            if ((stat.visited > 0 && at >= hard_deadline) || (stat.ran > 0 && (stat.ran >= cap || at >= deadline))) {
+            if ((stat.step_cnt > 0 && at >= hard_deadline) || (stat.ran > 0 && (stat.ran >= cap || at >= deadline))) {
                 stat.stopped_early = true;
                 break;
             }
-            stat.visited++;
+            stat.step_cnt++;
             if (step(item)) stat.ran++;
         }
         stat.elapsed_ms = now() - start;

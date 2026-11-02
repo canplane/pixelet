@@ -1,3 +1,10 @@
+# xpute's TypeScript packages, each a directory with its package.json: the
+# root's tests, example and scripts read them by name.
+packages:
+  - kit
+  - host
+  - gpu
+
 # koffi opens a native guest.
 onlyBuiltDependencies:
   - koffi

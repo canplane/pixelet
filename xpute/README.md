@@ -89,6 +89,16 @@ script                                      the repository's own scripts (Python
 spec                                        the numbers every language's are generated from
 ```
 
+A program takes these as packages, by name. In TypeScript they are
+`@xpute/kit`, `@xpute/host` and `@xpute/gpu` (`ts/kit`, `ts/host`, `ts/gpu`),
+each its own source: its `package.json` maps a path under its name to the file
+under `src/` (`@xpute/host/port.ts` is `ts/host/src/port.ts`), and the files
+strip to JavaScript as they are, so a bundler or Node's type stripping takes
+them with no build. In Rust they are the crates `xpute-kit`, `xpute-guest`,
+`xpute-host` and `xpute-gpu`. None is published yet: a program beside this tree
+lists the packages in its pnpm workspace and depends on them as `workspace:*`,
+and names the crates by `path`.
+
 ## Embedding a guest
 
 The smallest program shows the whole of it: a guest that answers one command, in
@@ -108,7 +118,10 @@ program's own is answered by the function `open` was given for its number. What
 waits on the host runs as a task (`Turn::spawn`): a file is read whole by
 awaiting `xpute_guest::program::read`, opened on one turn, read on the turn its
 open is answered and ready on the next, from the host's `Fs` that `open` was
-given; `raise` sends an event from the task.
+given; `raise` sends an event from the task to the program's port, and
+`Door::raise_to` to any port. A bug or a panic ends the guest:
+`program!` and `XPUTE_PROGRAM` install xpute's stop (`xpute-guest/stop.rs`,
+`cpp/xpute/guest/stop.hpp`), which the host hears as `ABORT`.
 
 The commands are the program's own table (`spec/example/cmd.json`), generated
 for both ends by xpute-tool's `cmd`: the guest's function takes its packet as

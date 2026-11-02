@@ -59,7 +59,9 @@ memory, set once (`core`, `at`).
 What goes in the memory is the guest's, and so is where. It lays ranges end to
 end on a unit it chooses (`mem/section`), as a linker script places output
 sections without knowing what they hold, and whatever is asked of a range is
-checked against its end (`Section::at`, `nth`). The host is told where the parts
+checked against its end (`Section::at`, `nth`); a range sized at compile time is
+handed to its owner once at boot and read as an array laid in it (`mem/range`
+`OwnedRange`, `arr`). The host is told where the parts
 it reads lie by a **toc**, a table of contents as a CD's tells where each track
 begins (`ipc/toc`, `spec/ipc/toc.json`), which the guest writes in its first
 turn, or in a boot call that returns its offset; the host learns that one offset
@@ -124,6 +126,12 @@ its meaning and numbers its commands as it likes. The host hands a frame to the
 port it names where one is attached and drops it where none is, as a datagram
 goes to the UDP port it names; the ports are the program's ABI, as UDP's
 well-known ones are a convention.
+
+Where what answers a port runs is the program's choice. What runs on the
+guest's thread (the doorbell, the rings, the hostcalls, the GPU host, and any
+port answered there) takes turns with the guest and reads its memory in place,
+at any address a call answers or a packet names; a call answered before it
+returns (`call`) is made only there.
 
 Two flags decide what a frame means. `ACKREQ`, set by whoever submits, asks for
 a reply. `RES`, set by whoever completes, says the frame is a reply. A
@@ -216,7 +224,8 @@ sent and rung. A guest that traps is gone, and the doorbell rings it no more.
 
 The guest's end is the **door** (`ipc/door` `Door`). It applies the submissions
 in order, answers each, and posts what the guest raises into the completion
-ring, for the port it names (`raise`), which holds a whole turn's output.
+ring, for the port it names (`raise`, or `raise_to` for an event its table
+generates, `Event`), which holds a whole turn's output.
 What the host sent it applies itself, and hands the program every other sender's
 and each open the host completed (`Submission`). A drain runs before any phase's budget, so the program records what it is handed
 and returns. Before each submission the door checks that the ring has room for
@@ -383,7 +392,8 @@ the invariant that stopped the guest; a program numbers its own with the
 `PROGRAM` bit. Each is a record (`ipc/sys`, `spec/ipc/sys.json`), run after the
 turn from one stream the toc names (`SYS`), or, a program's own, at once
 (below). The report (`ABORT`) drops the turn's other calls and is published
-alone, at once.
+alone, at once; a guest's bug reporter and, in Rust, its panic hook publish it
+(`stop`), which `program!` and `XPUTE_PROGRAM` install.
 
 Files borrow Plan 9's file namespace:
 
@@ -457,10 +467,14 @@ A guest writes them through the encoder (`gpu/encode`), which takes each
 object's handle from one table and writes each record twice, once to count its
 words and once into the room reserved for them. The **GPU host** runs the stream
 on its device after the turn returns (`gpu/host` `GpuHost`): on WebGPU in a
-page, on wgpu in a native program. Three calls finish later — an image copied
-in, a buffer read back, the queue's work done — so each names a word of the
-guest's memory and a ticket, a number the guest wrote there; once the call is
-done, the GPU host writes the ticket back with `DONE` set.
+page, on wgpu in a native program. Some calls finish later — an image copied
+in, a buffer read back, the queue's work done, a pipeline made by WebGPU's
+async call — so each names a word of the guest's memory and a ticket, a number
+the guest wrote there; once the call is done, the GPU host writes the ticket
+back with `DONE` set. A guest names an async pipeline in no record until its
+word says `DONE`, so nothing it records waits on the host. wgpu has no async
+call: the native GPU host makes the pipeline at once and writes its word by
+the same path.
 
 What a surface shows — a canvas, a view's layer, a window — is the program's,
 bound to the GPU host under the guest's handle for it and let go by that handle

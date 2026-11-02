@@ -6,8 +6,9 @@
 //! to the function the program names for it, whose result is the reply and
 //! whose errno is the failure. Work that waits on the host runs as a task
 //! (`Turn::spawn`): a file read whole (`read`) is awaited, and each await ends
-//! at a later turn. What lies under it, `ipc::door`, `ipc::sys`, `ipc::toc` and
-//! `sched::task`, a guest that lays its memory out itself uses as it is.
+//! at a later turn. A bug or a panic is published to the host (`stop`). What
+//! lies under it, `ipc::door`, `ipc::sys`, `ipc::toc`, `sched::task` and
+//! `stop`, a guest that lays its memory out itself uses as it is.
 
 use core::future::Future;
 use core::pin::Pin;
@@ -19,14 +20,15 @@ use xpute_kit::wire::xtp::{BranchCursor, PacketWriter, TreeReader};
 
 use crate::abi::cmd::SysOpened;
 use crate::global::Global;
-use crate::ipc::door::{Door, Submission};
+use crate::ipc::door::{Door, Event, Submission};
 use crate::ipc::file::Files;
 use crate::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use crate::ipc::sys::{spec::op, Fd, Sys};
 use crate::ipc::toc::{spec::key, toc_words, write_toc};
-use crate::mem::section::PAGE_BYTES;
+use crate::mem::section::{page_up, PAGE_BYTES};
 use crate::sched::task::{self, Executor, Task};
 use crate::sched::wake::NO_WAKE;
+use crate::stop;
 
 #[path = "program.spec.rs"]
 pub mod spec;
@@ -76,13 +78,13 @@ impl Layout {
 
     /// Where the heap begins, from the range's start.
     pub const fn heap_at(&self) -> u32 {
-        (self.sys_at() + 4 * self.sys_words).next_multiple_of(PAGE_BYTES)
+        page_up(self.sys_at() + 4 * self.sys_words)
     }
 }
 
 /// The range starts on the page past where the linker stopped.
 pub const fn range_at(data_end: u32) -> u32 {
-    data_end.next_multiple_of(PAGE_BYTES)
+    page_up(data_end)
 }
 
 /// Where the heap begins in the memory (`wasm::Config::heap_at`).
@@ -152,7 +154,15 @@ pub fn boot(layout: &Layout, data_end: u32) -> u32 {
         turn: 0,
     }));
     task::set(&TASKS);
+    stop::install(abort, None);
     range
+}
+
+/// A stop published as the turn's one record.
+fn abort(errnum: Errno, at: &core::panic::Location<'_>, a: u64, b: u64) {
+    if let Some(p) = PROGRAM.get(|| None) {
+        p.sys.abort(errnum, at, a, b);
+    }
 }
 
 /// A command's packet as its handler reads it: a branch of fields, or none.
@@ -207,13 +217,6 @@ impl<'a> FromPacket<'a> for Packet<'a> {
     }
 }
 
-/// An event a table generates: its number and its fields.
-pub trait Event {
-    const NUMBER: u32;
-    const FIELDS: u32;
-    fn write(&self, w: &mut PacketWriter);
-}
-
 /// A turn as a handler sees it: the host to call, and events to raise.
 pub struct Turn<'a> {
     sys: &'a mut Sys,
@@ -235,8 +238,7 @@ impl Turn<'_> {
 
     /// An event for the program's port, heard after the turn.
     pub fn raise<E: Event>(&self, event: &E) {
-        self.door
-            .raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, |w| event.write(w));
+        self.door.raise_to(PROGRAM_PORT, event);
     }
 
     /// An event of no table's: `cmd`, and `cnt` fields, which `f` writes.
@@ -259,8 +261,7 @@ impl Turn<'_> {
 /// An event for the program's port from a task, heard after the turn.
 pub fn raise<E: Event>(event: &E) {
     if let Some(p) = PROGRAM.get(|| None) {
-        p.door
-            .raise(PROGRAM_PORT, E::NUMBER, E::FIELDS, |w| event.write(w));
+        p.door.raise_to(PROGRAM_PORT, event);
     }
 }
 
@@ -284,19 +285,19 @@ pub struct Read {
     fd: Option<Fd>,
 }
 
-enum Got {
+enum Stage {
     Opening,
-    /// Filled by the host after the turn `asked` ends.
+    /// Filled by the host after the turn `asked_turn` ends.
     Reading {
         bytes: Vec<u8>,
-        asked: u32,
+        asked_turn: u32,
     },
     Done(Result<Vec<u8>, Errno>),
 }
 
 struct Reading {
     fd: Fd,
-    got: Got,
+    got: Stage,
     waker: Option<Waker>,
     /// Its `Read` was dropped: kept only while the host may still fill it.
     gone: bool,
@@ -304,7 +305,7 @@ struct Reading {
 
 impl Reading {
     fn ready(&mut self, res: Result<Vec<u8>, Errno>) {
-        self.got = Got::Done(res);
+        self.got = Stage::Done(res);
         if let Some(w) = self.waker.take() {
             w.wake();
         }
@@ -326,7 +327,7 @@ impl Future for Read {
             this.fd = Some(fd);
             p.reads.push(Reading {
                 fd,
-                got: Got::Opening,
+                got: Stage::Opening,
                 waker: Some(cx.waker().clone()),
                 gone: false,
             });
@@ -335,9 +336,9 @@ impl Future for Read {
         let Some(i) = p.reads.iter().position(|r| r.fd == fd && !r.gone) else {
             return Poll::Ready(Err(Errno::EBADF));
         };
-        if let Got::Done(_) = p.reads[i].got {
+        if let Stage::Done(_) = p.reads[i].got {
             this.fd = None;
-            let Got::Done(res) = p.reads.swap_remove(i).got else {
+            let Stage::Done(res) = p.reads.swap_remove(i).got else {
                 unreachable!()
             };
             return Poll::Ready(res);
@@ -356,12 +357,12 @@ impl Drop for Read {
             return;
         };
         match p.reads[i].got {
-            Got::Opening => {
+            Stage::Opening => {
                 p.files.close(&mut p.sys, fd);
                 p.reads.swap_remove(i);
             }
-            Got::Reading { .. } => p.reads[i].gone = true,
-            Got::Done(_) => {
+            Stage::Reading { .. } => p.reads[i].gone = true,
+            Stage::Done(_) => {
                 p.reads.swap_remove(i);
             }
         }
@@ -371,8 +372,8 @@ impl Drop for Read {
 impl Program {
     /// An open answered: an errno ends its read, a size has the host fill a
     /// buffer of it after this turn.
-    fn opened(&mut self, opened: &SysOpened) {
-        if self.files.opened(&mut self.sys, opened).is_none() {
+    fn complete_open(&mut self, opened: &SysOpened) {
+        if self.files.complete_open(&mut self.sys, opened).is_none() {
             return;
         }
         let Some(r) = self.reads.iter_mut().find(|r| r.fd == opened.fd) else {
@@ -382,20 +383,19 @@ impl Program {
             r.ready(Err(Errno::of(opened.res).unwrap_or(Errno::EIO)));
             return;
         }
-        let mut bytes = Vec::new();
-        if bytes.try_reserve_exact(opened.res as usize).is_err() {
-            self.files.close(&mut self.sys, opened.fd);
-            r.ready(Err(Errno::ENOMEM));
-            return;
-        }
-        bytes.resize(opened.res as usize, 0);
         // SAFETY: the buffer is kept in `reads`, never grown, until a later
         // turn's rise; nothing reads it before then.
-        unsafe { self.sys.read(opened.fd, &mut bytes) };
-        self.files.close(&mut self.sys, opened.fd);
-        r.got = Got::Reading {
+        let read = unsafe {
+            self.files
+                .read_whole(&mut self.sys, opened.fd, opened.res as u32)
+        };
+        let bytes = match read {
+            Ok(bytes) => bytes,
+            Err(e) => return r.ready(Err(e)),
+        };
+        r.got = Stage::Reading {
             bytes,
-            asked: self.turn,
+            asked_turn: self.turn,
         };
     }
 
@@ -408,7 +408,7 @@ impl Program {
             .retain(|r| !(r.gone && turn > asked_of(&r.got).unwrap_or(0)));
         for r in &mut self.reads {
             if asked_of(&r.got).is_some_and(|asked| turn > asked) {
-                let Got::Reading { bytes, .. } = core::mem::replace(&mut r.got, Got::Opening)
+                let Stage::Reading { bytes, .. } = core::mem::replace(&mut r.got, Stage::Opening)
                 else {
                     unreachable!()
                 };
@@ -421,13 +421,13 @@ impl Program {
     fn waiting(&self) -> bool {
         self.reads
             .iter()
-            .any(|r| matches!(r.got, Got::Reading { .. }))
+            .any(|r| matches!(r.got, Stage::Reading { .. }))
     }
 }
 
-fn asked_of(got: &Got) -> Option<u32> {
+fn asked_of(got: &Stage) -> Option<u32> {
     match got {
-        Got::Reading { asked, .. } => Some(*asked),
+        Stage::Reading { asked_turn, .. } => Some(*asked_turn),
         _ => None,
     }
 }
@@ -546,7 +546,7 @@ pub fn turn(handlers: &[(u32, Handler)]) -> f64 {
         });
     }
     for o in &answered {
-        p.opened(o);
+        p.complete_open(o);
     }
     // The tasks reach the program through `PROGRAM` themselves.
     task::poll();

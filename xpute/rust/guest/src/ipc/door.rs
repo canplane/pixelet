@@ -16,8 +16,16 @@ use crate::abi::cmd::{Command, Nop, SysOpened};
 use crate::ipc::frame;
 use crate::ipc::ring::Ring;
 
+/// An event a table generates (xpute-tool `spec/cmd`): its number, the
+/// children it is written as, and its writer.
+pub trait Event {
+    const NUMBER: u32;
+    const FIELDS: u32;
+    fn write(&self, w: &mut PacketWriter);
+}
+
 /// None for an unknown command, which replies ENOSYS.
-pub type Applied = Result<Option<i32>, MarshalError>;
+pub type Outcome = Result<Option<i32>, MarshalError>;
 
 /// What the door hands the program: an open the host completed, or a frame
 /// of the program's own, its number and its packet. A drain runs before any
@@ -100,11 +108,16 @@ impl Door {
 
     /// An event for `port`.
     pub fn raise(&self, port: u32, cmd: u32, cnt: u32, f: impl Fn(&mut PacketWriter)) {
-        self.post_in_place(frame::tagged(port, 0), cmd, 0, 0, |out: &mut [u8]| {
+        self.post_in_place(frame::tag_of(port, 0), cmd, 0, 0, |out: &mut [u8]| {
             let mut w = PacketWriter::new(out, cnt);
             f(&mut w);
-            w.fitted()
+            w.fit_len()
         });
+    }
+
+    /// `event` for `port`.
+    pub fn raise_to<E: Event>(&self, port: u32, event: &E) {
+        self.raise(port, E::NUMBER, E::FIELDS, |w| event.write(w));
     }
 
     /// An unapplied command can wait in the submission ring; what it would
@@ -120,7 +133,7 @@ impl Door {
     /// Applies submissions in order while there is room; the rest waits for
     /// the next turn. Replies only to `ACKREQ` and to failures. Returns how
     /// many completions it made.
-    pub fn drain(&self, mut handle: impl FnMut(Submission) -> Applied) -> u32 {
+    pub fn drain(&self, mut handle: impl FnMut(Submission) -> Outcome) -> u32 {
         let tail = self.cq.tail();
         self.keep(|s| s.sq_peak = s.sq_peak.max(self.sq.len()));
         while self.has_room() {
@@ -128,7 +141,7 @@ impl Door {
                 break;
             };
             let result = match self.sq.pkt(&f) {
-                Ok(pkt) => match applied(&f, pkt, &mut handle) {
+                Ok(pkt) => match apply_frame(&f, pkt, &mut handle) {
                     Ok(Some(val)) => Ok(val),
                     Ok(None) => Err(Errno::ENOSYS as i32),
                     Err(e) => Err(e.errnum as i32),
@@ -152,11 +165,11 @@ impl Door {
 
 /// The host's frames applied, NOP answering its value and an open's
 /// completion handed over; any other sender's handed to the program.
-fn applied(
+fn apply_frame(
     f: &frame::Frame,
     pkt: Option<&[u8]>,
-    handle: &mut impl FnMut(Submission) -> Applied,
-) -> Applied {
+    handle: &mut impl FnMut(Submission) -> Outcome,
+) -> Outcome {
     if frame::port_of(f.tag) != frame::HOST {
         return handle(Submission::Program(f.cmd, pkt));
     }

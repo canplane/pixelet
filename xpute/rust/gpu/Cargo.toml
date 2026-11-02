@@ -1,8 +1,12 @@
 [package]
 name = "xpute-gpu"
+description = "WebGPU's calls, which an xpute guest writes and its host runs"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 
 [lib]
 path = "src/lib.rs"

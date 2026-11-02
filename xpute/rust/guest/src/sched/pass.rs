@@ -23,7 +23,7 @@ pub struct Pass {
 pub struct PassStat {
     pub ran: u32,
     /// With the steps that did no work, and the one that tripped the stop.
-    pub visited: u32,
+    pub step_cnt: u32,
     pub elapsed_ms: f64,
     pub stopped_early: bool,
 }
@@ -57,13 +57,13 @@ impl Pass {
         for item in items {
             let at = now();
             // Before the waiver below, but the first item is always tried.
-            if stat.visited > 0 && at >= hard_deadline
+            if stat.step_cnt > 0 && at >= hard_deadline
                 || stat.ran > 0 && (stat.ran >= cap || at >= deadline)
             {
                 stat.stopped_early = true;
                 break;
             }
-            stat.visited += 1;
+            stat.step_cnt += 1;
             if step(item) {
                 stat.ran += 1;
             }

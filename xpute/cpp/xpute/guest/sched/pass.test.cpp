@@ -65,7 +65,7 @@ XPUTE_TEST(pass_no_op_uncounted) {
     std::vector<int> seen;
     PassStat s = pass(0).run(std::array{1, 2, 3, 4}, [&](int n) { return seen.push_back(n), n == 4; }, 1);
     XPUTE_CHECK((seen == std::vector{1, 2, 3, 4}));
-    XPUTE_CHECK(s.ran == 1 && s.visited == 4 && !s.stopped_early);
+    XPUTE_CHECK(s.ran == 1 && s.step_cnt == 4 && !s.stopped_early);
 }
 
 XPUTE_TEST(pass_hard_budget_bounds_no_ops) {
@@ -91,5 +91,5 @@ XPUTE_TEST(pass_zero_ceiling_first_item) {
 
 XPUTE_TEST(pass_empty_list) {
     PassStat s = pass(10).run(std::array<int, 0>{}, [](int) { return true; });
-    XPUTE_CHECK(s.ran == 0 && s.visited == 0 && !s.stopped_early);
+    XPUTE_CHECK(s.ran == 0 && s.step_cnt == 0 && !s.stopped_early);
 }

@@ -14,7 +14,7 @@ export function seed64(): u64 {
 
 const SEED_SALT = 0x9e3779b97f4a7c15n;
 
-/** splitmix64's finalizer, for deriving independent child seeds; not cryptographic. */
+/** splitmix64's finalizer, for deriving independent child seeds. */
 export function mix64(x: u64): u64 {
   x = U64(x + SEED_SALT);
   let z: u64 = x;
@@ -27,7 +27,7 @@ export function derive_seed_u64(base: u64, tag: u64): u64 {
   return mix64(U64(base ^ U64(tag)));
 }
 
-/** splitmix64, drawn as each output's high 32 bits; not cryptographic. */
+/** splitmix64, drawn as each output's high 32 bits. */
 export function make_rng(seed: u64 = seed64()): RNG {
   let x: u64 = U64(seed);
 
@@ -39,9 +39,7 @@ export function make_rng(seed: u64 = seed64()): RNG {
     z = U64((z ^ (z >> 27n)) * 0x94d049bb133111ebn);
     z ^= z >> 31n;
 
-    // The high half, as java.util.random's `nextInt` and rand_xoshiro's
-    // `SplitMix64` take a u32 from a 64-bit word; shifted while a bigint, so
-    // `Number` holds it exactly.
+    // Shifted while a bigint, so `Number` holds it exactly.
     return Number(z >> 32n);
   };
 }

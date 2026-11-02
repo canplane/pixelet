@@ -315,13 +315,51 @@ void dropped_transaction(Encoder &gpu, Stream &s, const At &at, const Turn &turn
     turn(s);
 }
 
+// The triangle again, its render pipeline and a compute pipeline made by the
+// async ops: each in a turn of its own, its ticket at the done word, and named
+// by no record until the next turn has found it DONE.
+void pipelines_async(Encoder &gpu, Stream &s, const At &at, const Turn &turn) {
+    Id cm = *gpu.shader_module(s, "@compute @workgroup_size(1) fn main() {}\n");
+    Id compute = *gpu.compute_pipeline_async(s, {std::nullopt, cm, "main"}, at.done(), 1);
+    turn(s);
+    auto [t, v] = target(gpu, s);
+    Id m = *gpu.shader_module(s, "@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {\n"
+                                 "  var p = array(vec2f(-0.75, -0.78125), vec2f(0.9375, -0.71875), vec2f(-0.75, 0.96875));\n"
+                                 "  return vec4f(p[i], 0.0, 1.0);\n"
+                                 "}\n"
+                                 "@fragment fn fs() -> @location(0) vec4f { return vec4f(1.0, 0.2, 0.0, 1.0); }\n");
+    Id render = *gpu.render_pipeline_async(s,
+                                           {.layout = std::nullopt,
+                                            .vertex = {m, "vs", {}},
+                                            .primitive = PRIMITIVE,
+                                            .depth_stencil = std::nullopt,
+                                            .multisample = {},
+                                            .fragment = FragmentState{m, "fs", COLOR_TARGET}},
+                                           at.done(), 2);
+    turn(s);
+    Id e = *gpu.encoder(s);
+    Id work = *gpu.compute_pass(s, e, std::nullopt);
+    call::set_pipeline(s, work, compute);
+    call::dispatch(s, work, {1, 1, 1});
+    gpu.end(s, work);
+    Id ps = pass(gpu, s, e, v);
+    call::set_pipeline(s, ps, render);
+    call::draw(s, ps, 3, 1, 0, 0);
+    gpu.end(s, ps);
+    read_target(gpu, s, at, e, t, 3);
+    turn(s);
+}
+
 struct Program {
     const char *name;
     void (*encode)(Encoder &, Stream &, const At &, const Turn &);
 };
 
 const Program PROGRAMS[] = {
-    {"add_arrays", add_arrays}, {"triangle", triangle}, {"indexed_instanced", indexed_instanced}, {"sampled_image", sampled_image}, {"timestamps", timestamps}, {"dropped_transaction", dropped_transaction},
+    {"add_arrays", add_arrays},   {"triangle", triangle},
+    {"indexed_instanced", indexed_instanced}, {"sampled_image", sampled_image},
+    {"timestamps", timestamps},   {"dropped_transaction", dropped_transaction},
+    {"pipelines_async", pipelines_async},
 };
 
 } // namespace

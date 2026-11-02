@@ -1,4 +1,4 @@
-// @xpute/example/cmd/command.spec.ts
+// ts/example/cmd/command.spec.ts
 //
 // GENERATED from spec/example/cmd.json
 

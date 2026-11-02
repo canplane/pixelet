@@ -2,8 +2,7 @@
 
 //! Reproducible seeds and streams; not for anything that must resist prediction.
 //! Two families, a file each: 64-bit (splitmix64, `rng.64.rs`) and 32-bit
-//! (Murmur3's finalizer, `rng.32.rs`), the latter gpu-portable, since WebGPU
-//! has no 64-bit integer.
+//! (Murmur3's finalizer, `rng.32.rs`), the latter gpu-portable.
 
 #[path = "rng.32.rs"]
 mod w32;

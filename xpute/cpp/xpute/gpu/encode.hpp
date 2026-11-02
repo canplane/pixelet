@@ -324,7 +324,7 @@ template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept
 }
 
 // What a record takes of a stream's room, measured as `emit` writes it.
-template <class F> std::uint64_t measured(F &&put) noexcept {
+template <class F> std::uint64_t record_size(F &&put) noexcept {
     Count count;
     put(count);
     return (2 + std::uint64_t{count.n}) * WORD;
@@ -344,6 +344,58 @@ template <class S> void buffer_layout(S &s, const TexelCopyBuffer &b) noexcept {
 template <class S> void extent(S &s, std::array<std::uint32_t, 3> e) noexcept { words(s, {e[0], e[1], e[2]}); }
 
 template <class S> void stencil_face(S &s, const StencilFaceState &f) noexcept { words(s, {u(f.compare), u(f.fail), u(f.depth_fail), u(f.pass)}); }
+
+// A render pipeline's words but its id (RENDER_PIPELINE).
+template <class S> void render_pipeline_words(S &s, const RenderPipelineDescriptor &d) noexcept {
+    s.word(opt(d.layout));
+    const VertexState &v = d.vertex;
+    s.word(v.module);
+    s.bytes(text(v.entry));
+    s.word(static_cast<std::uint32_t>(v.buffers.size()));
+    for (const VertexBufferLayout &b : v.buffers) {
+        words(s, {b.stride, u(b.step), static_cast<std::uint32_t>(b.attributes.size())});
+        for (const VertexAttribute &a : b.attributes) words(s, {u(a.format), a.offset, a.location});
+    }
+    const PrimitiveState &p = d.primitive;
+    words(s, {u(p.topology), opt(p.strip_index_format), u(p.front_face), u(p.cull), flag(p.unclipped_depth)});
+    if (const auto &ds = d.depth_stencil) {
+        words(s, {u(ds->format), flag(ds->depth_write), u(ds->depth_compare)});
+        stencil_face(s, ds->stencil_front);
+        stencil_face(s, ds->stencil_back);
+        words(s, {ds->stencil_read_mask, ds->stencil_write_mask, static_cast<std::uint32_t>(ds->bias), f(ds->slope_scale), f(ds->clamp)});
+    } else {
+        // Present either way, so the record's shape is fixed.
+        s.word(NONE);
+        for (int k = 0; k < 2 + 8 + 5; k++) s.word(0);
+    }
+    const MultisampleState &m = d.multisample;
+    words(s, {m.count, m.mask, flag(m.alpha_to_coverage)});
+    if (const auto &fr = d.fragment) {
+        s.word(fr->module);
+        s.bytes(text(fr->entry));
+        s.word(static_cast<std::uint32_t>(fr->targets.size()));
+        for (const ColorTargetState &t : fr->targets) {
+            s.word(u(t.format));
+            if (const auto &b = t.blend) {
+                words(s, {u(b->color.operation), u(b->color.src), u(b->color.dst), u(b->alpha.operation), u(b->alpha.src), u(b->alpha.dst)});
+            } else {
+                s.word(NONE);
+                for (int k = 0; k < 5; k++) s.word(0);
+            }
+            s.word(t.write_mask);
+        }
+    } else {
+        s.word(NONE);
+        s.bytes({});
+        s.word(0);
+    }
+}
+
+// A compute pipeline's words but its id (COMPUTE_PIPELINE).
+template <class S> void compute_pipeline_words(S &s, const ComputePipelineDescriptor &d) noexcept {
+    words(s, {opt(d.layout), d.module});
+    s.bytes(text(d.entry));
+}
 
 } // namespace detail
 
@@ -387,6 +439,15 @@ template <std::size_t N> class Gpu {
         return make(stream, op::SHADER_MODULE, [&](auto &s) { s.bytes(detail::text(wgsl)); });
     }
 
+    // What shader_module takes of a stream's room (Stream::fits), so a caller
+    // making several asks before each.
+    static std::uint64_t shader_module_bytes(std::string_view wgsl) noexcept {
+        return detail::record_size([&](auto &s) {
+            s.word(0);
+            s.bytes(detail::text(wgsl));
+        });
+    }
+
     std::optional<Id> bind_group_layout(Stream &stream, std::span<const BindGroupLayoutEntry> entries) noexcept {
         using detail::flag;
         using detail::u;
@@ -428,60 +489,31 @@ template <std::size_t N> class Gpu {
     }
 
     std::optional<Id> render_pipeline(Stream &stream, const RenderPipelineDescriptor &d) noexcept {
-        using detail::f;
-        using detail::flag;
-        using detail::opt;
-        using detail::u;
-        return make(stream, op::RENDER_PIPELINE, [&](auto &s) {
-            s.word(opt(d.layout));
-            const VertexState &v = d.vertex;
-            s.word(v.module);
-            s.bytes(detail::text(v.entry));
-            s.word(static_cast<std::uint32_t>(v.buffers.size()));
-            for (const VertexBufferLayout &b : v.buffers) {
-                detail::words(s, {b.stride, u(b.step), static_cast<std::uint32_t>(b.attributes.size())});
-                for (const VertexAttribute &a : b.attributes) detail::words(s, {u(a.format), a.offset, a.location});
-            }
-            const PrimitiveState &p = d.primitive;
-            detail::words(s, {u(p.topology), opt(p.strip_index_format), u(p.front_face), u(p.cull), flag(p.unclipped_depth)});
-            if (const auto &ds = d.depth_stencil) {
-                detail::words(s, {u(ds->format), flag(ds->depth_write), u(ds->depth_compare)});
-                detail::stencil_face(s, ds->stencil_front);
-                detail::stencil_face(s, ds->stencil_back);
-                detail::words(s, {ds->stencil_read_mask, ds->stencil_write_mask, static_cast<std::uint32_t>(ds->bias), f(ds->slope_scale), f(ds->clamp)});
-            } else {
-                // Present either way, so the record's shape is fixed.
-                s.word(NONE);
-                for (int k = 0; k < 2 + 8 + 5; k++) s.word(0);
-            }
-            const MultisampleState &m = d.multisample;
-            detail::words(s, {m.count, m.mask, flag(m.alpha_to_coverage)});
-            if (const auto &fr = d.fragment) {
-                s.word(fr->module);
-                s.bytes(detail::text(fr->entry));
-                s.word(static_cast<std::uint32_t>(fr->targets.size()));
-                for (const ColorTargetState &t : fr->targets) {
-                    s.word(u(t.format));
-                    if (const auto &b = t.blend) {
-                        detail::words(s, {u(b->color.operation), u(b->color.src), u(b->color.dst), u(b->alpha.operation), u(b->alpha.src), u(b->alpha.dst)});
-                    } else {
-                        s.word(NONE);
-                        for (int k = 0; k < 5; k++) s.word(0);
-                    }
-                    s.word(t.write_mask);
-                }
-            } else {
-                s.word(NONE);
-                s.bytes({});
-                s.word(0);
-            }
+        return make(stream, op::RENDER_PIPELINE, [&](auto &s) { detail::render_pipeline_words(s, d); });
+    }
+
+    // As render_pipeline, made where the host can without holding its thread:
+    // `word` holds `ticket | DONE` once it is made, and no record names it before.
+    std::optional<Id> render_pipeline_async(Stream &stream, const RenderPipelineDescriptor &d, std::uint32_t &word, std::uint32_t ticket) noexcept {
+        word = ticket;
+        std::uint32_t at = stream.mem().off_of(&word);
+        return make_as(stream, op::RENDER_PIPELINE_ASYNC, op::RENDER_PIPELINE, [&](auto &s) {
+            detail::render_pipeline_words(s, d);
+            detail::words(s, {at, ticket});
         });
     }
 
     std::optional<Id> compute_pipeline(Stream &stream, const ComputePipelineDescriptor &d) noexcept {
-        return make(stream, op::COMPUTE_PIPELINE, [&](auto &s) {
-            detail::words(s, {detail::opt(d.layout), d.module});
-            s.bytes(detail::text(d.entry));
+        return make(stream, op::COMPUTE_PIPELINE, [&](auto &s) { detail::compute_pipeline_words(s, d); });
+    }
+
+    // As compute_pipeline, its word as render_pipeline_async's.
+    std::optional<Id> compute_pipeline_async(Stream &stream, const ComputePipelineDescriptor &d, std::uint32_t &word, std::uint32_t ticket) noexcept {
+        word = ticket;
+        std::uint32_t at = stream.mem().off_of(&word);
+        return make_as(stream, op::COMPUTE_PIPELINE_ASYNC, op::COMPUTE_PIPELINE, [&](auto &s) {
+            detail::compute_pipeline_words(s, d);
+            detail::words(s, {at, ticket});
         });
     }
 
@@ -571,9 +603,13 @@ template <std::size_t N> class Gpu {
   private:
     // An object's handle, written by `op` as the record's first word; none
     // where the table is full or the record did not fit.
-    template <class F> std::optional<Id> make(Stream &stream, std::uint32_t op, F &&put) noexcept {
-        bool lasts = op < OBJECT_OPS;
-        std::optional<std::uint32_t> id = handles_.insert(lasts ? static_cast<std::uint8_t>(op) : 0);
+    template <class F> std::optional<Id> make(Stream &stream, std::uint32_t op, F &&put) noexcept { return make_as(stream, op, op, put); }
+
+    // As make, the object counted as `kind` makes it: an async pipeline as its
+    // sync op's.
+    template <class F> std::optional<Id> make_as(Stream &stream, std::uint32_t op, std::uint32_t kind, F &&put) noexcept {
+        bool lasts = kind < OBJECT_OPS;
+        std::optional<std::uint32_t> id = handles_.insert(lasts ? static_cast<std::uint8_t>(kind) : 0);
         if (!id) return std::nullopt;
         if (!detail::emit(stream, op, [&](auto &s) {
                 s.word(*id);
@@ -582,7 +618,7 @@ template <std::size_t N> class Gpu {
             handles_.remove(*id);
             return std::nullopt;
         }
-        if (lasts) objects_[op]++;
+        if (lasts) objects_[kind]++;
         return id;
     }
 

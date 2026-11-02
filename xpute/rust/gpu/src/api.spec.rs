@@ -23,7 +23,7 @@
 /// An optional field left unset, an index or a handle absent.
 pub const NONE: u32 = 4294967295;
 
-/// Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE).
+/// Or-ed into a ticket where a completion word is written (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE, RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC).
 pub const DONE: u32 = 2147483648;
 
 /// In CONFIGURE's format: the format the host's surface prefers.
@@ -133,6 +133,10 @@ pub mod op {
     pub const CURRENT: u32 = 47;
     /// address, words: the host writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then its timestamp period (f32 bits: the nanoseconds a resolved timestamp's unit is, 1 where they are nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: what SURFACE_PREFERRED names, as the web's getPreferredCanvasFormat), then STATUS.
     pub const DEVICE: u32 = 48;
+    /// RENDER_PIPELINE's words, then word, ticket: WebGPU's createRenderPipelineAsync. Once the pipeline is made, ticket | DONE at the word, where the ticket still stands; the guest names the pipeline in no other record until it holds DONE. One the device refuses is made as RENDER_PIPELINE makes it, its error reported as that op's, and its word written all the same. A host with no async call makes it at once and writes the word by the same path, before the next turn reads it.
+    pub const RENDER_PIPELINE_ASYNC: u32 = 49;
+    /// COMPUTE_PIPELINE's words, then word, ticket: WebGPU's createComputePipelineAsync, its word as RENDER_PIPELINE_ASYNC's.
+    pub const COMPUTE_PIPELINE_ASYNC: u32 = 50;
     pub const KEYS: &[&str] = &[
         "BUFFER",
         "TEXTURE",
@@ -182,6 +186,8 @@ pub mod op {
         "RESIZE",
         "CURRENT",
         "DEVICE",
+        "RENDER_PIPELINE_ASYNC",
+        "COMPUTE_PIPELINE_ASYNC",
     ];
 }
 

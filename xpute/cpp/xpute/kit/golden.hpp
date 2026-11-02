@@ -1,7 +1,7 @@
 // cpp/xpute/kit/golden.hpp
 
-// The golden records: lines of `path<TAB>value`, split per line with no parser
-// so reading is not itself a thing to verify. For tests only.
+// The golden records: lines of `path<TAB>value`, split per line with no
+// parser. For tests only.
 
 #pragma once
 
