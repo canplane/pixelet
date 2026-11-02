@@ -11,7 +11,16 @@ const ENDPOINT = "/__console";
 const queue: string[] = [];
 let scheduled = false;
 
-const LINE_MAX = 2000;
+/** A message's first and last characters kept: a compiler's error follows
+ * the source it quotes, so a long one keeps its end. */
+const HEAD_MAX = 1000;
+const TAIL_MAX = 8000;
+
+function clip(s: string): string {
+  return s.length <= HEAD_MAX + TAIL_MAX
+    ? s
+    : `${s.slice(0, HEAD_MAX)}\n… ${s.length - HEAD_MAX - TAIL_MAX} characters …\n${s.slice(-TAIL_MAX)}`;
+}
 
 function label(): string {
   const ua = navigator.userAgent;
@@ -49,9 +58,7 @@ function flush(): void {
 
 function send(level: string, args: unknown[]): void {
   if (queue.length > 200) return;
-  queue.push(
-    `[${label()}/${level}] ${args.map(text).join(" ").slice(0, LINE_MAX)}`,
-  );
+  queue.push(`[${label()}/${level}] ${clip(args.map(text).join(" "))}`);
   if (scheduled) return;
   scheduled = true;
   setTimeout(flush, 200);
