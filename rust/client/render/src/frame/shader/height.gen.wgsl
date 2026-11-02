@@ -62,7 +62,7 @@ fn function_3(param_5: u32, param_6: u32, param_7: u32) {
 fn function_4(param_8: f32) -> type_14 {
     let _e55 = ((param_8 * 0.0625f) + 1.5f);
     let _e56 = floor(_e55);
-    return type_14((select(0i, select(select(i32(_e56), i32(-2147483648), (_e56 < -2147483600f)), 2147483647i, (_e56 > 2147483500f)), (_e56 == _e56)) - 1i), (_e55 - _e56));
+    return type_14((select(0i, select(select(i32(_e56), i32_min(), (_e56 < -2147483600f)), 2147483647i, (_e56 > 2147483500f)), (_e56 == _e56)) - 1i), (_e55 - _e56));
 }
 
 fn function_5(param_9: f32) -> array<f32, 4> {
@@ -347,7 +347,7 @@ fn function_7() {
                 let _e225 = function_5(_e216.member_1);
                 local_2 = array<f32, 4>(_e225[0], _e225[1], _e225[2], _e225[3]);
                 phi_350_ = 0i;
-                phi_353_ = i32(-2147483648);
+                phi_353_ = i32_min();
                 phi_355_ = 2147483647i;
                 phi_357_ = 0f;
                 loop {
@@ -439,7 +439,7 @@ fn function_7() {
                 let _e316 = local_17;
                 let _e317 = select(_e316, _e308, (_e313 < _e308));
                 let _e320 = round(select(_e317, _e311, (_e317 > _e311)));
-                phi_429_ = select(0i, select(select(i32(_e320), i32(-2147483648), (_e320 < -2147483600f)), 2147483647i, (_e320 > 2147483500f)), (_e320 == _e320));
+                phi_429_ = select(0i, select(select(i32(_e320), i32_min(), (_e320 < -2147483600f)), 2147483647i, (_e320 > 2147483500f)), (_e320 == _e320));
             }
             let _e329 = phi_429_;
             function_3(_e61, (_e71 + _e80), (bitcast<u32>(_e329) & 65535u));
@@ -627,4 +627,8 @@ fn function_7() {
 fn height_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global_2 = param;
     function_7();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

@@ -337,7 +337,7 @@ fn function_8(param_11: u32, param_12: f32) -> type_10 {
     let _e221 = bitcast<i32>(param_11);
     let _e222 = (_e221 - 24i);
     if (_e222 >= 0i) {
-        phi_543_ = type_10((select(0i, select(select(i32(param_12), i32(-2147483648), (param_12 < -2147483600f)), 2147483647i, (param_12 > 2147483500f)), (param_12 == param_12)) << bitcast<u32>((_e222 & 31i))), 32768u);
+        phi_543_ = type_10((select(0i, select(select(i32(param_12), i32_min(), (param_12 < -2147483600f)), 2147483647i, (param_12 > 2147483500f)), (param_12 == param_12)) << bitcast<u32>((_e222 & 31i))), 32768u);
     } else {
         let _e229 = (param_12 / f32((1i << bitcast<u32>(((24i - _e221) & 31i)))));
         let _e230 = floor(_e229);
@@ -345,9 +345,9 @@ fn function_8(param_11: u32, param_12: f32) -> type_10 {
         let _e237 = select(select(u32(_e232), 0u, (_e232 < 0f)), 4294967295u, (_e232 > 4294967000f));
         let _e238 = (_e237 / 4096u);
         if (select(_e238, 8u, (_e238 > 8u)) == 0u) {
-            phi_532_ = type_10(select(0i, select(select(i32(_e230), i32(-2147483648), (_e230 < -2147483600f)), 2147483647i, (_e230 > 2147483500f)), (_e230 == _e230)), 32768u);
+            phi_532_ = type_10(select(0i, select(select(i32(_e230), i32_min(), (_e230 < -2147483600f)), 2147483647i, (_e230 > 2147483500f)), (_e230 == _e230)), 32768u);
         } else {
-            phi_532_ = type_10((select(0i, select(select(i32(_e230), i32(-2147483648), (_e230 < -2147483600f)), 2147483647i, (_e230 > 2147483500f)), (_e230 == _e230)) + 1i), _e237);
+            phi_532_ = type_10((select(0i, select(select(i32(_e230), i32_min(), (_e230 < -2147483600f)), 2147483647i, (_e230 > 2147483500f)), (_e230 == _e230)) + 1i), _e237);
         }
         let _e260 = phi_532_;
         phi_543_ = _e260;
@@ -3848,7 +3848,7 @@ fn function_104() {
                         let _e479 = local_59.member;
                         let _e484 = function_99(array<f32, 3>(_e479[0], _e479[1], _e479[2]), 0u);
                         let _e487 = floor(((_e484 * _e402) * 256f));
-                        let _e494 = select(0i, select(select(i32(_e487), i32(-2147483648), (_e487 < -2147483600f)), 2147483647i, (_e487 > 2147483500f)), (_e487 == _e487));
+                        let _e494 = select(0i, select(select(i32(_e487), i32_min(), (_e487 < -2147483600f)), 2147483647i, (_e487 > 2147483500f)), (_e487 == _e487));
                         let _e496 = (_e474[0] + bitcast<u32>(_e494));
                         if (_e494 >= 0i) {
                             phi_3818_ = select(true, false, (_e496 < _e474[0]));
@@ -3871,7 +3871,7 @@ fn function_104() {
                         let _e511 = local_59.member;
                         let _e516 = function_99(array<f32, 3>(_e511[0], _e511[1], _e511[2]), 1u);
                         let _e519 = floor(((_e516 * _e402) * 256f));
-                        let _e526 = select(0i, select(select(i32(_e519), i32(-2147483648), (_e519 < -2147483600f)), 2147483647i, (_e519 > 2147483500f)), (_e519 == _e519));
+                        let _e526 = select(0i, select(select(i32(_e519), i32_min(), (_e519 < -2147483600f)), 2147483647i, (_e519 > 2147483500f)), (_e519 == _e519));
                         let _e528 = (_e474[1] + bitcast<u32>(_e526));
                         if (_e526 >= 0i) {
                             phi_3855_ = select(true, false, (_e528 < _e474[1]));
@@ -3894,7 +3894,7 @@ fn function_104() {
                         let _e543 = local_59.member;
                         let _e548 = function_99(array<f32, 3>(_e543[0], _e543[1], _e543[2]), 2u);
                         let _e551 = floor(((_e548 * _e402) * 256f));
-                        let _e558 = select(0i, select(select(i32(_e551), i32(-2147483648), (_e551 < -2147483600f)), 2147483647i, (_e551 > 2147483500f)), (_e551 == _e551));
+                        let _e558 = select(0i, select(select(i32(_e551), i32_min(), (_e551 < -2147483600f)), 2147483647i, (_e551 > 2147483500f)), (_e551 == _e551));
                         let _e560 = (_e474[2] + bitcast<u32>(_e558));
                         if (_e558 >= 0i) {
                             phi_3892_ = select(true, false, (_e560 < _e474[2]));
@@ -6989,4 +6989,8 @@ fn miss_list_cs(@builtin(workgroup_id) param: vec3<u32>, @builtin(local_invocati
     global = param;
     global_1 = param_1;
     function_104();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

@@ -208,7 +208,7 @@ fn function_7(param_13: ptr<function, type_16>, param_14: array<i32, 2>, param_1
 
 fn function_8(param_16: f32, param_17: f32) -> i32 {
     let _e118 = round((param_16 * param_17));
-    return select(0i, select(select(i32(_e118), i32(-2147483648), (_e118 < -2147483600f)), 2147483647i, (_e118 > 2147483500f)), (_e118 == _e118));
+    return select(0i, select(select(i32(_e118), i32_min(), (_e118 < -2147483600f)), 2147483647i, (_e118 > 2147483500f)), (_e118 == _e118));
 }
 
 fn function_9(param_18: f32) -> i32 {
@@ -227,10 +227,10 @@ fn function_10(param_19: ptr<function, type_35>, param_20: i32, param_21: f32) -
 
     let _e119 = (*param_19).member;
     let _e120 = round(_e119);
-    let _e127 = select(0i, select(select(i32(_e120), i32(-2147483648), (_e120 < -2147483600f)), 2147483647i, (_e120 > 2147483500f)), (_e120 == _e120));
+    let _e127 = select(0i, select(select(i32(_e120), i32_min(), (_e120 < -2147483600f)), 2147483647i, (_e120 > 2147483500f)), (_e120 == _e120));
     let _e129 = (*param_19).member_1;
     let _e130 = round(_e129);
-    let _e137 = select(0i, select(select(i32(_e130), i32(-2147483648), (_e130 < -2147483600f)), 2147483647i, (_e130 > 2147483500f)), (_e130 == _e130));
+    let _e137 = select(0i, select(select(i32(_e130), i32_min(), (_e130 < -2147483600f)), 2147483647i, (_e130 > 2147483500f)), (_e130 == _e130));
     let _e139 = (*param_19).member_3;
     switch bitcast<i32>(_e139) {
         case 0: {
@@ -597,7 +597,7 @@ fn function_23(param_66: u32, param_67: u32, param_68: u32, param_69: u32, param
                     phi_1974_ = false;
                 } else {
                     let _e279 = round(((_e262 * _e169.member_1.member_2) * 0.5f));
-                    let _e286 = select(0i, select(select(i32(_e279), i32(-2147483648), (_e279 < -2147483600f)), 2147483647i, (_e279 > 2147483500f)), (_e279 == _e279));
+                    let _e286 = select(0i, select(select(i32(_e279), i32_min(), (_e279 < -2147483600f)), 2147483647i, (_e279 > 2147483500f)), (_e279 == _e279));
                     let _e287 = (_e286 <= 2i);
                     let _e288 = select(1u, 0u, _e287);
                     let _e290 = local_2[_e288];
@@ -879,7 +879,7 @@ fn function_26(param_83: f32) -> array<f32, 4> {
 fn function_27(param_84: f32) -> type_24 {
     let _e117 = ((param_84 * 0.0625f) + 1.5f);
     let _e118 = floor(_e117);
-    return type_24((select(0i, select(select(i32(_e118), i32(-2147483648), (_e118 < -2147483600f)), 2147483647i, (_e118 > 2147483500f)), (_e118 == _e118)) - 1i), (_e117 - _e118));
+    return type_24((select(0i, select(select(i32(_e118), i32_min(), (_e118 < -2147483600f)), 2147483647i, (_e118 > 2147483500f)), (_e118 == _e118)) - 1i), (_e117 - _e118));
 }
 
 fn function_28(param_85: u32, param_86: i32) -> i32 {
@@ -1072,7 +1072,7 @@ fn function_31() {
         if _e152 {
             let _e153 = function_30(_e150);
             if _e153 {
-                phi_335_ = type_18(type_16(array<array<i32, 2>, 10>(array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i)), array<u32, 10>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u), 0u, i32(-2147483648)), true);
+                phi_335_ = type_18(type_16(array<array<i32, 2>, 10>(array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i)), array<u32, 10>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u), 0u, i32_min()), true);
             } else {
                 phi_335_ = type_18();
             }
@@ -1086,7 +1086,7 @@ fn function_31() {
         let _e158 = phi_337_;
         let _e160 = phi_338_;
         if _e160 {
-            local_20 = type_16(array<array<i32, 2>, 10>(array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i)), array<u32, 10>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u), 0u, i32(-2147483648));
+            local_20 = type_16(array<array<i32, 2>, 10>(array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i)), array<u32, 10>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u), 0u, i32_min());
             let _e161 = (_e147 < 0i);
             if _e161 {
                 phi_367_ = u32();
@@ -1266,7 +1266,7 @@ fn function_31() {
                             let _e338 = function_26(_e329.member_1);
                             local_19 = array<f32, 4>(_e338[0], _e338[1], _e338[2], _e338[3]);
                             phi_552_ = 0i;
-                            phi_555_ = i32(-2147483648);
+                            phi_555_ = i32_min();
                             phi_557_ = 2147483647i;
                             phi_559_ = 0f;
                             loop {
@@ -1358,7 +1358,7 @@ fn function_31() {
                             let _e429 = local_27;
                             let _e430 = select(_e429, _e421, (_e426 < _e421));
                             let _e433 = round(select(_e430, _e424, (_e430 > _e424)));
-                            phi_632_ = select(0i, select(select(i32(_e433), i32(-2147483648), (_e433 < -2147483600f)), 2147483647i, (_e433 > 2147483500f)), (_e433 == _e433));
+                            phi_632_ = select(0i, select(select(i32(_e433), i32_min(), (_e433 < -2147483600f)), 2147483647i, (_e433 > 2147483500f)), (_e433 == _e433));
                         } else {
                             phi_632_ = _e313;
                         }
@@ -1368,7 +1368,7 @@ fn function_31() {
                         let _e445 = (_e444 - 24i);
                         let _e446 = (_e445 >= 0i);
                         if _e446 {
-                            phi_688_ = type_10((select(0i, select(select(i32(_e443), i32(-2147483648), (_e443 < -2147483600f)), 2147483647i, (_e443 > 2147483500f)), (_e443 == _e443)) << bitcast<u32>((_e445 & 31i))), 32768u);
+                            phi_688_ = type_10((select(0i, select(select(i32(_e443), i32_min(), (_e443 < -2147483600f)), 2147483647i, (_e443 > 2147483500f)), (_e443 == _e443)) << bitcast<u32>((_e445 & 31i))), 32768u);
                         } else {
                             let _e452 = (_e443 / f32((1i << bitcast<u32>(((24i - _e444) & 31i)))));
                             let _e453 = floor(_e452);
@@ -1376,9 +1376,9 @@ fn function_31() {
                             let _e460 = select(select(u32(_e455), 0u, (_e455 < 0f)), 4294967295u, (_e455 > 4294967000f));
                             let _e461 = (_e460 / 4096u);
                             if (select(_e461, 8u, (_e461 > 8u)) == 0u) {
-                                phi_677_ = type_10(select(0i, select(select(i32(_e453), i32(-2147483648), (_e453 < -2147483600f)), 2147483647i, (_e453 > 2147483500f)), (_e453 == _e453)), 32768u);
+                                phi_677_ = type_10(select(0i, select(select(i32(_e453), i32_min(), (_e453 < -2147483600f)), 2147483647i, (_e453 > 2147483500f)), (_e453 == _e453)), 32768u);
                             } else {
-                                phi_677_ = type_10((select(0i, select(select(i32(_e453), i32(-2147483648), (_e453 < -2147483600f)), 2147483647i, (_e453 > 2147483500f)), (_e453 == _e453)) + 1i), _e460);
+                                phi_677_ = type_10((select(0i, select(select(i32(_e453), i32_min(), (_e453 < -2147483600f)), 2147483647i, (_e453 > 2147483500f)), (_e453 == _e453)) + 1i), _e460);
                             }
                             let _e483 = phi_677_;
                             phi_688_ = _e483;
@@ -1406,7 +1406,7 @@ fn function_31() {
                     let _e520 = bitcast<i32>(_e141);
                     let _e521 = (_e520 - 24i);
                     if (_e521 >= 0i) {
-                        phi_767_ = type_10((select(0i, select(select(i32(_e519), i32(-2147483648), (_e519 < -2147483600f)), 2147483647i, (_e519 > 2147483500f)), (_e519 == _e519)) << bitcast<u32>((_e521 & 31i))), 32768u);
+                        phi_767_ = type_10((select(0i, select(select(i32(_e519), i32_min(), (_e519 < -2147483600f)), 2147483647i, (_e519 > 2147483500f)), (_e519 == _e519)) << bitcast<u32>((_e521 & 31i))), 32768u);
                     } else {
                         let _e528 = (_e519 / f32((1i << bitcast<u32>(((24i - _e520) & 31i)))));
                         let _e529 = floor(_e528);
@@ -1414,9 +1414,9 @@ fn function_31() {
                         let _e536 = select(select(u32(_e531), 0u, (_e531 < 0f)), 4294967295u, (_e531 > 4294967000f));
                         let _e537 = (_e536 / 4096u);
                         if (select(_e537, 8u, (_e537 > 8u)) == 0u) {
-                            phi_756_ = type_10(select(0i, select(select(i32(_e529), i32(-2147483648), (_e529 < -2147483600f)), 2147483647i, (_e529 > 2147483500f)), (_e529 == _e529)), 32768u);
+                            phi_756_ = type_10(select(0i, select(select(i32(_e529), i32_min(), (_e529 < -2147483600f)), 2147483647i, (_e529 > 2147483500f)), (_e529 == _e529)), 32768u);
                         } else {
-                            phi_756_ = type_10((select(0i, select(select(i32(_e529), i32(-2147483648), (_e529 < -2147483600f)), 2147483647i, (_e529 > 2147483500f)), (_e529 == _e529)) + 1i), _e536);
+                            phi_756_ = type_10((select(0i, select(select(i32(_e529), i32_min(), (_e529 < -2147483600f)), 2147483647i, (_e529 > 2147483500f)), (_e529 == _e529)) + 1i), _e536);
                         }
                         let _e559 = phi_756_;
                         phi_767_ = _e559;
@@ -1766,7 +1766,7 @@ fn function_31() {
         local_15 = array<array<i32, 2>, 10>(array<i32, 2>(_e965.member.member[0][0], _e965.member.member[0][1]), array<i32, 2>(_e965.member.member[1][0], _e965.member.member[1][1]), array<i32, 2>(_e965.member.member[2][0], _e965.member.member[2][1]), array<i32, 2>(_e965.member.member[3][0], _e965.member.member[3][1]), array<i32, 2>(_e965.member.member[4][0], _e965.member.member[4][1]), array<i32, 2>(_e965.member.member[5][0], _e965.member.member[5][1]), array<i32, 2>(_e965.member.member[6][0], _e965.member.member[6][1]), array<i32, 2>(_e965.member.member[7][0], _e965.member.member[7][1]), array<i32, 2>(_e965.member.member[8][0], _e965.member.member[8][1]), array<i32, 2>(_e965.member.member[9][0], _e965.member.member[9][1]));
         local_14 = array<u32, 10>(_e965.member.member_1[0], _e965.member.member_1[1], _e965.member.member_1[2], _e965.member.member_1[3], _e965.member.member_1[4], _e965.member.member_1[5], _e965.member.member_1[6], _e965.member.member_1[7], _e965.member.member_1[8], _e965.member.member_1[9]);
         let _e1025 = ((_e122.z * (_e128 / 9u)) + (_e122.x * 21u));
-        if (_e965.member.member_3 == i32(-2147483648)) {
+        if (_e965.member.member_3 == i32_min()) {
             phi_1274_ = -32768i;
         } else {
             if (_e965.member.member_3 < -32767i) {
@@ -1811,4 +1811,8 @@ fn function_31() {
 fn way_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global_2 = param;
     function_31();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

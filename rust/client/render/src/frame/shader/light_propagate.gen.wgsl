@@ -224,8 +224,8 @@ fn function_() {
                                                     phi_349_ = bool();
                                                     phi_350_ = i32();
                                                 } else {
-                                                    let _e230 = ((_e188 - select(0i, select(select(i32(_e202), i32(-2147483648), (_e202 < -2147483600f)), 2147483647i, (_e202 > 2147483500f)), (_e202 == _e202))) + _e227);
-                                                    let _e232 = ((_e189 - select(0i, select(select(i32(_e211), i32(-2147483648), (_e211 < -2147483600f)), 2147483647i, (_e211 > 2147483500f)), (_e211 == _e211))) + _e222);
+                                                    let _e230 = ((_e188 - select(0i, select(select(i32(_e202), i32_min(), (_e202 < -2147483600f)), 2147483647i, (_e202 > 2147483500f)), (_e202 == _e202))) + _e227);
+                                                    let _e232 = ((_e189 - select(0i, select(select(i32(_e211), i32_min(), (_e211 < -2147483600f)), 2147483647i, (_e211 > 2147483500f)), (_e211 == _e211))) + _e222);
                                                     let _e233 = (_e68 / 4u);
                                                     let _e235 = (_e69 + 11u);
                                                     let _e246 = bitcast<i32>(_e69);
@@ -766,4 +766,8 @@ fn function_() {
 fn light_propagate_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

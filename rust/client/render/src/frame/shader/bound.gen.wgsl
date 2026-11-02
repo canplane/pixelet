@@ -316,7 +316,7 @@ fn function_13(param_31: u32, param_32: u32, param_33: array<i32, 2>) -> type_9 
     let _e52 = function_10(param_31, param_32, param_33);
     let _e53 = function_9(param_31, _e52);
     let _e56 = (bitcast<i32>(_e53) >> bitcast<u32>(16i));
-    return type_9(select(_e56, i32(-2147483648), (_e56 == -32768i)), (_e53 & 32767u));
+    return type_9(select(_e56, i32_min(), (_e56 == -32768i)), (_e53 & 32767u));
 }
 
 fn function_14(param_34: u32, param_35: u32) -> u32 {
@@ -473,7 +473,7 @@ fn function_16() {
                         break if !(_e179);
                     }
                 }
-                phi_397_ = select(1u, 7u, (_e170.member == i32(-2147483648)));
+                phi_397_ = select(1u, 7u, (_e170.member == i32_min()));
                 let _e357 = local_6;
                 phi_400_ = _e357;
                 let _e360 = local_7;
@@ -653,4 +653,8 @@ fn function_16() {
 fn bound_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_16();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

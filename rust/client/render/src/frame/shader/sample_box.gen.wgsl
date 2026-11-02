@@ -625,7 +625,7 @@ fn function_() {
                 let _e821 = round(((_e810[0] + (_e789 * bitcast<f32>(bitcast<u32>(_e99)))) + (_e792 * bitcast<f32>(bitcast<u32>(_e120)))));
                 let _e835 = round(((_e810[1] + (_e789 * bitcast<f32>(bitcast<u32>(_e104)))) + (_e792 * bitcast<f32>(bitcast<u32>(_e125)))));
                 let _e849 = round(((_e810[2] + (_e789 * bitcast<f32>(bitcast<u32>(_e109)))) + (_e792 * bitcast<f32>(bitcast<u32>(_e130)))));
-                phi_812_ = type_34(array<i32, 3>((_e812[0] + select(0i, select(select(i32(_e821), i32(-2147483648), (_e821 < -2147483600f)), 2147483647i, (_e821 > 2147483500f)), (_e821 == _e821))), (_e812[1] + select(0i, select(select(i32(_e835), i32(-2147483648), (_e835 < -2147483600f)), 2147483647i, (_e835 > 2147483500f)), (_e835 == _e835))), (_e812[2] + select(0i, select(select(i32(_e849), i32(-2147483648), (_e849 < -2147483600f)), 2147483647i, (_e849 > 2147483500f)), (_e849 == _e849)))), type_33(false, array<f32, 2>(0f, 0f)));
+                phi_812_ = type_34(array<i32, 3>((_e812[0] + select(0i, select(select(i32(_e821), i32_min(), (_e821 < -2147483600f)), 2147483647i, (_e821 > 2147483500f)), (_e821 == _e821))), (_e812[1] + select(0i, select(select(i32(_e835), i32_min(), (_e835 < -2147483600f)), 2147483647i, (_e835 > 2147483500f)), (_e835 == _e835))), (_e812[2] + select(0i, select(select(i32(_e849), i32_min(), (_e849 < -2147483600f)), 2147483647i, (_e849 > 2147483500f)), (_e849 == _e849)))), type_33(false, array<f32, 2>(0f, 0f)));
             } else {
                 let _e762 = global_1.member.member[0u];
                 let _e766 = global_1.member.member[1u];
@@ -992,4 +992,8 @@ fn function_() {
 fn sample_box_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

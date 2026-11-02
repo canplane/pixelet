@@ -336,7 +336,7 @@ fn function_8(param_10: u32, param_11: f32) -> type_10 {
     let _e217 = bitcast<i32>(param_10);
     let _e218 = (_e217 - 24i);
     if (_e218 >= 0i) {
-        phi_539_ = type_10((select(0i, select(select(i32(param_11), i32(-2147483648), (param_11 < -2147483600f)), 2147483647i, (param_11 > 2147483500f)), (param_11 == param_11)) << bitcast<u32>((_e218 & 31i))), 32768u);
+        phi_539_ = type_10((select(0i, select(select(i32(param_11), i32_min(), (param_11 < -2147483600f)), 2147483647i, (param_11 > 2147483500f)), (param_11 == param_11)) << bitcast<u32>((_e218 & 31i))), 32768u);
     } else {
         let _e225 = (param_11 / f32((1i << bitcast<u32>(((24i - _e217) & 31i)))));
         let _e226 = floor(_e225);
@@ -344,9 +344,9 @@ fn function_8(param_10: u32, param_11: f32) -> type_10 {
         let _e233 = select(select(u32(_e228), 0u, (_e228 < 0f)), 4294967295u, (_e228 > 4294967000f));
         let _e234 = (_e233 / 4096u);
         if (select(_e234, 8u, (_e234 > 8u)) == 0u) {
-            phi_528_ = type_10(select(0i, select(select(i32(_e226), i32(-2147483648), (_e226 < -2147483600f)), 2147483647i, (_e226 > 2147483500f)), (_e226 == _e226)), 32768u);
+            phi_528_ = type_10(select(0i, select(select(i32(_e226), i32_min(), (_e226 < -2147483600f)), 2147483647i, (_e226 > 2147483500f)), (_e226 == _e226)), 32768u);
         } else {
-            phi_528_ = type_10((select(0i, select(select(i32(_e226), i32(-2147483648), (_e226 < -2147483600f)), 2147483647i, (_e226 > 2147483500f)), (_e226 == _e226)) + 1i), _e233);
+            phi_528_ = type_10((select(0i, select(select(i32(_e226), i32_min(), (_e226 < -2147483600f)), 2147483647i, (_e226 > 2147483500f)), (_e226 == _e226)) + 1i), _e233);
         }
         let _e256 = phi_528_;
         phi_539_ = _e256;
@@ -3841,7 +3841,7 @@ fn function_104() {
                     let _e470 = local_59.member;
                     let _e475 = function_99(array<f32, 3>(_e470[0], _e470[1], _e470[2]), 0u);
                     let _e478 = floor(((_e475 * _e393) * 256f));
-                    let _e485 = select(0i, select(select(i32(_e478), i32(-2147483648), (_e478 < -2147483600f)), 2147483647i, (_e478 > 2147483500f)), (_e478 == _e478));
+                    let _e485 = select(0i, select(select(i32(_e478), i32_min(), (_e478 < -2147483600f)), 2147483647i, (_e478 > 2147483500f)), (_e478 == _e478));
                     let _e487 = (_e465[0] + bitcast<u32>(_e485));
                     if (_e485 >= 0i) {
                         phi_3803_ = select(true, false, (_e487 < _e465[0]));
@@ -3864,7 +3864,7 @@ fn function_104() {
                     let _e502 = local_59.member;
                     let _e507 = function_99(array<f32, 3>(_e502[0], _e502[1], _e502[2]), 1u);
                     let _e510 = floor(((_e507 * _e393) * 256f));
-                    let _e517 = select(0i, select(select(i32(_e510), i32(-2147483648), (_e510 < -2147483600f)), 2147483647i, (_e510 > 2147483500f)), (_e510 == _e510));
+                    let _e517 = select(0i, select(select(i32(_e510), i32_min(), (_e510 < -2147483600f)), 2147483647i, (_e510 > 2147483500f)), (_e510 == _e510));
                     let _e519 = (_e465[1] + bitcast<u32>(_e517));
                     if (_e517 >= 0i) {
                         phi_3840_ = select(true, false, (_e519 < _e465[1]));
@@ -3887,7 +3887,7 @@ fn function_104() {
                     let _e534 = local_59.member;
                     let _e539 = function_99(array<f32, 3>(_e534[0], _e534[1], _e534[2]), 2u);
                     let _e542 = floor(((_e539 * _e393) * 256f));
-                    let _e549 = select(0i, select(select(i32(_e542), i32(-2147483648), (_e542 < -2147483600f)), 2147483647i, (_e542 > 2147483500f)), (_e542 == _e542));
+                    let _e549 = select(0i, select(select(i32(_e542), i32_min(), (_e542 < -2147483600f)), 2147483647i, (_e542 > 2147483500f)), (_e542 == _e542));
                     let _e551 = (_e465[2] + bitcast<u32>(_e549));
                     if (_e549 >= 0i) {
                         phi_3877_ = select(true, false, (_e551 < _e465[2]));
@@ -6980,4 +6980,8 @@ fn function_104() {
 fn miss_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_104();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

@@ -358,7 +358,7 @@ fn function_8(param_10: u32, param_11: f32) -> type_11 {
     let _e247 = bitcast<i32>(param_10);
     let _e248 = (_e247 - 24i);
     if (_e248 >= 0i) {
-        phi_587_ = type_11((select(0i, select(select(i32(param_11), i32(-2147483648), (param_11 < -2147483600f)), 2147483647i, (param_11 > 2147483500f)), (param_11 == param_11)) << bitcast<u32>((_e248 & 31i))), 32768u);
+        phi_587_ = type_11((select(0i, select(select(i32(param_11), i32_min(), (param_11 < -2147483600f)), 2147483647i, (param_11 > 2147483500f)), (param_11 == param_11)) << bitcast<u32>((_e248 & 31i))), 32768u);
     } else {
         let _e255 = (param_11 / f32((1i << bitcast<u32>(((24i - _e247) & 31i)))));
         let _e256 = floor(_e255);
@@ -366,9 +366,9 @@ fn function_8(param_10: u32, param_11: f32) -> type_11 {
         let _e263 = select(select(u32(_e258), 0u, (_e258 < 0f)), 4294967295u, (_e258 > 4294967000f));
         let _e264 = (_e263 / 4096u);
         if (select(_e264, 8u, (_e264 > 8u)) == 0u) {
-            phi_576_ = type_11(select(0i, select(select(i32(_e256), i32(-2147483648), (_e256 < -2147483600f)), 2147483647i, (_e256 > 2147483500f)), (_e256 == _e256)), 32768u);
+            phi_576_ = type_11(select(0i, select(select(i32(_e256), i32_min(), (_e256 < -2147483600f)), 2147483647i, (_e256 > 2147483500f)), (_e256 == _e256)), 32768u);
         } else {
-            phi_576_ = type_11((select(0i, select(select(i32(_e256), i32(-2147483648), (_e256 < -2147483600f)), 2147483647i, (_e256 > 2147483500f)), (_e256 == _e256)) + 1i), _e263);
+            phi_576_ = type_11((select(0i, select(select(i32(_e256), i32_min(), (_e256 < -2147483600f)), 2147483647i, (_e256 > 2147483500f)), (_e256 == _e256)) + 1i), _e263);
         }
         let _e286 = phi_576_;
         phi_587_ = _e286;
@@ -7781,4 +7781,8 @@ fn function_101() {
 fn decor_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_101();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

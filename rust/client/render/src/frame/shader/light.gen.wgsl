@@ -971,7 +971,7 @@ fn function_33() {
                 let _e647 = select(_e645, _e575[1], (_e575[1] < _e645));
                 let _e650 = local_5.member_2.member;
                 let _e653 = local_5.member_2.member_1;
-                local_6 = type_49(type_48(array<u32, 2>(_e647, _e647), type_18(_e650, _e653)), array<i32, 3>((_e517[0] + select(0i, select(select(i32(_e526), i32(-2147483648), (_e526 < -2147483600f)), 2147483647i, (_e526 > 2147483500f)), (_e526 == _e526))), (_e517[1] + select(0i, select(select(i32(_e540), i32(-2147483648), (_e540 < -2147483600f)), 2147483647i, (_e540 > 2147483500f)), (_e540 == _e540))), (_e517[2] + select(0i, select(select(i32(_e554), i32(-2147483648), (_e554 < -2147483600f)), 2147483647i, (_e554 > 2147483500f)), (_e554 == _e554)))), type_46(array<f32, 3>(_e566, _e567, _e568), _e429.member_2, array<f32, 3>(_e569, _e570, _e571)));
+                local_6 = type_49(type_48(array<u32, 2>(_e647, _e647), type_18(_e650, _e653)), array<i32, 3>((_e517[0] + select(0i, select(select(i32(_e526), i32_min(), (_e526 < -2147483600f)), 2147483647i, (_e526 > 2147483500f)), (_e526 == _e526))), (_e517[1] + select(0i, select(select(i32(_e540), i32_min(), (_e540 < -2147483600f)), 2147483647i, (_e540 > 2147483500f)), (_e540 == _e540))), (_e517[2] + select(0i, select(select(i32(_e554), i32_min(), (_e554 < -2147483600f)), 2147483647i, (_e554 > 2147483500f)), (_e554 == _e554)))), type_46(array<f32, 3>(_e566, _e567, _e568), _e429.member_2, array<f32, 3>(_e569, _e570, _e571)));
                 let _e663 = local_5.member_3;
                 local_4 = _e663;
                 let _e664 = function_14((&local_4), _e247, _e334);
@@ -1307,4 +1307,8 @@ fn light_cs(@builtin(workgroup_id) param: vec3<u32>, @builtin(local_invocation_i
     global = param;
     global_1 = param_1;
     function_33();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

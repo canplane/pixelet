@@ -202,7 +202,7 @@ fn function_() {
             let _e341 = global_2.member.member[0u][0u];
             let _e342 = bitcast<u32>(_e341);
             let _e345 = ceil((0.25f / sqrt(_e304)));
-            let _e352 = select(0i, select(select(i32(_e345), i32(-2147483648), (_e345 < -2147483600f)), 2147483647i, (_e345 > 2147483500f)), (_e345 == _e345));
+            let _e352 = select(0i, select(select(i32(_e345), i32_min(), (_e345 < -2147483600f)), 2147483647i, (_e345 > 2147483500f)), (_e345 == _e345));
             let _e354 = select(1i, _e352, (1i < _e352));
             let _e355 = -(_e354);
             phi_366_ = _e355;
@@ -215,8 +215,8 @@ fn function_() {
                         let _e360 = phi_376_;
                         let _e361 = (_e360 <= _e354);
                         if _e361 {
-                            let _e362 = (select(0i, select(select(i32(_e319), i32(-2147483648), (_e319 < -2147483600f)), 2147483647i, (_e319 > 2147483500f)), (_e319 == _e319)) + _e360);
-                            let _e363 = (select(0i, select(select(i32(_e329), i32(-2147483648), (_e329 < -2147483600f)), 2147483647i, (_e329 > 2147483500f)), (_e329 == _e329)) + _e357);
+                            let _e362 = (select(0i, select(select(i32(_e319), i32_min(), (_e319 < -2147483600f)), 2147483647i, (_e319 > 2147483500f)), (_e319 == _e319)) + _e360);
+                            let _e363 = (select(0i, select(select(i32(_e329), i32_min(), (_e329 < -2147483600f)), 2147483647i, (_e329 > 2147483500f)), (_e329 == _e329)) + _e357);
                             let _e364 = (_e291 / 4u);
                             let _e366 = (_e291 / 8u);
                             let _e367 = (_e366 + 11u);
@@ -302,4 +302,8 @@ fn function_() {
 fn light_mark_draws_cs(@builtin(global_invocation_id) param: vec3<u32>) {
     global = param;
     function_();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

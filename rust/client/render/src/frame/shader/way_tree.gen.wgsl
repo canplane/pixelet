@@ -218,7 +218,7 @@ fn function_11(param_26: u32, param_27: u32, param_28: array<i32, 2>, param_29: 
     var local_2: u32;
 
     phi_1340_ = 0u;
-    phi_1343_ = array<i32, 2>(i32(-2147483648), i32(-2147483648));
+    phi_1343_ = array<i32, 2>(i32_min(), i32_min());
     phi_1345_ = 4294967295u;
     phi_1347_ = 4294967295u;
     loop {
@@ -329,7 +329,7 @@ fn function_12(param_32: u32, param_33: u32, param_34: array<i32, 2>) -> type_11
     let _e85 = function_10(param_32, param_33, param_34);
     let _e86 = function_9(param_32, _e85);
     let _e89 = (bitcast<i32>(_e86) >> bitcast<u32>(16i));
-    return type_11(select(_e89, i32(-2147483648), (_e89 == -32768i)), (_e86 & 32767u));
+    return type_11(select(_e89, i32_min(), (_e89 == -32768i)), (_e86 & 32767u));
 }
 
 fn function_13(param_35: u32) -> array<i32, 3> {
@@ -1746,4 +1746,8 @@ fn way_tree_cs(@builtin(workgroup_id) param: vec3<u32>, @builtin(local_invocatio
     global = param;
     global_1 = param_1;
     function_27();
+}
+
+fn i32_min() -> i32 {
+    return -2147483647i - 1i;
 }

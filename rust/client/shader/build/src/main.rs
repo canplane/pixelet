@@ -216,7 +216,31 @@ fn wgsl(spv: &[u32]) -> Result<String, String> {
     uniform_loads(&mut module, &info);
     let info = validate(&module)?;
     naga::back::wgsl::write_string(&module, &info, naga::back::wgsl::WriterFlags::empty())
+        .map(|text| i32_min_called(&text))
         .map_err(|e| e.to_string())
+}
+
+/// What naga writes for `i32::MIN`, and the function it is called through.
+const I32_MIN: &str = "i32(-2147483648)";
+const I32_MIN_FN: &str = "i32_min";
+
+/// `text` with each `i32::MIN` a call of a function that returns it.
+/// WebKit writes the constant into Metal as the bare `-2147483648`, which
+/// C++ reads as a `long`, so a `select` of it and an `int` names no one
+/// overload and the module fails to compile on Safari; a call is no
+/// constant, and its value is the function's `int`.
+fn i32_min_called(text: &str) -> String {
+    if !text.contains(I32_MIN) {
+        return text.to_owned();
+    }
+    assert!(
+        !text.contains(&format!("fn {I32_MIN_FN}(")),
+        "naga named a function {I32_MIN_FN}"
+    );
+    format!(
+        "{}\nfn {I32_MIN_FN}() -> i32 {{\n    return -2147483647i - 1i;\n}}\n",
+        text.replace(I32_MIN, &format!("{I32_MIN_FN}()"))
+    )
 }
 
 /// The module's words with each access chain a pointer is loaded, stored,
