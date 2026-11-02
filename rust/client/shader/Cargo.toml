@@ -26,6 +26,12 @@ codegen-units = 16
 [patch.crates-io]
 naga = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
 naga-types = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+# rust-gpu's codegen as published, its linker taught to clone a function per
+# set of bindings its storage-buffer pointer arguments come from rather than
+# inline it (rustc_codegen_spirv/src/linker/specialize_roots.rs), and to leave
+# an abort under `--abort-strategy=unreachable` where it is rather than inline
+# it up to its entry (linker/simple_passes.rs `remove_aborts`).
+rustc_codegen_spirv = { path = "rustc_codegen_spirv" }
 
 [package]
 name = "pxl-shader"

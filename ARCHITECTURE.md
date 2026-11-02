@@ -633,7 +633,16 @@ The compute entries are built by rust-gpu to WGSL and checked in beside the
 renderer's shaders (`frame/shader/*.gen.wgsl`, pxl-tool `shader.rs` `ENTRIES`);
 the renderer's build validates every shader with naga, and the web app's test
 compiles each with Tint, the compiler a browser runs
-(`ts/app/web/src/shader.test.ts`).
+(`ts/app/web/src/shader.test.ts`). Nothing in pxl-spec-core aborts, so a check
+that fails in an entry (a bound, an overflow) is built as unreachable
+(`rust/client/shader/build`, `ShaderPanicStrategy`) and spirv-opt drops its
+branch; where one is reached after all, the invocation runs on with WGSL's
+defined behaviour for the access instead of ending. A function an entry's
+buffers reach is kept once for those buffers, not written again into every
+caller, and one that may fail a check stays a function. Those two need
+rust-gpu's codegen changed: the shader build takes a copy of it, and
+`rust/client/shader/rustc_codegen_spirv/README.md` is the ledger of what
+differs from the published crate, why, and how to upgrade it.
 
 ## Past the pyramid: the sky and the sphere
 

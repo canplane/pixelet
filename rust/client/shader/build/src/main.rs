@@ -16,9 +16,11 @@
 //! one place and taking only what WGSL takes as a parameter keeps its
 //! boundary where a call is shorter than its body (`dont_inline`), and a
 //! module keeps those boundaries where that makes it shorter (`wgsl_of`).
-//! Every function a binding's pointer reaches the codegen has inlined before
-//! (its legalization, rustc_codegen_spirv linker/inline.rs): no Rust names a
-//! binding but through the entry's parameters.
+//! A function a binding's pointer reaches is the codegen's clone of it for
+//! that binding, the pointer made again inside from the binding itself
+//! (rustc_codegen_spirv linker/specialize_roots.rs, vendored beside), or,
+//! where the codegen cannot tell which binding, inlined to legalize it as
+//! before (linker/inline.rs).
 
 use naga::proc::TypeResolution;
 use naga::valid::{Capabilities, FunctionInfo, ModuleInfo, ValidationFlags, Validator};
@@ -26,15 +28,20 @@ use naga::{
     AddressSpace, Arena, Barrier, Block, Expression, Function, GlobalVariable, Handle, Module,
     Range, Span, Statement, Type, UniqueArena,
 };
-use spirv_builder::{Capability, ModuleResult, SpirvBuilder};
+use spirv_builder::{Capability, ModuleResult, ShaderPanicStrategy, SpirvBuilder};
 
 fn main() {
     let shader = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
     // WebGPU's own types alone, and a texture's size asked of it (WGSL
     // `textureDimensions`): the rays are as large as the surface they lie on.
-    // Vulkan 1.3 is the SPIR-V rust-gpu emits for its naga target.
+    // Vulkan 1.3 is the SPIR-V rust-gpu emits for its naga target. A check
+    // that fails (a bound, an overflow) is unreachable, not an early return:
+    // pxl-spec-core's rule is that nothing aborts, so the branch is dead by
+    // contract and spirv-opt drops it; where one is reached after all, the
+    // invocation runs on with WGSL's defined behaviour for the access.
     let result = SpirvBuilder::new(shader, "spirv-unknown-vulkan1.3")
         .multimodule(true)
+        .shader_panic_strategy(ShaderPanicStrategy::UNSOUND_DO_NOT_USE_UndefinedBehaviorViaUnreachable)
         .capability(Capability::ImageQuery)
         .extra_arg("--no-spirv-opt")
         .build();
@@ -81,14 +88,17 @@ fn wgsl_of(spv: &[u8]) -> Result<String, String> {
 
 /// One entry's SPIR-V through spirv-opt as the codegen runs it, its
 /// performance passes and then its dead constants and debug info dropped
-/// (rustc_codegen_spirv link.rs `do_spirv_opt`).
+/// (rustc_codegen_spirv link.rs `do_spirv_opt`), its ids numbered anew: the
+/// codegen numbers them across the crate and naga names values after them,
+/// so an edit to one entry would rename values in every other.
 fn optimized(words: Vec<u32>) -> Result<Vec<u32>, String> {
     use spirv_tools::opt::{self, Optimizer, Passes};
     let mut optimizer = opt::create(Some(spirv_tools::TargetEnv::Vulkan_1_3));
     optimizer
         .register_performance_passes()
         .register_pass(Passes::EliminateDeadConstant)
-        .register_pass(Passes::StripDebugInfo);
+        .register_pass(Passes::StripDebugInfo)
+        .register_pass(Passes::CompactIds);
     let mut told = String::new();
     let options = opt::Options {
         validator_options: Some(spirv_tools::val::ValidatorOptions::default()),
@@ -189,6 +199,7 @@ fn call_shorter(calls: u32, params: u32, body: u32) -> bool {
 
 /// One entry's SPIR-V as WGSL, validated as WebGPU takes it.
 fn wgsl(spv: &[u32]) -> Result<String, String> {
+    let spv = pointers_where_used(spv);
     let mut module = naga::front::spv::parse_u8_slice(
         &spv.iter()
             .flat_map(|w| w.to_le_bytes())
@@ -206,6 +217,93 @@ fn wgsl(spv: &[u32]) -> Result<String, String> {
     let info = validate(&module)?;
     naga::back::wgsl::write_string(&module, &info, naga::back::wgsl::WriterFlags::empty())
         .map_err(|e| e.to_string())
+}
+
+/// The module's words with each access chain a pointer is loaded, stored,
+/// copied, chained or passed through made again in the block that uses it,
+/// where spirv-opt left it in another: naga holds a value used outside the
+/// scope that made it in a local variable, and no local holds a pointer.
+fn pointers_where_used(spv: &[u32]) -> Vec<u32> {
+    // SPIR-V's opcodes (the SPIR-V specification, 3.52).
+    const TYPE_POINTER: u32 = 32;
+    const FUNCTION: u32 = 54;
+    const FUNCTION_END: u32 = 56;
+    const FUNCTION_CALL: u32 = 57;
+    const LOAD: u32 = 61;
+    const STORE: u32 = 62;
+    const COPY_MEMORY: u32 = 63;
+    const ACCESS_CHAIN: u32 = 65;
+    const IN_BOUNDS_ACCESS_CHAIN: u32 = 66;
+    const LABEL: u32 = 248;
+    let mut bound = spv[3];
+    let mut pointers = std::collections::HashSet::new();
+    let mut out = spv[..5].to_vec();
+    // Per function: each chain's words and block; then each instruction
+    // with the chains it names from another block made before it.
+    let mut i = 5;
+    let mut chains = std::collections::HashMap::<u32, (usize, Vec<u32>)>::new();
+    let mut block = 0;
+    let mut made = std::collections::HashMap::<(u32, usize), u32>::new();
+    while i < spv.len() {
+        let n = (spv[i] >> 16) as usize;
+        let inst = &spv[i..i + n];
+        let op = inst[0] & 0xffff;
+        match op {
+            TYPE_POINTER => {
+                pointers.insert(inst[1]);
+            }
+            FUNCTION | FUNCTION_END => {
+                chains.clear();
+                made.clear();
+            }
+            LABEL => block += 1,
+            _ => {}
+        }
+        let uses: &[usize] = match op {
+            LOAD | ACCESS_CHAIN | IN_BOUNDS_ACCESS_CHAIN => &[3],
+            STORE => &[1],
+            COPY_MEMORY => &[1, 2],
+            _ => &[],
+        };
+        let mut inst = inst.to_vec();
+        let args = if op == FUNCTION_CALL { 4..n } else { 0..0 };
+        for k in uses.iter().copied().chain(args) {
+            inst[k] = in_block(inst[k], block, &chains, &mut made, &mut bound, &mut out);
+        }
+        if matches!(op, ACCESS_CHAIN | IN_BOUNDS_ACCESS_CHAIN) && pointers.contains(&inst[1]) {
+            chains.insert(inst[2], (block, inst.clone()));
+        }
+        out.extend(inst);
+        i += n.max(1);
+    }
+    out[3] = bound;
+    out
+}
+
+/// `id`, or where it is a chain made in another block, a chain made again
+/// at the end of `out` in `block` (once a block).
+fn in_block(
+    id: u32,
+    block: usize,
+    chains: &std::collections::HashMap<u32, (usize, Vec<u32>)>,
+    made: &mut std::collections::HashMap<(u32, usize), u32>,
+    bound: &mut u32,
+    out: &mut Vec<u32>,
+) -> u32 {
+    let Some((at, words)) = chains.get(&id) else { return id };
+    if *at == block {
+        return id;
+    }
+    if let Some(&again) = made.get(&(id, block)) {
+        return again;
+    }
+    let mut words = words.clone();
+    words[3] = in_block(words[3], block, chains, made, bound, out);
+    words[2] = *bound;
+    *bound += 1;
+    made.insert((id, block), words[2]);
+    out.extend(&words);
+    words[2]
 }
 
 /// Every `ControlBarrier(WORK_GROUP)`, load of a workgroup pointer,
