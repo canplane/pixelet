@@ -124,12 +124,12 @@ export const disabledContent = 0.4;
 export const shadow = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
 
 /** A dark halo so white reads over any ground: black copies grown by 1 to
- * `reach` px a side, each at opacity `ring`. */
-export const halo = { reach: 2, ring: 0.3 } as const;
+ * `width` px a side, each at opacity `ring`. */
+export const halo = { width: 2, ring: 0.3 } as const;
 
 export const haloRings: readonly number[] = Array.from(
-  { length: halo.reach },
-  (_, i) => halo.reach - i,
+  { length: halo.width },
+  (_, i) => halo.width - i,
 );
 
 export const hairline = alpha(color.labelGray, 0.1);

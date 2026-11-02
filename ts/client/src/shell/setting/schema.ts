@@ -7,14 +7,14 @@
 
 import {
   SETTING as EVERY,
-  SETTING_SHIPPED as SHIPPED,
+  SETTING_PRODUCTION as PRODUCTION,
 } from "@/abi/schema.spec.ts";
 
 type Spec = typeof EVERY;
 
 /** A constant-folded choice, not a filter, so dev rows are absent from the
  * production artifact rather than hidden. */
-export const SETTING = (__IS_DEV__ ? EVERY : SHIPPED) as Spec;
+export const SETTING = (__IS_DEV__ ? EVERY : PRODUCTION) as Spec;
 
 export type SettingName = keyof Spec;
 

@@ -29,9 +29,9 @@ function bakeLines(
   return source.map((s) => `${s.kind}/${s.version}`);
 }
 
-/** The objects one has placed, kept on the device: the format this build reads them in. */
+/** The objects one has placed, kept a shard at a time: the format this build reads them in. */
 function objectLabel(): string {
-  return `objects · format ${format.OBJECTS}`;
+  return `objects · format ${format.OBJECT}`;
 }
 
 /** UTC: a stamp in the viewer's zone said different things on two phones. */

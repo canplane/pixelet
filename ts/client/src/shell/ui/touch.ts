@@ -13,6 +13,6 @@ export const touches = StyleSheet.create({
 
 /** What a control seen `size` high is grown by on each side so a press lands on `chrome.target`:
  * a box laid out around it, not `hitSlop`, which react-native-web does not honor. */
-export function touchReach(size: f64): f64 {
+export function touchOutset(size: f64): f64 {
   return Math.max(0, (chrome.target - size) / 2);
 }

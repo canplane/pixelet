@@ -9,7 +9,7 @@ import {
 } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { heldRing } from "@/shell/catalog/asset/swatch.tsx";
+import { selectionRing } from "@/shell/catalog/asset/swatch.tsx";
 import { chrome, color, hairline } from "@/shell/ui/theme.ts";
 import { NamingContext } from "./name-tip.tsx";
 
@@ -67,7 +67,7 @@ export function Grid({
   );
 }
 
-/** Pictures only: names under every item read as a list. A press names it above the finger. */
+/** Pictures only. A press names it above the finger. */
 export function Item({
   label,
   active,
@@ -103,7 +103,7 @@ export function Item({
 export const mark = StyleSheet.create({
   off: { boxShadow: `0 0 0 1px ${hairline}` },
   on: {
-    boxShadow: heldRing(color.ground, color.black, LIT_INK),
+    boxShadow: selectionRing(color.ground, color.black, LIT_INK),
     transform: [{ scale: LIT_SCALE }],
   },
 });

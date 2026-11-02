@@ -109,15 +109,14 @@ export const LEAVE: Transition = ease(150, [0, 0, 0.58, 1]);
 
 export const FADE: Transition = ease(200, [0, 0, 0.58, 1]);
 
-/** Critical damping: leaves at full speed and lands without a bounce. An
- * ease-in-out moved a panel 8% in 100 ms and read as slow. */
+/** Critical damping: leaves at full speed and lands without a bounce. */
 export const SLIDE: Transition = spring({
   stiffness: 420,
   damping: 41,
   mass: 1,
 });
 
-/** Material's emphasized accelerate; a spring would linger at the end. */
+/** Material's emphasized accelerate. */
 export const SLIDE_AWAY: Transition = ease(200, [0.3, 0, 0.8, 0.15]);
 
 export const DIM: Transition = ease(500, [0.42, 0, 0.58, 1]);

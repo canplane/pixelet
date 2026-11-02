@@ -8,7 +8,7 @@ import { Panel as Sheet } from "./panel.tsx";
 // Everything the default has, but what this file draws itself.
 export * from "./panel.tsx";
 
-// Android draws the page's sheet; the system back closes it, which Material's sheet did for itself.
+// Android draws the page's sheet; the system back closes it.
 export function Panel(props: PanelProps) {
   const { open } = useContext(PanelPresence);
   const onClose = useRef(props.onClose);

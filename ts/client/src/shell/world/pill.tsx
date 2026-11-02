@@ -25,7 +25,7 @@ import type { BackingPlace } from "@/shell/ui/backing.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP, type Transition } from "@/shell/ui/motion/transition.ts";
 import { useDim } from "@/shell/ui/motion/dim.ts";
-import { touchReach } from "@/shell/ui/touch.ts";
+import { touchOutset } from "@/shell/ui/touch.ts";
 
 export interface PillProps {
   x: f64;
@@ -42,7 +42,7 @@ export interface PillProps {
   fadeFrom?: f64;
   fadeTransition?: Transition;
   touch?: GestureResponderHandlers;
-  /** More of `touch`'s reach under it, over a deck's cards peeking out. */
+  /** More of `touch`'s outset under it, over a deck's cards peeking out. */
   touchBelow?: f64;
   children?: ReactNode;
   onContentWidth?: (width: f64) => void;
@@ -93,7 +93,7 @@ export function Pill({
     width: span,
     height,
   };
-  const reach = touch ? touchReach(height) : 0;
+  const outset = touch ? touchOutset(height) : 0;
 
   return (
     <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
@@ -116,18 +116,18 @@ export function Pill({
             collapsable={false}
             {...touch}
             style={[
-              touch ? styles.reach : styles.box,
+              touch ? styles.target : styles.box,
               {
-                left: -reach,
-                top: -reach,
-                width: width + 2 * reach,
-                height: height + 2 * reach + touchBelow,
+                left: -outset,
+                top: -outset,
+                width: width + 2 * outset,
+                height: height + 2 * outset + touchBelow,
               },
             ]}
           >
             <View
               collapsable={false}
-              style={[styles.box, { left: reach, top: reach, width, height }]}
+              style={[styles.box, { left: outset, top: outset, width, height }]}
             >
               {shadow && (
                 <>
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   },
   // From the sheet: an inline `box-none` is drawn as a `none` the content inherits.
   box: { position: "absolute", pointerEvents: "box-none" },
-  reach: { position: "absolute" },
+  target: { position: "absolute" },
   clip: { position: "absolute", overflow: "hidden", pointerEvents: "none" },
   circle: { position: "absolute", left: 0, top: 0, pointerEvents: "none" },
   fill: { flex: 1 },
