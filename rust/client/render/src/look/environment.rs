@@ -37,7 +37,7 @@ pub struct Light {
     pub km_per_u: f64,
     pub lat: f64,
     pub lon: f64,
-    /// Where the sky draws its own ground, so the terrain does not stand over it.
+    /// Where the sky draws its own ground.
     pub ground_km: f64,
     /// The equatorial frame to the local one, as rows.
     pub star_frame: [V3; 3],

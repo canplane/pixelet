@@ -5,7 +5,7 @@
 //! sample, denoise twice, at half resolution), only where what it reads moved, and held;
 //! brought to the pixel and laid over the world's color in the claimed tiles each drawn frame
 //! (`apply`), as the tiles' quads, a draw of the world's pass, which ends about it only where
-//! the map is found again. About 6 bytes a pixel.
+//! the map is found again. About 3 bytes a pixel.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
@@ -20,7 +20,7 @@ use crate::gpu::api::{
     texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Load, RenderContext,
     TrackedRenderPass,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
 
@@ -36,10 +36,10 @@ pub struct ScreenAo {
     run: u32,
     stride: u32,
     sampler: u32,
-    downsample: Built,
-    sample: Built,
-    blur: Built,
-    apply: Built,
+    downsample: Pipeline,
+    sample: Pipeline,
+    blur: Pipeline,
+    apply: Pipeline,
     width: u32,
     height: u32,
     /// The world's depth, read only, its view as last bound.
@@ -51,10 +51,6 @@ pub struct ScreenAo {
     ping_view: [u32; 2],
     /// Downsample, sample, denoise ping[0]->ping[1], denoise back.
     groups: [u32; 4],
-    /// The half depth, the map and the tiles' words and uniform `apply`
-    /// reads, made again exactly when one of them is another.
-    apply_group: u32,
-    apply_bound: [u32; 3],
 }
 
 impl ScreenAo {
@@ -93,7 +89,7 @@ impl ScreenAo {
             run,
             stride,
             sampler,
-            downsample: pipelines.build(g, PIPELINE_AO_DOWNSAMPLE, Format::rgba32float),
+            downsample: pipelines.build(g, PIPELINE_AO_DOWNSAMPLE, Format::r32float),
             sample: pipelines.build(g, PIPELINE_AO_SAMPLE, g.canvas()),
             blur: pipelines.build(g, PIPELINE_AO_BLUR, g.canvas()),
             apply: pipelines.build_world(g, PIPELINE_AO_APPLY),
@@ -105,12 +101,12 @@ impl ScreenAo {
             ping: [0; 2],
             ping_view: [0; 2],
             groups: [0; 4],
-            apply_group: 0,
-            apply_bound: [0; 3],
         }
     }
 
-    pub fn lay_out(&mut self, proj: &Mat4, width: u32, height: u32) {
+    /// `reach` the reach of every effect, which the occlusion
+    /// takes to as the others do (effect.wgsl `effect_share`).
+    pub fn prepare(&mut self, proj: &Mat4, width: u32, height: u32, reach: f32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
         mat4::invert(&mut inv, proj);
@@ -118,9 +114,10 @@ impl ScreenAo {
         put_mat(u, ao::INV_PROJ, &inv);
         u[ao::HALF] = (width / AO_DOWNSCALE) as f32;
         u[ao::HALF + 1] = (height / AO_DOWNSCALE) as f32;
+        u[ao::EFFECT_REACH] = reach;
     }
 
-    /// The words its passes read, as `lay_out` wrote them.
+    /// The words its passes read, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.uniform_words
     }
@@ -148,7 +145,7 @@ impl ScreenAo {
         );
         let attach = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
         self.depth_view = depth_view;
-        self.half = g.texture(hw, hh, 1, Format::rgba32float, 1, attach);
+        self.half = g.texture(hw, hh, 1, Format::r32float, 1, attach);
         self.half_view = g.view(self.half, false, 0, 1, 0, 1);
         for k in 0..2 {
             self.ping[k] = g.texture(hw, hh, 1, g.canvas(), 1, attach);
@@ -179,8 +176,12 @@ impl ScreenAo {
         );
         let g1 = group(
             self.sample.layouts[0],
-            false,
-            &[view(1, self.half_view), view(2, self.noise_view)],
+            true,
+            &[
+                view(1, self.half_view),
+                view(2, self.noise_view),
+                view(3, self.depth_view),
+            ],
         );
         let blur = self.ping_view.map(|src| {
             group(
@@ -211,30 +212,22 @@ impl ScreenAo {
             self.ping[1],
             self.half_view,
             self.half,
-            self.apply_group,
         ] {
             release(id);
         }
         self.groups = [0; 4];
         self.half = 0;
         self.half_view = 0;
-        self.apply_group = 0;
-        self.apply_bound = [0; 3];
     }
 
     pub fn run(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::ao);
         let steps: [(u32, u32, u32, u32); 4] = [
-            (self.downsample.pipeline, self.groups[0], self.half_view, 0),
-            (self.sample.pipeline, self.groups[1], self.ping_view[0], 0),
-            (self.blur.pipeline, self.groups[2], self.ping_view[1], 0),
-            (
-                self.blur.pipeline,
-                self.groups[3],
-                self.ping_view[0],
-                self.stride,
-            ),
+            (self.downsample.id, self.groups[0], self.half_view, 0),
+            (self.sample.id, self.groups[1], self.ping_view[0], 0),
+            (self.blur.id, self.groups[2], self.ping_view[1], 0),
+            (self.blur.id, self.groups[3], self.ping_view[0], self.stride),
         ];
         for (k, &(pipeline, group, target, off)) in steps.iter().enumerate() {
             let pass = g.pass(
@@ -257,24 +250,20 @@ impl ScreenAo {
     /// it, in the tiles `tiles` (their words and uniform) claim of `count`, a
     /// quad each (ao_apply.wgsl): every drawn frame, as the world's color is
     /// drawn again there, whether or not the map was found again.
-    pub fn apply(&mut self, g: &Gpu, pass: &mut TrackedRenderPass, tiles: (u32, u32), count: u32) {
-        let bound = [self.half_view, tiles.0, tiles.1];
-        if bound != self.apply_bound {
-            release(self.apply_group);
-            self.apply_group = g.bind_group(
-                self.apply.layouts[0],
-                &[
-                    view_entry(1, self.half_view),
-                    view_entry(2, self.ping_view[0]),
-                    buf_entry(6, self.uniform),
-                    buf_entry(30, tiles.0),
-                    buf_entry(31, tiles.1),
-                ],
-            );
-            self.apply_bound = bound;
-        }
-        pass.set_pipeline(self.apply.pipeline);
-        pass.set_bind_group(0, self.apply_group, &[]);
+    pub fn apply(&self, g: &Gpu, pass: &mut TrackedRenderPass, tiles: (u32, u32), count: u32) {
+        let group = g.bind_group(
+            self.apply.layouts[0],
+            &[
+                view_entry(1, self.half_view),
+                view_entry(2, self.ping_view[0]),
+                buf_entry(6, self.uniform),
+                buf_entry(30, tiles.0),
+                buf_entry(31, tiles.1),
+            ],
+        );
+        pass.set_pipeline(self.apply.id);
+        pass.set_bind_group(0, group, &[]);
         pass.draw(6, count, 0, 0);
+        release(group);
     }
 }

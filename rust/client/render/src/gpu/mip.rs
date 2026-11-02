@@ -23,7 +23,7 @@ pub struct MipPass {
 impl MipPass {
     /// A pipeline draws into the format it was built for, so each format needs its own.
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: Format) -> MipPass {
-        let built = pipelines.build(g, PIPELINE_MIP, format);
+        let pipeline = pipelines.build(g, PIPELINE_MIP, format);
         let sampler = g.sampler(
             FilterMode::linear,
             FilterMode::linear,
@@ -33,8 +33,8 @@ impl MipPass {
             1,
         );
         MipPass {
-            pipeline: built.pipeline,
-            layout: built.layouts[0],
+            pipeline: pipeline.id,
+            layout: pipeline.layouts[0],
             sampler,
         }
     }

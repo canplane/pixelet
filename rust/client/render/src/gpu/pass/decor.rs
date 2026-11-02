@@ -12,26 +12,26 @@ use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
 use crate::frame::shader::word::DECOR_GROUPS;
 
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
-use crate::gpu::generated::Drawn;
+use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::mark::{self, Marks, UploadCopies};
 use crate::gpu::pass::model::{
     bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, DrawUniforms,
     ModelDraw, Stage, DRAW_BYTES,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::{Draws, Uploads};
-use pxl_spec_core::generated;
+use pxl_content::generation;
 
 const _: () = assert!(
-    generated::GROUPS as usize <= DECOR_GROUPS,
+    generation::GROUPS as usize <= DECOR_GROUPS,
     "a decor variant past the draw groups"
 );
 
 pub struct DecorPass {
-    lit: Built,
-    ghost: Built,
-    depth: Built,
+    lit: Pipeline,
+    ghost: Pipeline,
+    depth: Pipeline,
     uniforms: DrawUniforms,
     /// Each group's mesh, 0 for a model not yet registered, and its skin's image.
     groups: [(u32, Option<Image>); DECOR_GROUPS],
@@ -41,7 +41,7 @@ pub struct DecorPass {
 }
 
 /// A mark's uniform, as the draw's (`put_instances`).
-fn put_mark(buf: &mut [u8], (_, u): &mark::Drawn) {
+fn put_mark(buf: &mut [u8], (_, u): &mark::Draw) {
     put_instances(buf, u, 0);
 }
 
@@ -85,16 +85,16 @@ impl DecorPass {
         uniforms: &[f32],
         touched: &[u32],
         uploads: &mut Uploads,
-        kept: &UploadCopies,
+        last_frame_uploads: &UploadCopies,
     ) -> (bool, bool) {
         let opaque = draws.of(PIPELINE_DECOR);
         let casts = self
             .marks
-            .prepare(g, opaque, uniforms, touched, uploads, kept);
+            .prepare(g, opaque, uniforms, touched, uploads, last_frame_uploads);
         let ghost = draws.of(PIPELINE_GHOST_DECOR);
-        let blended = self
-            .ghost_marks
-            .prepare(g, ghost, uniforms, touched, uploads, kept);
+        let blended =
+            self.ghost_marks
+                .prepare(g, ghost, uniforms, touched, uploads, last_frame_uploads);
         (casts || blended, casts)
     }
 
@@ -228,8 +228,8 @@ impl DecorPass {
 
     fn pipeline(&self, stage: Stage) -> u32 {
         match stage {
-            Stage::Lit => self.lit.pipeline,
-            Stage::Depth => self.depth.pipeline,
+            Stage::Lit => self.lit.id,
+            Stage::Depth => self.depth.id,
         }
     }
 
@@ -245,7 +245,7 @@ impl DecorPass {
             draws,
             uploads,
             PIPELINE_GHOST_DECOR,
-            self.ghost.pipeline,
+            self.ghost.id,
             frame,
         );
     }
@@ -289,11 +289,11 @@ impl DecorPass {
     }
 
     /// The models the GPU generated, an indirect draw a group whose model is held
-    /// (pxl-spec-core `generated::drawn`, a group's models its region `2·group`).
+    /// (pxl-content `generation::drawn`, a group's models its region `2·group`).
     pub fn draw_generated(
         &mut self,
         pass: &mut TrackedRenderPass,
-        generated: Option<Drawn>,
+        generated: Option<IndirectDraw>,
         uploads: &Uploads,
         stage: Stage,
         frame: u32,
@@ -302,7 +302,7 @@ impl DecorPass {
         pass.set_pipeline(self.pipeline(stage));
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
-        for group in 0..generated::GROUPS {
+        for group in 0..generation::GROUPS {
             let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(group, uploads) else {
                 continue;
             };

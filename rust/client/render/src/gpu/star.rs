@@ -1,9 +1,8 @@
 // pxl-render/gpu/star.rs
 
 //! The Yale Bright Star Catalog (Hoffleit and Warren 1991, CDS V/50), drawn
-//! after the sky as one instanced strip. Direction, flux and color are computed
-//! once here rather than per corner per frame. Nothing is drawn in daylight.
-//! The catalog's stars are the whole night sky: no Milky Way and no planets.
+//! after the sky as one instanced strip. Nothing is drawn in daylight.
+//! The catalog's stars are the whole night sky.
 
 use pxl_spec::asset::star::{self, RECORD_BYTES};
 use pxl_spec::space::coord::mat4::Mat4;
@@ -14,7 +13,7 @@ use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
 use crate::gpu::atmosphere::{AIR_ENTRIES, MEDIUM};
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
 use crate::param::sky::star::DRAWN_ABOVE;
@@ -22,7 +21,7 @@ use crate::param::sky::star::DRAWN_ABOVE;
 const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-star.bin");
 
 pub struct StarPass {
-    built: Built,
+    pipeline: Pipeline,
     frame_group: u32,
     uniform: u32,
     group: u32,
@@ -38,7 +37,7 @@ impl StarPass {
         frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> StarPass {
-        let built = pipelines.build_world(g, PIPELINE_STAR);
+        let pipeline = pipelines.build_world(g, PIPELINE_STAR);
         let uniform = g.buf(
             word_bytes(STARS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -56,13 +55,13 @@ impl StarPass {
         g.write_buf(catalog, 0, bytes(&stars));
         let mut frame = vec![buf_entry(0, frame_buf)];
         frame.extend(air.iter().filter(|e| MEDIUM.contains(&e.binding)));
-        let frame_group = g.bind_group(built.layouts[0], &frame);
+        let frame_group = g.bind_group(pipeline.layouts[0], &frame);
         let group = g.bind_group(
-            built.layouts[1],
+            pipeline.layouts[1],
             &[buf_entry(0, uniform), buf_entry(1, catalog)],
         );
         StarPass {
-            built,
+            pipeline,
             frame_group,
             uniform,
             group,
@@ -70,13 +69,13 @@ impl StarPass {
         }
     }
 
-    /// The words they are drawn by, as `lay_out` wrote them.
+    /// The words they are drawn by, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.words
     }
 
     /// Nothing is laid out past the intensity while the stars are faded out.
-    pub fn lay_out(&mut self, view_proj: &Mat4, env: &[f32], width: u32) {
+    pub fn prepare(&mut self, view_proj: &Mat4, env: &[f32], width: u32) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
         if u[INTENSITY] <= DRAWN_ABOVE {
@@ -103,7 +102,7 @@ impl StarPass {
         if self.words[INTENSITY] <= DRAWN_ABOVE {
             return;
         }
-        pass.set_pipeline(self.built.pipeline);
+        pass.set_pipeline(self.pipeline.id);
         pass.set_bind_group(0, self.frame_group, &[]);
         pass.set_bind_group(1, self.group, &[]);
         pass.draw(4, (CATALOG.len() / RECORD_BYTES) as u32, 0, 0);

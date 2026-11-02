@@ -2,32 +2,32 @@
 
 //! Each handed brick's ground, filled once as it is handed: its columns'
 //! tops off its tile's samples (`height_cs`) and its levels (`bound_cs`),
-//! which the CPU reads back; and the eye's windows' levels folded over
-//! their bricks (`joined_cs`).
+//! which the CPU reads back; and the eye's clip levels' levels folded over
+//! their bricks (`fold_cs`).
 
-use pxl_spec_core::fill;
-use pxl_spec_core::clipmap::{self, BRICK, FIRST_CELL};
-use pxl_spec_core::{at, way};
+use pxl_engine::fill;
+use pxl_engine::clipmap::{self, BRICK, FIRST_CELL};
+use pxl_engine::{at, way};
 use spirv_std::glam::{IVec4, UVec3, UVec4};
 use spirv_std::spirv;
 
 use crate::eye::Eye;
 use crate::world::{brick_at, NoPalette, World};
 
-/// The eye's windows folded over their bricks, a thread an entry
-/// (pxl-spec-core `clipmap::fold`), each a row of the windows' buffer past
-/// their slot table (`clipmap::JOINED_AT`): each window's levels over a
+/// The eye's clip levels folded over their bricks, a thread an entry
+/// (pxl-engine `clipmap::fold`), each a row of the clip levels' buffer past
+/// their slot table (`clipmap::JOINED_AT`): each clip level's levels over a
 /// brick, the join of its aligned blocks of bricks, which a node wider
 /// than a brick reads as one entry (`clipmap::bound_over`), a level a dispatch
-/// off the one under it. Run where the windows' slots moved; a present
+/// off the one under it. Run where the clip levels' slots moved; a present
 /// brick's levels stand while it does.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "joined_cs"))]
+#[spirv(compute(threads(64, 1, 1), entry_point_name = "fold_cs"))]
 #[allow(clippy::too_many_arguments)]
-pub fn joined_cs(
+pub fn fold_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(num_workgroups)] groups: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &mut [IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
@@ -39,14 +39,14 @@ pub fn joined_cs(
         groups.z,
         (clipmap::ACROSS >> groups.z) * (clipmap::ACROSS >> groups.z),
     );
-    if id.z + 1 != l || id.x >= blocks * clipmap::EYE_WINDOWS {
+    if id.z + 1 != l || id.x >= blocks * clipmap::EYE_CLIP_LEVELS {
         return;
     }
     let (cell, b) = (FIRST_CELL + id.x / blocks, id.x % blocks);
     let [x, y, bound, pad] = {
-        let read: &[IVec4] = window;
+        let read: &[IVec4] = clipmap;
         let world = World {
-            window: read,
+            clipmap: read,
             ground,
             palette_indices: NoPalette(0),
             shards,
@@ -60,8 +60,8 @@ pub fn joined_cs(
         + (cell - FIRST_CELL) * clipmap::JOINED_ENTRIES
         + clipmap::joined_idx(l, [0, 0])
         + b) as usize;
-    if k < window.len() {
-        window[k] = IVec4::new(x as i32, y as i32, bound as i32, pad as i32);
+    if k < clipmap.len() {
+        clipmap[k] = IVec4::new(x as i32, y as i32, bound as i32, pad as i32);
     }
 }
 
@@ -103,16 +103,16 @@ pub fn bound_cs(
         return;
     }
     let rec = clipmap::handed_at(id.z);
-    let base = brick_at(at(fresh, rec + clipmap::FRESH_BRICK));
-    let kept = fill::Scratch {
+    let base = brick_at(at(fresh, rec + clipmap::FILL_BRICK));
+    let spans = fill::Scratch {
         words: scratch,
         at: fill::scratch_at(scratch, id.z),
     };
     fill::level(
         ground,
         base,
-        &kept,
-        at(fresh, rec + clipmap::FRESH_CELL),
+        &spans,
+        at(fresh, rec + clipmap::FILL_CELL),
         j,
         [id.x, id.y],
     );

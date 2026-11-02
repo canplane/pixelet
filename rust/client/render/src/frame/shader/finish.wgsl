@@ -4,9 +4,8 @@
 // blended there; the screen's finish encodes it once (`finish`).
 
 // ACES's reference rendering and sRGB output transforms, as Stephen Hill fit
-// them (BakingLab): the filmic curve Unreal draws with by default, whose
-// shoulder takes the color out of what is bright, as film does. One for every
-// pass, so the sky and the ground reach the screen by one curve.
+// them (BakingLab). One for every pass, so the sky and the ground reach the
+// screen by one curve.
 const ACES_IN: mat3x3f = mat3x3f(
   vec3f(0.59719, 0.07600, 0.02840),
   vec3f(0.35458, 0.90834, 0.13383),
@@ -58,9 +57,7 @@ fn most(c: vec3f) -> f32 {
 }
 
 // The toned color the world's passes left at `frag`, encoded, half a step of
-// noise added (screen_finish.wgsl): the screen keeps 8 bits, and a gentle
-// gradient left whole, the sea's toward its horizon, broke into steps one
-// apart, drawn out along it into lines.
+// noise added (screen_finish.wgsl): the screen keeps 8 bits.
 fn finish(toned: vec3f, frag: vec2f) -> vec3f {
   return displayed(toned, vignette(frag)) + (dither(frag) - 0.5) / 255.0;
 }

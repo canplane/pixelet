@@ -1,11 +1,11 @@
 // pxl-render/frame/shader/screen_ray.wgsl
 
-// The eye's rays (pxl-spec-core `ray`), a drawn px each: each px
+// The eye's rays (pxl-engine `ray`), a drawn px each: each px
 // the face its ray entered, painted by paint.wgsl's `paint`, as the ghost's
 // boxes are. A px whose ray met nothing is left to the sky. What lies
 // across each edge and corner of a face — the air, the next cell of a flat
 // run, a cell rising in front of it — is the world's own answer, asked once
-// where the cast stopped (pxl-spec-core `face`) and handed in the px's
+// where the cast stopped (pxl-engine `face`) and handed in the px's
 // own words: a line is drawn along an edge that meets the air, and the face
 // closes in towards an edge or a corner a cell rises across (`creases`). No
 // other px's ray is read, so every px of a cell is painted by the
@@ -20,7 +20,7 @@
 // linear light (`mesh/paint/ground.rs` `look_words`), by val whichever
 // source holds it.
 @group(0) @binding(20) var<storage, read> looks: array<vec4u>;
-// The eye the rays left (pxl-spec-core `eye`): its Q3 steps (`EYE_ORIGIN`),
+// The eye the rays left (pxl-engine `eye`): its Q3 steps (`EYE_ORIGIN`),
 // FRAC_W bits a unit and wrapping, a cell's place on the lattice read off
 // their low bits; whether a ray reports its steps (`EYE_STEPS`); its reach;
 // the axes and tangents each ray's direction is formed of; and where each
@@ -36,7 +36,7 @@ fn eye_vec3(k: u32) -> vec3f {
 }
 
 // The ray along a px's aim (`aim`), as the cast formed it
-// (pxl-shader `eye_ray`): pxl-spec-core cast.rs `through`'s mirror,
+// (pxl-shader `eye_ray`): pxl-engine cast.rs `through`'s mirror,
 // off the eye's own words, so the t a ray left is laid along the very
 // direction it was cast in.
 fn through(a: vec3f) -> vec3f {
@@ -47,7 +47,7 @@ fn eye_tan() -> vec2f {
   return vec2f(bitcast<f32>(eye_word(EYE_TAN)), bitcast<f32>(eye_word(EYE_TAN + 1u)));
 }
 
-// Where this frame's rays go through their pixels (pxl-spec-core
+// Where this frame's rays go through their pixels (pxl-engine
 // `eye::JITTER`), off their middles, in drawn pixels.
 fn eye_jitter() -> vec2f {
   return vec2f(bitcast<f32>(eye_word(EYE_JITTER)), bitcast<f32>(eye_word(EYE_JITTER + 1u)));
@@ -109,7 +109,7 @@ fn far(l: vec4u) -> vec3f {
   return select(swatch(l), vec3f(unpack2x16unorm(l.z), unpack2x16unorm(l.w).x), frame_low_spec() < 0.5);
 }
 
-struct Drawn {
+struct Appearance {
   rgb: vec3f,
   layers: vec4f,
 };
@@ -119,18 +119,18 @@ struct Drawn {
 // in all four taps; coarser, one color as it reads from afar, the ground's
 // the mean of the four palette indices its cell folds where its face's own is among
 // them.
-fn drawn(c: vec3u) -> Drawn {
+fn appearance(c: vec3u) -> Appearance {
   let val = ray_val(c.x);
   let l = look(val);
   if (ray_zoom(c.x) >= GROUND_CELL) {
-    return Drawn(swatch(l), vec4f(f32(l.y >> 16u)));
+    return Appearance(swatch(l), vec4f(f32(l.y >> 16u)));
   }
   let fold = ray_palette_indices(c.z);
   if (any(fold == vec4u(val))) {
     let sum = far(look(fold.x)) + far(look(fold.y)) + far(look(fold.z)) + far(look(fold.w));
-    return Drawn(sum * 0.25, vec4f(NO_LAYER));
+    return Appearance(sum * 0.25, vec4f(NO_LAYER));
   }
-  return Drawn(far(l), vec4f(NO_LAYER));
+  return Appearance(far(l), vec4f(NO_LAYER));
 }
 
 // Along `axis`, how far the eye is past the start of the cell of side
@@ -167,7 +167,7 @@ fn hit_of(c: vec2u, d: vec3f) -> Hit {
   let t = bitcast<f32>(c.y);
   let node = floor((e + d * t - n * (0.5 * fill_side(ray_fill(c.x)) * side)) / side) * side - e;
   // A cell kept short of its cube is the box its share fills, inset about
-  // the cube's center (pxl-spec-core cast.rs `fill_bounds`).
+  // the cube's center (pxl-engine cast.rs `fill_bounds`).
   let box = side * fill_side(ray_fill(c.x));
   let corner = node + vec3f(0.5 * (side - box));
   let plane = corner[axis] + select(0.0, box, n[axis] > 0.0);
@@ -210,15 +210,14 @@ fn footprint(p: mat2x3f) -> vec3f {
 // at least that cell: the step is at most `SNAP / cos` of
 // a cell, under one for any field of view short of 150°, however edge on
 // the face is seen. `BEHIND` adds 2^-14 of the distance, where a cell is at
-// least 1/96 of it (pxl-spec-core `grid::CELL`).
+// least 1/96 of it (pxl-engine `grid::CELL`).
 fn behind(h: Hit, p: mat2x3f) -> f32 {
   let f = eye_vec3(EYE_FORWARD);
   return BEHIND + SNAP * max(abs(dot(p[0], f)), abs(dot(p[1], f))) / dot(h.at, f);
 }
 
 // How much a rising edge closes a face `d` cells from it: over one cell
-// and no further. Squared, not smoothstep: a smoothstep sits flat against
-// the wall and reads as a dark strip with an edge rather than a gradient.
+// and no further.
 fn occlusion_of(d: f32) -> f32 {
   let t = 1.0 - clamp(d, 0.0, 1.0);
   return t * t;
@@ -231,16 +230,18 @@ struct Creases {
   ao: f32,
 };
 
-// Off the face's own bits (pxl-spec-core `face`), edge `k` +u, -u, +v, -v
+// Off the face's own bits (pxl-engine `face`), edge `k` +u, -u, +v, -v
 // and corner `k` across edges `k & 1` and `2 + (k >> 1)`. The line: along
 // each crease, an edge that meets the air or one a cell rises across,
 // `frame_edge_width` units wide whatever the cell's size, so cells of
 // every size side by side show one line and perspective alone thins it far
 // off (`line_at`). The closing in: each edge a cell rises across, and each
 // corner one rises across alone, takes its share of what the last left,
-// over a cell.
+// over a cell. Both to the effects' reach, faded alike before it
+// (effect.wgsl `effect_share`).
 fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
-  if (frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) {
+  let share = effect_share(length(h.at), frame_effect_reach());
+  if ((frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) || share <= 0.0) {
     return Creases(0.0, 1.0);
   }
   let u = (h.axis + 1u) % 3u;
@@ -266,8 +267,8 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
       ao *= 1.0 - occlusion_of(length(vec2f(to[a], to[b])));
     }
   }
-  let k = frame_corner_ao() * (1.0 - ao);
-  return Creases(edge, 1.0 - k);
+  let k = frame_corner_ao() * (1.0 - ao) * share;
+  return Creases(edge * share, 1.0 - k);
 }
 
 // The face's texture coordinate: the world's pos, one repeat a unit.
@@ -278,14 +279,14 @@ fn box_uv(h: Hit) -> vec2f {
 // This px's ray, through its middle, as the cast formed it, and what it
 // met: its aim, once, for the ray and for the face's step across a px;
 // the ray's words; and the face it stopped on, as the lit pass reads it
-// (screen_lit.wgsl).
+// (screen_shade.wgsl).
 struct Pixel {
   a: vec3f,
   size: vec2f,
   d: vec3f,
   c: vec3u,
   faces: u32,
-  // A ray that met nothing leaves its first word zero: no stop is void.
+  // A ray that met nothing leaves its first word zero: no hit is void.
   met: bool,
   h: Hit,
 };

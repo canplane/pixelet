@@ -16,17 +16,17 @@ use crate::gpu::api::{
     buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
     view_entry, Format, Gpu, Load, TrackedRenderPass,
 };
-use crate::gpu::generated::Drawn;
+use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::mark::{self, Marks, UploadCopies};
 use crate::gpu::pass::model::{
     draw_model, draw_models, put_instances, DrawUniforms, ModelDraw, DRAW_BYTES,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
 
 /// Impostors span less than the model tier's floor, a camera grid cell
-/// (pxl-spec-core `grid::CELLS_A_RAD`), 45 drawn pixels on a view 2160
+/// (pxl-engine `grid::CELLS_A_RAD`), 45 drawn pixels on a view 2160
 /// CSS pixels high at ratio 2, so this is several times any one's drawn
 /// size.
 const IMPOSTOR_SIZE: u32 = 128;
@@ -35,11 +35,11 @@ const FIT_BYTES: u32 = 16;
 /// glTF's across, up and deep.
 pub type Extent = [f32; 3];
 
-type Baked = (u32, Option<u32>, Extent);
+type BakeKey = (u32, Option<u32>, Extent);
 
 pub struct ImpostorPass {
-    draw: Built,
-    bake: Built,
+    draw: Pipeline,
+    bake: Pipeline,
     uniforms: DrawUniforms,
     fit_uniforms: DrawUniforms,
     atlas: u32,
@@ -48,14 +48,14 @@ pub struct ImpostorPass {
     group: u32,
     /// Center across, center up, half side, half depth.
     fit: [[f32; 4]; DECOR_GROUPS],
-    baked: [Option<Baked>; DECOR_GROUPS],
-    wanted: [Option<Baked>; DECOR_GROUPS],
+    baked: [Option<BakeKey>; DECOR_GROUPS],
+    wanted: [Option<BakeKey>; DECOR_GROUPS],
     marks: Marks,
 }
 
 /// A mark's uniform, as the draw's (`put_instances`), its atlas layer its
 /// group's.
-fn put_mark(buf: &mut [u8], (d, u): &mark::Drawn) {
+fn put_mark(buf: &mut [u8], (d, u): &mark::Draw) {
     put_instances(buf, u, d[1]);
 }
 
@@ -139,10 +139,10 @@ impl ImpostorPass {
         uniforms: &[f32],
         touched: &[u32],
         uploads: &mut Uploads,
-        kept: &UploadCopies,
+        last_frame_uploads: &UploadCopies,
     ) -> bool {
         self.marks
-            .prepare(g, draws, uniforms, touched, uploads, kept)
+            .prepare(g, draws, uniforms, touched, uploads, last_frame_uploads)
     }
 
     /// The marks `prepare_marks` made drawn into `pass`, `frames` their group
@@ -189,7 +189,7 @@ impl ImpostorPass {
         // The groups whose model or extent moved since baked, each once, and
         // whose model has landed: one still landing is due on a later frame,
         // and this one bakes, writes and submits nothing for it.
-        let (mut due, mut len) = ([(0, Baked::default(), (0, 0, 0, 0)); DECOR_GROUPS], 0);
+        let (mut due, mut len) = ([(0, BakeKey::default(), (0, 0, 0, 0)); DECOR_GROUPS], 0);
         for k in 0..DECOR_GROUPS {
             if let Some(w) =
                 self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w))
@@ -224,7 +224,7 @@ impl ImpostorPass {
                 &pass_desc(layer, Load::Clear, self.depth_view, Load::Clear, 1.0, None),
             );
             let mut pass = TrackedRenderPass::new(g, pass);
-            pass.set_pipeline(self.bake.pipeline);
+            pass.set_pipeline(self.bake.id);
             pass.set_bind_group(0, fit_group, &[off]);
             pass.set_bind_group(1, skin, &[]);
             draw_model(&mut pass, &self.bake, model, vertex_cnt, idx_cnt, 1);
@@ -274,36 +274,28 @@ impl ImpostorPass {
         let Some(slots) = self.uniforms.slots() else {
             return;
         };
-        draw_models(
-            pass,
-            &self.draw,
-            self.draw.pipeline,
-            frame,
-            slots,
-            draws,
-            |d| {
-                self.baked.get(d[1] as usize).copied().flatten()?;
-                Some(ModelDraw {
-                    groups: [self.group, uploads.group_of(d[0])?],
-                    mesh: None,
-                    instances: d[2],
-                })
-            },
-        );
+        draw_models(pass, &self.draw, self.draw.id, frame, slots, draws, |d| {
+            self.baked.get(d[1] as usize).copied().flatten()?;
+            Some(ModelDraw {
+                groups: [self.group, uploads.group_of(d[0])?],
+                mesh: None,
+                instances: d[2],
+            })
+        });
     }
 
     /// The impostors the GPU generated, an indirect draw a group whose layer
-    /// is drawn (pxl-spec-core `generated::drawn`, a group's impostors its region
+    /// is drawn (pxl-content `generation::drawn`, a group's impostors its region
     /// `2·group + 1`).
     pub fn draw_generated(
         &self,
         pass: &mut TrackedRenderPass,
-        generated: Option<Drawn>,
+        generated: Option<IndirectDraw>,
         groups: u32,
         frame: u32,
     ) {
         let Some(d) = generated else { return };
-        pass.set_pipeline(self.draw.pipeline);
+        pass.set_pipeline(self.draw.id);
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(2, self.group, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);

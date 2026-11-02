@@ -3,8 +3,7 @@
 //! Where each marker's bitmap lies in the atlas, one texture, so all markers draw in one instanced
 //! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth
 //! doubles the atlas and replays each sprite's `Paint`. Only dirty rectangles
-//! are uploaded: a whole atlas re-uploaded each frame costs a phone many
-//! frames' time (~100 ms, measured at 4096 a side).
+//! are uploaded.
 
 /// Slot rectangles are in canvas orientation (v0 top < v1 bottom) and move on a
 /// repack, so read them on every use; the slot index is what stays.
@@ -43,8 +42,7 @@ const HEIGHT_BUCKET: u32 = 16;
 
 pub const INIT_SIZE: u32 = 1024;
 
-/// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen markers (one per
-/// places cell); past the limit a sprite waits unshown (`NO_SLOT`).
+/// 2048 px RGBA is 16 MiB plus mips; past the limit a sprite waits unshown (`NO_SLOT`).
 const MAX_SIZE: u32 = 2048;
 
 /// Transparent margin so a linear or mipmapped sample cannot reach a neighbor.
@@ -331,8 +329,7 @@ impl Atlas {
         (slots, ws, hs)
     }
 
-    /// Halves the atlas while every live sprite still fits. Without it an atlas one
-    /// dense view grew stays that large, canvas and texture, for a dozen sprites.
+    /// Halves the atlas while every live sprite still fits.
     pub fn compact(&mut self) -> bool {
         let mut changed = false;
         while self.size > INIT_SIZE {

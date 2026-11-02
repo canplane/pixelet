@@ -2,10 +2,9 @@
 
 //! The observer of a pass both the eye and the shadow map take (observer.rs
 //! `Observer`), chosen by the head the pass is handed: one entry a pass, so
-//! a pass is one module whichever casts it (beam.rs, raster.rs). A walk the
-//! shadow map's alone tells what it asks of (pxl-spec-core `cast::Asked`)
-//! takes an entry of its own over the same pass (light.rs `light_beam_cs`,
-//! `light_sample_cs`), so the eye's tells nothing and pays nothing for it.
+//! a pass is one module whichever casts it (beam.rs, raster.rs).
+
+use pxl_engine::cast::Detail;
 
 use crate::beam::Words;
 use crate::eye::Eye;
@@ -13,10 +12,9 @@ use crate::observer::{Aim, Level, Observer};
 use crate::light::{self, Map, Head};
 
 /// The observer of a pass both take, read off the head it is handed
-/// (pxl-spec-core `light::HEAD_SIZE`): the shadow map where the head names
-/// one, else the eye, whose head is all zero. Each call is its observer's;
-/// no walk asks which, so the walk is one in the module whichever casts.
-/// Both walk the same world, its palette indices too, which only what a stop is drawn
+/// (pxl-engine `light::HEAD_SIZE`): the shadow map where the head names
+/// one, else the eye, whose head is all zero. Each call is its observer's.
+/// Both walk the same world, its palette indices too, which only what a hit is drawn
 /// by holds, and the map's word leaves out (light.rs `Map::word`).
 pub(crate) struct PassObserver<'a> {
     eye: &'a Eye,
@@ -114,6 +112,14 @@ impl Observer for PassObserver<'_> {
         }
     }
 
+    fn hand_at(&self, idx: u32) -> u32 {
+        if self.light {
+            self.map.hand_at(idx)
+        } else {
+            self.eye.hand_at(idx)
+        }
+    }
+
     fn origin_of<W: Words + ?Sized>(&self, w: &W, base: u32) -> [i32; 3] {
         if self.light {
             self.map.origin_of(w, base)
@@ -151,6 +157,22 @@ impl Observer for PassObserver<'_> {
             self.map.cell_at(c)
         } else {
             self.eye.cell_at(c)
+        }
+    }
+
+    fn corner_detail(&self, c: [u32; 2]) -> Detail {
+        if self.light {
+            self.map.corner_detail(c)
+        } else {
+            self.eye.corner_detail(c)
+        }
+    }
+
+    fn cell_detail(&self, c: [u32; 2]) -> Detail {
+        if self.light {
+            self.map.cell_detail(c)
+        } else {
+            self.eye.cell_detail(c)
         }
     }
 
@@ -216,6 +238,14 @@ impl Observer for PassObserver<'_> {
         }
     }
 
+    fn detail(&self, at: Point) -> Detail {
+        if self.light {
+            self.map.detail(at.slot)
+        } else {
+            self.eye.detail(at.tan)
+        }
+    }
+
     fn raster_layout(&self) -> ([i32; 3], (bool, [f32; 2])) {
         if self.light {
             self.map.raster_layout()
@@ -229,6 +259,14 @@ impl Observer for PassObserver<'_> {
             self.map.needs(w, level, at)
         } else {
             self.eye.needs(w, level, at)
+        }
+    }
+
+    fn take<W: Words + ?Sized>(&self, w: &W, level: Level, id: [u32; 2]) -> [u32; 2] {
+        if self.light {
+            self.map.take(w, level, id)
+        } else {
+            self.eye.take(w, level, id)
         }
     }
 }

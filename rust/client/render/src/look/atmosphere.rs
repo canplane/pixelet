@@ -4,8 +4,7 @@
 //! from them, and every light through the air is read off those tables. Bruneton and Hillaire (EGSR 2020) with Unreal's
 //! Earth; km, and coefficients per km.
 
-/// The map's sphere, so ground and horizon are one; the literature's 6,360 km
-/// is 0.3% off, which the scattering does not see.
+/// The map's sphere, so ground and horizon are one.
 use pxl_spec::space::coord::globe;
 
 pub const BOTTOM_RADIUS_KM: f64 = globe::MERCATOR_RADIUS_KM;
@@ -13,7 +12,7 @@ pub const TOP_RADIUS_KM: f64 = BOTTOM_RADIUS_KM + 100.0;
 pub const RAYLEIGH_SCATTERING: [f64; 3] = [5.802e-3, 13.558e-3, 33.1e-3];
 pub const RAYLEIGH_SCALE_HEIGHT_KM: f64 = 8.0;
 /// The day's weather: Koschmieder's visual range, 30-50 km on a clear day; the
-/// aerosol takes what Rayleigh leaves of it at sea level. Unreal's gave 179 km.
+/// aerosol takes what Rayleigh leaves of it at sea level.
 pub const VISUAL_RANGE_KM: f64 = 40.0;
 /// What the aerosol scatters of what it takes: Unreal's (3.996e-3 of 4.44e-3),
 /// OPAC's continental haze at green (Hess, Koepke and Schult, 1998).

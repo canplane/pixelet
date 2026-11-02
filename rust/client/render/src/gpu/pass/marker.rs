@@ -4,8 +4,7 @@
 //! each as its marker's number, into a target of their own, then the markers whose
 //! number is the one at their anchor, with the world's depth attached
 //! read-only (marker.wgsl). The atlas is premultiplied so its mips
-//! filter without a dark fringe; without mips a marker minified slightly against
-//! the supersampled atlas crawls with every camera micro-movement.
+//! filter without a dark fringe.
 
 use crate::frame::draw::{uniform_of, PIPELINE_MARKER};
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
@@ -20,7 +19,7 @@ use crate::gpu::atlas::shelf::{Atlas, Paint, SlotSet};
 use crate::gpu::atlas::{AtlasPainter, DisplayList, ATLAS_SCALE};
 use crate::gpu::mip::{mip_levels, MipPass};
 use crate::gpu::pass::model::DrawUniforms;
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::{Draws, Uploads};
@@ -87,8 +86,7 @@ fn pill(p: &mut DisplayList, text: &str, fill: u32, ink: u32, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
-/// The uncovered corners read as a pixel-art rounded corner; a real arc would
-/// anti-alias against nearest sampling.
+/// The uncovered corners read as a pixel-art rounded corner.
 fn notched_rect(p: &mut DisplayList, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.rect(x + notch, y, (w - notch * 2.0).max(0.0), h, fill);
     p.rect(x, y + notch, w, (h - notch * 2.0).max(0.0), fill);
@@ -142,8 +140,8 @@ struct Set {
 }
 
 pub struct MarkerPass {
-    built: Built,
-    region_built: Built,
+    pipeline: Pipeline,
+    region_pipeline: Pipeline,
     /// The regions' numbers and their depth, the canvas's size.
     numbers: u32,
     numbers_view: u32,
@@ -177,11 +175,11 @@ impl MarkerPass {
             None,
             1,
         );
-        let built = pipelines.build(g, PIPELINE_MARKER, g.canvas());
-        let frame_group = g.bind_group(built.layouts[0], &[buf_entry(0, frame_buf)]);
+        let pipeline = pipelines.build(g, PIPELINE_MARKER, g.canvas());
+        let frame_group = g.bind_group(pipeline.layouts[0], &[buf_entry(0, frame_buf)]);
         MarkerPass {
-            built,
-            region_built: pipelines.build(g, PIPELINE_MARKER_REGION, Format::rgba8unorm),
+            pipeline,
+            region_pipeline: pipelines.build(g, PIPELINE_MARKER_REGION, Format::rgba8unorm),
             numbers: 0,
             numbers_view: 0,
             regions: 0,
@@ -229,7 +227,7 @@ impl MarkerPass {
             );
             self.atlas_view = g.view(self.atlas, false, 0, self.levels, 0, 1);
             self.atlas_group = g.bind_group(
-                self.built.layouts[3],
+                self.pipeline.layouts[3],
                 &[
                     view_entry(0, self.atlas_view),
                     sampler_entry(1, self.sampler),
@@ -364,8 +362,8 @@ impl MarkerPass {
                 };
                 release(set.group);
                 release(set.region_group);
-                set.group = bound(self.built.layouts[2], self.numbers_view);
-                set.region_group = bound(self.region_built.layouts[2], depth);
+                set.group = bound(self.pipeline.layouts[2], self.numbers_view);
+                set.region_group = bound(self.region_pipeline.layouts[2], depth);
                 (set.upload, set.depth, set.numbers) = (upload, depth, self.numbers_view);
             }
         }
@@ -380,8 +378,13 @@ impl MarkerPass {
         let (view, proj, px_per_unit) = (self.view, self.proj, self.px_per_unit);
         let cnt = placed().take(SETS).count() as u32;
         let mut before = 0;
-        self.uniforms
-            .write(g, self.built.layouts[1], cnt, placed(), true, |buf, d| {
+        self.uniforms.write(
+            g,
+            self.pipeline.layouts[1],
+            cnt,
+            placed(),
+            true,
+            |buf, d| {
                 let mut s = [0.0f32; MARKER_FLOATS];
                 s[marker::VIEW..marker::VIEW + 16].copy_from_slice(&view);
                 s[marker::PROJ..marker::PROJ + 16].copy_from_slice(&proj);
@@ -391,7 +394,8 @@ impl MarkerPass {
                 s[marker::BEFORE] = before as f32;
                 buf[..word_bytes(MARKER_FLOATS) as usize].copy_from_slice(bytes(&s));
                 before += d[1];
-            });
+            },
+        );
     }
 
     pub fn draw(
@@ -431,7 +435,7 @@ impl MarkerPass {
                 stamp.pass(),
             ),
         );
-        g.set_pipeline(pass, self.region_built.pipeline);
+        g.set_pipeline(pass, self.region_pipeline.id);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         for (k, (set, d)) in self.sets.iter().zip(placed()).enumerate() {
             let (group, off) = slots.at(k as u32);
@@ -444,7 +448,7 @@ impl MarkerPass {
             encoder,
             &pass_desc(color, Load::Load, depth, Load::ReadOnly, 0.0, stamp.pass()),
         );
-        g.set_pipeline(pass, self.built.pipeline);
+        g.set_pipeline(pass, self.pipeline.id);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 3, self.atlas_group, &[]);
         for (k, (set, d)) in self.sets.iter().zip(placed()).enumerate() {

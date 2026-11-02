@@ -3,17 +3,15 @@
 //! Executes the scheduler's draw lists on the device, in the kernel's own turn,
 //! in the device's depth (`mat4::perspective`).
 
+use pxl_content::generation::GROUPS;
+use pxl_engine::light::TILE as LIGHT_TILE;
+use pxl_engine::ray;
+use pxl_engine::{beam, eye};
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec_core::clipmap::{FRESH_WORDS, HANDED};
-use pxl_spec_core::eye;
-use pxl_spec_core::generated::GROUPS;
-use pxl_spec_core::light::TILE as LIGHT_TILE;
-use pxl_spec_core::ray;
-use pxl_spec_core::way;
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -29,8 +27,8 @@ use crate::frame::draw::{
 };
 use crate::frame::shader::record::{PIPELINE_SCREEN_GATE, PIPELINE_SKY};
 use crate::frame::shader::word::frame::{
-    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, GIZMO, JITTER, LIGHT_VIEW_PROJ,
-    LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_RADIUS_NDC, SHADOW_STRENGTH,
+    CAMERA_POS, CELL, CORNER_AO, EDGE_STRENGTH, EDGE_WIDTH, EFFECT_REACH, GIZMO, JITTER,
+    LIGHT_VIEW_PROJ, LOW_SPEC, MAP, RIM_INTENSITY, SCREEN, SHADOW_MOON, SHADOW_STRENGTH,
     SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::{
@@ -48,7 +46,6 @@ use crate::gpu::atlas::shelf::Atlas;
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
 use crate::gpu::finish::Finish;
-use crate::gpu::generated::DecorFrame;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::mip::MipPass;
 use crate::gpu::pack::Pack;
@@ -60,11 +57,11 @@ use crate::gpu::pass::mark::UploadCopies;
 use crate::gpu::pass::marker::MarkerPass;
 use crate::gpu::pass::model::{frame_layout, on_skins_lost, FrameGroups, Stage};
 use crate::gpu::pass::preview::Preview;
-use crate::gpu::pass::skinned::SkinnedPass;
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pass::skinned_mesh::SkinnedPass;
+use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::propagate::{self, Propagate};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::{RayCounts, RaysPass};
-use crate::gpu::reach::{self, Reach};
+use crate::gpu::ray::{Cast, GroundBricks, RayCounts, RaysPass};
 use crate::gpu::read::Read;
 use crate::gpu::resolve::Resolve;
 use crate::gpu::shadow::{self, Shadow};
@@ -119,11 +116,10 @@ pub struct FrameInput<'a> {
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
     /// The draws among `BESIDE`'s the kernel bounds, by their handles
-    /// (pxl-kernel region.rs `drawn`): theirs moving draws the frame whole no
-    /// more, each that changed marking the tiles it covers and shades where
-    /// it was and where it is, as every listed draw outside `BESIDE` does
-    /// (gpu/pass/mark.rs).
-    pub bounded: &'a [u32],
+    /// (pxl-kernel region.rs `drawn`): each that changed marks the tiles it
+    /// covers and shades where it was and where it is, as every listed draw
+    /// outside `BESIDE` does (gpu/pass/mark.rs).
+    pub bounded_draws: &'a [u32],
     /// Whether what the kernel animates stepped this turn: it wakes the turn
     /// at its own steps, so the resolve asks no frame after it.
     pub animated: bool,
@@ -195,134 +191,6 @@ pub struct EarthTiles<'a> {
     pub upload: &'a mut Upload,
 }
 
-/// The ground's windows as the GPU holds them (pxl-spec-core `window`,
-/// their bricks in `SLOTS` slots): the bricks to hand it, and where
-/// their cells come back.
-pub struct GroundBricks<'a> {
-    /// Hands each brick whose cells the GPU is to draw to the writer.
-    pub upload: &'a mut TerrainUpload,
-    /// Told each brick whose cells came back, and the fill they are of
-    /// (`CellsBack::ticket`).
-    pub landed: &'a mut CellsLanded<'a>,
-    /// The ways' pool's child groups at first (pxl-kernel domain/scene/param.rs
-    /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
-    /// to `way::tree::POOL_CHILD_GROUPS` (`GroundBuffers::grow`).
-    pub pool: u32,
-    /// The child groups each handed brick's scratch holds a tree of at first
-    /// (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_FIRST_BYTES`): it
-    /// doubles each time a build outgrows it, up to
-    /// `way::tree::BRICK_CHILD_GROUPS` (`GroundBuffers::grow_scratch`).
-    pub scratch: u32,
-    /// A read's records' room at first, in bytes: every read's is doubled
-    /// past a brick's records that outgrew it, up to
-    /// `way::tree::RECORDS_BYTES` (`GroundBuffers::record_bytes`).
-    pub records: u32,
-}
-
-/// How a brick's fill landed: its cells are back in every case.
-pub enum Resident<'a> {
-    /// Its ways' tree built: the child groups it holds, their count first, a
-    /// record each (pxl-spec-core `way::tree::lay`).
-    Built(&'a [u32]),
-    /// To be filled again, for want of room the renderer grows: its tree not
-    /// built, the pool or the scratch it was built in having run out
-    /// (`Short`), or built but its records past its read's room, the tree
-    /// the refill frees.
-    Again,
-    /// Its tree refused, the pool or the scratch at its most having run out,
-    /// or the brick past its own (`way::tree::past`): the brick stays
-    /// absent.
-    Refused,
-}
-
-/// The read-backs a brick's cells and its ways' records come back in
-/// (gpu/ray/ground.rs `GroundBuffers::read_back`): two frames' fills, so one
-/// frame's mappings are still landing while the next is copied.
-pub const READS: u32 = 2 * HANDED;
-
-/// The pool's records the renderer keeps on the heap at their worst, in
-/// the buddy's blocks: every read's room at a brick's most
-/// (`GroundBuffers::room`), each a power of two as the heap gives it.
-pub const RECORD_ROOMS_BYTES: u64 =
-    READS as u64 * (way::tree::RECORDS_BYTES as u64).next_power_of_two();
-
-/// A brick whose cells came back, the fill they are of
-/// (`CellsBack::ticket`), and how its ways' tree landed; what is told may
-/// borrow its caller's for the frame.
-pub type CellsLanded<'a> = dyn FnMut(u32, u32, Resident<'_>) + 'a;
-
-/// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
-/// a drawn pixel of the world surface: the eye, the terrain's tiles as the
-/// GPU holds them, and what is placed.
-pub struct Cast<'a> {
-    /// The eye (pxl-spec-core `eye`; pxl-kernel domain/view/lens.rs `gpu_cast`,
-    /// domain/scene/cast.rs `eye`).
-    pub eye: [u32; eye::WORDS],
-    /// The windows' table (pxl-spec-core `clipmap::Entry`; pxl-kernel
-    /// domain/layer/terrain/clipmap.rs `table`), four words a row: every window's
-    /// entries, the eye's first, from the top's, each the brick it wants, X
-    /// and Y, the slot holding it plus one while present (`Entry::slot`)
-    /// and the fill it is on its way from; then each window's first brick
-    /// (`clipmap::ORIGIN_AT`).
-    pub window: &'a [i32],
-    /// The service area's index (pxl-spec-core `area::Area`), its keys four a
-    /// row (pxl-kernel domain/scene/cast.rs `shards`); read where it lies,
-    /// unwritten until the page replays the turn.
-    pub shards: &'a [[i32; 4]],
-    pub overwrites: Overwrites<'a>,
-    /// The decor the GPU generates and draws over the same world (gpu/generated.rs).
-    pub decor: DecorFrame<'a>,
-    /// Where each actor drawn stands, units from the eye, as its draw is
-    /// placed (frame/draw.rs `Lists::stands`): receivers of the shadow map as
-    /// decor is (pxl-spec-core `light::ACTORS_AT`).
-    pub actors: &'a [[f32; 3]],
-    /// Whether what the eye's cast and the sun's walked and took is counted
-    /// (gpu/ray/tally.rs).
-    pub ray_counts: bool,
-}
-
-/// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
-/// child pointer and data lanes, unwritten until the page replays the turn, the room
-/// either has before it grows, the revision they are at, and the child groups
-/// written since `since`, the revision they were last handed at, by their
-/// first slots (`GpuColumns`).
-pub struct Overwrites<'a> {
-    pub first_child: &'a [u32],
-    pub data: &'a [u32],
-    pub room: usize,
-    pub revision: u32,
-    pub since: u32,
-    pub written: &'a [u32],
-}
-
-/// Where a brick's cells, which the GPU draws, come back to in the
-/// kernel's memory: its columns, levels, laid cells and root
-/// (pxl-spec-core `clipmap::BACK_WORDS`); and the fill's ticket, never 0,
-/// which the kernel is told once this fill's are in.
-#[derive(Clone, Copy, Default)]
-pub struct CellsBack {
-    pub cells: u32,
-    pub ticket: u32,
-}
-
-/// A brick handed to the GPU's fill, the record the ground's windows hand
-/// on (pxl-kernel domain/layer/terrain/clipmap.rs `fill`): its words
-/// (pxl-spec-core `clipmap::fresh`), its four palette indices a cell, its tile's
-/// padded samples, its lines as far as they are written
-/// (`clipmap::LINES_AT`), and where its cells come back to.
-pub struct FreshBrick<'a> {
-    pub fresh: [u32; FRESH_WORDS as usize],
-    pub palette_indices: &'a [u8],
-    pub samples: &'a [i16],
-    pub lines: &'a [u32],
-    pub back: CellsBack,
-}
-
-/// Takes a brick while the turn's stream has room for it.
-pub type TerrainWrite<'a> = dyn FnMut(FreshBrick<'_>) -> bool + 'a;
-
-pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
-
 pub struct FrameOutput {
     /// What the frame turn made: decided where each preview is (no device or
     /// surface, not admitted, dropped from the stream, and the cast's kind).
@@ -338,11 +206,14 @@ pub struct FrameStat {
     /// read's, `gpu_busy_ms` the time they ran, those that overlap counted
     /// once, the frame's GPU time where its passes overlap (`Gpu::gpu_busy_ms`),
     /// `gpu_px` the world's pixels the frame it timed drew, what the spans
-    /// were measured over, and `gpu_frame` that frame's number (`frame` as it
-    /// was); else they are 0, as nothing was measured with this frame.
+    /// were measured over, `gpu_lattice` the camera grid's lattice its eye
+    /// laid (pxl-engine `beam::Grid::lattice`), 0 where it had none, and
+    /// `gpu_frame` that frame's number (`frame` as it was); else they are 0,
+    /// as nothing was measured with this frame.
     pub gpu_read: bool,
     pub gpu_busy_ms: f64,
     pub gpu_px: f64,
+    pub gpu_lattice: f64,
     pub gpu_frame: f64,
     /// This frame's number, from 1, a frame the renderer encoded each; 0
     /// where it stood and drew nothing.
@@ -357,8 +228,8 @@ pub struct FrameStat {
     pub draws: DrawStats,
     pub gpu_spans: [f64; GPU_SPAN_NAMES],
     /// Why the light's map cast this frame, a bit each in LIGHT_MOVED's
-    /// order (gpu/ray/cast.rs `light_why`), and the boxes decor's slots were
-    /// marked by to generate again (gpu/generated.rs `marked_boxes`): 0
+    /// order (gpu/ray/cast.rs `light_moved`), and the boxes decor's slots were
+    /// marked by to generate again (gpu/generator.rs `marked_boxes`): 0
     /// where it cast none or marked none.
     pub light_moved: f64,
     pub decor_boxes: f64,
@@ -367,29 +238,21 @@ pub struct FrameStat {
     pub rays: Option<RayCounts>,
 }
 
-/// The passes drawn at the world's own pixels, whose cost goes with them:
-/// its occlusion, its drawing, its gathering over frames and its cast. The
-/// air's
-/// tables, the fill and the decor's generation, the thumbnails, markers and debug
-/// cost what they cost at any resolution.
-const PER_PX: [GpuSpanName; 11] = [
-    GpuSpanName::ao,
-    GpuSpanName::world,
-    GpuSpanName::world_rest,
-    GpuSpanName::resolve,
-    GpuSpanName::cast,
-    GpuSpanName::beam,
-    GpuSpanName::cell,
-    GpuSpanName::sample,
-    GpuSpanName::sraster,
-    GpuSpanName::px,
-    GpuSpanName::miss,
-];
-
-/// A frame's GPU time in the passes drawn at the world's pixels (`PER_PX`):
-/// what its drawn resolution can buy back.
+/// A frame's GPU time in the spans that run threads over the world's drawn
+/// pixels (span.json `per_px`, `GpuSpanName::PER_PX`): what its drawn
+/// resolution can buy back.
 pub fn px_ms(spans: &[f64]) -> f64 {
-    PER_PX.iter().map(|&s| spans[s as usize]).sum()
+    GpuSpanName::PER_PX.iter().map(|&s| spans[s as usize]).sum()
+}
+
+/// A frame's GPU time in the spans that run over the camera grid's lattice,
+/// its corners or its cells (span.json `per_cell`, `GpuSpanName::PER_CELL`):
+/// what a coarser lattice can buy back.
+pub fn cell_ms(spans: &[f64]) -> f64 {
+    GpuSpanName::PER_CELL
+        .iter()
+        .map(|&s| spans[s as usize])
+        .sum()
 }
 
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, the screen's lens
@@ -415,6 +278,20 @@ fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4) {
 
 static RENDERER: Global<Option<Renderer>> = Global::new();
 
+/// The renderer's pipelines while their modules are made, a few a turn,
+/// before it is (`render_frame`); taken into it once all are.
+static MAKING: Global<Option<Pipelines>> = Global::new();
+
+/// How much of what the renderer makes before its first frame is made, 0 to
+/// 1 (`Pipelines::share`): what the shell's progress bar shows. 0 with no
+/// device, 1 once it draws.
+pub fn renderer_progress() -> f64 {
+    if let Some(r) = RENDERER.get(|| None).as_ref() {
+        return r.pipelines.share();
+    }
+    MAKING.get(|| None).as_ref().map_or(0.0, Pipelines::share)
+}
+
 /// Each light's step, the sun's first: the height it moves before the sky as
 /// drawn moves a display level, or out of reach before it comes into reach
 /// (gpu/atmosphere.rs `steps`); 0, the least, before any has landed; none
@@ -436,12 +313,13 @@ static DRAWN_FRAMES: Global<f64> = Global::new();
 /// The number the frame being made takes as it is encoded, which a pass
 /// that counts it names its counts by (gpu/ray/tally.rs `Frame`): a frame
 /// that stands takes none, and none counts.
-pub(crate) fn next_frame() -> f64 {
+fn next_frame() -> f64 {
     *DRAWN_FRAMES.get(|| 0.0) + 1.0
 }
 
 pub fn on_gpu_lost() {
     RENDERER.set(None);
+    MAKING.set(None);
     on_skins_lost();
     on_device_lost();
     uploads().lose();
@@ -465,25 +343,26 @@ pub struct Renderer {
     /// The spans' queries (`Gpu::spans`); 0 where the device keeps no
     /// timestamps, and no frame is timed.
     query_set: u32,
-    /// The world's pixels and the number of the frame whose spans' read is
-    /// on its way: one read at most is (`Gpu::submit_frame`).
-    read_px: f64,
-    read_frame: f64,
+    /// The world's pixels, the camera grid's lattice and the number of the
+    /// frame whose spans each read on its way timed (`Gpu::submit_frame`).
+    read_px: [f64; api::READS],
+    read_lattice: [f64; api::READS],
+    read_frame: [f64; api::READS],
     pipelines: Pipelines,
     frame_buf: u32,
     frame: Frame,
     sky_buf: u32,
     sky: [f32; SKY_FLOATS],
-    sky_built: Built,
+    sky_built: Pipeline,
     sky_group: u32,
-    ghost: Built,
+    ghost: Pipeline,
     draws_buf: u32,
     draws_bytes: u32,
     bind_group: u32,
     models: FrameGroups,
     shadow: Shadow,
     /// Whether the shadow map is cast and drawn this frame: the setting on
-    /// (`STAGE_AT::SHADOWS`) and the sun or the moon up (`lay_out`).
+    /// (`STAGE_AT::SHADOWS`) and the sun or the moon up (`prepare`).
     shadows: bool,
     /// Whether the debug pass drew into the screen's depth last frame, so
     /// the finish carries it whole again (gpu/finish.rs).
@@ -498,13 +377,13 @@ pub struct Renderer {
     moon: ImageMap,
     decor: DecorPass,
     impostor: ImpostorPass,
-    skinned: SkinnedPass,
+    skinned_mesh: SkinnedPass,
     location: LocationPass,
     marker: MarkerPass,
     finish: Finish,
     resolve: Resolve,
-    /// The light's map's tiles that changed reached across to the screen's.
-    reach: Reach,
+    /// The light's map's tiles that changed propagated to the screen's.
+    propagate: Propagate,
     debug: DebugPass,
     screen: RaysPass,
     /// The frame's whole input as the last frame drew it (stage 2): the
@@ -516,41 +395,31 @@ pub struct Renderer {
     /// The jitter in the frame's words as the GPU holds them (`JITTER`).
     jitter_written: [f32; 2],
     /// The lists as the last frame drew them, apart from the rest of its
-    /// input: their records, uniforms and uploads (`listed`), and the
+    /// input: their records, uniforms and uploads (`lists_read`), and the
     /// records and uniforms of the draws the kernel does not bound, with
     /// whether an upload they read moved (`beside`, `BESIDE`).
-    listed: Read,
+    lists_read: Read,
     beside: Read,
     /// The sheets' words as last written (`CloudPass::words`).
     clouds_read: Read,
-    /// The gate a frame not drawn whole is drawn through, and its group
-    /// over the tiles' words and uniform (`Resolve::tiles`).
-    gate: Built,
-    gate_group: u32,
-    gate_bound: (u32, u32),
-    /// The light's map's tiles, the light's cast's tiles' side (pxl-spec-core
+    /// The gate a frame not drawn whole is drawn through, over the tiles'
+    /// words and uniform (`Resolve::tiles`).
+    gate: Pipeline,
+    /// The light's map's tiles, the light's cast's tiles' side (pxl-engine
     /// `light::TILE`), claimed the frame they changed alone, as the
     /// map gathers nothing (gpu/tiles.rs).
     light_tiles: Tiles,
     /// The uploads the draws that mark read, as the last frame drew them
     /// (gpu/pass/mark.rs).
-    kept: UploadCopies,
+    last_frame_uploads: UploadCopies,
     /// The frame's words as the last frame drawn drew with them, kept
     /// beside what the marks keep of its draws (`Marks::keep`), and their
     /// buffer, written where the screen's marks draw: a draw as it was is
     /// marked by them, at the jitter it was drawn at (gpu/pass/mark.rs).
     frame_was: Frame,
     frame_was_buf: u32,
-    /// The marks' groups 0 over the frame's words, this frame's and the
-    /// last's (`frame_was`), and the screen tiles' (tile_mark.wgsl), and
-    /// what they were made over.
-    mark_frame_groups: [u32; 2],
-    mark_frame_bound: [u32; 5],
-    /// The same from the light, over the light's frame and the map's tiles.
-    light_mark_group: u32,
-    light_mark_bound: [u32; 4],
-    /// The eye's view-projection as `lay_out` took it, which the sheets are
-    /// seen through (`sheets_mark`) and the reach reads.
+    /// The eye's view-projection as `prepare` took it, which the sheets are
+    /// seen through (`sheets_mark`) and the propagation reads.
     view_proj: Mat4,
     /// What the occlusion was last found from: the frame's words, its own,
     /// the surface and whether decor is generated, the world's depth the
@@ -562,8 +431,10 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    fn new(g: &Gpu, device: Device) -> Renderer {
-        let mut pipelines = Pipelines::new();
+    /// Over `pipelines`, every shader's module made (`Pipelines::make_modules`):
+    /// each of its pipelines asked for here, the cast's and the ground's
+    /// among them (`RaysPass::make`), so none is asked for once it draws.
+    fn new(g: &Gpu, device: Device, mut pipelines: Pipelines) -> Renderer {
         let frame_buf = g.buf(
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -605,38 +476,33 @@ impl Renderer {
         let mut r = Renderer {
             align: device.align,
             query_set,
-            read_px: 0.0,
-            read_frame: 0.0,
+            read_px: [0.0; api::READS],
+            read_lattice: [0.0; api::READS],
+            read_frame: [0.0; api::READS],
             ghost: pipelines.build_world(g, PIPELINE_GHOST_BOX),
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
-            skinned: SkinnedPass::new(g, &mut pipelines, device.align),
+            skinned_mesh: SkinnedPass::new(g, &mut pipelines, device.align),
             location: LocationPass::new(g, &mut pipelines, frame_buf, device.align),
             marker: MarkerPass::new(g, &mut pipelines, frame_buf, device.align),
             finish: Finish::new(g, &mut pipelines),
             resolve: Resolve::new(g, &mut pipelines),
-            reach: Reach::new(g, &mut pipelines),
+            propagate: Propagate::new(g, &mut pipelines),
             debug: DebugPass::new(g, &mut pipelines, frame_buf, sky_buf, device.align),
             screen: RaysPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
-            listed: Read::default(),
+            lists_read: Read::default(),
             beside: Read::default(),
             clouds_read: Read::default(),
             gate: pipelines.build_gate(g, PIPELINE_SCREEN_GATE),
-            gate_group: 0,
-            gate_bound: (0, 0),
-            light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1),
-            kept: UploadCopies::default(),
+            light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1, GpuSpanName::light_mark),
+            last_frame_uploads: UploadCopies::default(),
             frame_was: [0.0; FRAME_FLOATS],
             frame_was_buf: g.buf(
                 word_bytes(FRAME_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            mark_frame_groups: [0; 2],
-            mark_frame_bound: [0; 5],
-            light_mark_group: 0,
-            light_mark_bound: [0; 4],
             view_proj: mat4::new(),
             ao_read: Read::default(),
             pipelines,
@@ -664,8 +530,34 @@ impl Renderer {
             previews: [const { None }; SURFACES],
             order: Vec::new(),
         };
+        r.screen.make(g, &mut r.pipelines);
         r.box_groups(g);
         r
+    }
+
+    /// Whether every pipeline it asked for is made, so it may draw: the
+    /// cloud field baked the first time it is (`CloudPass::bake`).
+    fn made(&mut self, g: &Gpu) -> bool {
+        if !self.pipelines.made() {
+            return false;
+        }
+        self.clouds.bake(g);
+        true
+    }
+
+    /// A mark's group 0 over the frame's words `frame` and `tiles`' words,
+    /// uniform and marks' box (tile_mark.wgsl), for the frame it is made in.
+    fn mark_group(&self, g: &Gpu, frame: u32, tiles: &Tiles) -> u32 {
+        let (words, uniform) = tiles.this_frame();
+        g.bind_group(
+            self.skinned_mesh.mark_layout(),
+            &[
+                buf_entry(0, frame),
+                buf_entry(30, words),
+                buf_entry(31, uniform),
+                buf_entry(32, tiles.marks_box()),
+            ],
+        )
     }
 
     /// What a cell's face is painted by, wherever it is drawn from
@@ -695,15 +587,15 @@ impl Renderer {
         self.screen.set_lit(lit);
     }
 
-    /// `reach` how far the eye draws, in units; none without an eye.
-    fn lay_out(
+    /// `eye_far` how far the eye draws, in units; none without an eye.
+    fn prepare(
         &mut self,
         g: &Gpu,
         width: u32,
         height: u32,
         screen: (u32, u32),
         env: &[f32],
-        reach: f32,
+        eye_far: f32,
     ) {
         let s = stage_lane();
         let (mut m, mut proj) = (mat4::new(), mat4::new());
@@ -727,16 +619,16 @@ impl Renderer {
         // Everything is drawn in the eye's frame; positions are taken against the eye
         // in f64 before they are narrowed.
         let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
-        self.resolve.lay_out(&m, eye_world);
+        self.resolve.prepare(&m, eye_world);
         let eye = [0.0; 3];
         put_ray(&mut self.sky, sky::RAY, &m);
-        self.clouds.lay_out(
+        self.clouds.prepare(
             [eye_world[0], eye_world[1]],
             env,
             s[STAGE_AT::CLOUDS],
-            reach * env[ENV_AIR + 1],
+            eye_far * env[ENV_AIR + 1],
         );
-        self.stars.lay_out(&m, env, width);
+        self.stars.prepare(&m, env, width);
         self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_POLE..ENV_POLE + 3]);
         self.sky[sky::MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
@@ -753,9 +645,12 @@ impl Renderer {
         u[SCREEN] = screen.0 as f32;
         u[SCREEN + 1] = screen.1 as f32;
         u[VIGNETTE] = 1.0;
+        // Every effect's one reach (effect.wgsl `effect_share`).
+        let reach = s[STAGE_AT::EFFECT_REACH];
+        u[EFFECT_REACH] = reach as f32;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         if self.screen_ao {
-            self.ao.lay_out(&proj, width, height);
+            self.ao.prepare(&proj, width, height, reach as f32);
         }
         // The eye's own place on the map, Mercator's longitude and ordinate
         // (its units over the map's radius in them), and that radius.
@@ -765,12 +660,11 @@ impl Renderer {
             (eye_world[1] / MERCATOR_RADIUS_U) as f32,
             MERCATOR_RADIUS_U as f32,
         ]);
-        // The shadow map, as wide as the casters reach, cast from the sun
+        // The shadow map, as wide as the effects reach, cast from the sun
         // where it still reaches the land, else from the moon where it does;
         // none where the shadows are off, or where neither reaches it, as
         // only their direct light reads the map (atmos_light.wgsl
         // `surface_light_in`) and a shadow would show nowhere.
-        let far = s[STAGE_AT::SHADOWS];
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 3]);
         let low = least_height(f64::from(env[ENV_AIR]));
         let light = if f64::from(sun[2]) > low {
@@ -780,28 +674,22 @@ impl Renderer {
         } else {
             None
         };
-        let light = light.filter(|_| far > 0.0);
+        let light = light.filter(|_| s[STAGE_AT::SHADOWS] > 0.0 && reach > 0.0);
         self.shadows = light.is_some();
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_MOON] = if light.is_some_and(|l| l.1) { 1.0 } else { 0.0 };
         if let Some((dir, _)) = light {
-            // Up to a power of two, so the snap grid and the texel move only in steps;
-            // the shadows fade by the casters' own reach.
-            let half_width = libm::exp2(libm::ceil(libm::log2(far)));
-            let shadow_radius_ndc = (far / half_width) as f32;
-            self.shadow.aim(
-                dir,
-                eye,
-                half_width,
-                shadow_radius_ndc,
-                eye_world.map(|v| -v),
-            );
+            // Up to a power of two, so the snap grid and the texel move only in
+            // steps; what a receiver reads within, the effects' reach.
+            let half_width = libm::exp2(libm::ceil(libm::log2(reach)));
+            let reach_ndc = (reach / half_width) as f32;
+            self.shadow
+                .aim(dir, eye, half_width, reach_ndc, eye_world.map(|v| -v));
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
             u[SHADOW_TEXEL] = self.shadow.texel as f32;
-            u[SHADOW_RADIUS_NDC] = shadow_radius_ndc;
         }
 
-        self.atmosphere.lay_out(g, env, reach);
+        self.atmosphere.prepare(g, env, eye_far);
     }
 
     /// A box is one instance shared by `BOX_VERTICES`; a draw's first box is its first
@@ -817,7 +705,7 @@ impl Renderer {
             let Some(buf) = buf else {
                 xpute_kit::bug!(ENOTRECOVERABLE, handle)
             };
-            pass.set_pipeline(self.ghost.pipeline);
+            pass.set_pipeline(self.ghost.id);
             pass.set_bind_group(0, self.bind_group, &[]);
             pass.set_vertex_buf(0, buf, 0, 0);
             pass.set_vertex_buf(1, buf, 0, 0);
@@ -835,12 +723,11 @@ impl Renderer {
             return None;
         }
         let (alt, km_per_u) = (f64::from(env[ENV_AIR]), f64::from(env[ENV_AIR + 1]));
-        let reach = f64::from(w[clouds::REACH]);
+        let dist = f64::from(w[clouds::DRAW_DIST]);
         let mut clip: Option<[f32; 4]> = None;
         for km in [cloud::altocumulus::KM, cloud::cirrus::KM] {
             let h = f64::from(km) - alt;
-            let half =
-                libm::sqrt((reach * reach - h * h).max(0.0)) / km_per_u.max(f64::MIN_POSITIVE);
+            let half = libm::sqrt((dist * dist - h * h).max(0.0)) / km_per_u.max(f64::MIN_POSITIVE);
             if half <= 0.0 {
                 continue;
             }
@@ -869,7 +756,7 @@ impl Renderer {
     /// (gpu/pass/mark.rs `UploadCopies`).
     fn marks_read(&self, draws: &Draws) -> Vec<u32> {
         let mut out = Vec::new();
-        self.skinned
+        self.skinned_mesh
             .marks_read(draws.of(PIPELINE_SKINNED), &mut out);
         self.decor.marks_read(draws, &mut out);
         self.impostor
@@ -886,7 +773,7 @@ impl Renderer {
     fn put_off(&mut self) {
         self.frame_read.forget();
         self.beside.forget();
-        self.kept.forget();
+        self.last_frame_uploads.forget();
     }
 
     /// Whether a draw the kernel does not bound moved since the last
@@ -924,8 +811,7 @@ impl Renderer {
     /// what moves on its own — the actors, whose clips play, the clouds,
     /// which the wind carries, the location indicator, the ghosts, the markers, the gizmos
     /// (stage 2, `frame_read`). The rays hold the world as the cast left
-    /// it, so the frame draws it again off them rather than off an image of
-    /// it: that costs what laying an image would.
+    /// it, so the frame draws it again off them.
     fn frame(
         &mut self,
         g: &Gpu,
@@ -941,7 +827,7 @@ impl Renderer {
                 .iter()
                 .map(|&(mesh, image, extent)| (mesh, image.map(|i| i.0), extent)),
         );
-        self.skinned.set_skins(input.skins);
+        self.skinned_mesh.set_skins(input.skins);
         read.read(input.skins);
         read.mark(self.pack.step(g, &self.mips, input.pack));
         read.mark(self.moon.step(g, &self.mips, input.moon));
@@ -951,11 +837,10 @@ impl Renderer {
         // the cast pass made first, then the bricks' uploads, which take
         // only the room left.
         if cast.is_some() {
-            self.screen.make(g, &mut self.pipelines);
             self.screen
                 .light_made(g, stage_lane()[STAGE_AT::SHADOWS] > 0.0);
         }
-        self.screen.hand(g, &mut self.pipelines, &mut input.ground);
+        self.screen.hand(g, &mut input.ground);
         let tiles = input.earth_tiles;
         read.mark(
             self.atmosphere
@@ -983,28 +868,33 @@ impl Renderer {
             .chain(lists.frees.iter().copied())
             .collect();
         let (records, uniforms, uploads_moved) = take_lists(Some(g), lists);
-        let l = &mut self.listed;
+        let l = &mut self.lists_read;
         l.begin();
         l.mark(uploads_moved);
         let uniforms_moved = l.read(uniforms);
         let lists_moved = l.read(records) | uniforms_moved;
         let listed_same = l.end();
-        let beside_moved = self.beside_moved(records, uniforms, &touched, input.bounded);
+        let beside_moved = self.beside_moved(records, uniforms, &touched, input.bounded_draws);
         read.read(input.previews);
 
         targets(g, world);
         let animated = input.animated;
         // How far the eye draws, as far as the clouds are drawn.
-        let reach = cast
+        let far = cast
             .as_ref()
-            .map_or(0.0, |c| f32::from_bits(c.eye[eye::REACH]));
-        self.lay_out(
+            .map_or(0.0, |c| f32::from_bits(c.eye[eye::FAR]));
+        // The lattice the eye's grid lays (pxl-engine `beam::GRID_LATTICE`),
+        // which a read of this frame was timed on.
+        let lattice = cast
+            .as_ref()
+            .map_or(0.0, |c| f64::from(c.eye[eye::GRID + beam::GRID_LATTICE]));
+        self.prepare(
             g,
             world.width,
             world.height,
             world.screen,
             input.environment,
-            reach,
+            far,
         );
         // The light box the world is cast from, as the map is aimed; none
         // where no shadow is cast.
@@ -1064,7 +954,7 @@ impl Renderer {
         }
         let mut order = core::mem::take(&mut self.order);
         let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        // The camera gizmo listed tints the rays' cells (screen_lit.wgsl `cell_share`).
+        // The camera gizmo listed tints the rays' cells (screen_shade.wgsl `cell_share`).
         self.frame[GIZMO] = if draws.of(PIPELINE_CAMERA_GRID).len() > 0 {
             1.0
         } else {
@@ -1097,7 +987,7 @@ impl Renderer {
         self.decor.prepare(g, &draws, uniforms, lists_moved, b);
         self.impostor
             .prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, lists_moved, b);
-        self.skinned
+        self.skinned_mesh
             .prepare(g, draws.of(PIPELINE_SKINNED), uniforms, lists_moved, b);
         self.location.prepare(g, &draws, uniforms, lists_moved, b);
         self.marker.prepare(
@@ -1117,14 +1007,18 @@ impl Renderer {
         // them, its pixels cast there alone.
         let partial = read.same() && !beside_moved;
         // The tiles of this size, before anything binds them: the claimed
-        // the pixels' cast casts and its samples' raster draws, and those the
-        // rays' screen pass draws, every one where the world's pass has no
-        // gate.
-        self.resolve.tiles.size(g, [world.width, world.height]);
-        let drawn = self.resolve.tiles.drawn();
+        // the pixels' cast casts, its samples' raster draws and the rays'
+        // screen pass draws. The depth's bound of this size with them, which
+        // the world's pass sets where the shadows are cast
+        // (`Propagate::set_bounds`).
+        let size = [world.width, world.height];
+        self.resolve.tiles.size(g, size);
+        if self.shadows {
+            self.propagate.size(g, size);
+        }
+        let drawn = self.resolve.tiles.this_frame();
         let [across, down] = self.resolve.tiles.squares();
-        self.screen
-            .set_tiles(self.resolve.tiles.bound(), drawn, across * down);
+        self.screen.set_tiles(drawn, across * down);
         self.screen.prepare(
             g,
             cast,
@@ -1136,6 +1030,7 @@ impl Renderer {
                 self.shadow.starts(),
             ),
             partial,
+            next_frame(),
         );
         // The frame draws the decor generated, so it reads whether that is on:
         // decor turned off generates nothing and casts no ray again, yet the
@@ -1201,10 +1096,10 @@ impl Renderer {
         // handed. What they read kept as the last frame drew it, made before
         // the frame's commands.
         let (screen_marking, casters_marking) = if gated {
-            let k = &self.kept;
+            let k = &self.last_frame_uploads;
             let t = &touched;
             let actors =
-                self.skinned
+                self.skinned_mesh
                     .prepare_marks(g, draws.of(PIPELINE_SKINNED), uniforms, t, b, k);
             let (decor, decor_casts) = self.decor.prepare_marks(g, &draws, uniforms, t, b, k);
             let impostors =
@@ -1219,84 +1114,65 @@ impl Renderer {
             (false, false)
         };
         let read_uploads = self.marks_read(&draws);
-        self.kept.prepare(g, &read_uploads, b);
+        self.last_frame_uploads.prepare(g, &read_uploads, b);
         // The sun's map: whole where it moved, but where the frame is gated
         // over the world the sun's cast left as it was, through its gate,
-        // the tiles the casters that changed set, or none of it; whole where
-        // the device has no stencil. Which tiles they set the GPU alone
-        // knows, so the map draws its claimed tiles among those of the box
-        // they cover, which the GPU keeps and counts (`Tiles::box_args`).
+        // the tiles the casters that changed set, or none of it. Which tiles
+        // they set the GPU alone knows, so the map draws its claimed tiles
+        // among those of the box they cover, which the GPU keeps and counts
+        // (`Tiles::box_args`).
         // No mark is handed: through the gate the casters mark drawn, and a
         // map drawn whole claims every tile by its uniform, its stamp read
         // by no frame while the map's `claimed_for` is 1 (`Tiles::mark`).
         let cast = self.screen.kind != FrameKind::plain;
-        let map_gated = gated && cast && !self.screen.light_casts() && g.gates();
+        let map_gated = gated && cast && !self.screen.light_casts();
         self.light_tiles.size(g, [shadow::SIZE; 2]);
-        self.light_tiles
-            .mark(g, [shadow::SIZE; 2], (map_gated, false), None);
+        self.light_tiles.mark(g, (map_gated, false), None);
         let map_drawn = self.shadows && (!map_gated || casters_marking);
         // Where the map's tiles changed through its gate, the screen's tiles
-        // whose pixels read them are reached on the GPU (gpu/reach.rs): only
+        // whose pixels read them are propagated to on the GPU
+        // (gpu/propagate.rs): only
         // where a caster marks, which marks the screen's tiles too
         // (`screen_marking`), so the host counts the frame as marked.
-        let reaching = map_drawn && map_gated;
-        if reaching {
-            let spread = reach::spread(SHADOW_MARGIN as f32);
+        let propagating = map_drawn && map_gated;
+        if propagating {
+            let spread = propagate::spread(SHADOW_MARGIN as f32);
             let light = &self.shadow.light_view_proj;
-            self.reach
-                .lay_out(g, &self.view_proj, light, spread, shadow::SIZE);
+            self.propagate
+                .prepare(g, &self.view_proj, light, spread, shadow::SIZE);
         }
         // The tiles marked by what moved where only the listed draws that
         // mark did, however much of the screen they and the tiles still
         // gathering cover; every one where anything else did. What the gate,
         // the resolve and the finish draw.
-        self.resolve
-            .tiles
-            .mark(g, [world.width, world.height], (gated, quiet), sheets);
+        self.resolve.tiles.mark(g, (gated, quiet), sheets);
         if screen_marking {
             let now = self.resolve.tiles.now();
             self.resolve.tiles.marked_in(now);
         }
 
-        // The frame proper changes nothing that outlives it, so one too large
-        // for the stream is dropped whole and the screen keeps the last.
+        // The frame proper changes nothing that outlives it and lets go in it
+        // each object it makes: one too large for the stream is dropped whole,
+        // and the screen keeps the last.
         frame_begin();
         let encoder = g.encoder();
         let mut ctx = RenderContext::new(g, encoder, &mut stamps);
-        // The tiles' words first, before anything reads them; a frame
-        // dropped leaves them as they were, and the next is drawn whole.
+        // The screen's tiles' words first, then its marks, then the light's
+        // words and marks, each before anything reads them; a frame dropped
+        // leaves them as they were, and the next is drawn whole. A span times
+        // from its first pass to its last (gpu/api.rs `TimestampWrites`), so
+        // the screen's (`mark`), the light's (`light_mark`) and the
+        // propagation's (`propagate`) passes are each encoded together.
         self.resolve.tiles.dispatch_marks(&mut ctx);
-        if map_drawn {
-            self.light_tiles.dispatch_marks(&mut ctx);
-        }
         if screen_marking {
             // A draw as it is marked by this frame's words, as it was by the
             // last's: each at the jitter it is or was drawn at.
             g.write_buf(self.frame_was_buf, 0, bytes(&self.frame_was));
+            // The marks' groups 0 over the frame's words, this frame's and
+            // the last's, and the screen tiles' (tile_mark.wgsl).
             let tiles = &self.resolve.tiles;
-            let (words, uniform) = tiles.bound();
-            let bound = [
-                self.frame_buf,
-                self.frame_was_buf,
-                words,
-                uniform,
-                tiles.marks_box(),
-            ];
-            if bound != self.mark_frame_bound {
-                for (k, frame) in [bound[0], bound[1]].into_iter().enumerate() {
-                    release(self.mark_frame_groups[k]);
-                    self.mark_frame_groups[k] = g.bind_group(
-                        self.skinned.mark_layout(),
-                        &[
-                            buf_entry(0, frame),
-                            buf_entry(30, bound[2]),
-                            buf_entry(31, bound[3]),
-                            buf_entry(32, bound[4]),
-                        ],
-                    );
-                }
-                self.mark_frame_bound = bound;
-            }
+            let frames =
+                [self.frame_buf, self.frame_was_buf].map(|frame| self.mark_group(g, frame, tiles));
             // The world's depth attached read only, its stencil kept: the
             // marks test nothing and write no color.
             let desc = pass_desc(
@@ -1307,60 +1183,49 @@ impl Renderer {
                 0.0,
                 ctx.stamp(GpuSpanName::mark).pass(),
             )
-            .kept();
+            .load_stencil();
             let pass = g.pass(ctx.encoder, &desc);
             let mut pass = TrackedRenderPass::new(g, pass);
-            let frames = self.mark_frame_groups;
-            self.skinned.draw_marks(&mut pass, frames, b);
+            self.skinned_mesh.draw_marks(&mut pass, frames, b);
             self.decor.draw_marks(&mut pass, frames, b, false);
             self.impostor.draw_marks(&mut pass, frames);
             self.location.draw_marks(&mut pass, frames);
             pass.end();
+            frames.into_iter().for_each(release);
+        }
+        if map_drawn {
+            self.light_tiles.dispatch_marks(&mut ctx);
         }
         // The same from the light, where the map is drawn through its gate:
         // the map's tiles the casters' shadows change, their words set by
-        // their drawn selves, which the reach reads.
-        if reaching {
+        // their drawn selves, which the propagation reads.
+        if propagating {
             let (light_frame, map) = self.shadow.frame_and_map();
-            let tiles = &self.light_tiles;
-            let (words, uniform) = tiles.bound();
-            let bound = [light_frame, words, uniform, tiles.marks_box()];
-            if bound != self.light_mark_bound {
-                release(self.light_mark_group);
-                self.light_mark_group = g.bind_group(
-                    self.skinned.mark_layout(),
-                    &[
-                        buf_entry(0, bound[0]),
-                        buf_entry(30, bound[1]),
-                        buf_entry(31, bound[2]),
-                        buf_entry(32, bound[3]),
-                    ],
-                );
-                self.light_mark_bound = bound;
-            }
+            let group = self.mark_group(g, light_frame, &self.light_tiles);
             let desc = pass_desc(
                 0,
                 Load::Clear,
                 map,
                 Load::ReadOnly,
                 1.0,
-                ctx.stamp(GpuSpanName::mark).pass(),
+                ctx.stamp(GpuSpanName::light_mark).pass(),
             )
-            .kept();
+            .load_stencil();
             let pass = g.pass(ctx.encoder, &desc);
             let mut pass = TrackedRenderPass::new(g, pass);
             // The light's frame has no jitter, and stands in a frame whose
             // map is drawn through its gate: as a draw is and as it was, one.
-            let frames = [self.light_mark_group; 2];
-            self.skinned.draw_marks(&mut pass, frames, b);
+            let frames = [group; 2];
+            self.skinned_mesh.draw_marks(&mut pass, frames, b);
             self.decor.draw_marks(&mut pass, frames, b, true);
             pass.end();
+            release(group);
             // The box they cover counted into the gate's draw.
             self.light_tiles.dispatch_box_args(&mut ctx);
         }
-        if reaching {
+        if propagating {
             let depth = world.depth_only_view;
-            self.reach
+            self.propagate
                 .dispatch(&mut ctx, depth, &self.light_tiles, &self.resolve.tiles);
         }
         self.screen.dispatch(&mut ctx);
@@ -1375,7 +1240,7 @@ impl Renderer {
             self.decor
                 .draw_generated(&mut pass, self.screen.generated(), b, Stage::Depth, light);
             self.decor.draw(&mut pass, &draws, b, Stage::Depth, light);
-            self.skinned.draw(
+            self.skinned_mesh.draw(
                 &mut pass,
                 draws.of(PIPELINE_SKINNED),
                 b,
@@ -1414,10 +1279,7 @@ impl Renderer {
         // number into their stencil, and every draw after it passes there
         // alone (`Stencil`). The stencil kept but where the numbers come
         // round, cleared then; a frame drawn whole clears it, its number 0.
-        // Without the stencil the gate passes every pixel, so the world's pass
-        // is drawn whole, the rest by tile all the same.
-        let gating = gated && g.gates();
-        let load = if gating { Load::Load } else { Load::Clear };
+        let load = if gated { Load::Load } else { Load::Clear };
         let desc = pass_desc(
             world.color_view,
             load,
@@ -1426,24 +1288,21 @@ impl Renderer {
             0.0,
             ctx.stamp(GpuSpanName::world).pass(),
         );
-        let (desc, number) = self.resolve.tiles.gate(desc, gating);
+        let (desc, number) = self.resolve.tiles.gate(desc, gated);
         let pass = g.pass(encoder, &desc);
         let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(number) = number {
             pass.set_stencil_reference(number);
-            let tiles = self.resolve.tiles.bound();
-            if tiles != self.gate_bound {
-                release(self.gate_group);
-                self.gate_group = g.bind_group(
-                    self.gate.layouts[0],
-                    &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
-                );
-                self.gate_bound = tiles;
-            }
+            let tiles = self.resolve.tiles.this_frame();
+            let group = g.bind_group(
+                self.gate.layouts[0],
+                &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
+            );
             let [across, down] = self.resolve.tiles.squares();
-            pass.set_pipeline(self.gate.pipeline);
-            pass.set_bind_group(0, self.gate_group, &[]);
+            pass.set_pipeline(self.gate.id);
+            pass.set_bind_group(0, group, &[]);
             pass.draw(6, across * down, 0, 0);
+            release(group);
         }
         // The world that stands while the eye does: what the occlusion reads.
         self.draw_opaque(&mut pass, b, Stage::Lit);
@@ -1479,7 +1338,7 @@ impl Renderer {
             self.ao.apply(g, &mut pass, drawn, across * down);
         }
         // At the far plane after the opaque world, so only empty pixels run the sky shader.
-        pass.set_pipeline(self.sky_built.pipeline);
+        pass.set_pipeline(self.sky_built.id);
         pass.set_bind_group(0, self.sky_group, &[]);
         pass.draw(3, 1, 0, 0);
         self.stars.draw(&mut pass);
@@ -1487,7 +1346,7 @@ impl Renderer {
         // cumulus, which the wind carries: drawn over the world against its
         // depth, the occlusion not laid over them.
         let frame_group = self.models.frame;
-        self.skinned.draw(
+        self.skinned_mesh.draw(
             &mut pass,
             draws.of(PIPELINE_SKINNED),
             b,
@@ -1505,24 +1364,24 @@ impl Renderer {
         self.decor
             .draw_ghosts(&mut pass, &draws, b, self.models.frame);
         pass.end();
-        let size = [world.width, world.height];
         let squares = self.resolve.tiles.squares();
         // What the listed draws were drawn with this frame, the frame's
         // words with them, kept for the next's marks where they were.
         self.frame_was = self.frame;
-        self.skinned.keep(draws.of(PIPELINE_SKINNED), uniforms);
+        self.skinned_mesh.keep(draws.of(PIPELINE_SKINNED), uniforms);
         self.decor.keep(&draws, uniforms);
         self.impostor.keep(draws.of(PIPELINE_IMPOSTOR), uniforms);
         self.location.keep(&draws, uniforms);
-        self.kept.keep(g, ctx.encoder, &read_uploads, &touched, b);
-        // The depth's bound the reach reads, in the tiles the world's pass
-        // drew: the claimed, or every one without the stencil. None without
-        // the shadows, which the reach runs with alone: the frame they come
-        // on in moves the frame's words (`SHADOW_STRENGTH`), so it is drawn
-        // whole and sets every square before a frame reaches.
+        self.last_frame_uploads
+            .keep(g, ctx.encoder, &read_uploads, &touched, b);
+        // The depth's bound the propagation reads, in the tiles the world's
+        // pass drew, the claimed. None without the shadows, which the
+        // propagation runs with alone: the frame they come on in moves the
+        // frame's words (`SHADOW_STRENGTH`), so it is drawn whole and sets
+        // every square before a frame reaches.
         if self.shadows {
-            self.reach
-                .set_bounds(&mut ctx, world.depth_only_view, size, drawn, squares);
+            self.propagate
+                .set_bounds(&mut ctx, world.depth_only_view, drawn, squares);
         }
         let gathered = self.resolve.draw(&mut ctx, self.frame_buf, world, gated);
         // At the canvas's size, its own span. A frame not drawn whole
@@ -1555,24 +1414,26 @@ impl Renderer {
             .fold(0, |m, (k, _)| m | 1 << k);
         let asked = g.submit_frame(encoder, written);
         release(canvas_view);
-        // The read that landed is the one that was on its way; this frame's
-        // takes its place where one was asked.
-        let gpu_read = q != 0 && g.has_gpu_landed();
-        let (gpu_spans, gpu_busy_ms, gpu_px, gpu_frame) = if gpu_read {
-            (
+        // The read that landed is one that was on its way, of the frame it
+        // timed; this frame's is kept in the read it was asked in.
+        let landed = g.gpu_landed().filter(|_| q != 0);
+        let gpu_read = landed.is_some();
+        let (gpu_spans, gpu_busy_ms, gpu_px, gpu_lattice, gpu_frame) = match landed {
+            Some(r) => (
                 core::array::from_fn(|k| g.gpu_ms(k as u32)),
                 g.gpu_busy_ms(),
-                self.read_px,
-                self.read_frame,
-            )
-        } else {
-            ([0.0; GPU_SPAN_NAMES], 0.0, 0.0, 0.0)
+                self.read_px[r],
+                self.read_lattice[r],
+                self.read_frame[r],
+            ),
+            None => ([0.0; GPU_SPAN_NAMES], 0.0, 0.0, 0.0, 0.0),
         };
         let frame = DRAWN_FRAMES.get(|| 0.0);
         *frame += 1.0;
-        if asked {
-            self.read_px = f64::from(world.width) * f64::from(world.height);
-            self.read_frame = *frame;
+        if let Some(r) = asked {
+            self.read_px[r] = f64::from(world.width) * f64::from(world.height);
+            self.read_lattice[r] = lattice;
+            self.read_frame[r] = *frame;
         }
         let skipped = !frame_commit();
         if skipped {
@@ -1582,22 +1443,21 @@ impl Renderer {
                 preview.read.forget();
             }
             read.forget();
-            self.listed.forget();
+            self.lists_read.forget();
             self.beside.forget();
             self.ao_read.forget();
             // The stencil holds what the last drawn frame left: the next
             // gated frame clears it.
             self.resolve.tiles.on_dropped();
             self.light_tiles.on_dropped();
-            self.kept.forget();
+            self.last_frame_uploads.forget();
         } else {
             self.resolve.on_drawn(gated);
             // The jitter's sequence run through once anything moved, as
             // nothing else asks for those frames while it stands. What
             // moves on its own (an actor, the clouds, the location indicator) wakes the
             // turn at its own steps and takes a place of the sequence a
-            // step, held to the pixels about it: it is not hurried to the
-            // display's rate.
+            // step, held to the pixels about it.
             if self.resolve.gathering() && (quiet || !animated) {
                 REDRAW.set(true);
             }
@@ -1618,6 +1478,7 @@ impl Renderer {
         stat.gpu_read = gpu_read;
         stat.gpu_busy_ms = gpu_busy_ms;
         stat.gpu_px = gpu_px;
+        stat.gpu_lattice = gpu_lattice;
         stat.gpu_frame = gpu_frame;
         stat.rays = self.screen.take_counts();
         self.order = order;
@@ -1662,9 +1523,9 @@ impl Renderer {
                 ));
             }
             let preview = self.previews[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
-            preview.skinned.set_skins(&[(model, image)]);
+            preview.skinned_mesh.set_skins(&[(model, image)]);
             preview
-                .skinned
+                .skinned_mesh
                 .prepare(g, core::iter::once(own), uniforms, moved, uploads());
         }
     }
@@ -1720,6 +1581,7 @@ impl Renderer {
             gpu_read: false,
             gpu_busy_ms: 0.0,
             gpu_px: 0.0,
+            gpu_lattice: 0.0,
             gpu_frame: 0.0,
             frame: *DRAWN_FRAMES.get(|| 0.0),
             uploads: b.cnt as f64,
@@ -1727,7 +1589,7 @@ impl Renderer {
             pack_bytes: self.pack.bytes as f64,
             draws: stats,
             gpu_spans,
-            light_moved: f64::from(self.screen.light_why()),
+            light_moved: f64::from(self.screen.light_moved()),
             decor_boxes: f64::from(self.screen.decor_boxes()),
             rays: None,
         }
@@ -1745,27 +1607,27 @@ fn targets(g: &Gpu, s: &mut Surface) {
     }
     let made = s.depth != 0;
     if made && s.width == width && s.height == height && s.screen == screen {
-        s.waited = 0;
+        s.waited_turns = 0;
         return;
     }
     if made {
-        if s.wanted != ((width, height), screen) {
-            s.wanted = ((width, height), screen);
-            s.waited = 0;
+        if s.wanted_sizes != ((width, height), screen) {
+            s.wanted_sizes = ((width, height), screen);
+            s.waited_turns = 0;
         }
-        s.waited += 1;
-        if s.waited < SETTLE_TURNS {
+        s.waited_turns += 1;
+        if s.waited_turns < SETTLE_TURNS {
             REDRAW.set(true);
             return;
         }
     }
-    s.waited = 0;
+    s.waited_turns = 0;
     g.resize(s.handle, screen.0, screen.1);
     for id in s.targets() {
         release(id);
     }
     let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-    s.depth = g.texture(width, height, 1, g.gated_depth(), 1, usage);
+    s.depth = g.texture(width, height, 1, api::GATED_DEPTH, 1, usage);
     s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
     s.depth_only_view = g.depth_only_view(s.depth);
     s.color = g.texture(width, height, 1, WORLD_COLOR, 1, usage);
@@ -1775,10 +1637,10 @@ fn targets(g: &Gpu, s: &mut Surface) {
     // The world's alone holds the cast's rays and its color over frames.
     (s.rays, s.rays_view) = (0, 0);
     (s.history, s.history_view) = ([0; 2], [0; 2]);
-    (s.shown, s.shown_view) = (0, 0);
+    (s.picture, s.picture_view) = (0, 0);
     if s.role == surface_role::WORLD {
-        s.shown = g.texture(screen.0, screen.1, 1, g.canvas(), 1, usage);
-        s.shown_view = g.view(s.shown, false, 0, 1, 0, 1);
+        s.picture = g.texture(screen.0, screen.1, 1, g.canvas(), 1, usage);
+        s.picture_view = g.view(s.picture, false, 0, 1, 0, 1);
         for k in 0..2 {
             s.history[k] = g.texture(width, height, 1, WORLD_COLOR, 1, usage);
             s.history_view[k] = g.view(s.history[k], false, 0, 1, 0, 1);
@@ -1833,8 +1695,31 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
             stat: None,
         };
     }
+    // The renderer is made in three steps before it draws (gpu/pipeline.rs):
+    // its shaders' modules, a few a turn; then it, every pipeline asked for
+    // by WebGPU's async call; then nothing until each is made. A turn before
+    // draws nothing and asks for the next.
     let slot = RENDERER.get(|| None);
-    let r = slot.get_or_insert_with(|| Renderer::new(g, device));
+    if slot.is_none() {
+        let making = MAKING.get(|| None);
+        if making.get_or_insert_with(Pipelines::new).make_modules(g) {
+            let pipelines = making.take().or_bug(Errno::ENOTRECOVERABLE);
+            *slot = Some(Renderer::new(g, device, pipelines));
+        }
+    }
+    if !slot.as_mut().is_some_and(|r| r.made(g)) {
+        carry_edits(&input.cast);
+        take_lists(slot.as_ref().map(|_| g), input.lists);
+        if let Some(r) = slot.as_mut() {
+            r.put_off();
+        }
+        return FrameOutput {
+            kind: FrameKind::unready,
+            redraw: true,
+            stat: None,
+        };
+    }
+    let r = slot.as_mut().or_bug(Errno::ENOTRECOVERABLE);
     uploads().restore(g);
     let (kind, stat) = r.frame(g, world, input);
     FrameOutput {

@@ -1,47 +1,155 @@
 // pxl-render/gpu/ray/ground.rs
 
-//! The windows' bricks on the GPU: each handed brick filled in its turn
+//! The clip levels' bricks on the GPU: each handed brick filled in its turn
 //! (`height_cs`, `way_cs`, `bound_cs`, the ways' tree) and its cells and
 //! its tree's records read back where the CPU looks them up.
 
-use pxl_spec_core::clipmap::{
-    self, BACK_WORDS, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT, FRESH_BRICK,
-    FRESH_WORDS, HANDED, HANDED_WORDS, LEVELS, LINES_AT, PALETTE_AT, SLOTS,
+use pxl_engine::clipmap::{
+    self, BACK_WORDS, BRICK, BRICK_CELLS, BRICK_WORDS, COLUMNS_AT, ELE_AT, FILL_BRICK, FILL_CAP,
+    FILL_WORDS, HANDED_WORDS, LEVELS, LINES_AT, PALETTE_AT, SLOTS,
 };
-use pxl_spec_core::way;
+use pxl_engine::way;
 use xpute_guest::mem::off_of;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use super::RaysPass;
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, dynamic, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE, SHADER_WAY_FREED,
+    compute, dynamic, SHADER_BOUND, SHADER_HEIGHT, SHADER_WAY, SHADER_WAY_FREE, SHADER_WAY_RETURN,
     SHADER_WAY_TREE,
 };
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, room, word_bytes, write_buffer_bytes,
     Gpu, RenderContext, DONE, UNIFORM_ALIGN_MAX,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer;
-use crate::gpu::renderer::{CellsBack, GroundBricks, Resident};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 
-/// The buffers bricks' cells come back through: what a frame hands, a
-/// mapping still out a frame more (pxl-spec-core `clipmap::HANDED`).
-const READS: usize = renderer::READS as usize;
+/// The ground's clip levels as the GPU holds them (pxl-engine
+/// `clipmap`, their bricks in `SLOTS` slots): the bricks to hand it, and where
+/// their cells come back.
+pub struct GroundBricks<'a> {
+    /// Hands each brick whose cells the GPU is to draw to the writer.
+    pub upload: &'a mut TerrainUpload,
+    /// Told each brick whose cells came back, and the fill they are of
+    /// (`CellsBack::ticket`).
+    pub on_resident: &'a mut OnResident<'a>,
+    /// The ways' pool's child groups at first (pxl-kernel domain/scene/param.rs
+    /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
+    /// to `way::tree::POOL_CHILD_GROUPS` (`GroundBuffers::grow`).
+    pub pool: u32,
+    /// The child groups each handed brick's scratch holds a tree of at first
+    /// (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_FIRST_BYTES`): it
+    /// doubles each time a build outgrows it, up to
+    /// `way::tree::BRICK_CHILD_GROUPS` (`GroundBuffers::grow_scratch`).
+    pub scratch: u32,
+    /// A read's records' room at first, in bytes: every read's is doubled
+    /// past a brick's records that outgrew it, up to
+    /// `way::tree::RECORDS_BYTES` (`GroundBuffers::record_bytes`).
+    pub records: u32,
+}
+
+/// How a brick's fill landed: its cells are back in every case.
+pub enum Resident<'a> {
+    /// Its ways' tree built: the child groups it holds, their count first, a
+    /// record each (pxl-engine `way::tree::lay`).
+    Built(&'a [u32]),
+    /// To be filled again, for want of room the renderer grows: its tree not
+    /// built, the pool or the scratch it was built in having run out
+    /// (`Short`), or built but its records past its read's room, the tree
+    /// the refill frees.
+    Again,
+    /// Its tree refused, the pool or the scratch at its most having run out,
+    /// or the brick past its own (`way::tree::past`): the brick stays
+    /// absent.
+    Refused,
+}
+
+/// The read-backs a brick's cells and its ways' records come back in
+/// (`GroundBuffers::read_back`): two frames' fills (pxl-engine
+/// `clipmap::FILL_CAP`), so one frame's mappings are still landing while
+/// the next is copied.
+const READS: usize = 2 * FILL_CAP as usize;
+
+/// The pool's records the renderer keeps on the heap at their worst, in
+/// the buddy's blocks: every read's room at a brick's most
+/// (`GroundBuffers::room`), each a power of two as the heap gives it.
+pub const RECORD_ROOMS_BYTES: u64 =
+    READS as u64 * (way::tree::RECORDS_BYTES as u64).next_power_of_two();
+
+/// A brick whose cells came back, the fill they are of
+/// (`CellsBack::ticket`), and how its ways' tree landed; what is told may
+/// borrow its caller's for the frame.
+pub type OnResident<'a> = dyn FnMut(u32, u32, Resident<'_>) + 'a;
+
+/// Where a brick's cells, which the GPU draws, come back to in the
+/// kernel's memory: its columns, levels, laid cells and root
+/// (pxl-engine `clipmap::BACK_WORDS`); and the fill's ticket, never 0,
+/// which the kernel is told once this fill's are in.
+#[derive(Clone, Copy, Default)]
+pub struct CellsBack {
+    pub cells: u32,
+    pub ticket: u32,
+}
+
+/// A brick handed to the GPU's fill, the record the ground's clip levels hand
+/// on (pxl-kernel domain/layer/terrain/clipmap.rs `fill`): its words
+/// (pxl-engine `clipmap::fill_words`), its four palette indices a cell, its tile's
+/// padded samples, its lines as far as they are written
+/// (`clipmap::LINES_AT`), and where its cells come back to.
+pub struct BrickFill<'a> {
+    pub words: [u32; FILL_WORDS as usize],
+    pub palette_indices: &'a [u8],
+    pub samples: &'a [i16],
+    pub lines: &'a [u32],
+    pub back: CellsBack,
+}
+
+/// Takes a brick while the turn's stream has room for it.
+pub type TerrainWrite<'a> = dyn FnMut(BrickFill<'_>) -> bool + 'a;
+
+pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
+
 /// A buffer of them carrying no brick.
 const FREE: u32 = u32::MAX;
 
+/// The passes that fill a handed brick: made with the renderer's pipelines
+/// (`RaysPass::make`), before its first frame, and taken into its buffers
+/// when the first are made (`hand`).
+#[derive(Clone, Copy)]
+pub(super) struct GroundPipelines {
+    heights: Pipeline,
+    bound: Pipeline,
+    ways: Pipeline,
+    free: Pipeline,
+    tree: Pipeline,
+    give_back: Pipeline,
+}
+
+impl GroundPipelines {
+    pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> GroundPipelines {
+        GroundPipelines {
+            heights: pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP),
+            bound: pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
+            ways: pipelines.build_compute(g, SHADER_WAY, &compute::WAY_GROUP),
+            free: pipelines.build_compute(g, SHADER_WAY_FREE, &compute::WAY_FREE_GROUP),
+            tree: pipelines.build_compute(g, SHADER_WAY_TREE, &compute::WAY_TREE_GROUP),
+            give_back: pipelines.build_compute(g, SHADER_WAY_RETURN, &compute::WAY_RETURN_GROUP),
+        }
+    }
+}
+
 /// The terrain's frames on the GPU and the passes that draw their cells.
 pub(super) struct GroundBuffers {
-    /// Per slot of the windows' bricks (`clipmap::SLOTS`), its columns,
+    /// Per slot of the clip levels' bricks (`clipmap::SLOTS`), its columns,
     /// levels, cells as laid and root, which `height_cs`, `bound_cs` and
-    /// `way_tree_cs` write in the turn it is handed (pxl-spec-core
+    /// `way_tree_cs` write in the turn it is handed (pxl-engine
     /// `clipmap::BRICK_WORDS`).
     pub(super) ground: u32,
     /// Per slot, its cells' four palette indices (`PALETTE_BYTES`).
     pub(super) palette_indices: u32,
-    /// The bricks the turn handed, `clipmap::HANDED` at most, a record each
+    /// The bricks the turn handed, `clipmap::FILL_CAP` at most, a record each
     /// (`clipmap::HANDED_WORDS`): its words, then its palette indices, its tile's
     /// samples and its lines, which only its fill reads; `height_cs`'s,
     /// `bound_cs`'s and `way_cs`'s one per `id.z`.
@@ -49,12 +157,12 @@ pub(super) struct GroundBuffers {
     pub(super) fresh_len: u32,
     /// Per slot (`clipmap::SLOTS`), its cells' way back: the fill
     /// the next landing must be of (its ticket 0 where none is asked).
-    asked: [CellsBack; SLOTS as usize],
-    /// The bricks the frame handed, their words (`clipmap::fresh`), in the
+    cells_back: [CellsBack; SLOTS as usize],
+    /// The bricks the frame handed, their words (`clipmap::fill_words`), in the
     /// order handed, each with a read of its own (`hand` hands none past the
     /// reads free): a fill's records live in its frame's scratch, so its
     /// read is taken in its frame.
-    pub(super) handed: [[u32; FRESH_WORDS as usize]; HANDED as usize],
+    pub(super) handed: [[u32; FILL_WORDS as usize]; FILL_CAP as usize],
     /// The buffers cells are copied into and mapped back through, as many as
     /// a frame hands bricks a mapping still out a frame more (`READS`);
     /// each one's brick and the fill it carries (`FREE` where none), and
@@ -63,7 +171,7 @@ pub(super) struct GroundBuffers {
     /// addresses, as an arriving image's word is. A static is outside it on
     /// a device.
     reads: [u32; READS],
-    held: [(u32, u32); READS],
+    brick_fills: [(u32, u32); READS],
     mapping: Box<[u32; READS]>,
     /// Each read's records, mapped beside its brick's words into its room
     /// on the heap, as many bytes as the room holds, the buffer of its size
@@ -92,33 +200,33 @@ pub(super) struct GroundBuffers {
     /// Each slot's number, `bound_cs`'s level, at a dynamic offset of its
     /// group.
     slots: u32,
-    heights_built: Built,
+    heights_built: Pipeline,
     heights_group: u32,
-    bound_built: Built,
+    bound_built: Pipeline,
     /// `bound_cs`'s group, its level at a dynamic offset (`SLOT_STRIDE`).
     bound_group: u32,
     /// `way_cs`'s, and its group: the fresh frames, the frames it reads
     /// the columns of, and the scratch it keeps the spans in.
-    ways_built: Built,
+    ways_built: Pipeline,
     ways_group: u32,
     /// A re-filled brick's old ways' tree given back, its new one built,
-    /// the child groups the build gave back pushed (pxl-spec-core `way::tree`):
+    /// the child groups the build gave back pushed (pxl-engine `way::tree`):
     /// each pass and its group, over the ways' pool, child pointers then data
     /// words (`pool_bytes`), its free stack, the count taken then the ids,
     /// child group 0 never among them, a word a child group, and each handed brick's
     /// scratch past its build (`way::tree::FREED_AT`).
-    free_built: Built,
+    free_built: Pipeline,
     free_group: u32,
-    tree_built: Built,
+    tree_built: Pipeline,
     tree_group: u32,
-    freed_built: Built,
+    return_built: Pipeline,
     freed_group: u32,
 }
 
 /// The ways' pool of `child_groups` on the GPU, in bytes: a slot two words,
 /// eight a child group. Its free stack is a word a child group: the count taken, then
 /// every child group's id but child group 0's, every child group free but child group 0 as WebGPU
-/// makes it, zeroed (pxl-shader `TAKEN`, `id`), so nothing is written to
+/// makes it, zeroed (pxl-shader `TAKEN_CNT`, `id`), so nothing is written to
 /// start it, nor to grow it.
 const fn pool_bytes(child_groups: u32) -> u32 {
     child_groups * way::tree::CHILD_GROUP_WORDS * 4
@@ -139,10 +247,10 @@ fn pool_bufs(g: &Gpu, child_groups: u32) -> (u32, u32) {
 }
 
 /// The handed bricks' scratch, each brick's for a tree of `child_groups`, in
-/// bytes: `HANDED` of them, every brick's alike, so each finds its own off
-/// the buffer's length (pxl-spec-core fill.rs `scratch_at`).
+/// bytes: `FILL_CAP` of them, every brick's alike, so each finds its own off
+/// the buffer's length (pxl-engine fill.rs `scratch_at`).
 const fn scratch_bytes(child_groups: u32) -> u32 {
-    HANDED * way::tree::scratch_words(child_groups) * 4
+    FILL_CAP * way::tree::scratch_words(child_groups) * 4
 }
 const _: () = assert!(
     floor::fits(scratch_bytes(way::tree::BRICK_CHILD_GROUPS) as u64, true),
@@ -258,7 +366,7 @@ impl GroundBuffers {
             ],
         );
         self.freed_group = g.bind_group(
-            self.freed_built.layouts[0],
+            self.return_built.layouts[0],
             &[buf_entry(0, scratch), buf_entry(1, stack)],
         );
     }
@@ -269,7 +377,7 @@ impl GroundBuffers {
     /// copied where they were, its data words to the new data's first, so
     /// every id a tree or a read in flight names holds what it held, and the
     /// stack's slots past the old hold the new child groups free (pxl-shader
-    /// `TAKEN`). Ahead of the turn's bricks, so their builds and the cast
+    /// `TAKEN_CNT`). Ahead of the turn's bricks, so their builds and the cast
     /// read the new one; the cast's groups follow its id (`prepare`).
     ///
     /// A known gap: a device out of memory may fail to make the doubled
@@ -352,16 +460,16 @@ impl GroundBuffers {
 /// A brick on the GPU, in bytes.
 const BRICK_BYTES: u32 = BRICK_WORDS * 4;
 
-/// The windows' bricks on the GPU, in bytes: one storage buffer, bound
+/// The clip levels' bricks on the GPU, in bytes: one storage buffer, bound
 /// whole by the cast's, the levels' and the ways' groups.
 const GROUND_BYTES: u64 = SLOTS as u64 * BRICK_BYTES as u64;
 const _: () = assert!(
     floor::fits(GROUND_BYTES, true),
-    "GROUND_BYTES: the windows' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+    "GROUND_BYTES: the clip levels' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// The windows' bricks' cells' four palette indices, a word a cell in the slots'
-/// order: written by the fill off each handed brick (`height_cs`), read
+/// The clip levels' bricks' cells' four palette indices, a word a cell in the
+/// slots' order: written by the fill off each handed brick (`height_cs`), read
 /// by the cast at a hit (pxl-shader `World`'s `PaletteWords`). Their own
 /// buffer, as the bricks' binding has no room for them.
 const PALETTE_BYTES: u64 = SLOTS as u64 * BRICK_CELLS as u64 * 4;
@@ -372,7 +480,7 @@ const _: () = assert!(
 
 /// `bound_cs`'s group: its level at a dynamic offset (`SLOT_STRIDE`), the
 /// fresh frames, the frames it writes the levels of, and the handed
-/// bricks' scratch it reads the spans in. The cast's and `joined_cs`'s one
+/// bricks' scratch it reads the spans in. The cast's and `fold_cs`'s one
 /// group is the cast's, which binds all of theirs.
 const BOUND_GROUP: [u32; compute::BOUND_GROUP.len()] = dynamic(compute::BOUND_GROUP, 0);
 /// A number's slot in the fill's numbers, read at a dynamic offset: every
@@ -384,16 +492,17 @@ impl RaysPass {
     /// into the turn's stream as it has room, the packets they live in let
     /// go once handed; whether or not an eye casts, as a tile's cells are
     /// no eye's.
-    pub fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: &mut GroundBricks) {
+    pub fn hand(&mut self, g: &Gpu, ground: &mut GroundBricks) {
         let child_groups = ground.pool.min(way::tree::POOL_CHILD_GROUPS);
         let scratch_child_groups = ground.scratch.clamp(1, way::tree::BRICK_CHILD_GROUPS);
+        let built = self.ground_built.or_bug(Errno::ENOTRECOVERABLE);
         let gb = self.ground.get_or_insert_with(|| {
             let buf = |size: u32, usage: u32| g.buf(size, usage);
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let frames_buf = buf(GROUND_BYTES as u32, storage | buffer_usage::COPY_SRC);
-            let fresh = buf(word_bytes((HANDED_WORDS * HANDED) as usize), storage);
+            let fresh = buf(word_bytes((HANDED_WORDS * FILL_CAP) as usize), storage);
             let palette_indices = buf(PALETTE_BYTES as u32, storage);
-            let heights_built = pipelines.build_compute(g, SHADER_HEIGHT, &compute::HEIGHT_GROUP);
+            let heights_built = built.heights;
             let heights_group = g.bind_group(
                 heights_built.layouts[0],
                 &[
@@ -411,29 +520,23 @@ impl RaysPass {
                 g.write_buf(slots, k * SLOT_STRIDE, bytes(&[k, 0, 0, 0]));
             }
             let scratch = scratch_buf(g, scratch_child_groups);
-            let (bound_built, ways_built) = (
-                pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP),
-                pipelines.build_compute(g, SHADER_WAY, &compute::WAY_GROUP),
-            );
+            let (bound_built, ways_built) = (built.bound, built.ways);
             let (pool, stack) = pool_bufs(g, child_groups);
-            let free_built = pipelines.build_compute(g, SHADER_WAY_FREE, &compute::WAY_FREE_GROUP);
-            let tree_built = pipelines.build_compute(g, SHADER_WAY_TREE, &compute::WAY_TREE_GROUP);
-            let freed_built =
-                pipelines.build_compute(g, SHADER_WAY_FREED, &compute::WAY_FREED_GROUP);
+            let (free_built, tree_built, return_built) = (built.free, built.tree, built.give_back);
             let mut gb = GroundBuffers {
                 ground: frames_buf,
                 palette_indices,
                 fresh,
                 fresh_len: 0,
-                asked: [CellsBack::default(); SLOTS as usize],
-                handed: [[0; FRESH_WORDS as usize]; HANDED as usize],
+                cells_back: [CellsBack::default(); SLOTS as usize],
+                handed: [[0; FILL_WORDS as usize]; FILL_CAP as usize],
                 reads: core::array::from_fn(|_| {
                     buf(
                         BACK_WORDS * 4,
                         buffer_usage::MAP_READ | buffer_usage::COPY_DST,
                     )
                 }),
-                held: [(FREE, 0); READS],
+                brick_fills: [(FREE, 0); READS],
                 mapping: Box::new([0; READS]),
                 record_reads: [0; READS],
                 record_rooms: core::array::from_fn(|_| Box::default()),
@@ -460,7 +563,7 @@ impl RaysPass {
                 free_group: 0,
                 tree_built,
                 tree_group: 0,
-                freed_built,
+                return_built,
                 freed_group: 0,
             };
             gb.ways_groups(g);
@@ -474,11 +577,11 @@ impl RaysPass {
         }
         // A brick handed takes a read its frame: none past those free.
         let free = gb
-            .held
+            .brick_fills
             .iter()
             .filter(|h| h.0 == FREE)
             .count()
-            .min(HANDED as usize) as u32;
+            .min(FILL_CAP as usize) as u32;
         let mut fresh = 0;
         (ground.upload)(&mut |q| {
             if fresh == free
@@ -486,18 +589,18 @@ impl RaysPass {
                     write_buffer_bytes(q.palette_indices)
                         + write_buffer_bytes(bytes(q.samples))
                         + write_buffer_bytes(bytes(q.lines))
-                        + write_buffer_bytes(bytes(&q.fresh)),
+                        + write_buffer_bytes(bytes(&q.words)),
                 )
             {
                 return false;
             }
-            let (brick, at) = (q.fresh[FRESH_BRICK as usize], clipmap::handed_at(fresh) * 4);
-            g.write_buf(gb.fresh, at, bytes(&q.fresh));
+            let (brick, at) = (q.words[FILL_BRICK as usize], clipmap::handed_at(fresh) * 4);
+            g.write_buf(gb.fresh, at, bytes(&q.words));
             g.write_buf(gb.fresh, at + PALETTE_AT * 4, q.palette_indices);
             g.write_buf(gb.fresh, at + ELE_AT * 4, bytes(q.samples));
             g.write_buf(gb.fresh, at + LINES_AT * 4, bytes(q.lines));
-            gb.asked[brick as usize] = q.back;
-            gb.handed[fresh as usize] = q.fresh;
+            gb.cells_back[brick as usize] = q.back;
+            gb.handed[fresh as usize] = q.words;
             fresh += 1;
             true
         });
@@ -507,7 +610,7 @@ impl RaysPass {
     /// The bricks this turn handed filled: their tops from their samples,
     /// their ways' spans, their levels a dispatch, level 0 a column's own and
     /// each over the one before, and their ways' trees. Ahead of the frame,
-    /// as they outlive it, so no brick the window names is cast before its
+    /// as they outlive it, so no brick the clip level names is cast before its
     /// cells are written, even when the frame proper is dropped. Whether it
     /// recorded any.
     pub fn grids(&mut self, ctx: &mut RenderContext) -> bool {
@@ -518,11 +621,11 @@ impl RaysPass {
         };
         let pass = g.compute_pass(encoder, stamp.pass());
         // A re-filled brick's old ways' child groups given back, off its root word
-        // before its build writes another (pxl-spec-core `way::tree`).
-        g.set_pipeline(pass, c.free_built.pipeline);
+        // before its build writes another (pxl-engine `way::tree`).
+        g.set_pipeline(pass, c.free_built.id);
         g.set_bind_group(pass, 0, c.free_group, &[]);
         g.dispatch(pass, 1, 1, c.fresh_len);
-        g.set_pipeline(pass, c.heights_built.pipeline);
+        g.set_pipeline(pass, c.heights_built.id);
         g.set_bind_group(pass, 0, c.heights_group, &[]);
         let w = compute::HEIGHT_WORKGROUP;
         g.dispatch(
@@ -532,9 +635,9 @@ impl RaysPass {
             c.fresh_len,
         );
         // A column a thread, over the tops just drawn: each column's spans
-        // once, the brick's and its ring's (pxl-spec-core fill.rs `spans`),
+        // once, the brick's and its ring's (pxl-engine fill.rs `spans`),
         // which the levels and the trees read.
-        g.set_pipeline(pass, c.ways_built.pipeline);
+        g.set_pipeline(pass, c.ways_built.id);
         g.set_bind_group(pass, 0, c.ways_group, &[]);
         g.dispatch(
             pass,
@@ -542,7 +645,7 @@ impl RaysPass {
             1,
             c.fresh_len,
         );
-        g.set_pipeline(pass, c.bound_built.pipeline);
+        g.set_pipeline(pass, c.bound_built.id);
         for j in 0..=LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[j * SLOT_STRIDE]);
             let side = (BRICK >> j).div_ceil(compute::BOUND_WORKGROUP[0]);
@@ -552,10 +655,10 @@ impl RaysPass {
         // and the levels just folded; then what its build gave back pushed,
         // a dispatch after, so no push lands under another brick's ids
         // while it reads them.
-        g.set_pipeline(pass, c.tree_built.pipeline);
+        g.set_pipeline(pass, c.tree_built.id);
         g.set_bind_group(pass, 0, c.tree_group, &[]);
         g.dispatch(pass, 1, 1, c.fresh_len);
-        g.set_pipeline(pass, c.freed_built.pipeline);
+        g.set_pipeline(pass, c.return_built.id);
         g.set_bind_group(pass, 0, c.freed_group, &[]);
         g.dispatch(pass, 1, 1, c.fresh_len);
         g.end(pass);
@@ -569,7 +672,7 @@ impl RaysPass {
     ///
     /// A brick asked takes a free buffer of `READS`, which maps once at a
     /// time and lands whatever fill it carried. One that landed for the
-    /// brick's latest fill is told `landed`. One that landed for an earlier
+    /// brick's latest fill is told `on_resident`. One that landed for an earlier
     /// fill is discarded: its bytes went into the brick's cells while the
     /// kernel holds the brick on its way (or absent, if it moved), which
     /// nothing reads, and the latest fill's landing writes them again before
@@ -584,7 +687,7 @@ impl RaysPass {
     /// `snatchable_lock` across the fence wait, `Surface::present` writes
     /// it), so none waits.
     pub fn read_back(&mut self, g: &Gpu, ground: &mut GroundBricks) {
-        let landed = &mut *ground.landed;
+        let on_resident = &mut *ground.on_resident;
         let most = [way::tree::POOL_CHILD_GROUPS, way::tree::BRICK_CHILD_GROUPS];
         let Some(c) = self.ground.as_mut() else {
             return;
@@ -599,15 +702,15 @@ impl RaysPass {
         // own most is refused at once; one whose records outgrew its read is
         // filled again, every read's room grown past them.
         for k in 0..READS {
-            let (s, ticket) = c.held[k];
+            let (s, ticket) = c.brick_fills[k];
             if s == FREE || c.mapping[k] & DONE == 0 || c.record_mapping[k] & DONE == 0 {
                 continue;
             }
-            c.held[k] = (FREE, 0);
-            if c.asked[s as usize].ticket != ticket {
+            c.brick_fills[k] = (FREE, 0);
+            if c.cells_back[s as usize].ticket != ticket {
                 continue;
             }
-            c.asked[s as usize].ticket = 0;
+            c.cells_back[s as usize].ticket = 0;
             let room = &c.record_rooms[k];
             let n = room.first().copied().unwrap_or(0);
             let words = 1 + n.min(way::tree::BRICK_CHILD_GROUPS) * way::tree::RECORD_WORDS;
@@ -633,7 +736,7 @@ impl RaysPass {
             } else {
                 Resident::Built(&room[..words as usize])
             };
-            landed(s, ticket, landing);
+            on_resident(s, ticket, landing);
         }
         // Each brick the frame handed, its words and its build's records
         // copied in its frame, into a read `hand` kept free for it: as much
@@ -646,8 +749,8 @@ impl RaysPass {
         let mut taken = [false; READS];
         let mut free = 0;
         for h in 0..fresh {
-            let s = c.handed[h as usize][FRESH_BRICK as usize];
-            let Some(k) = (free..READS).find(|&k| c.held[k].0 == FREE) else {
+            let s = c.handed[h as usize][FILL_BRICK as usize];
+            let Some(k) = (free..READS).find(|&k| c.brick_fills[k].0 == FREE) else {
                 break;
             };
             free = k + 1;
@@ -669,17 +772,20 @@ impl RaysPass {
                 (c.record_reads[k], 0),
                 word_bytes(words),
             );
-            (c.held[k], c.built_in[k], taken[k]) =
-                ((s, c.asked[s as usize].ticket), [c.child_groups, sb], true);
+            (c.brick_fills[k], c.built_in[k], taken[k]) = (
+                (s, c.cells_back[s as usize].ticket),
+                [c.child_groups, sb],
+                true,
+            );
         }
         g.submit(e);
         for k in (0..READS).filter(|&k| taken[k]) {
-            let (s, ticket) = c.held[k];
+            let (s, ticket) = c.brick_fills[k];
             g.map_read(
                 c.reads[k],
                 0,
                 BACK_WORDS * 4,
-                c.asked[s as usize].cells,
+                c.cells_back[s as usize].cells,
                 &mut c.mapping[k],
                 ticket,
             );

@@ -1,9 +1,10 @@
 // pxl-render/frame/shader/record.rs
 
-//! Shaders and their pipeline records (lanes, bind groups, primitive, depth and
-//! blend state) as one source the host turns into WebGPU or wgpu descriptors.
-//! build.rs assembles and validates every shader (part.rs), and reads off it
-//! the stages each pipeline's groups are seen from.
+//! Shaders and their pipeline records (vertex buffers, bind groups,
+//! primitive, depth and blend state) as one source the host turns into WebGPU
+//! or wgpu descriptors. build.rs assembles and validates every shader
+//! (part.rs), and reads off it the stages each pipeline's groups are seen
+//! from.
 
 pub use crate::frame::shader::part::*;
 
@@ -11,24 +12,24 @@ pub use crate::frame::shader::part::*;
 pub fn compute_entry(kind: u32) -> &'static str {
     match kind {
         SHADER_CAST => "cast_cs",
-        SHADER_JOINED => "joined_cs",
+        SHADER_FOLD => "fold_cs",
         SHADER_ATMOS_FROXEL => "froxel_cs",
         SHADER_ATMOS_EXPOSURE => "exposure_cs",
-        SHADER_SCREEN_REACH => "screen_reach_cs",
+        SHADER_SCREEN_PROPAGATE => "screen_propagate_cs",
         SHADER_SCREEN_BOUND => "screen_bound_cs",
         SHADER_SCREEN_MARK => "screen_mark_cs",
         SHADER_BOUND => "bound_cs",
         SHADER_HEIGHT => "height_cs",
-        SHADER_GENERATED_MARK => "decor_mark_cs",
-        SHADER_GENERATED_THIN => "decor_thin_cs",
-        SHADER_GENERATED => "decor_cs",
-        SHADER_GENERATED_CNT => "decor_cnt_cs",
-        SHADER_GENERATED_ARGS => "decor_args_cs",
-        SHADER_GENERATED_COMPACT => "decor_compact_cs",
+        SHADER_GENERATION_MARK => "decor_mark_cs",
+        SHADER_GENERATION_THIN => "decor_thin_cs",
+        SHADER_GENERATION => "decor_cs",
+        SHADER_GENERATION_CNT => "decor_cnt_cs",
+        SHADER_GENERATION_ARGS => "decor_args_cs",
+        SHADER_GENERATION_COMPACT => "decor_compact_cs",
         SHADER_WAY => "way_cs",
         SHADER_WAY_FREE => "way_free_cs",
         SHADER_WAY_TREE => "way_tree_cs",
-        SHADER_WAY_FREED => "way_freed_cs",
+        SHADER_WAY_RETURN => "way_return_cs",
         SHADER_BEAM => "beam_cs",
         SHADER_CELL => "cell_cs",
         SHADER_MISS => "miss_cs",
@@ -40,16 +41,12 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_MISS_LIST => "miss_list_cs",
         SHADER_FACE => "face_cs",
         SHADER_LIGHT_MARK => "light_mark_cs",
-        SHADER_LIGHT_MARK_DRAWN => "light_mark_drawn_cs",
-        SHADER_LIGHT_REACH => "light_reach_cs",
-        SHADER_LIGHT_DETAIL => "light_detail_cs",
-        SHADER_LIGHT_BEAM => "light_beam_cs",
-        SHADER_LIGHT_SAMPLE => "light_sample_cs",
-        SHADER_STOP_LEAD => "stop_lead_cs",
-        SHADER_STOP_FACES => "stop_faces_cs",
+        SHADER_LIGHT_MARK_DRAWS => "light_mark_draws_cs",
+        SHADER_LIGHT_PROPAGATE => "light_propagate_cs",
+        SHADER_LIGHT_SLIDE => "light_slide_cs",
+        SHADER_HIT_LEAD => "hit_lead_cs",
+        SHADER_HIT_FACES => "hit_faces_cs",
         SHADER_BOX_ARGS => "box_args_cs",
-        SHADER_LIGHT_HELD => "light_held_cs",
-        SHADER_LIGHT_TOLD => "light_told_cs",
         _ => xpute_kit::bug!(EINVAL, kind),
     }
 }
@@ -78,7 +75,7 @@ pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 24;
 pub const PIPELINE_MARKER_REGION: u32 = 25;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/pass/debug.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 26;
-/// The eye's rays, opaque at their depth (pxl-spec-core ray.rs).
+/// The eye's rays, opaque at their depth (pxl-engine ray.rs).
 pub const PIPELINE_SCREEN_RAY: u32 = 27;
 /// Decor's and the actors' depth from the light, and the world's laid in
 /// before them, into the light's shadow map (gpu/shadow.rs).
@@ -111,7 +108,7 @@ pub const PIPELINE_RASTER_GATE: u32 = 37;
 /// their stencil raised (gpu/shadow.rs).
 pub const PIPELINE_LIGHT_GATE: u32 = 38;
 /// An actor drawn where it was and where it is, its fragments setting their
-/// screen tiles' words (gpu/pass/skinned.rs `draw_marks`).
+/// screen tiles' words (gpu/pass/skinned_mesh.rs `draw_marks`).
 pub const PIPELINE_SKINNED_MARK: u32 = 39;
 /// The same of decor, an impostor, the location indicator's zone and its beacon
 /// (gpu/pass/mark.rs `Marks`).
@@ -178,7 +175,7 @@ use crate::frame::draw::{
     PIPELINE_SKINNED,
 };
 use crate::frame::shader::floor;
-use pxl_spec_core::param::light;
+use pxl_engine::param::light;
 
 const fn f(v: f32) -> u32 {
     v.to_bits()
@@ -234,7 +231,7 @@ const fn blended(shader: u32, cull: u32) -> Head {
     }
 }
 
-/// The shadow map's casters' alike, raster and cast (pxl-spec-core `param::light::SLOPE_BIAS`).
+/// The shadow map's casters' alike, raster and cast (pxl-engine `param::light::SLOPE_BIAS`).
 const DEPTH_SLOPE_BIAS: f32 = light::SLOPE_BIAS;
 
 /// Depth alone: plain less-than, no fragment stage, both sides, pushed back
@@ -349,29 +346,29 @@ pub const GROUP_ENTRIES: usize = SCREEN_GROUP.len();
 /// A vertex buffer: its stride, whether it steps by vertex or instance, and
 /// its attributes, each (location, offset, format).
 #[derive(Clone, Copy)]
-struct Lane {
+struct VertexBufferLayout {
     stride: u32,
     step: u32,
     attributes: &'static [[u32; 3]],
 }
 
-const fn vertex(stride: u32, attributes: &'static [[u32; 3]]) -> Lane {
-    Lane {
+const fn vertex(stride: u32, attributes: &'static [[u32; 3]]) -> VertexBufferLayout {
+    VertexBufferLayout {
         stride,
         step: PER_VERTEX,
         attributes,
     }
 }
 
-const MODEL_LANES: [Lane; 3] = [
+const MODEL_BUFFERS: [VertexBufferLayout; 3] = [
     vertex(12, &[[0, 0, F32X3]]),
     vertex(12, &[[1, 0, F32X3]]),
     vertex(8, &[[2, 0, F32X2]]),
 ];
-const SKINNED_LANES: [Lane; 5] = [
-    MODEL_LANES[0],
-    MODEL_LANES[1],
-    MODEL_LANES[2],
+const SKINNED_BUFFERS: [VertexBufferLayout; 5] = [
+    MODEL_BUFFERS[0],
+    MODEL_BUFFERS[1],
+    MODEL_BUFFERS[2],
     vertex(16, &[[3, 0, U32X4]]),
     vertex(16, &[[4, 0, F32X4]]),
 ];
@@ -380,26 +377,27 @@ const SKINNED_LANES: [Lane; 5] = [
 pub const BOX_WORDS: u32 = 5;
 /// The boxes are a per-instance vertex buffer, so a draw reaches its boxes by
 /// its first instance.
-const BOX_LANES: [Lane; 2] = [
-    Lane {
+const BOX_BUFFERS: [VertexBufferLayout; 2] = [
+    VertexBufferLayout {
         stride: BOX_WORDS * 4,
         step: PER_INSTANCE,
         attributes: &[[0, 0, U32X4]],
     },
-    Lane {
+    VertexBufferLayout {
         stride: BOX_WORDS * 4,
         step: PER_INSTANCE,
         attributes: &[[1, 16, U32]],
     },
 ];
-const LOCATION_ZONE_LANES: [Lane; 2] = [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
-const LOCATION_BEACON_LANES: [Lane; 2] =
+const LOCATION_ZONE_BUFFERS: [VertexBufferLayout; 2] =
+    [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
+const LOCATION_BEACON_BUFFERS: [VertexBufferLayout; 2] =
     [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]])];
 /// A debug line's vertex, its place and its color, a segment's two read as
 /// one instance; a debug face's vertex, its place.
 pub const DEBUG_VERTEX_BYTES: u32 = 28;
 pub const DEBUG_FACE_VERTEX_BYTES: u32 = 12;
-const DEBUG_LANES: [Lane; 1] = [Lane {
+const DEBUG_BUFFERS: [VertexBufferLayout; 1] = [VertexBufferLayout {
     stride: 2 * DEBUG_VERTEX_BYTES,
     step: PER_INSTANCE,
     attributes: &[
@@ -408,7 +406,8 @@ const DEBUG_LANES: [Lane; 1] = [Lane {
         [2, DEBUG_VERTEX_BYTES, F32X3],
     ],
 }];
-const DEBUG_FACE_LANES: [Lane; 1] = [vertex(DEBUG_FACE_VERTEX_BYTES, &[[0, 0, F32X3]])];
+const DEBUG_FACE_BUFFERS: [VertexBufferLayout; 1] =
+    [vertex(DEBUG_FACE_VERTEX_BYTES, &[[0, 0, F32X3]])];
 
 /// `a` then `b`: a group laid out as another and more.
 const fn and<const N: usize, const M: usize, const R: usize>(
@@ -432,13 +431,17 @@ const BOX_GROUP: [[u32; 2]; 18] = and(
 );
 /// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
 /// and its upload: one layout each wherever a draw binds them, so a group
-/// one owner makes binds in every pipeline that names them (gpu/generated.rs,
+/// one owner makes binds in every pipeline that names them (gpu/generator.rs,
 /// gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
 const UPLOAD: [[u32; 2]; 1] = [[0, STORAGE]];
 /// An upload's group as every pipeline binding one lays it out, which the
 /// draw list's uploads are grouped in (gpu/upload.rs `Uploads::group`).
-pub const UPLOAD_LAYOUT: [u32; 3] = [UPLOAD[0][0], seen(&UPLOAD, UPLOAD[0][0]), UPLOAD[0][1]];
+pub const UPLOAD_LAYOUT: [u32; 3] = [
+    UPLOAD[0][0],
+    stages_reading(&UPLOAD, UPLOAD[0][0]),
+    UPLOAD[0][1],
+];
 
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 /// A model's depth from the light: the light's frame alone in group 0, where
@@ -474,21 +477,25 @@ const SKY_GROUP: [[u32; 2]; 15] = and(
     AIR,
 );
 
-/// A pipeline's record before its groups' stages: its head, its lanes and
+/// A pipeline's record before its groups' stages: its head, its vertex buffers and
 /// each group's entries (binding, kind), which `record` sees from the
 /// stages that read them.
 #[derive(Clone, Copy)]
 struct Descriptor {
     head: Head,
-    lanes: &'static [Lane],
+    buffers: &'static [VertexBufferLayout],
     groups: &'static [Group],
 }
 
 impl Descriptor {
-    const fn new(head: Head, lanes: &'static [Lane], groups: &'static [Group]) -> Self {
+    const fn new(
+        head: Head,
+        buffers: &'static [VertexBufferLayout],
+        groups: &'static [Group],
+    ) -> Self {
         Self {
             head,
-            lanes,
+            buffers,
             groups,
         }
     }
@@ -499,33 +506,33 @@ impl Descriptor {
 const fn desc_of(id: u32) -> Descriptor {
     match id {
         PIPELINE_DECOR => {
-            Descriptor::new(lit(SHADER_DECOR, CULL_NONE), &MODEL_LANES, &MODEL_GROUPS)
+            Descriptor::new(lit(SHADER_DECOR, CULL_NONE), &MODEL_BUFFERS, &MODEL_GROUPS)
         }
         // What is laid on the world's faces draws at its own depth: the
         // world's stands behind it (screen_ray.wgsl `behind`).
         PIPELINE_GHOST_BOX => {
-            Descriptor::new(blended(SHADER_BOX, CULL_BACK), &BOX_LANES, &[&BOX_GROUP])
+            Descriptor::new(blended(SHADER_BOX, CULL_BACK), &BOX_BUFFERS, &[&BOX_GROUP])
         }
         PIPELINE_GHOST_DECOR => Descriptor::new(
             blended(SHADER_DECOR, CULL_NONE),
-            &MODEL_LANES,
+            &MODEL_BUFFERS,
             &MODEL_GROUPS,
         ),
         // Back faces culled: drawn both sides, a closed body's inner faces fight its
         // outer ones at a distance and the character shimmers.
         PIPELINE_SKINNED => Descriptor::new(
             lit(SHADER_SKINNED, CULL_BACK),
-            &SKINNED_LANES,
+            &SKINNED_BUFFERS,
             &MODEL_GROUPS,
         ),
         PIPELINE_LOCATION_ZONE => Descriptor::new(
             blended(SHADER_LOCATION_ZONE, CULL_NONE),
-            &LOCATION_ZONE_LANES,
+            &LOCATION_ZONE_BUFFERS,
             &[FRAME, &DRAW, &UPLOAD],
         ),
         PIPELINE_LOCATION_BEACON => Descriptor::new(
             lit(SHADER_LOCATION_BEACON, CULL_BACK),
-            &LOCATION_BEACON_LANES,
+            &LOCATION_BEACON_BUFFERS,
             &[&LIT_FRAME, &DRAW],
         ),
         PIPELINE_MARKER => Descriptor::new(
@@ -554,7 +561,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 blend: ALPHA,
                 ..blended(SHADER_DEBUG, CULL_NONE)
             },
-            &DEBUG_LANES,
+            &DEBUG_BUFFERS,
             &[FRAME, &DRAW],
         ),
         // Pushed back by their slope as a rasterizer's polygon offset is, so
@@ -567,7 +574,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 depth_bias_slope: f(-2.0),
                 ..depth_only(SHADER_DEBUG)
             },
-            &DEBUG_FACE_LANES,
+            &DEBUG_FACE_BUFFERS,
             &[FRAME, &DRAW],
         ),
         // Over everything, against no depth.
@@ -608,17 +615,19 @@ const fn desc_of(id: u32) -> Descriptor {
             ]],
         ),
         PIPELINE_DECOR_DEPTH => {
-            Descriptor::new(depth_only(SHADER_DECOR), &MODEL_LANES, &DEPTH_GROUPS)
+            Descriptor::new(depth_only(SHADER_DECOR), &MODEL_BUFFERS, &DEPTH_GROUPS)
         }
         PIPELINE_SKINNED_DEPTH => {
-            Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_LANES, &DEPTH_GROUPS)
+            Descriptor::new(depth_only(SHADER_SKINNED), &SKINNED_BUFFERS, &DEPTH_GROUPS)
         }
         // Its vertices as the depth pass lays them, its fragments writing
         // no color and testing no depth: they mark their tiles.
         PIPELINE_SKINNED_MARK => {
-            Descriptor::new(mark(SHADER_SKINNED_MARK), &SKINNED_LANES, &MARK_GROUPS)
+            Descriptor::new(mark(SHADER_SKINNED_MARK), &SKINNED_BUFFERS, &MARK_GROUPS)
         }
-        PIPELINE_DECOR_MARK => Descriptor::new(mark(SHADER_DECOR_MARK), &MODEL_LANES, &MARK_GROUPS),
+        PIPELINE_DECOR_MARK => {
+            Descriptor::new(mark(SHADER_DECOR_MARK), &MODEL_BUFFERS, &MARK_GROUPS)
+        }
         PIPELINE_IMPOSTOR_MARK => Descriptor::new(
             Head {
                 topology: STRIP,
@@ -634,12 +643,12 @@ const fn desc_of(id: u32) -> Descriptor {
         ),
         PIPELINE_LOCATION_ZONE_MARK => Descriptor::new(
             mark(SHADER_LOCATION_ZONE_MARK),
-            &LOCATION_ZONE_LANES,
+            &LOCATION_ZONE_BUFFERS,
             &[MARK_FRAME, &DRAW, &UPLOAD],
         ),
         PIPELINE_LOCATION_BEACON_MARK => Descriptor::new(
             mark(SHADER_LOCATION_BEACON_MARK),
-            &LOCATION_BEACON_LANES,
+            &LOCATION_BEACON_BUFFERS,
             &[MARK_FRAME, &DRAW],
         ),
         // Every texel of the box the world's cast holds, whatever lies
@@ -690,7 +699,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[&[[0, UNIFORM], [1, STORAGE]]],
         ),
-        // Only where the opaque world left the far plane, so covered pixels never run it.
+        // Only where the opaque world left the far plane.
         PIPELINE_SKY => Descriptor::new(
             Head {
                 depth_compare: GREATER_EQUAL,
@@ -777,7 +786,7 @@ const fn desc_of(id: u32) -> Descriptor {
                 vertex: VS,
                 ..depth_only(SHADER_IMPOSTOR_BAKE)
             },
-            &MODEL_LANES,
+            &MODEL_BUFFERS,
             &[&DRAW, &SKIN],
         ),
         PIPELINE_ATLAS => Descriptor::new(
@@ -800,7 +809,13 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_AO_SAMPLE => Descriptor::new(
             screen(SHADER_AO_SAMPLE),
             &[],
-            &[&[[1, TEXTURE_UNFILTERED], [2, TEXTURE], [6, UNIFORM]]],
+            &[&[
+                [0, UNIFORM],
+                [1, TEXTURE_UNFILTERED],
+                [2, TEXTURE],
+                [3, DEPTH],
+                [6, UNIFORM],
+            ]],
         ),
         PIPELINE_AO_BLUR => Descriptor::new(
             screen(SHADER_AO_BLUR),
@@ -894,9 +909,8 @@ const fn alike(a: Group, b: Group) -> bool {
 
 /// The stages binding `binding` of `group` is seen from: those that read
 /// it in every shader whose pipeline lays out the same group, wherever, so
-/// the one layout those pipelines share holds for each, and from no stage
-/// written by hand.
-const fn seen(group: Group, binding: u32) -> u32 {
+/// the one layout those pipelines share holds for each.
+const fn stages_reading(group: Group, binding: u32) -> u32 {
     let mut stages = NONE;
     let mut id = 0;
     while id < PIPELINES {
@@ -917,8 +931,8 @@ const fn seen(group: Group, binding: u32) -> u32 {
 const fn words(desc: &Descriptor) -> usize {
     let mut n = HEAD as usize + 1 + 1;
     let mut k = 0;
-    while k < desc.lanes.len() {
-        n += 3 + 3 * desc.lanes[k].attributes.len();
+    while k < desc.buffers.len() {
+        n += 3 + 3 * desc.buffers[k].attributes.len();
         k += 1;
     }
     k = 0;
@@ -941,7 +955,7 @@ const RECORD_WORDS: usize = {
 };
 
 /// Pipeline `id`'s record and its length, each group entry seen from the
-/// stages that read it (`seen`).
+/// stages that read it (`stages_reading`).
 const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
     let mut out = [0; RECORD_WORDS];
     let desc = desc_of(id);
@@ -963,11 +977,11 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
         out[n] = head[n];
         n += 1;
     }
-    out[n] = desc.lanes.len() as u32;
+    out[n] = desc.buffers.len() as u32;
     n += 1;
     let mut k = 0;
-    while k < desc.lanes.len() {
-        let l = desc.lanes[k];
+    while k < desc.buffers.len() {
+        let l = desc.buffers[k];
         (out[n], out[n + 1], out[n + 2]) = (l.stride, l.step, l.attributes.len() as u32);
         n += 3;
         let mut a = 0;
@@ -987,7 +1001,7 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
         n += 1;
         let mut e = 0;
         while e < g.len() {
-            (out[n], out[n + 1], out[n + 2]) = (g[e][0], seen(g, g[e][0]), g[e][1]);
+            (out[n], out[n + 1], out[n + 2]) = (g[e][0], stages_reading(g, g[e][0]), g[e][1]);
             (n, e) = (n + 3, e + 1);
         }
         k += 1;
@@ -998,7 +1012,7 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
 /// Every pipeline's record, worked out as the crate is built.
 #[expect(
     clippy::large_const_arrays,
-    reason = "`is_floored` reads it as the crate is built, which a static is not"
+    reason = "`is_floored` reads it as the crate is pipeline, which a static is not"
 )]
 const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
     let mut r = [([0; RECORD_WORDS], 0); PIPELINES as usize];
@@ -1023,10 +1037,10 @@ pub fn pipeline(id: u32) -> &'static [u32] {
 const fn is_floored(id: u32) -> bool {
     let (words, _) = &RECORDS[id as usize];
     let mut at = HEAD as usize;
-    let lanes = words[at];
+    let buffers = words[at];
     at += 1;
     let mut k = 0;
-    while k < lanes {
+    while k < buffers {
         at += 3 + 3 * words[at + 2] as usize;
         k += 1;
     }
@@ -1047,7 +1061,7 @@ const fn is_floored(id: u32) -> bool {
 }
 
 /// Every pipeline's layout within the floor, checked as the crate is built,
-/// over every id, so a descriptor added is checked with no list to grow.
+/// over every id.
 const _: () = {
     let mut id = 0;
     while id < PIPELINES {

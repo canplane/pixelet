@@ -1,19 +1,19 @@
 // pxl-render/frame/shader/screen_bound.wgsl
 
-// The depth's bound the reach reads (gpu/reach.rs, screen_reach.wgsl): each
-// square of the screen `BOUND_STEP` pixels a side, its least and most depth
-// the world's pass drew, reversed, the sky left out (a square of sky alone
-// holds 2 and 0). Set after the world's pass in the tiles it drew this frame
-// (screen_tiles.wgsl), every one where it drew every one, so it holds what
-// the depth holds while the eye stands: a workgroup a tile, a thread a
-// square.
+// The depth's bound the propagation reads (gpu/propagate.rs,
+// screen_propagate.wgsl): each square of the screen `BOUND_STEP` pixels a
+// side, its least and most depth the world's pass drew, reversed, the sky
+// left out (a square of sky alone holds 2 and 0). Set after the world's pass
+// in the tiles it drew this frame (screen_tiles.wgsl), every one where it
+// drew every one, so it holds what the depth holds while the eye stands: a
+// workgroup a tile, a thread a square.
 
 @group(0) @binding(0) var depth: texture_depth_2d;
 @group(0) @binding(1) var<storage, read_write> bounds: array<vec2f>;
 
 // A square's pixels a side, `BOUND_STEP`, a thread's of a tile's
-// `BOUND_SQUARES` a side (constant.wgsl, pxl-spec-core `screen::TILE`), the
-// reach's.
+// `BOUND_SQUARES` a side (constant.wgsl, pxl-engine `screen::TILE`), the
+// propagation's.
 @compute @workgroup_size(BOUND_SQUARES, BOUND_SQUARES, 1)
 fn screen_bound_cs(
   @builtin(workgroup_id) wg: vec3u,

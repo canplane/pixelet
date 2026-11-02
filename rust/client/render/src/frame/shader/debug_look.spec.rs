@@ -4,8 +4,8 @@
 //
 // What the renderer's two debug views are drawn in, so the screen and the
 // shell's legend of them read one look: the camera gizmo's grid and the
-// tints of the cells the rays stop on (camera_grid.wgsl, screen_lit.wgsl
-// `cell_share`), and the ray steps' ramp (screen_lit.wgsl). Each #rrggbb in
+// tints of the cells the rays stop on (camera_grid.wgsl, screen_shade.wgsl
+// `cell_share`), and the ray steps' ramp (screen_shade.wgsl). Each #rrggbb in
 // sRGB.
 
 // Names as the spec spells them, so one record has one name on every side.

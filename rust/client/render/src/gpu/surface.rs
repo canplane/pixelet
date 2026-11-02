@@ -39,11 +39,11 @@ pub struct Surface {
     pub height: u32,
     /// The world's size and the canvas's last asked, which hold
     /// `SETTLE_TURNS` before the targets are made at them.
-    pub wanted: ((u32, u32), (u32, u32)),
-    pub waited: u32,
+    pub wanted_sizes: ((u32, u32), (u32, u32)),
+    pub waited_turns: u32,
     /// The frame's depth, the world's and over it what moves on its own
-    /// (gpu/renderer.rs, stage 2), with a stencil where the device carries
-    /// one (`Gpu::world_depth`): `depth_view` as a pass draws into it,
+    /// (gpu/renderer.rs, stage 2), with a stencil (`GATED_DEPTH`):
+    /// `depth_view` as a pass draws into it,
     /// `depth_only_view` as a binding reads it.
     pub depth: u32,
     pub depth_view: u32,
@@ -61,7 +61,7 @@ pub struct Surface {
     pub screen_depth_view: u32,
     /// The eye's rays as the cast leaves them, a drawn pixel each, made with
     /// the depth: `ray::WORDS` layers of `r32uint`, a word of the ray's a
-    /// layer (pxl-spec-core `ray`).
+    /// layer (pxl-engine `ray`).
     pub rays: u32,
     pub rays_view: u32,
     /// The world's color gathered over frames, two of `WORLD_COLOR` made
@@ -73,8 +73,8 @@ pub struct Surface {
     /// with the screen's depth: a gated frame finishes again only its
     /// claimed tiles in it, and every frame shows it whole on the canvas, whose
     /// texture is a new one each frame (gpu/finish.rs): the world's alone.
-    pub shown: u32,
-    pub shown_view: u32,
+    pub picture: u32,
+    pub picture_view: u32,
 }
 
 impl Surface {
@@ -94,8 +94,8 @@ impl Surface {
             self.history[0],
             self.history_view[1],
             self.history[1],
-            self.shown_view,
-            self.shown,
+            self.picture_view,
+            self.picture,
         ]
     }
 

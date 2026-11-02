@@ -15,7 +15,7 @@
 // words are frame/shader/word.rs's.
 
 // A face's outward normal by its number, 2·axis plus one down the axis, the
-// order of a ray's face (pxl-spec-core ray.rs).
+// order of a ray's face (pxl-engine ray.rs).
 const FACE_NORMAL = array<vec3f, 6>(
   vec3f(1.0, 0.0, 0.0), vec3f(-1.0, 0.0, 0.0),
   vec3f(0.0, 1.0, 0.0), vec3f(0.0, -1.0, 0.0),
@@ -43,7 +43,7 @@ struct Surface {
   ddx: vec2f,
   ddy: vec2f,
   ao: f32,
-  seen: Seen,
+  seen: Air,
 };
 
 // A cell's face wears its own image for that face, at any depth: a cell
@@ -93,8 +93,7 @@ fn line_at(d: f32, px: f32) -> f32 {
 }
 
 fn paint(s: Surface) -> vec3f {
-  // Only leaf cells carry layers; the taps are skipped, not taken and
-  // discarded.
+  // Only leaf cells carry layers; the taps are skipped.
   let textured = s.layers.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
   var albedo = s.rgb;
   if (textured) {

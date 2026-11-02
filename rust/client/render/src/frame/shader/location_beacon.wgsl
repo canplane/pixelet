@@ -33,7 +33,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let color = select(LOCATION_BEACON_DAY, LOCATION_BEACON_NIGHT, draw_night() > 0.5);
   let glow = select(LOCATION_BEACON_DAY_GLOW, LOCATION_BEACON_NIGHT_GLOW, draw_night() > 0.5);
   let n = normalize(i.normal);
-  let seen = Seen(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill));
+  let seen = Air(i.transmittance, i.scattered, Light(i.sun, i.other, i.fill));
   let lit = shade_metal(color, LOCATION_BEACON_METALNESS, LOCATION_BEACON_ROUGHNESS, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, seen);
   return vec4f(tone(lit + color * glow * seen.transmittance), 1.0);
 }

@@ -102,11 +102,11 @@ fn mem(at: u32, n: u32) -> &'static [u8] {
 }
 
 /// Handle, address, length, the two counts, buffer, group.
-const UPLOAD_LANES: usize = 7;
+const UPLOAD_COLUMNS: usize = 7;
 
-/// The table's lanes for `live` uploads, then the draw list's (frame/draw.rs `lanes_bytes`).
+/// The table's columns for `live` uploads, then the draw list's (frame/draw.rs `lists_bytes`).
 pub const fn uploads_bytes(live: usize) -> u32 {
-    (UPLOAD_LANES * slots_of(live) * 4) as u32 + draw::lanes_bytes(live)
+    (UPLOAD_COLUMNS * slots_of(live) * 4) as u32 + draw::lists_bytes(live)
 }
 
 /// # Safety
@@ -114,18 +114,18 @@ pub const fn uploads_bytes(live: usize) -> u32 {
 /// renderer's alone for as long as the module runs.
 pub unsafe fn set_uploads(at: u32, live: usize) {
     let slots = slots_of(live);
-    // SAFETY: the caller's range, one lane of `slots` words after another.
-    let lane = |k: usize| unsafe {
+    // SAFETY: the caller's range, one column of `slots` words after another.
+    let column = |k: usize| unsafe {
         core::slice::from_raw_parts_mut(mem::at::<u32>(at as usize + k * slots * 4), slots)
     };
     UPLOADS.set(Uploads {
-        handle: lane(0),
-        at: lane(1),
-        len: lane(2),
-        vertex_cnt: lane(3),
-        idx_cnt: lane(4),
-        buf: lane(5),
-        group: lane(6),
+        handle: column(0),
+        at: column(1),
+        len: column(2),
+        vertex_cnt: column(3),
+        idx_cnt: column(4),
+        buf: column(5),
+        group: column(6),
         live: live as u32,
         cnt: 0,
         bytes: 0,
@@ -133,7 +133,7 @@ pub unsafe fn set_uploads(at: u32, live: usize) {
         layout: 0,
     });
     // SAFETY: the range's rest past the table, the lists' alone.
-    unsafe { draw::set_lanes(at + (UPLOAD_LANES * slots * 4) as u32, live) };
+    unsafe { draw::set_lists(at + (UPLOAD_COLUMNS * slots * 4) as u32, live) };
 }
 
 fn home(handle: u32, slots: usize) -> usize {
@@ -165,7 +165,7 @@ impl Uploads {
         if !room(write_buffer_bytes(mem(self.at[i], self.len[i] & !3))) {
             return false;
         }
-        // Copied from too, a palette kept as it was drawn (gpu/pass/skinned.rs
+        // Copied from too, a palette kept as it was drawn (gpu/pass/skinned_mesh.rs
         // `keep`).
         let buf = g.buf(
             buf_size(self.len[i]),

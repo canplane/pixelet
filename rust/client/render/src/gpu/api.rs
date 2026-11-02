@@ -73,12 +73,22 @@ const FEAT_WORDS: usize = FEATURE_NAME.len().div_ceil(32);
 const PERIOD_AT: usize = LIMIT_NAME.len() + FEAT_WORDS;
 const DEVICE_WORDS: usize = PERIOD_AT + 3;
 
-/// The head's words past the stream's own: the device's block, the spans'
-/// read's word, then their begin and end ticks, two words a tick.
+/// The head's words past the stream's own: the device's block, then the
+/// spans' reads, `READS` of them, each its word, then the begin and end ticks
+/// of the frame it timed, two words a tick (`read_at`).
 const DEVICE_AT: usize = 1;
-const STAMPS_WORD_AT: usize = DEVICE_AT + DEVICE_WORDS;
-const STAMPS_AT: usize = STAMPS_WORD_AT + 1;
-const HEAD: usize = STAMPS_AT + 2 * 2 * SPANS;
+const READS_AT: usize = DEVICE_AT + DEVICE_WORDS;
+/// The spans' reads on their way at once, each its own mapped buffer: a
+/// frame's read lands a frame or two after it, so with three none waits on
+/// the one before it to be taken.
+pub const READS: usize = 3;
+const READ_WORDS: usize = 1 + 2 * 2 * SPANS;
+const HEAD: usize = READS_AT + READS * READ_WORDS;
+
+/// Read `k`'s word in the head; its ticks follow it.
+const fn read_at(k: usize) -> usize {
+    READS_AT + k * READ_WORDS
+}
 const _: () = assert!(
     HEAD == stream::HEAD as usize,
     "spec/client/render/gpu/api.json's stream HEAD is the head laid out here"
@@ -89,9 +99,6 @@ const _: () = assert!(
 pub struct Device {
     pub align: u32,
     pub timestamps: bool,
-    /// Whether a depth target may carry a stencil beside a 32-bit float
-    /// depth, which the world's does where it can (`Gpu::world_depth`).
-    pub depth32float_stencil8: bool,
     /// What a surface shows best, and so what the canvas's pipelines target.
     pub canvas: Format,
     period_ns: f32,
@@ -151,9 +158,8 @@ pub fn place(texture: Id, origin: [u32; 3]) -> encode::TexelCopyTexture {
     }
 }
 
-/// An encoder being recorded and the frame's spans, as Bevy's
-/// `RenderContext` holds a command encoder and its timestamps: a pass is
-/// handed this and writes its own span's.
+/// An encoder being recorded and the frame's spans: a pass is handed this
+/// and writes its own span's.
 pub struct RenderContext<'a> {
     pub g: &'a Gpu,
     pub encoder: Id,
@@ -170,9 +176,8 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-/// What a render pass holds, as Bevy's `DrawState` keeps it for its
-/// `TrackedRenderPass`. A group set with offsets is held as none: its offsets
-/// move per draw.
+/// What a render pass holds. A group set with offsets is held as none: its
+/// offsets move per draw.
 #[derive(Default)]
 pub struct DrawState {
     pipeline: Id,
@@ -216,9 +221,8 @@ impl DrawState {
 }
 
 /// A render pass handed from draw to draw, which sets no pipeline, bind
-/// group, vertex lane or index buffer its `DrawState` says it holds, as
-/// Bevy's `TrackedRenderPass` does. Every call on the pass goes through it,
-/// so what it holds is what the pass has.
+/// group, vertex lane or index buffer its `DrawState` says it holds. Every
+/// call on the pass goes through it, so what it holds is what the pass has.
 pub struct TrackedRenderPass<'a> {
     g: &'a Gpu,
     pass: Id,
@@ -298,13 +302,18 @@ impl<'a> TrackedRenderPass<'a> {
     }
 }
 
-/// What a pipeline does with the stencil beside its depth (`Gpu::gated_depth`),
+/// The depth a pass drawn through a gate draws into, the world's surfaces'
+/// and the light's map's: a 32-bit float, and a stencil, which marks the
+/// tiles a frame draws again, so a pass skips the rest (`Stencil`).
+pub const GATED_DEPTH: Format = Format::depth32float_stencil8;
+
+/// What a pipeline does with the stencil beside its depth (`GATED_DEPTH`),
 /// which holds in each tile the number of the gated frame that last claimed
 /// it, as a light tile's word names the cast that read it: nothing; passes
 /// only where it holds the pass's reference, this frame's number, as every
 /// draw of the world's pass does; or writes the reference there, as the gate
 /// does (gpu/renderer.rs `frame`). A pass clears it to 0, its reference 0,
-/// unless it keeps it (`PassDesc::kept`), so a pass with no gate passes
+/// unless it keeps it (`PassDesc::load_stencil`), so a pass with no gate passes
 /// everywhere.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Stencil {
@@ -323,23 +332,23 @@ pub enum Load {
 
 /// A pass's targets: color cleared to transparent or loaded, depth cleared
 /// to `depth_clear`, loaded or read only, and its stencil, where it has one,
-/// cleared to 0 or loaded where it is `kept`; 0 for one absent.
+/// cleared to 0 or loaded (`load_stencil`); 0 for one absent.
 pub struct PassDesc {
     color: Id,
     color_load: Load,
     depth: Id,
     depth_load: Load,
     depth_clear: f32,
-    stencil_kept: bool,
+    stencil_load: Load,
     stamp: Option<encode::TimestampWrites>,
 }
 
 impl PassDesc {
     /// Its stencil loaded as the last pass left it, the numbers of the gated
     /// frames that claimed each tile (`Stencil`).
-    pub fn kept(self) -> PassDesc {
+    pub fn load_stencil(self) -> PassDesc {
         PassDesc {
-            stencil_kept: true,
+            stencil_load: Load::Load,
             ..self
         }
     }
@@ -359,7 +368,7 @@ pub fn pass_desc(
         depth,
         depth_load,
         depth_clear,
-        stencil_kept: false,
+        stencil_load: Load::Clear,
         stamp,
     }
 }
@@ -427,25 +436,29 @@ struct State {
     /// The device's block asked for; read once it is READY.
     asked: bool,
     device: Option<Device>,
-    /// The spans' query set, its resolve buffer and the buffer it is copied
-    /// into and mapped back through, which spans the read in flight timed,
-    /// and their times from the last read in, in ms; past the last span, the
-    /// whole frame's.
-    stamps: Option<(Id, Id, Id)>,
-    stamps_written: u32,
-    /// Whether this frame asked the read: its mapping's ticket is written
-    /// as it is encoded, so a frame dropped whole takes it back
-    /// (`frame_commit`), or no read would be asked again.
-    stamps_asked: bool,
+    /// The spans' query set, its resolve buffer and the buffers it is copied
+    /// into and mapped back through, a read's each; which spans each read
+    /// timed, and the order it was asked in, 0 where none is out, so the
+    /// reads are taken in as they were asked; and their times from the last
+    /// read in, in ms.
+    stamps: Option<(Id, Id, [Id; READS])>,
+    stamps_written: [u32; READS],
+    stamps_out: [u32; READS],
+    stamps_asked_cnt: u32,
+    /// The read this frame asked: its mapping's ticket is written as it is
+    /// encoded, so a frame dropped whole takes it back (`frame_commit`), or
+    /// it would never land.
+    stamps_asked: Option<usize>,
     gpu_ms: [f64; SPANS],
     /// The time the last read's spans ran, ms, those that overlap counted
     /// once: the frame's GPU time, as the spans' sum is not where its passes
     /// overlap; a span whose ticks a pass left unwritten (a pass with no work
     /// may be dropped) adds its own length, not the time since.
     gpu_busy_ms: f64,
-    /// Whether the last frame submitted took a read in: its figures are then
-    /// that read's, and else the read before it, not measured again.
-    gpu_landed: bool,
+    /// The read the last frame submitted took in, where it took one: its
+    /// figures are then that read's, and else the read before it, not
+    /// measured again.
+    gpu_landed: Option<usize>,
     /// The images on their way into textures (`Gpu::image`).
     images: Vec<Arriving>,
     /// The images taken since `take_landed` last ran, on this device.
@@ -505,11 +518,13 @@ pub unsafe fn install(at: u32) -> u32 {
         asked: false,
         device: None,
         stamps: None,
-        stamps_written: 0,
-        stamps_asked: false,
+        stamps_written: [0; READS],
+        stamps_out: [0; READS],
+        stamps_asked_cnt: 0,
+        stamps_asked: None,
         gpu_ms: [0.0; SPANS],
         gpu_busy_ms: 0.0,
-        gpu_landed: false,
+        gpu_landed: None,
         images: Vec::new(),
         landed: Vec::new(),
         generation: 0,
@@ -561,7 +576,6 @@ pub fn device() -> Option<Device> {
         s.device = Some(Device {
             align,
             timestamps: feat("timestamp-query"),
-            depth32float_stencil8: feat("depth32float-stencil8"),
             canvas,
             period_ns: f32::from_bits(word(PERIOD_AT)),
         });
@@ -597,34 +611,56 @@ pub fn device_generation() -> u32 {
     STATE.get(|| None).as_ref().map_or(0, |s| s.generation)
 }
 
-/// The last read's ticks, where its word says they landed: each span's ms, and
-/// the word let go for the next read; whether one landed.
-fn take_stamps(s: &mut State) -> bool {
-    let word = head(STAMPS_WORD_AT);
+/// The ticks of the read asked first of those out, where its word says they
+/// landed: each span's own ms, and the read let go for another frame to
+/// ask; which read landed. One a frame is taken, as one a frame is asked.
+fn take_stamps(s: &mut State) -> Option<usize> {
+    let r = (0..READS)
+        .filter(|&r| s.stamps_out[r] != 0)
+        .min_by_key(|&r| s.stamps_out[r])?;
+    let word = head(read_at(r));
     if *word & DONE == 0 {
-        return false;
+        return None;
     }
-    *word = 0;
+    (*word, s.stamps_out[r]) = (0, 0);
+    let written = s.stamps_written[r];
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
-    let tick = |k: usize| {
-        u64::from(*head(STAMPS_AT + 2 * k)) | u64::from(*head(STAMPS_AT + 2 * k + 1)) << 32
-    };
+    let ticks = read_at(r) + 1;
+    let tick =
+        |k: usize| u64::from(*head(ticks + 2 * k)) | u64::from(*head(ticks + 2 * k + 1)) << 32;
     let mut ran = [(0u64, 0u64); SPANS];
+    for (k, r) in ran.iter_mut().enumerate() {
+        let (b, e) = (tick(2 * k), tick(2 * k + 1));
+        if written & 1 << k != 0 && e >= b {
+            *r = (b, e);
+        }
+    }
+    // A span's own time is its end less the later of its begin and the
+    // latest end before it: a render pass's begin is stamped before the
+    // passes it waits on have finished (a tiled GPU starts its vertex work
+    // early), while its end and a compute pass's begin are not, so the end
+    // before it bounds what it took of their time.
+    let ends = ran;
+    for (k, r) in ran.iter_mut().enumerate() {
+        let (b, e) = *r;
+        let before = ends
+            .iter()
+            .enumerate()
+            .filter(|&(j, &(_, ej))| j != k && ej != 0 && ej < e)
+            .map(|(_, &(_, ej))| ej)
+            .max();
+        r.0 = before.map_or(b, |p| p.clamp(b, e));
+        s.gpu_ms[k] = (r.1 - r.0) as f64 * period_ms;
+    }
+    // The spans' own times by their starts, each run of overlapping ones
+    // counted once.
     let mut cnt = 0;
     for k in 0..SPANS {
-        let (b, e) = (tick(2 * k), tick(2 * k + 1));
-        let written = s.stamps_written & 1 << k != 0 && e >= b;
-        s.gpu_ms[k] = if written {
-            (e - b) as f64 * period_ms
-        } else {
-            0.0
-        };
-        if written {
-            ran[cnt] = (b, e);
+        if ran[k].1 != 0 {
+            ran[cnt] = ran[k];
             cnt += 1;
         }
     }
-    // The spans by their starts, each run of overlapping ones counted once.
     let ran = &mut ran[..cnt];
     ran.sort_unstable();
     let mut busy = 0;
@@ -643,7 +679,7 @@ fn take_stamps(s: &mut State) -> bool {
         busy += re - rb;
     }
     s.gpu_busy_ms = busy as f64 * period_ms;
-    true
+    Some(r)
 }
 
 /// The device went, and every object on it: the handles start over.
@@ -655,7 +691,10 @@ pub fn on_device_lost() {
         s.images.clear();
         s.landed.clear();
         s.generation = s.generation.wrapping_add(1);
-        *head(STAMPS_WORD_AT) = 0;
+        for r in 0..READS {
+            *head(read_at(r)) = 0;
+        }
+        s.stamps_out = [0; READS];
     }
 }
 
@@ -689,7 +728,7 @@ pub fn frame_begin() {
     let s = state();
     s.encoder.begin(&mut s.stream);
     s.in_frame = true;
-    s.stamps_asked = false;
+    s.stamps_asked = None;
 }
 
 /// False where the frame did not fit and nothing of it was recorded: the
@@ -698,8 +737,8 @@ pub fn frame_commit() -> bool {
     let s = state();
     s.in_frame = false;
     let committed = s.encoder.commit(&mut s.stream);
-    if !committed && core::mem::take(&mut s.stamps_asked) {
-        *head(STAMPS_WORD_AT) = 0;
+    if let Some(r) = s.stamps_asked.take().filter(|_| !committed) {
+        (*head(read_at(r)), s.stamps_out[r]) = (0, 0);
     }
     committed
 }
@@ -710,8 +749,15 @@ use pxl_spec::asset;
 /// it: what a caller sums over the writes it makes together and asks `room`.
 pub use xpute_gpu::encode::call::{write_buffer_bytes, write_texture_bytes};
 
-/// Whether records of `bytes` (`write_buffer_bytes`, `write_texture_bytes`)
-/// fit the stream, leaving `stream::RESERVE` for what cannot wait.
+/// What a shader module of `code` takes of the stream (`Gpu::shader`), as
+/// its writer measures it: what its maker asks `room` before it.
+pub fn shader_bytes(code: &str) -> usize {
+    Encoder::<OBJECTS>::shader_module_bytes(code)
+}
+
+/// Whether records of `bytes` (`write_buffer_bytes`, `write_texture_bytes`,
+/// `shader_bytes`) fit the stream, leaving `stream::RESERVE` for what cannot
+/// wait.
 pub fn room(bytes: usize) -> bool {
     STATE
         .get(|| None)
@@ -721,7 +767,7 @@ pub fn room(bytes: usize) -> bool {
 
 /// An object's handle, or 0 where the frame it was made in no longer fits
 /// (and is dropped with it); a full table is a bug.
-fn made(id: Option<Id>) -> Id {
+fn handle_of(id: Option<Id>) -> Id {
     match id {
         Some(id) => id,
         None => {
@@ -869,7 +915,7 @@ impl Gpu {
             size
         );
         let s = self.s();
-        made(s.encoder.buffer(
+        handle_of(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
                 size,
@@ -889,7 +935,7 @@ impl Gpu {
         usage: u32,
     ) -> Id {
         let s = self.s();
-        made(s.encoder.texture(
+        handle_of(s.encoder.texture(
             &mut s.stream,
             &encode::TextureDescriptor {
                 size: [width, height, layers],
@@ -906,7 +952,7 @@ impl Gpu {
     /// A volume `size` texels on a side each way: no mips, no layers.
     pub fn volume(&self, size: [u32; 3], format: Format, usage: u32) -> Id {
         let s = self.s();
-        made(s.encoder.texture(
+        handle_of(s.encoder.texture(
             &mut s.stream,
             &encode::TextureDescriptor {
                 size,
@@ -923,7 +969,7 @@ impl Gpu {
     /// A volume's view, whole (`volume`).
     pub fn volume_view(&self, texture: Id) -> Id {
         let s = self.s();
-        made(s.encoder.view(
+        handle_of(s.encoder.view(
             &mut s.stream,
             texture,
             &encode::ViewDescriptor {
@@ -948,7 +994,7 @@ impl Gpu {
         layers: u32,
     ) -> Id {
         let s = self.s();
-        made(s.encoder.view(
+        handle_of(s.encoder.view(
             &mut s.stream,
             texture,
             &encode::ViewDescriptor {
@@ -970,7 +1016,7 @@ impl Gpu {
     /// binding reads it: WebGPU binds no view of both aspects.
     pub fn depth_only_view(&self, texture: Id) -> Id {
         let s = self.s();
-        made(s.encoder.view(
+        handle_of(s.encoder.view(
             &mut s.stream,
             texture,
             &encode::ViewDescriptor {
@@ -981,24 +1027,6 @@ impl Gpu {
                 ..Default::default()
             },
         ))
-    }
-
-    /// The depth a pass drawn through a gate draws into, the world's
-    /// surfaces' and the light's map's: a 32-bit float, with a stencil where
-    /// the device carries one beside it (`gates`).
-    pub fn gated_depth(&self) -> Format {
-        if self.gates() {
-            Format::depth32float_stencil8
-        } else {
-            Format::depth32float
-        }
-    }
-
-    /// Whether a gated depth carries a stencil, so a frame may be drawn
-    /// through a gate (`Stencil`); else every pass a gate would hold is
-    /// drawn whole.
-    pub fn gates(&self) -> bool {
-        self.s().device.is_some_and(|d| d.depth32float_stencil8)
     }
 
     /// Both directions addressed alike; `compare` for a comparison sampler.
@@ -1012,7 +1040,7 @@ impl Gpu {
         anisotropy: u32,
     ) -> Id {
         let s = self.s();
-        made(s.encoder.sampler(
+        handle_of(s.encoder.sampler(
             &mut s.stream,
             &encode::SamplerDescriptor {
                 address: [addr, addr, AddressMode::clamp_to_edge],
@@ -1028,7 +1056,7 @@ impl Gpu {
 
     pub fn shader(&self, code: &str) -> Id {
         let s = self.s();
-        made(s.encoder.shader_module(&mut s.stream, code))
+        handle_of(s.encoder.shader_module(&mut s.stream, code))
     }
 
     /// A group's (binding, stages, kind) words, as a pipeline record holds them.
@@ -1044,7 +1072,7 @@ impl Gpu {
             }
         });
         let s = self.s();
-        made(
+        handle_of(
             s.encoder
                 .bind_group_layout(&mut s.stream, &entries[..words.len()]),
         )
@@ -1052,13 +1080,15 @@ impl Gpu {
 
     fn pipeline_layout(&self, layouts: &[Id]) -> Id {
         let s = self.s();
-        made(s.encoder.pipeline_layout(&mut s.stream, layouts))
+        handle_of(s.encoder.pipeline_layout(&mut s.stream, layouts))
     }
 
     /// A render pipeline from its record (frame/shader/record.rs) over the
     /// group layouts, drawing into `format` and `depth`, `stencil` the
     /// stencil beside it: into the depth alone where `format` is depth32's,
-    /// its fragment writing no color (the shadow map, gpu/shadow.rs).
+    /// its fragment writing no color (the shadow map, gpu/shadow.rs). Made by
+    /// WebGPU's async call: `word` holds `ticket | DONE` once it is made, and
+    /// nothing names it before (gpu/pipeline.rs `Pipelines::made`).
     pub fn pipeline(
         &self,
         words: &[u32],
@@ -1066,6 +1096,7 @@ impl Gpu {
         module: Id,
         format: Format,
         (depth, stencil): (Format, Stencil),
+        (word, ticket): (&mut u32, u32),
     ) -> Id {
         let mut at = record::HEAD as usize;
         let mut next = || {
@@ -1120,7 +1151,7 @@ impl Gpu {
             _ => CompareFunction::always,
         };
         let s = self.s();
-        let p = made(s.encoder.render_pipeline(
+        let p = handle_of(s.encoder.render_pipeline_async(
             &mut s.stream,
             &encode::RenderPipelineDescriptor {
                 layout: Some(layout),
@@ -1168,22 +1199,33 @@ impl Gpu {
                     },
                 }),
             },
+            word,
+            ticket,
         ));
         s.encoder.destroy(&mut s.stream, layout);
         p
     }
 
-    /// The module's compute entry `entry`, over `layouts`.
-    pub fn compute_pipeline(&self, module: Id, entry: &str, layouts: &[Id]) -> Id {
+    /// The module's compute entry `entry`, over `layouts`, its word as
+    /// `pipeline`'s.
+    pub fn compute_pipeline(
+        &self,
+        module: Id,
+        entry: &str,
+        layouts: &[Id],
+        (word, ticket): (&mut u32, u32),
+    ) -> Id {
         let layout = self.pipeline_layout(layouts);
         let s = self.s();
-        let p = made(s.encoder.compute_pipeline(
+        let p = handle_of(s.encoder.compute_pipeline_async(
             &mut s.stream,
             &encode::ComputePipelineDescriptor {
                 layout: Some(layout),
                 module,
                 entry,
             },
+            word,
+            ticket,
         ));
         s.encoder.destroy(&mut s.stream, layout);
         p
@@ -1192,7 +1234,7 @@ impl Gpu {
     pub fn bind_group(&self, layout: Id, entries: &[Entry]) -> Id {
         xpute_kit::ensure!(entries.len() <= GROUP_ENTRIES, ENOSPC, entries.len());
         let s = self.s();
-        made(s.encoder.bind_group(&mut s.stream, layout, entries))
+        handle_of(s.encoder.bind_group(&mut s.stream, layout, entries))
     }
 
     /// The format the device's surfaces show best, which the canvas's pipelines target.
@@ -1266,7 +1308,7 @@ impl Gpu {
 
     pub fn encoder(&self) -> Id {
         let s = self.s();
-        made(s.encoder.encoder(&mut s.stream))
+        handle_of(s.encoder.encoder(&mut s.stream))
     }
 
     /// `size` texels of `src` into `dst`, as WebGPU's `copyTextureToTexture`.
@@ -1294,17 +1336,13 @@ impl Gpu {
             depth_store: StoreOp::store,
             depth_clear: d.depth_clear,
             depth_read_only: d.depth_load == Load::ReadOnly,
-            stencil_load: if d.stencil_kept {
-                LoadOp::load
-            } else {
-                LoadOp::clear
-            },
+            stencil_load: load_op(d.stencil_load),
             stencil_store: StoreOp::store,
             stencil_clear: 0,
             stencil_read_only: false,
         });
         let s = self.s();
-        made(s.encoder.render_pass(
+        handle_of(s.encoder.render_pass(
             &mut s.stream,
             encoder,
             &encode::RenderPassDescriptor {
@@ -1323,7 +1361,7 @@ impl Gpu {
     /// Timed in `stamp`'s span where the frame is timed.
     pub fn compute_pass(&self, encoder: Id, stamp: Option<encode::TimestampWrites>) -> Id {
         let s = self.s();
-        made(s.encoder.compute_pass(&mut s.stream, encoder, &stamp))
+        handle_of(s.encoder.compute_pass(&mut s.stream, encoder, &stamp))
     }
 
     pub fn dispatch(&self, pass: Id, x: u32, y: u32, z: u32) {
@@ -1431,37 +1469,36 @@ impl Gpu {
     }
 
     /// The frame's encoder, its spans resolved, copied out and mapped back
-    /// where it wrote any and no mapping is still on its way, submitted. One
-    /// mapping at most is on its way, so its ticket need not tell them apart.
-    /// A mapping that landed is taken in first: asking for the next writes its
-    /// ticket over the word that says so. Whether this frame's spans are on
-    /// their way back.
-    pub fn submit_frame(&self, encoder: Id, written: u32) -> bool {
+    /// through a read none is out on, where it wrote any, submitted. The
+    /// read asked first of those out is taken in first, where it landed:
+    /// asking for that one again writes its ticket over the word that says
+    /// so. Which read this frame's spans are on their way back in.
+    pub fn submit_frame(&self, encoder: Id, written: u32) -> Option<usize> {
         let s = self.s();
         s.gpu_landed = take_stamps(s);
-        let stamps_free = *head(STAMPS_WORD_AT) == 0;
-        let asked = stamps_free && written != 0;
-        if let (Some((set, resolve, mapped)), true) = (s.stamps, asked) {
-            let bytes = 2 * SPANS as u32 * 8;
-            call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
-            call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped, 0), bytes);
+        let free = (0..READS).find(|&r| s.stamps_out[r] == 0);
+        let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, written != 0) else {
             s.encoder.submit(&mut s.stream, &[encoder]);
-            s.stamps_written = written;
-            let at = s.at as usize + STAMPS_AT * WORD;
-            // SAFETY: the head's ticks and their word, the host's to write.
-            let (ticks, word) = unsafe {
-                (
-                    core::slice::from_raw_parts_mut(mem::at::<u8>(at), 2 * SPANS * 8),
-                    &mut *mem::at::<u32>(s.at as usize + STAMPS_WORD_AT * WORD),
-                )
-            };
-            call::map_async(&mut s.stream, mapped, 0, ticks, word, 1);
-            s.stamps_asked = true;
-            true
-        } else {
-            s.encoder.submit(&mut s.stream, &[encoder]);
-            false
-        }
+            return None;
+        };
+        let bytes = 2 * SPANS as u32 * 8;
+        call::resolve_query_set(&mut s.stream, encoder, set, 0, 2 * SPANS as u32, resolve, 0);
+        call::copy_buffer_to_buffer(&mut s.stream, encoder, (resolve, 0), (mapped[r], 0), bytes);
+        s.encoder.submit(&mut s.stream, &[encoder]);
+        s.stamps_written[r] = written;
+        s.stamps_asked_cnt = s.stamps_asked_cnt.wrapping_add(1).max(1);
+        s.stamps_out[r] = s.stamps_asked_cnt;
+        let at = s.at as usize + read_at(r) * WORD;
+        // SAFETY: the head's read: its word and its ticks, the host's to write.
+        let (word, ticks) = unsafe {
+            (
+                &mut *mem::at::<u32>(at),
+                core::slice::from_raw_parts_mut(mem::at::<u8>(at + WORD), 2 * SPANS * 8),
+            )
+        };
+        call::map_async(&mut s.stream, mapped[r], 0, ticks, word, 1);
+        s.stamps_asked = Some(r);
+        Some(r)
     }
 
     /// Configured in the format the device prefers, its alpha premultiplied.
@@ -1482,18 +1519,19 @@ impl Gpu {
     /// A view of the surface's texture for this frame.
     pub fn cur(&self, surface: u32) -> Id {
         let s = self.s();
-        made(s.encoder.current(&mut s.stream, handle_slot(surface)))
+        handle_of(s.encoder.current(&mut s.stream, handle_slot(surface)))
     }
 
     /// The spans' query set, two queries a span, the buffer they resolve into
-    /// and the one that is mapped back.
+    /// and those mapped back, a read's each.
     pub fn spans(&self) -> Id {
         let s = self.s();
-        let set = made(
-            s.encoder
-                .query_set(&mut s.stream, QueryType::timestamp, 2 * SPANS as u32),
-        );
-        let resolve = made(s.encoder.buffer(
+        let set = handle_of(s.encoder.query_set(
+            &mut s.stream,
+            QueryType::timestamp,
+            2 * SPANS as u32,
+        ));
+        let resolve = handle_of(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
                 size: (2 * SPANS * 8) as u32,
@@ -1501,14 +1539,16 @@ impl Gpu {
                 mapped_at_creation: false,
             },
         ));
-        let mapped = made(s.encoder.buffer(
-            &mut s.stream,
-            &encode::BufferDescriptor {
-                size: (2 * SPANS * 8) as u32,
-                usage: BUFFER_USAGE::MAP_READ | BUFFER_USAGE::COPY_DST,
-                mapped_at_creation: false,
-            },
-        ));
+        let mapped = core::array::from_fn(|_| {
+            handle_of(s.encoder.buffer(
+                &mut s.stream,
+                &encode::BufferDescriptor {
+                    size: (2 * SPANS * 8) as u32,
+                    usage: BUFFER_USAGE::MAP_READ | BUFFER_USAGE::COPY_DST,
+                    mapped_at_creation: false,
+                },
+            ))
+        });
         s.stamps = Some((set, resolve, mapped));
         set
     }
@@ -1529,9 +1569,9 @@ impl Gpu {
         self.s().gpu_busy_ms
     }
 
-    /// Whether the frame just submitted took a read in, so its figures were
-    /// measured with it.
-    pub fn has_gpu_landed(&self) -> bool {
+    /// The read the frame just submitted took in, where it took one: its
+    /// figures were measured with it.
+    pub fn gpu_landed(&self) -> Option<usize> {
         self.s().gpu_landed
     }
 

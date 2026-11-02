@@ -1,9 +1,9 @@
 // pxl-render/frame/shader/raster.wgsl
 
-// The samples' stops drawn at the eye's rays' pixels (pxl-spec-core raster.rs):
+// The samples' hits drawn at the eye's rays' pixels (pxl-engine raster.rs):
 // each box an instance, its three faces turned to the eye, one an axis, as
 // `corner` winds them, the faces turned away never drawn, each grown in its own
-// plane by `GROWN` (pxl-spec-core param.rs `raster::GROWN`) of a drawn pixel. A
+// plane by `GROWTH` (pxl-engine param.rs `raster::GROWTH`) of a drawn pixel. A
 // hit's box draws the face across its sample's axis alone, a lack's every face
 // turned to the eye. A face keeps a pixel only where the pixel's own ray enters
 // the box across that face's axis (`raster_enters`). A ray enters a box through
@@ -15,8 +15,8 @@
 // the whole screen at the nearest depth, a lack's nearer still, tested alike
 // but for the axis.
 //
-// The light's samples' stops are drawn the same way into the light's box
-// (pxl-spec-core param.rs `param::light::SAMPLE`), orthographic, where
+// The light's samples' hits are drawn the same way into the light's box
+// (pxl-engine param.rs `param::light::SAMPLE`), orthographic, where
 // `turn.y` says: a texel's ray starts on the box's near plane at its middle,
 // off `first`, and runs along the light; a box's face turned to it is the one
 // its rays enter across; its depth is how far along the rays, a share of
@@ -39,7 +39,7 @@ struct Raster {
   screen: vec4f,
   // The light's: where box texel (0, 0)'s ray starts, in units from where
   // its boxes are laid. The eye's: where each pixel's ray goes through it,
-  // off its middle, in drawn pixels (pxl-spec-core `eye::JITTER`).
+  // off its middle, in drawn pixels (pxl-engine `eye::JITTER`).
   first: vec4f,
 };
 
@@ -144,16 +144,16 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   return o;
 }
 
-// A ray's direction component as the cast holds it (pxl-spec-core cast.rs
+// A ray's direction component as the cast holds it (pxl-engine cast.rs
 // `Ray::new`): 0 under f32's least normal magnitude.
 fn raster_moves(d: f32) -> f32 {
   return select(d, 0.0, abs(d) < 1.17549435e-38);
 }
 
-// The ray's t at the near and far planes on one axis (pxl-spec-core cast.rs
+// The ray's t at the near and far planes on one axis (pxl-engine cast.rs
 // `planes`, from 0): an axis it runs beside, its whole reach inside the
 // slab, none outside.
-fn raster_planes(d: f32, lo: f32, hi: f32, reach: f32) -> vec2f {
+fn raster_planes(d: f32, lo: f32, hi: f32, far: f32) -> vec2f {
   if (d > 0.0) {
     let inv = 1.0 / d;
     return vec2f(lo * inv, hi * inv);
@@ -163,9 +163,9 @@ fn raster_planes(d: f32, lo: f32, hi: f32, reach: f32) -> vec2f {
     return vec2f(hi * inv, lo * inv);
   }
   if (lo <= 0.0 && 0.0 < hi) {
-    return vec2f(0.0, reach);
+    return vec2f(0.0, far);
   }
-  return vec2f(reach, 0.0);
+  return vec2f(far, 0.0);
 }
 
 // The drawn pixel's tangents across and up at `at`, where its ray goes
@@ -175,18 +175,18 @@ fn raster_tan(at: vec2f) -> vec2f {
 }
 
 // Whether the ray from `o` along the unit `u` enters the box `lo`..`hi`
-// within its reach, across axis `a` unless `RASTER_ANY`: pxl-spec-core
+// within its reach, across axis `a` unless `RASTER_ANY`: pxl-engine
 // cast.rs `entry`, its span in the box not empty, the axis entered the last
 // of the near planes it reaches among those it moves along, the lowest at a
 // tie (`crossing`).
 fn raster_enters(o: vec3f, u: vec3f, lo: vec3f, hi: vec3f, a: u32) -> bool {
   let d = vec3f(raster_moves(u.x), raster_moves(u.y), raster_moves(u.z));
-  let reach = raster.screen.w;
-  let x = raster_planes(d.x, lo.x - o.x, hi.x - o.x, reach);
-  let y = raster_planes(d.y, lo.y - o.y, hi.y - o.y, reach);
-  let z = raster_planes(d.z, lo.z - o.z, hi.z - o.z, reach);
+  let far = raster.screen.w;
+  let x = raster_planes(d.x, lo.x - o.x, hi.x - o.x, far);
+  let y = raster_planes(d.y, lo.y - o.y, hi.y - o.y, far);
+  let z = raster_planes(d.z, lo.z - o.z, hi.z - o.z, far);
   let t0 = max(max(max(0.0, x.x), y.x), z.x);
-  let t1 = min(min(min(reach, x.y), y.y), z.y);
+  let t1 = min(min(min(far, x.y), y.y), z.y);
   let near = vec3f(x.x, y.x, z.x);
   var e = 2u;
   if (d.x != 0.0) {
@@ -203,9 +203,9 @@ fn raster_enters(o: vec3f, u: vec3f, lo: vec3f, hi: vec3f, a: u32) -> bool {
   return t1 > t0 && (a == RASTER_ANY || e == a);
 }
 
-// Its sample's number (pxl-spec-core raster.rs `id_of`) where the pixel's
+// Its sample's number (pxl-engine raster.rs `id_of`) where the pixel's
 // ray enters its box across this face (`raster_enters`): the eye's from the
-// eye, its direction as pxl-spec-core cast.rs `through` forms it; the light's
+// eye, its direction as pxl-engine cast.rs `through` forms it; the light's
 // from its texel's middle on the near plane, along the light.
 @fragment
 fn fs(i: RasterOut) -> @location(0) vec4u {

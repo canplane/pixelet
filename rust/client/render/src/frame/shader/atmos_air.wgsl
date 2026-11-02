@@ -31,9 +31,7 @@ fn bspline_taps(x: f32) -> vec4f {
 // centers at whole numbers, by the cubic B-spline in all three: smooth to
 // its second derivative across every column and slice, eight trilinear
 // reads. A tap past the half's first or last column reads that column, as
-// the edge's own would. It smooths what it reads by a sixth of the square of
-// a texel's step times its curvature, which the slow light per share taken
-// has little of.
+// the edge's own would.
 fn air_held_at(k: u32, c: vec2f, slice: f32) -> vec3f {
   let n = f32(AIR_FROXELS);
   let x = bspline_taps(c.x);
@@ -93,11 +91,11 @@ fn air_before(dir: vec3f, d: f32) -> vec4f {
 // are the point's own, read where it stands (atmos_view.wgsl `light_of`):
 // they turn with its height, and a froxel stands higher or lower than what
 // is drawn in it.
-fn seen_from_eye(world_pos: vec3f) -> Seen {
+fn seen_from_eye(world_pos: vec3f) -> Air {
   let to = world_pos - frame_camera_pos();
   let d = length(to);
   let air = air_before(to / max(d, 1e-6), d);
-  var s: Seen;
+  var s: Air;
   s.scattered = air.rgb;
   s.transmittance = air.a;
   s.light = light_of(world_pos);
@@ -118,8 +116,8 @@ fn map_of(p: vec3f) -> vec2f {
 }
 
 // Reflectance, and in alpha its lights' square root, at the map's place
-// `mercator`: the global picture at its latitude and longitude, a held tile
-// over it.
+// `mercator`: the global picture at its latitude and longitude, zero before
+// it has come, a held tile over it.
 fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
   let lat = 2.0 * atan(exp(mercator.y)) - 0.5 * PI;
   let uv = vec2f(fract(mercator.x / TAU + 0.5), 0.5 - lat / PI);
@@ -173,7 +171,7 @@ fn beyond(dir: vec3f) -> vec3f {
   let d = to_land(dir);
   let p = dir * d;
   let seen = seen_from_eye(p);
-  let octaves = log2(d / atmos_earth_reach());
+  let octaves = log2(d / atmos_earth_dist());
   let n = frame_up();
   let face = earth_face(map_of(p), octaves);
   let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, seen.light) + city_shown(face.a, n);

@@ -1,26 +1,26 @@
 // pxl-shader/eye.rs
 
-//! The eye a cast is from, as the kernel writes its words (pxl-spec-core
+//! The eye a cast is from, as the kernel writes its words (pxl-engine
 //! `eye`), what every entry reads off it, and the eye as an observer
 //! (observer.rs `Observer`): its camera grid's corners, cells and samples
-//! (pxl-spec-core `beam::Grid`), a ray at the screen's tangents.
+//! (pxl-engine `beam::Grid`), a ray at the screen's tangents.
 
-use pxl_spec_core::cast::{self, Detail};
-use pxl_spec_core::{beam, eye, observed, tally};
+use pxl_engine::cast::{self, Detail};
+use pxl_engine::{beam, eye, pyramid, tally};
 use spirv_std::glam::{IVec4, UVec2, UVec4, Vec2, Vec4};
 
 use crate::beam::Words;
 use crate::observer::{Aim, Level, Observer};
 
 /// The eye a cast is from (pxl-kernel domain/view/lens.rs `gpu_cast`), its words
-/// where pxl-spec-core `eye` lays them (asserted below).
+/// where pxl-engine `eye` lays them (asserted below).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Eye {
     /// The Q3 position, and whether a ray reports the nodes its descent
     /// asked (`word`), not what it met.
     pub origin: IVec4,
-    /// The unit forward, and the reach.
+    /// The unit forward, and how far the rays go (pxl-engine `eye::FAR`).
     pub forward_far: Vec4,
     /// The unit right, and a pad.
     pub right: Vec4,
@@ -36,16 +36,16 @@ pub struct Eye {
     /// `eye::NO_CUT` for none.
     pub carve: IVec4,
     pub hide: IVec4,
-    /// The camera grid the frame casts on, as the kernel laid it once
-    /// (pxl-spec-core `beam::Grid`, `grid`).
-    pub grid: [UVec4; eye::GRID_WORDS / 4],
-    /// The light's cast, a frame's constants (pxl-spec-core `light::Light`), all
+    /// The light's cast, a frame's constants (pxl-engine `light::Light`), all
     /// zero where no shadow is cast.
     pub light: [Vec4; 5],
     /// Each pixel's ray's offset from its middle, in drawn pixels, and the
-    /// first pixel of the region the frame casts (pxl-spec-core
+    /// first pixel of the region the frame casts (pxl-engine
     /// `eye::JITTER`).
     pub jitter: Vec4,
+    /// The camera grid the frame casts on, as the kernel laid it once
+    /// (pxl-engine `beam::Grid`, `grid`).
+    pub grid: [UVec4; eye::GRID_WORDS / 4],
 }
 
 /// Word `words`'s byte.
@@ -70,9 +70,9 @@ const _: () = {
     assert!(
         offset_of!(Eye, carve) == at(eye::CARVE)
             && offset_of!(Eye, hide) == at(eye::HIDE)
-            && offset_of!(Eye, grid) == at(eye::GRID)
             && offset_of!(Eye, light) == at(eye::LIGHT)
             && offset_of!(Eye, jitter) == at(eye::JITTER)
+            && offset_of!(Eye, grid) == at(eye::GRID)
     );
 };
 
@@ -82,9 +82,10 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
         [eye.origin.x, eye.origin.y, eye.origin.z],
         Detail {
             range: [eye.range.x, eye.range.y],
-            eye: [0.0; 3],
+            // The beam rays' lattice's side, the grid's first word
+            // (`beam::Grid::words`), which their `narrow` reads.
             spacing: cast::Spacing {
-                angle: pxl_spec_core::grid::CELL,
+                angle: f32::from_bits(eye.grid[0].x),
                 across: 0.0,
             },
         },
@@ -101,17 +102,16 @@ pub(crate) fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
 }
 
 /// The camera grid the frame casts on, read whole off the eye's words, as
-/// the kernel worked it out once (pxl-spec-core `beam::Grid`): no thread
-/// works any of it out again.
+/// the kernel worked it out once (pxl-engine `beam::Grid`).
 pub(crate) fn grid(eye: &Eye) -> beam::Grid {
     let g = &eye.grid;
     let w = [
         g[0].x, g[0].y, g[0].z, g[0].w, g[1].x, g[1].y, g[1].z, g[1].w, g[2].x, g[2].y, g[2].z,
-        g[2].w, g[3].x, g[3].y, g[3].z, g[3].w,
+        g[2].w, g[3].x, g[3].y, g[3].z, g[3].w, g[4].x, g[4].y, g[4].z, g[4].w,
     ];
     beam::Grid::of_words([eye.tan.x, eye.tan.y], w)
 }
-const _: () = assert!(eye::GRID_WORDS == 16, "`grid` reads the grid's four vec4s");
+const _: () = assert!(eye::GRID_WORDS == 20, "`grid` reads the grid's five vec4s");
 
 impl Observer for Eye {
     type At = [f32; 2];
@@ -126,9 +126,9 @@ impl Observer for Eye {
 
     fn passes(&self) -> [u32; 3] {
         [
-            observed::BEAM_PASS,
-            observed::SAMPLES_PASS,
-            observed::MISSED_PASS,
+            pyramid::BEAM_PASS,
+            pyramid::SAMPLES_PASS,
+            pyramid::MISSED_PASS,
         ]
     }
 
@@ -145,11 +145,15 @@ impl Observer for Eye {
     }
 
     fn handed(&self, _: &Aim, t: f32) -> f32 {
-        grid(self).handed(t)
+        grid(self).hand_dist(t)
     }
 
     fn line(&self, idx: u32) -> u32 {
         beam::Grid::line(idx)
+    }
+
+    fn hand_at(&self, idx: u32) -> u32 {
+        grid(self).hand_at(idx)
     }
 
     /// Every ray of the eye's starts at the eye.
@@ -174,6 +178,15 @@ impl Observer for Eye {
 
     fn cell_at(&self, c: [u32; 2]) -> u32 {
         grid(self).cell_at(c)
+    }
+
+    /// Its own everywhere (`detail`).
+    fn corner_detail(&self, _: [u32; 2]) -> Detail {
+        eye_origin(self).1
+    }
+
+    fn cell_detail(&self, _: [u32; 2]) -> Detail {
+        eye_origin(self).1
     }
 
     fn samples(&self) -> [u32; 2] {
@@ -211,6 +224,11 @@ impl Observer for Eye {
         grid(self).cell(at)
     }
 
+    /// Its own everywhere, each distance's zoom from the eye.
+    fn detail(&self, _: [f32; 2]) -> Detail {
+        eye_origin(self).1
+    }
+
     /// From the eye, its boxes about it marked at the screen's tangents.
     fn raster_layout(&self) -> ([i32; 3], (bool, [f32; 2])) {
         (eye_origin(self).0, (true, [self.tan.x, self.tan.y]))
@@ -219,5 +237,10 @@ impl Observer for Eye {
     /// Every one: what the eye casts is what it shows.
     fn needs<W: Words + ?Sized>(&self, _: &W, _: Level, _: [u32; 2]) -> bool {
         true
+    }
+
+    /// Each at its own place: it casts its lattice whole.
+    fn take<W: Words + ?Sized>(&self, _: &W, _: Level, id: [u32; 2]) -> [u32; 2] {
+        id
     }
 }

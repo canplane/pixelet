@@ -22,13 +22,13 @@ pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
 
 /// Box draw: (upload handle, box count, first box, uniform, pipeline).
 /// Decor draw: (upload handle, group, instance count, uniform, pipeline); the
-/// uniform carries the group's first lane word, stride and index-list start.
+/// uniform carries the group's first column word, stride and index-list start.
 pub const PIPELINE_DECOR: u32 = 0;
 /// Half transparent, at the depth of the faces it lies on, which stand
 /// behind it (screen_ray.wgsl `behind`).
 pub const PIPELINE_GHOST_BOX: u32 = 1;
 pub const PIPELINE_GHOST_DECOR: u32 = 2;
-/// Position 3, normal 3, UV 2, joints 4 (u32), weights 4; indices follow the vertex lanes.
+/// Position 3, normal 3, UV 2, joints 4 (u32), weights 4; indices follow the vertex columns.
 pub const MODEL_VERTEX_WORDS: u32 = 16;
 /// (model handle, joint palette handle, model id, uniform, pipeline); uniform
 /// float 4 is the turn about Z.
@@ -76,44 +76,44 @@ pub fn stats_slot(pipeline: u32) -> usize {
 /// Rewrite record: handle, address, byte offset, length.
 pub const REWRITE_WORDS: usize = 4;
 
-/// The uploads' and the frees' lanes in `.fixed.uploads` (pxl-render
+/// The uploads' and the frees' arrays in `.fixed.uploads` (pxl-render
 /// gpu/upload.rs `set_uploads`), each twice, the one written and the one
 /// the renderer took: room for as many records as uploads live, since a
 /// turn's uploads become live and its frees were.
-struct ListLanes {
+struct ListArrays {
     uploads: [&'static mut [u32]; 2],
     frees: [&'static mut [u32]; 2],
 }
 
-static LANES: Global<ListLanes> = Global::new();
+static LIST_ARRAYS: Global<ListArrays> = Global::new();
 
-fn lanes() -> &'static mut ListLanes {
-    LANES.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
+fn list_arrays() -> &'static mut ListArrays {
+    LIST_ARRAYS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
 }
 
-/// The lists' lanes' bytes, for `live` uploads.
-pub const fn lanes_bytes(live: usize) -> u32 {
+/// The lists' arrays' bytes, for `live` uploads.
+pub const fn lists_bytes(live: usize) -> u32 {
     (2 * (UPLOAD_WORDS + 1) * live * 4) as u32
 }
 
 /// # Safety
-/// `at` must address `lanes_bytes(live)`, 4-aligned, the lists' alone for
+/// `at` must address `lists_bytes(live)`, 4-aligned, the lists' alone for
 /// as long as the module runs.
-pub unsafe fn set_lanes(at: u32, live: usize) {
-    // SAFETY: the caller's range, one lane after another.
-    let lane = |from: usize, words: usize| unsafe {
+pub unsafe fn set_lists(at: u32, live: usize) {
+    // SAFETY: the caller's range, one array after another.
+    let arr = |from: usize, words: usize| unsafe {
         core::slice::from_raw_parts_mut(mem::at::<u32>(at as usize + from * 4), words)
     };
     let (u, f) = (UPLOAD_WORDS * live, live);
-    LANES.set(ListLanes {
-        uploads: [lane(0, u), lane(u, u)],
-        frees: [lane(2 * u, f), lane(2 * u + f, f)],
+    LIST_ARRAYS.set(ListArrays {
+        uploads: [arr(0, u), arr(u, u)],
+        frees: [arr(2 * u, f), arr(2 * u + f, f)],
     });
 }
 
 #[derive(Default)]
 pub struct DrawList {
-    /// The lanes' side written, and how much of each is.
+    /// The lists' side written, and how much of each is.
     side: usize,
     uploads: usize,
     frees: usize,
@@ -143,13 +143,9 @@ impl DrawList {
     pub fn upload(&mut self, at: u32, bytes: u32, vertex_cnt: u32, idx_cnt: u32) -> u32 {
         self.next_handle = self.next_handle.wrapping_add(1).max(1);
         let handle = self.next_handle;
-        let lane = &mut lanes().uploads[self.side];
-        xpute_kit::ensure!(
-            self.uploads + UPLOAD_WORDS <= lane.len(),
-            ENOSPC,
-            lane.len()
-        );
-        lane[self.uploads..self.uploads + UPLOAD_WORDS]
+        let arr = &mut list_arrays().uploads[self.side];
+        xpute_kit::ensure!(self.uploads + UPLOAD_WORDS <= arr.len(), ENOSPC, arr.len());
+        arr[self.uploads..self.uploads + UPLOAD_WORDS]
             .copy_from_slice(&[handle, at, bytes, vertex_cnt, idx_cnt]);
         self.uploads += UPLOAD_WORDS;
         handle
@@ -169,8 +165,8 @@ impl DrawList {
             }
         }
         let (uploads, frees) = (
-            &mut lanes().uploads[self.side],
-            &mut lanes().frees[self.side],
+            &mut list_arrays().uploads[self.side],
+            &mut list_arrays().frees[self.side],
         );
         let mut k = 0;
         while k < self.uploads {
@@ -219,7 +215,7 @@ impl DrawList {
 
     /// An actor drawn stands at `translation`, its draw's (pxl-kernel
     /// domain/scene/actor.rs `Actor::draw`): a receiver of the shadow map
-    /// (pxl-spec-core `light::ACTORS_AT`).
+    /// (pxl-engine `light::ACTORS_AT`).
     pub fn stand(&mut self, translation: [f32; 3]) {
         self.stands.push(translation);
     }
@@ -336,11 +332,11 @@ impl DrawList {
         handle: u32,
         group: u32,
         cnt: u32,
-        lanes: [u32; 3],
+        columns: [u32; 3],
         translation: [f32; 3],
         opacity: f32,
     ) {
-        let [off, stride, idx] = lanes;
+        let [off, stride, idx] = columns;
         let uniform = (self.uniforms.len() / DRAW_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[
             translation[0],
@@ -356,14 +352,14 @@ impl DrawList {
             .extend_from_slice(&[handle, group, cnt, uniform, pipeline]);
     }
 
-    /// Uploads, rewrites and frees start fresh, on the lanes' other side;
+    /// Uploads, rewrites and frees start fresh, on the lists' other side;
     /// draws stay until the next frame.
     pub fn take(&mut self) -> Lists<'_> {
         let (side, uploads, frees) = (self.side, self.uploads, self.frees);
         (self.side, self.uploads, self.frees) = (1 - side, 0, 0);
         core::mem::swap(&mut self.taken, &mut self.rewrites);
         self.rewrites.clear();
-        let l = lanes();
+        let l = list_arrays();
         Lists {
             uploads: &l.uploads[side][..uploads],
             rewrites: &self.taken,
@@ -376,7 +372,7 @@ impl DrawList {
 }
 
 /// A heap block the renderer mirrors, written whole each time and grown to the
-/// next power of two so a small wobble in count does not reallocate.
+/// next power of two.
 #[derive(Default)]
 pub struct MirroredBlock {
     pub at: usize,
@@ -386,8 +382,8 @@ pub struct MirroredBlock {
 
 impl MirroredBlock {
     /// False when the heap refused; the block is then gone.
-    pub fn write(&mut self, draw: &mut DrawList, lane: &[u8]) -> bool {
-        let need = (lane.len() as u32).max(4);
+    pub fn write(&mut self, draw: &mut DrawList, data: &[u8]) -> bool {
+        let need = (data.len() as u32).max(4);
         if need > self.bytes {
             self.free(draw);
             let bytes = need.next_power_of_two();
@@ -398,9 +394,9 @@ impl MirroredBlock {
             self.bytes = bytes;
         }
         // SAFETY: the block is the heap's, `self.bytes` long, and at least
-        // `lane` long.
+        // `data` long.
         unsafe {
-            core::ptr::copy_nonoverlapping(lane.as_ptr(), mem::at::<u8>(self.at), lane.len());
+            core::ptr::copy_nonoverlapping(data.as_ptr(), mem::at::<u8>(self.at), data.len());
         };
         if self.handle == 0 {
             self.handle = draw.upload(self.at as u32, self.bytes, 0, 0);
@@ -413,7 +409,7 @@ impl MirroredBlock {
     pub fn free(&mut self, draw: &mut DrawList) {
         if self.bytes > 0 {
             draw.free(self.handle);
-            // SAFETY: the block this lane took and has not given back.
+            // SAFETY: the block this write took and has not given back.
             unsafe { free((self.at, self.bytes)) };
             self.bytes = 0;
             self.handle = 0;

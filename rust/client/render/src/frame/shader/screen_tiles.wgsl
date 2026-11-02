@@ -6,17 +6,15 @@
 // returning at once. A tile is claimed where it changed
 // this frame or has not yet run through the jitter's sequence since, or every
 // one where the frame is drawn whole. The frames the sequence covers a pixel
-// in, `TILE_JITTERS`, are constant.wgsl's (pxl-spec-core `screen::JITTERS`).
+// in, `TILE_JITTERS`, are constant.wgsl's (pxl-engine `screen::JITTERS`).
 
-struct Tiles {
-  // The tiles across and down, the frames a tile stays claimed once it
-  // changed (`claimed_for`, all of them where every one is drawn), and this
-  // frame's number.
-  count: vec4u,
-  // The target's pixels across and down, how far, in them, a quad is grown
-  // each way past its tile, and a tile's side, in them.
-  size: vec4f,
-};
+// The uniform `Tiles` and the rule a tile's word is read by, `tiles_age` and
+// `tiles_claimed`, are tile_word.wgsl's, which build.rs writes from
+// pxl-engine `screen`: `count` the tiles across and down, the frames a
+// tile stays claimed once it changed (`claimed_for`, all of them where every
+// one is drawn), and this frame's number; `size` the target's pixels across
+// and down, how far, in them, a quad is grown each way past its tile, and a
+// tile's side, in them.
 
 // Each tile's word, the number of the frame it last changed in
 // (gpu/tiles.rs `Tiles::mark`).
@@ -34,12 +32,12 @@ fn tile_side() -> u32 {
 
 // Tile `ii`'s frames since it last changed: 0 where it changed this frame.
 fn tile_age(ii: u32) -> u32 {
-  return tiles.count.w - changed_at[ii];
+  return tiles_age(tiles, changed_at[ii]);
 }
 
 // Whether tile `ii` is claimed.
 fn tile_claimed(ii: u32) -> bool {
-  return tile_age(ii) < tiles.count.z;
+  return tiles_claimed(tiles, changed_at[ii]);
 }
 
 // A quad's corner `vi`, two triangles.

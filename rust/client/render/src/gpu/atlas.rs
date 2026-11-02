@@ -17,8 +17,9 @@ use crate::gpu::api::{
     view_entry, write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
 };
 use crate::gpu::atlas::shelf::PAD;
-use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::text::{Font, Raster, TextOf};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::text::{Raster, TextOf};
+use crate::look::marker::{Font, Halo};
 use pxl_spec::asset::symbol;
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
 use xpute_kit::math::scalar::round;
@@ -32,17 +33,6 @@ struct Line {
     /// Its middle across, and its baseline's height.
     at: [f32; 2],
     halo: Option<Halo>,
-}
-
-/// A color round a line's glyphs and its radius, and under it a shadow, its
-/// color, radius and drop; in logical pixels.
-#[derive(Clone, Copy)]
-pub struct Halo {
-    pub color: u32,
-    pub radius: f32,
-    pub shadow: u32,
-    pub shadow_radius: f32,
-    pub shadow_dy: f32,
 }
 
 /// Device pixels an atlas draws per logical pixel: the symbols' masks', laid
@@ -67,7 +57,7 @@ struct Icon {
 
 /// A symbol's mask in `color`, as the platform hands text: RGBA, not
 /// premultiplied, top row first.
-fn tinted(symbol: usize, color: u32) -> Vec<u8> {
+fn symbol_rgba(symbol: usize, color: u32) -> Vec<u8> {
     let side = (SYMBOL_PX * SYMBOL_PX) as usize;
     let mask = &SYMBOL_MASKS[symbol * side..(symbol + 1) * side];
     let [r, g, b, a] = color.to_be_bytes();
@@ -196,7 +186,7 @@ impl DisplayList {
 }
 
 pub struct AtlasPainter {
-    built: Built,
+    pipeline: Pipeline,
     sampler: u32,
 }
 
@@ -211,7 +201,7 @@ impl AtlasPainter {
             1,
         );
         AtlasPainter {
-            built: pipelines.build(g, PIPELINE_ATLAS, Format::rgba8unorm_srgb),
+            pipeline: pipelines.build(g, PIPELINE_ATLAS, Format::rgba8unorm_srgb),
             sampler,
         }
     }
@@ -241,7 +231,7 @@ impl AtlasPainter {
         let icons: Vec<Vec<u8>> = list
             .icons
             .iter()
-            .map(|i| tinted(i.symbol, i.color))
+            .map(|i| symbol_rgba(i.symbol, i.color))
             .collect();
         let drawn = rasters.len() + icons.len();
         let [x, y, w, h] = rect;
@@ -367,11 +357,11 @@ impl AtlasPainter {
         g.write_buf(instances, 0, instance_bytes);
 
         let entry_group = g.bind_group(
-            self.built.layouts[0],
+            self.pipeline.layouts[0],
             &[buf_entry(0, size), buf_entry(1, instances)],
         );
         let lines_group = g.bind_group(
-            self.built.layouts[1],
+            self.pipeline.layouts[1],
             &[view_entry(0, lines_view), sampler_entry(1, self.sampler)],
         );
 
@@ -388,7 +378,7 @@ impl AtlasPainter {
             encoder,
             &pass_desc(target_view, Load::Clear, 0, Load::Clear, 0.0, None),
         );
-        g.set_pipeline(pass, self.built.pipeline);
+        g.set_pipeline(pass, self.pipeline.id);
         g.set_bind_group(pass, 0, entry_group, &[]);
         g.set_bind_group(pass, 1, lines_group, &[]);
         g.draw(pass, 4, shapes.len() as u32, 0, 0);

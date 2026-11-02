@@ -7,7 +7,7 @@ use pxl_spec::asset::color;
 use pxl_spec::asset::cube::cube_rgb;
 use pxl_spec::asset::cube::{sentinel, Cube, ALL_CUBES};
 use pxl_spec::asset::cube::{Ground, Object};
-use pxl_spec::asset::ingested::CubeFace;
+use pxl_spec::asset::ingest::CubeFace;
 use pxl_spec::asset::{shipped_sentinel_mean, shipped_tile_mean};
 use std::sync::LazyLock;
 
@@ -44,7 +44,7 @@ pub fn rgb255(rgb: u32) -> [u8; 3] {
 
 /// What a layer reads as once its tile is too small to see: the tile's mean,
 /// or the swatch with no tile. One mean a layer, its top's, on every face, so
-/// far off a cliff reads as its land use; Distant Horizons summarizes the same way.
+/// far off a cliff reads as its land use.
 pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(|| {
     palette()
         .map(|cube| {

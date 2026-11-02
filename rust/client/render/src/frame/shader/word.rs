@@ -5,7 +5,7 @@
 //! (constant.wgsl's tail), a uniform's floats as its vec4s, and each
 //! uniform's fields as their accessors to the part that binds it.
 
-use pxl_spec_core::screen;
+use pxl_engine::screen;
 
 /// A draw's uniform (frame/draw.rs): its translation and what its pipeline
 /// reads past it.
@@ -55,8 +55,8 @@ pub const fn floats(fields: &[Field]) -> usize {
     let mut end = 0;
     let mut k = 0;
     while k < fields.len() {
-        let reach = fields[k].at + fields[k].kind.floats();
-        end = if reach > end { reach } else { end };
+        let field_end = fields[k].at + fields[k].kind.floats();
+        end = if field_end > end { field_end } else { end };
         k += 1;
     }
     end.div_ceil(4) * 4
@@ -95,17 +95,18 @@ uniform! {
         RIM_INTENSITY: F32 = 30,
         CORNER_AO: F32 = 31,
         /// The light box from the eye's frame (gpu/shadow.rs `aim`), how
-        /// much of its light a shadow takes, none where no map is drawn, the
-        /// normal offset a fragment takes, a texel at the map's reach, and
-        /// the share of the map's half-width the casters reach, where the
-        /// shadows end. Its light is the sun's, or the moon's where
-        /// `SHADOW_MOON` is 1 (shadow.wgsl `shadow_light`).
+        /// much of its light a shadow takes, none where no map is drawn, and
+        /// the normal offset a fragment takes, a texel at the map's reach.
+        /// Its light is the sun's, or the moon's where `SHADOW_MOON` is 1
+        /// (shadow.wgsl `shadow_light`).
         LIGHT_VIEW_PROJ: Mat4 = 32,
         SHADOW_STRENGTH: F32 = 48,
         SHADOW_TEXEL: F32 = 49,
-        SHADOW_RADIUS_NDC: F32 = 50,
+        /// How far from the eye the effects on a drawn surface reach, in
+        /// units (effect.wgsl `effect_share`).
+        EFFECT_REACH: F32 = 50,
         /// Whether the camera gizmo is drawn, its tint on the rays' cells
-        /// with it (screen_lit.wgsl `cell_share`).
+        /// with it (screen_shade.wgsl `cell_share`).
         GIZMO: F32 = 51,
         /// The canvas's device pixels, where `VIEWPORT` is the world's: what
         /// is drawn over the world, after the finish, is laid out in them.
@@ -113,7 +114,7 @@ uniform! {
         /// 1 where the shadow map is cast from the moon (`LIGHT_VIEW_PROJ`).
         SHADOW_MOON: F32 = 54,
         /// Where this frame's pixels sample the world, off their middles, in
-        /// clip units, X right and Y up: pxl-spec-core `eye::JITTER`'s offset
+        /// clip units, X right and Y up: pxl-engine `eye::JITTER`'s offset
         /// `j`, in drawn pixels with Y down, as (2 j.x / width, -2 j.y /
         /// height) of `VIEWPORT`. What is drawn into the world's color is
         /// moved against it (frame.wgsl `jittered`), the sky aimed along it.
@@ -163,24 +164,24 @@ uniform! {
         MOON_LIGHT: F32 = 31,
         /// As it reaches the air, against the sun's white.
         MOON_COLOR: Vec3 = 32,
-        /// Where the eye's rays end, in units (pxl-spec-core `eye::REACH`):
+        /// Where the eye's rays end, in units (pxl-engine `eye::FAR`):
         /// past it the land is the Earth's picture whole.
         DRAWN: F32 = 35,
-        /// Lights the ground, never drawn: drawn, the sky went pale blue.
+        /// Lights the ground, never drawn.
         NIGHT_SKY: Vec3 = 36,
-        /// The Earth's face under the eye: at sea level the terrain floated on it.
+        /// The Earth's face under the eye.
         LAND_ALT_KM: F32 = 39,
         /// A lit city's radiance where the picture holds all of it.
         CITY_LIGHT: Vec3 = 40,
         /// In units.
-        EARTH_REACH: F32 = 43,
+        EARTH_DIST: F32 = 43,
         /// The south-west tile, tiles across the window and around the
         /// world; then a tile's layer plus one in `EARTH_TILE_BITS`, row by
         /// row, zero for the global picture.
         EARTH_WINDOW: Vec4i = 44,
         EARTH_TILES: Vec4u = 48,
         /// Each light's sky view and share of the air's volume as laid
-        /// (gpu/atmosphere.rs `lay_out`): how far under the level the
+        /// (gpu/atmosphere.rs `prepare`): how far under the level the
         /// horizon dips from the eye's radius they were drawn at, in
         /// radians, and the near and far ends of the air's depth law there,
         /// in km (atmos_medium.wgsl `laid`); and 1 where the light reaches
@@ -201,7 +202,7 @@ uniform! {
         /// domain/scene/environment/cloud.rs `clouds_shown`).
         SHOWN: F32 = 0,
         /// How far the eye draws, in km: past it no sheet is drawn.
-        REACH: F32 = 1,
+        DRAW_DIST: F32 = 1,
         /// The lattice's units around; the cells the wind has moved it
         /// under the map; the field's lattice unit the eye is over and its
         /// share of one (gpu/cloud.rs `field`).
@@ -227,11 +228,13 @@ pub const STARS_FLOATS: usize = floats(stars::FIELDS);
 
 uniform! {
     /// The screen's occlusion's (ao_view.wgsl, gpu/ao.rs): the view's
-    /// projection and its inverse, and the half-resolution target's size.
+    /// projection and its inverse, the half-resolution target's size, and
+    /// the effects' reach, the frame's `EFFECT_REACH`.
     ao {
         PROJ: Mat4 = 0,
         INV_PROJ: Mat4 = 16,
         HALF: Vec2 = 32,
+        EFFECT_REACH: F32 = 34,
     }
 }
 pub const AO_FLOATS: usize = floats(ao::FIELDS);
@@ -272,10 +275,10 @@ pub const AO_DOWNSCALE: u32 = 2;
 /// N8AO's blue noise a side (gpu/ao.rs), which a pixel reads tiled.
 pub const AO_NOISE_SIDE: u32 = 128;
 
-/// A square of the depth's bound the reach reads, its pixels a side
-/// (gpu/reach.rs, screen_bound.wgsl, screen_reach.wgsl).
+/// A square of the depth's bound the propagation reads, its pixels a side
+/// (gpu/propagate.rs, screen_bound.wgsl, screen_propagate.wgsl).
 pub const BOUND_STEP: u32 = 4;
-/// A screen tile's squares a side (pxl-spec-core `screen::TILE`), a thread
+/// A screen tile's squares a side (pxl-engine `screen::TILE`), a thread
 /// each of the workgroup a tile both passes take: every square of a tile is
 /// set and read whatever its side.
 pub const BOUND_SQUARES: u32 = screen::TILE / BOUND_STEP;
@@ -305,7 +308,7 @@ pub const ATLAS_HALO: u32 = 4;
 /// its mesh's own.
 pub const BOX_XY_STEPS: u32 = 256;
 
-/// A box's vertices, two triangles each of its six faces (pxl-spec-core
+/// A box's vertices, two triangles each of its six faces (pxl-engine
 /// raster.rs `corner`, box.wgsl).
 pub const BOX_VERTICES: u32 = 36;
 
@@ -320,8 +323,7 @@ pub const UNIFORMS: [(&str, &[Field]); 7] = [
     (marker::NAME, marker::FIELDS),
 ];
 
-/// The cloud sheets' tile (gpu/cloud.rs), one fetch a pixel and a mip chain
-/// in place of eight octaves of hashes: 32 lattice units is about 250 km,
+/// The cloud sheets' tile (gpu/cloud.rs): 32 lattice units is about 250 km,
 /// further than the layer is drawn, and the lattice wraps with the tile.
 pub const CLOUD_TILE_UNITS: u32 = 32;
 pub const CLOUD_TILE_TEXELS: u32 = 1024;

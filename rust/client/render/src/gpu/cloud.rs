@@ -1,14 +1,14 @@
 // pxl-render/gpu/cloud.rs
 
 //! The cloud sheets, altocumulus and cirrus, each a plane drawn over the
-//! world's pass against its depth, both reading the cloud field (`pxl-spec-core cloud.rs`) as a tile baked once
+//! world's pass against its depth, both reading the cloud field (`pxl-content cloud.rs`) as a tile baked once
 //! per device.
 //! The cumulus is drawn as decor is (`pxl-kernel domain/scene/environment/cloud.rs`).
 
 use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::word::clouds::{BASE, CNT, DRIFT, FRAC, REACH, SHOWN};
+use crate::frame::shader::word::clouds::{BASE, CNT, DRAW_DIST, DRIFT, FRAC, SHOWN};
 use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
@@ -16,12 +16,12 @@ use crate::gpu::api::{
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, MipPass};
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::look::environment::ENV_SKY;
+use pxl_content::cloud::{drift, LATTICE_CNT};
+use pxl_content::param::cloud::LATTICE_SHAMT;
+use pxl_engine::UNIT_ZOOM;
 use pxl_spec::space::coord::world::EXTENT;
-use pxl_spec_core::cloud::{drift, LATTICE_CNT};
-use pxl_spec_core::param::cloud::LATTICE_SHAMT;
-use pxl_spec_core::UNIT_ZOOM;
 
 const _: () = assert!(
     EXTENT[0] == UNIT_ZOOM && EXTENT[1] == UNIT_ZOOM,
@@ -33,10 +33,14 @@ const _: () = assert!(
 );
 
 pub struct CloudPass {
-    built: Built,
+    pipeline: Pipeline,
     uniform: u32,
     group: u32,
     words: [f32; CLOUDS_FLOATS],
+    /// The field's tile, its pipeline and its mips' pass, until it is baked
+    /// (`bake`): once the renderer's pipelines are made, before its first
+    /// frame.
+    unbaked: Option<(u32, Pipeline, MipPass)>,
 }
 
 impl CloudPass {
@@ -46,7 +50,7 @@ impl CloudPass {
         frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> CloudPass {
-        let built = pipelines.build_world(g, PIPELINE_CLOUD);
+        let pipeline = pipelines.build_world(g, PIPELINE_CLOUD);
         let tile = g.texture(
             CLOUD_TILE_TEXELS,
             CLOUD_TILE_TEXELS,
@@ -83,28 +87,53 @@ impl CloudPass {
             sampler_entry(3, tile_sampler),
         ];
         e.extend(air);
-        let group = g.bind_group(built.layouts[0], &e);
-        bake(
-            g,
-            pipelines,
-            tile,
-            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
-        );
+        let group = g.bind_group(pipeline.layouts[0], &e);
+        let field = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::r8unorm);
+        let mips = MipPass::new(g, pipelines, Format::r8unorm);
         CloudPass {
-            built,
+            pipeline,
             uniform,
             group,
             words: [0.0; CLOUDS_FLOATS],
+            unbaked: Some((tile, field, mips)),
         }
     }
 
+    /// The field's tile drawn, then its mips, once, as the renderer's first
+    /// frame comes: its pipelines are made by then.
+    pub fn bake(&mut self, g: &Gpu) {
+        let Some((tile, field, mips)) = self.unbaked.take() else {
+            return;
+        };
+        let encoder = g.encoder();
+        let level = g.view(tile, false, 0, 1, 0, 1);
+        let pass = g.pass(
+            encoder,
+            &pass_desc(level, Load::Clear, 0, Load::Clear, 0.0, None),
+        );
+        let mut pass = TrackedRenderPass::new(g, pass);
+        pass.set_pipeline(field.id);
+        pass.draw(3, 1, 0, 0);
+        pass.end();
+        release(level);
+        g.submit(encoder);
+        mips.build(
+            g,
+            tile,
+            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
+            0,
+            1,
+        );
+        mips.release();
+    }
+
     /// `shown`, how much of the clouds the kernel shows; `over`, the eye's
-    /// place on the map in the world's doubles; `reach_km` how far it
+    /// place on the map in the world's doubles; `draw_dist_km` how far it
     /// draws: past it no sheet is drawn. The field moves with the wind,
     /// so its words are the clouds' own.
-    pub fn lay_out(&mut self, over: [f64; 2], env: &[f32], shown: f64, reach_km: f32) {
+    pub fn prepare(&mut self, over: [f64; 2], env: &[f32], shown: f64, draw_dist_km: f32) {
         self.words[SHOWN] = shown as f32;
-        self.words[REACH] = reach_km;
+        self.words[DRAW_DIST] = draw_dist_km;
         field(&mut self.words, over, env);
     }
 
@@ -113,8 +142,7 @@ impl CloudPass {
         g.write_buf(self.uniform, 0, bytes(&self.words));
     }
 
-    /// The sheets, over the world's pass.
-    /// The words its pass reads, as `lay_out` wrote them.
+    /// The words its pass reads, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.words
     }
@@ -123,7 +151,7 @@ impl CloudPass {
         if self.words[SHOWN] <= 0.0 {
             return;
         }
-        pass.set_pipeline(self.built.pipeline);
+        pass.set_pipeline(self.pipeline.id);
         pass.set_bind_group(0, self.group, &[]);
         // A quad each, the farther sheet first (cloud.wgsl `vs`).
         pass.draw(6, 2, 0, 0);
@@ -146,23 +174,4 @@ fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], env: &[f32]) {
         words[DRIFT + k] = drift[k] as f32;
     }
     words[CNT] = f32::from_bits(LATTICE_CNT);
-}
-
-fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
-    let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::r8unorm);
-    let encoder = g.encoder();
-    let level = g.view(tile, false, 0, 1, 0, 1);
-    let pass = g.pass(
-        encoder,
-        &pass_desc(level, Load::Clear, 0, Load::Clear, 0.0, None),
-    );
-    let mut pass = TrackedRenderPass::new(g, pass);
-    pass.set_pipeline(built.pipeline);
-    pass.draw(3, 1, 0, 0);
-    pass.end();
-    release(level);
-    g.submit(encoder);
-    let mips = MipPass::new(g, pipelines, Format::r8unorm);
-    mips.build(g, tile, levels, 0, 1);
-    mips.release();
 }

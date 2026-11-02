@@ -11,7 +11,7 @@
 // `slopes`).
 
 // 1 where the ground's slope is measured with this drawing
-// (gpu/atmosphere.rs `lay_out`).
+// (gpu/atmosphere.rs `prepare`).
 @group(0) @binding(14) var<uniform> own: vec4f;
 @group(0) @binding(1) var exposure_out: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(20) var<storage, read_write> slopes: array<atomic<u32>, SLOPE_WORDS>;
@@ -80,7 +80,7 @@ fn shows(k: u32, mu: f32, stops: f32) -> f32 {
 // own sampling where it stands, the eye's stops moving with it; moving over
 // it counts as a level at least. A light out of reach comes into it no
 // sooner than its step to `REACH` off that slope (gpu/atmosphere.rs
-// `Lit::step`).
+// `LightMemo::step`).
 fn reach(k: u32) {
   let now = lights_now();
   let mu = dot(light_dir(k), frame_up());

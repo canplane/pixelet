@@ -5,7 +5,7 @@
 
 // Which light, 1 for the moon; 1 where its height's slope is measured with
 // this drawing, and 1 where its altitude's is (gpu/atmosphere.rs
-// `lay_out`).
+// `prepare`).
 @group(0) @binding(14) var<uniform> light: vec4f;
 
 // What the views and the exposure measure (frame/shader/word.rs

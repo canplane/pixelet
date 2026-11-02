@@ -12,7 +12,7 @@ use crate::frame::shader::word::BOX_VERTICES;
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, Gpu, TrackedRenderPass};
 use crate::gpu::pass::mark::{self, Marks, UploadCopies};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::{buf_size, Draws, Uploads};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
@@ -78,8 +78,8 @@ fn octahedron_lanes() -> ([f32; BEACON_LANE], [f32; BEACON_LANE]) {
 }
 
 pub struct LocationPass {
-    zone: Built,
-    beacon: Built,
+    zone: Pipeline,
+    beacon: Pipeline,
     /// A slot a draw, each read at its own offset (`prepare`).
     zone_uniforms: DrawUniforms,
     beacon_uniforms: DrawUniforms,
@@ -97,7 +97,7 @@ pub struct LocationPass {
 
 /// A mark's uniform: the draw's place and turn, as the lit pass's first
 /// words (location.wgsl `Draw`).
-fn put_mark(buf: &mut [u8], (_, u): &mark::Drawn) {
+fn put_mark(buf: &mut [u8], (_, u): &mark::Draw) {
     buf[..DRAW_BYTES as usize]
         .copy_from_slice(bytes(&[u[0], u[1], u[2], u[3], 0.0, 0.0, 0.0, 0.0]));
 }
@@ -158,15 +158,20 @@ impl LocationPass {
         uniforms: &[f32],
         touched: &[u32],
         uploads: &mut Uploads,
-        kept: &UploadCopies,
+        last_frame_uploads: &UploadCopies,
     ) -> bool {
-        let zones = self
-            .zone_marks
-            .prepare(g, zones(draws), uniforms, touched, uploads, kept);
+        let zones = self.zone_marks.prepare(
+            g,
+            zones(draws),
+            uniforms,
+            touched,
+            uploads,
+            last_frame_uploads,
+        );
         let beacons = draws.of(PIPELINE_LOCATION_BEACON);
-        let beacon = self
-            .beacon_marks
-            .prepare(g, beacons, uniforms, touched, uploads, kept);
+        let beacon =
+            self.beacon_marks
+                .prepare(g, beacons, uniforms, touched, uploads, last_frame_uploads);
         zones || beacon
     }
 
@@ -253,7 +258,7 @@ impl LocationPass {
         if cnt == 0 {
             return;
         }
-        pass.set_pipeline(self.beacon.pipeline);
+        pass.set_pipeline(self.beacon.id);
         pass.set_bind_group(0, frame, &[]);
         pass.set_vertex_buf(0, self.oct_pos, 0, 0);
         pass.set_vertex_buf(1, self.oct_normal, 0, 0);
@@ -274,7 +279,7 @@ impl LocationPass {
         if zones(draws).next().is_none() {
             return;
         }
-        pass.set_pipeline(self.zone.pipeline);
+        pass.set_pipeline(self.zone.id);
         pass.set_bind_group(0, self.frame_group, &[]);
         pass.set_vertex_buf(0, self.box_pos, 0, 0);
         pass.set_vertex_buf(1, self.box_uv, 0, 0);

@@ -1,5 +1,5 @@
 // Value noise over the cloud field's hash, `lattice_hash`, which build.rs
-// writes from pxl-spec-core cloud.rs, where the cumulus draws its cells from
+// writes from pxl-engine cloud.rs, where the cumulus draws its cells from
 // it on the CPU.
 
 // Wraps at `mask + 1`, the lattice's cnt across the world, so the noise wraps with the map.
@@ -24,14 +24,14 @@ fn lattice_fbm(base: vec2u, p: vec2f, cnt: u32, first: u32, salt: u32, footprint
   var n = cnt * scale;
   var sum = 0.0;
   var amp = 0.5;
-  var reach = footprint * f32(scale);
+  var octave_footprint = footprint * f32(scale);
   for (var k = 0u; k < NOISE_OCTAVES; k++) {
-    if (reach > 0.5) {
+    if (octave_footprint > 0.5) {
       sum += amp * 0.5;
     } else {
       sum += amp * lattice_noise(b, q + f32(k) * NOISE_OCTAVE_OFF, n - 1u, salt + first + k);
     }
-    reach *= 2.0;
+    octave_footprint *= 2.0;
     b *= 2u;
     q *= 2.0;
     n *= 2u;

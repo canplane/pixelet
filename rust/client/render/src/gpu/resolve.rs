@@ -1,7 +1,7 @@
 // pxl-render/gpu/resolve.rs
 
 //! The world's color gathered over frames: each frame's pixels sample the
-//! world off their middles by a jitter of their own (pxl-spec-core
+//! world off their middles by a jitter of their own (pxl-engine
 //! `eye::JITTER`), a sequence that covers the pixel in `JITTERS` frames, and
 //! each is blended into what the frames before left (screen_resolve.wgsl),
 //! two of the world surface's `history` in turn, the one written this frame
@@ -10,12 +10,11 @@
 //! encodes. Each tile of the screen keeps its age, the frames since it last
 //! changed: where only the jitter moved there since, nothing the
 //! frames before left is stale, and each frame takes its even share of the
-//! sequence from the first still frame; where it changed this frame, what
-//! the frames before left is moved to where this frame's eye sees it and
-//! held within what this frame's pixels about it hold, for that frame's
-//! picture alone. A tile is claimed, drawn again, the frame it changed and
-//! until its still frames have run through the sequence (pxl-spec-core
-//! `screen::CLAIMED_FOR`, screen_tiles.wgsl); once every one has,
+//! sequence; where it changed this frame, what the frames before left is
+//! moved to where this frame's eye sees it and held within what this
+//! frame's pixels about it hold. A tile is claimed, drawn again, until it
+//! has run through the sequence (pxl-engine `screen::CLAIMED_FOR`,
+//! screen_tiles.wgsl); once every one has,
 //! the jitter holds, and the frame stands. The tiles' words are the GPU's,
 //! as the light's are (gpu/tiles.rs): each the number of the frame it last
 //! changed in, which the frame's marks set; the host hands the marks, and
@@ -32,11 +31,11 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, view_entry, Gpu, Load,
     RenderContext,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::{Surface, WORLD_COLOR};
 use crate::gpu::tiles::{Tiles, SIDE};
-use pxl_spec_core::screen::{CLAIMED_FOR, JITTERS};
+use pxl_engine::screen::{CLAIMED_FOR, JITTERS};
 
 /// The least share a frame takes where what the frames before left is
 /// held to it: how long a trail what moved leaves, and how still an edge
@@ -47,17 +46,11 @@ const BLEND_LEAST: f32 = 0.1;
 const UNIFORM_FLOATS: usize = 20;
 
 pub struct Resolve {
-    built: Built,
+    pipeline: Pipeline,
     sampler: u32,
     uniform: u32,
-    /// A group a history written, reading the other, and what each was
-    /// made over: made again exactly when one is another.
-    groups: [u32; 2],
-    bound: [[u32; 5]; 2],
-    /// The write-back, and its group a history read, as `groups`.
-    back: Built,
-    back_groups: [u32; 2],
-    back_bound: [[u32; 2]; 2],
+    /// The write-back.
+    back: Pipeline,
     /// The history this frame writes, the other the last frame's.
     turn: usize,
     /// The surface's histories it gathered into, and the frames gathered
@@ -65,7 +58,7 @@ pub struct Resolve {
     histories: [u32; 2],
     gathered: u32,
     /// This frame's view, its view-projection about the eye and the eye's
-    /// place (`lay_out`), and the last drawn frame's.
+    /// place (`prepare`), and the last drawn frame's.
     view: (Mat4, [f64; 3]),
     last: (Mat4, [f64; 3]),
     /// Where the jitter is in its sequence, and this frame's, in drawn
@@ -81,7 +74,7 @@ pub struct Resolve {
 impl Resolve {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Resolve {
         Resolve {
-            built: pipelines.build_world(g, PIPELINE_SCREEN_RESOLVE),
+            pipeline: pipelines.build_world(g, PIPELINE_SCREEN_RESOLVE),
             sampler: g.sampler(
                 FilterMode::linear,
                 FilterMode::linear,
@@ -94,11 +87,7 @@ impl Resolve {
                 (4 * UNIFORM_FLOATS) as u32,
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            groups: [0; 2],
-            bound: [[0; 5]; 2],
             back: pipelines.build(g, PIPELINE_SCREEN_WRITE_BACK, WORLD_COLOR),
-            back_groups: [0; 2],
-            back_bound: [[0; 2]; 2],
             turn: 0,
             histories: [0; 2],
             gathered: 0,
@@ -106,20 +95,20 @@ impl Resolve {
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
             jitter: [0.0; 2],
-            tiles: Tiles::new(g, pipelines, SIDE, CLAIMED_FOR),
+            tiles: Tiles::new(g, pipelines, SIDE, CLAIMED_FOR, GpuSpanName::mark),
         }
     }
 
     /// This frame's view: its view-projection about the eye, and the eye's
     /// place.
-    pub fn lay_out(&mut self, view_proj: &Mat4, eye: [f64; 3]) {
+    pub fn prepare(&mut self, view_proj: &Mat4, eye: [f64; 3]) {
         self.view = (*view_proj, eye);
     }
 
     /// This frame's jitter, in drawn pixels, X right and Y down: the
     /// sequence's next, or where it holds once it ran through with nothing
-    /// else moving: the last frame anything else moved in and the `JITTERS`
-    /// after it, each of those at its own place of the sequence.
+    /// else moving: the last frame anything else moved in and the
+    /// `JITTERS - 1` after it, each at its own place of the sequence.
     pub fn jitter(&mut self) -> [f32; 2] {
         if self.gathering() {
             let k = self.phase + 1;
@@ -143,8 +132,7 @@ impl Resolve {
         let (k, was) = (self.turn, 1 - self.turn);
         // A square that changed this frame takes its share held no less than
         // `BLEND_LEAST`; one where only the jitter moved since, its even share
-        // of the sequence's from the first still frame, off its age
-        // (screen_resolve.wgsl).
+        // of the sequence's, off its age (screen_resolve.wgsl).
         let blend = match self.gathered {
             0 => 1.0,
             n => (1.0 / (n + 1) as f32).max(BLEND_LEAST),
@@ -156,30 +144,20 @@ impl Resolve {
         }
         u[16] = blend;
         g.write_buf(self.uniform, 0, bytes(&u));
-        let bound = [
-            frame,
-            s.color_view,
-            s.depth_only_view,
-            s.history_view[was],
-            self.tiles.changed_at(),
-        ];
-        if bound != self.bound[k] {
-            release(self.groups[k]);
-            self.groups[k] = g.bind_group(
-                self.built.layouts[0],
-                &[
-                    buf_entry(0, frame),
-                    view_entry(1, s.color_view),
-                    view_entry(2, s.depth_only_view),
-                    view_entry(3, s.history_view[was]),
-                    sampler_entry(4, self.sampler),
-                    buf_entry(5, self.uniform),
-                    buf_entry(30, self.tiles.bound().0),
-                    buf_entry(31, self.tiles.bound().1),
-                ],
-            );
-            self.bound[k] = bound;
-        }
+        let (words, uniform) = self.tiles.this_frame();
+        let group = g.bind_group(
+            self.pipeline.layouts[0],
+            &[
+                buf_entry(0, frame),
+                view_entry(1, s.color_view),
+                view_entry(2, s.depth_only_view),
+                view_entry(3, s.history_view[was]),
+                sampler_entry(4, self.sampler),
+                buf_entry(5, self.uniform),
+                buf_entry(30, words),
+                buf_entry(31, uniform),
+            ],
+        );
         let [across, down] = self.tiles.squares();
         let tiles = across * down;
         let load = if gated { Load::Load } else { Load::Clear };
@@ -187,26 +165,22 @@ impl Resolve {
             encoder,
             &pass_desc(s.history_view[k], load, 0, Load::Clear, 0.0, stamp.pass()),
         );
-        g.set_pipeline(pass, self.built.pipeline);
-        g.set_bind_group(pass, 0, self.groups[k], &[]);
+        g.set_pipeline(pass, self.pipeline.id);
+        g.set_bind_group(pass, 0, group, &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
+        release(group);
         if !gated {
             return s.history_view[k];
         }
-        let back_bound = [s.history_view[k], self.tiles.changed_at()];
-        if back_bound != self.back_bound[k] {
-            release(self.back_groups[k]);
-            self.back_groups[k] = g.bind_group(
-                self.back.layouts[0],
-                &[
-                    view_entry(1, s.history_view[k]),
-                    buf_entry(30, self.tiles.bound().0),
-                    buf_entry(31, self.tiles.bound().1),
-                ],
-            );
-            self.back_bound[k] = back_bound;
-        }
+        let group = g.bind_group(
+            self.back.layouts[0],
+            &[
+                view_entry(1, s.history_view[k]),
+                buf_entry(30, words),
+                buf_entry(31, uniform),
+            ],
+        );
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -218,10 +192,11 @@ impl Resolve {
                 stamp.pass(),
             ),
         );
-        g.set_pipeline(pass, self.back.pipeline);
-        g.set_bind_group(pass, 0, self.back_groups[k], &[]);
+        g.set_pipeline(pass, self.back.id);
+        g.set_bind_group(pass, 0, group, &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
+        release(group);
         s.history_view[was]
     }
 
@@ -230,14 +205,14 @@ impl Resolve {
     /// its places, the nearest copy of the last's about this one's.
     fn reproject(&self) -> Mat4 {
         let ((now, eye), (last, was)) = (&self.view, &self.last);
-        let moved = [
+        let shift = [
             world::nearest(eye[0], was[0]) - was[0],
             eye[1] - was[1],
             eye[2] - was[2],
         ];
         let (mut inv, mut t, mut a, mut m) = (mat4::new(), mat4::new(), mat4::new(), mat4::new());
         mat4::invert(&mut inv, now);
-        mat4::translation(&mut t, moved[0], moved[1], moved[2]);
+        mat4::translation(&mut t, shift[0], shift[1], shift[2]);
         mat4::mul(&mut a, &t, &inv);
         mat4::mul(&mut m, last, &a);
         m

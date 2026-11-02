@@ -5,44 +5,48 @@
 //! (eye.rs): the passes a cast takes, written once over the observer it
 //! casts for (observer.rs), a pass both observers take one entry
 //! (pass_observer.rs), the eye's rays (beam.rs, raster.rs, cast.rs) through the
-//! observed pyramid (observed.rs), the world's depth from the light (light.rs),
+//! observed pyramid (pyramid.rs), their image bound only where rays.rs lets
+//! it be (cast.rs, light_mark.rs), the world's depth from the light (light.rs),
 //! each handed brick's ground (ground.rs) and ways (way.rs), and the decor
-//! the ground generates (decor.rs). An entry is named
+//! the ground generates (decor.rs), each workgroup a constant its code counts
+//! by (workgroup.rs). An entry is named
 //! by `entry_point_name`, never by its module's path, so each keeps the
 //! name pxl-tool shader.rs `ENTRIES` reads.
 
 #![cfg_attr(target_arch = "spirv", no_std)]
-// The workspace's clippy never builds this crate: its own build refuses a
-// warning, as `-D warnings` does every other.
+// The workspace's clippy never builds this crate.
 #![deny(warnings)]
 
 mod beam;
-mod cast;
+mod rays;
 mod decor;
 mod pass_observer;
 mod eye;
 mod ground;
-mod observed;
+mod pyramid;
 mod observer;
 mod raster;
 mod light;
 mod way;
+mod workgroup;
 mod world;
 
+use rays::{cast, light_mark};
+
 pub use beam::{beam_cs, cell_cs, sample_cs};
-pub use cast::{cast_cs, miss_cs, miss_list_cs, stop_faces_cs, stop_lead_cs};
+pub use cast::{cast_cs, miss_cs, miss_list_cs, hit_faces_cs, hit_lead_cs};
 pub use decor::{
     decor_args_cs, decor_cnt_cs, decor_compact_cs, decor_cs, decor_mark_cs, decor_thin_cs,
 };
 pub use eye::Eye;
-pub use ground::{bound_cs, height_cs, joined_cs};
-pub use observed::forget_cs;
+pub use ground::{bound_cs, height_cs, fold_cs};
+pub use pyramid::forget_cs;
 pub use raster::{face_cs, sample_box_cs};
 pub use light::{
-    light_beam_cs, light_cs, light_detail_cs, light_held_cs, light_mark_cs, light_mark_drawn_cs,
-    light_miss_cs, light_reach_cs, light_sample_cs, light_told_cs, Head,
+    light_cs, light_slide_cs, light_mark_draws_cs, light_miss_cs, light_propagate_cs, Head,
 };
-pub use way::{way_cs, way_free_cs, way_freed_cs, way_tree_cs};
+pub use light_mark::light_mark_cs;
+pub use way::{way_cs, way_free_cs, way_return_cs, way_tree_cs};
 pub use world::{PaletteWords, NoPalette, World};
 
 use spirv_std::memory::{Scope, Semantics};
@@ -66,20 +70,6 @@ fn add(s: &mut [u32], i: u32, v: u32) -> u32 {
     }
 }
 
-/// Word `i` of `s` lowered to `v` where it is more, none past `s`.
-fn least(s: &mut [u32], i: u32, v: u32) {
-    if (i as usize) < s.len() {
-        // SAFETY: just bounded by the slice's own length.
-        unsafe {
-            spirv_std::arch::atomic_u_min::<
-                u32,
-                { Scope::QueueFamily as u32 },
-                { Semantics::NONE.bits() },
-            >(s.get_unchecked_mut(i as usize), v)
-        };
-    }
-}
-
 /// Word `i` of `w`, a dispatch's workgroups of `per` lanes over a list,
 /// raised to hold place `at` by the place that opens a workgroup alone:
 /// a list's places are taken one by one from 0 (`beam::Words::add`), so
@@ -87,6 +77,23 @@ fn least(s: &mut [u32], i: u32, v: u32) {
 fn opens<W: beam::Words + ?Sized>(w: &mut W, i: u32, at: u32, per: u32) {
     if at % per == 0 {
         w.most(i, at / per + 1);
+    }
+}
+
+/// Word `i` of `s` raised to `v` where it is less, none past `s`; what it
+/// was, `v` past `s`.
+fn raise(s: &mut [u32], i: u32, v: u32) -> u32 {
+    if (i as usize) < s.len() {
+        // SAFETY: just bounded by the slice's own length.
+        unsafe {
+            spirv_std::arch::atomic_u_max::<
+                u32,
+                { Scope::QueueFamily as u32 },
+                { Semantics::NONE.bits() },
+            >(s.get_unchecked_mut(i as usize), v)
+        }
+    } else {
+        v
     }
 }
 

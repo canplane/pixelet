@@ -2,14 +2,15 @@
 // down (`shadow_light`): 3x3 PCF with a texel of normal
 // offset, each tap compared at the depth the receiver's own plane has
 // where it lies; 1 where the map does not reach, and fading out toward the
-// casters' reach, so the shadows end where they do with no edge. A pass
-// drawing the map binds a blank one here and reads as lit.
+// effects' reach as every effect does (effect.wgsl `effect_share`), so the
+// shadows end where the others do, with no edge. A pass drawing the map
+// binds a blank one here and reads as lit.
 
 @group(0) @binding(1) var shadow_map: texture_depth_2d;
 @group(0) @binding(2) var shadow_sampler: sampler_comparison;
 
 // How much the depth of a plane with normal `n` changes a texel across and
-// a texel down the map, as a share of the box's depth: pxl-spec-core
+// a texel down the map, as a share of the box's depth: pxl-engine
 // `light::slope`, the one statement of it, which the casters' push takes too
 // (`Light::of`, `param::light::SLOPE_BIAS`). Its steps are the light box's own: the
 // box is orthographic, so each row of its matrix is the world's step along
@@ -28,7 +29,7 @@ fn light_slope(n: vec3f, texel: f32) -> vec2f {
   return -vec2f(dot(n, across / dot(across, across)), -dot(n, up / dot(up, up))) * texel / d;
 }
 
-// Where the map is cast from: the sun, or the moon (renderer.rs `lay_out`).
+// Where the map is cast from: the sun, or the moon (renderer.rs `prepare`).
 fn shadow_light() -> vec3f {
   return select(atmos_sun_dir(), atmos_moon_dir(), frame_shadow_moon() > 0.0);
 }
@@ -48,8 +49,7 @@ fn shadow_visibility(world_pos: vec3f, n: vec3f) -> f32 {
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0)) || ndc.z > 1.0 || ndc.z < 0.0) {
     return 1.0;
   }
-  let shadow_radius_ndc = frame_shadow_radius_ndc();
-  let strength = frame_shadow_strength() * (1.0 - smoothstep(SHADOW_FADE_START * shadow_radius_ndc, shadow_radius_ndc, length(ndc.xy)));
+  let strength = frame_shadow_strength() * effect_share(length(world_pos), frame_effect_reach());
   let size = vec2f(textureDimensions(shadow_map));
   // A tap a texel and a half off lies where the receiver's plane is that
   // much nearer the light or further: compared at its own depth there

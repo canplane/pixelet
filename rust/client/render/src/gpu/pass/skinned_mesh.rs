@@ -1,4 +1,4 @@
-// pxl-render/gpu/pass/skinned.rs
+// pxl-render/gpu/pass/skinned_mesh.rs
 
 //! Actors: each model's mesh upload skinned by each actor's joint palette. A
 //! case of the variant picker draws one actor in a pass of its own. An actor
@@ -10,25 +10,25 @@ use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_MARK};
 
 use crate::gpu::api::{bytes, Format, Gpu, Image, Stencil, TrackedRenderPass};
-use crate::gpu::pass::mark::{Drawn, Marks, UploadCopies};
+use crate::gpu::pass::mark::{Draw, Marks, UploadCopies};
 use crate::gpu::pass::model::{
     draw_model, draw_models, skin_group, skin_made, DrawUniforms, ModelDraw, Stage, DRAW_BYTES,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
 
 pub struct SkinnedPass {
-    lit: Built,
-    depth: Built,
+    lit: Pipeline,
+    depth: Pipeline,
     uniforms: DrawUniforms,
     /// Each model's skin image, as the frame hands them.
     skins: Vec<(u32, Image)>,
     marks: Marks,
 }
 
-/// A mark's uniform: its place, the uniform's first words (skinned.wgsl
+/// A mark's uniform: its place, the uniform's first words (skinned_mesh.wgsl
 /// `Draw`).
-fn put_mark(buf: &mut [u8], (_, u): &Drawn) {
+fn put_mark(buf: &mut [u8], (_, u): &Draw) {
     buf[..24].copy_from_slice(bytes(&u[..6]));
     buf[24..DRAW_BYTES as usize].fill(0);
 }
@@ -64,10 +64,10 @@ impl SkinnedPass {
         uniforms: &[f32],
         touched: &[u32],
         uploads: &mut Uploads,
-        kept: &UploadCopies,
+        last_frame_uploads: &UploadCopies,
     ) -> bool {
         self.marks
-            .prepare(g, draws, uniforms, touched, uploads, kept)
+            .prepare(g, draws, uniforms, touched, uploads, last_frame_uploads)
     }
 
     /// Group 0's layout of the marks (tile_mark.wgsl).
@@ -143,7 +143,7 @@ impl SkinnedPass {
             moved,
             |buf, d| {
                 let u = uniform_of(uniforms, d);
-                // Translation, turn about Z, opacity, scale, padding (skinned.wgsl `Draw`).
+                // Translation, turn about Z, opacity, scale, padding (skinned_mesh.wgsl `Draw`).
                 buf[..24].copy_from_slice(bytes(&u[..6]));
                 buf[24..DRAW_BYTES as usize].fill(0);
             },
@@ -170,8 +170,8 @@ impl SkinnedPass {
             return;
         };
         let pipeline = match stage {
-            Stage::Depth => self.depth.pipeline,
-            _ => self.lit.pipeline,
+            Stage::Depth => self.depth.id,
+            _ => self.lit.id,
         };
         draw_models(pass, &self.lit, pipeline, frame, slots, draws, |d| {
             let (mesh, vertex_cnt, idx_cnt) = uploads.get(d[0])?;

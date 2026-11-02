@@ -19,7 +19,6 @@ pub fn linear(v: u8) -> f64 {
 pub mod indicator {
     /// Reserved for "you could grab this", never for a preview of a change.
     pub const ACTION: u32 = 0x4fd1c5;
-    /// For removal where the thing cannot be drawn as itself. Dark, since users
-    /// read ACTION's cyan as "move".
+    /// For removal where the thing cannot be drawn as itself.
     pub const ERASE: u32 = 0x1d2026;
 }

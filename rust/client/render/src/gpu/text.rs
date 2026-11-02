@@ -4,12 +4,7 @@
 //! and color glyphs and shapes a line whole; the renderer gets pixels.
 
 use crate::gpu::atlas::ATLAS_SCALE;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Font {
-    pub weight: u32,
-    pub px: f32,
-}
+use crate::look::marker::Font;
 
 /// RGBA, top row first, not premultiplied; `origin` is the line's start at its
 /// em box's middle.

@@ -6,7 +6,7 @@
 // view is (atmos_skyview.wgsl): a column of froxels a workgroup and a froxel
 // a thread, `AIR_FROXELS` directions each way, Hillaire's
 // (atmos_medium.wgsl `view_unit`), and as many deep by one law for every
-// direction (atmos_medium.wgsl `air_reach`), the march along the column
+// direction (atmos_medium.wgsl `air_dist`), the march along the column
 // marched once and each froxel written (`air_held`). Nothing in it is the
 // view's, so a turn of the eye keeps it; it is drawn with its light's sky
 // view, of the same light and altitude and as it laid them
@@ -59,8 +59,8 @@ fn froxel_cs(@builtin(global_invocation_id) id: vec3u) {
   let e = l.yz;
   let last = f32(AIR_FROXELS - 1u);
   let k = id.z;
-  let t0 = select(0.0, air_reach((f32(k) - 1.0) / last, e), k > 0u);
-  let t1 = air_reach(f32(k) / last, e);
+  let t0 = select(0.0, air_dist((f32(k) - 1.0) / last, e), k > 0u);
+  let t1 = air_dist(f32(k) / last, e);
   var v = gather_between(r, vec3f(0.0, 0.0, 1.0), dir, t0, t1, toward, toward, 0.0, ATMOS_AIR_STRETCH_KNOTS);
   for (var step = 1u; step < AIR_FROXELS; step <<= 1u) {
     column_transmittance[k] = v.transmittance;

@@ -28,21 +28,27 @@ pub mod surface_role {
 /// has returned.
 ///
 /// Its head is HEAD words, past the stream's END what the host writes for the
-/// kernel: the device's block (xpute DEVICE) and the timed spans' read: its
-/// word, then each span's begin and end ticks (gpu/api.rs lays them out and
-/// holds this number to it).
+/// kernel: the device's block (xpute DEVICE) and the timed spans' reads, three
+/// of them (gpu/api.rs `READS`), each its word, then each span's begin and end
+/// ticks (gpu/api.rs lays them out and holds this number to it).
 pub mod stream {
-    pub const HEAD: u32 = 145;
+    pub const HEAD: u32 = 411;
     /// The range's size: the stream, what one turn may send the device, then at
     /// its end the encoder's handle table (gpu/api.rs), which zeroed bytes are an
     /// empty one of. A product number, said rather than derived: a turn's uploads
     /// wait (`room`) only when a burst of them comes at once.
     pub const BYTES: u32 = 4194304;
     /// What an upload leaves of the range. The records a turn cannot put off — a
-    /// frame's passes and draws, the shaders the first frame makes — are never
-    /// refused, so an upload, which can wait a turn, is taken only while this much
-    /// is left after it.
+    /// frame's passes and draws, the renderer's pipelines — are never refused, so
+    /// an upload, or a shader module made before the renderer (`MODULE_BYTES`),
+    /// which can wait a turn, is taken only while this much is left after it.
     pub const RESERVE: u32 = 1048576;
+    /// The WGSL a turn hands the device as shader modules before the renderer is
+    /// made (gpu/pipeline.rs `Pipelines::make_modules`): one module a turn, then
+    /// more while their sources stay within this and `RESERVE` is left. A page
+    /// makes a module on its main thread, so this bounds the task that makes
+    /// them, a module larger than it alone in its turn.
+    pub const MODULE_BYTES: u32 = 131072;
 }
 
 /// What a device's GPU host runs the renderer's stream by (xpute-gpu host
@@ -76,7 +82,7 @@ pub mod device {
 /// gpu/atmosphere.rs); STORAGE_TEXTURE_3D an rgba16float volume a compute
 /// pass writes, STORAGE_TEXTURE_2D an rgba16float texture one writes (the
 /// exposure's texel, gpu/atmosphere.rs); SAMPLER_COMPARISON a sampler that
-/// compares a depth texture's texels against a reference (the sun's shadow
+/// compares a depth texture's texels against a reference (the light's shadow
 /// map, gpu/shadow.rs).
 pub mod record {
     pub const HEAD: u32 = 10;

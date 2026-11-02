@@ -13,7 +13,7 @@ use crate::gpu::api::{
     Entry, Gpu, Image, TrackedRenderPass,
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::{put_f32, put_u32, Scratch};
 
 fn frame_group(
@@ -246,7 +246,7 @@ pub struct ModelDraw {
 /// group 0 set once a draw is made.
 pub fn draw_models<'a>(
     pass: &mut TrackedRenderPass,
-    lit: &Built,
+    lit: &Pipeline,
     pipeline: u32,
     frame: u32,
     slots: Slots,
@@ -273,7 +273,7 @@ pub fn draw_models<'a>(
 
 pub fn draw_model(
     pass: &mut TrackedRenderPass,
-    lit: &Built,
+    lit: &Pipeline,
     mesh: u32,
     vertex_cnt: u32,
     idx_cnt: u32,
@@ -286,7 +286,7 @@ pub fn draw_model(
 /// A mesh's vertex lanes and indices, a lane its `lit` stride's share.
 pub fn bind_mesh(
     pass: &mut TrackedRenderPass,
-    lit: &Built,
+    lit: &Pipeline,
     mesh: u32,
     vertex_cnt: u32,
     idx_cnt: u32,

@@ -4,8 +4,7 @@
 //! casts, the light's map's (tile_mark.wgsl), by itself drawn where it was,
 //! by the frame's words the last frame drew it with, and where it is, by
 //! this frame's, its vertices as its depth pass lays them, each fragment
-//! setting its tile's word (doc/minutes/20261029-the-screen-keeps-its-tiles-
-//! as-the-light-does.md, step 6): the pixels it covered then and covers now,
+//! setting its tile's word: the pixels it covered then and covers now,
 //! each frame at its own jitter. A draw changed where no draw the last frame
 //! drew draws as it does, by its record, its uniform's place in the list
 //! aside, and its uniform; or where the upload it reads moved (`touched`, the
@@ -20,26 +19,26 @@ use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{buf_entry, buffer_usage, release, Format, Gpu, Stencil, TrackedRenderPass};
 use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
 
 /// A draw as a frame drew it: its record and its uniform.
-pub type Drawn = ([u32; DRAW_WORDS], [f32; DRAW_FLOATS]);
+pub type Draw = ([u32; DRAW_WORDS], [f32; DRAW_FLOATS]);
 
 /// The upload a draw reads, 0 for none.
 type UploadOf = fn(&[u32; DRAW_WORDS]) -> u32;
 
 /// A mark's uniform written as its pipeline reads it.
-type PutMark = fn(&mut [u8], &Drawn);
+type PutMark = fn(&mut [u8], &Draw);
 
 /// Whether two draws draw alike: their records but where their uniforms lie
 /// in the list, and their uniforms, bit for bit.
-fn alike(a: &Drawn, b: &Drawn) -> bool {
+fn alike(a: &Draw, b: &Draw) -> bool {
     let record = |d: &[u32; DRAW_WORDS]| [d[0], d[1], d[2], d[4]];
     record(&a.0) == record(&b.0) && a.1.map(f32::to_bits) == b.1.map(f32::to_bits)
 }
 
-fn drawn_of(uniforms: &[f32], d: &[u32; DRAW_WORDS]) -> Drawn {
+fn drawn_of(uniforms: &[f32], d: &[u32; DRAW_WORDS]) -> Draw {
     let mut u = [0.0; DRAW_FLOATS];
     u.copy_from_slice(uniform_of(uniforms, d));
     (*d, u)
@@ -51,13 +50,13 @@ fn drawn_of(uniforms: &[f32], d: &[u32; DRAW_WORDS]) -> Drawn {
 /// it reads, as it is or as it was (0 where it reads none), those as they
 /// are first, `now_cnt` of them, and what the last frame drew.
 pub struct Marks {
-    built: Built,
+    pipeline: Pipeline,
     read: UploadOf,
     put: PutMark,
     uniforms: DrawUniforms,
     marks: Vec<([u32; DRAW_WORDS], u32)>,
     now_cnt: usize,
-    was: Vec<Drawn>,
+    was: Vec<Draw>,
 }
 
 impl Marks {
@@ -72,7 +71,7 @@ impl Marks {
         (read, put): (UploadOf, PutMark),
     ) -> Marks {
         Marks {
-            built: pipelines.build_gated(g, id, Format::depth32float, Stencil::Unused),
+            pipeline: pipelines.build_gated(g, id, Format::depth32float, Stencil::Unused),
             read,
             put,
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
@@ -85,13 +84,14 @@ impl Marks {
     /// Group 0's layout (tile_mark.wgsl): the frame, the tiles' words, their
     /// uniform and the box of the tiles the frame's marks cover.
     pub fn layout(&self) -> u32 {
-        self.built.layouts[0]
+        self.pipeline.layouts[0]
     }
 
     /// The marks this frame of `draws`: each that no draw the last frame
     /// drew draws as, where it is, its upload as it is; each the last frame
     /// drew that none of this frame's draws as, where it was, its upload as
-    /// kept (`kept`); one whose upload moved, both. Whether any.
+    /// the last frame drew it (`last_frame_uploads`); one whose upload moved,
+    /// both. Whether any.
     pub fn prepare<'a>(
         &mut self,
         g: &Gpu,
@@ -99,12 +99,12 @@ impl Marks {
         uniforms: &[f32],
         touched: &[u32],
         uploads: &mut Uploads,
-        kept: &UploadCopies,
+        last_frame_uploads: &UploadCopies,
     ) -> bool {
         let (read, put) = (self.read, self.put);
-        let now: Vec<Drawn> = draws.map(|d| drawn_of(uniforms, d)).collect();
-        let moved = |d: &Drawn| read(&d.0) != 0 && touched.contains(&read(&d.0));
-        let mut marks: Vec<(Drawn, u32)> = Vec::new();
+        let now: Vec<Draw> = draws.map(|d| drawn_of(uniforms, d)).collect();
+        let moved = |d: &Draw| read(&d.0) != 0 && touched.contains(&read(&d.0));
+        let mut marks: Vec<(Draw, u32)> = Vec::new();
         for d in &now {
             if !moved(d) && self.was.iter().any(|w| alike(w, d)) {
                 continue;
@@ -122,13 +122,13 @@ impl Marks {
             }
             let group = match read(&w.0) {
                 0 => Some(0),
-                h => kept.group_of(h),
+                h => last_frame_uploads.group_of(h),
             };
             marks.extend(group.map(|group| (*w, group)));
         }
         self.uniforms.write(
             g,
-            self.built.layouts[1],
+            self.pipeline.layouts[1],
             marks.len() as u32,
             marks.iter(),
             true,
@@ -157,7 +157,7 @@ impl Marks {
             return;
         };
         for (k, (d, upload)) in self.marks.iter().enumerate() {
-            pass.set_pipeline(self.built.pipeline);
+            pass.set_pipeline(self.pipeline.id);
             pass.set_bind_group(0, frames[usize::from(k >= self.now_cnt)], &[]);
             let (group, off) = slots.at(k as u32);
             pass.set_bind_group(1, group, &[off]);

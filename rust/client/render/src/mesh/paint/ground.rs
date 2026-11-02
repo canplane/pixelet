@@ -17,9 +17,8 @@ const BYTES: usize = u8::MAX as usize + 1;
 
 /// Each value's look as a ray's pixel paints it (frame/shader/screen_ray.wgsl
 /// `drawn`), by value alone, whichever source holds it, four words, its
-/// colors in linear light, which a pixel lights in, worked out here once a
-/// look rather than at every pixel: its swatch's red and green, its blue
-/// with its layer over it, then what it reads as from afar (`layer_mean`),
+/// colors in linear light, which a pixel lights in: its swatch's red and
+/// green, its blue with its layer over it, then what it reads as from afar (`layer_mean`),
 /// red and green, then blue; each channel 16 bits of the unit (WGSL
 /// `unpack2x16unorm`), which darks keep without bands. A cube the catalog
 /// teaches is its painter's (object.rs `look_of`), a ground look's the cube

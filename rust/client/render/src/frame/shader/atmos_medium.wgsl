@@ -108,10 +108,10 @@ fn land_radius() -> f32 {
 /* each light's tables */
 
 // A light's sky view and its share of the air's volume as laid
-// (gpu/atmosphere.rs `lay_out`), the sun `k` 0 and the moon 1: how far
+// (gpu/atmosphere.rs `prepare`), the sun `k` 0 and the moon 1: how far
 // under the level the horizon dips from the eye's radius they were drawn at,
 // in radians, and the near and far ends of the air's depth law laid there,
-// in km (`air_reach`).
+// in km (`air_dist`).
 fn laid(k: u32) -> vec3f {
   return select(atmos_sun_laid(), atmos_moon_laid(), k == 1u);
 }
@@ -132,11 +132,9 @@ fn light_gain(k: u32) -> f32 {
 }
 
 // The volume's depth, one law for every direction: slice z, 0 to 1, lies
-// `air_reach(z, e)` km out, the cube of z over the span between the ends `e`
-// it was laid with (`laid`). A cube puts the near view, where most of what is
-// drawn lies, in most of the slices and keeps a far slice a tenth or so past
-// the one before.
-fn air_reach(z: f32, e: vec2f) -> f32 {
+// `air_dist(z, e)` km out, the cube of z over the span between the ends `e`
+// it was laid with (`laid`).
+fn air_dist(z: f32, e: vec2f) -> f32 {
   return e.x + (e.y - e.x) * z * z * z;
 }
 

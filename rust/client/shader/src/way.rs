@@ -1,21 +1,23 @@
 // pxl-shader/way.rs
 
 //! Each handed brick's ways: their spans off its lines (`way_cs`), and
-//! their tree in the ways' pool (pxl-spec-core `way::tree`), the old one
+//! their tree in the ways' pool (pxl-engine `way::tree`), the old one
 //! given back (`way_free_cs`), the new one built (`way_tree_cs`) and the
-//! child groups the build gave back pushed (`way_freed_cs`).
+//! child groups the build gave back pushed (`way_return_cs`).
 
-use pxl_spec_core::at;
-use pxl_spec_core::fill::{self, put};
-use pxl_spec_core::overwrite;
-use pxl_spec_core::way::tree::{self, Pool, FREED_AT, RECORD_WORDS};
-use pxl_spec_core::clipmap;
+use pxl_engine::at;
+use pxl_engine::fill::{self, put};
+use pxl_engine::overwrite;
+use pxl_engine::way::tree::{self, Pool, FREED_AT, RECORD_WORDS};
+use pxl_engine::clipmap;
+use pxl_shader_macro::compute;
 use spirv_std::arch::IndexUnchecked;
 use spirv_std::glam::UVec3;
 use spirv_std::memory::{Scope, Semantics};
 use spirv_std::spirv;
 
 use crate::add;
+use crate::workgroup::WAY_LANES;
 use crate::world::brick_at;
 
 /// The ways of the bricks `fresh` names, one a `z`, a thread a column of
@@ -23,8 +25,8 @@ use crate::world::brick_at;
 /// brick's lines into the brick's scratch (`fill::spans`), which its
 /// levels and its ways' tree read its cells and its neighbors' off. Over
 /// `height_cs`'s tops: a way is told from their faces. Each brick's
-/// entry as handed whole: where it lies and its shard lay the area's edge
-/// (pxl-spec-core `way::Columns::is_walled`).
+/// entry as handed whole: where it lies and its shard say the wall
+/// (pxl-engine `area::is_wall`).
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "way_cs"))]
 pub fn way_cs(
     #[spirv(global_invocation_id)] id: UVec3,
@@ -35,12 +37,8 @@ pub fn way_cs(
     fill::spans(ground, fresh, scratch, id.z, id.x);
 }
 
-/// The lanes of a workgroup a brick: `way_tree_cs`'s, which a level's
-/// scan ranks the flagged across, and `way_freed_cs`'s.
-const LANES: u32 = 64;
-
 /// The workgroup's words, a lane's own: a scan's sums, a level's numbers.
-type Shared = [u32; LANES as usize];
+type LaneWords = [u32; WAY_LANES as usize];
 
 /// Thread `t`'s inclusive sum of the workgroup's `own`s, a step a doubling
 /// (Hillis and Steele 1986; GPU Gems 3, ch. 39): each sum adds the one `d`
@@ -50,12 +48,12 @@ type Shared = [u32; LANES as usize];
 /// takes only in uniform control flow; and two loads lie between them, a
 /// lane's own, so they are no one load every lane shares
 /// (pxl-shader-build's `workgroupUniformLoad`). `way_tree_cs`'s scan.
-fn scan(sums: &mut Shared, t: u32, own: u32) -> u32 {
-    let at = |v: u32| (v & (LANES - 1)) as usize;
+fn scan(sums: &mut LaneWords, t: u32, own: u32) -> u32 {
+    let at = |v: u32| (v & (WAY_LANES - 1)) as usize;
     // SAFETY: every index is masked under the array's length.
     unsafe { *sums.index_unchecked_mut(at(t)) = own };
     let mut d = 1;
-    while d < LANES {
+    while d < WAY_LANES {
         spirv_std::arch::workgroup_memory_barrier_with_group_sync();
         // SAFETY: masked, as above.
         let (before, sum) = unsafe {
@@ -76,25 +74,25 @@ fn scan(sums: &mut Shared, t: u32, own: u32) -> u32 {
 /// Word `i` of the workgroup's `w` as every lane reads it alike: the
 /// barriers about the one load, which pxl-shader-build reads back as
 /// WGSL's `workgroupUniformLoad`, so a loop bound on it is uniform.
-fn load_shared(w: &Shared, i: u32) -> u32 {
+fn load_shared(w: &LaneWords, i: u32) -> u32 {
     spirv_std::arch::workgroup_memory_barrier_with_group_sync();
     // SAFETY: masked under the array's length.
-    let v = unsafe { *w.index_unchecked((i & (LANES - 1)) as usize) };
+    let v = unsafe { *w.index_unchecked((i & (WAY_LANES - 1)) as usize) };
     spirv_std::arch::workgroup_memory_barrier_with_group_sync();
     v
 }
 
 /// Word `i` of the workgroup's `w`, as the lane that wrote it reads it.
-fn lane_word(w: &Shared, i: u32) -> u32 {
+fn lane_word(w: &LaneWords, i: u32) -> u32 {
     // SAFETY: masked under the array's length.
-    unsafe { *w.index_unchecked((i & (LANES - 1)) as usize) }
+    unsafe { *w.index_unchecked((i & (WAY_LANES - 1)) as usize) }
 }
 
 /// Word `i` of the workgroup's `w` set to `v`, by lane 0 alone.
-fn set_shared(w: &mut Shared, t: u32, i: u32, v: u32) {
+fn set_shared(w: &mut LaneWords, t: u32, i: u32, v: u32) {
     if t == 0 {
         // SAFETY: masked under the array's length.
-        unsafe { *w.index_unchecked_mut((i & (LANES - 1)) as usize) = v };
+        unsafe { *w.index_unchecked_mut((i & (WAY_LANES - 1)) as usize) = v };
     }
 }
 
@@ -114,7 +112,7 @@ fn settle() {
 
 /// The ways' pool's free stack, a word a child group of the pool's, the two
 /// grown together (pxl-render gpu/ray/ground.rs `GroundBuffers::grow`),
-/// which starts as WebGPU makes a buffer, zeroed: word `TAKEN` how many
+/// which starts as WebGPU makes a buffer, zeroed: word `TAKEN_CNT` how many
 /// child groups are taken, the slots after it their ids, then the free child groups'
 /// ids, child group 0 never among them, a brick's root word 0 naming no tree as
 /// a child pointer 0 names no children. A slot's id is read and written by
@@ -124,7 +122,7 @@ fn settle() {
 /// child groups past the old free, so every id ever handed lies under the most
 /// ever taken, which the pool's and its mirror's growth keep to
 /// (pxl-kernel domain/layer/terrain/mirror.rs).
-const TAKEN: u32 = 0;
+const TAKEN_CNT: u32 = 0;
 
 /// The child groups free when `taken` are of a stack of `len` slots, child group 0
 /// never one.
@@ -145,7 +143,7 @@ fn put_id(stack: &mut [u32], i: u32, child_group: u32) {
 /// Child group `child_group` back on the stack, into the slot of the last taken.
 fn push(stack: &mut [u32], child_group: u32) {
     // One fewer taken: an add of -1, as the count's word is unsigned.
-    let was = add(stack, TAKEN, 1u32.wrapping_neg());
+    let was = add(stack, TAKEN_CNT, 1u32.wrapping_neg());
     put_id(stack, was, child_group);
 }
 
@@ -155,9 +153,9 @@ fn push(stack: &mut [u32], child_group: u32) {
 /// One exit, for the reason `add` gives.
 fn pop(stack: &mut [u32], taken: u32, n: u32) -> (u32, bool) {
     let len = stack.len() as u32;
-    // SAFETY: word `TAKEN`, the stack's first; the buffer is never empty
+    // SAFETY: word `TAKEN_CNT`, the stack's first; the buffer is never empty
     // (pxl-render gpu/ray/ground.rs makes it a word a child group of the pool's).
-    let cnt = unsafe { stack.get_unchecked_mut(TAKEN as usize) };
+    let cnt = unsafe { stack.get_unchecked_mut(TAKEN_CNT as usize) };
     let mut gone = unsafe {
         spirv_std::arch::atomic_load::<u32, { Scope::QueueFamily as u32 }, { Semantics::NONE.bits() }>(
             cnt,
@@ -223,7 +221,7 @@ pub fn way_free_cs(
 ) {
     let root = at(
         ground,
-        brick_at(at(fresh, clipmap::handed_at(group.z) + clipmap::FRESH_BRICK)) + clipmap::ROOT_AT,
+        brick_at(at(fresh, clipmap::handed_at(group.z) + clipmap::FILL_BRICK)) + clipmap::ROOT_AT,
     );
     if lane.x != 0 || root == 0 {
         return;
@@ -257,21 +255,21 @@ pub fn way_free_cs(
 }
 
 /// Each handed brick's ways as a tree of the placed tree's shape
-/// (pxl-spec-core `way::tree`), a workgroup a brick, `group.z` its place
+/// (pxl-engine `way::tree`), a workgroup a brick, `group.z` its place
 /// in `fresh`: from the brick's own nodes along z its ways' bound meets
 /// (`tree::span`) down a level at a time, each
 /// candidate flagged where the brick's levels say a way may lie under it
 /// and the flagged given their children's child groups off the pool's stack
 /// together, in the order the workgroup's scan ranks them; at the brick's
-/// cells each a leaf off the spans kept (`way::lined`); then up, each
+/// cells each a leaf off the spans kept (`way::way_cell`); then up, each
 /// branch folded, one of eight equal leaves written as that leaf and its
-/// child group given back (`way_freed_cs` pushes them), every child group it holds
+/// child group given back (`way_return_cs` pushes them), every child group it holds
 /// kept as a record for the read-back. Its root word last; none where it
 /// has no ways, nothing taken nor kept, or where the pool or its scratch ran
 /// out, the child groups it took given back, and its records' count saying
 /// which (`tree::STARVED`, `tree::CRAMPED`). A level's numbers are what
 /// every lane reads alike (`load_shared`), the loops' bounds.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "way_tree_cs"))]
+#[compute(threads(WAY_LANES), entry_point_name = "way_tree_cs")]
 #[allow(clippy::too_many_arguments)]
 pub fn way_tree_cs(
     #[spirv(workgroup_id)] group: UVec3,
@@ -281,15 +279,15 @@ pub fn way_tree_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] pool: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] stack: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] scratch: &mut [u32],
-    #[spirv(workgroup)] sums: &mut Shared,
-    #[spirv(workgroup)] levels: &mut Shared,
+    #[spirv(workgroup)] sums: &mut LaneWords,
+    #[spirv(workgroup)] levels: &mut LaneWords,
 ) {
-    let (k, t, lanes) = (group.z, lane.x, LANES);
-    let base = brick_at(at(fresh, clipmap::handed_at(k) + clipmap::FRESH_BRICK));
+    let (k, t, lanes) = (group.z, lane.x, WAY_LANES);
+    let base = brick_at(at(fresh, clipmap::handed_at(k) + clipmap::FILL_BRICK));
     let mine = fill::scratch_at(scratch, k);
     // The child groups a brick's scratch holds, every brick's alike, and where
     // its records begin (`tree::scratch_words`).
-    let room = tree::scratch_child_groups(scratch.len() as u32 / clipmap::HANDED);
+    let room = tree::scratch_child_groups(scratch.len() as u32 / clipmap::FILL_CAP);
     let records = mine + tree::records_at(room);
     let mut pool = tree::Column(pool);
     // A level's candidate `c`: slot `c % 8` of the child group whose id is the
@@ -337,7 +335,7 @@ pub fn way_tree_cs(
     while ok && zoom < cell {
         settle();
         let (from, n) = (load_shared(levels, 2 * j), load_shared(levels, 2 * j + 1));
-        let brick = fill::Fresh { ground, base };
+        let brick = fill::LoneBrick { ground, base };
         // The flagged, counted, then given their child groups together.
         let (mut flagged, mut c) = (0, 0);
         while c < n {
@@ -413,12 +411,12 @@ pub fn way_tree_cs(
     // flow, which WebGPU takes only there.
     let mut c = 0;
     while ok && c < n {
-        let kept = fill::Scratch {
+        let spans = fill::Scratch {
             words: scratch,
             at: mine,
         };
         if c + t < n {
-            tree::leaf(&mut pool, &kept, cell, slot(stack, from, c + t));
+            tree::leaf(&mut pool, &spans, cell, slot(stack, from, c + t));
         }
         c += lanes;
     }
@@ -459,7 +457,7 @@ pub fn way_tree_cs(
             put(scratch, records, tree::NONE);
         } else if short == SHORT {
             // Past what its scratch holds: its count `CRAMPED`, the
-            // scratch's to grow, as none is the pool's (pxl-render `Short`).
+            // scratch's to grow (pxl-render `Short`).
             put(scratch, records, tree::CRAMPED);
         }
         let root = if ok {
@@ -474,8 +472,8 @@ pub fn way_tree_cs(
 /// The child groups each handed brick's build gave back (`way_tree_cs`), on the
 /// stack again: after the build, so no push lands under another brick's
 /// ids while it reads them.
-#[spirv(compute(threads(64, 1, 1), entry_point_name = "way_freed_cs"))]
-pub fn way_freed_cs(
+#[compute(threads(WAY_LANES), entry_point_name = "way_return_cs")]
+pub fn way_return_cs(
     #[spirv(workgroup_id)] group: UVec3,
     #[spirv(local_invocation_id)] lane: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] scratch: &[u32],
@@ -486,6 +484,6 @@ pub fn way_freed_cs(
     let mut r = lane.x;
     while r < n {
         push(stack, at(scratch, mine + FREED_AT + 1 + r));
-        r += LANES;
+        r += WAY_LANES;
     }
 }

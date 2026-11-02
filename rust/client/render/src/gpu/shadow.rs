@@ -1,12 +1,12 @@
 // pxl-render/gpu/shadow.rs
 
 //! The light's shadow map: the world's depth from the light each frame,
-//! orthographic about the eye and as wide as the casters reach (the
-//! kernel's `STAGE_AT::SHADOWS`), so its texel follows the camera grid.
+//! orthographic about the eye and as wide as every effect reaches (the
+//! kernel's `STAGE_AT::EFFECT_REACH`), so its texel follows the camera grid.
 //! The world is cast a ray a texel through the world's query, as the eye's
 //! rays are, off samples and the visible sample (pxl-shader `light_cs`), into
 //! `world`, a clipmap the light box slides over a texel at a time, every
-//! texel each frame it is cast (pxl-spec-core `light`); laid into the map
+//! texel each frame it is cast (pxl-engine `light`); laid into the map
 //! each frame in the box's own order, one triangle over it
 //! (`PIPELINE_LIGHT_MAP`), and decor and the actors, which move every frame,
 //! drawn over it depth only, from the light's frame. The lit passes read
@@ -15,10 +15,10 @@
 //! map is drawn again in the tiles they set alone (gpu/tiles.rs), through a
 //! gate of its own (light_gate.wgsl), as the world's pass is.
 
+use pxl_engine::eye;
+use pxl_engine::light::{self, Light, Starts, ANCHOR};
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec_core::eye;
-use pxl_spec_core::light::{self, Light, Starts, ANCHOR};
 use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_GATE, PIPELINE_LIGHT_MAP};
@@ -26,9 +26,9 @@ use crate::frame::shader::word::frame::VIEW_PROJ;
 use crate::frame::shader::word::FRAME_FLOATS;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
-    word_bytes, Entry, Format, Gpu, Load, RenderContext, Stencil, TrackedRenderPass,
+    word_bytes, Entry, Format, Gpu, Load, RenderContext, Stencil, TrackedRenderPass, GATED_DEPTH,
 };
-use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::tiles::Tiles;
@@ -39,10 +39,6 @@ pub const SIZE: u32 = 2048;
 const _: () = assert!(
     SIZE as i32 <= ANCHOR,
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
-);
-const _: () = assert!(
-    light::tiles(SIZE) * light::tiles(SIZE) <= light::MISSED_TILES,
-    "a listed slot's walk names its tile in 16 bits (`light::missed`)"
 );
 
 /// An anchor of the rays' starts (`Shadow::starts`): its world texel, its
@@ -60,35 +56,32 @@ fn ortho(out: &mut Mat4, half: f64, near: f64, far: f64) {
 }
 
 pub struct Shadow {
-    /// The map as its pass draws it, with the gate's stencil where the
-    /// device carries one (`Gpu::gated_depth`), and its depth alone, as the
-    /// lit passes read it.
+    /// The map as its pass draws it, with the gate's stencil
+    /// (`GATED_DEPTH`), and its depth alone, as the lit passes read it.
     map_view: u32,
     map_depth_view: u32,
     sampler: u32,
     blank_view: u32,
     blank_sampler: u32,
     /// The world's depth from the light as its cast leaves it, a word a slot
-    /// of the clipmap (pxl-spec-core `light::word`): `light_cs` writes it,
+    /// of the clipmap (pxl-engine `light::word`): `light_cs` writes it,
     /// `PIPELINE_LIGHT_MAP` lays it into the map off the box's corner,
     /// `corner`'s words.
     pub world: u32,
     /// The world laid in, its group over the world and the corner; and the
-    /// map's gate, which lays it in the claimed tiles alone, its group over
-    /// the same, the map's tiles' words and uniform and the marks' box
-    /// (`Tiles::marks_box`), made again where those are others.
-    lay: Built,
+    /// map's gate, which lays it in the claimed tiles alone, over the same,
+    /// the map's tiles' words and uniform and the marks' box
+    /// (`Tiles::marks_box`).
+    lay: Pipeline,
     lay_group: u32,
-    gate: Built,
-    gate_group: u32,
-    gate_bound: (u32, u32, u32),
+    gate: Pipeline,
     corner: u32,
     /// Group 0 of the casters' depth pipelines: the light's frame.
     pub light_group: u32,
     light_frame: u32,
     light: [f32; FRAME_FLOATS],
     pub light_view_proj: Mat4,
-    /// The world's cast's words off it (pxl-spec-core `eye::LIGHT`).
+    /// The world's cast's words off it (pxl-engine `eye::LIGHT`).
     pub light_words: [u32; eye::LIGHT_WORDS],
     /// The normal offset a fragment takes: a texel at the last reach.
     pub texel: f64,
@@ -115,7 +108,7 @@ impl Shadow {
             SIZE,
             SIZE,
             1,
-            g.gated_depth(),
+            GATED_DEPTH,
             1,
             texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
         );
@@ -184,8 +177,6 @@ impl Shadow {
             lay,
             lay_group,
             gate,
-            gate_group: 0,
-            gate_bound: (0, 0, 0),
             corner,
             light_group,
             light_frame,
@@ -205,7 +196,7 @@ impl Shadow {
 
     /// The light's frame, which a draw from the light reads in group 0, and
     /// the map as its pass draws it: what a mark from the light binds and
-    /// attaches (gpu/pass/skinned.rs `draw_marks`).
+    /// attaches (gpu/pass/skinned_mesh.rs `draw_marks`).
     pub fn frame_and_map(&self) -> (u32, u32) {
         (self.light_frame, self.map_view)
     }
@@ -227,22 +218,14 @@ impl Shadow {
     }
 
     /// `half_width` is the map's half width about `target`,
-    /// `shadow_radius_ndc` the share of it a receiver reads within; `fixed`
+    /// `reach_ndc` the share of it a receiver reads within; `fixed`
     /// is a point that stays put in the world as the eye moves, in the eye's
     /// frame.
-    pub fn aim(
-        &mut self,
-        sun_dir: &[f32],
-        target: V3,
-        half_width: f64,
-        shadow_radius_ndc: f32,
-        fixed: V3,
-    ) {
+    pub fn aim(&mut self, sun_dir: &[f32], target: V3, half_width: f64, reach_ndc: f32, fixed: V3) {
         self.texel = half_width * 2.0 / f64::from(SIZE);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
-        // the light goes, on purpose: the light read as moving. Turned on every
-        // frame instead, the grid below snapped another way each time and a
-        // wall's shadow flickered as fast as the frames came.
+        // the light goes; turned on every frame, the grid below snaps another
+        // way each time and a wall's shadow flickers.
         let light = v3::norm(&[sun_dir[0] as f64, sun_dir[1] as f64, sun_dir[2] as f64]);
         let step = self.texel / half_width;
         let from = match self.cast_from {
@@ -265,15 +248,14 @@ impl Shadow {
         );
         mat4::mul(&mut self.light_view_proj, &proj, &view);
         // The map follows the eye, so its texels are slid onto a grid fixed in the
-        // world: off it, every edge fell on other texels each frame as the view
-        // moved, and shimmered (stable shadow maps, texel snapping); and its
+        // world (stable shadow maps, texel snapping); and its
         // planes onto a coarser one along the light, so a texel kept is the
         // same ray. Where the fixed point falls on the texels' grid is the
         // world's texel index of the box's first texel, X across and Y down
         // the rows: the clipmap's corner, a whole number of tiles
         // (`light::TILE`), so a tile of the box holds whole tiles of the world
         // and what the cast read of it moves with the box a tile at a time
-        // (pxl-shader light.rs `light_detail_cs`).
+        // (pxl-shader light.rs `light_slide_cs`).
         let m = &mut self.light_view_proj;
         let mut cell = [0i64; 3];
         let tile = f64::from(light::TILE);
@@ -304,14 +286,14 @@ impl Shadow {
             [column(0), column(1), column(2), column(3)],
             SIZE,
             corner,
-            shadow_radius_ndc,
+            reach_ndc,
         )
         .words();
         (self.box_corner, self.inverse) = (corner, inverse);
         self.eye_world = fixed.map(|v| -v);
     }
 
-    /// Where the world's cast starts each texel's ray (pxl-spec-core
+    /// Where the world's cast starts each texel's ray (pxl-engine
     /// `light::Starts`): the anchors about the box's corner, each worked out
     /// once a light frame, on the near plane where its world texel's middle
     /// lies, in Q3 off the eye's world position, and kept while the frame
@@ -326,7 +308,7 @@ impl Shadow {
             corner[0].div_euclid(ANCHOR) * ANCHOR,
             corner[1].div_euclid(ANCHOR) * ANCHOR,
         ];
-        let q3 = f64::from(1u32 << pxl_spec_core::FRAC_W);
+        let q3 = f64::from(1u32 << pxl_engine::FRAC_W);
         let texel = 2.0 / f64::from(SIZE);
         let (inverse, eye) = (self.inverse, self.eye_world);
         let mut anchor = |k: usize| {
@@ -403,7 +385,7 @@ impl Shadow {
     /// counted (`Tiles::box_args`). The casters are drawn into it next,
     /// through the stencil, then it ends.
     pub fn begin<'a>(
-        &mut self,
+        &self,
         ctx: &mut RenderContext<'a>,
         cast: bool,
         tiles: &mut Tiles,
@@ -418,30 +400,26 @@ impl Shadow {
         let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(n) = number {
             xpute_kit::ensure!(cast, EINVAL, n);
-            let (words, uniform) = tiles.bound();
-            let bound = (words, uniform, tiles.marks_box());
-            if bound != self.gate_bound {
-                release(self.gate_group);
-                self.gate_group = g.bind_group(
-                    self.gate.layouts[0],
-                    &[
-                        view_entry(0, self.world),
-                        buf_entry(1, self.corner),
-                        buf_entry(30, words),
-                        buf_entry(31, uniform),
-                        buf_entry(33, bound.2),
-                    ],
-                );
-                self.gate_bound = bound;
-            }
+            let (words, uniform) = tiles.this_frame();
+            let group = g.bind_group(
+                self.gate.layouts[0],
+                &[
+                    view_entry(0, self.world),
+                    buf_entry(1, self.corner),
+                    buf_entry(30, words),
+                    buf_entry(31, uniform),
+                    buf_entry(33, tiles.marks_box()),
+                ],
+            );
             pass.set_stencil_reference(n);
-            pass.set_pipeline(self.gate.pipeline);
-            pass.set_bind_group(0, self.gate_group, &[]);
+            pass.set_pipeline(self.gate.id);
+            pass.set_bind_group(0, group, &[]);
             if let Some(args) = tiles.box_args() {
                 pass.draw_indirect(args, 0);
             }
+            release(group);
         } else if cast {
-            pass.set_pipeline(self.lay.pipeline);
+            pass.set_pipeline(self.lay.id);
             pass.set_bind_group(0, self.lay_group, &[]);
             pass.draw(3, 1, 0, 0);
         }
