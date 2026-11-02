@@ -321,8 +321,7 @@ fn toward_carto(img: &mut RgbaImage, carto: u32) {
     }
 }
 
-/// The pack laid out as one lossy WebP (q92): about 400 KB against several MB
-/// lossless, downloaded on every cold start.
+/// The pack laid out as one lossy WebP (q92).
 pub struct Image {
     pub bytes: Vec<u8>,
     pub tiles: Vec<String>,

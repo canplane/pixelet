@@ -2,7 +2,7 @@
 
 //! A guest's open files, each with the owner `O` the program gives it. A
 //! descriptor is a generational handle, so an answer to one already closed
-//! reaches no one; that is the whole of stale-answer handling.
+//! reaches no one.
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

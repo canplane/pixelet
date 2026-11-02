@@ -35,8 +35,7 @@ use pxl_spec::space::layer::tile;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
 /// cell, the model's edge, an angle about the eye in radians (pxl-spec
-/// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it. No fade: the edge is per instance,
-/// so it staggers.
+/// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it.
 pub fn decor_model_angle() -> f64 {
     param::DECOR_MODEL_CELLS * grid::CELL
 }

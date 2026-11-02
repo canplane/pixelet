@@ -295,7 +295,7 @@ const _: () = assert!(BRICK_CELLS.is_multiple_of(DECOR_CELL_LANES));
 /// which stands clear (`scatter::retained`) is laid as the decor's next record
 /// (`generation::cnt_at`), `RETAINED`, its cell and seed after it, for
 /// `decor_cs` to generate; none past the decor's room (`Decor::cap`). What
-/// it reads is the decor's hash alone, never the world.
+/// it reads is the decor's hash alone.
 #[compute(threads(DECOR_CELL_LANES), entry_point_name = "decor_thin_cs")]
 pub fn decor_thin_cs(
     #[spirv(global_invocation_id)] id: UVec3,

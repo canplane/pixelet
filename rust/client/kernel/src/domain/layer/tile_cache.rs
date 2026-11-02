@@ -9,9 +9,8 @@
 //! what this observation asks and never of where the eye has been. A miss
 //! falls back to the nearest resident tile over it (`finest_resident`).
 //!
-//! Capacity is asserted, not observed, since thrash here would be silent:
-//! slots cover everything held hard plus everything demand can name at once
-//! (the reach), so a view at rest converges to exact.
+//! Capacity is asserted: slots cover everything held hard plus everything
+//! demand can name at once (the reach), so a view at rest converges to exact.
 
 pub mod floor;
 
@@ -24,7 +23,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::Ask;
 
-/// Only the eye. Another point observer would add its own misses.
+/// Only the eye.
 const OBSERVERS: u32 = 1;
 
 /// No slot for an empty tile, whose body is its own. One asked for again
@@ -403,9 +402,8 @@ impl<L: Base> TileCache<L> {
     /// The slot is emptied first, so a body that fails to decode leaves it free
     /// rather than another tile reading half-overwritten bytes.
     /// `victim` picks which slot goes when one must, among the tiles of the
-    /// slots held only as cache, so a policy changes what is held next and
-    /// never what is correct; none where none may. They come in no order the
-    /// state fixes, so a policy picks by a total one.
+    /// slots held only as cache; none where none may. They come in no order
+    /// the state fixes, so a policy picks by a total one.
     pub fn admit<E>(
         &mut self,
         p: Tile,
@@ -427,7 +425,7 @@ impl<L: Base> TileCache<L> {
         }
     }
 
-    /// Held only while something asks for it: nothing else would ever let it go.
+    /// Held only while something asks for it.
     pub fn set(&mut self, p: Tile, tile: L) {
         if self.ask_of(p).is_none() {
             return;

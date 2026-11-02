@@ -21,7 +21,7 @@ use crate::way::tree;
 use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 
 /// What a node is handed by the node over it, each source's own, so a
-/// descent asks each node's sources once rather than again from the top:
+/// descent asks each node's sources once:
 /// what is placed (`overwrite::NodeSlot`, its cursor in the
 /// objects' tree), what is known of the service area at its shard
 /// (`area::Shard`), where the clip levels held the ground's cells of a node
@@ -327,9 +327,9 @@ const PLACED_LEVELS: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
 
 /// What is placed at the unit cells of a box, one leaf at a time
 /// (`PlacedCursor::next`), each with its cell and its stored word, as the
-/// objects' tree holds it (`overwrite`): asked of the query, never by
-/// walking the tree beside it. A cursor rather than a callback, so a GPU,
-/// which takes no closure over a binding's slice, walks it alike.
+/// objects' tree holds it (`overwrite`): asked of the query. A cursor rather
+/// than a callback, so a GPU, which takes no closure over a binding's slice,
+/// walks it alike.
 #[derive(Clone, Copy)]
 pub struct PlacedCursor {
     lo: [i32; 3],

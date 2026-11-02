@@ -5,10 +5,9 @@ use pxl_spec::bake::publication::TILE_SPHERE;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::codec::json::read_json;
 
-/// The host names a tile by its subject as the kernel once
-/// named it itself,
-/// recorded in this fixture, which its test reads too (tile.test.ts):
-/// each name there is its subject's, as pxl-spec writes it.
+/// The host names a tile by its subject, recorded in this fixture, which its
+/// test reads too (tile.test.ts): each name there is its subject's, as
+/// pxl-spec writes it.
 const FIXTURE: &str = include_str!(concat!(
     env!("PXL_REPO"),
     "/ts/client/src/driver/namespace/tile.fixture.json"

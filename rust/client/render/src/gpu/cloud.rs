@@ -142,7 +142,6 @@ impl CloudPass {
         g.write_buf(self.uniform, 0, bytes(&self.words));
     }
 
-    /// The sheets, over the world's pass.
     /// The words its pass reads, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.words

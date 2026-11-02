@@ -183,7 +183,7 @@ fn ask(eye: &Eye, beams: &mut Beams, s: [u32; 2], place: u32) {
 /// workgroup, dispatched off its args (`raster::ARGS_FACES`), each past
 /// their count (`raster::ARGS_INSTANCES`) returning at once: what lies
 /// about the face its ray entered (`World::ask_face`), asked of the world's
-/// query once a hit rather than once a ray, off the line down to it from
+/// query once a hit, off the line down to it from
 /// the deepest node of its cell's beam ray's line over it, that line read
 /// in place (`support::sub_line`, beam.rs `BeamAncestors`), and left in the word its ask
 /// names (`beam::ASK_TO`). The boxes' asks (`beam::Grid::ask_at`), their

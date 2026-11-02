@@ -309,7 +309,7 @@ impl<S: Serve> RequestScheduler<S> {
 
     #[cfg(test)]
     /// `stream`'s requests waiting for a credit and out on one. For a
-    /// report only, never for deciding what to want.
+    /// report only.
     pub fn stream_counts(&self, stream: Stream) -> (u32, u32) {
         let out = self
             .attempt

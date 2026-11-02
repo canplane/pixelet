@@ -473,8 +473,7 @@ fn ramp_len(total: f64, scale: Scale) -> f64 {
 /// deck sets, the deck it clears and the joint it meets, leans in turn on that deck's own window, so
 /// it is weighed only within `DECK_NEAR`, the cell's own included, and the reach adds up over the
 /// levels stacked (a deck over a deck, a track riding it, a bore opening on it): `DECK_LEVELS` of them
-/// fit in a tile, which every ring holds about what its tile draws. Arnis solves a structure as one,
-/// over all of it, which no ring can; a deck no longer than a window comes out much as it would.
+/// fit in a tile, which every ring holds about what its tile draws.
 const DECK_PANEL: usize = 16;
 const DECK_WINDOW: usize = 384;
 const DECK_NEAR: usize = 16;
@@ -633,8 +632,7 @@ fn deck_panel(
         .chain(plateau)
         .fold(tmax, i32::max);
     let u = |p: [f64; 2]| along(me, p);
-    // a joint holds every deck about it; an end at the ground only its own way's, which ramps down to it,
-    // where Arnis's one line over the whole passes over an end in the middle of a structure
+    // a joint holds every deck about it; an end at the ground only its own way's, which ramps down to it
     let mut pts: Vec<(f64, f64)> = anchors
         .iter()
         .filter(|a| a.2 || a.3 == m)

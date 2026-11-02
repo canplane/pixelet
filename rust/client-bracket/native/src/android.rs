@@ -365,8 +365,7 @@ pub(crate) fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
     }
 }
 
-/// A line to the system's log, where an Android app's error stream goes
-/// nowhere anyone reads.
+/// A line to the system's log.
 pub(crate) fn say(line: &str) {
     let line = std::ffi::CString::new(line.replace('\0', " ")).unwrap_or_default();
     // SAFETY: two strings, ours for the call.

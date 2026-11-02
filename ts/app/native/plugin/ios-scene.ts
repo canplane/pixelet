@@ -4,7 +4,7 @@
  * The scene life cycle, which iOS 27 asserts at launch: an app that leaves its
  * window to the app delegate is stopped before it draws. Expo's scene delegate
  * makes the window from the scene and starts React Native in it, so the app
- * delegate only hands it the factory. Expo 57's template does not do this yet.
+ * delegate only hands it the factory.
  */
 
 import { withAppDelegate, withInfoPlist } from "expo/config-plugins";

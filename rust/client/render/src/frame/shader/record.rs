@@ -699,7 +699,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[&[[0, UNIFORM], [1, STORAGE]]],
         ),
-        // Only where the opaque world left the far plane, so covered pixels never run it.
+        // Only where the opaque world left the far plane.
         PIPELINE_SKY => Descriptor::new(
             Head {
                 depth_compare: GREATER_EQUAL,
@@ -909,8 +909,7 @@ const fn alike(a: Group, b: Group) -> bool {
 
 /// The stages binding `binding` of `group` is seen from: those that read
 /// it in every shader whose pipeline lays out the same group, wherever, so
-/// the one layout those pipelines share holds for each, and from no stage
-/// written by hand.
+/// the one layout those pipelines share holds for each.
 const fn stages_reading(group: Group, binding: u32) -> u32 {
     let mut stages = NONE;
     let mut id = 0;
@@ -1062,7 +1061,7 @@ const fn is_floored(id: u32) -> bool {
 }
 
 /// Every pipeline's layout within the floor, checked as the crate is built,
-/// over every id, so a descriptor added is checked with no list to grow.
+/// over every id.
 const _: () = {
     let mut id = 0;
     while id < PIPELINES {

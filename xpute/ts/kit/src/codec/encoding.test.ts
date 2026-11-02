@@ -1,6 +1,6 @@
 // @xpute/kit/codec/encoding.test.ts
 
-/** The wire tests read records through this hex, so a decoder that silently accepts bad input would hide a mismatch. */
+/** The wire tests read records through this hex. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
@@ -41,9 +41,7 @@ test("hex round trips, pads a byte under 0x10, and reads no half a pair", () => 
 });
 
 test("hex refuses what it cannot read whole rather than taking what it can", () => {
-  // `parseInt` would read "1g" as 1 and "zz" as NaN, which is the fault these
-  // guards exist for: a packet's length taken from half a pair reads as a
-  // shorter packet instead of as an error.
+  // `parseInt` would read "1g" as 1 and "zz" as NaN.
   assert.throws(() => hex_to_bytes("0"), MarshalError);
   assert.throws(() => hex_to_bytes("abc"), MarshalError);
   assert.throws(() => hex_to_bytes("1g"), MarshalError);

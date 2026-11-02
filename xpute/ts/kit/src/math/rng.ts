@@ -3,8 +3,7 @@
 /**
  * Reproducible seeds and streams; not for anything that must resist
  * prediction. Two families, a file each: 64-bit (splitmix64, rng.64.ts) and
- * 32-bit (Murmur3's finalizer, rng.32.ts), the latter gpu-portable, since
- * WebGPU has no 64-bit integer.
+ * 32-bit (Murmur3's finalizer, rng.32.ts), the latter gpu-portable.
  */
 
 import type { f64, u32 } from "../abi/word.ts";

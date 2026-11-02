@@ -22,7 +22,7 @@ export interface SearchResult {
   category: number;
   /** Only for a division; null for places. */
   common: Record<string, string> | null;
-  /** Tells same-named results apart; replaced an address field that could name another city. */
+  /** Tells same-named results apart. */
   context: NamePart[];
   lon: f64;
   lat: f64;

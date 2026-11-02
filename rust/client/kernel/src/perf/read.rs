@@ -2,8 +2,7 @@
 
 //! What PERF_STATS reads: the profiler window reduced into perf.json's
 //! STAT, and what holds as it reads into its NOW, each read in place by the
-//! panel and the report so both agree. Sections go only through `put`;
-//! indexing columns by hand let sections drift out of order (2026-09-23).
+//! panel and the report. Sections go only through `put`.
 
 use crate::domain::control::camera::controller;
 use crate::domain::query;
@@ -341,7 +340,6 @@ fn view() -> ViewSection {
     }
 }
 
-/// Per step: a cooperative scheduler is only as cooperative as its longest step.
 fn steps() -> StepsSection {
     let mut steps = StepsSection::default();
     for s in tick_step_stats()

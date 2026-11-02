@@ -51,8 +51,7 @@ xpute_host::native_abi!(
 );
 
 /// The process's error stream, or Android's log where that stream goes
-/// nowhere: the kernel stops with the app, before the shell could run the
-/// report's record.
+/// nowhere.
 fn panic_hook(stop: Stop<'_>) {
     let line = match stop {
         Stop::Bug { errnum, at, a, b } => format!(

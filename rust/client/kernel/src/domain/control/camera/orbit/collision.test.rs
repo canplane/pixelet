@@ -223,9 +223,9 @@ fn climb_fails_under_roof() {
     assert_eq!((climbed.polar, failed), (0.1, true));
 }
 
-/// Over open ground the climb steepens as it did: a block three cells
-/// across and high round the eye, deeper than a first cell, lifts it to
-/// clear the block's top.
+/// Over open ground the climb steepens: a block three cells across and high
+/// round the eye, deeper than a first cell, lifts it to clear the block's
+/// top.
 #[test]
 fn climb_clears_block() {
     let _g = serial();
@@ -354,8 +354,7 @@ fn slope_keeps_pitch_climbed() {
 
 /// The pivot on a tower ten over the ground, the eye tilted past level 20
 /// out and sunk in the ground there: the floor under the eye lies under the
-/// pivot, and the climb lifts it past level onto that floor, where it took
-/// only a rise over the pivot and left the eye sunk (30b477576).
+/// pivot, and the climb lifts it past level onto that floor.
 #[test]
 fn climbs_past_level() {
     let _g = serial();

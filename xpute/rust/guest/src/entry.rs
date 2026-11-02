@@ -8,7 +8,7 @@
 use crate::mem::heap::HeapStat;
 
 /// What every guest is handed, whichever form it is built in. Asked for as a
-/// function (`Entry`), so a guest that reads it once pays nothing after.
+/// function (`Entry`).
 #[derive(Clone, Copy)]
 pub struct BootInfo {
     /// The bytes of the core memory, which never grows.

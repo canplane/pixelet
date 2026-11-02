@@ -11,7 +11,7 @@ use crate::frame::shader::record::BOX_WORDS;
 use crate::frame::shader::word::BOX_XY_STEPS;
 
 /// A cell is `BOX_XY_STEPS`; a box's z is held in its mesh's own steps from
-/// the mesh's floor, since a cell's z is the world's.
+/// the mesh's floor.
 const XY_STEPS: f64 = BOX_XY_STEPS as f64;
 const Z_STEPS: f64 = u16::MAX as f64;
 

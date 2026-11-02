@@ -7,7 +7,7 @@
  * WebGPU runs (Dawn's, npm:webgpu), and its compute pipeline made with the
  * layout it declares on a device of the default limits, the floor every
  * WebGPU device binds (frame/shader/floor.rs). naga, which writes them, takes
- * modules Tint refuses (a literal past f32's range, at e84ddd56e).
+ * modules Tint refuses (a literal past f32's range).
  */
 
 import { test } from "vitest";

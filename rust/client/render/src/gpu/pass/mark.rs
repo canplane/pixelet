@@ -4,8 +4,7 @@
 //! casts, the light's map's (tile_mark.wgsl), by itself drawn where it was,
 //! by the frame's words the last frame drew it with, and where it is, by
 //! this frame's, its vertices as its depth pass lays them, each fragment
-//! setting its tile's word (doc/minutes/20261029-the-screen-keeps-its-tiles-
-//! as-the-light-does.md, step 6): the pixels it covered then and covers now,
+//! setting its tile's word: the pixels it covered then and covers now,
 //! each frame at its own jitter. A draw changed where no draw the last frame
 //! drew draws as it does, by its record, its uniform's place in the list
 //! aside, and its uniform; or where the upload it reads moved (`touched`, the

@@ -152,10 +152,8 @@ pub(crate) const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
 /// (cast.rs `walk`), and the one place a value is told to be so: what
 /// nothing is painted on and what is placed as nothing. What is placed
 /// answers a voxel alone (`overwrite::value`), so no decor or marker is
-/// among them. A question of light, not of matter (`fills`): the two split
-/// the values between them today only because no matter lets light
-/// through yet, so neither is the other's negation; matter a ray sees
-/// through would answer yes to both.
+/// among them. A question of light, not of matter (`fills`): matter a ray
+/// sees through would answer yes to both.
 pub fn transparent(val: u32) -> bool {
     let v = self::val(val);
     v == sentinel::void as u32 || v == object::air as u32
@@ -164,8 +162,7 @@ pub fn transparent(val: u32) -> bool {
 /// Whether an asset is matter, taking its share of its cell as the
 /// layers compose its volume (`cover`) and drawn by its palette indices: anything but
 /// what nothing is painted on and what is placed as nothing. A question of
-/// matter, not of light (`transparent`): matter a ray sees through would
-/// still fill, so this is not `!transparent`.
+/// matter, not of light (`transparent`).
 pub fn fills(val: u32) -> bool {
     let v = self::val(val);
     v != sentinel::void as u32 && v != object::air as u32

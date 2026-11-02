@@ -1,7 +1,7 @@
 // cpp/xpute/guest/ipc/file.hpp
 
 // A guest's open files. A descriptor is a table handle, so an answer to one
-// already closed reaches no one, which is the whole of a stale answer's handling.
+// already closed reaches no one.
 
 #pragma once
 
@@ -48,7 +48,6 @@ template <class O, std::size_t N> class Files {
         close(sys, fd);
     }
 
-    // None for a descriptor already closed.
     // The owner of the open `opened` completes, or none where its descriptor was
     // closed since; a descriptor whose open failed is closed here.
     std::optional<O> complete_open(Sys &sys, const abi::SysOpened &opened) {

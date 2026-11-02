@@ -99,9 +99,8 @@ const CHUNK_BIN: u32 = 0x004e_4942;
 const COMPS_PER_BYTE: usize = 4;
 
 /// The most the scene may draw, a mesh counted at every node that draws it: a
-/// mesh is decoded once but laid out for each. Far above the shipped models
-/// (3,836 vertices, 7,422 indices and 7 primitives at most); what an upload
-/// may claim is for whatever accepts it to bound tighter.
+/// mesh is decoded once but laid out for each. What an upload may claim is
+/// for whatever accepts it to bound tighter.
 pub const MAX_SCENE_VERTICES: u32 = 1 << 20;
 pub const MAX_SCENE_IDXS: u32 = 1 << 22;
 pub const MAX_SCENE_PRIMITIVES: u32 = 1 << 12;

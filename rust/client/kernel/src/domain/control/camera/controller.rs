@@ -270,7 +270,7 @@ pub fn reset_dist() {
 }
 
 /// Going to a place: a view far out comes back in; one the user brought
-/// nearer stays, as map apps do.
+/// nearer stays.
 pub fn come_in_to_default() {
     let default = DEFAULT_DIST;
     if camera_state().intent.dist > default {
@@ -364,8 +364,6 @@ fn take_mode(want: CameraMode) -> bool {
 /// `q` (x, y, z, w) turns the camera's axes to the tracker's. The first of a
 /// run places the tracker's space so the camera stays where it is; before
 /// the camera stands anywhere there is nowhere to place it.
-/// No client sends it yet (`INPUT_XR_POSE`): it waits for an immersive mode's
-/// head pose.
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let mut turn = mat4::new();
     mat4::rot_quat(&mut turn, q);

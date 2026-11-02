@@ -2,7 +2,6 @@
 
 //! The write end: a tree of nodes built before `TreeEncoder` lays it out.
 
-// Stateless helpers are uppercase, as the C header's macros they mirror.
 #![allow(non_snake_case)]
 
 use crate::status::error::MarshalError;

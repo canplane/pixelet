@@ -1118,8 +1118,8 @@ impl RaysPass {
             // off that, or reading it from their cell's start, marking the
             // pixels that missed; and those again,
             // writing it, a thread a drawn pixel, each but the marked
-            // returning at once. One pass, a dispatch each, each
-            // reading what the ones before wrote (pxl-engine `pyramid`).
+            // returning at once, each reading what the ones before wrote
+            // (pxl-engine `pyramid`).
             // A pass a dispatch, each timed in its own span, so the cast's
             // parts are read apart: `cast` holds the forgetting alone; the
             // samples' boxes written and drawn between the samples and the

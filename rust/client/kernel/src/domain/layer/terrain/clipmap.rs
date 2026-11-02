@@ -9,7 +9,7 @@
 //! draws and lays its cells; they come back into `.fixed.terrain`, and the
 //! brick is present from then on (`on_resident`). Nothing of a tile is kept for
 //! a brick still to come: one that enters asks its tile again
-//! (`TileCache::again`), which the browser's cache answers.
+//! (`TileCache::again`).
 
 use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{
@@ -379,10 +379,8 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         assign_slots(w, lost);
     }
     // Tiles are asked again only as far as their packets could be kept,
-    // in slot order, or they would come back only to be freed: while no
-    // frame is drawn, so none gives a packet back, the rest are asked once
-    // room is given back instead. Only an absent brick's tile is asked of
-    // again.
+    // in slot order; the rest once room is given back. Only an absent
+    // brick's tile is asked of again.
     let mut room = tile::again_room();
     for b in 0..SLOTS {
         let held = w.slots[b as usize];
@@ -579,8 +577,7 @@ pub fn refold() {
 /// the coarser clip level's (pxl-engine `clipmap::step`), then the pivot's
 /// and a destination's; in a clip level by how far its brick lies from the
 /// center. A brick another clip level listed first is not listed again. Only a
-/// brick whose tile can hand it now: one waiting on its tile does not hold a
-/// place another could take.
+/// brick whose tile can hand it now.
 fn due(w: &mut Clipmap) {
     let terrain = TerrainTile::tile_cache();
     let handable =

@@ -1,8 +1,7 @@
 // xpute-kit/collection/list.rs
 
 //! A list of at most `N`, held inline: it never grows, and a push past `N`
-//! is a bug (ENOSPC). For what a program bounds by a constant, where a `Vec`
-//! would grow to that bound anyway. Its first `len` slots are live.
+//! is a bug (ENOSPC). Its first `len` slots are live.
 
 use core::mem::MaybeUninit;
 

@@ -122,7 +122,7 @@ const _: () = assert!(
 /// each: a brick is a node `BRICK_SHIFT` zooms over its cells, and its
 /// ways' bound meets no more of them than this; a tile past it fails its
 /// bake (pxl-spec bake/tile/terrain.rs `fill_fit`), its build refused as one
-/// `past` its child groups. The most of the staged z15 set is 4 (2026-10-27).
+/// `past` its child groups.
 pub const ROOT_NODES: u32 = overwrite::CHILDREN;
 
 /// The brick's own nodes along z its ways' bound `[lo, hi)` (leaf cells,
@@ -161,8 +161,7 @@ pub fn cursor(columns: &impl Columns, root: u32, cell: Zoom, zoom: Zoom, at: [i3
 pub const CHILD_GROUP_WORDS: u32 = 2 * overwrite::CHILDREN;
 
 /// The most child groups one brick's build takes before its fold gives any
-/// back: the most of the format-12 set (2026-10-18, its clip levels' bricks
-/// lined as before the face cell, which only lines more); a tile past it
+/// back: the most of the format-12 set; a tile past it
 /// fails its bake (pxl-geo-bake terrain/pool.rs), and what a build keeps a
 /// brick, its records and the child groups its fold gives back, is held to it.
 pub const BRICK_CHILD_GROUPS: u32 = 24_067;

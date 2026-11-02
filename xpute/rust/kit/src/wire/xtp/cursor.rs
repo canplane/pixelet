@@ -2,7 +2,6 @@
 
 //! The read end: lazy cursors over a packet. Nothing is decoded until a `get`.
 
-// Stateless helpers are uppercase, as the C header's macros they mirror.
 #![allow(non_snake_case)]
 
 use crate::status::errno::Errno;

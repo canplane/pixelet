@@ -167,9 +167,9 @@ uniform! {
         /// Where the eye's rays end, in units (pxl-engine `eye::FAR`):
         /// past it the land is the Earth's picture whole.
         DRAWN: F32 = 35,
-        /// Lights the ground, never drawn: drawn, the sky went pale blue.
+        /// Lights the ground, never drawn.
         NIGHT_SKY: Vec3 = 36,
-        /// The Earth's face under the eye: at sea level the terrain floated on it.
+        /// The Earth's face under the eye.
         LAND_ALT_KM: F32 = 39,
         /// A lit city's radiance where the picture holds all of it.
         CITY_LIGHT: Vec3 = 40,
@@ -323,8 +323,7 @@ pub const UNIFORMS: [(&str, &[Field]); 7] = [
     (marker::NAME, marker::FIELDS),
 ];
 
-/// The cloud sheets' tile (gpu/cloud.rs), one fetch a pixel and a mip chain
-/// in place of eight octaves of hashes: 32 lattice units is about 250 km,
+/// The cloud sheets' tile (gpu/cloud.rs): 32 lattice units is about 250 km,
 /// further than the layer is drawn, and the lattice wraps with the tile.
 pub const CLOUD_TILE_UNITS: u32 = 32;
 pub const CLOUD_TILE_TEXELS: u32 = 1024;

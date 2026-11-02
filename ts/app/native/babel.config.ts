@@ -1,11 +1,9 @@
 // @pxl/native/babel.config.ts
 
 /**
- * Expo's preset, and the build's constants written into the code as values
- * — what vite.config.ts's `define` did — so a branch on one is folded where
- * it is compiled and what only a development build uses is not in a
- * production one at all. They are values and not globals for that reason:
- * `__IS_DEV__ ? EVERY : PRODUCTION` read at run time carries both.
+ * Expo's preset, and the build's constants written into the code as values,
+ * so a branch on one is folded where it is compiled and what only a
+ * development build uses is not in a production one at all.
  */
 
 import * as path from "node:path";
@@ -24,13 +22,8 @@ import { REPO, WORKSPACE } from "@pxl/build/paths.ts";
 
 /**
  * The const enums of the shell, the xpute packages and this app, read by the
- * table both bundlers share (ts/build/const-enum.ts): a const enum is
- * a compile-time name for a number, and a bundle holds the number alone. A
- * transpiler that sees one file at a time cannot inline a name declared in
- * another, and Babel's TypeScript transform emits the enum as an object
- * instead — every command's and errno's name as a string, reverse mapping
- * and all. The table refuses an enum it cannot inline; `inlineEnums` below
- * does the rest.
+ * table both bundlers share (ts/build/const-enum.ts), inlined by
+ * `inlineEnums` below: Babel sees one file at a time.
  */
 const TABLE = readEnums([
   path.join(WORKSPACE, "client/src"),
@@ -40,9 +33,8 @@ const TABLE = readEnums([
 const { exported: EXPORTED, local: LOCAL } = TABLE;
 
 /** The table is read once, when Metro loads this file, so an enum or a member
- * added since — a spec regenerated under a running Metro — is not in it. Left
- * alone, it bundles as a name nothing binds and throws on the device; said
- * here, it stops the build with what to do. */
+ * added since — a spec regenerated under a running Metro — is not in it, and
+ * stops the build with what to do. */
 const stale = (what: string) => staleIn(what, "restart Metro with --clear");
 
 /** What a plugin is handed of Babel. */
@@ -61,7 +53,7 @@ interface EnumState extends PluginPass {
  * TypeScript transform's other type-only imports. A file's own enums are
  * replaced in that file only. An enum that is not const, or a use of one as a
  * value that is left — `Command[x]`, the enum handed on whole — is a build
- * error, never a bundle that reaches a device and throws or carries a name. */
+ * error. */
 const inlineEnums = ({ types: t }: Babel): PluginObj<EnumState> => ({
   visitor: {
     MemberExpression(p, state) {
@@ -203,8 +195,8 @@ export default (api: ConfigAPI): TransformOptions => {
     new URL("../babel-preset-expo", import.meta.resolve("expo/package.json")),
   );
   // The defines and the enums are this tree's: a package's own sources are
-  // left as they are, where a name of theirs could be one of ours — @expo/ui
-  // has a `Slot` of its own, which the enum pass took for the mode bar's.
+  // left as they are, where a name of theirs could be one of ours (@expo/ui's
+  // `Slot`).
   // A function and not a RegExp: Metro reads the config with no file for its
   // cache key, and Babel refuses a RegExp it has nothing to test against.
   return {

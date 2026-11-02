@@ -1,9 +1,8 @@
 // pxl-render/gpu/star.rs
 
 //! The Yale Bright Star Catalog (Hoffleit and Warren 1991, CDS V/50), drawn
-//! after the sky as one instanced strip. Direction, flux and color are computed
-//! once here rather than per corner per frame. Nothing is drawn in daylight.
-//! The catalog's stars are the whole night sky: no Milky Way and no planets.
+//! after the sky as one instanced strip. Nothing is drawn in daylight.
+//! The catalog's stars are the whole night sky.
 
 use pxl_spec::asset::star::{self, RECORD_BYTES};
 use pxl_spec::space::coord::mat4::Mat4;

@@ -3,9 +3,7 @@
 //! gpu-portable: the ground's column at a cell, the one rule a node's ground
 //! is answered by (`node`) before what overwrites it: a cell's palette index and
 //! height off the clip level drawing it (`clipmap::ground`), and its cells by
-//! depth with a cave's air where a cave may take them. What overwrites it
-//! is not here: the ways by their own rule (`way.rs`), and what is placed
-//! by its own (`placed.rs`).
+//! depth with a cave's air where a cave may take them.
 //!
 //! A palette index and a height are stored as a byte and an i16 and read into a word
 //! here, since WGSL has no narrower integer.
@@ -31,7 +29,6 @@ use crate::param::ground::HEADROOM;
 use crate::param::ground::SANDSTONE_DEPTH;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
-// The catalog's palette indices this rule names, read into a word.
 /// The catalog's void and unknown as the words a palette index is read into.
 pub const VOID: u32 = sentinel::void as u32;
 pub const UNKNOWN: u32 = sentinel::unknown as u32;
@@ -293,7 +290,7 @@ pub(crate) fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
     }
     let s = leaf_cells(cell);
     // Water's filler is water, as sand's is sand: under a face it is the
-    // same cell, never dirt.
+    // same cell.
     let (filler, sandstone) = match palette_idx {
         SAND | BEACH => (SAND, SANDSTONE_DEPTH),
         WATER => (WATER, 0),

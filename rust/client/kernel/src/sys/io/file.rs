@@ -373,8 +373,7 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
     }
 }
 
-/// What an open came to, read once from the host's answer, so no owner
-/// compares a raw result.
+/// What an open came to, read once from the host's answer.
 #[derive(Clone, Copy, Debug)]
 pub enum Opened {
     /// The file's size; the descriptor is the owner's to read and close.

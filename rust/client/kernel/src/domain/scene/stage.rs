@@ -47,8 +47,7 @@ pub fn is_screen_drawn() -> bool {
 }
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
-/// season, as Google Earth and Cesium keep one mosaic; the earth layer's, under
-/// its version.
+/// season; the earth layer's, under its version.
 const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::object::preview;
@@ -312,9 +311,7 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
     };
 
     // The world gizmo, laid before the frame's list begins, so its lines and the
-    // origin they are drawn about are the same turn's: laid after, a new buffer
-    // went up under the last origin, and every rebuild flung the lines by how
-    // far it moved.
+    // origin they are drawn about are the same turn's.
     let show = settings_store().world_gizmo;
     frame_gizmo_step(show, pivot, heading);
     coverage_gizmo_step(show);

@@ -141,10 +141,7 @@ pub fn view_resize(width: f64, height: f64) {
 /// The eye is held on the steps the cast's rays leave from (pxl-spec
 /// `world::origin`), so the world the rays draw and what is rasterized on
 /// its faces — the location indicator's zone, the ghosts, the markers' anchors — stand
-/// about one eye. Off them, the rays' eye stood up to a step from the
-/// raster's, past the step back the world's depth is written by
-/// (screen_ray.wgsl `behind`) within ~64 units, and a face and what lay on
-/// it fought. Whether the view moved.
+/// about one eye. Whether the view moved.
 pub fn view_compose(pose: Option<ObserverPose>) -> bool {
     let pose = pose.map(|p| ObserverPose {
         eye: p.eye.map(|v| to_real(from_real(v))),

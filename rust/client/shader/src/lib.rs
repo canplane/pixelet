@@ -14,8 +14,7 @@
 //! name pxl-tool shader.rs `ENTRIES` reads.
 
 #![cfg_attr(target_arch = "spirv", no_std)]
-// The workspace's clippy never builds this crate: its own build refuses a
-// warning, as `-D warnings` does every other.
+// The workspace's clippy never builds this crate.
 #![deny(warnings)]
 
 mod beam;

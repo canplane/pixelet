@@ -93,8 +93,7 @@ fn point_wrap_x_clamp_y() {
 }
 
 /// A Bundang tile, (11569, 3671): rows count from the south and a first
-/// digit is the signs, written out because the orientation is what can be
-/// silently wrong. The bucket's keys are these names.
+/// digit is the signs. The bucket's keys are these names.
 const BUNDANG: [i32; 2] = [11569, 3671];
 const BUNDANG_NAME: &str = "010332102130223";
 

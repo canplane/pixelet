@@ -5,8 +5,7 @@
 //! is `#[spirv(compute(threads(64, 1, 1), entry_point_name = "hit_lead_cs"))]`,
 //! each side named in `threads` written as its constant's value, since
 //! rust-gpu's `threads` takes literals alone. The constants are
-//! pxl-engine's and pxl-shader workgroup.rs's, read here as they are, so
-//! an entry's size and the constant it counts by are one fact.
+//! pxl-engine's and pxl-shader workgroup.rs's, read here as they are.
 
 #![deny(warnings)]
 

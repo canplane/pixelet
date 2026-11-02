@@ -102,8 +102,7 @@ pub(crate) fn eye_ray(eye: &Eye, [tx, ty]: [f32; 2]) -> cast::Ray {
 }
 
 /// The camera grid the frame casts on, read whole off the eye's words, as
-/// the kernel worked it out once (pxl-engine `beam::Grid`): no thread
-/// works any of it out again.
+/// the kernel worked it out once (pxl-engine `beam::Grid`).
 pub(crate) fn grid(eye: &Eye) -> beam::Grid {
     let g = &eye.grid;
     let w = [

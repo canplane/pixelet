@@ -457,7 +457,7 @@ pub fn way_tree_cs(
             put(scratch, records, tree::NONE);
         } else if short == SHORT {
             // Past what its scratch holds: its count `CRAMPED`, the
-            // scratch's to grow, as none is the pool's (pxl-render `Short`).
+            // scratch's to grow (pxl-render `Short`).
             put(scratch, records, tree::CRAMPED);
         }
         let root = if ok {

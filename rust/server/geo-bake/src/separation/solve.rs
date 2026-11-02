@@ -25,8 +25,7 @@
 //!
 //! The 1-ring is the most a tile may consult, not what it must: nothing is
 //! read past it, and nothing reads all of it where less will do. A tile draws
-//! only itself (`terrain/pipeline/separation.rs` keeps what lies in it), so
-//! what it computes past what bears on its own cells is spent for nothing. Two
+//! only itself (`terrain/pipeline/separation.rs` keeps what lies in it). Two
 //! rules follow, and a change here or in `bridge` or `tunnel` keeps both:
 //!
 //! - Where the ring cuts a piece is no end of it. A cut lies a tile from every
@@ -36,12 +35,9 @@
 //!   piece shows (its lowest point, the straight run between its portals),
 //!   comes out different, and their tiles step at the seam.
 //! - What only the whole piece can answer is not answered by reading past the
-//!   ring for it, which costs every tile reads it is not owed. A tile that
-//!   cannot see it does without it, by a rule that leans on what it sees
-//!   (a long bore, `tunnel::road_bores`; a deck, `bridge::deck_panel`).
-//!
-//! Arnis is where this solve started, not a bound on it: where its answer
-//! needs a structure whole, the ring wins and the answer is reworked.
+//!   ring for it. A tile that cannot see it does without it, by a rule that
+//!   leans on what it sees (a long bore, `tunnel::road_bores`; a deck,
+//!   `bridge::deck_panel`).
 
 mod bridge;
 mod tunnel;

@@ -63,8 +63,7 @@ fn submit(write: Write) {
 
 /// Whether a whole-cell pick of a palette entry only undoes a carve: the cell holds
 /// an AIR leaf, and the ground there without it is that palette entry, its stratum's
-/// at that depth (without the carve, every cube stacked on matching ground
-/// was dropped).
+/// at that depth.
 fn place_val_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
     if zoom > GROUND.cell() || !is_carved(at) {
         return false;
@@ -286,7 +285,7 @@ pub fn pending_step() -> RenderEdits {
         }
         _ => (false, None),
     };
-    // The real object's hide lands a tick or more after the ghost, accepted.
+    // The real object's hide lands a tick or more after the ghost.
     let hidden = object.filter(|_| active_tool == ActiveTool::Eraser);
     let edits = RenderEdits {
         hide: hidden.map(|o| o.id()),

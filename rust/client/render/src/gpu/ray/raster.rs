@@ -89,7 +89,7 @@ pub(super) struct LightRaster {
 
 impl Raster {
     /// Its pipelines and its args and uniform, made where the cast's are
-    /// (`RaysPass::make`): its modules are a few kilobytes beside theirs.
+    /// (`RaysPass::make`).
     pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> Raster {
         let blank = g.texture(1, 1, 1, Format::r32uint, 1, texture_usage::TEXTURE_BINDING);
         Raster {

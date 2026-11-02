@@ -132,8 +132,7 @@ fn golf_paint(class: &str) -> Option<Paint> {
 
 /// `natural`, as Overture's land classes carry it; Carto fills a wetland by
 /// its `wetland` tag, which Overture drops, and one without it not at all.
-/// The only land classes read: the rest, an island's coast of 585,169 points
-/// among them, paint nothing.
+/// The only land classes read: the rest paint nothing.
 pub(crate) const LAND: &[(&str, Paint)] = {
     use Layer::Landcover as L;
     &[

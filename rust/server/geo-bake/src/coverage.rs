@@ -30,8 +30,7 @@ pub const EPS: f64 = units(GROUND.cell());
 /// How far past a leaf any bake reads, in units: a z13 tile, four terrain
 /// leaves. A terrain leaf's reads stay within its 2-ring; a
 /// divisions leaf looks this far for the point of a division with no area,
-/// past the gap between such points nearly everywhere (99% of Korea's
-/// neighborhoods, most of its villages, measured 2026-10-08).
+/// past the gap between such points nearly everywhere.
 pub(crate) const BAKE_READ_DIST: f64 = units(LEAF_ZOOM - 2);
 
 const _: () = assert!(
@@ -41,7 +40,7 @@ const _: () = assert!(
 
 /// How far past its edges a shard holds, in units: the bakes' read distance
 /// and `EPS`, so every leaf bakes from its shard alone. A read past
-/// `BAKE_READ_DIST` is a violation, never a reason to grow this.
+/// `BAKE_READ_DIST` is a violation.
 pub const SHARD_APRON: f64 = BAKE_READ_DIST + EPS;
 
 /// A node of the hierarchy at or above the shards: its zoom and index.

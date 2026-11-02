@@ -26,8 +26,8 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
   return out;
 }
 
-/** Dev catalogs only behind a constant at top level, not via a helper:
- * Rolldown did not drop a helper's argument and shipped 47 dev strings. */
+/** Dev catalogs only behind a constant at top level: Rolldown does not drop a
+ * helper's argument. */
 const catalog = __IS_DEV__
   ? {
       en: deepMerge(en, enDev) as typeof en,
@@ -62,8 +62,7 @@ let booted = false;
 
 /**
  * Called by the app before the first render (web main.tsx, native index.ts). Catalogs are
- * bundled, so `t()` is correct from the first render; fetching them flashed
- * raw keys on a cold load.
+ * bundled, so `t()` is correct from the first render.
  */
 export function boot(): void {
   if (booted) return;

@@ -3,7 +3,7 @@
 /**
  * The 32-bit family, rng.64.ts's counterpart in u32 alone, gpu-portable since
  * WebGPU has no 64-bit integer: Murmur3's finalizer, a seed derived through
- * it, and a stream that draws it over a Weyl sequence. Not cryptographic.
+ * it, and a stream that draws it over a Weyl sequence.
  */
 
 import { U32, type u32 } from "../abi/word.ts";

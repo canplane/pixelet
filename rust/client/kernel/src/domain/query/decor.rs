@@ -5,8 +5,7 @@
 //! cell, each read as asked (`World::surfaces`), and what objects place, each
 //! struck as the box it claims. A ray strikes it as the ground walk passes, only
 //! where the frame draws it as held, at the leaf cells: a fold strikes none of
-//! it. The walk follows the detail rule, not a partition the view chose,
-//! which may differ at its edges.
+//! it. The walk follows the detail rule.
 //!
 //! Under it, beside the catalog (spec/spec/asset/decor.json), a decor
 //! thing struck as the box it claims (`intersect`); their models as they arrive
@@ -91,8 +90,7 @@ fn finest(fits: impl Fn(f64) -> bool) -> Zoom {
 /// (pxl-engine `overwrite::NodeSlot`), each zoom's the children of the zoom
 /// over's, as a node's neighbors are its parent's neighbors' children
 /// (Samet 1989, neighbor finding). A walk enters a node through its
-/// parent, so each zoom's is stepped from the one over in 27 `child` reads,
-/// never walked from the roots.
+/// parent, so each zoom's is stepped from the one over in 27 `child` reads.
 pub(super) struct Around {
     at: [[i32; 3]; cast::DEPTH],
     slots: [[NodeSlot; 27]; cast::DEPTH],
@@ -166,9 +164,8 @@ impl Around {
     /// The 3 × 3 columns about `(zoom, c)` read at its tile's cells: each
     /// column's line off its parent column's (`line_under`), its cells found
     /// from where its parent column's were (pxl-engine `clipmap::step`),
-    /// and its relief's highest, read once for every node under it. A walk
-    /// enters a node through its parent, so each zoom's is stepped from the
-    /// one over's, never walked from the top.
+    /// and its relief's highest, read once for every node under it, each
+    /// zoom's stepped from the one over's (`Around`).
     pub(super) fn read_columns(&mut self, world: &World, (zoom, c): (Zoom, [i32; 2])) {
         let z = zoom as usize;
         if self.columns_at[z] == c {
@@ -381,7 +378,7 @@ impl<'a> World<'a> {
 
     /// Whether decor `s` strikes may reach into the node `(zoom, c)`, X on the
     /// asker's lap, where no cell under it fills: decor stands on the ground or
-    /// where something is placed, and extent's no farther than its    ///
+    /// where something is placed, and extent's no farther than its
     /// extent from there, so a node is out of it where, about it and as wide as
     /// the extent, the clip levels' relief holds no top over its bottom less
     /// the extent and the objects' pyramid no record, past the area none, as

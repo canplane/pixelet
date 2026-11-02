@@ -22,9 +22,8 @@ const KeyboardDock: ComponentType<KeyboardDockProps> = requireNativeView(
 
 /**
  * A layer standing `inset` above an open keyboard. The native view lifts it
- * in the keyboard's own animation, which a layout from JS a thread hop later
- * did not match; once still, the lift is laid out here so presses hit-test
- * where the layer is.
+ * in the keyboard's own animation; once still, the lift is laid out here so
+ * presses hit-test where the layer is.
  */
 export function AboveKeyboard({
   inset,

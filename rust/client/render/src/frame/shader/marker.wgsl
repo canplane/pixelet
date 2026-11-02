@@ -55,7 +55,7 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   let center_view = anchor_view + vec3f(0.0, drop, 0.0);
   // A region reaches a pixel past its sprite above and below, so an anchor on
   // the sprite's edge, a bubble's tail tip, is inside its own region whatever
-  // the subpixel it falls on; on the edge it flickered as it moved.
+  // the subpixel it falls on.
   let corner = q * (size + vec2f(0.0, select(0.0, 2.0, region) * depth / marker_px_per_unit()));
 
   var p: Placement;
@@ -67,7 +67,7 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   let world_up_view = normalize((marker_view() * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
   p.push = DEPTH_BIAS_U + max(0.0, -center_view.z) * frame_cell() * DEPTH_BIAS_CELLS;
   // What hangs under the anchor lies on the level ground through it, where the
-  // eye sees it; stood up, it would be in the ground the eye sees in front.
+  // eye sees it.
   let over = drop + corner.y;
   var twin = anchor_view + vec3f(corner.x, 0.0, 0.0) + world_up_view * max(over, 0.0);
   let shown = center_view + vec3f(corner, 0.0);

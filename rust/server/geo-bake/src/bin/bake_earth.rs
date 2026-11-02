@@ -231,8 +231,7 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
         }
     });
     // Lossless: a tile of one color is left out because the global picture reads
-    // the same there, which holds only if the picture keeps every byte; lossy, the
-    // open sea came back a step off the tiles' and their edges showed.
+    // the same there, which holds only if the picture keeps every byte.
     let mut config = webp::WebPConfig::new().map_err(|()| "a WebP config")?;
     config.lossless = 1;
     // libwebp otherwise rewrites the color under a zero alpha: the unlit Earth.
@@ -262,7 +261,6 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
     Ok(())
 }
 
-/// The Black Marble's eight tiles as one raster.
 /// The night's tiles, `rows` of NASA's tiling, put back into one plate.
 fn night_mosaic(rows: &[Vec<&str>]) -> Result<(Vec<u8>, usize, usize), String> {
     let mut mosaic = Vec::new();

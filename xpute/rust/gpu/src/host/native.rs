@@ -33,9 +33,8 @@ static GUEST: OnceLock<Guest> = OnceLock::new();
 static WAKE: AtomicUsize = AtomicUsize::new(0);
 
 /// Where a native guest's surfaces are configured, for its `Config`: on an
-/// Apple platform's main thread while the guest is idle, since Core
-/// Animation sets a layer's properties there alone; elsewhere on the guest's
-/// thread, which runs the stream.
+/// Apple platform's main thread while the guest is idle; elsewhere on the
+/// guest's thread, which runs the stream.
 #[cfg(target_vendor = "apple")]
 pub const CONFIGURE_AT: ConfigureAt = ConfigureAt::Main(configure);
 #[cfg(not(target_vendor = "apple"))]

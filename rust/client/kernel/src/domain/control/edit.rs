@@ -281,8 +281,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
                     }
                 }
                 // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
-                // size tier: the scan emits nothing for a zero material whatever its
-                // sub-cell bytes, so a smaller leaf would save a bite nobody took.
+                // size tier.
                 (None, None) => place_air(EntryAt::holding(GROUND.cell(), &hovered)),
             }
         }

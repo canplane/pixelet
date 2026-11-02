@@ -86,8 +86,7 @@ fn companion_props() -> Option<CompanionProps> {
     if controller::dist() == 0.0 {
         return None;
     }
-    // Where the camera is going, not where its easing has got to: walked toward
-    // only once the eased pivot settled, it set off as the glide's long tail ended.
+    // Where the camera is going, not where its easing has got to.
     let goal = controller::pivot_to().or_else(controller::pivot)?;
     let eye = coord::world_to_canonical(&controller::eye_world()?);
     let at = coord::to_world(&goal);
@@ -236,9 +235,7 @@ pub fn effect_times() -> [f64; spec::EFFECT_NAMES] {
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES])
 }
 
-/// Effects are not budgeted, so nothing in them may be real work. They were
-/// untimed until a fold here took 70 ms of a turn whose tick was 1.5 ms
-/// (2026-09-23).
+/// Effects are not budgeted, so nothing in them may be real work.
 macro_rules! effect {
     ($times:ident, $name:ident, $step:expr) => {{
         let at = now();

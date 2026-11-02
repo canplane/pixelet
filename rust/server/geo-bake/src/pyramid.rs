@@ -34,7 +34,7 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     const LATTICE: Lattice;
 
     /// The coarsest zoom it is folded to: the coarsest the client reads it
-    /// at (pxl-spec lattice.rs `coarsest`), since a tile coarser is one nobody asks for.
+    /// at (pxl-spec lattice.rs `coarsest`).
     const COARSEST: Zoom = coarsest(Self::LATTICE);
 
     /// As tile `at` is published.

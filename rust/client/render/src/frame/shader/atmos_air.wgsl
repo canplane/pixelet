@@ -31,9 +31,7 @@ fn bspline_taps(x: f32) -> vec4f {
 // centers at whole numbers, by the cubic B-spline in all three: smooth to
 // its second derivative across every column and slice, eight trilinear
 // reads. A tap past the half's first or last column reads that column, as
-// the edge's own would. It smooths what it reads by a sixth of the square of
-// a texel's step times its curvature, which the slow light per share taken
-// has little of.
+// the edge's own would.
 fn air_held_at(k: u32, c: vec2f, slice: f32) -> vec3f {
   let n = f32(AIR_FROXELS);
   let x = bspline_taps(c.x);

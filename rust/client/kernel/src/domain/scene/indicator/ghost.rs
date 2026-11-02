@@ -51,8 +51,7 @@ pub struct GhostDraw {
     at: V3,
 }
 
-/// Where a decor instance's base stands, its turn and its scale, as Bevy's
-/// `Transform` holds a translation, a rotation and a scale.
+/// Where a decor instance's base stands, its turn and its scale.
 #[derive(Clone, Copy)]
 struct Transform {
     at: V3,
@@ -128,10 +127,10 @@ impl GhostDraw {
         true
     }
 
-    /// `decor`'s `variant`, its base at `t`'s `at`. An untextured white silhouette
-    /// reads as a glitch, so until the variant's model and skin both arrive
-    /// `stand_in`'s box is drawn instead; with none, the instance is the
-    /// world's own and drawn as it is. Whether what is drawn changed.
+    /// `decor`'s `variant`, its base at `t`'s `at`. Until the variant's model
+    /// and skin both arrive `stand_in`'s box is drawn instead; with none, the
+    /// instance is the world's own and drawn as it is. Whether what is drawn
+    /// changed.
     fn set_decor(
         &mut self,
         draw: &mut DrawList,

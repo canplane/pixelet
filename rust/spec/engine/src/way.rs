@@ -651,9 +651,8 @@ fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) 
 }
 
 /// The most spans one column's visits make (`column`): the most of the
-/// format-12 set (2026-10-17), measured with every tile at every zoom (z14's
-/// 10 at 01033210230311; z15's most 9, none past z11); a tile past it fails
-/// its bake (pxl-spec bake/tile/terrain.rs `fill_fit`).
+/// format-12 set; a tile past it fails its bake (pxl-spec
+/// bake/tile/terrain.rs `fill_fit`).
 pub const SPANS: usize = 10;
 
 /// A column's spans, in leaf cells, in the order its visits come: each a
@@ -848,7 +847,7 @@ pub fn way_cell(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
 /// cells a bore's air beside it lines, where no slab or pier of that
 /// column fills the cell read (`bare`). A lined cell is under the face's
 /// cell, so under the top: the hull of the cells `way_cell` reads something
-/// in, exactly, off the spans, never a cell at a time.
+/// in, exactly, off the spans.
 pub fn lined_hull(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL - cell);
     let (face, n) = k.head(c);

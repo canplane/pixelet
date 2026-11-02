@@ -6,9 +6,7 @@
 //! marked by how it stands, and the drawn ones' tiles and shards, each
 //! colored as its `Mark` says (`gizmo_spec::coverage`).
 //! Every line is cut at each edge's ends on it, and each stretch drawn once
-//! in the highest mark over it, straight between its ends on the ground:
-//! overlaid, the lines read as none of them, and laid along the ground they
-//! wavered with every cell they crossed.
+//! in the highest mark over it, straight between its ends on the ground.
 
 use fnv::{FnvHashMap, FnvHashSet};
 

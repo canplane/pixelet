@@ -25,9 +25,6 @@ pub struct Halo {
     pub shadow_dy: f32,
 }
 
-// Regular and semibold, not canvas's "bold" (700); the system faces carry a real
-// semibold, so neither is synthetic.
-
 const REGULAR: u32 = 400;
 const SEMIBOLD: u32 = 600;
 
@@ -53,8 +50,7 @@ pub const PILL_FILL: u32 = 0x14141ab8;
 pub const PILL_INK: u32 = WHITE;
 pub const DOT_FILL: u32 = 0xffffff99;
 pub const DOT_RING: u32 = 0xffffff40;
-/// A pill's colors turned over, a light pill, its words dark, so a number
-/// on it does not read as words that are a number.
+/// A pill's colors turned over, a light pill, its words dark.
 pub const CNT_FILL: u32 = 0xffffffe6;
 pub const CNT_INK: u32 = 0x14141aff;
 
@@ -72,7 +68,7 @@ pub fn pill_size(text_w: f64) -> [f64; 3] {
 // category's fill, rimmed white so it holds on any ground, lit from above and
 // casting a soft shadow, or before its icon's zoom a small disc of the same; the name under it in its category's
 // color, semibold, in a near-opaque white halo. Which places and when are
-// Carto's (`pxl-spec bake/place_theme.spec.rs`); how they look is not.
+// Carto's (`pxl-spec bake/place_theme.spec.rs`).
 
 pub const POINT_FONT: Font = Font {
     weight: SEMIBOLD,

@@ -7,12 +7,8 @@ mod spec;
 pub use spec::{Kind, SHAPE_BITS};
 
 /// An asset's id, `kind << SHAPE_BITS | shape`, as the code carries it: a
-/// u32 whose values a u16 holds. A type alias and not a newtype, since the
-/// number crosses as a bare u32 wherever it goes — a command's and the
-/// snapshot's words, the object store's leaf word, which pxl-engine
-/// packs for the GPU too (`overwrite::leaf_word`) — and a value past a u16
-/// is refused where it is read (`kind_of`, the store's write), not where
-/// it is made.
+/// u32 whose values a u16 holds. A value past a u16 is refused where it is
+/// read (`kind_of`, the store's write).
 pub type AssetId = u32;
 
 /// The id of `kind`'s `shape`.
@@ -23,8 +19,7 @@ pub(crate) const fn asset_id(kind: Kind, shape: u32) -> AssetId {
 impl Kind {
     /// Whether what is placed stands on an instance of the kind: a cube, or a
     /// decor on its box, which may float over the model; a marker is stood
-    /// on nowhere. A walker stands on what fills a cell, which a decor does
-    /// not, and asks nothing of this.
+    /// on nowhere.
     pub const fn stood_on(self) -> bool {
         matches!(self, Kind::cube | Kind::decor)
     }

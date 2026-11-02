@@ -4,16 +4,14 @@
 //! ranked against the others. It changes how soon the view is right, never
 //! what it is.
 //!
-//! 1. By layer, the order a view builds up (the user's order,
-//!    2026-09-26): terrain, then the catalog assets decor draws with, then
-//!    places. The objects' shards ride the ground's order: each of the
-//!    ground's shells, seen then unseen, is followed by the objects' of the
-//!    same shell, so what is placed in view comes before ground out of it.
+//! 1. By layer, the order a view builds up: terrain, then the catalog assets
+//!    decor draws with, then places. The objects' shards ride the ground's
+//!    order: each of the ground's shells, seen then unseen, is followed by the
+//!    objects' of the same shell, so what is placed in view comes before
+//!    ground out of it.
 //! 2. Within a layer, seen before unseen and nearer first;
 //!    of tiles as near, the finer first, so the leaf under the eye is not
 //!    asked after the coarse tiles over it, which cost a fold where baked on demand.
-//!    Ranking holes before coarse ground instead put the top tile's 2 km
-//!    cubes in front of the eye for seconds on a cold start (2026-09-26).
 //!
 //! Everything else ties, after the view. Rank orders what starts; nothing
 //! running is stopped for it.
@@ -107,9 +105,8 @@ impl Serve for Policy {
             Errno::ENETUNREACH => Fault::Network,
             // Any other status but 204 and 404, or no response while online. The
             // Worker answers only 200, 204 and 404, so this is the platform under
-            // it: R2's internal error, a Cloudflare incident (R2 down 59 minutes
-            // on 2025-02-06), the free plan's daily cap failing closed, an edge
-            // refusing the connection.
+            // it: R2's internal error, a Cloudflare incident, the free plan's
+            // daily cap failing closed, an edge refusing the connection.
             Errno::EACCES | Errno::EIO => Fault::Server,
             // ENXIO: 404, a key that names nothing. EBADMSG: a body empty, still
             // packed in an encoding this browser does not undo, or not decoding.

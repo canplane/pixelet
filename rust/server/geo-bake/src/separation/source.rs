@@ -34,8 +34,7 @@ const SEGMENTS_SQL: &str = concat!(
     " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"
 );
 
-/// The waterways a deck clears, lines alone: a water area, a sea's 444,741
-/// points among them, clears nothing.
+/// The waterways a deck clears, lines alone: a water area clears nothing.
 const WATER_SQL: &str = "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_water WHERE ST_Dimension(geom) = 1 AND geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)";
 
 /// One tile's rows, as a tile's other rows are read: whatever overlaps it.

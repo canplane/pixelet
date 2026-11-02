@@ -49,8 +49,7 @@ template <class Vec, bool MIN> class Heap {
 
     void build() noexcept { build_of(a_); }
 
-    // The new element's place is opened by moving parents down, so one write
-    // lands it rather than a swap per level.
+    // The new element's place is opened by moving parents down.
     void push(E e) {
         std::size_t i = a_.size();
         a_.push_back(e);

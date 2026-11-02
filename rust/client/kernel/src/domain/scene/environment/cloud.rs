@@ -89,7 +89,7 @@ const THIN_FROM: f64 = CELL / grid::CELL / CLOUD_SPACING_CELLS;
 /// Whether the cloud whose middle lies at `local` about its patch's corner
 /// shows `d2` square units from the eye: its hash under (THIN_FROM / d)²,
 /// asked as a product, so a cloud costs a multiply. Decided as it is drawn,
-/// never built: a patch built again as the eye moved made the zoom stall.
+/// never built.
 fn shows(local: [f32; 2], d2: f64) -> bool {
     f64::from(lattice_hash(local.map(f32::to_bits), CLOUD_SALT + 6)) * d2 < THIN_FROM * THIN_FROM
 }

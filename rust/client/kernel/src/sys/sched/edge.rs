@@ -1,7 +1,6 @@
 // pxl-kernel/sys/sched/edge.rs
 
-//! The world's turn edge: when its tasks run, and a frame asked for, since
-//! the canvas renders on demand.
+//! The world's turn edge: when its tasks run, and a frame asked for.
 
 use xpute_guest::sched::edge::Edge;
 
@@ -16,8 +15,7 @@ use xpute_guest::sched::task;
 /// `registration`); an executor sizes its pool by it.
 pub const TASKS: usize = 3 + load::LOAD_FILES + load::REGISTRATIONS;
 
-/// The order the kernel's tasks ask of the executor, which may ignore it;
-/// nothing relies on it.
+/// The order the kernel's tasks ask of the executor, which may ignore it.
 #[repr(u8)]
 #[derive(Clone, Copy)]
 pub(crate) enum TaskPriority {
@@ -48,7 +46,7 @@ pub fn request_world_tick() {
 /// The turn's tasks keep their share past the frame that ran before them
 /// (`param::CONTENT_SHARE` of the frame the host paces, the margin taken as
 /// the quota takes it), whatever the frame overran: what the frame owes the
-/// host comes off its own next quota, never the tasks' turn.
+/// host comes off its own next quota.
 pub fn tasks_after_frame(paced_ms: f64) {
     use crate::sys::sched::pacing_spec::MARGIN_SHARE;
     use crate::sys::sched::param::CONTENT_SHARE;

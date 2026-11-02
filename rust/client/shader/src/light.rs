@@ -179,8 +179,7 @@ pub(crate) fn light_of(eye: &Eye) -> Light {
 /// (`Light::spacing`). Its lattice is the box's texels, a slot each: a beam
 /// ray every `light::BEAM`-th, `light::BEAM_WINDOW` past the box on each
 /// side, a sample every `param::light::SAMPLE`-th slot, which wrap as the
-/// slots do. Each ray asks the band of the tile it lies on (`asks`), so no
-/// walk reads where the eye stands.
+/// slots do. Each ray asks the band of the tile it lies on (`asks`).
 pub(crate) struct Map {
     light: Light,
     starts: Starts,
@@ -570,8 +569,8 @@ impl Map {
     /// The tiles about its own (`on`) what `level` feeds, the first and the
     /// last across and down, the same wherever it lies: a ray its own slot's
     /// tile; a sample the slots that may take its box, a tile either way,
-    /// beyond the four it lies about (`sample_before`), as a box fewer is a
-    /// slot walked more; a cell, a tile, as a sample does; a beam ray the
+    /// beyond the four it lies about (`sample_before`); a cell, a tile, as a
+    /// sample does; a beam ray the
     /// cells whose window holds it (`window`), each as a cell does, laid
     /// about the tile it lies on, `BEAM_WINDOW` before its number.
     fn reach(&self, level: Level) -> ([i32; 2], [i32; 2]) {
@@ -909,9 +908,7 @@ pub fn light_propagate_cs(
 /// `prepare`). A tile the box slid onto, and one the slide moved into
 /// another band (`Light::keeps`), is set to none, so the propagation takes
 /// it, read, as read anew (`light_propagate_cs`); the rest hold what their
-/// cast left, which their band, the light and the world alone made. Each
-/// writes its own word alone, so none waits on another. Run only where the
-/// box slid.
+/// cast left. Each writes its own word alone. Run only where the box slid.
 #[spirv(compute(threads(8, 8, 1), entry_point_name = "light_slide_cs"))]
 pub fn light_slide_cs(
     #[spirv(global_invocation_id)] id: UVec3,

@@ -78,8 +78,8 @@ XPUTE_TEST(heap_matches_record) {
 namespace {
 
 struct Slot {
-    // What a slot owns and keeps across a rewind, which is the whole point: a
-    // vector's buffer is still allocated when the slot is handed out again.
+    // What a slot owns and keeps across a rewind: a vector's buffer is still
+    // allocated when the slot is handed out again.
     std::vector<std::uint32_t> kept;
     std::uint32_t mark = 0;
 };

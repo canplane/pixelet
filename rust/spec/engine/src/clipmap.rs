@@ -62,8 +62,7 @@ pub const CLIP_LEVELS: u32 = EYE_CLIP_LEVELS + 3;
 /// two of them want takes one.
 pub const SLOTS: u32 = CLIP_LEVELS * ENTRIES;
 /// What the GPU's fill costs a frame, measured at dpr 2 on an M-series Mac
-/// (2026-10-17, the `fill` span): its passes whatever it is handed, and each
-/// brick more; handed one brick a frame it took 2.2 ms, sixteen 5.5 ms.
+/// (the `fill` span): its passes whatever it is handed, and each brick more.
 pub(crate) const FILL_MS: f32 = 2.0;
 pub(crate) const FILL_BRICK_MS: f32 = 0.22;
 /// The share of a frame the fill may take.
@@ -225,8 +224,8 @@ pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
 
 /// The most entries a brick holds of its tile's ways: one a segment and a
 /// bin (`WAYS_SHIFT`) its footprint reaches. The densest brick
-/// of the format-12 set, z15 010332102333322 (2026-10-17; z14's most 711);
-/// a tile past it fails its bake (pxl-spec bake/tile/terrain.rs `ways_fit`).
+/// of the format-12 set; a tile past it fails its bake (pxl-spec
+/// bake/tile/terrain.rs `ways_fit`).
 pub const WAYS_BRICK_SEGMENTS: u32 = 1065;
 
 /// A brick's lines, laid by the CPU as the brick is filled (pxl-spec
@@ -273,7 +272,7 @@ pub const fn column_top(w: u32) -> i32 {
 
 /// A brick's cells as its fill lays them, four a word, cell `i` in the
 /// `i % 4`-th byte (`laid_at`): its own palette index (`ground::own` of its
-/// four at the brick's zoom), so a read never works out its majority again.
+/// four at the brick's zoom).
 pub const LAID_WORDS: u32 = BRICK_CELLS / LAID_CELLS;
 /// The cells a laid word holds, a byte each: in the cells' order
 /// (`idx_of`), a 2×2 square.
@@ -298,7 +297,7 @@ pub const LAID_AT: u32 = LEVELS_AT + LEVEL_WORDS;
 pub const ROOT_AT: u32 = LAID_AT + LAID_WORDS;
 pub const BRICK_WORDS: u32 = ROOT_AT + 1;
 /// What comes back of a brick: all of it, so the CPU reads a column as the
-/// GPU does, never working it out again.
+/// GPU does.
 pub const BACK_WORDS: u32 = BRICK_WORDS;
 
 /// A brick handed to the fill as a frame's fresh list holds it, a record
@@ -677,8 +676,7 @@ pub(crate) const BOUND_LEVELS: u32 = LEVELS + ACROSS.trailing_zeros();
 /// The levels over a clip level's bricks, from one over a brick
 /// (`LEVELS + 1`) to the clip level whole: a node wider than a brick bounded
 /// by the join of the bricks it covers, folded where the clip levels' entries
-/// are written (`fold`) and read as one entry (`bounded`), not joined
-/// again at every node that asks.
+/// are written (`fold`) and read as one entry (`bounded`).
 pub const JOINED_LEVELS: u32 = BOUND_LEVELS - LEVELS;
 /// A clip level's entries: level `l` over a brick has `(ACROSS >> l)²`, an
 /// aligned block of `2^l` bricks a side each.

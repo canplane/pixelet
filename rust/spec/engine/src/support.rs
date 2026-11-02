@@ -7,8 +7,8 @@
 //! cursor (ARCHITECTURE.md "The query, the only seam"): a descent's line
 //! (`Line`), a column_surface's or one straight down to a node (`line`), and a
 //! asset about it asked from the deepest node of that line holding it and
-//! stepped down by what each parent hands its child, never again from the
-//! top (`asset`). The CPU's and a GPU's alike, each over its own reading of
+//! stepped down by what each parent hands its child (`asset`). The CPU's and
+//! a GPU's alike, each over its own reading of
 //! the world (`cast::Query`).
 
 use crate::cast::{self, Detail, End, Keep, Node, Query, Ray, Trace, Until, DEPTH};

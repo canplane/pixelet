@@ -13,8 +13,8 @@ use crate::segment::Part;
 use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, LAND, WIDEST_LINE};
 use crate::terrain::pipeline::overture::width::carto_u;
 
-// Buildings and roads are not clipped: a naive bbox clip broke ring closure.
-// Water and coast are clipped, since their rows reach hundreds of thousands of points.
+// Buildings and roads are not clipped: a bbox clip breaks ring closure.
+// Water and coast are clipped.
 const OVERTURE_BUILDINGS_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
@@ -127,8 +127,7 @@ pub struct TileSource {
     pub(crate) coast_rows: Vec<CoastRow>,
 }
 
-/// Prepared once per connection: re-planning spent ~34 ms of a ~44 ms
-/// buildings lookup, prepared it is ~2–3 ms.
+/// Prepared once per connection.
 pub struct TerrainRepository {
     raster: Arc<Raster>,
     buildings: Statement,

@@ -37,8 +37,6 @@ impl SplitMix64 {
         z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
         z ^= z >> 31;
 
-        // The high half, as java.util.random's `nextInt` and rand_xoshiro's
-        // `SplitMix64` take a u32 from a 64-bit word.
         (z >> 32) as u32
     }
 }

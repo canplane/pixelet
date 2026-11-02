@@ -133,9 +133,7 @@ fn light_gain(k: u32) -> f32 {
 
 // The volume's depth, one law for every direction: slice z, 0 to 1, lies
 // `air_dist(z, e)` km out, the cube of z over the span between the ends `e`
-// it was laid with (`laid`). A cube puts the near view, where most of what is
-// drawn lies, in most of the slices and keeps a far slice a tenth or so past
-// the one before.
+// it was laid with (`laid`).
 fn air_dist(z: f32, e: vec2f) -> f32 {
   return e.x + (e.y - e.x) * z * z * z;
 }

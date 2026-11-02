@@ -9,7 +9,7 @@
 //! Perlin's improved noise on a lattice of its own, a hash at each lattice
 //! point (`node_seed`) choosing its gradient, all in integers, so the CPU
 //! and a GPU carve the same cells to the bit. A cave is a pure function of
-//! the cube and the seed: nothing is handed down a descent and nothing kept.
+//! the cube and the seed.
 
 use xpute_kit::math::rng::derive_seed_u32;
 
@@ -17,9 +17,7 @@ use crate::param::cave;
 use crate::{idx_at, wrap_idx, Zoom, LEAF_CELL};
 
 /// The seed every draw on the world's nodes starts from (`node_seed`): the
-/// caves, the ground's decor and a placed decor's pose. Changing it
-/// reshuffles them. The cloud field is not on the nodes and draws from a hash
-/// of its own (cloud.rs `lattice_hash`), which the sheets' noise sums.
+/// caves, the ground's decor and a placed decor's pose.
 const MASTER_SEED: u32 = 0x5eed_0001;
 
 /// A node's seed for one use: `tag` names the use, and the node's zoom and

@@ -294,10 +294,7 @@ pub fn lattice() -> u32 {
 }
 
 /// Device pixels per CSS pixel a display of `dpr` is drawn at whole: its
-/// own. How many of them the eye resolves turns on how near it is held,
-/// which no page is told: a phone's CSS pixel, held at a forearm, spans half
-/// again the reference pixel's angle, so its display's three are about the
-/// eye's limit there.
+/// own.
 fn device(dpr: f64) -> f64 {
     dpr
 }

@@ -85,9 +85,8 @@ pub mod raster {
 }
 
 pub(crate) mod scatter {
-    /// How far about a cell its turn is voted: a fixed radius (O(1) reads, no
-    /// flood fill), enough to outvote a one-cell stairstep jog in a straight run;
-    /// it does not resolve curves.
+    /// How far about a cell its turn is voted: a fixed radius (O(1) reads),
+    /// enough to outvote a one-cell stairstep jog in a straight run.
     pub const ALIGN_NEIGHBOR_RADIUS: i32 = 3;
 }
 

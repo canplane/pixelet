@@ -13,8 +13,7 @@ use crate::light::{self, Map, Head};
 
 /// The observer of a pass both take, read off the head it is handed
 /// (pxl-engine `light::HEAD_SIZE`): the shadow map where the head names
-/// one, else the eye, whose head is all zero. Each call is its observer's;
-/// no walk asks which, so the walk is one in the module whichever casts.
+/// one, else the eye, whose head is all zero. Each call is its observer's.
 /// Both walk the same world, its palette indices too, which only what a hit is drawn
 /// by holds, and the map's word leaves out (light.rs `Map::word`).
 pub(crate) struct PassObserver<'a> {

@@ -47,8 +47,7 @@ use crate::spec::DONE;
 #[cfg(test)]
 use admit::FrameGuard;
 
-/// The program's numbers and choices, which the host runs by: none of them
-/// is the host's to pick.
+/// The program's numbers and choices, which the host runs by.
 #[derive(Clone, Copy)]
 pub struct Config {
     /// The format SURFACE_PREFERRED names and DEVICE tells the guest, as the

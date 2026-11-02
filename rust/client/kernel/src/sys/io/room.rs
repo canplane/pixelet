@@ -2,8 +2,7 @@
 
 //! A request refused room, by the heap or by the body slots (sys/io/body.rs),
 //! as what refused it counted its releases then: it waits until that gives
-//! some room back, never on a clock, since only a release can change the
-//! answer, and not on the other. A slot given back gives the heap nothing
+//! some room back, not on the other. A slot given back gives the heap nothing
 //! until its run is empty, which the heap's count then shows; the heap's
 //! pages given back give no slot. A body refused a run of slots waits on
 //! both, since a slot given back in a run held serves it as well.

@@ -17,8 +17,7 @@
 
 namespace xpute {
 
-// An offset and a size rather than a pointer, because a host names a block by
-// its offset, and giving a block back needs the size.
+// An offset and a size: freeing needs both.
 struct Block {
     std::uint32_t at;
     std::uint32_t bytes;

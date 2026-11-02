@@ -1,6 +1,5 @@
 // Yale Bright Star Catalog stars as quads at infinity, dimmed by the air.
-// Added untoned to the world's color, which a point this small cannot tell
-// apart: over a dark sky the encode shows it as it shows the star's own light.
+// Added untoned to the world's color.
 
 // Its words' fields and accessors are frame/shader/word.rs `stars`'s, which
 // build.rs writes here. The viewport and the up are the frame's, the moon
@@ -35,8 +34,6 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
 
   var o: StarOut;
   let flux = at.w;
-  // No twinkle: the frame redraws only on motion, so a twinkle would become a
-  // blink, and redrawing every frame for it costs the device.
   let height = dot(dir, frame_up());
   // The air straight up from the eye, from orbit none.
   let depth = depth_to_top(camera_r(), 1.0);

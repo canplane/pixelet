@@ -21,10 +21,9 @@
 //! stays read.
 //!
 //! The writes the store takes go up as edits, batched (host.json
-//! `object.EDITS`), which the source applies to its shards and its top: the
-//! kernel writes no shard and no top. A file that does not decode is
-//! refused, named to the host to set aside (`refused_files`), and read again once
-//! it says so (`on_emptied`).
+//! `object.EDITS`), which the source applies to its shards and its top. A
+//! file that does not decode is refused, named to the host to set aside
+//! (`refused_files`), and read again once it says so (`on_emptied`).
 
 use fnv::FnvHashSet;
 use pxl_engine::answer::FULL;

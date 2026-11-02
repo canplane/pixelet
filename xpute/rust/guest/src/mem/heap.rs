@@ -29,8 +29,8 @@ const PAGE_LOG2: usize = crate::mem::section::PAGE_BYTES.trailing_zeros() as usi
 /// real.
 const SPAN_LOG2: usize = ADDR_BITS - 1;
 
-/// A bit per possible parent node; the compiler cannot derive the length,
-/// so the buddy checks it on the first request.
+/// A bit per possible parent node; the buddy checks the length on the first
+/// request.
 const SPLIT_BYTES: usize = (1 << (SPAN_LOG2 - PAGE_LOG2)) / 8;
 
 pub struct Span<B>(PhantomData<B>);

@@ -74,9 +74,8 @@ export function tile_object(
 
 /**
  * A body still packed means the transport did not decode the stored
- * encoding: a browser that cannot, which the Worker cannot refuse, since
- * Cloudflare rewrites `accept-encoding` before the Worker sees it; or a
- * device whose own decode (ts/app/native/src/origin.ts) was skipped.
+ * encoding: a browser that cannot, or a device whose own decode
+ * (ts/app/native/src/origin.ts) was skipped.
  */
 function packed(body: U8Array): boolean {
   return (
@@ -100,7 +99,7 @@ export async function read_object(
   if (name === null) throw new FileError(Errno.ENOENT);
   const body = await get(tile_url(BASE_LAYERS[bake], name), name, signal);
   if (body.byteLength > 0 && packed(body)) {
-    // Fail here: handing it on would fail in the kernel's decoder, far from the cause.
+    // Fail here, not in the kernel's decoder.
     console.warn(
       `[read] ${name}: the body arrived still packed, with no encoding to undo it`,
     );

@@ -237,7 +237,7 @@ fn strip_comments(text: &str) -> String {
 /// Each generated compute entry's group 0 as its WGSL declares it, a binding
 /// its index, its stages and its kind (frame/shader/record.rs's codes), and
 /// its workgroup: what a pipeline's layout is made of and a dispatch counts
-/// by, read off the one module rust-gpu wrote, never stated again.
+/// by, read off the one module rust-gpu wrote.
 fn compute(dir: &Path) -> String {
     let mut out = String::new();
     let mut files: Vec<_> = std::fs::read_dir(dir)

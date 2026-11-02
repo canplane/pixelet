@@ -32,8 +32,7 @@ pub const RES_UP_WINDOWS: u32 = 4;
 /// A window within this of its budget, either way, holds the step.
 pub const RES_BAND: f64 = 0.1;
 
-/// The tightest budget: 60 Hz. Faster displays would trade sharpness for
-/// frames the eye gains less from.
+/// The tightest budget: 60 Hz.
 pub const RES_BUDGET_FLOOR_MS: f64 = 1000.0 / 60.0;
 
 /// A change rebuilds the render targets, or the lattice's casts in full, so
@@ -65,6 +64,5 @@ pub const NEAR: f64 = 0.1;
 /// The share of a camera grid cell a motion stepped a quantum at a time
 /// carries what it moves a step, at the nearest drawn (`lens::seen_step_s`),
 /// set by eye on the clouds: a twelfth of a cell, 1/1152 rad, is not seen
-/// to move by itself, and a whole cell's step at once was seen as the
-/// clouds stopping and jumping.
+/// to move by itself.
 pub const SEEN_STEP_CELLS: f64 = 1.0 / 12.0;

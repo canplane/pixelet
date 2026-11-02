@@ -4,9 +4,7 @@
 //! meet: the world is open from `BEDROCK_DEPTH` under the ground or sea
 //! level, whichever is lower, to `HEADROOM` over the ground or sea level,
 //! whichever is higher, in leaf cells (pxl-engine ground.rs `bedrock`,
-//! `ceiling`) — Minecraft's −64 to 320 on its own blocks,
-//! held from sea level here so a shore below it is not buried. Under the floor
-//! is bedrock, the unknown the world holds no more of
+//! `ceiling`). Under the floor is bedrock, the unknown the world holds no more of
 //! (`spec/spec/asset/cube.json` `unknown`), and the service area is walled by
 //! it from inside: a leaf column with ground beside one past the area is
 //! bedrock up to its own face, a cell of the leaves as any is, so the wall's

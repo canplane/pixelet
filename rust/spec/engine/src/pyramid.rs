@@ -105,10 +105,8 @@ pub const W_NODE: u32 = W_INHERITANCE + INHERITANCE_WORDS;
 pub const W_PLACED: u32 = W_INHERITANCE;
 pub(crate) const ENTRY_WORDS: u32 = W_NODE + 4;
 
-/// The slots: no more than the tiles' entries were (8 roots and 2^16 tiles
-/// of eight), room for many frames of the about 80 thousand nodes a frame
-/// at E120 asks (a probe's count, not kept); a power of two, so a key's
-/// hash masks to one.
+/// The slots: room for many frames of the about 80 thousand nodes a frame
+/// at E120 asks; a power of two, so a key's hash masks to one.
 pub const ENTRIES: u32 = 1 << 19;
 pub(crate) const ENTRIES_AT: u32 = HEAD_WORDS;
 /// The marked pixels listed (`MARKS_AT`), a word each, its row over its

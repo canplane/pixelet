@@ -1,7 +1,7 @@
 // @xpute/kit/status/errno.test.ts
 
-/** The errno as constants, held to what an enum's type held it to: no two
- * share a number, and each is one strerror names. */
+/** The errno as constants: no two share a number, and each is one strerror
+ * names. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

@@ -4,12 +4,9 @@ export {};
 
 declare global {
   // Global constants injected at build time: Vite's `define` on a page
-  // (vite.config.ts), the device app's babel.config.ts on a device.
-  // The __SCREAMING__ names are read directly at their call sites on purpose:
-  // they mark a compile-time constant whose branches vanish from the bundle.
-  // Deployment *values* are read through deploy.ts instead — see
-  // that file for why the two differ. Route paths are not injected at all:
-  // they are source, in namespace/route.ts.
+  // (vite.config.ts), the device app's babel.config.ts on a device: each a
+  // compile-time constant whose branches vanish from the bundle. Deployment
+  // values are read through deploy.ts.
   const __APP_ENV__: string;
   const __IS_DEV__: boolean;
 

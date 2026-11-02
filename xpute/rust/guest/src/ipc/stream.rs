@@ -1,8 +1,7 @@
 // xpute-guest/ipc/stream.rs
 
 //! A turn's calls from guest to host as records, run whole by the host after
-//! the turn returns, so a record from turn N is done when N + 1 rises (a
-//! ring gives no such guarantee).
+//! the turn returns, so a record from turn N is done when N + 1 rises.
 //!
 //!   0      END      words of records past the head, set at the turn's end
 //!   1…     the user's

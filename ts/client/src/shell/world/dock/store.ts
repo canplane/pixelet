@@ -50,7 +50,7 @@ function isKnownPick(pick: RecentPick): boolean {
   return pick.tool === ActiveTool.Marker;
 }
 
-// Only a new pick joins, at the front: slots reshuffling under the finger disorient.
+// Only a new pick joins, at the front.
 function touchRecent(
   recentPicks: readonly RecentPick[],
   pick: RecentPick,
@@ -119,7 +119,7 @@ function load(): Stored {
         .filter((p) => typeof p === "object" && p !== null && isKnownPick(p))
         .slice(0, RECENT_PICKS)
     : [];
-  // Padded from the seed: an empty tail reads as broken.
+  // Padded from the seed.
   for (const seed of SEED) {
     if (picks.length >= RECENT_PICKS) break;
     if (!picks.some((pick) => isSamePick(pick, seed))) picks.push(seed);

@@ -7,9 +7,8 @@
 //!   .fixed    ranges sized at compile time, never freed (fixed.rs)
 //!   heap      everything left, one allocator
 //!
-//! `.fixed` is not `.bss` on purpose: its size is a decision about how much
-//! world is resident, not compiler output. Everything ahead of the heap is
-//! checked against MIN_HEAP_BYTES, at compile time and again at boot.
+//! Everything ahead of the heap is checked against MIN_HEAP_BYTES, at compile
+//! time and again at boot.
 
 use xpute_guest::mem::section::{align_up, Section};
 

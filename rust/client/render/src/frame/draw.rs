@@ -372,7 +372,7 @@ impl DrawList {
 }
 
 /// A heap block the renderer mirrors, written whole each time and grown to the
-/// next power of two so a small wobble in count does not reallocate.
+/// next power of two.
 #[derive(Default)]
 pub struct MirroredBlock {
     pub at: usize,

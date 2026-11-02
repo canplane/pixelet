@@ -156,8 +156,8 @@ impl Shard {
         self.served_bits() == SHARD_ALL
     }
     /// Whether the leaf tile `leaf` is past the area (`past`): off the nine
-    /// bits of what `self`, the node `(zoom, c)`'s, knows, never the area's
-    /// index. Asked only where `self` is known and the leaf lies in the
+    /// bits of what `self`, the node `(zoom, c)`'s, knows. Asked only where
+    /// `self` is known and the leaf lies in the
     /// node's shard or the eight about it, which every asker's shape gives:
     /// a node no wider than a shard, and a leaf a cell or a node beside it.
     /// The area is searched once a shard, where it is first known (`at`).
@@ -222,8 +222,7 @@ pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// it past the area, so the wall is a leaf column thick at every zoom past
 /// the leaves, bedrock (`UNKNOWN`) up to its own face, its outer face on the
 /// area's edge. The area alone says it, off `shard`, the node `(cell, b)`'s
-/// (`Shard::at`): never the brick the column is read off, nor none, nor its
-/// palette index. What a column is read as (`clipmap::ground`), what the
+/// (`Shard::at`). What a column is read as (`clipmap::ground`), what the
 /// ways' fill writes no way in (`way::Columns::is_walled`), and what
 /// `World::within` and `World::editable` refuse (pxl-kernel
 /// domain/query/limit.rs).

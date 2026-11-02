@@ -75,8 +75,7 @@ fn eye(at: &ViewPose) -> (V3, Q3) {
 }
 
 /// A step may not end deeper in the ground than it started, but for the
-/// first cell of a wall or a roof (`embedded`). A blanket exemption for an
-/// already-blocked start once opened the gate for good.
+/// first cell of a wall or a roof (`embedded`).
 fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the floor's walk.
     match settings_store().orbit_obstacle {
@@ -238,9 +237,7 @@ pub fn allowed_view(to: Intent, from: Intent) -> Intent {
     }
 }
 
-/// The shallowest pitch that clears terrain, solved as `acos(h / dist)`
-/// rather than scanned: a scan's fixed angles made the camera judder on flat
-/// ground.
+/// The shallowest pitch that clears terrain, solved as `acos(h / dist)`.
 ///
 /// It stands while what it is made of stands: the pose, where its pivot is
 /// on the world, and the ground its walks read (`Columns`).

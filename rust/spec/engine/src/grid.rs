@@ -13,22 +13,19 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 
 /// The camera grid, the knob of what is observed: the view's cells a radian,
 /// a cell 1/`CELLS_A_RAD` radians about the eye whatever the screen. An
-/// angle, so what is observed is the display's pixels' to draw, never
-/// theirs to decide.
+/// angle, so what is observed is the display's pixels' to draw.
 pub const CELLS_A_RAD: f32 = 96.0;
 
 /// How many times finer than the view's a grid the bands and clip levels are
 /// sized for (`CLIP_CELLS_A_RAD`, `clipmap::RADIUS`): a clip level holds its
 /// zoom's cells out to `CLIP_MARGIN` times where the view stops drawing them.
-/// Whether a margin of 1 keeps up with a moving eye is unmeasured.
 pub const CLIP_MARGIN: f32 = 2.0;
 
 // ---- the split's rule ----
 
 /// The view's cells a zoom's cell spans where it begins to be drawn, going out:
 /// its split distance is `CELLS_A_RAD / SPANS` of its sides (pxl-spec
-/// space/camera/grid.rs `split_dist`): the rule the cell is told by,
-/// not a setting of it.
+/// space/camera/grid.rs `split_dist`).
 pub const SPANS: f32 = 2.0;
 
 // ---- derived from the knobs ----

@@ -69,9 +69,7 @@ pub const STAMP: &str = "gen.digest";
 /// (pxl-tool bin/shader_wgsl.rs `snapshot`), so one it reads and the digest
 /// does not name fails there rather than going unseen. The digest is all that holds
 /// a file current, for a write that skips the container and for check_rules
-/// alike, so it names everything a file is made by. Wider than what reaches a
-/// shader: a change elsewhere in them asks for a regenerate that differs only
-/// here.
+/// alike, so it names everything a file is made by.
 const INPUT_ROOTS: [&str; 12] = [
     "rust/spec/engine/",
     "rust/client/shader/",

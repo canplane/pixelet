@@ -19,7 +19,7 @@
 //! each table anew from every shard, beside the live one, and swaps it in.
 //! When to run which is the user's to say: the catalog records each shard's
 //! release and when it was ingested, and decides nothing. The release is the
-//! one `source.json` pins, never the CLI's latest. A column a reader
+//! one `source.json` pins. A column a reader
 //! filters on is generated from `properties`.
 //! A division names its parent, which may stand past every shard: the
 //! divisions are taken with their ancestors, each fetched by its id, so a
@@ -353,8 +353,8 @@ fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {
 }
 
 /// A type's extracts, a CLI call a rectangle of shards, called one after
-/// another: every call reads Overture's STAC catalog, and a call a shard, six
-/// at once, was refused for load (HTTP 429). Each is named by the release and
+/// another: every call reads Overture's STAC catalog, which refuses calls made
+/// at once (HTTP 429). Each is named by the release and
 /// the bbox it was asked for, and the CLI's output takes that name only once
 /// the CLI has finished, so an extract under it is current and whole; the
 /// CLI's own state file is its private format, not read. The type's other

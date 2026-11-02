@@ -4,8 +4,7 @@
 //! each as its marker's number, into a target of their own, then the markers whose
 //! number is the one at their anchor, with the world's depth attached
 //! read-only (marker.wgsl). The atlas is premultiplied so its mips
-//! filter without a dark fringe; without mips a marker minified slightly against
-//! the supersampled atlas crawls with every camera micro-movement.
+//! filter without a dark fringe.
 
 use crate::frame::draw::{uniform_of, PIPELINE_MARKER};
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
@@ -87,8 +86,7 @@ fn pill(p: &mut DisplayList, text: &str, fill: u32, ink: u32, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
-/// The uncovered corners read as a pixel-art rounded corner; a real arc would
-/// anti-alias against nearest sampling.
+/// The uncovered corners read as a pixel-art rounded corner.
 fn notched_rect(p: &mut DisplayList, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.rect(x + notch, y, (w - notch * 2.0).max(0.0), h, fill);
     p.rect(x, y + notch, w, (h - notch * 2.0).max(0.0), fill);

@@ -1,5 +1,4 @@
-// Unlit and half transparent, so the zone reads as an indicator rather than a
-// surface; placed as location_zone_place.wgsl lays it.
+// Unlit and half transparent; placed as location_zone_place.wgsl lays it.
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

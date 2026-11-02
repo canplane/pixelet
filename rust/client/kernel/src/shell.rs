@@ -45,7 +45,7 @@ use pxl_spec::space::layer::tile::Tile;
 use xpute_kit::status::errno::Errno;
 
 /// The pivot's division and each above it, broad to narrow. Every language
-/// is sent, so switching language re-reads rather than refetches. A name
+/// is sent. A name
 /// shows where a logical pixel, `u_per_px` wide, is no wider than a cell at
 /// the zoom it shows from (`Division::shown_from`).
 fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&DivisionPart<'_>)) {

@@ -14,7 +14,7 @@
 //! slot its index names modulo the map's side. A slot holds its depth
 //! (`word`). A tile of slots cast in an epoch holds until the box slides it
 //! off or into another band (`Light::keeps`, pxl-shader light.rs
-//! `light_slide_cs`); no walk reads where the eye stands.
+//! `light_slide_cs`).
 
 use crate::beam;
 use crate::cast;
@@ -367,9 +367,7 @@ pub const HEAD_FOOTPRINT: usize = 6;
 /// plane worked out once on the host, its Q3 position and what rounding to
 /// it left (`frac`), and a texel's step across and down in Q3 steps, so a
 /// start is the anchor's and the steps from it rounded, an f32 sum of the
-/// same numbers each frame (`start`). Worked out off the eye each frame
-/// instead, its float's rounding moved as the eye did, and a texel's depth
-/// a Q3 step with it: an edge's shadow stirred as the eye moved. `base` is the world texel index of
+/// same numbers each frame (`start`). `base` is the world texel index of
 /// anchor `at[0]`; `at[1]` is the next across, `at[2]` the next down,
 /// `at[3]` both, the box lying in the four (`ANCHOR` its side at least).
 #[derive(Clone, Copy, Debug, PartialEq)]

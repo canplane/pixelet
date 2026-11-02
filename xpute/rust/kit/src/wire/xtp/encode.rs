@@ -399,9 +399,8 @@ impl<'a> PacketWriter<'a> {
     }
 
     /// A string written into the room after its length's word, `write`
-    /// answering how many bytes it wrote, or none where they did not fit:
-    /// the one way a string goes in, whether copied or written in place, so
-    /// the two lay out alike. Followed by a NUL that the length leaves out.
+    /// answering how many bytes it wrote, or none where they did not fit.
+    /// Followed by a NUL that the length leaves out.
     fn str_with(&mut self, write: impl FnOnce(&mut [u8]) -> Option<usize>) -> &mut Self {
         let base = align(self.lim, WORD_SZ) as usize;
         let payload = base + WORD_SZ as usize;

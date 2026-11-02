@@ -24,15 +24,13 @@ use crate::world::World;
 /// `beam`): the lines, a corner each, the cells' starts and the samples'
 /// hits, as the frame's `Grid` lays them (`Grid::size`), or as the light's
 /// list does (`light::list_words`) where the pass casts for the map; a
-/// runtime array as `Pyramid` is. A pixel's own ray words say whether it
-/// missed (`ray::MISS`), so nothing here is a pixel's.
+/// runtime array as `Pyramid` is.
 pub(crate) type Beams = spirv_std::RuntimeArray<u32>;
 
 /// A beam ray's line (pxl-engine `beam::LINE_WORDS`, at `base` of the
 /// words `W` hold: the eye's beam rays' buffer or the light's list) as a walk
 /// resumes from one: what was handed each node of it (`world::Inheritance::words`),
-/// its own at its zoom. A node's entry is its key's (`pyramid::entry_of`),
-/// so none is read off the line.
+/// its own at its zoom. A node's entry is its key's (`pyramid::entry_of`).
 pub(crate) struct BeamLine<'a, W: ?Sized>(pub(crate) &'a W, pub(crate) u32);
 
 impl<W: ?Sized> Clone for BeamLine<'_, W> {

@@ -246,8 +246,7 @@ pub const EFFECTS: usize = spec::EFFECT_NAMES;
 /// paced one by half a refresh or more, so it landed a refresh late at least.
 /// Half a refresh is the jitter the host's pacing allows a frame, skipping
 /// one nearer the last turn than the paced interval less that (xpute host
-/// sched/strobe.ts `turn`). Still frames take a larger budget on purpose, and
-/// a repeated image is no visible stutter.
+/// sched/strobe.ts `turn`).
 pub fn is_missed(f: &FrameSample) -> bool {
     f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
 }
@@ -257,8 +256,7 @@ pub fn overran(f: &FrameSample) -> bool {
     f.tick_ms > f.budget_ms + tick::HARD_SLACK_MS
 }
 
-/// What the interval's turns ran past it, read off the interval and the
-/// turns rather than kept beside them.
+/// What the interval's turns ran past it.
 pub fn over_ms(f: &FrameSample) -> f64 {
     (f.busy_ms - f.interval_ms).max(0.0)
 }

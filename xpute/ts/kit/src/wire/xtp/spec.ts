@@ -72,15 +72,15 @@ export const R = (x: u32): u8 => (BIT_LEAF | (CLASS_R | (x & ARG_MASK))) as u8;
 export type NodeType = u8;
 
 export type LeafType = u8;
-/** One of ScalarType's, as its enum was a type. */
+/** One of ScalarType's. */
 type ScalarType = (typeof ScalarType)[keyof typeof ScalarType];
 export { ScalarType };
 
-/** One of SequenceType's, as its enum was a type. */
+/** One of SequenceType's. */
 type SequenceType = (typeof SequenceType)[keyof typeof SequenceType];
 export { SequenceType };
 
-/** One of SpecialType's, as its enum was a type. */
+/** One of SpecialType's. */
 type SpecialType = (typeof SpecialType)[keyof typeof SpecialType];
 export { SpecialType };
 

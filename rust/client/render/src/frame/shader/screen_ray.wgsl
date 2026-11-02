@@ -217,8 +217,7 @@ fn behind(h: Hit, p: mat2x3f) -> f32 {
 }
 
 // How much a rising edge closes a face `d` cells from it: over one cell
-// and no further. Squared, not smoothstep: a smoothstep sits flat against
-// the wall and reads as a dark strip with an edge rather than a gradient.
+// and no further.
 fn occlusion_of(d: f32) -> f32 {
   let t = 1.0 - clamp(d, 0.0, 1.0);
   return t * t;

@@ -83,7 +83,7 @@ pub struct Model {
 
 #[derive(Default)]
 pub struct Models {
-    /// Never let go: a model is a build asset and stays while the build runs.
+    /// Never let go.
     models: Vec<Model>,
 }
 

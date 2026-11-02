@@ -161,9 +161,8 @@ pub fn place(texture: Id, origin: [u32; 3]) -> encode::TexelCopyTexture {
     }
 }
 
-/// An encoder being recorded and the frame's spans, as Bevy's
-/// `RenderContext` holds a command encoder and its timestamps: a pass is
-/// handed this and writes its own span's.
+/// An encoder being recorded and the frame's spans: a pass is handed this
+/// and writes its own span's.
 pub struct RenderContext<'a> {
     pub g: &'a Gpu,
     pub encoder: Id,
@@ -180,9 +179,8 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-/// What a render pass holds, as Bevy's `DrawState` keeps it for its
-/// `TrackedRenderPass`. A group set with offsets is held as none: its offsets
-/// move per draw.
+/// What a render pass holds. A group set with offsets is held as none: its
+/// offsets move per draw.
 #[derive(Default)]
 pub struct DrawState {
     pipeline: Id,
@@ -226,9 +224,8 @@ impl DrawState {
 }
 
 /// A render pass handed from draw to draw, which sets no pipeline, bind
-/// group, vertex lane or index buffer its `DrawState` says it holds, as
-/// Bevy's `TrackedRenderPass` does. Every call on the pass goes through it,
-/// so what it holds is what the pass has.
+/// group, vertex lane or index buffer its `DrawState` says it holds. Every
+/// call on the pass goes through it, so what it holds is what the pass has.
 pub struct TrackedRenderPass<'a> {
     g: &'a Gpu,
     pass: Id,

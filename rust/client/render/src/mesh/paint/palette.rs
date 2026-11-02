@@ -44,7 +44,7 @@ pub fn rgb255(rgb: u32) -> [u8; 3] {
 
 /// What a layer reads as once its tile is too small to see: the tile's mean,
 /// or the swatch with no tile. One mean a layer, its top's, on every face, so
-/// far off a cliff reads as its land use; Distant Horizons summarizes the same way.
+/// far off a cliff reads as its land use.
 pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(|| {
     palette()
         .map(|cube| {

@@ -2,9 +2,8 @@
 
 //! Where the camera goes when a place is named by its X and Y (a fix, a
 //! search, the start): put there once, on the ground, when the ground is
-//! known exactly, never at a guessed height corrected later. A fix's
-//! altitude picks the floor nearest it; with none, the surface. A place
-//! named with its own height is put as it is (`go_to`).
+//! known exactly. A fix's altitude picks the floor nearest it; with none,
+//! the surface. A place named with its own height is put as it is (`go_to`).
 
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3::Q3;

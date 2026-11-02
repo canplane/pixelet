@@ -316,14 +316,13 @@ impl<'a> World<'a> {
     /// a leaf cell at a time. Our rule after Quake III's PM_StepSlideMove
     /// (id Software, code/game/bg_slidemove.c), which steps up and slides a
     /// blocked axis along the wall as PM_ClipVelocity clips the velocity:
-    /// here the step up has no height but the ceiling's, since nothing jumps,
-    /// it gives up where its own cell's ceiling stops the climb, and it
-    /// settles on the floor where it `falls`; with `falls` off it keeps its
-    /// height wherever nothing lifts it, as the orbit's eye does. Where the
+    /// here the step up has no height but the ceiling's, it gives up where its
+    /// own cell's ceiling stops the climb, and it settles on the floor where it
+    /// `falls`; with `falls` off it keeps its height wherever nothing lifts it,
+    /// as the orbit's eye does. Where the
     /// camera grid draws `from` coarser than the ground's own cells, seen from
     /// `eye`, this is a map, not a walk: it goes to `to` and stands there.
-    /// That is decided where it starts, and by the grid's angle so that the
-    /// pixels a device draws with move no wall.
+    /// That is decided where it starts, by the grid's angle.
     /// Where it is `walled`, as what walks in the world is, it never leaves
     /// the service area (`within`), sliding along its edge, and one already
     /// past it is not walled until it is back in; the camera is not, and goes anywhere a position

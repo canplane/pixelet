@@ -10,8 +10,7 @@ use xpute_guest::global::{off_marked_thread, Global};
 use xpute_kit::status::bug;
 use xpute_kit::status::errno::Errno;
 
-/// Numbers only: formatting is the bracket's, so a module that reports
-/// nothing links none of it.
+/// Numbers only: formatting is the bracket's.
 pub enum Stop<'a> {
     Bug {
         errnum: Errno,
@@ -31,8 +30,8 @@ static STOPPED: Global<bool> = Global::new();
 /// Installs the bug reporter and std's panic hook, once at boot. Both are
 /// process-wide, and on a device the app's other threads fail through them
 /// too: such a panic is not the kernel's, and is told by the bracket's
-/// `PanicHook` where it has one, else by the std hook this one replaced,
-/// never by both; a bug there is not reported, and is told as the panic it
+/// `PanicHook` where it has one, else by the std hook this one replaced; a
+/// bug there is not reported, and is told as the panic it
 /// then is (xpute_guest::global `off_marked_thread`).
 pub(crate) fn install(panic_hook: Option<PanicHook>) {
     PANIC_HOOK.set(panic_hook);
@@ -69,7 +68,7 @@ fn bug(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
 }
 
 /// Past its report a bug panics where it cannot trap, and that panic is its
-/// way out, not a second fault.
+/// way out.
 fn is_stopped() -> bool {
     *STOPPED.get(|| false)
 }

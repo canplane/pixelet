@@ -17,9 +17,7 @@ fn up_at(world_pos: vec3f) -> vec3f {
 }
 
 // A point's radius in the air, by its height on the flat map: the eye's
-// radius and the point's height over it, its z. Measured from the air's
-// center instead, flat ground d out stood d²/2R up — 7 km at 300 km — and
-// its light swept the tables' radius rows, a band at each.
+// radius and the point's height over it, its z.
 fn radius_of(world_pos: vec3f) -> f32 {
   return max(camera_r() + (world_pos.z - frame_camera_pos().z) * atmos_km_per_u(), atmos_bottom_radius());
 }

@@ -11,7 +11,7 @@ use crate::sys::sched::phase_spec::Phase;
 use xpute_guest::global::Global;
 
 /// Each phase's share held back for the phases after it: the visible phase
-/// keeps the content's, or content starves while a load keeps it busy.
+/// keeps the content's.
 const HELD_BACK: [f64; Phase::ALL.len()] = {
     let mut held = [0.0; Phase::ALL.len()];
     held[Phase::visible as usize] = param::CONTENT_SHARE;

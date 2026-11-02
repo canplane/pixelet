@@ -67,8 +67,6 @@ struct Input {
     hovering: bool,
     hover_pending: bool,
 
-    // Pointer moves fire far more often than frames; uncoalesced store writes
-    // dominated a drag's CPU time in profiling.
     drag_pending: bool,
     pending_pan_dx: f64,
     pending_pan_dy: f64,
@@ -173,8 +171,7 @@ fn do_pan(dx: f64, dy: f64) {
 
 /// Azimuth follows the pointer's angle about screen center (arcball), tilt a
 /// fixed rate from the drag's start. The drag locks to whichever axis
-/// dominates past AXIS_LOCK_THRESHOLD_PX: an off-center vertical drag still
-/// sweeps an angle, which read as a spin once tilt saturated.
+/// dominates past AXIS_LOCK_THRESHOLD_PX.
 fn do_rotate(s: &mut Input, view_x: f64, view_y: f64) {
     if s.rotate_axis_lock == RotateAxisLock::None {
         let total_dx = view_x - s.rotate_drag_start_x;

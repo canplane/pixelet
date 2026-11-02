@@ -4,11 +4,11 @@
 //! its clips. What is its own alone is its clips' times and its joint
 //! palette, in a block of its own; where it stands is its holder's, a
 //! figure or a case, which hands its transform in (`Transform`). Each tick
-//! advances its clips, cross-fades as three's mixer did, and writes the
-//! palette into its block. It is drawn by decor's tiers, by how much of a
-//! camera cell it spans: posed as it plays down to the model's edge, its pose
-//! held below it down to the impostor's, and nothing below that, as decor
-//! smaller than that is none (`decor::gpu`).
+//! advances its clips, cross-fades, and writes the palette into its block. It
+//! is drawn by decor's tiers, by how much of a camera cell it spans: posed as
+//! it plays down to the model's edge, its pose held below it down to the
+//! impostor's, and nothing below that, as decor smaller than that is none
+//! (`decor::gpu`).
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;

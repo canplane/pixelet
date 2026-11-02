@@ -1,9 +1,7 @@
 // pxl-kernel/domain/scene/marker/selection.rs
 
 //! Visibility of world-anchored markers: in the frustum as a sphere about
-//! the anchor (a point test dropped the nearest markers first at an oblique
-//! camera, since a marker is drawn above its anchor), and with a box on
-//! screen, nearest first.
+//! the anchor, and with a box on screen, nearest first.
 
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3;

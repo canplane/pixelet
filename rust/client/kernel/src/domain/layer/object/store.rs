@@ -107,7 +107,7 @@ pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) -> bool {
 static WRITTEN: Global<Vec<Aabb>> = Global::new();
 
 /// Where the objects changed, kept for the turn to tell what draws them and
-/// what is worked out from them (`take_written`); storage calls nothing above it.
+/// what is worked out from them (`take_written`).
 pub(super) fn note_written(regions: &[Aabb]) {
     WRITTEN.get(Vec::new).extend_from_slice(regions);
     request_world_tick();

@@ -12,8 +12,7 @@ use crate::sys::io::room::Refusal;
 pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
 
 /// Why a task failed, as numbers the statistics count by. A kernel-made
-/// failure carries its source location: EBADMSG alone does not say which
-/// rule a body broke.
+/// failure carries its source location.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Failure {
     pub errnum: Errno,

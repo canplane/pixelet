@@ -31,9 +31,8 @@ const FROM_APP = path.join(here, "index.ts");
  * module `virtual:pxl-build` (deploy.ts reads it). The source is git's
  * short hash, `-dirty` where the tree had changes; the number is the one CI
  * handed the build, or else `#<n>-<id>` from the number the deployment serves
- * (ts/client/.build_number, script/build-number.py), since a build CI did not
- * number is not that build. Written once, when Metro starts: a dev server's
- * stamp is the one it started under.
+ * (ts/client/.build_number, script/build-number.py). Written once, when
+ * Metro starts: a dev server's stamp is the one it started under.
  */
 function buildStamp(): string {
   let id = "unknown";

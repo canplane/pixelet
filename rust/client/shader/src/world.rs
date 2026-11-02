@@ -61,7 +61,7 @@ pub struct World<'a, L> {
     /// pointer lane, then its data lane from half the buffer.
     pub(crate) overwrites: &'a [u32],
     /// The eye, whose preview cuts are read where something placed or cut
-    /// is asked about, not held through the descent.
+    /// is asked about.
     pub(crate) eye: &'a Eye,
     /// The ways' pool (pxl-engine `way::tree`), every brick's tree,
     /// which every pass that asks the world's query reads.
@@ -255,7 +255,7 @@ impl<L: PaletteWords> World<'_, L> {
     /// on (pxl-engine `face::word`): each cell beside it at its zoom,
     /// hiding its cube whole (`answer::whole`), asked off `line`, the line
     /// down to it read in place (`support::Ancestors`), each from the deepest
-    /// node it shares with it, never again from the top (`support::asset`).
+    /// node it shares with it (`support::asset`).
     /// Asked once a hit (raster.rs `face_cs`); a hit that needs none is
     /// told so first (`unasked_face`).
     pub(crate) fn ask_face(

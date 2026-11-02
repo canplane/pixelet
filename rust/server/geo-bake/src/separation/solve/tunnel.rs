@@ -443,15 +443,12 @@ fn road_bores(
         // as high as its cover leaves room for, in one valley. Every tile that draws any of it holds
         // all of it in its ring, so all of them solve it alike.
         //
-        // A longer one is not: a tile that draws it may see neither portal, and the straight run
-        // between them is not a ring's to know. Its ring cuts it, and where the ring cuts is no end of
-        // it, nor a height to draw a line from: two neighbors cut it in different places, and a
-        // floor that leaned on the cut would differ where they meet, though both see the cells there.
-        // So the floor of a long bore leans on nothing further than a tile (`TILE_CELLS`) from each
-        // cell, which every ring holds about what its tile draws: the highest floor under the cover by
-        // its drop that rises from the lowest such floor within a tile at `TUNNEL_FAR_GRADE` at most
-        // (`envelope`), raised to whichever portal it sees. Reading past the ring to find the portals
-        // instead costs every tile reads it is not owed, and is not done.
+        // A longer one is not: a tile that draws it may see neither portal, and where its ring cuts
+        // it is no end of it (the module's rules). So the floor of a long bore leans on nothing
+        // further than a tile (`TILE_CELLS`) from each cell, which every ring holds about what its
+        // tile draws: the highest floor under the cover by its drop that rises from the lowest such
+        // floor within a tile at `TUNNEL_FAR_GRADE` at most (`envelope`), raised to whichever portal
+        // it sees.
         let long = libm::ceil(r.piece.way.length() / step) > f64::from(TILE_CELLS);
         let denom = last.max(1) as f64;
         let grade = |i: usize| round(f64::from(gs) + f64::from(ge - gs) * i as f64 / denom) as i32;

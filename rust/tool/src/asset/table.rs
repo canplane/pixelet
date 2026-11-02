@@ -49,8 +49,7 @@ pub struct TileFace {
 }
 
 /// Each slot and the tile it wears; one tile may be several slots'. A slot
-/// naming no catalog type is an error: a renamed type once left its blocks
-/// untextured silently.
+/// naming no catalog type is an error.
 pub fn faces(
     slots: &[(u32, Slot)],
     groups: &[(String, Vec<String>)],

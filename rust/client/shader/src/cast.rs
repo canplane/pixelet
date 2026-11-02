@@ -95,8 +95,7 @@ pub struct Tiles {
 /// where no sample about it met anything. Any other pixel, where it kept a
 /// node a sample lacks at, or none, or the test refuses it, takes no walk
 /// here: its first word is the mark the walk again goes by (pxl-engine
-/// `ray::MISS`; `miss_list_cs`, `miss_cs`), so no lane carries a walk's
-/// footprint for the few that walk. A marked pixel is listed for that walk
+/// `ray::MISS`; `miss_list_cs`, `miss_cs`). A marked pixel is listed for that walk
 /// (pxl-engine `pyramid::MARKS_AT`) by a plain write, its place taken
 /// off the count in its dispatch's words (`marks`, `ray::MISS_ARGS_CNT`),
 /// so no word of the pyramid is typed atomic here; one past the list's room
@@ -140,8 +139,7 @@ pub fn cast_cs(
     let steps = eye.origin.w != 0;
     let on = pyramid_at(pyramid, pyramid::TALLY_ON) != 0;
     // No sample about it met anything: the sky, taken without a walk of its
-    // own, as a thing thinner than the samples' spacing between them goes
-    // unseen.
+    // own.
     if took == Take::Sky {
         add_cnt(marks, on, tally::SKY, 1);
         write_ray(
@@ -192,8 +190,7 @@ pub fn cast_cs(
         return;
     }
     // Neither: marked and listed for its walk (`miss_list_cs`), which reads
-    // and writes the pyramid. No walk is this pass's own, so a lane that
-    // takes its visible sample pays none of a walk's footprint.
+    // and writes the pyramid.
     add_cnt(marks, on, tally::WALKED, 1);
     // SAFETY: within the rays, bounded by their size above.
     unsafe { rays.write(UVec3::new(id.x, id.y, 0), ray::MISS) };
@@ -426,8 +423,8 @@ fn alike_hit(rays: &Rays, beams: &Beams, g: &beam::Grid, k: u32, x: u32, y: u32)
 /// (`pyramid::HITS_ARGS`): the one that asks what lies about its face is
 /// one whose pixel's neighbors to the left and above wait for no hit alike
 /// (`alike`) within its square of `beam::HIT_SQUARE` a side, so a patch of
-/// hits alike is asked once a square, not once a pixel or a row, and
-/// which of them asks is a function of the pixels alone. It is listed with
+/// hits alike is asked once a square, and which of them asks is a function
+/// of the pixels alone. It is listed with
 /// its ask (`beam::Grid::hit_ask_at`) for the faces' pass as a box is
 /// (raster.rs `face_cs`; `ray::MISS_ARGS_ROOM` of the walk again's words,
 /// its count, and its dispatch raised by the place that opens a

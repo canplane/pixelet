@@ -1,6 +1,6 @@
 // Shared by the AO passes and its apply: N8AO 1.10.1 (CC0) ported to WGSL and
-// reversed depth, at its "performance" settings with four hemisphere samples,
-// not eight: the sample pass is most of its cost. Everything is in view space.
+// reversed depth, at its "performance" settings with four hemisphere samples.
+// Everything is in view space.
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process. The screen's size and the fog are the frame's.

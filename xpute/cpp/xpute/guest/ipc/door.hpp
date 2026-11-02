@@ -1,9 +1,9 @@
 // cpp/xpute/guest/ipc/door.hpp
 
 // The guest's end of its two rings. A command is started only while the
-// completion ring has room for all it may leave (`reserve`), as a credit-based
-// link bounds a sender, so one started never finds the ring full; what is not
-// started waits in order. Overrunning the ring is a sizing fault.
+// completion ring has room for all it may leave (`reserve`), so one started
+// never finds the ring full; what is not started waits in order. Overrunning
+// the ring is a sizing fault.
 
 #pragma once
 

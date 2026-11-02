@@ -316,8 +316,8 @@ pub mod drawn {
 
     /// What a thing spanning `across` radians about the eye is drawn as: a
     /// model at `model` or more, else an impostor at `impostor` or more, else
-    /// culled, nothing drawn, each an angle, so no screen decides it. A
-    /// group's region is `2·group` past its tier where drawn.
+    /// culled, nothing drawn, each an angle. A group's region is `2·group`
+    /// past its tier where drawn.
     pub const MODEL: u32 = 0;
     pub const IMPOSTOR: u32 = 1;
     pub const CULLED: u32 = 2;
@@ -345,7 +345,7 @@ pub trait DecorQuery {
     /// A column surface as this side keeps it: what its assets are asked off.
     type ColumnSurface: Copy;
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
-    /// reads them from a buffer, never a table it copies.
+    /// reads them from a buffer.
     fn rows(&self) -> &[Decor];
     /// The column surface down column `g` at `cell` of the world unplaced,
     /// what is placed left out: the query's support (`support::column_surface`) as

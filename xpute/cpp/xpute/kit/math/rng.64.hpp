@@ -32,8 +32,6 @@ class SplitMix64 {
         z = (z ^ z >> 30) * 0xbf58476d1ce4e5b9u;
         z = (z ^ z >> 27) * 0x94d049bb133111ebu;
         z ^= z >> 31;
-        // The high half, as java.util.random's nextInt and rand_xoshiro's
-        // SplitMix64 take a u32 from a 64-bit word.
         return static_cast<std::uint32_t>(z >> 32);
     }
 

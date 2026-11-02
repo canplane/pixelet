@@ -45,7 +45,7 @@ impl Phases {
 
 use crate::sys::io::demand_spec;
 /// A stream of demands (spec `STREAM_NAMES`). An asset shares the
-/// tiles' credits but is never withdrawn: it is wanted until it arrives.
+/// tiles' credits but is never withdrawn.
 pub use crate::sys::io::demand_spec::StreamName as Stream;
 use crate::sys::io::host_spec::root;
 use pxl_spec::bake::tile;

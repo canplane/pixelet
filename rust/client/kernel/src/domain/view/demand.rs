@@ -289,8 +289,7 @@ impl<L: Observed> Demand<L> {
             }
         }
         // The whole line, not only the finest tile: which one says the ground is
-        // known only once those above are, and asking one at a time would cost a
-        // round trip per zoom.
+        // known only once those above are.
         let mut named = 0u32;
         for p in dst {
             named += 1;
@@ -424,8 +423,7 @@ impl<L: Observed> Demand<L> {
 
     /// A layer the view does not show keeps what it holds and asks for
     /// nothing: its tile cache let go of its asks again only where what it
-    /// holds moved since it last was (`TileCache::revision`), as asking
-    /// nothing of what is unchanged changes nothing.
+    /// holds moved since it last was (`TileCache::revision`).
     pub fn idle(&mut self) {
         if self
             .idle_revision

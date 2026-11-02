@@ -92,9 +92,8 @@ pub struct EnvironmentDraw {
     progress: f64,
     stars: f64,
     /// Seconds of wall time since the first observation, the clouds' clock,
-    /// held between their steps (`observe`): a tick's delta is clamped and
-    /// sparse at rest, which ran the clouds slow, and the epoch would not
-    /// survive the shader's f32.
+    /// held between their steps (`observe`): the epoch would not survive the
+    /// shader's f32.
     time: f64,
     /// Where the sky's hour and the clouds' wall clock last stepped, in
     /// Unix ms.

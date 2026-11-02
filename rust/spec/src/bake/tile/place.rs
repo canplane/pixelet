@@ -37,9 +37,7 @@ const ICON_STEPS: Zoom = MARK_STEPS;
 pub const PLACE_LATTICE: Lattice =
     Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
 
-/// The cell a place keeps to itself, as a zoom under the tile. Seen at an
-/// icon's own cell, places a few meters apart stood side by side as near as
-/// the view came.
+/// The cell a place keeps to itself, as a zoom under the tile.
 const SPACING_STEPS: Zoom = ICON_STEPS - SPREAD_STEPS;
 
 /// The coarsest zoom any category is shown from; no tile coarser holds a place.
@@ -66,13 +64,11 @@ const _: () = assert!(
     "a tile's ground leaf cells no longer fit a half-word a lane"
 );
 
-/// The most a packet takes, a tile past it failing its bake (`encode`): the
-/// set baked 2026-10-17 holds at most 107 KiB.
+/// The most a packet takes, a tile past it failing its bake (`encode`).
 pub(crate) const MAX_PKT_BYTES: usize = 1 << 20;
 
 /// The longest name a tile holds, in code points; a longer one is cut to end
-/// in an ellipsis. At 32, 99% of the places Overture names in Korea are whole
-/// (their names' 99th percentile, measured 2026-09-25).
+/// in an ellipsis.
 pub(crate) const NAME_CHARS: usize = 32;
 
 /// The zoom a category is first drawn from, as a dot or its icon; none for a category

@@ -107,8 +107,7 @@ pub(crate) fn uncovered(less: &[Range]) -> Vec<Range> {
 }
 
 /// A line by its length so far at each point. Fractions are of the planar
-/// 3857 length where Overture's are geodesic; over one segment the
-/// difference is far under a cell.
+/// 3857 length where Overture's are geodesic.
 pub(crate) struct Line<'a> {
     points: &'a [G3857],
     cum: Vec<f64>,

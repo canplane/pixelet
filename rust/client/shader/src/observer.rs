@@ -10,7 +10,7 @@
 //! observer (beam.rs, cast.rs, raster.rs, light.rs); its lattice, its rays and
 //! what its walks leave are its own (eye.rs `Eye`, light.rs `Map`). A pass both
 //! observers take is one entry, its observer the one its head names
-//! (pass_observer.rs `PassObserver`), so a pass is one module whichever casts it.
+//! (pass_observer.rs `PassObserver`).
 
 use pxl_engine::cast::{self, Detail, Trace, Query, Until};
 use pxl_engine::world::Inheritance;

@@ -16,7 +16,7 @@
 //! integers do. WGSL's f32 is not strictly IEEE (a division's last
 //! place, a contraction into a fused multiply-add), so where a ray passes
 //! within the last bit of a face, the CPU and a GPU may stop on either side
-//! of it; that is the one rule computed twice, not a second rule.
+//! of it.
 //!
 //! The descent holds one frame a zoom, so its stack is as deep as the zooms
 //! a node can have, and from a child it steps to the next across the face
@@ -734,8 +734,7 @@ pub fn walk<Q: Query>(
     // What the walk carries is what nothing it holds gives again: the node
     // and what was handed it, where the ray is, what it keeps of every node
     // over it (`stack`, its own from `low` down, `over`'s above), and its
-    // visits. The node's planes and the world's node it is follow from its
-    // corner, and are worked out where they are read.
+    // visits.
     let (mut n, mut at, mut t) = from;
     let mut stack = [at; DEPTH];
     let (mut low, mut visits) = (n.zoom, 0);
@@ -874,8 +873,8 @@ pub fn walk<Q: Query>(
                 }
             };
             if ends != End::Miss {
-                // Where the walk ends, its hit, made there and nowhere else:
-                // where the ray enters the node, or its asset's box
+                // Where the walk ends, its hit: where the ray enters the
+                // node, or its asset's box
                 // (`entry_plane`).
                 let (t, axis) = entry_plane(ray, near);
                 let hit = Hit {

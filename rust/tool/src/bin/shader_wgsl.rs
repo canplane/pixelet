@@ -24,9 +24,9 @@
 //! test-ts runs: naga takes modules Tint refuses.
 //!
 //! The check judges only that each checked-in file is what the source makes
-//! now; it never compares two implementations, since there is one. The
-//! set's stamp names the digest of its sources, which check_rules recomputes
-//! without the container, so a set the source has moved past fails there too.
+//! now. The set's stamp names the digest of its sources, which check_rules
+//! recomputes without the container, so a set the source has moved past fails
+//! there too.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};

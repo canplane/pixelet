@@ -2,8 +2,7 @@
 
 /**
  * A surface's presence (1 to 0), told to the surface rather than applied as a
- * parent opacity: UIKit renders glass wrongly under any alpha below one, so a
- * glass toast stood solid and then vanished.
+ * parent opacity: UIKit renders glass wrongly under any alpha below one.
  */
 
 import { createContext, useContext, useEffect, useRef } from "react";

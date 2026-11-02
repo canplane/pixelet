@@ -35,7 +35,7 @@ pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// The camera grid the frame casts on (pxl-engine `beam::Grid`, its
 /// `words`), worked out once off the tangents above where the kernel
 /// writes them: every thread of the cast and the renderer's dispatches and
-/// buffer read it here, none works it out again.
+/// buffer read it here.
 pub const GRID: usize = HIDE + CUT_WORDS;
 pub const GRID_WORDS: usize = beam::GRID_WORDS;
 /// The light's cast into the shadow map, its frame's constants off the light

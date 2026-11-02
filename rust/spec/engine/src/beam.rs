@@ -26,8 +26,7 @@ use crate::world;
 /// eye's words (pxl-kernel domain/view/lens.rs `gpu_cast`, pxl-engine
 /// `eye::GRID`): every thread of the cast reads it off them
 /// (pxl-shader `grid`), and the renderer sizes the cast's dispatches
-/// and its buffer off the same words, so no reader works any of it out
-/// again.
+/// and its buffer off the same words.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Grid {
     /// The screen's half-angles' tangents, across and up: the eye's own

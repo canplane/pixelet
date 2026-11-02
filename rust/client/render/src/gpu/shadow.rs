@@ -229,9 +229,8 @@ impl Shadow {
     pub fn aim(&mut self, sun_dir: &[f32], target: V3, half_width: f64, reach_ndc: f32, fixed: V3) {
         self.texel = half_width * 2.0 / f64::from(SIZE);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
-        // the light goes, on purpose: the light read as moving. Turned on every
-        // frame instead, the grid below snapped another way each time and a
-        // wall's shadow flickered as fast as the frames came.
+        // the light goes; turned on every frame, the grid below snaps another
+        // way each time and a wall's shadow flickers.
         let light = v3::norm(&[sun_dir[0] as f64, sun_dir[1] as f64, sun_dir[2] as f64]);
         let step = self.texel / half_width;
         let from = match self.cast_from {
@@ -254,8 +253,7 @@ impl Shadow {
         );
         mat4::mul(&mut self.light_view_proj, &proj, &view);
         // The map follows the eye, so its texels are slid onto a grid fixed in the
-        // world: off it, every edge fell on other texels each frame as the view
-        // moved, and shimmered (stable shadow maps, texel snapping); and its
+        // world (stable shadow maps, texel snapping); and its
         // planes onto a coarser one along the light, so a texel kept is the
         // same ray. Where the fixed point falls on the texels' grid is the
         // world's texel index of the box's first texel, X across and Y down

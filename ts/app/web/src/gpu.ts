@@ -5,8 +5,7 @@ import * as webgpu from "./webgpu.ts";
 
 /** Safari, after losing its GPU process, gave no device for a while, so the
  * page keeps asking. The first retry waits too, or an adapter returning an
- * already-lost device loops at once. A fixed interval, not a backoff: the GPU
- * is this device's alone, so there are no other askers to spread out. */
+ * already-lost device loops at once. */
 const RETRY_MS = 1000;
 
 /** Asks before the GPU is given up, about ten seconds of them. */

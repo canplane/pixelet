@@ -33,8 +33,7 @@ impl Default for Painter {
 
 impl Painter {
     pub fn new() -> Painter {
-        // A state past a leaf's width is a catalog bug and is not named,
-        // rather than sizing the table to it.
+        // A state past a leaf's width is a catalog bug and is not named.
         let named = ALL_CUBES
             .iter()
             .map(|&c| cube_id(c))

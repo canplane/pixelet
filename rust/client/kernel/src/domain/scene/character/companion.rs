@@ -111,8 +111,7 @@ impl Figure {
         }
     }
 
-    /// Placed at the target on creation; walking from the frame's origin would
-    /// take far too long.
+    /// Placed at the target on creation.
     fn acquire(&mut self, target: [f64; 2]) {
         let character = self.character;
         if self.actor.is_some() {
@@ -212,8 +211,7 @@ impl Figure {
                     });
                 }
             }
-            // A plan in flight finishes even once the pivot moves again: dropping it
-            // stalled the figure during gestures and a run of quick pans ended in one jump.
+            // A plan in flight finishes even once the pivot moves again.
             let (step, heading) = self
                 .walk_plan
                 .as_ref()

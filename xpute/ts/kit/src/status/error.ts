@@ -30,10 +30,8 @@ export class XputeError extends Error {
   }
 }
 /** Fatal. */
-/** Internal invariant violation / impossible state / our bug (fatal). */
 export class InvariantError extends XputeError {}
 /** An external fault or untrusted input; normally non-fatal. */
-/** External fault / untrusted input / peer-network-remote failure (normally non-fatal). */
 export class FaultError extends XputeError {}
 /** Wire/payload decode failure at marshal boundary (not an application-level error, normally non-fatal). */
 export class MarshalError extends FaultError {}

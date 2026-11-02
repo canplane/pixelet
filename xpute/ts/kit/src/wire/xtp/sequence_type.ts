@@ -1,9 +1,8 @@
 // @xpute/kit/wire/xtp/sequence_type.ts
 
 // A leaf of many values, by its type byte. One constant a member, read as a
-// namespace (`SequenceType.U8_ARRAY`, re-exported by spec.ts): no enum, so a file
-// transpiled alone or a stripped one reads it, and a bundle inlines it. Literals, so each
-// is its own type and the group a union of them (spec.ts).
+// namespace (`SequenceType.U8_ARRAY`, re-exported by spec.ts). Literals, so
+// each is its own type and the group a union of them (spec.ts).
 
 export const U8_ARRAY = 0xa0; // BIT_SEQ | I(0, 0)
 export const I8_ARRAY = 0xa8; // BIT_SEQ | I(0, 1)

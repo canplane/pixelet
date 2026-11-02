@@ -18,9 +18,7 @@ pub fn perf_follow(on: bool) {
     }
 }
 
-/// Step timing starts here, not at boot: it is a clock read around every
-/// step of every tick, and only the report reads it. False, nothing
-/// recorded, where the heap refuses the recording's columns.
+/// False, nothing recorded, where the heap refuses the recording's columns.
 pub fn perf_window_start() -> bool {
     if !perf_recording_start() {
         return false;

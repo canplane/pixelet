@@ -19,8 +19,8 @@
 //! A function a binding's pointer reaches is the codegen's clone of it for
 //! that binding, the pointer made again inside from the binding itself
 //! (rustc_codegen_spirv linker/specialize_roots.rs, vendored beside), or,
-//! where the codegen cannot tell which binding, inlined to legalize it as
-//! before (linker/inline.rs).
+//! where the codegen cannot tell which binding, inlined to legalize it
+//! (linker/inline.rs).
 
 use naga::proc::TypeResolution;
 use naga::valid::{Capabilities, FunctionInfo, ModuleInfo, ValidationFlags, Validator};
@@ -121,7 +121,7 @@ fn optimized(words: Vec<u32>) -> Result<Vec<u32>, String> {
 /// parameters, and is shorter written once and called (`call_shorter`). One
 /// called from one place, one the codegen marked `Inline` (`#[inline]`) and
 /// one taking a pointer to the workgroup's memory or to an image, which WGSL
-/// takes as no parameter, are inlined as before.
+/// takes as no parameter, are inlined.
 fn dont_inline(mut words: Vec<u32>) -> Vec<u32> {
     // SPIR-V's opcodes, storage classes and function controls (the SPIR-V
     // specification, 3.32, 3.7, 3.24).

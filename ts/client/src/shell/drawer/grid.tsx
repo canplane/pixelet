@@ -67,7 +67,7 @@ export function Grid({
   );
 }
 
-/** Pictures only: names under every item read as a list. A press names it above the finger. */
+/** Pictures only. A press names it above the finger. */
 export function Item({
   label,
   active,

@@ -23,8 +23,7 @@ constexpr std::uint32_t toc_words(std::uint32_t entries) noexcept {
     return toc::HEAD + 2 * entries;
 }
 
-// The toc at `at`, `words` long. A key may appear once, so no two
-// readers can pick different values.
+// The toc at `at`, `words` long.
 void write_toc(Memory mem, std::uint32_t at, std::uint32_t words, std::span<const Entry> entries) noexcept;
 
 } // namespace xpute

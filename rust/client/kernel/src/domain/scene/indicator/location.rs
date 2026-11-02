@@ -127,8 +127,7 @@ fn lay_zone(
                     s.off[1] + f64::from(d[1]) * cell,
                 ];
                 let v = v3::add(&center_pos, &[off[0], off[1], s.off[2]]);
-                // An unloaded neighbor tile falls back to the center's height; 0 would
-                // sink or launch that instance.
+                // An unloaded neighbor tile falls back to the center's height.
                 let ground = ground(&world::point(v[0], v[1], v[2])).unwrap_or(center_pos[2]);
                 rise[idx(at)] = Some(ground - center_pos[2]);
             }
@@ -203,10 +202,9 @@ struct Zone {
 
 #[derive(Default)]
 pub struct LocationIndicator {
-    /// Holds across a GPS dropout: rebuilding the zone on a blip caused a
-    /// stacked-cube glitch after tab-away-and-back.
+    /// Holds across a GPS dropout.
     last_known_device_coord: Option<Q3>,
-    /// None until grounded, rather than drawing at a guessed height.
+    /// None until grounded.
     last_known_center_z: Option<f64>,
     /// The center the zone was last grounded at, none where it found no
     /// height, kept while the fix stands and no change touched what

@@ -1,8 +1,7 @@
 // cpp/xpute/kit/collection/list.hpp
 
 // A list of at most `N`, held inline: it never grows, and a push past `N` is a
-// bug (ENOSPC). For what a program bounds by a constant, where a vector would
-// grow to that bound anyway. Its first `len` slots are live.
+// bug (ENOSPC). Its first `len` slots are live.
 
 #pragma once
 

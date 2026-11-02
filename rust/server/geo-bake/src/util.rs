@@ -23,8 +23,6 @@ pub const fn fnv1a(bytes: &[u8]) -> u64 {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Level {
-    /// Measured on v4 leaves: 39% under gzip -6 at four times its time; the
-    /// ultra levels save a tenth more at five times again.
     Stored = 19,
     Live = 3,
 }

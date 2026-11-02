@@ -113,8 +113,7 @@ fn noon() -> f32 {
 // The eye, adapted to the light on the land under it, at radius `land_r`: an
 // up-facing face of albedo one, against the same at sea level under a sun
 // overhead. A fall from noon shows as SHOWN_FALL of it down to NIGHT_STOPS
-// under; the eye takes back the rest. In stops, which an opened night eye
-// needs.
+// under; the eye takes back the rest. In stops.
 fn eye_stops_at(land_r: f32, s: Lights) -> f32 {
   let up = frame_up();
   let land = dot(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, s), s), LUMA);

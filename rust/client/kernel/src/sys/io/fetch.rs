@@ -102,8 +102,7 @@ pub fn answer_cnt(of: &[Stream]) -> usize {
         .count()
 }
 
-/// The oldest answer of one of `of`, not yet taken. No more are kept than
-/// fetches are out, so the scan is short.
+/// The oldest answer of one of `of`, not yet taken.
 pub fn take_answer(of: &[Stream]) -> Option<Response> {
     let all = ANSWERS.get(List::new);
     let at = all.iter().position(|a| of.contains(&a.stream))?;
@@ -124,8 +123,7 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-/// `detail` is only printed by the profiler; nothing branches on it, which
-/// keeps the protocol out of here.
+/// `detail` is only printed by the profiler.
 pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     let stream = attempt_of(key).map(|(stream, _)| stream);
     let got = match opened {

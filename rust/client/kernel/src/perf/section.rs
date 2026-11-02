@@ -1,9 +1,6 @@
 // pxl-kernel/perf/section.rs
 
 //! Every STAT and NOW section as a record held to perf.json by `words!`.
-//! Written word by word, sections had shifted columns, mirrored structures and
-//! unread fields that only an audit found (2026-09-23); a record makes each
-//! of those a compile error.
 
 use core::mem::{offset_of, size_of};
 

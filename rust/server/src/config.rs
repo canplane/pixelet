@@ -11,7 +11,7 @@ pub struct Config {
     pub(crate) db_pool_size: usize,
 }
 
-/// A server's own variable names; distinct prefixes keep two local servers off one port.
+/// A server's own variable names.
 pub struct Env<'a> {
     pub prefix: &'a str,
     pub default_port: u16,

@@ -116,10 +116,9 @@ pub struct FrameInput<'a> {
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
     /// The draws among `BESIDE`'s the kernel bounds, by their handles
-    /// (pxl-kernel region.rs `drawn`): theirs moving draws the frame whole no
-    /// more, each that changed marking the tiles it covers and shades where
-    /// it was and where it is, as every listed draw outside `BESIDE` does
-    /// (gpu/pass/mark.rs).
+    /// (pxl-kernel region.rs `drawn`): each that changed marks the tiles it
+    /// covers and shades where it was and where it is, as every listed draw
+    /// outside `BESIDE` does (gpu/pass/mark.rs).
     pub bounded_draws: &'a [u32],
     /// Whether what the kernel animates stepped this turn: it wakes the turn
     /// at its own steps, so the resolve asks no frame after it.
@@ -813,8 +812,7 @@ impl Renderer {
     /// what moves on its own — the actors, whose clips play, the clouds,
     /// which the wind carries, the location indicator, the ghosts, the markers, the gizmos
     /// (stage 2, `frame_read`). The rays hold the world as the cast left
-    /// it, so the frame draws it again off them rather than off an image of
-    /// it: that costs what laying an image would.
+    /// it, so the frame draws it again off them.
     fn frame(
         &mut self,
         g: &Gpu,
@@ -1498,8 +1496,7 @@ impl Renderer {
             // nothing else asks for those frames while it stands. What
             // moves on its own (an actor, the clouds, the location indicator) wakes the
             // turn at its own steps and takes a place of the sequence a
-            // step, held to the pixels about it: it is not hurried to the
-            // display's rate.
+            // step, held to the pixels about it.
             if self.resolve.gathering() && (quiet || !animated) {
                 REDRAW.set(true);
             }

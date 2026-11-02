@@ -4,7 +4,6 @@
 //! and the table mapping a layer's top, side and bottom to array slots. A slot is a distinct
 //! tile: a face with no tile of its own shares the top's slot, and a layer the
 //! pack ships nothing for takes none and reads as the box's color.
-//! Without the mip chain the far ground crawls as the camera moves.
 
 use crate::frame::shader::word::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
 use pxl_spec::asset::ingest::{CubeFace, PACK};
@@ -77,8 +76,7 @@ pub struct Pack {
 }
 
 impl Pack {
-    /// Nothing is drawn until the pack arrives: a flat color is the box's own,
-    /// which the shader already has. Until then every face reads NO_SLOT.
+    /// Until the pack arrives every face reads NO_SLOT.
     pub fn new(g: &Gpu) -> Pack {
         let (tiles, _) = layout();
         let slots = tiles.len() as u32;

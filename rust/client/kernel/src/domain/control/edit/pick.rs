@@ -22,8 +22,7 @@ const PICK_DIST_U: f64 = 32.0;
 // any two object tiers (the finest's side).
 const SAME_EXTENT_EPS: f64 = units(OBJECT_FINEST) / 16.0;
 
-/// The octree only stores a `size` object on these lines; any other corner
-/// was re-snapped by the write later, which caused overlapping placements.
+/// The octree only stores a `size` object on these lines.
 fn grid_ceil(v: f64, size: f64) -> f64 {
     ((v - SAME_EXTENT_EPS) / size).ceil() * size
 }

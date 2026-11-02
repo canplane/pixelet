@@ -95,9 +95,9 @@ pub const SHARD_ZOOM: Zoom = UNIT_ZOOM - HEIGHT_BITS;
 
 /// Element `i` of `s`, a buffer the host wrote or a table, read totally:
 /// what lies outside it is `T::default()` — nothing held, void, zero — so
-/// no read aborts, and a GPU's code holds no path for one. The one fact of
-/// what is outside a buffer; a host that indexes past what it wrote breaks
-/// a contract, which the CPU's debug builds still catch.
+/// no read aborts. The one fact of what is outside a buffer; a host that
+/// indexes past what it wrote breaks a contract, which the CPU's debug
+/// builds catch.
 pub fn at<T: Copy + Default>(s: &[T], i: u32) -> T {
     // Debug builds only, as the shader crate's never are.
     #[cfg(debug_assertions)]

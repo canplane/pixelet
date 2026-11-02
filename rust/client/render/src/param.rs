@@ -3,8 +3,7 @@
 //! The settings that shape how the world is drawn and lit, each one literal
 //! with why it is what it is: a subject a module, read by the code beside
 //! it and handed by build.rs to every render shader (constant.wgsl's tail),
-//! each named by its path (`sky::sun::LIMB` is `SKY_SUN_LIMB`), so no
-//! shader holds a value of its own that its source could leave behind.
+//! each named by its path (`sky::sun::LIMB` is `SKY_SUN_LIMB`).
 
 /// A setting's value as build.rs writes it into WGSL; an `F64` is the
 /// host's alone and is not written.
@@ -162,8 +161,7 @@ pub mod cloud {
 
     /// Where clouds gather: value noise over cells this many lattice units
     /// wide, about 64 km, spread even through the logistic and cut so some
-    /// country stays clear and some is crowded, rather than every field
-    /// equally dotted.
+    /// country stays clear and some is crowded.
     pub mod weather {
         params! {
             CELL: u32 = 8;
@@ -219,8 +217,7 @@ pub mod lens {
 pub mod light {
     params! {
         /// The share that keeps its direction; the rest, an up-facing face's,
-        /// reaches every face alike. By the normal alone, a wall turned from
-        /// the sun read as a toy's.
+        /// reaches every face alike.
         BY_NORMAL: f32 = 0.25;
         /// The exponent only sets the band's width; `frame_rim_intensity()`
         /// scales the peak.
@@ -256,7 +253,7 @@ pub mod noise {
 /// The location indicator's look in the world (gpu/pass/location.rs).
 pub mod location {
     /// The zone of unit boxes about it (frame/shader/location_zone.wgsl): half
-    /// transparent, so it reads as an indicator rather than a surface.
+    /// transparent, so it reads as an indicator.
     pub mod zone {
         params! {
             FILL_OPACITY: f32 = 0.4;

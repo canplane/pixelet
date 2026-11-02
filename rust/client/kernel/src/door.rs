@@ -106,8 +106,7 @@ fn state() -> &'static mut State {
 /// xpute's two rings and the host's stream, and the GPU stream.
 const TOC_ENTRIES: usize = 4;
 
-/// A case lives on its surface, so it goes with it: a preview never closed
-/// held its actor for good.
+/// A case lives on its surface, so it goes with it.
 fn close_surface(handle: u32) {
     if let Some(closed) = surface::surface_close(handle) {
         renderer::on_surface_closed(closed);

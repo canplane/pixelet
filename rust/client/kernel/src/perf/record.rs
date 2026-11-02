@@ -1,12 +1,11 @@
 // pxl-kernel/perf/record.rs
 
-//! Read-only instrument: records where time and work go. Never read back
-//! into a scheduling decision. Records are laid out word for word as
-//! perf.json says, in columns the shell reads in place, so reading the
-//! profiler allocates nothing in the heap it measures. The columns are the
-//! heap's while the profiler's setting is on, taken whole as it starts
-//! recording and given back as it is turned off (`perf_release`): its
-//! heap figures count them all along, so a frame's deltas do not.
+//! Read-only instrument: records where time and work go. Records are laid
+//! out word for word as perf.json says, in columns the shell reads in place,
+//! so reading the profiler allocates nothing in the heap it measures. The
+//! columns are the heap's while the profiler's setting is on, taken whole as
+//! it starts recording and given back as it is turned off (`perf_release`):
+//! its heap figures count them all along, so a frame's deltas do not.
 
 use core::mem::size_of;
 
@@ -34,8 +33,7 @@ pub const PERCENTILES_LIMIT: usize = if FRAME_LIMIT > TASK_LIMIT {
 };
 
 /// Advances `head` past records older than `cutoff`; returns how many to drop
-/// now, only once the dropped part is the larger half, so most trims are a
-/// head step rather than a shift.
+/// now, only once the dropped part is the larger half.
 fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> usize {
     while *head < ring.len() && t(&ring[*head]) < cutoff {
         *head += 1;
