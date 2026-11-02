@@ -46,7 +46,6 @@ impl Content for Pixelet {
     fn earth(z: i32) -> u32 {
         strata::earth(z)
     }
-    const WHOLE_FROM: Zoom = cave::PIPE;
     const TALLEST: i32 = generation::TALLEST;
     const WIDEST: i32 = generation::WIDEST;
 }

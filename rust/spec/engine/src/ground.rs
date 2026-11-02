@@ -18,7 +18,7 @@ use crate::answer::{
     bound_of, bound_word, box_word, eighths, BoxWords, In, Kind, BOX_BITS, BOX_NONE, BOX_STEPS,
     BOX_WHOLE, FULL,
 };
-use crate::area::{is_walled, Area, Shard};
+use crate::area::{Area, Shard};
 use crate::clipmap::Lookup;
 use crate::content::Content;
 use crate::lattice::CELL_CENTER;
@@ -266,12 +266,9 @@ pub fn rock<C: Content>(cell: Zoom, face: i32) -> i32 {
 /// its face at sea level.
 ///
 /// Over it, past the highest top any of those zooms rounds `hi` to: a
-/// coarser zoom's cell may round past a finer's. Under it, the lowest
-/// face's top cell and the one under it at those zooms, the ground a cave
-/// leaves there (`Cell::opens`), where a
-/// cave takes all of the node (`hollow`), no bedrock is in it and no wall
-/// is about it; else from the world's bottom. Nothing (`EMPTY`) where no
-/// zoom is asked within it.
+/// coarser zoom's cell may round past a finer's. Under it, from the world's
+/// bottom: a node a cave takes all of is split, and its cells say so
+/// (`node`). Nothing (`EMPTY`) where no zoom is asked within it.
 ///
 /// What fills the node is what of it lies in the slab (`meets`): its bottom
 /// and top are whole cells of every zoom finer than it, an even count of
@@ -280,42 +277,20 @@ pub fn rock<C: Content>(cell: Zoom, face: i32) -> i32 {
 /// face is under an eighth of that zoom's cell over it, the finest zoom's
 /// saying it for all of them. A top kept short of whole still lies in it
 /// whole, which only splits more. The bedrock is `C`'s (`Content::bedrock`).
-pub fn slab<C: Content>(
-    shard: Shard,
-    (zoom, c): (Zoom, [i32; 3]),
-    [lo, hi]: [i32; 2],
-    [far, near]: [Zoom; 2],
-    hollow: bool,
-) -> [i32; 2] {
-    let [lo, hi] = if zoom < SHARD_ZOOM {
-        [lo.min(SEA_LEVEL), hi.max(SEA_LEVEL)]
+pub fn slab(zoom: Zoom, [_, hi]: [i32; 2], [far, near]: [Zoom; 2]) -> [i32; 2] {
+    let hi = if zoom < SHARD_ZOOM && hi < SEA_LEVEL {
+        SEA_LEVEL
     } else {
-        [lo, hi]
+        hi
     };
-    // No bedrock in it: the bedrock's top, rounded at `near` as a face is,
-    // at most its bottom.
-    let rock = face_height(near, cells(near, C::bedrock(hi) as f32));
-    let caved = hollow
-        && !meets([UNBOUNDED[0], rock], (zoom, c[2]), near)
-        && !is_walled(shard, near, (zoom, [c[0], c[1]]));
-    let [mut under, mut over] = if caved {
-        EMPTY
-    } else {
-        [UNBOUNDED[0], EMPTY[1]]
-    };
+    let mut over = EMPTY[1];
     let mut z = coarsest(zoom, far);
     while z <= near {
         let top = face_height(z, cells(z, hi as f32));
         over = if top > over { top } else { over };
-        if caved {
-            // Its top cell, and the cell under it where the top is a box
-            // (`Cell::opens`).
-            let floor = face_height(z, cells(z, lo as f32) - 2 * leaf_cells(z));
-            under = if floor < under { floor } else { under };
-        }
         z += 1;
     }
-    [under, over]
+    [UNBOUNDED[0], over]
 }
 
 /// The coarsest zoom asked under a node at `zoom` coarser than asked, `far`
@@ -481,16 +456,9 @@ pub fn node<H: Resident>(
         );
     }
     // Air where none of it lies where the ground may fill, else a split
-    // and its box, the span along z it may fill in the node's steps. The
-    // caves only take away, so they are asked only of a node the ground
-    // meets.
-    let mut s = slab::<H::Content>(shard, (zoom, c), relief, [far, near], false);
-    if zoom >= H::Content::WHOLE_FROM
-        && meets(s, (zoom, c[2]), near)
-        && H::Content::hollow((zoom, c)) >= FULL
-    {
-        s = slab::<H::Content>(shard, (zoom, c), relief, [far, near], true);
-    }
+    // and its box, the span along z it may fill in the node's steps; a node
+    // a cave takes all of splits, and its cells say so.
+    let s = slab(zoom, relief, [far, near]);
     let answer = if meets(s, (zoom, c[2]), near) {
         In {
             kind: Kind::Split,

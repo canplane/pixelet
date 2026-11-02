@@ -112,10 +112,10 @@ fn function_5(param_13: i32, param_14: i32, param_15: i32) -> f32 {
 fn function_6(param_16: u32) -> u32 {
     var phi_727_: u32;
 
-    if (param_16 < 1536000u) {
+    if (param_16 < 970752u) {
         phi_727_ = (5376u + (param_16 * 5u));
     } else {
-        phi_727_ = (7685380u + ((param_16 - 1536000u) * 5u));
+        phi_727_ = (4859140u + ((param_16 - 970752u) * 5u));
     }
     let _e69 = phi_727_;
     return _e69;
@@ -361,7 +361,7 @@ fn function_10() {
         phi_221_ = _e62.x;
         loop {
             let _e101 = phi_221_;
-            let _e102 = (_e101 < 125u);
+            let _e102 = (_e101 < 79u);
             if _e102 {
                 if (_e61.x < 768u) {
                     let _e112 = (_e101 * 16u);
@@ -442,11 +442,11 @@ fn function_10() {
                         }
                     }
                     let _e169 = local_7;
-                    phi_303_ = type_13((((_e61.x * 2000u) + _e169) + _e147), select(16u, _e151, (_e151 < 16u)));
+                    phi_303_ = type_13((((_e61.x * 1264u) + _e169) + _e147), select(16u, _e151, (_e151 < 16u)));
                 } else {
-                    let _e106 = (((_e61.x - 768u) * 125u) + _e101);
-                    let _e108 = function_8(_e66, 7685376u);
-                    phi_303_ = type_13((1536000u + _e106), select(0u, 1u, (_e106 < _e108)));
+                    let _e106 = (((_e61.x - 768u) * 79u) + _e101);
+                    let _e108 = function_8(_e66, 4859136u);
+                    phi_303_ = type_13((970752u + _e106), select(0u, 1u, (_e106 < _e108)));
                 }
                 let _e176 = phi_303_;
                 phi_307_ = 0u;
@@ -478,7 +478,7 @@ fn function_10() {
                                 let _e235 = function_5(_e209, _e221, 128i);
                                 let _e236 = function_5(_e213, _e225, 0i);
                                 let _e241 = (((_e234 * _e234) + (_e235 * _e235)) + (_e236 * _e236));
-                                let _e242 = function_6(1536000u);
+                                let _e242 = function_6(970752u);
                                 let _e243 = (_e183 >= _e242);
                                 let _e253 = (24i - ((bitcast<i32>(((bitcast<u32>((_e241 * 0.00043402778f)) >> bitcast<u32>(23i)) & 255u)) - 127i) >> bitcast<u32>(1i)));
                                 if (_e253 < 0i) {

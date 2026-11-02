@@ -269,7 +269,7 @@ fn function_3() {
         phi_138_ = _e50.x;
         loop {
             let _e98 = phi_138_;
-            let _e99 = (_e98 < 125u);
+            let _e99 = (_e98 < 79u);
             if _e99 {
                 if (_e49.x < 768u) {
                     let _e109 = (_e98 * 16u);
@@ -350,11 +350,11 @@ fn function_3() {
                         }
                     }
                     let _e166 = local_7;
-                    phi_220_ = type_11((((_e49.x * 2000u) + _e166) + _e144), select(16u, _e148, (_e148 < 16u)));
+                    phi_220_ = type_11((((_e49.x * 1264u) + _e166) + _e144), select(16u, _e148, (_e148 < 16u)));
                 } else {
-                    let _e103 = (((_e49.x - 768u) * 125u) + _e98);
-                    let _e105 = function_2(_e56, 7685376u);
-                    phi_220_ = type_11((1536000u + _e103), select(0u, 1u, (_e103 < _e105)));
+                    let _e103 = (((_e49.x - 768u) * 79u) + _e98);
+                    let _e105 = function_2(_e56, 4859136u);
+                    phi_220_ = type_11((970752u + _e103), select(0u, 1u, (_e103 < _e105)));
                 }
                 let _e173 = phi_220_;
                 phi_224_ = 0u;
@@ -363,10 +363,10 @@ fn function_3() {
                     let _e178 = (_e177 < _e173.member_1);
                     if _e178 {
                         let _e179 = (_e173.member + _e177);
-                        if (_e179 < 1536000u) {
+                        if (_e179 < 970752u) {
                             phi_243_ = (5376u + (_e179 * 5u));
                         } else {
-                            phi_243_ = (7685380u + ((_e179 - 1536000u) * 5u));
+                            phi_243_ = (4859140u + ((_e179 - 970752u) * 5u));
                         }
                         let _e187 = phi_243_;
                         let _e188 = (_e187 + 4u);
