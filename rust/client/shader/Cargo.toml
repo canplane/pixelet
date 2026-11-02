@@ -1,15 +1,16 @@
-# pxl-shader: the GPU's compute entries, written in Rust over pxl-spec-core
+# pxl-shader: the GPU's compute entries, written in Rust over pxl-engine
 # and compiled by rust-gpu to SPIR-V, which build/ (pxl-shader-build) reads
 # into the WGSL pxl-render checks in (pxl-tool bin/shader_wgsl.rs). Its own
 # workspace on rust-gpu's nightly (rust-toolchain.toml), so no everyday build
 # needs either.
 [workspace]
 resolver = "2"
-members = [".", "build"]
+members = [".", "build", "macro"]
 
-# The one crate of the main workspace it compiles, by its path once.
+# The crates of the main workspace it compiles, each by its path once.
 [workspace.dependencies]
-pxl-spec-core = { path = "../../spec/core" }
+pxl-engine = { path = "../../spec/engine" }
+pxl-content = { path = "../../spec/content" }
 
 [profile.release.build-override]
 opt-level = 3
@@ -26,6 +27,12 @@ codegen-units = 16
 [patch.crates-io]
 naga = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
 naga-types = { git = "https://github.com/teoxoy/wgpu", rev = "fb9c4542d81d1db96ad5cf3295214c7ba91034ca" }
+# rust-gpu's codegen as published, its linker taught to clone a function per
+# set of bindings its storage-buffer pointer arguments come from rather than
+# inline it (rustc_codegen_spirv/src/linker/specialize_roots.rs), and to leave
+# an abort under `--abort-strategy=unreachable` where it is rather than inline
+# it up to its entry (linker/simple_passes.rs `remove_aborts`).
+rustc_codegen_spirv = { path = "rustc_codegen_spirv" }
 
 [package]
 name = "pxl-shader"
@@ -38,6 +45,9 @@ crate-type = ["lib", "dylib"]
 
 [dependencies]
 spirv-std = "=0.10.0-alpha.1"
-# The one source, as pxl-spec takes it.
-pxl-spec-core.workspace = true
+# The one source, as pxl-spec takes it, and pixelet's content over it.
+pxl-engine.workspace = true
+pxl-content.workspace = true
+# An entry's workgroup written off the constants its code counts by.
+pxl-shader-macro = { path = "macro" }
 

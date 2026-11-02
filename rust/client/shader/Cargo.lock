@@ -814,10 +814,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pxl-engine"
+version = "0.0.0"
+dependencies = [
+ "libm",
+ "xpute-kit",
+]
+
+[[package]]
+name = "pxl-content"
+version = "0.0.0"
+dependencies = [
+ "pxl-engine",
+ "xpute-kit",
+]
+
+[[package]]
 name = "pxl-shader"
 version = "0.0.0"
 dependencies = [
- "pxl-spec-core",
+ "pxl-content",
+ "pxl-engine",
+ "pxl-shader-macro",
  "spirv-std",
 ]
 
@@ -828,14 +846,14 @@ dependencies = [
  "naga 30.0.0",
  "rustc_codegen_spirv",
  "spirv-builder",
+ "spirv-tools",
 ]
 
 [[package]]
-name = "pxl-spec-core"
+name = "pxl-shader-macro"
 version = "0.0.0"
 dependencies = [
- "libm",
- "xpute-kit",
+ "pxl-engine",
 ]
 
 [[package]]
@@ -919,8 +937,6 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 [[package]]
 name = "rustc_codegen_spirv"
 version = "0.10.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "740c626d44a2d9614c029c67a1235b505b7166c169a93fd2bea553c14d36872b"
 dependencies = [
  "ahash",
  "ar",

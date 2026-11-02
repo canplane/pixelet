@@ -1,8 +1,8 @@
 # Third-party notices
 
-One port here is of someone else's code rather than our own, and its license
-asks for a notice to travel with the copy; each file carries it, and this
-records where it came from. xpute, the system pixelet runs on, is developed in
+Two copies here are of someone else's code rather than our own, and their
+licenses ask for a notice to travel with the copy; this records where each came
+from. xpute, the system pixelet runs on, is developed in
 this repository and keeps its own record of what it ported:
 [xpute/THIRD_PARTY_NOTICES.md](./xpute/THIRD_PARTY_NOTICES.md).
 
@@ -41,3 +41,16 @@ shows the notice under Settings, Attribution
 
 [arnis]: https://github.com/louis-e/arnis
 [processing]: https://github.com/louis-e/arnis/tree/c96872e0fa21573402d1b731ea87f796e8caa1d2/src/element_processing
+
+## rust-gpu — `rust/client/shader/rustc_codegen_spirv/`
+
+rust-gpu's codegen, [`rustc_codegen_spirv`][rcs] 0.10.0-alpha.1 as published on
+crates.io (MIT OR Apache-2.0, here under Apache-2.0), copyright the rust-gpu
+developers and Embark Studios. The shader build takes it in place of the
+published crate (`rust/client/shader/Cargo.toml`, `[patch.crates-io]`). Changed
+from the published copy: its linker's `mod.rs`, `inline.rs` and
+`simple_passes.rs`, and the added `specialize_roots.rs`.
+
+The license is at <https://www.apache.org/licenses/LICENSE-2.0>.
+
+[rcs]: https://github.com/rust-gpu/rust-gpu/tree/main/crates/rustc_codegen_spirv
