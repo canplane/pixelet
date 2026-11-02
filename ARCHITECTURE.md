@@ -187,11 +187,15 @@ sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
 
 The ground generates its decor as it carves its caves, each a function of the
 node and the one seed (`pxl-engine seed.rs` `node_seed`), evaluated where it
-is asked, never stored and never handed down a descent. Decor's is a tree of
-hashes: a column at the coarsest zoom a decor stands at holds as many as a hash
-draws about its mean, each column hands its count to its four a hash each, and a
-leaf cell holds one or none; where it stands is a function of the cell, a seed
-and the ground's face, one rule on both sides (`pxl-content scatter.rs`). One
+is asked from its root down, never stored and never handed down a descent:
+a count at a root handed to the children by weights a hash draws, exactly,
+within each one's room (`pxl-content pyramid.rs` `share_out`), the cumulus's
+too. Decor's root is a column at the coarsest zoom a decor stands at, holding
+as many as a hash draws about its mean, and a leaf cell holds one or none;
+where it stands is a function of the cell, a seed and the ground's face, one
+rule on both sides (`pxl-content scatter.rs`). The caves' roots each hold the
+same tunnels, a node its piece of one and the ones not yet started
+(`pxl-content cave.rs`). One
 whose box meets a neighbor's that drew lower gives way, so two generated decors
 never share a cell. A decor, placed or generated, stands as itself, a model or
 its impostor, at every zoom whose cell its box keeps an eighth of or more, as a
