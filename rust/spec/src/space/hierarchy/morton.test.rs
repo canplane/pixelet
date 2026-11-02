@@ -84,3 +84,11 @@ fn digit_is_child_slot() {
         }
     }
 }
+
+/// Zero is no key: `node_of` refuses it, where reading an end bit off it
+/// wrapped and looped some 2^31 times (0529abe78).
+#[test]
+#[should_panic]
+fn zero_refused() {
+    node_of::<2>(0);
+}

@@ -351,3 +351,30 @@ fn slope_keeps_pitch_climbed() {
     assert!(!failed, "{climbed:?}");
     assert!(climbed.polar < at.polar, "{climbed:?}");
 }
+
+/// The pivot on a tower ten over the ground, the eye tilted past level 20
+/// out and sunk in the ground there: the floor under the eye lies under the
+/// pivot, and the climb lifts it past level onto that floor, where it took
+/// only a rise over the pivot and left the eye sunk (30b477576).
+#[test]
+fn climbs_past_level() {
+    let _g = serial();
+    let (tile_cache, mut store, ground) = roofed(None);
+    let red = cube_id(Cube::Object(cube::Object::red));
+    for z in 0..10 {
+        write(
+            &mut store,
+            [ground[0], ground[1], 5.0 + f64::from(z)],
+            OBJECT_COARSEST,
+            red,
+        );
+    }
+    let access = World::new(&tile_cache, &store);
+    let at = pose([ground[0], ground[1], over(15.0)], 20.0, 2.2);
+    assert!(in_solid(&at, &access));
+    let (climbed, failed) = climb_pose(at, &access);
+    assert!(!failed, "{climbed:?}");
+    assert!(climbed.polar < at.polar, "{climbed:?}");
+    assert!(climbed.polar > core::f64::consts::FRAC_PI_2, "{climbed:?}");
+    assert!(!in_solid(&climbed, &access), "{climbed:?}");
+}

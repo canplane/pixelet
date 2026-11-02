@@ -130,3 +130,7 @@ impl Serve for Policy {
         Some(ceiling * u32_to_unit(SplitMix64::new(seed).next_u32()))
     }
 }
+
+#[cfg(test)]
+#[path = "policy.test.rs"]
+mod test;
