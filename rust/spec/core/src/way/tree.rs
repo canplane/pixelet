@@ -281,7 +281,7 @@ pub fn flag(pool: &impl Pool, w: &impl Bricks, s: u32, cell: Zoom, zoom: Zoom, s
 /// the tree is refused, its root word 0 and its records' count `STARVED`,
 /// which the renderer reads as the pool's to grow or, at its cap, the
 /// brick's to stay absent; its count `NONE` where it is `past` the brick's most,
-/// absent at once (pxl-render gpu/renderer.rs `Resident`). The bake bounds
+/// absent at once (pxl-render gpu/ray/ground.rs `Resident`). The bake bounds
 /// a set's and a brick's (pxl-geo-bake terrain/pool.rs).
 pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
     flagged <= left && !past(taken, flagged)

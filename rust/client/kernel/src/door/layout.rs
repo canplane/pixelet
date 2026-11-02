@@ -31,7 +31,7 @@ use crate::sys::mem::spec::{
 };
 use pxl_render::api_spec::stream;
 use pxl_render::gpu::api;
-use pxl_render::gpu::renderer;
+use pxl_render::gpu::ray;
 use pxl_render::gpu::upload;
 use xpute_guest::mem;
 use xpute_guest::mem::section::span_of;
@@ -190,7 +190,7 @@ const HEAP_FLOWS_BYTES: u64 = {
         }
         k += 1;
     }
-    let ways = mirror::MIRROR_BYTES + renderer::RECORD_ROOMS_BYTES;
+    let ways = mirror::MIRROR_BYTES + ray::RECORD_ROOMS_BYTES;
     slots_bytes(param::BODY_SLOTS) + param::MAX_CREDITS as u64 * longest + ways + record::PERF_BYTES
 };
 

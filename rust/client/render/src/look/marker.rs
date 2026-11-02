@@ -8,8 +8,22 @@
 
 use pxl_spec::asset::symbol::{SYMBOL_PX, SYMBOL_RATIO};
 
-use crate::gpu::atlas::Halo;
-use crate::gpu::text::Font;
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Font {
+    pub weight: u32,
+    pub px: f32,
+}
+
+/// A color round a line's glyphs and its radius, and under it a shadow, its
+/// color, radius and drop; in logical pixels.
+#[derive(Clone, Copy)]
+pub struct Halo {
+    pub color: u32,
+    pub radius: f32,
+    pub shadow: u32,
+    pub shadow_radius: f32,
+    pub shadow_dy: f32,
+}
 
 // Regular and semibold, not canvas's "bold" (700); the system faces carry a real
 // semibold, so neither is synthetic.

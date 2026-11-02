@@ -1,12 +1,12 @@
 // pxl-kernel/domain/scene/cast.rs
 
-//! What the GPU's cast of the eye's rays reads (pxl-render gpu/renderer.rs
+//! What the GPU's cast of the eye's rays reads (pxl-render gpu/ray/cast.rs
 //! `Cast`): the eye as the rays leave it, a ray a drawn pixel, the eye's
 //! clip levels as a table of the bricks each holds, and each brick the
 //! clip levels want handed to the GPU once, off its tile's packet
 //! (domain/layer/terrain/clipmap.rs `fill`).
 
-use pxl_render::gpu::renderer::{Overwrites, TerrainWrite};
+use pxl_render::gpu::ray::{Overwrites, TerrainWrite};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec_core::eye;

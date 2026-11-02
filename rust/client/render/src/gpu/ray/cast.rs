@@ -25,13 +25,56 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, write_buffer_bytes, Gpu,
     RenderContext,
 };
-use crate::gpu::generator::{cut_boxes, hold, Generation, Generator, IndirectDraw};
+use crate::gpu::generator::{cut_boxes, hold, DecorFrame, Generation, Generator, IndirectDraw};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
-use crate::gpu::renderer::{next_frame, Cast, Overwrites};
 use crate::gpu::shadow;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, LightMoved};
 use pxl_spec_core::param::light::SAMPLE;
+
+/// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`), a ray
+/// a drawn pixel of the world surface: the eye, the terrain's tiles as the
+/// GPU holds them, and what is placed.
+pub struct Cast<'a> {
+    /// The eye (pxl-spec-core `eye`; pxl-kernel domain/view/lens.rs `gpu_cast`,
+    /// domain/scene/cast.rs `eye`).
+    pub eye: [u32; eye::WORDS],
+    /// The clipmap's table (pxl-spec-core `clipmap::Entry`; pxl-kernel
+    /// domain/layer/terrain/clipmap.rs `table`), four words a row: every clip
+    /// level's entries, the eye's first, from the top's, each the brick it
+    /// wants, X and Y, the slot holding it plus one while present (`Entry::slot`)
+    /// and the fill it is on its way from; then each clip level's first brick
+    /// (`clipmap::ORIGIN_AT`).
+    pub clipmap: &'a [i32],
+    /// The service area's index (pxl-spec-core `area::Area`), its keys four a
+    /// row (pxl-kernel domain/scene/cast.rs `shards`); read where it lies,
+    /// unwritten until the page replays the turn.
+    pub shards: &'a [[i32; 4]],
+    pub overwrites: Overwrites<'a>,
+    /// The decor the GPU generates and draws over the same world (gpu/generator.rs).
+    pub decor: DecorFrame<'a>,
+    /// Where each actor drawn stands, units from the eye, as its draw is
+    /// placed (frame/draw.rs `Lists::stands`): receivers of the shadow map as
+    /// decor is (pxl-spec-core `light::ACTORS_AT`).
+    pub actors: &'a [[f32; 3]],
+    /// Whether what the eye's cast and the sun's walked and took is counted
+    /// (gpu/ray/tally.rs).
+    pub ray_counts: bool,
+}
+
+/// The overwrites' tree (pxl-kernel domain/layer/object/store.rs) as it lives: its
+/// child pointer and data lanes, unwritten until the page replays the turn, the room
+/// either has before it grows, the revision they are at, and the child groups
+/// written since `since`, the revision they were last handed at, by their
+/// first slots (`GpuColumns`).
+pub struct Overwrites<'a> {
+    pub first_child: &'a [u32],
+    pub data: &'a [u32],
+    pub room: usize,
+    pub revision: u32,
+    pub since: u32,
+    pub written_groups: &'a [u32],
+}
 
 /// What the GPU's cast reads; it writes the world surface's rays.
 pub(super) struct CastBuffers {
@@ -438,7 +481,13 @@ impl RaysPass {
     /// The rays for this frame into the world surface's (`rays`, its view,
     /// and its drawn pixels), and the world's depth from the light into `light`'s
     /// view: the GPU's cast where an eye casts, its eye handed over first;
-    /// its samples' raster through its gate where the frame is `gated`.
+    /// its samples' raster through its gate where the frame is `gated`;
+    /// `frame` the renderer's number this frame takes, which its counts are
+    /// named by (tally.rs `Frame`).
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the frame's values, each its own"
+    )]
     pub fn prepare(
         &mut self,
         g: &Gpu,
@@ -447,6 +496,7 @@ impl RaysPass {
         rays: (u32, [u32; 2]),
         light_map: (u32, u32, light::Starts),
         gated: bool,
+        frame: f64,
     ) {
         // No cast, no world: no ray cast, none drawn and no decor generated.
         // What the cast reads stands for the next: the ground it binds is
@@ -887,7 +937,7 @@ impl RaysPass {
             c.sent_forget = None;
         }
         let frame = tally::Frame {
-            number: next_frame(),
+            number: frame,
             // A full cast's alone, so what a cast asks is not shared out
             // over the frames that cast only the pixels.
             casts: [self.kind == FrameKind::cast, c.light_cast],

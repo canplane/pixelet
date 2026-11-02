@@ -18,7 +18,8 @@ use crate::gpu::api::{
 };
 use crate::gpu::atlas::shelf::PAD;
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::text::{Font, Raster, TextOf};
+use crate::gpu::text::{Raster, TextOf};
+use crate::look::marker::{Font, Halo};
 use pxl_spec::asset::symbol;
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
 use xpute_kit::math::scalar::round;
@@ -32,17 +33,6 @@ struct Line {
     /// Its middle across, and its baseline's height.
     at: [f32; 2],
     halo: Option<Halo>,
-}
-
-/// A color round a line's glyphs and its radius, and under it a shadow, its
-/// color, radius and drop; in logical pixels.
-#[derive(Clone, Copy)]
-pub struct Halo {
-    pub color: u32,
-    pub radius: f32,
-    pub shadow: u32,
-    pub shadow_radius: f32,
-    pub shadow_dy: f32,
 }
 
 /// Device pixels an atlas draws per logical pixel: the symbols' masks', laid

@@ -762,7 +762,7 @@ pub(crate) fn stand(list: &mut [u32], size: u32, cast: u32, tile: [i32; 2]) {
 /// ball about its middle as wide as decor is tall and wide meets the view
 /// (`eye::sees`); the tiles about its own stood on too, as many as half
 /// the widest decor spans (`Light::ring`). The actors are those the scene
-/// draws in the world (pxl-render gpu/renderer.rs `Cast::actors`), no more
+/// draws in the world (pxl-render gpu/ray/cast.rs `Cast::actors`), no more
 /// than `light::ACTORS`. Run after decor is placed, before the propagation.
 #[spirv(compute(threads(64, 1, 1), entry_point_name = "light_mark_draws_cs"))]
 #[allow(clippy::too_many_arguments)]

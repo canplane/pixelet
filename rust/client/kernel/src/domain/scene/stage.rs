@@ -9,9 +9,8 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::frame::stage::{stage_lane, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
-use pxl_render::gpu::renderer::{
-    render_frame, Cast, EarthTiles, FrameInput, GroundBricks, Resident,
-};
+use pxl_render::gpu::ray::{Cast, GroundBricks, Resident};
+use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;

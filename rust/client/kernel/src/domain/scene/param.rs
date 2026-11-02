@@ -47,7 +47,7 @@ const _: () = {
 /// read's room doubles past a brick's records that outgrew it, that brick
 /// filled again (pxl-render gpu/ray/ground.rs `GroundBuffers::room`), up to
 /// a brick's most, `way::tree::RECORDS_BYTES`: the GPU's read buffers and
-/// their rooms on the heap together, each pxl-render gpu/renderer.rs
+/// their rooms on the heap together, each pxl-render gpu/ray/ground.rs
 /// `READS` of them.
 pub const WAYS_RECORDS_FIRST_BYTES: u32 = 16 << 10;
 

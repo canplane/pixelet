@@ -22,13 +22,93 @@ use crate::gpu::api::{
     Gpu, RenderContext, DONE, UNIFORM_ALIGN_MAX,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::renderer;
-use crate::gpu::renderer::{CellsBack, GroundBricks, Resident};
 use crate::gpu::span_spec::GpuSpanName;
 
-/// The buffers bricks' cells come back through: what a frame hands, a
-/// mapping still out a frame more (pxl-spec-core `clipmap::FILL_CAP`).
-const READS: usize = renderer::READS as usize;
+/// The ground's clip levels as the GPU holds them (pxl-spec-core
+/// `clipmap`, their bricks in `SLOTS` slots): the bricks to hand it, and where
+/// their cells come back.
+pub struct GroundBricks<'a> {
+    /// Hands each brick whose cells the GPU is to draw to the writer.
+    pub upload: &'a mut TerrainUpload,
+    /// Told each brick whose cells came back, and the fill they are of
+    /// (`CellsBack::ticket`).
+    pub on_resident: &'a mut OnResident<'a>,
+    /// The ways' pool's child groups at first (pxl-kernel domain/scene/param.rs
+    /// `WAYS_POOL_FIRST_BYTES`): it doubles each time a build runs out, up
+    /// to `way::tree::POOL_CHILD_GROUPS` (`GroundBuffers::grow`).
+    pub pool: u32,
+    /// The child groups each handed brick's scratch holds a tree of at first
+    /// (pxl-kernel domain/scene/param.rs `WAYS_SCRATCH_FIRST_BYTES`): it
+    /// doubles each time a build outgrows it, up to
+    /// `way::tree::BRICK_CHILD_GROUPS` (`GroundBuffers::grow_scratch`).
+    pub scratch: u32,
+    /// A read's records' room at first, in bytes: every read's is doubled
+    /// past a brick's records that outgrew it, up to
+    /// `way::tree::RECORDS_BYTES` (`GroundBuffers::record_bytes`).
+    pub records: u32,
+}
+
+/// How a brick's fill landed: its cells are back in every case.
+pub enum Resident<'a> {
+    /// Its ways' tree built: the child groups it holds, their count first, a
+    /// record each (pxl-spec-core `way::tree::lay`).
+    Built(&'a [u32]),
+    /// To be filled again, for want of room the renderer grows: its tree not
+    /// built, the pool or the scratch it was built in having run out
+    /// (`Short`), or built but its records past its read's room, the tree
+    /// the refill frees.
+    Again,
+    /// Its tree refused, the pool or the scratch at its most having run out,
+    /// or the brick past its own (`way::tree::past`): the brick stays
+    /// absent.
+    Refused,
+}
+
+/// The read-backs a brick's cells and its ways' records come back in
+/// (`GroundBuffers::read_back`): two frames' fills (pxl-spec-core
+/// `clipmap::FILL_CAP`), so one frame's mappings are still landing while
+/// the next is copied.
+const READS: usize = 2 * FILL_CAP as usize;
+
+/// The pool's records the renderer keeps on the heap at their worst, in
+/// the buddy's blocks: every read's room at a brick's most
+/// (`GroundBuffers::room`), each a power of two as the heap gives it.
+pub const RECORD_ROOMS_BYTES: u64 =
+    READS as u64 * (way::tree::RECORDS_BYTES as u64).next_power_of_two();
+
+/// A brick whose cells came back, the fill they are of
+/// (`CellsBack::ticket`), and how its ways' tree landed; what is told may
+/// borrow its caller's for the frame.
+pub type OnResident<'a> = dyn FnMut(u32, u32, Resident<'_>) + 'a;
+
+/// Where a brick's cells, which the GPU draws, come back to in the
+/// kernel's memory: its columns, levels, laid cells and root
+/// (pxl-spec-core `clipmap::BACK_WORDS`); and the fill's ticket, never 0,
+/// which the kernel is told once this fill's are in.
+#[derive(Clone, Copy, Default)]
+pub struct CellsBack {
+    pub cells: u32,
+    pub ticket: u32,
+}
+
+/// A brick handed to the GPU's fill, the record the ground's clip levels hand
+/// on (pxl-kernel domain/layer/terrain/clipmap.rs `fill`): its words
+/// (pxl-spec-core `clipmap::fill_words`), its four palette indices a cell, its tile's
+/// padded samples, its lines as far as they are written
+/// (`clipmap::LINES_AT`), and where its cells come back to.
+pub struct BrickFill<'a> {
+    pub words: [u32; FILL_WORDS as usize],
+    pub palette_indices: &'a [u8],
+    pub samples: &'a [i16],
+    pub lines: &'a [u32],
+    pub back: CellsBack,
+}
+
+/// Takes a brick while the turn's stream has room for it.
+pub type TerrainWrite<'a> = dyn FnMut(BrickFill<'_>) -> bool + 'a;
+
+pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
+
 /// A buffer of them carrying no brick.
 const FREE: u32 = u32::MAX;
 

@@ -669,7 +669,7 @@ fn box_placed_matches_store() {
 #[test]
 fn late_brick_spike() {
     use crate::domain::layer::terrain::clipmap::{on_resident, refold, test::unland, CpuClipmap};
-    use pxl_render::gpu::renderer::Resident;
+    use pxl_render::gpu::ray::Resident;
     use pxl_spec_core::clipmap::{self as cells, Bricks, Lookup, BRICK, CLIP_SIZE, LEVELS};
     use pxl_spec_core::LEAF_CELL;
     let _g = serial();

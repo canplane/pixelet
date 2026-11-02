@@ -2,7 +2,7 @@
 
 //! The eye's rays, each drawn at its own pixel where it met a face, painted
 //! by paint.wgsl's `paint` (pxl-spec-core ray.rs), from the world surface's
-//! `rays` the GPU's cast leaves (gpu/renderer.rs `Cast`): the ground it
+//! `rays` the GPU's cast leaves (`Cast`): the ground it
 //! casts over (ray/ground.rs) and the cast (ray/cast.rs), its samples'
 //! stops handed to the rasterizer (ray/raster.rs).
 
@@ -19,7 +19,12 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
+pub use cast::{Cast, Overwrites};
 use ground::GroundBuffers;
+pub use ground::{
+    BrickFill, CellsBack, GroundBricks, OnResident, Resident, TerrainUpload, TerrainWrite,
+    RECORD_ROOMS_BYTES,
+};
 pub use tally::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 
 /// Whether a frame of `kind` casts the pixels' rays, whole or off the
