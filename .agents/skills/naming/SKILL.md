@@ -11,8 +11,11 @@ description: Recommendations for naming in pixelet — short, plain names read w
 - Prefer short, plain names, as in UNIX V6 and K&R's C, and the abbreviations
   programmers already use (`idx`, `buf`, `pos`, `px`, `cfg`, `err`, `tmp`;
   `pkt` for a wire packet) over coined ones; keep a domain word mostly whole.
-- Name what the thing is. A padding noun or a vague participle (`kept`,
-  `held`) says little; a plain word that reads at once (`reach`) is fine.
+- Name what the thing is. A padding noun says little, and a placeholder word
+  says nothing: one that could stand for anything, as "whatsit" could (`kept`,
+  `held`, `goes`, `done`), which only the code around it explains (`Stop`, not
+  `Held`). A plain word that reads at once (`reach`) is fine. A word in a
+  comment is no precedent for a name.
 - Leave a name that reads fine, and don't lengthen it to repeat its module.
 - Mind a loose word mostly where several modules use it for different things.
 - Snake_case and SCREAMING tend to abbreviate; PascalCase types, camelCase and
