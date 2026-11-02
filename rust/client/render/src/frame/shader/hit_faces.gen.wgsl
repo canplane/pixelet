@@ -17,7 +17,7 @@ struct type_17 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 4>,
+    member_8: array<vec4<u32>, 5>,
     member_9: array<vec4<f32>, 5>,
     member_10: vec4<f32>,
 }
@@ -37,62 +37,62 @@ var<storage> global_3: type_4;
 var<storage> global_4: type_4;
 
 fn function_() {
+    var phi_71_: u32;
+    var phi_74_: u32;
+    var phi_94_: u32;
+    var phi_95_: u32;
     var phi_72_: u32;
     var phi_75_: u32;
-    var phi_95_: u32;
-    var phi_96_: u32;
-    var phi_73_: u32;
-    var phi_76_: u32;
-    var phi_97_: bool;
+    var phi_96_: bool;
     var local: u32;
 
-    let _e23 = global;
-    let _e27 = global_3.member[118u];
-    if (_e23.x >= select(_e27, 524288u, (524288u < _e27))) {
+    let _e22 = global;
+    let _e26 = global_3.member[118u];
+    if (_e22.x >= select(_e26, 524288u, (524288u < _e26))) {
     } else {
-        let _e35 = global_1.member.member_8[3u][2u];
-        let _e37 = (_e35 + (_e23.x * 10u));
-        let _e41 = global_4.member[(_e37 + 8u)];
-        let _e45 = global_4.member[(_e37 + 9u)];
-        phi_72_ = _e45;
-        phi_75_ = 0u;
+        let _e34 = global_1.member.member_8[3u][2u];
+        let _e36 = (_e34 + (_e22.x * 10u));
+        let _e40 = global_4.member[(_e36 + 8u)];
+        let _e44 = global_4.member[(_e36 + 9u)];
+        phi_71_ = _e44;
+        phi_74_ = 0u;
         loop {
-            let _e47 = phi_72_;
-            let _e49 = phi_75_;
-            local = _e47;
-            if ((_e47 & 2147483648u) == 0u) {
-                phi_73_ = u32();
-                phi_76_ = u32();
-                phi_97_ = false;
+            let _e46 = phi_71_;
+            let _e48 = phi_74_;
+            local = _e46;
+            if ((_e46 & 2147483648u) == 0u) {
+                phi_72_ = u32();
+                phi_75_ = u32();
+                phi_96_ = false;
             } else {
-                let _e52 = (_e49 < 32u);
-                if _e52 {
-                    let _e59 = global_4.member[((_e35 + ((_e47 & 2147483647u) * 10u)) + 9u)];
-                    phi_95_ = _e59;
-                    phi_96_ = (_e49 + 1u);
+                let _e51 = (_e48 < 32u);
+                if _e51 {
+                    let _e58 = global_4.member[((_e34 + ((_e46 & 2147483647u) * 10u)) + 9u)];
+                    phi_94_ = _e58;
+                    phi_95_ = (_e48 + 1u);
                 } else {
+                    phi_94_ = u32();
                     phi_95_ = u32();
-                    phi_96_ = u32();
                 }
-                let _e62 = phi_95_;
-                let _e64 = phi_96_;
-                phi_73_ = _e62;
-                phi_76_ = _e64;
-                phi_97_ = _e52;
+                let _e61 = phi_94_;
+                let _e63 = phi_95_;
+                phi_72_ = _e61;
+                phi_75_ = _e63;
+                phi_96_ = _e51;
             }
-            let _e66 = phi_73_;
-            let _e68 = phi_76_;
-            let _e70 = phi_97_;
+            let _e65 = phi_72_;
+            let _e67 = phi_75_;
+            let _e69 = phi_96_;
             continue;
             continuing {
-                phi_72_ = _e66;
-                phi_75_ = _e68;
-                break if !(_e70);
+                phi_71_ = _e65;
+                phi_74_ = _e67;
+                break if !(_e69);
             }
         }
-        let _e75 = vec3<u32>((_e41 & 65535u), (_e41 >> bitcast<u32>(16i)), 3u);
-        let _e82 = local;
-        textureStore(global_2, vec2<u32>(_e75.x, _e75.y), i32(_e75.z), vec4(_e82));
+        let _e74 = vec3<u32>((_e40 & 65535u), (_e40 >> bitcast<u32>(16i)), 3u);
+        let _e81 = local;
+        textureStore(global_2, vec2<u32>(_e74.x, _e74.y), i32(_e74.z), vec4(_e81));
     }
     return;
 }

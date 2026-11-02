@@ -216,7 +216,7 @@ function windowSection(r: PerfReport): string[] {
     )} ms   paced ${n1(last.paced_ms)} ms   scale ${fixed(
       last.scale,
       2,
-    )}   turns ${f.turns}`,
+    )}   lattice ${last.lattice}   turns ${f.turns}`,
     `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
     `  interval ${percentiles(f.interval)} ms   missed ${f.missed} (${pct(
       f.missed,

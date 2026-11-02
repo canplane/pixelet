@@ -544,7 +544,9 @@ impl RaysPass {
         let ray_counts = *ray_counts;
         let r = &mut c.read;
         r.begin();
-        // The light's words are its cast's alone (below).
+        // The light's words are its cast's alone (below); the grid among the
+        // rest, so a lattice changed casts in full (pxl-spec-core
+        // `beam::Grid::lattice`).
         let eye_moved = r.read(&eye[..eye::LIGHT]);
         let clipmap_moved = r.read(clipmap);
         let shards_moved = r.read(shards);

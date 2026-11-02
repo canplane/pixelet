@@ -60,10 +60,16 @@ impl Stepped {
 /// and how far it draws (observation.rs `eye_draw_dist`); the unit right;
 /// the unit up; the tangents of the
 /// screen's half-angles across and up and the zooms a cell is asked at;
-/// the camera grid the cast lays over the screen off them, once. A
+/// the camera grid the cast lays over the screen off them, once, its beam
+/// rays and cells `lattice` cells apart (pxl-spec-core `beam::Grid::of`). A
 /// ray a drawn pixel, through its middle. The cuts are the scene's. None
 /// without a screen.
-pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> Option<()> {
+pub fn gpu_cast(
+    o: &Observation,
+    steps: bool,
+    lattice: u32,
+    words: &mut [u32; eye::WORDS],
+) -> Option<()> {
     let lens = o.frustum?.lens()?;
     let far = observation::eye_draw_dist()?;
     let q = origin(o.eye[0], o.eye[1], o.eye[2]);
@@ -81,7 +87,7 @@ pub fn gpu_cast(o: &Observation, steps: bool, words: &mut [u32; eye::WORDS]) -> 
     // this one (pxl-spec-core `beam::Grid`).
     put(
         eye::GRID,
-        &beam::Grid::of(lens.tan.map(|t| t as f32)).words(),
+        &beam::Grid::of(lens.tan.map(|t| t as f32), lattice).words(),
     );
     Some(())
 }

@@ -63,7 +63,7 @@ use crate::domain::scene::param;
 use crate::domain::scene::region;
 use crate::domain::view::frame::pose::{sea_under_eye, view};
 use crate::domain::view::frame::resolution;
-use crate::domain::view::frame::resolution::Pace;
+use crate::domain::view::frame::resolution::{GpuMeasure, Pace};
 use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::boot;
@@ -232,19 +232,27 @@ pub fn stage_render(pace: Pace) {
     }
     // An image whose texture the frame took needs its file no more.
     api::take_landed(loader::on_image_landed);
-    // The scale the world was drawn at, before a read can move the next one.
-    let scale = resolution::drawn_scale();
+    // The scale and the lattice the world was drawn at, before a read can
+    // move the next.
+    let (scale, lattice) = (resolution::drawn_scale(), f64::from(resolution::lattice()));
     let gpu = out
         .stat
         .as_ref()
         .filter(|stat| stat.gpu_read)
-        .map(|stat| (renderer::px_ms(&stat.gpu_spans), stat.gpu_px));
+        .map(|stat| GpuMeasure {
+            px_ms: renderer::px_ms(&stat.gpu_spans),
+            cell_ms: renderer::cell_ms(&stat.gpu_spans),
+            busy_ms: stat.gpu_busy_ms,
+            px: stat.gpu_px,
+            lattice: stat.gpu_lattice,
+        });
     resolution::load(pace, gpu);
     let Some(stat) = out.stat else {
         set_host_frame(
             out.kind,
             GpuSample {
                 scale,
+                lattice,
                 ..GpuSample::default()
             },
             DeviceSample::default(),
@@ -262,6 +270,7 @@ pub fn stage_render(pace: Pace) {
         out.kind,
         GpuSample {
             scale,
+            lattice,
             draws,
             triangles,
             frame: stat.frame,

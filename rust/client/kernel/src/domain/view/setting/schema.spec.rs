@@ -119,15 +119,18 @@ impl AoMode {
     }
 }
 
-/// How many device pixels the world is drawn at to a CSS pixel.
+/// How many device pixels the world is drawn at to a CSS pixel, and the
+/// lattice the camera grid's beam rays and cells are laid on.
 ///
-///   auto  — the display's, stepped down to a share of it while moving
-///           frames' per-pixel GPU time runs over their budget — the
-///           display's interval, no tighter than a sixtieth of a second —
-///           and back up once the step above would fit, a budget control
-///           as congestion control is (rust/client/kernel/src/domain/view/frame/resolution.rs).
-///   fixed — the display's, whatever the frames cost.
-///   low   — one.
+///   auto  — the display's, stepped down to a share of it, then the
+///           lattice to twice the cell, while moving frames' GPU time runs
+///           over their budget — the display's interval, no tighter than a
+///           sixtieth of a second — and back up, the lattice first, once
+///           the step above would fit, a budget control as congestion
+///           control is (rust/client/kernel/src/domain/view/frame/resolution.rs).
+///           The lattice changes no pixel drawn.
+///   fixed — the display's, on the cell's lattice, whatever the frames cost.
+///   low   — one, on the cell's lattice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum ResMode {
@@ -252,7 +255,10 @@ pub enum SettingKey {
     /// The pixels the world is drawn at: two to a CSS pixel is four times the
     /// work done a drawn pixel at a time (span.json `per_px`), and nothing
     /// more; the camera grid's rays and the light's map cost the same at any.
-    /// The markers and the finish stay at the display's. RES_MODES says each.
+    /// `auto` lays the grid's beam rays and cells on a coarser lattice too
+    /// (span.json `per_cell`), its samples the same rays, so no pixel drawn
+    /// changes. The markers and the finish stay at the display's. RES_MODES
+    /// says each.
     res = 12,
     /// Where the camera and the pointer are, read live (perf/read.rs, NOW's view section).
     view = 13,

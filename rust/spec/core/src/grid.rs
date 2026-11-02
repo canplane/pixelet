@@ -1,6 +1,6 @@
 // pxl-spec-core/grid.rs
 
-//! gpu-portable: the camera grid, the one knob of resolution: a cell is an
+//! gpu-portable: the camera grid, the knob of what is observed: a cell is an
 //! angle about the eye, and the zoom a node is drawn at, at a distance, is
 //! the one at which it spans a cell there. What the descent asks at a
 //! distance and how far the ground's clip levels reach both follow from it.
@@ -11,7 +11,7 @@ use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 // What is drawn and how finely follows from these, with the field of view
 // (pxl-spec space/camera/grid.rs `HALF_TAN`) and the display's pixels.
 
-/// The camera grid, the one knob of resolution: the view's cells a radian,
+/// The camera grid, the knob of what is observed: the view's cells a radian,
 /// a cell 1/`CELLS_A_RAD` radians about the eye whatever the screen. An
 /// angle, so what is observed is the display's pixels' to draw, never
 /// theirs to decide.
@@ -37,9 +37,23 @@ pub const SPANS: f32 = 2.0;
 /// `CLIP_MARGIN` times finer.
 pub const CLIP_CELLS_A_RAD: f32 = CELLS_A_RAD * CLIP_MARGIN;
 
-/// The view's cell, an angle in radians: what a beam's rays lie apart by
-/// (`beam::Grid`), and the angle every eye's ray is asked at (`cell_zoom_at`).
+/// The view's cell, an angle in radians: the angle every eye's ray is asked
+/// at (`cell_zoom_at`), and the samples' lattice, `param::beam::SAMPLE` a
+/// cell a side, which a pixel takes the nearest stop of. The beam rays and
+/// the cells their starts are found for lie on a lattice of their own, a
+/// power of two of cells a side up to `LATTICE_MAX` (`beam::Grid::of`), the
+/// drawn resolution's second knob (pxl-kernel
+/// domain/view/frame/resolution.rs): the samples are the very rays at every
+/// lattice, so what each screen observes and draws is the cell's alone. The
+/// cell spaced the beam rays too until the lattice came apart from it
+/// (doc/minutes/20261102-auto-judges-the-pixels-and-the-lattice.md).
 pub const CELL: f32 = 1.0 / CELLS_A_RAD;
+
+/// The coarsest lattice the beam rays and cells are laid on, in `CELL`s a
+/// side, which lays a quarter of the cell's beam rays and cells. A lattice is a power of two of cells, so the
+/// sample's spacing, the lattice's side over its samples a side, is the
+/// very f32 at every one (`beam::Grid::sample`).
+pub const LATTICE_MAX: u32 = 2;
 
 /// The camera grid's cell zoom at `r2`, a distance from the eye squared, in
 /// units: the widest cell whose split distance (`CELLS_A_RAD / SPANS` of its

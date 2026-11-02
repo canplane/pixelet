@@ -9,6 +9,10 @@ use pxl_spec::space::coord::adapter::epsg4326::G4326;
 pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 // ---- the drawn resolution ----
+// `auto`'s two knobs, the scale and the camera grid's lattice (pxl-spec-core
+// `grid::LATTICE_MAX`), share the windows, the band and the budget, `RES_`
+// (frame/resolution.rs); the steps, and the misses and probes judged where no
+// GPU time is reported, are the scale's alone, `SCALE_`.
 
 /// The least share of the display's pixels, each way, the world is drawn at.
 pub const SCALE_MIN: f64 = 0.5;
@@ -19,22 +23,22 @@ pub const SCALE_STEPS: i32 = 4;
 
 /// The budgets a window of the load sums, in ms: what a step down waits
 /// for.
-pub const SCALE_WINDOW_MS: f64 = 500.0;
+pub const RES_WINDOW_MS: f64 = 500.0;
 
-/// The windows in a row the step above must fit in before it is taken,
-/// where the device reports GPU time.
-pub const SCALE_UP_WINDOWS: u32 = 4;
+/// The windows in a row the step above, of either knob, must fit in before
+/// it is taken, where the device reports GPU time.
+pub const RES_UP_WINDOWS: u32 = 4;
 
 /// A window within this of its budget, either way, holds the step.
-pub const SCALE_BAND: f64 = 0.1;
+pub const RES_BAND: f64 = 0.1;
 
 /// The tightest budget: 60 Hz. Faster displays would trade sharpness for
 /// frames the eye gains less from.
-pub const SCALE_BUDGET_FLOOR_MS: f64 = 1000.0 / 60.0;
+pub const RES_BUDGET_FLOOR_MS: f64 = 1000.0 / 60.0;
 
-/// A change rebuilds the render targets, so the windows after one, a second
-/// of them, are not judged.
-pub const SCALE_SETTLE_WINDOWS: u32 = 2;
+/// A change rebuilds the render targets, or the lattice's casts in full, so
+/// the windows after one of either, a second of them, are not judged.
+pub const RES_SETTLE_WINDOWS: u32 = 2;
 
 /// Where the device reports no GPU time, a window whose frames' gap averages
 /// past this many budgets missed frames.

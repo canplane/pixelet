@@ -82,8 +82,10 @@ pub(crate) fn eye_origin(eye: &Eye) -> ([i32; 3], Detail) {
         [eye.origin.x, eye.origin.y, eye.origin.z],
         Detail {
             range: [eye.range.x, eye.range.y],
+            // The beam rays' lattice's side, the grid's first word
+            // (`beam::Grid::words`), which their `narrow` reads.
             spacing: cast::Spacing {
-                angle: pxl_spec_core::grid::CELL,
+                angle: f32::from_bits(eye.grid[0].x),
                 across: 0.0,
             },
         },
@@ -106,11 +108,11 @@ pub(crate) fn grid(eye: &Eye) -> beam::Grid {
     let g = &eye.grid;
     let w = [
         g[0].x, g[0].y, g[0].z, g[0].w, g[1].x, g[1].y, g[1].z, g[1].w, g[2].x, g[2].y, g[2].z,
-        g[2].w, g[3].x, g[3].y, g[3].z, g[3].w,
+        g[2].w, g[3].x, g[3].y, g[3].z, g[3].w, g[4].x, g[4].y, g[4].z, g[4].w,
     ];
     beam::Grid::of_words([eye.tan.x, eye.tan.y], w)
 }
-const _: () = assert!(eye::GRID_WORDS == 16, "`grid` reads the grid's four vec4s");
+const _: () = assert!(eye::GRID_WORDS == 20, "`grid` reads the grid's five vec4s");
 
 impl Observer for Eye {
     type At = [f32; 2];

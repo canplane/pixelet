@@ -28,8 +28,11 @@ pub struct GpuSample {
     pub spans: [f64; GPU_SPANS],
     pub busy_ms: f64,
     pub px: f64,
-    /// The share of the display's pixels, each way, the world was drawn at.
+    /// The share of the display's pixels, each way, the world was drawn at,
+    /// and the camera grid's lattice its beam rays and cells were laid on,
+    /// in cells a side (pxl-kernel domain/view/frame/resolution.rs).
     pub scale: f64,
+    pub lattice: f64,
     /// The frame's draws and their triangles, every pipeline a draw names
     /// (pxl-render renderer.rs `FrameStat::draws`, summed).
     pub draws: f64,
@@ -208,6 +211,7 @@ words!(FrameSample, FRAME::WORDS,
     perf_ms => FRAME::perf_ms, effects => FRAME::effects,
     kind => FRAME::kind_name, wake => FRAME::wake_name,
     gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.busy_ms => FRAME::gpu_busy_ms, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
+    gpu.lattice => FRAME::lattice,
     gpu.draws => FRAME::draws, gpu.triangles => FRAME::triangles, gpu.frame => FRAME::gpu_frame,
     gpu.light_moved => FRAME::light_moved, gpu.decor_boxes => FRAME::decor_boxes,
     rays => FRAME::eye_cast,

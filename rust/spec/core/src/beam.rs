@@ -6,15 +6,16 @@
 //! than it can share with the rays about it (`cast::narrow`); each cell starts
 //! from the least of the beam rays about it, shortened by a margin
 //! (`hand_dist`), and what resumes from the line that beam ray left is the
-//! samples, `SAMPLE` a cell a side, walked to the cell that fills; the
-//! cells they stopped at are drawn as boxes, and each drawn pixel takes the
-//! nearest its own ray enters (`raster`), walking from its cell's start
-//! only where that is a node a sample lacks at, or none. The lattice is the
-//! grid's own, so neither the beam rays nor the samples follow the
-//! screen's pixels.
+//! samples, `SAMPLE` an angular cell (`grid::CELL`) a side, walked to the
+//! cell that fills; the cells they stopped at are drawn as boxes, and each
+//! drawn pixel takes the nearest its own ray enters (`raster`), walking from
+//! its cell's start only where that is a node a sample lacks at, or none.
+//! The lattice is the grid's own, so neither the beam rays nor the samples
+//! follow the screen's pixels. The beam rays and cells lie `lattice` cells
+//! apart (`Grid::of`), the samples `SAMPLE` a cell a side at every lattice.
 
 use crate::cast;
-use crate::grid::CELL;
+use crate::grid::{CELL, LATTICE_MAX};
 use crate::param::beam;
 use crate::param::beam::NEAR;
 use crate::param::beam::SAMPLE;
@@ -32,8 +33,9 @@ pub struct Grid {
     /// The screen's half-angles' tangents, across and up: the eye's own
     /// (`eye::TAN`), so not among the grid's words.
     pub tan: [f32; 2],
-    /// The cell as an angle (`grid::CELL`), in the screen's tangents at its
-    /// axis.
+    /// The lattice's side as an angle, `lattice` cells (`grid::CELL`), in
+    /// the screen's tangents at its axis: what the beam rays lie apart by,
+    /// and the screen's cells, whose starts they find, a side.
     pub s: f32,
     /// What a beam ray's hit is shortened by, `1 − γ`, the margin `γ`
     /// within which two rays enter a cube under `2√2 · s · d` wide apart
@@ -50,10 +52,15 @@ pub struct Grid {
     /// The screen's cells across and up, as many as span it from its left
     /// and top; the grid's corners, as many as span it and `past` more on
     /// each side, so every corner a cell's window reads is cast; and the
-    /// samples, `SAMPLE` a cell and `NEAR` past the screen on each side.
+    /// samples, `SAMPLE` a cell (`grid::CELL`) and `NEAR` past the screen
+    /// on each side, as many as the lattice of one cell lays whatever the
+    /// lattice.
     pub span: [u32; 2],
     pub corners: [u32; 2],
     pub samples: [u32; 2],
+    /// The lattice, in cells (`grid::CELL`) a side: a power of two from 1 to
+    /// `grid::LATTICE_MAX`.
+    pub lattice: u32,
     /// Where the cells' starts and the samples' hits start among the beam
     /// rays' words, past the lines and how far each hands on (`hand_at`);
     /// then the boxes' asks, a sample's room
@@ -68,14 +75,19 @@ pub struct Grid {
 
 /// The grid's words among the eye's (`eye::GRID`): `s`, `keep`, `radius`,
 /// `radius_tan` as f32 bits, then `past`, `span`, `corners`, `samples`,
-/// `cells_at`, `samples_at`, `asks_at`, `hits_at`, `hit_asks_at`: whole
-/// vec4s.
-pub const GRID_WORDS: usize = 16;
+/// `cells_at`, `samples_at`, `asks_at`, `hits_at`, `hit_asks_at`, then
+/// `lattice` (`GRID_LATTICE`) and three words no reader reads: whole vec4s.
+pub const GRID_WORDS: usize = 20;
+pub const GRID_LATTICE: usize = 16;
 
 impl Grid {
-    /// The grid at the screen's tangents `tan`.
-    pub fn of(tan: [f32; 2]) -> Grid {
-        let s = CELL;
+    /// The grid at the screen's tangents `tan`, its beam rays and cells
+    /// `lattice` cells apart, held to the power of two at or under it from 1
+    /// to `grid::LATTICE_MAX`: the samples the very rays at every lattice
+    /// (`sample`), and as many.
+    pub fn of(tan: [f32; 2], lattice: u32) -> Grid {
+        let lattice = 1 << (31 - lattice.clamp(1, LATTICE_MAX).leading_zeros());
+        let s = lattice as f32 * CELL;
         let r6 = cast::SQRT_6 * s;
         let k = 2.0 * r6;
         let radius = r6 / (1.0 - r6) * beam::RADIUS_SLACK;
@@ -83,9 +95,10 @@ impl Grid {
             libm::ceilf(2.0 * tan[0] / s) as u32,
             libm::ceilf(2.0 * tan[1] / s) as u32,
         ];
+        // As many as the cell's own lattice lays, whatever this one.
         let samples = [
-            span[0] * SAMPLE + 1 + 2 * NEAR,
-            span[1] * SAMPLE + 1 + 2 * NEAR,
+            libm::ceilf(2.0 * tan[0] / CELL) as u32 * SAMPLE + 1 + 2 * NEAR,
+            libm::ceilf(2.0 * tan[1] / CELL) as u32 * SAMPLE + 1 + 2 * NEAR,
         ];
         let mut g = Grid {
             tan,
@@ -97,6 +110,7 @@ impl Grid {
             span,
             corners: [0; 2],
             samples,
+            lattice,
             cells_at: 0,
             samples_at: 0,
             asks_at: 0,
@@ -133,6 +147,10 @@ impl Grid {
             self.asks_at,
             self.hits_at,
             self.hit_asks_at,
+            self.lattice,
+            0,
+            0,
+            0,
         ]
     }
 
@@ -149,6 +167,7 @@ impl Grid {
             span: [w[5], w[6]],
             corners: [w[7], w[8]],
             samples: [w[9], w[10]],
+            lattice: w[GRID_LATTICE],
             cells_at: w[11],
             samples_at: w[12],
             asks_at: w[13],
@@ -209,10 +228,22 @@ impl Grid {
         ]
     }
 
+    /// The samples a side of a screen's cell: `SAMPLE` a `grid::CELL`.
+    fn cell_samples(&self) -> u32 {
+        SAMPLE * self.lattice
+    }
+
+    /// The samples' spacing, in the screen's tangents at its axis: the
+    /// lattice's side over its samples a side, both a power of two times
+    /// the cell's, so the very f32 at every lattice, `grid::CELL / SAMPLE`.
+    fn sample_spacing(&self) -> f32 {
+        self.s / self.cell_samples() as f32
+    }
+
     /// The tangents across and up of sample `[i, j]`, from the screen's
-    /// left and top `NEAR` samples past it.
+    /// left and top `NEAR` samples past it: the same at every lattice.
     pub fn sample(&self, [i, j]: [u32; 2]) -> [f32; 2] {
-        let d = self.s / SAMPLE as f32;
+        let d = self.sample_spacing();
         [
             -self.tan[0] + (i as f32 - NEAR as f32) * d,
             self.tan[1] - (j as f32 - NEAR as f32) * d,
@@ -223,7 +254,7 @@ impl Grid {
     /// ty]`, across and up, from the screen's left and top `NEAR` samples
     /// past it: with the next across, down and both, the four about it.
     pub fn sample_before(&self, [tx, ty]: [f32; 2]) -> [u32; 2] {
-        let d = self.s / SAMPLE as f32;
+        let d = self.sample_spacing();
         let at = |v: f32, n: u32| (libm::floorf(v / d).max(0.0) as u32 + NEAR).min(n - 2);
         [
             at(tx + self.tan[0], self.samples[0]),
@@ -235,10 +266,10 @@ impl Grid {
     /// the nearest where it lies past the screen, as only the screen's cells
     /// have a start.
     pub fn sample_cell(&self, [i, j]: [u32; 2]) -> [u32; 2] {
-        let n = self.span;
+        let (n, k) = (self.span, self.cell_samples());
         [
-            ((i.max(NEAR) - NEAR) / SAMPLE).min(n[0] - 1),
-            ((j.max(NEAR) - NEAR) / SAMPLE).min(n[1] - 1),
+            ((i.max(NEAR) - NEAR) / k).min(n[0] - 1),
+            ((j.max(NEAR) - NEAR) / k).min(n[1] - 1),
         ]
     }
 
@@ -328,7 +359,8 @@ pub const CELL_CORNER: u32 = 1;
 pub const CELL_RESUMES: u32 = 2;
 pub const CELL_WORDS: u32 = 3;
 
-/// The samples: rays on a lattice `SAMPLE` a cell a side, each resumed from
+/// The samples: rays on a lattice `SAMPLE` a cell (`grid::CELL`) a side,
+/// whatever the beam rays' lattice, each resumed from
 /// its cell's start as a pixel is and walked to the cell that fills; a
 /// pixel takes the nearest of the cells they stopped at that its own ray
 /// enters (`raster`), and walks only where none does. The lattice runs
@@ -402,7 +434,35 @@ mod tests {
         // 33,554,432 words a storage binding holds on every device
         // (pxl-render floor.rs).
         let up = 0.5;
-        let words = Grid::of([up * 4112.0 / 2338.0, up]).size();
+        let words = Grid::of([up * 4112.0 / 2338.0, up], 1).size();
         assert!(words <= 33_554_432, "{words} words");
+    }
+
+    /// The samples are the very rays at every lattice, as many, and each on
+    /// the screen resumes from the coarser cell that holds the one it
+    /// resumed from at the lattice of one cell.
+    #[test]
+    fn samples_same_every_lattice() {
+        for tan in [
+            [0.5 * 16.0 / 9.0, 0.5],
+            [0.613, 0.5],
+            [0.5, 0.5 * 19.5 / 9.0],
+        ] {
+            let one = Grid::of(tan, 1);
+            let g = Grid::of(tan, LATTICE_MAX);
+            assert_eq!((g.lattice, g.samples), (LATTICE_MAX, one.samples));
+            assert!((0..2).all(|k| g.span[k] * LATTICE_MAX >= one.span[k]));
+            for j in 0..g.samples[1] {
+                for i in 0..g.samples[0] {
+                    let (a, b) = (one.sample([i, j]), g.sample([i, j]));
+                    assert_eq!(a.map(f32::to_bits), b.map(f32::to_bits));
+                    let on = |v: u32, k: usize| v >= NEAR && v - NEAR < one.span[k] * SAMPLE;
+                    if on(i, 0) && on(j, 1) {
+                        let c = one.sample_cell([i, j]).map(|v| v / LATTICE_MAX);
+                        assert_eq!(g.sample_cell([i, j]), c);
+                    }
+                }
+            }
+        }
     }
 }

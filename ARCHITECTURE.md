@@ -259,6 +259,14 @@ same angle wherever it lies (`pxl-spec space/camera/grid.rs`). An angular cell
 is 1/`CELLS_A_RAD` radians on every view (`CELL`), so what is observed at a
 distance is the same on every screen; a display only draws it.
 
+The cell sets what is observed and the samples' lattice, `SAMPLE` a cell a
+side; the beam rays and the cells their starts are found for lie on a lattice
+of their own, one or two cells a side (`pxl-spec-core grid.rs` `LATTICE_MAX`,
+`beam.rs` `Grid::of`), which the drawn resolution sets (Drawing). A lattice is
+a power of two of cells, so the samples are the very rays on either, and no
+pixel drawn changes with it. Until the lattice came apart, the cell spaced the
+beam rays too.
+
 That sets the rule of detail. A node is drawn at the zoom at which it spans one
 to two angular cells at its distance (`cell_zoom_at`): each zoom is drawn over a
 band of distance, and the bands double going out, as an angular cell widens with
@@ -491,14 +499,14 @@ Neighboring rays share most of their descent, so the cast walks that part once
 an angular cell and hands the rest to the rasterizer:
 
 ```text
-  one angular cell of the camera grid
+  one cell of the camera grid's lattice, one or two angular cells a side
   ●─────────────●   beam rays at its corners walk the descent its
   │ ·  ·  ·  ·  │   pixels share (beam_cs); the cell starts at the
   │ ·  ·  ·  ·  │   least of them (cell_cs)
   │ ·  ·  ·  ·  │
-  │ ·  ·  ·  ·  │   samples, SAMPLE a side, walk on from there, and the
-  ●─────────────●   node each stops on is drawn as a box (sample_cs,
-                    sample_box_cs)
+  │ ·  ·  ·  ·  │   samples, SAMPLE an angular cell a side, walk on from
+  ●─────────────●   there, and the node each stops on is drawn as a box
+                    (sample_cs, sample_box_cs)
 
   each pixel ──▶ the nearest box its own ray enters (raster.wgsl)
                    ├── a node a sample answered ──▶ takes it
@@ -511,23 +519,28 @@ an angular cell and hands the rest to the rasterizer:
 The entries are pxl-shader's (`beam.rs`, `raster.rs`, `cast.rs` `cast_cs`). Once
 a frame the kernel hands them the eye and the camera grid's layout
 (`domain/view/lens.rs` `gpu_cast`), and the cast draws at the display's pixels
-times a scale the `resolution` setting picks
-(`domain/view/frame/resolution.rs`).
+times a scale, its beam rays on a lattice, both of which the `resolution`
+setting picks (`domain/view/frame/resolution.rs`).
 
 The scale buys back only the work done a drawn pixel at a time: the pixels' cast
 and misses, the boxes drawn into the visibility buffer, the world's passes, its
 occlusion, gathering and marks, and the light's tiles marked where the eye's
-rays meet the world. The beam rays, cells, samples and their boxes run on the
-camera grid's angular cells and the rest of the light's passes on its map's
-texels, which no scale shrinks; the finish and the markers draw at the display's
-pixels at any scale, their text sharp. Each GPU span says which it is (span.json
-`per_px`), and a span whose passes are of both kinds is split. `auto` is a
-budget controller, as congestion control is: the frame's budget is the display's
-interval, no tighter than 1/60 s; while the per-pixel spans' time runs over it
-the scale steps down, and steps up where the step above, that time grown by its
-pixels, would fit. Without timestamps it reads the frames' gaps, which cannot
-foresee room, so a step up is a probe whose failure doubles the wait before the
-next.
+rays meet the world. The beam rays and cells run on the camera grid's lattice,
+which the lattice buys back, a quarter of them at twice the cell; the samples,
+their boxes and faces on its angular cells and the rest of the light's passes
+on its map's texels, which neither shrinks; the finish and the markers draw at
+the display's pixels at any scale, their text sharp. Each GPU span says which
+it is (span.json `per_px`, `per_cell`), and a span whose passes are of two
+kinds is split. `auto` is a budget controller, as congestion control is, over
+both knobs: the frame's budget is the display's interval, no tighter than
+1/60 s; while the frame's GPU time runs over it a knob steps down, the scale to
+its least first, then the lattice, and a knob steps up, the lattice first,
+where the step above, the rest of the GPU's time as it is, the per-pixel spans'
+grown by their pixels and the lattice's by its cells, would fit; one step a
+settling window. A lattice changed casts in full, as the eye's grid is another.
+Without timestamps it reads the frames' gaps, which cannot foresee room, so
+only the scale moves, and a step up is a probe whose failure doubles the wait
+before the next.
 
 What the rays asked of each node is kept between frames in the **observed
 pyramid** (`pxl-spec-core pyramid.rs`), a table keyed by the node, and

@@ -18,6 +18,7 @@ use crate::domain::layer::terrain::clipmap::{self, TileContent};
 use crate::domain::layer::terrain::tile::uploads;
 use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base as _;
+use crate::domain::view::frame::resolution;
 use crate::domain::view::lens;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::source;
@@ -47,13 +48,20 @@ pub fn shards() -> &'static [[i32; 4]] {
     s
 }
 
-/// The eye as the GPU's rays leave it, a ray a drawn pixel (`lens::gpu_cast`),
+/// The eye as the GPU's rays leave it, a ray a drawn pixel, its beam rays
+/// on the lattice the drawn resolution leaves (`lens::gpu_cast`,
+/// domain/view/frame/resolution.rs `lattice`),
 /// then the pointer's preview as the world answers through it (domain/query/world.rs
 /// `previewing`), its cut to air and its left-out leaf, each X, Y, Z and the
 /// zoom (pxl-spec-core `eye`). None without a screen.
 pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
-    lens::gpu_cast(o, settings_store().ray_steps, &mut words)?;
+    lens::gpu_cast(
+        o,
+        settings_store().ray_steps,
+        resolution::lattice(),
+        &mut words,
+    )?;
     let edits = preview::cur();
     let cut = |e: Option<EntryAt>| {
         e.map_or([0, 0, 0, eye::NO_CUT], |e| {
