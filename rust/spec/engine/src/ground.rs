@@ -484,7 +484,10 @@ pub fn node<H: Resident>(
     // caves only take away, so they are asked only of a node the ground
     // meets.
     let mut s = slab::<H::Content>(shard, (zoom, c), relief, [far, near], false);
-    if meets(s, (zoom, c[2]), near) && H::Content::hollow((zoom, c)) >= FULL {
+    if zoom >= H::Content::WHOLE_FROM
+        && meets(s, (zoom, c[2]), near)
+        && H::Content::hollow((zoom, c)) >= FULL
+    {
         s = slab::<H::Content>(shard, (zoom, c), relief, [far, near], true);
     }
     let answer = if meets(s, (zoom, c[2]), near) {

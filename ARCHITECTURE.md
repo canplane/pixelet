@@ -189,7 +189,7 @@ The ground generates its decor as it carves its caves, each a function of the
 node and the one seed (`pxl-engine seed.rs` `node_seed`), evaluated where it
 is asked from its root down, never stored and never handed down a descent:
 a count at a root handed to the children by weights a hash draws, exactly,
-within each one's room (`pxl-content pyramid.rs` `share_out`), the cumulus's
+within each one's room (`pxl-content share.rs` `halve`), the cumulus's
 too. Decor's root is a column at the coarsest zoom a decor stands at, holding
 as many as a hash draws about its mean, and a leaf cell holds one or none;
 where it stands is a function of the cell, a seed and the ground's face, one

@@ -19,8 +19,8 @@ pub mod cube;
 pub mod decor;
 pub mod generation;
 pub mod param;
-pub mod pyramid;
 pub mod scatter;
+pub mod share;
 pub mod strata;
 
 use pxl_engine::content::Content;
@@ -46,6 +46,7 @@ impl Content for Pixelet {
     fn earth(z: i32) -> u32 {
         strata::earth(z)
     }
+    const WHOLE_FROM: Zoom = cave::PIPE;
     const TALLEST: i32 = generation::TALLEST;
     const WIDEST: i32 = generation::WIDEST;
 }

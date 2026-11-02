@@ -109,11 +109,13 @@ const ENGINE_ORDER: [(&str, u8); 25] = [
     ("face", 3),
 ];
 
-/// pxl-content's order: its parameters and its palette, its rules and
-/// fields, then the decor's generation over its scatter.
+/// pxl-content's order: its parameters, its palette and the one rule a
+/// count is handed down by, its rules and fields, then the decor's generation
+/// over its scatter.
 const CONTENT: &str = "rust/spec/content/src/";
-const CONTENT_ORDER: [(&str, u8); 8] = [
+const CONTENT_ORDER: [(&str, u8); 9] = [
     ("param", 0),
+    ("share", 0),
     ("cube", 0),
     ("decor", 0),
     ("cave", 1),

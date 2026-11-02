@@ -12,7 +12,7 @@ use pxl_engine::{Zoom, UNIT_ZOOM};
 
 use crate::param::cloud::LATTICE_SHAMT;
 use crate::param::cloud::WIND;
-use crate::pyramid::halve;
+use crate::share::halve;
 
 /// The lattice's units around the world, X's 2^24 units over a lattice unit's.
 pub const LATTICE_CNT: u32 = 1 << (UNIT_ZOOM - LATTICE_SHAMT);
@@ -65,7 +65,7 @@ pub fn cloud_draw(cell: [i32; 2], salt: u32) -> f64 {
 
 /// Whether the field's cell `cell` holds a cumulus: its patch holds `mean`
 /// of its 256 about a hash's draw, halved across and along a step by weights
-/// a hash draws, pushed apart so they gather in clumps (`pyramid::halve`,
+/// a hash draws, pushed apart so they gather in clumps (`share::halve`,
 /// the one rule the decor and the caves hand theirs by), to one or none a
 /// cell.
 pub fn holds_cloud(cell: [i32; 2], mean: u32) -> bool {

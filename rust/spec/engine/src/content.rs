@@ -21,6 +21,11 @@ pub trait Content {
     /// `FULL` is a cave all through.
     fn hollow(node: (Zoom, [i32; 3])) -> u32;
 
+    /// The coarsest zoom a cave may take a node all of: coarser, the ground
+    /// does not ask (a node a cave takes all of is split there, and its
+    /// cells say so).
+    const WHOLE_FROM: Zoom;
+
     /// What the ground is in cell `z` of a column of `cell` whose palette
     /// index is `palette_idx` and whose top is `top` cells: by depth under
     /// its top, `value::VOID` over it, `value::UNKNOWN` under its bedrock and
@@ -83,6 +88,7 @@ impl Content for Sample {
             VOID
         }
     }
+    const WHOLE_FROM: Zoom = Zoom::MAX;
     const TALLEST: i32 = 3;
     const WIDEST: i32 = 2;
 }

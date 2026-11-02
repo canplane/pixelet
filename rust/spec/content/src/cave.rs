@@ -9,7 +9,7 @@
 //! (`CLASS`) and runs between two of its pipe cells (`PIPE`); a node hands
 //! its piece of a tunnel to the children it passes, a walk over at most four
 //! of them, crossing each face where a hash says, its blocks split by how
-//! far each child's part runs (`pyramid::share_out`); the tunnels not yet
+//! far each child's part runs (`share::halve`); the tunnels not yet
 //! started go to the children no piece passes, by hashed weights heavier
 //! below. A pipe cell's piece hollows the blocks nearest its line, as many
 //! as it holds. Irregular by the seed alone (`node_seed`).
@@ -19,7 +19,7 @@ use pxl_engine::seed::node_seed;
 use pxl_engine::{Zoom, LEAF_CELL};
 
 use crate::param::cave::{BLOCKS_A_TUNNEL, NUDGE, ROOT_TUNNELS};
-use crate::pyramid::halve;
+use crate::share::halve;
 
 /// The root cube, 256 units: every one holds `ROOT_TUNNELS`.
 pub const ROOT: Zoom = LEAF_CELL - 8;
@@ -104,7 +104,9 @@ fn manhattan(a: [i32; 3], b: [i32; 3]) -> u32 {
 
 /// Which of a node's eight a pipe cell lies in, `dx + 2dy + 4dz`.
 fn child_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
-    (p[0] >= o[0] + half) as u32 | ((p[1] >= o[1] + half) as u32) << 1 | ((p[2] >= o[2] + half) as u32) << 2
+    (p[0] >= o[0] + half) as u32
+        | ((p[1] >= o[1] + half) as u32) << 1
+        | ((p[2] >= o[2] + half) as u32) << 2
 }
 
 /// A tunnel started in the node: from a cell by hash in a corner quarter of
@@ -126,7 +128,13 @@ fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
         o[1] + s - 1 - ey - ((g >> 8) % (q as u32 / 2 + 1)) as i32,
         o[2] + ez + ((g >> 16) % (q as u32 / 2 + 1)) as i32 - q / 4,
     ];
-    Piece { e, x, from: 6, to: 6, blocks: tunnel_blocks(k) }
+    Piece {
+        e,
+        x,
+        from: 6,
+        to: 6,
+        blocks: tunnel_blocks(k),
+    }
 }
 
 /// The walk from child `u` to child `v` over at most four: its length, and
@@ -145,7 +153,11 @@ fn walk_at(u: u32, v: u32, h: u32, i: u32) -> u32 {
     let d = u ^ v;
     if d != 0 && d.count_ones() == 1 && h & 1 == 1 {
         // Aside by the next side or the one after, by hash, then across, then back.
-        let b = if (h >> 1) & 1 == 0 { ((d << 1) | (d >> 2)) & 7 } else { ((d << 2) | (d >> 1)) & 7 };
+        let b = if (h >> 1) & 1 == 0 {
+            ((d << 1) | (d >> 2)) & 7
+        } else {
+            ((d << 2) | (d >> 1)) & 7
+        };
         return match i {
             0 => u,
             1 => u ^ b,
@@ -176,7 +188,11 @@ fn walk_at(u: u32, v: u32, h: u32, i: u32) -> u32 {
 fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
     let (o, s) = bounds(node);
     let half = s / 2;
-    let (u, v, wh) = (child_of(o, half, p.e), child_of(o, half, p.x), node_seed(WALK, node));
+    let (u, v, wh) = (
+        child_of(o, half, p.e),
+        child_of(o, half, p.x),
+        node_seed(WALK, node),
+    );
     let n = walk_len(u, v, wh);
     let mut on = 0u32;
     let mut mine = NONE;
@@ -188,8 +204,18 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
     while i < n {
         let k = walk_at(u, v, wh, i);
         on |= 1 << k;
-        let co = [o[0] + half * (k & 1) as i32, o[1] + half * (k >> 1 & 1) as i32, o[2] + half * (k >> 2 & 1) as i32];
-        let mut part = Piece { e: cur, x: p.x, from, to: p.to, blocks: 0 };
+        let co = [
+            o[0] + half * (k & 1) as i32,
+            o[1] + half * (k >> 1 & 1) as i32,
+            o[2] + half * (k >> 2 & 1) as i32,
+        ];
+        let mut part = Piece {
+            e: cur,
+            x: p.x,
+            from,
+            to: p.to,
+            blocks: 0,
+        };
         if i + 1 < n {
             let nk = walk_at(u, v, wh, i + 1);
             let axis = (k ^ nk).trailing_zeros();
@@ -197,11 +223,23 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
             let h = node_seed(CROSS ^ i, node);
             let mut j = 0;
             while j < 3 {
-                let v = (cur[j] + p.x[j]) / 2 + ((h >> (10 * j)) & 0x3ff) as i32 * (half / 2 + 1) / 1024 - half / 4;
-                part.x[j] = if v < co[j] { co[j] } else if v > co[j] + half - 1 { co[j] + half - 1 } else { v };
+                let v = (cur[j] + p.x[j]) / 2
+                    + ((h >> (10 * j)) & 0x3ff) as i32 * (half / 2 + 1) / 1024
+                    - half / 4;
+                part.x[j] = if v < co[j] {
+                    co[j]
+                } else if v > co[j] + half - 1 {
+                    co[j] + half - 1
+                } else {
+                    v
+                };
                 j += 1;
             }
-            part.x[axis as usize] = if up { co[axis as usize] + half - 1 } else { co[axis as usize] };
+            part.x[axis as usize] = if up {
+                co[axis as usize] + half - 1
+            } else {
+                co[axis as usize]
+            };
             part.to = 2 * axis + up as u32;
             cur = part.x;
             cur[axis as usize] += if up { 1 } else { -1 };
@@ -251,32 +289,35 @@ fn tunnels_down(node: (Zoom, [i32; 3]), tunnels: [u32; 4], on: u32, want: u32) -
     while k < 4 {
         let r = room(k, child);
         let mut n = tunnels[k];
-        let h = if n > 0 { node_seed(SPLIT ^ k as u32, node) } else { 0 };
-        // The children still in play, a bit each, narrowed a side at a time.
-        let mut keep = 0xffu32;
+        let h = if n > 0 {
+            node_seed(SPLIT ^ k as u32, node)
+        } else {
+            0
+        };
+        // The children still in play and free of a piece, a bit each,
+        // narrowed a side at a time; a half's room its children's in play.
+        let mut keep = 0xffu32 & !on;
         let mut side = 0;
         while side < 3 && n > 0 {
-            let bit = 1u32 << side;
-            let mut rooms = [0u32; 2];
-            let mut i = 0;
-            while i < 8 {
-                if keep >> i & 1 == 1 && on >> i & 1 == 0 {
-                    rooms[(i & bit != 0) as usize] += r;
-                }
-                i += 1;
-            }
+            let upper = match side {
+                0 => 0xaau32,
+                1 => 0xcc,
+                _ => 0xf0,
+            };
+            let rooms = [
+                (keep & !upper).count_ones() * r,
+                (keep & upper).count_ones() * r,
+            ];
             let w = (h >> (8 * side)) & 0xff;
-            let w = if side == 2 { 0x8000 + w * 0x60 } else { 0x4000 + w * 0x80 };
+            let w = if side == 2 {
+                0x8000 + w * 0x60
+            } else {
+                0x4000 + w * 0x80
+            };
             let lo = halve(n, rooms, w);
-            let up = want & bit != 0;
+            let up = want >> side & 1 == 1;
             n = if up { n - lo } else { lo };
-            let mut i = 0;
-            while i < 8 {
-                if (i & bit != 0) != up {
-                    keep &= !(1 << i);
-                }
-                i += 1;
-            }
+            keep &= if up { upper } else { !upper };
             side += 1;
         }
         out[k] = n;
@@ -289,7 +330,10 @@ fn tunnels_down(node: (Zoom, [i32; 3]), tunnels: [u32; 4], on: u32, want: u32) -
 fn holds(node: (Zoom, [i32; 3])) -> Holds {
     let (zoom, c) = node;
     let at = |z: Zoom| [c[0] >> (zoom - z), c[1] >> (zoom - z), c[2] >> (zoom - z)];
-    let mut h = Holds { piece: NONE, tunnels: ROOT_TUNNELS };
+    let mut h = Holds {
+        piece: NONE,
+        tunnels: ROOT_TUNNELS,
+    };
     let mut z = ROOT;
     loop {
         let here = (z, at(z));
@@ -299,25 +343,30 @@ fn holds(node: (Zoom, [i32; 3])) -> Holds {
             h.piece = spawn(here, k);
             h.tunnels[k] -= 1;
         }
-        if z == zoom || z == PIPE || h.piece.blocks == 0 && h.tunnels[0] + h.tunnels[1] + h.tunnels[2] + h.tunnels[3] == 0 {
+        if z == zoom
+            || z == PIPE
+            || h.piece.blocks == 0 && h.tunnels[0] + h.tunnels[1] + h.tunnels[2] + h.tunnels[3] == 0
+        {
             return h;
         }
         let next = at(z + 1);
         let i = (next[0] & 1 | (next[1] & 1) << 1 | (next[2] & 1) << 2) as u32;
-        let (piece, on) = if h.piece.blocks == 0 { (NONE, 0) } else { hand_down(here, h.piece, i) };
-        h = Holds { piece, tunnels: tunnels_down(here, h.tunnels, on, i) };
+        let (piece, on) = if h.piece.blocks == 0 {
+            (NONE, 0)
+        } else {
+            hand_down(here, h.piece, i)
+        };
+        h = Holds {
+            piece,
+            tunnels: tunnels_down(here, h.tunnels, on, i),
+        };
         z += 1;
     }
 }
 
-/// The orders a pair of sides has, a pipe cell's own by its hash.
-const VARIANTS: u32 = 4;
-/// The sides a pipe cell's piece comes in or goes out by, and none (6).
-const SIDES: u32 = 7;
-
 /// Side `side`'s middle in a pipe cell, in sixteenths of a unit from its
-/// corner; the cell's middle for none.
-const fn side_mid(side: u32) -> [i32; 3] {
+/// corner; the cell's middle for none (6).
+fn side_mid(side: u32) -> [i32; 3] {
     let mut p = [64; 3];
     if side < 6 {
         p[(side / 2) as usize] = if side & 1 == 1 { 128 } else { 0 };
@@ -325,13 +374,24 @@ const fn side_mid(side: u32) -> [i32; 3] {
     p
 }
 
-/// The squared distance, in sixteenths, from `p` to the segment `a`–`b`.
-const fn to_segment(p: [i32; 3], a: [i32; 3], b: [i32; 3]) -> i32 {
-    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    let ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
-    let l = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+/// How far block `b`'s middle lies from the piece's line, from the middle
+/// of the side it comes in by to the middle of the side it goes out by, in
+/// squared sixteenths, nudged by a draw off the cell's hash so no wall runs
+/// smooth: the lower, the sooner the block is hollowed.
+fn key(a: [i32; 3], ab: [i32; 3], l: i32, h: u32, b: u32) -> i32 {
+    let ap = [
+        (b & 3) as i32 * 32 + 16 - a[0],
+        (b >> 2 & 3) as i32 * 32 + 16 - a[1],
+        (b >> 4 & 3) as i32 * 32 + 16 - a[2],
+    ];
     let t = ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2];
-    let t = if l == 0 || t <= 0 { 0 } else if t >= l { l } else { t };
+    let t = if l == 0 || t <= 0 {
+        0
+    } else if t >= l {
+        l
+    } else {
+        t
+    };
     let mut d = 0;
     let mut j = 0;
     while j < 3 {
@@ -339,67 +399,35 @@ const fn to_segment(p: [i32; 3], a: [i32; 3], b: [i32; 3]) -> i32 {
         d += q * q;
         j += 1;
     }
-    d
+    let mut n = h ^ b.wrapping_mul(0x9e37_79b9);
+    n ^= n >> 15;
+    n = n.wrapping_mul(0x2c1b_3c6d);
+    n ^= n >> 12;
+    d + (n % NUDGE) as i32
 }
-
-/// A fixed draw, for the orders' nudges.
-const fn mix(mut h: u32) -> u32 {
-    h ^= h >> 16;
-    h = h.wrapping_mul(0x7feb_352d);
-    h ^= h >> 15;
-    h = h.wrapping_mul(0x846c_a68b);
-    h ^ (h >> 16)
-}
-
-/// Each block's place in the order a pipe cell hollows its blocks in, by
-/// the sides its piece comes in and goes out by and a variant, four to a
-/// word: nearest first to the line in from the one side's middle, by the
-/// cell's middle, out the other's, each block nudged by a fixed draw so no
-/// wall runs smooth. Worked out once, so a block asks one word.
-const ORDER: [u32; (SIDES * SIDES * VARIANTS * 16) as usize] = {
-    let mut out = [0u32; (SIDES * SIDES * VARIANTS * 16) as usize];
-    let mut t = 0;
-    while t < SIDES * SIDES * VARIANTS {
-        let (from, to) = (t / VARIANTS / SIDES, t / VARIANTS % SIDES);
-        let (a, z) = (side_mid(from), side_mid(to));
-        let m = [(a[0] + z[0]) / 4 + 32, (a[1] + z[1]) / 4 + 32, (a[2] + z[2]) / 4 + 32];
-        let mut d = [0i32; 64];
-        let mut b = 0;
-        while b < 64 {
-            let q = [(b & 3) as i32 * 32 + 16, (b >> 2 & 3) as i32 * 32 + 16, (b >> 4 & 3) as i32 * 32 + 16];
-            let (d1, d2) = (to_segment(q, a, m), to_segment(q, m, z));
-            d[b as usize] = (if d1 < d2 { d1 } else { d2 }) + (mix(t * 64 + b) % NUDGE) as i32;
-            b += 1;
-        }
-        let mut b = 0;
-        while b < 64 {
-            let mut rank = 0u32;
-            let mut o = 0;
-            while o < 64 {
-                if d[o] < d[b] || d[o] == d[b] && o < b {
-                    rank += 1;
-                }
-                o += 1;
-            }
-            let w = (t * 16 + b as u32 / 4) as usize;
-            out[w] |= rank << (8 * (b % 4));
-            b += 1;
-        }
-        t += 1;
-    }
-    out
-};
 
 /// Whether block `b` of the pipe cell `cell` is hollow: among its piece's
-/// `blocks` first in the order for its sides and the cell's variant.
+/// `blocks` nearest its line (`key`, the lower block first where two tie).
 fn block_hollow(cell: [i32; 3], p: &Piece, b: u32) -> bool {
     if p.blocks >= CELL_BLOCKS {
         return true;
     }
-    let variant = node_seed(BLOCKS, (PIPE, cell)) % VARIANTS;
-    let t = (p.from * SIDES + p.to) * VARIANTS + variant;
-    let rank = ORDER[(t * 16 + b / 4) as usize] >> (8 * (b % 4)) & 0xff;
-    rank < p.blocks
+    let a = side_mid(p.from);
+    let z = side_mid(p.to);
+    let ab = [z[0] - a[0], z[1] - a[1], z[2] - a[2]];
+    let l = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+    let h = node_seed(BLOCKS, (PIPE, cell));
+    let mine = key(a, ab, l, h, b);
+    let mut before = 0;
+    let mut o = 0;
+    while o < CELL_BLOCKS && before < p.blocks {
+        let k = key(a, ab, l, h, o);
+        if k < mine || k == mine && o < b {
+            before += 1;
+        }
+        o += 1;
+    }
+    before < p.blocks
 }
 
 /// The blocks of the caves in the node.
@@ -456,12 +484,20 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
 pub fn hollow(node: (Zoom, [i32; 3])) -> u32 {
     let (zoom, c) = node;
     // Coarser than a root, a root's: every root holds the same.
-    let (zoom, n) = if zoom <= ROOT { (ROOT, ROOT_BLOCKS) } else { (zoom, blocks((zoom, c))) };
+    let (zoom, n) = if zoom <= ROOT {
+        (ROOT, ROOT_BLOCKS)
+    } else {
+        (zoom, blocks((zoom, c)))
+    };
     // A block is 8 leaves; FULL is 2^15; the node holds 2^(3(LEAF − zoom)) leaves.
     let shift = 3 + 15 - 3 * (LEAF_CELL - zoom) as i32;
     if shift >= 0 {
         let v = n << shift;
-        if v > FULL { FULL } else { v }
+        if v > FULL {
+            FULL
+        } else {
+            v
+        }
     } else {
         n >> -shift
     }

@@ -1,4 +1,4 @@
-// pxl-content/pyramid.rs
+// pxl-content/share.rs
 
 //! gpu-portable: a count handed down a pyramid, the one rule the decor, the
 //! caves and the cumulus hand theirs by: a node's count halved along each
@@ -28,5 +28,5 @@ pub fn halve(n: u32, rooms: [u32; 2], w: u32) -> u32 {
 }
 
 #[cfg(test)]
-#[path = "pyramid.test.rs"]
+#[path = "share.test.rs"]
 mod test;

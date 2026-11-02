@@ -3,7 +3,16 @@ use pxl_engine::answer::FULL;
 use pxl_engine::LEAF_CELL;
 
 fn children(zoom: u32, c: [i32; 3]) -> impl Iterator<Item = (u32, [i32; 3])> {
-    (0..8).map(move |k| (zoom + 1, [2 * c[0] + (k & 1), 2 * c[1] + (k >> 1 & 1), 2 * c[2] + (k >> 2 & 1)]))
+    (0..8).map(move |k| {
+        (
+            zoom + 1,
+            [
+                2 * c[0] + (k & 1),
+                2 * c[1] + (k >> 1 & 1),
+                2 * c[2] + (k >> 2 & 1),
+            ],
+        )
+    })
 }
 
 /// Every node holds exactly what its eight do, from a root to the leaves.
@@ -17,7 +26,11 @@ fn a_node_is_its_children() {
         h
     };
     for _ in 0..300 {
-        let r = [(next() % 64) as i32 - 32, (next() % 64) as i32 - 32, (next() % 8) as i32 - 4];
+        let r = [
+            (next() % 64) as i32 - 32,
+            (next() % 64) as i32 - 32,
+            (next() % 8) as i32 - 4,
+        ];
         // Down a line from the root, checking each node on it and a sibling.
         let mut node = (ROOT, r);
         while node.0 < LEAF_CELL {
@@ -59,10 +72,12 @@ fn every_root_alike() {
 #[ignore]
 fn picture() {
     extern crate std;
-    use std::vec;
-    use std::format;
     use super::{block_hollow, holds, PIPE};
-    let Ok(path) = std::env::var("CAVE_PICTURE") else { return };
+    use std::format;
+    use std::vec;
+    let Ok(path) = std::env::var("CAVE_PICTURE") else {
+        return;
+    };
     let side = 128usize; // blocks, 2 units each: four roots across
     let mut hollow = vec![false; side * side * side];
     for cx in 0..side as i32 / 4 {
@@ -74,7 +89,11 @@ fn picture() {
                 }
                 for b in 0..64u32 {
                     if block_hollow([cx, cy, cz], &p, b) {
-                        let (x, y, z) = (cx as usize * 4 + (b & 3) as usize, cy as usize * 4 + (b >> 2 & 3) as usize, cz as usize * 4 + (b >> 4 & 3) as usize);
+                        let (x, y, z) = (
+                            cx as usize * 4 + (b & 3) as usize,
+                            cy as usize * 4 + (b >> 2 & 3) as usize,
+                            cz as usize * 4 + (b >> 4 & 3) as usize,
+                        );
                         hollow[(x * side + y) * side + z] = true;
                     }
                 }
@@ -84,12 +103,23 @@ fn picture() {
     let g = |x: usize, y: usize, z: usize| hollow[(x * side + y) * side + z];
     let w = side * 2 + 4;
     let mut img = vec![245u8; w * w];
-    for (ox, oy, q) in [(0, 0, 0usize), (side + 4, 0, 1), (0, side + 4, 2), (side + 4, side + 4, 3)] {
+    for (ox, oy, q) in [
+        (0, 0, 0usize),
+        (side + 4, 0, 1),
+        (0, side + 4, 2),
+        (side + 4, side + 4, 3),
+    ] {
         for a in 0..side {
             for b in 0..side {
                 let first = |f: &dyn Fn(usize) -> bool| (0..side).find(|&k| f(k));
                 let hit = match q {
-                    0 => if g(a, side / 2, side - 1 - b) { Some(0) } else { None },
+                    0 => {
+                        if g(a, side / 2, side - 1 - b) {
+                            Some(0)
+                        } else {
+                            None
+                        }
+                    }
                     1 => first(&|k| g(a, b, side - 1 - k)),
                     2 => first(&|k| g(a, k, side - 1 - b)),
                     _ => first(&|k| g(k, a, side - 1 - b)),

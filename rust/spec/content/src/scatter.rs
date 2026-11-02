@@ -18,7 +18,7 @@ use pxl_engine::{Zoom, LEAF_CELL, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::decor::{Decor, DECORS};
-use crate::pyramid::halve;
+use crate::share::halve;
 
 /// A cell's candidate: the leaf cell it stands at, at every zoom; its first
 /// draw, against the decor's chance and, lower first, the order neighbors
@@ -118,7 +118,7 @@ pub fn count(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
     let mut z = root;
     while z < zoom && n > 0 {
         // Halved across, then along, by weights its own hash draws, none
-        // past what its leaf cells hold (`pyramid::halve`), the one rule the
+        // past what its leaf cells hold (`share::halve`), the one rule the
         // caves and the cumulus hand theirs down by.
         let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT, (z, at(z))));
         let c = at(z + 1);
