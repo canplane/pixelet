@@ -15,7 +15,7 @@ use std::sync::OnceLock;
 use xpute_guest::global::Global;
 use xpute_host::native::Guest;
 
-use super::{Ask, Config, ConfigureAt, GpuHost, Opened};
+use super::{Ask, Config, ConfigureAt, GpuHost, OpenError, Opened};
 
 struct Device {
     /// What each window's surface is made with.
@@ -79,7 +79,7 @@ fn wake() {
 /// What the exports below answer besides 0, done: the C ABI's numbers, which
 /// an embedder's header states as they are here.
 ///
-/// `xpute_gpu_open`: the system has no device.
+/// `xpute_gpu_open`: no device opened as the program asks.
 pub const NO_DEVICE: i32 = -1;
 /// `xpute_gpu_surface_bind`: no device is open.
 pub const NOT_OPEN: i32 = -2;
@@ -89,25 +89,22 @@ pub const NO_SURFACE: i32 = -3;
 pub const SLOT_TAKEN: i32 = -4;
 
 /// Opens the device as `ask` says (`open`), once, on `guest`'s thread:
-/// whether it is open.
-pub fn open(guest: Guest, ask: &Ask, cfg: Config) -> bool {
+/// open, or what refused it.
+pub fn open(guest: Guest, ask: &Ask, cfg: Config) -> Result<(), OpenError> {
     let _ = GUEST.set(guest);
     guest.run(move || {
         if device().is_some() {
-            return true;
+            return Ok(());
         }
-        let Ok(Opened {
+        let Opened {
             instance,
             adapter,
             device,
             queue,
-        }) = super::open(ask)
-        else {
-            return false;
-        };
+        } = super::open(ask)?;
         let host = GpuHost::new(adapter, device, queue, cfg, wake);
         DEVICE.set(Some(Device { instance, host }));
-        true
+        Ok(())
     })
 }
 
@@ -159,7 +156,7 @@ pub fn unbind(guest: Guest, handle: u32) {
 /// `native_abi!`, under xpute's names:
 ///
 /// - `xpute_gpu_open(void) -> int32_t`: opens the device, 0 when it is open,
-///   `NO_DEVICE` when the system has none.
+///   `NO_DEVICE` when none opened as asked, after `refused` is told why.
 /// - `xpute_gpu_wake_on(void (*f)(void))`: `f` asks the platform's loop for a
 ///   turn, from whichever thread learned of a completion.
 /// - `xpute_gpu_surface_bind(uint32_t handle, void *window) -> int32_t`:
@@ -168,22 +165,25 @@ pub fn unbind(guest: Guest, handle: u32) {
 /// - `xpute_gpu_surface_unbind(uint32_t handle)`: lets it go (`unbind`).
 ///
 /// `guest` is the guest's (`native_abi!`'s `guest`), `ask` and `cfg` the
-/// program's for the device (`Ask`, `Config`), and `target` makes a surface's
+/// program's for the device (`Ask`, `Config`), `target` makes a surface's
 /// target of a window as the platform hands it over
-/// (`fn(NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe`). `host()` is the
+/// (`fn(NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe`), and `refused` says
+/// what refused the device (`fn(&OpenError)`). `host()` is the
 /// program's for its own calls around a turn.
 #[macro_export]
 macro_rules! native_abi {
-    ($guest:expr, $ask:expr, $cfg:expr, $target:expr $(,)?) => {
+    ($guest:expr, $ask:expr, $cfg:expr, $target:expr, $refused:expr $(,)?) => {
         mod xpute_gpu_native {
             #[allow(unused_imports)]
             use super::*;
 
             pub fn open() -> i32 {
-                if $crate::host::native::open(($guest)(), &$ask, $cfg) {
-                    0
-                } else {
-                    $crate::host::native::NO_DEVICE
+                match $crate::host::native::open(($guest)(), &$ask, $cfg) {
+                    Ok(()) => 0,
+                    Err(e) => {
+                        ($refused)(&e);
+                        $crate::host::native::NO_DEVICE
+                    }
                 }
             }
 

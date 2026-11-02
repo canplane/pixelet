@@ -15,7 +15,7 @@
 
 use pxl_render::api_spec::{device as numbers, stream};
 use xpute_gpu::host::native;
-use xpute_gpu::host::{Ask, Config};
+use xpute_gpu::host::{Ask, Config, OpenError};
 use xpute_host::mem::Memory;
 
 #[cfg(target_os = "android")]
@@ -38,18 +38,28 @@ const CFG: Config = Config {
     present_mode: wgpu::PresentMode::Fifo,
 };
 
-/// The device the kernel asks for: the timestamps its spans are timed by
-/// and a stencil beside the world's depth, each where the adapter has it
-/// (pxl-render gpu/api.rs `Device`), and the adapter's own limits, since the
-/// simulator's Metal falls short of WebGPU's defaults and refuses a device
-/// that asks for them.
+/// The device the kernel asks for: its features (`features`), and the
+/// adapter's own limits, since the simulator's Metal falls short of WebGPU's
+/// defaults and refuses a device that asks for them.
 const ASK: Ask = Ask {
     backends: wgpu::Backends::PRIMARY,
     power_preference: wgpu::PowerPreference::HighPerformance,
-    features: wgpu::Features::TIMESTAMP_QUERY.union(wgpu::Features::DEPTH32FLOAT_STENCIL8),
+    features,
     limits: wgpu::Adapter::limits,
     memory_hints: wgpu::MemoryHints::Performance,
 };
+
+/// A stencil beside the world's depth (pxl-render gpu/api.rs
+/// `GATED_DEPTH`), and the timestamps its spans are timed by where the
+/// adapter has them (`Device`).
+fn features(adapter: &wgpu::Adapter) -> wgpu::Features {
+    wgpu::Features::DEPTH32FLOAT_STENCIL8 | (adapter.features() & wgpu::Features::TIMESTAMP_QUERY)
+}
+
+/// What refused the device, said as a panic is (`crate::say`).
+fn refused(e: &OpenError) {
+    crate::say(&format!("[gpu] the device did not open: {e:?}"));
+}
 
 /// What an iPhone's view hands over to be drawn into: its `CAMetalLayer`.
 #[cfg(target_vendor = "apple")]
@@ -63,7 +73,7 @@ fn target(layer: core::ptr::NonNull<core::ffi::c_void>) -> wgpu::SurfaceTargetUn
 // `xpute_gpu_surface_bind` and `xpute_gpu_surface_unbind`
 // (include/pxl_native.h): the app's loop then sends the app an event, and
 // JavaScript asks the strobe for a frame (ts/app/native/src/gpu.ts).
-xpute_gpu::native_abi!(crate::guest, ASK, CFG, target);
+xpute_gpu::native_abi!(crate::guest, ASK, CFG, target, refused);
 
 /// The turn's edge, on the kernel's thread: what the device has answered
 /// since, written into `memory` before the turn reads it.

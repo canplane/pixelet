@@ -7,9 +7,10 @@ use crate::enums::{FEATURE_NAME, LIMIT_NAME};
 pub struct Ask {
     pub backends: wgpu::Backends,
     pub power_preference: wgpu::PowerPreference,
-    /// Asked for where the adapter offers them, and left out where it does
-    /// not: what the device has, the guest reads from its block (DEVICE).
-    pub features: wgpu::Features,
+    /// What the device is asked to have, from the adapter it is asked of:
+    /// one the adapter lacks makes the device refuse (`OpenError::Device`).
+    /// What the device has, the guest reads from its block (DEVICE).
+    pub features: fn(&wgpu::Adapter) -> wgpu::Features,
     /// What the device is asked to hold, from the adapter it is asked of,
     /// since an adapter refuses a device that asks past its own.
     pub limits: fn(&wgpu::Adapter) -> wgpu::Limits,
@@ -45,7 +46,7 @@ pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
     }))
     .map_err(OpenError::Adapter)?;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_features: adapter.features() & ask.features,
+        required_features: (ask.features)(&adapter),
         required_limits: (ask.limits)(&adapter),
         memory_hints: ask.memory_hints.clone(),
         ..Default::default()

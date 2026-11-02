@@ -50,8 +50,7 @@ xpute_host::native_abi!(
     turn
 );
 
-/// The process's error stream, or Android's log where that stream goes
-/// nowhere.
+/// A stop's line, said (`say`).
 fn panic_hook(stop: Stop<'_>) {
     let line = match stop {
         Stop::Bug { errnum, at, a, b } => format!(
@@ -62,8 +61,14 @@ fn panic_hook(stop: Stop<'_>) {
         ),
         Stop::Panic(info) => format!("[pxl] {info}"),
     };
+    say(&line);
+}
+
+/// A line to the process's error stream, or to Android's log where that
+/// stream goes nowhere.
+fn say(line: &str) {
     #[cfg(target_os = "android")]
-    android::say(&line);
+    android::say(line);
     #[cfg(not(target_os = "android"))]
     eprintln!("{line}");
 }
