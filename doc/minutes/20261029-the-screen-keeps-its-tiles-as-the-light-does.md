@@ -605,6 +605,17 @@ the user (2026-11-01); measured in the tiles' baseline's record (the backlog's r
   stands, a still tile taking `1/min(age, JITTERS)`, so the picture that
   stands is the view's own jitters alone. Step 5 part 1 and the cost above
   read `JITTERS`; this replaces them.
+  Replaced by the user (2026-11-02): a screen tile is claimed `JITTERS`
+  frames again (`screen::CLAIMED_FOR`), a still tile taking
+  `1/(min(age - 1, JITTERS - 2) + 2)`, the first still frame half of what
+  stands, the frame it changed in counting as one of the sequence. The
+  TAA's priorities are efficiency, low memory and cost-effective
+  jittering, not exact convergence: a claim a frame shorter; no pop when
+  motion stops, the first still frame keeping half the history; and a
+  mover's tiles accumulating history between its steps. The frame it
+  changed in and the `JITTERS - 1` still frames after it each take their
+  own place of the sequence (`Resolve::jitter`, `Tiles::claiming`), the
+  eight covered.
 - **A draw marks the tiles it covered at the frame it was drawn in**, the
   "as it was" marks drawn with that frame's own words (`frame_was`), its
   jitter among them.
