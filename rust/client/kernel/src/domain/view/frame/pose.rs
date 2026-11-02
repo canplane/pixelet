@@ -15,6 +15,7 @@ use pxl_spec::space::coord::world::nearest;
 use crate::domain::view::observation;
 use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
+use pxl_spec::procedural::height_u_per_m;
 use pxl_spec::space::camera::grid::fov;
 use xpute_guest::global::Global;
 
@@ -108,10 +109,11 @@ pub fn anchor() -> G4326 {
     globe_anchor().unwrap_or(FALLBACK_G4326)
 }
 
-/// Mercator stretches by the secant of the latitude, heights alike; at the
-/// equator it is `u_per_m(0)`.
+/// Kilometers a unit of height where the eye stands: the ground's own
+/// scale there (pxl-spec procedural.rs `height_u_per_m`).
 pub fn km_per_u() -> f64 {
-    libm::cos(anchor()[1].to_radians()) / epsg3857::u_per_m(0.0) / 1000.0
+    let y_u = epsg3857::u_from_merc(epsg4326::to_mercator(&anchor())[1]);
+    1.0 / height_u_per_m(y_u) / 1000.0
 }
 
 /// The view `width` × `height` CSS pixels: what its matrices are made of,

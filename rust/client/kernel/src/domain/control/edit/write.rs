@@ -8,7 +8,7 @@ use crate::domain::control::edit::collision::{
 };
 use crate::domain::control::edit::{hover, tool, ActiveTool};
 use crate::domain::layer::object::ext::Ext;
-use crate::domain::layer::object::preview::{draft, draft_mut, text_at, Draft, RenderEdits};
+use crate::domain::layer::object::preview::{draft, draft_mut, Draft, RenderEdits};
 use crate::domain::layer::object::size::MARKER_ZOOM;
 use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::asset::decor_num_id;
@@ -127,10 +127,16 @@ pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
 /// A marker tool's tap at `at`, a place free or holding a marker: a draft
 /// opened there, with the marker's own text if one stands there.
 pub fn draft_at(at: EntryAt) {
-    *draft_mut() = Some(Draft {
-        at,
-        text: text_at(at).unwrap_or_default().to_string(),
-    });
+    let world = World::now();
+    let text = match draft().filter(|d| d.at == at) {
+        Some(d) => d.text.clone(),
+        None => world
+            .entry_at(at)
+            .and_then(|e| world.text(&e))
+            .unwrap_or_default()
+            .to_string(),
+    };
+    *draft_mut() = Some(Draft { at, text });
 }
 
 /// A marker tool's tap on the free cell whose min corner is `corner`: a new

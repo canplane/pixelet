@@ -91,6 +91,20 @@ impl GpuSpanName {
     }
 }
 
+impl GpuSpanName {
+    /// The members whose `per_px` is true, in the JSON's order.
+    pub const PER_PX: [GpuSpanName; 8] = [
+        GpuSpanName::ao,
+        GpuSpanName::world,
+        GpuSpanName::world_rest,
+        GpuSpanName::resolve,
+        GpuSpanName::sraster,
+        GpuSpanName::px,
+        GpuSpanName::miss,
+        GpuSpanName::mark,
+    ];
+}
+
 pub const LIGHT_MOVED: usize = 4;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]

@@ -7,6 +7,7 @@ use pxl_spec::space::hierarchy::morton::key_of;
 use xpute_kit::golden::Golden;
 
 use super::*;
+use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::sys;
 use crate::sys::io::request;
 

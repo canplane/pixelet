@@ -77,7 +77,10 @@ Meaning enters at an **adapter**, and only there:
 
 - `coord/adapter/3857.rs` — the DB's EPSG:3857 coordinates. Lengths are the
   plane's, in u, or the ground's, in meters; `scale_factor` relates them, and
-  `merc_from_u`/`u_from_merc` are the only way to or from Mercator's meter.
+  `merc_from_u`/`u_from_merc` are the only way to or from Mercator's meter. A
+  height's meters are the ground's own: the scale its leaf tile was baked by,
+  one value a leaf tile (`procedural.rs` `height_u_per_m`, from
+  `Frame::per_m`, which the terrain header keeps).
 - `coord/adapter/4326.rs` — lon/lat, and the projection to and from 3857.
   3857's plane leaves out the poles (`CLAMP_LAT`), and the pyramid never
   leaves the plane.

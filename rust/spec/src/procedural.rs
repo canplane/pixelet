@@ -7,7 +7,7 @@
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::units;
 use crate::space::layer::lattice::TILE_CELLS;
-use crate::space::layer::tile::Tile;
+use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use pxl_spec_core::way::{Stations, INTERVAL_M};
 use pxl_spec_core::LEAF_CELL;
@@ -36,7 +36,9 @@ impl Frame {
 
     /// Leaf cells a ground meter over the tile, of height as of breadth: the
     /// scale where its south-west corner lies, one value a tile
-    /// (pxl-spec-core `cells_of_m`).
+    /// (pxl-spec-core `cells_of_m`). A leaf tile's is the scale the bake
+    /// makes the ground's heights by, and so a height's meters
+    /// (`height_u_per_m`).
     pub fn per_m(self) -> f32 {
         (u_per_m(self.corner[1]) / units(LEAF_CELL)) as f32
     }
@@ -54,4 +56,14 @@ impl Frame {
             leaf: (self.cell / units(LEAF_CELL)) as f32,
         }
     }
+}
+
+/// The world's units a ground meter of height at `y_u`: the scale the bake
+/// made the ground's heights by there, its leaf tile's (`Frame::per_m`, which
+/// the terrain header keeps and the clip levels read). Every height shown or
+/// read in meters is converted by it (pxl-spec 3857.rs `project`,
+/// `unproject`).
+pub fn height_u_per_m(y_u: f64) -> f64 {
+    let row = libm::floor(y_u / units(LEAF_ZOOM)) as i32;
+    f64::from(Frame::of(Tile::new(LEAF_ZOOM, [0, row])).per_m()) * units(LEAF_CELL)
 }

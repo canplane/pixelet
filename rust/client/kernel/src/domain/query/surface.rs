@@ -15,6 +15,7 @@ use pxl_spec_core::clipmap::Lookup;
 
 use super::world::World;
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
+use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::{Answer, Query};
 use pxl_spec::asset::cube::sentinel;
 

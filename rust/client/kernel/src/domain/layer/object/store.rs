@@ -257,11 +257,6 @@ pub(super) type Tree = SparseTree<u32, 3>;
 type Enter<'a> = dyn FnMut(Zoom, [i32; 3], &Aabb, Option<Leaf>) -> bool + 'a;
 
 impl Store {
-    /// The tree's columns, read where they live.
-    pub fn columns(&self) -> Columns<'_> {
-        Columns(&self.tree)
-    }
-
     /// What is placed as of now, which every write moves.
     pub fn revision(&self) -> u32 {
         self.revision
@@ -327,49 +322,6 @@ impl Store {
         });
     }
 
-    /// Every leaf whose cube meets `query`, X in `query`'s frame.
-    pub fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
-        self.descend(about(query), &mut |zoom, at, whole, leaf| {
-            if whole.meet(*query).is_none() {
-                return false;
-            }
-            if let Some(v) = leaf {
-                visit(&Entry::of(zoom, at, v));
-            }
-            true
-        });
-    }
-
-    /// `entries_in`, from the nodes `from` names, each with what the tree holds
-    /// there (`overwrite::NodeSlot`, a descent's), none under another and
-    /// `query` within them: each walked from its slot, so what is found and
-    /// the order it is found in are the walk's from the roots, taken in the
-    /// tree's own order (`tree_key`).
-    pub fn entries_under(
-        &self,
-        from: &[(Node<3>, NodeSlot)],
-        query: &Aabb,
-        visit: &mut dyn FnMut(&Entry),
-    ) {
-        let about = about(query);
-        for &((zoom, at), slot) in from {
-            if !slot.holds() {
-                continue;
-            }
-            let z = slot.zoom();
-            let at = wrap_cell(z, at.map(|c| c >> (zoom - z)));
-            self.walk(slot, z, at, about, &mut |zoom, at, whole, leaf| {
-                if whole.meet(*query).is_none() {
-                    return false;
-                }
-                if let Some(v) = leaf {
-                    visit(&Entry::of(zoom, at, v));
-                }
-                true
-            });
-        }
-    }
-
     /// Every leaf meeting the cube at `zoom` that holds `slot`, X in the
     /// cube's frame: walked from the slot the cursor names, the node's own or
     /// the leaf over it.
@@ -390,25 +342,6 @@ impl Store {
                 true
             },
         );
-    }
-
-    /// The value placed at exactly the node `at` of `zoom`, if one is, read
-    /// off the cursor a descent holds there (`Query::cursor`, `Query::child`).
-    pub(crate) fn entry_at(&self, zoom: Zoom, at: [i32; 3], slot: NodeSlot) -> Option<Entry> {
-        (slot.holds() && !slot.is_folded() && slot.zoom() == zoom)
-            .then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[slot.slot() as usize])))
-    }
-
-    /// What a leaf carries beyond its id, if anything.
-    pub fn ext(&self, e: &Entry) -> Option<&Ext> {
-        self.ext.get(class_of(e.state)?, e.ext)
-    }
-
-    /// A marker's text, as put up; none for anything else.
-    pub fn text(&self, e: &Entry) -> Option<&str> {
-        match self.ext(e)? {
-            Ext::MarkerText(t) => Some(t),
-        }
     }
 
     /// Applies every write; the cubes that changed. A write whose record its
@@ -651,13 +584,107 @@ impl Walk {
     }
 }
 
-impl Store {
+/// What the store holds, read: its columns, the leaves in a box or a node,
+/// what a leaf carries, and a column's reach. Read by the world's query alone
+/// (domain/query.rs), as `Query` is.
+pub(in crate::domain) trait ObjectQuery {
+    /// The tree's columns, read where they live.
+    fn columns(&self) -> Columns<'_>;
+
+    /// Every leaf whose cube meets `query`, X in `query`'s frame.
+    fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry));
+
+    /// `entries_in`, from the nodes `from` names, each with what the tree holds
+    /// there (`overwrite::NodeSlot`, a descent's), none under another and
+    /// `query` within them: each walked from its slot, so what is found and
+    /// the order it is found in are the walk's from the roots, taken in the
+    /// tree's own order (`tree_key`).
+    fn entries_under(
+        &self,
+        from: &[(Node<3>, NodeSlot)],
+        query: &Aabb,
+        visit: &mut dyn FnMut(&Entry),
+    );
+
+    /// The value placed at exactly the node `at` of `zoom`, if one is, read
+    /// off the cursor a descent holds there (`Query::cursor`, `Query::child`).
+    fn entry_at(&self, zoom: Zoom, at: [i32; 3], slot: NodeSlot) -> Option<Entry>;
+
+    /// What a leaf carries beyond its id, if anything.
+    fn ext(&self, e: &Entry) -> Option<&Ext>;
+
+    /// A marker's text, as put up; none for anything else.
+    fn text(&self, e: &Entry) -> Option<&str>;
+
     /// The column `node` of the ground's two axes, X in the asker's frame,
     /// as far along z as what is placed in it reaches: the cubes of its zoom
     /// that hold and the leaves over them, none where nothing is placed in
     /// it. Stepped down from where `walk` last went, a zoom at a time,
     /// through the branches in its column alone.
-    pub fn column(&self, walk: &mut Walk, (zoom, xy): Node<2>) -> Option<Aabb> {
+    fn column(&self, walk: &mut Walk, node: Node<2>) -> Option<Aabb>;
+
+    /// What is placed in the node, read where it stands: all resident.
+    fn read(&self, node: Node<3>) -> Cells<'_>;
+}
+
+impl ObjectQuery for Store {
+    fn columns(&self) -> Columns<'_> {
+        Columns(&self.tree)
+    }
+
+    fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
+        self.descend(about(query), &mut |zoom, at, whole, leaf| {
+            if whole.meet(*query).is_none() {
+                return false;
+            }
+            if let Some(v) = leaf {
+                visit(&Entry::of(zoom, at, v));
+            }
+            true
+        });
+    }
+
+    fn entries_under(
+        &self,
+        from: &[(Node<3>, NodeSlot)],
+        query: &Aabb,
+        visit: &mut dyn FnMut(&Entry),
+    ) {
+        let about = about(query);
+        for &((zoom, at), slot) in from {
+            if !slot.holds() {
+                continue;
+            }
+            let z = slot.zoom();
+            let at = wrap_cell(z, at.map(|c| c >> (zoom - z)));
+            self.walk(slot, z, at, about, &mut |zoom, at, whole, leaf| {
+                if whole.meet(*query).is_none() {
+                    return false;
+                }
+                if let Some(v) = leaf {
+                    visit(&Entry::of(zoom, at, v));
+                }
+                true
+            });
+        }
+    }
+
+    fn entry_at(&self, zoom: Zoom, at: [i32; 3], slot: NodeSlot) -> Option<Entry> {
+        (slot.holds() && !slot.is_folded() && slot.zoom() == zoom)
+            .then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[slot.slot() as usize])))
+    }
+
+    fn ext(&self, e: &Entry) -> Option<&Ext> {
+        self.ext.get(class_of(e.state)?, e.ext)
+    }
+
+    fn text(&self, e: &Entry) -> Option<&str> {
+        match self.ext(e)? {
+            Ext::MarkerText(t) => Some(t),
+        }
+    }
+
+    fn column(&self, walk: &mut Walk, (zoom, xy): Node<2>) -> Option<Aabb> {
         let p = path(zoom, [xy[0], xy[1], 0]);
         let column = |k: usize| [p[0] >> (zoom as usize - k), p[1] >> (zoom as usize - k)];
         let kept = walk
@@ -725,11 +752,7 @@ impl Store {
         };
         placed.meet(whole)
     }
-}
-
-impl Store {
-    /// What is placed in the node, read where it stands: all resident.
-    pub fn read(&self, node: Node<3>) -> Cells<'_> {
+    fn read(&self, node: Node<3>) -> Cells<'_> {
         Cells { store: self, node }
     }
 }

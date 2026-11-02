@@ -57,7 +57,9 @@ use pxl_spec_core::overwrite::Cut;
 use pxl_spec_core::world;
 
 use super::world::World;
+use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::terrain::clipmap::{pool, CpuClipmap};
+use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::Lines;
 use crate::domain::layer::Answer;
 use crate::sys::io::source;

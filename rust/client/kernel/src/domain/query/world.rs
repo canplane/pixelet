@@ -11,7 +11,9 @@ use pxl_spec::bake::constant::EntryAt;
 
 use super::changes::Columns;
 use crate::domain::layer::object::store;
+use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::object::store::{Store, Walk};
+use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;

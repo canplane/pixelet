@@ -1102,7 +1102,7 @@ impl RaysPass {
     /// each a pass of its own over the cast's group, timed in its own span,
     /// so what each costs is read apart; the light's in the shadow's, with
     /// the map's pass, which is not drawn at the world's pixels
-    /// (`PER_PX`).
+    /// (span.json `per_px`).
     pub fn dispatch(&mut self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let (generates, casts, kind) = (self.generates(), self.casts_px(), self.kind);

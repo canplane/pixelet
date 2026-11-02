@@ -32,6 +32,8 @@ use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::meta::decor_instance;
 use crate::domain::layer::object::store::tree_key;
 use crate::domain::layer::object::store::Entry;
+use crate::domain::layer::object::store::ObjectQuery as _;
+use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::Line;
 use crate::domain::query::decor::intersect::{box_extent, intersect};
 use pxl_spec_core::area::{self, Shard};

@@ -6,7 +6,10 @@
 //! `#RRGGBB`. `{ "$val", "$doc" }` carries a reason. The Rust carries no
 //! names: a list of them is its count, and an enum where the spec asks for
 //! one, and a table's keys are not listed; the TypeScript keeps them for what
-//! a person reads. A `file` is a slot of the catalog (catalog.rs).
+//! a person reads. A list of names may give each member as `{ "name", <flag>:
+//! bool, … }`, every member the same flags: the TypeScript keeps its names,
+//! and the Rust's enum gives each flag as a const of the members it holds
+//! (`flagged`). A `file` is a slot of the catalog (catalog.rs).
 
 use std::cell::Cell;
 
@@ -418,6 +421,50 @@ fn constants(
     file(&out)
 }
 
+/// A flag of a list's members and the names of those it holds (`flagged`).
+type Flag<'a> = (&'a str, Vec<&'a str>);
+
+/// A list's names and its members' flags (`flagged`).
+type Flagged<'a> = (Vec<&'a str>, Vec<Flag<'a>>);
+
+/// A list of names whose members carry flags, each `{ "name", <flag>: bool,
+/// … }`, every one the same flags in one order: its names, and each flag with
+/// the names it holds. None where the list's members are not such.
+fn flagged(a: &[Node]) -> Result<Option<Flagged<'_>>, String> {
+    fn flags_of(e: &Node) -> Vec<&str> {
+        e.named().map(|(k, _)| k).filter(|k| *k != "name").collect()
+    }
+    let Some(first) = a.first().filter(|e| e.str_at("name").is_some()) else {
+        return Ok(None);
+    };
+    let mut held: Vec<Flag<'_>> = flags_of(first)
+        .into_iter()
+        .map(|f| (f, Vec::new()))
+        .collect();
+    let mut names = Vec::with_capacity(a.len());
+    for e in a {
+        let name = e.str_at("name").ok_or(format!(
+            "a member with no name after `{}`",
+            names.join("`, `")
+        ))?;
+        let flags = flags_of(e);
+        if flags.len() != held.len() || flags.iter().zip(&held).any(|(f, (h, _))| f != h) {
+            return Err(format!(
+                "`{name}` carries {flags:?}, not the first member's flags"
+            ));
+        }
+        for (f, members) in &mut held {
+            match e.get(f) {
+                Some(Node::Bool(true)) => members.push(name),
+                Some(Node::Bool(false)) => {}
+                _ => return Err(format!("`{name}`'s `{f}` is not true or false")),
+            }
+        }
+        names.push(name);
+    }
+    Ok(Some((names, held)))
+}
+
 pub(crate) fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, String> {
     if n.is_wrapper() {
         return ts_literal(n.value(), type_of(n, ty), indent);
@@ -429,13 +476,23 @@ pub(crate) fn ts_literal(n: &Node, ty: &str, indent: &str) -> Result<String, Str
         Node::Str(s) if ty == "rgb" => rgb_literal(s)?,
         Node::Str(s) if ty == FILE => format!("{} as number", file_number(s)?),
         Node::Str(s) => json_str(s),
-        Node::Arr(a) => format!(
-            "[{}]",
-            a.iter()
-                .map(|e| ts_literal(e, ty, indent))
-                .collect::<Result<Vec<_>, _>>()?
-                .join(", ")
-        ),
+        Node::Arr(a) => match flagged(a)? {
+            Some((names, _)) => format!(
+                "[{}]",
+                names
+                    .iter()
+                    .map(|n| json_str(n))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            None => format!(
+                "[{}]",
+                a.iter()
+                    .map(|e| ts_literal(e, ty, indent))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join(", ")
+            ),
+        },
         Node::Null => "null".to_string(),
         Node::Obj(_) => {
             let inner = format!("{indent}  ");
@@ -650,6 +707,45 @@ fn rs_leaf(
     scope: &Scope,
 ) -> Result<(), String> {
     if let Node::Arr(a) = v {
+        if let Some((names, flags)) = flagged(a)? {
+            if !(scope.enums || scope.enum_names.iter().any(|n| n == name))
+                || !names.iter().all(|n| is_name(n))
+            {
+                return Err(format!("{name}: its members carry flags, so it is an enum"));
+            }
+            out.push(format!(
+                "{indent}pub const {}: usize = {};",
+                rs_ident(name),
+                names.len()
+            ));
+            let variants: Vec<(String, String)> = names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| (n.to_string(), i.to_string()))
+                .collect();
+            rs_enum(name, &variants, indent, out);
+            let e = enum_name(name);
+            out.extend([String::new(), format!("{indent}impl {e} {{")]);
+            for (f, members) in flags {
+                out.extend([
+                    format!(
+                        "{indent}    /// The members whose `{f}` is true, in the JSON's order."
+                    ),
+                    format!(
+                        "{indent}    pub const {}: [{e}; {}] = [{}];",
+                        rs_ident(&f.to_uppercase()),
+                        members.len(),
+                        members
+                            .iter()
+                            .map(|m| format!("{e}::{}", rs_ident(m)))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                ]);
+            }
+            out.push(format!("{indent}}}"));
+            return Ok(());
+        }
         let strings = matches!(a.first(), Some(Node::Str(_)));
         if strings && ty != "u64" && enum_path(ty, scope).is_none() && ty != "rgb" && ty != FILE {
             // How many there are, as the spec's widths read a list's name.

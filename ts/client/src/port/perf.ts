@@ -158,7 +158,7 @@ export interface FrameSummary {
   /** The world's pixels of the last frame a read timed. */
   gpu_px: f64;
   /** The ray counts of the window's frames summed, by FRAME's rays columns. */
-  rays: Record<string, f64>;
+  rays: RayCounts;
   /** The heap's high-water mark, the window's last frame's less its first's. */
   heap_used_delta_bytes: f64;
   /** The window's first frame and its last. */
@@ -211,6 +211,17 @@ export interface Worst {
   } | null;
 }
 
+/** A section's words by the names its spec gives them (perf.json), AT and
+ * WORDS aside. */
+export type Section<S> = { [K in Exclude<keyof S, "AT" | "WORDS">]: f64 };
+/** Where the view is as the read finds it (NOW.view). */
+export type ViewSection = Section<typeof NOW.view>;
+/** What the frames held at the most or the least since the recording
+ * started (STAT.recording). */
+export type RecordingSection = Section<typeof STAT.recording>;
+/** The window's ray counts by FRAME's rays columns (FRAME_GROUP.rays). */
+export type RayCounts = { [K in (typeof FRAME_GROUP.rays)[number]]: f64 };
+
 /** What PERF_STATS sums over its window, section by section: `recording` is since
  * the recording started, as the steps are, by STAT.recording's names. */
 export interface Summary {
@@ -218,8 +229,8 @@ export interface Summary {
   frames: FrameSummary | null;
   tasks: TaskSummary[];
   steps: Step[];
-  recording: Record<string, f64>;
-  view: Record<string, f64>;
+  recording: RecordingSection;
+  view: ViewSection;
 }
 
 /** The records each ring holds, as RINGS counts them. */
@@ -281,7 +292,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
     gpu_px: s[a + F.gpu_px],
     rays: Object.fromEntries(
       FRAME_GROUP.rays.map((name, k) => [name, s[a + F.rays + k]]),
-    ),
+    ) as RayCounts,
     heap_used_delta_bytes: last.heap_used_bytes - first.heap_used_bytes,
     first,
     last,
@@ -335,12 +346,15 @@ function steps_at(s: F64Array): Step[] {
   });
 }
 
-function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
+function section<S extends { AT: u32; WORDS: u32 }>(
+  s: F64Array,
+  sec: S,
+): Section<S> {
   const out: Record<string, f64> = {};
-  for (const [k, v] of Object.entries(sec)) {
+  for (const [k, v] of Object.entries(sec) as [string, u32][]) {
     if (k !== "AT" && k !== "WORDS") out[k] = s[sec.AT + v];
   }
-  return out;
+  return out as Section<S>;
 }
 
 /** STAT's words over `window_ms` and NOW's, as PERF_STATS lays them out. */
@@ -375,7 +389,7 @@ export function perf_summary(window_ms: f64 | null): Summary {
 
 /** The view alone, NOW's, read over an empty window, which folds no frame or
  * task. */
-export function perf_view(): Summary["view"] {
+export function perf_view(): ViewSection {
   return section(read(0).now, NOW.view);
 }
 

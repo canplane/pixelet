@@ -342,6 +342,16 @@ columns, at the finest zoom placed there (`domain/query/support.rs`), and the
 pointer's ray strikes decor as the box it claims where the rays draw decor as it
 is (`domain/query/decor.rs`). None reads a layer.
 
+Only the query reads a layer. The layers' reads are the form both answer
+(`Query`), the terrain's and the store's past it (`TerrainQuery`,
+`ObjectQuery`), the clip levels as the CPU reads them (`CpuClipmap`) and the
+ways' pool. Rust lets them out of `domain/` alone; inside it they are named by
+the layers and `domain/query/`, which re-exports none of them, and check-rules
+holds that (pxl-tool `bin/check_rules.rs` `LAYER_READERS`). What the query
+answers in public is the composed world: an answer of one layer alone, such as
+the ground's surface a walker starts from (`domain/query/surface.rs`), stays
+inside it. A reader that needs what a layer holds asks the world for it.
+
 What the bucket serves is said in its **declaration**: the coarsest zoom
 supplied whole, each kind's format and version, and the shards served
 (`pxl-geo-bake source.rs` `declaration`; Publishing a version). The world ends

@@ -23,7 +23,10 @@ use crate::sys::io::source;
 use crate::domain::layer::{Answer, Query};
 use pxl_spec::space::coord::aabb::Aabb;
 
-impl TileCache<TerrainTile> {
+/// The terrain's reads past the form it shares with the object store
+/// (`Query`): its relief, its columns and the lines they are read on. Read by
+/// the world's query alone (domain/query.rs), as `Query` is.
+pub(in crate::domain) trait TerrainQuery {
     /// The lowest and highest the ground holds over the column `node`'s own
     /// cells, in leaf cells, and the ways apart (pxl-spec-core
     /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off the
@@ -37,7 +40,42 @@ impl TileCache<TerrainTile> {
     /// `clipmap::step`). Its cells are read at `cell` as the GPU reads them
     /// (pxl-spec-core `clipmap::bound_over`); `line` names the tile and says
     /// whether the clip level read is its ground's own.
-    pub fn relief(
+    fn relief(
+        &self,
+        line: &Line,
+        place: &mut Lookup,
+        node: Node<2>,
+        zooms: [Zoom; 2],
+    ) -> Answer<Bounds>;
+
+    /// The column `node` off the clip levels, the wall where it is the
+    /// wall, as the GPU reads it (pxl-spec-core `clipmap::ground`), stepped
+    /// from `place`: exact where `line`
+    /// says the ground at the clip level it was read off or coarser, else
+    /// coarser, naming its tile (`answer_at`); where no clip level holds it, the
+    /// lack.
+    fn column(&self, line: &Line, place: Lookup, node: Node<2>) -> Answer<Cell>;
+
+    /// The line `node`'s cells at `cell` are read on, stepped from where
+    /// `lines` last walked: a tile under one it holds from that one's line, a
+    /// coarser one its own as an ancestor read it, so nodes beside or under
+    /// each other share their lines down to where they part, and pay a
+    /// look-up a zoom only past it.
+    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line;
+
+    /// The line `node`'s cells at `cell` are read on, off `over`, the line its
+    /// parent column's were: that line where it is the same tile's, stepped
+    /// from it where it is the tile's parent's (`step`), else walked from the
+    /// top, as `seek` steps.
+    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell: Zoom) -> Line;
+
+    /// `bound`, its line walked (`walk_line`): a walk in key order pays one
+    /// look-up a node.
+    fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>>;
+}
+
+impl TerrainQuery for TileCache<TerrainTile> {
+    fn relief(
         &self,
         line: &Line,
         place: &mut Lookup,
@@ -48,31 +86,16 @@ impl TileCache<TerrainTile> {
         answer_at(line, from, here, r)
     }
 
-    /// The column `c` at `zoom` off the clip levels, the wall where it is
-    /// the wall, as the GPU reads it (pxl-spec-core `clipmap::ground`), stepped
-    /// from `place`: exact where `line`
-    /// says the ground at the clip level it was read off or coarser, else
-    /// coarser, naming its tile (`answer_at`); where no clip level holds it, the
-    /// lack.
-    pub fn column(&self, line: &Line, place: Lookup, (zoom, c): Node<2>) -> Answer<Cell> {
+    fn column(&self, line: &Line, place: Lookup, (zoom, c): Node<2>) -> Answer<Cell> {
         let (cell, f) = cells::ground(&CpuClipmap, Shard::UNKNOWN, place, zoom, c);
         answer_at(line, f.from(), f.here(), cell)
     }
 
-    /// The line `node`'s cells at `cell` are read on, stepped from where
-    /// `lines` last walked: a tile under one it holds from that one's line, a
-    /// coarser one its own as an ancestor read it, so nodes beside or under
-    /// each other share their lines down to where they part, and pay a
-    /// look-up a zoom only past it.
-    pub fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
+    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
         self.seek(lines, bound_tile(node, cell))
     }
 
-    /// The line `node`'s cells at `cell` are read on, off `over`, the line its
-    /// parent column's were: that line where it is the same tile's, stepped
-    /// from it where it is the tile's parent's (`step`), else walked from the
-    /// top, as `seek` steps.
-    pub fn line_under(&self, over: Option<&Line>, node: Node<2>, cell: Zoom) -> Line {
+    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell: Zoom) -> Line {
         let tile = bound_tile(node, cell);
         match over {
             Some(o) if o.tile == tile => *o,
@@ -81,14 +104,7 @@ impl TileCache<TerrainTile> {
         }
     }
 
-    /// `bound`, its line walked (`walk_line`): a walk in key order pays one
-    /// look-up a node.
-    pub fn bound_walked(
-        &self,
-        lines: &mut Lines,
-        node: Node<2>,
-        cell: Zoom,
-    ) -> Answer<Option<Aabb>> {
+    fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
         self.bound(&self.walk_line(lines, node, cell), node, cell)
     }
 }

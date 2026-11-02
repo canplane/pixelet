@@ -281,7 +281,7 @@ fn fold(w: &mut Clipmap) {
 /// The GPU's ways' pool as the CPU mirrors it, the landed bricks' child groups
 /// at the GPU's entries, which a cursor reads as the cast reads the GPU's
 /// (pxl-spec-core `way::tree`).
-pub fn pool() -> &'static Mirror {
+pub(in crate::domain) fn pool() -> &'static Mirror {
     mirror()
 }
 
@@ -824,7 +824,7 @@ pub fn fill(tile: Tile, from: TileContent, write: &mut dyn FnMut(BrickFill<'_>) 
 /// them folded here (`fold`); and the service area they end at (pxl-spec-core
 /// `area::Area`).
 #[derive(Clone, Copy)]
-pub struct CpuClipmap;
+pub(in crate::domain) struct CpuClipmap;
 
 impl Area for CpuClipmap {
     fn ends(&self) -> bool {

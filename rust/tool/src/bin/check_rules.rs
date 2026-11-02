@@ -4,8 +4,8 @@
 //! pointer casts in offset crates, each rounding half to even where clippy
 //! does not see it, no CommonJS file, each generated shader made from the
 //! sources the tree holds now, the layers' order, where nothing names what is
-//! above it, the screen's pixels read only at the screen, and no Rust file
-//! outside a crate's module tree. A rule Rust alone keeps is clippy's
+//! above it, the layers read by the query alone, the screen's pixels read
+//! only at the screen, and no Rust file outside a crate's module tree. A rule Rust alone keeps is clippy's
 //! (rust/clippy.toml, xpute/rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
@@ -144,6 +144,48 @@ fn screen_reached(text: &str) -> Vec<usize> {
         r"\bscreen::|\bframe::\{[^}]*\bscreen\b|\bframe::\*|\bframe\s+as\b|\bpub\s+use\b[^;]*\bscreen\b",
     )
     .expect("the screen's pattern");
+    let mut lines: Vec<usize> = reach
+        .find_iter(&code)
+        .map(|m| code[..m.start()].matches('\n').count() + 1)
+        .collect();
+    lines.dedup();
+    lines
+}
+
+/// Only the world's query reads a layer (ARCHITECTURE.md, "The query, the
+/// only seam"): the layers' reads, the form both answer (`Query`), the
+/// terrain's and the store's past it (`TerrainQuery`, `ObjectQuery`), the clip
+/// levels as the CPU reads them (`CpuClipmap`) and the ways' pool, are named
+/// in the kernel by the layers and the query alone, and the query lends none
+/// of them on. A path is a file, or a folder by its trailing slash.
+const LAYERS: [&str; 2] = [
+    "rust/client/kernel/src/domain/layer.rs",
+    "rust/client/kernel/src/domain/layer/",
+];
+const LAYER_READERS: [&str; 3] = [
+    "rust/client/kernel/src/domain/query.rs",
+    "rust/client/kernel/src/domain/query/",
+    "rust/client/kernel/src/domain/query.test.rs",
+];
+const LAYER_READS: &str =
+    r"\b(?:Query|TerrainQuery|ObjectQuery|CpuClipmap)\b|\bclipmap::(?:\{[^}]*\bpool\b|pool\b)";
+
+/// The lines of `text`, a kernel source, comments left out, that name a
+/// layer's read (`LAYER_READS`), or glob a module that would bring one in
+/// unnamed: where `lent`, only a re-export of one past the query.
+fn layer_read_named(text: &str, lent: bool) -> Vec<usize> {
+    let code: String = text
+        .lines()
+        .map(|l| l.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let pattern = match lent {
+        false => format!(r"{LAYER_READS}|\b(?:layer|terrain|clipmap|store)::\*"),
+        true => format!(
+            r"\bpub(?:\s*\(\s*(?:crate|in\s+crate::domain)\s*\))?\s+use\b[^;]*(?:{LAYER_READS}|::\*)"
+        ),
+    };
+    let reach = Regex::new(&pattern).expect("the layers' reads' pattern");
     let mut lines: Vec<usize> = reach
         .find_iter(&code)
         .map(|m| code[..m.start()].matches('\n').count() + 1)
@@ -479,6 +521,25 @@ fn run() -> Result<Vec<String>, String> {
             ));
         }
     }
+    for f in files
+        .iter()
+        .filter(|f| f.starts_with(KERNEL) && f.ends_with(".rs"))
+    {
+        if LAYERS.iter().any(|l| f.starts_with(l)) {
+            continue;
+        }
+        let query = LAYER_READERS.iter().any(|r| f.starts_with(r));
+        for line in layer_read_named(&read(f).unwrap_or_default(), query) {
+            problems.push(match query {
+                false => format!(
+                    "{f}:{line}: reads a layer where every reader asks the world's query; only the query may (check_rules.rs `LAYER_READERS`)"
+                ),
+                true => format!(
+                    "{f}:{line}: lends a layer's read on from the query, which answers only as the world (check_rules.rs)"
+                ),
+            });
+        }
+    }
     let pixelet = Regex::new(PIXELET_WORDS).expect("pixelet's words' pattern");
     for f in files.iter().filter(|f| f.starts_with(XPUTE)) {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
@@ -509,7 +570,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the screen's pixels and the crates' module trees hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the generated shaders, the layers' order, the query as the one seam, the screen's pixels and the crates' module trees hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -556,6 +617,51 @@ mod spec;"
         let found = unlinked(&files, &read);
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(found[0].starts_with("rust/a/src/stray.rs:"));
+    }
+
+    #[test]
+    fn layer_read_any_name() {
+        for (text, at) in [
+            ("use crate::domain::layer::Query;", vec![1]),
+            (
+                "use crate::domain::layer::terrain::TerrainQuery as _;",
+                vec![1],
+            ),
+            (
+                "use crate::domain::layer::object::store::{\n    object,\n    ObjectQuery,\n};",
+                vec![3],
+            ),
+            (
+                "use crate::domain::layer::terrain::clipmap::{pool, CpuClipmap};",
+                vec![1],
+            ),
+            ("let w = clipmap::pool();", vec![1]),
+            ("use crate::domain::layer::object::store::*;", vec![1]),
+            ("use crate::domain::layer::*;", vec![1]),
+        ] {
+            assert_eq!(layer_read_named(text, false), at, "{text}");
+        }
+        for text in [
+            "use crate::domain::query::World;",
+            "use crate::domain::layer::object::store::{object, Entry};",
+            "// the layer's Query, in a comment",
+            "use pxl_spec_core::generation::DecorQuery;",
+        ] {
+            assert!(layer_read_named(text, false).is_empty(), "{text}");
+        }
+        assert_eq!(
+            layer_read_named("pub use crate::domain::layer::Query;", true),
+            vec![1]
+        );
+        assert_eq!(
+            layer_read_named(
+                "pub(in crate::domain) use crate::domain::layer::Query;",
+                true
+            ),
+            vec![1]
+        );
+        assert!(layer_read_named("use crate::domain::layer::Query;", true).is_empty());
+        assert!(layer_read_named("pub(super) use crate::domain::layer::Query;", true).is_empty());
     }
 
     #[test]

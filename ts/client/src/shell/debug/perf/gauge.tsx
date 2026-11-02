@@ -109,7 +109,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
         k="hit/drawn at"
         v={
           picked
-            ? `${zoomName(v.held)}/${zoomName(v.drawn)}${folded ? " folded" : ""}`
+            ? `${zoomName(v.pick_zoom)}/${zoomName(v.ray_zoom)}${folded ? " folded" : ""}`
             : "-"
         }
         warn={folded}

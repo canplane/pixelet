@@ -5,7 +5,6 @@
 //! ghost it shows under the pointer (`Ghost`); and a marker's draft, drawn
 //! with the text it has so far.
 
-use crate::domain::layer::object::store;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::asset::cube::Cube;
 use pxl_spec::asset::decor::Decor;
@@ -87,16 +86,6 @@ pub struct Draft {
 }
 
 static DRAFT: Global<Option<Draft>> = Global::new();
-
-/// The text a marker at `at` shows: the draft's so far, else the one
-/// committed there; none where no marker stands or is drafted.
-pub fn text_at(at: EntryAt) -> Option<&'static str> {
-    if let Some(d) = draft().filter(|d| d.at == at) {
-        return Some(&d.text);
-    }
-    let object = store::object();
-    object.text(&object.read((at.zoom(), at.at())).entry()?)
-}
 
 /// The draft, which the markers draw.
 pub fn draft() -> Option<&'static Draft> {

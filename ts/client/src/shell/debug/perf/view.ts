@@ -14,9 +14,11 @@ import {
   perf_summary,
   perf_tasks,
   perf_worst,
+  type RecordingSection,
   type Step,
   type TaskRecord,
   type TaskSummary,
+  type ViewSection,
   type Worst,
 } from "@/port/perf.ts";
 import type { LongFrame } from "@/bracket.tsx";
@@ -35,8 +37,8 @@ export interface PerfReport {
   longs: LongFrame[];
   /** What the frames held at the most or the least since the recording
    * started, and where the view is as it is read. */
-  recording: Record<string, f64>;
-  view: Record<string, f64>;
+  recording: RecordingSection;
+  view: ViewSection;
 }
 
 /** Frames a second over a window: its intervals over its span, none under two frames. */
@@ -68,7 +70,7 @@ export interface Gauge {
   /** The frames over the last `RECENT_MS`, the header's rate. */
   recent: FrameSummary | null;
   tasks: TaskSummary[];
-  view: Record<string, f64>;
+  view: ViewSection;
 }
 
 export function perfGaugeRead(windowMs: f64): Gauge {

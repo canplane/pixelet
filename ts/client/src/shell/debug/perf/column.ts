@@ -12,7 +12,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@/abi/phase.spec.ts";
 import { FRAME_GROUP, WAKES } from "@/abi/perf.spec.ts";
-import type { ListColumn } from "@/port/perf.ts";
+import type { FrameColumn, ListColumn } from "@/port/perf.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { fixed } from "@/shell/fixed.ts";
@@ -49,13 +49,17 @@ export const pct = (part: number, whole: number) =>
 export const tris = (t: number) =>
   t >= 1000 ? `${round(t / 1000)}k` : String(round(t));
 
-const NAME_TABLES: Record<string, readonly string[]> = {
+/** The names each `_name` column indexes, every one of FRAME's. */
+type NameColumn = Extract<FrameColumn, `${string}_name`>;
+const NAME_TABLES: { readonly [K in NameColumn]: readonly string[] } = {
   kind_name: FRAME_KINDS,
   wake_name: WAKES,
 };
+const isNameColumn = (name: string): name is NameColumn =>
+  Object.hasOwn(NAME_TABLES, name);
 
 export function valueText(name: string, v: f64): string {
-  if (name.endsWith("_name")) return NAME_TABLES[name]?.[v] ?? "-";
+  if (isNameColumn(name)) return NAME_TABLES[name][v] ?? "-";
   if (name.endsWith("_ms")) return `${n1(v)} ms`;
   if (name.endsWith("_bytes")) return `${+fixed(v / MIB, 1)} MiB`;
   if (name.endsWith("_px")) return `${fixed(v / 1e6, 1)} Mpx`;

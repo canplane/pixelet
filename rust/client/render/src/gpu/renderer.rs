@@ -236,29 +236,11 @@ pub struct FrameStat {
     pub rays: Option<RayCounts>,
 }
 
-/// The passes drawn at the world's own pixels, whose cost goes with them:
-/// its occlusion, its drawing, its gathering over frames and its cast. The
-/// air's
-/// tables, the fill and the decor's generation, the thumbnails, markers and debug
-/// cost what they cost at any resolution.
-const PER_PX: [GpuSpanName; 11] = [
-    GpuSpanName::ao,
-    GpuSpanName::world,
-    GpuSpanName::world_rest,
-    GpuSpanName::resolve,
-    GpuSpanName::cast,
-    GpuSpanName::beam,
-    GpuSpanName::cell,
-    GpuSpanName::sample,
-    GpuSpanName::sraster,
-    GpuSpanName::px,
-    GpuSpanName::miss,
-];
-
-/// A frame's GPU time in the passes drawn at the world's pixels (`PER_PX`):
-/// what its drawn resolution can buy back.
+/// A frame's GPU time in the spans that run threads over the world's drawn
+/// pixels (span.json `per_px`, `GpuSpanName::PER_PX`): what its drawn
+/// resolution can buy back.
 pub fn px_ms(spans: &[f64]) -> f64 {
-    PER_PX.iter().map(|&s| spans[s as usize]).sum()
+    GpuSpanName::PER_PX.iter().map(|&s| spans[s as usize]).sum()
 }
 
 /// The ray under NDC (x, y) is `x·col0 + y·col1 + col2`, the screen's lens

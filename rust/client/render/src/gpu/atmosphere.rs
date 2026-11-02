@@ -13,7 +13,7 @@
 use core::ops::Range;
 
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
-use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::procedural::height_u_per_m;
 use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec_core::HEIGHT_BITS;
@@ -876,7 +876,8 @@ fn alt_sample(alt: f32) -> f32 {
 /// `laid`): the angle from straight down to the horizon there, and the near
 /// and far ends of the air's depth law, in km. The near end is how far the
 /// eye stands over the world's top where it is highest, a pos's Z ending
-/// `HEIGHT_BITS` about sea level and a unit longest at the equator, so an eye
+/// `HEIGHT_BITS` about sea level and a unit longest at the equator, its
+/// leaf tiles' row there (pxl-spec procedural.rs `height_u_per_m`), so an eye
 /// high over the world spends no slice on the empty air under it whatever
 /// latitude a unit is measured at; none while it stands within the world.
 /// The far end is a ray out of the eye through the air to where it leaves
@@ -886,7 +887,7 @@ fn laid(alt: f32) -> [f32; 3] {
     let alt = f64::from(alt);
     let r = b + alt.max(0.001);
     let across = libm::sqrt((r * r - b * b).max(0.0));
-    let top = f64::from(1u32 << (HEIGHT_BITS - 1)) / epsg3857::u_per_m(0.0) / 1000.0;
+    let top = f64::from(1u32 << (HEIGHT_BITS - 1)) / height_u_per_m(0.0) / 1000.0;
     let near = (alt - top).max(0.0);
     let far = (across + libm::sqrt(t * t - b * b)).max(near + 0.001);
     [

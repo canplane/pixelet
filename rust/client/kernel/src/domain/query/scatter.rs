@@ -22,6 +22,7 @@ use super::node::At;
 use super::world::World;
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
+use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::Answer;
 use pxl_spec_core::decor;
 

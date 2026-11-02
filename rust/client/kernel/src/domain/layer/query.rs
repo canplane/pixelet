@@ -23,8 +23,9 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use super::answer::Answer;
 
-/// The terrain's or the object store's answers, by the node asked.
-pub trait Query {
+/// The terrain's or the object store's answers, by the node asked. Read by
+/// the world's query alone (domain/query.rs); every reader asks the world.
+pub(in crate::domain) trait Query {
     /// What a descent carries from a node to its children.
     type Cursor: Copy;
 

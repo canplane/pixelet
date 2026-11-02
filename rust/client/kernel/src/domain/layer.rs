@@ -27,7 +27,7 @@ pub mod upload;
 use crate::sys::io::fetch;
 use crate::sys::io::source;
 pub use answer::Answer;
-pub use query::Query;
+pub(in crate::domain) use query::Query;
 
 /// What a layer asks for of the view.
 #[derive(Clone, Copy)]

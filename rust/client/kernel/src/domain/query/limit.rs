@@ -19,6 +19,7 @@ use pxl_spec_core::wrap_idx;
 
 use super::World;
 use crate::domain::layer::object::repository;
+use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::Query;
 use crate::sys::io::source;
 use pxl_spec::space::coord::q3::{self, Q3};
