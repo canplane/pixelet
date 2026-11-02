@@ -423,45 +423,5 @@ pub const HIT_FOLLOWS: u32 = 1 << 31;
 pub const HIT_WAITS: u32 = 1 << 31;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn largest_beam_fits_binding() {
-        // 4112 × 2338 drawn, a ratio of 2, at the view's FOV (the tangent of
-        // its half 1/2, pxl-spec space/camera/grid.rs `HALF_TAN`), within the
-        // 33,554,432 words a storage binding holds on every device
-        // (pxl-render floor.rs).
-        let up = 0.5;
-        let words = Grid::of([up * 4112.0 / 2338.0, up], 1).size();
-        assert!(words <= 33_554_432, "{words} words");
-    }
-
-    /// The samples are the very rays at every lattice, as many, and each on
-    /// the screen resumes from the coarser cell that holds the one it
-    /// resumed from at the lattice of one cell.
-    #[test]
-    fn samples_same_every_lattice() {
-        for tan in [
-            [0.5 * 16.0 / 9.0, 0.5],
-            [0.613, 0.5],
-            [0.5, 0.5 * 19.5 / 9.0],
-        ] {
-            let one = Grid::of(tan, 1);
-            let g = Grid::of(tan, LATTICE_MAX);
-            assert_eq!((g.lattice, g.samples), (LATTICE_MAX, one.samples));
-            assert!((0..2).all(|k| g.span[k] * LATTICE_MAX >= one.span[k]));
-            for j in 0..g.samples[1] {
-                for i in 0..g.samples[0] {
-                    let (a, b) = (one.sample([i, j]), g.sample([i, j]));
-                    assert_eq!(a.map(f32::to_bits), b.map(f32::to_bits));
-                    let on = |v: u32, k: usize| v >= NEAR && v - NEAR < one.span[k] * SAMPLE;
-                    if on(i, 0) && on(j, 1) {
-                        let c = one.sample_cell([i, j]).map(|v| v / LATTICE_MAX);
-                        assert_eq!(g.sample_cell([i, j]), c);
-                    }
-                }
-            }
-        }
-    }
-}
+#[path = "beam.test.rs"]
+mod tests;
