@@ -59,7 +59,9 @@ memory, set once (`core`, `at`).
 What goes in the memory is the guest's, and so is where. It lays ranges end to
 end on a unit it chooses (`mem/section`), as a linker script places output
 sections without knowing what they hold, and whatever is asked of a range is
-checked against its end (`Section::at`, `nth`). The host is told where the parts
+checked against its end (`Section::at`, `nth`); a range sized at compile time is
+handed to its owner once at boot and read as an array laid in it (`mem/range`
+`OwnedRange`, `arr`). The host is told where the parts
 it reads lie by a **toc**, a table of contents as a CD's tells where each track
 begins (`ipc/toc`, `spec/ipc/toc.json`), which the guest writes in its first
 turn, or in a boot call that returns its offset; the host learns that one offset

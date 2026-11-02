@@ -15,10 +15,10 @@ use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::PALETTE_COLUMN;
 
 use crate::domain::layer::tile_cache::TileCache;
-use crate::sys::mem::range::arr_bytes;
-use crate::sys::mem::range::OwnedRange;
 use pxl_engine::clipmap::SLOTS;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use xpute_guest::mem::range::arr_bytes;
+use xpute_guest::mem::range::OwnedRange;
 
 /// `.fixed.terrain`, handed in at boot.
 pub static RANGE: OwnedRange = OwnedRange::new();

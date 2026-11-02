@@ -25,7 +25,7 @@ use crate::ipc::file::Files;
 use crate::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use crate::ipc::sys::{spec::op, Fd, Sys};
 use crate::ipc::toc::{spec::key, toc_words, write_toc};
-use crate::mem::section::PAGE_BYTES;
+use crate::mem::section::{page_up, PAGE_BYTES};
 use crate::sched::task::{self, Executor, Task};
 use crate::sched::wake::NO_WAKE;
 use crate::stop;
@@ -78,13 +78,13 @@ impl Layout {
 
     /// Where the heap begins, from the range's start.
     pub const fn heap_at(&self) -> u32 {
-        (self.sys_at() + 4 * self.sys_words).next_multiple_of(PAGE_BYTES)
+        page_up(self.sys_at() + 4 * self.sys_words)
     }
 }
 
 /// The range starts on the page past where the linker stopped.
 pub const fn range_at(data_end: u32) -> u32 {
-    data_end.next_multiple_of(PAGE_BYTES)
+    page_up(data_end)
 }
 
 /// Where the heap begins in the memory (`wasm::Config::heap_at`).

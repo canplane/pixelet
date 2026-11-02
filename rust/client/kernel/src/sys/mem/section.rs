@@ -10,17 +10,12 @@
 //! Everything ahead of the heap is checked against MIN_HEAP_BYTES, at compile
 //! time and again at boot.
 
-use xpute_guest::mem::section::{align_up, Section};
+use xpute_guest::mem::section::{page_up, Section};
 
 use xpute_guest::global::Global;
 
 // Shared with the shell and the linker through mem.json.
 pub use crate::sys::mem::spec::{MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
-use xpute_guest::mem::section::PAGE_BYTES;
-
-pub const fn page_up(n: u32) -> u32 {
-    align_up(n, PAGE_BYTES)
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Map {

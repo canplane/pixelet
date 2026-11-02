@@ -67,7 +67,7 @@ struct Layout {
     constexpr std::uint32_t sys_at() const noexcept { return cq_slots_at() + slots_bytes(cap, slot_bytes); }
 
     // Where the heap begins, from the range's start.
-    constexpr std::uint32_t heap_at() const noexcept { return align_up(sys_at() + 4 * sys_words, PAGE_BYTES); }
+    constexpr std::uint32_t heap_at() const noexcept { return page_up(sys_at() + 4 * sys_words); }
 };
 
 inline constexpr Layout Layout::DEFAULT{
@@ -79,7 +79,7 @@ inline constexpr Layout Layout::DEFAULT{
 
 // The range starts on the page past where the linker stopped.
 constexpr std::uint32_t range_at(std::uint32_t data_end) noexcept {
-    return align_up(data_end, PAGE_BYTES);
+    return page_up(data_end);
 }
 
 // Where the heap begins in the memory.

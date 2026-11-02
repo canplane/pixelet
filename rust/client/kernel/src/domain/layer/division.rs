@@ -15,13 +15,13 @@ use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
+use xpute_guest::mem::range;
+use xpute_guest::mem::range::OwnedRange;
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Phases, Stream};
 use crate::sys::io::failure::Failure;
-use crate::sys::mem::range;
-use crate::sys::mem::range::OwnedRange;
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 

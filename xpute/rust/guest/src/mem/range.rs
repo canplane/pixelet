@@ -1,18 +1,16 @@
-// pxl-kernel/sys/mem/range.rs
+// xpute-guest/mem/range.rs
 
-//! What `.fixed` is to whoever holds a range of it: placed once at boot,
-//! never freed, sized at compile time. Only the kernel's own formats belong
-//! here; external ones (glTF, PNG) have no predictable bound and are read
-//! into the heap, a model kept parsed and an image only until its texture
-//! lands (sys/io/loader.rs). Which ranges there are and how large is the roof's
-//! (door/layout.rs), which hands each owner its own at boot; a range is read
-//! only through `arr` and `Section::at`, which check its end.
+//! A range of the guest's own ahead of its heap: placed once at boot, never
+//! freed, sized at compile time. Whoever lays the memory out hands each owner
+//! its range once (`OwnedRange`); a range is read only through `arr` and
+//! `Section::at`, which check its end.
 
-use xpute_guest::global::Global;
-use xpute_guest::mem;
-use xpute_guest::mem::section::Section;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+
+use crate::global::Global;
+use crate::mem;
+use crate::mem::section::Section;
 
 /// One owner's range, handed in once at boot; asking before is a bug.
 pub struct OwnedRange(Global<Option<Section>>);
@@ -37,17 +35,20 @@ impl OwnedRange {
     }
 }
 
-/// `count` of `size` bytes, rounded up to a whole cache line, as an array is laid.
+/// A cache line, which an array is laid on.
+const LINE_BYTES: usize = 64;
+
+/// `cnt` of `size` bytes, rounded up to a whole cache line, as an array is laid.
 pub const fn arr_bytes(cnt: usize, size: usize) -> u32 {
-    ((cnt * size).div_ceil(64) * 64) as u32
+    ((cnt * size).div_ceil(LINE_BYTES) * LINE_BYTES) as u32
 }
 
-/// `n` of `T` from `off` into `s`. Sizes are fixed at compile time, so out
-/// of bounds or misaligned is a bug, not a refusal.
+/// `n` of `T` from `off` into `s`, in the guest's own memory. Sizes are fixed
+/// at compile time, so out of bounds or misaligned is a bug, not a refusal.
 ///
 /// # Safety
 /// The caller holds those bytes alone while it keeps the array, and they are
-/// a valid `T` (zeroed, for the plain numbers every array here holds).
+/// a valid `T` (zeroed, for plain numbers).
 pub unsafe fn arr<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
     let at = u32::try_from(n * size_of::<T>())
         .ok()
@@ -61,3 +62,7 @@ pub unsafe fn arr<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
     // SAFETY: inside `s`, aligned, and the caller's alone.
     unsafe { core::slice::from_raw_parts_mut(mem::at::<T>(at as usize), n) }
 }
+
+#[cfg(test)]
+#[path = "range.test.rs"]
+mod test;

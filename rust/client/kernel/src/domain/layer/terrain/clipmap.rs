@@ -39,9 +39,9 @@ use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
-use crate::sys::mem::range::arr;
 use pxl_render::gpu::api::DONE;
 use pxl_render::gpu::ray::{BrickFill, CellsBack, Resident};
+use xpute_guest::mem::range::arr;
 
 /// Who a clip level is about.
 #[derive(Clone, Copy, PartialEq, Eq)]

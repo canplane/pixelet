@@ -49,6 +49,11 @@ pub const fn align_up(n: u32, unit: u32) -> u32 {
     n.div_ceil(unit) * unit
 }
 
+/// `n` rounded up to a whole page, where whatever follows it begins.
+pub const fn page_up(n: u32) -> u32 {
+    align_up(n, PAGE_BYTES)
+}
+
 /// Includes the last one's rounding.
 pub const fn span_of(bytes: &[u32], unit: u32) -> u32 {
     let (mut span, mut i) = (0, 0);

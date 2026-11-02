@@ -6,6 +6,7 @@
 //! goes through `core`, whose base is 0 on wasm32 and in a native test.
 
 pub mod heap;
+pub mod range;
 pub mod section;
 
 use xpute_kit::status::bug::OrBug;

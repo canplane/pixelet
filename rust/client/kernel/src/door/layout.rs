@@ -23,9 +23,7 @@ use crate::sys::io::demand::Stream;
 use crate::sys::io::host;
 use crate::sys::io::host_spec::stream::BYTES;
 use crate::sys::io::param;
-use crate::sys::mem::section::{
-    self, fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES,
-};
+use crate::sys::mem::section::{self, fixed_at, map, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
 use crate::sys::mem::spec::{
     CQ_CAP, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, SQ_CAP, STACK_BYTES, TOC_AT,
 };
@@ -35,7 +33,7 @@ use pxl_render::gpu::ray;
 use pxl_render::gpu::upload;
 use xpute_guest::mem;
 use xpute_guest::mem::section::span_of;
-use xpute_guest::mem::section::{Section, PAGE_BYTES};
+use xpute_guest::mem::section::{page_up, Section, PAGE_BYTES};
 use xpute_kit::status::errno::Errno;
 
 /// A packet is at most a page; anything larger crosses by address. A page

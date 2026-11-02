@@ -22,6 +22,11 @@ constexpr std::uint32_t align_up(std::uint32_t n, std::uint32_t unit) noexcept {
     return (n + unit - 1) / unit * unit;
 }
 
+// `n` rounded up to a whole page, where whatever follows it begins.
+constexpr std::uint32_t page_up(std::uint32_t n) noexcept {
+    return align_up(n, PAGE_BYTES);
+}
+
 // Includes the last one's own rounding, so this is where whatever follows starts.
 constexpr std::uint32_t span_of(std::span<const std::uint32_t> bytes, std::uint32_t unit) noexcept {
     std::uint32_t span = 0;
