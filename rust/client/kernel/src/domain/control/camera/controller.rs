@@ -187,7 +187,7 @@ pub enum Active {
 
 /// The tracker's space placed in the world as it was at takeover, and the
 /// camera in it now.
-struct Tracked {
+struct TrackerSpace {
     world_turn: Mat4,
     world_at: V3,
     turn: Mat4,
@@ -196,7 +196,7 @@ struct Tracked {
 
 struct Controllers {
     base: CameraMode,
-    tracked: Option<Tracked>,
+    tracker: Option<TrackerSpace>,
 }
 
 static CONTROLLERS: Global<Controllers> = Global::new();
@@ -204,13 +204,13 @@ static CONTROLLERS: Global<Controllers> = Global::new();
 fn controllers() -> &'static mut Controllers {
     CONTROLLERS.get(|| Controllers {
         base: CameraMode::orbit,
-        tracked: None,
+        tracker: None,
     })
 }
 
 pub fn active() -> Active {
     let c = controllers();
-    match (&c.tracked, c.base) {
+    match (&c.tracker, c.base) {
         (Some(_), _) => Active::Tracked,
         (None, CameraMode::orbit) => Active::Orbit,
         (None, CameraMode::first_person) => Active::FirstPerson,
@@ -221,7 +221,7 @@ pub fn active() -> Active {
 pub fn pose() -> Option<ObserverPose> {
     camera().eye?;
     let c = controllers();
-    match (&c.tracked, c.base) {
+    match (&c.tracker, c.base) {
         (Some(t), _) => {
             let (mut camera_to_world, mut rot, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
             mat4::mul(&mut camera_to_world, &t.world_turn, &t.turn);
@@ -247,7 +247,7 @@ pub fn set_intent(partial: IntentPatch) -> Intent {
         Active::Orbit => orbit::ask(partial),
         Active::FirstPerson | Active::Tracked => {
             let c = camera_state();
-            c.commit_intent(c.merged(partial));
+            c.commit_intent(c.with_patch(partial));
             c.intent
         }
     }
@@ -270,7 +270,7 @@ pub fn reset_dist() {
 }
 
 /// Going to a place: a view far out comes back in; one the user brought
-/// nearer stays, as map apps do.
+/// nearer stays.
 pub fn come_in_to_default() {
     let default = DEFAULT_DIST;
     if camera_state().intent.dist > default {
@@ -329,7 +329,7 @@ fn switch() -> bool {
 /// until it lets go.
 fn take_mode(want: CameraMode) -> bool {
     let c = controllers();
-    if c.base == want || c.tracked.is_some() {
+    if c.base == want || c.tracker.is_some() {
         return false;
     }
     // Taken back to the nearest canonical point, or a few round trips walk the
@@ -364,15 +364,13 @@ fn take_mode(want: CameraMode) -> bool {
 /// `q` (x, y, z, w) turns the camera's axes to the tracker's. The first of a
 /// run places the tracker's space so the camera stays where it is; before
 /// the camera stands anywhere there is nowhere to place it.
-/// No client sends it yet (`INPUT_XR_POSE`): it waits for an immersive mode's
-/// head pose.
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let mut turn = mat4::new();
     mat4::rot_quat(&mut turn, q);
     let c = controllers();
-    if c.tracked.is_none() {
+    if c.tracker.is_none() {
         let Some(now) = pose() else { return };
-        let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) =
+        let (mut camera_to_world, mut turn_back, mut world_turn, mut off) =
             (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
         mat4::transpose(&mut camera_to_world, &now.rot);
         mat4::mul(
@@ -380,21 +378,21 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
             &camera_to_world,
             mat4::transpose(&mut turn_back, &turn),
         );
-        mat4::transform_point(&mut moved, &world_turn, at[0], at[1], at[2]);
-        c.tracked = Some(Tracked {
+        mat4::transform_point(&mut off, &world_turn, at[0], at[1], at[2]);
+        c.tracker = Some(TrackerSpace {
             world_turn,
-            world_at: v3::sub(&now.eye, &moved),
+            world_at: v3::sub(&now.eye, &off),
             turn,
             at,
         });
-    } else if let Some(t) = &mut c.tracked {
+    } else if let Some(t) = &mut c.tracker {
         (t.turn, t.at) = (turn, at);
     }
     request_world_tick();
 }
 
 pub fn tracked_end() {
-    if controllers().tracked.take().is_some() {
+    if controllers().tracker.take().is_some() {
         request_world_tick();
     }
 }

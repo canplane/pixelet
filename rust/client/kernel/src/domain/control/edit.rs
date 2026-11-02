@@ -64,7 +64,7 @@ pub struct Hover {
     pub coord: Option<Q3>,
     pub object_at: Option<EntryAt>,
     /// A decor the ground generated, which has no entry.
-    pub scattered: Option<Instance>,
+    pub scattered_decor: Option<Instance>,
     /// Where the pivot sent there starts from.
     pub approach: Option<Q3>,
 }
@@ -74,7 +74,7 @@ struct State {
     hover: Hover,
     /// Where the pointer stands on the screen, in NDC, whatever it can strike:
     /// the gauge casts its own ray there.
-    pointed: Option<[f64; 2]>,
+    pointer_ndc: Option<[f64; 2]>,
 }
 
 static STATE: Global<State> = Global::new();
@@ -83,7 +83,7 @@ fn state() -> &'static mut State {
     STATE.get(|| State {
         tool: Tool::default(),
         hover: Hover::default(),
-        pointed: None,
+        pointer_ndc: None,
     })
 }
 
@@ -101,18 +101,18 @@ pub fn hover() -> Hover {
 
 pub(crate) fn clear_hover() {
     state().hover = Hover::default();
-    state().pointed = None;
+    state().pointer_ndc = None;
 }
 
 /// Where the pointer stands on the screen, in NDC, while it is over it.
-pub fn pointed() -> Option<[f64; 2]> {
-    state().pointed
+pub fn pointer_ndc() -> Option<[f64; 2]> {
+    state().pointer_ndc
 }
 
 /// The pointer stands at `ndc_x`, `ndc_y` over something the world's pick
 /// does not reach (pxl-kernel pointer.rs): nothing in the world is picked.
 pub(crate) fn point_at(ndc_x: f64, ndc_y: f64) {
-    state().pointed = Some([ndc_x, ndc_y]);
+    state().pointer_ndc = Some([ndc_x, ndc_y]);
     state().hover = Hover::default();
 }
 
@@ -152,9 +152,9 @@ fn resolve_target(hit: &Hit) -> Option<Target> {
 /// it struck, by the rule they are cast by (domain/query/ray.rs `by_dist`),
 /// which near the eye is finer than the ground's cells, as what is placed
 /// may be; none without an eye.
-pub(crate) struct Picked {
+pub(crate) struct Pick {
     pub hit: Hit,
-    pub drawn: Option<Zoom>,
+    pub ray_zoom: Option<Zoom>,
 }
 
 /// The cell what `hit` struck stands in: a decor's, whatever its box, else
@@ -166,47 +166,47 @@ fn cell_struck(hit: &Hit) -> Aabb {
     }
 }
 
-impl Picked {
+impl Pick {
     /// The zoom of the cell struck.
-    pub fn held(&self) -> Zoom {
+    pub(crate) fn zoom(&self) -> Zoom {
         of_side(cell_struck(&self.hit).extent()[0])
     }
 
     /// Whether the rays draw coarser there than the cell struck: a summary,
     /// not what is held, so nothing in it is struck.
-    pub fn is_folded(&self) -> bool {
-        self.drawn.is_some_and(|z| z < self.held())
+    pub(crate) fn is_folded(&self) -> bool {
+        self.ray_zoom.is_some_and(|z| z < self.zoom())
     }
 }
 
 /// What the hover picks at `ndc_x`, `ndc_y`,
 /// from the pose as the camera holds it now, which a door event or a
 /// controller may have moved since the turn composed the view.
-pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Picked> {
+pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
     let pose = controller::pose()?;
     let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
     ray_of(pose, ndc_x, ndc_y, &mut origin, &mut dir);
     let hit = ray_pick(origin, dir)?;
-    let drawn = observation::eye().map(|eye| {
+    let ray_zoom = observation::eye().map(|eye| {
         let v = v3::sub(&cell_struck(&hit).center(), &eye);
         query::by_dist().at(v3::dot(&v, &v) as f32)
     });
-    Some(Picked { hit, drawn })
+    Some(Pick { hit, ray_zoom })
 }
 
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
 pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     let ui = state().tool;
-    state().pointed = Some([ndc_x, ndc_y]);
+    state().pointer_ndc = Some([ndc_x, ndc_y]);
     let hover = &mut state().hover;
-    let Some(Picked { hit, .. }) = pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
+    let Some(Pick { hit, .. }) = pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
         *hover = Hover::default();
         return;
     };
 
     if let Some(tool) = PlacementTool::of(&ui) {
         hover.object_at = None;
-        hover.scattered = None;
+        hover.scattered_decor = None;
         hover.approach = None;
         hover.coord = Some(world_adjacent_corner(
             &hit,
@@ -221,7 +221,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         Some(Target::Object(o)) => Some(o.id()),
         _ => None,
     };
-    hover.scattered = match target {
+    hover.scattered_decor = match target {
         Some(Target::Generated(_, s)) => Some(s),
         _ => None,
     };
@@ -273,7 +273,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
         }
         // The eraser.
         None => {
-            match (hover.object_at, hover.scattered) {
+            match (hover.object_at, hover.scattered_decor) {
                 (Some(at), _) => remove(at),
                 (None, Some(s)) => {
                     if let Some(cell) = s.generated_in() {
@@ -281,8 +281,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
                     }
                 }
                 // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
-                // size tier: the scan emits nothing for a zero material whatever its
-                // sub-cell bytes, so a smaller leaf would save a bite nobody took.
+                // size tier.
                 (None, None) => place_air(EntryAt::holding(GROUND.cell(), &hovered)),
             }
         }

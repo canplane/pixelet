@@ -54,7 +54,7 @@ impl CameraState {
     }
 
     /// Before the active controller has its say (controller.rs `set_intent`).
-    pub fn merged(&self, partial: IntentPatch) -> Intent {
+    pub fn with_patch(&self, partial: IntentPatch) -> Intent {
         let from = self.intent;
         Intent {
             dist: norm_dist(partial.dist.unwrap_or(from.dist)),

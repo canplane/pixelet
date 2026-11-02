@@ -10,14 +10,14 @@
 //! (orbit/collision.rs `allowed_view`), and the camera setting decides
 //! what follows: through ignores the ground, stop takes a control as far as
 //! it gets, and climb raises the drawn pitch instead (`climb_polar`); where a
-//! roof over the pivot holds the climb, a zoom in goes under it (`dive`).
+//! control's way hits something all the same, a zoom in goes through it
+//! (`dive`) and any other stops (`Step`).
 
 pub mod collision;
 
 use pxl_spec::space::coord::q3::Q3;
 
 use pxl_spec::space::coord::v3::{self, V3};
-use xpute_kit::math::scalar::clamp;
 
 use crate::domain::control::camera::controller::{
     camera, facing_dir, facing_domain, pivot, pivot_world, set_eye_world,
@@ -38,6 +38,7 @@ use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use collision::{allowed_view, climb_polar};
 use xpute_guest::global::Global;
+use xpute_kit::math::scalar::clamp;
 
 pub struct OrbitState {
     pub dist: f64,
@@ -65,9 +66,11 @@ pub fn orbit_eye_off(dist: f64, polar: f64, azimuth: f64) -> V3 {
 /// drawn facing, which would stick if written into the controls.
 pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_state();
-    let mut asked = c.merged(partial);
+    let mut asked = c.with_patch(partial);
     if partial.polar.is_some() && settings_store().orbit_obstacle == OrbitObstacleMode::climb {
-        asked.polar = climb_polar(asked.dist, asked.polar, asked.azimuth);
+        if let Some(at) = pivot_world() {
+            asked.polar = climb_polar(at, asked.dist, asked.polar, asked.azimuth);
+        }
     }
     c.commit_intent(allowed_view(asked, c.intent));
     c.intent
@@ -138,7 +141,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     // `climb` pitches the facing toward straight down instead of shortening
     // dist: rising fast and relaxing slowly while the ground bounds it.
     let polar = match settings_store().orbit_obstacle {
-        OrbitObstacleMode::climb => climb_polar(o.dist, vs.polar, vs.azimuth),
+        OrbitObstacleMode::climb => climb_polar(drawn_pivot, o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
     };
     let rate = match (polar < vs.polar, polar < cam.polar) {

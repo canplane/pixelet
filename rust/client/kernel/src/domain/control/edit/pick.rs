@@ -11,19 +11,18 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 
 use crate::domain::layer::object::store::Entry;
-use crate::domain::query::{held, Hit, HitKind, Ray, World};
+use crate::domain::query::{finest, Hit, HitKind, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::aabb::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
-const PICK_REACH_U: f64 = 32.0;
+const PICK_DIST_U: f64 = 32.0;
 
 // Above the 1/256-grid round trip's error (±1/512 u), below the gap between
 // any two object tiers (the finest's side).
 const SAME_EXTENT_EPS: f64 = units(OBJECT_FINEST) / 16.0;
 
-/// The octree only stores a `size` object on these lines; any other corner
-/// was re-snapped by the write later, which caused overlapping placements.
+/// The octree only stores a `size` object on these lines.
 fn grid_ceil(v: f64, size: f64) -> f64 {
     ((v - SAME_EXTENT_EPS) / size).ceil() * size
 }
@@ -86,7 +85,7 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
         | HitKind::Decor(Instance {
             src: Source::Object(at),
             ..
-        }) => World::now().placed(at),
+        }) => World::now().entry_at(at),
         HitKind::Ground | HitKind::Objects | HitKind::Decor(_) => None,
     }
 }
@@ -99,12 +98,12 @@ pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     let ray = Ray {
         origin,
         dir,
-        reach: PICK_REACH_U,
+        t_max: PICK_DIST_U,
     };
     // A coarser tile's answer is a summary, not what is held.
     World::now()
         .striking_decor()
-        .first_hit(&ray, held())
+        .first_hit(&ray, finest())
         .exact()
         .flatten()
 }

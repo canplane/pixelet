@@ -2,15 +2,16 @@
 
 //! The pivot standing on the ground, and where every camera's pan
 //! puts it. The pivot's Z is half a cell over the floor the character
-//! stands on, as a cell's center stands over its ground. Only a leaf gives
-//! that floor; a pivot put over coarser ground keeps its Z unknown and
-//! stands on the finest ground known there until the leaves' is.
+//! stands on, as a cell's center stands over its ground, and follows that
+//! floor as the world under it changes. Only a leaf gives that floor; a
+//! pivot put over coarser ground keeps its Z unknown and stands on the
+//! finest ground known there until the leaves' is.
 
-use crate::domain::query::changed::Asked;
+use crate::domain::query::changes::Memo;
 use crate::domain::query::{over, under};
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::{self, REACH};
+use pxl_spec::space::coord::world::{self, BOUNDS};
 use xpute_guest::global::Global;
 
 use crate::domain::layer::Answer;
@@ -19,9 +20,9 @@ use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::domain::view::setting::store::settings_store;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-/// The world's floor (`world::REACH`), under any ground, in steps: what a
+/// The world's floor (`world::BOUNDS`), under any ground, in steps: what a
 /// point whose height is not known holds.
-const UNKNOWN_Z: i64 = (REACH.min[2] as i64) << FRAC_W;
+const UNKNOWN_Z: i64 = (BOUNDS.min[2] as i64) << FRAC_W;
 
 fn with_z(at: &Q3, z: i64) -> Q3 {
     world::at(i64::from(at[0]), i64::from(at[1]), z)
@@ -58,26 +59,37 @@ pub fn stand_over(at: &Q3, top: f64) -> Q3 {
 /// What `standing` found under an unknown Z, of that point and its cell's
 /// columns and one about: a camera's `to` and a destination ask it every
 /// tick until a leaf gives the Z, and a `to` twice in one (`resolve_to`).
-static STOOD: Global<Asked<Q3, Answer<Option<Q3>>>> = Global::new();
+static STAND_MEMO: Global<Memo<Q3, Answer<Option<Q3>>>> = Global::new();
 
-fn stood() -> &'static mut Asked<Q3, Answer<Option<Q3>>> {
-    STOOD.get(|| Asked::NONE)
+fn stand_memo() -> &'static mut Memo<Q3, Answer<Option<Q3>>> {
+    STAND_MEMO.get(|| Memo::NONE)
 }
 
 /// The turn's look at what `standing` kept, a change under it letting it go
-/// (`changed::Asked::forget_touched`): every frame turn, so each change is seen once.
+/// (`changes::Memo::forget_touched`): every frame turn, so each change is seen once.
 pub fn support_step() {
-    stood().forget_touched();
+    stand_memo().forget_touched();
 }
 
-/// An unknown Z on the surface of `world`'s finest ground known there; none
-/// where nothing stands. Kept while the point is the one asked and nothing
-/// changed under what it read (`STOOD`).
+/// Where `at` stands in `world`: an unknown Z on the surface of the finest
+/// ground known there, none where nothing stands; a known Z, where the
+/// surface is followed, on the floor under it as a leaf gives it, down to it
+/// where what it stood on is taken away and up out of what fills it
+/// (`World::floor_under`), so the pivot and the figures at it stand on one
+/// floor; else as it is. Kept while the point is the one asked and nothing
+/// changed under what it read (`STAND_MEMO`).
 fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
     if !is_unknown(at) {
-        return Answer::Exact(Some(*at));
+        if !settings_store().surface_follow {
+            return Answer::Exact(Some(*at));
+        }
+        let floor = stand_memo().of(world, *at, |w| {
+            w.floor_under(at, LEAF_ZOOM)
+                .map(|top| top.map(|top| stand_over(at, top)))
+        });
+        return Answer::Exact(Some(floor.exact().flatten().unwrap_or(*at)));
     }
-    stood().of(world, *at, |w| {
+    stand_memo().of(world, *at, |w| {
         w.surface_support(at)
             .map(|top| top.map(|top| stand_over(at, top)))
     })
@@ -85,7 +97,7 @@ fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
 
 /// The floor `at` is drawn on in `world`: its own, or where its height is
 /// not known the finest ground's there; none where nothing is known.
-pub fn floor_seen(world: World<'_>, at: &Q3) -> Option<f64> {
+pub fn floor_at(world: World<'_>, at: &Q3) -> Option<f64> {
     match standing(world, at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => Some(floor_of(&p)),
         _ => None,
@@ -118,12 +130,12 @@ pub fn exact(at: &Q3) -> Option<Q3> {
 }
 
 /// `resolve` for a camera's `to`, writing the leaves' Z into it once known.
-pub fn resolve_to(to: &mut Option<Q3>, held: V3) -> V3 {
-    let Some(at) = *to else { return held };
+pub fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
+    let Some(at) = *to else { return cur };
     if let Some(p) = exact(&at) {
         *to = Some(p);
     }
-    resolve(&to.unwrap_or(at), held)
+    resolve(&to.unwrap_or(at), cur)
 }
 
 /// By the world's step-slide, the way `lx`, `ly` in units across and up the
@@ -148,3 +160,7 @@ pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
         .step_slide(from, &to, eye, true, false)
         .unwrap_or_else(|| unknown_z(&to))
 }
+
+#[cfg(test)]
+#[path = "support.test.rs"]
+mod test;

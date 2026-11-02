@@ -30,6 +30,8 @@ const _: () = assert!(
 /// The orbit's nearest, in units from the pivot, about 3.8 m at Seoul's
 /// latitude: `DOLLY_END_CELLS` of the 2^-5 cell the grid asks there.
 pub const MIN_DIST: f64 = 2.0;
+/// How far out the orbit's nearest counts (orbit/collision.rs `nearest`).
+pub const NEAREST_DIST: f64 = 1.25 * MIN_DIST;
 /// The orbit's farthest: `DOLLY_END_CELLS` of the coarsest cell any zoom
 /// holds, the pyramid's top's, so looking straight down the grid never asks
 /// a coarser cell than a zoom draws.
@@ -55,9 +57,7 @@ pub const CLIMB_PASSES: u32 = 2;
 
 // ---- input ----
 
-/// Stated against the screen, not as rad/px, to match azimuth's 1:1 arcball:
-/// a fixed rate of -0.012 rad/px moved tilt six times faster than azimuth, and
-/// its settle after release read as the gesture still being held.
+/// Stated against the screen, to match azimuth's 1:1 arcball.
 pub const TILT_SWEEP_FRACTION: f64 = 0.5;
 pub const DOLLY_GAIN: f64 = 0.0022;
 /// atan2 swings wildly near the screen center; below this, azimuth freezes.
@@ -67,15 +67,12 @@ pub const MIN_TWIST_DIST_PX: f64 = 24.0;
 /// off-center vertical drag spins once tilt saturates. Smaller than
 /// MIN_ROTATE_RADIUS_PX: it only needs to tell vertical from horizontal.
 pub const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
-/// Real pointers jitter a pixel or two on a still click; gating taps on any
-/// movement swallowed them.
+/// Real pointers jitter a pixel or two on a still click.
 pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
 /// A held movement key pans this share of the distance to the pivot a
 /// second (`controller::pan_across`): a product number, a 16:9 width at the
 /// pivot crossed in about 3.4 s at any distance and any pitch, the view's
-/// height in about 2 looking straight down. Not the grid's cells, whose
-/// count a distance moves with how finely the world is drawn and not with
-/// how fast a view should pan.
+/// height in about 2 looking straight down.
 pub const KEY_PAN_PER_S: f64 = 0.520_833_333_333_333_4;
 
 // ---- smoothing ----

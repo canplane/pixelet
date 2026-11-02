@@ -109,7 +109,7 @@ fn person_change_keeps_pivot() {
         }
     }
     // Under a tracker the change waits, and the base is left as it was.
-    controllers().tracked = Some(Tracked {
+    controllers().tracker = Some(TrackerSpace {
         world_turn: mat4::new(),
         world_at: [0.0; 3],
         turn: mat4::new(),
@@ -124,7 +124,7 @@ fn person_change_keeps_pivot() {
         CameraMode::orbit,
         "the base changed under a tracker"
     );
-    controllers().tracked = None;
+    controllers().tracker = None;
     assert!(
         take_mode(CameraMode::first_person),
         "not taken once the tracker let go"

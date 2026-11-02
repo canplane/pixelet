@@ -69,9 +69,7 @@ pub fn follow_mode_step() {
     let device_coord = off_center().device_coord;
 
     // Follow needs the location READY; a heading only turns the camera where there
-    // is one, so a device without a compass still follows where it is. A blip
-    // must not drop it (it read as the mode switching itself off), but a dead
-    // location must eventually, or the camera freezes behind a disabled button.
+    // is one, so a device without a compass still follows where it is.
     let status = device_location_store().state.status;
     let ready = status == SensorStatus::Ready;
     if is_follow_mode && !ready {
