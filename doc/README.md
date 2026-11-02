@@ -19,6 +19,9 @@ agenda, its minutes and its reports beside its rules.
 - [experiment/](./experiment/) — measurements, dated, each with its procedure,
   its numbers and what produced them; evidence under those conditions, not a
   rule.
+- [tip/](./tip/) — what was learned the hard way and holds beyond one
+  change, a file a lesson: what to keep clear of and how to check it, each
+  pointing at the experiment that showed it.
 
 An adopted decision is checked for its scope, and for whether a later adopted
 decision replaced it; minutes that replace an earlier one say which. One that
