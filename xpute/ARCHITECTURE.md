@@ -127,17 +127,11 @@ port it names where one is attached and drops it where none is, as a datagram
 goes to the UDP port it names; the ports are the program's ABI, as UDP's
 well-known ones are a convention.
 
-A port is an address, not a place. What answers it may share the guest's
-thread, its frames crossing on the rings in turns, or stand on a thread of its
-own, its frames crossing as messages; only what carries them, the port's
-**carrier**, differs. Only what shares a memory takes turns: a guest, and what
-reads that memory where it lies (the doorbell, the rings, the hostcalls, the
-GPU host). A call answered before it returns (`call`) is made only to what
-shares the guest's thread, which may read the guest's memory in place, at the
-address the call answers. Every other port is free to stand anywhere while the
-host gives no port's number a meaning and the packets it is sent name no address
-outside themselves, so a carrier copies one into another memory and it reads
-the same, as XTP's offsets below already do within one.
+Where what answers a port runs is the program's choice. What runs on the
+guest's thread (the doorbell, the rings, the hostcalls, the GPU host, and any
+port answered there) takes turns with the guest and reads its memory in place,
+at any address a call answers or a packet names; a call answered before it
+returns (`call`) is made only there.
 
 Two flags decide what a frame means. `ACKREQ`, set by whoever submits, asks for
 a reply. `RES`, set by whoever completes, says the frame is a reply. A
