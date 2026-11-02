@@ -14,12 +14,7 @@ Nothing now.
 
 ## P1
 
-- **The bucket's switch, after the next deploy.** That deploy is the first
-  to serve `pixelet-bucket` and to read `_meta` with its own key
-  (`4d2a58fcf`). If the Worker's upload is refused for R2, the new
-  `pixelet-worker-ci` takes Workers R2 Storage: Read. Once it is out and the
-  smoke passes: `pixelet-tiles` taken off `pixelet-bucket-publish`, and
-  `pixelet-tiles` emptied and deleted.
+Nothing now.
 
 ## P2
 
