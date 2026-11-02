@@ -24,6 +24,7 @@ use crate::domain::scene::indicator::param::{
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::region;
 use crate::domain::scene::scene;
+use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
 use crate::domain::view::lens::{seen_step_s, Stepped};
@@ -338,7 +339,7 @@ impl LocationIndicator {
         let gap = libm::hypot(p.target[0] - shown[0], p.target[1] - shown[1]);
         let slides = p.visible && gap <= ZONE_RADIUS && gap >= cell_there;
         if slides {
-            let a = 1.0 - libm::exp(-BEACON_SMOOTH_RATE * dt);
+            let a = smoothing_factor(BEACON_SMOOTH_RATE, dt);
             shown[0] += (p.target[0] - shown[0]) * a;
             shown[1] += (p.target[1] - shown[1]) * a;
         } else {
