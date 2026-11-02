@@ -20,18 +20,19 @@ use crate::answer::{
 use crate::area::{earth, is_walled, Area, Shard};
 use crate::cave;
 use crate::clipmap::Lookup;
-use crate::cube::{ground, sentinel, Ground};
+use crate::cube::ground;
 use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
 use crate::param::ground::BEDROCK_DEPTH;
 use crate::param::ground::FILLER_DEPTH;
 use crate::param::ground::HEADROOM;
 use crate::param::ground::SANDSTONE_DEPTH;
+use crate::value;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
 /// The catalog's void and unknown as the words a palette index is read into.
-pub const VOID: u32 = sentinel::void as u32;
-pub const UNKNOWN: u32 = sentinel::unknown as u32;
+pub const VOID: u32 = value::VOID;
+pub const UNKNOWN: u32 = value::UNKNOWN;
 const SAND: u32 = ground::sand as u32;
 const BEACH: u32 = ground::beach as u32;
 const WATER: u32 = ground::water as u32;
@@ -576,7 +577,7 @@ impl Cell {
 
     /// Whether it has ground at all: a palette index the catalog grounds, or the wall.
     pub fn is_grounded(&self) -> bool {
-        self.palette_idx == UNKNOWN || Ground::grounds(self.palette_idx)
+        self.palette_idx == UNKNOWN || value::grounds(self.palette_idx)
     }
 
     /// Whether a cave may take cell `z` of the column at `cell`: the ground's

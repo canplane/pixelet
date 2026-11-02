@@ -6,7 +6,7 @@
 //! in its own steps, every axis alike.
 //! Below the descent, the query and the sources alike.
 
-use crate::cube::{object, sentinel};
+use crate::value;
 
 /// A cube filled whole, as a share counts it: a share is in 2⁻¹⁵ of its
 /// cube, floored at each fold, so eighths stay exact `FULL_FOLDS` folds deep.
@@ -37,7 +37,7 @@ pub struct In<B> {
 }
 
 /// A cell nothing fills: void, no palette indices.
-pub const AIR: [u32; 2] = [sentinel::void as u32, 0];
+pub const AIR: [u32; 2] = [value::VOID, 0];
 
 /// The bits an asset's value takes at the foot of its word.
 pub const VAL_BITS: u32 = 16;
@@ -156,7 +156,7 @@ pub(crate) const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
 /// sees through would answer yes to both.
 pub fn transparent(val: u32) -> bool {
     let v = self::val(val);
-    v == sentinel::void as u32 || v == object::air as u32
+    v == value::VOID || v == value::AIR
 }
 
 /// Whether an asset is matter, taking its share of its cell as the
@@ -165,7 +165,7 @@ pub fn transparent(val: u32) -> bool {
 /// matter, not of light (`transparent`).
 pub fn fills(val: u32) -> bool {
     let v = self::val(val);
-    v != sentinel::void as u32 && v != object::air as u32
+    v != value::VOID && v != value::AIR
 }
 
 /// A cell's fill share over its asset's value and `PLACED_ASSET`: the eighths of

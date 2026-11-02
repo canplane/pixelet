@@ -13,7 +13,7 @@
 //! first (`over`): where it holds a value, air included, that is the cell's
 //! asset, whatever is under it.
 
-use crate::cube::{object, sentinel, Ground, Object};
+use crate::value;
 use crate::{Zoom, LEAF_CELL};
 
 /// A slot's child pointer when it is a branch, its child group under it.
@@ -52,8 +52,8 @@ pub const fn cut_box(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
     }
 }
 
-const VOID: u32 = sentinel::void as u32;
-pub const AIR: u32 = object::air as u32;
+const VOID: u32 = value::VOID;
+pub const AIR: u32 = value::AIR;
 
 /// A slot's data word, the one layout every reader of the tree reads it by:
 /// a leaf's value low and its record's handle high (`leaf_word`), a
@@ -288,7 +288,7 @@ pub fn child(columns: &impl Columns, parent: NodeSlot, zoom: Zoom, at: [i32; 3])
 /// Whether a value is drawn as a voxel, a placeable cube or air, rather than
 /// an instance or nothing.
 pub const fn voxel(val: u32) -> bool {
-    val == AIR || Ground::grounds(val) || Object::objects(val)
+    val == AIR || value::grounds(val) || value::objects(val)
 }
 
 /// Whether `cut` is at `zoom` or coarser and its cube holds the node `at`.

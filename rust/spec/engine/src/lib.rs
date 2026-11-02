@@ -42,6 +42,7 @@ pub mod scatter;
 pub mod screen;
 pub mod support;
 pub mod tally;
+pub mod value;
 pub mod way;
 pub mod world;
 

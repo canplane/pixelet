@@ -20,7 +20,6 @@
 
 pub mod tree;
 
-use crate::cube::{sentinel, Ground};
 use crate::ground;
 use crate::param::way::BEAM_PILLAR_INTERVAL_M;
 use crate::param::way::DECK_THICKNESS_M;
@@ -28,6 +27,7 @@ use crate::param::way::LINE_PAST;
 use crate::param::way::PIER_MIN_RISE_M;
 use crate::param::way::STACKED_DECK_HEADROOM_M;
 use crate::param::way::WIDE_BEAM_PIER_INTERVAL_M;
+use crate::value;
 use crate::{cells_of_m, Zoom, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM};
 
 /// Points are eighths of the tile's cell.
@@ -42,7 +42,7 @@ pub const POINT_SCALE: f32 = 8.0;
 const LOWER_DECK_GAP_M: f32 = STACKED_DECK_HEADROOM_M - 1.0;
 
 /// What a pier is drawn as.
-pub(crate) const PIER: u32 = Ground::building as u32;
+pub(crate) const PIER: u32 = value::PIER;
 
 /// A line's form, as its byte on the wire.
 pub const BRIDGE: u32 = 0;
@@ -53,7 +53,7 @@ pub const APPROACH: u32 = 2;
 pub const NOTHING: u32 = u32::MAX;
 
 /// What a bore's air is where the ways write it (`way_cell`): the ground's void.
-pub const AIR: u32 = sentinel::void as u32;
+pub const AIR: u32 = value::VOID;
 
 /// A vector's length, as a GPU takes one: no `hypot` there.
 fn length(v: [f32; 2]) -> f32 {
@@ -575,7 +575,7 @@ fn pier_stands<C: Columns>(
     per_m: f32,
 ) -> [i32; 2] {
     let (none, palette_idx) = ([0, 0], cols.palette_idx(c));
-    if !Ground::grounds(palette_idx) || Ground::transports(palette_idx) {
+    if !value::grounds(palette_idx) || value::transports(palette_idx) {
         return none;
     }
     let surface = pier[1] + slab_depth(per_m);
@@ -625,7 +625,7 @@ impl Write {
 /// pier where one stands.
 fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Write, u32) {
     let (x, next) = visit(cols, c, k);
-    if !x.is() || !Ground::grounds(x.kind) {
+    if !x.is() || !value::grounds(x.kind) {
         return (Write::NONE, next);
     }
     let o = occupies(&x, face, per_m);
