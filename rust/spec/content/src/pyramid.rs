@@ -6,12 +6,16 @@
 //! sum to the node's exactly and a node is known before anything under it is
 //! asked. The weights are a hash's: what makes it irregular is the seed.
 
+/// The children a count goes to: a cube's eight; a square's four leave the
+/// rest none.
+const K: usize = 8;
+
 /// `n` handed to `K` children by `weights` (each under 2^15, `n` under 2^16),
 /// none past its `rooms`: each its floor of `n` by its weight, then one more
 /// to those with the largest remainders, the lower child first; a child at
 /// its room keeps it and the rest goes round again. `n` past every room
 /// together is cut to them.
-pub fn share_out<const K: usize>(n: u32, rooms: [u32; K], weights: [u32; K]) -> [u32; K] {
+pub fn share_out(n: u32, rooms: [u32; K], weights: [u32; K]) -> [u32; K] {
     let mut out = [0u32; K];
     let mut left = n;
     // The children at their rooms, a bit each (K under 32).

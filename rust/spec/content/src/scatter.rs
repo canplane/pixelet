@@ -125,8 +125,8 @@ pub fn count(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
         let room = 1u32 << (2 * (LEAF_CELL - z - 1));
         let room = if room > 0xffff { 0xffff } else { room };
-        let w = [draws.next_u32() >> 18, draws.next_u32() >> 18, draws.next_u32() >> 18, draws.next_u32() >> 18];
-        n = share_out(n, [room; 4], w)[quarter];
+        let w = [draws.next_u32() >> 18, draws.next_u32() >> 18, draws.next_u32() >> 18, draws.next_u32() >> 18, 0, 0, 0, 0];
+        n = share_out(n, [room, room, room, room, 0, 0, 0, 0], w)[quarter];
         z += 1;
     }
     n

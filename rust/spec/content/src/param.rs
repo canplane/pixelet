@@ -24,9 +24,10 @@ pub(crate) mod cave {
     /// across, four 128, fourteen 64 and forty-eight 32; within what a root
     /// can start (cave.rs `room`), so every coarser node is the same share.
     pub const ROOT_TUNNELS: [u32; 4] = [1, 4, 14, 48];
-    /// The 2-unit blocks a tunnel of each class hollows: thirty a pipe cell
-    /// of the node's side, under the 32 a side's pipe cells can take.
-    pub const BLOCKS_A_TUNNEL: [u32; 4] = [960, 480, 240, 120];
+    /// The 2-unit blocks a tunnel of each class hollows: forty-eight a pipe
+    /// cell of its node's side, under the 64 a pipe cell holds of the side
+    /// and one it crosses at least.
+    pub const BLOCKS_A_TUNNEL: [u32; 4] = [1536, 768, 384, 192];
     /// How far a block's own hash moves it from its line, in squared
     /// sixteenths of a unit: walls that do not run smooth.
     pub const NUDGE: u32 = 1200;

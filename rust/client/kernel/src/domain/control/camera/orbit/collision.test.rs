@@ -352,8 +352,8 @@ fn slope_keeps_pitch_climbed() {
     assert!(climbed.polar < at.polar, "{climbed:?}");
 }
 
-/// The pivot on a tower ten over the ground, the eye tilted past level 20
-/// out and sunk in the ground there: the floor under the eye lies under the
+/// The pivot on a tower ten over the ground, the eye tilted past level 18
+/// out and sunk in the ground there, clear of the seed's caves: the floor under the eye lies under the
 /// pivot, and the climb lifts it past level onto that floor.
 #[test]
 fn climbs_past_level() {
@@ -369,7 +369,7 @@ fn climbs_past_level() {
         );
     }
     let access = World::new(&tile_cache, &store);
-    let at = pose([ground[0], ground[1], over(15.0)], 20.0, 2.2);
+    let at = pose([ground[0], ground[1], over(15.0)], 18.0, 2.2);
     assert!(in_solid(&at, &access));
     let (climbed, failed) = climb_pose(at, &access);
     assert!(!failed, "{climbed:?}");

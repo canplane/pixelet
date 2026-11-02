@@ -29,6 +29,16 @@ pub const PIPE: Zoom = LEAF_CELL - 3;
 const BLOCK: Zoom = LEAF_CELL - 1;
 /// The classes' zooms: a tunnel of class `k` starts in a node there.
 const CLASS: [Zoom; 4] = [ROOT, ROOT + 1, ROOT + 2, ROOT + 3];
+/// A root's blocks: its tunnels', every root alike.
+const ROOT_BLOCKS: u32 = {
+    let mut n = 0;
+    let mut k = 0;
+    while k < 4 {
+        n += ROOT_TUNNELS[k] * BLOCKS_A_TUNNEL[k];
+        k += 1;
+    }
+    n
+};
 /// A pipe cell's blocks, 4 a side.
 const CELL_BLOCKS: u32 = 64;
 
@@ -98,22 +108,25 @@ fn child_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
     (p[0] >= o[0] + half) as u32 | ((p[1] >= o[1] + half) as u32) << 1 | ((p[2] >= o[2] + half) as u32) << 2
 }
 
-/// A tunnel started in the node: from a cell by hash in the node's middle
-/// half to one half the node's side away across, toward the side with room,
-/// and a little up or down; so its blocks fit the pipe cells it must pass.
+/// A tunnel started in the node: from a cell by hash in a corner quarter of
+/// the node across, to one in the far quarter the other way, a little up or
+/// down: so it crosses the node and its blocks fit the pipe cells it passes
+/// (at least its side and one, `BLOCKS_A_TUNNEL`).
 fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
     let (o, s) = bounds(node);
     let h = node_seed(SPAWN, node);
     let g = node_seed(SPAWN ^ 1, node);
     let q = s / 4;
-    let e = [o[0] + q + (h % (2 * q) as u32) as i32, o[1] + q + ((h >> 8) % (2 * q) as u32) as i32, o[2] + q + ((h >> 16) % (2 * q) as u32) as i32];
-    // |dx| + |dy| = s/2, the share across by hash, each side's sign by hash.
-    let across = (g % (2 * q + 1) as u32) as i32;
-    // Toward the side with room, so it stays in the node.
-    let dx = if e[0] - o[0] < 2 * q { across } else { -across };
-    let dy = if e[1] - o[1] < 2 * q { 2 * q - across } else { across - 2 * q };
-    let dz = ((g >> 10) % (q as u32 / 2 + 1)) as i32 - q / 4;
-    let x = [e[0] + dx, e[1] + dy, e[2] + dz];
+    let near = |r: u32, b: u32| if r >> b & 1 == 0 { (r >> (b + 1)) % q as u32 } else { (3 * q) as u32 + (r >> (b + 1)) % q as u32 } as i32;
+    let ex = near(h, 0);
+    let ey = near(h, 8);
+    let ez = q + ((h >> 16) % (2 * q) as u32) as i32;
+    let e = [o[0] + ex, o[1] + ey, o[2] + ez];
+    let x = [
+        o[0] + s - 1 - ex - (g % (q as u32 / 2 + 1)) as i32,
+        o[1] + s - 1 - ey - ((g >> 8) % (q as u32 / 2 + 1)) as i32,
+        o[2] + ez + ((g >> 16) % (q as u32 / 2 + 1)) as i32 - q / 4,
+    ];
     Piece { e, x, from: 6, to: 6, blocks: tunnel_blocks(k) }
 }
 
@@ -156,16 +169,18 @@ fn walk(u: u32, v: u32, h: u32) -> ([u32; 4], u32) {
     (w, n as u32 + 1)
 }
 
-/// The node's piece handed to its children: each child the walk passes its
-/// part, crossing each face at a cell by hash, its blocks by how far its part
-/// runs; and child `want`'s part.
-fn hand_down(node: (Zoom, [i32; 3]), p: Piece) -> ([Piece; 8], u32) {
-    // The children it passes, a bit each.
-    let mut on = 0u32;
+/// The node's piece handed to its children, child `want`'s part of it, and
+/// the children the walk passes, a bit each: the walk's parts cross each face
+/// near the way on toward its end, moved by hash; their blocks split by how
+/// far each runs, none past a pipe cell's each (`share_out`).
+fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
     let (o, s) = bounds(node);
     let half = s / 2;
     let (w, n) = walk(child_of(o, half, p.e), child_of(o, half, p.x), node_seed(WALK, node));
-    let mut parts = [NONE; 8];
+    let mut on = 0u32;
+    let mut mine = NONE;
+    let mut at = 8u32;
+    let mut rooms = [0u32; 8];
     let mut cur = p.e;
     let mut from = p.from;
     let mut i = 0;
@@ -173,59 +188,43 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece) -> ([Piece; 8], u32) {
         let k = w[i as usize];
         on |= 1 << k;
         let co = [o[0] + half * (k & 1) as i32, o[1] + half * (k >> 1 & 1) as i32, o[2] + half * (k >> 2 & 1) as i32];
-        if i + 1 == n {
-            parts[k as usize] = Piece { e: cur, x: p.x, from, to: p.to, blocks: 0 };
-        } else {
+        let mut part = Piece { e: cur, x: p.x, from, to: p.to, blocks: 0 };
+        if i + 1 < n {
             let nk = w[i as usize + 1];
             let axis = (k ^ nk).trailing_zeros();
             let up = nk >> axis & 1 == 1;
-            // Where the way on toward its end meets the face, moved by up to a
-            // quarter of the child by hash.
             let h = node_seed(CROSS ^ i, node);
-            let mut x = [0; 3];
             let mut j = 0;
             while j < 3 {
-                let mid = (cur[j] + p.x[j]) / 2;
-                let jit = ((h >> (10 * j)) & 0x3ff) as i32 * (half / 2 + 1) / 1024 - half / 4;
-                let v = mid + jit;
-                x[j] = if v < co[j] { co[j] } else if v > co[j] + half - 1 { co[j] + half - 1 } else { v };
+                let v = (cur[j] + p.x[j]) / 2 + ((h >> (10 * j)) & 0x3ff) as i32 * (half / 2 + 1) / 1024 - half / 4;
+                part.x[j] = if v < co[j] { co[j] } else if v > co[j] + half - 1 { co[j] + half - 1 } else { v };
                 j += 1;
             }
-            x[axis as usize] = if up { co[axis as usize] + half - 1 } else { co[axis as usize] };
-            let side = 2 * axis + up as u32;
-            parts[k as usize] = Piece { e: cur, x, from, to: side, blocks: 0 };
-            cur = x;
+            part.x[axis as usize] = if up { co[axis as usize] + half - 1 } else { co[axis as usize] };
+            part.to = 2 * axis + up as u32;
+            cur = part.x;
             cur[axis as usize] += if up { 1 } else { -1 };
             from = 2 * axis + !up as u32;
         }
+        rooms[i as usize] = (manhattan(part.e, part.x) + 1) * CELL_BLOCKS;
+        if k == want {
+            mine = part;
+            at = i;
+        }
         i += 1;
     }
-    // Its blocks by how far each part runs, none past a pipe cell's each.
-    let mut rooms = [0u32; 8];
-    let mut weights = [0u32; 8];
-    let mut i = 0;
-    while i < n {
-        let k = w[i as usize] as usize;
-        let cells = manhattan(parts[k].e, parts[k].x) + 1;
-        rooms[k] = cells * CELL_BLOCKS;
-        weights[k] = cells * 64;
-        i += 1;
+    if at < 8 {
+        mine.blocks = share_out(p.blocks, rooms, rooms)[at as usize];
     }
-    let got = share_out(p.blocks, rooms, weights);
-    let mut k = 0;
-    while k < 8 {
-        parts[k].blocks = got[k];
-        k += 1;
-    }
-    (parts, on)
+    (mine, on)
 }
 
-/// The node's tunnels not yet started to its children no piece passes: each
-/// class by hashed weights, the lower four heavier, a child's room four of
-/// its children's where it starts its own and none where a piece passes.
-fn tunnels_down(node: (Zoom, [i32; 3]), tunnels: [u32; 4], on: u32) -> [[u32; 4]; 8] {
+/// The node's tunnels not yet started handed to its children no piece
+/// passes, child `want`'s: each class by hashed weights, the lower four
+/// heavier, a child's room what it can start (`room`).
+fn tunnels_down(node: (Zoom, [i32; 3]), tunnels: [u32; 4], on: u32, want: u32) -> [u32; 4] {
     let child = node.0 + 1;
-    let mut out = [[0u32; 4]; 8];
+    let mut out = [0u32; 4];
     let mut k = 0;
     while k < 4 {
         if tunnels[k] > 0 {
@@ -241,12 +240,7 @@ fn tunnels_down(node: (Zoom, [i32; 3]), tunnels: [u32; 4], on: u32) -> [[u32; 4]
                 weights[i] = if i & 4 == 0 { u * 3 / 2 } else { u };
                 i += 1;
             }
-            let got = share_out(tunnels[k], rooms, weights);
-            let mut i = 0;
-            while i < 8 {
-                out[i][k] = got[i];
-                i += 1;
-            }
+            out[k] = share_out(tunnels[k], rooms, weights)[want as usize];
         }
         k += 1;
     }
@@ -273,15 +267,10 @@ fn holds(node: (Zoom, [i32; 3])) -> Holds {
         if z == zoom || z == PIPE {
             return h;
         }
-        let (parts, on) = if h.piece.blocks == 0 {
-            ([NONE; 8], 0)
-        } else {
-            hand_down(here, h.piece)
-        };
-        let down = tunnels_down(here, h.tunnels, on);
         let next = at(z + 1);
-        let i = (next[0] & 1 | (next[1] & 1) << 1 | (next[2] & 1) << 2) as usize;
-        h = Holds { piece: parts[i], tunnels: down[i] };
+        let i = (next[0] & 1 | (next[1] & 1) << 1 | (next[2] & 1) << 2) as u32;
+        let (piece, on) = if h.piece.blocks == 0 { (NONE, 0) } else { hand_down(here, h.piece, i) };
+        h = Holds { piece, tunnels: tunnels_down(here, h.tunnels, on, i) };
         z += 1;
     }
 }
@@ -418,10 +407,12 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
 
 /// The share of the cube `c` at `zoom` the caves take, in `answer::FULL`'s
 /// units: its blocks of caves over its volume, a root's at any coarser.
+/// One body however many ask it (the ground asks it of a cell and of a node).
+#[inline(never)]
 pub fn hollow(node: (Zoom, [i32; 3])) -> u32 {
     let (zoom, c) = node;
     // Coarser than a root, a root's: every root holds the same.
-    let (zoom, n) = if zoom < ROOT { (ROOT, blocks((ROOT, [0; 3]))) } else { (zoom, blocks((zoom, c))) };
+    let (zoom, n) = if zoom <= ROOT { (ROOT, ROOT_BLOCKS) } else { (zoom, blocks((zoom, c))) };
     // A block is 8 leaves; FULL is 2^15; the node holds 2^(3(LEAF − zoom)) leaves.
     let shift = 3 + 15 - 3 * (LEAF_CELL - zoom) as i32;
     if shift >= 0 {

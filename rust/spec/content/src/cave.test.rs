@@ -1,4 +1,4 @@
-use super::{blocks, hollow, ROOT};
+use super::{blocks, hollow, ROOT, ROOT_BLOCKS};
 use pxl_engine::answer::FULL;
 use pxl_engine::LEAF_CELL;
 
@@ -47,6 +47,10 @@ fn every_root_alike() {
         assert_eq!(hollow((ROOT, c)), a);
     }
     assert_eq!(hollow((ROOT - 3, [1, 2, 0])), a);
+    // The constant a coarser node reads is what a root's descent holds.
+    for c in [[0, 0, 0], [7, -9, 3], [-31, 12, -1]] {
+        assert_eq!(blocks((ROOT, c)), ROOT_BLOCKS);
+    }
 }
 
 /// A picture of one root's caves, for a look only: `cargo test --release
