@@ -30,6 +30,8 @@ const _: () = assert!(
 /// The orbit's nearest, in units from the pivot, about 3.8 m at Seoul's
 /// latitude: `DOLLY_END_CELLS` of the 2^-5 cell the grid asks there.
 pub const MIN_DIST: f64 = 2.0;
+/// How far out the orbit's nearest counts (orbit/collision.rs `nearest`).
+pub const NEAREST_DIST: f64 = 1.25 * MIN_DIST;
 /// The orbit's farthest: `DOLLY_END_CELLS` of the coarsest cell any zoom
 /// holds, the pyramid's top's, so looking straight down the grid never asks
 /// a coarser cell than a zoom draws.

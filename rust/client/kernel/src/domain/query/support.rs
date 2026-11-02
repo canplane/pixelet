@@ -294,6 +294,24 @@ impl<'a> World<'a> {
         c.answer(stands)
     }
 
+    /// The top of the highest solid over `at` or holding it, in any column, as
+    /// many as are stacked with air between; none where the sky is open over
+    /// it.
+    pub fn top_over(&self, at: &Q3) -> Answer<Option<f64>> {
+        let start = q3::to_real(i64::from(at[2]));
+        let mut c = CellColumns::new(self, xy(at), LEAF_ZOOM, Lines::default());
+        let hi = BOUNDS.max[2];
+        let mut top = c.lift(start);
+        while let Some(bottom) = c.above(top, hi) {
+            let next = c.lift(bottom);
+            if next <= top {
+                break;
+            }
+            top = next;
+        }
+        c.answer((top > start).then_some(top.min(hi)))
+    }
+
     /// The floor under `at` nearest its height: the top of a solid with
     /// room over it, under `at` or over it, or the cell's surface; none
     /// where nothing stands.
