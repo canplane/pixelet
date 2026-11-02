@@ -16,7 +16,7 @@ import { SensorIcons } from "./sensor-icons.tsx";
 import { MapScaleBar } from "./scale-bar.tsx";
 import { ProgressBar } from "./progress-bar.tsx";
 import { LocationStack } from "./location-stack.tsx";
-import { ViewStack } from "./view-stack.tsx";
+import { ViewButtons } from "./view-buttons.tsx";
 import { BusyDim } from "@/shell/world/busy-dim.tsx";
 import { useChromeTop } from "@/shell/world/chrome.ts";
 import { CircularButton } from "@/shell/ui/circular-button.tsx";
@@ -96,7 +96,7 @@ export function TopOverlays() {
 
       <BusyDim style={[styles.right, { top }]}>
         <LocationStack />
-        <ViewStack />
+        <ViewButtons />
       </BusyDim>
     </>
   );
