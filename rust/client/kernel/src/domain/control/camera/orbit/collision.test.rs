@@ -10,6 +10,9 @@ use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::query::over;
 use crate::domain::query::test::{flat_at_five, write};
 use crate::sys::serial;
+use pxl_content::cave::hollow;
+use pxl_engine::answer::FULL;
+use pxl_engine::LEAF_CELL;
 use pxl_spec::asset::cube::{self, cube_id, Cube};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -350,6 +353,42 @@ fn slope_keeps_pitch_climbed() {
     let (climbed, failed) = climb_pose(at, &access);
     assert!(!failed, "{climbed:?}");
     assert!(climbed.polar < at.polar, "{climbed:?}");
+}
+
+/// The pivot on a tower ten over the ground, the eye tilted past level and
+/// out to where it lies under the ground in one of the seed's caves: in a
+/// cave's air it is not in the ground, and nothing climbs it.
+#[test]
+fn a_cave_is_not_climbed_out_of() {
+    let _g = serial();
+    let (tile_cache, mut store, ground) = roofed(None);
+    let red = cube_id(Cube::Object(cube::Object::red));
+    for z in 0..10 {
+        write(
+            &mut store,
+            [ground[0], ground[1], 5.0 + f64::from(z)],
+            OBJECT_COARSEST,
+            red,
+        );
+    }
+    let access = World::new(&tile_cache, &store);
+    let pivot = [ground[0], ground[1], over(15.0)];
+    // A pose whose eye is in a leaf the seed's caves take under the ground.
+    let at = (0..90)
+        .flat_map(|a| (0..50).flat_map(move |d| (0..20).map(move |p| (a, d, p))))
+        .map(|(a, d, p)| ViewPose {
+            azimuth: core::f64::consts::TAU * f64::from(a) / 90.0,
+            ..pose(pivot, 10.0 + f64::from(d), 1.9 + 0.05 * f64::from(p))
+        })
+        .find(|at| {
+            let e = eye(at).0;
+            e[2] < 4.0 && hollow((LEAF_CELL, e.map(|v| v.floor() as i32))) >= FULL
+        })
+        .expect("an eye in a cave under the ground");
+    assert!(!in_solid(&at, &access), "{at:?}");
+    let (climbed, failed) = climb_pose(at, &access);
+    assert!(!failed, "{climbed:?}");
+    assert_eq!(climbed.polar, at.polar, "{climbed:?}");
 }
 
 /// The pivot on a tower ten over the ground, the eye tilted past level 18

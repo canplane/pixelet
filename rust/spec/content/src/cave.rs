@@ -10,8 +10,7 @@
 //! its piece of a tunnel to the children it passes, a walk over at most four
 //! of them, crossing each face where a hash says, its blocks split by how
 //! far each child's part runs (`share::halve`); the tunnels not yet
-//! started go to the children no piece passes, by hashed weights heavier
-//! below. A pipe cell's piece hollows the blocks nearest its line, as many
+//! started go to the children no piece passes, by hashed weights. A pipe cell's piece hollows the blocks nearest its line, as many
 //! as it holds. Irregular by the seed alone (`node_seed`).
 
 use pxl_engine::answer::FULL;
@@ -28,12 +27,14 @@ pub const PIPE: Zoom = LEAF_CELL - 3;
 /// A block, 2 units, what a pipe cell hollows a whole of.
 const BLOCK: Zoom = LEAF_CELL - 1;
 /// The classes' zooms: a tunnel of class `k` starts in a node there.
-const CLASS: [Zoom; 4] = [ROOT, ROOT + 1, ROOT + 2, ROOT + 3];
+/// The classes a tunnel is of, by the size of the node it starts in.
+const CLASSES: usize = 5;
+const CLASS: [Zoom; CLASSES] = [ROOT, ROOT + 1, ROOT + 2, ROOT + 3, ROOT + 4];
 /// A root's blocks: its tunnels', every root alike.
 const ROOT_BLOCKS: u32 = {
     let mut n = 0;
     let mut k = 0;
-    while k < 4 {
+    while k < CLASSES {
         n += ROOT_TUNNELS[k] * BLOCKS_A_TUNNEL[k];
         k += 1;
     }
@@ -73,7 +74,7 @@ const NONE: Piece = Piece {
 #[derive(Clone, Copy, Debug)]
 struct Holds {
     piece: Piece,
-    tunnels: [u32; 4],
+    tunnels: [u32; CLASSES],
 }
 
 /// Tunnels of class `k` a node at `zoom` with no piece may be handed: one at
@@ -110,18 +111,40 @@ fn child_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
 }
 
 /// A tunnel started in the node: from a cell by hash in a corner quarter of
-/// the node across, to one in the far quarter the other way, a little up or
-/// down: so it crosses the node and its blocks fit the pipe cells it passes
+/// the node across, at any height, to one in the far quarter the other way, a
+/// little up or down: so it crosses the node and its blocks fit the pipe cells it passes
 /// (at least its side and one, `BLOCKS_A_TUNNEL`).
 fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
     let (o, s) = bounds(node);
     let h = node_seed(SPAWN, node);
     let g = node_seed(SPAWN ^ 1, node);
+    if s < 4 {
+        // Two pipe cells a side: from a cell by hash to the far corner, up or
+        // down too.
+        let e = [
+            o[0] + (h & 1) as i32,
+            o[1] + (h >> 1 & 1) as i32,
+            o[2] + (h >> 2 & 1) as i32,
+        ];
+        let x = [
+            o[0] + 1 - (h & 1) as i32,
+            o[1] + 1 - (h >> 1 & 1) as i32,
+            o[2] + 1 - (h >> 2 & 1) as i32,
+        ];
+        return Piece {
+            e,
+            x,
+            from: 6,
+            to: 6,
+            blocks: tunnel_blocks(k),
+        };
+    }
     let q = s / 4;
     let near = |r: u32, b: u32| if r >> b & 1 == 0 { (r >> (b + 1)) % q as u32 } else { (3 * q) as u32 + (r >> (b + 1)) % q as u32 } as i32;
     let ex = near(h, 0);
     let ey = near(h, 8);
-    let ez = q + ((h >> 16) % (2 * q) as u32) as i32;
+    // Its height anywhere in the node, so tunnels lie at every height.
+    let ez = ((h >> 16) % s as u32) as i32;
     let e = [o[0] + ex, o[1] + ey, o[2] + ez];
     // Mirrored across the node and moved back toward its middle by hash,
     // so it stays in the node.
@@ -137,7 +160,7 @@ fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
     let x = [
         o[0] + back(ex, g),
         o[1] + back(ey, g >> 8),
-        o[2] + ez + ((g >> 16) % (q as u32 / 2 + 1)) as i32 - q / 4,
+        o[2] + (ez + ((g >> 16) % (q as u32 / 2 + 1)) as i32 - q / 4).clamp(0, s - 1),
     ];
     Piece {
         e,
@@ -293,13 +316,18 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
 
 /// The node's tunnels not yet started handed to its children no piece
 /// passes, child `want`'s: each class halved across, then along, then up
-/// (`halve`), by a hash's weight, the lower half heavier, each half's room
-/// what its children can start (`room`).
-fn tunnels_down(node: (Zoom, [i32; 3]), tunnels: [u32; 4], on: u32, want: u32) -> [u32; 4] {
+/// (`halve`), by a hash's weight alike each side, each half's room what its
+/// children can start (`room`).
+fn tunnels_down(
+    node: (Zoom, [i32; 3]),
+    tunnels: [u32; CLASSES],
+    on: u32,
+    want: u32,
+) -> [u32; CLASSES] {
     let child = node.0 + 1;
-    let mut out = [0u32; 4];
+    let mut out = [0u32; CLASSES];
     let mut k = 0;
-    while k < 4 {
+    while k < CLASSES {
         let r = room(k, child);
         let mut n = tunnels[k];
         let h = if n > 0 {
@@ -322,11 +350,7 @@ fn tunnels_down(node: (Zoom, [i32; 3]), tunnels: [u32; 4], on: u32, want: u32) -
                 (keep & upper).count_ones() * r,
             ];
             let u = (h >> (8 * side)) & 0xff;
-            let weight = if side == 2 {
-                0x8000 + u * 0x60
-            } else {
-                0x4000 + u * 0x80
-            };
+            let weight = 0x4000 + u * 0x80;
             let w = weight << 16 | (h.rotate_left(11 * side + 5) & 0xffff);
             let lo = halve(n, rooms, w);
             let up = want >> side & 1 == 1;
@@ -353,13 +377,14 @@ fn holds(node: (Zoom, [i32; 3])) -> Holds {
         let here = (z, at(z));
         // Start its own where it is its class's size and holds one.
         let k = (z - ROOT) as usize;
-        if k < 4 && h.tunnels[k] > 0 && h.piece.blocks == 0 {
+        if k < CLASSES && h.tunnels[k] > 0 && h.piece.blocks == 0 {
             h.piece = spawn(here, k);
             h.tunnels[k] -= 1;
         }
         if z == zoom
             || z == PIPE
-            || h.piece.blocks == 0 && h.tunnels[0] + h.tunnels[1] + h.tunnels[2] + h.tunnels[3] == 0
+            || h.piece.blocks == 0
+                && h.tunnels[0] + h.tunnels[1] + h.tunnels[2] + h.tunnels[3] + h.tunnels[4] == 0
         {
             return h;
         }
@@ -447,7 +472,7 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
         let h = holds(node);
         let mut n = h.piece.blocks;
         let mut k = 0;
-        while k < 4 {
+        while k < CLASSES {
             n += h.tunnels[k] * tunnel_blocks(k);
             k += 1;
         }

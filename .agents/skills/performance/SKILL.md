@@ -25,6 +25,8 @@ one measured case fitted at the cost of another.
 - A small change that keeps the contracts and the behaviour is fine; fewer
   copies is not safe by itself.
 - The CPU↔GPU data contract is generated from `spec/` (`make spec`).
+- In gpu-portable code, index no large const array at run time: the WGSL
+  builds it as a local array, filled on every call.
 
 Report in three lines: the structure kept; the cost removed and what was
 added; the effect checked and the range not checked.

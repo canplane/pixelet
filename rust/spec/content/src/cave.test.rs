@@ -185,3 +185,48 @@ fn finer_than_a_leaf_is_its_leaf() {
         );
     }
 }
+
+/// How often a leaf is a cave in the band a cave may take under a face near
+/// sea level, for a look only: `cargo test --release -p pxl-content band --
+/// --ignored --nocapture`.
+#[test]
+#[ignore]
+fn band() {
+    extern crate std;
+    use std::println;
+    let sea = pxl_engine::SEA_LEVEL;
+    let mut hollow_n = 0u64;
+    let mut all = 0u64;
+    let mut cols_with = 0u64;
+    for y in 0..128 {
+        for x in 0..128 {
+            let mut any = false;
+            for z in sea - 64..sea {
+                all += 1;
+                // Columns 37 units apart, over 18 roots across.
+                if hollow((LEAF_CELL, [x * 37, y * 37, z])) >= FULL {
+                    hollow_n += 1;
+                    any = true;
+                }
+            }
+            cols_with += any as u64;
+        }
+    }
+    println!(
+        "band: {hollow_n} of {all} leaves ({:.3}%), columns with any {cols_with} of {}",
+        hollow_n as f64 * 100.0 / all as f64,
+        128 * 128
+    );
+    let mut deep = 0u64;
+    for d in [0, 8, 16, 32, 48, 63] {
+        let mut n = 0;
+        for y in 0..128 {
+            for x in 0..128 {
+                n += (hollow((LEAF_CELL, [x * 37, y * 37, sea - 1 - d])) >= FULL) as u64;
+            }
+        }
+        deep += n;
+        println!("depth {d}: {n} of {}", 128 * 128);
+    }
+    let _ = deep;
+}

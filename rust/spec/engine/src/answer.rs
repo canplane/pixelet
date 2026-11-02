@@ -270,4 +270,17 @@ mod tests {
         assert_eq!(box_join(BOX_NONE, a), a);
         assert_eq!(box_of(BOX_WHOLE), ([0; 3], [BOX_STEPS; 3]));
     }
+
+    /// A carve takes a fill in whole eighths: a trace under one takes none,
+    /// as a fill under one keeps none (`eighths`).
+    #[test]
+    fn carve_takes_whole_eighths() {
+        let air = value::AIR;
+        let eighth = FULL / EIGHTHS;
+        assert_eq!(cover(FULL, air, eighth - 1), (FULL, false));
+        assert_eq!(cover(FULL, air, eighth + 5), (FULL - eighth, false));
+        assert_eq!(cover(FULL, air, 3 * eighth), (FULL - 3 * eighth, false));
+        assert_eq!(cover(eighth, air, FULL), (0, false));
+        assert_eq!(eighths(cover(FULL, air, 300).0), EIGHTHS);
+    }
 }
