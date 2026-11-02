@@ -18,6 +18,7 @@ use pxl_engine::{Zoom, LEAF_CELL, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::decor::{Decor, DECORS};
+use crate::pyramid::share_out;
 
 /// A cell's candidate: the leaf cell it stands at, at every zoom; its first
 /// draw, against the decor's chance and, lower first, the order neighbors
@@ -101,9 +102,9 @@ const SPLIT: u32 = 0x5b17_dec0;
 /// How many of the `k`-th decor the column `b` at `zoom` holds, a leaf
 /// cell's one or none: its root's column (`ROOTS`) as many as a hash draws
 /// about its mean, the decor's chance a leaf cell under it, rounded at a
-/// uniform draw; then each column's count handed to its four a hash each,
-/// each one to the quarter a draw names, none past what its leaf cells
-/// hold. None coarser than the root. Every word read by value.
+/// uniform draw; then each column's count handed to its four by weights its
+/// hash draws, exactly, none past what its leaf cells hold. None coarser
+/// than the root. Every word read by value.
 pub fn count(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
     let (seed, chance, root) = (SEEDS[k], CHANCES[k], ROOTS[k]);
     if zoom < root {
@@ -116,16 +117,16 @@ pub fn count(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
     let mut n = (mean + (draw & 0xffff)) >> 16;
     let mut z = root;
     while z < zoom && n > 0 {
+        // To its four by weights its own hash draws, none past what its
+        // leaf cells hold (`pyramid::share_out`), the one rule the caves
+        // hand theirs down by.
         let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT, (z, at(z))));
         let c = at(z + 1);
-        let quarter = (c[0] & 1 | (c[1] & 1) << 1) as u32;
-        let (mut mine, mut i) = (0, 0);
-        while i < n {
-            mine += u32::from(draws.next_u32() >> 30 == quarter);
-            i += 1;
-        }
-        let room = 1 << (2 * (LEAF_CELL - z - 1));
-        n = if mine < room { mine } else { room };
+        let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
+        let room = 1u32 << (2 * (LEAF_CELL - z - 1));
+        let room = if room > 0xffff { 0xffff } else { room };
+        let w = [draws.next_u32() >> 18, draws.next_u32() >> 18, draws.next_u32() >> 18, draws.next_u32() >> 18];
+        n = share_out(n, [room; 4], w)[quarter];
         z += 1;
     }
     n

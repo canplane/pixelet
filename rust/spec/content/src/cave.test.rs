@@ -1,109 +1,102 @@
-// pxl-content/cave.test.rs
+use super::{blocks, hollow, ROOT};
+use pxl_engine::answer::FULL;
+use pxl_engine::LEAF_CELL;
 
-extern crate std;
-
-use super::*;
-
-/// `fade` runs from none to whole, and falls under a value it took before by
-/// `FADE_DROP` at the most, which `noise_span` widens a box's fades by.
-#[test]
-fn fade_falls_by_its_drop() {
-    assert_eq!((fade(0), fade(T_ONE)), (0, T_ONE));
-    let (mut most, mut fall) = (0, 0);
-    for t in 0..=T_ONE {
-        let f = fade(t);
-        fall = fall.max(most - f);
-        most = most.max(f);
-    }
-    assert_eq!(fall, FADE_DROP);
+fn children(zoom: u32, c: [i32; 3]) -> impl Iterator<Item = (u32, [i32; 3])> {
+    (0..8).map(move |k| (zoom + 1, [2 * c[0] + (k & 1), 2 * c[1] + (k >> 1 & 1), 2 * c[2] + (k >> 2 & 1)]))
 }
 
-/// Caves are some of the ground, not none and not most, over leaves spread
-/// across many of the caves' lattice cells rather than in a few, where one
-/// cave decides the share.
+/// Every node holds exactly what its eight do, from a root to the leaves.
 #[test]
-fn caves_hollow_some() {
-    let mut n = 0;
-    for x in 0..64 {
-        for y in 0..64 {
-            for z in -32..0 {
-                n += usize::from(hollow((LEAF_CELL, [x * 4093, y * 4099, z * 61])));
-            }
+fn a_node_is_its_children() {
+    let mut h = 0x9e37_79b9u32;
+    let mut next = || {
+        h ^= h << 13;
+        h ^= h >> 17;
+        h ^= h << 5;
+        h
+    };
+    for _ in 0..300 {
+        let r = [(next() % 64) as i32 - 32, (next() % 64) as i32 - 32, (next() % 8) as i32 - 4];
+        // Down a line from the root, checking each node on it and a sibling.
+        let mut node = (ROOT, r);
+        while node.0 < LEAF_CELL {
+            let sum: u32 = children(node.0, node.1).map(blocks_or_leaves).sum();
+            assert_eq!(blocks_or_leaves(node), sum, "node {node:?}");
+            let k = next() % 8;
+            node = children(node.0, node.1).nth(k as usize).unwrap();
         }
     }
-    let share = n as f64 / (64.0 * 64.0 * 32.0);
-    assert!((0.005..0.5).contains(&share), "{share}");
 }
 
-/// A cube a cave is said to take all of holds no cube under it, at any zoom
-/// down past the leaves, that is not hollow; some are said so, on either
-/// side of X's wrap and of zero.
+/// Its leaves of caves: a block is 8, a leaf its block's one.
+fn blocks_or_leaves(node: (u32, [i32; 3])) -> u32 {
+    if node.0 == LEAF_CELL {
+        blocks(node)
+    } else {
+        blocks(node) * 8
+    }
+}
+
+/// The caves take some of a root, not most, and the same share of every root.
 #[test]
-fn all_hollow_holds_every_cube_under() {
-    let mut said = 0;
-    for zoom in CAVE_COARSEST..LEAF_CELL {
-        let side = 1i32 << (LEAF_CELL - zoom);
-        let half = 1i32 << (zoom - 1);
-        let n = 1024 / side;
-        for x in (-n..n).chain(half - n..half + n) {
-            for y in -2..2 {
-                for z in -64 / side..0 {
-                    let c = [x, y * 37, z];
-                    if !all_hollow((zoom, c)) {
-                        continue;
-                    }
-                    said += 1;
-                    for under in zoom + 1..=LEAF_CELL + 1 {
-                        let k = 1i32 << (under - zoom);
-                        for i in 0..k * k * k {
-                            let u = [
-                                c[0] * k + i % k,
-                                c[1] * k + i / k % k,
-                                c[2] * k + i / (k * k),
-                            ];
-                            assert!(hollow((under, u)), "z{zoom} {c:?}: z{under} {u:?}");
-                        }
+fn every_root_alike() {
+    let a = hollow((ROOT, [0, 0, 0]));
+    assert!(a > 0 && a < FULL / 20, "{a}");
+    for c in [[5, -3, 1], [100, 7, -2], [-40, 40, 0]] {
+        assert_eq!(hollow((ROOT, c)), a);
+    }
+    assert_eq!(hollow((ROOT - 3, [1, 2, 0])), a);
+}
+
+/// A picture of one root's caves, for a look only: `cargo test --release
+/// -p pxl-content picture -- --ignored`, written where `CAVE_PICTURE` says.
+#[test]
+#[ignore]
+fn picture() {
+    extern crate std;
+    use std::vec;
+    use std::format;
+    use super::{block_hollow, holds, PIPE};
+    let Ok(path) = std::env::var("CAVE_PICTURE") else { return };
+    let side = 128usize; // blocks, 2 units each: four roots across
+    let mut hollow = vec![false; side * side * side];
+    for cx in 0..side as i32 / 4 {
+        for cy in 0..side as i32 / 4 {
+            for cz in 0..side as i32 / 4 {
+                let p = holds((PIPE, [cx, cy, cz])).piece;
+                if p.blocks == 0 {
+                    continue;
+                }
+                for b in 0..64u32 {
+                    if block_hollow([cx, cy, cz], &p, b) {
+                        let (x, y, z) = (cx as usize * 4 + (b & 3) as usize, cy as usize * 4 + (b >> 2 & 3) as usize, cz as usize * 4 + (b >> 4 & 3) as usize);
+                        hollow[(x * side + y) * side + z] = true;
                     }
                 }
             }
         }
     }
-    assert!(said > 0);
-}
-
-/// The caves only take away, and only under a leaf column's face cell, the
-/// cell under its top: every cell from it up is what the strata make it,
-/// cave or none (pxl-engine `ground::Cell::asset`).
-#[test]
-fn caves_under_face_alone() {
-    use crate::Pixelet;
-    use pxl_engine::answer::FULL;
-    use pxl_engine::content::Content;
-    use pxl_engine::ground::Cell;
-    use pxl_engine::value;
-    let mut taken = 0;
-    for x in 0..64 {
-        for y in 0..64 {
-            let top = (x * 7 + y * 13) % 40 - 20;
-            let column = Cell {
-                palette_idx: 7,
-                top,
-                part: FULL,
-                fold: [7; 4],
-            };
-            for z in top - 90..top + 2 {
-                let c = [x * 977, y * 991, z];
-                let asset =
-                    column.asset::<Pixelet>(LEAF_CELL, z, || Pixelet::hollow((LEAF_CELL, c)));
-                let strata = Pixelet::by_depth(LEAF_CELL, column.palette_idx, top, z);
-                if z >= top - 1 {
-                    assert_eq!(asset, strata, "{c:?}, top {top}");
-                } else if asset != strata {
-                    assert_eq!(asset, value::VOID, "{c:?}");
-                    taken += 1;
+    let g = |x: usize, y: usize, z: usize| hollow[(x * side + y) * side + z];
+    let w = side * 2 + 4;
+    let mut img = vec![245u8; w * w];
+    for (ox, oy, q) in [(0, 0, 0usize), (side + 4, 0, 1), (0, side + 4, 2), (side + 4, side + 4, 3)] {
+        for a in 0..side {
+            for b in 0..side {
+                let first = |f: &dyn Fn(usize) -> bool| (0..side).find(|&k| f(k));
+                let hit = match q {
+                    0 => if g(a, side / 2, side - 1 - b) { Some(0) } else { None },
+                    1 => first(&|k| g(a, b, side - 1 - k)),
+                    2 => first(&|k| g(a, k, side - 1 - b)),
+                    _ => first(&|k| g(k, a, side - 1 - b)),
+                };
+                if let Some(d) = hit {
+                    img[(oy + b) * w + ox + a] = (30 + d * 170 / side) as u8;
                 }
             }
         }
     }
-    assert!(taken > 0);
+    let mut out = format!("P5 {w} {w} 255\n").into_bytes();
+    out.extend(img);
+    std::fs::write(path, out).unwrap();
 }

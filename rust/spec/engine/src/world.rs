@@ -236,7 +236,14 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
         } else {
             VOID
         };
-        let mut fill = if fills(val) { cell.cover(c[2]) } else { 0 };
+        // The ground's share, less what its caves take (the ground's answer's
+        // second word, `ground::node`).
+        let mut fill = if fills(val) {
+            let (f, _) = cover(cell.cover(c[2]), AIR, i.asset[1]);
+            f
+        } else {
+            0
+        };
         let mut four = if fills(val) {
             ground::word(cell.four(zoom, val))
         } else {

@@ -1,328 +1,436 @@
 // pxl-content/cave.rs
 
-//! gpu-portable: the caves, u32 hashes over i32 cells (pxl-engine
-//! `seed::node_seed`), no `Option<bool>`, and each lattice corner by itself.
+//! gpu-portable: the caves, worms of tunnel decided from the top down, so a
+//! node's share of cave is its own before anything under it is asked and a
+//! coarse cell holds exactly what its leaves do.
 //!
-//! The caves are Minecraft 1.18's noise caves: tunnels where two noises are
-//! both near zero, its spaghetti, and caverns where one is high, its cheese,
-//! a finer noise over all three so no wall runs smooth. Each noise is Ken
-//! Perlin's improved noise on a lattice of its own, a hash at each lattice
-//! point (`node_seed`) choosing its gradient, all in integers, so the CPU
-//! and a GPU carve the same cells to the bit. A cave is a pure function of
-//! the cube and the seed.
+//! A root cube (`ROOT`) holds the same tunnels as every other, so every node
+//! coarser is the same share. A tunnel starts in a node of its class's size
+//! (`CLASS`) and runs between two of its pipe cells (`PIPE`); a node hands
+//! its piece of a tunnel to the children it passes, a walk over at most four
+//! of them, crossing each face where a hash says, its blocks split by how
+//! far each child's part runs (`pyramid::share_out`); the tunnels not yet
+//! started go to the children no piece passes, by hashed weights heavier
+//! below. A pipe cell's piece hollows the blocks nearest its line, as many
+//! as it holds. Irregular by the seed alone (`node_seed`).
 
+use pxl_engine::answer::FULL;
 use pxl_engine::seed::node_seed;
-use pxl_engine::{idx_at, wrap_idx, Zoom, LEAF_CELL};
+use pxl_engine::{Zoom, LEAF_CELL};
 
-use crate::param::cave;
+use crate::param::cave::{BLOCKS_A_TUNNEL, NUDGE, ROOT_TUNNELS};
+use crate::pyramid::share_out;
 
-/// The coarsest cube a cave takes, 32 units a side: nothing coarser is
-/// hollow, so every coarser fold of the caves is solid.
-pub const CAVE_COARSEST: Zoom = LEAF_CELL - cave::COARSEST_STEPS;
+/// The root cube, 256 units: every one holds `ROOT_TUNNELS`.
+pub const ROOT: Zoom = LEAF_CELL - 8;
+/// The pipe cell, 8 units, a tunnel's step.
+pub const PIPE: Zoom = LEAF_CELL - 3;
+/// A block, 2 units, what a pipe cell hollows a whole of.
+const BLOCK: Zoom = LEAF_CELL - 1;
+/// The classes' zooms: a tunnel of class `k` starts in a node there.
+const CLASS: [Zoom; 4] = [ROOT, ROOT + 1, ROOT + 2, ROOT + 3];
+/// A pipe cell's blocks, 4 a side.
+const CELL_BLOCKS: u32 = 64;
 
-/// Where a point lies in a lattice cell, in fixed point: `T_ONE` across it.
-const T_BITS: u32 = 14;
-const T_ONE: i32 = 1 << T_BITS;
+/// The tags of a node's draws (`node_seed`).
+const SPAWN: u32 = 0xca7e_5001;
+const WALK: u32 = 0xca7e_5002;
+const CROSS: u32 = 0xca7e_5003;
+const SPLIT: u32 = 0xca7e_5004;
+const FACE: u32 = 0xca7e_5005;
+const BLOCKS: u32 = 0xca7e_5006;
 
-/// Ken Perlin's quintic fade, 6t⁵ − 15t⁴ + 10t³, over `[0, T_ONE]`, in
-/// steps that stay within an i32. Their floors make it fall back a little
-/// where it rises slowest, never more than `FADE_DROP` under a value it took
-/// before (cave.test.rs).
-fn fade(t: i32) -> i32 {
-    let t3 = (((t * t) >> T_BITS) * t) >> T_BITS;
-    let inner = 10 * T_ONE + ((((6 * t - 15 * T_ONE) >> 2) * t) >> (T_BITS - 2));
-    (t3 * (inner >> 2)) >> (T_BITS - 2)
+/// A tunnel's part in a node, in pipe cells: where it comes in and goes
+/// out, the sides it crosses there (6 none, at its ends), and its blocks.
+#[derive(Clone, Copy, Debug)]
+struct Piece {
+    e: [i32; 3],
+    x: [i32; 3],
+    from: u32,
+    to: u32,
+    blocks: u32,
 }
 
-/// The most `fade` falls under a value it took at a smaller `t`.
-const FADE_DROP: i32 = 7;
+const NONE: Piece = Piece {
+    e: [0; 3],
+    x: [0; 3],
+    from: 6,
+    to: 6,
+    blocks: 0,
+};
 
-/// `a` toward `b` by `t` of `T_ONE`, never past either: the floor of a
-/// product no larger than either's span.
-fn lerp(a: i32, b: i32, t: i32) -> i32 {
-    a + (((b - a) * t) >> T_BITS)
+/// What a node holds: its piece of a tunnel (none: no blocks) and the
+/// tunnels of each class not yet started in it.
+#[derive(Clone, Copy, Debug)]
+struct Holds {
+    piece: Piece,
+    tunnels: [u32; 4],
 }
 
-/// A lattice: its tag (`node_seed`), and its spacing as powers of two of
-/// units, across (X and Y) and up (Z). The tunnels' two noises come off one
-/// hash, the detail's three off another.
-#[derive(Clone, Copy)]
-struct Lattice {
-    tag: u32,
-    shift: [u32; 2],
-}
-
-const TUNNEL_LATTICE: Lattice = Lattice {
-    tag: 0xca7e_0001,
-    shift: cave::TUNNEL_SHIFT,
-};
-const CAVERN_LATTICE: Lattice = Lattice {
-    tag: 0xca7e_0002,
-    shift: cave::CAVERN_SHIFT,
-};
-const DETAIL_LATTICE: Lattice = Lattice {
-    tag: 0xca7e_0003,
-    shift: cave::DETAIL_SHIFT,
-};
-
-impl Lattice {
-    /// The lattice cell `p`, in half units, lies in, and where in it along
-    /// each axis, in `T_ONE`.
-    fn place(self, p: [i32; 3]) -> ([i32; 3], [i32; 3]) {
-        let (x, y, z) = (
-            along(p[0], self.shift[0]),
-            along(p[1], self.shift[0]),
-            along(p[2], self.shift[1]),
-        );
-        ([x.0, y.0, z.0], [x.1, y.1, z.1])
-    }
-
-    /// The hashes at the eight corners of the lattice cell `cell`, corner
-    /// `dx + 2·dy + 4·dz`. X is wrapped as the world wraps it, its lattice's
-    /// zoom the one whose cells are its spacing.
-    fn corners(self, [x, y, z]: [i32; 3]) -> [u32; 8] {
-        let at = (LEAF_CELL - self.shift[0], self.tag);
-        [
-            node_seed(at.1, (at.0, [x, y, z])),
-            node_seed(at.1, (at.0, [x + 1, y, z])),
-            node_seed(at.1, (at.0, [x, y + 1, z])),
-            node_seed(at.1, (at.0, [x + 1, y + 1, z])),
-            node_seed(at.1, (at.0, [x, y, z + 1])),
-            node_seed(at.1, (at.0, [x + 1, y, z + 1])),
-            node_seed(at.1, (at.0, [x, y + 1, z + 1])),
-            node_seed(at.1, (at.0, [x + 1, y + 1, z + 1])),
-        ]
+/// Tunnels of class `k` a node at `zoom` with no piece may be handed: one at
+/// the class's own zoom, four children's a step coarser (a node starting its
+/// own takes at most four).
+const fn room(k: usize, zoom: Zoom) -> u32 {
+    if zoom > CLASS[k] {
+        0
+    } else {
+        1 << (2 * (CLASS[k] - zoom))
     }
 }
 
-/// Along one axis, the lattice cell `p`, in half units (`HALF_UNIT`), lies
-/// in, its spacing `2^shift` units, and where in it, in `T_ONE`.
-fn along(p: i32, shift: u32) -> (i32, i32) {
-    let s = shift + 1;
-    (
-        idx_at(HALF_UNIT, p, LEAF_CELL - shift),
-        (p & ((1 << s) - 1)) << (T_BITS - s),
-    )
+/// The blocks a tunnel of class `k` hollows.
+const fn tunnel_blocks(k: usize) -> u32 {
+    BLOCKS_A_TUNNEL[k]
 }
 
-/// The zoom whose cells are half a unit, the points a cube's center and its
-/// corners fall on.
-const HALF_UNIT: Zoom = LEAF_CELL + 1;
-
-/// Ken Perlin's improved gradient, the low four bits of `h`, one of the
-/// cube's twelve edges, four of them twice: its least and most against the
-/// offsets `[lo, hi]` from its lattice point, in `T_ONE`, each axis its own.
-fn grad_span(h: u32, lo: [i32; 3], hi: [i32; 3]) -> [i32; 2] {
-    let h = h & 15;
-    let (u0, u1) = if h < 8 {
-        (lo[0], hi[0])
-    } else {
-        (lo[1], hi[1])
-    };
-    let (v0, v1) = if h < 4 {
-        (lo[1], hi[1])
-    } else if h == 12 || h == 14 {
-        (lo[0], hi[0])
-    } else {
-        (lo[2], hi[2])
-    };
-    let (u0, u1) = if h & 1 == 0 { (u0, u1) } else { (-u1, -u0) };
-    let (v0, v1) = if h & 2 == 0 { (v0, v1) } else { (-v1, -v0) };
-    [u0 + v0, u1 + v1]
+/// A node's side in pipe cells, and its first cell.
+fn bounds((zoom, c): (Zoom, [i32; 3])) -> ([i32; 3], i32) {
+    let s = PIPE - zoom;
+    ([c[0] << s, c[1] << s, c[2] << s], 1 << s)
 }
 
-/// Corner `k`'s offset from the point at `t` in its lattice cell.
-fn offset(k: usize, t: [i32; 3]) -> [i32; 3] {
-    [
-        t[0] - (k & 1) as i32 * T_ONE,
-        t[1] - (k >> 1 & 1) as i32 * T_ONE,
-        t[2] - (k >> 2 & 1) as i32 * T_ONE,
-    ]
+fn manhattan(a: [i32; 3], b: [i32; 3]) -> u32 {
+    ((a[0] - b[0]).abs() + (a[1] - b[1]).abs() + (a[2] - b[2]).abs()) as u32
 }
 
-/// `lerp`'s least over `a` and `b` at their least and `t` between `t0` and
-/// `t1`, and its most at their most: it rises with `a` and `b`, and runs
-/// straight in `t`.
-fn lerp_span(a: [i32; 2], b: [i32; 2], t0: i32, t1: i32) -> [i32; 2] {
-    let (l0, l1) = (lerp(a[0], b[0], t0), lerp(a[0], b[0], t1));
-    let (m0, m1) = (lerp(a[1], b[1], t0), lerp(a[1], b[1], t1));
-    [if l0 < l1 { l0 } else { l1 }, if m0 > m1 { m0 } else { m1 }]
+/// Which of a node's eight a pipe cell lies in, `dx + 2dy + 4dz`.
+fn child_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
+    (p[0] >= o[0] + half) as u32 | ((p[1] >= o[1] + half) as u32) << 1 | ((p[2] >= o[2] + half) as u32) << 2
 }
 
-/// The least and the most the noise whose gradients are `h`'s bits from
-/// `from` takes over the box `[lo, hi]` of its lattice cell, in `T_ONE`,
-/// about `±T_ONE`: each corner's gradient over the box, blended over the
-/// fades the box's points take, from its first end's less `FADE_DROP` to its
-/// last's and `FADE_DROP` more. Over a box of no size, a point, it is the
-/// noise there, both ends.
-fn noise_span(h: [u32; 8], from: u32, [lo, hi]: [[i32; 3]; 2]) -> [i32; 2] {
-    let g = |k: usize, h: u32| grad_span(h >> from, offset(k, lo), offset(k, hi));
-    let v = [
-        g(0, h[0]),
-        g(1, h[1]),
-        g(2, h[2]),
-        g(3, h[3]),
-        g(4, h[4]),
-        g(5, h[5]),
-        g(6, h[6]),
-        g(7, h[7]),
-    ];
-    let below = |t: i32, u: i32| {
-        let f = fade(t) - if u > t { FADE_DROP } else { 0 };
-        if f < 0 {
-            0
-        } else {
-            f
+/// A tunnel started in the node: from a cell by hash in the node's middle
+/// half to one half the node's side away across, toward the side with room,
+/// and a little up or down; so its blocks fit the pipe cells it must pass.
+fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
+    let (o, s) = bounds(node);
+    let h = node_seed(SPAWN, node);
+    let g = node_seed(SPAWN ^ 1, node);
+    let q = s / 4;
+    let e = [o[0] + q + (h % (2 * q) as u32) as i32, o[1] + q + ((h >> 8) % (2 * q) as u32) as i32, o[2] + q + ((h >> 16) % (2 * q) as u32) as i32];
+    // |dx| + |dy| = s/2, the share across by hash, each side's sign by hash.
+    let across = (g % (2 * q + 1) as u32) as i32;
+    // Toward the side with room, so it stays in the node.
+    let dx = if e[0] - o[0] < 2 * q { across } else { -across };
+    let dy = if e[1] - o[1] < 2 * q { 2 * q - across } else { across - 2 * q };
+    let dz = ((g >> 10) % (q as u32 / 2 + 1)) as i32 - q / 4;
+    let x = [e[0] + dx, e[1] + dy, e[2] + dz];
+    Piece { e, x, from: 6, to: 6, blocks: tunnel_blocks(k) }
+}
+
+/// The walk from child `u` to child `v` over at most four: their differing
+/// sides in an order by hash, or, where one side differs, a step aside and
+/// back by hash.
+fn walk(u: u32, v: u32, h: u32) -> ([u32; 4], u32) {
+    let d = u ^ v;
+    let mut w = [u; 4];
+    if d == 0 {
+        return (w, 1);
+    }
+    if d.count_ones() == 1 && h & 1 == 1 {
+        let b = if (h >> 1) & 1 == 0 { ((d << 1) | (d >> 2)) & 7 } else { ((d << 2) | (d >> 1)) & 7 };
+        w[1] = u ^ b;
+        w[2] = u ^ b ^ d;
+        w[3] = v;
+        return (w, 4);
+    }
+    // The differing sides, a rotation by hash.
+    let mut bits = [0u32; 3];
+    let mut n = 0;
+    let r = (h >> 2) % 3;
+    let mut i = 0;
+    while i < 3 {
+        let b = 1 << ((i + r) % 3);
+        if d & b != 0 {
+            bits[n] = b;
+            n += 1;
         }
-    };
-    let above = |t: i32, u: i32| {
-        let f = fade(u) + if u > t { FADE_DROP } else { 0 };
-        if f > T_ONE {
-            T_ONE
-        } else {
-            f
-        }
-    };
-    let f0 = [
-        below(lo[0], hi[0]),
-        below(lo[1], hi[1]),
-        below(lo[2], hi[2]),
-    ];
-    let f1 = [
-        above(lo[0], hi[0]),
-        above(lo[1], hi[1]),
-        above(lo[2], hi[2]),
-    ];
-    let x00 = lerp_span(v[0], v[1], f0[0], f1[0]);
-    let x10 = lerp_span(v[2], v[3], f0[0], f1[0]);
-    let x01 = lerp_span(v[4], v[5], f0[0], f1[0]);
-    let x11 = lerp_span(v[6], v[7], f0[0], f1[0]);
-    let y0 = lerp_span(x00, x10, f0[1], f1[1]);
-    let y1 = lerp_span(x01, x11, f0[1], f1[1]);
-    lerp_span(y0, y1, f0[2], f1[2])
-}
-
-/// The detail over a noise: a share of it (`cave::DETAIL_SHRINK`).
-fn detail(n: i32) -> i32 {
-    n >> cave::DETAIL_SHRINK
-}
-
-/// The leaf cell a cube finer than the leaves lies in, and any other as
-/// itself, its X wrapped as the world wraps it.
-fn leaf_or_coarser((zoom, c): (Zoom, [i32; 3])) -> (Zoom, [i32; 3]) {
-    let to = if zoom > LEAF_CELL { LEAF_CELL } else { zoom };
-    let [x, y, z] = c;
-    (
-        to,
-        [
-            wrap_idx(to, idx_at(zoom, x, to)),
-            idx_at(zoom, y, to),
-            idx_at(zoom, z, to),
-        ],
-    )
-}
-
-/// Whether the tunnels' two noises, `a` and `b` with the detail over them,
-/// are both within the band about zero.
-fn in_tunnel(a: i32, b: i32) -> bool {
-    a > -cave::TUNNEL_BAND
-        && a < cave::TUNNEL_BAND
-        && b > -cave::TUNNEL_BAND
-        && b < cave::TUNNEL_BAND
-}
-
-/// The box `[lo, hi]`, in `T_ONE`, that the cube `c` at `zoom`, no finer
-/// than a leaf, takes of the lattice cell it lies in, and that cell: the
-/// cube whole where `whole`, none (`false`) where it is larger than a
-/// lattice cell along an axis; else its center, a box of no size.
-fn span(
-    lattice: Lattice,
-    (zoom, c): (Zoom, [i32; 3]),
-    whole: bool,
-) -> ([i32; 3], [[i32; 3]; 2], bool) {
-    let s = LEAF_CELL - zoom;
-    let [across, up] = lattice.shift;
-    if whole && (s > across || s > up) {
-        return ([0; 3], [[0; 3]; 2], false);
+        i += 1;
     }
-    // Its first corner, and its center half its side on.
-    let half = if whole { 0 } else { 1 << s };
-    let [x, y, z] = c;
-    let lo = [
-        idx_at(zoom, x, HALF_UNIT) + half,
-        idx_at(zoom, y, HALF_UNIT) + half,
-        idx_at(zoom, z, HALF_UNIT) + half,
-    ];
-    let (cell, lo) = lattice.place(lo);
-    let hi = if whole {
-        let (a, u) = (1 << (T_BITS + s - across), 1 << (T_BITS + s - up));
-        [lo[0] + a, lo[1] + a, lo[2] + u]
-    } else {
-        lo
-    };
-    (cell, [lo, hi], true)
+    let mut cur = u;
+    let mut i = 0;
+    while i < n {
+        cur ^= bits[i];
+        w[i + 1] = cur;
+        i += 1;
+    }
+    (w, n as u32 + 1)
 }
 
-/// Whether the cube `c` at `zoom` is a cave's air (`whole` false), by the
-/// noises at its center, or whether a cave takes all of it (`whole`),
-/// whatever cube under it is asked, by the noises' least and most over it
-/// (`noise_span`), known only where it lies in one cell of the detail's
-/// lattice, the finest: in a tunnel, or in a cavern. A cube coarser than the
-/// caves' first is solid; one finer than the leaves is its leaf's, whole.
-/// One body for both, so a GPU's module writes it once.
-fn caves(node: (Zoom, [i32; 3]), whole: bool) -> bool {
-    let whole = whole && node.0 < LEAF_CELL;
-    let (zoom, c) = leaf_or_coarser(node);
-    if zoom < CAVE_COARSEST {
+/// The node's piece handed to its children: each child the walk passes its
+/// part, crossing each face at a cell by hash, its blocks by how far its part
+/// runs; and child `want`'s part.
+fn hand_down(node: (Zoom, [i32; 3]), p: Piece) -> ([Piece; 8], u32) {
+    // The children it passes, a bit each.
+    let mut on = 0u32;
+    let (o, s) = bounds(node);
+    let half = s / 2;
+    let (w, n) = walk(child_of(o, half, p.e), child_of(o, half, p.x), node_seed(WALK, node));
+    let mut parts = [NONE; 8];
+    let mut cur = p.e;
+    let mut from = p.from;
+    let mut i = 0;
+    while i < n {
+        let k = w[i as usize];
+        on |= 1 << k;
+        let co = [o[0] + half * (k & 1) as i32, o[1] + half * (k >> 1 & 1) as i32, o[2] + half * (k >> 2 & 1) as i32];
+        if i + 1 == n {
+            parts[k as usize] = Piece { e: cur, x: p.x, from, to: p.to, blocks: 0 };
+        } else {
+            let nk = w[i as usize + 1];
+            let axis = (k ^ nk).trailing_zeros();
+            let up = nk >> axis & 1 == 1;
+            // Where the way on toward its end meets the face, moved by up to a
+            // quarter of the child by hash.
+            let h = node_seed(CROSS ^ i, node);
+            let mut x = [0; 3];
+            let mut j = 0;
+            while j < 3 {
+                let mid = (cur[j] + p.x[j]) / 2;
+                let jit = ((h >> (10 * j)) & 0x3ff) as i32 * (half / 2 + 1) / 1024 - half / 4;
+                let v = mid + jit;
+                x[j] = if v < co[j] { co[j] } else if v > co[j] + half - 1 { co[j] + half - 1 } else { v };
+                j += 1;
+            }
+            x[axis as usize] = if up { co[axis as usize] + half - 1 } else { co[axis as usize] };
+            let side = 2 * axis + up as u32;
+            parts[k as usize] = Piece { e: cur, x, from, to: side, blocks: 0 };
+            cur = x;
+            cur[axis as usize] += if up { 1 } else { -1 };
+            from = 2 * axis + !up as u32;
+        }
+        i += 1;
+    }
+    // Its blocks by how far each part runs, none past a pipe cell's each.
+    let mut rooms = [0u32; 8];
+    let mut weights = [0u32; 8];
+    let mut i = 0;
+    while i < n {
+        let k = w[i as usize] as usize;
+        let cells = manhattan(parts[k].e, parts[k].x) + 1;
+        rooms[k] = cells * CELL_BLOCKS;
+        weights[k] = cells * 64;
+        i += 1;
+    }
+    let got = share_out(p.blocks, rooms, weights);
+    let mut k = 0;
+    while k < 8 {
+        parts[k].blocks = got[k];
+        k += 1;
+    }
+    (parts, on)
+}
+
+/// The node's tunnels not yet started to its children no piece passes: each
+/// class by hashed weights, the lower four heavier, a child's room four of
+/// its children's where it starts its own and none where a piece passes.
+fn tunnels_down(node: (Zoom, [i32; 3]), tunnels: [u32; 4], on: u32) -> [[u32; 4]; 8] {
+    let child = node.0 + 1;
+    let mut out = [[0u32; 4]; 8];
+    let mut k = 0;
+    while k < 4 {
+        if tunnels[k] > 0 {
+            let mut rooms = [0u32; 8];
+            let mut weights = [0u32; 8];
+            let h = node_seed(SPLIT ^ k as u32, node);
+            let mut i = 0;
+            while i < 8 {
+                if on >> i & 1 == 0 {
+                    rooms[i] = room(k, child);
+                }
+                let u = (h.rotate_left(4 * i as u32) & 0x3fff) + 0x800;
+                weights[i] = if i & 4 == 0 { u * 3 / 2 } else { u };
+                i += 1;
+            }
+            let got = share_out(tunnels[k], rooms, weights);
+            let mut i = 0;
+            while i < 8 {
+                out[i][k] = got[i];
+                i += 1;
+            }
+        }
+        k += 1;
+    }
+    out
+}
+
+/// What the node holds, from its root down.
+fn holds(node: (Zoom, [i32; 3])) -> Holds {
+    let (zoom, c) = node;
+    let at = |z: Zoom| [c[0] >> (zoom - z), c[1] >> (zoom - z), c[2] >> (zoom - z)];
+    let mut h = Holds { piece: NONE, tunnels: ROOT_TUNNELS };
+    let mut z = ROOT;
+    loop {
+        let here = (z, at(z));
+        // Start its own where it is its class's size and holds one.
+        let mut k = 0;
+        while k < 4 {
+            if CLASS[k] == z && h.tunnels[k] > 0 && h.piece.blocks == 0 {
+                h.piece = spawn(here, k);
+                h.tunnels[k] -= 1;
+            }
+            k += 1;
+        }
+        if z == zoom || z == PIPE {
+            return h;
+        }
+        let (parts, on) = if h.piece.blocks == 0 {
+            ([NONE; 8], 0)
+        } else {
+            hand_down(here, h.piece)
+        };
+        let down = tunnels_down(here, h.tunnels, on);
+        let next = at(z + 1);
+        let i = (next[0] & 1 | (next[1] & 1) << 1 | (next[2] & 1) << 2) as usize;
+        h = Holds { piece: parts[i], tunnels: down[i] };
+        z += 1;
+    }
+}
+
+/// A face's crossing point in its pipe cell, in sixteenths of a unit from
+/// the cell's corner: the middle of side `side`, moved across it by the
+/// face's own hash, so the cells either side meet at one point.
+fn crossing(cell: [i32; 3], side: u32) -> [i32; 3] {
+    let mid = 4 * 16;
+    if side >= 6 {
+        return [mid; 3];
+    }
+    let axis = (side / 2) as usize;
+    let up = side & 1 == 1;
+    let mut lower = cell;
+    if !up {
+        lower[axis] -= 1;
+    }
+    let h = node_seed(FACE ^ axis as u32, (PIPE, lower));
+    let mut p = [mid; 3];
+    let mut n = 0;
+    let mut j = 0;
+    while j < 3 {
+        if j == axis {
+            p[j] = if up { 8 * 16 } else { 0 };
+        } else {
+            p[j] = mid + ((h >> (16 * n)) & 0x3f) as i32 - 32;
+            n += 1;
+        }
+        j += 1;
+    }
+    p
+}
+
+/// The squared distance, in sixteenths, from `p` to the segment `a`–`b`.
+fn to_segment(p: [i32; 3], a: [i32; 3], b: [i32; 3]) -> i32 {
+    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
+    let l = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+    let t = ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2];
+    let t = if l == 0 || t <= 0 { 0 } else if t >= l { l } else { t };
+    let mut d = 0;
+    let mut j = 0;
+    while j < 3 {
+        let q = if l == 0 { ap[j] } else { ap[j] - ab[j] * t / l };
+        d += q * q;
+        j += 1;
+    }
+    d
+}
+
+/// How near block `b` (0..64) of the pipe cell lies to its piece's line,
+/// in from its way in, by its middle, out its way out, nudged by its own
+/// hash: the lower, the sooner hollowed.
+fn nearness(cell: [i32; 3], p: &Piece, b: u32) -> i32 {
+    let q = [(b & 3) as i32 * 32 + 16, (b >> 2 & 3) as i32 * 32 + 16, (b >> 4 & 3) as i32 * 32 + 16];
+    let a = crossing(cell, p.from);
+    let z = crossing(cell, p.to);
+    let m = [(a[0] + z[0]) / 4 + 32, (a[1] + z[1]) / 4 + 32, (a[2] + z[2]) / 4 + 32];
+    let d1 = to_segment(q, a, m);
+    let d2 = to_segment(q, m, z);
+    let d = if d1 < d2 { d1 } else { d2 };
+    let g = [cell[0] * 4 + (b & 3) as i32, cell[1] * 4 + (b >> 2 & 3) as i32, cell[2] * 4 + (b >> 4 & 3) as i32];
+    d + (node_seed(BLOCKS, (BLOCK, g)) % NUDGE) as i32
+}
+
+/// Whether block `b` of the pipe cell is hollow: among the `blocks` nearest.
+fn block_hollow(cell: [i32; 3], p: &Piece, b: u32) -> bool {
+    if p.blocks == 0 {
         return false;
     }
-    let (cell, b, within) = span(DETAIL_LATTICE, (zoom, c), whole);
-    if !within {
-        return false;
-    }
-    let h = DETAIL_LATTICE.corners(cell);
-    let da = noise_span(h, 0, b);
-    let db = noise_span(h, 4, b);
-    let dc = noise_span(h, 8, b);
-    let (cell, b, _) = span(TUNNEL_LATTICE, (zoom, c), whole);
-    let h = TUNNEL_LATTICE.corners(cell);
-    let ta = noise_span(h, 0, b);
-    let tb = noise_span(h, 4, b);
-    if in_tunnel(ta[0] + detail(da[0]), tb[0] + detail(db[0]))
-        && in_tunnel(ta[1] + detail(da[1]), tb[1] + detail(db[1]))
-    {
+    if p.blocks >= CELL_BLOCKS {
         return true;
     }
-    let (cell, b, _) = span(CAVERN_LATTICE, (zoom, c), whole);
-    noise_span(CAVERN_LATTICE.corners(cell), 0, b)[0] + detail(dc[0]) > cave::CAVERN_OVER
+    let mine = nearness(cell, p, b);
+    let mut before = 0;
+    let mut o = 0;
+    while o < CELL_BLOCKS {
+        let d = nearness(cell, p, o);
+        if d < mine || d == mine && o < b {
+            before += 1;
+        }
+        o += 1;
+    }
+    before < p.blocks
 }
 
-/// Whether the cube `c` at `zoom` is a cave's air, by the noises at its
-/// center (`caves`).
-pub fn hollow(node: (Zoom, [i32; 3])) -> bool {
-    caves(node, false)
+/// The blocks of the caves in the node.
+fn blocks(node: (Zoom, [i32; 3])) -> u32 {
+    let (zoom, c) = node;
+    if zoom <= PIPE {
+        let h = holds(node);
+        let mut n = h.piece.blocks;
+        let mut k = 0;
+        while k < 4 {
+            n += h.tunnels[k] * tunnel_blocks(k);
+            k += 1;
+        }
+        return n;
+    }
+    // Finer than a pipe cell: its blocks among its cell's.
+    let s = zoom - PIPE;
+    let cell = [c[0] >> s, c[1] >> s, c[2] >> s];
+    let p = holds((PIPE, cell)).piece;
+    if p.blocks == 0 {
+        return 0;
+    }
+    // The node's blocks: below the block zoom one, else 2 or 4 a side.
+    let (side, lo) = if zoom >= BLOCK {
+        let t = zoom - BLOCK;
+        (1, [(c[0] >> t) & 3, (c[1] >> t) & 3, (c[2] >> t) & 3])
+    } else {
+        let t = BLOCK - zoom;
+        let n = 1 << t;
+        (n, [(c[0] << t) & 3, (c[1] << t) & 3, (c[2] << t) & 3])
+    };
+    let mut n = 0;
+    let mut z = 0;
+    while z < side {
+        let mut y = 0;
+        while y < side {
+            let mut x = 0;
+            while x < side {
+                let b = (lo[0] + x) as u32 | ((lo[1] + y) as u32) << 2 | ((lo[2] + z) as u32) << 4;
+                n += block_hollow(cell, &p, b) as u32;
+                x += 1;
+            }
+            y += 1;
+        }
+        z += 1;
+    }
+    n
 }
 
-/// Whether a cave takes all of the cube `c` at `zoom`, whatever cube under
-/// it is asked (`caves`).
-pub fn all_hollow(node: (Zoom, [i32; 3])) -> bool {
-    caves(node, true)
+/// The share of the cube `c` at `zoom` the caves take, in `answer::FULL`'s
+/// units: its blocks of caves over its volume, a root's at any coarser.
+pub fn hollow(node: (Zoom, [i32; 3])) -> u32 {
+    let (zoom, c) = node;
+    // Coarser than a root, a root's: every root holds the same.
+    let (zoom, n) = if zoom < ROOT { (ROOT, blocks((ROOT, [0; 3]))) } else { (zoom, blocks((zoom, c))) };
+    // A block is 8 leaves; FULL is 2^15; the node holds 2^(3(LEAF − zoom)) leaves.
+    let shift = 3 + 15 - 3 * (LEAF_CELL - zoom) as i32;
+    if shift >= 0 {
+        let v = n << shift;
+        if v > FULL { FULL } else { v }
+    } else {
+        n >> -shift
+    }
 }
-
-const _: () = assert!(
-    cave::DETAIL_SHIFT[0] <= cave::TUNNEL_SHIFT[0]
-        && cave::DETAIL_SHIFT[1] <= cave::TUNNEL_SHIFT[1]
-        && cave::DETAIL_SHIFT[0] <= cave::CAVERN_SHIFT[0]
-        && cave::DETAIL_SHIFT[1] <= cave::CAVERN_SHIFT[1],
-    "the detail's lattice is the finest, so a cube within one of its cells is within one of each"
-);
-const _: () = assert!(
-    cave::TUNNEL_SHIFT[0] < T_BITS
-        && cave::TUNNEL_SHIFT[1] < T_BITS
-        && cave::CAVERN_SHIFT[0] < T_BITS
-        && cave::CAVERN_SHIFT[1] < T_BITS,
-    "a lattice cell's half units fit `T_ONE`"
-);
 
 #[cfg(test)]
 #[path = "cave.test.rs"]

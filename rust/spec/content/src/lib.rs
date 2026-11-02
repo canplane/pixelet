@@ -19,6 +19,7 @@ pub mod cube;
 pub mod decor;
 pub mod generation;
 pub mod param;
+pub mod pyramid;
 pub mod scatter;
 pub mod strata;
 
@@ -30,11 +31,8 @@ use pxl_engine::Zoom;
 pub struct Pixelet;
 
 impl Content for Pixelet {
-    fn hollow(node: (Zoom, [i32; 3])) -> bool {
+    fn hollow(node: (Zoom, [i32; 3])) -> u32 {
         cave::hollow(node)
-    }
-    fn all_hollow(node: (Zoom, [i32; 3])) -> bool {
-        cave::all_hollow(node)
     }
     fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
         strata::by_depth(cell, palette_idx, top, z)

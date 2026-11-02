@@ -15,13 +15,11 @@ use crate::Zoom;
 /// The rules a content's world follows, each answered the same on the CPU
 /// and on the GPU.
 pub trait Content {
-    /// Whether the cube `c` at `zoom` is a cave's air, where the ground may
-    /// take one (`ground::Cell::asset`).
-    fn hollow(node: (Zoom, [i32; 3])) -> bool;
-
-    /// Whether a cave takes all of the cube `c` at `zoom`, whatever cube
-    /// under it is asked: where it does, `hollow` does of every one.
-    fn all_hollow(node: (Zoom, [i32; 3])) -> bool;
+    /// The share of the cube `c` at `zoom` its caves take, in
+    /// `answer::FULL`'s units, where the ground may give one (`ground::node`):
+    /// the mean of its leaves', so a coarse cell holds what they do and
+    /// `FULL` is a cave all through.
+    fn hollow(node: (Zoom, [i32; 3])) -> u32;
 
     /// What the ground is in cell `z` of a column of `cell` whose palette
     /// index is `palette_idx` and whose top is `top` cells: by depth under
@@ -62,11 +60,8 @@ impl Sample {
 
 #[cfg(test)]
 impl Content for Sample {
-    fn hollow(_: (Zoom, [i32; 3])) -> bool {
-        false
-    }
-    fn all_hollow(_: (Zoom, [i32; 3])) -> bool {
-        false
+    fn hollow(_: (Zoom, [i32; 3])) -> u32 {
+        0
     }
     fn by_depth(_: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
         if z >= top {

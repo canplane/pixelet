@@ -383,8 +383,8 @@ pub type Answer = In<[u32; 2]>;
 
 /// The ground's answer for a node, the one way a descent asks the ground,
 /// `is_cell` whether it is asked at its own zoom, the caves asked of the node
-/// itself only where they may take it (`Content::hollow`,
-/// `Content::all_hollow`), the content `H`'s, as its strata (`Cell::asset`):
+/// itself only where they may take it (`Content::hollow`, a share), the
+/// content `H`'s, as its strata (`Cell::asset`):
 /// past the service area, the Earth's; else the node's own bound first, of
 /// each zoom's tile its cells are read from (`Resident::relief`) — at its own zoom,
 /// over it is air, else its column's asset (`Cell::asset`), its palette index; a
@@ -462,11 +462,18 @@ pub fn node<H: Resident>(
     }
     if is_cell {
         let column = held.cell(shard, *place, zoom, c);
-        let asset = column.asset::<H::Content>(zoom, c[2], || H::Content::hollow((zoom, c)));
+        // The caves' share where they may take the cell, beside its asset:
+        // the cell is air where they take it all.
+        let cave = if column.opens::<H::Content>(zoom, c[2]) {
+            H::Content::hollow((zoom, c))
+        } else {
+            0
+        };
+        let asset = column.asset::<H::Content>(zoom, c[2], || cave >= FULL);
         return (
             In {
                 kind: Kind::Cell,
-                asset: [asset, 0],
+                asset: [asset, cave],
             },
             column,
             ways,
@@ -477,7 +484,7 @@ pub fn node<H: Resident>(
     // caves only take away, so they are asked only of a node the ground
     // meets.
     let mut s = slab::<H::Content>(shard, (zoom, c), relief, [far, near], false);
-    if meets(s, (zoom, c[2]), near) && H::Content::all_hollow((zoom, c)) {
+    if meets(s, (zoom, c[2]), near) && H::Content::hollow((zoom, c)) >= FULL {
         s = slab::<H::Content>(shard, (zoom, c), relief, [far, near], true);
     }
     let answer = if meets(s, (zoom, c[2]), near) {
@@ -534,7 +541,7 @@ impl Cell {
     /// cells as the column rounds them. Under a top kept short of whole
     /// is ground, as under a shrunk box, so the cell under it is not taken
     /// either.
-    fn opens<C: Content>(&self, cell: Zoom, z: i32) -> bool {
+    pub fn opens<C: Content>(&self, cell: Zoom, z: i32) -> bool {
         let face = face_height(cell, self.top);
         let under = face_cell(cell, face) - (self.part < FULL) as i32;
         self.palette_idx != UNKNOWN && z < under && z >= rock::<C>(cell, face)

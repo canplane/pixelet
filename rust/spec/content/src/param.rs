@@ -20,27 +20,16 @@ pub mod cloud {
 }
 
 pub(crate) mod cave {
-    use pxl_engine::Zoom;
-
-    /// The tunnels' lattice, as powers of two of units across and up: 32
-    /// units across and 16 up, so a tunnel winds more across than up.
-    pub const TUNNEL_SHIFT: [u32; 2] = [5, 4];
-    /// The caverns' lattice: 64 across, 32 up.
-    pub const CAVERN_SHIFT: [u32; 2] = [6, 5];
-    /// The detail's lattice, the finest: 8 units every way.
-    pub const DETAIL_SHIFT: [u32; 2] = [3, 3];
-    /// The detail's span against a noise's, in halvings: a quarter.
-    pub const DETAIL_SHRINK: u32 = 2;
-    /// The band about zero both tunnel noises fall in where a tunnel is, of
-    /// a noise's about `±2^14`.
-    pub const TUNNEL_BAND: i32 = 1200;
-    /// What the caverns' noise passes where a cavern is, of its about `±2^14`.
-    pub const CAVERN_OVER: i32 = 7000;
-
-    /// The coarsest cube a cave takes, in zoom steps over the leaf cell: 32
-    /// units a side; nothing coarser is hollow, so every coarser fold of the
-    /// caves is solid.
-    pub const COARSEST_STEPS: Zoom = 5;
+    /// The tunnels every root cube (256 units) holds, by class: one 256
+    /// across, four 128, fourteen 64 and forty-eight 32; within what a root
+    /// can start (cave.rs `room`), so every coarser node is the same share.
+    pub const ROOT_TUNNELS: [u32; 4] = [1, 4, 14, 48];
+    /// The 2-unit blocks a tunnel of each class hollows: thirty a pipe cell
+    /// of the node's side, under the 32 a side's pipe cells can take.
+    pub const BLOCKS_A_TUNNEL: [u32; 4] = [960, 480, 240, 120];
+    /// How far a block's own hash moves it from its line, in squared
+    /// sixteenths of a unit: walls that do not run smooth.
+    pub const NUDGE: u32 = 1200;
 }
 
 pub(crate) mod strata {
