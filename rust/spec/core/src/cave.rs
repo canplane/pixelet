@@ -61,12 +61,6 @@ impl Indices for [i32; 3] {
     }
 }
 
-/// The caves' tags (`node_seed`), a lattice each: the tunnels' two noises
-/// off one hash, the caverns', and the detail over them.
-const TUNNELS: u32 = 0xca7e_0001;
-const CAVERNS: u32 = 0xca7e_0002;
-const DETAIL: u32 = 0xca7e_0003;
-
 /// The coarsest cube a cave takes, 32 units a side: nothing coarser is
 /// hollow, so every coarser fold of the caves is solid.
 pub const CAVE_COARSEST: Zoom = LEAF_CELL - cave::COARSEST_STEPS;
@@ -76,12 +70,17 @@ const T_BITS: u32 = 14;
 const T_ONE: i32 = 1 << T_BITS;
 
 /// Ken Perlin's quintic fade, 6t⁵ − 15t⁴ + 10t³, over `[0, T_ONE]`, in
-/// steps that stay within an i32.
+/// steps that stay within an i32. Their floors make it fall back a little
+/// where it rises slowest, never more than `FADE_DROP` under a value it took
+/// before (cave.test.rs).
 fn fade(t: i32) -> i32 {
     let t3 = (((t * t) >> T_BITS) * t) >> T_BITS;
     let inner = 10 * T_ONE + ((((6 * t - 15 * T_ONE) >> 2) * t) >> (T_BITS - 2));
     (t3 * (inner >> 2)) >> (T_BITS - 2)
 }
+
+/// The most `fade` falls under a value it took at a smaller `t`.
+const FADE_DROP: i32 = 7;
 
 /// `a` toward `b` by `t` of `T_ONE`, never past either: the floor of a
 /// product no larger than either's span.
@@ -89,8 +88,9 @@ fn lerp(a: i32, b: i32, t: i32) -> i32 {
     a + (((b - a) * t) >> T_BITS)
 }
 
-/// A lattice: its tag, and its spacing as powers of two of units, across
-/// (X and Y) and up (Z).
+/// A lattice: its tag (`node_seed`), and its spacing as powers of two of
+/// units, across (X and Y) and up (Z). The tunnels' two noises come off one
+/// hash, the detail's three off another.
 #[derive(Clone, Copy)]
 struct Lattice {
     tag: u32,
@@ -98,15 +98,15 @@ struct Lattice {
 }
 
 const TUNNEL_LATTICE: Lattice = Lattice {
-    tag: TUNNELS,
+    tag: 0xca7e_0001,
     shift: cave::TUNNEL_SHIFT,
 };
 const CAVERN_LATTICE: Lattice = Lattice {
-    tag: CAVERNS,
+    tag: 0xca7e_0002,
     shift: cave::CAVERN_SHIFT,
 };
 const DETAIL_LATTICE: Lattice = Lattice {
-    tag: DETAIL,
+    tag: 0xca7e_0003,
     shift: cave::DETAIL_SHIFT,
 };
 
@@ -196,10 +196,11 @@ fn lerp_span(a: [i32; 2], b: [i32; 2], t0: i32, t1: i32) -> [i32; 2] {
 
 /// The least and the most the noise whose gradients are `h`'s bits from
 /// `from` takes over the box `[lo, hi]` of its lattice cell, in `T_ONE`,
-/// about `±T_ONE`, widened by `slack`: each corner's gradient over the box,
-/// blended at the fades of the box's ends, the fade only rising. Over a box
-/// of no size, a point, it is the noise there, both ends.
-fn noise_span(h: [u32; 8], from: u32, [lo, hi]: [[i32; 3]; 2], slack: i32) -> [i32; 2] {
+/// about `±T_ONE`: each corner's gradient over the box, blended over the
+/// fades the box's points take, from its first end's less `FADE_DROP` to its
+/// last's and `FADE_DROP` more. Over a box of no size, a point, it is the
+/// noise there, both ends.
+fn noise_span(h: [u32; 8], from: u32, [lo, hi]: [[i32; 3]; 2]) -> [i32; 2] {
     let g = |k: usize, h: u32| grad_span(h >> from, offset(k, lo), offset(k, hi));
     let v = [
         g(0, h[0]),
@@ -211,16 +212,39 @@ fn noise_span(h: [u32; 8], from: u32, [lo, hi]: [[i32; 3]; 2], slack: i32) -> [i
         g(6, h[6]),
         g(7, h[7]),
     ];
-    let f0 = [fade(lo[0]), fade(lo[1]), fade(lo[2])];
-    let f1 = [fade(hi[0]), fade(hi[1]), fade(hi[2])];
+    let below = |t: i32, u: i32| {
+        let f = fade(t) - if u > t { FADE_DROP } else { 0 };
+        if f < 0 {
+            0
+        } else {
+            f
+        }
+    };
+    let above = |t: i32, u: i32| {
+        let f = fade(u) + if u > t { FADE_DROP } else { 0 };
+        if f > T_ONE {
+            T_ONE
+        } else {
+            f
+        }
+    };
+    let f0 = [
+        below(lo[0], hi[0]),
+        below(lo[1], hi[1]),
+        below(lo[2], hi[2]),
+    ];
+    let f1 = [
+        above(lo[0], hi[0]),
+        above(lo[1], hi[1]),
+        above(lo[2], hi[2]),
+    ];
     let x00 = lerp_span(v[0], v[1], f0[0], f1[0]);
     let x10 = lerp_span(v[2], v[3], f0[0], f1[0]);
     let x01 = lerp_span(v[4], v[5], f0[0], f1[0]);
     let x11 = lerp_span(v[6], v[7], f0[0], f1[0]);
     let y0 = lerp_span(x00, x10, f0[1], f1[1]);
     let y1 = lerp_span(x01, x11, f0[1], f1[1]);
-    let z = lerp_span(y0, y1, f0[2], f1[2]);
-    [z[0] - slack, z[1] + slack]
+    lerp_span(y0, y1, f0[2], f1[2])
 }
 
 /// The detail over a noise: a share of it (`cave::DETAIL_SHRINK`).
@@ -297,26 +321,25 @@ fn caves(node: (Zoom, [i32; 3]), whole: bool) -> bool {
     if zoom < CAVE_COARSEST {
         return false;
     }
-    let slack = if whole { cave::SLACK } else { 0 };
     let (cell, b, within) = span(DETAIL_LATTICE, (zoom, c), whole);
     if !within {
         return false;
     }
     let h = DETAIL_LATTICE.corners(cell);
-    let da = noise_span(h, 0, b, slack);
-    let db = noise_span(h, 4, b, slack);
-    let dc = noise_span(h, 8, b, slack);
+    let da = noise_span(h, 0, b);
+    let db = noise_span(h, 4, b);
+    let dc = noise_span(h, 8, b);
     let (cell, b, _) = span(TUNNEL_LATTICE, (zoom, c), whole);
     let h = TUNNEL_LATTICE.corners(cell);
-    let ta = noise_span(h, 0, b, slack);
-    let tb = noise_span(h, 4, b, slack);
+    let ta = noise_span(h, 0, b);
+    let tb = noise_span(h, 4, b);
     if in_tunnel(ta[0] + detail(da[0]), tb[0] + detail(db[0]))
         && in_tunnel(ta[1] + detail(da[1]), tb[1] + detail(db[1]))
     {
         return true;
     }
     let (cell, b, _) = span(CAVERN_LATTICE, (zoom, c), whole);
-    noise_span(CAVERN_LATTICE.corners(cell), 0, b, slack)[0] + detail(dc[0]) > cave::CAVERN_OVER
+    noise_span(CAVERN_LATTICE.corners(cell), 0, b)[0] + detail(dc[0]) > cave::CAVERN_OVER
 }
 
 /// Whether the cube `c` at `zoom` is a cave's air, by the noises at its
@@ -345,3 +368,7 @@ const _: () = assert!(
         && cave::CAVERN_SHIFT[1] < T_BITS,
     "a lattice cell's half units fit `T_ONE`"
 );
+
+#[cfg(test)]
+#[path = "cave.test.rs"]
+mod test;

@@ -1,16 +1,16 @@
 // pxl-spec-core/scatter.rs
 
-//! gpu-portable: the decor the ground holds, never stored, a tree of hashes:
-//! a column at a decor's root zoom (`ROOTS`) holds as many as one hash draws
-//! about its mean, and each column hands its count down to its four, one hash
-//! a column, to the leaf cells, a unit, which hold one or none (`count`). A leaf cell's own hash draws its variant and heading
-//! (`candidate_at`); one whose box meets a neighbor's that drew lower gives
-//! way to it (`retained`). At a zoom a decor stands as itself where its box
-//! keeps an eighth of that zoom's cell or more, as a folded cube is drawn, and
-//! is none where it keeps none (`stands_at`), placed or generated alike.
-//! Every draw is a u32 (xpute-kit `SplitMix32`), seeded by the decor's seed
-//! and the column (`node_seed`), so every reader, either side, draws the
-//! same.
+//! gpu-portable: the decor the ground holds, never stored, a tree of hashes: a
+//! column at a decor's root zoom (`ROOTS`) holds as many as one hash draws
+//! about its mean, and each column hands its count down to its four, one hash a
+//! column, to the leaf cells, a unit, which hold one or none (`count`). A leaf
+//! cell's own hash draws its variant and heading (`candidate_at`); one whose
+//! box meets a neighbor's that drew lower gives way to it (`retained`). At a
+//! zoom a decor stands as itself where its box keeps an eighth of that zoom's
+//! cell or more, as a folded cube is drawn, and is none where it keeps none
+//! (`stands_at`), placed or generated alike. Every draw is a u32 (xpute-kit
+//! `SplitMix32`), seeded by the decor's seed and the column (`node_seed`), so
+//! every reader, either side, draws the same.
 
 use xpute_kit::math::rng::SplitMix32;
 

@@ -185,11 +185,13 @@ sources, arriving as one record (`pxl-kernel domain/layer/instance.rs`
 | decor  | what the ground generates                    | a placed decor  |
 | marker | a place, Carto's icon and its name           | a placed marker |
 
-The ground generates decor by evaluating, never storing, a tree of hashes: a
-column at the coarsest zoom a decor stands at holds as many as a hash draws
-about its mean, each column hands its count to its four a hash each, and a leaf
-cell holds one or none; where it stands is a function of the cell, a seed and
-the ground's face, one rule on both sides (`pxl-spec-core scatter.rs`). One
+The ground generates its decor as it carves its caves, each a function of the
+node and the one seed (`pxl-spec-core cave.rs` `node_seed`), evaluated where it
+is asked, never stored and never handed down a descent. Decor's is a tree of
+hashes: a column at the coarsest zoom a decor stands at holds as many as a hash
+draws about its mean, each column hands its count to its four a hash each, and a
+leaf cell holds one or none; where it stands is a function of the cell, a seed
+and the ground's face, one rule on both sides (`pxl-spec-core scatter.rs`). One
 whose box meets a neighbor's that drew lower gives way, so two generated decors
 never share a cell. A decor, placed or generated, stands as itself, a model or
 its impostor, at every zoom whose cell its box keeps an eighth of or more, as a
@@ -198,9 +200,12 @@ none, so neither is told from the other.
 
 A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its palette index the majority of those it folds,
-and its top cell is filled to the share its height reaches
-(`pxl-spec-core ground.rs` `top`). What is placed and the ways fold to the kind
-most of their fill is (`overwrite.rs` `fold`).
+and its top cell is filled to the share its height reaches (`pxl-spec-core
+ground.rs` `top`). What is placed and the ways fold to the kind most of their
+fill is (`overwrite.rs` `fold`). The caves' coarse cell is the noises' at its
+center (`cave.rs` `hollow`), no summary of the cells under it: a cave narrower
+than the cell opens or closes there as the zoom changes. A coarser node is all
+air only where the noises' least and most over it say so (`all_hollow`).
 
 A coarse cell keeps how much of its cube the ground and what is written over it
 fill (`answer.rs` `cover`), in eighths, floored: its **fill eighths**. It is

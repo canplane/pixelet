@@ -102,20 +102,18 @@ ownership and lifetime.
 ## The generated WGSL's size
 
 - Compare each `*.gen.wgsl` and their total against `HEAD` and against the
-  tree just before the change: `cargo shader-wgsl` keeps every set it made
-  under the user's cache (`~/Library/Caches/pixelet/shader/<digest>/` on a
-  Mac), newest last, so a change another session left in the tree is told
-  apart from this one.
+  tree just before the change: `cargo shader-wgsl` keeps the sets it made, the
+  most lately used up to `SOURCE_CAP` (pxl-tool bin/shader_wgsl.rs), under the
+  user's cache (`~/Library/Caches/pixelet/shader/<digest>/` on a Mac), so a
+  change another session left in the tree is told apart from this one.
 - A body written again at each call is what grows it. pxl-shader-build keeps
   a function called from more than one place a WGSL function (`dont_inline`),
-  but only one rust-gpu has not inlined already: rust-gpu inlines a function
-  that may panic, and every function calling it (pxl-spec-core lib.rs,
-  nothing may abort).
+  but only one rust-gpu has not inlined already
+  (rustc_codegen_spirv linker/inline.rs `should_inline`).
 - To find why one was inlined, mark it and the functions under it
   `#[inline(never)]` for one build: rust-gpu warns that each "has been
-  inlined", with the cause (`panicking`, `illegal (pointer) argument`) and its
-  callers. Follow the cause down to the function that holds it, fix it there,
-  and take the marks out.
+  inlined", with the cause and its callers. Follow the cause down to the
+  function that holds it, fix it there, and take the marks out.
 
 ## Report
 

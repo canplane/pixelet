@@ -35,9 +35,6 @@ pub(crate) mod cave {
     pub const TUNNEL_BAND: i32 = 1200;
     /// What the caverns' noise passes where a cavern is, of its about `±2^14`.
     pub const CAVERN_OVER: i32 = 7000;
-    /// What a noise's least and most over a box are widened by, past the
-    /// integers' rounding.
-    pub const SLACK: i32 = 64;
 
     /// The coarsest cube a cave takes, in zoom steps over the leaf cell: 32
     /// units a side; nothing coarser is hollow, so every coarser fold of the

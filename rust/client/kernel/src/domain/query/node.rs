@@ -13,8 +13,8 @@
 //!   GPU built of its brick, its child groups read back into the pool's mirror,
 //!   read as the GPU reads them (pxl-spec-core `clipmap::ground`,
 //!   `way::tree`);
-//! - the caves: the noises at the cell's center (`procedural.rs`
-//!   `hollow`);
+//! - the caves: the noises at the cell's center (pxl-spec-core
+//!   `cave::hollow`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
 //!   their majority (`pyramid.rs`, through the store's query).
 //!
@@ -37,7 +37,7 @@
 //!   narrower than half its cell is dropped there, as
 //!   its level of detail does;
 //! - the caves: a cave through all of the node, by the noises' least and
-//!   most over it (`procedural::all_hollow`);
+//!   most over it (pxl-spec-core `cave::all_hollow`);
 //! - what is placed: no record of the objects' pyramid at the node.
 //!
 //! A source not holding the node answers that it lacks it, never air and
