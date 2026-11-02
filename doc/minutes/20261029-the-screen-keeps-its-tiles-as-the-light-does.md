@@ -605,6 +605,17 @@ the user (2026-11-01); measured in the tiles' baseline's record (the backlog's r
   stands, a still tile taking `1/min(age, JITTERS)`, so the picture that
   stands is the view's own jitters alone. Step 5 part 1 and the cost above
   read `JITTERS`; this replaces them.
+  Replaced by the user (2026-11-02): a screen tile is claimed `JITTERS`
+  frames again (`screen::CLAIMED_FOR`), a still tile taking
+  `1/(min(age - 1, JITTERS - 2) + 2)`, the first still frame half of what
+  stands, the frame it changed in counting as one of the sequence. The
+  TAA's priorities are efficiency, low memory and cost-effective
+  jittering, not exact convergence: a claim a frame shorter; no pop when
+  motion stops, the first still frame keeping half the history; and a
+  mover's tiles accumulating history between its steps. The frame it
+  changed in and the `JITTERS - 1` still frames after it each take their
+  own place of the sequence (`Resolve::jitter`, `Tiles::claiming`), the
+  eight covered.
 - **A draw marks the tiles it covered at the frame it was drawn in**, the
   "as it was" marks drawn with that frame's own words (`frame_was`), its
   jitter among them.
@@ -656,3 +667,123 @@ record (the closing round):
   whether any tile gathers from what it handed (`Tiles::claiming`), as the
   light decides whether to cast; a dropped frame is followed by one drawn
   whole, which marks every tile.
+
+## Not taken in the waste round (2026-11-02)
+
+- **The beam's corners resumed off a coarser level's lines** not taken by
+  the user. Counted (a47145e81, S1 turned and walked): neighboring corners
+  descend the same nodes from the root, 42.8k of the eye's 48k world asks a
+  cast in its beam and samples; the eye's `beam` 1.1-1.2 ms of a GPU frame
+  near 20 ms. Resuming each corner off the least coarser line about it, as
+  a cell's samples resume off its corners, takes at most half of that, and
+  adds a pass and lines a level, the levels' spacing, keep and radius in
+  `beam::Grid` and the light's layout, and a list and reach a level for the
+  light's dispatch (275972a85): more than it takes off.
+## Taken in the closing round: effects alike across zooms (2026-11-02)
+
+The user's word: every effect a drawn surface takes applies at every zoom by
+one computation from what the hit gives at its zoom; one whose reads are
+missing at a zoom stops at one boundary stated from that and fades as the
+others do; none vanishes by accident. Then: shadows show at coarse zooms
+too, the map reaching as far as the eye draws by the light's own mechanism,
+no shadow coarser anywhere than it was.
+
+- **Face bits.** A neighbor hides a face where it keeps as much of its cube
+  as the hit does (`answer::hides(asset, hit_fill)`, the fill handed in the
+  ask's word, `face::ask_word`). It was `answer::whole`, and a hit short of its
+  cube asked nothing (`face::BOX`), so creases, corners and lines went at
+  coarse cells.
+- **The screen's occlusion.** Its radius and falloffs are in sides of the
+  cell drawn at the pixel's distance (`ao_cell`); within the leaf's band, as
+  before.
+- **Shadows.** The map is 12 clip levels, each twice as wide as the last.
+  The first, 2048 texels of 1/8 unit, is the map as it stood, reaching 122
+  units where it read 96. The rest are 512 texels a side, the least that
+  keeps a texel no wider than the camera grid's cell at the level's near
+  edge, to the pyramid top's draw distance (`gpu/shadow.rs` asserts each).
+  The `split_dist` boundary is gone. Each level casts by the same passes
+  over its own head and list; the marks run once for all of them, the
+  stands their own buffer. The memory, from the sizes, over the map as it
+  stood: the levels past the first's layers, 13.75 MiB at 5 bytes a texel;
+  their world words, 11 MiB; the raster's 512 targets, 2 MiB; their lists,
+  11 × 1,549,184 words, 65.0 MiB; the stands, 0.4 MiB, of which the first
+  level's 0.25 MiB left its list. About 92 MiB added to the 150 MiB the map
+  took.
+- **What stays as it was.** A line's width in units, the rim and the air,
+  each one computation at every zoom.
+- **Open: one list for every level's transient words.** The lines, samples
+  and misses (65.0 MiB of the above) are needed only while their level
+  casts. Sharing one asks each level cast whole before the next, which folds
+  the light's spans into each other.
+- **Images stay as they were**, on the user's word: a cell coarser than the
+  ground's leaf keeps its far colors.
+- Looked at once in the app, near to far at noon and 07:00. Creases and
+  lines show on the coarse folds; no tree's shadow showed near the eye at
+  07:00, which was not set beside main's before the GPU was given back.
+  Open. No timing runs, on the user's word.
+- **The 07:00 look, read in the code (2026-11-02).** The level was chosen
+  by the distance across the light's rays alone, and a level's box holds a
+  receiver along them within its half-width. Under a low sun a receiver far
+  along the rays lies close across them: it read the first level, past its
+  planes (128 units and a share either side of the eye), and was lit. The
+  level is now the finest that holds it both ways (`Light::level_dist`,
+  shadow.wgsl `shadow_dist`), the marks alike; a receiver within the first
+  level's half-width along the rays reads it as before. Open: a receiver near a level's sunward plane keeps only what
+  stands between it and that plane.
+- **A level's box toward the sun (2026-11-02).** A receiver near a level's
+  sunward plane kept only what stood between it and that plane. Each
+  level's box now reaches past its receivers toward the sun as far along the
+  rays as they climb from the ground to the world's ceiling over it
+  (`HEADROOM`), no farther than the eye draws at the pyramid's top
+  (pxl-render gpu/shadow.rs `caster_reach`), the same for every level; its
+  depth step's margin grows with it. The lit passes scale each level's depth
+  by the first's over its own (`level_clip`), its texel off the first's row
+  across. Level 0's texel and reach for receivers are as they were. Read in
+  the code, no GPU run.
+- **A level's box toward the sun over the world's relief (2026-11-02).**
+  On the user's word: a caster taller than the ceiling over the receiver's
+  own ground was left out, so a mountain more than `HEADROOM` over a
+  receiver at its foot cast nothing on it under a low sun. A level's reach
+  now runs from the lowest ground under its box to the ceiling over the
+  highest ground the rays cross before it, as the ground's clip levels
+  bound it, over the light's height (pxl-render gpu/shadow.rs
+  `caster_reach`, pxl-kernel domain/layer/terrain/clipmap.rs
+  `relief_over`), read on the CPU as each level is aimed: the box's
+  receivers first, then on toward the sun as far as the reach asks, until
+  no higher ground lies within it; no farther than the eye draws, the same
+  for every level. The height is rounded up to a power of two of leaf
+  cells, so the box moves only where it doubles or halves; the light's
+  frame is renumbered where a box's depth moves (`Level::generation`).
+  Where the clip levels do not yet bound the ground, as far as the eye
+  draws; where they hold none under the box, `HEADROOM` over sea level.
+  No texel is coarser and no reach shorter than before. Open: a receiver
+  dug below the ground's face keeps only the reach from that face. Read in
+  the code, no GPU run.
+
+## Withdrawn: effects alike across zooms (2026-11-02)
+
+The user's word: every effect applied at every zoom is withdrawn, all of
+them together, not one: the face bits answered at coarse cells
+(`answer::hides`, `face::ask_word`), the screen's occlusion in sides of the
+cell drawn (`ao_cell`) and the shadow map's 12 clip levels with what
+followed them (the level chosen along the rays, the box toward the sun over
+the relief, the levels' shared list) are reverted to how they stood before
+the closing round. Measured once (S1, 10 s turned and walked, 2056×1113,
+6a6429155 against 30b477576): the GPU's p50 3 to 10 ms more in every
+condition, the light's passes 6.6 → 14.4 ms at noon and 8.9 → 21.9 ms at
+07:00, `shadow` 0.3 → 3.5 ms, decor's and the actors' depth, the marks and
+the propagation run every frame for every level. The aim, the user's: a
+design symmetric and orthogonal, with fewer states.
+
+## The effects stop at one boundary (2026-11-02)
+
+The user's word: the effects stop at the same boundary. The lines, the
+corners' occlusion, the screen's occlusion and the shadows reach one
+distance from the eye, `STAGE_AT::EFFECT_REACH`, where the camera grid's cells
+one zoom coarser than the ground's leaf begin (the shadows' reach as it
+stood), and fade by one function from `effect::FADE_START` of it
+(`effect.wgsl` `effect_share`), by the distance from the eye; the shadows
+faded by their place across the light's box before. `STAGE_AT::SHADOWS` is
+the setting's on or off alone, and the frame's `REACH_NDC` is gone
+(`EFFECT_REACH` in its place); the cast still reads within the same reach. The
+rim and the air go on as far as the eye draws.

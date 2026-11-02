@@ -956,3 +956,25 @@ The conditions the tiles' plan left (S2 unless named; busy p50 / p95):
 - One run each; the clouds only turn on or off, and the render scale's other
   setting, `auto`, stepped down differently on each build, so it is not set
   side by side. No console error in any.
+
+**The occlusion's half depth one float a texel, against `6a6429155`**
+(2026-11-02, ports 5195 and 5192, S1 turned and walked at noon, a 2056×1169
+canvas at a device pixel ratio of 2, spans timing their own work since
+`9d3102f90`). The half map was rgba32float, the depth and the normal; it is
+r32float, the depth alone, and the sample finds the normal from the
+full-resolution depth at the pixel the downsample kept, so every tap of the
+sample, the denoise and the apply reads 4 bytes where it read 16.
+
+| build | AO | busy p50 / p95 | `ao` p95 | `world` / `world_rest` p95 |
+|---|---|---|---|---|
+| tip | `screen` | 22.9 / 34.6, 22.9 / 34.0 | 1.9, 1.8 | 5.4 / 1.2, 5.3 / 1.2 |
+| tip | `corner` | 21.0 / 32.6 | – | 5.4 |
+| round | `screen` | 22.4 / 33.8, 24.8 / 35.2 | 1.0, 1.2 | 5.3 / 1.2, 6.4 / 1.4 |
+| round | `corner` | 25.7 / 39.9 | – | 7.8 |
+
+- `ao` some 0.7 ms less at the p95; the busy time within a run's noise, the
+  round's `corner` run its noisiest. With the spans timing their own work,
+  AO `screen` over `corner` reads some 2 ms busy on the tip, not 2 to 4,
+  `ao` and `world_rest` its parts.
+- The picture: a still at noon with AO `screen` the same on both builds but
+  the cumulus, which the clock moves. No console error.

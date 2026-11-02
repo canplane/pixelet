@@ -16,14 +16,14 @@ follows one rule: **the eye decides.** The view is a grid of cells of equal
 angle about the eye, so a cell grows with distance. Space is cut into cubes at
 every zoom; one cube of space at one zoom is a **node**, an address the world is
 asked about, never something stored. Wherever it stands, the world is drawn at
-the zoom whose nodes span a cell there (`pxl-spec-core grid.rs` `cell_zoom_at`).
+the zoom whose nodes span a cell there (`pxl-engine grid.rs` `cell_zoom_at`).
 A city, a mountain range or a tower behind a ridge costs the cells it covers on
 the screen, not what it holds.
 
 Every pixel's ray, every step a walker takes, the pointer and every edit ask the
 world the same question: what fills this node? One function answers it, each
-layer written over the one below (`pxl-spec-core world.rs` `node`). It is
-compiled for the CPU and, through rust-gpu, for the GPU (`pxl-spec-core cast.rs`
+layer written over the one below (`pxl-engine world.rs` `node`). It is
+compiled for the CPU and, through rust-gpu, for the GPU (`pxl-engine cast.rs`
 `first`, `pxl-shader cast.rs` `cast_cs`), so what is drawn is what is walked on
 and edited.
 
@@ -216,7 +216,8 @@ language by where a thing runs.
 │   └── build/           #   what the bundlers read the workspace through
 ├── rust/                # The Rust workspace (Cargo)
 │   ├── spec/            #   pxl-spec: the model every crate shares
-│   │   └── core/        #     pxl-spec-core: what CPU and GPU both compute
+│   │   ├── engine/      #     pxl-engine: what CPU and GPU both compute
+│   │   └── content/     #     pxl-content: pixelet's content over it
 │   ├── client/          #   pxl-kernel, pxl-render, and pxl-shader, the GPU's
 │   │                    #     compute entries built to WGSL
 │   ├── client-bracket/  #   pxl-wasm and pxl-native, the kernel's two forms
@@ -252,7 +253,10 @@ field or a catalog entry, keeps the kernel's.
 `xpute/` is xpute's repository root, developed here and copied out byte for
 byte by `xpute/script/export.py`; [xpute/README.md](./xpute/README.md) and
 [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) describe the system under the
-application. Nothing under it names pixelet.
+application. Nothing under it names pixelet. pixelet takes it through its
+packages, as any program would: `ts/pnpm-workspace.yaml` lists xpute's, which
+the client and the apps depend on as `workspace:*`, and `rust/Cargo.toml` names
+the crates by path.
 
 ---
 
