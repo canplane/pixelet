@@ -226,19 +226,19 @@ fn function_8(param_16: u32, param_17: ptr<function, type_29>) -> i32 {
 }
 
 fn function_9(param_18: u32, param_19: type_12) -> u32 {
-    var phi_717_: i32;
+    var phi_716_: i32;
 
     let _e70 = function_1(1592590337u, param_18);
     let _e71 = function_1(_e70, param_19.member);
     if (param_19.member == 0u) {
-        phi_717_ = 0i;
+        phi_716_ = 0i;
     } else {
-        let _e76 = ((32u - param_19.member) & 31u);
-        phi_717_ = ((param_19.member_1[0] << bitcast<u32>(_e76)) >> bitcast<u32>(_e76));
+        let _e75 = ((32u - param_19.member) & 31u);
+        phi_716_ = ((param_19.member_1[0] << bitcast<u32>(_e75)) >> bitcast<u32>(_e75));
     }
-    let _e82 = phi_717_;
-    let _e84 = function_1(_e71, bitcast<u32>(_e82));
-    let _e86 = function_1(_e84, bitcast<u32>(param_19.member_1[1]));
+    let _e81 = phi_716_;
+    let _e83 = function_1(_e71, bitcast<u32>(_e81));
+    let _e86 = function_1(_e83, bitcast<u32>(param_19.member_1[1]));
     return _e86;
 }
 

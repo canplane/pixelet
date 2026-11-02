@@ -1,7 +1,7 @@
 // pxl-spec-core/cave.rs
 
 //! gpu-portable: a node's seed and the caves, u32 hashes over i32 cells, no
-//! `Option<bool>`, and every index a constant (lib.rs, nothing may abort).
+//! `Option<bool>`, and each lattice corner by itself.
 //!
 //! The caves are Minecraft 1.18's noise caves: tunnels where two noises are
 //! both near zero, its spaghetti, and caverns where one is high, its cheese,
@@ -27,38 +27,22 @@ const MASTER_SEED: u32 = 0x5eed_0001;
 /// it (`wrap_idx`), so a node seeds alike on whichever lap its asker counts
 /// it. Every draw on the world's nodes seeds by it, each use under a tag of
 /// its own, so no two uses draw one stream.
-///
-/// [naga] Each index by itself, not a loop (`Indices`): Naga's Metal backend
-/// breaks a `loop { … continuing { break if … } }` an iteration early,
-/// re-reading its condition after the counter moved.
-pub fn node_seed<I: Indices>(tag: u32, (zoom, c): (Zoom, I)) -> u32 {
-    c.fold(
-        derive_seed_u32(derive_seed_u32(MASTER_SEED, tag), zoom),
-        zoom,
-    )
-}
-
-/// A node's indices, two or three, as `node_seed` folds them in, each by
-/// itself and taken apart, not indexed: an index into an array of a const
-/// generic's length is checked even where it cannot fail, since rustc folds
-/// no constant after monomorphizing (lib.rs, nothing may abort).
-pub trait Indices: Copy {
-    /// `h` with each index folded in, X named as the world at `zoom` names it.
-    fn fold(self, h: u32, zoom: Zoom) -> u32;
-}
-
-impl Indices for [i32; 2] {
-    fn fold(self, h: u32, zoom: Zoom) -> u32 {
-        let [x, y] = self;
-        derive_seed_u32(derive_seed_u32(h, wrap_idx(zoom, x) as u32), y as u32)
+pub fn node_seed<const D: usize>(tag: u32, (zoom, at): (Zoom, [i32; D])) -> u32 {
+    const { assert!(D <= 3, "a node has at most three indices") };
+    let mut h = derive_seed_u32(derive_seed_u32(MASTER_SEED, tag), zoom);
+    // [naga] each index by itself, not a loop: Naga's Metal backend breaks a
+    // `loop { … continuing { break if … } }` an iteration early, re-reading
+    // its condition after the counter moved.
+    if D > 0 {
+        h = derive_seed_u32(h, wrap_idx(zoom, at[0]) as u32);
     }
-}
-
-impl Indices for [i32; 3] {
-    fn fold(self, h: u32, zoom: Zoom) -> u32 {
-        let [x, y, z] = self;
-        derive_seed_u32([x, y].fold(h, zoom), z as u32)
+    if D > 1 {
+        h = derive_seed_u32(h, at[1] as u32);
     }
+    if D > 2 {
+        h = derive_seed_u32(h, at[2] as u32);
+    }
+    h
 }
 
 /// The coarsest cube a cave takes, 32 units a side: nothing coarser is
