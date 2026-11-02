@@ -46,11 +46,9 @@ pub(super) struct Raster {
     pub(super) boxes_built: Pipeline,
     faces_built: Pipeline,
     draw_built: Pipeline,
-    /// The gate the boxes are drawn through in a frame not drawn whole, and
-    /// its group over the claimed tiles (`Resolve::tiles`).
+    /// The gate the boxes are drawn through in a frame not drawn whole, over
+    /// the claimed tiles (`Resolve::tiles`).
     gate: Pipeline,
-    gate_group: u32,
-    gate_bindings: (u32, u32),
     pub(super) args: u32,
     boxes: u32,
     room: u32,
@@ -97,8 +95,6 @@ impl Raster {
             faces_built: pipelines.build_compute(g, SHADER_FACE, &compute::FACE_GROUP),
             draw_built: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
             gate: pipelines.build(g, PIPELINE_RASTER_GATE, Format::r32uint),
-            gate_group: 0,
-            gate_bindings: (0, 0),
             args: g.buf(
                 word_bytes(raster::ARGS_WORDS as usize),
                 buffer_usage::STORAGE
@@ -282,7 +278,7 @@ impl Raster {
     /// cleared first, through the gate in the `claimed` tiles where the frame
     /// is not drawn whole (`Resolve::tiles`, `cnt` of them; span `sraster`).
     pub(super) fn draw(
-        &mut self,
+        &self,
         ctx: &mut RenderContext,
         grid: &beam::Grid,
         samples_cast: bool,
@@ -313,17 +309,14 @@ impl Raster {
             ),
         );
         if let Some((tiles, cnt)) = claimed {
-            if tiles != self.gate_bindings {
-                release(self.gate_group);
-                self.gate_group = g.bind_group(
-                    self.gate.layouts[0],
-                    &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
-                );
-                self.gate_bindings = tiles;
-            }
+            let group = g.bind_group(
+                self.gate.layouts[0],
+                &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
+            );
             g.set_pipeline(pass, self.gate.id);
-            g.set_bind_group(pass, 0, self.gate_group, &[]);
+            g.set_bind_group(pass, 0, group, &[]);
             g.draw(pass, 6, cnt, 0, 0);
+            release(group);
         }
         g.set_pipeline(pass, self.draw_built.id);
         g.set_bind_group(pass, 0, self.groups[1], &[]);

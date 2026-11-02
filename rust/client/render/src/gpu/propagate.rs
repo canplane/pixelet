@@ -61,17 +61,11 @@ const UNIFORM_FLOATS: usize = 36;
 pub struct Propagate {
     pipeline: Pipeline,
     uniform: u32,
-    /// Its group and what it was made over, made again where one is another.
-    group: u32,
-    bindings: [u32; 7],
     /// The depth's bound (screen_bound.wgsl `bounds`), two floats a square,
-    /// the squares across and down it was made for, and its pass and group,
-    /// made again where what it binds is another.
+    /// the squares across and down it was made for (`size`), and its pass.
     bounds: u32,
     bounds_size: [u32; 2],
     bounds_built: Pipeline,
-    bounds_group: u32,
-    bounds_bindings: [u32; 4],
 }
 
 impl Propagate {
@@ -82,18 +76,14 @@ impl Propagate {
                 word_bytes(UNIFORM_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            group: 0,
-            bindings: [0; 7],
             bounds: 0,
             bounds_size: [0; 2],
             bounds_built: pipelines.build_compute(g, SHADER_SCREEN_BOUND, &BOUNDS_GROUP),
-            bounds_group: 0,
-            bounds_bindings: [0; 4],
         }
     }
 
     pub fn release(self) {
-        for id in [self.uniform, self.group, self.bounds, self.bounds_group] {
+        for id in [self.uniform, self.bounds] {
             release(id);
         }
     }
@@ -123,80 +113,78 @@ impl Propagate {
         g.write_buf(self.uniform, 0, bytes(&u));
     }
 
+    /// The depth's bound for a world's depth `size` pixels across and down,
+    /// made anew for a new size, where every tile is drawn; before the
+    /// frame's commands.
+    pub fn size(&mut self, g: &Gpu, size: [u32; 2]) {
+        let squares = size.map(|v| v.div_ceil(BOUND_STEP));
+        if squares == self.bounds_size {
+            return;
+        }
+        release(self.bounds);
+        self.bounds = g.buf(
+            word_bytes(2 * (squares[0] * squares[1]) as usize),
+            buffer_usage::STORAGE,
+        );
+        self.bounds_size = squares;
+    }
+
     /// The depth's bound set in the tiles the world's pass drew this frame,
-    /// the words and uniform `drawn` (`Tiles::after_gate`), off the world's depth `depth`, `size`
-    /// pixels across and down; made anew for a new size, where every tile is
-    /// drawn. Timed with the resolve, which follows it.
+    /// the words and uniform `drawn` (`Tiles::after_gate`), off the world's
+    /// depth `depth`, `tiles` across and down. Timed with the resolve, which
+    /// follows it.
     pub fn set_bounds(
-        &mut self,
+        &self,
         ctx: &mut RenderContext,
         depth: u32,
-        size: [u32; 2],
         drawn: (u32, u32),
         tiles: [u32; 2],
     ) {
         let g = ctx.g;
-        let squares = size.map(|v| v.div_ceil(BOUND_STEP));
-        if squares != self.bounds_size {
-            release(self.bounds);
-            self.bounds = g.buf(
-                word_bytes(2 * (squares[0] * squares[1]) as usize),
-                buffer_usage::STORAGE,
-            );
-            self.bounds_size = squares;
-        }
-        let bindings = [depth, self.bounds, drawn.0, drawn.1];
-        if bindings != self.bounds_bindings {
-            release(self.bounds_group);
-            self.bounds_group = g.bind_group(
-                self.bounds_built.layouts[0],
-                &[
-                    view_entry(0, depth),
-                    buf_entry(1, self.bounds),
-                    buf_entry(30, drawn.0),
-                    buf_entry(31, drawn.1),
-                ],
-            );
-            self.bounds_bindings = bindings;
-        }
+        let group = g.bind_group(
+            self.bounds_built.layouts[0],
+            &[
+                view_entry(0, depth),
+                buf_entry(1, self.bounds),
+                buf_entry(30, drawn.0),
+                buf_entry(31, drawn.1),
+            ],
+        );
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::resolve).pass());
-        g.set_bind_group(pass, 0, self.bounds_group, &[]);
+        g.set_bind_group(pass, 0, group, &[]);
         g.set_pipeline(pass, self.bounds_built.id);
         g.dispatch(pass, tiles[0], tiles[1], 1);
         g.end(pass);
+        release(group);
     }
 
     /// The map's `light` tiles that changed this frame propagated to the
     /// `screen`'s, over the depth's bound and, where a square's spans past a
     /// few tiles, the world's depth `depth`, both as the last frame left
     /// them, off the tiles the frame's marks cover (`Tiles::marks_box`).
-    pub fn dispatch(&mut self, ctx: &mut RenderContext, depth: u32, light: &Tiles, screen: &Tiles) {
+    pub fn dispatch(&self, ctx: &mut RenderContext, depth: u32, light: &Tiles, screen: &Tiles) {
         let g = ctx.g;
         let (l, s) = (light.this_frame(), screen.this_frame());
-        let bindings = [depth, l.0, l.1, s.0, s.1, self.bounds, light.marks_box()];
-        if bindings != self.bindings {
-            release(self.group);
-            self.group = g.bind_group(
-                self.pipeline.layouts[0],
-                &[
-                    view_entry(0, depth),
-                    buf_entry(1, self.uniform),
-                    buf_entry(2, l.0),
-                    buf_entry(3, l.1),
-                    buf_entry(4, s.0),
-                    buf_entry(5, s.1),
-                    buf_entry(6, self.bounds),
-                    buf_entry(7, light.marks_box()),
-                ],
-            );
-            self.bindings = bindings;
-        }
+        let group = g.bind_group(
+            self.pipeline.layouts[0],
+            &[
+                view_entry(0, depth),
+                buf_entry(1, self.uniform),
+                buf_entry(2, l.0),
+                buf_entry(3, l.1),
+                buf_entry(4, s.0),
+                buf_entry(5, s.1),
+                buf_entry(6, self.bounds),
+                buf_entry(7, light.marks_box()),
+            ],
+        );
         let [across, down] = screen.squares();
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::propagate).pass());
-        g.set_bind_group(pass, 0, self.group, &[]);
+        g.set_bind_group(pass, 0, group, &[]);
         g.set_pipeline(pass, self.pipeline.id);
         g.dispatch(pass, across, down, 1);
         g.end(pass);
+        release(group);
     }
 }
 

@@ -89,19 +89,16 @@ pub struct Tiles {
     /// gate is drawn whole, one that draws every tile (`after_gate`).
     uniform: u32,
     every: Option<u32>,
-    /// Each tile's word, a row after another, the GPU's; the tiles across
-    /// and down; this frame's number, and that of the last frame a mark was
-    /// handed in, every tile where it was drawn whole.
+    /// Each tile's word, a row after another, the GPU's; the target's
+    /// pixels across and down; this frame's number, and that of the last
+    /// frame a mark was handed in, every tile where it was drawn whole.
     changed_at: u32,
-    squares: [u32; 2],
+    size: [u32; 2],
     now: u32,
     marked_at: u32,
-    /// The marks' pass, its group over its uniform and the words, made
-    /// again where the words are others; the uniform, the mark's tiles and
-    /// its head; and the tiles this frame's mark sets, 0 where it sets none.
+    /// The marks' pass; its uniform, the mark's tiles and its head; and the
+    /// tiles this frame's mark sets, 0 where it sets none.
     mark: Pipeline,
-    mark_group: u32,
-    mark_binding: u32,
     mark_uniform: u32,
     mark_cnt: u32,
     /// The tiles the frame's marks cover, from the first to past the last,
@@ -157,12 +154,10 @@ impl Tiles {
             uniform: uniform(),
             every: (!g.gates()).then(uniform),
             changed_at: 0,
-            squares: [0; 2],
+            size: [0; 2],
             now: 0,
             marked_at: 0,
             mark: pipelines.build_compute(g, SHADER_SCREEN_MARK, &MARK_GROUP),
-            mark_group: 0,
-            mark_binding: 0,
             mark_uniform: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -180,7 +175,6 @@ impl Tiles {
             self.uniform,
             self.every.unwrap_or(0),
             self.changed_at,
-            self.mark_group,
             self.mark_uniform,
             self.marks_box,
             args,
@@ -191,43 +185,34 @@ impl Tiles {
     }
 
     /// The tiles of a target `size` pixels across and down, their words made
-    /// anew where they were another size's, a frame that moves every one;
-    /// before anything this frame binds them (`this_frame`, `after_gate`).
+    /// anew and `every` written where the target was another size, a frame
+    /// that moves every one; before anything this frame binds them
+    /// (`this_frame`, `after_gate`).
     pub fn size(&mut self, g: &Gpu, size: [u32; 2]) {
-        let squares = size.map(|v| v.div_ceil(self.side));
-        if squares == self.squares {
+        if size == self.size {
             return;
         }
-        self.squares = squares;
+        self.size = size;
+        let [across, down] = self.squares();
         release(self.changed_at);
-        self.changed_at = g.buf(
-            word_bytes((squares[0] * squares[1]) as usize),
-            buffer_usage::STORAGE,
-        );
+        self.changed_at = g.buf(word_bytes((across * down) as usize), buffer_usage::STORAGE);
         if let Some(every) = self.every {
-            let words = self.words(size, 0.0, u32::MAX);
+            let words = self.words(0.0, u32::MAX);
             g.write_buf(every, 0, bytes(&words));
         }
     }
 
-    /// The mark this frame hands, of a target `size` pixels across and
-    /// down, the frame numbered anew: where it is drawn through the gate
-    /// (`gated`), the tiles `mark` covers (`mark_of`); else none where
-    /// nothing it draws moved (`quiet`), one of every tile where anything
-    /// did. The tiles the frame draws: the claimed alone where it is gated,
+    /// The mark this frame hands, the frame numbered anew: where it is
+    /// drawn through the gate (`gated`), the tiles `mark` covers
+    /// (`mark_of`); else none where nothing it draws moved (`quiet`), one of
+    /// every tile where anything did. The tiles the frame draws: the claimed alone where it is gated,
     /// else every one. Set on the GPU, before anything reads them, by
     /// `dispatch_marks`; but a whole frame's stamp where a tile is claimed
     /// the frame it changed alone (`claimed_for` 1, the map's): that frame
     /// claims every tile by its uniform, and a later one through the gate
     /// only those set in it, so no frame reads the stamp.
-    pub fn mark(
-        &mut self,
-        g: &Gpu,
-        size: [u32; 2],
-        (gated, quiet): (bool, bool),
-        mark: Option<Mark>,
-    ) {
-        let squares = self.squares;
+    pub fn mark(&mut self, g: &Gpu, (gated, quiet): (bool, bool), mark: Option<Mark>) {
+        let squares = self.squares();
         self.now = self.now.wrapping_add(1);
         let whole = !gated && !quiet;
         let side = self.side;
@@ -260,34 +245,31 @@ impl Tiles {
             g.write_buf(self.marks_box, 0, bytes(&marks_box));
         }
         let claimed_for = if gated { self.claimed_for } else { u32::MAX };
-        let words = self.words(size, 0.0, claimed_for);
+        let words = self.words(0.0, claimed_for);
         g.write_buf(self.uniform, 0, bytes(&words));
     }
 
     /// The mark `mark` handed set into the tiles' words, a thread a tile of
     /// its tiles, before anything reads them, timed in the tiles' span; none
     /// where it handed none.
-    pub fn dispatch_marks(&mut self, ctx: &mut RenderContext) {
+    pub fn dispatch_marks(&self, ctx: &mut RenderContext) {
         if self.mark_cnt == 0 {
             return;
         }
         let g = ctx.g;
-        if self.changed_at != self.mark_binding {
-            release(self.mark_group);
-            self.mark_group = g.bind_group(
-                self.mark.layouts[0],
-                &[
-                    buf_entry(0, self.mark_uniform),
-                    buf_entry(1, self.changed_at),
-                ],
-            );
-            self.mark_binding = self.changed_at;
-        }
+        let group = g.bind_group(
+            self.mark.layouts[0],
+            &[
+                buf_entry(0, self.mark_uniform),
+                buf_entry(1, self.changed_at),
+            ],
+        );
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(self.span).pass());
-        g.set_bind_group(pass, 0, self.mark_group, &[]);
+        g.set_bind_group(pass, 0, group, &[]);
         g.set_pipeline(pass, self.mark.id);
         g.dispatch(pass, self.mark_cnt.div_ceil(64), 1, 1);
         g.end(pass);
+        release(group);
     }
 
     /// The words and the uniform as this frame draws them, the claimed alone
@@ -365,18 +347,19 @@ impl Tiles {
 
     /// The tiles across and down.
     pub fn squares(&self) -> [u32; 2] {
-        self.squares
+        self.size.map(|v| v.div_ceil(self.side))
     }
 
-    /// The uniform's words (pxl-engine `screen::TILES_WORDS`) for a
-    /// target `size` pixels across and down, a quad grown by `grow` of them,
-    /// in this frame, a tile claimed for `claimed_for` frames once changed,
+    /// The uniform's words (pxl-engine `screen::TILES_WORDS`) for the
+    /// target, a quad grown by `grow` of its pixels, in this frame, a tile
+    /// claimed for `claimed_for` frames once changed,
     /// and a tile's side, as build.rs's `Tiles` reads them (tile_word.wgsl).
-    pub fn words(&self, size: [u32; 2], grow: f32, claimed_for: u32) -> [u32; TILES_WORDS] {
+    pub fn words(&self, grow: f32, claimed_for: u32) -> [u32; TILES_WORDS] {
+        let [across, down] = self.squares();
         let mut t = [0u32; TILES_WORDS];
-        t[..4].copy_from_slice(&[self.squares[0], self.squares[1], claimed_for, self.now]);
-        t[4] = (size[0] as f32).to_bits();
-        t[5] = (size[1] as f32).to_bits();
+        t[..4].copy_from_slice(&[across, down, claimed_for, self.now]);
+        t[4] = (self.size[0] as f32).to_bits();
+        t[5] = (self.size[1] as f32).to_bits();
         t[6] = grow.to_bits();
         t[7] = (self.side as f32).to_bits();
         t

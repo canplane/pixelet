@@ -402,11 +402,9 @@ pub struct Renderer {
     beside: Read,
     /// The sheets' words as last written (`CloudPass::words`).
     clouds_read: Read,
-    /// The gate a frame not drawn whole is drawn through, and its group
-    /// over the tiles' words and uniform (`Resolve::tiles`).
+    /// The gate a frame not drawn whole is drawn through, over the tiles'
+    /// words and uniform (`Resolve::tiles`).
     gate: Pipeline,
-    gate_group: u32,
-    gate_bound: (u32, u32),
     /// The light's map's tiles, the light's cast's tiles' side (pxl-engine
     /// `light::TILE`), claimed the frame they changed alone, as the
     /// map gathers nothing (gpu/tiles.rs).
@@ -420,14 +418,6 @@ pub struct Renderer {
     /// marked by them, at the jitter it was drawn at (gpu/pass/mark.rs).
     frame_was: Frame,
     frame_was_buf: u32,
-    /// The marks' groups 0 over the frame's words, this frame's and the
-    /// last's (`frame_was`), and the screen tiles' (tile_mark.wgsl), and
-    /// what they were made over.
-    mark_frame_groups: [u32; 2],
-    mark_frame_bound: [u32; 5],
-    /// The same from the light, over the light's frame and the map's tiles.
-    light_mark_group: u32,
-    light_mark_bound: [u32; 4],
     /// The eye's view-projection as `prepare` took it, which the sheets are
     /// seen through (`sheets_mark`) and the propagation reads.
     view_proj: Mat4,
@@ -506,8 +496,6 @@ impl Renderer {
             beside: Read::default(),
             clouds_read: Read::default(),
             gate: pipelines.build_gate(g, PIPELINE_SCREEN_GATE),
-            gate_group: 0,
-            gate_bound: (0, 0),
             light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1, GpuSpanName::light_mark),
             last_frame_uploads: UploadCopies::default(),
             frame_was: [0.0; FRAME_FLOATS],
@@ -515,10 +503,6 @@ impl Renderer {
                 word_bytes(FRAME_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            mark_frame_groups: [0; 2],
-            mark_frame_bound: [0; 5],
-            light_mark_group: 0,
-            light_mark_bound: [0; 4],
             view_proj: mat4::new(),
             ao_read: Read::default(),
             pipelines,
@@ -559,6 +543,21 @@ impl Renderer {
         }
         self.clouds.bake(g);
         true
+    }
+
+    /// A mark's group 0 over the frame's words `frame` and `tiles`' words,
+    /// uniform and marks' box (tile_mark.wgsl), for the frame it is made in.
+    fn mark_group(&self, g: &Gpu, frame: u32, tiles: &Tiles) -> u32 {
+        let (words, uniform) = tiles.this_frame();
+        g.bind_group(
+            self.skinned_mesh.mark_layout(),
+            &[
+                buf_entry(0, frame),
+                buf_entry(30, words),
+                buf_entry(31, uniform),
+                buf_entry(32, tiles.marks_box()),
+            ],
+        )
     }
 
     /// What a cell's face is painted by, wherever it is drawn from
@@ -1010,8 +1009,13 @@ impl Renderer {
         // The tiles of this size, before anything binds them: the claimed
         // the pixels' cast casts and its samples' raster draws, and those the
         // rays' screen pass draws, every one where the world's pass has no
-        // gate.
-        self.resolve.tiles.size(g, [world.width, world.height]);
+        // gate. The depth's bound of this size with them, which the world's
+        // pass sets where the shadows are cast (`Propagate::set_bounds`).
+        let size = [world.width, world.height];
+        self.resolve.tiles.size(g, size);
+        if self.shadows {
+            self.propagate.size(g, size);
+        }
         let drawn = self.resolve.tiles.after_gate();
         let [across, down] = self.resolve.tiles.squares();
         self.screen
@@ -1124,8 +1128,7 @@ impl Renderer {
         let cast = self.screen.kind != FrameKind::plain;
         let map_gated = gated && cast && !self.screen.light_casts() && g.gates();
         self.light_tiles.size(g, [shadow::SIZE; 2]);
-        self.light_tiles
-            .mark(g, [shadow::SIZE; 2], (map_gated, false), None);
+        self.light_tiles.mark(g, (map_gated, false), None);
         let map_drawn = self.shadows && (!map_gated || casters_marking);
         // Where the map's tiles changed through its gate, the screen's tiles
         // whose pixels read them are propagated to on the GPU
@@ -1143,16 +1146,15 @@ impl Renderer {
         // mark did, however much of the screen they and the tiles still
         // gathering cover; every one where anything else did. What the gate,
         // the resolve and the finish draw.
-        self.resolve
-            .tiles
-            .mark(g, [world.width, world.height], (gated, quiet), sheets);
+        self.resolve.tiles.mark(g, (gated, quiet), sheets);
         if screen_marking {
             let now = self.resolve.tiles.now();
             self.resolve.tiles.marked_in(now);
         }
 
-        // The frame proper changes nothing that outlives it, so one too large
-        // for the stream is dropped whole and the screen keeps the last.
+        // The frame proper changes nothing that outlives it and lets go in it
+        // each object it makes: one too large for the stream is dropped whole,
+        // and the screen keeps the last.
         frame_begin();
         let encoder = g.encoder();
         let mut ctx = RenderContext::new(g, encoder, &mut stamps);
@@ -1167,30 +1169,11 @@ impl Renderer {
             // A draw as it is marked by this frame's words, as it was by the
             // last's: each at the jitter it is or was drawn at.
             g.write_buf(self.frame_was_buf, 0, bytes(&self.frame_was));
+            // The marks' groups 0 over the frame's words, this frame's and
+            // the last's, and the screen tiles' (tile_mark.wgsl).
             let tiles = &self.resolve.tiles;
-            let (words, uniform) = tiles.this_frame();
-            let bound = [
-                self.frame_buf,
-                self.frame_was_buf,
-                words,
-                uniform,
-                tiles.marks_box(),
-            ];
-            if bound != self.mark_frame_bound {
-                for (k, frame) in [bound[0], bound[1]].into_iter().enumerate() {
-                    release(self.mark_frame_groups[k]);
-                    self.mark_frame_groups[k] = g.bind_group(
-                        self.skinned_mesh.mark_layout(),
-                        &[
-                            buf_entry(0, frame),
-                            buf_entry(30, bound[2]),
-                            buf_entry(31, bound[3]),
-                            buf_entry(32, bound[4]),
-                        ],
-                    );
-                }
-                self.mark_frame_bound = bound;
-            }
+            let frames =
+                [self.frame_buf, self.frame_was_buf].map(|frame| self.mark_group(g, frame, tiles));
             // The world's depth attached read only, its stencil kept: the
             // marks test nothing and write no color.
             let desc = pass_desc(
@@ -1204,12 +1187,12 @@ impl Renderer {
             .load_stencil();
             let pass = g.pass(ctx.encoder, &desc);
             let mut pass = TrackedRenderPass::new(g, pass);
-            let frames = self.mark_frame_groups;
             self.skinned_mesh.draw_marks(&mut pass, frames, b);
             self.decor.draw_marks(&mut pass, frames, b, false);
             self.impostor.draw_marks(&mut pass, frames);
             self.location.draw_marks(&mut pass, frames);
             pass.end();
+            frames.into_iter().for_each(release);
         }
         if map_drawn {
             self.light_tiles.dispatch_marks(&mut ctx);
@@ -1219,22 +1202,7 @@ impl Renderer {
         // their drawn selves, which the propagation reads.
         if propagating {
             let (light_frame, map) = self.shadow.frame_and_map();
-            let tiles = &self.light_tiles;
-            let (words, uniform) = tiles.this_frame();
-            let bound = [light_frame, words, uniform, tiles.marks_box()];
-            if bound != self.light_mark_bound {
-                release(self.light_mark_group);
-                self.light_mark_group = g.bind_group(
-                    self.skinned_mesh.mark_layout(),
-                    &[
-                        buf_entry(0, bound[0]),
-                        buf_entry(30, bound[1]),
-                        buf_entry(31, bound[2]),
-                        buf_entry(32, bound[3]),
-                    ],
-                );
-                self.light_mark_bound = bound;
-            }
+            let group = self.mark_group(g, light_frame, &self.light_tiles);
             let desc = pass_desc(
                 0,
                 Load::Clear,
@@ -1248,10 +1216,11 @@ impl Renderer {
             let mut pass = TrackedRenderPass::new(g, pass);
             // The light's frame has no jitter, and stands in a frame whose
             // map is drawn through its gate: as a draw is and as it was, one.
-            let frames = [self.light_mark_group; 2];
+            let frames = [group; 2];
             self.skinned_mesh.draw_marks(&mut pass, frames, b);
             self.decor.draw_marks(&mut pass, frames, b, true);
             pass.end();
+            release(group);
             // The box they cover counted into the gate's draw.
             self.light_tiles.dispatch_box_args(&mut ctx);
         }
@@ -1329,18 +1298,15 @@ impl Renderer {
         if let Some(number) = number {
             pass.set_stencil_reference(number);
             let tiles = self.resolve.tiles.this_frame();
-            if tiles != self.gate_bound {
-                release(self.gate_group);
-                self.gate_group = g.bind_group(
-                    self.gate.layouts[0],
-                    &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
-                );
-                self.gate_bound = tiles;
-            }
+            let group = g.bind_group(
+                self.gate.layouts[0],
+                &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
+            );
             let [across, down] = self.resolve.tiles.squares();
             pass.set_pipeline(self.gate.id);
-            pass.set_bind_group(0, self.gate_group, &[]);
+            pass.set_bind_group(0, group, &[]);
             pass.draw(6, across * down, 0, 0);
+            release(group);
         }
         // The world that stands while the eye does: what the occlusion reads.
         self.draw_opaque(&mut pass, b, Stage::Lit);
@@ -1402,7 +1368,6 @@ impl Renderer {
         self.decor
             .draw_ghosts(&mut pass, &draws, b, self.models.frame);
         pass.end();
-        let size = [world.width, world.height];
         let squares = self.resolve.tiles.squares();
         // What the listed draws were drawn with this frame, the frame's
         // words with them, kept for the next's marks where they were.
@@ -1420,7 +1385,7 @@ impl Renderer {
         // whole and sets every square before a frame reaches.
         if self.shadows {
             self.propagate
-                .set_bounds(&mut ctx, world.depth_only_view, size, drawn, squares);
+                .set_bounds(&mut ctx, world.depth_only_view, drawn, squares);
         }
         let gathered = self.resolve.draw(&mut ctx, self.frame_buf, world, gated);
         // At the canvas's size, its own span. A frame not drawn whole

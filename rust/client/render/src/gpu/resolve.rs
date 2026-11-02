@@ -50,14 +50,8 @@ pub struct Resolve {
     pipeline: Pipeline,
     sampler: u32,
     uniform: u32,
-    /// A group a history written, reading the other, and what each was
-    /// made over: made again exactly when one is another.
-    groups: [u32; 2],
-    bindings: [[u32; 5]; 2],
-    /// The write-back, and its group a history read, as `groups`.
+    /// The write-back.
     back: Pipeline,
-    back_groups: [u32; 2],
-    back_bindings: [[u32; 2]; 2],
     /// The history this frame writes, the other the last frame's.
     turn: usize,
     /// The surface's histories it gathered into, and the frames gathered
@@ -94,11 +88,7 @@ impl Resolve {
                 (4 * UNIFORM_FLOATS) as u32,
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            groups: [0; 2],
-            bindings: [[0; 5]; 2],
             back: pipelines.build(g, PIPELINE_SCREEN_WRITE_BACK, WORLD_COLOR),
-            back_groups: [0; 2],
-            back_bindings: [[0; 2]; 2],
             turn: 0,
             histories: [0; 2],
             gathered: 0,
@@ -156,30 +146,20 @@ impl Resolve {
         }
         u[16] = blend;
         g.write_buf(self.uniform, 0, bytes(&u));
-        let bindings = [
-            frame,
-            s.color_view,
-            s.depth_only_view,
-            s.history_view[was],
-            self.tiles.changed_at(),
-        ];
-        if bindings != self.bindings[k] {
-            release(self.groups[k]);
-            self.groups[k] = g.bind_group(
-                self.pipeline.layouts[0],
-                &[
-                    buf_entry(0, frame),
-                    view_entry(1, s.color_view),
-                    view_entry(2, s.depth_only_view),
-                    view_entry(3, s.history_view[was]),
-                    sampler_entry(4, self.sampler),
-                    buf_entry(5, self.uniform),
-                    buf_entry(30, self.tiles.this_frame().0),
-                    buf_entry(31, self.tiles.this_frame().1),
-                ],
-            );
-            self.bindings[k] = bindings;
-        }
+        let (words, uniform) = self.tiles.this_frame();
+        let group = g.bind_group(
+            self.pipeline.layouts[0],
+            &[
+                buf_entry(0, frame),
+                view_entry(1, s.color_view),
+                view_entry(2, s.depth_only_view),
+                view_entry(3, s.history_view[was]),
+                sampler_entry(4, self.sampler),
+                buf_entry(5, self.uniform),
+                buf_entry(30, words),
+                buf_entry(31, uniform),
+            ],
+        );
         let [across, down] = self.tiles.squares();
         let tiles = across * down;
         let load = if gated { Load::Load } else { Load::Clear };
@@ -188,25 +168,21 @@ impl Resolve {
             &pass_desc(s.history_view[k], load, 0, Load::Clear, 0.0, stamp.pass()),
         );
         g.set_pipeline(pass, self.pipeline.id);
-        g.set_bind_group(pass, 0, self.groups[k], &[]);
+        g.set_bind_group(pass, 0, group, &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
+        release(group);
         if !gated {
             return s.history_view[k];
         }
-        let back_bindings = [s.history_view[k], self.tiles.changed_at()];
-        if back_bindings != self.back_bindings[k] {
-            release(self.back_groups[k]);
-            self.back_groups[k] = g.bind_group(
-                self.back.layouts[0],
-                &[
-                    view_entry(1, s.history_view[k]),
-                    buf_entry(30, self.tiles.this_frame().0),
-                    buf_entry(31, self.tiles.this_frame().1),
-                ],
-            );
-            self.back_bindings[k] = back_bindings;
-        }
+        let group = g.bind_group(
+            self.back.layouts[0],
+            &[
+                view_entry(1, s.history_view[k]),
+                buf_entry(30, words),
+                buf_entry(31, uniform),
+            ],
+        );
         let pass = g.pass(
             encoder,
             &pass_desc(
@@ -219,9 +195,10 @@ impl Resolve {
             ),
         );
         g.set_pipeline(pass, self.back.id);
-        g.set_bind_group(pass, 0, self.back_groups[k], &[]);
+        g.set_bind_group(pass, 0, group, &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
+        release(group);
         s.history_view[was]
     }
 

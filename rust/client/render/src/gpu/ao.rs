@@ -51,10 +51,6 @@ pub struct ScreenAo {
     ping_view: [u32; 2],
     /// Downsample, sample, denoise ping[0]->ping[1], denoise back.
     groups: [u32; 4],
-    /// The half depth, the map and the tiles' words and uniform `apply`
-    /// reads, made again exactly when one of them is another.
-    apply_group: u32,
-    apply_bound: [u32; 3],
 }
 
 impl ScreenAo {
@@ -105,8 +101,6 @@ impl ScreenAo {
             ping: [0; 2],
             ping_view: [0; 2],
             groups: [0; 4],
-            apply_group: 0,
-            apply_bound: [0; 3],
         }
     }
 
@@ -218,15 +212,12 @@ impl ScreenAo {
             self.ping[1],
             self.half_view,
             self.half,
-            self.apply_group,
         ] {
             release(id);
         }
         self.groups = [0; 4];
         self.half = 0;
         self.half_view = 0;
-        self.apply_group = 0;
-        self.apply_bound = [0; 3];
     }
 
     pub fn run(&self, ctx: &mut RenderContext) {
@@ -259,24 +250,20 @@ impl ScreenAo {
     /// it, in the tiles `tiles` (their words and uniform) claim of `count`, a
     /// quad each (ao_apply.wgsl): every drawn frame, as the world's color is
     /// drawn again there, whether or not the map was found again.
-    pub fn apply(&mut self, g: &Gpu, pass: &mut TrackedRenderPass, tiles: (u32, u32), count: u32) {
-        let bound = [self.half_view, tiles.0, tiles.1];
-        if bound != self.apply_bound {
-            release(self.apply_group);
-            self.apply_group = g.bind_group(
-                self.apply.layouts[0],
-                &[
-                    view_entry(1, self.half_view),
-                    view_entry(2, self.ping_view[0]),
-                    buf_entry(6, self.uniform),
-                    buf_entry(30, tiles.0),
-                    buf_entry(31, tiles.1),
-                ],
-            );
-            self.apply_bound = bound;
-        }
+    pub fn apply(&self, g: &Gpu, pass: &mut TrackedRenderPass, tiles: (u32, u32), count: u32) {
+        let group = g.bind_group(
+            self.apply.layouts[0],
+            &[
+                view_entry(1, self.half_view),
+                view_entry(2, self.ping_view[0]),
+                buf_entry(6, self.uniform),
+                buf_entry(30, tiles.0),
+                buf_entry(31, tiles.1),
+            ],
+        );
         pass.set_pipeline(self.apply.id);
-        pass.set_bind_group(0, self.apply_group, &[]);
+        pass.set_bind_group(0, group, &[]);
         pass.draw(6, count, 0, 0);
+        release(group);
     }
 }

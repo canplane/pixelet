@@ -70,14 +70,12 @@ pub struct Shadow {
     /// `corner`'s words.
     pub world: u32,
     /// The world laid in, its group over the world and the corner; and the
-    /// map's gate, which lays it in the claimed tiles alone, its group over
-    /// the same, the map's tiles' words and uniform and the marks' box
-    /// (`Tiles::marks_box`), made again where those are others.
+    /// map's gate, which lays it in the claimed tiles alone, over the same,
+    /// the map's tiles' words and uniform and the marks' box
+    /// (`Tiles::marks_box`).
     lay: Pipeline,
     lay_group: u32,
     gate: Pipeline,
-    gate_group: u32,
-    gate_bound: (u32, u32, u32),
     corner: u32,
     /// Group 0 of the casters' depth pipelines: the light's frame.
     pub light_group: u32,
@@ -180,8 +178,6 @@ impl Shadow {
             lay,
             lay_group,
             gate,
-            gate_group: 0,
-            gate_bound: (0, 0, 0),
             corner,
             light_group,
             light_frame,
@@ -390,7 +386,7 @@ impl Shadow {
     /// counted (`Tiles::box_args`). The casters are drawn into it next,
     /// through the stencil, then it ends.
     pub fn begin<'a>(
-        &mut self,
+        &self,
         ctx: &mut RenderContext<'a>,
         cast: bool,
         tiles: &mut Tiles,
@@ -406,27 +402,23 @@ impl Shadow {
         if let Some(n) = number {
             xpute_kit::ensure!(cast, EINVAL, n);
             let (words, uniform) = tiles.this_frame();
-            let bound = (words, uniform, tiles.marks_box());
-            if bound != self.gate_bound {
-                release(self.gate_group);
-                self.gate_group = g.bind_group(
-                    self.gate.layouts[0],
-                    &[
-                        view_entry(0, self.world),
-                        buf_entry(1, self.corner),
-                        buf_entry(30, words),
-                        buf_entry(31, uniform),
-                        buf_entry(33, bound.2),
-                    ],
-                );
-                self.gate_bound = bound;
-            }
+            let group = g.bind_group(
+                self.gate.layouts[0],
+                &[
+                    view_entry(0, self.world),
+                    buf_entry(1, self.corner),
+                    buf_entry(30, words),
+                    buf_entry(31, uniform),
+                    buf_entry(33, tiles.marks_box()),
+                ],
+            );
             pass.set_stencil_reference(n);
             pass.set_pipeline(self.gate.id);
-            pass.set_bind_group(0, self.gate_group, &[]);
+            pass.set_bind_group(0, group, &[]);
             if let Some(args) = tiles.box_args() {
                 pass.draw_indirect(args, 0);
             }
+            release(group);
         } else if cast {
             pass.set_pipeline(self.lay.id);
             pass.set_bind_group(0, self.lay_group, &[]);

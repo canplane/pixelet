@@ -22,40 +22,28 @@ use crate::gpu::tiles::{Tiles, SIDE};
 
 pub struct Finish {
     pipeline: Pipeline,
-    /// Its group over `bindings`, the frame's words, the color and depth it
-    /// reads and the tiles' words: made again exactly when one is another.
-    group: u32,
-    bindings: [u32; 4],
     /// The tiles' uniform it draws them by, at the canvas's scale, and the
     /// words it binds where it draws every tile, which none reads.
     tiles: u32,
     every: u32,
-    /// The picture at the canvas's size shown on the canvas, its group over it.
+    /// The picture at the canvas's size shown on the canvas.
     show: Pipeline,
-    show_group: u32,
-    show_binding: u32,
 }
 
 impl Finish {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Finish {
         Finish {
             pipeline: pipelines.build(g, PIPELINE_SCREEN_FINISH, g.canvas()),
-            group: 0,
-            bindings: [0; 4],
             tiles: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             every: g.buf(word_bytes(1), buffer_usage::STORAGE),
             show: pipelines.build(g, PIPELINE_SCREEN_SHOW, g.canvas()),
-            show_group: 0,
-            show_binding: 0,
         }
     }
 
     pub fn release(self) {
-        release(self.group);
-        release(self.show_group);
         release(self.tiles);
         release(self.every);
     }
@@ -71,7 +59,7 @@ impl Finish {
         reason = "the pass's targets, each its own"
     )]
     pub fn draw(
-        &mut self,
+        &self,
         ctx: &mut RenderContext,
         span: GpuSpanName,
         frame: u32,
@@ -88,26 +76,20 @@ impl Finish {
         );
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(span);
-        let bindings = [frame, color, s.depth_only_view, changed_at];
-        if bindings != self.bindings {
-            release(self.group);
-            self.group = g.bind_group(
-                self.pipeline.layouts[0],
-                &[
-                    buf_entry(0, frame),
-                    view_entry(1, color),
-                    view_entry(2, s.depth_only_view),
-                    buf_entry(30, changed_at),
-                    buf_entry(31, self.tiles),
-                ],
-            );
-            self.bindings = bindings;
-        }
+        let group = g.bind_group(
+            self.pipeline.layouts[0],
+            &[
+                buf_entry(0, frame),
+                view_entry(1, color),
+                view_entry(2, s.depth_only_view),
+                buf_entry(30, changed_at),
+                buf_entry(31, self.tiles),
+            ],
+        );
         let partial = claimed.is_some();
         // A tile's quad grown by a canvas pixel each way, in the world's
         // pixels, for the world texels a pixel at its edge reads.
         let grow = s.width as f32 / s.screen.0.max(1) as f32;
-        let size = [s.width, s.height];
         let t = claimed.map_or(
             [
                 tiles[0],
@@ -119,7 +101,7 @@ impl Finish {
                 grow.to_bits(),
                 (SIDE as f32).to_bits(),
             ],
-            |c| c.words(size, grow, c.claimed_for()),
+            |c| c.words(grow, c.claimed_for()),
         );
         g.write_buf(self.tiles, 0, bytes(&t));
         let load = if partial { Load::Load } else { Load::Clear };
@@ -129,24 +111,22 @@ impl Finish {
             &pass_desc(target, load, s.screen_depth_view, load, 0.0, stamp.pass()),
         );
         g.set_pipeline(pass, self.pipeline.id);
-        g.set_bind_group(pass, 0, self.group, &[]);
+        g.set_bind_group(pass, 0, group, &[]);
         g.draw(pass, 6, tiles[0] * tiles[1], 0, 0);
         g.end(pass);
+        release(group);
         if !has_picture {
             return;
         }
-        if s.picture_view != self.show_binding {
-            release(self.show_group);
-            self.show_group = g.bind_group(self.show.layouts[0], &[view_entry(1, s.picture_view)]);
-            self.show_binding = s.picture_view;
-        }
+        let group = g.bind_group(self.show.layouts[0], &[view_entry(1, s.picture_view)]);
         let pass = g.pass(
             encoder,
             &pass_desc(canvas, Load::Clear, 0, Load::Clear, 0.0, stamp.pass()),
         );
         g.set_pipeline(pass, self.show.id);
-        g.set_bind_group(pass, 0, self.show_group, &[]);
+        g.set_bind_group(pass, 0, group, &[]);
         g.draw(pass, 3, 1, 0, 0);
         g.end(pass);
+        release(group);
     }
 }
