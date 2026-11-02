@@ -772,7 +772,7 @@ fn device_loss_drops_bounds() {
 
 /// What the ground generates stands where it was generated whatever is put
 /// over it or in place of the cell under it, air or a cube: it generates on
-/// the world unplaced (pxl-engine `generation::placement`).
+/// the world unplaced (pxl-content `generation::placement`).
 #[test]
 fn generated_decor_stays() {
     use crate::domain::layer::object::store::AIR;

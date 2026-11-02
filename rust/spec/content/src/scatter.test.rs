@@ -1,10 +1,10 @@
-// pxl-engine/scatter.test.rs
+// pxl-content/scatter.test.rs
 
 extern crate std;
 
 use super::*;
-use crate::answer::{eighths, FULL};
-use crate::clipmap::FIRST_CELL;
+use pxl_engine::answer::{eighths, FULL};
+use pxl_engine::clipmap::FIRST_CELL;
 use std::vec::Vec;
 
 /// A decor's cells hold one at its chance: over a square of leaf cells, the

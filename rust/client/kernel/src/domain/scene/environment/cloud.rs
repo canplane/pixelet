@@ -7,15 +7,15 @@
 //! which the wind carries (`pxl-content cloud.rs` `drift`): a patch of
 //! cells there is built once and drawn moved, each instance a model, an
 //! impostor or nothing by its size on the screen (`present_patch`), by the
-//! tiers the GPU draws decor by, one rule (pxl-engine scatter.rs
+//! tiers the GPU draws decor by, one rule (pxl-content scatter.rs
 //! `drawn::tier`). A patch is laid in the columns the decor and impostor
 //! shaders read (domain/scene/column.rs).
 
 use fnv::FnvHashMap;
 
 use pxl_content::cloud::{drift, lattice_hash};
+use pxl_content::generation::drawn;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
-use pxl_engine::generation::drawn;
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::look::environment::{ENV_AIR, ENV_SKY};
@@ -45,8 +45,8 @@ use crate::domain::view::observation::eye;
 use crate::domain::view::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::{catalog, load_image, load_of};
+use pxl_content::generation;
 use pxl_content::param::cloud;
-use pxl_engine::generation;
 use pxl_render::gpu::api::Image;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world;
@@ -57,7 +57,7 @@ const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
 pub const MODELS_MAX: usize = VARIANTS.len();
 
 /// Its draw groups follow the decors' variants, which number the groups
-/// before it (pxl-engine scatter.rs `GROUPS`).
+/// before it (pxl-content scatter.rs `GROUPS`).
 const FIRST_GROUP: usize = generation::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,

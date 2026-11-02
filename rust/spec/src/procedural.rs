@@ -14,7 +14,7 @@ use pxl_engine::LEAF_CELL;
 
 // ---- scatter: pxl-engine's, for the CPU's readers of one cell ----
 
-pub use pxl_engine::scatter::{before, meet, scatter_at, side_of, Candidate};
+pub use pxl_content::scatter::{before, meet, scatter_at, side_of, Candidate};
 
 // ---- piers ----
 

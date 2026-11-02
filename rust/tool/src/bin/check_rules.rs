@@ -81,19 +81,16 @@ const KERNEL_BESIDE: [&str; 1] = ["perf"];
 /// only seam"), and what asks it. A layer knows no query, and the query no
 /// asker.
 const ENGINE: &str = "rust/spec/engine/src/";
-const ENGINE_ORDER: [(&str, u8); 29] = [
+const ENGINE_ORDER: [(&str, u8); 25] = [
     ("param", 0),
     ("seed", 0),
     ("content", 0),
     ("value", 0),
-    ("cube", 0),
-    ("decor", 0),
     ("lattice", 0),
     ("grid", 0),
     ("answer", 0),
     ("tally", 0),
     ("area", 1),
-    ("scatter", 1),
     ("ground", 1),
     ("clipmap", 1),
     ("way", 1),
@@ -109,13 +106,22 @@ const ENGINE_ORDER: [(&str, u8); 29] = [
     ("ray", 3),
     ("light", 3),
     ("screen", 3),
-    ("generation", 3),
     ("face", 3),
 ];
 
-/// pxl-content's order: its parameters, then its rules and fields.
+/// pxl-content's order: its parameters and its palette, its rules and
+/// fields, then the decor's generation over its scatter.
 const CONTENT: &str = "rust/spec/content/src/";
-const CONTENT_ORDER: [(&str, u8); 4] = [("param", 0), ("cave", 1), ("strata", 1), ("cloud", 1)];
+const CONTENT_ORDER: [(&str, u8); 8] = [
+    ("param", 0),
+    ("cube", 0),
+    ("decor", 0),
+    ("cave", 1),
+    ("strata", 1),
+    ("cloud", 1),
+    ("scatter", 1),
+    ("generation", 2),
+];
 
 /// What the world shows is decided in angles, the camera grid's cell; a
 /// pixel enters only at the screen (ARCHITECTURE.md, "The camera grid").
@@ -651,7 +657,7 @@ mod spec;"
             "use crate::domain::query::World;",
             "use crate::domain::layer::object::store::{object, Entry};",
             "// the layer's Query, in a comment",
-            "use pxl_engine::generation::DecorQuery;",
+            "use pxl_content::generation::DecorQuery;",
         ] {
             assert!(layer_read_named(text, false).is_empty(), "{text}");
         }

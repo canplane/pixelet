@@ -10,7 +10,7 @@
 // Each decor is said here once: its number, its models, and how the ground
 // generates it on its own. A decor's `seed` names its scatter, so changing it
 // reshuffles every one the ground generates; `density` is the chance a cell of
-// its holds one, the mean of a tree of hashes of the cells (pxl-engine
+// its holds one, the mean of a tree of hashes of the cells (pxl-content
 // scatter.rs); `on` the palette entries it may stand on; `orientation` a random
 // heading, or along the road or rail its cell lies on. A variant's
 // skin is its pack's colormap, kept outside the glb.

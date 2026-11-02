@@ -191,7 +191,7 @@ is asked, never stored and never handed down a descent. Decor's is a tree of
 hashes: a column at the coarsest zoom a decor stands at holds as many as a hash
 draws about its mean, each column hands its count to its four a hash each, and a
 leaf cell holds one or none; where it stands is a function of the cell, a seed
-and the ground's face, one rule on both sides (`pxl-engine scatter.rs`). One
+and the ground's face, one rule on both sides (`pxl-content scatter.rs`). One
 whose box meets a neighbor's that drew lower gives way, so two generated decors
 never share a cell. A decor, placed or generated, stands as itself, a model or
 its impostor, at every zoom whose cell its box keeps an eighth of or more, as a
@@ -448,7 +448,7 @@ into the instances, a model down to its own size on screen, an impostor below
 it and culled below that. Placed decor is handed in
 as records the GPU draws beside it, taken where the rays ask the coarsest zoom
 it stands at or finer (`domain/scene/decor/gpu.rs`,
-`pxl-engine generation.rs` `drawn_at`).
+`pxl-content generation.rs` `drawn_at`).
 
 A **marker** is drawn flat to the camera: a place, a pin someone put up, or the
 chat's line. Each kind reads its own, and one arrangement draws them together

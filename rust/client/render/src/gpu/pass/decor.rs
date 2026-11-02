@@ -21,7 +21,7 @@ use crate::gpu::pass::model::{
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::{Draws, Uploads};
-use pxl_engine::generation;
+use pxl_content::generation;
 
 const _: () = assert!(
     generation::GROUPS as usize <= DECOR_GROUPS,
@@ -289,7 +289,7 @@ impl DecorPass {
     }
 
     /// The models the GPU generated, an indirect draw a group whose model is held
-    /// (pxl-engine `generation::drawn`, a group's models its region `2·group`).
+    /// (pxl-content `generation::drawn`, a group's models its region `2·group`).
     pub fn draw_generated(
         &mut self,
         pass: &mut TrackedRenderPass,

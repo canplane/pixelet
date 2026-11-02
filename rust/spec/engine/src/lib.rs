@@ -4,9 +4,9 @@
 //!
 //! What pixelet's spec computes the same on the CPU and on the GPU, in
 //! `core` alone: the zooms and the lattices of cells on them, a node's seed,
-//! the value space, the ground and the service area it ends at, the decor the
-//! ground generates, the ray's descent, and the samples' stops as the boxes
-//! a raster draws, asking the content it draws its rules (`content`).
+//! the value space, the ground and the service area it ends at, the ray's
+//! descent, and the samples' stops as the boxes a raster draws, asking the
+//! content it draws its rules (`content`).
 //! pxl-spec takes it as its own, and a shader crate depends on it as it is.
 //!
 //! No check here fails: an index stays in its array, a divisor is not zero,
@@ -21,14 +21,9 @@ pub mod beam;
 pub mod cast;
 pub mod clipmap;
 pub mod content;
-#[path = "cube.spec.rs"]
-pub mod cube;
-#[path = "decor.spec.rs"]
-pub mod decor;
 pub mod eye;
 pub mod face;
 pub mod fill;
-pub mod generation;
 pub mod grid;
 pub mod ground;
 pub mod lattice;
@@ -38,7 +33,6 @@ pub mod param;
 pub mod pyramid;
 pub mod raster;
 pub mod ray;
-pub mod scatter;
 pub mod screen;
 pub mod seed;
 pub mod support;

@@ -28,12 +28,6 @@ pub mod raster {
     pub const GROWTH: f32 = 0.25;
 }
 
-pub(crate) mod scatter {
-    /// How far about a cell its turn is voted: a fixed radius (O(1) reads),
-    /// enough to outvote a one-cell stairstep jog in a straight run.
-    pub const ALIGN_NEIGHBOR_RADIUS: i32 = 3;
-}
-
 pub mod light {
     /// The slope a caster's depth in the shadow map is pushed back by, as a
     /// rasterizer's polygon offset: its greatest slope, in depth a texel

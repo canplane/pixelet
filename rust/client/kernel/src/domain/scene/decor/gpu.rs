@@ -8,9 +8,9 @@
 //! variant's extent, placed decor as records, and the boxes the objects
 //! were written in, where what the ground generates may have changed.
 
-use pxl_engine::generation::{self, drawn, row_of};
+use pxl_content::generation::{self, drawn, row_of};
+use pxl_content::scatter;
 use pxl_engine::overwrite;
-use pxl_engine::scatter;
 use pxl_engine::LEAF_CELL;
 use pxl_render::gpu::generator::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
@@ -25,8 +25,8 @@ use crate::domain::query::World;
 use crate::domain::scene::decor::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::catalog;
+use pxl_content::decor;
 use pxl_engine::clipmap::FIRST_CELL;
-use pxl_engine::decor;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::camera::grid;

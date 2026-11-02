@@ -1,4 +1,4 @@
-// pxl-engine/decor.spec.rs
+// pxl-content/decor.spec.rs
 //
 // GENERATED from spec/spec/asset/decor.json
 //
@@ -31,7 +31,7 @@ pub struct Decor {
     /// Its scatter: changing it reshuffles every one the ground generates.
     pub seed: u32,
     /// The chance a cell of its holds one, over 2^32: a cell's mean
-    /// (pxl-engine scatter.rs `count`).
+    /// (pxl-content scatter.rs `count`).
     pub chance: u32,
     pub orientation: Orientation,
     /// The palette entries it may stand on, a bit each.

@@ -1,7 +1,7 @@
-// pxl-engine/generated.test.rs
+// pxl-content/generation.test.rs
 
 use super::*;
-use crate::cast::{Detail, Spacing};
+use pxl_engine::cast::{Detail, Spacing};
 
 /// Decor of the leaves' clip level is drawn where the rays ask the leaf cell's
 /// zoom or finer at its distance, decor of a coarser clip level where they ask
@@ -10,7 +10,7 @@ use crate::cast::{Detail, Spacing};
 #[test]
 fn decor_at_its_clip_level() {
     let detail = Detail {
-        range: [0, crate::FINEST_ZOOM],
+        range: [0, FINEST_ZOOM],
         spacing: Spacing::NONE,
     };
     let mut d = 0.25f32;
@@ -55,7 +55,7 @@ impl clipmap::Presence for HeldTo {
 #[test]
 fn decor_at_held_clip_level() {
     let (coarse, c) = (LEAF_CELL - 2, [12_345, 678]);
-    for at in coarse..=crate::FINEST_ZOOM {
+    for at in coarse..=FINEST_ZOOM {
         let held = held_at(&HeldTo(coarse), at, c);
         assert!(drawn_at(held, coarse, false), "z{at} over z{coarse}");
         let finer = held_at(&HeldTo(LEAF_CELL), at, c);

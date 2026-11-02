@@ -20,8 +20,8 @@ use crate::beam;
 use crate::cast;
 use crate::cast::Spacing;
 use crate::cast::{End, Ray, Trace};
+use crate::content::Content;
 use crate::eye;
-use crate::generation;
 use crate::param::light;
 use crate::param::light::{SAMPLE, SPREAD};
 use crate::{axis, Zoom, FRAC_W};
@@ -169,23 +169,23 @@ impl Light {
 
     /// How many tiles either side of its own a drawn receiver stands on
     /// (pxl-shader light.rs `light_mark_draws_cs`): as many as half the widest
-    /// decor (`generation::WIDEST`) spans, at least one, as its tile is one a
-    /// point of it lies in.
-    pub fn ring(&self) -> i32 {
+    /// decor of `C`'s (`Content::WIDEST`) spans, at least one, as its tile is
+    /// one a point of it lies in.
+    pub fn ring<C: Content>(&self) -> i32 {
         let across = TILE as f32 * libm::sqrtf(dot(self.across, self.across));
-        let half = generation::WIDEST as f32 / 2.0;
+        let half = C::WIDEST as f32 / 2.0;
         (libm::ceilf(half / across) as i32).max(1)
     }
 
-    /// The way up the tallest decor (`generation::TALLEST`) on the box, in
+    /// The way up `C`'s tallest decor (`Content::TALLEST`) on the box, in
     /// tiles across and down, and the steps it takes a tile apart at most:
     /// a receiver standing on a tile reads the box up it, decor and the
     /// actors no taller (pxl-shader light.rs `light_propagate_cs`). The box is
     /// orthographic, so it is the same from every tile.
-    pub fn up(&self) -> ([f32; 2], u32) {
+    pub fn up<C: Content>(&self) -> ([f32; 2], u32) {
         let (low, top, tile) = (
             self.texel_at([0.0; 3]),
-            self.texel_at([0.0, 0.0, generation::TALLEST as f32]),
+            self.texel_at([0.0, 0.0, C::TALLEST as f32]),
             TILE as f32,
         );
         let way = [(top[0] - low[0]) / tile, (top[1] - low[1]) / tile];
@@ -792,7 +792,7 @@ mod tests {
     use crate::answer;
     use crate::cast::Hit;
     use crate::cast::Node;
-    use crate::cube::ground::stone;
+    use crate::content::Sample;
     use crate::overwrite::AIR;
     use crate::param::light;
 
@@ -1017,8 +1017,8 @@ mod tests {
             [0, 0],
             1.0,
         );
-        let up = s.up();
-        let rise = generation::TALLEST as f32 * 4.0 / TILE as f32 * r;
+        let up = s.up::<Sample>();
+        let rise = Sample::TALLEST as f32 * 4.0 / TILE as f32 * r;
         assert!(
             (up.0[0] - rise).abs() < 1e-4 && up.0[1].abs() < 1e-6,
             "{up:?}"
@@ -1059,11 +1059,11 @@ mod tests {
                 [0, 0],
                 1.0,
             );
-            let up = s.up();
+            let up = s.up::<Sample>();
             let texel = libm::sqrtf(dot(s.across, s.across));
             for base in [[0.1, 0.2, -3.0], [0.37, -0.81, -2.5], [-0.66, 0.45, -3.3]] {
                 let stood = s.tile_of(base);
-                for h in [0.0, 0.7, 1.9, 3.1, generation::TALLEST as f32] {
+                for h in [0.0, 0.7, 1.9, 3.1, Sample::TALLEST as f32] {
                     for (a, b) in [(0.0, 0.0), (3.5, 0.0), (-3.5, 0.0), (0.0, 3.5), (2.5, -2.5)] {
                         // A tap `(a, b)` texels off the point `h` up.
                         let p = [
@@ -1149,7 +1149,7 @@ mod tests {
             let floor = c[2] as f32 * side;
             let (kind, asset) = if zoom >= near {
                 let mid = |k: usize| (c[k] as f32 + 0.5) * side;
-                let filled = answer::fill_word(stone as u32, answer::EIGHTHS);
+                let filled = answer::fill_word(Sample::GROUND, answer::EIGHTHS);
                 let under = floor < top(mid(0), mid(1));
                 (answer::Kind::Cell, [if under { filled } else { AIR }, 0])
             } else if floor < BUMPS {

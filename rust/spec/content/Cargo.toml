@@ -9,8 +9,13 @@ path = "src/lib.rs"
 doctest = false
 
 [dependencies]
-# The engine it fills.
+# The engine it fills, and the decor's draws.
 pxl-engine.workspace = true
+xpute-kit.workspace = true
+
+[dev-dependencies]
+# What a test reads a scatter's spread off.
+libm.workspace = true
 
 [lints]
 workspace = true

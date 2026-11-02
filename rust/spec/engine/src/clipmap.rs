@@ -596,7 +596,7 @@ pub fn step(w: &impl Presence, above: Lookup, cell: Zoom, g: [i32; 2]) -> (Looku
 /// The zoom a cell at `cell` is read at, the eye's clip levels' (`FIRST_CELL`
 /// to `LEAF_CELL`): past the leaves a leaf's, coarser than the coarsest
 /// clip level that clip level's.
-pub(crate) const fn held_to(cell: Zoom) -> Zoom {
+pub const fn held_to(cell: Zoom) -> Zoom {
     if cell > LEAF_CELL {
         LEAF_CELL
     } else if cell < FIRST_CELL {

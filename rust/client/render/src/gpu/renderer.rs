@@ -3,7 +3,7 @@
 //! Executes the scheduler's draw lists on the device, in the kernel's own turn,
 //! in the device's depth (`mat4::perspective`).
 
-use pxl_engine::generation::GROUPS;
+use pxl_content::generation::GROUPS;
 use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::ray;
 use pxl_engine::{beam, eye};

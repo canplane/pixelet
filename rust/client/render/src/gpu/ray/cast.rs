@@ -4,8 +4,8 @@
 //! world's depth from the light cast with them, and the decor generated over the
 //! world (gpu/generator.rs): what each reads, made once, and their dispatches.
 
+use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap::{self, FILL_CELL, FILL_FIRST};
-use pxl_engine::generation::{self, GROUPS};
 use pxl_engine::{beam, eye, light, overwrite, pyramid, raster, ray};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

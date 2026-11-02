@@ -3,7 +3,7 @@
 //! What a placed thing carries beyond its value: decor's variant and heading,
 //! seeded by where it is placed, its one stable identity.
 
-use pxl_engine::generation::placed_pose;
+use pxl_content::generation::placed_pose;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::decor_id_from_num;
 use pxl_spec::object::is_decor;

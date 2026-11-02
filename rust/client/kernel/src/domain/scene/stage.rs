@@ -141,7 +141,7 @@ pub fn stage_render(pace: Pace) {
     let lists = draw_list().take();
     let actors = lists.stands;
     let models = model::models();
-    // Each decor variant at its draw group (pxl-engine scatter.rs `first_group`).
+    // Each decor variant at its draw group (pxl-content scatter.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
     for d in &decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {

@@ -1,6 +1,6 @@
 // pxl-render/gpu/generator.rs
 
-//! The decor the GPU generates and draws (pxl-engine `scatter`): what the
+//! The decor the GPU generates and draws (pxl-content `scatter`): what the
 //! ground generates in the eye's clip levels over the cast's world
 //! (`decor_cs`), placed decor handed as records beside it — a candidate
 //! generated again only where what it reads changed (`decor_mark_cs`,
@@ -13,8 +13,8 @@
 //! (`decor_compact_cs`). The CPU hands what only it knows and never reads what
 //! is generated.
 
-use pxl_engine::decor::DECORS;
-use pxl_engine::generation::{self, drawn, GROUPS};
+use pxl_content::decor::DECORS;
+use pxl_content::generation::{self, drawn, GROUPS};
 use pxl_engine::{clipmap, eye, overwrite};
 
 use crate::frame::draw::PIPELINE_DECOR;
@@ -33,7 +33,7 @@ pub struct DecorFrame<'a> {
     /// Per kind, the clip level zooms it is generated at, a bit each over the
     /// first clip level's (`decor_cs`).
     pub zooms: &'a [u32],
-    /// pxl-engine `generation::drawn`'s drawing words, `DRAWING_WORDS` of them.
+    /// pxl-content `generation::drawn`'s drawing words, `DRAWING_WORDS` of them.
     pub drawing: &'a [u32],
     /// Placed decor, a record each as `decor_cs` writes one: its kind,
     /// variant and turn, then its box's min corner in leaf cells, its base
@@ -44,7 +44,7 @@ pub struct DecorFrame<'a> {
     /// instances are drawn.
     pub translation: [f32; 3],
     /// What overwrites wrote since the last frame, `overwrite::EDITS` boxes
-    /// of leaf cells at most (pxl-engine `generation::meets`): the slots
+    /// of leaf cells at most (pxl-content `generation::meets`): the slots
     /// whose decor they reach generate again.
     pub edits: &'a [[i32; 4]],
 }
@@ -59,7 +59,7 @@ pub struct DecorFrame<'a> {
 /// once, before any brick is held, so neither generates a slot by itself. A
 /// brick filled reaches its own clip level's zoom and every coarser one: a
 /// coarser clip level's decor faces as the leaf cells vote, each read off the
-/// finest clip level holding it (pxl-engine `generation::asks`).
+/// finest clip level holding it (pxl-content `generation::asks`).
 pub struct Generation<'a> {
     pub clipmap: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
@@ -146,7 +146,7 @@ impl Generator {
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let rows = buf(size_of_val(&DECORS) as u32, storage);
         let table = DECORS;
-        // SAFETY: the rows are `repr(C)` words alone (pxl-engine decor.spec.rs), read while `table` lives.
+        // SAFETY: the rows are `repr(C)` words alone (pxl-content decor.spec.rs), read while `table` lives.
         let words = unsafe {
             core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), size_of_val(&table) / 4)
         };
@@ -318,7 +318,7 @@ impl Generator {
                 n += 1;
             }
             self.boxes = n as u32;
-            // The list's head (pxl-engine `generation::THIN_ARGS`): each
+            // The list's head (pxl-content `generation::THIN_ARGS`): each
             // pass's workgroups across and up, the pairs listed 0 until
             // `decor_mark_cs` lists them; whether every entry generates
             // whole, the boxes, and no pair yet in part.

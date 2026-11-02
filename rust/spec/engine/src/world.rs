@@ -74,8 +74,8 @@ impl Inheritance {
     }
 
     /// `of` with nothing placed, any node's: the node as the world unplaced
-    /// holds it, the ground's alone, which decor generates on
-    /// (`generation::DecorQuery::column_surface`); nothing placed stays
+    /// holds it, the ground's alone, which a content's decor generates on;
+    /// nothing placed stays
     /// nothing down a descent (`overwrite::child`).
     pub const UNPLACED: Inheritance = Inheritance {
         object: overwrite::NodeSlot::NOTHING,

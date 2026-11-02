@@ -2,17 +2,24 @@
 
 //! gpu-portable: pixelet's content, one source for the CPU and, through
 //! rust-gpu, WGSL, as the engine's is (pxl-engine): the rules the engine
-//! asks of it (pxl-engine `content::Content`), answered by `Pixelet` —
-//! its caves (`cave`) and its strata (`strata`) — and the clouds' field
-//! (`cloud`). The engine names none of it: pxl-spec, the kernel, the
-//! renderer and the shader crate name `Pixelet` where they hand the engine
-//! its content.
+//! asks of it (pxl-engine `content::Content`), answered by `Pixelet`: its
+//! caves (`cave`), its strata (`strata`) and its decor's bounds; its palette
+//! (`cube`, `decor`), laid into the engine's value space; the decor the
+//! ground holds and how it is generated (`scatter`, `generation`); and the
+//! clouds' field (`cloud`). pxl-spec, the kernel, the renderer and the
+//! shader crate name `Pixelet` where they hand the engine its content.
 
 #![no_std]
 
 pub mod cave;
 pub mod cloud;
+#[path = "cube.spec.rs"]
+pub mod cube;
+#[path = "decor.spec.rs"]
+pub mod decor;
+pub mod generation;
 pub mod param;
+pub mod scatter;
 pub mod strata;
 
 use pxl_engine::content::Content;
@@ -41,6 +48,8 @@ impl Content for Pixelet {
     fn earth(z: i32) -> u32 {
         strata::earth(z)
     }
+    const TALLEST: i32 = generation::TALLEST;
+    const WIDEST: i32 = generation::WIDEST;
 }
 
 // Pixelet's palette laid into the engine's value space (pxl-engine
@@ -48,8 +57,8 @@ impl Content for Pixelet {
 // slots, the ways' exactly in the ways', a pier drawn as a building, the
 // object's colors in theirs, and decor past them all.
 const _: () = {
-    use pxl_engine::cube::{object, sentinel, Ground, Object};
-    use pxl_engine::decor::DECORS;
+    use crate::cube::{object, sentinel, Ground, Object};
+    use crate::decor::DECORS;
     use pxl_engine::value;
     assert!(
         sentinel::void as u32 == value::VOID

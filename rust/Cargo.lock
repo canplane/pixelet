@@ -2081,7 +2081,9 @@ dependencies = [
 name = "pxl-content"
 version = "0.0.0"
 dependencies = [
+ "libm",
  "pxl-engine",
+ "xpute-kit",
 ]
 
 [[package]]

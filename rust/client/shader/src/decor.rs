@@ -10,11 +10,11 @@
 
 use pxl_engine::answer::In;
 use pxl_engine::cast::{End, Query};
-use pxl_engine::decor::Decor;
+use pxl_content::decor::Decor;
 use pxl_engine::fill::put;
-use pxl_engine::generation::{self, drawn, DecorQuery};
+use pxl_content::generation::{self, drawn, DecorQuery};
 use pxl_engine::overwrite::Cut;
-use pxl_engine::scatter;
+use pxl_content::scatter;
 use pxl_engine::support::{self, Ancestors};
 use pxl_engine::clipmap::{self, BRICK, BRICK_CELLS, ENTRIES, FIRST_CELL};
 use pxl_engine::world::{self, Inheritance};
@@ -28,7 +28,7 @@ use crate::eye::{eye_origin, Eye};
 use crate::workgroup::{DECOR_CELL_LANES, DECOR_RECORD_LANES};
 use crate::world::{Clipmap, NoPalette, World};
 
-/// The world as decor's generation asks it on the GPU (pxl-engine `scatter`):
+/// The world as decor's generation asks it on the GPU (pxl-content `scatter`):
 /// the cast's, and the catalog's rows as handed.
 struct Generating<'a> {
     world: World<'a, NoPalette>,
@@ -176,7 +176,7 @@ fn shown_at(shown: &[u32], j: u32, cell: u32) -> bool {
     cell <= LEAF_CELL && at(shown, j) >> (cell - FIRST_CELL) & 1 != 0
 }
 
-/// Whether a box of the frame's (pxl-engine `generation::BOXES_AT`)
+/// Whether a box of the frame's (pxl-content `generation::BOXES_AT`)
 /// reaches what a candidate in `cells`, leaf cells of the clip level at `cell`,
 /// reads (`generation::reaches`): a brick's, or one candidate's own cell.
 fn is_changed(list: &[u32], cell: u32, cells: [i32; 4]) -> bool {
@@ -199,7 +199,7 @@ fn is_changed(list: &[u32], cell: u32, cells: [i32; 4]) -> bool {
 
 /// The eye's entries whose decor generates again this frame, a thread an entry,
 /// listed with each decor shown at the entry's clip level zoom (`shown_at`) for
-/// `decor_cs` (pxl-engine `generation::LIST_AT`), the decors the catalog's
+/// `decor_cs` (pxl-content `generation::LIST_AT`), the decors the catalog's
 /// rows as handed (`rows`), its count the dispatch's. An entry generates whole
 /// where every one does, decor having been off, or its records were not
 /// generated for its brick (`generation::generated_for`), its head then laid
@@ -466,7 +466,7 @@ fn is_held(records: &[u32], clipmap: &[IVec4], g: u32) -> bool {
 }
 
 /// The `k`-th run of records workgroup `g` of a decor pass reads, as record
-/// numbers (pxl-engine `generation::record_at`): the first and how many,
+/// numbers (pxl-content `generation::record_at`): the first and how many,
 /// where it reads any (`is_held`). A workgroup an entry, each run
 /// `generation::RUN` of its records, those of the decor whose room the run
 /// lies in that it laid (`generation::cnt_at`); past the entries, a workgroup

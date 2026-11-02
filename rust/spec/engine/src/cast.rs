@@ -1053,7 +1053,7 @@ mod tests {
     use crate::answer;
     use crate::answer::BoxWords;
     use crate::answer::{fill_word, BOX_WHOLE, EIGHTHS, FULL};
-    use crate::cube::ground::stone;
+    use crate::content::Sample;
     use crate::grid;
     use crate::overwrite::AIR;
 
@@ -1086,7 +1086,7 @@ mod tests {
                 },
                 (false, true) => In {
                     kind: Kind::Cell,
-                    asset: [fill_word(stone as u32, self.fill), 0],
+                    asset: [fill_word(Sample::GROUND, self.fill), 0],
                 },
                 _ => In {
                     kind: Kind::Cell,

@@ -6,10 +6,10 @@
 //! bedrock; how high a cube may reach over the face; and past the service
 //! area, the Earth's ground.
 
-use pxl_engine::cube::ground;
 use pxl_engine::ground::{face_height, leaf_cells, rock, UNKNOWN, VOID};
 use pxl_engine::{Zoom, LEAF_CELL, SEA_LEVEL};
 
+use crate::cube::ground;
 use crate::param::strata::{BEDROCK_DEPTH, FILLER_DEPTH, HEADROOM, SANDSTONE_DEPTH};
 use crate::Pixelet;
 

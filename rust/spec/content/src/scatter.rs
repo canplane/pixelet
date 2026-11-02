@@ -1,4 +1,4 @@
-// pxl-engine/scatter.rs
+// pxl-content/scatter.rs
 
 //! gpu-portable: the decor the ground holds, never stored, a tree of hashes: a
 //! column at a decor's root zoom (`ROOTS`) holds as many as one hash draws
@@ -12,12 +12,12 @@
 //! `SplitMix32`), seeded by the decor's seed and the column (`node_seed`), so
 //! every reader, either side, draws the same.
 
+use pxl_engine::answer::EIGHTHS;
+use pxl_engine::seed::node_seed;
+use pxl_engine::{Zoom, LEAF_CELL, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix32;
 
-use crate::answer::EIGHTHS;
 use crate::decor::{Decor, DECORS};
-use crate::seed::node_seed;
-use crate::{Zoom, LEAF_CELL, UNIT_ZOOM};
 
 /// A cell's candidate: the leaf cell it stands at, at every zoom; its first
 /// draw, against the decor's chance and, lower first, the order neighbors

@@ -1,4 +1,4 @@
-// pxl-engine/generation.rs
+// pxl-content/generation.rs
 
 //! gpu-portable: the decor the ground holds (`scatter`) generated on the
 //! world as either side holds it: where a candidate stands, which way it
@@ -6,19 +6,19 @@
 //! placed decor claims (`overlaps_placed`), and how the GPU lays, lists and
 //! draws what it generates in a clip level's bricks.
 
+use pxl_engine::answer::{self, val};
+use pxl_engine::clipmap;
+use pxl_engine::clipmap::{BRICK, BRICK_SHIFT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
+use pxl_engine::overwrite;
+use pxl_engine::seed::node_seed;
+use pxl_engine::value;
+use pxl_engine::world::{placed_in, PlacedCursor};
+use pxl_engine::{wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, LEAF_CELL, UNIT_ZOOM, ZOOM_BITS};
 use xpute_kit::math::rng::SplitMix32;
 
-use crate::answer::{self, val};
-use crate::clipmap;
-use crate::clipmap::{BRICK, BRICK_SHIFT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
 use crate::decor::{Decor, Orientation, DECORS};
-use crate::overwrite;
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
 use crate::scatter::{mul_hi, root, stands_at, variant_of, Candidate};
-use crate::seed::node_seed;
-use crate::value;
-use crate::world::{placed_in, PlacedCursor};
-use crate::{wrap_idx, Zoom, FRAC_W, LEAF_CELL, UNIT_ZOOM};
 
 /// The records a run of a decor pass reads (pxl-shader decor.rs `run_of`),
 /// a decor's capacity a whole number of them.
@@ -71,7 +71,7 @@ const _: () = assert!(UNGENERATED >> drawn::REGION_SHIFT == drawn::NONE);
 /// generates it in its place the same frame, so no other pass reads one.
 pub const RETAINED: u32 = UNGENERATED - 1;
 const _: () = assert!(
-    crate::FINEST_ZOOM < (1 << crate::ZOOM_BITS) - 1,
+    FINEST_ZOOM < (1 << ZOOM_BITS) - 1,
     "no record's first word is `RETAINED` or `UNGENERATED`: its zoom's bits are never all set"
 );
 
@@ -247,7 +247,7 @@ pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
         w & 0xff,
         (w >> 8) & 0xff,
         (w >> TURN_SHIFT) & ((1 << TURN_BITS) - 1),
-        (w >> CELL_SHIFT) & ((1 << crate::ZOOM_BITS) - 1),
+        (w >> CELL_SHIFT) & ((1 << ZOOM_BITS) - 1),
     )
 }
 
@@ -286,7 +286,7 @@ pub mod drawn {
     pub const NONE: u32 = 0xff;
     /// What a record's first word holds past its decor, variant and turn:
     /// its region, once sized.
-    pub const REGION_SHIFT: u32 = super::CELL_SHIFT + crate::ZOOM_BITS;
+    pub const REGION_SHIFT: u32 = super::CELL_SHIFT + pxl_engine::ZOOM_BITS;
     pub const COLUMNS: u32 = 5;
     /// Each region's indirect args, `ARGS_WORDS` a region: a model's
     /// indexed, an impostor's a strip of four corners an instance; its first

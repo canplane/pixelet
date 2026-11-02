@@ -1,11 +1,12 @@
 // pxl-engine/content.rs
 
 //! gpu-portable: the rules the engine asks of the content it draws, the one
-//! trait a content implements: where its caves take the ground, and its
-//! strata. A world type carries its content as an associated type of the
-//! trait it implements where those rules are asked (`ground::Resident`).
-//! The values a content's palette takes are the engine's value space
-//! (`value`).
+//! trait a content implements: where its caves take the ground, its strata,
+//! and how far its decor reaches, which the light's box reads. A world type
+//! carries its content as an associated type of the trait it implements
+//! where those rules are asked (`ground::Resident`); a function that reads
+//! no world takes it as a type parameter (`light::Light::up`). The values a
+//! content's palette takes are the engine's value space (`value`).
 
 #[cfg(test)]
 use crate::value::{UNKNOWN, VOID};
@@ -38,11 +39,18 @@ pub trait Content {
 
     /// Cell `z` past the service area: the Earth's ground there.
     fn earth(z: i32) -> u32;
+
+    /// The tallest decor and the widest, in unit cells: as high over what it
+    /// stands on as anything it generates reaches, and as far across
+    /// (`light::Light::up`, `Light::ring`).
+    const TALLEST: i32;
+    const WIDEST: i32;
 }
 
 /// A content for the engine's own tests, no content's: no caves, a column
 /// its face's entry all the way down, a bedrock 64 under it or sea level,
-/// room 128 over it, and past the area bedrock under sea level.
+/// room 128 over it, past the area bedrock under sea level, and decor three
+/// units tall and two wide.
 #[cfg(test)]
 pub(crate) struct Sample;
 
@@ -80,4 +88,6 @@ impl Content for Sample {
             VOID
         }
     }
+    const TALLEST: i32 = 3;
+    const WIDEST: i32 = 2;
 }

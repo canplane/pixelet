@@ -6,9 +6,9 @@
 //! it is read. Where it stands, which way it faces and whether it generates are
 //! the world unplaced, the ground's alone, its column's surface
 //! and the cells about it (`World::column_surface`); only an edit in its box, asked
-//! of the world as edited, takes it away (pxl-engine `generation::placement`).
+//! of the world as edited, takes it away (pxl-content `generation::placement`).
 
-use pxl_engine::generation::{self, DecorQuery, Generated};
+use pxl_content::generation::{self, DecorQuery, Generated};
 use pxl_engine::support::ColumnSurface;
 use pxl_engine::world::PlacedCursor;
 use pxl_engine::FRAC_W;
@@ -24,7 +24,7 @@ use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::Answer;
-use pxl_engine::decor;
+use pxl_content::decor;
 
 /// The world as decor's generation asks it on the CPU (pxl-engine
 /// `DecorQuery`): the world's one query and its ray, unplaced (`ground`,
@@ -92,7 +92,7 @@ impl DecorQuery for DecorWorld<'_, '_> {
 /// read about it (`World::generated_in`): the leaf scatter, cell by cell, which
 /// a region generates the same (pxl-spec procedural.test.rs); and, where
 /// `boxed`, whether it generates there, its box asked about the same column surface
-/// (pxl-engine `generation::placement`), true where not.
+/// (pxl-content `generation::placement`), true where not.
 pub(super) fn generated_at(
     asked: &mut DecorWorld,
     decor: &Decor,

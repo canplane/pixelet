@@ -1,12 +1,12 @@
 // pxl-spec/asset/cube.rs
 
 //! The cube kind (`spec/spec/asset/cube.json`): the ground and the cubes,
-//! one table with the GPU's (pxl-engine), and a cube as the catalog
+//! one table with the GPU's (pxl-content), and a cube as the catalog
 //! gives it out to be placed.
 
 use std::sync::LazyLock;
 
-pub use pxl_engine::cube::*;
+pub use pxl_content::cube::*;
 
 use crate::asset::color;
 use crate::asset::id::AssetId;

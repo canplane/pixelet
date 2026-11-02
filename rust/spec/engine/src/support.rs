@@ -292,7 +292,7 @@ pub fn asset<Q: Query>(q: &mut Q, l: &impl Ancestors<Q::At>, zoom: Zoom, c: [i32
 mod tests {
     use super::*;
     use crate::answer::{In, Kind, AIR, BOX_WHOLE};
-    use crate::cube::ground::stone;
+    use crate::content::Sample;
     use crate::UNIT_ZOOM;
 
     /// Ground of stone up to `height` unit cells, two over the cells west of
@@ -309,7 +309,7 @@ mod tests {
         }
     }
 
-    const STONE: [u32; 2] = [stone as u32, 0];
+    const STONE: [u32; 2] = [Sample::GROUND, 0];
 
     impl Query for Step {
         type At = (Zoom, [i32; 3]);

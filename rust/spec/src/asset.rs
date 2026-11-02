@@ -36,8 +36,8 @@ use crate::space::coord::zoom::units;
 use catalog::Catalog;
 use cube::Cube;
 use ingest::{CubeFace, PACK};
-use pxl_engine::decor::DECORS;
-use pxl_engine::generation;
+use pxl_content::decor::DECORS;
+use pxl_content::generation;
 use xpute_kit::status::errno::Errno;
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
@@ -131,7 +131,7 @@ impl decor::Decor {
     }
 
     /// Where its variants are numbered from as draw groups, as the GPU's
-    /// decor numbers them (pxl-engine scatter.rs `first_group`).
+    /// decor numbers them (pxl-content scatter.rs `first_group`).
     pub fn first_group(&self) -> u32 {
         let kind = decor::DECORS.iter().take_while(|d| d.id != self.id).count();
         generation::first_group(&DECORS, kind as u32)

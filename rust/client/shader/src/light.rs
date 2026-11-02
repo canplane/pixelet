@@ -11,6 +11,7 @@
 //! (`light_miss_cs`); and the tiles a slide of the box keeps
 //! (`light_slide_cs`).
 
+use pxl_content::Pixelet;
 use pxl_engine::cast::{self, Detail, Spacing};
 use pxl_engine::fill::put;
 use pxl_engine::light::{Light, Starts};
@@ -774,7 +775,7 @@ pub fn light_mark_draws_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 19)] regions: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 20)] instances: &[u32],
 ) {
-    use pxl_engine::generation::{TALLEST, WIDEST};
+    use pxl_content::generation::{TALLEST, WIDEST};
     let at = pxl_engine::light::ACTORS_AT;
     let k = id.x as usize;
     let v = if k < pxl_engine::light::ACTORS {
@@ -812,7 +813,7 @@ pub fn light_mark_draws_cs(
         return;
     }
     let (s, n) = (light_of(eye), size(head));
-    let ([i, j], cast, r) = (s.tile_of(v), cast_number(head), s.ring());
+    let ([i, j], cast, r) = (s.tile_of(v), cast_number(head), s.ring::<Pixelet>());
     let mut b = -r;
     while b <= r {
         let mut a = -r;
@@ -861,7 +862,7 @@ pub fn light_propagate_cs(
         return;
     }
     let (cast, epoch) = (cast_number(head), epoch(head));
-    let up = s.up();
+    let up = s.up::<Pixelet>();
     let t = [id.x as i32, id.y as i32];
     let mut read = false;
     let mut k = 0;

@@ -1,4 +1,4 @@
-// pxl-engine/cube.spec.rs
+// pxl-content/cube.spec.rs
 //
 // GENERATED from spec/spec/asset/cube.json
 //
