@@ -85,7 +85,7 @@ pub(super) struct CastBuffers {
     /// the cast's group and the shadow map's over the light's (`light_groups`),
     /// each told by the head it binds (`eye_head`, `light_head`); and the
     /// eye's buffer (pxl-engine `beam`): a line a corner, a start a
-    /// cell, a hit a sample, as the eye's words lay the frame's `grid`, none
+    /// cell, a hit a sample, as the last cast's `grid` lays them, none
     /// a pixel's; room for `beam_room` words.
     beam_built: Pipeline,
     cells_built: Pipeline,
@@ -246,9 +246,10 @@ pub(super) struct CastBuffers {
     overwrite_room: usize,
     overwrite_revision: Option<u32>,
     generator: Generator,
-    /// What the last cast read (`Read`) but the jitter, and whether this
-    /// frame's is the same: the samples and the decor generated over them
-    /// stand, and only the pixels are cast again where the jitter moved.
+    /// What the last cast read (`Read`) but the jitter and the grid, and
+    /// whether this frame's is the same: the samples and the decor generated
+    /// over them stand, and only the pixels are cast again where the jitter
+    /// moved.
     read: Read,
     /// Where each pixel's ray went through it last (pxl-engine
     /// `eye::JITTER`). It moving alone, the beam rays, the cells' starts and
@@ -544,10 +545,9 @@ impl RaysPass {
         let ray_counts = *ray_counts;
         let r = &mut c.read;
         r.begin();
-        // The light's words are its cast's alone (below); the grid among the
-        // rest, so a lattice changed casts in full (pxl-engine
-        // `beam::Grid::lattice`).
-        let eye_moved = r.read(&eye[..eye::LIGHT]);
+        // The words a cast is from: not the light's, its cast's alone
+        // (below), the jitter's or the grid's (pxl-engine `eye::GRID`).
+        r.read(&eye[..eye::LIGHT]);
         let clipmap_moved = r.read(clipmap);
         let shards_moved = r.read(shards);
         // A surface made again holds no rays.
@@ -558,10 +558,23 @@ impl RaysPass {
         let jitter = [eye[eye::JITTER], eye[eye::JITTER + 1]];
         let jittered = jitter != c.jitter;
         c.jitter = jitter;
+        // A cast lays the grid the eye's words hold (pxl-engine `eye::GRID`);
+        // the frames that stand on its samples keep it, its dispatches'
+        // sizes and the room for its corners' lines, its cells' starts and
+        // its samples' hits.
         self.kind = match (stands, jittered) {
             (true, false) => FrameKind::standing,
             (true, true) => FrameKind::px,
-            (false, _) => FrameKind::cast,
+            (false, _) => {
+                let tan = [eye[eye::TAN], eye[eye::TAN + 1]].map(f32::from_bits);
+                c.grid = beam::Grid::of_words(
+                    tan,
+                    eye[eye::GRID..eye::GRID + eye::GRID_WORDS]
+                        .try_into()
+                        .or_bug(Errno::ENOTRECOVERABLE),
+                );
+                FrameKind::cast
+            }
         };
         let (kind, casts) = (self.kind, casts_px(self.kind));
         xpute_kit::ensure!(
@@ -574,20 +587,8 @@ impl RaysPass {
             c.refold = true;
         }
         c.size = rays.1;
-        // The grid as the eye's words lay it (pxl-engine `eye::GRID`), the
-        // dispatches' sizes, and room for its corners' lines, its cells'
-        // starts and its samples' hits, made again only where they outgrow
+        // The room for the grid's words, made again only where they outgrow
         // it.
-        let tan = [
-            f32::from_bits(cast.eye[eye::TAN]),
-            f32::from_bits(cast.eye[eye::TAN + 1]),
-        ];
-        c.grid = beam::Grid::of_words(
-            tan,
-            cast.eye[eye::GRID..eye::GRID + eye::GRID_WORDS]
-                .try_into()
-                .or_bug(Errno::ENOTRECOVERABLE),
-        );
         let need = c.grid.size();
         if need > c.beam_room {
             if c.beams != 0 {
@@ -874,8 +875,11 @@ impl RaysPass {
             }
             c.raster.light_prepare(g, &cast.eye, shadow::SIZE);
         }
-        if eye_moved || jittered || c.light_cast {
-            g.write_buf(c.eye, 0, bytes(&cast.eye));
+        // The eye's words with the grid its cast laid (`grid`).
+        if casts || c.light_cast {
+            let mut words = cast.eye;
+            words[eye::GRID..].copy_from_slice(&c.grid.words());
+            g.write_buf(c.eye, 0, bytes(&words));
         }
         // The samples' raster through its gate where only the kernel's
         // bounds moved; the pixels' cast passes by the tiles not claimed

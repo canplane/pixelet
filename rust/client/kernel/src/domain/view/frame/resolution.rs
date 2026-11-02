@@ -46,9 +46,10 @@
 //! `SCALE_TRUST_WINDOWS` steps back and doubles the hold, up to
 //! `SCALE_PROBE_WINDOWS_MAX`. A change moves one knob a step: the scale's
 //! rebuilds the targets, so no frame is summed while it waits to be drawn,
-//! and the lattice's casts in full, as the eye's grid is another
-//! (pxl-render gpu/ray/cast.rs `eye_moved`); the `RES_SETTLE_WINDOWS`
-//! after either are not judged, and it asks for the frame that draws it.
+//! and the lattice's is laid by the next cast, the frames that stand on the
+//! last keeping its grid (pxl-render gpu/ray/cast.rs `prepare`); the
+//! `RES_SETTLE_WINDOWS` after either are not judged, and it asks for the
+//! frame that draws it.
 
 use crate::domain::view::param;
 use crate::domain::view::setting::store::{settings_store, ResMode};
@@ -285,7 +286,7 @@ pub fn drawn_scale() -> f64 {
 /// The camera grid's lattice, in cells (`grid::CELL`) a side, its beam rays
 /// and cells are laid on (pxl-engine `beam::Grid::of`): `auto`'s, the
 /// cell's own at any other setting. The eye's words take it as they are
-/// written, so the frame drawn next casts on it.
+/// written, so the next cast casts on it.
 pub fn lattice() -> u32 {
     match settings_store().res {
         ResMode::auto => state().lattice,

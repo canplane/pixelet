@@ -17,9 +17,9 @@ struct type_17 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_18 {
@@ -73,12 +73,12 @@ fn function_() {
     let _e42 = global_5.member[118u];
     if (_e36.x >= select(_e42, 524288u, (524288u < _e42))) {
     } else {
-        let _e50 = global_1.member.member_8[0u][0u];
-        let _e55 = global_1.member.member_8[1u][1u];
-        let _e60 = global_1.member.member_8[1u][2u];
-        let _e65 = global_1.member.member_8[2u][3u];
-        let _e70 = global_1.member.member_8[3u][2u];
-        let _e75 = global_1.member.member_8[3u][3u];
+        let _e50 = global_1.member.member_10[0u][0u];
+        let _e55 = global_1.member.member_10[1u][1u];
+        let _e60 = global_1.member.member_10[1u][2u];
+        let _e65 = global_1.member.member_10[2u][3u];
+        let _e70 = global_1.member.member_10[3u][2u];
+        let _e75 = global_1.member.member_10[3u][3u];
         let _e79 = global_1.member.member_4[0u];
         let _e83 = global_1.member.member_4[1u];
         let _e84 = bitcast<f32>(_e50);
@@ -220,8 +220,8 @@ fn function_() {
                 }
             }
             let _e224 = textureDimensions(global_3);
-            let _e230 = global_1.member.member_10[0u];
-            let _e242 = global_1.member.member_10[1u];
+            let _e230 = global_1.member.member_9[0u];
+            let _e242 = global_1.member.member_9[1u];
             let _e253 = floor(((((((((f32(_e91) + 0.5f) + _e230) / f32(_e224.x)) * 2f) - 1f) * _e79) + _e79) / _e84));
             if (_e253 != _e253) {
                 phi_275_ = true;

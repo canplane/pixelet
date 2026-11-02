@@ -32,9 +32,9 @@ struct type_31 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_32 {

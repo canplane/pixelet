@@ -32,12 +32,6 @@ pub const CUT_WORDS: usize = 4;
 /// Both cuts, carve then hide, as one run of words.
 pub const CUTS: usize = 2 * CUT_WORDS;
 pub const NO_CUT: u32 = Cut::NONE.zoom;
-/// The camera grid the frame casts on (pxl-engine `beam::Grid`, its
-/// `words`), worked out once off the tangents above where the kernel
-/// writes them: every thread of the cast and the renderer's dispatches and
-/// buffer read it here.
-pub const GRID: usize = HIDE + CUT_WORDS;
-pub const GRID_WORDS: usize = beam::GRID_WORDS;
 /// The light's cast into the shadow map, its frame's constants off the light
 /// box (pxl-engine `light::Light`, its `words`): texel (0, 0)'s ray's start
 /// and every ray's reach, the step to the next texel across and down, the
@@ -46,7 +40,7 @@ pub const GRID_WORDS: usize = beam::GRID_WORDS;
 /// (`light::CORNER`, `light::KEPT`). All zero where no shadow is cast. The renderer writes
 /// them, as it aims the map (pxl-render gpu/shadow.rs `aim`); the kernel
 /// leaves them zero.
-pub const LIGHT: usize = GRID + GRID_WORDS;
+pub const LIGHT: usize = HIDE + CUT_WORDS;
 pub const LIGHT_WORDS: usize = 20;
 /// Where each pixel's ray goes through it this frame, its offset from the
 /// pixel's middle in drawn pixels, X right and Y down, f32 bits; then two
@@ -56,8 +50,16 @@ pub const LIGHT_WORDS: usize = 20;
 /// of it.
 pub const JITTER: usize = LIGHT + LIGHT_WORDS;
 pub(crate) const JITTER_WORDS: usize = 4;
-/// Every word, the jitter last.
-pub const WORDS: usize = JITTER + JITTER_WORDS;
+/// The camera grid the frame casts on (pxl-engine `beam::Grid`, its
+/// `words`), worked out once off the tangents above where the kernel
+/// writes them: every thread of the cast and the renderer's dispatches and
+/// buffer read it here. Past the words a cast is from, those before
+/// `LIGHT`: the frames that stand on a cast's samples keep its grid, and
+/// the next cast lays this one (pxl-render gpu/ray/cast.rs `prepare`).
+pub const GRID: usize = JITTER + JITTER_WORDS;
+pub const GRID_WORDS: usize = beam::GRID_WORDS;
+/// Every word, the grid last.
+pub const WORDS: usize = GRID + GRID_WORDS;
 const _: () = assert!(
     STEPS == ORIGIN + 3
         && FAR == FORWARD + 3
@@ -66,9 +68,9 @@ const _: () = assert!(
         && RANGE == TAN + 2
         && CARVE == RANGE + 2
         && HIDE == CARVE + CUT_WORDS
-        && GRID.is_multiple_of(4)
         && LIGHT.is_multiple_of(4)
         && JITTER.is_multiple_of(4)
+        && GRID.is_multiple_of(4)
 );
 
 /// Whether a ball `radius` units wide about `v`, units from the eye, lies

@@ -17,9 +17,9 @@ struct type_19 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_20 {
@@ -54,664 +54,664 @@ var<storage, read_write> global_3: type_32;
 var<storage, read_write> global_4: type_32;
 
 fn function_() {
-    var phi_208_: bool;
-    var phi_219_: bool;
-    var phi_222_: u32;
-    var phi_240_: f32;
-    var phi_260_: bool;
-    var phi_263_: i32;
+    var phi_207_: bool;
+    var phi_218_: bool;
+    var phi_221_: u32;
+    var phi_239_: f32;
+    var phi_259_: bool;
+    var phi_262_: i32;
+    var phi_274_: bool;
+    var phi_277_: i32;
+    var phi_326_: u32;
+    var phi_328_: u32;
+    var phi_329_: bool;
+    var phi_330_: u32;
+    var phi_331_: bool;
+    var phi_332_: u32;
+    var phi_333_: bool;
+    var phi_345_: u32;
+    var phi_347_: bool;
+    var phi_349_: bool;
+    var phi_350_: i32;
     var phi_275_: bool;
     var phi_278_: i32;
-    var phi_327_: u32;
-    var phi_329_: u32;
-    var phi_330_: bool;
-    var phi_331_: u32;
-    var phi_332_: bool;
-    var phi_333_: u32;
-    var phi_334_: bool;
-    var phi_346_: u32;
-    var phi_348_: bool;
-    var phi_350_: bool;
-    var phi_351_: i32;
-    var phi_276_: bool;
-    var phi_279_: i32;
-    var phi_353_: bool;
-    var phi_355_: bool;
-    var phi_356_: i32;
-    var phi_261_: bool;
-    var phi_264_: i32;
-    var phi_358_: bool;
-    var phi_360_: bool;
-    var phi_361_: u32;
-    var phi_220_: bool;
-    var phi_223_: u32;
-    var phi_363_: bool;
+    var phi_352_: bool;
+    var phi_354_: bool;
+    var phi_355_: i32;
+    var phi_260_: bool;
+    var phi_263_: i32;
+    var phi_357_: bool;
+    var phi_359_: bool;
+    var phi_360_: u32;
+    var phi_219_: bool;
+    var phi_222_: u32;
+    var phi_362_: bool;
     var local: bool;
-    var phi_390_: u32;
-    var phi_416_: i32;
-    var phi_429_: u32;
-    var phi_436_: u32;
-    var phi_437_: bool;
-    var phi_443_: u32;
-    var phi_451_: type_29;
-    var phi_452_: bool;
-    var phi_456_: type_29;
-    var phi_485_: array<i32, 2>;
-    var phi_486_: array<u32, 2>;
-    var phi_487_: bool;
+    var phi_389_: u32;
+    var phi_415_: i32;
+    var phi_428_: u32;
+    var phi_435_: u32;
+    var phi_436_: bool;
+    var phi_442_: u32;
+    var phi_450_: type_29;
+    var phi_451_: bool;
+    var phi_455_: type_29;
+    var phi_484_: array<i32, 2>;
+    var phi_485_: array<u32, 2>;
+    var phi_486_: bool;
+    var phi_498_: array<i32, 2>;
     var phi_499_: array<i32, 2>;
-    var phi_500_: array<i32, 2>;
+    var phi_503_: u32;
+    var phi_506_: u32;
     var phi_504_: u32;
     var phi_507_: u32;
-    var phi_505_: u32;
-    var phi_508_: u32;
+    var phi_519_: u32;
+    var phi_522_: u32;
     var phi_520_: u32;
     var phi_523_: u32;
-    var phi_521_: u32;
-    var phi_524_: u32;
+    var phi_535_: u32;
+    var phi_538_: u32;
     var phi_536_: u32;
     var phi_539_: u32;
-    var phi_537_: u32;
-    var phi_540_: u32;
-    var phi_557_: i32;
-    var phi_574_: i32;
+    var phi_556_: i32;
+    var phi_573_: i32;
     var local_1: u32;
-    var phi_612_: u32;
+    var phi_611_: u32;
     var local_2: u32;
     var local_3: u32;
-    var phi_623_: u32;
+    var phi_622_: u32;
     var local_4: u32;
-    var phi_651_: u32;
-    var phi_666_: u32;
-    var phi_681_: u32;
-    var phi_692_: u32;
-    var phi_708_: u32;
-    var phi_575_: i32;
-    var phi_558_: i32;
-    var phi_417_: i32;
+    var phi_650_: u32;
+    var phi_665_: u32;
+    var phi_680_: u32;
+    var phi_691_: u32;
+    var phi_707_: u32;
+    var phi_574_: i32;
+    var phi_557_: i32;
+    var phi_416_: i32;
+    var phi_718_: u32;
+    var phi_734_: u32;
     var phi_719_: u32;
-    var phi_735_: u32;
-    var phi_720_: u32;
     var local_5: bool;
     var local_6: bool;
     var local_7: u32;
 
-    let _e59 = global;
-    let _e61 = arrayLength((&global_3.member));
-    let _e63 = arrayLength((&global_4.member));
-    let _e68 = global_2.member.member[0u][3u];
-    let _e69 = bitcast<u32>(_e68);
-    let _e70 = (_e69 / 8u);
-    if (_e59.x >= _e70) {
+    let _e58 = global;
+    let _e60 = arrayLength((&global_3.member));
+    let _e62 = arrayLength((&global_4.member));
+    let _e67 = global_2.member.member[0u][3u];
+    let _e68 = bitcast<u32>(_e67);
+    let _e69 = (_e68 / 8u);
+    if (_e58.x >= _e69) {
     } else {
-        if (_e59.y >= _e70) {
+        if (_e58.y >= _e69) {
         } else {
-            let _e78 = global_1.member.member_9[0u];
-            let _e85 = global_1.member.member_9[1u];
-            let _e92 = global_1.member.member_9[2u];
-            let _e98 = bitcast<i32>(bitcast<u32>(_e85.w));
-            let _e101 = bitcast<i32>(bitcast<u32>(_e92.w));
-            let _e106 = global_1.member.member_9[3u][3u];
-            let _e114 = (f32(_e69) * 0.5f);
-            let _e117 = ((f32(bitcast<i32>(((_e59.x * 8u) + 4u))) + 0.5f) - _e114);
-            let _e120 = ((f32(bitcast<i32>(((_e59.y * 8u) + 4u))) + 0.5f) - _e114);
-            let _e122 = ((_e106 * _e114) + 9.192389f);
-            if (((_e117 * _e117) + (_e120 * _e120)) <= (_e122 * _e122)) {
-                let _e132 = global_2.member.member[0u][0u];
-                let _e133 = bitcast<u32>(_e132);
-                let _e138 = global_2.member.member[0u][2u];
-                let _e139 = bitcast<u32>(_e138);
-                let _e140 = -(_e78.x);
-                let _e141 = -(_e78.y);
-                let _e142 = -(_e78.z);
-                let _e145 = ((_e140 * _e85.x) + (_e141 * _e85.y));
-                let _e152 = (((_e85.x * _e85.x) + (_e85.y * _e85.y)) + (_e85.z * _e85.z));
-                let _e156 = ((_e140 * _e92.x) + (_e141 * _e92.y));
-                let _e163 = (((_e92.x * _e92.x) + (_e92.y * _e92.y)) + (_e92.z * _e92.z));
-                let _e165 = (5f - _e78.z);
-                let _e173 = ((((_e145 + (_e165 * _e85.z)) / _e152) - ((_e145 + (_e142 * _e85.z)) / _e152)) * 0.125f);
-                let _e175 = ((((_e156 + (_e165 * _e92.z)) / _e163) - ((_e156 + (_e142 * _e92.z)) / _e163)) * 0.125f);
-                let _e176 = abs(_e173);
-                let _e177 = abs(_e175);
-                if (_e176 != _e176) {
-                    phi_208_ = true;
+            let _e77 = global_1.member.member_8[0u];
+            let _e84 = global_1.member.member_8[1u];
+            let _e91 = global_1.member.member_8[2u];
+            let _e97 = bitcast<i32>(bitcast<u32>(_e84.w));
+            let _e100 = bitcast<i32>(bitcast<u32>(_e91.w));
+            let _e105 = global_1.member.member_8[3u][3u];
+            let _e113 = (f32(_e68) * 0.5f);
+            let _e116 = ((f32(bitcast<i32>(((_e58.x * 8u) + 4u))) + 0.5f) - _e113);
+            let _e119 = ((f32(bitcast<i32>(((_e58.y * 8u) + 4u))) + 0.5f) - _e113);
+            let _e121 = ((_e105 * _e113) + 9.192389f);
+            if (((_e116 * _e116) + (_e119 * _e119)) <= (_e121 * _e121)) {
+                let _e131 = global_2.member.member[0u][0u];
+                let _e132 = bitcast<u32>(_e131);
+                let _e137 = global_2.member.member[0u][2u];
+                let _e138 = bitcast<u32>(_e137);
+                let _e139 = -(_e77.x);
+                let _e140 = -(_e77.y);
+                let _e141 = -(_e77.z);
+                let _e144 = ((_e139 * _e84.x) + (_e140 * _e84.y));
+                let _e151 = (((_e84.x * _e84.x) + (_e84.y * _e84.y)) + (_e84.z * _e84.z));
+                let _e155 = ((_e139 * _e91.x) + (_e140 * _e91.y));
+                let _e162 = (((_e91.x * _e91.x) + (_e91.y * _e91.y)) + (_e91.z * _e91.z));
+                let _e164 = (5f - _e77.z);
+                let _e172 = ((((_e144 + (_e164 * _e84.z)) / _e151) - ((_e144 + (_e141 * _e84.z)) / _e151)) * 0.125f);
+                let _e174 = ((((_e155 + (_e164 * _e91.z)) / _e162) - ((_e155 + (_e141 * _e91.z)) / _e162)) * 0.125f);
+                let _e175 = abs(_e172);
+                let _e176 = abs(_e174);
+                if (_e175 != _e175) {
+                    phi_207_ = true;
                 } else {
-                    phi_208_ = (_e177 >= _e176);
+                    phi_207_ = (_e176 >= _e175);
                 }
-                let _e181 = phi_208_;
-                let _e183 = ceil(select(_e176, _e177, _e181));
-                let _e188 = select(select(u32(_e183), 0u, (_e183 < 0f)), 4294967295u, (_e183 > 4294967000f));
-                let _e189 = bitcast<i32>(_e59.x);
-                let _e190 = bitcast<i32>(_e59.y);
-                phi_219_ = false;
-                phi_222_ = 0u;
+                let _e180 = phi_207_;
+                let _e182 = ceil(select(_e175, _e176, _e180));
+                let _e187 = select(select(u32(_e182), 0u, (_e182 < 0f)), 4294967295u, (_e182 > 4294967000f));
+                let _e188 = bitcast<i32>(_e58.x);
+                let _e189 = bitcast<i32>(_e58.y);
+                phi_218_ = false;
+                phi_221_ = 0u;
                 loop {
-                    let _e192 = phi_219_;
-                    let _e194 = phi_222_;
-                    local = _e192;
-                    if (_e194 <= _e188) {
-                        if _e192 {
-                            phi_360_ = bool();
-                            phi_361_ = u32();
+                    let _e191 = phi_218_;
+                    let _e193 = phi_221_;
+                    local = _e191;
+                    if (_e193 <= _e187) {
+                        if _e191 {
+                            phi_359_ = bool();
+                            phi_360_ = u32();
                         } else {
-                            if (_e188 == 0u) {
-                                phi_240_ = 0f;
+                            if (_e187 == 0u) {
+                                phi_239_ = 0f;
                             } else {
-                                phi_240_ = (f32(_e194) / f32(_e188));
+                                phi_239_ = (f32(_e193) / f32(_e187));
                             }
-                            let _e201 = phi_240_;
-                            let _e203 = floor((_e173 * _e201));
-                            let _e212 = floor((_e175 * _e201));
-                            phi_260_ = _e192;
-                            phi_263_ = -2i;
+                            let _e200 = phi_239_;
+                            let _e202 = floor((_e172 * _e200));
+                            let _e211 = floor((_e174 * _e200));
+                            phi_259_ = _e191;
+                            phi_262_ = -2i;
                             loop {
-                                let _e221 = phi_260_;
-                                let _e223 = phi_263_;
-                                local_6 = _e221;
-                                if (_e223 <= 1i) {
-                                    if _e221 {
-                                        phi_355_ = bool();
-                                        phi_356_ = i32();
+                                let _e220 = phi_259_;
+                                let _e222 = phi_262_;
+                                local_6 = _e220;
+                                if (_e222 <= 1i) {
+                                    if _e220 {
+                                        phi_354_ = bool();
+                                        phi_355_ = i32();
                                     } else {
-                                        phi_275_ = _e221;
-                                        phi_278_ = -2i;
+                                        phi_274_ = _e220;
+                                        phi_277_ = -2i;
                                         loop {
-                                            let _e226 = phi_275_;
-                                            let _e228 = phi_278_;
-                                            local_5 = _e226;
-                                            if (_e228 <= 1i) {
-                                                if _e226 {
-                                                    phi_350_ = bool();
-                                                    phi_351_ = i32();
+                                            let _e225 = phi_274_;
+                                            let _e227 = phi_277_;
+                                            local_5 = _e225;
+                                            if (_e227 <= 1i) {
+                                                if _e225 {
+                                                    phi_349_ = bool();
+                                                    phi_350_ = i32();
                                                 } else {
-                                                    let _e231 = ((_e189 - select(0i, select(select(i32(_e203), i32(-2147483648), (_e203 < -2147483600f)), 2147483647i, (_e203 > 2147483500f)), (_e203 == _e203))) + _e228);
-                                                    let _e233 = ((_e190 - select(0i, select(select(i32(_e212), i32(-2147483648), (_e212 < -2147483600f)), 2147483647i, (_e212 > 2147483500f)), (_e212 == _e212))) + _e223);
-                                                    let _e234 = (_e69 / 4u);
-                                                    let _e236 = (_e70 + 11u);
-                                                    let _e247 = bitcast<i32>(_e70);
-                                                    if (_e231 >= 0i) {
-                                                        if (_e233 >= 0i) {
-                                                            if (_e231 < _e247) {
-                                                                let _e251 = (_e233 < _e247);
-                                                                if _e251 {
-                                                                    phi_327_ = (((((((_e236 * _e236) * 144u) + ((_e70 * _e70) * 3u)) + ((_e234 * _e234) * 13u)) + 1u) + (_e69 * _e69)) + bitcast<u32>(((_e233 * _e247) + _e231)));
+                                                    let _e230 = ((_e188 - select(0i, select(select(i32(_e202), i32(-2147483648), (_e202 < -2147483600f)), 2147483647i, (_e202 > 2147483500f)), (_e202 == _e202))) + _e227);
+                                                    let _e232 = ((_e189 - select(0i, select(select(i32(_e211), i32(-2147483648), (_e211 < -2147483600f)), 2147483647i, (_e211 > 2147483500f)), (_e211 == _e211))) + _e222);
+                                                    let _e233 = (_e68 / 4u);
+                                                    let _e235 = (_e69 + 11u);
+                                                    let _e246 = bitcast<i32>(_e69);
+                                                    if (_e230 >= 0i) {
+                                                        if (_e232 >= 0i) {
+                                                            if (_e230 < _e246) {
+                                                                let _e250 = (_e232 < _e246);
+                                                                if _e250 {
+                                                                    phi_326_ = (((((((_e235 * _e235) * 144u) + ((_e69 * _e69) * 3u)) + ((_e233 * _e233) * 13u)) + 1u) + (_e68 * _e68)) + bitcast<u32>(((_e232 * _e246) + _e230)));
                                                                 } else {
-                                                                    phi_327_ = u32();
+                                                                    phi_326_ = u32();
                                                                 }
-                                                                let _e257 = phi_327_;
-                                                                phi_329_ = _e257;
-                                                                phi_330_ = select(true, false, _e251);
+                                                                let _e256 = phi_326_;
+                                                                phi_328_ = _e256;
+                                                                phi_329_ = select(true, false, _e250);
                                                             } else {
-                                                                phi_329_ = u32();
-                                                                phi_330_ = true;
+                                                                phi_328_ = u32();
+                                                                phi_329_ = true;
                                                             }
-                                                            let _e260 = phi_329_;
-                                                            let _e262 = phi_330_;
-                                                            phi_331_ = _e260;
-                                                            phi_332_ = _e262;
+                                                            let _e259 = phi_328_;
+                                                            let _e261 = phi_329_;
+                                                            phi_330_ = _e259;
+                                                            phi_331_ = _e261;
                                                         } else {
-                                                            phi_331_ = u32();
-                                                            phi_332_ = true;
+                                                            phi_330_ = u32();
+                                                            phi_331_ = true;
                                                         }
-                                                        let _e264 = phi_331_;
-                                                        let _e266 = phi_332_;
-                                                        phi_333_ = _e264;
-                                                        phi_334_ = _e266;
+                                                        let _e263 = phi_330_;
+                                                        let _e265 = phi_331_;
+                                                        phi_332_ = _e263;
+                                                        phi_333_ = _e265;
                                                     } else {
-                                                        phi_333_ = u32();
-                                                        phi_334_ = true;
+                                                        phi_332_ = u32();
+                                                        phi_333_ = true;
                                                     }
-                                                    let _e268 = phi_333_;
-                                                    let _e270 = phi_334_;
-                                                    let _e271 = select(_e268, 4294967295u, _e270);
-                                                    if (_e271 != 4294967295u) {
-                                                        if (_e271 < _e61) {
-                                                            let _e276 = atomicLoad((&global_3.member[_e271]));
-                                                            phi_346_ = _e276;
+                                                    let _e267 = phi_332_;
+                                                    let _e269 = phi_333_;
+                                                    let _e270 = select(_e267, 4294967295u, _e269);
+                                                    if (_e270 != 4294967295u) {
+                                                        if (_e270 < _e60) {
+                                                            let _e275 = atomicLoad((&global_3.member[_e270]));
+                                                            phi_345_ = _e275;
                                                         } else {
-                                                            phi_346_ = 0u;
+                                                            phi_345_ = 0u;
                                                         }
-                                                        let _e278 = phi_346_;
-                                                        phi_348_ = (_e278 == _e133);
+                                                        let _e277 = phi_345_;
+                                                        phi_347_ = (_e277 == _e132);
                                                     } else {
-                                                        phi_348_ = false;
+                                                        phi_347_ = false;
                                                     }
-                                                    let _e281 = phi_348_;
-                                                    phi_350_ = _e281;
-                                                    phi_351_ = (_e228 + 1i);
+                                                    let _e280 = phi_347_;
+                                                    phi_349_ = _e280;
+                                                    phi_350_ = (_e227 + 1i);
                                                 }
-                                                let _e284 = phi_350_;
-                                                let _e286 = phi_351_;
-                                                phi_276_ = _e284;
-                                                phi_279_ = _e286;
-                                                phi_353_ = select(true, false, _e226);
+                                                let _e283 = phi_349_;
+                                                let _e285 = phi_350_;
+                                                phi_275_ = _e283;
+                                                phi_278_ = _e285;
+                                                phi_352_ = select(true, false, _e225);
                                             } else {
-                                                phi_276_ = bool();
-                                                phi_279_ = i32();
-                                                phi_353_ = false;
+                                                phi_275_ = bool();
+                                                phi_278_ = i32();
+                                                phi_352_ = false;
                                             }
-                                            let _e289 = phi_276_;
-                                            let _e291 = phi_279_;
-                                            let _e293 = phi_353_;
+                                            let _e288 = phi_275_;
+                                            let _e290 = phi_278_;
+                                            let _e292 = phi_352_;
                                             continue;
                                             continuing {
-                                                phi_275_ = _e289;
-                                                phi_278_ = _e291;
-                                                break if !(_e293);
+                                                phi_274_ = _e288;
+                                                phi_277_ = _e290;
+                                                break if !(_e292);
                                             }
                                         }
-                                        let _e631 = local_5;
-                                        phi_355_ = _e631;
-                                        phi_356_ = (_e223 + 1i);
+                                        let _e630 = local_5;
+                                        phi_354_ = _e630;
+                                        phi_355_ = (_e222 + 1i);
                                     }
-                                    let _e297 = phi_355_;
-                                    let _e299 = phi_356_;
-                                    phi_261_ = _e297;
-                                    phi_264_ = _e299;
-                                    phi_358_ = select(true, false, _e221);
+                                    let _e296 = phi_354_;
+                                    let _e298 = phi_355_;
+                                    phi_260_ = _e296;
+                                    phi_263_ = _e298;
+                                    phi_357_ = select(true, false, _e220);
                                 } else {
-                                    phi_261_ = bool();
-                                    phi_264_ = i32();
-                                    phi_358_ = false;
+                                    phi_260_ = bool();
+                                    phi_263_ = i32();
+                                    phi_357_ = false;
                                 }
-                                let _e302 = phi_261_;
-                                let _e304 = phi_264_;
-                                let _e306 = phi_358_;
+                                let _e301 = phi_260_;
+                                let _e303 = phi_263_;
+                                let _e305 = phi_357_;
                                 continue;
                                 continuing {
-                                    phi_260_ = _e302;
-                                    phi_263_ = _e304;
-                                    break if !(_e306);
+                                    phi_259_ = _e301;
+                                    phi_262_ = _e303;
+                                    break if !(_e305);
                                 }
                             }
-                            let _e638 = local_6;
-                            phi_360_ = _e638;
-                            phi_361_ = (_e194 + 1u);
+                            let _e637 = local_6;
+                            phi_359_ = _e637;
+                            phi_360_ = (_e193 + 1u);
                         }
-                        let _e310 = phi_360_;
-                        let _e312 = phi_361_;
-                        phi_220_ = _e310;
-                        phi_223_ = _e312;
-                        phi_363_ = select(true, false, _e192);
+                        let _e309 = phi_359_;
+                        let _e311 = phi_360_;
+                        phi_219_ = _e309;
+                        phi_222_ = _e311;
+                        phi_362_ = select(true, false, _e191);
                     } else {
-                        phi_220_ = bool();
-                        phi_223_ = u32();
-                        phi_363_ = false;
+                        phi_219_ = bool();
+                        phi_222_ = u32();
+                        phi_362_ = false;
                     }
-                    let _e315 = phi_220_;
-                    let _e317 = phi_223_;
-                    let _e319 = phi_363_;
+                    let _e314 = phi_219_;
+                    let _e316 = phi_222_;
+                    let _e318 = phi_362_;
                     continue;
                     continuing {
-                        phi_219_ = _e315;
-                        phi_222_ = _e317;
-                        break if !(_e319);
+                        phi_218_ = _e314;
+                        phi_221_ = _e316;
+                        break if !(_e318);
                     }
                 }
-                let _e321 = (_e69 / 4u);
-                let _e323 = (_e70 + 11u);
-                let _e324 = (_e323 * _e323);
-                let _e326 = (_e70 * _e70);
-                let _e334 = ((((((_e324 * 144u) + (_e326 * 3u)) + ((_e321 * _e321) * 13u)) + 1u) + (_e69 * _e69)) + _e326);
-                let _e337 = ((_e334 + (_e59.y * _e70)) + _e59.x);
-                let _e339 = local;
-                if _e339 {
-                    let _e340 = (_e337 < _e61);
-                    if _e340 {
-                        let _e343 = atomicLoad((&global_3.member[_e337]));
-                        phi_390_ = _e343;
+                let _e320 = (_e68 / 4u);
+                let _e322 = (_e69 + 11u);
+                let _e323 = (_e322 * _e322);
+                let _e325 = (_e69 * _e69);
+                let _e333 = ((((((_e323 * 144u) + (_e325 * 3u)) + ((_e320 * _e320) * 13u)) + 1u) + (_e68 * _e68)) + _e325);
+                let _e336 = ((_e333 + (_e58.y * _e69)) + _e58.x);
+                let _e338 = local;
+                if _e338 {
+                    let _e339 = (_e336 < _e60);
+                    if _e339 {
+                        let _e342 = atomicLoad((&global_3.member[_e336]));
+                        phi_389_ = _e342;
                     } else {
-                        phi_390_ = 0u;
+                        phi_389_ = 0u;
                     }
-                    let _e345 = phi_390_;
-                    if (_e345 < _e139) {
-                        if _e340 {
-                            atomicStore((&global_3.member[_e337]), _e133);
+                    let _e344 = phi_389_;
+                    if (_e344 < _e138) {
+                        if _e339 {
+                            atomicStore((&global_3.member[_e336]), _e132);
                         }
-                        let _e349 = (_e334 + _e326);
-                        let _e351 = (_e70 / 8u);
-                        let _e355 = ((_e349 + ((_e59.y / 8u) * _e351)) + (_e59.x / 8u));
-                        if (_e355 < _e61) {
-                            atomicStore((&global_3.member[_e355]), _e133);
+                        let _e348 = (_e333 + _e325);
+                        let _e350 = (_e69 / 8u);
+                        let _e354 = ((_e348 + ((_e58.y / 8u) * _e350)) + (_e58.x / 8u));
+                        if (_e354 < _e60) {
+                            atomicStore((&global_3.member[_e354]), _e132);
                         }
-                        if (_e133 == _e139) {
-                            phi_719_ = 0u;
+                        if (_e132 == _e138) {
+                            phi_718_ = 0u;
                             loop {
-                                let _e591 = phi_719_;
-                                let _e592 = (_e591 < 15u);
-                                if _e592 {
-                                    let _e593 = (15u + _e591);
-                                    if (_e593 < _e63) {
-                                        let _e597 = atomicLoad((&global_4.member[_e593]));
-                                        phi_735_ = _e597;
+                                let _e590 = phi_718_;
+                                let _e591 = (_e590 < 15u);
+                                if _e591 {
+                                    let _e592 = (15u + _e590);
+                                    if (_e592 < _e62) {
+                                        let _e596 = atomicLoad((&global_4.member[_e592]));
+                                        phi_734_ = _e596;
                                     } else {
-                                        phi_735_ = 0u;
+                                        phi_734_ = 0u;
                                     }
-                                    let _e599 = phi_735_;
-                                    if (_e591 < _e63) {
-                                        atomicStore((&global_4.member[_e591]), _e599);
+                                    let _e598 = phi_734_;
+                                    if (_e590 < _e62) {
+                                        atomicStore((&global_4.member[_e590]), _e598);
                                     }
-                                    phi_720_ = (_e591 + 1u);
+                                    phi_719_ = (_e590 + 1u);
                                 } else {
-                                    phi_720_ = u32();
+                                    phi_719_ = u32();
                                 }
-                                let _e605 = phi_720_;
+                                let _e604 = phi_719_;
                                 continue;
                                 continuing {
-                                    phi_719_ = _e605;
-                                    break if !(_e592);
+                                    phi_718_ = _e604;
+                                    break if !(_e591);
                                 }
                             }
                         } else {
-                            phi_416_ = 0i;
+                            phi_415_ = 0i;
                             loop {
-                                let _e361 = phi_416_;
-                                let _e362 = (_e361 < 3i);
-                                if _e362 {
-                                    switch _e361 {
+                                let _e360 = phi_415_;
+                                let _e361 = (_e360 < 3i);
+                                if _e361 {
+                                    switch _e360 {
                                         case 0: {
-                                            phi_429_ = 3u;
+                                            phi_428_ = 3u;
                                             break;
                                         }
                                         case 1: {
-                                            phi_429_ = 1u;
+                                            phi_428_ = 1u;
                                             break;
                                         }
                                         default: {
-                                            phi_429_ = 0u;
+                                            phi_428_ = 0u;
                                             break;
                                         }
                                     }
-                                    let _e364 = phi_429_;
-                                    switch bitcast<i32>(_e364) {
+                                    let _e363 = phi_428_;
+                                    switch bitcast<i32>(_e363) {
                                         case 0: {
-                                            phi_436_ = 0u;
-                                            phi_437_ = false;
+                                            phi_435_ = 0u;
+                                            phi_436_ = false;
                                             break;
                                         }
                                         case 1: {
-                                            phi_436_ = u32();
-                                            phi_437_ = true;
+                                            phi_435_ = u32();
+                                            phi_436_ = true;
                                             break;
                                         }
                                         case 2: {
-                                            phi_436_ = u32();
-                                            phi_437_ = true;
+                                            phi_435_ = u32();
+                                            phi_436_ = true;
                                             break;
                                         }
                                         case 3: {
-                                            phi_436_ = 2u;
-                                            phi_437_ = false;
+                                            phi_435_ = 2u;
+                                            phi_436_ = false;
                                             break;
                                         }
                                         default: {
-                                            phi_436_ = u32();
-                                            phi_437_ = bool();
+                                            phi_435_ = u32();
+                                            phi_436_ = bool();
                                             break;
                                         }
                                     }
-                                    let _e367 = phi_436_;
-                                    let _e369 = phi_437_;
-                                    let _e370 = select(_e367, 1u, _e369);
-                                    if (_e370 == 0u) {
-                                        phi_443_ = _e323;
+                                    let _e366 = phi_435_;
+                                    let _e368 = phi_436_;
+                                    let _e369 = select(_e366, 1u, _e368);
+                                    if (_e369 == 0u) {
+                                        phi_442_ = _e322;
                                     } else {
-                                        phi_443_ = _e70;
+                                        phi_442_ = _e69;
                                     }
-                                    let _e373 = phi_443_;
-                                    let _e374 = bitcast<i32>(_e373);
-                                    switch bitcast<i32>(_e364) {
+                                    let _e372 = phi_442_;
+                                    let _e373 = bitcast<i32>(_e372);
+                                    switch bitcast<i32>(_e363) {
                                         case 0: {
-                                            phi_451_ = type_29(array<i32, 2>(-7i, -7i), array<i32, 2>(6i, 6i));
-                                            phi_452_ = false;
+                                            phi_450_ = type_29(array<i32, 2>(-7i, -7i), array<i32, 2>(6i, 6i));
+                                            phi_451_ = false;
                                             break;
                                         }
                                         case 1: {
-                                            phi_451_ = type_29();
-                                            phi_452_ = true;
+                                            phi_450_ = type_29();
+                                            phi_451_ = true;
                                             break;
                                         }
                                         case 2: {
-                                            phi_451_ = type_29();
-                                            phi_452_ = true;
+                                            phi_450_ = type_29();
+                                            phi_451_ = true;
                                             break;
                                         }
                                         case 3: {
-                                            phi_451_ = type_29(array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i));
-                                            phi_452_ = false;
+                                            phi_450_ = type_29(array<i32, 2>(0i, 0i), array<i32, 2>(0i, 0i));
+                                            phi_451_ = false;
                                             break;
                                         }
                                         default: {
-                                            phi_451_ = type_29();
-                                            phi_452_ = bool();
+                                            phi_450_ = type_29();
+                                            phi_451_ = bool();
                                             break;
                                         }
                                     }
-                                    let _e377 = phi_451_;
-                                    let _e379 = phi_452_;
-                                    if _e379 {
-                                        phi_456_ = type_29(array<i32, 2>(-1i, -1i), array<i32, 2>(1i, 1i));
+                                    let _e376 = phi_450_;
+                                    let _e378 = phi_451_;
+                                    if _e378 {
+                                        phi_455_ = type_29(array<i32, 2>(-1i, -1i), array<i32, 2>(1i, 1i));
                                     } else {
-                                        phi_456_ = _e377;
+                                        phi_455_ = _e376;
                                     }
-                                    let _e381 = phi_456_;
-                                    if (_e364 == 0u) {
-                                        switch bitcast<i32>(_e364) {
+                                    let _e380 = phi_455_;
+                                    if (_e363 == 0u) {
+                                        switch bitcast<i32>(_e363) {
                                             case 0: {
-                                                phi_485_ = array<i32, 2>(-5i, -5i);
-                                                phi_486_ = array<u32, 2>();
-                                                phi_487_ = true;
+                                                phi_484_ = array<i32, 2>(-5i, -5i);
+                                                phi_485_ = array<u32, 2>();
+                                                phi_486_ = true;
                                                 break;
                                             }
                                             case 1: {
-                                                phi_485_ = array<i32, 2>(0i, 0i);
-                                                phi_486_ = array<u32, 2>();
-                                                phi_487_ = true;
+                                                phi_484_ = array<i32, 2>(0i, 0i);
+                                                phi_485_ = array<u32, 2>();
+                                                phi_486_ = true;
                                                 break;
                                             }
                                             case 2: {
-                                                let _e396 = (_e69 - 1u);
-                                                phi_485_ = array<i32, 2>();
-                                                phi_486_ = array<u32, 2>((bitcast<u32>((0i - _e98)) & _e396), (bitcast<u32>((0i - _e101)) & _e396));
-                                                phi_487_ = false;
+                                                let _e395 = (_e68 - 1u);
+                                                phi_484_ = array<i32, 2>();
+                                                phi_485_ = array<u32, 2>((bitcast<u32>((0i - _e97)) & _e395), (bitcast<u32>((0i - _e100)) & _e395));
+                                                phi_486_ = false;
                                                 break;
                                             }
                                             case 3: {
-                                                let _e388 = (_e69 - 1u);
-                                                phi_485_ = array<i32, 2>();
-                                                phi_486_ = array<u32, 2>((bitcast<u32>((0i - _e98)) & _e388), (bitcast<u32>((0i - _e101)) & _e388));
-                                                phi_487_ = false;
+                                                let _e387 = (_e68 - 1u);
+                                                phi_484_ = array<i32, 2>();
+                                                phi_485_ = array<u32, 2>((bitcast<u32>((0i - _e97)) & _e387), (bitcast<u32>((0i - _e100)) & _e387));
+                                                phi_486_ = false;
                                                 break;
                                             }
                                             default: {
-                                                phi_485_ = array<i32, 2>();
-                                                phi_486_ = array<u32, 2>();
-                                                phi_487_ = bool();
+                                                phi_484_ = array<i32, 2>();
+                                                phi_485_ = array<u32, 2>();
+                                                phi_486_ = bool();
                                                 break;
                                             }
                                         }
-                                        let _e403 = phi_485_;
-                                        let _e405 = phi_486_;
-                                        let _e407 = phi_487_;
-                                        if select(true, false, _e407) {
-                                            phi_499_ = array<i32, 2>(bitcast<i32>((_e405[0] / 8u)), bitcast<i32>((_e405[1] / 8u)));
+                                        let _e402 = phi_484_;
+                                        let _e404 = phi_485_;
+                                        let _e406 = phi_486_;
+                                        if select(true, false, _e406) {
+                                            phi_498_ = array<i32, 2>(bitcast<i32>((_e404[0] / 8u)), bitcast<i32>((_e404[1] / 8u)));
                                         } else {
-                                            phi_499_ = _e403;
+                                            phi_498_ = _e402;
                                         }
-                                        let _e417 = phi_499_;
-                                        phi_500_ = _e417;
+                                        let _e416 = phi_498_;
+                                        phi_499_ = _e416;
                                     } else {
-                                        phi_500_ = array<i32, 2>(0i, 0i);
+                                        phi_499_ = array<i32, 2>(0i, 0i);
                                     }
-                                    let _e419 = phi_500_;
-                                    let _e421 = (_e349 + (_e351 * _e351));
-                                    phi_504_ = 0u;
-                                    phi_507_ = _e421;
+                                    let _e418 = phi_499_;
+                                    let _e420 = (_e348 + (_e350 * _e350));
+                                    phi_503_ = 0u;
+                                    phi_506_ = _e420;
                                     loop {
-                                        let _e423 = phi_504_;
-                                        let _e425 = phi_507_;
-                                        local_1 = _e425;
-                                        let _e426 = (_e423 < _e370);
-                                        if _e426 {
-                                            phi_505_ = (_e423 + 1u);
-                                            phi_508_ = (_e425 + select(_e326, _e324, (_e423 == 0u)));
+                                        let _e422 = phi_503_;
+                                        let _e424 = phi_506_;
+                                        local_1 = _e424;
+                                        let _e425 = (_e422 < _e369);
+                                        if _e425 {
+                                            phi_504_ = (_e422 + 1u);
+                                            phi_507_ = (_e424 + select(_e325, _e323, (_e422 == 0u)));
                                         } else {
-                                            phi_505_ = u32();
-                                            phi_508_ = u32();
+                                            phi_504_ = u32();
+                                            phi_507_ = u32();
                                         }
-                                        let _e432 = phi_505_;
-                                        let _e434 = phi_508_;
+                                        let _e431 = phi_504_;
+                                        let _e433 = phi_507_;
                                         continue;
                                         continuing {
-                                            phi_504_ = _e432;
-                                            phi_507_ = _e434;
-                                            break if !(_e426);
+                                            phi_503_ = _e431;
+                                            phi_506_ = _e433;
+                                            break if !(_e425);
                                         }
                                     }
-                                    phi_520_ = 0u;
-                                    phi_523_ = _e421;
+                                    phi_519_ = 0u;
+                                    phi_522_ = _e420;
                                     loop {
-                                        let _e437 = phi_520_;
-                                        let _e439 = phi_523_;
-                                        local_7 = _e439;
-                                        let _e440 = (_e437 < 3u);
-                                        if _e440 {
-                                            phi_521_ = (_e437 + 1u);
-                                            phi_524_ = (_e439 + select(_e326, _e324, (_e437 == 0u)));
+                                        let _e436 = phi_519_;
+                                        let _e438 = phi_522_;
+                                        local_7 = _e438;
+                                        let _e439 = (_e436 < 3u);
+                                        if _e439 {
+                                            phi_520_ = (_e436 + 1u);
+                                            phi_523_ = (_e438 + select(_e325, _e323, (_e436 == 0u)));
                                         } else {
-                                            phi_521_ = u32();
-                                            phi_524_ = u32();
+                                            phi_520_ = u32();
+                                            phi_523_ = u32();
                                         }
-                                        let _e446 = phi_521_;
-                                        let _e448 = phi_524_;
+                                        let _e445 = phi_520_;
+                                        let _e447 = phi_523_;
                                         continue;
                                         continuing {
-                                            phi_520_ = _e446;
-                                            phi_523_ = _e448;
-                                            break if !(_e440);
+                                            phi_519_ = _e445;
+                                            phi_522_ = _e447;
+                                            break if !(_e439);
                                         }
                                     }
-                                    phi_536_ = 0u;
-                                    let _e669 = local_7;
-                                    phi_539_ = _e669;
+                                    phi_535_ = 0u;
+                                    let _e668 = local_7;
+                                    phi_538_ = _e668;
                                     loop {
-                                        let _e451 = phi_536_;
-                                        let _e453 = phi_539_;
-                                        local_2 = _e453;
-                                        local_3 = _e453;
-                                        local_4 = _e453;
-                                        let _e454 = (_e451 < _e370);
-                                        if _e454 {
-                                            phi_537_ = (_e451 + 1u);
-                                            phi_540_ = (_e453 + (1u + select(_e326, _e324, (_e451 == 0u))));
+                                        let _e450 = phi_535_;
+                                        let _e452 = phi_538_;
+                                        local_2 = _e452;
+                                        local_3 = _e452;
+                                        local_4 = _e452;
+                                        let _e453 = (_e450 < _e369);
+                                        if _e453 {
+                                            phi_536_ = (_e450 + 1u);
+                                            phi_539_ = (_e452 + (1u + select(_e325, _e323, (_e450 == 0u))));
                                         } else {
-                                            phi_537_ = u32();
-                                            phi_540_ = u32();
+                                            phi_536_ = u32();
+                                            phi_539_ = u32();
                                         }
-                                        let _e461 = phi_537_;
-                                        let _e463 = phi_540_;
+                                        let _e460 = phi_536_;
+                                        let _e462 = phi_539_;
                                         continue;
                                         continuing {
-                                            phi_536_ = _e461;
-                                            phi_539_ = _e463;
-                                            break if !(_e454);
+                                            phi_535_ = _e460;
+                                            phi_538_ = _e462;
+                                            break if !(_e453);
                                         }
                                     }
-                                    phi_557_ = ((_e190 - _e381.member_1[1]) - _e419[1]);
+                                    phi_556_ = ((_e189 - _e380.member_1[1]) - _e418[1]);
                                     loop {
-                                        let _e470 = phi_557_;
-                                        let _e474 = (_e470 <= ((_e190 - _e381.member[1]) - _e419[1]));
-                                        if _e474 {
-                                            phi_574_ = ((_e189 - _e381.member_1[0]) - _e419[0]);
+                                        let _e469 = phi_556_;
+                                        let _e473 = (_e469 <= ((_e189 - _e380.member[1]) - _e418[1]));
+                                        if _e473 {
+                                            phi_573_ = ((_e188 - _e380.member_1[0]) - _e418[0]);
                                             loop {
-                                                let _e480 = phi_574_;
-                                                let _e484 = (_e480 <= ((_e189 - _e381.member[0]) - _e419[0]));
-                                                if _e484 {
-                                                    if (_e480 >= 0i) {
-                                                        if (_e470 >= 0i) {
-                                                            if (_e480 < _e374) {
-                                                                if (_e470 < _e374) {
-                                                                    let _e493 = local_1;
-                                                                    let _e494 = (_e493 + bitcast<u32>(((_e470 * _e374) + _e480)));
-                                                                    if (_e494 < _e61) {
-                                                                        let _e498 = atomicMax((&global_3.member[_e494]), _e133);
-                                                                        phi_612_ = _e498;
+                                                let _e479 = phi_573_;
+                                                let _e483 = (_e479 <= ((_e188 - _e380.member[0]) - _e418[0]));
+                                                if _e483 {
+                                                    if (_e479 >= 0i) {
+                                                        if (_e469 >= 0i) {
+                                                            if (_e479 < _e373) {
+                                                                if (_e469 < _e373) {
+                                                                    let _e492 = local_1;
+                                                                    let _e493 = (_e492 + bitcast<u32>(((_e469 * _e373) + _e479)));
+                                                                    if (_e493 < _e60) {
+                                                                        let _e497 = atomicMax((&global_3.member[_e493]), _e132);
+                                                                        phi_611_ = _e497;
                                                                     } else {
-                                                                        phi_612_ = _e133;
+                                                                        phi_611_ = _e132;
                                                                     }
-                                                                    let _e500 = phi_612_;
-                                                                    if (_e500 != _e133) {
-                                                                        let _e503 = local_2;
-                                                                        if (_e503 < _e61) {
-                                                                            let _e507 = local_3;
-                                                                            let _e509 = atomicAdd((&global_3.member[_e507]), 1u);
-                                                                            phi_623_ = _e509;
+                                                                    let _e499 = phi_611_;
+                                                                    if (_e499 != _e132) {
+                                                                        let _e502 = local_2;
+                                                                        if (_e502 < _e60) {
+                                                                            let _e506 = local_3;
+                                                                            let _e508 = atomicAdd((&global_3.member[_e506]), 1u);
+                                                                            phi_622_ = _e508;
                                                                         } else {
-                                                                            phi_623_ = 0u;
+                                                                            phi_622_ = 0u;
                                                                         }
-                                                                        let _e511 = phi_623_;
-                                                                        let _e513 = local_4;
-                                                                        let _e515 = ((_e513 + 1u) + _e511);
-                                                                        if (_e515 < _e61) {
-                                                                            atomicStore((&global_3.member[_e515]), ((bitcast<u32>(_e470) << bitcast<u32>(16i)) | bitcast<u32>(_e480)));
+                                                                        let _e510 = phi_622_;
+                                                                        let _e512 = local_4;
+                                                                        let _e514 = ((_e512 + 1u) + _e510);
+                                                                        if (_e514 < _e60) {
+                                                                            atomicStore((&global_3.member[_e514]), ((bitcast<u32>(_e469) << bitcast<u32>(16i)) | bitcast<u32>(_e479)));
                                                                         }
-                                                                        if (_e370 == 2u) {
-                                                                            let _e567 = ((_e511 + 1u) * 64u);
-                                                                            let _e568 = (_e567 / 4096u);
-                                                                            if ((_e567 % 4096u) > 0u) {
-                                                                                phi_708_ = (_e568 + 1u);
+                                                                        if (_e369 == 2u) {
+                                                                            let _e566 = ((_e510 + 1u) * 64u);
+                                                                            let _e567 = (_e566 / 4096u);
+                                                                            if ((_e566 % 4096u) > 0u) {
+                                                                                phi_707_ = (_e567 + 1u);
                                                                             } else {
-                                                                                phi_708_ = _e568;
+                                                                                phi_707_ = _e567;
                                                                             }
-                                                                            let _e573 = phi_708_;
-                                                                            if (13u < _e63) {
-                                                                                let _e577 = atomicMax((&global_4.member[13u]), _e573);
+                                                                            let _e572 = phi_707_;
+                                                                            if (13u < _e62) {
+                                                                                let _e576 = atomicMax((&global_4.member[13u]), _e572);
                                                                             }
                                                                         } else {
-                                                                            if (_e370 == 1u) {
-                                                                                let _e537 = (_e511 + 1u);
-                                                                                let _e538 = (_e537 / 4096u);
-                                                                                if ((_e537 % 4096u) > 0u) {
-                                                                                    phi_666_ = (_e538 + 1u);
+                                                                            if (_e369 == 1u) {
+                                                                                let _e536 = (_e510 + 1u);
+                                                                                let _e537 = (_e536 / 4096u);
+                                                                                if ((_e536 % 4096u) > 0u) {
+                                                                                    phi_665_ = (_e537 + 1u);
                                                                                 } else {
-                                                                                    phi_666_ = _e538;
+                                                                                    phi_665_ = _e537;
                                                                                 }
-                                                                                let _e543 = phi_666_;
-                                                                                if (4u < _e63) {
-                                                                                    let _e547 = atomicMax((&global_4.member[4u]), _e543);
+                                                                                let _e542 = phi_665_;
+                                                                                if (4u < _e62) {
+                                                                                    let _e546 = atomicMax((&global_4.member[4u]), _e542);
                                                                                 }
-                                                                                let _e548 = (_e537 * 4u);
-                                                                                let _e549 = (_e548 / 4096u);
-                                                                                let _e551 = ((_e548 % 4096u) > 0u);
-                                                                                if _e551 {
-                                                                                    phi_681_ = (_e549 + 1u);
+                                                                                let _e547 = (_e536 * 4u);
+                                                                                let _e548 = (_e547 / 4096u);
+                                                                                let _e550 = ((_e547 % 4096u) > 0u);
+                                                                                if _e550 {
+                                                                                    phi_680_ = (_e548 + 1u);
                                                                                 } else {
-                                                                                    phi_681_ = _e549;
+                                                                                    phi_680_ = _e548;
                                                                                 }
-                                                                                let _e554 = phi_681_;
-                                                                                if (7u < _e63) {
-                                                                                    let _e558 = atomicMax((&global_4.member[7u]), _e554);
+                                                                                let _e553 = phi_680_;
+                                                                                if (7u < _e62) {
+                                                                                    let _e557 = atomicMax((&global_4.member[7u]), _e553);
                                                                                 }
-                                                                                if _e551 {
-                                                                                    phi_692_ = (_e549 + 1u);
+                                                                                if _e550 {
+                                                                                    phi_691_ = (_e548 + 1u);
                                                                                 } else {
-                                                                                    phi_692_ = _e549;
+                                                                                    phi_691_ = _e548;
                                                                                 }
-                                                                                let _e561 = phi_692_;
-                                                                                if (10u < _e63) {
-                                                                                    let _e565 = atomicMax((&global_4.member[10u]), _e561);
+                                                                                let _e560 = phi_691_;
+                                                                                if (10u < _e62) {
+                                                                                    let _e564 = atomicMax((&global_4.member[10u]), _e560);
                                                                                 }
                                                                             } else {
-                                                                                let _e526 = (_e511 + 1u);
-                                                                                let _e527 = (_e526 / 4096u);
-                                                                                if ((_e526 % 4096u) > 0u) {
-                                                                                    phi_651_ = (_e527 + 1u);
+                                                                                let _e525 = (_e510 + 1u);
+                                                                                let _e526 = (_e525 / 4096u);
+                                                                                if ((_e525 % 4096u) > 0u) {
+                                                                                    phi_650_ = (_e526 + 1u);
                                                                                 } else {
-                                                                                    phi_651_ = _e527;
+                                                                                    phi_650_ = _e526;
                                                                                 }
-                                                                                let _e532 = phi_651_;
-                                                                                if (1u < _e63) {
-                                                                                    let _e536 = atomicMax((&global_4.member[1u]), _e532);
+                                                                                let _e531 = phi_650_;
+                                                                                if (1u < _e62) {
+                                                                                    let _e535 = atomicMax((&global_4.member[1u]), _e531);
                                                                                 }
                                                                             }
                                                                         }
@@ -720,37 +720,37 @@ fn function_() {
                                                             }
                                                         }
                                                     }
-                                                    phi_575_ = (_e480 + 1i);
+                                                    phi_574_ = (_e479 + 1i);
                                                 } else {
-                                                    phi_575_ = i32();
+                                                    phi_574_ = i32();
                                                 }
-                                                let _e580 = phi_575_;
+                                                let _e579 = phi_574_;
                                                 continue;
                                                 continuing {
-                                                    phi_574_ = _e580;
-                                                    break if !(_e484);
+                                                    phi_573_ = _e579;
+                                                    break if !(_e483);
                                                 }
                                             }
-                                            phi_558_ = (_e470 + 1i);
+                                            phi_557_ = (_e469 + 1i);
                                         } else {
-                                            phi_558_ = i32();
+                                            phi_557_ = i32();
                                         }
-                                        let _e584 = phi_558_;
+                                        let _e583 = phi_557_;
                                         continue;
                                         continuing {
-                                            phi_557_ = _e584;
-                                            break if !(_e474);
+                                            phi_556_ = _e583;
+                                            break if !(_e473);
                                         }
                                     }
-                                    phi_417_ = (_e361 + 1i);
+                                    phi_416_ = (_e360 + 1i);
                                 } else {
-                                    phi_417_ = i32();
+                                    phi_416_ = i32();
                                 }
-                                let _e588 = phi_417_;
+                                let _e587 = phi_416_;
                                 continue;
                                 continuing {
-                                    phi_416_ = _e588;
-                                    break if !(_e362);
+                                    phi_415_ = _e587;
+                                    break if !(_e361);
                                 }
                             }
                         }

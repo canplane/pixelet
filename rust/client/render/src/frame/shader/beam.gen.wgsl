@@ -37,9 +37,9 @@ struct type_33 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_34 {
@@ -3264,23 +3264,23 @@ fn function_99(param_241: vec4<f32>) -> array<f32, 3> {
 }
 
 fn function_100() -> type_58 {
-    let _e3307 = global_7.member.member_8[0u][0u];
-    let _e3312 = global_7.member.member_8[0u][1u];
-    let _e3317 = global_7.member.member_8[0u][2u];
-    let _e3322 = global_7.member.member_8[0u][3u];
-    let _e3327 = global_7.member.member_8[1u][0u];
-    let _e3332 = global_7.member.member_8[1u][1u];
-    let _e3337 = global_7.member.member_8[1u][2u];
-    let _e3342 = global_7.member.member_8[1u][3u];
-    let _e3347 = global_7.member.member_8[2u][0u];
-    let _e3352 = global_7.member.member_8[2u][1u];
-    let _e3357 = global_7.member.member_8[2u][2u];
-    let _e3362 = global_7.member.member_8[2u][3u];
-    let _e3367 = global_7.member.member_8[3u][0u];
-    let _e3372 = global_7.member.member_8[3u][1u];
-    let _e3377 = global_7.member.member_8[3u][2u];
-    let _e3382 = global_7.member.member_8[3u][3u];
-    let _e3387 = global_7.member.member_8[4u][0u];
+    let _e3307 = global_7.member.member_10[0u][0u];
+    let _e3312 = global_7.member.member_10[0u][1u];
+    let _e3317 = global_7.member.member_10[0u][2u];
+    let _e3322 = global_7.member.member_10[0u][3u];
+    let _e3327 = global_7.member.member_10[1u][0u];
+    let _e3332 = global_7.member.member_10[1u][1u];
+    let _e3337 = global_7.member.member_10[1u][2u];
+    let _e3342 = global_7.member.member_10[1u][3u];
+    let _e3347 = global_7.member.member_10[2u][0u];
+    let _e3352 = global_7.member.member_10[2u][1u];
+    let _e3357 = global_7.member.member_10[2u][2u];
+    let _e3362 = global_7.member.member_10[2u][3u];
+    let _e3367 = global_7.member.member_10[3u][0u];
+    let _e3372 = global_7.member.member_10[3u][1u];
+    let _e3377 = global_7.member.member_10[3u][2u];
+    let _e3382 = global_7.member.member_10[3u][3u];
+    let _e3387 = global_7.member.member_10[4u][0u];
     let _e3391 = global_7.member.member_4[0u];
     let _e3395 = global_7.member.member_4[1u];
     return type_58(array<f32, 2>(_e3391, _e3395), array<u32, 2>(_e3332, _e3337), array<u32, 2>(_e3342, _e3347), array<u32, 2>(_e3352, _e3357), bitcast<f32>(_e3307), bitcast<f32>(_e3312), bitcast<f32>(_e3317), bitcast<f32>(_e3322), _e3327, _e3387, _e3362, _e3367, _e3372, _e3377, _e3382);
@@ -3982,20 +3982,20 @@ fn function_116() {
     let _e3325 = arrayLength((&global_4.member));
     let _e3327 = arrayLength((&global_5.member));
     let _e3329 = arrayLength((&global_6.member));
-    let _e3333 = global_7.member.member_9[0u];
+    let _e3333 = global_7.member.member_8[0u];
     let _e3334 = function_115(_e3333);
-    let _e3339 = global_7.member.member_9[0u][3u];
-    let _e3343 = global_7.member.member_9[1u];
+    let _e3339 = global_7.member.member_8[0u][3u];
+    let _e3343 = global_7.member.member_8[1u];
     let _e3344 = function_115(_e3343);
-    let _e3348 = global_7.member.member_9[2u];
+    let _e3348 = global_7.member.member_8[2u];
     let _e3349 = function_115(_e3348);
-    let _e3353 = global_7.member.member_9[3u];
+    let _e3353 = global_7.member.member_8[3u];
     let _e3354 = function_115(_e3353);
-    let _e3358 = global_7.member.member_9[4u];
+    let _e3358 = global_7.member.member_8[4u];
     let _e3359 = function_115(_e3358);
     let _e3360 = function_114(_e3343);
     let _e3361 = function_114(_e3348);
-    let _e3366 = global_7.member.member_9[3u][3u];
+    let _e3366 = global_7.member.member_8[3u][3u];
     let _e3367 = function_113(0u);
     let _e3371 = function_113(1u);
     let _e3372 = function_112(_e3371);
@@ -4303,7 +4303,7 @@ fn function_116() {
                     let _e3668 = global_7.member.member[0u];
                     let _e3672 = global_7.member.member[1u];
                     let _e3676 = global_7.member.member[2u];
-                    let _e3682 = global_7.member.member_8[0u][0u];
+                    let _e3682 = global_7.member.member_10[0u][0u];
                     let _e3688 = global_7.member.member_1;
                     let _e3689 = function_99(_e3688);
                     let _e3692 = global_7.member.member_2;

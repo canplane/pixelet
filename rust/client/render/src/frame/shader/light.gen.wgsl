@@ -22,9 +22,9 @@ struct type_26 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_27 {
@@ -649,20 +649,20 @@ fn function_33() {
     let _e84 = global_1;
     let _e86 = arrayLength((&global_4.member));
     let _e88 = arrayLength((&global_6.member));
-    let _e92 = global_2.member.member_9[0u];
+    let _e92 = global_2.member.member_8[0u];
     let _e93 = function_(_e92);
-    let _e98 = global_2.member.member_9[0u][3u];
-    let _e102 = global_2.member.member_9[1u];
+    let _e98 = global_2.member.member_8[0u][3u];
+    let _e102 = global_2.member.member_8[1u];
     let _e103 = function_(_e102);
-    let _e107 = global_2.member.member_9[2u];
+    let _e107 = global_2.member.member_8[2u];
     let _e108 = function_(_e107);
-    let _e112 = global_2.member.member_9[3u];
+    let _e112 = global_2.member.member_8[3u];
     let _e113 = function_(_e112);
-    let _e117 = global_2.member.member_9[4u];
+    let _e117 = global_2.member.member_8[4u];
     let _e118 = function_(_e117);
     let _e119 = function_1(_e102);
     let _e120 = function_1(_e107);
-    let _e125 = global_2.member.member_9[3u][3u];
+    let _e125 = global_2.member.member_8[3u][3u];
     let _e126 = function_2(0u);
     let _e129 = function_2(1u);
     let _e130 = function_3(_e129);

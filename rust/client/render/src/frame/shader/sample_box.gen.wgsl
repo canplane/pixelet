@@ -17,9 +17,9 @@ struct type_20 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_21 {
@@ -172,8 +172,8 @@ fn function_() {
     let _e66 = global;
     let _e68 = arrayLength((&global_4.member));
     let _e70 = arrayLength((&global_5.member));
-    let _e74 = global_1.member.member_9[1u];
-    let _e78 = global_1.member.member_9[2u];
+    let _e74 = global_1.member.member_8[1u];
+    let _e78 = global_1.member.member_8[2u];
     let _e81 = bitcast<i32>(bitcast<u32>(_e74.w));
     let _e84 = bitcast<i32>(bitcast<u32>(_e78.w));
     let _e89 = global_2.member.member[2u][0u];
@@ -218,8 +218,8 @@ fn function_() {
         let _e311 = (_e286 / 4u);
         phi_241_ = array<u32, 2>(_e311, _e311);
     } else {
-        let _e304 = global_1.member.member_8[2u][1u];
-        let _e309 = global_1.member.member_8[2u][2u];
+        let _e304 = global_1.member.member_10[2u][1u];
+        let _e309 = global_1.member.member_10[2u][2u];
         phi_241_ = array<u32, 2>(_e304, _e309);
     }
     let _e314 = phi_241_;
@@ -429,8 +429,8 @@ fn function_() {
                         let _e574 = (_e573 + 11u);
                         phi_532_ = ((((_e574 * _e574) * 144u) + ((_e573 * _e573) * 3u)) + ((((_e420[1] % _e568) * _e568) + (_e426 % _e568)) * 13u));
                     } else {
-                        let _e558 = global_1.member.member_8[2u][1u];
-                        let _e563 = global_1.member.member_8[3u][0u];
+                        let _e558 = global_1.member.member_10[2u][1u];
+                        let _e563 = global_1.member.member_10[3u][0u];
                         phi_532_ = (_e563 + (((_e420[1] * _e558) + _e426) * 13u));
                     }
                     let _e583 = phi_532_;
@@ -569,8 +569,8 @@ fn function_() {
                         let _e741 = (_e740 + 11u);
                         phi_709_ = ((((_e741 * _e741) * 144u) + ((_e740 * _e740) * 3u)) + ((((_e593 % _e735) * _e735) + (_e420[0] % _e735)) * 13u));
                     } else {
-                        let _e725 = global_1.member.member_8[2u][1u];
-                        let _e730 = global_1.member.member_8[3u][0u];
+                        let _e725 = global_1.member.member_10[2u][1u];
+                        let _e730 = global_1.member.member_10[3u][0u];
                         phi_709_ = (_e730 + (((_e593 * _e725) + _e420[0]) * 13u));
                     }
                     let _e750 = phi_709_;
@@ -641,8 +641,8 @@ fn function_() {
                 let _e884 = (_e883 + 11u);
                 phi_840_ = ((((_e884 * _e884) * 144u) + ((_e883 * _e883) * 3u)) + ((((_e420[1] % _e878) * _e878) + (_e420[0] % _e878)) * 13u));
             } else {
-                let _e868 = global_1.member.member_8[2u][1u];
-                let _e873 = global_1.member.member_8[3u][0u];
+                let _e868 = global_1.member.member_10[2u][1u];
+                let _e873 = global_1.member.member_10[3u][0u];
                 phi_840_ = (_e873 + (((_e420[1] * _e868) + _e420[0]) * 13u));
             }
             let _e893 = phi_840_;
@@ -650,8 +650,8 @@ fn function_() {
                 let _e905 = (_e286 / 4u);
                 phi_851_ = array<u32, 2>(_e905, _e905);
             } else {
-                let _e898 = global_1.member.member_8[2u][1u];
-                let _e903 = global_1.member.member_8[2u][2u];
+                let _e898 = global_1.member.member_10[2u][1u];
+                let _e903 = global_1.member.member_10[2u][2u];
                 phi_851_ = array<u32, 2>(_e898, _e903);
             }
             let _e908 = phi_851_;
@@ -910,14 +910,14 @@ fn function_() {
             if _e299 {
             } else {
                 if (_e1284 != 4294967295u) {
-                    let _e1290 = global_1.member.member_8[0u][0u];
-                    let _e1295 = global_1.member.member_8[1u][1u];
-                    let _e1300 = global_1.member.member_8[1u][2u];
-                    let _e1305 = global_1.member.member_8[2u][1u];
-                    let _e1310 = global_1.member.member_8[2u][3u];
-                    let _e1315 = global_1.member.member_8[3u][0u];
-                    let _e1320 = global_1.member.member_8[3u][1u];
-                    let _e1325 = global_1.member.member_8[4u][0u];
+                    let _e1290 = global_1.member.member_10[0u][0u];
+                    let _e1295 = global_1.member.member_10[1u][1u];
+                    let _e1300 = global_1.member.member_10[1u][2u];
+                    let _e1305 = global_1.member.member_10[2u][1u];
+                    let _e1310 = global_1.member.member_10[2u][3u];
+                    let _e1315 = global_1.member.member_10[3u][0u];
+                    let _e1320 = global_1.member.member_10[3u][1u];
+                    let _e1325 = global_1.member.member_10[4u][0u];
                     let _e1329 = global_1.member.member_4[0u];
                     let _e1333 = global_1.member.member_4[1u];
                     let _e1338 = (_e1315 + (((_e420[1] * _e1305) + _e420[0]) * 13u));

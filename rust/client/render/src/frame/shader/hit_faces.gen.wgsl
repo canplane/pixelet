@@ -17,9 +17,9 @@ struct type_17 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_18 {
@@ -50,7 +50,7 @@ fn function_() {
     let _e26 = global_3.member[118u];
     if (_e22.x >= select(_e26, 524288u, (524288u < _e26))) {
     } else {
-        let _e34 = global_1.member.member_8[3u][2u];
+        let _e34 = global_1.member.member_10[3u][2u];
         let _e36 = (_e34 + (_e22.x * 10u));
         let _e40 = global_4.member[(_e36 + 8u)];
         let _e44 = global_4.member[(_e36 + 9u)];

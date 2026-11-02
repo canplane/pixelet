@@ -22,9 +22,9 @@ struct type_26 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_27 {
@@ -140,23 +140,23 @@ fn function_(param_1: f32, param_2: f32) -> f32 {
 }
 
 fn function_1() -> type_35 {
-    let _e69 = global_1.member.member_8[0u][0u];
-    let _e74 = global_1.member.member_8[0u][1u];
-    let _e79 = global_1.member.member_8[0u][2u];
-    let _e84 = global_1.member.member_8[0u][3u];
-    let _e89 = global_1.member.member_8[1u][0u];
-    let _e94 = global_1.member.member_8[1u][1u];
-    let _e99 = global_1.member.member_8[1u][2u];
-    let _e104 = global_1.member.member_8[1u][3u];
-    let _e109 = global_1.member.member_8[2u][0u];
-    let _e114 = global_1.member.member_8[2u][1u];
-    let _e119 = global_1.member.member_8[2u][2u];
-    let _e124 = global_1.member.member_8[2u][3u];
-    let _e129 = global_1.member.member_8[3u][0u];
-    let _e134 = global_1.member.member_8[3u][1u];
-    let _e139 = global_1.member.member_8[3u][2u];
-    let _e144 = global_1.member.member_8[3u][3u];
-    let _e149 = global_1.member.member_8[4u][0u];
+    let _e69 = global_1.member.member_10[0u][0u];
+    let _e74 = global_1.member.member_10[0u][1u];
+    let _e79 = global_1.member.member_10[0u][2u];
+    let _e84 = global_1.member.member_10[0u][3u];
+    let _e89 = global_1.member.member_10[1u][0u];
+    let _e94 = global_1.member.member_10[1u][1u];
+    let _e99 = global_1.member.member_10[1u][2u];
+    let _e104 = global_1.member.member_10[1u][3u];
+    let _e109 = global_1.member.member_10[2u][0u];
+    let _e114 = global_1.member.member_10[2u][1u];
+    let _e119 = global_1.member.member_10[2u][2u];
+    let _e124 = global_1.member.member_10[2u][3u];
+    let _e129 = global_1.member.member_10[3u][0u];
+    let _e134 = global_1.member.member_10[3u][1u];
+    let _e139 = global_1.member.member_10[3u][2u];
+    let _e144 = global_1.member.member_10[3u][3u];
+    let _e149 = global_1.member.member_10[4u][0u];
     let _e153 = global_1.member.member_4[0u];
     let _e157 = global_1.member.member_4[1u];
     return type_35(array<f32, 2>(_e153, _e157), array<u32, 2>(_e94, _e99), array<u32, 2>(_e104, _e109), array<u32, 2>(_e114, _e119), bitcast<f32>(_e69), bitcast<f32>(_e74), bitcast<f32>(_e79), bitcast<f32>(_e84), _e89, _e149, _e124, _e129, _e134, _e139, _e144);
@@ -184,7 +184,7 @@ fn function_4() -> type_42 {
     let _e76 = global_1.member.member[2u];
     let _e81 = global_1.member.member_5[0u];
     let _e85 = global_1.member.member_5[1u];
-    let _e91 = global_1.member.member_8[0u][0u];
+    let _e91 = global_1.member.member_10[0u][0u];
     return type_42(array<i32, 3>(_e68, _e72, _e76), type_38(array<u32, 2>(_e81, _e85), type_18(bitcast<f32>(_e91), 0f)));
 }
 
@@ -478,8 +478,8 @@ fn function_23() {
             if ((_e92 - _e95) < _e100) {
                 let _e102 = function_1();
                 local_5 = type_35(array<f32, 2>(_e102.member[0], _e102.member[1]), array<u32, 2>(_e102.member_1[0], _e102.member_1[1]), array<u32, 2>(_e102.member_2[0], _e102.member_2[1]), array<u32, 2>(_e102.member_3[0], _e102.member_3[1]), _e102.member_4, _e102.member_5, _e102.member_6, _e102.member_7, _e102.member_8, _e102.member_9, _e102.member_10, _e102.member_11, _e102.member_12, _e102.member_13, _e102.member_14);
-                let _e136 = global_1.member.member_10[0u];
-                let _e147 = global_1.member.member_10[1u];
+                let _e136 = global_1.member.member_9[0u];
+                let _e147 = global_1.member.member_9[1u];
                 let _e156 = global_1.member.member_4[0u];
                 let _e157 = ((((((f32(_e71.x) + 0.5f) + _e136) / f32(_e74.x)) * 2f) - 1f) * _e156);
                 let _e161 = global_1.member.member_4[1u];

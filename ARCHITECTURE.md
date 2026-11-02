@@ -538,7 +538,8 @@ both knobs: the frame's budget is the display's interval, no tighter than
 its least first, then the lattice, and a knob steps up, the lattice first,
 where the step above, the rest of the GPU's time as it is, the per-pixel spans'
 grown by their pixels and the lattice's by its cells, would fit; one step a
-settling window. A lattice changed casts in full, as the eye's grid is another.
+settling window. A lattice changed draws no other pixel: the next cast lays
+it, and the frames that stand on the last cast's samples keep its grid.
 Without timestamps it reads the frames' gaps, which cannot foresee room, so
 only the scale moves, and a step up is a probe whose failure doubles the wait
 before the next.

@@ -36,9 +36,6 @@ pub struct Eye {
     /// `eye::NO_CUT` for none.
     pub carve: IVec4,
     pub hide: IVec4,
-    /// The camera grid the frame casts on, as the kernel laid it once
-    /// (pxl-engine `beam::Grid`, `grid`).
-    pub grid: [UVec4; eye::GRID_WORDS / 4],
     /// The light's cast, a frame's constants (pxl-engine `light::Light`), all
     /// zero where no shadow is cast.
     pub light: [Vec4; 5],
@@ -46,6 +43,9 @@ pub struct Eye {
     /// first pixel of the region the frame casts (pxl-engine
     /// `eye::JITTER`).
     pub jitter: Vec4,
+    /// The camera grid the frame casts on, as the kernel laid it once
+    /// (pxl-engine `beam::Grid`, `grid`).
+    pub grid: [UVec4; eye::GRID_WORDS / 4],
 }
 
 /// Word `words`'s byte.
@@ -70,9 +70,9 @@ const _: () = {
     assert!(
         offset_of!(Eye, carve) == at(eye::CARVE)
             && offset_of!(Eye, hide) == at(eye::HIDE)
-            && offset_of!(Eye, grid) == at(eye::GRID)
             && offset_of!(Eye, light) == at(eye::LIGHT)
             && offset_of!(Eye, jitter) == at(eye::JITTER)
+            && offset_of!(Eye, grid) == at(eye::GRID)
     );
 };
 

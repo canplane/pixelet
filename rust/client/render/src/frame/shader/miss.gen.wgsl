@@ -32,9 +32,9 @@ struct type_32 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_33 {
@@ -463,23 +463,23 @@ fn function_12(param_18: f32, param_19: f32) -> f32 {
 }
 
 fn function_13() -> type_46 {
-    let _e3307 = global_7.member.member_8[0u][0u];
-    let _e3312 = global_7.member.member_8[0u][1u];
-    let _e3317 = global_7.member.member_8[0u][2u];
-    let _e3322 = global_7.member.member_8[0u][3u];
-    let _e3327 = global_7.member.member_8[1u][0u];
-    let _e3332 = global_7.member.member_8[1u][1u];
-    let _e3337 = global_7.member.member_8[1u][2u];
-    let _e3342 = global_7.member.member_8[1u][3u];
-    let _e3347 = global_7.member.member_8[2u][0u];
-    let _e3352 = global_7.member.member_8[2u][1u];
-    let _e3357 = global_7.member.member_8[2u][2u];
-    let _e3362 = global_7.member.member_8[2u][3u];
-    let _e3367 = global_7.member.member_8[3u][0u];
-    let _e3372 = global_7.member.member_8[3u][1u];
-    let _e3377 = global_7.member.member_8[3u][2u];
-    let _e3382 = global_7.member.member_8[3u][3u];
-    let _e3387 = global_7.member.member_8[4u][0u];
+    let _e3307 = global_7.member.member_10[0u][0u];
+    let _e3312 = global_7.member.member_10[0u][1u];
+    let _e3317 = global_7.member.member_10[0u][2u];
+    let _e3322 = global_7.member.member_10[0u][3u];
+    let _e3327 = global_7.member.member_10[1u][0u];
+    let _e3332 = global_7.member.member_10[1u][1u];
+    let _e3337 = global_7.member.member_10[1u][2u];
+    let _e3342 = global_7.member.member_10[1u][3u];
+    let _e3347 = global_7.member.member_10[2u][0u];
+    let _e3352 = global_7.member.member_10[2u][1u];
+    let _e3357 = global_7.member.member_10[2u][2u];
+    let _e3362 = global_7.member.member_10[2u][3u];
+    let _e3367 = global_7.member.member_10[3u][0u];
+    let _e3372 = global_7.member.member_10[3u][1u];
+    let _e3377 = global_7.member.member_10[3u][2u];
+    let _e3382 = global_7.member.member_10[3u][3u];
+    let _e3387 = global_7.member.member_10[4u][0u];
     let _e3391 = global_7.member.member_4[0u];
     let _e3395 = global_7.member.member_4[1u];
     return type_46(array<f32, 2>(_e3391, _e3395), array<u32, 2>(_e3332, _e3337), array<u32, 2>(_e3342, _e3347), array<u32, 2>(_e3352, _e3357), bitcast<f32>(_e3307), bitcast<f32>(_e3312), bitcast<f32>(_e3317), bitcast<f32>(_e3322), _e3327, _e3387, _e3362, _e3367, _e3372, _e3377, _e3382);
@@ -527,7 +527,7 @@ fn function_18() -> type_50 {
     let _e3314 = global_7.member.member[2u];
     let _e3319 = global_7.member.member_5[0u];
     let _e3323 = global_7.member.member_5[1u];
-    let _e3329 = global_7.member.member_8[0u][0u];
+    let _e3329 = global_7.member.member_10[0u][0u];
     return type_50(array<i32, 3>(_e3306, _e3310, _e3314), type_49(array<u32, 2>(_e3319, _e3323), type_39(bitcast<f32>(_e3329), 0f)));
 }
 
@@ -3845,8 +3845,8 @@ fn function_106() {
             let _e3341 = textureLoad(global_11, vec2<u32>(_e3335.x, _e3335.y), i32(_e3335.z));
             if (_e3341.x != 4294967295u) {
             } else {
-                let _e3349 = global_7.member.member_10[0u];
-                let _e3360 = global_7.member.member_10[1u];
+                let _e3349 = global_7.member.member_9[0u];
+                let _e3360 = global_7.member.member_9[1u];
                 let _e3369 = global_7.member.member_4[0u];
                 let _e3370 = ((((((f32(_e3315.x) + 0.5f) + _e3349) / f32(_e3328.x)) * 2f) - 1f) * _e3369);
                 let _e3374 = global_7.member.member_4[1u];

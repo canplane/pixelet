@@ -32,9 +32,9 @@ struct type_31 {
     member_5: vec2<u32>,
     member_6: vec4<i32>,
     member_7: vec4<i32>,
-    member_8: array<vec4<u32>, 5>,
-    member_9: array<vec4<f32>, 5>,
-    member_10: vec4<f32>,
+    member_8: array<vec4<f32>, 5>,
+    member_9: vec4<f32>,
+    member_10: array<vec4<u32>, 5>,
 }
 
 struct type_32 {
@@ -3817,20 +3817,20 @@ fn function_107() {
     let _e3328 = arrayLength((&global_5.member));
     let _e3330 = arrayLength((&global_6.member));
     let _e3332 = arrayLength((&global_7.member));
-    let _e3336 = global_8.member.member_9[0u];
+    let _e3336 = global_8.member.member_8[0u];
     let _e3337 = function_12(_e3336);
-    let _e3342 = global_8.member.member_9[0u][3u];
-    let _e3346 = global_8.member.member_9[1u];
+    let _e3342 = global_8.member.member_8[0u][3u];
+    let _e3346 = global_8.member.member_8[1u];
     let _e3347 = function_12(_e3346);
-    let _e3351 = global_8.member.member_9[2u];
+    let _e3351 = global_8.member.member_8[2u];
     let _e3352 = function_12(_e3351);
-    let _e3356 = global_8.member.member_9[3u];
+    let _e3356 = global_8.member.member_8[3u];
     let _e3357 = function_12(_e3356);
-    let _e3361 = global_8.member.member_9[4u];
+    let _e3361 = global_8.member.member_8[4u];
     let _e3362 = function_12(_e3361);
     let _e3363 = function_13(_e3346);
     let _e3364 = function_13(_e3351);
-    let _e3369 = global_8.member.member_9[3u][3u];
+    let _e3369 = global_8.member.member_8[3u][3u];
     let _e3370 = function_14(0u);
     let _e3373 = function_14(1u);
     let _e3374 = function_15(_e3373);
