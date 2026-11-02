@@ -1,7 +1,8 @@
-use super::share_out;
+use super::halve;
 
+/// The halves sum to the count, each within its room.
 #[test]
-fn shares_sum_to_the_count_within_rooms() {
+fn halves_sum_within_rooms() {
     let mut h = 0x1234_5678u32;
     let mut next = || {
         h ^= h << 13;
@@ -9,15 +10,10 @@ fn shares_sum_to_the_count_within_rooms() {
         h ^= h << 5;
         h
     };
-    for _ in 0..20_000 {
-        let rooms = [0u32; 8].map(|_| next() % 40);
-        let total: u32 = rooms.iter().sum();
-        let n = next() % (total + 1);
-        let weights = [0u32; 8].map(|_| next() % (1 << 15));
-        let out = share_out(n, rooms, weights);
-        assert_eq!(out.iter().sum::<u32>(), n, "{rooms:?} {weights:?} {n}");
-        for k in 0..8 {
-            assert!(out[k] <= rooms[k]);
-        }
+    for _ in 0..100_000 {
+        let rooms = [next() % 3000, next() % 3000];
+        let n = next() % (rooms[0] + rooms[1] + 1);
+        let a = halve(n, rooms, next());
+        assert!(a <= rooms[0] && n - a <= rooms[1], "{rooms:?} {n} {a}");
     }
 }
