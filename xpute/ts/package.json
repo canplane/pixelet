@@ -6,7 +6,6 @@
     "node": ">=24"
   },
   "scripts": {
-    "preinstall": "node script/require-pnpm.ts",
     "check": "pnpm fmt:check && pnpm lint && pnpm typecheck",
     "typecheck": "tsc -p .",
     "test": "vitest run --exclude host/src/conformance.test.ts --exclude 'example/**'",

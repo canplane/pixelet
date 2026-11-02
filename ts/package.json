@@ -6,7 +6,6 @@
     "node": ">=24"
   },
   "scripts": {
-    "preinstall": "node build/require-pnpm.ts",
     "check": "pnpm fmt:check && pnpm lint && pnpm typecheck",
     "typecheck": "tsc -p . && tsc -p app/native && tsc -p server/edge",
     "test": "vitest run",
