@@ -201,7 +201,7 @@ export interface Snapshot {
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
   stall: Message | null;
   /** How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): its shader modules, by their bytes, the first half, its pipelines made the second; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it. */
-  renderer_made: f64;
+  renderer_progress: f64;
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -222,7 +222,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     previews: Array.from(b.at(13).get<U32Array>()),
     refused_files: list(b.at_branch(14), read_refused_file),
     stall: b.at(15).get<Message | null>(),
-    renderer_made: b.at(16).get<f64>(),
+    renderer_progress: b.at(16).get<f64>(),
   };
 }
 

@@ -666,7 +666,7 @@ pipelines made by WebGPU's async call, which compiles off that thread, its
 completion a ticket's word (xpute `RENDER_PIPELINE_ASYNC`,
 `COMPUTE_PIPELINE_ASYNC`); then no frame until every word says it is made. A
 frame turn before then draws nothing and asks for the next, and the kernel's
-snapshot carries how much is made (`renderer_made`), which the search strip
+snapshot carries how much is made (`renderer_progress`), which the search strip
 shows as a progress bar in the address's place. Every pipeline it draws with
 is asked for in the second step, the cast's and the ground's included; one
 asked for once it draws is a bug (`EBUSY`). The device app's wgpu has no async

@@ -108,7 +108,7 @@ export function TopOverlays() {
 function SearchStrip() {
   const { t } = useTranslation();
   const mode = useKernel((s) =>
-    s.renderer_made < 1 ? "progress" : s.zooming ? "scale" : "address",
+    s.renderer_progress < 1 ? "progress" : s.zooming ? "scale" : "address",
   );
   const dim = useDim(1, SNAP);
   return (

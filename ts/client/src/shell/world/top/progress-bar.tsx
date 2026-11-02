@@ -33,12 +33,12 @@ function capsule(x: f64, y: f64, w: f64, h: f64): string {
   );
 }
 
-/** `renderer_made` in the scale bar's place: a capsule BAR_MAX_PX wide, its
- * top where the scale's line is, filled that share, its percent above it
+/** `renderer_progress` in the scale bar's place: a capsule BAR_MAX_PX wide,
+ * its top where the scale's line is, filled that share, its percent above it
  * where the scale's label is. The fill slides in from the left inside a
  * capsule that clips it, so it eases between shares on the compositor. */
 export function ProgressBar({ show }: { show: boolean }) {
-  const made = useKernel((s) => s.renderer_made);
+  const made = useKernel((s) => s.renderer_progress);
   return (
     <Presence
       show={show}

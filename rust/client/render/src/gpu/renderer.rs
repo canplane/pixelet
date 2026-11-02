@@ -285,7 +285,7 @@ static MAKING: Global<Option<Pipelines>> = Global::new();
 /// How much of what the renderer makes before its first frame is made, 0 to
 /// 1 (`Pipelines::share`): what the shell's progress bar shows. 0 with no
 /// device, 1 once it draws.
-pub fn renderer_made() -> f64 {
+pub fn renderer_progress() -> f64 {
     if let Some(r) = RENDERER.get(|| None).as_ref() {
         return r.pipelines.share();
     }
