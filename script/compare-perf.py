@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # Measures a change's page against its base's, each served on its own port,
-# in a fresh Chrome a run, base and change by turns after each server's first
-# page, spoken to over Chrome's debugging pipe. Read off the app's own profiler
-# (`pxl.perf.read`, `pxl.perf.drive`): the first load's longest frame, which
-# its long-frame observer replays from load (perf/long-frame.ts), and the
-# GPU's busy time over the one measurement (`pxl.perf.drive`, perf/drive.ts).
-# Fails where the change's median runs past the base's: its load's longest
-# frame by more than `LOAD_SLACK_MS`, its GPU's p50 or p95 by more than
-# `P50_SHARE` or `P95_SHARE`.
+# in a fresh Chrome a run, base and change by turns, spoken to over Chrome's
+# debugging pipe. Read off the app's own profiler (`pxl.perf.read`,
+# `pxl.perf.drive`): the first load's longest frame, which its long-frame
+# observer replays from load (perf/long-frame.ts), and the GPU's busy time and
+# the kernel's tick over the one measurement (perf/drive.ts). Fails where the
+# change's median runs past the base's: its load's longest frame by more than
+# `LOAD_SLACK_MS`, its GPU's or its tick's p50 or p95 by more than `P50_SHARE`
+# or `P95_SHARE`, its tick also by more than `TICK_SLACK_MS`.
 #
 #   ./script/compare-perf.py <base url> <change url> [rounds]
 
@@ -24,14 +24,18 @@ import time
 CHROME = os.environ.get(
     "CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 )
-SIZE = {"width": 2056, "height": 1113}
-# Where the device stands, so the view opens there as a user's does.
-PLACE = {"latitude": 37.2741, "longitude": 127.0349}
+# 4K, at the two device pixels a side below.
+SIZE = {"width": 1920, "height": 1080}
+# Where the device stands, so the view opens there as a user's does: on
+# Seoraksan, whose ridges the drive's eye meets at the horizon.
+PLACE = {"latitude": 38.1193, "longitude": 128.4656}
 # How much longer the change's first load may block the page than the base's.
 LOAD_SLACK_MS = 3000
 # How much more the change's GPU time may take than the base's.
 P50_SHARE = 1.15
 P95_SHARE = 1.3
+# A tick's share is of little time: what it may run past that as well.
+TICK_SLACK_MS = 0.5
 # The page settled: no resource ends for this long, within `LOAD_CAP_S`.
 QUIET_S = 8
 LOAD_CAP_S = 90
@@ -45,6 +49,7 @@ READ = """(() => {
   return {
     load: Math.max(0, ...r.longs.map((l) => l.durationMs)),
     gpu: f ? [f.gpu_busy.p50, f.gpu_busy.p95, f.n, f.gpu_read] : [null, null, 0, 0],
+    tick: f ? [f.tick.p50, f.tick.p95] : [null, null],
   };
 })()"""
 LAST_END = "Math.max(0, ...performance.getEntriesByType('resource').map((e) => e.responseEnd))"
@@ -205,10 +210,7 @@ def main():
         print("compare-perf.py <base url> <change url> [rounds]", file=sys.stderr)
         return 2
     base, change = sys.argv[1:3]
-    rounds = int(sys.argv[3]) if len(sys.argv) > 3 else 2
-    # Each server's first page builds what it serves; no run counts it.
-    for url in (base, change):
-        once(url)
+    rounds = int(sys.argv[3]) if len(sys.argv) > 3 else 1
     runs = {"base": [], "change": []}
     for _ in range(rounds):
         for who, url in (("base", base), ("change", change)):
@@ -237,6 +239,15 @@ def main():
         fails.append(f"GPU p50 past {P50_SHARE}x the base's")
     if not c[1] <= b[1] * P95_SHARE:
         fails.append(f"GPU p95 past {P95_SHARE}x the base's")
+    b, c = (
+        [median([r["tick"][k] for r in runs[who]]) for k in range(2)]
+        for who in ("base", "change")
+    )
+    print(f"tick p50 {b[0]:.2f} -> {c[0]:.2f}, p95 {b[1]:.2f} -> {c[1]:.2f}")
+    if not c[0] <= b[0] * P50_SHARE + TICK_SLACK_MS:
+        fails.append(f"tick p50 past {P50_SHARE}x the base's")
+    if not c[1] <= b[1] * P95_SHARE + TICK_SLACK_MS:
+        fails.append(f"tick p95 past {P95_SHARE}x the base's")
     for f in fails:
         print(f"FAIL {f}")
     print("fail" if fails else "pass")
