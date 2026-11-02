@@ -292,15 +292,19 @@ fn climb_pose(at: ViewPose, access: &World) -> (ViewPose, bool) {
 }
 
 /// `at` steepened by the rise to the floor under its eye (`climb_rise`), only
-/// ever steepened.
+/// ever steepened, until the eye clears that floor: past level too, where
+/// the floor lies under the pivot and the rise is none or below it.
 fn steepened(at: ViewPose, access: &World, cramped: bool) -> ViewPose {
     let mut climbed = at;
     for _ in 0..CLIMB_PASSES {
-        let Some(rise) = climb_rise(&climbed, access, cramped).filter(|r| *r > 0.0) else {
+        let Some(rise) = climb_rise(&climbed, access, cramped) else {
             break;
         };
-        let solved = libm::acos((rise / climbed.dist).min(1.0));
-        climbed.polar = climbed.polar.min(solved);
+        let solved = libm::acos((rise / climbed.dist).clamp(-1.0, 1.0));
+        if solved >= climbed.polar {
+            break;
+        }
+        climbed.polar = solved;
     }
     climbed
 }
