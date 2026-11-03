@@ -3,6 +3,7 @@
 /** The page's bracket: what the client asks of a browser tab (@pxl/client/bracket.tsx), answered by the browser's own APIs. */
 
 import type { Bracket } from "@pxl/client/bracket.tsx";
+import * as db from "./db.ts";
 import * as device from "./device.ts";
 import * as gpu from "./gpu.ts";
 import * as guest from "./guest.ts";
@@ -28,6 +29,7 @@ export const page: Bracket = {
   guest,
   gpu,
   storage,
+  db,
   text,
   origin,
   online,

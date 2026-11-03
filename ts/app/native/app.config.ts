@@ -19,6 +19,12 @@ export default {
     userInterfaceStyle: "light",
     icon,
     platforms: ["ios", "android"],
+    locales: {
+      ko: "./locale/ko.json",
+      ja: "./locale/ja.json",
+      "zh-Hans": "./locale/zh-Hans.json",
+      "zh-Hant": "./locale/zh-Hant.json",
+    },
     ios: { bundleIdentifier: "me.plei.pixelet" },
     android: {
       package: "me.plei.pixelet",

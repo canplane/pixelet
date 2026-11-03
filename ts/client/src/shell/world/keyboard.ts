@@ -11,8 +11,9 @@
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { ActiveTool } from "@/abi/cmd.spec.ts";
-import { kernel_keys } from "@/port/input.ts";
+import { Tool } from "@/abi/cmd.spec.ts";
+import { KIND } from "@/shell/catalog/asset/id.spec.ts";
+import { kindOf } from "@/shell/catalog/asset/mod.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
 import {
   DockMode,
@@ -21,13 +22,12 @@ import {
   selectTool,
   RECENT_PICKS,
   recentPick,
-  selectCube,
-  selectDecor,
-  selectMarker,
+  selectAsset,
   setDockMode,
-  stepSize,
+  stepScale,
   switchDockMode,
 } from "@/shell/world/dock/store.ts";
+import * as input from "@/port/input.ts";
 
 const MOVE: Record<string, [i32, i32]> = {
   KeyW: [0, -1],
@@ -40,16 +40,16 @@ const MOVE: Record<string, [i32, i32]> = {
 const SLOT = /^Digit([1-9])$/;
 
 /** Figma's and Photoshop's letters for the move tool and the eraser. */
-const TOOL: Record<string, ActiveTool> = {
-  KeyV: ActiveTool.Pointer,
-  KeyE: ActiveTool.Eraser,
+const TOOL: Record<string, Tool> = {
+  KeyV: Tool.Pointer,
+  KeyE: Tool.Eraser,
 };
 
 /** A game's inventory key, and Figma's for its resources (Shift+I); Escape closes it as any sheet. */
 const DRAWER = "KeyI";
 
-/** Photoshop's brush size: `]` a coarser block, `[` a finer, a tier being finer as it counts up. */
-const SIZE: Record<string, i32> = { BracketRight: -1, BracketLeft: 1 };
+/** Photoshop's brush size: `]` a coarser block, `[` a finer. */
+const SIZE: Record<string, i32> = { BracketRight: 1, BracketLeft: -1 };
 
 const held = new Set<string>();
 let sent: [i32, i32] = [0, 0];
@@ -62,15 +62,13 @@ function sendMove(): void {
   }
   if (to[0] === sent[0] && to[1] === sent[1]) return;
   sent = to;
-  kernel_keys(to[0], to[1]);
+  input.keys(to[0], to[1]);
 }
 
 function pickSlot(slot: number): void {
-  const pick = recentPick(slot);
-  if (pick.tool === ActiveTool.Decor) return selectDecor(pick.kind);
-  if (pick.tool === ActiveTool.Marker) return selectMarker();
-  selectCube(pick.cube);
-  flashSwatch(pick.cube, false);
+  const id = recentPick(slot);
+  selectAsset(id);
+  if (kindOf(id) === KIND.cube) flashSwatch(id, false);
 }
 
 /** Whether the key is one the shell answers, so a driver can leave the rest alone. */
@@ -102,7 +100,7 @@ export function keyDown(
     return true;
   }
   if (code in SIZE) {
-    stepSize(SIZE[code]);
+    stepScale(SIZE[code]);
     return true;
   }
   if (code in MOVE) {

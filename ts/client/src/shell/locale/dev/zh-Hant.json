@@ -1,0 +1,61 @@
+{
+  "settings": {
+    "camera": {
+      "surface_follow": {
+        "label": "貼合表面",
+        "description": "拖曳時，畫面中心沿地形和物件表面移動。關閉後保持目前高度並穿過障礙物。"
+      },
+      "orbit_obstacle": {
+        "label": "第三人稱相機碰撞",
+        "through": {
+          "label": "穿過",
+          "description": "忽略障礙物，直接穿過。"
+        },
+        "stop": {
+          "label": "停止",
+          "description": "在碰到障礙物之前停止相機操作。可能陷入牆壁或天花板一格。"
+        },
+        "climb": {
+          "label": "越過",
+          "description": "被障礙物擋住時抬起相機越過。"
+        },
+        "description": "設定縮放、旋轉或傾斜相機時被地形或物件擋住後的處理方式。"
+      }
+    },
+    "debug": {
+      "sky_time": {
+        "label": "天空時間",
+        "description": "固定繪製天空和太陽的時間，以目前查看地點的太陽時為準，雲和已存資料的時間不變。重新整理後恢復實際時間。",
+        "real": {
+          "label": "實際時間",
+          "description": "跟隨裝置時鐘。"
+        },
+        "dawn": {
+          "label": "清晨 7 點",
+          "description": "太陽很低，影子很長。"
+        },
+        "morning": {
+          "label": "上午 9 點",
+          "description": "太陽斜掛在天上。"
+        },
+        "noon": {
+          "label": "正午",
+          "description": "太陽最高，影子最短。"
+        },
+        "afternoon": {
+          "label": "下午 3 點",
+          "description": "太陽開始西斜。"
+        },
+        "dusk": {
+          "label": "傍晚 5 點",
+          "description": "太陽很低，影子很長。"
+        }
+      }
+    }
+  },
+  "world": {
+    "chat": {
+      "self_label": "我"
+    }
+  }
+}

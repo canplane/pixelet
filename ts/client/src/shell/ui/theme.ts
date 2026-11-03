@@ -2,11 +2,10 @@
 
 /**
  * The shell's one theme, as values rather than CSS variables, so a style is
- * the same on the web and on a device. Colors are named for their use, not
- * their hue, so two uses sharing a value can change apart.
+ * the same on the web and on a device.
  */
 
-import { FAMILY } from "@/shell/ui/typeface.ts";
+import { GROUND } from "@/shell/ui/ground.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 export function alpha(hex: string, a: number): string {
@@ -51,8 +50,6 @@ const CORAL = {
 
 /** iOS's fill gray, turned as warm as the ground. */
 const FILL = "#7d766c";
-
-const GROUND = "#fffcf7";
 
 export const color = {
   white: "#ffffff",
@@ -143,48 +140,41 @@ export const weight = {
 
 export const textStyle = {
   title2: {
-    fontFamily: FAMILY,
     fontSize: 20,
     lineHeight: 25,
     fontWeight: weight.semibold,
   },
   title: {
-    fontFamily: FAMILY,
     fontSize: 15,
     lineHeight: 20,
     fontWeight: weight.semibold,
   },
   body: {
-    fontFamily: FAMILY,
     fontSize: 15,
     lineHeight: 20,
     fontWeight: weight.regular,
   },
   /** 16, not 15: iOS Safari zooms into a focused field set smaller. */
-  input: { fontFamily: FAMILY, fontSize: 16, fontWeight: weight.regular },
+  input: { fontSize: 16, fontWeight: weight.regular },
   footnote: {
-    fontFamily: FAMILY,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: weight.regular,
   },
   /** A notice's words: a toast, an item's name. */
   notice: {
-    fontFamily: FAMILY,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: weight.semibold,
     letterSpacing: -0.3,
   },
   caption: {
-    fontFamily: FAMILY,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: weight.regular,
   },
   /** 11 is iOS's floor. */
   caption2: {
-    fontFamily: FAMILY,
     fontSize: 11,
     lineHeight: 13,
     fontWeight: weight.medium,

@@ -16,7 +16,7 @@ import { bracket } from "@/bracket.tsx";
 import { send_input } from "./input.ts";
 
 /** iOS Safari's compass prompt runs here, inside the press. */
-export async function kernel_tracking(tracking: Tracking): Promise<void> {
+export async function tracking(tracking: Tracking): Promise<void> {
   if (tracking === Tracking.Follow && !(await bracket.sensor.orient.permit())) {
     console.error("[orientation] could not start the sensor.");
     return;
@@ -28,12 +28,12 @@ export async function kernel_tracking(tracking: Tracking): Promise<void> {
 }
 
 /** The compass's press: north up. */
-export function kernel_north_up(): void {
+export function north_up(): void {
   HOST.now(port.SHELL, Command.CAMERA_NORTH_UP);
 }
 
 /** A search result: the pivot moved there, the view as it is. */
-export function kernel_goto(lon: f64, lat: f64): void {
+export function goto(lon: f64, lat: f64): void {
   HOST.now(
     port.SHELL,
     Command.CAMERA_GOTO,

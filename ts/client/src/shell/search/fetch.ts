@@ -2,13 +2,14 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { SEARCH_URL } from "@/port/shell.ts";
-import type { Name, NamePart } from "@/shell/division/label.ts";
+import type { NamePart } from "@/shell/division/label.ts";
 import { DIVISION_SUBTYPE } from "@/shell/division/division.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import type { SEARCH_KIND } from "./search.spec.ts";
 
 /** A part as the API writes it: its subtype's number, and `approx` where no area holds the point. */
-interface WirePart extends Name {
+interface WirePart {
+  name: string;
   subtype: number;
   approx?: boolean;
 }
@@ -20,8 +21,6 @@ export interface SearchResult {
   name: string;
   /** A place's category (place_theme.spec.ts, from 1, 0 for none), a division's subtype. */
   category: number;
-  /** Only for a division; null for places. */
-  common: Record<string, string> | null;
   /** Tells same-named results apart. */
   context: NamePart[];
   lon: f64;

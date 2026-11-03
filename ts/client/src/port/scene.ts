@@ -13,11 +13,7 @@ import {
 import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
 
-export function kernel_preview_open(
-  surface: u32,
-  group: u32,
-  number: u8,
-): void {
+export function preview_open(surface: u32, group: u32, number: u8): void {
   HOST.now(
     port.SHELL,
     Command.SCENE_PREVIEW_OPEN,
@@ -25,7 +21,7 @@ export function kernel_preview_open(
   );
 }
 
-export function kernel_preview_close(surface: u32): void {
+export function preview_close(surface: u32): void {
   HOST.now(
     port.SHELL,
     Command.SCENE_PREVIEW_CLOSE,
@@ -33,7 +29,7 @@ export function kernel_preview_close(surface: u32): void {
   );
 }
 
-export function kernel_chat(text: string): void {
+export function chat(text: string): void {
   HOST.now(
     port.SHELL,
     Command.SCENE_CHAT,
@@ -42,6 +38,6 @@ export function kernel_chat(text: string): void {
 }
 
 /** Whether a line fits a command; one too long to send is refused whole. */
-export function kernel_chat_fits(text: string): boolean {
+export function chat_fits(text: string): boolean {
   return HOST.doorbell.fits(encode_scene_chat(HOST.doorbell, text));
 }

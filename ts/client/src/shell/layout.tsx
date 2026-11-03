@@ -1,61 +1,67 @@
 // @pxl/client/shell/layout.tsx
 
-import { type ReactNode, useEffect } from "react";
+import { Component, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { Message } from "@/abi/cmd.spec.ts";
-import { Boot, Gpu } from "@/abi/state.ts";
-import { useBoot, useStop } from "./boot.ts";
+import { BOOT_LOADING, BOOT_STARTED } from "@/abi/state.ts";
+import { useStanding } from "./boot.ts";
+import { coverOf, SHELL_PANIC } from "./cover.ts";
 import { Modals } from "./modal.tsx";
-import { BlueScreen, Halt } from "./halt.tsx";
-import { messageKey } from "@/shell/locale/message-key.ts";
+import { Screen } from "./screens.tsx";
 import { KeyboardAway } from "@/shell/ui/keyboard.tsx";
 import { DockMode, setDockMode } from "@/shell/world/dock/store.ts";
-import { useGpu, useKernel } from "@/shell/store/watch.ts";
 
-/** What ends the app before it ran, said in place of it: no GPU to start with, or a kernel that never started. */
-function haltOf(gpu: Gpu, boot: Boot): string | null {
-  if (gpu === Gpu.Missing) return "halt.gpu_failed";
-  return boot === Boot.Failed ? "halt.boot" : null;
-}
-
-/** What ended the app after it ran, as a blue screen: its words and its stop code — the kernel's
- * report, or the name of what was given up. */
-function endedOf(
-  gpu: Gpu,
-  boot: Boot,
-  givenUp: boolean,
-  stopCode: string | null,
-): [string, string | null] | null {
-  if (boot === Boot.Stopped) return ["halt.kernel_panic", stopCode];
-  if (gpu === Gpu.Lost) return ["halt.gpu_lost", "GPU_LOST"];
-  return givenUp
-    ? [messageKey(Message.WorldUnavailable), "WORLD_UNAVAILABLE"]
-    : null;
-}
-
-export function AppLayout({ children }: { children: ReactNode }) {
-  const gpu = useGpu();
-  const boot = useBoot();
-  const givenUp = useKernel((s) => s.stall === Message.WorldUnavailable);
-  const stopCode = useStop();
-  useEffect(() => {
-    if (givenUp) {
-      console.error(
-        "[read] a read failed past every retry; the space is given up",
-      );
-    }
-  }, [givenUp]);
-  const ended = endedOf(gpu, boot, givenUp, stopCode);
-  if (ended !== null) return <BlueScreen of={ended[0]} code={ended[1]} />;
-  const halt = haltOf(gpu, boot);
-  if (halt !== null) return <Halt of={halt} />;
+/** The app under its cover. The world mounts once the kernel runs, and goes for a
+ * panic, as nothing can be drawn or read behind one. */
+function AppBody({ children }: { children: ReactNode }) {
+  const standing = useStanding();
+  const cover = coverOf(standing);
+  const shows =
+    (standing.boot === BOOT_LOADING || standing.boot === BOOT_STARTED) &&
+    cover?.kind !== "panic";
   return (
     // A touch elsewhere puts the typing away with the keyboard.
     <KeyboardAway onAway={() => setDockMode(DockMode.Palette)}>
-      <View style={styles.page}>{boot === Boot.Started && children}</View>
-      <Modals />
+      <View style={styles.page}>{shows && children}</View>
+      {shows && <Modals />}
+      {cover !== null && (
+        <View style={StyleSheet.absoluteFill}>
+          <Screen cover={cover} />
+        </View>
+      )}
     </KeyboardAway>
+  );
+}
+
+/** A throw while the shell renders is a panic, not a blank page. */
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { thrown: boolean }
+> {
+  override state = { thrown: false };
+
+  static getDerivedStateFromError() {
+    return { thrown: true };
+  }
+
+  override componentDidCatch(err: unknown) {
+    console.error("[shell] a render threw:", err);
+  }
+
+  override render() {
+    return this.state.thrown ? (
+      <Screen cover={SHELL_PANIC} />
+    ) : (
+      this.props.children
+    );
+  }
+}
+
+export function AppLayout({ children }: { children: ReactNode }) {
+  return (
+    <ErrorBoundary>
+      <AppBody>{children}</AppBody>
+    </ErrorBoundary>
   );
 }
 

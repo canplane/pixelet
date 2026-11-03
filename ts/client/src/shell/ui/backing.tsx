@@ -19,14 +19,11 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP, type Transition } from "@/shell/ui/motion/transition.ts";
 import { useDim } from "@/shell/ui/motion/dim.ts";
 import { alpha, type Material } from "@/shell/ui/theme.ts";
+import * as BackingPlace from "./backing-place.ts";
 
-/** Decides the iPhone's glass style: clear `OnSheet`, regular (frosted)
- * where what is behind moves. A page draws the fill everywhere. */
-export const enum BackingPlace {
-  OnSheet = 0,
-  OverMap = 1,
-  OverContent = 2,
-}
+/** One of BackingPlace's. */
+type BackingPlace = (typeof BackingPlace)[keyof typeof BackingPlace];
+export { BackingPlace };
 
 export interface BackingProps {
   /** With a material, a `#rrggbb` the material sets the opacity of. */

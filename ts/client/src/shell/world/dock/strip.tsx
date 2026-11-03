@@ -27,22 +27,28 @@ import { alpha, chrome, color } from "@/shell/ui/theme.ts";
 import { openModal } from "@/shell/modal.tsx";
 import {
   selectTool,
-  selectCube,
-  selectDecor,
-  selectMarker,
+  selectAsset,
+  useTool,
   useInHand,
   useRecentPicks,
   useSwatchFlash,
 } from "./store.ts";
-import { ActiveTool } from "@/abi/cmd.spec.ts";
-import { type Cube, cubeLabel, decorLabel } from "@/shell/catalog/asset/mod.ts";
+import { Tool } from "@/abi/cmd.spec.ts";
+import { KIND } from "@/shell/catalog/asset/id.spec.ts";
+import {
+  type AssetId,
+  type Cube,
+  cubeLabel,
+  decorLabel,
+  kindOf,
+  MARKER,
+} from "@/shell/catalog/asset/mod.ts";
 import { PIN_LABEL } from "@/shell/catalog/asset/marker.spec.ts";
 import {
   CubeSwatch,
   decorGlyph,
   selectionRing,
 } from "@/shell/catalog/asset/swatch.tsx";
-import { useKernel } from "@/shell/store/watch.ts";
 
 /** A page's browser pans the strip, and holds and drags up reach the view's own gesture; on a device the responder system shares the finger. */
 const PAN_X: ViewStyle =
@@ -55,11 +61,10 @@ const LONG_PRESS_MS = 300;
 /** A move this far before the hold is a drag: the strip's sideways, the deck's up and down. */
 export const DRAG_PX = 12;
 
-const enum Gesture {
-  Pending = 0,
-  Popover = 1,
-  Drag = 2,
-}
+const PENDING = 0;
+const POPOVER = 1;
+const DRAG = 2;
+type Gesture = typeof PENDING | typeof POPOVER | typeof DRAG;
 
 /** A swatch's gesture. `press`, `pressIn` and `longPress` are React Native
  * `Pressable`'s; `release` is a lift once the sizes are open, and `end` closes
@@ -81,7 +86,7 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   handlers.current = g;
   const responder = useRef<ReturnType<typeof PanResponder.create> | null>(null);
   if (!responder.current) {
-    let state = Gesture.Pending;
+    let state: Gesture = PENDING;
     let hold: ReturnType<typeof setTimeout> | null = null;
     const stopHold = () => {
       if (hold !== null) clearTimeout(hold);
@@ -89,44 +94,44 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
     };
     const longPress = () => {
       stopHold();
-      if (state !== Gesture.Pending) return;
-      state = Gesture.Popover;
+      if (state !== PENDING) return;
+      state = POPOVER;
       handlers.current.longPress();
     };
     responder.current = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        state = Gesture.Pending;
+        state = PENDING;
         if (swatch.current) handlers.current.pressIn(swatch.current);
         hold = setTimeout(longPress, LONG_PRESS_MS);
       },
       onPanResponderMove: (_e, s) => {
-        if (state === Gesture.Popover) {
+        if (state === POPOVER) {
           return handlers.current.move(s.moveX, s.moveY);
         }
         if (
-          state === Gesture.Drag ||
+          state === DRAG ||
           (Math.abs(s.dx) < DRAG_PX && Math.abs(s.dy) < DRAG_PX)
         )
           return;
-        state = Gesture.Drag;
+        state = DRAG;
         stopHold();
         handlers.current.end();
       },
       onPanResponderRelease: (_e, s) => {
         stopHold();
-        if (state === Gesture.Popover) {
+        if (state === POPOVER) {
           handlers.current.release(s.moveX, s.moveY);
-        } else if (state === Gesture.Pending) handlers.current.press();
+        } else if (state === PENDING) handlers.current.press();
         handlers.current.end();
-        state = Gesture.Pending;
+        state = PENDING;
       },
       onPanResponderTerminate: () => {
         stopHold();
         handlers.current.end();
-        state = Gesture.Pending;
+        state = PENDING;
       },
-      onPanResponderTerminationRequest: () => state !== Gesture.Popover,
+      onPanResponderTerminationRequest: () => state !== POPOVER,
     });
   }
   return responder.current.panHandlers;
@@ -139,7 +144,7 @@ function SwatchButton({
   cube: Cube;
   gesture: Omit<SizeGesture, "press">;
 }) {
-  const selected = useInHand({ tool: ActiveTool.Object, cube });
+  const selected = useInHand(cube);
   const ref = useRef<View | null>(null);
   const swatchFlash = useSwatchFlash();
   useEffect(() => {
@@ -150,9 +155,9 @@ function SwatchButton({
 
   const handlers = useSizeGesture(ref, {
     ...gesture,
-    press: () => selectCube(cube),
+    press: () => selectAsset(cube),
     longPress: () => {
-      selectCube(cube);
+      selectAsset(cube);
       gesture.longPress();
     },
   });
@@ -178,11 +183,11 @@ function SwatchButton({
 }
 
 function DecorIconButton({ kind }: { kind: u8 }) {
-  const active = useInHand({ tool: ActiveTool.Decor, kind });
+  const active = useInHand(kind);
 
   return (
     <Pressable
-      onPress={() => selectDecor(kind)}
+      onPress={() => selectAsset(kind)}
       accessibilityRole="button"
       accessibilityLabel={decorLabel(kind)}
       style={styles.slot}
@@ -205,12 +210,30 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   );
 }
 
+/** A hotbar slot: the button of what it holds. */
+function PickButton({
+  id,
+  gesture,
+}: {
+  id: AssetId;
+  gesture: Omit<SizeGesture, "press">;
+}) {
+  switch (kindOf(id)) {
+    case KIND.decor:
+      return <DecorIconButton kind={id} />;
+    case KIND.marker:
+      return <MarkerButton />;
+    default:
+      return <SwatchButton cube={id} gesture={gesture} />;
+  }
+}
+
 function MarkerButton() {
-  const active = useInHand({ tool: ActiveTool.Marker });
+  const active = useInHand(MARKER);
 
   return (
     <Pressable
-      onPress={selectMarker}
+      onPress={() => selectAsset(MARKER)}
       accessibilityRole="button"
       accessibilityLabel={PIN_LABEL}
       style={styles.slot}
@@ -278,7 +301,7 @@ export function Strip({
   gesture: Omit<SizeGesture, "press">;
 }) {
   const { t } = useTranslation();
-  const activeTool = useKernel((s) => s.tool.active);
+  const activeTool = useTool();
   const recentPicks = useRecentPicks();
 
   return (
@@ -287,14 +310,14 @@ export function Strip({
         <ToolButton
           label={t("world.dock.pointer")}
           glyph="hand.point.up.left"
-          active={activeTool === ActiveTool.Pointer}
-          onPress={() => selectTool(ActiveTool.Pointer)}
+          active={activeTool === Tool.Pointer}
+          onPress={() => selectTool(Tool.Pointer)}
         />
         <ToolButton
           label={t("world.dock.eraser")}
           glyph="eraser"
-          active={activeTool === ActiveTool.Eraser}
-          onPress={() => selectTool(ActiveTool.Eraser)}
+          active={activeTool === Tool.Eraser}
+          onPress={() => selectTool(Tool.Eraser)}
         />
       </View>
 
@@ -307,15 +330,9 @@ export function Strip({
         style={styles.picks}
         contentContainerStyle={styles.picksContent}
       >
-        {recentPicks.map((pick) =>
-          pick.tool === ActiveTool.Object ? (
-            <SwatchButton key={pick.cube} cube={pick.cube} gesture={gesture} />
-          ) : pick.tool === ActiveTool.Decor ? (
-            <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
-          ) : (
-            <MarkerButton key="marker" />
-          ),
-        )}
+        {recentPicks.map((id) => (
+          <PickButton key={id} id={id} gesture={gesture} />
+        ))}
       </ScrollView>
 
       <View style={styles.divider} />

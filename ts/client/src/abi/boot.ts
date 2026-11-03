@@ -17,8 +17,13 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { FramePacing } from "@xpute/host/sched/frame_pacing.ts";
-import { Command, encode_sys_boot } from "@/abi/cmd.spec.ts";
-import { declare_source } from "@/driver/namespace/source.ts";
+import {
+  Command,
+  encode_sys_boot,
+  GroundStatus,
+  type Snapshot,
+} from "@/abi/cmd.spec.ts";
+import { declare_source, source_state } from "@/driver/namespace/source.ts";
 import { namespace } from "@/driver/namespace/namespace.ts";
 import { follow_refused_files } from "@/driver/namespace/refusal.ts";
 
@@ -38,14 +43,23 @@ import { submit_frame } from "@/driver/frame.ts";
 import { abort } from "@/driver/stop.ts";
 import { text_call } from "@/driver/text.ts";
 import { bracket, type Config } from "@/bracket.tsx";
-import { GPU_STATE, set_gpu } from "@/driver/gpu.ts";
+import { GPU_STATE, gpu_present, set_gpu } from "@/driver/gpu.ts";
 import { world_visible } from "@/driver/sys.ts";
-import { Boot } from "@/abi/state.ts";
+import {
+  BOOT_FAILED,
+  BOOT_LOADING,
+  BOOT_STARTED,
+  BOOT_STARTING,
+  BOOT_STOPPED,
+  type Boot,
+  SOURCE_DECLARED,
+} from "@/abi/state.ts";
 import { set_online } from "@/driver/namespace/online.ts";
-import { kernel_snapshot, snapshot_posted } from "@/port/snapshot.ts";
+import { snapshot_posted } from "@/port/snapshot.ts";
+import * as snapshot from "@/port/snapshot.ts";
 
 let called = false;
-let state = Boot.Starting;
+let state: Boot = BOOT_STARTING;
 const listeners = new Listeners();
 
 function set(next: Boot): void {
@@ -65,11 +79,22 @@ export const watch_boot = listeners.watch;
 const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.SHELL_SNAPSHOT]: (f) => {
     snapshot_posted(f);
-    follow_refused_files(kernel_snapshot().refused_files);
+    follow_refused_files(snapshot.current().refused_files);
+    if (state === BOOT_LOADING && loaded(snapshot.current())) set(BOOT_STARTED);
   },
   [Command.SENSOR_START]: sensor_start,
   [Command.SENSOR_STOP]: sensor_stop,
 };
+
+/** Whether the world has come, or nothing will show of it: every pipeline made,
+ * and the view drawn or past the service area. A failed location draws the view
+ * at its default. */
+function loaded(s: Snapshot): boolean {
+  return (
+    s.renderer_progress === 1 &&
+    (s.pivot.status === GroundStatus.Success || s.pivot.outside)
+  );
+}
 
 function heard(_tag: u32, cmd: u32, f: BranchCursor | null): void {
   const take = HEARS[cmd as Command];
@@ -86,21 +111,19 @@ export function boot(): void {
   called = true;
   open().then(
     () => {
-      console.info("[boot] the kernel started");
-      // Its turns end with it.
-      HOST.doorbell.stopped = () => {
-        HOST.strobe.stop();
-        set(Boot.Stopped);
-      };
-      set(Boot.Started);
+      if (source_state() === SOURCE_DECLARED && state === BOOT_STARTING) {
+        set(BOOT_LOADING);
+      }
     },
     (err) => {
-      console.error("[boot] the kernel did not start:", err);
-      set(Boot.Failed);
+      console.error("[boot] the client did not start:", err);
+      if (state === BOOT_STARTING) set(BOOT_FAILED);
     },
   );
 }
 
+/** Whether the client can run: settled once the kernel runs, a GPU has answered
+ * and the world's source is declared; never where no GPU answers. */
 async function open(): Promise<void> {
   // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
   const cfg: Config = {
@@ -150,6 +173,13 @@ async function open(): Promise<void> {
   );
   if (booted < 0)
     throw new Error(`the kernel refused its boot: ${strerror(booted)}`);
-  // Not awaited: a dev tile server may answer late.
-  void declare_source();
+  console.info("[boot] the kernel started");
+  // Its turns end with it.
+  HOST.doorbell.stopped = () => {
+    HOST.strobe.stop();
+    set(BOOT_STOPPED);
+  };
+  const declared = declare_source();
+  await gpu_present();
+  await declared;
 }

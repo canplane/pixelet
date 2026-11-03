@@ -7,7 +7,7 @@ import { Prose, Section, settingText } from "@/shell/setting/row.tsx";
 import { BrandSymbol } from "./brand-symbol.tsx";
 import { textStyle } from "@/shell/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/deploy.ts";
-import { format } from "@/abi/host.spec.ts";
+import { format } from "@/abi/file.spec.ts";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { useSourceVersions } from "@/shell/store/watch.ts";
 
@@ -23,10 +23,10 @@ function envLabel(): string {
 }
 
 /** Each bake a line, as the source declares where it is read from. */
-function bakeLines(
-  source: readonly { kind: string; version: string }[],
-): string[] {
-  return source.map((s) => `${s.kind}/${s.version}`);
+function bakeLines(source: Readonly<Record<string, string>> | null): string[] {
+  return Object.entries(source ?? {}).map(
+    ([kind, version]) => `${kind}/${version}`,
+  );
 }
 
 /** The objects one has placed, kept a shard at a time: the format this build reads them in. */

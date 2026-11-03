@@ -14,7 +14,7 @@ import {
   encode_fs_truncated,
   type RefusedFile,
 } from "@/abi/cmd.spec.ts";
-import { root } from "@/abi/host.spec.ts";
+import { root } from "@/abi/file.spec.ts";
 import * as port from "@/abi/port.spec.ts";
 import { HOST } from "@/host/mount.ts";
 import { OBJECTS } from "@/driver/namespace/object.ts";
@@ -24,18 +24,22 @@ import {
   type Storage,
 } from "@/driver/namespace/storage.ts";
 
-/** A file set aside by the backend `root` is bound to, by its number; false,
+/** A file set aside by the backend `root` is bound to, by its path; false,
  * nothing changed, where it did not. */
-export type SetAside = (root: u32, number: bigint, now_ms: number) => boolean;
+export type SetAside = (
+  root: u32,
+  path: string,
+  now_ms: number,
+) => boolean | Promise<boolean>;
 
 /** Each root's backend's own set-aside, STORAGE's over `s`. */
 export function set_aside_by_root(s: Storage): SetAside {
-  return (r, number, now_ms) => {
+  return (r, path, now_ms) => {
     switch (r) {
       case root.STORAGE:
-        return number <= 0xffff_ffffn && set_aside(s, Number(number), now_ms);
+        return set_aside(s, path, now_ms);
       case root.OBJECT:
-        return OBJECTS.set_aside(number, now_ms);
+        return OBJECTS.set_aside(path, now_ms);
       default:
         return false;
     }
@@ -72,9 +76,11 @@ export function follow_refused_files(
   }
   for (const f of files) {
     const at = `${f.root}/${f.path}`;
-    if (emptying.has(at) || !/^\d{1,20}$/.test(f.path)) continue;
-    if (!aside(f.root, BigInt(f.path), Date.now())) continue;
+    if (emptying.has(at)) continue;
     emptying.add(at);
-    emptied(f);
+    void Promise.resolve(aside(f.root, f.path, Date.now())).then((set) => {
+      if (set) emptied(f);
+      else emptying.delete(at);
+    });
   }
 }

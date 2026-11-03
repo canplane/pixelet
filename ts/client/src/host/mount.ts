@@ -33,7 +33,7 @@ function steer(): void {
   else HOST.strobe.stop();
 }
 
-/** The world's view opened or closed (port/input.ts `kernel_open`). */
+/** The world's view opened or closed (port/input.ts `input.open`). */
 export function set_view_open(open: boolean): void {
   view_open = open;
   steer();

@@ -10,11 +10,11 @@
  * change is read off their reports.
  */
 
-import { kernel_setting } from "@/port/setting.ts";
-import { kernel_perf_start } from "@/port/perf.ts";
 import { SETTING } from "@/shell/setting/schema.ts";
 import { perfReportText } from "./report.ts";
 import { perfReportRead } from "./view.ts";
+import * as perf from "@/port/perf.ts";
+import * as setting from "@/port/setting.ts";
 
 /** An input a step, about a frame at 60 Hz. */
 const STEP_MS = 16;
@@ -36,10 +36,10 @@ export async function perfDrive(seconds = 60): Promise<string> {
   if (!canvas) {
     return "no canvas";
   }
-  kernel_setting(SETTING.res.key, SETTING.res.options.fixed);
-  kernel_setting(SETTING.shadows.key, 1);
-  kernel_setting(SETTING.perf.key, 1);
-  kernel_setting(SETTING.sky_time.key, SETTING.sky_time.options.dawn);
+  setting.set(SETTING.res.key, SETTING.res.options.fixed);
+  setting.set(SETTING.shadows.key, 1);
+  setting.set(SETTING.perf.key, 1);
+  setting.set(SETTING.sky_time.key, SETTING.sky_time.options.dawn);
   const r = canvas.getBoundingClientRect();
   const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
   const pointer = (type: string, at: [number, number], buttons: number) =>
@@ -77,7 +77,7 @@ export async function perfDrive(seconds = 60): Promise<string> {
   }
   pointer("pointerup", [x, y - TILT_PX], 0);
   await wait(SETTLE_MS);
-  kernel_perf_start();
+  perf.start();
   const on = (a: number): [number, number] => [
     x + RADIUS * Math.cos(a),
     y + RADIUS * Math.sin(a),

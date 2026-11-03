@@ -16,8 +16,8 @@ const TICK_PX = 5;
 const QUARTER_TICK_PX = 3;
 const LINE_PX = 1;
 const PAD_PX = LINE_PX + halo.width + 1;
-export const LABEL_GAP_PX = 8;
-export const BAR_MAX_PX = 80;
+const LABEL_GAP_PX = 8;
+const BAR_MAX_PX = 80;
 
 /** Nearest 1, 2 or 5 × 10ⁿ. */
 function niceLength(m: f64): f64 {
@@ -84,8 +84,8 @@ const styles = StyleSheet.create({
   },
 });
 
-/** The scale's label, the progress bar's too. */
-export const scaleLabel = StyleSheet.create({
+/** The scale's label. */
+const scaleLabel = StyleSheet.create({
   label: {
     ...textStyle.caption2,
     fontWeight: weight.semibold,

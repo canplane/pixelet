@@ -12,12 +12,8 @@ import { FileError } from "@xpute/host/ipc/sys.ts";
 import { online } from "@/driver/namespace/online.ts";
 import { bracket } from "@/bracket.tsx";
 
-/** The object at `url`, whole; `name` is what a warning calls it. */
-export async function get(
-  url: string,
-  name: string,
-  signal: AbortSignal,
-): Promise<U8Array> {
+/** The object at `url`, whole. */
+export async function get(url: string, signal: AbortSignal): Promise<U8Array> {
   let res: Response;
   let body: U8Array;
   try {
@@ -28,7 +24,7 @@ export async function get(
     // browser's own word says offline; the rest is the server's.
     if (!signal.aborted) {
       console.warn(
-        `[read] ${name}: ${
+        `[read] ${url}: ${
           err instanceof Error ? `${err.name}: ${err.message}` : String(err)
         }`,
       );
@@ -37,7 +33,7 @@ export async function get(
   }
   if (res.status === 204) throw new FileError(Errno.ENOENT);
   if (!res.ok) {
-    console.warn(`[read] ${name}: HTTP ${res.status}`);
+    console.warn(`[read] ${url}: HTTP ${res.status}`);
     // A key that names nothing is the object's failure; any other, the server's.
     throw new FileError(
       res.status === 404 ? Errno.ENXIO : Errno.EACCES,

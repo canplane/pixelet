@@ -6,9 +6,9 @@
  * The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),
  * and the packet each carries — an XTP branch whose children are its fields, in
  * order. A command with no fields carries no packet. The kernel is the process; the
- * JavaScript around it is two things to it, its host, which holds the devices and
- * the turns, and its shell, the UI. A command's major is the module it is for, and
- * the sections say which of the two it is between.
+ * JavaScript around it is three things to it, its host, which holds the turns, its
+ * drivers, which answer its devices, and its shell, the UI. A command's major is the module it is for, and
+ * the sections say which of them it is between.
  *
  * The same number is a command on the submission ring and an event on the
  * completion ring (its `RES` clear). The direction is the ring: `pkt` is
@@ -49,7 +49,7 @@ import * as EditMinor from "./cmd/edit_minor.spec.ts";
 import * as ShellMinor from "./cmd/shell_minor.spec.ts";
 import * as PointerPhase from "./cmd/pointer_phase.spec.ts";
 import * as PointerType from "./cmd/pointer_type.spec.ts";
-import * as ActiveTool from "./cmd/active_tool.spec.ts";
+import * as Tool from "./cmd/tool.spec.ts";
 import * as Tracking from "./cmd/tracking.spec.ts";
 import * as GeolocationErrorCode from "./cmd/geolocation_error_code.spec.ts";
 import * as Sensor from "./cmd/sensor.spec.ts";
@@ -119,9 +119,9 @@ export { PointerPhase };
 type PointerType = (typeof PointerType)[keyof typeof PointerType];
 export { PointerType };
 
-/** One of ActiveTool's, as its enum was a type. */
-type ActiveTool = (typeof ActiveTool)[keyof typeof ActiveTool];
-export { ActiveTool };
+/** One of Tool's, as its enum was a type. */
+type Tool = (typeof Tool)[keyof typeof Tool];
+export { Tool };
 
 /** One of Tracking's, as its enum was a type. */
 type Tracking = (typeof Tracking)[keyof typeof Tracking];
@@ -173,7 +173,8 @@ export interface Snapshot {
   pivot: PivotState;
   location: LocationState;
   companion: CompanionState;
-  tool: ToolState;
+  /** A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL. */
+  draft: string | null;
   orient: OrientationState;
   /** The view's azimuth. */
   azimuth: f64;
@@ -194,7 +195,7 @@ export interface Snapshot {
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
   /** The files the kernel refused, not of their format, not decoding, or too large for any
-   * heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The
+   * heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The
    * kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
    * empty. */
   refused_files: RefusedFile[];
@@ -202,6 +203,8 @@ export interface Snapshot {
   stall: Message | null;
   /** How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): its shader modules, by their bytes, the first half, its pipelines made the second; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it. */
   renderer_progress: f64;
+  /** How much of the view's ground shows, 0 to 1: of the tiles asked for, those with an answer or drawn coarser. 0 where none is asked yet, 1 once the area is shown; it goes back as more is asked for. */
+  area_progress: f64;
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -209,7 +212,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     pivot: read_pivot_state(b.at_branch(0)),
     location: read_location_state(b.at_branch(1)),
     companion: read_companion_state(b.at_branch(2)),
-    tool: read_tool_state(b.at_branch(3)),
+    draft: b.at(3).get<string | null>(),
     orient: read_orientation_state(b.at_branch(4)),
     azimuth: b.at(5).get<f64>(),
     is_follow_mode: b.at(6).get<boolean>(),
@@ -223,6 +226,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     refused_files: list(b.at_branch(14), read_refused_file),
     stall: b.at(15).get<Message | null>(),
     renderer_progress: b.at(16).get<f64>(),
+    area_progress: b.at(17).get<f64>(),
   };
 }
 
@@ -280,27 +284,6 @@ export function read_companion_state(b: BranchCursor): CompanionState {
   };
 }
 
-/** The tool and what it takes, as EDIT_TOOL set it: the cube and the decor are each remembered whichever tool is active; and a marker's draft. */
-export interface ToolState {
-  active: ActiveTool;
-  /** The cube the tool takes, by its number in the catalog's one value space. */
-  cube: u32;
-  decor: u32;
-  tier: u32;
-  /** A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL. */
-  draft: string | null;
-}
-
-export function read_tool_state(b: BranchCursor): ToolState {
-  return {
-    active: b.at(0).get<ActiveTool>(),
-    cube: b.at(1).get<u32>(),
-    decor: b.at(2).get<u32>(),
-    tier: b.at(3).get<u32>(),
-    draft: b.at(4).get<string | null>(),
-  };
-}
-
 export interface OrientationState {
   status: SensorStatus;
   /** Present exactly when status is Error: the failure the kernel chose. */
@@ -314,14 +297,11 @@ export function read_orientation_state(b: BranchCursor): OrientationState {
   };
 }
 
-/** One division of the name, in every language the provider had rather than one resolved
- * name: the reader's language is the page's, and switching it re-reads a label already
- * sent. */
+/** One division of the name, in its own name. */
 export interface DivisionPart {
   /** Overture's subtype, broadest first (spec/spec/division.json). */
   subtype: u8;
   name: string;
-  names: LangName[];
   /** The view is in far enough for its name to show: as far as Overture's own tiles
    * show it from (pxl-spec bake/tile/division.rs `Division::shown_from`). */
   shown: boolean;
@@ -333,31 +313,21 @@ export function read_division_part(b: BranchCursor): DivisionPart {
   return {
     subtype: b.at(0).get<u8>(),
     name: b.at(1).get<string>(),
-    names: list(b.at_branch(2), read_lang_name),
-    shown: b.at(3).get<boolean>(),
-    area: b.at(4).get<boolean>(),
+    shown: b.at(2).get<boolean>(),
+    area: b.at(3).get<boolean>(),
   };
 }
 
 /** A file the kernel refused, as it opened it. */
 export interface RefusedFile {
-  /** host.json's `root`. */
+  /** file.json's `root`. */
   root: u32;
-  /** Its number below the root in decimal. */
+  /** Its path below the root, as the kernel opened it. */
   path: string;
 }
 
 export function read_refused_file(b: BranchCursor): RefusedFile {
   return { root: b.at(0).get<u32>(), path: b.at(1).get<string>() };
-}
-
-export interface LangName {
-  lang: string;
-  name: string;
-}
-
-export function read_lang_name(b: BranchCursor): LangName {
-  return { lang: b.at(0).get<string>(), name: b.at(1).get<string>() };
 }
 
 /** Command.SENSOR_START's event. */
@@ -485,8 +455,8 @@ export function encode_fs_mount(
 
 /** Command.FS_TRUNCATED's packet, written in place into `to`.
  *
- * @param root host.json's `root`.
- * @param path Its number below the root in decimal, as the kernel opened it. */
+ * @param root file.json's `root`.
+ * @param path Its path below the root, as the kernel opened it. */
 export function encode_fs_truncated(
   to: PacketRoom,
   root: u32,
@@ -526,15 +496,15 @@ export function encode_input_pointer(
 
 /** Command.EDIT_TOOL's packet, written in place into `to`.
  *
- * @param val The cube or decor kind the tool takes, by its number in the catalog's one value space (cube.json).
- * @param tier The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
+ * @param val The item to place, its id (id.json); read only for that tool.
+ * @param scale_steps A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen. */
 export function encode_edit_tool(
   to: PacketRoom,
-  tool: ActiveTool,
+  tool: Tool,
   val: u32,
-  tier: u32,
+  scale_steps: i32,
 ): PacketWriter {
-  return to.writer(3).u32(tool).u32(val).u32(tier);
+  return to.writer(3).u32(tool).u32(val).i32(scale_steps);
 }
 
 /** Command.EDIT_MARKER_TEXT's packet, written in place into `to`. */

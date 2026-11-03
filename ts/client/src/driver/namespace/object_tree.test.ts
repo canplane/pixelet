@@ -36,14 +36,14 @@ test("top_of - each case's writes fold to the store's rows", () => {
     const writes: Leaf[] = [];
     for (let j = 0; g.has(`case.${cases}.write.${j}`); j++) {
       const [key, id] = g.get(`case.${cases}.write.${j}`)!.split(" ");
-      writes.push({ key: BigInt(`0x${key}`), id: Number(id), text: null });
+      writes.push({ key: key!, id: Number(id), text: null });
     }
     const want: TopRow[] = [];
     for (let j = 0; g.has(`case.${cases}.top.${j}`); j++) {
-      const [shard, z, f] = g.get(`case.${cases}.top.${j}`)!.split(" ");
-      want.push({ shard: BigInt(shard!), z: Number(z), fold: Number(f) });
+      const [shard, f] = g.get(`case.${cases}.top.${j}`)!.split(" ");
+      want.push({ shard: shard!, fold: Number(f) });
     }
-    const shards = new Map<bigint, Map<bigint, Leaf>>();
+    const shards = new Map<string, Map<string, Leaf>>();
     for (const w of writes) {
       const shard = shard_of(w.key);
       if (!shards.has(shard)) shards.set(shard, new Map());
@@ -60,10 +60,10 @@ test("top_of - each case's writes fold to the store's rows", () => {
 test("lay - a write splits the leaf over it and takes what is under it", () => {
   // A leaf at the first zoom past shard 0, then its first child of the next
   // zoom written: seven children of its value and the one written.
-  const leaves = new Map<bigint, Leaf>();
-  const coarse = 0x00000800000000000000000000000000n;
+  const leaves = new Map<string, Leaf>();
+  const coarse = "000000000";
   lay(leaves, { key: coarse, id: 7, text: null });
-  const fine = 0x00000100000000000000000000000000n;
+  const fine = "0000000000";
   lay(leaves, { key: fine, id: 8, text: null });
   assert.deepStrictEqual(leaves.size, 8);
   assert.deepStrictEqual(leaves.get(fine)?.id, 8);

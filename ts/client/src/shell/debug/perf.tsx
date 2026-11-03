@@ -23,21 +23,20 @@ import {
   longFramesClear,
 } from "./perf/long-frame.ts";
 import { perfTraceSave } from "./perf/trace.ts";
-import { kernel_setting } from "@/port/setting.ts";
-import { kernel_perf_start, kernel_perf_stop } from "@/port/perf.ts";
 import {
   SETTING,
   type SettingName,
   settingsIn,
 } from "@/shell/setting/schema.ts";
 import { useKernel } from "@/shell/store/watch.ts";
+import * as perf from "@/port/perf.ts";
+import * as setting from "@/port/setting.ts";
 
-const enum Tint {
-  Plain = 0,
-  Go = 1,
-  Halt = 2,
-  Off = 3,
-}
+const PLAIN = 0;
+const GO = 1;
+const HALT = 2;
+const OFF = 3;
+type Tint = typeof PLAIN | typeof GO | typeof HALT | typeof OFF;
 
 interface TintLook {
   border: string;
@@ -58,16 +57,16 @@ function hued(hue: string): TintLook {
 }
 
 const TINT: Record<Tint, TintLook> = {
-  [Tint.Plain]: {
+  [PLAIN]: {
     border: alpha(color.white, 0.15),
     ground: alpha(color.white, 0.05),
     ink: alpha(color.white, 0.6),
     lit: alpha(color.white, 0.1),
     litInk: alpha(color.white, 0.9),
   },
-  [Tint.Go]: hued(color.perfGo),
-  [Tint.Halt]: hued(color.perfHalt),
-  [Tint.Off]: {
+  [GO]: hued(color.perfGo),
+  [HALT]: hued(color.perfHalt),
+  [OFF]: {
     border: alpha(color.white, 0.1),
     ground: alpha(color.white, 0.05),
     ink: alpha(color.white, 0.25),
@@ -80,7 +79,7 @@ const TINT: Record<Tint, TintLook> = {
 function PanelButton({
   label,
   hint,
-  tint = Tint.Plain,
+  tint = PLAIN,
   onPress,
   onHint,
   disabled,
@@ -157,7 +156,7 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
   const Box = on ? CheckSquareIcon : SquareIcon;
   return (
     <Pressable
-      onPress={() => kernel_setting(key, on ? 0 : 1)}
+      onPress={() => setting.set(key, on ? 0 : 1)}
       disabled={disabled}
       accessibilityRole="checkbox"
       aria-checked={on}
@@ -183,7 +182,7 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
 }
 
 function restartWindow(): void {
-  kernel_perf_start();
+  perf.start();
   longFramesClear();
 }
 
@@ -234,16 +233,16 @@ export function PerfPanel() {
           onHint={setHint}
           label={recording ? "Restart" : "Start"}
           hint="clear everything and begin a fresh window"
-          tint={recording ? Tint.Plain : Tint.Go}
+          tint={recording ? PLAIN : GO}
           onPress={restartWindow}
         />
         <PanelButton
           onHint={setHint}
           label="Stop"
           hint="freeze the window so exports are stable while you read them"
-          tint={recording ? Tint.Halt : Tint.Off}
+          tint={recording ? HALT : OFF}
           disabled={!recording}
-          onPress={kernel_perf_stop}
+          onPress={perf.stop}
         />
         <PanelButton
           onHint={setHint}

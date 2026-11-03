@@ -6,16 +6,15 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
 
-import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { Backing, BackingPlace } from "@/shell/ui/backing.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";
 import { alpha, chrome, material, shadow } from "@/shell/ui/theme.ts";
-import { selectTier } from "./store.ts";
-import { useKernel } from "@/shell/store/watch.ts";
-import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
+import { selectScale, useScale } from "./store.ts";
+import { OBJECT_SCALES } from "@/shell/world/object.spec.ts";
 import { DOCK_HEIGHT } from "./card.tsx";
 import { type SizeGesture, STRIP } from "./strip.tsx";
 
@@ -26,16 +25,16 @@ const POPOVER_PAD_Y = 8;
 const POPOVER_WIDTH = chrome.target + 12;
 const POPOVER_PITCH = chrome.target + POPOVER_GAP_PX;
 
-/** A dot whose area halves per tier, so the finest stays visible: 28, 20, 14, 10. */
+/** A dot whose area halves per scale step, so the finest stays visible: 28, 20, 14, 10. */
 const MARK_COARSEST = 28;
-function sizeMark(tier: u32): f64 {
-  return round(MARK_COARSEST / Math.SQRT2 ** tier);
+function sizeMark(scaleSteps: i32): f64 {
+  return round(MARK_COARSEST * Math.SQRT2 ** scaleSteps);
 }
 
 /** Finest first, so the coarsest stands nearest the swatch. */
-const TIERS: readonly u32[] = Array.from(
-  { length: OBJECT_TIERS },
-  (_, i) => OBJECT_TIERS - 1 - i,
+const SCALES: readonly i32[] = Array.from(
+  { length: OBJECT_SCALES },
+  (_, i) => i + 1 - OBJECT_SCALES,
 );
 
 /** The seed of the sizes, at their foot. */
@@ -48,25 +47,25 @@ const FLASH_MS = 900;
 export interface Popover {
   centerX: f64;
   bar: [f64, f64];
-  highlighted: u32 | null;
+  highlighted: i32 | null;
   /** The sizes open; else their seed. */
   open: boolean;
 }
 
 /** `x` and `y` on the page. */
-function tierAt(at: Popover, x: f64, y: f64): u32 | null {
+function scaleAt(at: Popover, x: f64, y: f64): i32 | null {
   if (Math.abs(x - at.bar[0] - at.centerX) > POPOVER_WIDTH / 2) return null;
   const top =
     at.bar[1] -
     POPOVER_LIFT_PX -
-    (2 * POPOVER_PAD_Y + OBJECT_TIERS * POPOVER_PITCH - POPOVER_GAP_PX);
+    (2 * POPOVER_PAD_Y + OBJECT_SCALES * POPOVER_PITCH - POPOVER_GAP_PX);
   const along = y - top - POPOVER_PAD_Y;
   if (along < 0) return null;
   const row = Math.floor(along / POPOVER_PITCH);
-  if (row >= OBJECT_TIERS || along - row * POPOVER_PITCH > chrome.target) {
+  if (row >= OBJECT_SCALES || along - row * POPOVER_PITCH > chrome.target) {
     return null;
   }
-  return TIERS[row];
+  return SCALES[row];
 }
 
 /** Where the popover stands, and what a swatch's gesture does to it; `bar` is the dock's, whose place it is measured from. */
@@ -113,14 +112,14 @@ export function usePopover(bar: React.RefObject<View | null>): {
     longPress: () => setPopover((f) => f && { ...f, open: true }),
     move: (x, y) => {
       if (!popover?.open) return;
-      const highlighted = tierAt(popover, x, y);
+      const highlighted = scaleAt(popover, x, y);
       if (highlighted !== popover.highlighted) {
         setPopover({ ...popover, highlighted });
       }
     },
     release: (x, y) => {
-      const tier = popover?.open ? tierAt(popover, x, y) : null;
-      if (tier !== null) selectTier(tier);
+      const scaleSteps = popover?.open ? scaleAt(popover, x, y) : null;
+      if (scaleSteps !== null) selectScale(scaleSteps);
     },
     end: () => {
       pressing.current = false;
@@ -155,10 +154,10 @@ export function SizePopover({ popover }: { popover: Popover }) {
   );
 }
 
-/** The sizes open, a mark a tier. */
-function SizeMarks({ highlighted }: { highlighted: u32 | null }) {
+/** The sizes open, a mark a scale. */
+function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
   const { t } = useTranslation();
-  const objectTier = useKernel((s) => s.tool.tier);
+  const held = useScale();
 
   return (
     <Backing
@@ -167,26 +166,26 @@ function SizeMarks({ highlighted }: { highlighted: u32 | null }) {
       place={BackingPlace.OverMap}
       style={styles.popover}
     >
-      {TIERS.map((tier) => {
-        const mark = sizeMark(tier);
+      {SCALES.map((scaleSteps) => {
+        const mark = sizeMark(scaleSteps);
         return (
           <View
-            key={tier}
+            key={scaleSteps}
             accessibilityLabel={t("world.dock.object_size", {
-              n: OBJECT_TIERS - tier,
+              n: OBJECT_SCALES + scaleSteps,
             })}
             style={styles.popoverItem}
           >
             <Motion
-              to={{ scale: highlighted === tier ? 1.25 : 1 }}
+              to={{ scale: highlighted === scaleSteps ? 1.25 : 1 }}
               transition={SNAP}
             >
               <View
                 style={[
                   { width: mark, height: mark, borderRadius: mark / 2 },
-                  highlighted === tier
+                  highlighted === scaleSteps
                     ? styles.markHighlighted
-                    : objectTier === tier
+                    : held === scaleSteps
                       ? styles.markHeld
                       : styles.markIdle,
                 ]}

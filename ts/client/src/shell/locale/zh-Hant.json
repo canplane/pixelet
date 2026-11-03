@@ -1,0 +1,261 @@
+{
+  "close": "關閉",
+  "settings": {
+    "title": "設定",
+    "trigger_aria_label": "設定",
+    "tabs": {
+      "options": "選項",
+      "info": "資訊"
+    },
+    "language": {
+      "section_title": "語言"
+    },
+    "cost_legend": "LOW / MED / HIGH 表示效能負擔。畫面卡頓時，請先調整 HIGH 項目。",
+    "display": {
+      "section_title": "顯示",
+      "section_caption": "設定畫面繪製的內容和解析度。",
+      "decor": {
+        "label": "裝飾",
+        "description": "顯示地形上自動擺放的樹木、車輛等裝飾。不影響你自己放置的物件。"
+      },
+      "clouds": {
+        "label": "雲",
+        "description": "顯示天空中的積雲和其上方的薄雲層。相機升高時會逐漸變淡並消失。"
+      },
+      "textures": {
+        "label": "材質",
+        "description": "在方塊表面顯示材質，而不是單色。"
+      },
+      "res": {
+        "label": "解析度",
+        "auto": {
+          "label": "自動",
+          "description": "以裝置解析度繪製，卡頓時暫時降低，有餘裕時恢復。"
+        },
+        "fixed": {
+          "label": "固定",
+          "description": "一律以裝置解析度繪製。最清晰，但在效能較低的裝置上可能卡頓。"
+        },
+        "low": {
+          "label": "低解析度",
+          "description": "以較低解析度繪製，減少耗電和發熱。畫面會略顯模糊。"
+        }
+      }
+    },
+    "camera": {
+      "section_title": "相機",
+      "section_caption": "設定畫面移動和旋轉的方式。",
+      "tilt_lock": {
+        "label": "鎖定傾斜",
+        "description": "固定傾斜角度，只能左右旋轉。"
+      }
+    },
+    "lighting": {
+      "section_title": "光線與陰影",
+      "section_caption": "設定光線和陰影的效果。",
+      "edge_shade": {
+        "label": "方塊輪廓",
+        "description": "只加深與空氣相接的邊，讓平地平滑相連，只在高度變化處顯示線條。"
+      },
+      "ao": {
+        "label": "陰影細節",
+        "off": {
+          "label": "無",
+          "description": "對所有表面使用相同的環境光。"
+        },
+        "corner": {
+          "label": "邊角",
+          "description": "加深方塊與地面的接觸處和內角，讓方塊看起來落在地上。負擔較小。"
+        },
+        "screen": {
+          "label": "全部 (SSAO)",
+          "description": "除邊角外，也為裝飾、角色和較寬的縫隙加上柔和的陰影，增強立體感。需要處理整個畫面，負擔最大。"
+        }
+      },
+      "shadows": {
+        "label": "陰影",
+        "description": "地形、物件和角色在陽光下向地面投下陰影。"
+      },
+      "rim_light": {
+        "label": "邊緣光",
+        "description": "在方塊、裝飾和角色的輪廓上加上柔和的高光，使其從背景中清楚分離。"
+      }
+    },
+    "debug": {
+      "section_title": "偵錯",
+      "section_caption": "用於查看畫面繪製情況的診斷工具。",
+      "view": {
+        "label": "檢視",
+        "description": "在畫面上顯示相機和指標的位置，可查看相機的距離和角度，以及指標所指位置的座標。"
+      },
+      "perf": {
+        "label": "效能",
+        "description": "顯示每個影格的耗時以及 GPU、網路和記憶體的用量，開啟期間會持續記錄。"
+      },
+      "world_gizmo": {
+        "label": "世界輔助線",
+        "description": "繪製標示畫面中心和方向的圓環，並在地面上依狀態用顏色標示已載入地形的範圍。顏色含義見一同顯示的圖例。"
+      },
+      "camera_gizmo": {
+        "label": "相機輔助線",
+        "description": "疊加顯示環繞畫面中心的環形網格，並將方塊在畫面上的大小與網格單元比較，用顏色標示。顏色含義見一同顯示的圖例。"
+      },
+      "ray_steps": {
+        "label": "光線步數",
+        "description": "用顏色標示繪製畫面上每個點的負擔。借用附近點結果的點，顯示尋找該結果的負擔。顏色含義見一同顯示的圖例。"
+      }
+    },
+    "disclaimer": {
+      "section_title": "注意事項",
+      "demo_notice": "本服務為示範版本，資料可能被刪除，服務也可能中止，恕不另行通知。",
+      "coverage_notice": "目前僅支援韓國，其他地區顯示為海洋。",
+      "storage_notice": "你放置的物件不會儲存到伺服器，只保留在目前的裝置上。",
+      "location_notice": "我們不會收集或儲存你的位置資訊。",
+      "character_notice": "角色和裝飾使用 CC0 授權的 Kenney 素材包。"
+    },
+    "attribution": {
+      "section_title": "來源"
+    },
+    "about": {
+      "section_title": "關於",
+      "tagline": "以現實世界為畫布，堆疊方塊。"
+    }
+  },
+  "drawer": {
+    "title": "抽屜",
+    "tabs": {
+      "cube": "方塊",
+      "decor": "裝飾",
+      "marker": "標記",
+      "character": "角色"
+    },
+    "sections": {
+      "cube": {
+        "colors": "顏色",
+        "landcover": "土地",
+        "water": "水",
+        "water_features": "水邊設施",
+        "buildings": "建築",
+        "roads": "道路",
+        "aeroways": "機場",
+        "underground": "地下"
+      },
+      "decor": {
+        "nature": "自然",
+        "vehicle": "交通工具"
+      },
+      "pin": "圖釘"
+    },
+    "character": {
+      "person_label": "角色",
+      "female_label": "女性",
+      "male_label": "男性",
+      "pet_label": "寵物"
+    }
+  },
+  "device": {
+    "orientation": {
+      "permission_denied": "請允許使用方向感測器。",
+      "permission_error": "無法使用方向感測器。",
+      "signal_lost": "無法確定方向。"
+    },
+    "geolocation": {
+      "unsupported": "目前環境無法使用位置資訊。",
+      "permission_denied": "請允許使用位置資訊。",
+      "generic_error": "無法確定目前位置。",
+      "timeout": "未能確定位置，請重試。"
+    }
+  },
+  "toast": {
+    "server_unstable": "伺服器連線不穩定。",
+    "location_checking": "正在確定目前位置。",
+    "world_loading": "正在載入空間。",
+    "world_ready": "空間已載入。",
+    "companion_loading": "正在準備同伴。",
+    "outside": "不支援此地區。",
+    "network_unstable": "網路連線不穩定。",
+    "gpu_unstable": "WebGPU 連線不穩定。"
+  },
+  "world": {
+    "dock": {
+      "pointer": "指標",
+      "eraser": "橡皮擦",
+      "message_placeholder": "輸入訊息",
+      "pin_placeholder": "輸入圖釘訊息",
+      "send": "傳送",
+      "pin_done": "立起圖釘",
+      "drawer_tooltip": "開啟抽屜",
+      "object_size": "大小 {{n}}"
+    },
+    "controls": {
+      "reset_orientation": "朝向北方",
+      "move_to_location": "前往我的位置",
+      "start_compass_mode": "開啟指南針",
+      "exit_compass_mode": "關閉指南針",
+      "first_person": "第一人稱視角",
+      "third_person": "第三人稱視角",
+      "show_places": "顯示地點",
+      "hide_places": "隱藏地點"
+    },
+    "sensors": {
+      "label": "使用我的位置",
+      "turn_on": "開啟"
+    },
+    "search": {
+      "trigger_aria_label": "搜尋地點",
+      "placeholder": "搜尋地點",
+      "clear_aria_label": "清除搜尋內容",
+      "loading": "正在搜尋…",
+      "locating": "正在定位…",
+      "no_results": "沒有搜尋結果。",
+      "section_elsewhere": "其他",
+      "pivot": "目前位置"
+    }
+  },
+  "progress": {
+    "gpu": "正在連線 WebGPU。",
+    "offline": "正在等待網路連線。",
+    "server": "正在等待伺服器連線。",
+    "source": "正在確認伺服器資訊。",
+    "location": "正在等待位置資訊。",
+    "shaders": "正在產生著色器。",
+    "area": "正在載入空間。"
+  },
+  "failed": {
+    "webgpu": {
+      "title": "無法使用 WebGPU。",
+      "body": "請將瀏覽器更新到最新版本，或使用其他瀏覽器開啟。"
+    },
+    "insecure": {
+      "title": "需要 HTTPS 連線。",
+      "body": "請透過 https:// 網址重新開啟。"
+    },
+    "gpu": {
+      "title": "無法啟動 WebGPU。",
+      "body": "請在瀏覽器中開啟硬體加速，或檢查裝置設定。"
+    },
+    "boot": {
+      "title": "發生暫時性錯誤。",
+      "body": "請稍後再試。"
+    },
+    "source": {
+      "title": "無法讀取資料。",
+      "body": "請重新整理頁面或更新應用程式。"
+    }
+  },
+  "panic": {
+    "app": {
+      "title": "應用程式已停止。",
+      "body": "請重新整理或重新開啟應用程式。"
+    },
+    "gpu": {
+      "title": "WebGPU 連線已中斷。",
+      "body": "請重新整理或重新開啟應用程式。"
+    },
+    "server": {
+      "title": "伺服器連線失敗。",
+      "body": "請稍後再試。"
+    },
+    "stop_code": "停止代碼：{{code}}"
+  }
+}

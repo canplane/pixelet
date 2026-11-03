@@ -3,6 +3,7 @@
 /** The device's bracket: what the client asks of the app (@pxl/client/bracket.tsx), answered by the app's native module (module.ts) and the kernel linked into it (pxl-native). */
 
 import type { Bracket } from "@pxl/client/bracket.tsx";
+import * as db from "./db.ts";
 import * as device from "./device.ts";
 import * as gpu from "./gpu.ts";
 import * as guest from "./guest.ts";
@@ -28,6 +29,7 @@ export const app: Bracket = {
   guest,
   gpu,
   storage,
+  db,
   text,
   origin,
   online,

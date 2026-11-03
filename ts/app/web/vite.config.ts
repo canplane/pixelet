@@ -25,14 +25,7 @@ import {
   SITE_URL,
   TILE_PREFIX,
 } from "@pxl/client/driver/namespace/route.spec.ts";
-import {
-  DECL,
-  enumAt,
-  literal,
-  type Members,
-  readEnums,
-  stale,
-} from "@pxl/build/const-enum.ts";
+import { GROUND } from "@pxl/client/shell/ui/ground.ts";
 import { REPO, WORKSPACE } from "@pxl/build/paths.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -131,12 +124,14 @@ function remoteConsole(): Plugin {
   };
 }
 
-/** The page's own URL where index.html names it (`%SITE_URL%`), its links'
- * previews: the site's (spec/spec/route.json `origins`). */
-function siteUrl(): Plugin {
+/** What index.html names: the page's own URL (`%SITE_URL%`), its links'
+ * previews, the site's (spec/spec/route.json `origins`); and the shell's ground
+ * (`%GROUND%`), its first paint. */
+function htmlValues(): Plugin {
   return {
-    name: "pxl-site-url",
-    transformIndexHtml: (html) => html.replaceAll("%SITE_URL%", SITE_URL),
+    name: "pxl-html-values",
+    transformIndexHtml: (html) =>
+      html.replaceAll("%SITE_URL%", SITE_URL).replaceAll("%GROUND%", GROUND),
   };
 }
 
@@ -197,116 +192,6 @@ function buildStamp(): Plugin {
             time: new Date().toISOString(),
           }) + "\n",
       });
-    },
-  };
-}
-
-/**
- * Inlines every `const enum`: Vite transpiles each file on its own, and oxc
- * erases the declaration, which leaves every importer bound to a missing
- * export.
- *
- * The table is ts/build/const-enum.ts's, shared with the device's Babel pass.
- * Here each use is replaced by its value — a file's own enums in that file
- * only — and the declarations struck. An access left behind after a
- * declaration went is a build error. The table is read once, as the server
- * starts, so an enum declared since, or a member added to one, is the same
- * error, saying the server has to be restarted. A file that declares enums
- * and reaches the transform without its declarations is a build error.
- */
-function constEnum(roots: string[]): Plugin {
-  const table = readEnums(roots);
-  const restart = "restart the dev server";
-
-  // An id can carry a query or a hash (`?url`), which hides the extension
-  // from a `$`-anchored test: the file holding the declaration would lose it
-  // while the importer keeps the name it can no longer bind.
-  const sourceOf = (id: string) => path.resolve(id.split("?")[0].split("#")[0]);
-  const declares = (file: string) =>
-    table.exported.has(file) || table.local.has(file);
-  const IMPORT =
-    /import\s*(?:type\s+)?\{([^}]*)\}\s*from\s*(['"][^'"]+['"])\s*;?/g;
-  const items = (clause: string) =>
-    clause
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((s) => {
-        const [orig, as] = s.replace(/^type\s+/, "").split(/\s+as\s+/);
-        return { item: s, orig, local: as ?? orig };
-      });
-
-  return {
-    name: "const-enum",
-    // Before the transpiler reaches the types: the declarations are still here.
-    enforce: "pre",
-    transform(code, id) {
-      const at = sourceOf(id);
-      if (!/\.tsx?$/.test(at) || id.includes("node_modules")) return null;
-      if (declares(at) && code.search(DECL) < 0) {
-        throw new Error(
-          `const-enum: ${at} reached the bundler with its enums already emitted (${id})`,
-        );
-      }
-      for (const [, isExported, name] of code.matchAll(DECL)) {
-        if (!(isExported ? table.exported : table.local).get(at)?.has(name)) {
-          throw new Error(`${stale(`const enum ${name}`, restart)} (${id})`);
-        }
-      }
-      // What each name in the file is: its own enums, and every enum an
-      // import clause names, followed to the file that declares it — so an
-      // alias is the enum it aliases, and two files' `Command` are two.
-      const bound = new Map<string, Members>([
-        ...(table.local.get(at) ?? []),
-        ...(table.exported.get(at) ?? []),
-      ]);
-      const imported = new Set<string>();
-      for (const [, clause, from] of code.matchAll(IMPORT)) {
-        for (const { orig, local } of items(clause)) {
-          const members = enumAt(table, at, from.slice(1, -1), orig);
-          if (members) {
-            bound.set(local, members);
-            imported.add(local);
-          }
-        }
-      }
-      let out = code;
-      const struck: string[] = [];
-      for (const [name, members] of bound) {
-        if (!out.includes(name)) continue;
-        // Whole names only: INPUT_POSE is a prefix of INPUT_POSE_END.
-        out = out.replace(
-          new RegExp(`\\b${name}\\.(\\w+)\\b`, "g"),
-          (whole, key: string) =>
-            members.has(key) ? literal(members.get(key)!) : whole,
-        );
-        struck.push(name);
-      }
-      if (!struck.length) return null;
-      out = out.replace(DECL, "");
-      // A struck enum leaves the clause that imported it too.
-      out = out.replace(IMPORT, (whole, clause: string, from: string) => {
-        const all = items(clause);
-        const kept = all
-          .filter((i) => !imported.has(i.local))
-          .map((i) => i.item);
-        if (kept.length === all.length) return whole;
-        return kept.length ? `import { ${kept.join(", ")} } from ${from};` : "";
-      });
-      for (const name of struck) {
-        const left = new RegExp(`\\b${name}\\.\\w`).exec(out);
-        if (left) {
-          throw new Error(
-            `${stale(
-              `${name}.${
-                /\w+/.exec(out.slice(left.index + name.length + 1))![0]
-              }`,
-              restart,
-            )} (${id})`,
-          );
-        }
-      }
-      return { code: out, map: null };
     },
   };
 }
@@ -527,15 +412,10 @@ export default defineConfig(({ mode }) => {
     clearScreen: false,
 
     plugins: [
-      siteUrl(),
+      htmlValues(),
       stripHtmlComments(),
       buildStamp(),
       remoteConsole(),
-      constEnum([
-        path.resolve(__dirname, "src"),
-        path.join(WORKSPACE, "client", "src"),
-        path.join(REPO, "xpute", "ts"),
-      ]),
       react(),
 
       rebuildKernelOnRustChange(),

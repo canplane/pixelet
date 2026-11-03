@@ -16,7 +16,8 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { useDim } from "@/shell/ui/motion/dim.ts";
-import { BackingPlace, type BackingProps } from "@/shell/ui/backing.tsx";
+import * as BackingPlace from "./backing-place.ts";
+import type { BackingProps, BackingPlace as Place } from "./backing.tsx";
 import { alpha } from "@/shell/ui/theme.ts";
 import { Backing as Fill } from "./backing.tsx";
 
@@ -30,7 +31,7 @@ const Blur: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "Blur");
 
 type Effect = "none" | "clear" | "regular";
 
-function effectAt(level: f64, place: BackingPlace): Effect {
+function effectAt(level: f64, place: Place): Effect {
   if (level <= 0) return "none";
   if (level < 1 || place === BackingPlace.OnSheet) return "clear";
   return "regular";

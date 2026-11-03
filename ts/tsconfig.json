@@ -13,6 +13,7 @@
     "jsxImportSource": "react",
     "strict": true,
     "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
     "noImplicitOverride": true,
     "skipLibCheck": true,
     "types": ["node", "vite/client", "@webgpu/types"],

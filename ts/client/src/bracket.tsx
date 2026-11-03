@@ -9,10 +9,17 @@
 
 import type { ComponentType } from "react";
 
+import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f32, f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Guest } from "@xpute/host/host.ts";
 
 export type { Guest };
+
+/** A transaction on the place's database: files of bytes by key, null none. */
+export interface Tx {
+  get(key: string): Promise<U8Array | null>;
+  put(key: string, bytes: U8Array | null): Promise<void>;
+}
 
 /** What a place needs to open the guest, which the guest's own numbers say:
  * its memory, the offset its toc is at, and where its GPU stream's
@@ -30,8 +37,11 @@ export interface Config {
 export interface GpuHeard {
   /** A device answered, the first time or after a loss. */
   ready(): void;
-  /** Whether there is a GPU: one, none yet while it asks again, none it will ask for again, or none again after one it drew with. A GPU counts as present until a place says otherwise, and a place says only what it hears. */
-  state(state: "present" | "waiting" | "missing" | "lost"): void;
+  /** Whether there is a GPU: one, none yet while it asks again, none it will ask for again, none again after one it drew with, no WebGPU here, or none outside a secure context. A GPU counts as present until a place says otherwise, and a place says only what it hears. */
+  state(
+    state:
+      "present" | "waiting" | "missing" | "lost" | "unsupported" | "insecure",
+  ): void;
   /** A completion the device wrote between turns, which a turn must read. */
   wake(): void;
 }
@@ -147,6 +157,10 @@ export interface Bracket {
     get(key: string): string | null;
     set(key: string, value: string): void;
   };
+  /** `fn` as one transaction: all it put or, where it rejects, none. Transactions
+   * run one at a time in the order asked, each seeing those before it; `fn`
+   * awaits only `tx`'s promises. A database the place refuses keeps nothing. */
+  db: { transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> };
   /** `rgba` is 0xRRGGBBAA; `out` is RGBA, top row first, not premultiplied. */
   text: {
     width(weight: u32, px: f32, text: string): f32;

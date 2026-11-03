@@ -26,6 +26,6 @@ export function messageKey(message: Message): string {
     case Message.WorldReadFailing:
       return "toast.server_unstable";
     case Message.WorldUnavailable:
-      return "halt.server_failed";
+      return "panic.server";
   }
 }

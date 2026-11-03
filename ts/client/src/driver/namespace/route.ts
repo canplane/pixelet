@@ -3,7 +3,7 @@
 import type { BaseLayer } from "@/driver/namespace/publication.spec.ts";
 import { TILE_ROOT } from "./route.spec.ts";
 
-/** `<tile>/<layer>/<version>/<name>`: the object a bake's number is, under
+/** `<tile>/<layer>/<version>/<name>`: the object a bake's name is, under
  * the version its source declares serving it (namespace/tile.ts). */
 export function tile_url(layer: BaseLayer, object: string): string {
   return `${TILE_ROOT}/${layer}/${object}`;

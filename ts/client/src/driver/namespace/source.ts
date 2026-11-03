@@ -15,9 +15,16 @@ import {
   BASE_LAYERS,
   type BaseLayer,
   VERSION_BYTES,
+  VERSION_CHARS,
 } from "./publication.spec.ts";
 import { Command, encode_fs_mount } from "@/abi/cmd.spec.ts";
-import { Source } from "@/abi/state.ts";
+import {
+  SOURCE_ASKING,
+  SOURCE_DECLARED,
+  SOURCE_FAILING,
+  SOURCE_REFUSED,
+  type Source,
+} from "@/abi/state.ts";
 import { bracket } from "@/bracket.tsx";
 import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
@@ -31,8 +38,15 @@ export interface Declaration {
   shard: Record<string, { version?: Partial<Record<BaseLayer, string>> }>;
 }
 
-/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec bake/source.rs `is_version`), `VERSION_BYTES` long at most (publication.json). */
-const VERSION = new RegExp(`^[A-Za-z0-9._-]{1,${VERSION_BYTES}}$`);
+/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec
+ * bake/source.rs `is_version`, by the same bytes and the same characters). */
+function is_version(s: string): boolean {
+  return (
+    s.length >= 1 &&
+    s.length <= VERSION_BYTES &&
+    [...s].every((c) => VERSION_CHARS.includes(c))
+  );
+}
 
 /** The declaration's text, where every kind has a version and every version
  * is a URL's segment, the top zoom and each kind's format are u32s, and the
@@ -53,7 +67,7 @@ export function declaration(text: string): Declaration | null {
       ([k, s]) =>
         (BASE_LAYERS as readonly string[]).includes(k) &&
         typeof s === "string" &&
-        VERSION.test(s),
+        is_version(s),
     ) &&
     (!every || BASE_LAYERS.every((k) => k in v));
   if (
@@ -89,9 +103,8 @@ export function declaration(text: string): Declaration | null {
   return d as Declaration;
 }
 
-let state = Source.Asking;
+let state: Source = SOURCE_ASKING;
 let cur_declaration: Declaration | null = null;
-let versions: readonly { kind: BaseLayer; version: string }[] = [];
 const listeners = new Listeners();
 
 function set(next: Source): void {
@@ -108,12 +121,9 @@ export function source_declaration(): Declaration | null {
   return cur_declaration;
 }
 
-/** Each kind's own version as declared, empty until then. */
-export function source_versions(): readonly {
-  kind: BaseLayer;
-  version: string;
-}[] {
-  return versions;
+/** Each kind's own version as declared; none until then. */
+export function source_versions(): Declaration["version"] | null {
+  return cur_declaration?.version ?? null;
 }
 
 export const watch_source = listeners.watch;
@@ -141,7 +151,8 @@ async function ask_declaration(): Promise<string | null> {
 }
 
 /** Hands the kernel its part of the declaration (FS_MOUNT); false where
- * it is more than a command carries. */
+ * it is more than a command carries or the kernel refuses it, a format this
+ * build does not read among what it refuses. */
 export type SendSource = (
   top_zoom: number,
   formats: number[],
@@ -155,10 +166,15 @@ function send_source(
 ): boolean {
   const pkt = encode_fs_mount(HOST.doorbell, top_zoom, formats, shards);
   if (!HOST.doorbell.fits(pkt)) return false;
-  HOST.send(port.SHELL, Command.FS_MOUNT, pkt);
-  return true;
+  return HOST.doorbell.call(
+    port.SHELL,
+    Command.FS_MOUNT,
+    pkt,
+    (result) => result >= 0,
+  );
 }
 
+/** Settled once the source is declared or refused (`source_state`). */
 export async function declare_source(
   send: SendSource = send_source,
 ): Promise<void> {
@@ -166,7 +182,7 @@ export async function declare_source(
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
     if (online()) {
-      set(Source.Failing);
+      set(SOURCE_FAILING);
       await new Promise((resolve) =>
         setTimeout(resolve, Math.random() * wait_ms),
       );
@@ -179,10 +195,12 @@ export async function declare_source(
     console.error(
       "[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards",
     );
-    set(Source.Refused);
+    set(SOURCE_REFUSED);
     return;
   }
   const shards = Object.keys(read.shard);
+  // Before FS_MOUNT: a frame in that call opens a tile under it.
+  cur_declaration = read;
   if (
     !send(
       read.top_zoom,
@@ -191,12 +209,11 @@ export async function declare_source(
     )
   ) {
     console.error(
-      `[source] the declaration's ${shards.length} shards are more than a command carries`,
+      `[source] the kernel took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
     );
-    set(Source.Refused);
+    cur_declaration = null;
+    set(SOURCE_REFUSED);
     return;
   }
-  cur_declaration = read;
-  versions = BASE_LAYERS.map((kind) => ({ kind, version: read.version[kind] }));
-  set(Source.Declared);
+  set(SOURCE_DECLARED);
 }
