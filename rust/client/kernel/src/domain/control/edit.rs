@@ -8,8 +8,6 @@ pub mod ghost;
 pub mod pick;
 pub mod write;
 
-use pxl_spec::asset::decor::tree;
-use pxl_spec::asset::{cube, AssetId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3;
@@ -17,7 +15,6 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
-pub use crate::domain::control::cmd::ActiveTool;
 use crate::domain::control::edit::collision::is_placement_blocked;
 use crate::domain::control::edit::collision::{anchor_center, object_aabb};
 use crate::domain::control::edit::pick::{
@@ -38,35 +35,25 @@ use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, of_side, units, Zoom};
 use xpute_guest::global::Global;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Tool {
-    pub active_tool: ActiveTool,
-    /// A cube's id, the catalog's (`cube_of`).
-    pub cube: AssetId,
-    /// The object size by its tier (`object_zoom_of`).
-    pub tier: u32,
-    pub decor: AssetId,
+/// What the pointer holds, as the shell chose it (`EDIT_TOOL`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Tool {
+    #[default]
+    Pointer,
+    Eraser,
+    /// An item to place, in the cube of its zoom.
+    Item {
+        asset: Asset,
+        zoom: Zoom,
+    },
 }
 
 impl Tool {
-    /// What it would place; none for the pointer or the eraser.
-    pub fn asset(&self) -> Option<Asset> {
-        match self.active_tool {
-            ActiveTool::Cube => Some(Asset::of(self.cube)),
-            ActiveTool::Decor => Some(Asset::of(self.decor)),
-            ActiveTool::Marker => Some(Asset::Marker),
-            ActiveTool::Pointer | ActiveTool::Eraser => None,
-        }
-    }
-}
-
-impl Default for Tool {
-    fn default() -> Tool {
-        Tool {
-            active_tool: ActiveTool::Pointer,
-            cube: cube::Object::red as AssetId,
-            tier: 0,
-            decor: tree as AssetId,
+    /// What it would place, and at what zoom.
+    pub fn asset(self) -> Option<(Asset, Zoom)> {
+        match self {
+            Tool::Item { asset, zoom } => Some((asset, zoom)),
+            Tool::Pointer | Tool::Eraser => None,
         }
     }
 }
@@ -232,12 +219,12 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         return;
     };
 
-    if let Some(asset) = ui.asset() {
+    if let Some((_, zoom)) = ui.asset() {
         hover.target = None;
         hover.approach = None;
         hover.coord = Some(world_adjacent_corner(
             &hit,
-            units(asset.zoom(ui.tier)),
+            units(zoom),
             flush_against(&hit).as_ref(),
         ));
         return;
@@ -277,14 +264,13 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
     let hover = state().hover;
 
     match ui.asset() {
-        Some(asset) => {
+        Some((asset, zoom)) => {
             // The slot may have filled since the last hover update.
-            let zoom = asset.zoom(ui.tier);
             if !is_placement_blocked(asset, zoom, &hovered) {
                 asset.place(&hovered, zoom);
             }
         }
-        None if ui.active_tool == ActiveTool::Pointer => {
+        None if ui == Tool::Pointer => {
             // Recenter across the struck face, standing as a pan lands.
             let Some(approach) = hover.approach else {
                 return;

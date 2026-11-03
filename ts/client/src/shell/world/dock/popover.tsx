@@ -13,8 +13,7 @@ import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SNAP } from "@/shell/ui/motion/transition.ts";
 import { touches } from "@/shell/ui/touch.ts";
 import { alpha, chrome, material, shadow } from "@/shell/ui/theme.ts";
-import { selectTier } from "./store.ts";
-import { useKernel } from "@/shell/store/watch.ts";
+import { selectTier, useTier } from "./store.ts";
 import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
 import { DOCK_HEIGHT } from "./card.tsx";
 import { type SizeGesture, STRIP } from "./strip.tsx";
@@ -158,7 +157,7 @@ export function SizePopover({ popover }: { popover: Popover }) {
 /** The sizes open, a mark a tier. */
 function SizeMarks({ highlighted }: { highlighted: u32 | null }) {
   const { t } = useTranslation();
-  const objectTier = useKernel((s) => s.tool.tier);
+  const objectTier = useTier();
 
   return (
     <Backing

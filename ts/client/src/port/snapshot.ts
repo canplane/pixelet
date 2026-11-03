@@ -4,7 +4,6 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import { type BranchCursor, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
-  ActiveTool,
   GroundStatus,
   read_snapshot,
   read_shell_snapshot,
@@ -22,13 +21,7 @@ const INIT: Snapshot = {
   },
   location: { status: SensorStatus.Idle, has_location: false, err: null },
   companion: { person_ready: false, pet_ready: false },
-  tool: {
-    active: ActiveTool.Pointer,
-    cube: 0,
-    decor: 0,
-    tier: 0,
-    draft: null,
-  },
+  draft: null,
   orient: { status: SensorStatus.Idle, err: null },
   azimuth: 0,
   is_follow_mode: false,

@@ -382,30 +382,22 @@ impl PointerType {
     }
 }
 
-/// What the pointer holds.
+/// What the pointer holds: itself, the eraser, or an item to place, which its id says the kind of.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
-pub enum ActiveTool {
+pub enum Tool {
     #[default]
     Pointer = 0,
-    Cube = 1,
-    Decor = 2,
-    Eraser = 3,
-    Marker = 4,
+    Item = 1,
+    Eraser = 2,
 }
 
-impl ActiveTool {
-    pub const ALL: [ActiveTool; 5] = [
-        ActiveTool::Pointer,
-        ActiveTool::Cube,
-        ActiveTool::Decor,
-        ActiveTool::Eraser,
-        ActiveTool::Marker,
-    ];
+impl Tool {
+    pub const ALL: [Tool; 3] = [Tool::Pointer, Tool::Item, Tool::Eraser];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<ActiveTool> {
-        ActiveTool::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<Tool> {
+        Tool::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -655,9 +647,9 @@ pub enum Command {
     /// A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
     /// (transforms aside), as the world surface's size is (SURFACE_RESIZE).
     INPUT_POINTER = 0x1102,
-    /// The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
+    /// The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer.
     EDIT_TOOL = 0x1a01,
-    /// The draft's text (ToolState.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut.
+    /// The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut.
     EDIT_MARKER_TEXT = 0x1a02,
     /// The marker's draft dropped, nothing committed.
     EDIT_MARKER_CANCEL = 0x1a03,
@@ -767,7 +759,8 @@ pub struct Snapshot<'a> {
     pub pivot: PivotState,
     pub location: LocationState,
     pub companion: CompanionState,
-    pub tool: ToolState<'a>,
+    /// A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL.
+    pub draft: Option<&'a str>,
     pub orient: OrientationState,
     /// The view's azimuth.
     pub azimuth: f64,
@@ -806,7 +799,7 @@ impl Snapshot<'_> {
         w.branch(PivotState::FIELDS, |w| self.pivot.write(w));
         w.branch(LocationState::FIELDS, |w| self.location.write(w));
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
-        w.branch(ToolState::FIELDS, |w| self.tool.write(w));
+        w.str(self.draft);
         w.branch(OrientationState::FIELDS, |w| self.orient.write(w));
         w.f64(Some(self.azimuth));
         w.bool(Some(self.is_follow_mode));
@@ -904,30 +897,6 @@ impl CompanionState {
     pub fn write(&self, w: &mut PacketWriter) {
         w.bool(Some(self.person_ready));
         w.bool(Some(self.pet_ready));
-    }
-}
-
-/// The tool and what it takes, as EDIT_TOOL set it: the cube and the decor are each remembered whichever tool is active; and a marker's draft.
-pub struct ToolState<'a> {
-    pub active: ActiveTool,
-    /// The cube the tool takes, by its number in the catalog's one value space.
-    pub cube: u32,
-    pub decor: u32,
-    pub tier: u32,
-    /// A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL.
-    pub draft: Option<&'a str>,
-}
-
-impl ToolState<'_> {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 5;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.active as u32));
-        w.u32(Some(self.cube));
-        w.u32(Some(self.decor));
-        w.u32(Some(self.tier));
-        w.str(self.draft);
     }
 }
 
@@ -1284,8 +1253,8 @@ impl InputPointer {
 /// Command::EDIT_TOOL's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct EditTool {
-    pub tool: ActiveTool,
-    /// The cube or decor kind the tool takes, by its number in the catalog's one value space (cube.json).
+    pub tool: Tool,
+    /// The item to place, its id (id.json); read only for that tool.
     pub val: u32,
     /// The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs).
     pub tier: u32,
@@ -1295,8 +1264,7 @@ impl EditTool {
     pub fn read(pkt: &[u8]) -> Result<EditTool, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(EditTool {
-            tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?)
-                .ok_or_else(|| unknown())?,
+            tool: Tool::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             val: integer::<u32>(f.at(1)?.get_number()?)?,
             tier: integer::<u32>(f.at(2)?.get_number()?)?,
         })

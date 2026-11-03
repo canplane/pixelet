@@ -15,7 +15,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::control::edit::write::{middle, pending, restores_scattered, Pending};
-use crate::domain::control::edit::{hover, tool, ActiveTool};
+use crate::domain::control::edit::{hover, tool, Tool};
 use crate::domain::layer::object::meta::user_decor_pick;
 pub use crate::domain::layer::object::preview::{Ghost, GhostBox};
 use crate::domain::query::changes::Memo;
@@ -32,7 +32,6 @@ pub fn ghost() -> Ghost {
     let hover = hover();
     let ui = tool();
     let hovered = hover.coord;
-    let active_tool = ui.active_tool;
     let Pending {
         object: hovered_object,
         zoom: preview_zoom,
@@ -41,7 +40,7 @@ pub fn ghost() -> Ghost {
         ..
     } = pending();
 
-    let use_object_style = active_tool != ActiveTool::Pointer || hovered_object.is_some();
+    let use_object_style = ui != Tool::Pointer || hovered_object.is_some();
     let cur_scale = units(if use_object_style {
         preview_zoom
     } else {
@@ -67,18 +66,21 @@ pub fn ghost() -> Ghost {
 
     // What it shows: what the tool would place; else, as a placing tool hovers
     // no object, what the pointer or the eraser is over.
-    let shown = ui.asset().or(hovered_object.map(|o| o.asset()));
+    let shown = ui
+        .asset()
+        .map(|(a, _)| a)
+        .or(hovered_object.map(|o| o.asset()));
     // The pointer shows a decor it is over, and no cube.
     let cube = shown
         .and_then(Asset::cube)
-        .filter(|_| active_tool != ActiveTool::Pointer)
+        .filter(|_| ui != Tool::Pointer)
         .or(carved_style_cube);
     let decor = shown.and_then(Asset::decor);
     let decor_corner = hovered_object.map_or(hovered, |o| Some(o.corner()));
     // Placing back an erased scattered decor restores that instance; the ghost
     // shows it.
-    let restored = match (active_tool, &hovered) {
-        (ActiveTool::Decor, Some(h)) => restores_scattered(h, ui.decor),
+    let restored = match (ui.asset(), &hovered) {
+        (Some((Asset::Decor(id), _)), Some(h)) => restores_scattered(h, id),
         _ => None,
     };
     // Where it would stand, and what it would carry.
@@ -90,10 +92,10 @@ pub fn ghost() -> Ghost {
         }
         _ => None,
     };
-    let erase = active_tool == ActiveTool::Eraser;
+    let erase = ui == Tool::Eraser;
     let scattered_ghost = hover
         .scattered_decor()
-        .filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser))
+        .filter(|_| matches!(ui, Tool::Pointer | Tool::Eraser))
         .and_then(|s| {
             let (m, decor) = (s.meta, Asset::of(u32::from(s.id)).decor()?);
             Some(Ghost::Decor {

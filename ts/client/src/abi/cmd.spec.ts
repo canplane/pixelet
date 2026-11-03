@@ -49,7 +49,7 @@ import * as EditMinor from "./cmd/edit_minor.spec.ts";
 import * as ShellMinor from "./cmd/shell_minor.spec.ts";
 import * as PointerPhase from "./cmd/pointer_phase.spec.ts";
 import * as PointerType from "./cmd/pointer_type.spec.ts";
-import * as ActiveTool from "./cmd/active_tool.spec.ts";
+import * as Tool from "./cmd/tool.spec.ts";
 import * as Tracking from "./cmd/tracking.spec.ts";
 import * as GeolocationErrorCode from "./cmd/geolocation_error_code.spec.ts";
 import * as Sensor from "./cmd/sensor.spec.ts";
@@ -119,9 +119,9 @@ export { PointerPhase };
 type PointerType = (typeof PointerType)[keyof typeof PointerType];
 export { PointerType };
 
-/** One of ActiveTool's, as its enum was a type. */
-type ActiveTool = (typeof ActiveTool)[keyof typeof ActiveTool];
-export { ActiveTool };
+/** One of Tool's, as its enum was a type. */
+type Tool = (typeof Tool)[keyof typeof Tool];
+export { Tool };
 
 /** One of Tracking's, as its enum was a type. */
 type Tracking = (typeof Tracking)[keyof typeof Tracking];
@@ -173,7 +173,8 @@ export interface Snapshot {
   pivot: PivotState;
   location: LocationState;
   companion: CompanionState;
-  tool: ToolState;
+  /** A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL. */
+  draft: string | null;
   orient: OrientationState;
   /** The view's azimuth. */
   azimuth: f64;
@@ -209,7 +210,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     pivot: read_pivot_state(b.at_branch(0)),
     location: read_location_state(b.at_branch(1)),
     companion: read_companion_state(b.at_branch(2)),
-    tool: read_tool_state(b.at_branch(3)),
+    draft: b.at(3).get<string | null>(),
     orient: read_orientation_state(b.at_branch(4)),
     azimuth: b.at(5).get<f64>(),
     is_follow_mode: b.at(6).get<boolean>(),
@@ -277,27 +278,6 @@ export function read_companion_state(b: BranchCursor): CompanionState {
   return {
     person_ready: b.at(0).get<boolean>(),
     pet_ready: b.at(1).get<boolean>(),
-  };
-}
-
-/** The tool and what it takes, as EDIT_TOOL set it: the cube and the decor are each remembered whichever tool is active; and a marker's draft. */
-export interface ToolState {
-  active: ActiveTool;
-  /** The cube the tool takes, by its number in the catalog's one value space. */
-  cube: u32;
-  decor: u32;
-  tier: u32;
-  /** A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL. */
-  draft: string | null;
-}
-
-export function read_tool_state(b: BranchCursor): ToolState {
-  return {
-    active: b.at(0).get<ActiveTool>(),
-    cube: b.at(1).get<u32>(),
-    decor: b.at(2).get<u32>(),
-    tier: b.at(3).get<u32>(),
-    draft: b.at(4).get<string | null>(),
   };
 }
 
@@ -513,11 +493,11 @@ export function encode_input_pointer(
 
 /** Command.EDIT_TOOL's packet, written in place into `to`.
  *
- * @param val The cube or decor kind the tool takes, by its number in the catalog's one value space (cube.json).
+ * @param val The item to place, its id (id.json); read only for that tool.
  * @param tier The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
 export function encode_edit_tool(
   to: PacketRoom,
-  tool: ActiveTool,
+  tool: Tool,
   val: u32,
   tier: u32,
 ): PacketWriter {

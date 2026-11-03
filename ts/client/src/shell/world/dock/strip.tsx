@@ -28,17 +28,19 @@ import { openModal } from "@/shell/modal.tsx";
 import {
   selectTool,
   selectAsset,
-  toolOf,
+  useTool,
   useInHand,
   useRecentPicks,
   useSwatchFlash,
 } from "./store.ts";
-import { ActiveTool } from "@/abi/cmd.spec.ts";
+import { Tool } from "@/abi/cmd.spec.ts";
+import { KIND } from "@/shell/catalog/asset/id.spec.ts";
 import {
   type AssetId,
   type Cube,
   cubeLabel,
   decorLabel,
+  kindOf,
   MARKER,
 } from "@/shell/catalog/asset/mod.ts";
 import { PIN_LABEL } from "@/shell/catalog/asset/marker.spec.ts";
@@ -47,7 +49,6 @@ import {
   decorGlyph,
   selectionRing,
 } from "@/shell/catalog/asset/swatch.tsx";
-import { useKernel } from "@/shell/store/watch.ts";
 
 /** A page's browser pans the strip, and holds and drags up reach the view's own gesture; on a device the responder system shares the finger. */
 const PAN_X: ViewStyle =
@@ -217,10 +218,10 @@ function PickButton({
   id: AssetId;
   gesture: Omit<SizeGesture, "press">;
 }) {
-  switch (toolOf(id)) {
-    case ActiveTool.Decor:
+  switch (kindOf(id)) {
+    case KIND.decor:
       return <DecorIconButton kind={id} />;
-    case ActiveTool.Marker:
+    case KIND.marker:
       return <MarkerButton />;
     default:
       return <SwatchButton cube={id} gesture={gesture} />;
@@ -300,7 +301,7 @@ export function Strip({
   gesture: Omit<SizeGesture, "press">;
 }) {
   const { t } = useTranslation();
-  const activeTool = useKernel((s) => s.tool.active);
+  const activeTool = useTool();
   const recentPicks = useRecentPicks();
 
   return (
@@ -309,14 +310,14 @@ export function Strip({
         <ToolButton
           label={t("world.dock.pointer")}
           glyph="hand.point.up.left"
-          active={activeTool === ActiveTool.Pointer}
-          onPress={() => selectTool(ActiveTool.Pointer)}
+          active={activeTool === Tool.Pointer}
+          onPress={() => selectTool(Tool.Pointer)}
         />
         <ToolButton
           label={t("world.dock.eraser")}
           glyph="eraser"
-          active={activeTool === ActiveTool.Eraser}
-          onPress={() => selectTool(ActiveTool.Eraser)}
+          active={activeTool === Tool.Eraser}
+          onPress={() => selectTool(Tool.Eraser)}
         />
       </View>
 

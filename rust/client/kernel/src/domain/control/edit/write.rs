@@ -4,7 +4,7 @@
 //! carving objects, read through the world's query and written to the store.
 
 use crate::domain::control::edit::collision::{is_placement_blocked, placement_reads};
-use crate::domain::control::edit::{hover, tool, ActiveTool};
+use crate::domain::control::edit::{hover, tool, Tool};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::preview::{draft, draft_mut, Draft, RenderEdits};
@@ -257,21 +257,20 @@ pub fn pending_step() -> RenderEdits {
     let hover = hover();
     let ui = tool();
     let hovered = hover.coord;
-    let active_tool = ui.active_tool;
     let world = World::now();
     let object = hover.object_at().and_then(|at| world.entry_at(at));
     let scattered = hover.scattered_decor().is_some();
-    let digging = active_tool == ActiveTool::Eraser && object.is_none() && !scattered;
+    let digging = ui == Tool::Eraser && object.is_none() && !scattered;
     let asset = ui.asset();
     let zoom = match (asset, &object) {
-        (Some(asset), _) => asset.zoom(ui.tier),
+        (Some((_, zoom)), _) => zoom,
         (None, Some(o)) => o.zoom,
         // A terrain carve is a whole cell: the scan emits nothing for a zero
         // material whatever its sub-cell bytes, so the cell goes whole anyway.
         (None, None) => GROUND.cell(),
     };
     let (blocked, blocked_key) = match (&hovered, asset) {
-        (Some(h), Some(asset)) => {
+        (Some(h), Some((asset, _))) => {
             let blocked_key = Some((asset, zoom, *h, world.revision()));
             let was = *PENDING.get(Pending::default);
             let same = was.blocked_key == blocked_key
@@ -288,7 +287,7 @@ pub fn pending_step() -> RenderEdits {
         _ => (false, None),
     };
     // The real object's hide lands a tick or more after the ghost.
-    let hidden = object.filter(|_| active_tool == ActiveTool::Eraser);
+    let hidden = object.filter(|_| ui == Tool::Eraser);
     let edits = RenderEdits {
         hide: hidden.map(|o| o.id()),
         // The never-written AIR entry injected into the drawn build where
@@ -299,7 +298,7 @@ pub fn pending_step() -> RenderEdits {
             .map(|h| EntryAt::holding(zoom, &h)),
         scattered_cell: hover
             .scattered_decor()
-            .filter(|_| active_tool == ActiveTool::Eraser)
+            .filter(|_| ui == Tool::Eraser)
             .and_then(|s| s.generated_in()),
     };
     *PENDING.get(Pending::default) = Pending {

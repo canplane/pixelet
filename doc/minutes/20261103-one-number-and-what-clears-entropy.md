@@ -33,7 +33,13 @@ now generated for TypeScript too.
 Three enums name the kinds, each saying something else: `Kind` the number's bits,
 `ActiveTool` the protocol's tools, `Asset` the catalog's reading.
 
-## Open
+- **The dock's state is the shell's.** The kernel has no reason to keep it or say it
+  back. It is told what the pointer holds, and answers an errno, negative, which the
+  shell checks before keeping what it chose.
 
-- Whether `Tool` needs both `cube` and `decor`, or the shell's hotbar already says what
-  each tool last held.
+The protocol's `Tool` (`ActiveTool` before; the user took the name, and `Item` for what is
+held: an asset may be an actor or the sky, which nothing holds) is the pointer, the eraser
+or an item, whose id says its kind. In the kernel `Tool` is an enum: only an item has a
+zoom, and it keeps no size to remember.
+The shell's dock store keeps the tool, the id and the tier, and the snapshot gives only
+what the kernel makes, the draft.

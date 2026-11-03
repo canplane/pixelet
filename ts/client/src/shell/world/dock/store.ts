@@ -1,10 +1,12 @@
 // @pxl/client/shell/world/dock/store.ts
 
-/** The dock's own state, which the kernel does not keep (the hotbar's picks, the chat's lines, the
- * dock's mode and its swatch's flash), and the commands it sends with it: what is held, a chat line. */
+/** The dock's own state, which the kernel does not keep (what the pointer holds, the
+ * hotbar's picks, the chat's lines, the dock's mode and its swatch's flash), and the
+ * commands it sends with it: what is held, a chat line. */
 
 import { create } from "zustand";
 
+import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { ground, object } from "@/shell/catalog/asset/cube.spec.ts";
 import { KIND } from "@/shell/catalog/asset/id.spec.ts";
@@ -16,14 +18,12 @@ import {
   kindOf,
   MARKER,
 } from "@/shell/catalog/asset/mod.ts";
-import { ActiveTool } from "@/abi/cmd.spec.ts";
-import { kernel_snapshot } from "@/port/shell.ts";
+import { Tool } from "@/abi/cmd.spec.ts";
 import { kernel_tool } from "@/port/edit.ts";
 import { kernel_chat } from "@/port/scene.ts";
 import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import * as DockMode from "./mode.ts";
-import { useKernel } from "@/shell/store/watch.ts";
 
 interface ChatLine {
   id: number;
@@ -32,18 +32,6 @@ interface ChatLine {
 
 const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
-
-/** The tool that places it. */
-export function toolOf(id: AssetId): ActiveTool {
-  switch (kindOf(id)) {
-    case KIND.decor:
-      return ActiveTool.Decor;
-    case KIND.marker:
-      return ActiveTool.Marker;
-    default:
-      return ActiveTool.Cube;
-  }
-}
 
 // A stored pick may name something the catalog no longer gives out.
 function isKnownPick(id: AssetId): boolean {
@@ -60,8 +48,13 @@ function touchRecent(recentPicks: readonly AssetId[], id: AssetId): AssetId[] {
 type DockMode = (typeof DockMode)[keyof typeof DockMode];
 export { DockMode };
 
-/** What the pointer holds is the kernel's; the shell says what changes and reads it back. */
 interface DockState {
+  /** What the pointer holds, the shell's to choose: the kernel is told (`hold`). */
+  tool: Tool;
+  /** The asset last held. */
+  id: AssetId;
+  /** The size last chosen, kept as the tool changes. */
+  tier: u32;
   // The hotbar's MRU list; advanced only by selectAsset, which also switches the tool.
   recentPicks: AssetId[];
   chatLines: ChatLine[];
@@ -127,21 +120,10 @@ function save(s: DockState): void {
   );
 }
 
-/** The cube and the decor stay as the tool or the tier changes. */
-function sendTool(tool: ActiveTool, tier: u32): void {
-  const h = kernel_snapshot().tool;
-  kernel_tool(tool, tool === ActiveTool.Decor ? h.decor : h.cube, tier);
-}
-
-export function selectTool(tool: ActiveTool): void {
-  sendTool(tool, kernel_snapshot().tool.tier);
-}
-
-export function selectTier(tier: u32): void {
-  sendTool(kernel_snapshot().tool.active, tier);
-}
-
 const store = create<DockState>()(() => ({
+  tool: Tool.Pointer,
+  id: 0,
+  tier: 0,
   recentPicks: load().hotbar,
   chatLines: [],
   dockMode: DockMode.Palette,
@@ -187,10 +169,39 @@ export function watchDockMode(
   });
 }
 
-/** Holds it, the tool that places it with it, and puts it on the hotbar. */
+/** Tells the kernel, and keeps it only where the kernel took it. */
+function hold(tool: Tool, id: AssetId, tier: u32): boolean {
+  const result = kernel_tool(tool, id, tier);
+  if (result < 0) {
+    console.error(`[dock] the kernel refused the tool: ${strerror(result)}`);
+    return false;
+  }
+  store.setState({ tool, id, tier });
+  return true;
+}
+
+export function selectTool(tool: Tool): void {
+  const { id, tier } = store.getState();
+  hold(tool, id, tier);
+}
+
+export function selectTier(tier: u32): void {
+  const { tool, id } = store.getState();
+  hold(tool, id, tier);
+}
+
+/** Holds it to place, and puts it on the hotbar. */
 export function selectAsset(id: AssetId): void {
-  kernel_tool(toolOf(id), id, kernel_snapshot().tool.tier);
+  if (!hold(Tool.Item, id, store.getState().tier)) return;
   store.setState((s) => ({ recentPicks: touchRecent(s.recentPicks, id) }));
+}
+
+export function useTool(): Tool {
+  return store((s) => s.tool);
+}
+
+export function useTier(): u32 {
+  return store((s) => s.tier);
 }
 
 export function setDockMode(mode: DockMode): void {
@@ -211,10 +222,10 @@ export function flashSwatch(cube: Cube, open: boolean): void {
 }
 
 export function stepSize(delta: i32): void {
-  const h = kernel_snapshot().tool;
-  if (h.active !== ActiveTool.Cube) return;
-  selectTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
-  flashSwatch(h.cube, true);
+  const { tool, id, tier } = store.getState();
+  if (tool !== Tool.Item || kindOf(id) !== KIND.cube) return;
+  selectTier(Math.min(OBJECT_TIERS - 1, Math.max(0, tier + delta)));
+  flashSwatch(id, true);
 }
 
 export function appendChatLine(text: string): void {
@@ -227,16 +238,5 @@ export function appendChatLine(text: string): void {
 }
 
 export function useInHand(id: AssetId): boolean {
-  return useKernel(({ tool: h }) => {
-    switch (h.active) {
-      case ActiveTool.Cube:
-        return h.cube === id;
-      case ActiveTool.Decor:
-        return h.decor === id;
-      case ActiveTool.Marker:
-        return id === MARKER;
-      default:
-        return false;
-    }
-  });
+  return store((s) => s.tool === Tool.Item && s.id === id);
 }

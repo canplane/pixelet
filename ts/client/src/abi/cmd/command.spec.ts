@@ -54,9 +54,9 @@ export const GPU_READY = 0x1401;
 /** A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
  * (transforms aside), as the world surface's size is (SURFACE_RESIZE). */
 export const INPUT_POINTER = 0x1102;
-/** The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
+/** The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer. */
 export const EDIT_TOOL = 0x1a01;
-/** The draft's text (ToolState.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut. */
+/** The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut. */
 export const EDIT_MARKER_TEXT = 0x1a02;
 /** The marker's draft dropped, nothing committed. */
 export const EDIT_MARKER_CANCEL = 0x1a03;

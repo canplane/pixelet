@@ -3,21 +3,23 @@
 /** The edit's commands: the tool and what it takes, and the marker it left
  * waiting. */
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import {
-  type ActiveTool,
+  type Tool,
   Command,
   encode_edit_marker_text,
   encode_edit_tool,
 } from "@/abi/cmd.spec.ts";
 import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
-import { send_input } from "./input.ts";
 
-export function kernel_tool(tool: ActiveTool, val: u32, tier: u32): void {
-  send_input(
+/** What the pointer holds, told to the kernel: 0, or a negative errno it refused with. */
+export function kernel_tool(tool: Tool, val: u32, tier: u32): i32 {
+  return HOST.doorbell.call(
+    port.SHELL,
     Command.EDIT_TOOL,
     encode_edit_tool(HOST.doorbell, tool, val, tier),
+    (result) => result,
   );
 }
 

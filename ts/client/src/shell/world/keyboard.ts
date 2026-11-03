@@ -11,7 +11,9 @@
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { ActiveTool } from "@/abi/cmd.spec.ts";
+import { Tool } from "@/abi/cmd.spec.ts";
+import { KIND } from "@/shell/catalog/asset/id.spec.ts";
+import { kindOf } from "@/shell/catalog/asset/mod.ts";
 import { kernel_keys } from "@/port/input.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
 import {
@@ -22,7 +24,6 @@ import {
   RECENT_PICKS,
   recentPick,
   selectAsset,
-  toolOf,
   setDockMode,
   stepSize,
   switchDockMode,
@@ -39,9 +40,9 @@ const MOVE: Record<string, [i32, i32]> = {
 const SLOT = /^Digit([1-9])$/;
 
 /** Figma's and Photoshop's letters for the move tool and the eraser. */
-const TOOL: Record<string, ActiveTool> = {
-  KeyV: ActiveTool.Pointer,
-  KeyE: ActiveTool.Eraser,
+const TOOL: Record<string, Tool> = {
+  KeyV: Tool.Pointer,
+  KeyE: Tool.Eraser,
 };
 
 /** A game's inventory key, and Figma's for its resources (Shift+I); Escape closes it as any sheet. */
@@ -67,7 +68,7 @@ function sendMove(): void {
 function pickSlot(slot: number): void {
   const id = recentPick(slot);
   selectAsset(id);
-  if (toolOf(id) === ActiveTool.Cube) flashSwatch(id, false);
+  if (kindOf(id) === KIND.cube) flashSwatch(id, false);
 }
 
 /** Whether the key is one the shell answers, so a driver can leave the rest alone. */

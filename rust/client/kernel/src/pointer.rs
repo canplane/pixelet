@@ -9,8 +9,9 @@
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::q3::Q3;
 
-use crate::domain::control::edit::{self, ActiveTool};
+use crate::domain::control::edit::{self, Tool};
 use crate::domain::control::navigation::destination;
+use crate::domain::layer::object::asset::Asset;
 use crate::domain::scene::marker::{self, MarkerHit};
 
 /// What a tap on a scene marker does with the tool held.
@@ -24,10 +25,16 @@ enum MarkerTap {
 /// pointer goes to any, the eraser takes away a pin someone put up, the marker
 /// tool opens that pin's draft. A place's scene marker is no eraser's.
 fn marker_at(x: f64, y: f64) -> Option<MarkerTap> {
-    match (edit::tool().active_tool, marker::tap(x, y)?) {
-        (ActiveTool::Pointer, MarkerHit::To(at) | MarkerHit::Pin(_, at)) => Some(MarkerTap::Go(at)),
-        (ActiveTool::Eraser, MarkerHit::Pin(e, _)) => Some(MarkerTap::Remove(e)),
-        (ActiveTool::Marker, MarkerHit::Pin(e, _)) => Some(MarkerTap::Draft(e)),
+    match (edit::tool(), marker::tap(x, y)?) {
+        (Tool::Pointer, MarkerHit::To(at) | MarkerHit::Pin(_, at)) => Some(MarkerTap::Go(at)),
+        (Tool::Eraser, MarkerHit::Pin(e, _)) => Some(MarkerTap::Remove(e)),
+        (
+            Tool::Item {
+                asset: Asset::Marker,
+                ..
+            },
+            MarkerHit::Pin(e, _),
+        ) => Some(MarkerTap::Draft(e)),
         _ => None,
     }
 }

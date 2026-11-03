@@ -413,9 +413,9 @@
       ]
     },
     {
-      "name": "ActiveTool",
+      "name": "Tool",
       "$doc": [
-        "What the pointer holds."
+        "What the pointer holds: itself, the eraser, or an item to place, which its id says the kind of."
       ],
       "format": "dec",
       "default": "Pointer",
@@ -425,20 +425,12 @@
           "val": 0
         },
         {
-          "name": "Cube",
+          "name": "Item",
           "val": 1
         },
         {
-          "name": "Decor",
-          "val": 2
-        },
-        {
           "name": "Eraser",
-          "val": 3
-        },
-        {
-          "name": "Marker",
-          "val": 4
+          "val": 2
         }
       ]
     },
@@ -1020,18 +1012,18 @@
           "name": "EDIT_TOOL",
           "val": 6657,
           "$doc": [
-            "The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer."
+            "The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer."
           ],
           "pkt": [
             {
               "name": "tool",
-              "type": "ActiveTool"
+              "type": "Tool"
             },
             {
               "name": "val",
               "type": "u32",
               "$doc": [
-                "The cube or decor kind the tool takes, by its number in the catalog's one value space (cube.json)."
+                "The item to place, its id (id.json); read only for that tool."
               ]
             },
             {
@@ -1047,7 +1039,7 @@
           "name": "EDIT_MARKER_TEXT",
           "val": 6658,
           "$doc": [
-            "The draft's text (ToolState.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut."
+            "The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut."
           ],
           "pkt": [
             {
@@ -1414,8 +1406,12 @@
           "type": "CompanionState"
         },
         {
-          "name": "tool",
-          "type": "ToolState"
+          "name": "draft",
+          "type": "str",
+          "optional": true,
+          "$doc": [
+            "A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL."
+          ]
         },
         {
           "name": "orient",
@@ -1583,41 +1579,6 @@
         {
           "name": "pet_ready",
           "type": "bool"
-        }
-      ]
-    },
-    {
-      "name": "ToolState",
-      "$doc": [
-        "The tool and what it takes, as EDIT_TOOL set it: the cube and the decor are each remembered whichever tool is active; and a marker's draft."
-      ],
-      "fields": [
-        {
-          "name": "active",
-          "type": "ActiveTool"
-        },
-        {
-          "name": "cube",
-          "type": "u32",
-          "$doc": [
-            "The cube the tool takes, by its number in the catalog's one value space."
-          ]
-        },
-        {
-          "name": "decor",
-          "type": "u32"
-        },
-        {
-          "name": "tier",
-          "type": "u32"
-        },
-        {
-          "name": "draft",
-          "type": "str",
-          "optional": true,
-          "$doc": [
-            "A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL."
-          ]
         }
       ]
     },

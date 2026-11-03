@@ -35,7 +35,7 @@ function markerTextFits(text: string): boolean {
 /** The field's words and its sending, kept by the dock whether or not its cards are drawn yet. */
 export function useMessage(mode: DockMode) {
   // A marker's draft turns the message card to writing it.
-  const drafting = useKernel((s) => s.tool.draft !== null);
+  const drafting = useKernel((s) => s.draft !== null);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
@@ -53,7 +53,7 @@ export function useMessage(mode: DockMode) {
   // A draft opens: the message comes up with its text, which from
   // then on is the field's, sent as typed; done, the field is the chat's again.
   useEffect(() => {
-    setMessageText(drafting ? (kernel_snapshot().tool.draft ?? "") : "");
+    setMessageText(drafting ? (kernel_snapshot().draft ?? "") : "");
     if (drafting) setDockMode(DockMode.Message);
   }, [drafting]);
 

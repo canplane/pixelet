@@ -296,8 +296,7 @@ fn view() -> ViewSection {
             HitKind::Decor(_) => spec::HitKind::decor,
         } as u8)
     });
-    let ui = edit::tool();
-    let asset = ui.asset().map(|a| (a, a.zoom(ui.tier)));
+    let asset = edit::tool().asset();
     let place = edit::hover().coord.filter(|_| asset.is_some());
     let [place_x, place_y, place_z] = place.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));

@@ -15,10 +15,9 @@ use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::{
     CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
-    PivotState, RefusedFile, Snapshot, ToolState,
+    PivotState, RefusedFile, Snapshot,
 };
 use crate::domain::control::edit::write;
-use crate::domain::control::edit::{tool, Tool};
 use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::reading::{
@@ -67,7 +66,6 @@ pub struct SnapshotInputs {
     pivot: Option<Q3>,
     location: (SensorState, bool),
     companion: [bool; 2],
-    tool: Tool,
     drafting: bool,
     orient: SensorState,
     azimuth: f64,
@@ -115,7 +113,6 @@ fn snapshot_inputs() -> SnapshotInputs {
         pivot,
         location: (location.state, location.location.is_some()),
         companion: companion_ready(),
-        tool: tool(),
         drafting: write::marker_draft().is_some(),
         orient: device_orient_store().state,
         azimuth: camera_state().intent.azimuth,
@@ -179,7 +176,6 @@ impl SnapshotMemo {
 
 /// The snapshot made of `shown` into `out`; none where it does not fit.
 pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
-    let tool = shown.tool;
     let snapshot = Snapshot {
         pivot: PivotState {
             status: shown.status,
@@ -204,13 +200,7 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
             person_ready: shown.companion[0],
             pet_ready: shown.companion[1],
         },
-        tool: ToolState {
-            active: tool.active_tool,
-            cube: tool.cube,
-            decor: tool.decor,
-            tier: tool.tier,
-            draft: write::marker_draft(),
-        },
+        draft: write::marker_draft(),
         orient: OrientationState {
             status: shown.orient.status,
             err: shown.orient.err,
