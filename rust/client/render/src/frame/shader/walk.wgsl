@@ -188,6 +188,8 @@ struct Walked {
   face: u32,
   t: f32,
   visits: u32,
+  /// The zooms its last node was asked at: where it was left, what to ask.
+  asked: vec2<u32>,
 }
 
 /// The ray at the tangents `tan_at`, from the start of its cell `cell` (`resume`,
@@ -252,6 +254,7 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
   var asset = vec2<u32>(0u);
   var axis = 0u;
   var hit_t = 0.0;
+  var asked = vec2<u32>(0u);
   for (var step = 0u; step < STEPS_MOST && ends == 0u; step += 1u) {
     let u = under(zoom);
     let lo = units(corner, og, roots);
@@ -268,6 +271,7 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
       let asked_far = zoom_at(dot(far_v, far_v), range);
       let asked_near = zoom_at(dot(near_v, near_v), range);
       let c = idx_of(corner, zoom, roots, r0);
+      asked = vec2<u32>(asked_far, asked_near);
       let w = slot_of(zoom, c, asked_far, asked_near);
       if (w == NONE) {
         ends = 4u;
@@ -376,5 +380,5 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
     }
   }
   let face = 2u * axis + select(0u, 1u, dir[axis] > 0.0);
-  return Walked(ends, zoom, corner, roots, asset, axis, face, hit_t, visits);
+  return Walked(ends, zoom, corner, roots, asset, axis, face, hit_t, visits, asked);
 }

@@ -194,7 +194,11 @@ pub const SHADER_MISS_HIT: u32 = 82;
 /// The beam rays' walk over the observed pyramid alone, by hand: what it does not
 /// end `SHADER_BEAM` walks again.
 pub const SHADER_BEAM_HIT: u32 = 83;
-pub const SHADERS: u32 = 84;
+/// The world asked of each node `SHADER_BEAM_HIT` stopped at.
+pub const SHADER_ASK: u32 = 84;
+/// `SHADER_BEAM_HIT`'s second round; one module, another entry.
+pub const SHADER_BEAM_AGAIN: u32 = 85;
+pub const SHADERS: u32 = 86;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -484,5 +488,9 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     // SHADER_MISS_HIT
     &["walk_word", "walk", "miss_hit"],
     // SHADER_BEAM_HIT
+    &["walk_word", "walk", "beam_hit"],
+    // SHADER_ASK
+    &["ask.gen"],
+    // SHADER_BEAM_AGAIN
     &["walk_word", "walk", "beam_hit"],
 ];
