@@ -232,7 +232,7 @@
     },
     "gpu": {
       "title": "WebGPU couldn’t start.",
-      "body": "Check the settings of your browser or device."
+      "body": "Turn on hardware acceleration in your browser, or check your device’s settings."
     },
     "boot": {
       "title": "Something went wrong.",
