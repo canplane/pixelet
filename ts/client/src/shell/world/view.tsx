@@ -13,7 +13,7 @@ import { releasePointers, worldPointer } from "./pointer.ts";
 import { Corner } from "./corner.tsx";
 import { bottomRest } from "@/shell/ui/bottom-rest.ts";
 import { Toaster } from "@/shell/world/toast/stack.tsx";
-import { chrome, layer } from "@/shell/ui/theme.ts";
+import { chrome, color, layer } from "@/shell/ui/theme.ts";
 import { KEEPS_KEYBOARD } from "@/shell/ui/keyboard.tsx";
 
 import { useChromeTop } from "./chrome.ts";
@@ -107,7 +107,7 @@ export function WorldView() {
 }
 
 const styles = StyleSheet.create({
-  root: { overflow: "hidden", backgroundColor: "black" },
+  root: { overflow: "hidden", backgroundColor: color.black },
   between: {
     position: "absolute",
     left: chrome.inset,

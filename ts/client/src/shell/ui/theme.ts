@@ -2,8 +2,7 @@
 
 /**
  * The shell's one theme, as values rather than CSS variables, so a style is
- * the same on the web and on a device. Colors are named for their use, not
- * their hue, so two uses sharing a value can change apart.
+ * the same on the web and on a device.
  */
 
 import { GROUND } from "@/shell/ui/ground.ts";

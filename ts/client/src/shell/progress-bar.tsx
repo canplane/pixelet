@@ -6,7 +6,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { SETTLE } from "@/shell/ui/motion/transition.ts";
-import { LABEL } from "@/shell/ui/palette.ts";
+import { color } from "@/shell/ui/theme.ts";
 
 const WIDTH_PX = 160;
 const HEIGHT_PX = 4;
@@ -35,11 +35,11 @@ const styles = StyleSheet.create({
     width: WIDTH_PX,
     height: HEIGHT_PX,
     overflow: "hidden",
-    backgroundColor: LABEL.tertiary,
+    backgroundColor: color.track,
   },
   fill: {
     width: WIDTH_PX,
     height: HEIGHT_PX,
-    backgroundColor: LABEL.primary,
+    backgroundColor: color.chosen,
   },
 });
