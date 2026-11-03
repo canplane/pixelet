@@ -287,9 +287,8 @@ The matched circle on the S23, two windows each (`reports/s23-hand-kernel.json`)
 - **What stays is what remains in the big shader.** `ray_counts`' `sample` lane now
   counts the left ones' walks alone: 103,494 nodes a cast on the S23, 9.2% of the
   baseline, and 11,851 on the Mac, 1.0%. Why nine times as many are left on the
-  phone is open. 54.2 ms over those is 524 ns a node, far past the 111, so `sample`
-  either pays to be entered, by all 84,413 threads though most return at once, or
-  pays more on a left ray. These were not told apart.
+  phone is partly the camera: below. 54.2 ms over those is 524 ns a node, far past
+  the 111: `sample` pays to be entered and pays more on a left ray, both below.
 - **Auto** settles at a scale of 0.50 and a lattice of 2: 21–22 fps, `sample` 61–68,
   `beam` 18, `miss` 28.
 - **The drive is untouched**: 1.9 fps, `light_walk` p95 1,028 ms. The light's walks
@@ -301,6 +300,57 @@ The matched circle on the S23, two windows each (`reports/s23-hand-kernel.json`)
 
 Not checked: that the hand walk answers as `cast::walk` does, ray by ray. The walk is
 written twice and only this picture holds them.
+
+### What stays in `sample`
+
+`94d6e9284` runs `sample_cs` by an indirect dispatch over only what `sample_hit` left,
+so against `749560da1` the change is the cost of being entered. The left rule is the
+same (`tools/run6.mjs`, `reports/s23-left-only.json`, `reports/mac-left-by-speed.json`).
+A turn of the circle in seconds; the Mac at `749560da1`, the S23 at `94d6e9284`:
+
+| | Turn | fps | Left, nodes a cast | `sample` p95 | `miss` p95 | `beam` p95 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Mac | 6 | 60 | 10,654 | 1.4–1.7 | 1.7 | 2.2 |
+| Mac | 1.5 | 60 | 38,743 | 1.7–1.8 | 1.6 | 2.8 |
+| S23 | 6 | 13.3–13.9 | 90,082 | 33.5–39.6 | 58.9–69.7 | 39.5–40.2 |
+| S23 | 24 | 12.4–17.0 | 47,471 | 10.8–15.9 | 37.6–60.3 | 31.6–38.4 |
+
+- **Being entered costs about 14 ms of the 47–54.** Every thread out of `sample_cs`
+  took it to 33.5–39.6, and the frame gained no fps: 13.9 against 14.0–14.6.
+- **What is left is walked at 230–440 ns a node**, past the old walk's 111: `sample`'s
+  p95 over the left lane, a comparison. A left ray asks what no slot keeps, so it
+  pays `world::node`, where the old figure was mostly hits.
+- **A faster camera leaves more, and that is about half of it.** A quarter of the
+  turn leaves 3.6 times as many on the Mac, 1.9 on the S23. The S23 at 14 fps and a
+  6 s turn moves as far a frame as the Mac at 60 and 1.5 s, and leaves 2.3 times as
+  many; at 17 fps and 24 s it moves about as the Mac at 6 s, and leaves 4.5 times.
+  The rest was not traced.
+
+### `miss` by hand
+
+`e7757099f`: `miss_hit_cs` ahead of `miss_list_cs`, over the same marked list, the
+pyramid read-only, atomics only on its own 8-word buffer; `walk.wgsl` holds the walk
+it shares with `sample_hit`. The span `miss` covers both passes, and `ray_counts`' lane
+what is left (`reports/s23-miss-by-hand.json`). The S23, a 6 s turn, four windows:
+
+| | `94d6e9284` | `e7757099f` |
+| --- | --- | --- |
+| fps | 13.3–13.9 | 15.5–16.7 |
+| GPU p50, ms | 51.9, 69.7 | 50.6–55.7 |
+| GPU p95, ms | 151 | 107–129 |
+| interval p95, ms | not read | 217–257 |
+| `miss` p95 | 58.9–69.7 | 21.2–23.4 |
+| `miss` left, nodes a cast | 243,433 | 26,541–26,630 |
+| `sample` p95 | 33.5–39.6 | 29.0–39.1 |
+| `beam` p95 | 39.5–40.2 | 38.9–41.4 |
+| `generate` p95 | 1.0–12.2 | 8.3–13.8 |
+
+- **It makes its pipelines and draws.** At rest on the S23, 45 s after the world, the
+  picture is the ground and trees as on the Mac, by eye. No flat ground was seen; none
+  was looked for before 45 s.
+- **A tenth of what `miss` walked is left**, and `miss` falls to a third.
+- **The frame is still bimodal**: an interval's p50 is 20–21 ms and its p95 over
+  217. `beam` and `sample` hold the frames that run them.
 
 ## What runs by what
 
@@ -388,7 +438,7 @@ no run-time count.
 
 - The whole of the walk under the cliff: `sample_hit` is the samples' hits alone.
 - The real page's other buffers, against what the synthetic did to its table.
-- `sample`'s cost apart: being entered, and walking a left ray.
+- Why the S23 leaves 2–4 times what the Mac does at the same motion a frame.
 - The picture of step 1a against `d25f5b631`.
 - What of a node's time is the driver and Chrome's path.
 - The same WGSL in the S23's native app.
