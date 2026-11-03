@@ -7,8 +7,6 @@
 
 import type { f32, u32 } from "@xpute/kit/abi/word.ts";
 
-let family: string | null = null;
-
 /** The language the text is drawn in, which picks a Han character's form. */
 let language = "";
 
@@ -17,10 +15,7 @@ export function setLanguage(lng: string): void {
 }
 
 function face(weight: u32, px: f32): string {
-  family ??= globalThis.document
-    ? getComputedStyle(document.body).fontFamily
-    : "sans-serif";
-  return `${weight} ${px}px ${family}`;
+  return `${weight} ${px}px system-ui`;
 }
 
 /** `lang` is in the HTML standard and not yet in TypeScript's DOM types. */

@@ -8,8 +8,6 @@ body,
   margin: 0;
   padding: 0;
   overflow: hidden;
-
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 /* Flex, since RN-web lays its root out as a flex child. Fixed and black:

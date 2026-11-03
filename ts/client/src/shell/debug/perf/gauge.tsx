@@ -13,7 +13,7 @@ import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./column.ts";
 const bytes = (b: number) => valueText("_bytes", b);
 import { failText } from "./report.ts";
 import { fps, type Gauge } from "./view.ts";
-import { alpha, color, textStyle } from "@/shell/ui/theme.ts";
+import { alpha, color } from "@/shell/ui/theme.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { HIT_KINDS } from "@/abi/perf.spec.ts";
 
@@ -262,7 +262,6 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
 export const gauge = StyleSheet.create({
   // Figures a fixed width, so a column of them lines up.
   text: {
-    fontFamily: textStyle.caption.fontFamily,
     fontSize: 10.5,
     lineHeight: 16,
     fontVariant: ["tabular-nums"],

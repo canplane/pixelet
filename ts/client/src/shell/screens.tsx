@@ -89,7 +89,6 @@ const styles = StyleSheet.create({
   panic: { alignItems: "stretch", backgroundColor: color.panic },
   column: { width: "100%", maxWidth: 480, alignSelf: "center", gap: 16 },
   face: {
-    fontFamily: textStyle.title2.fontFamily,
     fontSize: 96,
     lineHeight: 112,
     color: color.white,
