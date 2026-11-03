@@ -121,9 +121,9 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
             for x in corner[0]..corner[0] + per {
                 let slot = store.cursor((target, [x, y, z]), target);
                 let v = overwrite::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
-                let kept = answer::eighths(overwrite::fill_share(&store.columns(), slot));
-                if v != VOID && kept > 0 {
-                    out.insert([x, y, z], (v, kept));
+                let eighths = answer::eighths(overwrite::fill_share(&store.columns(), slot));
+                if v != VOID && eighths > 0 {
+                    out.insert([x, y, z], (v, eighths));
                 }
             }
         }
@@ -293,7 +293,7 @@ fn leaf_words_freed_on_erase() {
         ext: None,
     }]);
     assert!(store.read((zoom, at)).entry().is_none());
-    // The freed slot is the next one kept: nothing outlived its leaf.
+    // The freed slot is the next one taken: nothing outlived its leaf.
     store.write([Write {
         at: id_of(zoom, at),
         id: MARKER,
@@ -317,7 +317,7 @@ fn marker_text_change_cube() {
         }])
     };
     assert_eq!(put(&mut store, "cafe").len(), 1);
-    // The old record's slot is the one kept, so the word is the same.
+    // The old record's slot is the one reused, so the word is the same.
     assert_eq!(put(&mut store, "bar").len(), 1);
     let e = store.read((zoom, at)).entry().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));

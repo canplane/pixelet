@@ -54,7 +54,7 @@ fn folded<const PLACE: bool>() -> Vec<Zoom> {
             &pack(&Count::<PLACE>(1).encode(leaf).unwrap(), Level::Live).unwrap(),
         )
         .unwrap();
-    let whole: FnvHashSet<Quadrant> = [ancestor(leaf, SHARD_ZOOM)].into_iter().collect();
+    let whole: FnvHashSet<Quadrant> = [leaf.shard()].into_iter().collect();
     let mut staged = Staged {
         base: &set,
         stage: &stage,

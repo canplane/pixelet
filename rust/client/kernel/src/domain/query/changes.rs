@@ -138,7 +138,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
         }
     }
 
-    /// The answer to `of`: the one kept, else `ask`'s of `world`, whose
+    /// The answer to `of`: the one cached, else `ask`'s of `world`, whose
     /// queries say what it read. What it read is read of `world` too, so an
     /// answer kept inside another's ask lets that one go with it.
     pub fn of(&mut self, world: World<'_>, of: K, ask: impl FnOnce(World<'_>) -> A) -> A {

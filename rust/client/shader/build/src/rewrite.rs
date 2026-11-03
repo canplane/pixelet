@@ -187,7 +187,7 @@ pub fn split_phis(text: &str) -> String {
 /// writes.
 pub fn small_arrays_as_vectors(text: &str) -> String {
     let structs = structs(text);
-    let mut kept = HashSet::new();
+    let mut bound = HashSet::new();
     let mut open: Vec<String> = text
         .lines()
         .filter(|l| l.starts_with("var<uniform>") || l.starts_with("var<storage"))
@@ -199,28 +199,28 @@ pub fn small_arrays_as_vectors(text: &str) -> String {
     while let Some(t) = open.pop() {
         for word in t.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
             if let Some(members) = structs.get(word) {
-                if kept.insert(word.to_string()) {
+                if bound.insert(word.to_string()) {
                     open.extend(members.iter().map(|(_, mt)| mt.clone()));
                 }
             }
         }
     }
     let mut out = String::with_capacity(text.len());
-    let mut in_kept = false;
+    let mut in_bound = false;
     for l in text.split_inclusive('\n') {
         if let Some(name) = l
             .strip_prefix("struct ")
             .and_then(|r| r.trim_end().strip_suffix(" {"))
         {
-            in_kept = kept.contains(name);
+            in_bound = bound.contains(name);
         }
-        if in_kept {
+        if in_bound {
             out.push_str(l);
         } else {
             out.push_str(&vectors(l));
         }
         if l.trim_end() == "}" {
-            in_kept = false;
+            in_bound = false;
         }
     }
     out

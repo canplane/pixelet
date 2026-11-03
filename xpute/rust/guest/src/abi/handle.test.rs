@@ -30,11 +30,11 @@ fn removed_handle_stale() {
 #[test]
 fn rollback_epoch() {
     let mut t = Table::<u8, 8>::new();
-    let kept = t.insert(1).unwrap();
+    let first = t.insert(1).unwrap();
     t.begin();
     let made = t.insert(2).unwrap();
     let mut gone = Vec::new();
     t.rollback(|h, v| gone.push((h, v)));
     assert_eq!(gone, vec![(made, 2)]);
-    assert!(t.live(kept) && !t.live(made));
+    assert!(t.live(first) && !t.live(made));
 }

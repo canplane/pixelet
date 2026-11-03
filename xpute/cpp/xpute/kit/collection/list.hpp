@@ -53,7 +53,7 @@ template <class T, std::size_t N> class List {
     const T *begin() const noexcept { return slot(0); }
     const T *end() const noexcept { return slot(len_); }
 
-    // The value at `at`, those after it moved down one: the order kept.
+    // The value at `at`, those after it moved down one: the order live.
     T remove(std::size_t at) noexcept {
         ensure(at < len_, Errno::einval, at);
         T val = std::move(*slot(at));
@@ -63,20 +63,20 @@ template <class T, std::size_t N> class List {
         return val;
     }
 
-    // Those `keep` refuses dropped, the order of the rest kept, in one pass.
+    // Those `keep` refuses dropped, the order of the rest live, in one pass.
     template <class Keep> void retain(Keep &&keep) noexcept {
-        std::size_t kept = 0;
+        std::size_t live = 0;
         for (std::size_t at = 0; at < len_; at++) {
-            // A slot below `at` and past `kept` is already empty: refused, or
+            // A slot below `at` and past `live` is already empty: refused, or
             // moved down from.
             if (keep(std::as_const(*slot(at)))) {
-                if (kept != at) move_down(at, kept);
-                kept++;
+                if (live != at) move_down(at, live);
+                live++;
             } else {
                 std::destroy_at(slot(at));
             }
         }
-        len_ = kept;
+        len_ = live;
     }
 
     void clear() noexcept {

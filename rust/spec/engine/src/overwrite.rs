@@ -567,7 +567,7 @@ pub fn object_box(columns: &impl Columns, slot: NodeSlot, zoom: Zoom) -> BoxWord
 /// its cube, and none of the 8ᵈ cubes `d` under it holds an eighth of its
 /// own unless the share is at least `FULL / 8ᵈ⁺¹`, a coarser cube's eighth
 /// more still. A share is floored at each fold, each floor less than one of
-/// the fold's units and so an eighth of its parent's, so the share kept is
+/// the fold's units and so an eighth of its parent's, so the share left is
 /// short of the filled volume by less than 8/7 of a unit: two units over it
 /// hold it. Where the ground fills the rest of such a cube, its own bound
 /// splits it.

@@ -25,7 +25,7 @@ fn storage_file_format() {
     }
 }
 
-/// Another format, or a packet kept with no format before it, is refused
+/// Another format, or a packet stored with no format before it, is refused
 /// until the slot is emptied.
 #[test]
 fn foreign_format_refused() {

@@ -265,10 +265,10 @@ pub fn stands(tile: Quadrant, at: [u32; 2]) -> Cell {
 pub fn fold(p: Quadrant, children: [&PlaceTile; 4]) -> PlaceTile {
     let side = 1u32 << (GROUND.cell() - p.zoom - 1);
     let mut placed = Vec::new();
-    let mut kept = [false; 4];
+    let mut has_child = [false; 4];
     for (q, (k, child)) in p.children().into_iter().zip(children).enumerate() {
         let [cx, cy] = k.node().1.map(|v| (v & 1) as u32);
-        kept[q] = child.occupancy.bits() != 0 || child.iter().any(|(_, h)| h.from > p.zoom);
+        has_child[q] = child.occupancy.bits() != 0 || child.iter().any(|(_, h)| h.from > p.zoom);
         placed.extend(
             child
                 .iter()
@@ -279,7 +279,7 @@ pub fn fold(p: Quadrant, children: [&PlaceTile; 4]) -> PlaceTile {
                 }),
         );
     }
-    tile_of(placed, Occupancy::of_slots(kept))
+    tile_of(placed, Occupancy::of_slots(has_child))
 }
 
 /// Places ascending by where they stand.

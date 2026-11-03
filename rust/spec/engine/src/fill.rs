@@ -372,14 +372,14 @@ pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], mine: u32, i: u32) ->
 pub fn level(
     ground: &mut [u32],
     base: u32,
-    kept: &impl way::ColumnSpans,
+    spans: &impl way::ColumnSpans,
     cell: Zoom,
     j: u32,
     at: [u32; 2],
 ) {
     let w = if j == 0 {
         let top = column_top(column_of(ground, base, clipmap::idx_of(at)));
-        let lines = way::lined_hull(kept, [at[0] as i32, at[1] as i32], cell, top);
+        let lines = way::lined_hull(spans, [at[0] as i32, at[1] as i32], cell, top);
         ground::bounds_word([[top, top], lines])
     } else {
         let under: &[u32] = ground;

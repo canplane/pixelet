@@ -95,7 +95,7 @@ pub fn overwrites() -> Overwrites<'static> {
 }
 
 /// Each brick the clip levels want to `write`, while it takes them: off the
-/// packets kept for them, and off each void tile, held with none.
+/// packets waiting for them, and off each void tile, held with none.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::tile_cache();
     let wanted = |slot| {

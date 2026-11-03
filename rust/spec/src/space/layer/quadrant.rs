@@ -16,6 +16,7 @@ use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{
     ancestor_of, child_of, first_descendant_of, off_in, parent_of, region, slot_of, Node,
 };
+use pxl_engine::area::shard_over;
 use pxl_engine::wrap_idx;
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
@@ -79,6 +80,13 @@ impl Quadrant {
         (TOP_ZOOM..=LEAF_ZOOM)
             .contains(&zoom)
             .then(|| Quadrant::new(zoom, at))
+    }
+
+    /// The shard over it, or itself where it is a shard or coarser, which no one
+    /// shard is over (`area::shard_over`).
+    pub fn shard(self) -> Quadrant {
+        let (zoom, at) = shard_over(self.zoom, self.at);
+        Quadrant::new(zoom, at)
     }
 
     /// Its place among its parent's `children`.

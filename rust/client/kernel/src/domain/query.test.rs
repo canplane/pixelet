@@ -833,7 +833,7 @@ fn generated_decor_edit_removes() {
         .expect("a decor generates about the eye");
     let generates = |store: &Store| generates_on(store, decor, [cx, cy, cz]);
     let red = cube::Object::red as AssetId;
-    for (dz, val, what, kept) in [
+    for (dz, val, what, still) in [
         (0, AIR, "air in its box", false),
         (0, red, "a cube in its box", false),
         (-1, AIR, "air under it", true),
@@ -843,7 +843,7 @@ fn generated_decor_edit_removes() {
         let mut store = Store::default();
         let at = [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
         write(&mut store, at, OBJECT_COARSEST, val);
-        assert_eq!(generates(&store), Some(kept), "{what}");
+        assert_eq!(generates(&store), Some(still), "{what}");
     }
 }
 

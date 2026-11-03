@@ -109,7 +109,7 @@ impl<'a> World<'a> {
         }
     }
 
-    /// The columns `columns`, read (`reading`): what a kept answer read.
+    /// The columns `columns`, read (`reading`): what a cached answer read.
     pub(super) fn read_columns(&self, columns: [[f64; 2]; 2]) {
         if let Some(c) = self.reading {
             c.join(columns);

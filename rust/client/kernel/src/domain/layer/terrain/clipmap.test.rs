@@ -349,7 +349,7 @@ fn shared_brick_held_once() {
 }
 
 #[test]
-fn left_brick_kept() {
+fn left_brick_part() {
     let _g = sys::serial();
     CLIPMAP.set(fresh());
     let w = clipmap();

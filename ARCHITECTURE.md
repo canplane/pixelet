@@ -1138,12 +1138,12 @@ set deleted and every shard baked again.
 A set holds only what a client can. A terrain tile is refused as it is made
 where a brick of it would not fill or build as a client's does
 (`pxl-spec bake/tile/terrain.rs` `fill_fit`, `pxl-geo-bake terrain.rs`
-`encode_stored`). That one pass also says what each brick's tree of ways
+`encode_with_fit`). That one pass also says what each brick's tree of ways
 takes, and the set keeps it beside its tiles (`pyramid.rs` `FITS`). Whether
 those trees fit the client's pool wherever the eye is is a fact of the whole
 set, since a clipmap level lies across tiles. The commit answers it before
-anything moves, from what each tile kept, the stage's over the set's
-(`terrain/pool.rs` `fits`). So at the pool's cap no brick of a published set is
+anything moves, from each tile's fit, the stage's over the set's
+(`terrain/pool.rs` `check`). A set with tiles and no fits is refused. So at the pool's cap no brick of a published set is
 refused ([What the view holds](#what-the-view-holds);
 `pxl-engine way/tree.rs` `POOL_CHILD_GROUPS`).
 

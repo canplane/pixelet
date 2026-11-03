@@ -51,7 +51,7 @@ impl Settings {
             return None;
         }
         if key.is_stored() {
-            *UNKEPT.get(|| false) = true;
+            *UNSAVED.get(|| false) = true;
         }
         Some(true)
     }
@@ -98,7 +98,7 @@ static SETTINGS_STORE: Global<Settings> = Global::new();
 
 /// The store differs from what storage holds. Written once a turn, so a turn
 /// of changes costs the host stream one file, whatever their number.
-static UNKEPT: Global<bool> = Global::new();
+static UNSAVED: Global<bool> = Global::new();
 
 /// The store against its storage file, opened on the storage root
 /// (sys/io/file.rs `StorageFile`). Until the slot is read
@@ -152,7 +152,7 @@ pub fn settings_load_step() -> bool {
         StorageRead::Unreadable => (Settings::DEFAULT, Load::Unreadable),
     };
     SETTINGS_STORE.set(s);
-    UNKEPT.set(false);
+    UNSAVED.set(false);
     *load() = now;
     true
 }
@@ -167,7 +167,7 @@ pub fn on_settings_emptied() {
 
 /// Only a slot read is written; a refused or unreadable one holds its changes.
 pub fn settings_keep_step() {
-    if *load() == Load::Loaded && core::mem::take(UNKEPT.get(|| false)) {
+    if *load() == Load::Loaded && core::mem::take(UNSAVED.get(|| false)) {
         file::write_storage(StorageFile::Settings, &settings_store().storage_bytes());
     }
 }

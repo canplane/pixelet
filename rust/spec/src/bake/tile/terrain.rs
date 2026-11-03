@@ -287,7 +287,7 @@ fn record(
 }
 
 /// The clip level's brick at `place` (in bricks) of `tile`, handed into
-/// `handed` (`record`) and filled into `column`, its spans into `kept`, its
+/// `handed` (`record`) and filled into `column`, its spans into `spans`, its
 /// scratch (`way::tree::SCRATCH_WORDS`), as a GPU fills it (pxl-engine
 /// `fill::brick`): the most spans a column makes.
 pub(crate) fn brick_spans(
@@ -295,14 +295,14 @@ pub(crate) fn brick_spans(
     held: &TerrainTile,
     place: [u32; 2],
     scratch: &mut [(u32, u32)],
-    [handed, column, kept]: [&mut [u32]; 3],
+    [handed, column, spans]: [&mut [u32]; 3],
 ) -> u32 {
     record(tile, held, place, scratch, handed);
     let cell = GROUND.cell_zoom(tile.zoom);
     fill::brick(
         handed,
         column,
-        kept,
+        spans,
         place,
         cell,
         first_cell(tile, cell, place),
@@ -345,7 +345,7 @@ pub fn drawn(tile: Quadrant, held: TerrainTile) -> TerrainTile {
         vec![(0, 0); WAYS_BRICK_SEGMENTS],
         vec![0; LINES_WORDS as usize],
     );
-    let mut kept = separation::Builder::default();
+    let mut separation = separation::Builder::default();
     for line in lines.iter() {
         let mut one = separation::Builder::default();
         one.push(
@@ -375,7 +375,7 @@ pub fn drawn(tile: Quadrant, held: TerrainTile) -> TerrainTile {
             })
         });
         if seen {
-            kept.push(
+            separation.push(
                 (0..line.points.len()).map(|i| (line.point(i), line.tops[i], line.coarsest[i])),
                 line.width,
                 line.kind,
@@ -385,7 +385,7 @@ pub fn drawn(tile: Quadrant, held: TerrainTile) -> TerrainTile {
         }
     }
     TerrainTile {
-        separation: kept.finish(),
+        separation: separation.finish(),
         ..held
     }
 }
@@ -412,7 +412,7 @@ pub enum Unfit {
     ChildGroups,
 }
 
-/// A brick as `fill_fit` filled and built it: its words and its kept
+/// A brick as `fill_fit` filled and built it: its words and its
 /// spans (pxl-engine `fill::brick`), its cells' zoom, and its ways' tree
 /// in a pool of its own, its root word (`way::tree::root_word`) and the
 /// child groups its build took and holds.

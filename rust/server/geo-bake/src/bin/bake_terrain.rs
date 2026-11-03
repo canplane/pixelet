@@ -108,10 +108,10 @@ fn run() -> Result<(), String> {
                         let terrain = bake_leaf(reader, tile)?;
                         let at = Quadrant::new(LEAF_ZOOM, tile);
                         let (pkt, fit) = terrain
-                            .encode_stored(at)
+                            .encode_with_fit(at)
                             .map_err(|e| format!("{}: {e}", at.key()))?;
                         let packed = pack(&pkt, Level::Stored).map_err(|e| e.to_string())?;
-                        set.write_stored(at, &packed, fit.as_deref())?;
+                        set.write_with_fit(at, &packed, fit.as_deref())?;
                         Ok(Outcome::Wrote {
                             bytes: packed.len() as u64,
                             items: 0,

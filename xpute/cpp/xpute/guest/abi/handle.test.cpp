@@ -40,7 +40,7 @@ XPUTE_TEST(handle_removed_stale) {
 
 XPUTE_TEST(handle_rollback_epoch) {
     Table<std::uint8_t, 8> t;
-    std::uint32_t kept = *t.insert(1);
+    std::uint32_t first = *t.insert(1);
     t.begin();
     std::uint32_t made = *t.insert(2);
     std::uint32_t gone = 0, val = 0;
@@ -49,5 +49,5 @@ XPUTE_TEST(handle_rollback_epoch) {
         val = v;
     });
     XPUTE_CHECK(gone == made && val == 2);
-    XPUTE_CHECK(t.live(kept) && !t.live(made));
+    XPUTE_CHECK(t.live(first) && !t.live(made));
 }

@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use crate::cli::Flags;
 use crate::coverage::{src_of, Coverage, Node};
 use crate::pyramid::{
-    ancestor, fold, unasked_tiles, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
+    fold, unasked_tiles, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
 };
 use crate::source;
 use crate::util;
@@ -158,7 +158,7 @@ impl Stage {
                 .remove(&L::LEAF)
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|&p| ancestor(p, SHARD_ZOOM) == at)
+                .filter(|&p| p.shard() == at)
                 .collect())
         };
         for p in under(&self.stage)? {
@@ -185,7 +185,7 @@ impl Stage {
             .remove(&L::LEAF)
             .unwrap_or_default()
             .into_iter()
-            .filter(|&p| tiles.contains(&ancestor(p, SHARD_ZOOM)))
+            .filter(|&p| tiles.contains(&p.shard()))
             .collect();
         let leaves_gone = self.leaves_gone(&whole)?;
         changed.extend(leaves_gone.iter().copied());
@@ -235,7 +235,7 @@ impl Stage {
                 whole: &tiles,
                 gone,
             };
-            let fits = L::fits_set(&view, workers)?;
+            let fits = L::check_pool(&view, workers)?;
             // Before anything moves: a commit begun is finished, never undone, so
             // the set will hold these, and a commit cut short leaves them said.
             if let Some(held) = self.will_hold()? {
@@ -292,7 +292,7 @@ impl Stage {
                 .get(&L::LEAF)
                 .into_iter()
                 .flatten()
-                .filter(|&&p| ancestor(p, SHARD_ZOOM) == at)
+                .filter(|&&p| p.shard() == at)
             {
                 put(p)?;
             }
@@ -311,8 +311,8 @@ impl Stage {
         for p in self.read_done(COMMIT)? {
             self.set.remove(p)?;
         }
-        // The set's tiles all moved, what it keeps of them is theirs; the
-        // stage's kept beside its tiles, read into it, go.
+        // The set's tiles all moved, its fits are theirs; the stage's beside its
+        // tiles, read into them, go.
         let next = self.next_fits();
         if next.exists() {
             fs::rename(&next, self.set.root.join(FITS)).map_err(|e| io(&next, e))?;
@@ -326,8 +326,7 @@ impl Stage {
         self.remove_done(COMMIT)
     }
 
-    /// What the set will keep of its tiles (`FITS`) once a commit begun has
-    /// moved them.
+    /// The set's fits (`FITS`) once a commit begun has moved its tiles.
     fn next_fits(&self) -> PathBuf {
         self.set.root.join(format!("{FITS}.next"))
     }
@@ -339,9 +338,7 @@ impl Stage {
             fs::remove_dir_all(to).map_err(|e| io(to, e))?;
         }
         fs::create_dir_all(to).map_err(|e| io(to, e))?;
-        // A reader starts at the kind's coarsest, so no tile there goes, and
-        // none coarser was ever read: a set baked before the fold stopped
-        // there still holds them.
+        // A reader starts at the kind's coarsest, so no tile there goes.
         let skip = if pruned {
             unasked_tiles::<L>(&self.set, L::COARSEST)?
         } else {

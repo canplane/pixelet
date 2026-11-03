@@ -155,10 +155,10 @@ struct Clipmap {
     /// packet go since, which moves what is due and what is asked again.
     read: u32,
     filled: bool,
-    /// The packets kept when the entries were last stepped over: one given
-    /// back may leave room to ask again for a tile whose packet was not
-    /// kept (`tile::again_room`).
-    kept: u32,
+    /// The packets waiting when the entries were last stepped over: one given
+    /// back may leave room to ask again for a tile whose packet had none
+    /// (`tile::again_room`).
+    uploads: u32,
     /// The tiles the clip levels apart from the eye's want (`pinned_tiles`).
     pinned: List<Quadrant, { PINNED_TILES as usize }>,
     /// The slots this turn hands the fill (`due`).
@@ -194,7 +194,7 @@ fn fresh() -> Clipmap {
         ticket: 0,
         read: 0,
         filled: true,
-        kept: 0,
+        uploads: 0,
         pinned: List::new(),
         due: List::new(),
         heap: None,
@@ -315,13 +315,13 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     }
     // Per clip level, whether its zoom moved, and whether it moved at all.
     let (mut moved, mut changed) = ([false; CLIP_LEVELS as usize], [lost; CLIP_LEVELS as usize]);
-    let kept = tile::uploads().cnt();
+    let uploads = tile::uploads().cnt();
     let released = wake(w);
     let mut stale = lost
         || released
         || core::mem::take(&mut w.filled)
         || terrain.revision() != w.read
-        || kept != w.kept;
+        || uploads != w.uploads;
     for clip_level in 0..CLIP_LEVELS {
         let (center, laid) = layout(clip_level);
         let p = at[center as usize];
@@ -353,7 +353,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     if !stale {
         return false;
     }
-    w.kept = kept;
+    w.uploads = uploads;
     // A clip level that did not move wants its bricks where they are.
     for clip_level in 0..CLIP_LEVELS {
         let (cell, first) = (
@@ -728,7 +728,7 @@ pub fn fill(
     let w = clipmap();
     let wants = |w: &Clipmap, b: u32| slot_wants(w, tile, b);
     let rest = |w: &Clipmap| match (0..SLOTS).any(|i| wants(w, i)) {
-        true => Uptake::Kept,
+        true => Uptake::Part,
         false => Uptake::Taken,
     };
     if !w.due.iter().any(|&i| wants(w, i)) {

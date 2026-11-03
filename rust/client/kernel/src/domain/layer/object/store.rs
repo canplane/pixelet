@@ -315,7 +315,7 @@ impl Store {
     /// Applies every write; the cubes that changed. A write whose record its
     /// pool has no room for is left out, as if never sent. A write with a
     /// record changes its cube whatever its word: the record it replaces is
-    /// freed first, so its slot is the one kept, and new text under the old
+    /// freed first, so its slot is the one reused, and new text under the old
     /// handle leave the word as it was.
     pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<Aabb> {
         let mut changed = Vec::new();
@@ -663,14 +663,14 @@ impl ObjectQuery for Store {
     fn column(&self, walk: &mut Walk, (zoom, xy): Node<2>) -> Option<Aabb> {
         let p = path(zoom, [xy[0], xy[1], 0]);
         let column = |k: usize| [p[0] >> (zoom as usize - k), p[1] >> (zoom as usize - k)];
-        let kept = walk
+        let shared = walk
             .at
             .iter()
             .take(zoom as usize + 1)
             .enumerate()
             .take_while(|&(k, s)| s.column == column(k))
             .count();
-        walk.at.truncate(kept);
+        walk.at.truncate(shared);
         walk.slots.truncate(walk.at.last().map_or(0, |s| s.end));
         let span = |z: usize, at: [i32; 3]| {
             let b = cube(z as Zoom, at);

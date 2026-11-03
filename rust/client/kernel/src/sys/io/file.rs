@@ -51,7 +51,7 @@ pub enum StorageFile {
 }
 
 impl StorageFile {
-    /// In declaration order, as `READS` is indexed by `kept as usize`.
+    /// In declaration order, as `READS` is indexed by `file as usize`.
     pub const ALL: [StorageFile; 1] = [StorageFile::Settings];
 
     /// Its path below STORAGE is this in decimal.

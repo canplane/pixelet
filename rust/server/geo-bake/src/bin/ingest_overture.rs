@@ -434,10 +434,10 @@ fn download<'a>(
         .flatten()
     {
         let other = entry.file_name().to_string_lossy().to_string();
-        let kept = out
+        let listed = out
             .iter()
             .any(|(p, _)| p.file_name().is_some_and(|n| n.to_string_lossy() == other));
-        if !kept && (other == ty.overture || other.starts_with(&format!("{}.", ty.overture))) {
+        if !listed && (other == ty.overture || other.starts_with(&format!("{}.", ty.overture))) {
             let path = entry.path();
             std::fs::remove_dir_all(&path)
                 .or_else(|_| std::fs::remove_file(&path))
@@ -535,7 +535,7 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
         PARENT.1
     );
     let prefix = format!("{}-ancestor.", ty.overture);
-    let mut kept = Vec::new();
+    let mut all = Vec::new();
     let mut asked = FnvHashSet::default();
     loop {
         let missing: Vec<String> = client
@@ -583,7 +583,7 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
             extracts.push(extract);
         }
         copy_extracts(client, &t, extracts.iter().map(|p| (p.as_path(), None)))?;
-        kept.extend(extracts);
+        all.extend(extracts);
     }
     for entry in std::fs::read_dir(EXTRACTS)
         .map_err(|e| e.to_string())?
@@ -594,7 +594,7 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
             std::fs::remove_file(entry.path()).map_err(|e| e.to_string())?;
         }
     }
-    Ok(kept.len())
+    Ok(all.len())
 }
 
 /// Each feature of the staging table once, in key order, made into a row.

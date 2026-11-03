@@ -70,7 +70,7 @@ fn main() {
     // edge or a corner (pxl-engine face.rs).
     use pxl_engine::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
     let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
-    // The side of the box a cell kept short of its cube is, by the eighths
+    // The side of the box a cell filled short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-engine answer.rs `side`).
     let sides: String = (1..answer::EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
@@ -160,7 +160,7 @@ fn main() {
     std::fs::write(out.join("tile_word.wgsl"), tile_word()).expect("the tile word's shader");
     // The cloud field's lattice unit and the hash its cells draw from, the
     // cumulus's own on the CPU (pxl-content cloud.rs `lattice_hash`): its
-    // multipliers, its rounds and its kept bits as the Rust takes them.
+    // multipliers, its rounds and its share's bits as the Rust takes them.
     use pxl_content::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
     use pxl_content::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;

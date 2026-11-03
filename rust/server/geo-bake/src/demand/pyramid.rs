@@ -5,8 +5,9 @@
 
 use super::job::{self, Job, Runner};
 use super::{Dataset, Failure, Kind};
-use crate::pyramid::{fold_stored, Absent, Base, TileSet};
+use crate::pyramid::{fold_parent, Absent, Base, TileSet};
 use crate::util::{pack, Level};
+use fnv::FnvHashMap;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use std::future::Future;
@@ -57,7 +58,7 @@ fn bake_missing(
                         .map_err(|_| Failure::Limited("demand dependency deadline"))??;
                     }
                 }
-                let job = Job::Tile {
+                let job = Job {
                     kind,
                     id: p.id(),
                     cache: d.cache.root.clone(),
@@ -78,7 +79,14 @@ pub(super) fn execute<L: Base>(
     let tile = if p.zoom == L::LEAF {
         leaf()?
     } else {
-        fold_stored(&TileSet::new(cache), p, absent)?
+        let set = TileSet::new(cache);
+        let mut sources = FnvHashMap::default();
+        for q in L::sources(p) {
+            if let Some(tile) = set.read::<L>(q)? {
+                sources.insert(q, tile);
+            }
+        }
+        fold_parent(p, |q| sources.get(&q), absent)
     };
     let pkt = tile
         .map(|tile| {

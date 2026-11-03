@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
 use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant, LEAF_ZOOM};
 
@@ -40,10 +39,9 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// As tile `at` is published.
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String>;
 
-    /// As tile `at` is stored: its packet, as `encode` makes it, and what of
-    /// it the set keeps beside its tiles for `fits_set` (`FITS`), where the
-    /// kind keeps anything; one pass makes both.
-    fn encode_stored(&self, at: Quadrant) -> Result<(Vec<u8>, Option<String>), String> {
+    /// As tile `at` is stored: its packet, as `encode` makes it, and its fit
+    /// for `check_pool` (`FITS`), where the kind has one; one pass makes both.
+    fn encode_with_fit(&self, at: Quadrant) -> Result<(Vec<u8>, Option<String>), String> {
         Ok((self.encode(at)?, None))
     }
     fn decode(raw: &[u8]) -> Result<Self, String>;
@@ -58,12 +56,11 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// Which of its children are tiles, as the tile says.
     fn occupancy(&self) -> Occupancy;
 
-    /// Refused where the set as it will be (`set`) holds what no reader can: a
-    /// fact of the whole set, not of a tile, asked before a commit moves
-    /// anything, of what each tile's `encode_stored` kept; `workers` tiles at
-    /// once. What the set will keep of its tiles (`FITS`), where the kind keeps
-    /// anything; none for most kinds.
-    fn fits_set(
+    /// The fits of the set as it will be (`set`, `FITS`), refused where it holds
+    /// what the client's pool cannot: a fact of the whole set, not of a tile, asked
+    /// before a commit moves anything, of each tile's fit (`encode_with_fit`);
+    /// `workers` tiles at once. None for a kind with no fits.
+    fn check_pool(
         _set: &Staged<'_>,
         _workers: usize,
     ) -> Result<Option<Vec<(Quadrant, String)>>, String> {
@@ -87,11 +84,10 @@ impl<L: Base> Absent<L> for L {
 /// Inside a set, beside its tiles; no tile is named so.
 pub const MANIFEST: &str = "manifest.json";
 
-/// Inside a set, what it keeps of each of its tiles (`Base::encode_stored`), a
-/// line a tile, its name and what was kept: so a commit asks what the set will
-/// hold of these, never of the tiles read and made again. Not published.
-/// A stage keeps each staged tile's beside it, `<name>.fit`. No tile is
-/// named so.
+/// Inside a set, each of its tiles' fit (`Base::encode_with_fit`), a line a tile,
+/// its name and its fit: so a commit asks what the set will hold of these, never
+/// of the tiles read and made again. Not published. A stage has each staged
+/// tile's beside it, `<name>.fit`. No tile is named so.
 pub(crate) const FITS: &str = "fits";
 
 pub struct TileSet {
@@ -118,9 +114,9 @@ impl TileSet {
         self.root.join(format!("{}.fit", p.key()))
     }
 
-    /// A tile as `Base::encode_stored` made it, and beside it what was kept, or
-    /// none: the kept first, so a tile written is never beside another's.
-    pub fn write_stored(
+    /// A tile as `Base::encode_with_fit` made it, and beside it its fit, or none:
+    /// the fit first, so a tile written is never beside another's.
+    pub fn write_with_fit(
         &self,
         p: Quadrant,
         packed: &[u8],
@@ -136,7 +132,7 @@ impl TileSet {
         self.write(p, packed)
     }
 
-    /// What was kept beside a tile (`write_stored`), none where nothing was.
+    /// A tile's fit (`write_with_fit`), none where it has none.
     pub fn fit(&self, p: Quadrant) -> Result<Option<String>, String> {
         let path = self.fit_path(p);
         match fs::read_to_string(&path) {
@@ -146,15 +142,13 @@ impl TileSet {
         }
     }
 
-    /// The tile, then what was kept beside it: one gone first leaves a kept
-    /// no tile reads.
+    /// The tile, then its fit: a tile gone first leaves a fit no tile reads.
     pub fn remove(&self, p: Quadrant) -> Result<(), String> {
         remove_file(&self.path(p))?;
         remove_file(&self.fit_path(p))
     }
 
-    /// What the set keeps of its tiles (`FITS`), by tile; none for a set
-    /// that keeps nothing, one baked before it kept them.
+    /// The set's fits (`FITS`), by tile; none for a set with none.
     pub(crate) fn fits(&self) -> Result<Option<FnvHashMap<Quadrant, String>>, String> {
         let path = self.root.join(FITS);
         let text = match fs::read_to_string(&path) {
@@ -239,21 +233,6 @@ pub(crate) fn fold_parent<'a, L: Base>(
     })
 }
 
-#[cfg(feature = "serve")]
-pub(crate) fn fold_stored<L: Base>(
-    set: &TileSet,
-    parent: Quadrant,
-    absent: &impl Absent<L>,
-) -> Result<Option<L>, String> {
-    let mut read = FnvHashMap::default();
-    for p in L::sources(parent) {
-        if let Some(tile) = set.read::<L>(p)? {
-            read.insert(p, tile);
-        }
-    }
-    Ok(fold_parent(parent, |p| read.get(&p), absent))
-}
-
 /// A set with a change staged beside it, read as the set it will be: a
 /// staged tile first, then none where the change takes one away, then the
 /// set's own. A staged leaf counts only once its shard is staged whole.
@@ -267,7 +246,7 @@ pub struct Staged<'a> {
 
 impl Staged<'_> {
     pub fn content(&self, p: Quadrant) -> Result<Option<Vec<u8>>, String> {
-        if p.zoom != self.leaf || self.whole.contains(&ancestor(p, SHARD_ZOOM)) {
+        if p.zoom != self.leaf || self.whole.contains(&p.shard()) {
             if let Some(c) = self.stage.content(p)? {
                 return Ok(Some(c));
             }
@@ -287,24 +266,21 @@ impl Staged<'_> {
             .map_err(|e| format!("{}: {e}", p.key()))
     }
 
-    /// What the set as it will be keeps of `p` (`Base::encode_stored`), as
-    /// `content` reads its tile: the stage's beside a staged tile, none for
-    /// one gone, else the set's (`base`, its `fits`). `None` where the set
-    /// keeps nothing, one baked before it did, so it is not known.
+    /// `p`'s fit in the set as it will be (`Base::encode_with_fit`), as `content`
+    /// reads its tile: the stage's beside a staged tile, none for one gone, else
+    /// the set's (`base`, its `fits`).
     pub fn fit_of(
         &self,
         p: Quadrant,
-        base: Option<&FnvHashMap<Quadrant, String>>,
-    ) -> Result<Option<Option<String>>, String> {
-        if (p.zoom != self.leaf || self.whole.contains(&ancestor(p, SHARD_ZOOM)))
-            && self.stage.path(p).exists()
-        {
-            return self.stage.fit(p).map(Some);
+        base: &FnvHashMap<Quadrant, String>,
+    ) -> Result<Option<String>, String> {
+        if (p.zoom != self.leaf || self.whole.contains(&p.shard())) && self.stage.path(p).exists() {
+            return self.stage.fit(p);
         }
         if self.gone.contains(&p) {
-            return Ok(Some(None));
+            return Ok(None);
         }
-        Ok(base.map(|fits| fits.get(&p).cloned()))
+        Ok(base.get(&p).cloned())
     }
 
     /// Every tile it may hold, the set's and the stage's, each zoom's
@@ -319,14 +295,6 @@ impl Staged<'_> {
         }
         Ok(all)
     }
-}
-
-/// The tile over `p` at `zoom`.
-pub fn ancestor(mut p: Quadrant, zoom: Zoom) -> Quadrant {
-    while p.zoom > zoom {
-        p = p.parent();
-    }
-    p
 }
 
 /// Folds again what `changed` reaches: at each zoom, every parent whose
@@ -471,20 +439,20 @@ fn fold_band<L: Base>(
     rows: &[&[Quadrant]],
     absent: &impl Absent<L>,
 ) -> Result<(Vec<Quadrant>, Vec<Quadrant>), String> {
-    let mut held: FnvHashMap<Quadrant, Option<L>> = FnvHashMap::default();
+    let mut sources: FnvHashMap<Quadrant, Option<L>> = FnvHashMap::default();
     let (mut written, mut gone) = (Vec::new(), Vec::new());
     for row in rows {
         let y = row[0].at[1];
-        held.retain(|p, _| p.at[1] >= 2 * y - 1);
+        sources.retain(|p, _| p.at[1] >= 2 * y - 1);
         for &parent in row.iter() {
             for p in L::sources(parent) {
-                if let std::collections::hash_map::Entry::Vacant(e) = held.entry(p) {
+                if let std::collections::hash_map::Entry::Vacant(e) = sources.entry(p) {
                     e.insert(set.read::<L>(p)?);
                 }
             }
-            let after = fold_parent(parent, |p| held.get(&p).and_then(Option::as_ref), absent)
+            let after = fold_parent(parent, |p| sources.get(&p).and_then(Option::as_ref), absent)
                 .map(|t| {
-                    t.encode_stored(parent)
+                    t.encode_with_fit(parent)
                         .map_err(|e| format!("{}: {e}", parent.key()))
                 })
                 .transpose()?;
@@ -493,7 +461,7 @@ fn fold_band<L: Base>(
             }
             match &after {
                 Some((raw, fit)) => {
-                    set.stage.write_stored(
+                    set.stage.write_with_fit(
                         parent,
                         &pack(raw, Level::Stored).map_err(|e| e.to_string())?,
                         fit.as_deref(),

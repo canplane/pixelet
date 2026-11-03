@@ -32,15 +32,15 @@ impl Base for TerrainTile {
     const LATTICE: Lattice = GROUND;
 
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
-        self.encode_stored(at).map(|(pkt, _)| pkt)
+        self.encode_with_fit(at).map(|(pkt, _)| pkt)
     }
 
     /// Refused where a record's room does not hold its lines (pxl-spec
     /// `Separation::fits`), or a window's brick would hold more of its
     /// ways' entries than a client gives one (pxl-spec `terrain::ways_fit`),
     /// or would not fill or build as a client's does (`terrain::fill_fit`);
-    /// what that build takes is kept beside the tile (pool.rs `line`).
-    fn encode_stored(&self, at: Quadrant) -> Result<(Vec<u8>, Option<String>), String> {
+    /// what that build takes is its fit (pool.rs `line`).
+    fn encode_with_fit(&self, at: Quadrant) -> Result<(Vec<u8>, Option<String>), String> {
         self.separation
             .fits()
             .map_err(|[lines, points]| format!("its ways hold {lines} lines and {points} points, past MAX_LINES ({MAX_LINES}) or MAX_POINTS ({MAX_POINTS})"))?;
@@ -69,17 +69,17 @@ impl Base for TerrainTile {
     }
 
     /// Refused where the set's ways' trees would not fit the client's pool
-    /// wherever the eye is (`pool::fits`).
-    fn fits_set(
+    /// wherever the eye is (`pool::check`).
+    fn check_pool(
         set: &Staged<'_>,
         workers: usize,
     ) -> Result<Option<Vec<(Quadrant, String)>>, String> {
-        pool::fits(set, workers).map(Some)
+        pool::check(set, workers).map(Some)
     }
 }
 
 /// Why brick `at` of a tile does not fit (`terrain::fill_fit`), said.
-pub(crate) fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
+fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
     match why {
         Unfit::Spans(spans) => format!("its brick ({qx}, {qy}) makes a column of {spans} of the ways' spans, past SPANS ({SPANS})"),
         Unfit::Nodes(nodes) => format!("its brick ({qx}, {qy}) has its ways meet {nodes} of its nodes along z, past ROOT_NODES ({ROOT_NODES})"),

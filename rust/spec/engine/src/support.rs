@@ -54,7 +54,7 @@ impl<A: Copy> Line<A> {
 impl<A: Copy> ColumnSurface<A> {
     /// A column surface whose assets are asked off `line` alone (`asset`),
     /// as a pass that did not walk the column holds it: the line straight
-    /// down to its top cell (`line`), which is the one its walk kept
+    /// down to its top cell (`line`), which is the one its walk found
     /// (`column_surface_line_is_its_top_cells`).
     pub fn of_line(line: Line<A>) -> ColumnSurface<A> {
         ColumnSurface {
@@ -431,7 +431,7 @@ mod tests {
         }
     }
 
-    /// What was handed each node of a kept line, as a beam ray's resumed
+    /// What was handed each node of a collected line, as a beam ray's resumed
     /// walk reads it (`cast::Over`).
     struct Along<'a>(&'a Line<At>);
 
@@ -489,7 +489,7 @@ mod tests {
                 } else {
                     (Node::ROOT, Step.root(Node::ROOT.idx(o)), t)
                 };
-                let mut kept = LineCollector(None, o);
+                let mut collected = LineCollector(None, o);
                 let resumed = cast::walk(
                     &mut Step,
                     o,
@@ -498,17 +498,17 @@ mod tests {
                     Until::Opaque,
                     from,
                     &Along(&first),
-                    &mut kept,
+                    &mut collected,
                 );
                 assert_eq!(resumed.ends, End::Hit, "{d:?} {share}");
-                let kept = kept.0.unwrap();
-                let walked = line(&mut Step, kept.zoom, kept.at);
-                same(&kept, &walked);
+                let collected = collected.0.unwrap();
+                let walked = line(&mut Step, collected.zoom, collected.at);
+                same(&collected, &walked);
                 for d in 0..6u32 {
-                    let mut c = kept.at;
+                    let mut c = collected.at;
                     c[(d / 2) as usize] += if d % 2 == 0 { -1 } else { 1 };
                     assert_eq!(
-                        asset(&mut Step, &kept, UNIT_ZOOM, c),
+                        asset(&mut Step, &collected, UNIT_ZOOM, c),
                         asset(&mut Step, &walked, UNIT_ZOOM, c),
                         "{c:?}"
                     );

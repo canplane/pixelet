@@ -332,7 +332,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
             )
         })
         .collect();
-    let kept: [bool; 4] = std::array::from_fn(|q| {
+    let has_child: [bool; 4] = std::array::from_fn(|q| {
         let child = children[q];
         child.occupancy.bits() != 0
             || (0..CELLS as u32).any(|c| {
@@ -375,7 +375,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
             .collect::<Vec<_>>()
             .into(),
         divisions,
-        occupancy: Occupancy::of_slots(kept),
+        occupancy: Occupancy::of_slots(has_child),
     }
 }
 

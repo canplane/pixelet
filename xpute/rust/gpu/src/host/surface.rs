@@ -198,11 +198,11 @@ impl GpuHost {
             height: s.size[1],
             depth_or_array_layers: 1,
         };
-        let kept = s
+        let reused = s
             .offscreen
             .take()
             .filter(|t| t.format() == format && t.usage() == usage && t.size() == size);
-        let texture = kept.unwrap_or_else(|| {
+        let texture = reused.unwrap_or_else(|| {
             device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
                 size,

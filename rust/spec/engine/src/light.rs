@@ -1211,7 +1211,7 @@ mod tests {
         let (n, t) = (tiles(size) as i32, TILE as i32);
         let was = over_bumps([512, 512]);
         let st = starts_of([0; 3], &was);
-        let (mut kept, mut banded) = (0, 0);
+        let (mut whole, mut banded) = (0, 0);
         for (dx, dy) in [(1, 0), (0, -1), (2, 1), (-3, 2)] {
             let now = Light {
                 corner: [was.corner[0] + dx * t, was.corner[1] + dy * t],
@@ -1228,12 +1228,12 @@ mod tests {
                         fresh,
                         "{dx} {dy} {here:?}"
                     );
-                    kept += 1;
+                    whole += 1;
                 } else if (0..n).contains(&from[0]) && (0..n).contains(&from[1]) {
                     banded += u32::from(cast_tile(&was, &st, range, from) != fresh);
                 }
             }
         }
-        assert!(kept > 0 && banded > 0, "{kept} {banded}");
+        assert!(whole > 0 && banded > 0, "{whole} {banded}");
     }
 }

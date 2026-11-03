@@ -365,10 +365,10 @@ pub fn perf_record_read(ms: f64) {
 fn land(l: &mut Perf, s: FrameSample) {
     let at = l.worst[..l.worst_len].partition_point(|w| w.sample.interval_ms >= s.interval_ms);
     if s.settled == 0.0 && at < l.worst.len() {
-        let kept = l.worst_len.min(l.worst.len() - 1);
-        l.worst.copy_within(at..kept, at + 1);
+        let end = l.worst_len.min(l.worst.len() - 1);
+        l.worst.copy_within(at..end, at + 1);
         l.worst[at] = WorstFrame::of(s, l.frame_ring[..l.frame_len].last());
-        l.worst_len = kept + 1;
+        l.worst_len = end + 1;
     }
 
     let dropped = trim(

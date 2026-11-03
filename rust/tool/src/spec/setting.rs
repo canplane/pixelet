@@ -31,7 +31,7 @@ impl Setting<'_> {
         self.spec.get(name) == Some(&Node::Bool(true))
     }
     /// StorageFile unless marked `"stored": false`; anything else there is refused.
-    fn kept(&self) -> Result<bool, String> {
+    fn stored(&self) -> Result<bool, String> {
         match self.spec.get("stored") {
             None | Some(Node::Bool(true)) => Ok(true),
             Some(Node::Bool(false)) => Ok(false),
@@ -274,7 +274,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }));
     let mut session = Vec::new();
     for s in &settings {
-        if !s.kept()? {
+        if !s.stored()? {
             session.push(format!("SettingKey::{}", s.key));
         }
     }

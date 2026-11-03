@@ -432,7 +432,7 @@ fn sample_hit_same_every_lattice() {
             ))
         });
         let (one, two) = (cast_at(&view, 1), cast_at(&view, LATTICE_MAX));
-        let (mut kept, mut misses, mut resumed) = ([0; EIGHTHS as usize + 1], 0, [0; 2]);
+        let (mut met, mut misses, mut resumed) = ([0; EIGHTHS as usize + 1], 0, [0; 2]);
         for (k, f) in fresh.iter().enumerate() {
             let s = [k as u32 % n, k as u32 / n];
             let (a, b) = (&one[k], &two[k]);
@@ -450,7 +450,7 @@ fn sample_hit_same_every_lattice() {
                 b.stop,
             );
             if f.ends == End::Hit {
-                kept[fill_eighths(f.asset[0]) as usize] += 1;
+                met[fill_eighths(f.asset[0]) as usize] += 1;
             }
             misses += u32::from(f.ends == End::Miss);
             resumed[0] += u32::from(a.resumed);
@@ -460,8 +460,8 @@ fn sample_hit_same_every_lattice() {
         // met, and something gone on past; the samples resume off their
         // lines at both lattices.
         assert!(
-            [EIGHTHS, 4, 6].iter().all(|&k| kept[k as usize] > 0) && misses > 0,
-            "{tan:?}: {kept:?} by the eighths kept, {misses} gone on"
+            [EIGHTHS, 4, 6].iter().all(|&k| met[k as usize] > 0) && misses > 0,
+            "{tan:?}: {met:?} by the eighths met, {misses} gone on"
         );
         assert!(
             resumed.iter().all(|&r| r > n * m / 2),

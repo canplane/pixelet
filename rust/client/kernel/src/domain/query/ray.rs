@@ -360,7 +360,7 @@ impl<'a> World<'a> {
                 .map_or(HitKind::Objects, |e| HitKind::Object(e.id())),
             false => HitKind::Ground,
         };
-        // A cell kept short of its cube is the box it is drawn as, about
+        // A cell filled short of its cube is the box it is drawn as, about
         // its cube's center (pxl-engine `cast::fill_bounds`).
         let (lo, hi) = cast::fill_bounds(([0.0; 3], [1.0; 3]), s.asset[0]);
         let t = f64::from(s.t);

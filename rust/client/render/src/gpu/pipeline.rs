@@ -126,8 +126,8 @@ impl Pipelines {
         id
     }
 
-    /// The pipeline kept under `key`, where one is.
-    fn kept(&self, key: u64) -> Option<Pipeline> {
+    /// The pipeline made under `key`, where one is.
+    fn existing(&self, key: u64) -> Option<Pipeline> {
         self.pipelines[..self.pipeline_len]
             .iter()
             .find(|(k, _)| *k == key)
@@ -187,7 +187,7 @@ impl Pipelines {
             ),
             stencil as u32,
         );
-        if let Some(b) = self.kept(key) {
+        if let Some(b) = self.existing(key) {
             return b;
         }
         let words = record_of(id);
@@ -229,7 +229,7 @@ impl Pipelines {
             .fold(fold(0xcbf29ce484222325, PIPELINES + kind), |k, &w| {
                 fold(k, w)
             });
-        if let Some(b) = self.kept(key) {
+        if let Some(b) = self.existing(key) {
             return b;
         }
         let module = self.module(kind);

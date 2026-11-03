@@ -80,7 +80,7 @@ namespace {
 struct Slot {
     // What a slot owns and keeps across a rewind: a vector's buffer is still
     // allocated when the slot is handed out again.
-    std::vector<std::uint32_t> kept;
+    std::vector<std::uint32_t> items;
     std::uint32_t mark = 0;
 };
 
@@ -97,19 +97,19 @@ XPUTE_TEST(arena_rewind_keeps_bufs) {
     SlotArena a = arena(4, 1 << 10);
     for (std::uint32_t i = 0; i < 4; i++) {
         Slot *slot = *a.alloc();
-        slot->kept.assign({i, i + 1, i + 2});
+        slot->items.assign({i, i + 1, i + 2});
         slot->mark = i;
     }
     std::array<std::size_t, 4> caps{};
-    for (std::uint32_t i = 0; i < 4; i++) caps[i] = a.get(i).kept.capacity();
+    for (std::uint32_t i = 0; i < 4; i++) caps[i] = a.get(i).items.capacity();
     a.truncate(0);
     XPUTE_CHECK(a.len() == 0);
     for (std::uint32_t i = 0; i < 4; i++) {
         Slot *slot = *a.alloc();
-        XPUTE_CHECK_EQ(slot->mark, i, "a rewound slot was rebuilt rather than kept");
-        XPUTE_CHECK_EQ(slot->kept, (std::vector<std::uint32_t>{i, i + 1, i + 2}), "a rewound slot lost what it owned");
+        XPUTE_CHECK_EQ(slot->mark, i, "a rewound slot was rebuilt rather than items");
+        XPUTE_CHECK_EQ(slot->items, (std::vector<std::uint32_t>{i, i + 1, i + 2}), "a rewound slot lost what it owned");
     }
-    for (std::uint32_t i = 0; i < 4; i++) XPUTE_CHECK_EQ(a.get(i).kept.capacity(), caps[i], "a rewind gave a slot's buffer back");
+    for (std::uint32_t i = 0; i < 4; i++) XPUTE_CHECK_EQ(a.get(i).items.capacity(), caps[i], "a rewind gave a slot's buffer back");
 }
 
 XPUTE_TEST(arena_growth_doubles) {

@@ -51,7 +51,7 @@ const errno = (name: string): number => ERRNO[name];
 
 async function run(g: Golden, scenario: string): Promise<void> {
   const turn = new Turn();
-  const kept = new Map<string, string>();
+  const files = new Map<string, string>();
   const waiting = new Map<string, (bytes: U8Array) => void>();
   const failing = new Map<string, (err: FileError) => void>();
   const answers: [number, number][] = [];
@@ -59,7 +59,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
   const fs: Fs = {
     open: (root, path) => {
       const key = `${root} ${path}`;
-      const b = kept.get(key);
+      const b = files.get(key);
       if (b === undefined || b === "ENOENT") throw new FileError(Errno.ENOENT);
       if (b === "later") {
         return new Promise(
@@ -85,7 +85,7 @@ async function run(g: Golden, scenario: string): Promise<void> {
     const path = (p: string) => (p === '""' ? "" : p);
     switch (what) {
       case "file":
-        kept.set(`${a[0]} ${a[1]}`, a[2]);
+        files.set(`${a[0]} ${a[1]}`, a[2]);
         break;
       case "openat":
         turn.record(

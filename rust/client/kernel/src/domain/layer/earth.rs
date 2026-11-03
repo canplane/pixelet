@@ -82,7 +82,7 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     }
     // A packet `receive` read reads again.
     // An Earth packet is wanted until its texels are written, at most a
-    // frame's four of them kept.
+    // frame's four of them waiting.
     uploads.send(
         on,
         &mut |record, pkt| match earth::decode(pkt).map(|texels| write(record, texels)) {

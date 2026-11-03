@@ -88,10 +88,10 @@ impl Base for TerrainTile {
     }
 }
 
-/// The most terrain packets kept at once: the body slots (`BODY_SLOTS`)
+/// The most terrain packets waiting at once: the body slots (`BODY_SLOTS`)
 /// less one for the most credits the host has granted and one for every
 /// Earth frame,
-/// so the packets kept, which only a drawn frame gives back, never take the
+/// so the packets waiting, which only a drawn frame gives back, never take the
 /// slots a read needs to arrive into (sys/io/body.rs). A packet past it is
 /// freed once decoded, and its tile asked again when one could be kept
 /// (`again_room`, domain/layer/terrain/clipmap.rs `step`).

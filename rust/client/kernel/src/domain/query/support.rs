@@ -9,7 +9,7 @@
 //! finely as it is held (query/ray.rs `finest`), so a walker, a cell wide,
 //! stands on what is placed whatever its size; a coarser zoom's cell is one
 //! column, read as that zoom's cells are (`at_zoom`), what is placed finer
-//! folded into it. Either way a cell kept short of its cube stands to the
+//! folded into it. Either way a cell filled short of its cube stands to the
 //! top of the box it is drawn as (pxl-engine `cast::top`).
 
 use pxl_spec::space::coord::q3::{self, Q3};
