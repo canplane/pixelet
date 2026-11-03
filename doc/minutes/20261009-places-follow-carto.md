@@ -148,3 +148,12 @@ what the shell writes is the pivot's address, UI text, and Carto has no
 precedent for how deep an address reads. Its depth stays overture-tiles' rule
 (`center.ts`). Drawn on the map one day, division names would follow Carto's
 `placenames.mss`.
+
+## 2026-11-03
+
+The user decided that a division is written in its own name, as a place is, with
+no second language beside it, and is found by its name in any language.
+
+The user decided that a table's shard is a slot with its own Overture release, and
+nothing limits one by another. A release is taken by type: `division` and
+`division_area` moved to 2026-10-21.0, and the other tables stayed on 2026-09-23.1.

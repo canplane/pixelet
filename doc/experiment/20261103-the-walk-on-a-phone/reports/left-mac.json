@@ -1,0 +1,418 @@
+{
+ "device": "mac",
+ "label": "left",
+ "log": [
+  [
+   "wake",
+   "NotAllowedError: Wake Lock permission request denied"
+  ],
+  [
+   "geo test",
+   [
+    "ok",
+    38.1193
+   ]
+  ],
+  [
+   "live at s",
+   {
+    "s": 11,
+    "read": 25,
+    "pivot": "38.11727°,",
+    "has": true
+   }
+  ],
+  [
+   "pair 0",
+   {
+    "frames": [
+     906,
+     907
+    ],
+    "kept0": 4447,
+    "beam": {
+     "rays": 116,
+     "distinct": 14,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 22,
+      "other_zooms": 94,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "22": 1,
+      "23": 65,
+      "24": 50
+     }
+    },
+    "sample": {
+     "rays": 0,
+     "distinct": 0,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 0,
+      "other_zooms": 0,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {}
+    },
+    "miss": {
+     "rays": 0,
+     "distinct": 0,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 0,
+      "other_zooms": 0,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {}
+    }
+   }
+  ],
+  [
+   "pair 1",
+   {
+    "frames": [
+     1059,
+     1060
+    ],
+    "kept0": 39380,
+    "beam": {
+     "rays": 558,
+     "distinct": 52,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 71,
+      "other_zooms": 487,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "13": 2,
+      "15": 3,
+      "16": 1,
+      "17": 2,
+      "18": 18,
+      "19": 2,
+      "20": 2,
+      "21": 170,
+      "22": 60,
+      "23": 61,
+      "24": 237
+     }
+    },
+    "sample": {
+     "rays": 801,
+     "distinct": 86,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 754,
+      "other_zooms": 47,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "18": 1,
+      "19": 12,
+      "20": 12,
+      "21": 188,
+      "22": 584,
+      "24": 4
+     }
+    },
+    "miss": {
+     "rays": 365,
+     "distinct": 23,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 341,
+      "other_zooms": 24,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "19": 12,
+      "21": 280,
+      "22": 72,
+      "23": 1
+     }
+    }
+   }
+  ],
+  [
+   "pair 2",
+   {
+    "frames": [
+     1213,
+     1214
+    ],
+    "kept0": 72243,
+    "beam": {
+     "rays": 282,
+     "distinct": 19,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 12,
+      "other_zooms": 270,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "14": 2,
+      "15": 2,
+      "16": 5,
+      "17": 1,
+      "22": 224,
+      "23": 34,
+      "24": 14
+     }
+    },
+    "sample": {
+     "rays": 50,
+     "distinct": 29,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 49,
+      "other_zooms": 1,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "16": 6,
+      "17": 29,
+      "18": 14,
+      "24": 1
+     }
+    },
+    "miss": {
+     "rays": 9,
+     "distinct": 4,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 9,
+      "other_zooms": 0,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "17": 7,
+      "24": 2
+     }
+    }
+   }
+  ],
+  [
+   "pair 3",
+   {
+    "frames": [
+     1367,
+     1368
+    ],
+    "kept0": 53103,
+    "beam": {
+     "rays": 66,
+     "distinct": 7,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 2,
+      "other_zooms": 64,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "18": 2,
+      "23": 39,
+      "24": 25
+     }
+    },
+    "sample": {
+     "rays": 4,
+     "distinct": 4,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 1,
+      "other_zooms": 3,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "23": 2,
+      "24": 2
+     }
+    },
+    "miss": {
+     "rays": 1,
+     "distinct": 1,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 1,
+      "other_zooms": 0,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "24": 1
+     }
+    }
+   }
+  ],
+  [
+   "pair 4",
+   {
+    "frames": [
+     1521,
+     1522
+    ],
+    "kept0": 64756,
+    "beam": {
+     "rays": 179,
+     "distinct": 41,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 75,
+      "other_zooms": 104,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "14": 6,
+      "15": 21,
+      "16": 19,
+      "17": 18,
+      "18": 11,
+      "21": 2,
+      "23": 80,
+      "24": 22
+     }
+    },
+    "sample": {
+     "rays": 384,
+     "distinct": 62,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 379,
+      "other_zooms": 0,
+      "absent_full": 5,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "15": 4,
+      "16": 73,
+      "17": 89,
+      "18": 199,
+      "19": 14,
+      "22": 5
+     }
+    },
+    "miss": {
+     "rays": 242,
+     "distinct": 16,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 242,
+      "other_zooms": 0,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "17": 8,
+      "18": 209,
+      "19": 25
+     }
+    }
+   }
+  ],
+  [
+   "pair 5",
+   {
+    "frames": [
+     1675,
+     1676
+    ],
+    "kept0": 53687,
+    "beam": {
+     "rays": 346,
+     "distinct": 11,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 0,
+      "other_zooms": 346,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {
+      "23": 215,
+      "24": 131
+     }
+    },
+    "sample": {
+     "rays": 0,
+     "distinct": 0,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 0,
+      "other_zooms": 0,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {}
+    },
+    "miss": {
+     "rays": 0,
+     "distinct": 0,
+     "reasons": {
+      "keeps": 0,
+      "absent_free": 0,
+      "other_zooms": 0,
+      "absent_full": 0,
+      "claimed": 0,
+      "steps": 0
+     },
+     "absent_held_last_frame": 0,
+     "zooms": {}
+    }
+   }
+  ],
+  [
+   "done",
+   51
+  ]
+ ]
+}

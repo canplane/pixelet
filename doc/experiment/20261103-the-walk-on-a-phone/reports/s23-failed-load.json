@@ -1,0 +1,42 @@
+{
+ "device": "s23",
+ "label": "floorc",
+ "log": [
+  [
+   "clear",
+   "ok"
+  ],
+  [
+   "wake",
+   "NotAllowedError: Wake Lock permission request denied"
+  ],
+  [
+   "geo test",
+   [
+    "ok",
+    38.1193
+   ]
+  ],
+  [
+   "live at s",
+   {
+    "s": 18,
+    "read": 4,
+    "pivot": "38.11727°,",
+    "has": true
+   }
+  ],
+  [
+   "camera after world",
+   "distance 16.0 u  polar 60.0°  azimuth 0.0"
+  ],
+  [
+   "frames",
+   677
+  ],
+  [
+   "done",
+   69
+  ]
+ ]
+}

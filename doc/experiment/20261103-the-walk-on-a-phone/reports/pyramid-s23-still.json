@@ -1,0 +1,58 @@
+{
+ "device": "s23",
+ "label": "still",
+ "log": [
+  [
+   "wake",
+   "NotAllowedError: Wake Lock permission request denied"
+  ],
+  [
+   "geo test",
+   [
+    "ok",
+    38.1193
+   ]
+  ],
+  [
+   "live at s",
+   {
+    "s": 16,
+    "read": 6,
+    "pivot": "38.11727°,",
+    "has": true
+   }
+  ],
+  [
+   "still @86",
+   {
+    "frame": 3240,
+    "kept": 6193,
+    "claimed": 0,
+    "zero": 518095,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "still again @97",
+   {
+    "frame": 3819,
+    "kept": 6193,
+    "claimed": 0,
+    "zero": 518095,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "done",
+   97
+  ]
+ ]
+}

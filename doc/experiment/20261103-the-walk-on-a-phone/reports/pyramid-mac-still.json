@@ -1,0 +1,58 @@
+{
+ "device": "mac",
+ "label": "still",
+ "log": [
+  [
+   "wake",
+   "NotAllowedError: Wake Lock permission request denied"
+  ],
+  [
+   "geo test",
+   [
+    "ok",
+    38.1193
+   ]
+  ],
+  [
+   "live at s",
+   {
+    "s": 12,
+    "read": 20,
+    "pivot": "38.11727°,",
+    "has": true
+   }
+  ],
+  [
+   "still @82",
+   {
+    "frame": 4197,
+    "kept": 6170,
+    "claimed": 0,
+    "zero": 518118,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "still again @92",
+   {
+    "frame": 4799,
+    "kept": 6170,
+    "claimed": 0,
+    "zero": 518118,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "done",
+   92
+  ]
+ ]
+}

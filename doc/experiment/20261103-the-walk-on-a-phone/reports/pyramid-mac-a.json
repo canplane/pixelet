@@ -1,0 +1,140 @@
+{
+ "device": "mac",
+ "label": "a",
+ "log": [
+  [
+   "wake",
+   "NotAllowedError: Wake Lock permission request denied"
+  ],
+  [
+   "geo test",
+   [
+    "ok",
+    38.1193
+   ]
+  ],
+  [
+   "live at s",
+   {
+    "s": 14,
+    "read": 36,
+    "pivot": "38.11727°,",
+    "has": true
+   }
+  ],
+  [
+   "settled @24",
+   {
+    "frame": 617,
+    "kept": 6185,
+    "claimed": 0,
+    "zero": 518103,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 0 @36",
+   {
+    "frame": 1339,
+    "kept": 53201,
+    "claimed": 0,
+    "zero": 471087,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 1 @48",
+   {
+    "frame": 2066,
+    "kept": 54041,
+    "claimed": 0,
+    "zero": 470247,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 2 @61",
+   {
+    "frame": 2794,
+    "kept": 54544,
+    "claimed": 0,
+    "zero": 469744,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "circle 3 @73",
+   {
+    "frame": 3523,
+    "kept": 54421,
+    "claimed": 0,
+    "zero": 469867,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "therm",
+   "mac"
+  ],
+  [
+   "drive @92",
+   {
+    "frame": 4669,
+    "kept": 18007,
+    "claimed": 0,
+    "zero": 506281,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "drive turn @104",
+   {
+    "frame": 5399,
+    "kept": 18007,
+    "claimed": 0,
+    "zero": 506281,
+    "badZoom": 0,
+    "badKeep": 0,
+    "badBucket": 0,
+    "badKind": 0,
+    "samples": []
+   }
+  ],
+  [
+   "report",
+   "frames n=1636  over 27.3s  fps 59.9  moving 1636  still 0   refresh 16.6 ms   paced 16.6 ms   scale 1.00   lat |   kinds   cast 179  gated 1457   wakes next 1533  timer 103 |   gpu     p50 7.1  p95 12.5  max 26.0 ms busy   (over the 1634 frames a read timed) | long frames n=7"
+  ],
+  [
+   "therm",
+   "mac"
+  ],
+  [
+   "done",
+   104
+  ]
+ ]
+}

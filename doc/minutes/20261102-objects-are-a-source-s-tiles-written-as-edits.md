@@ -8,7 +8,7 @@ edits up and files down, is being built.
 ## What was asked
 
 Every world read the kernel makes goes through one interface — a root's number
-and an object's number below it, bound by the host (`sys/io/file.rs`,
+and an object's number below it, bound by the driver (`sys/io/file.rs`,
 `ts/client/src/driver/namespace/`) — except the placed objects, which were one
 blob in a storage file beside the settings, read whole at boot. The user asked
 whether everything else was unified, and then for the objects to be unified
