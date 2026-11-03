@@ -211,7 +211,7 @@ const fn gather(v: u32) -> u32 {
 const _: () = assert!(BRICK <= 1 << 16, "a brick's side spreads in sixteen bits");
 pub const LEVELS: u32 = BRICK_SHIFT;
 /// A level entry's words: its bounds' (`ground::Bounds`), each a bound word.
-pub(crate) const LEVEL_ENTRY_WORDS: u32 = 2;
+pub const LEVEL_ENTRY_WORDS: u32 = 2;
 pub const LEVEL_WORDS: u32 = LEVEL_ENTRY_WORDS * level_at(LEVELS + 1);
 
 /// A tile's ways are cut into bins `WAYS_ACROSS` a side, each
@@ -502,10 +502,10 @@ impl<Q: Brick> Columns for Q {
 pub struct Lookup(u32);
 
 /// A slot, which a GPU and the CPU name alike (`SLOTS`).
-const LOOKUP_SLOT_BITS: u32 = SLOTS.next_power_of_two().trailing_zeros();
+pub const LOOKUP_SLOT_BITS: u32 = SLOTS.next_power_of_two().trailing_zeros();
 const LOOKUP_HERE: u32 = 1 << LOOKUP_SLOT_BITS;
-const LOOKUP_FROM_SHIFT: u32 = LOOKUP_SLOT_BITS + 1;
-const LOOKUP_CELL_SHIFT: u32 = LOOKUP_FROM_SHIFT + crate::ZOOM_BITS;
+pub const LOOKUP_FROM_SHIFT: u32 = LOOKUP_SLOT_BITS + 1;
+pub const LOOKUP_CELL_SHIFT: u32 = LOOKUP_FROM_SHIFT + crate::ZOOM_BITS;
 const LOOKUP_ZOOM_MASK: u32 = (1 << crate::ZOOM_BITS) - 1;
 /// A `Lookup`'s word's bits: its slot, here, and its two zooms.
 const LOOKUP_BITS: u32 = LOOKUP_CELL_SHIFT + crate::ZOOM_BITS;

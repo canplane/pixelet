@@ -111,7 +111,7 @@ pub const fn root_slot(w: u32) -> (u32, i32) {
 }
 
 /// A root word's child group id bits, `POOL_CHILD_GROUPS`'s.
-const ROOT_ID_BITS: u32 = POOL_CHILD_GROUPS.trailing_zeros();
+pub const ROOT_ID_BITS: u32 = POOL_CHILD_GROUPS.trailing_zeros();
 const _: () = assert!(
     POOL_CHILD_GROUPS.is_power_of_two()
         && (i16::MIN as i32 >> BRICK_SHIFT) >= -(1 << (31 - ROOT_ID_BITS)),

@@ -307,7 +307,7 @@ pub fn coarsest(zoom: Zoom, far: Zoom) -> Zoom {
 }
 
 /// A leaf cell's index at the world's floor, under sea level.
-const SEA_CELLS: i32 = 1 << (HEIGHT_BITS - 1);
+pub const SEA_CELLS: i32 = 1 << (HEIGHT_BITS - 1);
 
 /// Whether the leaf cells `[lo, hi)` along z meet the node `(zoom, z)`, read
 /// to `near`: past the leaves a leaf cell is cut 2^e a side, so every

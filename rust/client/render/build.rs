@@ -11,6 +11,10 @@ use pxl_engine::param::light;
 use pxl_engine::screen;
 use std::path::Path;
 
+// The caves' and the strata's settings, which world.wgsl reads (`world_word`).
+#[path = "../../spec/content/src/param.rs"]
+#[expect(dead_code, reason = "the build reads the caves' and the strata's")]
+mod content_param;
 #[path = "src/frame/shader/debug_look.spec.rs"]
 mod debug_look;
 #[path = "src/param.rs"]
@@ -58,6 +62,7 @@ fn main() {
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
     std::fs::write(out.join("walk_word.wgsl"), walk_word()).expect("the walk's words");
+    std::fs::write(out.join("world_word.wgsl"), world_word()).expect("the world's words");
     // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
     use pxl_engine::ray::*;
@@ -443,6 +448,146 @@ fn walk_word() -> String {
         out += &format!("const {name}: u32 = {v}u;\n");
     }
     out
+}
+
+/// What the world's one query by hand reads (world.wgsl), from pxl-engine and
+/// pxl-content, whose layouts and rules they are; a pxl-content constant kept
+/// private is read off its source's text.
+fn world_word() -> String {
+    use content_param::{cave, strata};
+    use pxl_content::cave::{PIPE, ROOT};
+    use pxl_content::cube::ground as palette;
+    use pxl_engine::clipmap as clip;
+    use pxl_engine::overwrite::{self, Cut};
+    use pxl_engine::way::tree;
+    use pxl_engine::{area, seed, value};
+    let cave_source = include_str!("../../spec/content/src/cave.rs");
+    let tag = |text: &str, name: &str| -> u32 {
+        let start = format!("const {name}: u32 = ");
+        let line = text
+            .lines()
+            .find_map(|l| l.strip_prefix(start.as_str()))
+            .unwrap_or_else(|| panic!("{name} in its source"));
+        let digits = line.trim_end_matches(';').replace('_', "");
+        match digits.strip_prefix("0x") {
+            Some(hex) => u32::from_str_radix(hex, 16),
+            None => digits.parse(),
+        }
+        .unwrap_or_else(|e| panic!("{name}: {e}"))
+    };
+    let cell_blocks = tag(cave_source, "CELL_BLOCKS");
+    let root_blocks: u32 = cave::ROOT_TUNNELS
+        .iter()
+        .zip(cave::BLOCKS_A_TUNNEL)
+        .map(|(n, b)| n * b)
+        .sum();
+    let words: &[(&str, u32)] = &[
+        ("LEAF_CELL", pxl_engine::LEAF_CELL),
+        ("TOP_ZOOM", pxl_engine::TOP_ZOOM),
+        ("VALUE_UNKNOWN", value::UNKNOWN),
+        ("GROUNDS_FIRST", value::GROUNDS[0]),
+        ("GROUNDS_LAST", value::GROUNDS[1]),
+        ("OBJECTS_FIRST", value::OBJECTS[0]),
+        ("OBJECTS_LAST", value::OBJECTS[1]),
+        ("KIND_LACKS", answer::Kind::Lacks as u32),
+        ("PLACED_ASSET", answer::PLACED_ASSET),
+        ("FULL", answer::FULL),
+        ("FULL_BITS", answer::FULL.trailing_zeros()),
+        ("FILL_BITS", answer::FILL_BITS),
+        ("BRANCH", overwrite::BRANCH),
+        ("OBJECT_ROOT", overwrite::OBJECT_ROOT),
+        ("CHILDREN", overwrite::CHILDREN),
+        ("SLOT_FOLDED", overwrite::FOLDED),
+        ("SLOT_ZOOM_MASK", overwrite::ZOOM_MASK),
+        ("SLOT_SHIFT", overwrite::SLOT_SHIFT),
+        ("POOL_CHILD_GROUPS", tree::POOL_CHILD_GROUPS),
+        ("ROOT_ID_BITS", tree::ROOT_ID_BITS),
+        ("ROOT_NODES", tree::ROOT_NODES),
+        ("SHARD_KNOWN", area::SHARD_KNOWN),
+        ("SHARD_SERVED_SHIFT", area::SHARD_SERVED_SHIFT),
+        ("SHARD_OWN", area::OWN),
+        ("BRICK", clip::BRICK),
+        ("BRICK_SHIFT", clip::BRICK_SHIFT),
+        ("BRICK_CELLS", clip::BRICK_CELLS),
+        ("BRICK_WORDS", clip::BRICK_WORDS),
+        ("BRICK_LEVELS", clip::LEVELS),
+        ("ACROSS", clip::ACROSS),
+        ("CLIP_ENTRIES", clip::ENTRIES),
+        ("FIRST_CELL", clip::FIRST_CELL),
+        ("ORIGIN_AT", clip::ORIGIN_AT),
+        ("JOINED_AT", clip::JOINED_AT),
+        ("JOINED_ENTRIES", clip::JOINED_ENTRIES),
+        ("JOINED_LEVELS", clip::JOINED_LEVELS),
+        ("COLUMNS_AT", clip::COLUMNS_AT),
+        ("LEVELS_AT", clip::LEVELS_AT),
+        ("LEVEL_ENTRY_WORDS", clip::LEVEL_ENTRY_WORDS),
+        ("LAID_AT", clip::LAID_AT),
+        ("LAID_CELLS", clip::LAID_CELLS),
+        ("ROOT_AT", clip::ROOT_AT),
+        ("LOOKUP_SLOT_BITS", clip::LOOKUP_SLOT_BITS),
+        ("LOOKUP_FROM_SHIFT", clip::LOOKUP_FROM_SHIFT),
+        ("LOOKUP_CELL_SHIFT", clip::LOOKUP_CELL_SHIFT),
+        ("LOOKUP_AT", (1 << clip::LOOKUP_CELL_SHIFT) - 1),
+        ("STRATA_SAND", palette::sand as u32),
+        ("STRATA_BEACH", palette::beach as u32),
+        ("STRATA_WATER", palette::water as u32),
+        ("STRATA_SOIL", palette::soil as u32),
+        ("STRATA_SANDSTONE", palette::sandstone as u32),
+        ("STRATA_STONE", palette::stone as u32),
+        ("CAVE_ROOT", ROOT),
+        ("CAVE_PIPE", PIPE),
+        ("CAVE_BLOCK", PIPE + cell_blocks.trailing_zeros() / 3),
+        ("CELL_BLOCKS", cell_blocks),
+        ("ROOT_BLOCKS", root_blocks),
+        ("CAVE_NUDGE", cave::NUDGE),
+        ("CAVE_SPAWN", tag(cave_source, "SPAWN")),
+        ("CAVE_WALK", tag(cave_source, "WALK")),
+        ("CAVE_CROSS", tag(cave_source, "CROSS")),
+        ("CAVE_SPLIT", tag(cave_source, "SPLIT")),
+        ("CAVE_BLOCKS", tag(cave_source, "BLOCKS")),
+        ("MASTER_SEED", seed::MASTER_SEED),
+        ("TUNNELS_LAST", cave::ROOT_TUNNELS[4]),
+    ];
+    let signed: &[(&str, i32)] = &[
+        ("SEA_LEVEL", pxl_engine::SEA_LEVEL),
+        ("SEA_CELLS", ground::SEA_CELLS),
+        ("EMPTY_LO", ground::EMPTY[0]),
+        ("EMPTY_HI", ground::EMPTY[1]),
+        ("UNBOUNDED_LO", ground::UNBOUNDED[0]),
+        ("UNBOUNDED_HI", ground::UNBOUNDED[1]),
+        ("STRATA_FILLER_DEPTH", strata::FILLER_DEPTH),
+        ("STRATA_SANDSTONE_DEPTH", strata::SANDSTONE_DEPTH),
+        ("STRATA_BEDROCK_DEPTH", strata::BEDROCK_DEPTH),
+    ];
+    let mut out = String::new();
+    for (name, v) in words {
+        out += &format!("const {name}: u32 = {v}u;\n");
+    }
+    for (name, v) in signed {
+        out += &format!("const {name}: i32 = {v}i;\n");
+    }
+    for (name, [a, b]) in [
+        ("BOX_NONE", answer::BOX_NONE),
+        ("BOX_WHOLE", answer::BOX_WHOLE),
+    ] {
+        out += &format!("const {name} = vec2<u32>({a}u, {b}u);\n");
+    }
+    let [a, b, c, d, _] = cave::ROOT_TUNNELS;
+    out += &format!("const TUNNELS_FIRST = vec4<u32>({a}u, {b}u, {c}u, {d}u);\n");
+    let none = Cut::NONE;
+    out += &format!(
+        "const NO_CUT = vec4<i32>({}i, {}i, {}i, {}i);\n",
+        none.at[0], none.at[1], none.at[2], none.zoom as i32
+    );
+    let cases: String = cave::BLOCKS_A_TUNNEL[..4]
+        .iter()
+        .enumerate()
+        .map(|(k, b)| format!("case {k}u: {{ return {b}u; }} "))
+        .collect();
+    out + &format!(
+        "fn tunnel_blocks(k: u32) -> u32 {{ switch k {{ {cases}default: {{ return {}u; }} }} }}\n",
+        cave::BLOCKS_A_TUNNEL[4]
+    )
 }
 
 fn tile_word() -> String {

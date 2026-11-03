@@ -79,7 +79,7 @@ pub const BOX_STEPS: u32 = 1 << BOX_BITS;
 pub const BOX_WHOLE: BoxWords = box_word([0; 3], [BOX_STEPS; 3]);
 /// No box: nothing lies in the node, as a join of boxes starts. No
 /// `box_word` sets a bit past `3 · BOX_BITS` of a word.
-pub(crate) const BOX_NONE: BoxWords = [u32::MAX; 2];
+pub const BOX_NONE: BoxWords = [u32::MAX; 2];
 
 /// The box from step `lo` to past step `hi` on each axis, each held to the
 /// node: `lo` in `0..BOX_STEPS`, `hi` in `1..=BOX_STEPS`, at least one past

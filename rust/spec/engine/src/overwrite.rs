@@ -158,9 +158,9 @@ pub trait Columns {
 pub struct NodeSlot(u32);
 
 /// A held slot's branch bit, over its zoom.
-const FOLDED: u32 = 1 << 5;
-const ZOOM_MASK: u32 = FOLDED - 1;
-const SLOT_SHIFT: u32 = FOLDED.trailing_zeros() + 1;
+pub const FOLDED: u32 = 1 << 5;
+pub const ZOOM_MASK: u32 = FOLDED - 1;
+pub const SLOT_SHIFT: u32 = FOLDED.trailing_zeros() + 1;
 
 impl NodeSlot {
     /// Nothing is placed under the node.

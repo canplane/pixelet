@@ -243,11 +243,10 @@ impl Observer for Map {
         tally::LIGHT
     }
 
-    /// None: its rays need only a hit's depth, and the pyramid's slots,
-    /// a fixed few a bucket (`pyramid::victim`), are kept for the cells the
-    /// eye's rays are drawn by and walk again.
+    /// Kept as the eye's are: what `light_miss_hit_cs` cannot answer it leaves to a whole
+    /// walk, and a ray that stops on a cell no slot keeps is left every cast.
     fn assets(&self) -> bool {
-        false
+        true
     }
 
     fn passes(&self) -> [u32; 3] {
