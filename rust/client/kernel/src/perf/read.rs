@@ -296,8 +296,8 @@ fn view() -> ViewSection {
             HitKind::Decor(_) => spec::HitKind::decor,
         } as u8)
     });
-    let tool = collision::PlacementTool::of(&edit::tool());
-    let place = edit::hover().coord.filter(|_| tool.is_some());
+    let placeable = collision::Placeable::of(&edit::tool());
+    let place = edit::hover().coord.filter(|_| placeable.is_some());
     let [place_x, place_y, place_z] = place.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
     let eye = controller::eye_world().map(|e| coord::world_to_canonical(&e));
@@ -333,8 +333,8 @@ fn view() -> ViewSection {
         place_x,
         place_y,
         place_z,
-        place_zoom: zoom(tool.map(|t| t.zoom())),
-        blocked: tool.zip(place).map_or(f64::NAN, |(t, p)| {
+        place_zoom: zoom(placeable.map(|t| t.zoom())),
+        blocked: placeable.zip(place).map_or(f64::NAN, |(t, p)| {
             f64::from(u8::from(collision::is_placement_blocked(t, &p)))
         }),
     }

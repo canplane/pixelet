@@ -3,9 +3,7 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the world's query and written to the store.
 
-use crate::domain::control::edit::collision::{
-    is_placement_blocked, placement_reads, PlacementTool,
-};
+use crate::domain::control::edit::collision::{is_placement_blocked, placement_reads, Placeable};
 use crate::domain::control::edit::{hover, tool, ActiveTool};
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::preview::{draft, draft_mut, Draft, RenderEdits};
@@ -107,15 +105,12 @@ pub fn place_decor(at: &Q3, decor_id: DecorId) {
     } else {
         decor_num_id(decor_id)
     };
-    write_object_val(
-        EntryAt::holding(PlacementTool::Decor(decor_id).zoom(), at),
-        val,
-    );
+    write_object_val(EntryAt::holding(Placeable::Decor(decor_id).zoom(), at), val);
 }
 
 /// The decor the ground generates that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
-    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && is_carved(&World::now(), at))
+    (Placeable::Decor(decor_id).zoom() <= GROUND.cell() && is_carved(&World::now(), at))
         .then(|| World::now().generated_instance(Decor::of(decor_id), at))?
 }
 
@@ -173,7 +168,7 @@ pub fn commit_draft() {
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().entry_at(at) {
         Some(e) => is_marker(e.state),
-        None => !is_placement_blocked(PlacementTool::Marker, &base_of(zoom, cell)),
+        None => !is_placement_blocked(Placeable::Marker, &base_of(zoom, cell)),
     };
     if stands && !text.is_empty() {
         submit(Write {
@@ -233,11 +228,11 @@ pub struct Pending {
     pub digging: bool,
     /// The same check as the commit, so preview and placement cannot disagree.
     pub blocked: bool,
-    /// What `blocked` was asked of: the tool, its zoom with it, the hovered
+    /// What `blocked` was asked of: what it places, its zoom with it, the hovered
     /// corner and the store's revision. Asked again only where one moved or
     /// a change touched the columns it reads (`placement_reads`,
     /// `changes::within`), as a step each frame turn sees each change once.
-    blocked_key: Option<(PlacementTool, Q3, u32)>,
+    blocked_key: Option<(Placeable, Q3, u32)>,
 }
 
 static PENDING: Global<Pending> = Global::new();
@@ -256,25 +251,25 @@ pub fn pending_step() -> RenderEdits {
     let object = hover.object_at.and_then(|at| world.entry_at(at));
     let scattered = hover.scattered_decor.is_some();
     let digging = active_tool == ActiveTool::Eraser && object.is_none() && !scattered;
-    let tool = PlacementTool::of(&ui);
-    let zoom = match (tool, &object) {
-        (Some(tool), _) => tool.zoom(),
+    let placeable = Placeable::of(&ui);
+    let zoom = match (placeable, &object) {
+        (Some(placeable), _) => placeable.zoom(),
         (None, Some(o)) => o.zoom,
         // A terrain carve is a whole cell: the scan emits nothing for a zero
         // material whatever its sub-cell bytes, so the cell goes whole anyway.
         (None, None) => GROUND.cell(),
     };
-    let (blocked, blocked_key) = match (&hovered, tool) {
-        (Some(h), Some(tool)) => {
-            let blocked_key = Some((tool, *h, world.revision()));
+    let (blocked, blocked_key) = match (&hovered, placeable) {
+        (Some(h), Some(placeable)) => {
+            let blocked_key = Some((placeable, *h, world.revision()));
             let was = *PENDING.get(Pending::default);
-            let same =
-                was.blocked_key == blocked_key && !changes::within(placement_reads(tool, h), &[]);
+            let same = was.blocked_key == blocked_key
+                && !changes::within(placement_reads(placeable, h), &[]);
             (
                 if same {
                     was.blocked
                 } else {
-                    is_placement_blocked(tool, h)
+                    is_placement_blocked(placeable, h)
                 },
                 blocked_key,
             )

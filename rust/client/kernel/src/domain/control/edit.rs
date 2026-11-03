@@ -19,7 +19,7 @@ use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
 pub use crate::domain::control::cmd::ActiveTool;
 use crate::domain::control::edit::collision::{anchor_center, object_aabb};
-use crate::domain::control::edit::collision::{is_placement_blocked, PlacementTool};
+use crate::domain::control::edit::collision::{is_placement_blocked, Placeable};
 use crate::domain::control::edit::pick::{
     ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner,
 };
@@ -204,13 +204,13 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         return;
     };
 
-    if let Some(tool) = PlacementTool::of(&ui) {
+    if let Some(placeable) = Placeable::of(&ui) {
         hover.object_at = None;
         hover.scattered_decor = None;
         hover.approach = None;
         hover.coord = Some(world_adjacent_corner(
             &hit,
-            tool.size(),
+            placeable.size(),
             flush_against(&hit).as_ref(),
         ));
         return;
@@ -256,13 +256,13 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
     let ui = state().tool;
     let hover = state().hover;
 
-    match PlacementTool::of(&ui) {
+    match Placeable::of(&ui) {
         // The slot may have filled since the last hover update.
         Some(tool) if is_placement_blocked(tool, &hovered) => {}
-        Some(PlacementTool::Cube(zoom)) => place(&hovered, zoom, ui.cube),
-        Some(PlacementTool::Decor(id)) => place_decor(&hovered, id),
+        Some(Placeable::Cube(zoom)) => place(&hovered, zoom, ui.cube),
+        Some(Placeable::Decor(id)) => place_decor(&hovered, id),
         // A draft opens there, its text the shell's to write.
-        Some(PlacementTool::Marker) => draft_new(&hovered),
+        Some(Placeable::Marker) => draft_new(&hovered),
         None if ui.active_tool == ActiveTool::Pointer => {
             // Recenter across the struck face, standing as a pan lands.
             let Some(approach) = hover.approach else {
