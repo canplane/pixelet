@@ -3,7 +3,7 @@
 import {client,ev} from './cdp.mjs';
 import {execSync,spawn} from 'node:child_process';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 const D=process.argv[2],LABEL=process.argv[3]||'run';const PORT=D==='s23'?9333:9222;
-const O='http://localhost:5174';const W=process.cwd()+'/wt/ts/client/src';
+const O=`http://localhost:${process.env.VPORT||5174}`;const W=process.cwd()+'/'+(process.env.WT||'wt')+'/ts/client/src';
 const A=process.env.HOME+'/Library/Android/sdk/platform-tools/adb';
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const file=`pyramid-${D}-${LABEL}.json`;const out={device:D,label:LABEL,log:[]};const log=(k,v)=>{out.log.push([k,v]);console.log(k,JSON.stringify(v).slice(0,230));fs.writeFileSync(file,JSON.stringify(out,null,1))};
@@ -27,12 +27,12 @@ const inject=`(()=>{
 })();`;
 const therm=()=>D!=='s23'?'mac':execSync(`${A} shell dumpsys thermalservice`).toString().split('\n').filter(l=>/Thermal Status|mName=AP\b/.test(l)).slice(0,2).map(s=>s.trim().replace(/Temperature\{mValue=|, mType=\d+|mName=|\}|, mStatus=\d/g,'')).join(' | ');
 let chrome,dir;
-if(D==='s23'){execSync(`${A} reverse tcp:5174 tcp:5174`);execSync(`${A} forward tcp:9333 localabstract:chrome_devtools_remote`);execSync(`${A} shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main -d about:blank`)}
+if(D==='s23'){execSync(`${A} reverse tcp:${process.env.VPORT||5174} tcp:${process.env.VPORT||5174}`);execSync(`${A} forward tcp:9333 localabstract:chrome_devtools_remote`);execSync(`${A} shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main -d about:blank`)}
 else{dir=fs.mkdtempSync(path.join(os.tmpdir(),'pxl-pyr-'));chrome=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',[`--user-data-dir=${dir}`,'--lang=ko','--remote-debugging-port=9222','--no-first-run','--no-default-browser-check','--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding','--disable-background-timer-throttling','about:blank'],{stdio:'ignore'})}
 let t;for(let i=0;i<30&&!t;i++){await wait(1000);try{const tabs=await (await fetch(`http://localhost:${PORT}/json`)).json();t=tabs.find(x=>x.type==='page'&&x.url==='about:blank')??tabs.find(x=>x.type==='page'&&x.url.startsWith(O))}catch{}}
 if(!t)throw new Error('no tab');
 const v=await (await fetch(`http://localhost:${PORT}/json/version`)).json();const b=client(v.webSocketDebuggerUrl);await b.open;await b.call('Browser.grantPermissions',{origin:O,permissions:['geolocation']});
-const c=client(t.webSocketDebuggerUrl);await c.open;await c.call('Page.enable');await c.call('Runtime.enable');
+const c=client(t.webSocketDebuggerUrl);await c.open;await c.call('Page.enable');await c.call('Input.setIgnoreInputEvents',{ignore:true});await c.call('Runtime.enable');
 if(D==='mac'){const dpr=await ev(c,'devicePixelRatio',5000);await c.call('Emulation.setDeviceMetricsOverride',{width:Math.round(1080/dpr),height:Math.round(1968/dpr),deviceScaleFactor:0,mobile:false})}
 await c.call('Emulation.setGeolocationOverride',{latitude:38.1193,longitude:128.4656,accuracy:10});
 await c.call('Page.addScriptToEvaluateOnNewDocument',{source:inject});
@@ -47,14 +47,15 @@ const dumps=[];const snap=async k=>{await ev(c,`__P.want=true`);const r=await ev
 const motion=(secs,turn)=>`(async()=>{const cv=document.querySelector('canvas');const r=cv.getBoundingClientRect();const [x,y]=[r.left+r.width/2,r.top+r.height/2];const p=(t,a,b)=>cv.dispatchEvent(new PointerEvent(t,{pointerId:1,pointerType:'mouse',isPrimary:true,clientX:a[0],clientY:a[1],buttons:b,button:2,bubbles:true,cancelable:true}));const on=a=>[x+100*Math.cos(a),y+100*Math.sin(a)];p('pointerdown',on(-Math.PI/2),2);const t0=performance.now();const s=setInterval(()=>p('pointermove',on(-Math.PI/2+(performance.now()-t0)/1000/${turn}*2*Math.PI),2),16);await new Promise(r=>setTimeout(r,${secs}*1000));clearInterval(s);p('pointerup',on(-Math.PI/2),0);return 1})()`;
 if(process.env.STILL){if(process.env.SHOT){await ev(c,`__m.set(__m.SET.sky_time.key,__m.SET.sky_time.options.dawn)`)}await wait(Number(process.env.STILL)*1000);await snap('still');
  if(process.env.SHOT){log('view',await ev(c,`(pxl.perf.report().match(/distance [0-9.]+ u +polar [-0-9.]+. +azimuth [-0-9.]+/)||[''])[0]`));for(const n of [1,2]){const r=await c.call('Page.captureScreenshot',{format:'png'});if(r.error)log('shot error',r.error.message);else{fs.writeFileSync(`shot-${D}-${LABEL}-${n}.png`,Buffer.from(r.result.data,'base64'));log('shot',n)}await wait(4000)}
+  for(const [tag,stepsN] of [['m',40],['n',40]]){await ev(c,`(async()=>{const cv=document.querySelector('canvas');const r=cv.getBoundingClientRect();const [x,y]=[r.left+r.width/2,r.top+r.height/2];const p=(t,a,b)=>cv.dispatchEvent(new PointerEvent(t,{pointerId:1,pointerType:'mouse',isPrimary:true,clientX:a,clientY:y,buttons:b,button:2,bubbles:true,cancelable:true}));window.__at=window.__at||x-100;p('pointerdown',window.__at,2);for(let n=0;n<${stepsN};n++){window.__at+=4;p('pointermove',window.__at,2);await new Promise(s=>setTimeout(s,16))}p('pointerup',window.__at,0);return 1})()`,60000);await wait(150);const r3=await c.call('Page.captureScreenshot',{format:'png'});if(!r3.error){fs.writeFileSync(`shot-${D}-${LABEL}-${tag}.png`,Buffer.from(r3.result.data,'base64'));log('shot '+tag,await ev(c,`(pxl.perf.report().match(/distance [0-9.]+ u +polar [-0-9.]+. +azimuth [-0-9.]+/)||[''])[0]`))}await wait(12000)}
   for(const [tag,steps] of [['w',8],['x',8]]){await ev(c,`(async()=>{const cv=document.querySelector('canvas');const r=cv.getBoundingClientRect();for(let n=0;n<${steps};n++){cv.dispatchEvent(new WheelEvent('wheel',{deltaY:100,clientX:r.left+r.width/2,clientY:r.top+r.height/2,bubbles:true,cancelable:true}));await new Promise(s=>setTimeout(s,30))}return 1})()`,30000);await wait(25000);const v=await ev(c,`(pxl.perf.report().match(/distance [0-9.]+ u +polar [-0-9.]+. +azimuth [-0-9.]+/)||[''])[0]`);const r2=await c.call('Page.captureScreenshot',{format:'png'});if(!r2.error){fs.writeFileSync(`shot-${D}-${LABEL}-${tag}.png`,Buffer.from(r2.result.data,'base64'));log('shot '+tag,v)}}
  }
-await wait(10000);await snap('still again');log('done',T());b.close();if(D==='s23'){await c.call('Page.navigate',{url:'about:blank'});c.close();execSync(`${A} reverse --remove tcp:5174`);execSync(`${A} forward --remove tcp:9333`)}else{c.close();chrome.kill();await wait(1500);fs.rmSync(dir,{recursive:true,force:true})}process.exit(0)}
+await wait(10000);await snap('still again');log('done',T());b.close();if(D==='s23'){await c.call('Page.navigate',{url:'about:blank'});c.close();execSync(`${A} reverse --remove-all`);execSync(`${A} forward --remove tcp:9333`)}else{c.close();chrome.kill();await wait(1500);fs.rmSync(dir,{recursive:true,force:true})}process.exit(0)}
 await wait(10000);await snap('settled');
 for(let k=0;k<4;k++){await ev(c,motion(12,6),120000);await snap('circle '+k)}
 log('therm',therm());
 await ev(c,`__m.start()`);await ev(c,`pxl.perf.drive(15).then(()=>1)`,240000);await snap('drive');await ev(c,motion(12,4),120000);await snap('drive turn');
 const line=await ev(c,`pxl.perf.report().split('\\n').filter(l=>/frames n=|kinds|gpu   /.test(l)).map(l=>l.slice(0,110)).join(' | ')`);log('report',line);log('therm',therm());
 log('done',T());b.close();
-if(D==='s23'){await c.call('Page.navigate',{url:'about:blank'});c.close();for(const x of (await (await fetch(`http://localhost:${PORT}/json`)).json()).filter(x=>x.type==='page'&&x.url==='about:blank'&&x.id!==t.id)){await fetch(`http://localhost:${PORT}/json/close/${x.id}`)}execSync(`${A} reverse --remove tcp:5174`);execSync(`${A} forward --remove tcp:9333`)}else{c.close();chrome.kill();await wait(1500);fs.rmSync(dir,{recursive:true,force:true})}
+if(D==='s23'){await c.call('Page.navigate',{url:'about:blank'});c.close();for(const x of (await (await fetch(`http://localhost:${PORT}/json`)).json()).filter(x=>x.type==='page'&&x.url==='about:blank'&&x.id!==t.id)){await fetch(`http://localhost:${PORT}/json/close/${x.id}`)}execSync(`${A} reverse --remove-all`);execSync(`${A} forward --remove tcp:9333`)}else{c.close();chrome.kill();await wait(1500);fs.rmSync(dir,{recursive:true,force:true})}
 process.exit(0);

@@ -377,7 +377,7 @@ both, and `ray_counts`' lane what is left (`reports/s23-beam-by-hand.json`). The
 - **The median frame gains, the worst does not.** GPU p50 falls by a third, p95 stands.
   `beam`'s p95 rose: 39–48% of its nodes are left, every write to the pyramid is in that
   pass, and a frame that meets many new nodes pays both passes.
-- **`face` went from 4.6 to 13.** Not traced.
+- **`face` read 4.6 before and 13 here**: the run, as a later run of this code shows.
 - **It draws**; no view moved unasked in these windows (16 u, polar 60).
 
 The picture against `d25f5b631`, on the S23, at rest, sky fixed, two runs of each
@@ -420,8 +420,9 @@ taken from them.
 - **`beam` is half zooms changed.** The node is kept, but at other asked zooms: half of
   the left beams on the S23, 88% on the Mac, mostly at zooms 22–24, the nodes near the
   eye. `sample` and `miss` are nearly all nodes never asked.
-- **Neither forgetting nor eviction.** Of 15,933 absent on the S23, 98 were held the
-  frame before, under any zooms, and 134 met a full bucket.
+- Eviction is small: 134 of 15,933 absent met a full bucket. Forgetting read small here too,
+  98 held the frame before, but this read missed the frames that forget: see "What stops a
+  whole frame".
 - **The rays come in bursts.** On the S23 one frame of the ten left 5,122 beams to 115
   nodes, and two left none. No reasons were read for a frame's GPU time against its
   count, so the tail's tie to these bursts is a reading.
@@ -448,7 +449,8 @@ windows, against `8ac7315b1`:
 
 - **`beam` did not move.** How many of the "other zooms" differ in `far` alone was not
   counted.
-- **`face` is back at its old value**, with no fewer left beams. Not traced.
+- **`face` is back at its old value**, with no fewer left beams; below, that was the
+  run and not this change.
 
 The picture, on the S23, at rest, sky fixed, the origin's storage cleared before each
 load and the camera logged, at the default view and two views zoomed out (93 u, 541 u),
@@ -467,14 +469,163 @@ noise is large, from what is still arriving, the toast and the companion, and wo
 hide a small change. By eye the three are the same, with no darker or bluer picture.
 Not compared: a moving view at a boundary of detail, or `2a9b235f3`'s run b.
 
-**A camera moved with no input.** `2a9b235f3`'s run b opened at 20.2 u, polar 56.3,
-azimuth -15.5, its storage cleared, where the five others opened at 16 u, 60, 0. The
-Mac at `8ac7315b1` once did the like (40.2 u, polar 27). Not traced; not seen at
-`d25f5b631` in 2 runs, too few to say.
+`2a9b235f3`'s run b opened at 20.2 u, polar 56.3, azimuth -15.5: a touch on the phone, the
+user's, as the Mac's like runs were not the hand walk's. It is left out of the table.
 
 Stored state had spoiled the runs before it: a view is kept by origin, and a run opens
 where the last left. Two of those six sat on `pivot -` for 180 s, one each at
 `2a9b235f3` and `d25f5b631`; none of the six from cleared storage did.
+
+### What "other zooms" is
+
+`2a9b235f3`, its misses instrumented as before (`tools/left-instrument-split.patch`,
+`reports/left-split-*.json`), the left beams' reason split by how the slot held differs
+from what was asked. Held minus asked; the walk takes a coarser `far` already, so what
+differs in `far` alone here is a finer one held. 14 frames on the S23, 8 on the Mac:
+
+| | Left beams | Distinct first stops | `near` alone | `far` alone | Both | Absent |
+| --- | --- | --- | --- | --- | --- | --- |
+| S23 | 16,068 | 342 | 3,065 | 429 | 11,349 | 1,225 |
+| Mac | 5,171 | 151 | 4,690 | 232 | 27 | 222 |
+
+- **`near` decides.** On the Mac 91% of left beams are held at another `near`, 4,238 of
+  them one coarser than asked and `far` the same.
+- **The S23's bursts are one node.** 10,540 were held both 2 coarser than asked, in two
+  frames of the 14: 6,848 left beams to 7 nodes, 6,366 of them at one node of zoom 21,
+  and 4,838 to 109, 4,171 at zoom 22. These are nodes high on nearly every beam's way,
+  so one key stops most of a frame. Four frames left none. That this is the frame's
+  tail is still a reading: no frame's GPU time was read against its count.
+- `sample` and `miss` stay nodes never asked: 23,869 of 25,161 and 3,466 of 3,514 on the
+  S23.
+
+### What a frame costs, and how deep a queue goes
+
+`7bf251816`, the passes as at `8ac7315b1`. `face` p95 there is 6.6–7.0, where the same
+code took 12.9–14.1 at `8ac7315b1` and `2a9b235f3` 4.6–5.6. `world` moved too, 8.7 at
+one and 11.8 at the other, on the same code. So those were no finding of `face`: on this
+phone a pass's p95 moves up to twice between runs, and only windows of one run compare.
+
+**A frame against what it left** (`reports/s23-frames.json`, `tools/tail.py`): the
+profiler's rows, each frame's GPU time and spans beside its `ray_counts` lanes, 149
+frames with both, a 6 s turn, `ray_counts` on.
+
+| Left nodes, all passes | Frames | GPU busy, ms | `beam` | `sample` | `miss` |
+| --- | --- | --- | --- | --- | --- |
+| under 20 thousand | 18 | 31.1 | 4.8 | 0.6 | 1.3 |
+| 20–100 thousand | 33 | 40.4 | 11.2 | 1.9 | 2.6 |
+| 100–250 thousand | 24 | 51.8 | 24.6 | 1.2 | 1.8 |
+| 250–500 thousand | 43 | 88.9 | 43.6 | 9.1 | 7.1 |
+| over 500 thousand | 31 | 157.2 | 57.1 | 40.2 | 28.7 |
+
+- **The tail is the left nodes.** GPU busy on all left nodes: 32.4 ms plus 150 ns a node,
+  correlation 0.96. By pass, at no node left and a left node's cost: `beam` 4.1 ms and
+  139 ns, 0.96; `sample` 1.8 and 113, 0.99; `miss` 2.9 and 213, 0.94.
+- **The floor read 32 ms with `ray_counts` on**, which is high: below.
+
+**How deep.** `tools/left.mjs`, `MODE=depth`, no shader change: a frame's entries the
+pyramid tags with that frame and pass, each counted one deeper than its parent if the
+parent is new too. The depth is the round of a queue that asks one layer a round
+(`reports/s23-depth.json`). 12 frames on the S23:
+
+| | Nodes in `beam` | Rounds | Nodes by round |
+| --- | --- | --- | --- |
+| Most frames | 5–892 | 1–8 | most in the first two or three |
+| Two frames of the 12 | 2,113, 2,228 | 19 | 100–128 in the first, a few each to the 14th, then 118, ~550, ~340, ~480, ~470 |
+
+`sample` is at most 4 rounds, `miss` 1 or 2 where read. What is kept alone is counted, so
+an opaque cell a beam does not keep is not among them, and these bound from below.
+
+**The floor** (`reports/s23-frames-all-spans*.json`), every span of each frame, in one
+sitting, mean ms:
+
+| | Frames | Busy | `world` | `beam` | `px` | `face` | `finish` | `sraster` | `generate` | `resolve` | `miss` | `sample_hit` | `sample` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Counts on, under 20 thousand left | 23 | 28.7 | 8.98 | 4.74 | 4.14 | 2.45 | 1.50 | 1.35 | 1.40 | 1.04 | 1.31 | 0.85 | 0.53 |
+| Counts off, the fastest quarter that cast | 146 | 20.4 | 5.67 | 4.36 | 1.32 | 1.96 | 1.46 | 1.31 | 1.31 | 0.97 | 0.84 | 0.77 | 0.06 |
+| Counts off, every frame | 631 | 50.6 | 5.31 | 17.79 | 1.37 | 4.58 | 1.46 | 1.42 | 1.47 | 0.94 | 7.91 | 1.16 | 6.65 |
+| Counts off, frames that did not cast | 50 | 7.9 | 2.59 | | 1.64 | | 1.30 | 0.95 | | 0.50 | 0.79 | | |
+
+A frame that casts with nothing left is about 20 ms, not 32: `ray_counts` itself costs
+`px` 3 ms and more. The spans sum to the busy time, so no GPU work is unaccounted. Every
+frame's p50 is 31.4 and its mean 50.6.
+
+### A load that never draws
+
+Seen on the S23 on `7bf251816` as on `d25f5b631`: the world never comes, the toast stays
+on "공간을 불러오고 있습니다", "위치 찾는 중…" (`reports/s23-failed-load.json`). When caught:
+`navigator.geolocation.getCurrentPosition` at 5 s gave error 3, timeout, with permission
+granted, where the same call answered at the page's first moment; `pivot -`, frames `plain`
+and `stood`, no failed resource. So the page was waiting on a position that never came.
+The position here is the DevTools override, set again every 5 s by the script, so this may
+be the harness's. Whether a real device's silence holds the page the same way was not
+tried.
+
+### Two rounds, and a Split at other zooms
+
+Each against its parent in one sitting, by turns (`tools/ab2.sh`, `tools/ab3.sh`).
+
+**A queue**, `3e7ba241d` against `7bf251816`: each left beam's first stop asked once, then
+the hand walk again. It left 115 thousand nodes a cast against 155–166, and took `beam` from
+44–60 to 88–99 and GPU p95 from 108–167 to 175–217. fps 13.0–17.2 against 15.8–23.4.
+Reverted. `ask.gen.wgsl` peaks at 95 live words, so the cliff is not why.
+
+**The node that stops a frame.** `7bf251816`, a first stop's distances against its side
+(`reports/left-near-s23.json`). Two frames of 16 left 6,848 beams, every one of the grid's
+corners, to one node: zoom 17, side 128 u, the eye inside it (near 0), its far corner at 192
+u, asked [23, 27] and held [22, 26]. Other bursts are alike: a node of the chain over the
+eye, near or far on a boundary of `zoom_at` (12, 24, 48, 96, 192 u).
+
+**A Split held at other zooms passed through**, `2f7d18b37` against `1af780b72`:
+
+| | `1af780b72` | `2f7d18b37` |
+| --- | --- | --- |
+| fps | 15.1–17.4 | 15.2–17.2 |
+| GPU p95, ms | 141–179 | 147–180 |
+| `beam` p95 | 56.5–64.9 | 59.7–66.1 |
+| `beam` left, mean a cast | 150–206 thousand | 109–122 thousand |
+| frames left over 250 thousand | 32–43% | 14–20% |
+| most left in a frame | 439–450 thousand | 430–432 thousand |
+| frame busy p50, p95, ms (with counts) | 32.5–54.0, 128–158 | 33.0–35.3, 130–161 |
+
+It halves the frames that leave most, and the worst frame and the tail stand. Not read: what
+those frames stopped on now.
+
+The picture at rest, sky fixed, two runs each: `1af780b72` a / `2f7d18b37` a differ 8.0%,
+0.04% over 8, mean 0.10, `1af780b72` a / `2f7d18b37` b mean 0.41, and the child's two runs
+0.37. The parent's run b differs from all at 8.9: three near trees absent and the toast
+"동행을 준비하고 있습니다" still up at 70 s. So a slow load, and no commit's. The "moved" view
+turned 0.1 degrees, so a moving view at a boundary of detail remains uncompared here.
+
+**Noise.** `world` and `face` trade by load, not commit: in one parent's load `world` 5.7–6.4
+and `face` 15.7–18.2, in the next 9.2–9.4 and 6.6–7.0. Not traced. Thermal status reached 1 at
+AP 48.7 °C after about an hour of this and again after each long round.
+
+### What stops a whole frame: forgetting
+
+The reads above of "Why rays are left" and "How deep" took the second of two frames after a
+stall of a 25 MB copy, and missed most of this. Read instead without that copy, the record
+zones as fast as they come, one distinct frame in about 3.5, and each frame's head beside them
+(`tools/left4.mjs`, `MODE=scan`, `tools/left-why.patch`, `reports/scan-s23.json`), `2f7d18b37`
+on the S23, a 6 s turn, 328 frames:
+
+| Forgets | Moved bricks | Boxes, writes | Beam rays left | Frames |
+| --- | --- | --- | --- | --- |
+| `FORGETS_MOVED` | yes | none | all 6,848 | 29 |
+| none | none | none | all 6,848 | 1 |
+| none | none | none | over 1,500 | 116 |
+| none | none | none | up to 1,500 | 182 |
+
+- **Every frame that moved a brick left the whole grid**, and all but one whole-grid frame moved
+  a brick. In the earlier scan 44 of 47 whole-grid frames stopped on one node, the root, absent:
+  `pyramid::forgets` drops every node over a moved brick, and a node as wide as a clip level
+  "reads every entry of the clip level", so any brick takes the root and the chain.
+- The bricks are few: 3 to 40 bits a frame. No box or write was involved.
+- The other whole-grid frames stopped on a node holding the eye, held as a Cell at coarser zooms
+  (z22, side 4, asked [27, 27], held [25, 26]).
+- Rays leave by no slot almost alone: 695,752 against 169 narrow, none at a Lacks under a blind
+  split or by a reach.
+- `sample` and `miss` rise with `beam` (correlation 0.64, 0.56), on nodes absent, not re-keyed.
+- Beam rays left a frame: p50 1,263, p90 6,386, p95 6,848.
 
 ## What runs by what
 
@@ -542,6 +693,8 @@ long task (`tools/raf.mjs`).
 - `main` past `d25f5b631`: at `69ff22b9a` the Mac's page drew nothing, its
   `FS_MOUNT` refused with `EINVAL`. That commit changes `spec/spec/bake/publication.json`,
   so the delivery data may lag it. The cause was not traced.
+- A touch moves the camera: `Input.setIgnoreInputEvents` holds real input off a run's tab,
+  and in-page events still pass.
 - Clear the origin's storage before a load and log the camera: a view is kept by
   origin. Compare pictures only where the views match.
 - A grant by `Browser.grantPermissions` ends with the session that made it: closed,

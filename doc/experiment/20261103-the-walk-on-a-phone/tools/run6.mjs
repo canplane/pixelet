@@ -2,22 +2,22 @@
 import {client,ev} from './cdp.mjs';
 import {execSync,spawn} from 'node:child_process';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 const D=process.argv[2];const PORT=D==='s23'?9333:9222;
-const O='http://localhost:5174';const W=process.cwd()+'/wt/ts/client/src';
+const O=`http://localhost:${process.env.VPORT||5174}`;const W=process.cwd()+'/'+(process.env.WT||'wt')+'/ts/client/src';
 const A=process.env.HOME+'/Library/Android/sdk/platform-tools/adb';
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
-const out={device:D,log:[]};const file=`run4-${D}.json`;const log=(k,v)=>{out.log.push([k,v]);console.log(k,typeof v==='string'?v.slice(0,160):JSON.stringify(v).slice(0,160));fs.writeFileSync(file,JSON.stringify(out,null,1))};
+const out={device:D,log:[]};const file=process.env.OUT||`run4-${D}.json`;const log=(k,v)=>{out.log.push([k,v]);console.log(k,typeof v==='string'?v.slice(0,160):JSON.stringify(v).slice(0,160));fs.writeFileSync(file,JSON.stringify(out,null,1))};
 const therm=()=>D!=='s23'?'mac':execSync(`${A} shell dumpsys thermalservice`).toString().split('\n').filter(l=>/Thermal Status|mName=(AP|SKIN)\b/.test(l)).slice(0,3).map(s=>s.trim().replace(/Temperature\{mValue=|, mType=\d+|mName=|\}|, mStatus=\d/g,'')).join(' | ');
 let chrome,dir;
-if(D==='s23'){execSync(`${A} reverse tcp:5174 tcp:5174`);execSync(`${A} forward tcp:9333 localabstract:chrome_devtools_remote`);execSync(`${A} shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main -d about:blank`)}
+if(D==='s23'){execSync(`${A} reverse tcp:${process.env.VPORT||5174} tcp:${process.env.VPORT||5174}`);execSync(`${A} forward tcp:9333 localabstract:chrome_devtools_remote`);execSync(`${A} shell am start -a android.intent.action.VIEW -n com.android.chrome/com.google.android.apps.chrome.Main -d about:blank`)}
 else{dir=fs.mkdtempSync(path.join(os.tmpdir(),'pxl-mac-'));chrome=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',[`--user-data-dir=${dir}`,'--remote-debugging-port=9222','--lang=ko','--no-first-run','--no-default-browser-check','--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding','--disable-background-timer-throttling','about:blank'],{stdio:'ignore'})}
 let tabs;for(let i=0;i<30;i++){await wait(1000);try{tabs=await (await fetch(`http://localhost:${PORT}/json`)).json();if(tabs.some(x=>x.type==='page'))break}catch{}}
 const t=D==='s23'?(tabs.find(x=>x.type==='page'&&x.url==='about:blank')??tabs.find(x=>x.type==='page'&&x.url.startsWith(O))):tabs.find(x=>x.type==='page');
 if(!t)throw new Error('no blank tab');
 const v=await (await fetch(`http://localhost:${PORT}/json/version`)).json();const b=client(v.webSocketDebuggerUrl);await b.open;const gr=await b.call('Browser.grantPermissions',{origin:O,permissions:['geolocation']});log('grant',gr.error||'ok');
-const c=client(t.webSocketDebuggerUrl);await c.open;await c.call('Page.enable');
+const c=client(t.webSocketDebuggerUrl);await c.open;await c.call('Page.enable');await c.call('Input.setIgnoreInputEvents',{ignore:true});
 if(D==='mac'){const dpr=await ev(c,'devicePixelRatio',5000);await c.call('Emulation.setDeviceMetricsOverride',{width:Math.round(1080/dpr),height:Math.round(1968/dpr),deviceScaleFactor:0,mobile:false});log('mac dpr',dpr)}
 await c.call('Emulation.setGeolocationOverride',{latitude:38.1193,longitude:128.4656,accuracy:10});
-await c.call('Page.bringToFront');await c.call('Page.navigate',{url:O+'/'});
+log('clear',(await c.call('Storage.clearDataForOrigin',{origin:O,storageTypes:'all'})).error||'ok');await c.call('Page.bringToFront');await c.call('Page.navigate',{url:O+'/'});
 await wait(1500);await c.call('Page.bringToFront');log('hidden',await ev(c,'document.hidden',5000));
 await ev(c,`navigator.wakeLock.request('screen').then(l=>{window.__wl0=l;return 1}).catch(e=>String(e))`,5000).then(v=>log('wake lock',v));
 const t0=Date.now();const T=()=>Math.round((Date.now()-t0)/1000);log('therm0',therm());
@@ -25,6 +25,7 @@ let first=null;
 for(let i=0;i<360;i++){await wait(1000);let s;try{s=await ev(c,`({p:typeof pxl,c:!!document.querySelector('canvas'),l:document.body.innerText.includes('공간을 불러오고')})`,5000)}catch(e){continue}
  if(s.p==='object'&&s.c&&!s.l){first=T();break}}
 log('world shown s',first);
+if(first===null){log('state',await ev(c,`(async()=>JSON.stringify({text:document.body.innerText.slice(0,160),vis:document.visibilityState,perm:(await navigator.permissions.query({name:'geolocation'})).state,geo:await new Promise(res=>navigator.geolocation.getCurrentPosition(p=>res(['ok',p.coords.latitude]),e=>res(['err',e.code,e.message]),{timeout:5000})),pxl:typeof pxl,res:performance.getEntriesByType('resource').length,bad:performance.getEntriesByType('resource').filter(e=>e.responseStatus>=400||e.responseStatus===0).slice(-8).map(e=>[new URL(e.name).pathname.slice(-50),e.responseStatus])}))()`,15000).catch(e=>String(e)))}
 if(first===null){c.close();chrome?.kill();process.exit(1)}
 await wait(15000);
 const P='/@fs'+W;

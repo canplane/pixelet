@@ -1,0 +1,455 @@
+{
+ "device": "s23",
+ "label": "depth",
+ "log": [
+  [
+   "clear",
+   "ok"
+  ],
+  [
+   "wake",
+   "NotAllowedError: Wake Lock permission request denied"
+  ],
+  [
+   "geo test",
+   [
+    "ok",
+    38.1193
+   ]
+  ],
+  [
+   "live at s",
+   {
+    "s": 16,
+    "read": 3,
+    "pivot": "38.11727°,",
+    "has": true
+   }
+  ],
+  [
+   "camera after world",
+   "distance 16.0 u  polar 60.0°  azimuth 0.0"
+  ],
+  [
+   "depth 0",
+   {
+    "frame": 232,
+    "older": 66497,
+    "beam": {
+     "nodes": 489,
+     "deepest": 8,
+     "by_round": {
+      "1": 306,
+      "2": 113,
+      "3": 50,
+      "4": 13,
+      "5": 1,
+      "6": 1,
+      "7": 2,
+      "8": 3
+     }
+    },
+    "sample": {
+     "nodes": 447,
+     "deepest": 3,
+     "by_round": {
+      "1": 320,
+      "2": 115,
+      "3": 12
+     }
+    },
+    "miss": {
+     "nodes": 11,
+     "deepest": 1,
+     "by_round": {
+      "1": 11
+     }
+    }
+   }
+  ],
+  [
+   "depth 1",
+   {
+    "frame": 277,
+    "older": 50957,
+    "beam": {
+     "nodes": 5,
+     "deepest": 2,
+     "by_round": {
+      "1": 4,
+      "2": 1
+     }
+    },
+    "sample": {
+     "nodes": 1,
+     "deepest": 1,
+     "by_round": {
+      "1": 1
+     }
+    },
+    "miss": {
+     "nodes": 2,
+     "deepest": 2,
+     "by_round": {
+      "1": 1,
+      "2": 1
+     }
+    }
+   }
+  ],
+  [
+   "depth 2",
+   {
+    "frame": 308,
+    "older": 53501,
+    "beam": {
+     "nodes": 892,
+     "deepest": 7,
+     "by_round": {
+      "1": 255,
+      "2": 221,
+      "3": 197,
+      "4": 51,
+      "5": 77,
+      "6": 52,
+      "7": 39
+     }
+    },
+    "sample": {
+     "nodes": 554,
+     "deepest": 4,
+     "by_round": {
+      "1": 347,
+      "2": 158,
+      "3": 46,
+      "4": 3
+     }
+    },
+    "miss": {
+     "nodes": 78,
+     "deepest": 2,
+     "by_round": {
+      "1": 72,
+      "2": 6
+     }
+    }
+   }
+  ],
+  [
+   "depth 3",
+   {
+    "frame": 326,
+    "older": 57291,
+    "beam": {
+     "nodes": 2228,
+     "deepest": 19,
+     "by_round": {
+      "1": 128,
+      "2": 29,
+      "3": 13,
+      "4": 1,
+      "5": 1,
+      "6": 1,
+      "7": 1,
+      "8": 1,
+      "9": 1,
+      "10": 1,
+      "11": 2,
+      "12": 6,
+      "13": 12,
+      "14": 38,
+      "15": 118,
+      "16": 541,
+      "17": 329,
+      "18": 495,
+      "19": 510
+     }
+    },
+    "sample": {
+     "nodes": 2439,
+     "deepest": 4,
+     "by_round": {
+      "1": 1203,
+      "2": 775,
+      "3": 325,
+      "4": 136
+     }
+    },
+    "miss": {
+     "nodes": 359,
+     "deepest": 3,
+     "by_round": {
+      "1": 326,
+      "2": 27,
+      "3": 6
+     }
+    }
+   }
+  ],
+  [
+   "depth 4",
+   {
+    "frame": 362,
+    "older": 52224,
+    "beam": {
+     "nodes": 9,
+     "deepest": 1,
+     "by_round": {
+      "1": 9
+     }
+    },
+    "sample": {
+     "nodes": 0,
+     "deepest": 0,
+     "by_round": {}
+    },
+    "miss": {
+     "nodes": 0,
+     "deepest": 0,
+     "by_round": {}
+    }
+   }
+  ],
+  [
+   "depth 5",
+   {
+    "frame": 404,
+    "older": 51359,
+    "beam": {
+     "nodes": 137,
+     "deepest": 4,
+     "by_round": {
+      "1": 99,
+      "2": 33,
+      "3": 4,
+      "4": 1
+     }
+    },
+    "sample": {
+     "nodes": 60,
+     "deepest": 2,
+     "by_round": {
+      "1": 59,
+      "2": 1
+     }
+    },
+    "miss": {
+     "nodes": 3,
+     "deepest": 1,
+     "by_round": {
+      "1": 3
+     }
+    }
+   }
+  ],
+  [
+   "depth 6",
+   {
+    "frame": 424,
+    "older": 66842,
+    "beam": {
+     "nodes": 131,
+     "deepest": 5,
+     "by_round": {
+      "1": 98,
+      "2": 21,
+      "3": 10,
+      "4": 1,
+      "5": 1
+     }
+    },
+    "sample": {
+     "nodes": 239,
+     "deepest": 3,
+     "by_round": {
+      "1": 204,
+      "2": 30,
+      "3": 5
+     }
+    },
+    "miss": {
+     "nodes": 12,
+     "deepest": 1,
+     "by_round": {
+      "1": 12
+     }
+    }
+   }
+  ],
+  [
+   "depth 7",
+   {
+    "frame": 441,
+    "older": 68079,
+    "beam": {
+     "nodes": 347,
+     "deepest": 6,
+     "by_round": {
+      "1": 212,
+      "2": 98,
+      "3": 27,
+      "4": 3,
+      "5": 4,
+      "6": 3
+     }
+    },
+    "sample": {
+     "nodes": 366,
+     "deepest": 2,
+     "by_round": {
+      "1": 228,
+      "2": 138
+     }
+    },
+    "miss": {
+     "nodes": 5,
+     "deepest": 1,
+     "by_round": {
+      "1": 5
+     }
+    }
+   }
+  ],
+  [
+   "depth 8",
+   {
+    "frame": 493,
+    "older": 51783,
+    "beam": {
+     "nodes": 33,
+     "deepest": 2,
+     "by_round": {
+      "1": 30,
+      "2": 3
+     }
+    },
+    "sample": {
+     "nodes": 1,
+     "deepest": 1,
+     "by_round": {
+      "1": 1
+     }
+    },
+    "miss": {
+     "nodes": 0,
+     "deepest": 0,
+     "by_round": {}
+    }
+   }
+  ],
+  [
+   "depth 9",
+   {
+    "frame": 523,
+    "older": 56470,
+    "beam": {
+     "nodes": 168,
+     "deepest": 3,
+     "by_round": {
+      "1": 104,
+      "2": 47,
+      "3": 17
+     }
+    },
+    "sample": {
+     "nodes": 94,
+     "deepest": 3,
+     "by_round": {
+      "1": 69,
+      "2": 17,
+      "3": 8
+     }
+    },
+    "miss": {
+     "nodes": 21,
+     "deepest": 2,
+     "by_round": {
+      "1": 20,
+      "2": 1
+     }
+    }
+   }
+  ],
+  [
+   "depth 10",
+   {
+    "frame": 540,
+    "older": 58535,
+    "beam": {
+     "nodes": 2113,
+     "deepest": 19,
+     "by_round": {
+      "1": 100,
+      "2": 27,
+      "3": 9,
+      "4": 1,
+      "5": 1,
+      "6": 1,
+      "7": 1,
+      "8": 1,
+      "9": 1,
+      "10": 1,
+      "11": 2,
+      "12": 6,
+      "13": 13,
+      "14": 39,
+      "15": 118,
+      "16": 550,
+      "17": 340,
+      "18": 472,
+      "19": 430
+     }
+    },
+    "sample": {
+     "nodes": 2217,
+     "deepest": 4,
+     "by_round": {
+      "1": 1098,
+      "2": 707,
+      "3": 304,
+      "4": 108
+     }
+    },
+    "miss": {
+     "nodes": 258,
+     "deepest": 2,
+     "by_round": {
+      "1": 222,
+      "2": 36
+     }
+    }
+   }
+  ],
+  [
+   "depth 11",
+   {
+    "frame": 575,
+    "older": 52433,
+    "beam": {
+     "nodes": 11,
+     "deepest": 2,
+     "by_round": {
+      "1": 8,
+      "2": 3
+     }
+    },
+    "sample": {
+     "nodes": 0,
+     "deepest": 0,
+     "by_round": {}
+    },
+    "miss": {
+     "nodes": 1,
+     "deepest": 1,
+     "by_round": {
+      "1": 1
+     }
+    }
+   }
+  ],
+  [
+   "done",
+   76
+  ]
+ ]
+}

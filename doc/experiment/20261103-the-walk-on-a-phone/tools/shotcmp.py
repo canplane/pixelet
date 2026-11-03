@@ -13,7 +13,7 @@ def rep(name,a,b):
     print(f'{name}: differ {100*gt0/n:.3f}% >2 {100*gt2/n:.3f}% >8 {100*gt8/n:.3f}% >32 {100*gt32/n:.4f}% mean {S/n:.3f}', (min(xs),max(xs),min(ys),max(ys)) if xs else '')
 import itertools,os
 sets=sys.argv[1:]
-for tail in ('1','w','x'):
+for tail in ('1','m','n','w','x'):
     print('-- pose',tail)
     names=[f'{l}{r}' for l in sets for r in 'ab' if os.path.exists(f'shot-s23-{l}{r}-{tail}.png')]
     for x,y in itertools.combinations(names,2):
