@@ -78,5 +78,5 @@ fn footing_word_round_trips() {
         }
     }
     assert!(!is_footing(RETAINED) && !is_footing(UNGENERATED));
-    assert!(!is_footing(record_word(3, 255, 3, pxl_engine::FINEST_ZOOM)));
+    assert!(!is_footing(record_word(3, 255, 3, FINEST_ZOOM)));
 }
