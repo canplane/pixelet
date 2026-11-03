@@ -2,7 +2,7 @@
 
 //! A node's one key at any zoom: its index's digits in two's complement, as
 //! the signed indices are, interleaved a zoom at a time from the coarsest in
-//! `slot_of`'s order, left-aligned, then a 1 that marks where they end. An
+//! `child_idx`'s order, left-aligned, then a 1 that marks where they end. An
 //! axis has a digit from the zoom its extent reaches (`world.rs` `EXTENT`): X
 //! and Y from z1, Z, 16 bits under X's 24, from z9, so a 3D key is the 2D one to z8 and an axis's
 //! first digit is its sign. A coarser key's digits prefix a finer one's over

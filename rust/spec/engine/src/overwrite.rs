@@ -246,7 +246,7 @@ pub fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
     ]
 }
 
-/// The node `at` of `zoom`'s child at `slot` (`slot_of`), X in `at`'s frame.
+/// The node `at` of `zoom`'s child at `slot` (`child_idx`), X in `at`'s frame.
 pub fn child_at(zoom: Zoom, at: [i32; 3], slot: u32) -> [i32; 3] {
     let p = path(zoom, at);
     [
@@ -266,11 +266,12 @@ pub fn ancestor_at(zoom: Zoom, at: [i32; 3], steps: Zoom) -> [i32; 3] {
     ]
 }
 
-/// A child group's slots, a node's children, each at its `slot_of`.
+/// A child group's slots, a node's children, each `child_idx` past its first.
 pub const CHILDREN: u32 = 8;
 
-/// A node's slot in its parent's child group: X's low bit, then Y's, then Z's.
-fn slot_of(at: [i32; 3]) -> u32 {
+/// A node's place in its parent's child group, a slot past the group's first: X's low
+/// bit, then Y's, then Z's.
+fn child_idx(at: [i32; 3]) -> u32 {
     (at[0] & 1 | (at[1] & 1) << 1 | (at[2] & 1) << 2) as u32
 }
 
@@ -293,7 +294,7 @@ pub fn cursor(columns: &impl Columns, root: u32, zoom: Zoom, at: [i32; 3]) -> No
     let p = path(zoom, at);
     down(
         columns,
-        root + slot_of([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]),
+        root + child_idx([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]),
         0,
         zoom,
         p,
@@ -321,7 +322,7 @@ pub fn child(columns: &impl Columns, parent: NodeSlot, zoom: Zoom, at: [i32; 3])
     if parent.is_folded() {
         of(
             columns,
-            (columns.first_child(parent.slot()) & !BRANCH) + slot_of(at),
+            (columns.first_child(parent.slot()) & !BRANCH) + child_idx(at),
             zoom,
         )
     } else {

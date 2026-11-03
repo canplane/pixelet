@@ -8,7 +8,7 @@ use crate::space::camera::grid::{cell_zoom_at, split_dist, CLIP_MARGIN};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{idx_of, Zoom};
 use crate::space::hierarchy::tree::{
-    ancestor_of, child_of, first_descendant_of, parent_of, slot_of,
+    ancestor_of, child_idx, child_of, first_descendant_of, parent_of,
 };
 
 /// A lattice's integer core — its zooms, its cells' indices, the ground's —
@@ -93,7 +93,7 @@ impl Cells for Lattice {
         self.cell_idx(x as u32, y as u32)
     }
 
-    /// The child slot and the 2×2 cells, in `slot_of`'s order, a parent cell
+    /// The child's place and the 2×2 cells, in `child_idx`'s order, a parent cell
     /// folds from: `parent_cell`'s inverse.
     fn child_cells(self, idx: u32) -> (usize, [u32; 4]) {
         let n = self.tile_cells() as i32;
@@ -101,6 +101,6 @@ impl Cells for Lattice {
         let [x0, y0] = [(x % n) as u32, (y % n) as u32];
         let cells =
             std::array::from_fn(|q| self.cell_idx(x0 + (q & 1) as u32, y0 + (q >> 1) as u32));
-        (slot_of([x / n, y / n]), cells)
+        (child_idx([x / n, y / n]), cells)
     }
 }

@@ -31,19 +31,20 @@ pub(crate) fn parent_of<const D: usize>(at: [i32; D]) -> [i32; D] {
     at.map(|v| v.div_euclid(2))
 }
 
-/// How many slots `slot_of` numbers in `axes` axes.
+/// How many children `child_idx` numbers in `axes` axes.
 pub const fn children(axes: usize) -> usize {
     1 << axes
 }
 
-/// Axis i's low bit at bit i: `x + 2y + 4z`.
-pub fn slot_of<const D: usize>(at: [i32; D]) -> usize {
+/// Which of its parent's children `at` is, its orthant (a quadrant in 2D, an octant
+/// in 3D): axis i's low bit at bit i, `x + 2y + 4z`.
+pub fn child_idx<const D: usize>(at: [i32; D]) -> usize {
     (0..D).map(|i| (at[i].rem_euclid(2) as usize) << i).sum()
 }
 
-/// `parent_of` and `slot_of`'s inverse.
-pub fn child_of<const D: usize>(at: [i32; D], slot: usize) -> [i32; D] {
-    std::array::from_fn(|i| 2 * at[i] + ((slot >> i) & 1) as i32)
+/// `parent_of` and `child_idx`'s inverse.
+pub fn child_of<const D: usize>(at: [i32; D], idx: usize) -> [i32; D] {
+    std::array::from_fn(|i| 2 * at[i] + ((idx >> i) & 1) as i32)
 }
 
 pub fn ancestor_of<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {

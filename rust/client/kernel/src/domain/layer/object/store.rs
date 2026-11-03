@@ -24,7 +24,7 @@ use pxl_spec::space::coord::world::{node_near, wrap_cell};
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::node_of;
 use pxl_spec::space::hierarchy::sparse_tree::SparseTree;
-use pxl_spec::space::hierarchy::tree::{region, slot_of, Node};
+use pxl_spec::space::hierarchy::tree::{child_idx, region, Node};
 use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -149,13 +149,13 @@ impl overwrite::Columns for Columns<'_> {
 
 /// Where the node `at` of `zoom` comes in the tree's own order, the order a
 /// walk from the roots enters nodes in (`descend`): its slot a zoom
-/// (`slot_of`) from the roots down, so of two nodes neither under the other
+/// (`child_idx`) from the roots down, so of two nodes neither under the other
 /// the one entered first is the lesser.
 pub(crate) fn tree_key(zoom: Zoom, at: [i32; 3]) -> u128 {
     let p = path(zoom, at);
     let mut key = 0u128;
     for l in 0..=zoom {
-        key = key << 3 | slot_of(p.map(|v| v >> (zoom - l))) as u128;
+        key = key << 3 | child_idx(p.map(|v| v >> (zoom - l))) as u128;
     }
     key << (3 * (OBJECT_FINEST - zoom))
 }

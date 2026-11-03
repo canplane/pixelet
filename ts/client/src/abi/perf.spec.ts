@@ -42,6 +42,7 @@ export const FRAME_GROUP = {
     "settled",
     "turns",
     "busy_ms",
+    "over_ms",
     "budget_ms",
   ],
   turn: [
@@ -92,7 +93,7 @@ export const FRAME_GROUP = {
   heap: ["heap_used_bytes"],
 } as const;
 
-/** One settled task (perf/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's. */
+/** One settled task (perf/task.rs TaskRow). `path` is the bytes of the path it opened, zero past their end, and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's. */
 export { TASK };
 
 /** One of the worst moving frames since the recording started, by its interval, and what changed from the frame before it: its uploads, their bytes and the heap's high-water mark, each this frame's less that one's, all 0 where `has_prev` is 0. A still interval is long on purpose and is never among them. */
@@ -140,23 +141,23 @@ export const STAT = {
     gpu_px: 158 as number,
     rays: 159 as number,
     first: 177 as number,
-    last: 271 as number,
-    WORDS: 365 as number,
+    last: 272 as number,
+    WORDS: 367 as number,
   },
   tasks: {
-    AT: 365 as number,
+    AT: 367 as number,
     slots: 0 as number,
     WORDS: 144 as number,
   },
   steps: {
-    AT: 509 as number,
+    AT: 511 as number,
     cnt: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   /** What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame turn's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frame turns folded; the heap's figures by their allocator's names (xpute-guest mem/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the door's rings' peaks and the body slots' (xpute-guest ipc/door.rs `DoorStat`, sys/io/body.rs `take_peak`), `ring_left_peak` its `left_peak`; and `cap_terrain_refused` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded. */
   recording: {
-    AT: 670 as number,
+    AT: 672 as number,
     frames: 0 as number,
     heap_live_max_bytes: 1 as number,
     heap_run_max_bytes: 2 as number,
@@ -171,7 +172,7 @@ export const STAT = {
     cap_terrain_refused: 11 as number,
     WORDS: 12 as number,
   },
-  WORDS: 682 as number,
+  WORDS: 684 as number,
 } as const;
 
 /** What PERF_STATS finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64. */

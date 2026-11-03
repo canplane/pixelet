@@ -16,92 +16,94 @@ export const turns = 5 as number;
 
 export const busy_ms = 6 as number;
 
-export const budget_ms = 7 as number;
+export const over_ms = 7 as number;
 
-export const effects_ms = 8 as number;
+export const budget_ms = 8 as number;
 
-export const tick_ms = 9 as number;
+export const effects_ms = 9 as number;
 
-export const phases = 10 as number;
+export const tick_ms = 10 as number;
 
-export const stage_ms = 15 as number;
+export const phases = 11 as number;
 
-export const tasks_ms = 16 as number;
+export const stage_ms = 16 as number;
 
-export const perf_ms = 17 as number;
+export const tasks_ms = 17 as number;
 
-export const effects = 18 as number;
+export const perf_ms = 18 as number;
 
-export const kind_name = 27 as number;
+export const effects = 19 as number;
 
-export const wake_name = 28 as number;
+export const kind_name = 28 as number;
 
-export const gpu_read = 29 as number;
+export const wake_name = 29 as number;
 
-export const gpu_spans = 30 as number;
+export const gpu_read = 30 as number;
 
-export const gpu_busy_ms = 62 as number;
+export const gpu_spans = 31 as number;
 
-export const gpu_px = 63 as number;
+export const gpu_busy_ms = 63 as number;
 
-export const scale = 64 as number;
+export const gpu_px = 64 as number;
 
-export const lattice = 65 as number;
+export const scale = 65 as number;
 
-export const draws = 66 as number;
+export const lattice = 66 as number;
 
-export const triangles = 67 as number;
+export const draws = 67 as number;
 
-export const gpu_frame = 68 as number;
+export const triangles = 68 as number;
 
-export const light_moved = 69 as number;
+export const gpu_frame = 69 as number;
 
-export const decor_boxes = 70 as number;
+export const light_moved = 70 as number;
 
-export const eye_cast = 71 as number;
+export const decor_boxes = 71 as number;
 
-export const eye_rays = 72 as number;
+export const eye_cast = 72 as number;
 
-export const eye_beam = 73 as number;
+export const eye_rays = 73 as number;
 
-export const eye_sample = 74 as number;
+export const eye_beam = 74 as number;
 
-export const eye_miss = 75 as number;
+export const eye_sample = 75 as number;
 
-export const eye_took = 76 as number;
+export const eye_miss = 76 as number;
 
-export const eye_walked = 77 as number;
+export const eye_took = 77 as number;
 
-export const eye_sky = 78 as number;
+export const eye_walked = 78 as number;
 
-export const eye_boxes = 79 as number;
+export const eye_sky = 79 as number;
 
-export const light_cast = 80 as number;
+export const eye_boxes = 80 as number;
 
-export const light_rays = 81 as number;
+export const light_cast = 81 as number;
 
-export const light_beam = 82 as number;
+export const light_rays = 82 as number;
 
-export const light_sample = 83 as number;
+export const light_beam = 83 as number;
 
-export const light_miss = 84 as number;
+export const light_sample = 84 as number;
 
-export const light_took = 85 as number;
+export const light_miss = 85 as number;
 
-export const light_walked = 86 as number;
+export const light_took = 86 as number;
 
-export const light_sky = 87 as number;
+export const light_walked = 87 as number;
 
-export const light_boxes = 88 as number;
+export const light_sky = 88 as number;
 
-export const terrain_landed = 89 as number;
+export const light_boxes = 89 as number;
 
-export const uploads = 90 as number;
+export const terrain_landed = 90 as number;
 
-export const uploads_bytes = 91 as number;
+export const uploads = 91 as number;
 
-export const pack_bytes = 92 as number;
+export const uploads_bytes = 92 as number;
 
-export const heap_used_bytes = 93 as number;
+export const pack_bytes = 93 as number;
 
-export const WORDS = 94 as number;
+export const heap_used_bytes = 94 as number;
+
+export const WORDS = 95 as number;

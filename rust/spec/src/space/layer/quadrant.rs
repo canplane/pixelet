@@ -14,7 +14,7 @@ use crate::space::coord::world;
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{
-    ancestor_of, child_of, first_descendant_of, off_in, parent_of, region, slot_of, Node,
+    ancestor_of, child_idx, child_of, first_descendant_of, off_in, parent_of, region, Node,
 };
 use pxl_engine::area::shard_over;
 use pxl_engine::wrap_idx;
@@ -91,10 +91,10 @@ impl Quadrant {
 
     /// Its place among its parent's `children`.
     pub fn slot(self) -> usize {
-        slot_of(self.at)
+        child_idx(self.at)
     }
 
-    /// In `slot_of`'s order.
+    /// In `child_idx`'s order.
     pub fn children(self) -> [Quadrant; 4] {
         std::array::from_fn(|slot| Quadrant::new(self.zoom + 1, child_of(self.at, slot)))
     }
@@ -159,7 +159,7 @@ pub fn quad_rows(zoom: Zoom) -> std::ops::Range<i32> {
     -n / 2..n / 2
 }
 
-/// Where a tile's own children sit in its neighborhood, in `slot_of`'s order.
+/// Where a tile's own children sit in its neighborhood, in `child_idx`'s order.
 pub const CHILDREN: [usize; 4] = [5, 6, 9, 10];
 
 /// A cell of the pyramid: a node of the one hierarchy at its lattice's cell
