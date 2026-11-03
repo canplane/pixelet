@@ -162,8 +162,15 @@ fn pyramid_of(world: &World) -> (Vec<u32>, u32) {
             continue;
         };
         let s = slot as usize;
+        // Some air as a turned eye leaves it, held at a coarser near: gone past alike.
+        let air = matches!(a.kind, Kind::Cell) && a.asset == AIR;
+        let held = if air && mix(zoom, c) % 3 == 0 {
+            [zooms[0], zooms[1].saturating_sub(1)]
+        } else {
+            zooms
+        };
         // Some splits as a moved brick leaves them: forgotten, gone through alike.
-        let key = pyramid::key(tag, zooms);
+        let key = pyramid::key(tag, held);
         let forgotten = matches!(a.kind, Kind::Split) && mix(zoom, c) % 9 == 0;
         w[s + pyramid::W_KEY as usize] = if forgotten {
             pyramid::forgotten_split(key)

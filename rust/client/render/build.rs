@@ -394,6 +394,7 @@ fn walk_word() -> String {
         ("BOX_STEPS", answer::BOX_STEPS),
         ("STEPS_MOST", 4096),
         ("JITTER", eye::JITTER as u32),
+        ("REVISIT", 16),
         ("Y_START", pxl_engine::cast::Y_START),
         ("Z_START", pxl_engine::cast::Z_START),
         ("SHARD_ZOOM", pxl_engine::SHARD_ZOOM),

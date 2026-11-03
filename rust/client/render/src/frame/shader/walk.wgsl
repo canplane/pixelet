@@ -102,28 +102,41 @@ fn slot_of(zoom: u32, c: vec3<i32>, far: u32, near: u32) -> u32 {
   return NONE;
 }
 
-/// The word of a slot that holds the node as a split, at any zooms; `NONE` where none
-/// does. Asked finer than itself the node is a split or air (`world::node`): a walk
-/// that goes in, taking no box of it, meets what its children answer either way. So
-/// one node over the eye whose corner crosses a zoom's distance does not send every
-/// ray to the world.
-fn split_at_other_zooms(zoom: u32, c: vec3<i32>, near: u32) -> u32 {
-  if (zoom >= near || !keeps(zoom, c)) {
+/// The word of a slot that holds the node at other zooms and answers for the zooms
+/// asked; `NONE` where none does. A split asked finer than itself is a split or air
+/// (`world::node`): a walk that goes in, taking no box of it, meets what its children
+/// answer either way. Air held no finer than asked stays air on nearly every node, and
+/// a ray goes past it (`revisits`).
+fn held_at_other_zooms(zoom: u32, c: vec3<i32>, near: u32) -> u32 {
+  if (!keeps(zoom, c)) {
     return NONE;
   }
   let first = bucket_of(zoom, c);
   for (var k = 0u; k < BUCKET; k += 1u) {
     let w = ENTRIES_AT + (first + k) * ENTRY_WORDS;
     let held = pyramid[w];
-    if (held != 0u && held != CLAIMED && pyramid[w + W_KIND] == KIND_SPLIT
+    if (held != 0u && held != CLAIMED
       && pyramid[w + W_NODE] == zoom
       && pyramid[w + W_NODE + 1u] == u32(c.x)
       && pyramid[w + W_NODE + 2u] == u32(c.y)
       && pyramid[w + W_NODE + 3u] == u32(c.z)) {
-      return w;
+      let kind = pyramid[w + W_KIND];
+      let v = pyramid[w + W_ASSET] & VAL_MASK;
+      let air = kind == KIND_CELL && (v == VALUE_VOID || v == VALUE_AIR);
+      let split = kind == KIND_SPLIT && zoom < near;
+      if (split || (air && (held >> (TAG_BITS + ZOOM_BITS)) <= near)) {
+        return w;
+      }
     }
   }
   return NONE;
+}
+
+/// Whether this ray asks again of a node it could go past, one ray in `REVISIT`, other
+/// rays on other frames: what it asks is kept at the zooms asked, for the next frame's.
+fn revisits(tan_at: vec2<f32>) -> bool {
+  let h = mix_hash(mix_hash(eye_word(JITTER), bitcast<u32>(tan_at.x)), bitcast<u32>(tan_at.y));
+  return (h >> 8u) % REVISIT == 0u;
 }
 
 /// The zoom asked at `r2`, a distance squared (`Detail::at`, `grid::cell_zoom_at`).
@@ -301,16 +314,16 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
       var w = slot_of(zoom, c, asked_far, asked_near);
       let other_zooms = w == NONE;
       if (other_zooms) {
-        w = split_at_other_zooms(zoom, c, asked_near);
+        w = held_at_other_zooms(zoom, c, asked_near);
       }
-      if (w == NONE) {
+      if (w == NONE || (other_zooms && pyramid[w + W_KIND] == KIND_CELL && revisits(tan_at))) {
         ends = 4u;
         break;
       }
       visits += 1u;
       visited = true;
       if (beam) {
-        // Through a split at other zooms, what was found under it is not taken: the
+        // Through a node at other zooms, what was found under it is not taken: the
         // next that asks finds it again (`Inheritance::of`), as a moved brick's may
         // be gone.
         let held = line + LINE_INHERITANCE + LINE_STEP * zoom;
@@ -322,7 +335,9 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
       let kind = pyramid[w + W_KIND];
       asset = vec2<u32>(pyramid[w + W_ASSET], pyramid[w + W_ASSET + 1u]);
       var near_at = s.near;
-      if (other_zooms) {
+      if (other_zooms && kind == KIND_CELL) {
+        // Air: gone past.
+      } else if (other_zooms) {
         // No box of it read. A beam ray stops at a split too narrow to share, which
         // a box would decide: left.
         let width = eye_f32(GRID) * length(far_v);
