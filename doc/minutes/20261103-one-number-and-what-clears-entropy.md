@@ -93,7 +93,9 @@ meaning geometry), one under a shard an `Octant` (`EntryAt`), and a tile stays w
 fetched and stored as one. **`key` is the text, the quadkey or the octkey, and `id` the number,
 its morton code**: a number named `key` said nothing, and most of its uses packed a node to
 unpack it later. A `Write` holds its address as `at`, its `id` being the asset's. What the
-queue's `id` holds is still its stream's to say; a typed want is open.
+queue's `id` holds is still its stream's to say: the queue keeps its wants in morton
+order and compares them every turn, so a typed want would work out the number again each
+time or hold it anyway, and the user took the word as it is.
 
 ## A shard is one cube
 
@@ -109,3 +111,10 @@ what it was, its index too, so no cell moved. The top is `<shard, fold>` (format
 at z8 or coarser has Z 0, or above the world past it, and its box the world's height. The key
 keeps two's complement, so its first Z digit is the tree's flipped; the mock says so.
 
+Measured the same day against `40fa72513`, `pxl.perf.drive(30)` three times a build in turn,
+2056×1112 at a device pixel ratio of 2, headless, over Seoul, another session running through
+the third pair: fps 52.4, 51.5, 45.4 before and 51.1, 51.3, 46.2 after; the cast's GPU busy
+p50 / p95 19.0 / 26.7, 19.7 / 27.2, 22.3 / 31.3 before and 18.7 / 28.8, 19.4 / 27.5, 20.0 / 29.6
+after. No change past the noise, as a ray there crosses no sea level; a coast was not measured,
+and the user let it go. Far views, a coast and a view past the service area drew the same on
+both, no more than 0.1 % of their pixels apart.
