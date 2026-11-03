@@ -374,10 +374,6 @@ fn hand_walk_answers_as_cast_walk() {
 
     // The beam rays', over the same table, from a line of their own.
     let beam_left = buffer(&[0, 1, 1, 0], wgpu::BufferUsages::STORAGE);
-    let asks = buffer(
-        &vec![0u32; beam::ASKS_WORDS as usize],
-        wgpu::BufferUsages::STORAGE,
-    );
     let beam_buf = buffer(
         &vec![0u32; grid.size() as usize],
         wgpu::BufferUsages::STORAGE,
@@ -397,7 +393,6 @@ fn hand_walk_answers_as_cast_walk() {
             (8, &beam_buf),
             (9, &pyramid_buf),
             (10, &beam_left),
-            (11, &asks),
         ],
         [
             grid.corners[0].div_ceil(WORKGROUP),

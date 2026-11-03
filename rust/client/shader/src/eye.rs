@@ -263,8 +263,6 @@ impl Observer for Eye {
 
     /// As `sample_walked` (pxl-render beam_hit.wgsl).
     fn corner_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
-        let g = grid(self);
-        // The second round's: what the first left and it did not end.
-        left_at(w, g.corners_at + 1 + g.corners[0] * g.corners[1], id)
+        left_at(w, grid(self).corners_at, id)
     }
 }

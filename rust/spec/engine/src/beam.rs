@@ -336,8 +336,7 @@ impl Grid {
     /// hits, the boxes' asks and the missed pixels' hits and theirs, as
     /// many as the grid lays, whatever the pixels drawn.
     pub fn size(&self) -> u32 {
-        // Each round's list of the corners it left.
-        self.corners_at + 2 * (1 + self.corners[0] * self.corners[1])
+        self.corners_at + 1 + self.corners[0] * self.corners[1]
     }
 }
 
@@ -404,17 +403,6 @@ pub const SAMPLE_FACES: u32 = SAMPLE_AXIS + 1;
 pub const SAMPLE_VISITS: u32 = SAMPLE_FACES + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_VISITS + 1;
 pub const SAMPLE_NONE: u32 = u32::MAX;
-
-/// The nodes the beam rays' walk over the observed pyramid stopped at, for the world
-/// to be asked of each once (pxl-render beam_hit.wgsl, pxl-shader `ask_cs`): the
-/// dispatch and how many, `ASKS_SLOTS` words that tell one seen, then the nodes, each
-/// its zoom, its index on X, Y and Z and the zooms it is asked at.
-pub const ASKS_TABLE: u32 = 4;
-pub const ASKS_SLOTS: u32 = 1 << 12;
-pub const ASKS_LIST: u32 = ASKS_TABLE + ASKS_SLOTS;
-pub const ASK_NODE_WORDS: u32 = 6;
-pub const ASKS_ROOM: u32 = 1 << 13;
-pub const ASKS_WORDS: u32 = ASKS_LIST + ASKS_ROOM * ASK_NODE_WORDS;
 
 /// What a hit's faces are asked off, once a hit (pxl-shader raster.rs
 /// `face_cs`), in words: the first word of its node (`NODE_WORDS`) among

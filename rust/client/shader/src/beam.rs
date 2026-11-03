@@ -14,7 +14,7 @@ use spirv_std::glam::{IVec4, UVec3};
 use spirv_std::spirv;
 
 use crate::eye::Eye;
-use crate::pyramid::{pyramid_add, pyramid_at, pyramid_most, pyramid_put, Writing, Pyramid};
+use crate::pyramid::{pyramid_add, pyramid_at, pyramid_most, pyramid_put, Pyramid};
 use crate::observer::{self, Level, Observer};
 use crate::light::{Head, Map};
 use crate::world::{PaletteWords, World};
@@ -328,51 +328,6 @@ fn beam_by<O: Observer, L: PaletteWords>(
         return;
     }
     observer::beam(o, world, pyramid, beams, c);
-}
-
-/// Each node the walk over the observed pyramid stopped at (pxl-render
-/// beam_hit.wgsl, pxl-engine `beam::ASKS_LIST`), a thread each, asked of the world
-/// from what `Inheritance::of` finds and kept for the walk to go on: no ray walks
-/// here, so it carries what one node asks and no more.
-#[spirv(compute(threads(64), entry_point_name = "ask_cs"))]
-#[allow(clippy::too_many_arguments)]
-pub fn ask_cs(
-    #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] clipmap: &mut [IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] ground: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] palette_indices: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] overwrites: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] pool: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 9)] pyramid: &mut Pyramid,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 12)] asks: &[u32],
-) {
-    if id.x >= asks[3].min(beam::ASKS_ROOM) {
-        return;
-    }
-    let at = (beam::ASKS_LIST + id.x * beam::ASK_NODE_WORDS) as usize;
-    let zoom = asks[at];
-    let c = [asks[at + 1] as i32, asks[at + 2] as i32, asks[at + 3] as i32];
-    let clipmap: &[IVec4] = clipmap;
-    let world = World {
-        clipmap,
-        ground,
-        palette_indices,
-        shards,
-        overwrites,
-        eye,
-        pool: way::tree::Read(pool),
-    };
-    let tag = pyramid::tag(pyramid_at(pyramid, pyramid::FRAME), pyramid::BEAM_PASS);
-    let mut n = Inheritance::of(&world, (zoom, c));
-    let mut q = Writing {
-        world,
-        pyramid: &mut *pyramid,
-        tag,
-        assets: true,
-    };
-    Query::node(&mut q, &mut n, zoom, c, [asks[at + 4], asks[at + 5]], 0.0);
 }
 
 /// A beam ray's line as it leaves it (pxl-engine `cast::Keep`), into the

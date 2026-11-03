@@ -15,12 +15,12 @@ use super::tally::{self, Counts, RayCounts, Tally};
 use super::{casts_px, GroundPipelines, RaysPass};
 use crate::frame::shader::floor;
 use crate::frame::shader::record::{
-    compute, within, COMPUTE, SHADER_ASK, SHADER_BEAM, SHADER_BEAM_AGAIN, SHADER_BEAM_HIT,
-    SHADER_CAST, SHADER_CELL, SHADER_FOLD, SHADER_FORGET, SHADER_HIT_FACES, SHADER_HIT_LEAD,
-    SHADER_LIGHT, SHADER_LIGHT_BEAM, SHADER_LIGHT_CELL, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS,
-    SHADER_LIGHT_MISS, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SLIDE,
-    SHADER_MISS, SHADER_MISS_HIT, SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SAMPLE_HIT, STORAGE,
-    STORAGE_RW, STORAGE_TEXTURE_RW, UNIFORM,
+    compute, within, COMPUTE, SHADER_BEAM, SHADER_BEAM_HIT, SHADER_CAST, SHADER_CELL, SHADER_FOLD,
+    SHADER_FORGET, SHADER_HIT_FACES, SHADER_HIT_LEAD, SHADER_LIGHT, SHADER_LIGHT_BEAM,
+    SHADER_LIGHT_CELL, SHADER_LIGHT_MARK, SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MISS,
+    SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SAMPLE, SHADER_LIGHT_SLIDE, SHADER_MISS, SHADER_MISS_HIT,
+    SHADER_MISS_LIST, SHADER_SAMPLE, SHADER_SAMPLE_HIT, STORAGE, STORAGE_RW, STORAGE_TEXTURE_RW,
+    UNIFORM,
 };
 use crate::gpu::api;
 use crate::gpu::api::{
@@ -107,14 +107,6 @@ pub(super) struct CastBuffers {
     beam_hit_built: Pipeline,
     beam_hit_group: u32,
     beam_left: u32,
-    /// Its second round's, over `beam_left_again`.
-    beam_again_built: Pipeline,
-    beam_again_group: u32,
-    beam_left_again: u32,
-    /// The world asked of the nodes `beam_hit_built` stopped at, off `asks`.
-    ask_built: Pipeline,
-    ask_group: u32,
-    asks: u32,
     /// The same passes for the shadow map, an entry each (pxl-shader
     /// `light_beam_cs`, `light_cell_cs`, `light_sample_cs`), over the same group.
     light_beam_built: Pipeline,
@@ -346,18 +338,6 @@ const SAMPLE_HIT_GROUP: [u32; 12] = [
 ];
 /// The samples `sample_hit_cs` left: `sample_cs`'s dispatch, then their count.
 const SAMPLE_LEFT_START: [u32; 4] = [0, 1, 1, 0];
-const BEAM_HIT_GROUP: [u32; 15] = [
-    0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE_RW, 11,
-    COMPUTE, STORAGE_RW,
-];
-/// `ask_cs`'s dispatch and count, and the table that tells a node seen, each frame
-/// (`beam::ASKS_TABLE`).
-const ASKS_START: [u32; beam::ASKS_LIST as usize] = {
-    let mut w = [0; beam::ASKS_LIST as usize];
-    w[1] = 1;
-    w[2] = 1;
-    w
-};
 const MISS_HIT_GROUP: [u32; 15] = [
     0,
     COMPUTE,
@@ -419,9 +399,7 @@ impl RaysPass {
         let sample_built = pipelines.build_compute(g, SHADER_SAMPLE, group);
         let sample_hit_built = pipelines.build_compute(g, SHADER_SAMPLE_HIT, &SAMPLE_HIT_GROUP);
         let miss_hit_built = pipelines.build_compute(g, SHADER_MISS_HIT, &MISS_HIT_GROUP);
-        let beam_hit_built = pipelines.build_compute(g, SHADER_BEAM_HIT, &BEAM_HIT_GROUP);
-        let beam_again_built = pipelines.build_compute(g, SHADER_BEAM_AGAIN, &BEAM_HIT_GROUP);
-        let ask_built = pipelines.build_compute(g, SHADER_ASK, &compute::ASK_GROUP);
+        let beam_hit_built = pipelines.build_compute(g, SHADER_BEAM_HIT, &SAMPLE_HIT_GROUP);
         let light_beam_built = pipelines.build_compute(g, SHADER_LIGHT_BEAM, group);
         let light_cells_built = pipelines.build_compute(g, SHADER_LIGHT_CELL, group);
         let light_sample_built = pipelines.build_compute(g, SHADER_LIGHT_SAMPLE, group);
@@ -454,8 +432,6 @@ impl RaysPass {
             sample_built,
             sample_hit_built,
             beam_hit_built,
-            beam_again_built,
-            ask_built,
             miss_hit_built,
             light_beam_built,
             light_cells_built,
@@ -541,16 +517,6 @@ impl RaysPass {
             beam_left: g.buf(
                 word_bytes(SAMPLE_LEFT_START.len()),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
-            ),
-            beam_again_group: 0,
-            beam_left_again: g.buf(
-                word_bytes(SAMPLE_LEFT_START.len()),
-                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
-            ),
-            ask_group: 0,
-            asks: g.buf(
-                word_bytes(beam::ASKS_WORDS as usize),
-                storage | buffer_usage::INDIRECT,
             ),
             miss_left: g.buf(
                 word_bytes(MISS_LEFT_START.len()),
@@ -1093,33 +1059,6 @@ impl RaysPass {
                     buf_entry(8, c.beams),
                     buf_entry(9, c.pyramid),
                     buf_entry(10, c.beam_left),
-                    buf_entry(11, c.asks),
-                ],
-            );
-            release(c.beam_again_group);
-            c.beam_again_group = g.bind_group(
-                c.beam_again_built.layouts[0],
-                &[
-                    buf_entry(0, c.eye),
-                    buf_entry(8, c.beams),
-                    buf_entry(9, c.pyramid),
-                    buf_entry(10, c.beam_left_again),
-                    buf_entry(11, c.asks),
-                ],
-            );
-            release(c.ask_group);
-            c.ask_group = g.bind_group(
-                c.ask_built.layouts[0],
-                &[
-                    buf_entry(0, c.eye),
-                    buf_entry(1, bindings[1]),
-                    buf_entry(2, bindings[2]),
-                    buf_entry(4, bindings[4]),
-                    buf_entry(5, bindings[5]),
-                    buf_entry(6, bindings[6]),
-                    buf_entry(7, bindings[7]),
-                    buf_entry(9, c.pyramid),
-                    buf_entry(12, c.asks),
                 ],
             );
             release(c.miss_hit_group);
@@ -1311,57 +1250,19 @@ impl RaysPass {
                 );
             }
             g.end(pass);
-            if kind != FrameKind::px {
-                // The beam rays': over the pyramid alone; the world asked of the
-                // nodes that stopped them, once each; over it again; and what that
-                // leaves, writing what it asks.
-                let across = c
-                    .grid
-                    .corners
-                    .map(|v| v.div_ceil(compute::BEAM_WORKGROUP[0]));
-                g.write_buf(c.beam_left, 0, bytes(&SAMPLE_LEFT_START));
-                g.write_buf(c.beam_left_again, 0, bytes(&SAMPLE_LEFT_START));
-                g.write_buf(c.asks, 0, bytes(&ASKS_START));
-                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::beam).pass());
-                g.set_bind_group(pass, 0, c.beam_hit_group, &[]);
-                g.set_pipeline(pass, c.beam_hit_built.id);
-                g.dispatch(pass, across[0], across[1], 1);
-                g.end(pass);
-                g.copy_buf(
-                    encoder,
-                    (c.beam_left, word_bytes(3)),
-                    (c.beams, word_bytes(c.grid.corners_at as usize)),
-                    4,
-                );
-                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::beam).pass());
-                g.set_bind_group(pass, 0, c.ask_group, &[]);
-                g.set_pipeline(pass, c.ask_built.id);
-                g.dispatch_indirect(pass, c.asks, 0);
-                g.end(pass);
-                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::beam).pass());
-                g.set_bind_group(pass, 0, c.beam_again_group, &[]);
-                g.set_pipeline(pass, c.beam_again_built.id);
-                g.dispatch_indirect(pass, c.beam_left, 0);
-                g.end(pass);
-                g.copy_buf(
-                    encoder,
-                    (c.beam_left_again, word_bytes(3)),
-                    (
-                        c.beams,
-                        word_bytes(
-                            (c.grid.corners_at + 1 + c.grid.corners[0] * c.grid.corners[1])
-                                as usize,
-                        ),
-                    ),
-                    4,
-                );
-                let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::beam).pass());
-                g.set_bind_group(pass, 0, c.group, &[]);
-                g.set_pipeline(pass, c.beam_built.id);
-                g.dispatch_indirect(pass, c.beam_left_again, 0);
-                g.end(pass);
-            }
             for (span, pipeline, [x, y], w) in [
+                (
+                    GpuSpanName::beam,
+                    &c.beam_hit_built,
+                    c.grid.corners,
+                    compute::BEAM_WORKGROUP,
+                ),
+                (
+                    GpuSpanName::beam,
+                    &c.beam_built,
+                    c.grid.corners,
+                    compute::BEAM_WORKGROUP,
+                ),
                 (
                     GpuSpanName::cell,
                     &c.cells_built,
@@ -1391,6 +1292,20 @@ impl RaysPass {
                     continue;
                 }
                 let mut group = c.group;
+                let beam_hit = pipeline.id == c.beam_hit_built.id;
+                let beam_left = pipeline.id == c.beam_built.id;
+                if beam_hit {
+                    group = c.beam_hit_group;
+                    g.write_buf(c.beam_left, 0, bytes(&SAMPLE_LEFT_START));
+                }
+                if beam_left {
+                    g.copy_buf(
+                        encoder,
+                        (c.beam_left, word_bytes(3)),
+                        (c.beams, word_bytes(c.grid.corners_at as usize)),
+                        4,
+                    );
+                }
                 if span == GpuSpanName::sample_hit {
                     group = c.sample_hit_group;
                     g.write_buf(c.sample_left, 0, bytes(&SAMPLE_LEFT_START));
@@ -1413,6 +1328,8 @@ impl RaysPass {
                 g.set_pipeline(pass, pipeline.id);
                 if span == GpuSpanName::sample {
                     g.dispatch_indirect(pass, c.sample_left, 0);
+                } else if beam_left {
+                    g.dispatch_indirect(pass, c.beam_left, 0);
                 } else {
                     g.dispatch(pass, x.div_ceil(w[0]), y.div_ceil(w[1]), 1);
                 }

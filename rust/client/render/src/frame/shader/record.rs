@@ -30,8 +30,6 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_SAMPLE_HIT => "sample_hit_cs",
         SHADER_MISS_HIT => "miss_hit_cs",
         SHADER_BEAM_HIT => "beam_hit_cs",
-        SHADER_ASK => "ask_cs",
-        SHADER_BEAM_AGAIN => "beam_again_cs",
         SHADER_GENERATION => "decor_cs",
         SHADER_GENERATION_CNT => "decor_cnt_cs",
         SHADER_GENERATION_ARGS => "decor_args_cs",
