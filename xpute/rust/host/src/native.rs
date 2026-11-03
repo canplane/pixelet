@@ -19,7 +19,7 @@ use xpute_guest::mem::heap::HeapStat;
 use xpute_guest::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
-pub use thread::{answer_with, Answer};
+pub use thread::{answer_with, stopped, Answer};
 pub use xpute_guest::entry::{run, BootInfo, Entry};
 
 pub struct Config {
@@ -72,8 +72,15 @@ impl Guest {
     /// `f` on the guest's thread, the caller waiting, and answering on its
     /// own thread each hostcall `f` makes (`answer_with`). Refused on the
     /// guest's thread, inside `while_idle` and inside an answer, where it
-    /// would wait for itself.
+    /// would wait for itself. For what a stopped guest is never asked; a turn is
+    /// `turn`.
     pub fn run<R: Send>(self, f: impl FnOnce() -> R + Send) -> R {
+        thread::run(f).expect("the guest has stopped")
+    }
+
+    /// `run`, none where the guest has stopped, in this call or before it
+    /// (`stopped`).
+    pub fn turn<R: Send>(self, f: impl FnOnce() -> R + Send) -> Option<R> {
         thread::run(f)
     }
 
@@ -147,7 +154,9 @@ macro_rules! native_abi {
             }
 
             pub fn run(quota_ms: f64) -> f64 {
-                guest().run(move || $crate::native::run(quota_ms, boot_info, ENTRY))
+                guest()
+                    .turn(move || $crate::native::run(quota_ms, boot_info, ENTRY))
+                    .unwrap_or(f64::NAN)
             }
 
             pub fn mem(bytes: Option<&mut u32>) -> *mut u8 {

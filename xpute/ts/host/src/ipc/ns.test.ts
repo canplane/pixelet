@@ -11,14 +11,14 @@ import { FileError } from "./sys.ts";
 const signal = new AbortController().signal;
 
 test("a root answers by what is bound there, and refuses as nothing bound or read-only", () => {
-  const kept: [string, U8Array][] = [];
+  const written: [string, U8Array][] = [];
   const ns = new Namespace([
     [1, { open: (path) => new TextEncoder().encode(path) }],
     [
       2,
       {
         open: () => new Uint8Array(),
-        commit: (path, bytes) => kept.push([path, bytes]),
+        commit: (path, bytes) => written.push([path, bytes]),
       },
     ],
   ]);
@@ -27,7 +27,7 @@ test("a root answers by what is bound there, and refuses as nothing bound or rea
     "a/b",
   );
   ns.commit(2, "c", new Uint8Array([7]));
-  assert.deepStrictEqual(kept, [["c", new Uint8Array([7])]]);
+  assert.deepStrictEqual(written, [["c", new Uint8Array([7])]]);
   const errnum = (f: () => unknown): number => {
     try {
       f();

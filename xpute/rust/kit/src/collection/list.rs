@@ -69,22 +69,22 @@ impl<T, const N: usize> List<T, N> {
         // a slot counted twice.
         self.len = 0;
         let p = self.slots.as_mut_ptr().cast::<T>();
-        let mut kept = 0;
+        let mut live = 0;
         for at in 0..len {
             // SAFETY: slots `at..len` are live and each is visited once; a kept
-            // one moves down to `kept <= at`, a refused one is dropped in place.
+            // one moves down to `live <= at`, a refused one is dropped in place.
             unsafe {
                 if keep(&*p.add(at)) {
-                    if kept != at {
-                        core::ptr::copy_nonoverlapping(p.add(at), p.add(kept), 1);
+                    if live != at {
+                        core::ptr::copy_nonoverlapping(p.add(at), p.add(live), 1);
                     }
-                    kept += 1;
+                    live += 1;
                 } else {
                     core::ptr::drop_in_place(p.add(at));
                 }
             }
         }
-        self.len = kept;
+        self.len = live;
     }
 
     pub fn clear(&mut self) {

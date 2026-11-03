@@ -4,7 +4,7 @@ use super::*;
 
 #[derive(Default, PartialEq, Debug)]
 struct Slot {
-    kept: Vec<u32>,
+    items: Vec<u32>,
     mark: u32,
 }
 
@@ -17,10 +17,10 @@ fn rewind_keeps_bufs() {
     let mut a = arena(4, 1 << 10);
     for i in 0..4 {
         let slot = a.alloc().unwrap();
-        slot.kept.extend([i, i + 1, i + 2]);
+        slot.items.extend([i, i + 1, i + 2]);
         slot.mark = i;
     }
-    let caps: Vec<usize> = (0..4).map(|i| a.get(i).kept.capacity()).collect();
+    let caps: Vec<usize> = (0..4).map(|i| a.get(i).items.capacity()).collect();
     assert!(caps.iter().all(|c| *c >= 3));
 
     a.truncate(0);
@@ -28,14 +28,14 @@ fn rewind_keeps_bufs() {
 
     for i in 0..4 {
         let slot = a.alloc().unwrap();
-        assert_eq!(slot.mark, i, "a rewound slot was rebuilt rather than kept");
+        assert_eq!(slot.mark, i, "a rewound slot was rebuilt rather than items");
         assert_eq!(
-            slot.kept,
+            slot.items,
             vec![i, i + 1, i + 2],
             "a rewound slot lost what it owned"
         );
     }
-    let after: Vec<usize> = (0..4).map(|i| a.get(i).kept.capacity()).collect();
+    let after: Vec<usize> = (0..4).map(|i| a.get(i).items.capacity()).collect();
     assert_eq!(after, caps, "a rewind gave a slot's buffer back");
 }
 

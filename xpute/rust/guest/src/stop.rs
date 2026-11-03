@@ -2,8 +2,8 @@
 
 //! How a guest stops: a broken invariant (`bug!`) or a panic, published to
 //! the host as the turn's one record (what `install` is given, the guest's
-//! `Sys::abort`) and told to the hook of a form whose process dies with the
-//! guest.
+//! `Sys::abort`) and told to the hook of a form whose guest shares its process
+//! with the host, where a panic would otherwise take the host with it.
 
 use core::panic::Location;
 
@@ -21,10 +21,13 @@ pub enum Stop<'a> {
         b: u64,
     },
     Panic(&'a std::panic::PanicHookInfo<'a>),
+    /// The guest has stopped, told last: the form ends its thread here (xpute-host
+    /// native `stopped`), or the process goes with it.
+    End,
 }
 
-/// Where a form whose process dies with the guest says why: no host is left
-/// to run the record, and a panic's text is not in its numbers.
+/// Where a form sharing its process with the guest says why, a panic's text not
+/// being in the record's numbers, and keeps the process alive.
 pub type PanicHook = fn(Stop<'_>);
 
 static ABORT: Global<Option<Report>> = Global::new();
@@ -58,13 +61,13 @@ pub fn install(abort: Report, panic_hook: Option<PanicHook>) {
             }
             return;
         }
-        if is_stopped() {
-            return;
+        if !is_stopped() {
+            say(Stop::Panic(info));
+            if let Some(at) = info.location() {
+                stopped(Errno::ENOTRECOVERABLE, at, 0, 0);
+            }
         }
-        say(Stop::Panic(info));
-        if let Some(at) = info.location() {
-            stopped(Errno::ENOTRECOVERABLE, at, 0, 0);
-        }
+        say(Stop::End);
     }));
 }
 

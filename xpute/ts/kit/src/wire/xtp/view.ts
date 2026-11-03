@@ -155,17 +155,19 @@ function val_to_node(val: NodeValue<NodeView>): Node {
 
   if (val === null) return NIL_NODE;
 
-  if (typeof val === "number") {
-    // -0 is a double's; as an I32 it would come back 0.
-    if (fits_i32(val) && !Object.is(val, -0)) return I32_NODE(val);
-    return F64_NODE(val);
+  switch (typeof val) {
+    case "number":
+      // -0 is a double's; as an I32 it would come back 0.
+      if (fits_i32(val) && !Object.is(val, -0)) return I32_NODE(val);
+      return F64_NODE(val);
+    case "bigint":
+      if (!fits_i64(val)) throw new MarshalError(Errno.EINVAL);
+      return I64_NODE(val);
+    case "boolean":
+      return BOOL_NODE(val);
+    case "string":
+      return STR_NODE(val);
   }
-  if (typeof val === "bigint") {
-    if (!fits_i64(val)) throw new MarshalError(Errno.EINVAL);
-    return I64_NODE(val);
-  }
-  if (typeof val === "boolean") return BOOL_NODE(val);
-  if (typeof val === "string") return STR_NODE(val);
 
   if (val instanceof Uint8Array) return U8_ARRAY_NODE(val);
   if (val instanceof Int8Array) return I8_ARRAY_NODE(val);

@@ -55,15 +55,15 @@ XPUTE_TEST(buddy_block_contents_survive) {
         live.emplace_back(p, sz, static_cast<std::uint8_t>(i));
     }
     XPUTE_CHECK(live.size() > 8);
-    std::vector<std::tuple<void *, std::size_t, std::uint8_t>> kept;
+    std::vector<std::tuple<void *, std::size_t, std::uint8_t>> left;
     for (std::size_t j = 0; j < live.size(); j++) {
         if (j % 2 == 0) heap.free(std::get<0>(live[j]), std::get<1>(live[j]));
-        else kept.push_back(live[j]);
+        else left.push_back(live[j]);
     }
     for (std::size_t sz : sizes) {
         if (void *p = heap.malloc(sz)) std::memset(p, 0xff, sz);
     }
-    for (auto &[p, sz, byte] : kept) XPUTE_CHECK_EQ(all(p, sz, byte), true, "a block was written over");
+    for (auto &[p, sz, byte] : left) XPUTE_CHECK_EQ(all(p, sz, byte), true, "a block was written over");
 }
 
 XPUTE_TEST(buddy_buddies_merge) {
@@ -117,15 +117,15 @@ XPUTE_TEST(slab_slot_contents_survive) {
         live.emplace_back(p, sz, static_cast<std::uint8_t>(i));
     }
     XPUTE_CHECK(live.size() > 40);
-    std::vector<std::tuple<void *, std::size_t, std::uint8_t>> kept;
+    std::vector<std::tuple<void *, std::size_t, std::uint8_t>> left;
     for (std::size_t j = 0; j < live.size(); j++) {
         if (j % 2 == 0) heap.dealloc(std::get<0>(live[j]), std::get<1>(live[j]), 8);
-        else kept.push_back(live[j]);
+        else left.push_back(live[j]);
     }
     for (std::size_t sz : sizes) {
         if (void *p = heap.alloc(sz, 8)) std::memset(p, 0xff, sz);
     }
-    for (auto &[p, sz, byte] : kept) XPUTE_CHECK_EQ(all(p, sz, byte), true, "a slot was written over");
+    for (auto &[p, sz, byte] : left) XPUTE_CHECK_EQ(all(p, sz, byte), true, "a slot was written over");
 }
 
 XPUTE_TEST(slab_empty_run_returned) {

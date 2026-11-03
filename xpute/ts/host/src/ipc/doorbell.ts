@@ -118,11 +118,12 @@ export class Doorbell implements PacketRoom {
     try {
       wake = this.run(quota_ms);
     } catch (err) {
-      // Printed here, once: what a caller catches next is only the stop.
+      // Printed here, once, and told: a turn's caller is a timer or an event,
+      // with nothing to do about it.
       console.error("[xpute/doorbell] the guest trapped:", err);
       this.trapped = true;
       this.stopped?.();
-      throw err;
+      return NO_WAKE;
     }
     this.read();
     this.wake?.(wake);
@@ -130,14 +131,15 @@ export class Doorbell implements PacketRoom {
   }
 
   /** Submitted as the port `src` with ACKREQ and rung with no quota until the
-   * reply returns; the reply is valid only inside `take`. */
+   * reply returns; the reply is valid only inside `take`. A guest that has
+   * trapped answers ENOTRECOVERABLE, with no reply. */
   call<T>(
     src: u32,
     cmd: u32,
     pkt: PacketWriter | null,
     take: (result: i32, reply: BranchCursor | null) => T,
   ): T {
-    if (this.trapped) throw new InvariantError(Errno.ENOTRECOVERABLE);
+    if (this.trapped) return take(Errno.ENOTRECOVERABLE, null);
     this.next_call = frame.id_of(this.next_call + 1);
     const tag = frame.tag_of(src, this.next_call);
     let out: { val: T } | null = null;
@@ -147,6 +149,7 @@ export class Doorbell implements PacketRoom {
       while (out === null) {
         const pending = this.sq.len;
         this.ring(0);
+        if (this.trapped) return take(Errno.ENOTRECOVERABLE, null);
         if (out === null && pending === 0) {
           throw new InvariantError(Errno.EPROTO);
         }
