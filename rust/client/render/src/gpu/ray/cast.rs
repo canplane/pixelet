@@ -1300,7 +1300,7 @@ impl RaysPass {
                     compute::BEAM_WORKGROUP,
                 ),
                 (
-                    GpuSpanName::cell,
+                    GpuSpanName::beam,
                     &c.cells_built,
                     c.grid.span,
                     compute::CELL_WORKGROUP,
@@ -1536,7 +1536,7 @@ impl RaysPass {
                 4,
             );
             g.write_buf(c.light_left, 0, bytes(&LIGHT_LEFT_START));
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_walk).pass());
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_hit).pass());
             g.set_bind_group(pass, 0, c.light_groups[8], &[]);
             g.set_pipeline(pass, c.light_miss_hit_built.id);
             let list = word_bytes(ray::MISS_ARGS_LIST as usize);
