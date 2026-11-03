@@ -5,13 +5,7 @@ import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { bracket, type InputDriver } from "@/bracket.tsx";
-import {
-  kernel_frame,
-  kernel_open,
-  kernel_wheel,
-  POINTER_KIND,
-  POINTER_PHASE,
-} from "@/port/input.ts";
+import { POINTER_KIND, POINTER_PHASE } from "@/port/input.ts";
 import { surface_role } from "@/abi/gpu.spec.ts";
 import { surface_driver } from "@/port/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
@@ -29,6 +23,7 @@ import { TopOverlays } from "@/shell/world/top/top.tsx";
 import { DOCK_HEIGHT } from "./dock/card.tsx";
 import { ToastController } from "@/shell/world/toast/controller.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
+import * as input from "@/port/input.ts";
 
 const TOAST_LIFT_PX = chrome.inset + 20;
 
@@ -40,15 +35,15 @@ const WORLD = surface_driver(surface_role.WORLD);
  * shell's own stores first (`worldPointer`, `keyDown`), the box and the wheel
  * to the kernel, and a moved box's turn to the strobe. */
 const INPUT: InputDriver = {
-  open: kernel_open,
+  open: input.open,
   pointer: (phase, kind, id, button, x, y) =>
     worldPointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
-  wheel: kernel_wheel,
+  wheel: input.wheel,
   keyDown,
   keyUp,
   releaseKeys,
   releasePointers,
-  requestFrame: kernel_frame,
+  requestFrame: input.frame,
 };
 
 /** Alone, so a marker under the pointer re-renders only the surface. */

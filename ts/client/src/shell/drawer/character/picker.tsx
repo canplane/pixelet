@@ -14,7 +14,6 @@ import {
 } from "@/shell/ui/theme.ts";
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { CharacterPreview } from "./preview.tsx";
-import { kernel_setting } from "@/port/setting.ts";
 import { SETTING } from "@/shell/setting/schema.ts";
 import {
   type Character,
@@ -31,6 +30,7 @@ import { LABEL } from "@/shell/ui/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shell/ui/panel.tsx";
 import { useKernel } from "@/shell/store/watch.ts";
 import { touchOutset } from "@/shell/ui/touch.ts";
+import * as setting from "@/port/setting.ts";
 
 // The chip one sees is 32; a press lands on 44, a box laid out around it.
 const CHIP_HEIGHT = 32;
@@ -186,11 +186,11 @@ export function CharacterPicker() {
         gender={gender}
         onGenderChange={setGender}
         selected={person}
-        onSelect={(v) => kernel_setting(SETTING.person.key, v.number)}
+        onSelect={(v) => setting.set(SETTING.person.key, v.number)}
       />
       <PetPicker
         selected={pet}
-        onSelect={(v) => kernel_setting(SETTING.pet.key, v.number)}
+        onSelect={(v) => setting.set(SETTING.pet.key, v.number)}
       />
     </View>
   );

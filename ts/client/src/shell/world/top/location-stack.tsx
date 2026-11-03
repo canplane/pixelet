@@ -6,13 +6,13 @@ import { type GlyphName, Spinner } from "@/shell/ui/icon.tsx";
 import { Motion } from "@/shell/ui/motion/motion.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { SensorStatus, Tracking } from "@/abi/cmd.spec.ts";
-import { kernel_north_up, kernel_tracking } from "@/port/camera.ts";
 import { CompassFace } from "./compass.tsx";
 import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/shell/ui/glyph.tsx";
 import { SETTLE } from "@/shell/ui/motion/transition.ts";
 import { chrome, color } from "@/shell/ui/theme.ts";
 import { useKernel } from "@/shell/store/watch.ts";
+import * as camera from "@/port/camera.ts";
 
 /** MKUserTrackingButton's glyphs. */
 const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
@@ -50,7 +50,7 @@ export function LocationStack() {
       items={[
         {
           label: t(label),
-          onPress: () => void kernel_tracking(press),
+          onPress: () => void camera.tracking(press),
           isActive: following,
           disabled: status !== SensorStatus.Ready || !hasLocation,
           face:
@@ -74,7 +74,7 @@ export function LocationStack() {
         },
         {
           label: t("world.controls.reset_orientation"),
-          onPress: kernel_north_up,
+          onPress: camera.north_up,
           disabled: following,
           face: <CompassFace />,
         },

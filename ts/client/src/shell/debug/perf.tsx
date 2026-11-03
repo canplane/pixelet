@@ -23,14 +23,14 @@ import {
   longFramesClear,
 } from "./perf/long-frame.ts";
 import { perfTraceSave } from "./perf/trace.ts";
-import { kernel_setting } from "@/port/setting.ts";
-import { kernel_perf_start, kernel_perf_stop } from "@/port/perf.ts";
 import {
   SETTING,
   type SettingName,
   settingsIn,
 } from "@/shell/setting/schema.ts";
 import { useKernel } from "@/shell/store/watch.ts";
+import * as perf from "@/port/perf.ts";
+import * as setting from "@/port/setting.ts";
 
 const PLAIN = 0;
 const GO = 1;
@@ -156,7 +156,7 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
   const Box = on ? CheckSquareIcon : SquareIcon;
   return (
     <Pressable
-      onPress={() => kernel_setting(key, on ? 0 : 1)}
+      onPress={() => setting.set(key, on ? 0 : 1)}
       disabled={disabled}
       accessibilityRole="checkbox"
       aria-checked={on}
@@ -182,7 +182,7 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
 }
 
 function restartWindow(): void {
-  kernel_perf_start();
+  perf.start();
   longFramesClear();
 }
 
@@ -242,7 +242,7 @@ export function PerfPanel() {
           hint="freeze the window so exports are stable while you read them"
           tint={recording ? HALT : OFF}
           disabled={!recording}
-          onPress={kernel_perf_stop}
+          onPress={perf.stop}
         />
         <PanelButton
           onHint={setHint}

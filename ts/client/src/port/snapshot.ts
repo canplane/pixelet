@@ -56,6 +56,6 @@ export function snapshot_posted(f: BranchCursor): void {
 
 export const watch_snapshot = listeners.watch;
 
-export function kernel_snapshot(): Snapshot {
+export function current(): Snapshot {
   return snapshot;
 }

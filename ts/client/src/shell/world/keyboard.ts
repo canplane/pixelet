@@ -14,7 +14,6 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 import { Tool } from "@/abi/cmd.spec.ts";
 import { KIND } from "@/shell/catalog/asset/id.spec.ts";
 import { kindOf } from "@/shell/catalog/asset/mod.ts";
-import { kernel_keys } from "@/port/input.ts";
 import { closeModal, modalOpen, openModal } from "@/shell/modal.tsx";
 import {
   DockMode,
@@ -28,6 +27,7 @@ import {
   stepSize,
   switchDockMode,
 } from "@/shell/world/dock/store.ts";
+import * as input from "@/port/input.ts";
 
 const MOVE: Record<string, [i32, i32]> = {
   KeyW: [0, -1],
@@ -62,7 +62,7 @@ function sendMove(): void {
   }
   if (to[0] === sent[0] && to[1] === sent[1]) return;
   sent = to;
-  kernel_keys(to[0], to[1]);
+  input.keys(to[0], to[1]);
 }
 
 function pickSlot(slot: number): void {

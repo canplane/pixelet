@@ -55,7 +55,8 @@ import {
   SOURCE_DECLARED,
 } from "@/abi/state.ts";
 import { set_online } from "@/driver/namespace/online.ts";
-import { kernel_snapshot, snapshot_posted } from "@/port/snapshot.ts";
+import { snapshot_posted } from "@/port/snapshot.ts";
+import * as snapshot from "@/port/snapshot.ts";
 
 let called = false;
 let state: Boot = BOOT_STARTING;
@@ -78,8 +79,8 @@ export const watch_boot = listeners.watch;
 const HEARS: Partial<Record<Command, (f: BranchCursor) => void>> = {
   [Command.SHELL_SNAPSHOT]: (f) => {
     snapshot_posted(f);
-    follow_refused_files(kernel_snapshot().refused_files);
-    if (state === BOOT_LOADING && loaded(kernel_snapshot())) set(BOOT_STARTED);
+    follow_refused_files(snapshot.current().refused_files);
+    if (state === BOOT_LOADING && loaded(snapshot.current())) set(BOOT_STARTED);
   },
   [Command.SENSOR_START]: sensor_start,
   [Command.SENSOR_STOP]: sensor_stop,

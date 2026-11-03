@@ -19,11 +19,11 @@ import {
   MARKER,
 } from "@/shell/catalog/asset/mod.ts";
 import { Tool } from "@/abi/cmd.spec.ts";
-import { kernel_tool } from "@/port/edit.ts";
-import { kernel_chat } from "@/port/scene.ts";
 import { OBJECT_TIERS } from "@/shell/world/object.spec.ts";
 import { bracket } from "@/bracket.tsx";
 import * as DockMode from "./mode.ts";
+import * as edit from "@/port/edit.ts";
+import * as scene from "@/port/scene.ts";
 
 interface ChatLine {
   id: number;
@@ -171,7 +171,7 @@ export function watchDockMode(
 
 /** Tells the kernel, and keeps it only where the kernel took it. */
 function hold(tool: Tool, id: AssetId, tier: u32): boolean {
-  const result = kernel_tool(tool, id, tier);
+  const result = edit.tool(tool, id, tier);
   if (result < 0) {
     console.error(`[dock] the kernel refused the tool: ${strerror(result)}`);
     return false;
@@ -234,7 +234,7 @@ export function appendChatLine(text: string): void {
       -MAX_CHAT_LINES,
     ),
   }));
-  kernel_chat(text);
+  scene.chat(text);
 }
 
 export function useInHand(id: AssetId): boolean {

@@ -7,6 +7,6 @@ import { Command } from "@/abi/cmd.spec.ts";
 import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
 
-export function kernel_locate(): void {
+export function locate(): void {
   HOST.now(port.SHELL, Command.SENSOR_LOCATE);
 }

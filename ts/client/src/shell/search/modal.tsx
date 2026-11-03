@@ -28,9 +28,6 @@ import {
 import { SectionTitle } from "@/shell/ui/section-title.tsx";
 import { SensorStatus } from "@/abi/cmd.spec.ts";
 import { statusColor } from "@/shell/world/top/sensor-icons.tsx";
-import { kernel_snapshot } from "@/port/shell.ts";
-import { kernel_goto } from "@/port/camera.ts";
-import { kernel_locate } from "@/port/sensor.ts";
 import { LABEL, STATUS } from "@/shell/ui/palette.ts";
 import { AboveKeyboard } from "@/shell/ui/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@/shell/ui/text-field.tsx";
@@ -50,6 +47,9 @@ import { fetchSearch, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/shell/fixed.ts";
 import { touchOutset } from "@/shell/ui/touch.ts";
 import { useKernel } from "@/shell/store/watch.ts";
+import * as camera from "@/port/camera.ts";
+import * as sensor from "@/port/sensor.ts";
+import * as snapshot from "@/port/snapshot.ts";
 
 const DEBOUNCE_MS = 300;
 
@@ -172,7 +172,7 @@ function LocateCard() {
         style={styles.locateCard}
       >
         <Pressable
-          onPress={kernel_locate}
+          onPress={sensor.locate}
           accessibilityRole="button"
           style={styles.locateRow}
         >
@@ -249,10 +249,10 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     if (q === "") return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      const snapshot = kernel_snapshot();
-      const near = snapshot.pivot.lon_lat ?? undefined;
+      const shown = snapshot.current();
+      const near = shown.pivot.lon_lat ?? undefined;
       const home =
-        snapshot.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)
+        shown.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)
           ?.name ?? null;
       fetchSearch(q, { near, signal: controller.signal })
         .then(
@@ -272,7 +272,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }, [q]);
 
   function select(result: SearchResult) {
-    kernel_goto(result.lon, result.lat);
+    camera.goto(result.lon, result.lat);
     onClose();
   }
 

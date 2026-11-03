@@ -7,7 +7,7 @@ import { Command, encode_setting_set } from "@/abi/cmd.spec.ts";
 import { HOST } from "@/host/mount.ts";
 import * as port from "@/abi/port.spec.ts";
 
-export function kernel_setting(key: u32, value: u32): void {
+export function set(key: u32, value: u32): void {
   HOST.now(
     port.SHELL,
     Command.SETTING_SET,

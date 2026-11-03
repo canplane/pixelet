@@ -10,7 +10,6 @@
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
-import { kernel_pointer } from "@/port/input.ts";
 import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
 import {
   DockMode,
@@ -18,6 +17,7 @@ import {
   setDockMode,
   watchDockMode,
 } from "@/shell/world/dock/store.ts";
+import * as input from "@/port/input.ts";
 
 /** The pointers spent putting the typing away. */
 const spent = new Set<i32>();
@@ -26,7 +26,7 @@ const pressed = new Map<i32, PointerType>();
 
 watchDockMode((mode) => {
   if (mode === DockMode.Message)
-    kernel_pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
+    input.pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
 });
 
 export function worldPointer(
@@ -56,7 +56,7 @@ export function worldPointer(
       if (spent.delete(id)) phase = PointerPhase.Cancel;
       break;
   }
-  kernel_pointer(phase, pointerType, id, button, x, y);
+  input.pointer(phase, pointerType, id, button, x, y);
 }
 
 /** Each pointer still pressed ends with a cancel: the page lost it (blur,

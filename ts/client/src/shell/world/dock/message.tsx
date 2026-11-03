@@ -15,17 +15,13 @@ import { putKeyboardAway } from "@/shell/ui/keyboard.tsx";
 import { LABEL } from "@/shell/ui/palette.ts";
 import { TextField } from "@/shell/ui/text-field.tsx";
 import { chrome, color, disabledContent } from "@/shell/ui/theme.ts";
-import { kernel_snapshot } from "@/port/shell.ts";
-import {
-  kernel_marker_cancel,
-  kernel_marker_commit,
-  kernel_marker_text,
-} from "@/port/edit.ts";
-import { kernel_chat_fits } from "@/port/scene.ts";
 import { MARKER_TEXT_CHARS } from "@/shell/catalog/asset/marker.spec.ts";
 import { useKernel } from "@/shell/store/watch.ts";
 import { appendChatLine, DockMode, setDockMode } from "./store.ts";
 import { SLOT } from "./strip.tsx";
+import * as edit from "@/port/edit.ts";
+import * as scene from "@/port/scene.ts";
+import * as snapshot from "@/port/snapshot.ts";
 
 /** Text past the cap is refused whole, never cut. */
 function markerTextFits(text: string): boolean {
@@ -46,21 +42,20 @@ export function useMessage(mode: DockMode) {
     if (mode === DockMode.Message) inputRef.current?.focus();
     else {
       putKeyboardAway();
-      if (drafting) kernel_marker_cancel();
+      if (drafting) edit.marker_cancel();
     }
   }, [mode]);
 
   // A draft opens: the message comes up with its text, which from
   // then on is the field's, sent as typed; done, the field is the chat's again.
   useEffect(() => {
-    setMessageText(drafting ? (kernel_snapshot().draft ?? "") : "");
+    setMessageText(drafting ? (snapshot.current().draft ?? "") : "");
     if (drafting) setDockMode(DockMode.Message);
   }, [drafting]);
 
   function changeText(text: string) {
     setMessageText(text);
-    if (drafting && markerTextFits(text.trim()))
-      kernel_marker_text(text.trim());
+    if (drafting && markerTextFits(text.trim())) edit.marker_text(text.trim());
   }
 
   function sendMessage() {
@@ -75,7 +70,7 @@ export function useMessage(mode: DockMode) {
         inputRef.current?.focus();
         return;
       }
-      kernel_marker_commit();
+      edit.marker_commit();
       // Put up, the palette comes back for the next.
       setDockMode(DockMode.Palette);
     }, FADE.durationMs);
@@ -85,7 +80,7 @@ export function useMessage(mode: DockMode) {
   // A line too long for the kernel is refused whole, never cut.
   const fits = drafting
     ? markerTextFits(messageText.trim())
-    : kernel_chat_fits(messageText.trim());
+    : scene.chat_fits(messageText.trim());
 
   return {
     drafting,

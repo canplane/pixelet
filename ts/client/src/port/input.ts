@@ -27,7 +27,7 @@ export function send_input(cmd: Command, pkt: PacketWriter): void {
   HOST.send(port.SHELL, cmd, pkt);
 }
 
-export function kernel_pointer(
+export function pointer(
   phase: PointerPhase,
   pointer_type: PointerType,
   id: i32,
@@ -41,15 +41,15 @@ export function kernel_pointer(
   );
 }
 
-export function kernel_wheel(delta_y: f64): void {
+export function wheel(delta_y: f64): void {
   send_input(Command.INPUT_WHEEL, encode_input_wheel(HOST.doorbell, delta_y));
 }
 
-export function kernel_keys(x: i32, y: i32): void {
+export function keys(x: i32, y: i32): void {
   send_input(Command.INPUT_MOVE, encode_input_move(HOST.doorbell, x, y));
 }
 
-export function kernel_open(): () => void {
+export function open(): () => void {
   set_view_open(true);
   const unfollow = bracket.sensor.follow();
   return () => {
@@ -59,7 +59,7 @@ export function kernel_open(): () => void {
 }
 
 /** A turn asked for now, as a moved box needs one. */
-export function kernel_frame(): void {
+export function frame(): void {
   HOST.strobe.request();
 }
 

@@ -55,12 +55,12 @@ function call(cmd: Command, pkt: PacketWriter | null = null): u32 {
 }
 
 /** A fresh recording window, rung at once. */
-export function kernel_perf_start(): void {
+export function start(): void {
   HOST.now(port.SHELL, Command.PERF_START);
 }
 
 /** The window frozen, so what is exported holds still. */
-export function kernel_perf_stop(): void {
+export function stop(): void {
   HOST.now(port.SHELL, Command.PERF_STOP);
 }
 
