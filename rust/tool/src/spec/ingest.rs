@@ -273,7 +273,7 @@ pub const PACK: Pack = Pack {"##
             _ => return Err(format!("{INGEST_JSON}: pack.faces: {face} is no face")),
         };
         out.push(format!(
-            "        (Cube::{variant}(cube::{variant}::{ty}), CubeFace::{face}, {tile}),"
+            "        (Cube::{group}(cube::{variant}::{ty}), CubeFace::{face}, {tile}),"
         ));
     }
     out.push("    ],".to_string());

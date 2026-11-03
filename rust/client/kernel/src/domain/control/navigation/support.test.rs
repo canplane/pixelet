@@ -33,7 +33,7 @@ fn the_pivot_follows_its_floor() {
     assert!(height(&on(&dug)) < over(5.0), "{}", height(&on(&dug)));
 
     let mut built = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     write(
         &mut built,
         [ground[0], ground[1], 5.0],

@@ -129,7 +129,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
 }
 
 fn red() -> u32 {
-    cube_id(Cube::Object(Object::red))
+    cube_id(Cube::object(Object::red))
 }
 
 #[test]
@@ -186,7 +186,7 @@ fn cube_at(store: &mut Store, [x, y, z]: [i32; 3], state: u32) {
 #[test]
 fn axis_turn() {
     let mut rng = Rng(SplitMix64::new(0x2c1b_3c6d_a5b4_9f1e));
-    let red = cube_id(Cube::Object(Object::red));
+    let red = cube_id(Cube::object(Object::red));
     let turn = |[x, y, z]: [i32; 3]| [y, z, x];
     let turn_box = |b: Aabb| Aabb {
         min: [b.min[1], b.min[2], b.min[0]],
@@ -220,7 +220,7 @@ fn axis_turn() {
 #[test]
 fn column_extent() {
     let mut rng = Rng(SplitMix64::new(0x7d3a_51e9_c2b4_0f86));
-    let red = cube_id(Cube::Object(Object::red));
+    let red = cube_id(Cube::object(Object::red));
     let mut store = Store::default();
     for _ in 0..300 {
         let at = [

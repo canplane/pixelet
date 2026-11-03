@@ -37,8 +37,8 @@ use pxl_spec::space::hierarchy::morton;
 
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
-fn is_carved(at: &Q3) -> bool {
-    World::now().asset_of(at).val() == Some(PLACED_ASSET | AIR)
+fn is_carved(world: &World, at: &Q3) -> bool {
+    world.asset_of(at).val() == Some(PLACED_ASSET | AIR)
 }
 
 // ---- Mutations ----
@@ -61,23 +61,19 @@ fn submit(write: Write) {
     }
 }
 
-/// Whether a whole-cell pick of a palette entry only undoes a carve: the cell holds
-/// an AIR leaf, and the ground there without it is that palette entry, its stratum's
-/// at that depth.
-fn place_val_is_redundant(at: &Q3, zoom: Zoom, cube: Cube) -> bool {
-    if zoom > GROUND.cell() || !is_carved(at) {
+/// Whether a whole-cell pick only undoes a carve: the cell holds an AIR leaf, and
+/// the ground there without it is that cube, its stratum's at that depth.
+fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: Cube) -> bool {
+    if zoom > GROUND.cell() || !is_carved(&world, at) {
         return false;
     }
-    let Cube::Ground(palette_idx) = cube else {
-        return false;
-    };
     let entry = EntryAt::holding(zoom, at);
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let ground = World::now()
+    let ground = world
         .previewing(Some(entry), None)
         .asset_of(&middle(entry))
         .exact();
-    ground == Some(palette_idx as u32)
+    ground == Some(cube_id(cube))
 }
 
 /// The middle of the cube `at` names.
@@ -95,7 +91,7 @@ pub(super) fn middle(at: EntryAt) -> Q3 {
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
 pub fn place(at: &Q3, zoom: Zoom, cube: Cube) {
-    let val = if place_val_is_redundant(at, zoom, cube) {
+    let val = if place_val_is_redundant(World::now(), at, zoom, cube) {
         VOID
     } else {
         cube_id(cube)
@@ -119,7 +115,7 @@ pub fn place_decor(at: &Q3, decor_id: DecorId) {
 
 /// The decor the ground generates that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Q3, decor_id: DecorId) -> Option<Instance> {
-    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && is_carved(at))
+    (PlacementTool::Decor(decor_id).zoom() <= GROUND.cell() && is_carved(&World::now(), at))
         .then(|| World::now().generated_instance(Decor::of(decor_id), at))?
 }
 
@@ -204,7 +200,7 @@ pub fn remove(at: EntryAt) {
         .generated_over(&cube(at.zoom(), at.at()))
         .into_iter()
         .filter_map(|i| i.generated_in())
-        .filter(|&c| is_carved(&base_of(GROUND.cell(), c)))
+        .filter(|&c| is_carved(&World::now(), &base_of(GROUND.cell(), c)))
         .collect();
     // Only the resident finest leaf can say what fills the cube without it, as
     // `place_val_is_redundant` asks; elsewhere it is emptied as asked.
@@ -309,3 +305,7 @@ pub fn pending_step() -> RenderEdits {
     };
     edits
 }
+
+#[cfg(test)]
+#[path = "write.test.rs"]
+mod test;

@@ -52,7 +52,7 @@ impl Default for Tool {
     fn default() -> Tool {
         Tool {
             active_tool: ActiveTool::Pointer,
-            cube: Cube::Object(cube::Object::red),
+            cube: Cube::object(cube::Object::red),
             tier: 0,
             decor_id: DecorId::tree,
         }

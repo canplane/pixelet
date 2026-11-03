@@ -11,37 +11,42 @@ pub use pxl_content::cube::*;
 use crate::asset::color;
 use crate::asset::id::AssetId;
 
-/// A cube of the catalog (`asset/cube.json`): a palette entry of the ground's palette,
-/// or one that is only ever placed; a player may place either.
+/// A cube of the catalog (`asset/cube.json`) by its number, the shell's too: a
+/// palette entry of the ground's, a byte, or past a byte one that is only ever
+/// placed; a player may place either.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Cube {
-    Ground(Ground),
-    Object(Object),
+pub struct Cube(u16);
+
+impl Cube {
+    pub const fn ground(g: Ground) -> Cube {
+        Cube(g as u16)
+    }
+
+    pub const fn object(o: Object) -> Cube {
+        Cube(o as u16)
+    }
 }
 
 /// The asset id a placement stores.
 pub fn cube_id(cube: Cube) -> AssetId {
-    match cube {
-        Cube::Ground(g) => g as u32,
-        Cube::Object(b) => b as u32,
-    }
+    u32::from(cube.0)
 }
 
 /// None for VOID, UNKNOWN, AIR or a decor kind.
 pub fn cube_of(num_id: AssetId) -> Option<Cube> {
     match u8::try_from(num_id) {
-        Ok(byte) => Ground::of(byte).map(Cube::Ground),
+        Ok(byte) => Ground::of(byte).map(Cube::ground),
         Err(_) => u16::try_from(num_id)
             .ok()
             .and_then(Object::of)
-            .map(Cube::Object),
+            .map(Cube::object),
     }
 }
 
 pub fn cube_rgb(cube: Cube) -> Option<u32> {
-    match cube {
-        Cube::Ground(g) => color::ground(g as u8),
-        Cube::Object(b) => color::object(b as u16),
+    match u8::try_from(cube.0) {
+        Ok(byte) => color::ground(byte),
+        Err(_) => color::object(cube.0),
     }
     .map(|s| s.rgb)
 }
@@ -50,8 +55,8 @@ pub fn cube_rgb(cube: Cube) -> Option<u32> {
 pub static ALL_CUBES: LazyLock<Vec<Cube>> = LazyLock::new(|| {
     Object::ALL
         .into_iter()
-        .map(Cube::Object)
-        .chain(Ground::ALL.into_iter().map(Cube::Ground))
+        .map(Cube::object)
+        .chain(Ground::ALL.into_iter().map(Cube::ground))
         .collect()
 });
 

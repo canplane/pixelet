@@ -182,7 +182,7 @@ fn no_surface_placed_stands() {
     );
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     write(
         &mut store,
         [x0 + 10.0, y0 + 10.0, 5.0],
@@ -277,7 +277,7 @@ fn ray_across_antimeridian() {
         .top;
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
 
@@ -412,7 +412,7 @@ fn half_cube_met() {
     let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
     let access = World::new(&tile_cache, &store);
     let at = [x + half / 2.0, y + half / 2.0];
@@ -436,7 +436,7 @@ fn half_cube_met() {
 fn walker_stands_any_tier() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
         let (cell, side) = (units(GROUND.cell()), units(zoom));
         let mut store = Store::default();
@@ -464,7 +464,7 @@ fn stack_gap_floored() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     for z in [5.0, 7.0] {
         write(&mut store, [x, y, z], OBJECT_COARSEST, red);
     }
@@ -486,7 +486,7 @@ fn coarse_cell_floored_as_drawn() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST, red);
     write(&mut store, [x + 1.0, y, 5.0], OBJECT_FINEST, red);
     let access = World::new(&tile_cache, &store);
@@ -516,7 +516,7 @@ fn walker_climbs_or_slides() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     // A wall three cubes high in the column east of the walker's.
     for z in [5.0, 6.0, 7.0] {
         write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
@@ -567,7 +567,7 @@ fn height_nearest_floor() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     // A deck a cube thick, its top at 10, with the ground at 5 under it.
     write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
@@ -792,7 +792,7 @@ fn generated_decor_stays() {
     let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     write(&mut store, column(6), OBJECT_COARSEST, red);
     assert_eq!(near(&store), bare, "a cube over it moves nothing");
 
@@ -834,7 +834,7 @@ fn generated_decor_edit_removes() {
         .find(|(d, c)| generates_on(&Store::default(), d, *c) == Some(true))
         .expect("a decor generates about the eye");
     let generates = |store: &Store| generates_on(store, decor, [cx, cy, cz]);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube_id(Cube::object(cube::Object::red));
     for (dz, val, what, kept) in [
         (0, AIR, "air in its box", false),
         (0, red, "a cube in its box", false),
