@@ -23,8 +23,10 @@ optimization and leaning on a black box
 it was measured slow: no hand-written shader has been compared, and that remained
 so at the decision. What was seen is control. A cut of the stack from 33 entries
 to 8 left `sample.gen.wgsl` with 2,201 function-scope variables of its 2,208, whose
-shape is naga's to choose, on a phone where 500 such variables that never run cost
-400 times what 125 do in a synthetic pass.
+shape is naga's to choose, on a phone where, in a synthetic pass, 500 variables
+live across the loop in code that never runs cost 400 times what 125 do. How many
+of `sample`'s are live is counted (16 at the walk's head, 301 words at the peak);
+what variables of its shape cost on the S23 is not yet measured.
 
 ## What is proposed, and not decided
 
@@ -32,11 +34,13 @@ The sessions' order: the traversal kernel by hand first, its keys apart from the
 pyramid's words and no stack past what it needs, measured on the S23 against
 `sample`'s 111 ns a node. This replaces moving the kernel apart in Rust first.
 
-What the rest becomes is open:
+What must agree between CPU and GPU is about 1,900 lines, `world::node` and
+`placement`; the walk need not (`cast::first`). What the rest becomes is open:
 
 | | Structure | The cost |
 | --- | --- | --- |
 | B | every shader by hand | the world defined twice, in Rust and WGSL, held equal to the bit by tests (the caves' noise) |
 | C | the CPU builds a compact tree and uploads it; the GPU only traverses | the renderer redesigned; WASM's build time and the upload on a phone; an edit's latency |
+| D | no CPU entry: picks off the visibility buffer, edits and decor by readback; the world defined on the GPU alone | a click, the camera's collision and an edit asynchronous, a frame or more late; the sync queries not yet counted |
 
 A shader at a time, not 35 at once, so each step is measured and can be undone.
