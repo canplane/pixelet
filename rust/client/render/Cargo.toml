@@ -38,6 +38,9 @@ naga = { version = "30", features = ["wgsl-in"] }
 # The moon's shipped map read back, so its mean holds `MOON_MAP_MEAN`
 # (frame/shader/word.test.rs).
 image = { version = "0.25", default-features = false, features = ["png"] }
+# The walks by hand run on a device against `cast::walk` (tests/walk.rs).
+wgpu = { version = "30", default-features = false, features = ["wgsl", "metal", "vulkan", "naga-ir"] }
+pollster = "1"
 
 [lints]
 workspace = true

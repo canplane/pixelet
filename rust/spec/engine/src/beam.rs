@@ -19,6 +19,7 @@ use crate::grid::{CELL, LATTICE_MAX};
 use crate::param::beam;
 use crate::param::beam::NEAR;
 use crate::param::beam::SAMPLE;
+use crate::pyramid;
 use crate::world;
 
 /// The camera grid as a frame lays it over the screen, worked out once,
@@ -70,12 +71,23 @@ pub struct Grid {
     pub asks_at: u32,
     pub(crate) hits_at: u32,
     pub hit_asks_at: u32,
+    /// The samples the walk over the observed pyramid alone left (pxl-render
+    /// sample_hit.wgsl) for the walk that asks the world: their count, then
+    /// each, `left_word`.
+    pub lefts_at: u32,
+    /// The pixels the same walk left for theirs (pxl-render miss_hit.wgsl): their
+    /// count, then each, as `pyramid::MARKS_AT` lists them.
+    pub misses_at: u32,
+    /// The corners the same walk left for theirs (pxl-render beam_hit.wgsl): their
+    /// count, then each, `left_word`.
+    pub corners_at: u32,
 }
 
 /// The grid's words among the eye's (`eye::GRID`): `s`, `keep`, `radius`,
 /// `radius_tan` as f32 bits, then `past`, `span`, `corners`, `samples`,
 /// `cells_at`, `samples_at`, `asks_at`, `hits_at`, `hit_asks_at`, then
-/// `lattice` (`GRID_LATTICE`) and three words no reader reads: whole vec4s.
+/// `lattice` (`GRID_LATTICE`), `lefts_at`, `misses_at` and `corners_at`: whole
+/// vec4s.
 pub const GRID_WORDS: usize = 20;
 pub const GRID_LATTICE: usize = 16;
 
@@ -115,6 +127,9 @@ impl Grid {
             asks_at: 0,
             hits_at: 0,
             hit_asks_at: 0,
+            lefts_at: 0,
+            misses_at: 0,
+            corners_at: 0,
         };
         g.past = g.cell_window([span[0] - 1, span[1] - 1]);
         g.corners = [span[0] + 1 + 2 * g.past, span[1] + 1 + 2 * g.past];
@@ -123,6 +138,9 @@ impl Grid {
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
         g.hit_asks_at = g.hits_at + HITS * HIT_WORDS;
+        g.lefts_at = g.hit_asks_at + HITS * ASK_WORDS;
+        g.misses_at = g.lefts_at + 1 + samples[0] * samples[1];
+        g.corners_at = g.misses_at + 1 + pyramid::MARKS;
         g
     }
 
@@ -147,9 +165,9 @@ impl Grid {
             self.hits_at,
             self.hit_asks_at,
             self.lattice,
-            0,
-            0,
-            0,
+            self.lefts_at,
+            self.misses_at,
+            self.corners_at,
         ]
     }
 
@@ -172,6 +190,9 @@ impl Grid {
             asks_at: w[13],
             hits_at: w[14],
             hit_asks_at: w[15],
+            lefts_at: w[17],
+            misses_at: w[18],
+            corners_at: w[19],
         }
     }
 
@@ -316,7 +337,7 @@ impl Grid {
     /// hits, the boxes' asks and the missed pixels' hits and theirs, as
     /// many as the grid lays, whatever the pixels drawn.
     pub fn size(&self) -> u32 {
-        self.hit_asks_at + HITS * ASK_WORDS
+        self.corners_at + 1 + self.corners[0] * self.corners[1]
     }
 }
 

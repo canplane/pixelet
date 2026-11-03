@@ -124,6 +124,15 @@ pub(crate) trait Observer {
     /// off its words `w`: none past the lattice's end. The one place a pass
     /// is told which thread takes which.
     fn take<W: Words + ?Sized>(&self, w: &W, level: Level, id: [u32; 2]) -> [u32; 2];
+    /// The sample the thread at `id` of `sample_cs` walks: none past those it
+    /// has.
+    fn sample_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
+        self.take(w, Level::Sample, id)
+    }
+    /// The corner the thread at `id` of `beam_cs` walks: none past those it has.
+    fn corner_walked<W: Words + ?Sized>(&self, w: &W, id: [u32; 2]) -> [u32; 2] {
+        self.take(w, Level::Corner, id)
+    }
 }
 
 /// The number of `c` on a lattice `across` a row, a corner's or a sample's.

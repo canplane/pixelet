@@ -4,12 +4,13 @@
 //! drawn as, by the catalog.
 
 use pxl_spec::asset::cube;
-use pxl_spec::asset::cube::{cube_id, ALL_CUBES};
-use pxl_spec::asset::{decor_num_id, DECOR_IDS};
+use pxl_spec::asset::cube::ALL_CUBES;
+use pxl_spec::asset::decor::DECORS;
+use pxl_spec::asset::AssetId;
 
 use crate::mesh::paint::palette::layer_idx;
 use crate::mesh::paint::palette::rgb255;
-use pxl_spec::asset::cube::{cube_rgb, Cube};
+use pxl_spec::asset::cube::cube_rgb;
 use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -36,16 +37,16 @@ impl Painter {
         // A state past a leaf's width is a catalog bug and is not named.
         let named = ALL_CUBES
             .iter()
-            .map(|&c| cube_id(c))
+            .copied()
             .chain([AIR])
-            .chain(DECOR_IDS.iter().map(|&id| decor_num_id(id)));
+            .chain(DECORS.iter().map(|d| d.id));
         let states = named
             .filter(|&s| s < u16::MAX as u32)
             .max()
             .map_or(0, |s| s as usize + 1);
         let mut looks = vec![None; states];
         for &cube in ALL_CUBES.iter() {
-            if let Some(l) = looks.get_mut(cube_id(cube) as usize) {
+            if let Some(l) = looks.get_mut(cube as usize) {
                 *l = Some(solid_look(cube));
             }
         }
@@ -64,7 +65,7 @@ impl Painter {
 }
 
 /// Its swatch and texture layer: a cube of a look takes its ground's.
-pub fn solid_look(cube: Cube) -> ([u8; 3], u8) {
+pub fn solid_look(cube: AssetId) -> ([u8; 3], u8) {
     (
         rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE)),
         layer_idx(cube) as u8,

@@ -57,6 +57,7 @@ fn main() {
         lattice::GROUND.cell()
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
+    std::fs::write(out.join("walk_word.wgsl"), walk_word()).expect("the walk's words");
     // A ray's first word, its fields as the cast writes them (pxl-engine
     // ray.rs), and each field read as the cast reads it.
     use pxl_engine::ray::*;
@@ -70,7 +71,7 @@ fn main() {
     // edge or a corner (pxl-engine face.rs).
     use pxl_engine::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
     let faces = format!("const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n");
-    // The side of the box a cell kept short of its cube is, by the eighths
+    // The side of the box a cell filled short of its cube is, by the eighths
     // it keeps, 0 for all eight (pxl-engine answer.rs `side`).
     let sides: String = (1..answer::EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
@@ -160,7 +161,7 @@ fn main() {
     std::fs::write(out.join("tile_word.wgsl"), tile_word()).expect("the tile word's shader");
     // The cloud field's lattice unit and the hash its cells draw from, the
     // cumulus's own on the CPU (pxl-content cloud.rs `lattice_hash`): its
-    // multipliers, its rounds and its kept bits as the Rust takes them.
+    // multipliers, its rounds and its share's bits as the Rust takes them.
     use pxl_content::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
     use pxl_content::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;
@@ -334,6 +335,106 @@ fn compute(dir: &Path) -> String {
 /// uniform's `claimed_for`. The one rule the screen's and the light's passes
 /// claim by (screen_tiles.wgsl, screen_propagate.wgsl); pxl-shader's cast calls
 /// the Rust itself.
+/// What the walk over the observed pyramid reads by hand (sample_hit.wgsl), from
+/// pxl-engine, whose layouts they are.
+fn walk_word() -> String {
+    use pxl_engine::area::Shard;
+    use pxl_engine::clipmap::Lookup;
+    use pxl_engine::overwrite::NodeSlot;
+    use pxl_engine::{answer, beam, cast, eye, face, param, pyramid, ray, value, SHARD_ZOOM};
+    let words: &[(&str, u32)] = &[
+        ("EYE_VEC4S", eye::WORDS as u32 / 4),
+        ("ORIGIN", eye::ORIGIN as u32),
+        ("FORWARD", eye::FORWARD as u32),
+        ("FAR", eye::FAR as u32),
+        ("RIGHT", eye::RIGHT as u32),
+        ("UP", eye::UP as u32),
+        ("TAN", eye::TAN as u32),
+        ("RANGE", eye::RANGE as u32),
+        ("GRID", eye::GRID as u32),
+        ("FRAC_W", pxl_engine::FRAC_W),
+        ("UNIT_ZOOM", pxl_engine::UNIT_ZOOM),
+        ("FINEST_ZOOM", pxl_engine::FINEST_ZOOM),
+        ("ZOOM_BITS", pxl_engine::ZOOM_BITS),
+        ("SAMPLE", param::beam::SAMPLE),
+        ("NEAR_SAMPLES", param::beam::NEAR),
+        ("CELL_T", beam::CELL_T),
+        ("CELL_CORNER", beam::CELL_CORNER),
+        ("CELL_RESUMES", beam::CELL_RESUMES),
+        ("CELL_WORDS", beam::CELL_WORDS),
+        ("LINE_VISITS", beam::LINE_VISITS),
+        ("LINE_NODE", beam::LINE_NODE),
+        ("LINE_WORDS", beam::LINE_WORDS),
+        ("NODE_ZOOM", beam::NODE_ZOOM),
+        ("NODE_CORNER", beam::NODE_CORNER),
+        ("NODE_ROOTS", beam::NODE_ROOTS),
+        ("SAMPLE_NODE", beam::SAMPLE_NODE),
+        ("SAMPLE_ASSET", beam::SAMPLE_ASSET),
+        ("SAMPLE_LACKS", beam::SAMPLE_LACKS),
+        ("SAMPLE_AXIS", beam::SAMPLE_AXIS),
+        ("SAMPLE_VISITS", beam::SAMPLE_VISITS),
+        ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
+        ("SAMPLE_NONE", beam::SAMPLE_NONE),
+        ("ENTRIES", pyramid::ENTRIES),
+        ("ENTRIES_AT", pyramid::ENTRIES_AT),
+        ("ENTRY_WORDS", pyramid::ENTRY_WORDS),
+        ("BUCKET", pyramid::BUCKET),
+        ("W_KIND", pyramid::W_KIND),
+        ("W_ASSET", pyramid::W_ASSET),
+        ("W_NODE", pyramid::W_NODE),
+        ("NONE", pyramid::NONE),
+        ("CLAIMED", pyramid::CLAIMED),
+        ("TAG_BITS", pyramid::TAG_BITS),
+        ("KEY_ZOOMS", !((1u32 << pyramid::TAG_BITS) - 1)),
+        ("KIND_SPLIT", answer::Kind::Split as u32),
+        ("KIND_CELL", answer::Kind::Cell as u32),
+        ("VAL_MASK", answer::PLACED_ASSET - 1),
+        ("VALUE_VOID", value::VOID),
+        ("VALUE_AIR", value::AIR),
+        ("FILL_SHIFT", answer::FILL_SHIFT),
+        ("EIGHTHS", answer::EIGHTHS),
+        ("BOX_BITS", answer::BOX_BITS),
+        ("BOX_STEPS", answer::BOX_STEPS),
+        ("STEPS_MOST", 4096),
+        ("JITTER", eye::JITTER as u32),
+        ("REVISIT", 16),
+        ("Y_START", cast::Y_START),
+        ("Z_START", cast::Z_START),
+        ("SHARD_ZOOM", SHARD_ZOOM),
+        ("SHARD_UNKNOWN", Shard::UNKNOWN.word()),
+        ("LOOKUP_NONE", Lookup::NONE.word()),
+        ("SLOT_NOTHING", NodeSlot::NOTHING.word()),
+        ("LINE_INHERITANCE", beam::LINE_INHERITANCE),
+        ("LINE_STEP", beam::LINE_STEP),
+        ("W_INHERITANCE", pyramid::W_INHERITANCE),
+        ("MISS_ACROSS", ray::MISS_ACROSS),
+        ("MISS_LANES", ray::MISS_LANES),
+        ("MARKS", pyramid::MARKS),
+        ("MARKS_AT", pyramid::MARKS_AT),
+        ("MARKS_CNT", pyramid::MARKS_CNT),
+        ("HITS", beam::HITS),
+        ("HIT_LANES", beam::HIT_LANES),
+        ("HIT_WORDS", beam::HIT_WORDS),
+        ("HIT_NODE", beam::HIT_NODE),
+        ("HIT_FACE", beam::HIT_FACE),
+        ("HIT_PX", beam::HIT_PX),
+        ("HIT_WAITS", beam::HIT_WAITS),
+        ("FACE_BOX", face::BOX),
+        ("RAY_FACE_SHIFT", ray::FACE_SHIFT),
+        ("RAY_ZOOM_SHIFT", ray::ZOOM_SHIFT),
+        ("RAY_FILL_SHIFT", ray::FILL_SHIFT),
+    ];
+    let mut out = format!(
+        "const ZOOM_SPLIT: f32 = {:?};\nconst NARROW: f32 = {:?};\n",
+        grid::CELLS_A_RAD / grid::SPANS,
+        cast::NARROW,
+    );
+    for (name, v) in words {
+        out += &format!("const {name}: u32 = {v}u;\n");
+    }
+    out
+}
+
 fn tile_word() -> String {
     // The Rust's rule, as the WGSL below spells it: a u32's difference that
     // wraps, a claim that ends at `claimed_for`.

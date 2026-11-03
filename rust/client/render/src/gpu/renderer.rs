@@ -1092,7 +1092,7 @@ impl Renderer {
 
         // The listed draws that changed, where the frame is gated: each
         // marks the screen's tiles drawn where it was and where it is, and a
-        // caster the map's (gpu/pass/mark.rs), a mark the host counts as
+        // caster the map's (gpu/pass/mark.rs), a mark the CPU counts as
         // handed. What they read kept as the last frame drew it, made before
         // the frame's commands.
         let (screen_marking, casters_marking) = if gated {
@@ -1133,7 +1133,7 @@ impl Renderer {
         // whose pixels read them are propagated to on the GPU
         // (gpu/propagate.rs): only
         // where a caster marks, which marks the screen's tiles too
-        // (`screen_marking`), so the host counts the frame as marked.
+        // (`screen_marking`), so the CPU counts the frame as marked.
         let propagating = map_drawn && map_gated;
         if propagating {
             let spread = propagate::spread(SHADOW_MARGIN as f32);

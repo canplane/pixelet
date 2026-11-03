@@ -300,7 +300,14 @@ pub fn forget_cs(
         k += 1;
     }
     if pyramid::forgets(&moved, zoom, [x, y]) {
-        pyramid_put(pyramid, w + pyramid::W_KEY, 0);
+        let key = pyramid_at(pyramid, w + pyramid::W_KEY);
+        let split = pyramid_at(pyramid, w + pyramid::W_KIND)
+            == pyramid::kind_word(pxl_engine::answer::Kind::Split);
+        pyramid_put(
+            pyramid,
+            w + pyramid::W_KEY,
+            if split { pyramid::forgotten_split(key) } else { 0 },
+        );
         return;
     }
     // Or handed a slot of a child group of what is placed that was written.

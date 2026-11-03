@@ -27,6 +27,9 @@ pub fn compute_entry(kind: u32) -> &'static str {
         SHADER_LIGHT_CELL => "light_cell_cs",
         SHADER_LIGHT_SAMPLE => "light_sample_cs",
         SHADER_LIGHT_SAMPLE_BOX => "light_sample_box_cs",
+        SHADER_SAMPLE_HIT => "sample_hit_cs",
+        SHADER_MISS_HIT => "miss_hit_cs",
+        SHADER_BEAM_HIT => "beam_hit_cs",
         SHADER_GENERATION => "decor_cs",
         SHADER_GENERATION_CNT => "decor_cnt_cs",
         SHADER_GENERATION_ARGS => "decor_args_cs",
@@ -141,8 +144,8 @@ pub mod compute {
     include!(concat!(env!("OUT_DIR"), "/compute.rs"));
 }
 
-/// `group` with its uniform at `binding` taken at a dynamic offset: how a
-/// host binds it, which the shader does not say.
+/// `group` with its uniform at `binding` taken at a dynamic offset: how the
+/// CPU binds it, which the shader does not say.
 pub const fn dynamic<const N: usize>(mut group: [u32; N], binding: u32) -> [u32; N] {
     let mut k = 0;
     while k < N {

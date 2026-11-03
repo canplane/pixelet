@@ -105,12 +105,12 @@ pub const W_NODE: u32 = W_INHERITANCE + INHERITANCE_WORDS;
 /// What was handed it of what is placed, its `Inheritance`'s first word
 /// (`world::Inheritance::words`).
 pub const W_PLACED: u32 = W_INHERITANCE;
-pub(crate) const ENTRY_WORDS: u32 = W_NODE + 4;
+pub const ENTRY_WORDS: u32 = W_NODE + 4;
 
 /// The slots: room for many frames of the about 80 thousand nodes a frame
 /// at E120 asks; a power of two, so a key's hash masks to one.
 pub const ENTRIES: u32 = 1 << 19;
-pub(crate) const ENTRIES_AT: u32 = HEAD_WORDS;
+pub const ENTRIES_AT: u32 = HEAD_WORDS;
 /// The marked pixels listed (`MARKS_AT`), a word each, its row over its
 /// column, as many as `MARKS`; and their count, copied in from the walk's
 /// dispatch (`ray::MISS_ARGS_CNT`) once the reading walk is done
@@ -148,7 +148,7 @@ pub const LIGHT_SAMPLES_PASS: u32 = 4;
 pub const LIGHT_MISSED_PASS: u32 = 5;
 
 /// A key's tag's bits, under its two zooms' (`key`).
-const TAG_BITS: u32 = 20;
+pub const TAG_BITS: u32 = 20;
 const _: () = assert!(
     TAG_BITS + 2 * ZOOM_BITS == 32,
     "a key is the tag and two zooms"
@@ -228,6 +228,17 @@ pub const fn holds(key: u32, [far, near]: [Zoom; 2]) -> bool {
     key != 0
         && (key >> TAG_BITS) & ((1 << ZOOM_BITS) - 1) == far
         && key >> (TAG_BITS + ZOOM_BITS) == near
+}
+
+/// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked,
+/// so the walk that asks the world asks again, and is no empty slot, so the walk over
+/// the pyramid alone (pxl-render walk.wgsl) still goes through it, taking none of what
+/// it read of the brick. Every moved brick lies under the root and the chain over it:
+/// zeroed, they stop every ray of the frame.
+pub const fn forgotten_split(key: u32) -> u32 {
+    tag_of(key)
+        | ((1 << ZOOM_BITS) - 1) << TAG_BITS
+        | ((1 << ZOOM_BITS) - 1) << (TAG_BITS + ZOOM_BITS)
 }
 
 /// A kind as a word, and back.

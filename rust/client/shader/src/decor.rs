@@ -147,7 +147,7 @@ impl DecorQuery for Generating<'_> {
     }
 
     fn asset(&mut self, f: &Self::ColumnSurface, zoom: u32, c: [i32; 3], edited: bool) -> u32 {
-        let root_at = [c[0] >> zoom, c[1] >> zoom, c[2] >> zoom];
+        let root_at = pxl_engine::overwrite::ancestor_at(zoom, c, zoom);
         let (cuts, root) = if edited {
             (self.world.cuts(), Inheritance::of(&self.world, (0, root_at)))
         } else {

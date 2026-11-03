@@ -8,6 +8,8 @@ use crate::answer::{
 };
 use crate::cast::{Detail, End, Node, Query, Ray, Spacing, Trace, Until, DEPTH};
 use crate::content::Sample;
+use crate::overwrite::{ancestor_at, y_start, z_start};
+use crate::HEIGHT_BITS;
 use crate::{wrap_idx, Zoom, FRAC_W, TOP_ZOOM, UNIT_ZOOM};
 use std::vec::Vec;
 
@@ -120,7 +122,8 @@ impl Query for Stand {
         (0, node)
     }
     fn child(&mut self, at: &At, zoom: Zoom, node: [i32; 3]) -> At {
-        let parent = [wrap_idx(zoom - 1, node[0] >> 1), node[1] >> 1, node[2] >> 1];
+        let parent = ancestor_at(zoom, node, 1);
+        let parent = [wrap_idx(zoom - 1, parent[0]), parent[1], parent[2]];
         assert_eq!(*at, (zoom - 1, parent), "handed {node:?} at {zoom}");
         (zoom, node)
     }
@@ -134,7 +137,12 @@ impl Query for Stand {
     ) -> In<[u32; 2]> {
         assert_eq!(*at, (zoom, c), "asked");
         let side = libm::ldexpf(1.0, UNIT_ZOOM as i32 - zoom as i32);
-        let lo = c.map(|v| v as f32 * side);
+        // Y and Z from the world's edge (`overwrite::path`).
+        let lo = [
+            c[0] as f32 * side,
+            (c[1] + y_start(zoom)) as f32 * side - (1u32 << (UNIT_ZOOM - 1)) as f32,
+            (c[2] + z_start(zoom)) as f32 * side - (1u32 << (HEIGHT_BITS - 1)) as f32,
+        ];
         let hi = lo.map(|v| v + side);
         if zoom >= near {
             let within = |t: &Thing| (0..3).all(|a| t.lo[a] <= lo[a] && hi[a] <= t.hi[a]);
@@ -424,7 +432,7 @@ fn sample_hit_same_every_lattice() {
             ))
         });
         let (one, two) = (cast_at(&view, 1), cast_at(&view, LATTICE_MAX));
-        let (mut kept, mut misses, mut resumed) = ([0; EIGHTHS as usize + 1], 0, [0; 2]);
+        let (mut met, mut misses, mut resumed) = ([0; EIGHTHS as usize + 1], 0, [0; 2]);
         for (k, f) in fresh.iter().enumerate() {
             let s = [k as u32 % n, k as u32 / n];
             let (a, b) = (&one[k], &two[k]);
@@ -442,7 +450,7 @@ fn sample_hit_same_every_lattice() {
                 b.stop,
             );
             if f.ends == End::Hit {
-                kept[fill_eighths(f.asset[0]) as usize] += 1;
+                met[fill_eighths(f.asset[0]) as usize] += 1;
             }
             misses += u32::from(f.ends == End::Miss);
             resumed[0] += u32::from(a.resumed);
@@ -452,8 +460,8 @@ fn sample_hit_same_every_lattice() {
         // met, and something gone on past; the samples resume off their
         // lines at both lattices.
         assert!(
-            [EIGHTHS, 4, 6].iter().all(|&k| kept[k as usize] > 0) && misses > 0,
-            "{tan:?}: {kept:?} by the eighths kept, {misses} gone on"
+            [EIGHTHS, 4, 6].iter().all(|&k| met[k as usize] > 0) && misses > 0,
+            "{tan:?}: {met:?} by the eighths met, {misses} gone on"
         );
         assert!(
             resumed.iter().all(|&r| r > n * m / 2),

@@ -6,7 +6,7 @@
 //! each named by its path (`sky::sun::LIMB` is `SKY_SUN_LIMB`).
 
 /// A setting's value as build.rs writes it into WGSL; an `F64` is the
-/// host's alone and is not written.
+/// CPU's alone and is not written.
 #[derive(Clone, Copy, Debug)]
 pub enum Value {
     F32(f32),

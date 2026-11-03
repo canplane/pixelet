@@ -34,7 +34,7 @@ pub const LINE_SHIFT: u32 = EDGES;
 pub const CORNER_SHIFT: u32 = 2 * EDGES;
 pub const BITS: u32 = 3 * EDGES;
 
-/// The bits of a face of a cell kept short of its cube
+/// The bits of a face of a cell filled short of its cube
 /// (`answer::fill_eighths`), a box inset in it apart from every cell about it:
 /// every edge meets the air, and nothing rises across one. Beside it, it is
 /// no cell that hides for a face's bits (`answer::whole`).

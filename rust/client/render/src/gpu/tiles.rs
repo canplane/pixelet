@@ -3,7 +3,7 @@
 //! Tiles a frame not drawn whole draws again by, the screen's and the light's
 //! map's alike (pxl-engine `screen`): `side` pixels a side, each a word, the
 //! number of the frame it last changed in (`changed_at`), the GPU's, as a
-//! light tile's word names the cast that read it. The host hands each frame
+//! light tile's word names the cast that read it. The CPU hands each frame
 //! at most one mark (`mark_of`), the clouds' sheets on the screen, and a pass
 //! sets the words of the tiles it covers, a thread a tile, one mark of every
 //! tile where the frame is drawn whole (screen_mark.wgsl), before anything

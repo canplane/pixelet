@@ -292,7 +292,7 @@ impl UploadCopies {
     }
 
     /// The copies no longer hold what the last frame drew, a frame dropped
-    /// or put off since: each is copied again by the next frame kept.
+    /// or put off since: each is copied again by the next frame drawn.
     pub fn forget(&mut self) {
         for c in &mut self.copies {
             c.held = false;

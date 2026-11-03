@@ -48,7 +48,7 @@ pub type Zoom = u32;
 /// of them (pxl-spec space/coord/zoom.rs).
 pub const UNIT_ZOOM: Zoom = 24;
 
-/// The finest tile zoom (pxl-spec space/layer/tile.rs).
+/// The finest tile zoom (pxl-spec space/layer/quadrant.rs).
 pub const LEAF_ZOOM: Zoom = 15;
 
 /// The coarsest tile zoom, the pyramid's top: what a layer is kept in runs

@@ -12,6 +12,7 @@
 //! the world (`cast::Query`).
 
 use crate::cast::{self, Detail, End, Keep, Node, Query, Ray, Trace, Until, DEPTH};
+use crate::overwrite::ancestor_at;
 use crate::{Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS};
 
 /// A descent's line: the node it ended at, by its index at its zoom, what
@@ -53,7 +54,7 @@ impl<A: Copy> Line<A> {
 impl<A: Copy> ColumnSurface<A> {
     /// A column surface whose assets are asked off `line` alone (`asset`),
     /// as a pass that did not walk the column holds it: the line straight
-    /// down to its top cell (`line`), which is the one its walk kept
+    /// down to its top cell (`line`), which is the one its walk found
     /// (`column_surface_line_is_its_top_cells`).
     pub fn of_line(line: Line<A>) -> ColumnSurface<A> {
         ColumnSurface {
@@ -126,8 +127,7 @@ fn down(cell: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
 
 /// The node over node `c` of `zoom` at `z`, `z` no finer.
 fn over(c: [i32; 3], zoom: Zoom, z: Zoom) -> [i32; 3] {
-    let s = zoom - z;
-    [c[0] >> s, c[1] >> s, c[2] >> s]
+    ancestor_at(zoom, c, zoom - z)
 }
 
 /// Whether two nodes are one. [rust-gpu] By its words: an array's `==` is
@@ -332,7 +332,7 @@ mod tests {
             (0, node)
         }
         fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At {
-            let up = [node[0] >> 1, node[1] >> 1, node[2] >> 1];
+            let up = ancestor_at(zoom, node, 1);
             assert_eq!((at.0 + 1, at.1), (zoom, up), "a child of another node");
             (zoom, node)
         }
@@ -431,7 +431,7 @@ mod tests {
         }
     }
 
-    /// What was handed each node of a kept line, as a beam ray's resumed
+    /// What was handed each node of a collected line, as a beam ray's resumed
     /// walk reads it (`cast::Over`).
     struct Along<'a>(&'a Line<At>);
 
@@ -489,7 +489,7 @@ mod tests {
                 } else {
                     (Node::ROOT, Step.root(Node::ROOT.idx(o)), t)
                 };
-                let mut kept = LineCollector(None, o);
+                let mut collected = LineCollector(None, o);
                 let resumed = cast::walk(
                     &mut Step,
                     o,
@@ -498,17 +498,17 @@ mod tests {
                     Until::Opaque,
                     from,
                     &Along(&first),
-                    &mut kept,
+                    &mut collected,
                 );
                 assert_eq!(resumed.ends, End::Hit, "{d:?} {share}");
-                let kept = kept.0.unwrap();
-                let walked = line(&mut Step, kept.zoom, kept.at);
-                same(&kept, &walked);
+                let collected = collected.0.unwrap();
+                let walked = line(&mut Step, collected.zoom, collected.at);
+                same(&collected, &walked);
                 for d in 0..6u32 {
-                    let mut c = kept.at;
+                    let mut c = collected.at;
                     c[(d / 2) as usize] += if d % 2 == 0 { -1 } else { 1 };
                     assert_eq!(
-                        asset(&mut Step, &kept, UNIT_ZOOM, c),
+                        asset(&mut Step, &collected, UNIT_ZOOM, c),
                         asset(&mut Step, &walked, UNIT_ZOOM, c),
                         "{c:?}"
                     );

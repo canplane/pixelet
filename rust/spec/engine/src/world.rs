@@ -93,7 +93,7 @@ impl Inheritance {
         (zoom, c): (Zoom, [i32; 3]),
     ) -> Inheritance {
         Inheritance {
-            object: overwrite::child(columns, self.object, zoom, c),
+            object: overwrite::child(columns, self.object, zoom, overwrite::path(zoom, c)),
             shard: self.shard,
             ground: self.ground,
             ways: overwrite::child(pool, self.ways, zoom, c),
@@ -265,11 +265,11 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
             }
             fill = f;
         }
-        let kept = eighths(fill);
-        if kept == 0 && i.kind == Kind::Lacks {
+        let filled = eighths(fill);
+        if filled == 0 && i.kind == Kind::Lacks {
             return lacks;
         }
-        let asset = if kept == 0 {
+        let asset = if filled == 0 {
             // Nothing kept: air, what is placed's where it is air.
             [
                 if over.says == CELL && over.asset == AIR {
@@ -280,7 +280,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
                 0,
             ]
         } else {
-            [fill_word(val, kept), four]
+            [fill_word(val, filled), four]
         };
         return In {
             kind: Kind::Cell,

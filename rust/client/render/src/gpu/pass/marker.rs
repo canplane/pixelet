@@ -237,7 +237,7 @@ impl MarkerPass {
         if self.dirty.is_empty() || self.atlas == 0 {
             return flush.whole;
         }
-        // Only the slots whose text the host has drawn: one still on its way
+        // Only the slots whose text the driver has drawn: one still on its way
         // waits for its landing, with no encoder made for it.
         let mut ready = Vec::new();
         for slot in self.dirty.iter() {

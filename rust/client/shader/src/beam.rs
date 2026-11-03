@@ -323,7 +323,7 @@ fn beam_by<O: Observer, L: PaletteWords>(
     beams: &mut Beams,
 ) {
     let [across, down] = o.corners();
-    let c = o.take(&*beams, Level::Corner, [id.x, id.y]);
+    let c = o.corner_walked(&*beams, [id.x, id.y]);
     if c[0] >= across || c[1] >= down {
         return;
     }
@@ -463,7 +463,7 @@ fn sample_by<O: Observer, L: PaletteWords>(
     beams: &mut Beams,
 ) {
     let [across, down] = o.samples();
-    let s = o.take(&*beams, Level::Sample, [id.x, id.y]);
+    let s = o.sample_walked(&*beams, [id.x, id.y]);
     if s[0] >= across || s[1] >= down {
         return;
     }

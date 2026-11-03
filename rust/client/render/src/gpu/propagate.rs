@@ -10,8 +10,8 @@
 //! reads the screen's words, timed in the span `propagate`. It reads
 //! the world's depth as the last frame left it, which holds while the eye
 //! stands, as it does in every frame through the gate. What it marked the
-//! host does not read back: it runs only in a frame whose casters that
-//! changed marked, which mark the screen's tiles drawn as well, so the host
+//! CPU does not read back: it runs only in a frame whose casters that
+//! changed marked, which mark the screen's tiles drawn as well, so the CPU
 //! counts that frame as marked (`Tiles::marked_in`) and takes the tiles to
 //! gather from it, as the light decides whether to cast from what it handed.
 //! The depth it reads is a bound, each square of `BOUND_STEP` pixels a side

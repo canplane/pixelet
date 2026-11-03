@@ -23,8 +23,9 @@ use crate::clipmap::Lookup;
 use crate::content::Content;
 use crate::lattice::CELL_CENTER;
 use crate::lattice::TILE_CELLS;
+use crate::overwrite::z_start;
 use crate::value;
-use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
+use crate::{Zoom, HEIGHT_BITS, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
 
 /// The value space's void and unknown as the words a palette index is read into.
 pub const VOID: u32 = value::VOID;
@@ -104,7 +105,7 @@ pub fn own(w: u32, cell: Zoom) -> u32 {
     majority(palette_indices(w), cell)
 }
 
-/// Tile cells an elevation sample spans.
+/// Quadrant cells an elevation sample spans.
 const CELL_STEP: f32 = (TILE_CELLS / TILE_ELE_SPAN) as f32;
 
 /// The first of the four samples the surface reads along an axis about a
@@ -305,13 +306,17 @@ pub fn coarsest(zoom: Zoom, far: Zoom) -> Zoom {
     }
 }
 
+/// A leaf cell's index at the world's floor, under sea level.
+const SEA_CELLS: i32 = 1 << (HEIGHT_BITS - 1);
+
 /// Whether the leaf cells `[lo, hi)` along z meet the node `(zoom, z)`, read
 /// to `near`: past the leaves a leaf cell is cut 2^e a side, so every
 /// height is a whole count.
 pub fn meets([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
     let e = near.max(LEAF_CELL) - LEAF_CELL;
     let s = LEAF_CELL + e - zoom;
-    z << s < hi << e && (z + 1) << s > lo << e
+    let first = ((z + z_start(zoom)) << s) - (SEA_CELLS << e);
+    first < hi << e && first + (1 << s) > lo << e
 }
 
 /// A bound over every height a cell holds, i16's whole range: a relief, the
@@ -397,7 +402,8 @@ pub fn node<H: Resident>(
         asset: [VOID, 0],
     };
     // Past the area: a cell's own Earth, or a node's where it is all over
-    // sea level. No node a shard or finer straddles the area.
+    // sea level, as no shard is, the world's height about it. No node a shard or
+    // finer straddles the area.
     if shard.past() {
         let earth = H::Content::earth(c[2]);
         let answer = if is_cell {
@@ -405,7 +411,7 @@ pub fn node<H: Resident>(
                 kind: Kind::Cell,
                 asset: [earth, 0],
             }
-        } else if earth == VOID {
+        } else if earth == VOID && zoom > SHARD_ZOOM {
             air
         } else {
             split
@@ -554,8 +560,8 @@ const _: () = assert!(
     "a span's leaf cell is the world's unit"
 );
 const _: () = assert!(
-    -(1i32 << (crate::HEIGHT_BITS - 1)) == i16::MIN as i32
-        && (1i32 << (crate::HEIGHT_BITS - 1)) - 1 == i16::MAX as i32,
+    -(1i32 << (HEIGHT_BITS - 1)) == i16::MIN as i32
+        && (1i32 << (HEIGHT_BITS - 1)) - 1 == i16::MAX as i32,
     "the world's z, in leaf cells, is i16's range"
 );
 
@@ -574,6 +580,7 @@ pub(crate) fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> BoxWord
     // steps count it: `v` scaled by `BOX_STEPS` / side, less the node's first.
     let shift = LEAF_CELL - zoom;
     let step = |v: i32| -> i32 {
+        let (v, z) = (v + SEA_CELLS, z + z_start(zoom));
         if shift >= BOX_BITS {
             (v >> (shift - BOX_BITS)) - (z << BOX_BITS)
         } else {
@@ -641,14 +648,10 @@ mod tests {
             box_of(box_along_z([-10, -9], (zoom, -1))),
             ([0, 0, 864], [1024, 1024, 880])
         );
-        // A root's node, its z the world's whole: one step holds it.
+        // A root's node, the world's floor at its own: its middle steps hold it.
         assert_eq!(
             box_of(box_along_z([-5, 7], (0, 0))),
-            ([0, 0, 0], [1024, 1024, 1])
-        );
-        assert_eq!(
-            box_of(box_along_z([-5, 7], (0, -1))),
-            ([0, 0, 1023], [1024, 1024, 1024])
+            ([0, 0, 1], [1024, 1024, 3])
         );
         // A node finer than a leaf cell: its steps scale up.
         assert_eq!(

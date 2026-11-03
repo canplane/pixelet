@@ -26,7 +26,8 @@ use crate::answer::{
     box_of, fill_eighths, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS,
 };
 use crate::grid::cell_zoom_at;
-use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
+use crate::overwrite::{y_start, z_start};
+use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS, UNIT_ZOOM};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
 /// axis: a drawn pixel's middle, its tangents the screen's half-angles'
@@ -108,7 +109,7 @@ pub fn narrow(side2: f32, width2: f32) -> bool {
 
 /// The spacings a node is narrow under (`narrow`): twice the width that
 /// holds one ray for certain, `2√2`; and its brick, exact.
-pub(crate) const NARROW: f32 = 2.0 * core::f32::consts::SQRT_2;
+pub const NARROW: f32 = 2.0 * core::f32::consts::SQRT_2;
 const NARROW_SQUARED: f32 = 8.0;
 const _: () = assert!(
     NARROW * NARROW - NARROW_SQUARED < 1e-6 && NARROW_SQUARED - NARROW * NARROW < 1e-6,
@@ -248,7 +249,7 @@ impl Node {
     pub fn moved(&self, from: [i32; 3], to: [i32; 3]) -> Node {
         let k = |a: usize| {
             let d = from[a].wrapping_sub(to[a]);
-            let og = from[a] as u32;
+            let og = grid_of(from)[a];
             // `to`'s position on the finest grid is `from`'s less `d`: a
             // root the more where that borrows, a root the less where it
             // carries.
@@ -275,23 +276,33 @@ impl Node {
                 self.zoom,
                 idx_on(r0[0] + self.roots[0], self.corner[0], self.zoom),
             ),
-            idx_on(r0[1] + self.roots[1], self.corner[1], self.zoom),
-            idx_on(r0[2] + self.roots[2], self.corner[2], self.zoom),
+            idx_on(r0[1] + self.roots[1], self.corner[1], self.zoom) - y_start(self.zoom),
+            idx_on(r0[2] + self.roots[2], self.corner[2], self.zoom) - z_start(self.zoom),
         ]
     }
 }
 
-/// The origin `o` on the finest grid within its root: the Q3 itself
-/// modulo the root's side, 2^32.
-fn grid_of(o: [i32; 3]) -> [u32; 3] {
+/// Y's Q3 steps from the world's south edge to 0, and Z's from its floor.
+pub const Y_START: u32 = 1 << 31;
+pub const Z_START: u32 = 1 << (HEIGHT_BITS - 1 + FRAC_W);
+
+/// The origin `o` on the finest grid within its root: modulo the root's side,
+/// 2^32, X the Q3 itself, Y and Z from the world's edge (`overwrite::path`), so
+/// the world is one root and a shard one cube.
+pub fn grid_of(o: [i32; 3]) -> [u32; 3] {
     // [naga] each axis by itself, not a loop (seed.rs `node_seed`).
-    [o[0] as u32, o[1] as u32, o[2] as u32]
+    [
+        o[0] as u32,
+        (o[1] as u32).wrapping_add(Y_START),
+        (o[2] as u32).wrapping_add(Z_START),
+    ]
 }
 
-/// The root holding the origin `o` on each axis: its Q3 over the root's
-/// side, 2^32, floored, so 0 or −1.
+/// The root holding the origin `o` on each axis: its place on the grid over
+/// the root's side, 2^32, floored, so 0 or −1: X either side of the seam, Y always
+/// 0, Z 0 from the world's floor up.
 fn roots_of(o: [i32; 3]) -> [i32; 3] {
-    [o[0] >> 31, o[1] >> 31, o[2] >> 31]
+    [o[0] >> 31, 0, o[2].wrapping_add(Z_START as i32) >> 31]
 }
 
 /// Where `ray` from the origin `o` is at `t`: on the finest grid in its
@@ -663,7 +674,7 @@ pub trait Over<A: Copy> {
 /// Over a walk from the roots, nothing: no node is over a root, so it is
 /// never read.
 #[derive(Clone, Copy)]
-pub(crate) struct Root<A>(pub A);
+pub struct Root<A>(pub A);
 
 impl<A: Copy> Over<A> for Root<A> {
     fn over(&self, _: Zoom) -> A {
@@ -1174,7 +1185,7 @@ mod tests {
     fn ray_passes_missed_split() {
         use crate::answer::box_word;
         let steps = |u: f32| (u * (1 << FRAC_W) as f32) as i32;
-        let o = [steps(5.0), steps(0.4), steps(0.6)];
+        let o = [steps(5.0), steps(-0.4), steps(0.6)];
         let ray = Ray::new([1.0, 0.0, 0.0], 20.0);
         let detail = Detail {
             range: [UNIT_ZOOM, UNIT_ZOOM],
@@ -1199,14 +1210,14 @@ mod tests {
             );
         }
         assert!(walk(box_word([0; 3], [512; 3])).visits > 1);
-        // An edge that is not a half: the origin lies in the root's first
-        // step along z, so a box from its second misses and one to it
-        // meets.
-        assert_eq!(walk(box_word([0, 0, 1], [1024; 3])).visits, 1);
-        assert!(walk(box_word([0; 3], [1024, 1024, 1])).visits > 1);
+        // An edge that is not a half: the origin, the world's floor at the
+        // root's, lies in the root's third step along z, so a box from its fourth
+        // misses and one to it meets.
+        assert_eq!(walk(box_word([0, 0, 3], [1024; 3])).visits, 1);
+        assert!(walk(box_word([0; 3], [1024, 1024, 3])).visits > 1);
         // A beam ray meets a box it clears by less than `2√2` of its width,
-        // and passes one it clears by more: the root's second step along z
-        // starts 2^14 units over the origin.
+        // and passes one it clears by more: the root's next step along z starts
+        // 2^14 units over the floor of the origin's.
         let beam = |width: f32| {
             let detail = Detail {
                 spacing: Spacing {
@@ -1216,7 +1227,7 @@ mod tests {
                 ..detail
             };
             first(
-                &mut BoxQuery(box_word([0, 0, 1], [1024; 3])),
+                &mut BoxQuery(box_word([0, 0, 3], [1024; 3])),
                 o,
                 &ray,
                 detail,
@@ -1236,7 +1247,7 @@ mod tests {
             ..detail
         };
         let met = first(
-            &mut BoxQuery(box_word([0; 3], [1024, 1024, 1])),
+            &mut BoxQuery(box_word([0, 0, 2], [1024, 1024, 3])),
             o,
             &ray,
             wide,

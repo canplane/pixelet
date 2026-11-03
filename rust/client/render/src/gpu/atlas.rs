@@ -206,7 +206,7 @@ impl AtlasPainter {
         }
     }
 
-    /// The rasters of a display list's lines, as the host has drawn them; none while
+    /// The rasters of a display list's lines, as the driver has drawn them; none while
     /// one is not drawn yet, whose landing is the turn that paints it.
     pub fn rasters(list: &DisplayList, text: TextOf) -> Option<Vec<Raster<'static>>> {
         list.lines
