@@ -401,10 +401,19 @@ mod tests {
             assert_eq!(f.ends, End::Hit, "{g:?}");
             let rebuilt = line(&mut Step, UNIT_ZOOM, [g[0], g[1], f.top.0]);
             same(&f.line, &rebuilt);
-            for c in [[g[0] + 1, g[1], f.top.0], [g[0] - 1, g[1], f.top.0 + 1], [g[0], g[1] + 2, 0]] {
+            for c in [
+                [g[0] + 1, g[1], f.top.0],
+                [g[0] - 1, g[1], f.top.0 + 1],
+                [g[0], g[1] + 2, 0],
+            ] {
                 assert_eq!(
                     asset(&mut Step, &f.line, UNIT_ZOOM, c),
-                    asset(&mut Step, &ColumnSurface::of_line(rebuilt).line, UNIT_ZOOM, c),
+                    asset(
+                        &mut Step,
+                        &ColumnSurface::of_line(rebuilt).line,
+                        UNIT_ZOOM,
+                        c
+                    ),
                     "{g:?} {c:?}"
                 );
             }

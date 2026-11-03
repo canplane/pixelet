@@ -10,6 +10,8 @@
  * returns. `?only=a,b` probes the modules whose names start so.
  */
 
+import { round } from "@xpute/kit/math/scalar.ts";
+
 import { install } from "./remote-console.ts";
 
 /** The experiments' shaders, which `?src=` names by its path under doc/experiment. */
@@ -103,7 +105,7 @@ async function probe(
   }
   const internal = await device.popErrorScope();
   const invalid = await device.popErrorScope();
-  const ms = Math.round(performance.now() - t0);
+  const ms = round(performance.now() - t0);
   const errs = [said, internal?.message, invalid?.message].filter(Boolean);
   const line =
     errs.length === 0
