@@ -132,11 +132,32 @@ fn held_at_other_zooms(zoom: u32, c: vec3<i32>, near: u32) -> u32 {
   return NONE;
 }
 
+/// A ray to walk: from `origin`, at the zooms `range` holds it to; `seed`, other rays'
+/// and other frames', says which asks again (`revisits`).
+struct Aim {
+  origin: vec3<i32>,
+  dir: vec3<f32>,
+  t_max: f32,
+  range: vec2<u32>,
+  seed: u32,
+}
+
+/// The eye's ray at the tangents `tan_at`.
+fn eye_aim(tan_at: vec2<f32>) -> Aim {
+  let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
+  return Aim(
+    vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u))),
+    aimed / length(aimed),
+    eye_f32(FAR),
+    vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)),
+    mix_hash(mix_hash(eye_word(JITTER), bitcast<u32>(tan_at.x)), bitcast<u32>(tan_at.y)),
+  );
+}
+
 /// Whether this ray asks again of a node it could go past, one ray in `REVISIT`, other
 /// rays on other frames: what it asks is kept at the zooms asked, for the next frame's.
-fn revisits(tan_at: vec2<f32>) -> bool {
-  let h = mix_hash(mix_hash(eye_word(JITTER), bitcast<u32>(tan_at.x)), bitcast<u32>(tan_at.y));
-  return (h >> 8u) % REVISIT == 0u;
+fn revisits(seed: u32) -> bool {
+  return (seed >> 8u) % REVISIT == 0u;
 }
 
 /// The zoom asked at `r2`, a distance squared (`Detail::at`, `grid::cell_zoom_at`).
@@ -231,27 +252,25 @@ struct Walked {
   visits: u32,
 }
 
-/// The ray at the tangents `tan_at`, from the start of its cell `cell` (`resume`,
-/// `resume_walk`, `cast::walk`); or, where `line` is a beam ray's line and not
-/// `NONE`, from the root (`Until::Beam`), what was handed each node it visits
-/// written there at once, in place of a stack.
-fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
+/// The ray `aim`, from the start of its cell `cell` (`resume`, `resume_walk`,
+/// `cast::walk`), from the root where `cell` is `NONE`; or, where `line` is a beam
+/// ray's line and not `NONE`, from the root (`Until::Beam`), what was handed each node
+/// it visits written there at once, in place of a stack.
+fn walk(aim: Aim, cell: vec2<u32>, line: u32) -> Walked {
   let beam = line != NONE;
-  let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
-  let raw = aimed / length(aimed);
-  let dir = select(raw, vec3<f32>(0.0), abs(raw) < vec3<f32>(1.17549435e-38));
+  let dir = select(aim.dir, vec3<f32>(0.0), abs(aim.dir) < vec3<f32>(1.17549435e-38));
   let inv = select(vec3<f32>(1.0) / dir, vec3<f32>(0.0), dir == vec3<f32>(0.0));
   let span_n = vec2<u32>(eye_word(GRID + 5u), eye_word(GRID + 6u));
-  let t_max = eye_f32(FAR);
-  let range = vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u));
-  let origin = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
+  let t_max = aim.t_max;
+  let range = aim.range;
+  let origin = aim.origin;
   // On the grid of the root that holds it (`grid_of`, `roots_of`).
   let og = vec3<u32>(origin) + vec3<u32>(0u, Y_START, Z_START);
   let r0 = vec3<i32>(origin.x >> 31u, 0i, i32(u32(origin.z) + Z_START) >> 31u);
 
   // Where its cell's start hands it (`resume`, `resume_walk`).
   let at_cell = eye_word(GRID + 11u) + (cell.y * span_n.x + cell.x) * CELL_WORDS;
-  let resumes = !beam && beams[at_cell + CELL_RESUMES] != 0u;
+  let resumes = !beam && cell.x != NONE && beams[at_cell + CELL_RESUMES] != 0u;
   var t = 0.0;
   var corner = vec3<u32>(0u);
   var zoom = 0u;
@@ -316,7 +335,7 @@ fn walk(tan_at: vec2<f32>, cell: vec2<u32>, line: u32) -> Walked {
       if (other_zooms) {
         w = held_at_other_zooms(zoom, c, asked_near);
       }
-      if (w == NONE || (other_zooms && pyramid[w + W_KIND] == KIND_CELL && revisits(tan_at))) {
+      if (w == NONE || (other_zooms && pyramid[w + W_KIND] == KIND_CELL && revisits(aim.seed))) {
         ends = 4u;
         break;
       }

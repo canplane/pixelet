@@ -360,6 +360,8 @@ pub const HEAD_CORNER_WAS: usize = 4;
 /// frame's rays mark again, and in the first frame it stands, which the
 /// jitter's frames after it stand on (pxl-shader light.rs `light_mark_cs`).
 pub const HEAD_FOOTPRINT: usize = 6;
+/// Where the slots' misses lie in the list (`misses_cnt`), the second vec4's last word.
+pub const HEAD_MISSES: usize = 7;
 
 /// Where a texel's ray starts, the same point of the world in every frame
 /// cast in one light frame (pxl-render gpu/shadow.rs `aim`): off anchors
@@ -618,6 +620,10 @@ pub(crate) const fn sample_words(size: u32) -> u32 {
 /// workgroup as long as its slowest lane. Past the samples: how many, copied
 /// in once the slots are done, as the eye's count is
 /// (`pyramid::MARKS_CNT`), then a slot each, its X and its Y over 16 bits.
+/// A slot its walk over the observed pyramid ended is struck from the list with this
+/// (pxl-render light_miss_hit.wgsl), past any slot's X and Y.
+pub const MISS_DONE: u32 = u32::MAX;
+
 pub const fn misses_cnt(size: u32) -> u32 {
     sample_words(size)
 }

@@ -19,7 +19,7 @@ fn beam_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let ty = eye_f32(TAN + 1u) - (f32(id.y) - past) * s;
   let idx = id.y * corners.x + id.x;
   let base = idx * LINE_WORDS;
-  let w = walk(vec2<f32>(tx, ty), vec2<u32>(0u), base);
+  let w = walk(eye_aim(vec2<f32>(tx, ty)), vec2<u32>(0u), base);
   if (w.ends == 0u || w.ends == 4u) {
     let place = atomicAdd(&left[3], 1u);
     if (place % 64u == 0u) {

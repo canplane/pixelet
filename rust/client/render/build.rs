@@ -341,7 +341,9 @@ fn walk_word() -> String {
     use pxl_engine::area::Shard;
     use pxl_engine::clipmap::Lookup;
     use pxl_engine::overwrite::NodeSlot;
-    use pxl_engine::{answer, beam, cast, eye, face, param, pyramid, ray, value, SHARD_ZOOM};
+    use pxl_engine::{
+        answer, beam, cast, eye, face, light, param, pyramid, ray, value, SHARD_ZOOM,
+    };
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
         ("ORIGIN", eye::ORIGIN as u32),
@@ -398,6 +400,14 @@ fn walk_word() -> String {
         ("STEPS_MOST", 4096),
         ("JITTER", eye::JITTER as u32),
         ("REVISIT", 16),
+        ("LIGHT", eye::LIGHT as u32),
+        ("LIGHT_HEAD_VEC4S", light::HEAD_VEC4S as u32),
+        ("LIGHT_HEAD_MISSES", light::HEAD_MISSES as u32),
+        ("LIGHT_STARTS_AT", light::STARTS_AT as u32),
+        ("LIGHT_ANCHOR", light::ANCHOR as u32),
+        ("LIGHT_TILE", light::TILE),
+        ("LIGHT_DEPTH_ONE", light::DEPTH_ONE),
+        ("LIGHT_MISS_DONE", light::MISS_DONE),
         ("Y_START", cast::Y_START),
         ("Z_START", cast::Z_START),
         ("SHARD_ZOOM", SHARD_ZOOM),

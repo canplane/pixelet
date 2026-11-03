@@ -700,6 +700,9 @@ pub fn light_miss_cs(
         return;
     }
     let w = list.word(pxl_engine::light::misses_at(n) + i);
+    if w == pxl_engine::light::MISS_DONE {
+        return;
+    }
     let slot = UVec3::new(w & 0xffff, w >> 16, 0);
     let world = world(eye, clipmap, ground, palette_indices, shards, overwrites, pool);
     let (_, met, _) = observer::walk_again(&m, world, pyramid, &*list, [slot.x, slot.y], &mut ());
