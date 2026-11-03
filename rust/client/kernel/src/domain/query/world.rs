@@ -7,7 +7,7 @@
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::layer::octant::Octant;
 
 use super::changes::Columns;
 use crate::domain::layer::object::store;
@@ -33,8 +33,8 @@ pub struct World<'a> {
     /// (pxl-engine `world::Inheritance::UNPLACED`).
     pub(super) unplaced: bool,
     /// What of what is placed a preview hides, and what it cuts to air.
-    pub(super) hide: Option<EntryAt>,
-    pub(super) carve: Option<EntryAt>,
+    pub(super) hide: Option<Octant>,
+    pub(super) carve: Option<Octant>,
     /// Where what its queries read is reported, if anywhere.
     pub(super) reading: Option<&'a Columns>,
 }
@@ -85,7 +85,7 @@ impl<'a> World<'a> {
     /// As a preview shows it: `hide` left out, `carve` cut to air, at the
     /// entry's zoom or finer, where it is drawn as held; coarser, the stored
     /// fold stands.
-    pub fn previewing(self, hide: Option<EntryAt>, carve: Option<EntryAt>) -> World<'a> {
+    pub fn previewing(self, hide: Option<Octant>, carve: Option<Octant>) -> World<'a> {
         World {
             hide,
             carve,
@@ -109,7 +109,7 @@ impl<'a> World<'a> {
         }
     }
 
-    /// The columns `columns`, read (`reading`): what a kept answer read.
+    /// The columns `columns`, read (`reading`): what a cached answer read.
     pub(super) fn read_columns(&self, columns: [[f64; 2]; 2]) {
         if let Some(c) = self.reading {
             c.join(columns);

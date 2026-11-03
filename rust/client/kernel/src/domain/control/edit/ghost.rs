@@ -7,19 +7,16 @@
 //! texture and what stands in for a decor not yet loaded, is the scene's
 //! (`domain/scene/indicator/ghost.rs`).
 
-use pxl_spec::asset::cube::{cube_of, Cube};
-use pxl_spec::asset::decor::Decor;
-use pxl_spec::asset::DecorId;
-use pxl_spec::bake::constant::EntryAt;
+use crate::domain::layer::object::asset::Asset;
+use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::octant::Octant;
 
 use crate::domain::control::edit::write::{middle, pending, restores_scattered, Pending};
-use crate::domain::control::edit::{hover, tool, ActiveTool};
+use crate::domain::control::edit::{hover, tool, Tool};
 use crate::domain::layer::object::meta::user_decor_pick;
 pub use crate::domain::layer::object::preview::{Ghost, GhostBox};
-use crate::domain::layer::object::store::Asset;
 use crate::domain::query::changes::Memo;
 use crate::domain::query::World;
 use crate::domain::view::frame::coord;
@@ -28,13 +25,12 @@ use xpute_guest::global::Global;
 
 /// The palette entry of the ground the eraser would carve, of the hovered point:
 /// asked again only where the hover moved or a change touched its column.
-static CARVE_CUBE: Global<Memo<Q3, Option<Cube>>> = Global::new();
+static CARVE_CUBE: Global<Memo<Q3, Option<AssetId>>> = Global::new();
 
 pub fn ghost() -> Ghost {
     let hover = hover();
     let ui = tool();
     let hovered = hover.coord;
-    let active_tool = ui.active_tool;
     let Pending {
         object: hovered_object,
         zoom: preview_zoom,
@@ -43,55 +39,47 @@ pub fn ghost() -> Ghost {
         ..
     } = pending();
 
-    let use_object_style = matches!(
-        active_tool,
-        ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser
-    ) || hovered_object.is_some();
-    let cur_scale = units(if use_object_style {
+    let use_object_style = ui != Tool::Pointer || hovered_object.is_some();
+    let box_zoom = if use_object_style {
         preview_zoom
     } else {
         GROUND.cell()
-    });
+    };
 
     let carved = CARVE_CUBE.get(|| Memo::NONE);
     // Looked at each frame turn, a hover not asked of this one too.
     carved.forget_touched();
     // The cell being carved as the world answers it, whichever source fills
     // it: the ground, a way, a bore's wall.
-    let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
+    let carved_style_cube: Option<AssetId> = match (&hovered, digging_terrain) {
         (Some(h), true) => carved.of(World::now(), *h, |w| {
-            cube_of(
-                w.asset_of(&middle(EntryAt::holding(GROUND.cell(), h)))
+            Asset::of(
+                w.asset_of(&middle(Octant::holding(GROUND.cell(), h)))
                     .val()
                     .map_or(0, answer::val),
             )
+            .cube()
         }),
         _ => None,
     };
 
-    let cube: Option<Cube> = match (active_tool, hovered_object.map(|o| o.asset())) {
-        (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
-        (_, Some(Asset::Cube { cube })) => Some(cube),
-        (ActiveTool::Object, _) => Some(ui.object_cube),
-        _ => carved_style_cube,
-    };
-
-    let decor_id = match (active_tool, hovered_object.map(|o| o.asset())) {
-        (ActiveTool::Decor, _) => Some(ui.decor_id),
-        (_, Some(Asset::Decor { decor_id })) => Some(decor_id),
-        _ => None,
-    };
-    let decor = decor_id.map(Decor::of);
-
-    let decor_corner = match (active_tool, &hovered_object) {
-        (ActiveTool::Decor, _) => hovered,
-        (_, Some(o)) if matches!(o.asset(), Asset::Decor { .. }) => Some(o.corner()),
-        _ => None,
-    };
+    // What it shows: what the tool would place; else, as a placing tool hovers
+    // no object, what the pointer or the eraser is over.
+    let shown = ui
+        .asset()
+        .map(|(a, _)| a)
+        .or(hovered_object.map(|o| o.asset()));
+    // The pointer shows a decor it is over, and no cube.
+    let cube = shown
+        .and_then(Asset::cube)
+        .filter(|_| ui != Tool::Pointer)
+        .or(carved_style_cube);
+    let decor = shown.and_then(Asset::decor);
+    let decor_corner = hovered_object.map_or(hovered, |o| Some(o.corner()));
     // Placing back an erased scattered decor restores that instance; the ghost
     // shows it.
-    let restored = match (active_tool, &hovered) {
-        (ActiveTool::Decor, Some(h)) => restores_scattered(h, ui.decor_id),
+    let restored = match (ui.asset(), &hovered) {
+        (Some((Asset::Decor(id), _)), Some(h)) => restores_scattered(h, id),
         _ => None,
     };
     // Where it would stand, and what it would carry.
@@ -103,12 +91,12 @@ pub fn ghost() -> Ghost {
         }
         _ => None,
     };
-    let erase = active_tool == ActiveTool::Eraser;
+    let erase = ui == Tool::Eraser;
     let scattered_ghost = hover
-        .scattered_decor
-        .filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser))
+        .scattered_decor()
+        .filter(|_| matches!(ui, Tool::Pointer | Tool::Eraser))
         .and_then(|s| {
-            let (m, decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
+            let (m, decor) = (s.meta, Asset::of(u32::from(s.id)).decor()?);
             Some(Ghost::Decor {
                 at: s.at,
                 decor,
@@ -125,7 +113,7 @@ pub fn ghost() -> Ghost {
             let c = q3::unpack(&h);
             let box_ghost = GhostBox {
                 at: [x, y, z],
-                size: cur_scale,
+                zoom: box_zoom,
                 cube,
                 erase,
             };

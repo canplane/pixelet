@@ -15,7 +15,7 @@ use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::bake::separation;
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::mem;
 use xpute_guest::mem::heap::Block;
 use xpute_kit::status::bug::OrBug;
@@ -57,7 +57,7 @@ impl Base for TerrainTile {
     /// One pass from the packet: nothing tile-sized stands between arrival and
     /// drawing.
     fn receive(
-        _tile: Tile,
+        _tile: Quadrant,
         record: u32,
         pkt: &[u8],
         phases: &mut Phases,
@@ -88,10 +88,10 @@ impl Base for TerrainTile {
     }
 }
 
-/// The most terrain packets kept at once: the body slots (`BODY_SLOTS`)
+/// The most terrain packets waiting at once: the body slots (`BODY_SLOTS`)
 /// less one for the most credits the host has granted and one for every
 /// Earth frame,
-/// so the packets kept, which only a drawn frame gives back, never take the
+/// so the packets waiting, which only a drawn frame gives back, never take the
 /// slots a read needs to arrive into (sys/io/body.rs). A packet past it is
 /// freed once decoded, and its tile asked again when one could be kept
 /// (`again_room`, domain/layer/terrain/clipmap.rs `step`).
@@ -111,7 +111,7 @@ const _: () = assert!(
 pub fn again_room() -> u32 {
     // Not one whose object failed: it is not read again while it is wanted.
     let coming = TerrainTile::tile_cache()
-        .asked_again(|p| !request::has_object_failed(Stream::terrain, p.subject()));
+        .asked_again(|p| !request::has_object_failed(Stream::terrain, p.id()));
     most_pending().saturating_sub(uploads().cnt() + coming)
 }
 
@@ -123,7 +123,7 @@ pub fn uploads() -> &'static mut Uploads {
 }
 
 /// Whether `tile`'s packet is kept, its bricks still to be handed.
-pub fn pending_for(tile: Tile) -> bool {
+pub fn pending_for(tile: Quadrant) -> bool {
     TerrainTile::tile_cache()
         .slot(tile)
         .is_some_and(|f| uploads().waiting(f))

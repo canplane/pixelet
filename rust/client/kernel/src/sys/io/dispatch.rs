@@ -13,13 +13,13 @@ use crate::sys::io::{fetch, loader};
 
 pub fn run() {
     // The key is an opaque handle to the shell.
-    take_starts(|credit, stream, subject| match stream {
+    take_starts(|credit, stream, id| match stream {
         Stream::asset => {
-            if let Some((_, load)) = loader::of_subject(subject) {
+            if let Some((_, load)) = loader::of_id(id) {
                 loader::open_asset(credit, load);
             }
         }
-        _ => fetch::start(credit, stream, subject),
+        _ => fetch::start(credit, stream, id),
     });
     // Collected first: stopping a read settles it, which must not happen inside
     // the request scheduler's own walk.

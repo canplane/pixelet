@@ -25,7 +25,7 @@ use pxl_spec::bake::tile::terrain::{
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_guest::global::Global;
 use xpute_guest::mem::off_of_slice;
 use xpute_kit::collection::list::List;
@@ -155,12 +155,12 @@ struct Clipmap {
     /// packet go since, which moves what is due and what is asked again.
     read: u32,
     filled: bool,
-    /// The packets kept when the entries were last stepped over: one given
-    /// back may leave room to ask again for a tile whose packet was not
-    /// kept (`tile::again_room`).
-    kept: u32,
+    /// The packets waiting when the entries were last stepped over: one given
+    /// back may leave room to ask again for a tile whose packet had none
+    /// (`tile::again_room`).
+    uploads: u32,
     /// The tiles the clip levels apart from the eye's want (`pinned_tiles`).
-    pinned: List<Tile, { PINNED_TILES as usize }>,
+    pinned: List<Quadrant, { PINNED_TILES as usize }>,
     /// The slots this turn hands the fill (`due`).
     due: List<u32, { FILL_CAP as usize }>,
     /// The heap as it was when it first refused a brick's child groups the
@@ -194,7 +194,7 @@ fn fresh() -> Clipmap {
         ticket: 0,
         read: 0,
         filled: true,
-        kept: 0,
+        uploads: 0,
         pinned: List::new(),
         due: List::new(),
         heap: None,
@@ -222,10 +222,10 @@ fn entry_brick(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
 }
 
 /// The tile brick `q` at `cell` lies in, and where in it, in bricks.
-pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Tile, [u32; 2]) {
+pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
     let per = (GROUND.tile_cells() >> BRICK_SHIFT) as i32;
     let zoom = cell - GROUND.tile_cell_shamt();
-    let t = tile_at(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
+    let t = Quadrant::new(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
     (
         t,
         [q[0].rem_euclid(per) as u32, q[1].rem_euclid(per) as u32],
@@ -315,20 +315,20 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     }
     // Per clip level, whether its zoom moved, and whether it moved at all.
     let (mut moved, mut changed) = ([false; CLIP_LEVELS as usize], [lost; CLIP_LEVELS as usize]);
-    let kept = tile::uploads().cnt();
+    let uploads = tile::uploads().cnt();
     let released = wake(w);
     let mut stale = lost
         || released
         || core::mem::take(&mut w.filled)
         || terrain.revision() != w.read
-        || kept != w.kept;
+        || uploads != w.uploads;
     for clip_level in 0..CLIP_LEVELS {
         let (center, laid) = layout(clip_level);
         let p = at[center as usize];
         let cell = match (center, p) {
             // Where its line says the ground: open sea's leaf is the tile over it.
             (Center::Destination, Some(p)) => {
-                let leaf = tile_at(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
+                let leaf = Quadrant::new(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
                 terrain.src(leaf).map_or(laid, |t| GROUND.cell_zoom(t.zoom))
             }
             _ => laid,
@@ -353,7 +353,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     if !stale {
         return false;
     }
-    w.kept = kept;
+    w.uploads = uploads;
     // A clip level that did not move wants its bricks where they are.
     for clip_level in 0..CLIP_LEVELS {
         let (cell, first) = (
@@ -581,7 +581,7 @@ pub fn refold() {
 fn due(w: &mut Clipmap) {
     let terrain = TerrainTile::tile_cache();
     let handable =
-        |t: Tile| tile::pending_for(t) || terrain.get(t).is_some() && terrain.slot(t).is_none();
+        |t: Quadrant| tile::pending_for(t) || terrain.get(t).is_some() && terrain.slot(t).is_none();
     w.due.clear();
     for clip_level in 0..CLIP_LEVELS {
         let (cell, Some(first)) = (
@@ -616,7 +616,7 @@ fn due(w: &mut Clipmap) {
 /// The tiles of the bricks this turn hands (`due`) held with no frame,
 /// each once: void tiles, whose bricks are filled off their palette indices alone
 /// (`TileContent::Void`).
-pub fn voids() -> List<Tile, { FILL_CAP as usize }> {
+pub fn voids() -> List<Quadrant, { FILL_CAP as usize }> {
     let (w, terrain) = (clipmap(), TerrainTile::tile_cache());
     let mut voids = List::new();
     for &b in w.due.iter() {
@@ -646,7 +646,7 @@ fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
 /// The tiles the pivot's and a destination's clip levels want, which the eye's
 /// demand need not name: held hard, as a destination's line is
 /// (pxl-kernel domain/view/demand.rs `observe`).
-pub fn pinned_tiles() -> &'static [Tile] {
+pub fn pinned_tiles() -> &'static [Quadrant] {
     &clipmap().pinned
 }
 
@@ -700,7 +700,7 @@ static FILL: Global<Fill> = Global::new();
 static ZEROS: [i16; ELE_COLUMN] = [0; ELE_COLUMN];
 
 /// Whether slot `b` holds a brick of `tile` a clip level wants, absent.
-fn slot_wants(w: &Clipmap, tile: Tile, b: u32) -> bool {
+fn slot_wants(w: &Clipmap, tile: Quadrant, b: u32) -> bool {
     let held = w.slots[b as usize];
     held.is_absent()
         && held.cell == GROUND.cell_zoom(tile.zoom)
@@ -709,7 +709,7 @@ fn slot_wants(w: &Clipmap, tile: Tile, b: u32) -> bool {
 
 /// Whether a clip level wants one of `tile`'s bricks, absent: its packet is
 /// kept for it while one does.
-pub fn is_tile_wanted(tile: Tile) -> bool {
+pub fn is_tile_wanted(tile: Quadrant) -> bool {
     let w = clipmap();
     (0..SLOTS).any(|b| slot_wants(w, tile, b))
 }
@@ -719,12 +719,16 @@ pub fn is_tile_wanted(tile: Tile) -> bool {
 /// samples to the GPU. Taken where no clip level wants another of its bricks;
 /// kept where one still does, for a later turn; full where the stream ran
 /// out first.
-pub fn fill(tile: Tile, from: TileContent, write: &mut dyn FnMut(BrickFill<'_>) -> bool) -> Uptake {
+pub fn fill(
+    tile: Quadrant,
+    from: TileContent,
+    write: &mut dyn FnMut(BrickFill<'_>) -> bool,
+) -> Uptake {
     let cell = GROUND.cell_zoom(tile.zoom);
     let w = clipmap();
     let wants = |w: &Clipmap, b: u32| slot_wants(w, tile, b);
     let rest = |w: &Clipmap| match (0..SLOTS).any(|i| wants(w, i)) {
-        true => Uptake::Kept,
+        true => Uptake::Part,
         false => Uptake::Taken,
     };
     if !w.due.iter().any(|&i| wants(w, i)) {

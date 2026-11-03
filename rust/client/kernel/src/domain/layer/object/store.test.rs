@@ -2,20 +2,23 @@
 
 use pxl_spec::asset::cube::Object;
 use pxl_spec::space::coord::zoom::UNIT_ZOOM;
+use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use fnv::FnvHashMap;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::hierarchy::morton::child_cube;
 
 use super::*;
 use crate::domain::layer::Query;
 use pxl_engine::answer;
 use pxl_engine::overwrite::{self, Cut};
-use pxl_spec::asset::cube::{cube_id, Cube};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
+
+fn id_of(zoom: Zoom, at: [i32; 3]) -> u128 {
+    key_of::<3>(zoom, at)
+}
 
 #[test]
 fn write_undo_round_trip() {
@@ -23,7 +26,7 @@ fn write_undo_round_trip() {
     for at in [[8, 16, 24], [-3, 5, -7]] {
         assert!(!store
             .write([Write {
-                key: key(OBJECT_COARSEST, at),
+                at: id_of(OBJECT_COARSEST, at),
                 id: 3,
                 ext: None
             }])
@@ -52,7 +55,7 @@ fn write_undo_round_trip() {
             }]
         );
         store.write([Write {
-            key: key(OBJECT_COARSEST, at),
+            at: id_of(OBJECT_COARSEST, at),
             id: VOID,
             ext: None,
         }]);
@@ -62,7 +65,7 @@ fn write_undo_round_trip() {
         assert!(
             store
                 .write([Write {
-                    key: key(OBJECT_COARSEST, at),
+                    at: id_of(OBJECT_COARSEST, at),
                     id: VOID,
                     ext: None,
                 }])
@@ -105,7 +108,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
-        key: key(OBJECT_COARSEST, [base[0] + x, base[1] + y, z]),
+        at: id_of(OBJECT_COARSEST, [base[0] + x, base[1] + y, z]),
         id: state,
         ext: None,
     }));
@@ -118,9 +121,9 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
             for x in corner[0]..corner[0] + per {
                 let slot = store.cursor((target, [x, y, z]), target);
                 let v = overwrite::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
-                let kept = answer::eighths(overwrite::fill_share(&store.columns(), slot));
-                if v != VOID && kept > 0 {
-                    out.insert([x, y, z], (v, kept));
+                let eighths = answer::eighths(overwrite::fill_share(&store.columns(), slot));
+                if v != VOID && eighths > 0 {
+                    out.insert([x, y, z], (v, eighths));
                 }
             }
         }
@@ -129,7 +132,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
 }
 
 fn red() -> u32 {
-    cube_id(Cube::Object(Object::red))
+    Object::red as AssetId
 }
 
 #[test]
@@ -180,13 +183,13 @@ fn air_folds_as_val() {
 }
 
 fn cube_at(store: &mut Store, [x, y, z]: [i32; 3], state: u32) {
-    store.write([Write::at(EntryAt::new(UNIT_ZOOM, [x, y, z]), state)]);
+    store.write([Write::at(Octant::new(UNIT_ZOOM, [x, y, z]), state)]);
 }
 
 #[test]
 fn axis_turn() {
     let mut rng = Rng(SplitMix64::new(0x2c1b_3c6d_a5b4_9f1e));
-    let red = cube_id(Cube::Object(Object::red));
+    let red = Object::red as AssetId;
     let turn = |[x, y, z]: [i32; 3]| [y, z, x];
     let turn_box = |b: Aabb| Aabb {
         min: [b.min[1], b.min[2], b.min[0]],
@@ -220,7 +223,7 @@ fn axis_turn() {
 #[test]
 fn column_extent() {
     let mut rng = Rng(SplitMix64::new(0x7d3a_51e9_c2b4_0f86));
-    let red = cube_id(Cube::Object(Object::red));
+    let red = Object::red as AssetId;
     let mut store = Store::default();
     for _ in 0..300 {
         let at = [
@@ -278,21 +281,21 @@ fn leaf_words_freed_on_erase() {
     let mut store = Store::default();
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
     store.write([Write {
-        key: key(zoom, at),
+        at: id_of(zoom, at),
         id: MARKER,
         ext: marker_text("cafe"),
     }]);
     let e = store.read((zoom, at)).entry().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
     store.write([Write {
-        key: key(zoom, at),
+        at: id_of(zoom, at),
         id: VOID,
         ext: None,
     }]);
     assert!(store.read((zoom, at)).entry().is_none());
-    // The freed slot is the next one kept: nothing outlived its leaf.
+    // The freed slot is the next one taken: nothing outlived its leaf.
     store.write([Write {
-        key: key(zoom, at),
+        at: id_of(zoom, at),
         id: MARKER,
         ext: marker_text("bar"),
     }]);
@@ -308,13 +311,13 @@ fn marker_text_change_cube() {
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
     let put = |store: &mut Store, text: &str| {
         store.write([Write {
-            key: key(zoom, at),
+            at: id_of(zoom, at),
             id: MARKER,
             ext: marker_text(text),
         }])
     };
     assert_eq!(put(&mut store, "cafe").len(), 1);
-    // The old record's slot is the one kept, so the word is the same.
+    // The old record's slot is the one reused, so the word is the same.
     assert_eq!(put(&mut store, "bar").len(), 1);
     let e = store.read((zoom, at)).entry().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
@@ -327,7 +330,10 @@ fn eight_markers_stay() {
     let parent = [4, 4, 2];
     let writes: Vec<Write> = (0..8)
         .map(|k| Write {
-            key: key(OBJECT_COARSEST + 1, child_cube(OBJECT_COARSEST, parent, k)),
+            at: id_of(
+                OBJECT_COARSEST + 1,
+                overwrite::child_at(OBJECT_COARSEST, parent, k),
+            ),
             id: MARKER,
             ext: marker_text(&format!("m{k}")),
         })
@@ -346,7 +352,7 @@ fn whole_shard_meets_leaves() {
     let mut store = Store::default();
     let at = [5, 7, 2];
     store.write([Write {
-        key: key(OBJECT_COARSEST, at),
+        at: id_of(OBJECT_COARSEST, at),
         id: 3,
         ext: None,
     }]);

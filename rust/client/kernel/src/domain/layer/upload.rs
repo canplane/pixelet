@@ -23,9 +23,9 @@ enum Frame {
 pub enum Uptake {
     /// Taken whole: freed.
     Taken,
-    /// Taken in part, the rest a later turn's: kept, and the next offered.
-    Kept,
-    /// The stream ran out: kept, and nothing more offered this turn.
+    /// Taken in part, the rest a later turn's, and the next offered.
+    Part,
+    /// The stream ran out: it waits, and nothing more is offered this turn.
     Full,
 }
 
@@ -72,7 +72,7 @@ impl Uploads {
         }
     }
 
-    /// The packets kept.
+    /// The packets waiting.
     pub fn cnt(&self) -> u32 {
         self.waiting
     }
@@ -115,7 +115,7 @@ impl Uploads {
             }
             match send(record as u32, body(block)) {
                 Uptake::Full => full = true,
-                Uptake::Kept => {}
+                Uptake::Part => {}
                 Uptake::Taken => {
                     release(Some(block));
                     *frame = Frame::Sent(on);

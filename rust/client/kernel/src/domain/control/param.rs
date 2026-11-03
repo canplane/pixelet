@@ -5,7 +5,7 @@
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile;
+use pxl_spec::space::layer::quadrant;
 
 // ---- the camera ----
 
@@ -35,7 +35,7 @@ pub const NEAREST_DIST: f64 = 1.25 * MIN_DIST;
 /// The orbit's farthest: `DOLLY_END_CELLS` of the coarsest cell any zoom
 /// holds, the pyramid's top's, so looking straight down the grid never asks
 /// a coarser cell than a zoom draws.
-pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(tile::TOP_ZOOM));
+pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(quadrant::TOP_ZOOM));
 
 // ---- the camera's settling and the ground it keeps to ----
 

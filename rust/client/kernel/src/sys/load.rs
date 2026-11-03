@@ -5,7 +5,9 @@
 //! the catalog, a model or an image. A leaf: io loads them, and the turn's
 //! edge sizes its tasks by them.
 
+use crate::sys::io::file::Path;
 use pxl_spec::asset::catalog::SLOTS;
+use pxl_spec::bake::publication::TILE_SPHERE;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadKind {
@@ -14,8 +16,8 @@ pub enum LoadKind {
     Catalog = 2,
 }
 
-/// A file below the asset root, by its number, the catalog's
-/// (host.json `CATALOG`) or one it names; the Earth's picture whole is the
+/// A file below the asset root, by its id, the catalog's
+/// (file.json `CATALOG`) or one it names; the Earth's picture whole is the
 /// earth layer's, under its version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
@@ -23,20 +25,27 @@ pub enum Load {
     Sphere,
 }
 
-/// The sphere's number, past every one below the asset root, which a u16
-/// holds.
+/// The sphere's id, past every one below the asset root, which a u16 holds.
 const SPHERE: u32 = 1 << 16;
 
 impl Load {
-    pub fn number(self) -> u32 {
+    /// Its path below its root.
+    pub fn path(self) -> Path {
+        match self {
+            Load::File(n) => Path::of_id(u64::from(n)),
+            Load::Sphere => Path::of_name(TILE_SPHERE),
+        }
+    }
+
+    pub fn id(self) -> u32 {
         match self {
             Load::File(n) => n,
             Load::Sphere => SPHERE,
         }
     }
 
-    pub fn of(number: u32) -> Option<Load> {
-        match number {
+    pub fn of(id: u32) -> Option<Load> {
+        match id {
             SPHERE => Some(Load::Sphere),
             n if n < SPHERE => Some(Load::File(n)),
             _ => None,

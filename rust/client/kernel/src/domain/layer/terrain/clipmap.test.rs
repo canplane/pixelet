@@ -15,7 +15,7 @@ use pxl_spec::bake::tile::terrain;
 
 /// A tile as `hold` takes it: a cell's own palette index and its height, row by row
 /// from its first, and its lines.
-pub(crate) type HeldTile = (Tile, Vec<GroundId>, Vec<i16>, Separation);
+pub(crate) type HeldTile = (Quadrant, Vec<GroundId>, Vec<i16>, Separation);
 
 /// What `hold` leaves held: the bricks' words up to their last that is
 /// not zero, the pool's child groups taken as records (pxl-engine
@@ -349,7 +349,7 @@ fn shared_brick_held_once() {
 }
 
 #[test]
-fn left_brick_kept() {
+fn left_brick_part() {
     let _g = sys::serial();
     CLIPMAP.set(fresh());
     let w = clipmap();

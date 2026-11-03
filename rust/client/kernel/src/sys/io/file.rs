@@ -4,24 +4,27 @@
 //! reaches its owner and one for a closed descriptor reaches no one. A
 //! native test has no host and opens nothing.
 //!
-//! Every file is a root's object by number (host.json `root`): a tile by its
-//! subject, an asset by its load, a storage file by its slot, a shard's
-//! objects by the shard's subject, their top and their edits by theirs. The
-//! number is the path's one name, in decimal; what it is and where, a
-//! version, a URL or a storage key, is what the host
+//! Every file is a root's object by one name (file.json `root`): a tile and a
+//! shard's objects by the quadkey, an asset by its load's id, a storage file by
+//! its slot's, the sphere, the objects' top and their edits by their own. What
+//! it is called past that and where, a version, a URL or a storage key, is what
+//! the driver
 //! (ts/client/src/driver/namespace/) binds the root to, `@xpute/host`
 //! carrying the open there. A file is bytes: how a platform keeps them, as
 //! text or otherwise, is its backend's.
 
+use core::fmt::{self, Write};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_guest::abi::cmd::SysOpened;
 use xpute_guest::ipc::file::Files;
 pub use xpute_guest::ipc::file::Opened;
 use xpute_guest::ipc::sys::Fd;
 use xpute_kit::status::bug::OrBug;
 
+use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch;
+use crate::sys::io::file_spec::{format, object, root, storage};
 use crate::sys::io::host::{sys, turn};
-use crate::sys::io::host_spec::{format, root, storage};
 use crate::sys::io::loader;
 use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::request::Credit;
@@ -31,15 +34,15 @@ use crate::sys::sched::edge::request_world_tick;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
-/// A file the kernel keeps in storage, by its slot (host.json `storage`).
+/// A file the kernel keeps in storage, by its slot (file.json `storage`).
 /// Storage is opened and written only by one of these, so what a turn can
 /// record there follows from how many.
 ///
-/// A storage file is its slot's format byte (host.json `format`), then what its
+/// A storage file is its slot's format byte (file.json `format`), then what its
 /// owner keeps. One of another format, one its backend cannot read as bytes
 /// (EBADMSG), or one larger than any heap a device is given (no build reads
 /// it) is refused: read as nothing and never written over, and named to the
-/// host (`is_refused`), whose it is to set the file aside and empty the slot
+/// driver (`is_refused`), whose it is to set the file aside and empty the slot
 /// (`on_emptied`). Which storage a slot is, how it keeps the bytes, and what
 /// an older file becomes, the kernel never says.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,7 +51,7 @@ pub enum StorageFile {
 }
 
 impl StorageFile {
-    /// In declaration order, as `READS` is indexed by `kept as usize`.
+    /// In declaration order, as `READS` is indexed by `file as usize`.
     pub const ALL: [StorageFile; 1] = [StorageFile::Settings];
 
     /// Its path below STORAGE is this in decimal.
@@ -68,19 +71,23 @@ impl StorageFile {
         StorageFile::ALL.into_iter().find(|k| k.slot() == slot)
     }
 
-    fn path(self) -> Path {
-        Path::of(u64::from(self.slot()))
+    pub fn path(self) -> Path {
+        Path::of_id(u64::from(self.slot()))
     }
 }
 
-/// The longest name the kernel opens: a number in decimal, a u64's widest,
-/// so the host stream's reserve can count on it.
+/// The longest name the kernel opens: a u64 in decimal, at its widest, past
+/// every quadkey, so the host stream's reserve can count on it.
 pub const PATH_BYTES: usize = 20;
 
 const _: () = assert!(u64::MAX.ilog10() as usize + 1 == PATH_BYTES);
+const _: () = assert!(LEAF_ZOOM as usize <= PATH_BYTES);
+
+/// The objects' top among a stream's ids, the rest tiles' keys: no tile's is 0.
+pub const TOP_ID: u64 = 0;
 
 /// `Load` is an asset's file, read as a model or an image as its attempt's
-/// subject says.
+/// id says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Owner {
     Fetch { key: u64, at_ms: f64 },
@@ -99,9 +106,9 @@ fn files() -> &'static mut Files<Owner, OPEN> {
     FILES.get(Files::new)
 }
 
-/// Opens `root`'s object `number`; none where there is no host.
-pub fn open(_: Credit, root: u32, number: u64, owner: Owner) -> Option<Fd> {
-    Some(files().open(sys()?, root, Path::of(number).as_str(), owner))
+/// Opens `root`'s object `path`; none where there is no host.
+pub fn open(_: Credit, root: u32, path: Path, owner: Owner) -> Option<Fd> {
+    Some(files().open(sys()?, root, path.as_str(), owner))
 }
 
 /// Opens a storage file to be read whole; what it held is taken with `take_storage`.
@@ -133,12 +140,12 @@ fn refusals() -> &'static mut [bool; StorageFile::ALL.len()] {
 }
 
 /// Its file is not of its slot's format, or too large for any heap: none of
-/// it was read, and nothing is written over it until the host empties the slot.
+/// it was read, and nothing is written over it until the driver empties the slot.
 pub fn is_refused(file: StorageFile) -> bool {
     refusals()[file as usize]
 }
 
-/// The host set a refused slot's file aside and emptied it: its owner may
+/// The driver set a refused slot's file aside and emptied it: its owner may
 /// open it again and write it.
 pub fn on_emptied(file: StorageFile) {
     refusals()[file as usize] = false;
@@ -157,7 +164,7 @@ pub fn storage_of(file: StorageFile, mut bytes: Vec<u8>) -> StorageRead {
     StorageRead::Bytes(bytes)
 }
 
-/// Named to the host in the next snapshot, for it to set aside.
+/// Named to the driver in the next snapshot, for it to set aside.
 fn refuse(file: StorageFile) -> StorageRead {
     refusals()[file as usize] = true;
     request_world_tick();
@@ -231,7 +238,7 @@ fn on_storage_opened(file: StorageFile, fd: Fd, opened: Opened) {
     set_read_state(file, read);
 }
 
-/// The host's answer to `open_storage`, for a test with none: `bytes`, read
+/// The driver's answer to `open_storage`, for a test with none: `bytes`, read
 /// whole and taken from the next turn on, or an open that came to no bytes.
 #[cfg(test)]
 pub fn on_storage_answered(file: StorageFile, answer: Result<&[u8], Opened>) {
@@ -299,33 +306,86 @@ pub fn close(fd: Fd) {
     }
 }
 
-/// An object's path below its root, its number in decimal, written where it
-/// is wanted, so no path is allocated.
-struct Path {
-    digits: [u8; PATH_BYTES],
-    from: usize,
+/// An object's path below its root, written where it is wanted, so no path is
+/// allocated.
+#[derive(Clone, Copy, PartialEq)]
+pub struct Path {
+    bytes: [u8; PATH_BYTES],
+    len: usize,
 }
 
 impl Path {
-    fn of(mut number: u64) -> Path {
-        let mut p = Path {
-            digits: [0; PATH_BYTES],
-            from: PATH_BYTES,
-        };
-        loop {
-            p.from -= 1;
-            p.digits[p.from] = b'0' + (number % 10) as u8;
-            number /= 10;
-            if number == 0 {
-                return p;
-            }
-        }
+    pub const EMPTY: Path = Path {
+        bytes: [0; PATH_BYTES],
+        len: 0,
+    };
+
+    /// A load's or a slot's, in decimal.
+    pub fn of_id(id: u64) -> Path {
+        let mut p = Path::EMPTY;
+        write!(p, "{id}").or_bug(Errno::EOVERFLOW);
+        p
     }
 
-    fn as_str(&self) -> &str {
-        // SAFETY: ASCII digits only.
-        unsafe { core::str::from_utf8_unchecked(&self.digits[self.from..]) }
+    /// A file's own name.
+    pub fn of_name(name: &str) -> Path {
+        let mut p = Path::EMPTY;
+        p.write_str(name).or_bug(Errno::EOVERFLOW);
+        p
     }
+
+    /// A tile's or a shard's key by its id, or the objects' top.
+    pub fn of_quadrant(id: u64) -> Path {
+        if id == TOP_ID {
+            return Path::of_name(object::TOP);
+        }
+        let mut p = Path::EMPTY;
+        Quadrant::of_id(id)
+            .write_key(&mut p)
+            .or_bug(Errno::EOVERFLOW);
+        p
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+
+    pub fn as_str(&self) -> &str {
+        core::str::from_utf8(&self.bytes[..self.len]).or_bug(Errno::ENOTRECOVERABLE)
+    }
+}
+
+impl Write for Path {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        let end = self.len + s.len();
+        let to = self.bytes.get_mut(self.len..end).ok_or(fmt::Error)?;
+        to.copy_from_slice(s.as_bytes());
+        self.len = end;
+        Ok(())
+    }
+}
+
+impl fmt::Display for Path {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// The path `stream`'s want `id` opens: a load's, or a tile's or a shard's.
+pub fn path_of(stream: Stream, id: u64) -> Path {
+    match stream {
+        Stream::asset => loader::of_id(id).map_or(Path::EMPTY, |(_, load)| load.path()),
+        _ => Path::of_quadrant(id),
+    }
+}
+
+/// The id `path` below OBJECT is (`Path::of_quadrant`); none for what is no
+/// shard's and not the top.
+pub fn id_of_path(path: &str) -> Option<u64> {
+    if path == object::TOP {
+        return Some(TOP_ID);
+    }
+    Quadrant::of_key(path).map(Quadrant::id)
 }
 
 pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
@@ -335,11 +395,11 @@ pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
 /// The turn `write` last wrote in, and how many files it wrote there.
 static LAST_WRITE: Global<(u64, u32)> = Global::new();
 
-/// Writes `bytes` whole as `root`'s object `number`, where the turn has a
+/// Writes `bytes` whole as `root`'s object `path`, where the turn has a
 /// write left (`WRITES_A_TURN`); false where it has none, nothing written,
 /// for its owner to write on a later turn. Nothing is written, and none
 /// counted, where there is no host.
-pub fn write(root: u32, number: u64, bytes: Vec<u8>) -> bool {
+pub fn write(root: u32, path: Path, bytes: Vec<u8>) -> bool {
     let Some(sys) = sys() else { return true };
     let written = LAST_WRITE.get(|| (0, 0));
     if written.0 != turn() {
@@ -349,7 +409,7 @@ pub fn write(root: u32, number: u64, bytes: Vec<u8>) -> bool {
         return false;
     }
     written.1 += 1;
-    files().write_whole(sys, root, Path::of(number).as_str(), bytes, Owner::Write);
+    files().write_whole(sys, root, path.as_str(), bytes, Owner::Write);
     true
 }
 
@@ -371,7 +431,7 @@ pub fn write_storage(file: StorageFile, bytes: &[u8]) {
 
 /// An open the host completed, read once (`Opened::of`); xpute's table finds
 /// its owner and closes it where it failed. A file larger than the heap every
-/// device is given cannot be held anywhere: it is the host's answer refused,
+/// device is given cannot be held anywhere: it is the driver's answer refused,
 /// closed here, and the owner hears EFBIG.
 pub fn on_opened(completed: &SysOpened) {
     let SysOpened { fd, detail, .. } = *completed;

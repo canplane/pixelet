@@ -7,8 +7,8 @@
 //! resolution apart from display resolution where a screen outgrows its GPU
 //! (Unreal's screen percentage). `fixed` draws
 //! whole, `low` a device pixel a CSS pixel, each with the camera grid's
-//! beam rays on the cell's own lattice, and `auto` one of `SCALE_STEPS`
-//! steps between whole and `SCALE_MIN`, each a like share of the last, so
+//! beam rays on the cell's own lattice, and `auto` one of `RES_STEPS`
+//! steps between whole and `RES_MIN`, each a like share of the last, so
 //! every move lays the pixels on one of a few grids, and a lattice up to
 //! `grid::LATTICE_MAX`.
 //!
@@ -37,7 +37,7 @@
 //! than `RES_BAND` steps down at once, and `RES_UP_WINDOWS` windows in a
 //! row in which the step above, F + P·(its share over this one)² + G·(this
 //! lattice over its)², fits under it by that much step up, so the knobs do
-//! not swing between two steps. Down, the scale goes first, to `SCALE_MIN`,
+//! not swing between two steps. Down, the scale goes first, to `RES_MIN`,
 //! then the lattice; up, the lattice first, then the scale. Where it keeps
 //! none the sample is the frame's gap, which never falls below the paced
 //! interval, so room cannot be foreseen and only the scale moves: a window
@@ -150,10 +150,10 @@ impl Judge {
         (self.window_ms, self.cost, self.budget_ms) = (0.0, Cost::default(), 0.0);
     }
 
-    /// The knobs a step down: the scale's, to `SCALE_MIN`, then, timed, the
+    /// The knobs a step down: the scale's, to `RES_MIN`, then, timed, the
     /// lattice's; none past both.
     fn down(&self, timed: bool) -> Option<(i32, u32)> {
-        if self.step < param::SCALE_STEPS {
+        if self.step < param::RES_STEPS {
             Some((self.step + 1, self.lattice))
         } else if timed && self.lattice < LATTICE_MAX {
             Some((self.step, self.lattice * 2))
@@ -256,8 +256,8 @@ fn state() -> &'static mut Judge {
 /// The share of the display's pixels, each way, step `step` draws at.
 fn share(step: i32) -> f64 {
     libm::pow(
-        param::SCALE_MIN,
-        f64::from(step) / f64::from(param::SCALE_STEPS),
+        param::RES_MIN,
+        f64::from(step) / f64::from(param::RES_STEPS),
     )
 }
 

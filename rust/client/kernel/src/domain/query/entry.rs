@@ -13,11 +13,11 @@ use crate::domain::layer::object::meta::decor_instance;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::query::decor::intersect::box_extent;
-use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::layer::octant::Octant;
 
 impl<'a> World<'a> {
     /// What is placed at exactly `at`, air left out.
-    pub fn entry_at(&self, at: EntryAt) -> Option<Entry> {
+    pub fn entry_at(&self, at: Octant) -> Option<Entry> {
         self.object
             .read((at.zoom(), at.at()))
             .entry()

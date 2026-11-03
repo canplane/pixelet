@@ -15,14 +15,14 @@ pub mod intersect;
 
 use pxl_spec::space::layer::lattice::Cells;
 
+use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::decor::{Decor, DECORS};
-use pxl_spec::asset::DecorId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 use super::ray::Ray;
 use super::scatter::{generated_at, DecorWorld};
@@ -145,10 +145,10 @@ impl Around {
                     lanes,
                     self.slots[z - 1][(q[0] + 3 * q[1] + 9 * q[2]) as usize],
                     zoom,
-                    n,
+                    overwrite::path(zoom, n),
                 )
             } else {
-                // Y and Z run over the two roots of zoom 0 alone; X round them.
+                // Y and Z run over the world's one root alone; X round it.
                 let inside =
                     (-1..=0).contains(&(n[1] >> zoom)) && (-1..=0).contains(&(n[2] >> zoom));
                 if inside {
@@ -233,7 +233,7 @@ impl Around {
                 a[2] + (k / 9) as i32 - 1,
             ];
             let h = slot.zoom();
-            let node = (h, overwrite::path(h, c.map(|v| v >> (zoom - h))));
+            let node = (h, overwrite::ancestor_at(zoom, c, zoom - h));
             if !out[..n].iter().any(|&(o, _)| o == node) {
                 out[n] = (node, slot);
                 n += 1;
@@ -424,7 +424,7 @@ impl<'a> World<'a> {
 
 /// The box a decor thing claims.
 pub(super) fn claim(i: &Instance) -> Option<Aabb> {
-    Some(Decor::of(DecorId::of(i.id)?).claim(i.at, &i.meta))
+    Some(Asset::of(u32::from(i.id)).decor()?.claim(i.at, &i.meta))
 }
 
 fn meet(s: &mut DecorRay, ray: &Ray, i: Instance) {

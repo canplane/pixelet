@@ -68,7 +68,7 @@ use crate::sys::sched::edge::{request_world_tick, world_edge};
 use crate::sys::sched::tick::{on_tick, run_tick, TickContext};
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::sched::tick::TickReport;
@@ -397,7 +397,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
 /// (domain/query/changes.rs). Taken after arrivals are admitted, before the
 /// layers observe.
 fn changes_step() {
-    static MOVED: Global<[Vec<Tile>; 3]> = Global::new();
+    static MOVED: Global<[Vec<Quadrant>; 3]> = Global::new();
     let [places, earth, divisions] = MOVED.get(Default::default);
     let shared = changes::take();
     gpu::note_edited(changes::written_boxes());

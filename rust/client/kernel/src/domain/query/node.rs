@@ -49,13 +49,13 @@ use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{self, Lookup};
 use pxl_engine::ground::VOID;
 use pxl_engine::ground::{self, Cell};
-use pxl_engine::overwrite::Cut;
+use pxl_engine::overwrite::{child_at, Cut};
 use pxl_engine::world;
-use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::hierarchy::tree::{child_of, Node};
+use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, TOP_ZOOM};
+use pxl_spec::space::layer::octant::Octant;
+use pxl_spec::space::layer::quadrant::{Quadrant, TOP_ZOOM};
 
 use super::world::World;
 use crate::domain::layer::object::store::ObjectQuery as _;
@@ -122,7 +122,7 @@ impl World<'_> {
     }
 
     /// A preview's entry as pxl-engine `overwrite` takes it.
-    fn cut(&self, entry: Option<EntryAt>) -> Cut {
+    fn cut(&self, entry: Option<Octant>) -> Cut {
         entry.map_or(Cut::NONE, |e| Cut {
             zoom: e.zoom(),
             at: e.at(),
@@ -132,7 +132,7 @@ impl World<'_> {
     /// Its child `k`, in `child_of`'s order, with what it found handed down.
     pub(super) fn child(&self, at: &At, k: usize) -> At {
         let (zoom, c) = at.node;
-        let node = (zoom + 1, child_of(c, k));
+        let node = (zoom + 1, child_at(zoom, c, k as u32));
         At {
             node,
             inheritance: at.inheritance.child(&self.object.columns(), pool(), node),
@@ -180,8 +180,8 @@ impl World<'_> {
 struct Reading<'r, 'a> {
     world: &'r World<'a>,
     lines: &'r mut Lines,
-    missing: Option<Tile>,
-    coarser: Option<Tile>,
+    missing: Option<Quadrant>,
+    coarser: Option<Quadrant>,
 }
 
 impl<'r, 'a> Reading<'r, 'a> {

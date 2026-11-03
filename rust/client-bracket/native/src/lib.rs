@@ -23,7 +23,7 @@ use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::sys::mem::spec::{GLOBAL_BASE, PHONE_BYTES, THREAD_STACK_BYTES};
 use xpute_guest::stop::Stop;
 use xpute_host::mem::Memory;
-use xpute_host::native::{self, Alloc, BootInfo, Config};
+use xpute_host::native::{self, stopped, Alloc, BootInfo, Config};
 
 /// The library's one allocator: the kernel's blocks in its memory, so a
 /// `Vec` the kernel hands the shell lies in the memory the shell reads.
@@ -60,6 +60,7 @@ fn panic_hook(stop: Stop<'_>) {
             at.column()
         ),
         Stop::Panic(info) => format!("[pxl] {info}"),
+        Stop::End => stopped(),
     };
     say(&line);
 }

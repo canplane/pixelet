@@ -15,7 +15,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
@@ -169,7 +169,7 @@ pub struct ByEye {
 }
 
 impl ByEye {
-    pub fn requirements(&self, o: &Observation, each: &mut dyn FnMut(Tile)) {
+    pub fn requirements(&self, o: &Observation, each: &mut dyn FnMut(Quadrant)) {
         for zoom in self.top + 1..=LEAF_ZOOM {
             if let Some(r) = demand_radius(o, self.lattice, self.top, zoom) {
                 tiles_within(zoom, [o.eye[0], o.eye[1]], r).for_each(&mut *each);
@@ -181,7 +181,12 @@ impl ByEye {
 /// A layer's tile's order, from where anything stands in it as the grid's
 /// cells its own fold into read it, stepped from where `walked` last went:
 /// all of it where nothing is known or nothing stands.
-pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile, walked: &mut ColumnWalk) -> Order {
+pub fn order_of_tile(
+    o: &Observation,
+    lattice: Lattice,
+    p: Quadrant,
+    walked: &mut ColumnWalk,
+) -> Order {
     let stands = World::now().bounds(walked, p.node(), lattice.grid_zoom(p.zoom));
     Order::of(o, &stands.val().flatten().unwrap_or(p.region()))
 }

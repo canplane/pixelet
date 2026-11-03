@@ -12,7 +12,7 @@ use core::mem::size_of;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-use crate::perf::frame::{FrameSample, WorstFrame};
+use crate::perf::frame::{over_ms, FrameSample, WorstFrame};
 use crate::perf::report::{GpuRead, RayRead};
 use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::spec::LIMIT;
@@ -259,6 +259,7 @@ pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool, frame_
     l.frame_task_ms = frame_task_ms;
     if let Some(mut f) = l.open.replace(s) {
         (f.interval_ms, f.settled) = (interval_ms, f64::from(u8::from(settled)));
+        f.over_ms = over_ms(&f);
         land(l, f);
     }
     // Landing it is the profiler's too, out of the frame task's time.
@@ -364,10 +365,10 @@ pub fn perf_record_read(ms: f64) {
 fn land(l: &mut Perf, s: FrameSample) {
     let at = l.worst[..l.worst_len].partition_point(|w| w.sample.interval_ms >= s.interval_ms);
     if s.settled == 0.0 && at < l.worst.len() {
-        let kept = l.worst_len.min(l.worst.len() - 1);
-        l.worst.copy_within(at..kept, at + 1);
+        let end = l.worst_len.min(l.worst.len() - 1);
+        l.worst.copy_within(at..end, at + 1);
         l.worst[at] = WorstFrame::of(s, l.frame_ring[..l.frame_len].last());
-        l.worst_len = kept + 1;
+        l.worst_len = end + 1;
     }
 
     let dropped = trim(

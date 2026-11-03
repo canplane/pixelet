@@ -21,7 +21,7 @@ use crate::sys::io::demand::{Ask, Stream};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::param;
 use crate::sys::io::request::{Fault, Rank, Serve};
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
 use xpute_kit::status::errno::Errno;
 
@@ -48,7 +48,7 @@ impl Policy {
     }
 }
 
-fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
+fn tile(layer: Stream, id: u64, ask: Ask) -> Rank {
     if ask.order == Order::LAST {
         return Rank {
             class: ASIDE,
@@ -57,10 +57,9 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
         };
     }
     let unseen = !ask.order.seen as u8;
-    // A zoom fits the rank's byte. The objects' subjects are their files'
-    // numbers: the top's, no tile, and shards all at `SHARD_ZOOM`, which no
-    // zoom orders.
-    let zoom = || Tile::of_subject(subject).zoom as u8;
+    // A zoom fits the rank's byte. The objects' ids are the top's, no tile's,
+    // and shards' all at `SHARD_ZOOM`, which no zoom orders.
+    let zoom = || Quadrant::of_id(id).zoom as u8;
     let (class, detail) = match layer {
         Stream::terrain => (TERRAIN + unseen * GROUND_SHELL, zoom()),
         Stream::object => (OBJECT + unseen * GROUND_SHELL, 0),
@@ -74,10 +73,10 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
 }
 
 impl Serve for Policy {
-    fn rank(&self, stream: Stream, subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
+    fn rank(&self, stream: Stream, id: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         match stream {
             Stream::terrain | Stream::object | Stream::place | Stream::earth => {
-                tile(stream, subject, ask)
+                tile(stream, id, ask)
             }
             Stream::asset => Rank {
                 class: ASSET,
@@ -108,8 +107,9 @@ impl Serve for Policy {
             // it: R2's internal error, a Cloudflare incident, the free plan's
             // daily cap failing closed, an edge refusing the connection.
             Errno::EACCES | Errno::EIO => Fault::Server,
-            // ENXIO: 404, a key that names nothing. EBADMSG: a body empty, still
-            // packed in an encoding this browser does not undo, or not decoding.
+            // ENXIO: 404, a key that names nothing. EBADMSG: a body empty or not
+            // decoding, one still packed in an encoding this browser does not undo
+            // among them.
             // EFBIG: larger than the heap takes, or than its kind's packet can be.
             _ => Fault::Object,
         }

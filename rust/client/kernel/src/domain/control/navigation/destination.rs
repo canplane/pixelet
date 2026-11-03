@@ -9,7 +9,7 @@ use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{put_pivot, Motion};
@@ -50,7 +50,7 @@ pub fn pending() -> Option<Q3> {
 }
 
 /// Whose ground the terrain is asked for.
-pub fn tile() -> Option<Tile> {
+pub fn tile() -> Option<Quadrant> {
     dst().map(|(at, _)| GROUND.cell_of(LEAF_ZOOM, &at).tile())
 }
 

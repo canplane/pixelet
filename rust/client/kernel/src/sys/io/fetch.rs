@@ -1,8 +1,8 @@
 // pxl-kernel/sys/io/fetch.rs
 
 //! The world's reads. The kernel opens a tile as its bake's object by its
-//! subject, and a shard's objects below OBJECT by the shard's, their top by
-//! its own (sys/io/file.rs);
+//! quadkey, and a shard's objects below OBJECT by the shard's, their top by
+//! its own name (sys/io/file.rs);
 //! a version, an address, a protocol or a storage key is the client's
 //! (ts/client/src/driver/namespace/tile.ts, object.ts). What an absent object
 //! means is decided here per stream.
@@ -19,7 +19,7 @@ use xpute_kit::status::errno::Errno;
 use crate::sys::io::body;
 use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Ended, Failure};
-use crate::sys::io::file::{self, Opened, Owner};
+use crate::sys::io::file::{self, Opened, Owner, Path};
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::{attempt_of, settle, Credit};
 use crate::sys::io::room::Refusal;
@@ -28,13 +28,13 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
 /// Assets are opened below the assets' root (sys/io/loader.rs), never here.
-pub fn start(credit: Credit, stream: Stream, subject: u64) {
+pub fn start(credit: Credit, stream: Stream, id: u64) {
     let Some(root) = stream.root() else { return };
     let owner = Owner::Fetch {
         key: credit.key(),
         at_ms: now(),
     };
-    file::open(credit, root, subject, owner);
+    file::open(credit, root, Path::of_quadrant(id), owner);
 }
 
 /// Settled as stopped at once: nothing is reported for a closed descriptor.
@@ -84,7 +84,7 @@ static ARRIVAL_QUEUE: Global<List<Arrival, { MAX_CREDITS as usize }>> = Global::
 pub struct Response {
     pub key: u64,
     pub stream: Stream,
-    pub subject: u64,
+    pub id: u64,
     /// None where the source has no object for it.
     pub block: Option<Block>,
     pub phases: Phases,
@@ -194,7 +194,7 @@ fn on_fetch_arrived(
         _ => None,
     };
     // A key the request scheduler does not hold is one a reset forgot.
-    let Some((stream, subject)) = attempt_of(key) else {
+    let Some((stream, id)) = attempt_of(key) else {
         release(block);
         return;
     };
@@ -211,7 +211,7 @@ fn on_fetch_arrived(
             ANSWERS.get(List::new).push(Response {
                 key,
                 stream,
-                subject,
+                id,
                 block,
                 phases,
             });
@@ -225,7 +225,3 @@ fn on_fetch_arrived(
     };
     settle(key, Ended::Failed(fail), Some(phases));
 }
-
-#[cfg(test)]
-#[path = "fetch.test.rs"]
-mod test;

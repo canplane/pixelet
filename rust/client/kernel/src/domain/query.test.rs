@@ -4,7 +4,7 @@
 // parent as the bake folds them, and objects written into a store.
 
 use pxl_spec::asset::cube::{self, ground, sentinel};
-use pxl_spec::asset::cube::{cube_id, Cube};
+use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::space::layer::lattice::{Cells, GROUND, TILE_CELLS};
@@ -16,7 +16,7 @@ use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_COLUMN};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
 
 use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
@@ -30,18 +30,16 @@ use crate::sys::serial;
 use pxl_engine::area::{self, Area};
 use pxl_engine::world::placed_in;
 use pxl_spec::asset::decor::Decor;
-use pxl_spec::asset::DecorId;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::hierarchy::morton;
-use pxl_spec::space::layer::tile;
 
 const CELLS: usize = GROUND_COLUMN;
 const SPAN: usize = TILE_CELLS as usize;
 
-fn top() -> Tile {
-    Tile::new(LEAF_ZOOM - 1, [40, -20])
+fn top() -> Quadrant {
+    Quadrant::new(LEAF_ZOOM - 1, [40, -20])
 }
 
 /// A leaf as a client holds it: its lines, and its cells, each its own palette index
@@ -58,10 +56,10 @@ struct Leaf {
 /// (`domain/layer/tile_cache/floor.rs`): a tile's coarser pictures here are the
 /// same ground, each marking its children held; their cells held in the
 /// clip levels about `centre`, in units.
-fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
+fn resident(center: [f64; 2], held: &[(Quadrant, Leaf)]) -> TileCache<TerrainTile> {
     use pxl_spec::bake::tile::Occupancy;
     let mut tile_cache = TileCache::default();
-    let mut admitted: Vec<Tile> = Vec::new();
+    let mut admitted: Vec<Quadrant> = Vec::new();
     let mut cells = Vec::new();
     for (
         p,
@@ -98,7 +96,7 @@ fn resident(center: [f64; 2], held: &[(Tile, Leaf)]) -> TileCache<TerrainTile> {
     }
     // Asked for, as the floor asks for what it holds: a tile held but not
     // asked is cache, which answers nothing.
-    let asks: fnv::FnvHashMap<Tile, Ask> = admitted.iter().map(|&q| (q, Ask::PLAIN)).collect();
+    let asks: fnv::FnvHashMap<Quadrant, Ask> = admitted.iter().map(|&q| (q, Ask::PLAIN)).collect();
     tile_cache.ask(&asks);
     // Their cells as a GPU would hand them back, at once.
     test::hold(center, &cells);
@@ -136,7 +134,7 @@ fn down(at: [f64; 2]) -> Ray {
 pub(crate) fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     let at = world::point(corner[0], corner[1], corner[2]);
     store.write([Write {
-        key: morton::key_of::<3>(side, idx_of(side, &at)),
+        at: morton::key_of::<3>(side, idx_of(side, &at)),
         id: state,
         ext: None,
     }]);
@@ -182,7 +180,7 @@ fn no_surface_placed_stands() {
     );
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(
         &mut store,
         [x0 + 10.0, y0 + 10.0, 5.0],
@@ -257,7 +255,7 @@ fn ray_across_antimeridian() {
             Default::default(),
         )
     };
-    let tile = |x: i32| tile::tile_at(LEAF_ZOOM, [x, 0]);
+    let tile = |x: i32| Quadrant::new(LEAF_ZOOM, [x, 0]);
     let seam = world::ROUND / 2.0;
     let tile_cache = resident(
         [seam, 100.5],
@@ -277,7 +275,7 @@ fn ray_across_antimeridian() {
         .top;
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
 
@@ -412,7 +410,7 @@ fn half_cube_met() {
     let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
     let access = World::new(&tile_cache, &store);
     let at = [x + half / 2.0, y + half / 2.0];
@@ -436,7 +434,7 @@ fn half_cube_met() {
 fn walker_stands_any_tier() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
         let (cell, side) = (units(GROUND.cell()), units(zoom));
         let mut store = Store::default();
@@ -464,7 +462,7 @@ fn stack_gap_floored() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for z in [5.0, 7.0] {
         write(&mut store, [x, y, z], OBJECT_COARSEST, red);
     }
@@ -486,7 +484,7 @@ fn coarse_cell_floored_as_drawn() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST, red);
     write(&mut store, [x + 1.0, y, 5.0], OBJECT_FINEST, red);
     let access = World::new(&tile_cache, &store);
@@ -516,7 +514,7 @@ fn walker_climbs_or_slides() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     // A wall three cubes high in the column east of the walker's.
     for z in [5.0, 6.0, 7.0] {
         write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
@@ -567,7 +565,7 @@ fn height_nearest_floor() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     // A deck a cube thick, its top at 10, with the ground at 5 under it.
     write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
@@ -792,7 +790,7 @@ fn generated_decor_stays() {
     let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     write(&mut store, column(6), OBJECT_COARSEST, red);
     assert_eq!(near(&store), bare, "a cube over it moves nothing");
 
@@ -819,7 +817,7 @@ fn generated_decor_edit_removes() {
     };
     let at = |tree: &Instance| {
         let [cx, cy, cz] = tree.generated_in().unwrap();
-        (Decor::of(DecorId::of(tree.id).unwrap()), [cx, cy, cz])
+        (Decor::of(u32::from(tree.id)), [cx, cy, cz])
     };
     let generates_on = |store: &Store, decor: &Decor, [cx, cy, _]: [i32; 3]| {
         let world = World::new(&tile_cache, store);
@@ -834,8 +832,8 @@ fn generated_decor_edit_removes() {
         .find(|(d, c)| generates_on(&Store::default(), d, *c) == Some(true))
         .expect("a decor generates about the eye");
     let generates = |store: &Store| generates_on(store, decor, [cx, cy, cz]);
-    let red = cube_id(Cube::Object(cube::Object::red));
-    for (dz, val, what, kept) in [
+    let red = cube::Object::red as AssetId;
+    for (dz, val, what, still) in [
         (0, AIR, "air in its box", false),
         (0, red, "a cube in its box", false),
         (-1, AIR, "air under it", true),
@@ -845,7 +843,7 @@ fn generated_decor_edit_removes() {
         let mut store = Store::default();
         let at = [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
         write(&mut store, at, OBJECT_COARSEST, val);
-        assert_eq!(generates(&store), Some(kept), "{what}");
+        assert_eq!(generates(&store), Some(still), "{what}");
     }
 }
 
@@ -878,7 +876,7 @@ fn area_edge_leaf_cell_thick() {
     let _g = serial();
     let s = LEAF_ZOOM - SHARD_ZOOM;
     // A served shard's westmost leaf, the shard west of it unserved.
-    let leaf = Tile::new(LEAF_ZOOM, [5 << s, 3 << s]);
+    let leaf = Quadrant::new(LEAF_ZOOM, [5 << s, 3 << s]);
     let area = EastOf(5);
     let flat = drawn(
         vec![5; CELLS],
@@ -908,4 +906,33 @@ fn area_edge_leaf_cell_thick() {
     assert_eq!(column(1.0), (true, true), "one in from the wall");
     assert_eq!(column(0.0), (false, false), "the wall's column");
     assert_eq!(column(-1.0), (false, false), "past the wall");
+}
+
+/// A decor of another version's catalog, read from a saved file, is unknown: no
+/// instance, and the kernel does not stop.
+#[test]
+fn stored_decor_past_the_catalog_is_unknown() {
+    use crate::domain::layer::object::asset::Asset;
+    use crate::domain::layer::object::meta::decor_instance;
+    use pxl_spec::asset::id::SHAPE_BITS;
+    use pxl_spec::space::layer::octant::Octant;
+    let _g = serial();
+    let (tile_cache, [x, y]) = flat_at_five();
+    let past: AssetId = (1 << SHAPE_BITS) | ((1 << SHAPE_BITS) - 1);
+    let mut store = Store::default();
+    write(&mut store, [x, y, 5.0], OBJECT_COARSEST, past);
+    let at = Octant::holding(OBJECT_COARSEST, &world::point(x, y, 5.0));
+    let entry = World::new(&tile_cache, &store).entry_at(at).unwrap();
+    assert_eq!(entry.state, past);
+    assert_eq!(entry.asset(), Asset::Unknown);
+    assert!(decor_instance(&entry).is_none());
+}
+
+/// The share of the bar the ground gives: of the tiles asked for, those that show.
+#[test]
+fn shown_share_of_what_is_asked() {
+    let _g = serial();
+    let (tile_cache, _) = flat_at_five();
+    assert!(tile_cache.is_shown());
+    assert_eq!(tile_cache.shown_share(), 1.0);
 }

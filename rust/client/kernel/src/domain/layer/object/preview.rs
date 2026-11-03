@@ -6,10 +6,11 @@
 //! with the text it has so far.
 
 use crate::sys::sched::edge::request_world_tick;
-use pxl_spec::asset::cube::Cube;
 use pxl_spec::asset::decor::Decor;
-use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::octant::Octant;
 use xpute_guest::global::Global;
 
 /// What the eraser's preview changes in what is drawn only: every mechanic
@@ -22,9 +23,9 @@ pub struct RenderEdits {
     /// The placed object hidden, by its key, whatever its kind: the rays
     /// cut it and decor's records leave it out, each meeting it only where
     /// it holds it.
-    pub hide: Option<EntryAt>,
+    pub hide: Option<Octant>,
     /// An AIR entry over bare terrain, which has no leaf to hide.
-    pub carve: Option<EntryAt>,
+    pub carve: Option<Octant>,
     /// The scattered decor hidden, by the cell it stands in.
     pub scattered_cell: Option<[i32; 3]>,
 }
@@ -66,14 +67,14 @@ pub enum Ghost {
     Box(GhostBox),
 }
 
-/// A box the tool would fill or carve: its corner in the world's frame, its
-/// edge, the cube it would be or carve (none where there is no one cube), and
+/// A box the tool would fill or carve: its corner in the world's frame, the
+/// zoom of its cube, the cube it would be or carve (none where there is no one cube), and
 /// whether the eraser holds it.
 #[derive(Clone, Copy)]
 pub struct GhostBox {
     pub at: V3,
-    pub size: f64,
-    pub cube: Option<Cube>,
+    pub zoom: Zoom,
+    pub cube: Option<AssetId>,
     pub erase: bool,
 }
 
@@ -81,7 +82,7 @@ pub struct GhostBox {
 /// far; committed, it is the marker that stands there.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Draft {
-    pub at: EntryAt,
+    pub at: Octant,
     pub text: String,
 }
 

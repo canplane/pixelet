@@ -32,10 +32,14 @@ fn stored_round_trip() {
             && s.set(SettingKey::ao, ao)
             && s.set(SettingKey::person, person)
     );
-    let kept = s.storage_bytes();
-    let back = read_stored(&kept);
+    let bytes = s.storage_bytes();
+    let back = read_stored(&bytes);
     for key in SettingKey::ALL {
-        assert_eq!(back.get(key), s.get(key), "{key:?} read back from {kept:?}");
+        assert_eq!(
+            back.get(key),
+            s.get(key),
+            "{key:?} read back from {bytes:?}"
+        );
     }
     assert!(
         Settings::DEFAULT.storage_bytes().is_empty(),
@@ -60,7 +64,7 @@ fn stored_pair_format() {
 #[test]
 fn unknown_stays_default() {
     let unknown = SettingKey::SLOTS as u32 + 1000;
-    for kept in [
+    for bytes in [
         storage_of(&[(SettingKey::ao as u32, 99)]),
         storage_of(&[(SettingKey::tilt_lock as u32, 2)]),
         storage_of(&[(unknown, 1)]),
@@ -68,9 +72,9 @@ fn unknown_stays_default() {
         vec![SettingKey::tilt_lock as u8],
         vec![0x80],
     ] {
-        let back = read_stored(&kept);
+        let back = read_stored(&bytes);
         for key in SettingKey::ALL {
-            assert_eq!(back.get(key), Settings::DEFAULT.get(key), "{kept:?}");
+            assert_eq!(back.get(key), Settings::DEFAULT.get(key), "{bytes:?}");
         }
     }
 }
@@ -117,7 +121,7 @@ fn session_setting_not_stored() {
     }
     assert!(
         s.storage_bytes().is_empty(),
-        "nothing of {session:?} is kept"
+        "nothing of {session:?} is bytes"
     );
     let back = read_stored(&storage_of(
         &session
@@ -133,12 +137,12 @@ fn session_setting_not_stored() {
         assert_eq!(settings_store().set_setting(key, other(key)), Some(true));
     }
     assert!(
-        !*UNKEPT.get(|| false),
+        !*UNSAVED.get(|| false),
         "a session's change asks for no write"
     );
 }
 
-/// What storage holds of the slot, as the host hands it over.
+/// What storage holds of the slot, as its driver hands it over.
 fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     let mut bytes = vec![StorageFile::Settings.format()];
     bytes.extend(storage_of(pairs));
@@ -150,7 +154,7 @@ fn open_slot() {
     file::on_emptied(StorageFile::Settings);
     while file::take_storage(StorageFile::Settings).is_some() {}
     settings_open();
-    UNKEPT.set(false);
+    UNSAVED.set(false);
 }
 
 /// One change, then a keep: whether it was held, unwritten.
@@ -161,7 +165,7 @@ fn held_after_a_change() -> bool {
         Some(true)
     );
     settings_keep_step();
-    *UNKEPT.get(|| false)
+    *UNSAVED.get(|| false)
 }
 
 /// The slot is read on the storage root a turn after its file lands, and
@@ -187,7 +191,7 @@ fn read_before_write() {
     host::rise();
     assert!(settings_load_step() && are_settings_loaded());
     assert_eq!(settings_store().get(SettingKey::tilt_lock), tilt);
-    assert!(!*UNKEPT.get(|| false), "what was read is not written back");
+    assert!(!*UNSAVED.get(|| false), "what was read is not written back");
     assert!(!held_after_a_change(), "a read slot keeps what changes");
     assert!(!settings_load_step(), "read once");
 }
@@ -205,7 +209,7 @@ fn empty_slot_defaults() {
 
 /// A file too large for any heap, or of another format (the JSON by name the
 /// slot held before), is refused: the defaults, nothing written over it until
-/// the host sets it aside and empties the slot, and then what changed meanwhile.
+/// the driver sets it aside and empties the slot, and then what changed meanwhile.
 #[test]
 fn bad_slot_refused() {
     let _g = sys::serial();
@@ -232,11 +236,11 @@ fn bad_slot_refused() {
         file::on_emptied(StorageFile::Settings);
         on_settings_emptied();
         settings_keep_step();
-        assert!(!*UNKEPT.get(|| false));
+        assert!(!*UNSAVED.get(|| false));
     }
 }
 
-/// One that fails to open otherwise is not the host's to set aside: the
+/// One that fails to open otherwise is not the driver's to set aside: the
 /// defaults, never written over this session.
 #[test]
 fn unreadable_slot_stored() {

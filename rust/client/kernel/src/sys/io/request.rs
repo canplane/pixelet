@@ -12,16 +12,17 @@
 //! reads up. A running attempt is never preempted.
 //!
 //! Invariants: no more attempts than credits and no want past its stream's
-//! bound; ties broken by stream then subject so the order is total; a free
+//! bound; ties broken by stream then id so the order is total; a free
 //! credit and a ready want never both outlast a pump; an attempt stops only
 //! when nobody wants it any more.
 
 use core::cmp::Ordering;
 
 use crate::perf::record::perf_record;
-use crate::perf::task::TaskRow;
+use crate::perf::task::{path_bytes, TaskRow};
 use crate::sys::io::demand::{Ask, Phases, Stream};
 use crate::sys::io::failure::{Ended, Failure};
+use crate::sys::io::file::path_of;
 use crate::sys::io::policy::Policy;
 use crate::sys::io::room::Refusal;
 use crate::sys::load::LOAD_FILES;
@@ -46,7 +47,7 @@ pub struct Rank {
 
 pub trait Serve {
     /// Asked again every pump: the order is the view's now.
-    fn rank(&self, stream: Stream, subject: u64, ask: Ask, enqueue_ms: f64) -> Rank;
+    fn rank(&self, stream: Stream, id: u64, ask: Ask, enqueue_ms: f64) -> Rank;
 
     fn intake(&self) -> u32;
 
@@ -86,7 +87,7 @@ fn bounds_of(frames: impl Fn(Stream) -> u32) -> Bounds {
 /// A want, in its stream's run (`RequestScheduler::wants`).
 #[derive(Clone, Copy, Debug)]
 struct Want {
-    subject: u64,
+    id: u64,
     ask: Ask,
     /// First wanted, kept across re-declarations so the profiler measures the real wait.
     enqueue_ms: f64,
@@ -95,7 +96,7 @@ struct Want {
 
 impl Want {
     const NONE: Want = Want {
-        subject: 0,
+        id: 0,
         ask: Ask::PLAIN,
         enqueue_ms: 0.0,
         wait: Wait::Ready,
@@ -127,7 +128,7 @@ impl Wait {
 #[derive(Clone, Copy, Debug)]
 struct Attempt {
     stream: Stream,
-    subject: u64,
+    id: u64,
     rank: Rank,
     enqueue_ms: f64,
     start_ms: f64,
@@ -137,7 +138,7 @@ struct Attempt {
 struct Ready {
     rank: Rank,
     stream: Stream,
-    subject: u64,
+    id: u64,
 }
 
 impl Ready {
@@ -148,7 +149,7 @@ impl Ready {
             .then(self.rank.dist.total_cmp(&other.rank.dist))
             .then(other.rank.detail.cmp(&self.rank.detail))
             // Meaningless tie-break, so two runs of the same turn start the same work.
-            .then((self.stream as u8, self.subject).cmp(&(other.stream as u8, other.subject)))
+            .then((self.stream as u8, self.id).cmp(&(other.stream as u8, other.id)))
     }
 }
 
@@ -156,7 +157,7 @@ pub struct RequestScheduler<S> {
     bounds: Bounds,
     serve: S,
     /// What is wanted: a stream's a run in a room its bound's wide, the
-    /// streams' rooms in order (`first`), each run by subject and as long as
+    /// streams' rooms in order (`first`), each run by id and as long as
     /// `run_lens` says.
     wants: Box<[Want]>,
     run_lens: [usize; Stream::ALL.len()],
@@ -237,9 +238,9 @@ impl<S: Serve> RequestScheduler<S> {
         &self.wants[first..first + self.run_lens[stream as usize]]
     }
 
-    fn find(&self, stream: Stream, subject: u64) -> Option<usize> {
+    fn find(&self, stream: Stream, id: u64) -> Option<usize> {
         self.run(stream)
-            .binary_search_by_key(&subject, |w| w.subject)
+            .binary_search_by_key(&id, |w| w.id)
             .ok()
             .map(|k| self.first(stream) + k)
     }
@@ -258,17 +259,17 @@ impl<S: Serve> RequestScheduler<S> {
         .then_some(slot)
     }
 
-    fn attempting(&self, stream: Stream, subject: u64) -> bool {
+    fn attempting(&self, stream: Stream, id: u64) -> bool {
         self.attempt
             .iter()
             .flatten()
-            .any(|a| a.stream == stream && a.subject == subject)
+            .any(|a| a.stream == stream && a.id == id)
     }
 
-    /// Replaces one stream's wants with `wanted`, by subject: one walk of
+    /// Replaces one stream's wants with `wanted`, by id: one walk of
     /// it beside the run held. Re-declaring the same set changes nothing, so
-    /// producers say everything every turn. A kept subject keeps its enqueue
-    /// time and retry wait; a repeated subject is one want, the later ask.
+    /// producers say everything every turn. A kept id keeps its enqueue
+    /// time and retry wait; a repeated id is one want, the later ask.
     pub fn declare(&mut self, stream: Stream, wanted: &[(u64, Ask)], at: f64) {
         xpute_kit::ensure!(
             wanted.windows(2).all(|p| p[0].0 <= p[1].0),
@@ -278,17 +279,17 @@ impl<S: Serve> RequestScheduler<S> {
         let (first, bound) = (self.first(stream), self.bounds[stream as usize]);
         let run = &self.wants[first..first + self.run_lens[stream as usize]];
         let (mut k, mut n) = (0, 0);
-        for (j, &(subject, ask)) in wanted.iter().enumerate() {
-            if wanted.get(j + 1).is_some_and(|w| w.0 == subject) {
+        for (j, &(id, ask)) in wanted.iter().enumerate() {
+            if wanted.get(j + 1).is_some_and(|w| w.0 == id) {
                 continue;
             }
-            while run.get(k).is_some_and(|w| w.subject < subject) {
+            while run.get(k).is_some_and(|w| w.id < id) {
                 k += 1;
             }
             let w = match run.get(k) {
-                Some(&w) if w.subject == subject => Want { ask, ..w },
+                Some(&w) if w.id == id => Want { ask, ..w },
                 _ => Want {
-                    subject,
+                    id,
                     ask,
                     enqueue_ms: at,
                     wait: Wait::Ready,
@@ -320,16 +321,16 @@ impl<S: Serve> RequestScheduler<S> {
         let waiting = self
             .run(stream)
             .iter()
-            .filter(|w| !self.attempting(stream, w.subject))
+            .filter(|w| !self.attempting(stream, w.id))
             .count() as u32;
         (waiting, out)
     }
 
     fn ready_of(&self, stream: Stream, w: &Want) -> Ready {
         Ready {
-            rank: self.serve.rank(stream, w.subject, w.ask, w.enqueue_ms),
+            rank: self.serve.rank(stream, w.id, w.ask, w.enqueue_ms),
             stream,
-            subject: w.subject,
+            id: w.id,
         }
     }
 
@@ -340,7 +341,7 @@ impl<S: Serve> RequestScheduler<S> {
         // Stop abandoned work in the turn it is abandoned: after a zoom out and
         // back in, credits must not sit on the zoom passed through.
         for slot in 0..self.attempt.len() {
-            if self.attempt[slot].is_some_and(|a| self.find(a.stream, a.subject).is_none()) {
+            if self.attempt[slot].is_some_and(|a| self.find(a.stream, a.id).is_none()) {
                 self.stop(slot, at);
             }
         }
@@ -363,7 +364,7 @@ impl<S: Serve> RequestScheduler<S> {
         for s in Stream::ALL {
             let first = self.first(s);
             for (k, w) in self.run(s).iter().enumerate() {
-                if w.wait.ready() && !self.attempting(s, w.subject) {
+                if w.wait.ready() && !self.attempting(s, w.id) {
                     ready.push((self.ready_of(s, w), first + k));
                 }
             }
@@ -388,13 +389,13 @@ impl<S: Serve> RequestScheduler<S> {
     fn start(&mut self, slot: usize, stream: Stream, w: Want, rank: Rank, at: f64) {
         self.attempt[slot] = Some(Attempt {
             stream,
-            subject: w.subject,
+            id: w.id,
             rank,
             enqueue_ms: w.enqueue_ms,
             start_ms: at,
         });
         self.starts
-            .push((key_of(slot, self.generation[slot]), stream, w.subject));
+            .push((key_of(slot, self.generation[slot]), stream, w.id));
     }
 
     /// Ends the slot's attempt; its key is spent, so whatever the host still
@@ -412,8 +413,8 @@ impl<S: Serve> RequestScheduler<S> {
     }
 
     pub fn take_starts(&mut self, mut each: impl FnMut(Credit, Stream, u64)) {
-        for (key, stream, subject) in self.starts.drain(..) {
-            each(Credit { key }, stream, subject);
+        for (key, stream, id) in self.starts.drain(..) {
+            each(Credit { key }, stream, id);
         }
     }
 
@@ -423,16 +424,16 @@ impl<S: Serve> RequestScheduler<S> {
         }
     }
 
-    /// Whether `stream`'s want of `subject` waits on its object, which
+    /// Whether `stream`'s want of `id` waits on its object, which
     /// failed: it is not asked again while it is wanted.
-    pub fn has_object_failed(&self, stream: Stream, subject: u64) -> bool {
-        self.find(stream, subject)
+    pub fn has_object_failed(&self, stream: Stream, id: u64) -> bool {
+        self.find(stream, id)
             .is_some_and(|i| matches!(self.wants[i].wait, Wait::Object))
     }
 
     pub fn attempt_of(&self, key: u64) -> Option<(Stream, u64)> {
         let slot = self.slot_of(key)?;
-        self.attempt[slot].map(|a| (a.stream, a.subject))
+        self.attempt[slot].map(|a| (a.stream, a.id))
     }
 
     /// An answer ends the want; a failure holds it back.
@@ -441,7 +442,7 @@ impl<S: Serve> RequestScheduler<S> {
             return;
         };
         let a = self.end(slot);
-        let want = self.find(a.stream, a.subject);
+        let want = self.find(a.stream, a.id);
         match ended {
             Ended::Ok => {
                 self.on_answered();
@@ -519,7 +520,7 @@ fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
     perf_record(|| {
         let mut row = TaskRow {
             stream: a.stream as u32 as f64,
-            subject: a.subject,
+            path: path_bytes(path_of(a.stream, a.id).as_bytes()),
             priority: a.rank.class as f64 + a.rank.dist,
             enqueue_ms: a.enqueue_ms,
             start_ms: a.start_ms,
@@ -610,8 +611,8 @@ pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
     sched().attempt_of(key)
 }
 
-pub fn has_object_failed(stream: Stream, subject: u64) -> bool {
-    sched().has_object_failed(stream, subject)
+pub fn has_object_failed(stream: Stream, id: u64) -> bool {
+    sched().has_object_failed(stream, id)
 }
 
 pub fn settle(key: u64, ended: Ended, phases: Option<Phases>) {

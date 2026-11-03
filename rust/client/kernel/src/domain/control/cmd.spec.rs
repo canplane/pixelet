@@ -5,9 +5,9 @@
 //! The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),
 //! and the packet each carries — an XTP branch whose children are its fields, in
 //! order. A command with no fields carries no packet. The kernel is the process; the
-//! JavaScript around it is two things to it, its host, which holds the devices and
-//! the turns, and its shell, the UI. A command's major is the module it is for, and
-//! the sections say which of the two it is between.
+//! JavaScript around it is three things to it, its host, which holds the turns, its
+//! drivers, which answer its devices, and its shell, the UI. A command's major is the module it is for, and
+//! the sections say which of them it is between.
 //!
 //! The same number is a command on the submission ring and an event on the
 //! completion ring (its `RES` clear). The direction is the ring: `pkt` is
@@ -382,30 +382,22 @@ impl PointerType {
     }
 }
 
-/// What the pointer holds.
+/// What the pointer holds: itself, the eraser, or an item to place, which its id says the kind of.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
-pub enum ActiveTool {
+pub enum Tool {
     #[default]
     Pointer = 0,
-    Object = 1,
-    Decor = 2,
-    Eraser = 3,
-    Marker = 4,
+    Item = 1,
+    Eraser = 2,
 }
 
-impl ActiveTool {
-    pub const ALL: [ActiveTool; 5] = [
-        ActiveTool::Pointer,
-        ActiveTool::Object,
-        ActiveTool::Decor,
-        ActiveTool::Eraser,
-        ActiveTool::Marker,
-    ];
+impl Tool {
+    pub const ALL: [Tool; 3] = [Tool::Pointer, Tool::Item, Tool::Eraser];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<ActiveTool> {
-        ActiveTool::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<Tool> {
+        Tool::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -607,7 +599,7 @@ impl Message {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Command {
-    // ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, host.json) ----
+    // ---- the process asks the host: its hostcalls, raised on the completion ring and run before the next turn (the rest are the host stream's records, file.json) ----
     /// Start watching.
     SENSOR_START = 0x1201,
     /// Stop watching.
@@ -643,7 +635,7 @@ pub enum Command {
     /// tile is asked for that no shard it serves is over or under (pxl-kernel sys/io/source.rs).
     FS_MOUNT = 0x1301,
     /// A file the kernel refused (the snapshot's `refused_files`) is empty now, or its source's
-    /// own again, what it held set aside by the host: the kernel reads it again, and writes
+    /// own again, what it held set aside by the driver: the kernel reads it again, and writes
     /// a storage file from then on.
     FS_TRUNCATED = 0x1302,
     /// A permission as the shell's prompt or the browser's change reported it.
@@ -655,9 +647,9 @@ pub enum Command {
     /// A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
     /// (transforms aside), as the world surface's size is (SURFACE_RESIZE).
     INPUT_POINTER = 0x1102,
-    /// The tool and what it takes, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
+    /// The tool and what it takes, the shell's to choose and keep: the kernel is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer.
     EDIT_TOOL = 0x1a01,
-    /// The draft's text (ToolState.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut.
+    /// The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut: EMSGSIZE, which the shell shows as what does not fit.
     EDIT_MARKER_TEXT = 0x1a02,
     /// The marker's draft dropped, nothing committed.
     EDIT_MARKER_CANCEL = 0x1a03,
@@ -767,7 +759,8 @@ pub struct Snapshot<'a> {
     pub pivot: PivotState,
     pub location: LocationState,
     pub companion: CompanionState,
-    pub tool: ToolState<'a>,
+    /// A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL.
+    pub draft: Option<&'a str>,
     pub orient: OrientationState,
     /// The view's azimuth.
     pub azimuth: f64,
@@ -788,7 +781,7 @@ pub struct Snapshot<'a> {
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
     /// The files the kernel refused, not of their format, not decoding, or too large for any
-    /// heap: a storage file (host.json's `storage`) or a placed objects' file (`object`). The
+    /// heap: a storage file (file.json's `storage`) or a placed objects' file (`object`). The
     /// kernel read none of it and writes nothing over it until FS_TRUNCATED says it is
     /// empty.
     pub refused_files: &'a dyn Fn(&mut dyn FnMut(&RefusedFile<'_>)),
@@ -796,17 +789,19 @@ pub struct Snapshot<'a> {
     pub stall: Option<Message>,
     /// How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): its shader modules, by their bytes, the first half, its pipelines made the second; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the shell's to draw of it.
     pub renderer_progress: f64,
+    /// How much of the view's ground shows, 0 to 1: of the tiles asked for, those with an answer or drawn coarser. 0 where none is asked yet, 1 once the area is shown; it goes back as more is asked for.
+    pub area_progress: f64,
 }
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 17;
+    pub const FIELDS: u32 = 18;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(PivotState::FIELDS, |w| self.pivot.write(w));
         w.branch(LocationState::FIELDS, |w| self.location.write(w));
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
-        w.branch(ToolState::FIELDS, |w| self.tool.write(w));
+        w.str(self.draft);
         w.branch(OrientationState::FIELDS, |w| self.orient.write(w));
         w.f64(Some(self.azimuth));
         w.bool(Some(self.is_follow_mode));
@@ -832,6 +827,7 @@ impl Snapshot<'_> {
         });
         w.u32(self.stall.map(|m| m as u32));
         w.f64(Some(self.renderer_progress));
+        w.f64(Some(self.area_progress));
     }
 }
 
@@ -907,30 +903,6 @@ impl CompanionState {
     }
 }
 
-/// The tool and what it takes, as EDIT_TOOL set it: the cube and the decor are each remembered whichever tool is active; and a marker's draft.
-pub struct ToolState<'a> {
-    pub active: ActiveTool,
-    /// The cube the tool takes, by its number in the catalog's one value space.
-    pub cube: u32,
-    pub decor: u32,
-    pub tier: u32,
-    /// A marker's draft, its text so far, absent where none is open: opened by the marker tool's tap, with the marker's own text where one stands there, empty where it is new, and closed by EDIT_MARKER_COMMIT or EDIT_MARKER_CANCEL.
-    pub draft: Option<&'a str>,
-}
-
-impl ToolState<'_> {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 5;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.active as u32));
-        w.u32(Some(self.cube));
-        w.u32(Some(self.decor));
-        w.u32(Some(self.tier));
-        w.str(self.draft);
-    }
-}
-
 pub struct OrientationState {
     pub status: SensorStatus,
     /// Present exactly when status is Error: the failure the kernel chose.
@@ -947,14 +919,11 @@ impl OrientationState {
     }
 }
 
-/// One division of the name, in every language the provider had rather than one resolved
-/// name: the reader's language is the page's, and switching it re-reads a label already
-/// sent.
+/// One division of the name, in its own name.
 pub struct DivisionPart<'a> {
     /// Overture's subtype, broadest first (spec/spec/division.json).
     pub subtype: u8,
     pub name: &'a dyn Display,
-    pub names: &'a dyn Fn(&mut dyn FnMut(&LangName<'_>)),
     /// The view is in far enough for its name to show: as far as Overture's own tiles
     /// show it from (pxl-spec bake/tile/division.rs `Division::shown_from`).
     pub shown: bool,
@@ -964,18 +933,11 @@ pub struct DivisionPart<'a> {
 
 impl DivisionPart<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 5;
+    pub const FIELDS: u32 = 4;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u8(Some(self.subtype));
         w.str_display(self.name);
-        let mut n = 0;
-        (self.names)(&mut |_| n += 1);
-        w.branch(n, |w| {
-            (self.names)(&mut |item| {
-                w.branch(LangName::FIELDS, |w| item.write(w));
-            });
-        });
         w.bool(Some(self.shown));
         w.bool(Some(self.area));
     }
@@ -983,9 +945,9 @@ impl DivisionPart<'_> {
 
 /// A file the kernel refused, as it opened it.
 pub struct RefusedFile<'a> {
-    /// host.json's `root`.
+    /// file.json's `root`.
     pub root: u32,
-    /// Its number below the root in decimal.
+    /// Its path below the root, as the kernel opened it.
     pub path: &'a dyn Display,
 }
 
@@ -996,21 +958,6 @@ impl RefusedFile<'_> {
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.root));
         w.str_display(self.path);
-    }
-}
-
-pub struct LangName<'a> {
-    pub lang: &'a dyn Display,
-    pub name: &'a dyn Display,
-}
-
-impl LangName<'_> {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.str_display(self.lang);
-        w.str_display(self.name);
     }
 }
 
@@ -1245,9 +1192,9 @@ impl<'a> FsMount<'a> {
 /// Command::FS_TRUNCATED's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct FsTruncated<'a> {
-    /// host.json's `root`.
+    /// file.json's `root`.
     pub root: u32,
-    /// Its number below the root in decimal, as the kernel opened it.
+    /// Its path below the root, as the kernel opened it.
     pub path: &'a str,
 }
 
@@ -1309,21 +1256,20 @@ impl InputPointer {
 /// Command::EDIT_TOOL's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct EditTool {
-    pub tool: ActiveTool,
-    /// The cube or decor kind the tool takes, by its number in the catalog's one value space (cube.json).
+    pub tool: Tool,
+    /// The item to place, its id (id.json); read only for that tool.
     pub val: u32,
-    /// The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs).
-    pub tier: u32,
+    /// A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen.
+    pub scale_steps: i32,
 }
 
 impl EditTool {
     pub fn read(pkt: &[u8]) -> Result<EditTool, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(EditTool {
-            tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?)
-                .ok_or_else(|| unknown())?,
+            tool: Tool::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             val: integer::<u32>(f.at(1)?.get_number()?)?,
-            tier: integer::<u32>(f.at(2)?.get_number()?)?,
+            scale_steps: integer::<i32>(f.at(2)?.get_number()?)?,
         })
     }
 }

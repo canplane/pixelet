@@ -7,7 +7,6 @@ use super::{given, or_refuse};
 use crate::domain::control::camera::input::camera_rehover;
 use crate::domain::control::cmd::{self as abi, Command};
 use crate::domain::control::edit::set_tool;
-use crate::domain::control::edit::tool;
 use crate::domain::control::edit::write;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -19,25 +18,20 @@ pub(super) fn apply(
 ) -> Result<Option<i32>, MarshalError> {
     match cmd {
         Command::EDIT_TOOL => {
-            use pxl_spec::asset::cube::cube_of;
-            use pxl_spec::asset::DecorId;
+            use crate::domain::control::edit::Tool;
+            use crate::domain::layer::object::asset::Asset;
             let p = abi::EditTool::read(given(pkt)?)?;
-            let mut tool = tool();
-            tool.active_tool = p.tool;
-            tool.object_tier = p.tier;
-            match p.tool {
-                abi::ActiveTool::Object => {
-                    tool.object_cube = or_refuse(cube_of(p.val), Errno::EINVAL)?;
-                }
-                abi::ActiveTool::Decor => {
-                    tool.decor_id = or_refuse(
-                        u16::try_from(p.val).ok().and_then(DecorId::of),
-                        Errno::EINVAL,
-                    )?;
-                }
-                abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
-            }
-            set_tool(tool);
+            set_tool(match p.tool {
+                abi::Tool::Pointer => Tool::Pointer,
+                abi::Tool::Eraser => Tool::Eraser,
+                abi::Tool::Item => match Asset::of(p.val) {
+                    Asset::Unknown => return Err(MarshalError::new(Errno::EINVAL)),
+                    asset => Tool::Item {
+                        asset,
+                        scale_steps: p.scale_steps,
+                    },
+                },
+            });
             camera_rehover();
             Ok(Some(0))
         }

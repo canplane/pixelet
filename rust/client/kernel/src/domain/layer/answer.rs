@@ -2,14 +2,14 @@
 
 //! What a query answers: a value, exact or coarser with the tile it lacked.
 
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// A coarser answer carries the tile it lacked, so none passes for exact.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Answer<T> {
     Exact(T),
-    Coarser(T, Tile),
-    Nothing(Tile),
+    Coarser(T, Quadrant),
+    Nothing(Quadrant),
 }
 
 impl<T> Answer<T> {
@@ -27,7 +27,7 @@ impl<T> Answer<T> {
         }
     }
 
-    pub fn lack(&self) -> Option<Tile> {
+    pub fn lack(&self) -> Option<Quadrant> {
         match self {
             Answer::Exact(_) => None,
             Answer::Coarser(_, l) | Answer::Nothing(l) => Some(*l),

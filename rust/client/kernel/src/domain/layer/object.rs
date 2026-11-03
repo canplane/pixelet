@@ -5,6 +5,7 @@
 //! holds at every zoom is its tree's branches, each its children folded
 //! (pxl-spec object/volume.rs).
 
+pub mod asset;
 pub mod ext;
 pub mod meta;
 pub mod preview;

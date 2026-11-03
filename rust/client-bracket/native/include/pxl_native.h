@@ -15,7 +15,8 @@
 #include <stdint.h>
 
 // The entry, the doorbell: a turn of quota_ms, and when the kernel wants the
-// next, in ms (xpute_guest::sched::quantum). The first lays the memory out.
+// next, in ms (xpute_guest::sched::quantum). The first lays the memory out. NaN
+// where the kernel has stopped: its thread is gone, and so is every later turn.
 double xpute_run(double quota_ms);
 
 // The memory: its first byte, with its bytes written through `bytes` (which

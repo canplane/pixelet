@@ -2,8 +2,8 @@
 
 use super::*;
 
-fn tile(name: &str) -> Tile {
-    Tile::of_name(name).expect("a tile's name")
+fn tile(name: &str) -> Quadrant {
+    Quadrant::of_key(name).expect("a tile's name")
 }
 
 /// The formats this client reads, by each kind's bake number: the published

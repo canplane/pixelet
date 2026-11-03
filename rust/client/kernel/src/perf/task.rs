@@ -8,12 +8,18 @@ use core::mem::{offset_of, size_of};
 use crate::perf::spec::TASK;
 use crate::perf::word::{words, Words};
 use crate::sys::io::demand::PHASES_MAX;
+use crate::sys::io::file::PATH_BYTES;
+
+/// A path's bytes in whole words.
+const TASK_PATH_BYTES: usize = 3 * 8;
+const _: () = assert!(PATH_BYTES <= TASK_PATH_BYTES);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TaskRow {
     pub stream: f64,
-    pub subject: u64,
+    /// The path it opened, its bytes zero past their end.
+    pub path: [u8; TASK_PATH_BYTES],
     pub priority: f64,
     pub enqueue_ms: f64,
     /// NaN for a task that never ran.
@@ -32,8 +38,15 @@ pub struct TaskRow {
 }
 
 words!(TaskRow, TASK::WORDS,
-    stream => TASK::stream, subject => TASK::subject, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
+    stream => TASK::stream, path => TASK::path, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
     start_ms => TASK::start_ms, end_ms => TASK::end_ms, outcome => TASK::outcome,
     fail => TASK::fail, detail => TASK::detail,
     at_file => TASK::at_file, at_file_bytes => TASK::at_file_bytes, at_line => TASK::at_line, phase_cnt => TASK::phase_cnt, phase_ids => TASK::phase_ids, phase_vals => TASK::phase_vals,
 );
+
+/// `path`'s bytes as a row holds them.
+pub fn path_bytes(path: &[u8]) -> [u8; TASK_PATH_BYTES] {
+    let mut out = [0; TASK_PATH_BYTES];
+    out[..path.len()].copy_from_slice(path);
+    out
+}

@@ -13,7 +13,8 @@ use crate::sys::serial;
 use pxl_content::cave::hollow;
 use pxl_engine::answer::FULL;
 use pxl_engine::LEAF_CELL;
-use pxl_spec::asset::cube::{self, cube_id, Cube};
+use pxl_spec::asset::cube::{self};
+use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 
@@ -32,7 +33,7 @@ fn roofed(roof: Option<f64>) -> (TileCache<TerrainTile>, Store, V3) {
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
     if let Some(roof) = roof {
-        let red = cube_id(Cube::Object(cube::Object::red));
+        let red = cube::Object::red as AssetId;
         write(&mut store, [x, y, 5.0 + roof], OBJECT_COARSEST, red);
     }
     (tile_cache, store, [x + 0.5, y + 0.5, over(5.0)])
@@ -124,7 +125,7 @@ fn zoom_out_does_not_go_through() {
 fn climb_or_dive_or_stop() {
     let _g = serial();
     let wall = |store: &mut Store, pivot: V3, top: f64| {
-        let red = cube_id(Cube::Object(cube::Object::red));
+        let red = cube::Object::red as AssetId;
         for dy in -3..=3 {
             for z in [5.0, 6.0].into_iter().filter(|&z| z < top) {
                 write(
@@ -223,7 +224,7 @@ fn open_ground_keeps_a_cell() {
 fn nearest_turns_through() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for dx in [-2.5, -1.5, 1.5, 2.5] {
         for dy in [-2.5, -1.5, -0.5, 0.5, 1.5] {
             for z in [5.0, 6.0, 7.0] {
@@ -284,7 +285,7 @@ fn nearest_turns_through() {
 fn stop_goes_straight() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for dy in -3..=3 {
         let at = [pivot[0] + 3.0, pivot[1] + f64::from(dy), 5.0];
         write(&mut store, at, OBJECT_COARSEST, red);
@@ -310,7 +311,7 @@ fn stop_goes_straight() {
 fn tunnel(roof: f64, thick: u32) -> (TileCache<TerrainTile>, Store, V3) {
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for dz in 0..thick {
         for dx in -3..=3 {
             for dy in -3..=3 {
@@ -358,7 +359,7 @@ fn climb_fails_under_roof() {
 fn climb_clears_block() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     // About the cell east of the pivot where the eye stands level with it 3 off.
     for dx in [1.5, 2.5, 3.5] {
         for dy in [-1.5, -0.5, 0.5] {
@@ -391,7 +392,7 @@ fn climb_clears_block() {
 fn climbs_out_of_wall_with_room() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for dy in [-1.5, -0.5, 0.5, 1.5] {
         write(
             &mut store,
@@ -420,7 +421,7 @@ fn climbs_out_of_wall_with_room() {
 fn climb_rises_under_eye() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = tunnel(3.0, 1);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for dy in [-1.5, -0.5, 0.5, 1.5] {
         for z in [5.0, 6.0, 7.0] {
             write(
@@ -453,7 +454,7 @@ fn climb_rises_under_eye() {
 fn slope_keeps_pitch_climbed() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     // From 20 cells east to 40, a column 60 less its distance high.
     for dx in 20..=40 {
         for z in 0..60 - dx {
@@ -486,7 +487,7 @@ fn slope_keeps_pitch_climbed() {
 fn a_cave_is_not_climbed_out_of() {
     let _g = serial();
     let (tile_cache, mut store, ground) = roofed(None);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for z in (0..10).chain([12]) {
         write(
             &mut store,
@@ -522,7 +523,7 @@ fn a_cave_is_not_climbed_out_of() {
 fn a_hollow_in_a_hill() {
     let _g = serial();
     let (tile_cache, mut store, pivot) = roofed(None);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for dx in 8..=40 {
         for dy in -6..=6 {
             for z in (0..12).filter(|z| !((18..=30).contains(&dx) && (3..=7).contains(z))) {
@@ -574,7 +575,7 @@ fn a_hollow_in_a_hill() {
 fn climbs_past_level() {
     let _g = serial();
     let (tile_cache, mut store, ground) = roofed(None);
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = cube::Object::red as AssetId;
     for z in 0..10 {
         write(
             &mut store,

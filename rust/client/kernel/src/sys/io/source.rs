@@ -16,7 +16,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
@@ -37,7 +37,7 @@ const UNDER: u8 = 2;
 
 /// Where the node `(zoom, at)`, no finer than `SHARD_ZOOM`, lies among
 /// `Source::nodes`: its zoom's first, then a row of its zoom's tiles south
-/// to north (`tile_rows`) and a column round the world. None past the rows.
+/// to north (`quad_rows`) and a column round the world. None past the rows.
 fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
     let n = 1i64 << zoom;
     let row = i64::from(at[1]) + n / 2;
@@ -77,7 +77,7 @@ pub fn top() -> Option<Zoom> {
 }
 
 /// Whether a served shard is over or under `p`, of a kind held by shards.
-pub fn serves(layer: BaseLayer, p: Tile) -> bool {
+pub fn serves(layer: BaseLayer, p: Quadrant) -> bool {
     !is_sharded(layer) || declared_source().is_some_and(|s| s.covers(p))
 }
 
@@ -115,13 +115,13 @@ pub fn nines() -> &'static [u16] {
 impl Source {
     /// `p`'s node among `nodes`: itself, or past `SHARD_ZOOM` the one over
     /// it there, which every shard over it is over too (no shard is finer).
-    fn node_over(&self, p: Tile) -> Option<u8> {
+    fn node_over(&self, p: Quadrant) -> Option<u8> {
         let (z, at) = area::shard_over(p.zoom, p.at);
         node_of(z, at).map(|i| self.nodes[i])
     }
 
     /// A shard over `p`, or at or under it: one read.
-    fn covers(&self, p: Tile) -> bool {
+    fn covers(&self, p: Quadrant) -> bool {
         self.node_over(p)
             .is_some_and(|w| w & OVER != 0 || p.zoom <= SHARD_ZOOM && w & UNDER != 0)
     }

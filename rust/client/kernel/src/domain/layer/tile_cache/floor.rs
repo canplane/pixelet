@@ -12,14 +12,14 @@ use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::demand::{demand_tiles, tiles_within};
 use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The tiles at `top`, the coarsest zoom the source supplies whole, with
 /// ground within the far edge of the eye itself, which hold every observed
 /// piece of ground. An eye higher than the edge holds none: a pixel there
 /// covers more than the top's cell, and the view has gone over to the
 /// Earth's picture.
-pub fn floor(o: &Observation, top: Zoom, each: impl FnMut(Tile)) {
+pub fn floor(o: &Observation, top: Zoom, each: impl FnMut(Quadrant)) {
     if let Some(r) = ring(o) {
         tiles_within(top, [o.eye[0], o.eye[1]], r).for_each(each);
     }

@@ -4,8 +4,6 @@
 //! only when changed) and the commands it applies to the stores.
 
 use crate::domain::layer::Base as _;
-use pxl_spec::asset::cube::cube_id;
-use pxl_spec::asset::decor_num_id;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::units;
@@ -16,11 +14,10 @@ use crate::domain::control::camera::controller::dist;
 use crate::domain::control::camera::input::dragging;
 use crate::domain::control::camera::state::camera_state;
 use crate::domain::control::cmd::{
-    CompanionState, DivisionPart, GroundStatus, LangName, LocationState, LonLat, Message,
-    OrientationState, PivotState, RefusedFile, Snapshot, ToolState,
+    CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
+    PivotState, RefusedFile, Snapshot,
 };
 use crate::domain::control::edit::write;
-use crate::domain::control::edit::{tool, Tool};
 use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::reading::{
@@ -35,31 +32,28 @@ use crate::domain::view::frame::screen::units_per_px_at;
 use crate::domain::view::observation;
 use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
 use crate::pointer;
-use crate::sys::io::file::{self, StorageFile};
-use crate::sys::io::host_spec::root;
+use crate::sys::io::file::{self, Path, StorageFile};
+use crate::sys::io::file_spec::root;
 use crate::sys::io::request;
 use crate::sys::io::source;
 use pxl_render::gpu::renderer::renderer_progress;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::status::errno::Errno;
 
-/// The pivot's division and each above it, broad to narrow. Every language
-/// is sent. A name
+/// The pivot's division and each above it, broad to narrow. A name
 /// shows where a logical pixel, `u_per_px` wide, is no wider than a cell at
 /// the zoom it shows from (`Division::shown_from`).
-fn division_parts(at: Option<(Tile, u32)>, u_per_px: f64, each: &mut dyn FnMut(&DivisionPart<'_>)) {
+fn division_parts(
+    at: Option<(Quadrant, u32)>,
+    u_per_px: f64,
+    each: &mut dyn FnMut(&DivisionPart<'_>),
+) {
     let Some(at) = at else { return };
     each_division(at, |part| {
-        let names = |each: &mut dyn FnMut(&LangName<'_>)| {
-            for (lang, name) in &part.names {
-                each(&LangName { lang, name });
-            }
-        };
         each(&DivisionPart {
             subtype: part.subtype as u8,
             name: &part.name,
-            names: &names,
             shown: u_per_px <= units(part.shown_from()),
             area: part.area,
         });
@@ -76,7 +70,6 @@ pub struct SnapshotInputs {
     pivot: Option<Q3>,
     location: (SensorState, bool),
     companion: [bool; 2],
-    tool: Tool,
     drafting: bool,
     orient: SensorState,
     azimuth: f64,
@@ -89,18 +82,19 @@ pub struct SnapshotInputs {
     settings: Option<[u32; SettingKey::SLOTS]>,
     /// The view's scale at the pivot, as the units a logical pixel spans.
     u_per_px: f64,
-    division: Option<(Tile, u32)>,
+    division: Option<(Quadrant, u32)>,
     previews: ([u32; PREVIEWS_MAX], usize),
     stall: Option<Message>,
     declared: bool,
-    /// The refused files by root and number, the first `.1` of them.
-    refused_files: ([(u32, u64); REFUSED_SHOWN], usize),
+    /// The refused files by root and path, the first `.1` of them.
+    refused_files: ([(u32, Path); REFUSED_SHOWN], usize),
     renderer_progress: f64,
+    area_progress: f64,
 }
 
 /// The refused files a snapshot names at once: every storage file, and as
 /// many of the objects' as the view asks for at once; the rest are named as
-/// the host empties those.
+/// the driver empties those.
 const REFUSED_SHOWN: usize = StorageFile::ALL.len() + repository::WANTS as usize;
 
 fn snapshot_inputs() -> SnapshotInputs {
@@ -111,20 +105,20 @@ fn snapshot_inputs() -> SnapshotInputs {
         *slot = surface;
         previews.1 += 1;
     }
+    // Shown once a frame went to the screen over a view whose tiles all
+    // show, if coarser: a finer tile asked for as the eye moves is not
+    // the area loading, and would flash its toast each time.
+    let status = match (observation::eye(), is_screen_drawn()) {
+        (None, _) => GroundStatus::Idle,
+        (Some(_), true) if TerrainTile::tile_cache().is_shown() => GroundStatus::Success,
+        _ => GroundStatus::Loading,
+    };
     SnapshotInputs {
-        // Shown once a frame went to the screen over a view whose tiles all
-        // show, if coarser: a finer tile asked for as the eye moves is not
-        // the area loading, and would flash its toast each time.
-        status: match (observation::eye(), is_screen_drawn()) {
-            (None, _) => GroundStatus::Idle,
-            (Some(_), true) if TerrainTile::tile_cache().is_shown() => GroundStatus::Success,
-            _ => GroundStatus::Loading,
-        },
+        status,
         is_off_center: off_center().is_off_center,
         pivot,
         location: (location.state, location.location.is_some()),
         companion: companion_ready(),
-        tool: tool(),
         drafting: write::marker_draft().is_some(),
         orient: device_orient_store().state,
         azimuth: camera_state().intent.azimuth,
@@ -148,11 +142,11 @@ fn snapshot_inputs() -> SnapshotInputs {
             let stored = StorageFile::ALL
                 .into_iter()
                 .filter(|&k| file::is_refused(k))
-                .map(|k| (root::STORAGE, u64::from(k.slot())));
+                .map(|k| (root::STORAGE, k.path()));
             let objects = repository::refused_files()
                 .iter()
-                .map(|&n| (root::OBJECT, n));
-            let mut refused = ([(0, 0); REFUSED_SHOWN], 0);
+                .map(|&s| (root::OBJECT, Path::of_quadrant(s)));
+            let mut refused = ([(0, Path::EMPTY); REFUSED_SHOWN], 0);
             for (at, file) in refused.0.iter_mut().zip(stored.chain(objects)) {
                 *at = file;
                 refused.1 += 1;
@@ -160,6 +154,11 @@ fn snapshot_inputs() -> SnapshotInputs {
             refused
         },
         renderer_progress: renderer_progress(),
+        // Asked of every tile, so only while the area loads.
+        area_progress: match status {
+            GroundStatus::Success => 1.0,
+            _ => TerrainTile::tile_cache().shown_share(),
+        },
     }
 }
 
@@ -188,7 +187,6 @@ impl SnapshotMemo {
 
 /// The snapshot made of `shown` into `out`; none where it does not fit.
 pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
-    let tool = shown.tool;
     let snapshot = Snapshot {
         pivot: PivotState {
             status: shown.status,
@@ -213,13 +211,7 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
             person_ready: shown.companion[0],
             pet_ready: shown.companion[1],
         },
-        tool: ToolState {
-            active: tool.active_tool,
-            cube: cube_id(tool.object_cube),
-            decor: decor_num_id(tool.decor_id),
-            tier: tool.object_tier,
-            draft: write::marker_draft(),
-        },
+        draft: write::marker_draft(),
         orient: OrientationState {
             status: shown.orient.status,
             err: shown.orient.err,
@@ -240,6 +232,7 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
         },
         stall: shown.stall,
         renderer_progress: shown.renderer_progress,
+        area_progress: shown.area_progress,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);
@@ -247,7 +240,7 @@ pub fn ui_snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
 }
 
 /// Why the server does not answer the world's reads now: failing, or given up.
-/// The network and the GPU are the host's, which says them.
+/// The network and the GPU are the drivers', which say them.
 fn stall() -> Option<Message> {
     if request::given_up() {
         return Some(Message::WorldUnavailable);
